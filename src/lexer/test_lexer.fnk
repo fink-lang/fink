@@ -1,0 +1,451 @@
+---
+ops_ws_from_position
+---
+a + b
+a+b
+# expect
+Ident 'a', loc (0, 1, 0), (1, 1, 1)
+Op '+', loc (2, 1, 2), (3, 1, 3)
+Ident 'b', loc (4, 1, 4), (5, 1, 5)
+BlockCont loc (5, 1, 5), (6, 2, 0)
+Ident 'a', loc (6, 2, 0), (7, 2, 1)
+Op '+', loc (7, 2, 1), (8, 2, 2)
+Ident 'b', loc (8, 2, 2), (9, 2, 3)
+
+
+---
+separators
+---
+a, b
+a; b
+a: b
+a ?
+# expect
+Ident 'a', loc (0, 1, 0), (1, 1, 1)
+Comma ',', loc (1, 1, 1), (2, 1, 2)
+Ident 'b', loc (3, 1, 3), (4, 1, 4)
+BlockCont loc (4, 1, 4), (5, 2, 0)
+Ident 'a', loc (5, 2, 0), (6, 2, 1)
+Semicolon ';', loc (6, 2, 1), (7, 2, 2)
+Ident 'b', loc (8, 2, 3), (9, 2, 4)
+BlockCont loc (9, 2, 4), (10, 3, 0)
+Ident 'a', loc (10, 3, 0), (11, 3, 1)
+Colon ':', loc (11, 3, 1), (12, 3, 2)
+Ident 'b', loc (13, 3, 3), (14, 3, 4)
+BlockCont loc (14, 3, 4), (15, 4, 0)
+Ident 'a', loc (15, 4, 0), (16, 4, 1)
+Partial '?', loc (17, 4, 2), (18, 4, 3)
+
+
+---
+ops_greedy_longest_match
+---
+a = b
+a == b
+# expect
+Ident 'a', loc (0, 1, 0), (1, 1, 1)
+Op '=', loc (2, 1, 2), (3, 1, 3)
+Ident 'b', loc (4, 1, 4), (5, 1, 5)
+BlockCont loc (5, 1, 5), (6, 2, 0)
+Ident 'a', loc (6, 2, 0), (7, 2, 1)
+Op '==', loc (8, 2, 2), (10, 2, 4)
+Ident 'b', loc (11, 2, 5), (12, 2, 6)
+
+
+---
+idents
+---
+foo
+foo-bar
+foo_bar
+foo_bar_123
+π
+café
+$foo
+$foo$bar
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+BlockCont loc (3, 1, 3), (4, 2, 0)
+Ident 'foo-bar', loc (4, 2, 0), (11, 2, 7)
+BlockCont loc (11, 2, 7), (12, 3, 0)
+Ident 'foo_bar', loc (12, 3, 0), (19, 3, 7)
+BlockCont loc (19, 3, 7), (20, 4, 0)
+Ident 'foo_bar_123', loc (20, 4, 0), (31, 4, 11)
+BlockCont loc (31, 4, 11), (32, 5, 0)
+Ident 'π', loc (32, 5, 0), (34, 5, 2)
+BlockCont loc (34, 5, 2), (35, 6, 0)
+Ident 'café', loc (35, 6, 0), (40, 6, 5)
+BlockCont loc (40, 6, 5), (41, 7, 0)
+Ident '$foo', loc (41, 7, 0), (45, 7, 4)
+BlockCont loc (45, 7, 4), (46, 8, 0)
+Ident '$foo$bar', loc (46, 8, 0), (54, 8, 8)
+
+
+---
+ident_hyphen_boundary
+---
+foo-bar
+foo - bar
+foo-
+# expect
+Ident 'foo-bar', loc (0, 1, 0), (7, 1, 7)
+BlockCont loc (7, 1, 7), (8, 2, 0)
+Ident 'foo', loc (8, 2, 0), (11, 2, 3)
+Op '-', loc (12, 2, 4), (13, 2, 5)
+Ident 'bar', loc (14, 2, 6), (17, 2, 9)
+BlockCont loc (17, 2, 9), (18, 3, 0)
+Ident 'foo', loc (18, 3, 0), (21, 3, 3)
+Op '-', loc (21, 3, 3), (22, 3, 4)
+
+
+---
+int
+---
+42
+1_000_000
+0xFF_aa_00
+0b1010_010
+0o777_111
+# expect
+Int '42', loc (0, 1, 0), (2, 1, 2)
+BlockCont loc (2, 1, 2), (3, 2, 0)
+Int '1_000_000', loc (3, 2, 0), (12, 2, 9)
+BlockCont loc (12, 2, 9), (13, 3, 0)
+Int '0xFF_aa_00', loc (13, 3, 0), (23, 3, 10)
+BlockCont loc (23, 3, 10), (24, 4, 0)
+Int '0b1010_010', loc (24, 4, 0), (34, 4, 10)
+BlockCont loc (34, 4, 10), (35, 5, 0)
+Int '0o777_111', loc (35, 5, 0), (44, 5, 9)
+
+
+---
+float
+---
+3.14
+1_000.123_456_789
+1.0e100_000
+1.0e-100
+# expect
+Float '3.14', loc (0, 1, 0), (4, 1, 4)
+BlockCont loc (4, 1, 4), (5, 2, 0)
+Float '1_000.123_456_789', loc (5, 2, 0), (22, 2, 17)
+BlockCont loc (22, 2, 17), (23, 3, 0)
+Float '1.0e100_000', loc (23, 3, 0), (34, 3, 11)
+BlockCont loc (34, 3, 11), (35, 4, 0)
+Float '1.0e-100', loc (35, 4, 0), (43, 4, 8)
+
+
+---
+decimal
+---
+1.0d
+1_000d
+1.0d-100_000
+# expect
+Decimal '1.0d', loc (0, 1, 0), (4, 1, 4)
+BlockCont loc (4, 1, 4), (5, 2, 0)
+Decimal '1_000d', loc (5, 2, 0), (11, 2, 6)
+BlockCont loc (11, 2, 6), (12, 3, 0)
+Decimal '1.0d-100_000', loc (12, 3, 0), (24, 3, 12)
+
+
+---
+strings
+---
+'hello'
+'hello ${name}'
+# expect
+StrStart "'", loc (0, 1, 0), (1, 1, 1)
+  StrText "hello", loc (1, 1, 1), (6, 1, 6)
+StrEnd "'", loc (6, 1, 6), (7, 1, 7)
+BlockCont loc (7, 1, 7), (8, 2, 0)
+StrStart "'", loc (8, 2, 0), (9, 2, 1)
+  StrText "hello ", loc (9, 2, 1), (15, 2, 7)
+  StrExprStart '\${', loc (15, 2, 7), (17, 2, 9)
+    Ident 'name', loc (17, 2, 9), (21, 2, 13)
+  StrExprEnd '}', loc (21, 2, 13), (22, 2, 14)
+StrEnd "'", loc (22, 2, 14), (23, 2, 15)
+
+
+---
+string_escape
+---
+'a\'b'
+# expect
+StrStart "'", loc (0, 1, 0), (1, 1, 1)
+  StrText "a\\'b", loc (1, 1, 1), (5, 1, 5)
+StrEnd "'", loc (5, 1, 5), (6, 1, 6)
+
+
+---
+string_multiline
+---
+'hello
+world'
+# expect
+StrStart "'", loc (0, 1, 0), (1, 1, 1)
+  StrText "hello\nworld", loc (1, 1, 1), (12, 2, 5)
+StrEnd "'", loc (12, 2, 5), (13, 2, 6)
+
+
+---
+brackets
+---
+[]
+{}
+()
+# expect
+BracketOpen '[', loc (0, 1, 0), (1, 1, 1)
+BracketClose ']', loc (1, 1, 1), (2, 1, 2)
+BlockCont loc (2, 1, 2), (3, 2, 0)
+BracketOpen '{', loc (3, 2, 0), (4, 2, 1)
+BracketClose '}', loc (4, 2, 1), (5, 2, 2)
+BlockCont loc (5, 2, 2), (6, 3, 0)
+BracketOpen '(', loc (6, 3, 0), (7, 3, 1)
+BracketClose ')', loc (7, 3, 1), (8, 3, 2)
+
+
+---
+bracket_nesting
+---
+[
+  {foo}
+]
+{foo: [bar]}
+((a + b) * c)
+# expect
+BracketOpen '[', loc (0, 1, 0), (1, 1, 1)
+    BlockStart loc (1, 1, 1), (4, 2, 2)
+    BracketOpen '{', loc (4, 2, 2), (5, 2, 3)
+      Ident 'foo', loc (5, 2, 3), (8, 2, 6)
+    BracketClose '}', loc (8, 2, 6), (9, 2, 7)
+    BlockEnd loc (9, 2, 7), (9, 2, 7)
+BracketClose ']', loc (10, 3, 0), (11, 3, 1)
+BlockCont loc (11, 3, 1), (12, 4, 0)
+BracketOpen '{', loc (12, 4, 0), (13, 4, 1)
+  Ident 'foo', loc (13, 4, 1), (16, 4, 4)
+  Colon ':', loc (16, 4, 4), (17, 4, 5)
+  BracketOpen '[', loc (18, 4, 6), (19, 4, 7)
+    Ident 'bar', loc (19, 4, 7), (22, 4, 10)
+  BracketClose ']', loc (22, 4, 10), (23, 4, 11)
+BracketClose '}', loc (23, 4, 11), (24, 4, 12)
+BlockCont loc (24, 4, 12), (25, 5, 0)
+BracketOpen '(', loc (25, 5, 0), (26, 5, 1)
+  BracketOpen '(', loc (26, 5, 1), (27, 5, 2)
+    Ident 'a', loc (27, 5, 2), (28, 5, 3)
+    Op '+', loc (29, 5, 4), (30, 5, 5)
+    Ident 'b', loc (31, 5, 6), (32, 5, 7)
+  BracketClose ')', loc (32, 5, 7), (33, 5, 8)
+  Op '*', loc (34, 5, 9), (35, 5, 10)
+  Ident 'c', loc (36, 5, 11), (37, 5, 12)
+BracketClose ')', loc (37, 5, 12), (38, 5, 13)
+
+
+---
+block_indent
+---
+foo
+  bar
+    ni
+  spam
+ham
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+  BlockStart loc (3, 1, 3), (6, 2, 2)
+  Ident 'bar', loc (6, 2, 2), (9, 2, 5)
+    BlockStart loc (9, 2, 5), (14, 3, 4)
+    Ident 'ni', loc (14, 3, 4), (16, 3, 6)
+    BlockEnd loc (16, 3, 6), (16, 3, 6)
+  BlockCont loc (16, 3, 6), (19, 4, 2)
+  Ident 'spam', loc (19, 4, 2), (23, 4, 6)
+  BlockEnd loc (23, 4, 6), (23, 4, 6)
+BlockCont loc (23, 4, 6), (24, 5, 0)
+Ident 'ham', loc (24, 5, 0), (27, 5, 3)
+
+
+---
+block_dedent_multi
+---
+foo
+  bar
+    ni
+ham
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+  BlockStart loc (3, 1, 3), (6, 2, 2)
+  Ident 'bar', loc (6, 2, 2), (9, 2, 5)
+    BlockStart loc (9, 2, 5), (14, 3, 4)
+    Ident 'ni', loc (14, 3, 4), (16, 3, 6)
+    BlockEnd loc (16, 3, 6), (16, 3, 6)
+  BlockEnd loc (16, 3, 6), (16, 3, 6)
+BlockCont loc (16, 3, 6), (17, 4, 0)
+Ident 'ham', loc (17, 4, 0), (20, 4, 3)
+
+
+---
+block_blank_lines
+---
+foo
+
+  bar
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+  BlockStart loc (3, 1, 3), (7, 3, 2)
+  Ident 'bar', loc (7, 3, 2), (10, 3, 5)
+  BlockEnd loc (10, 3, 5), (10, 3, 5)
+
+
+---
+comment
+---
+foo # a comment
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+Comment "# a comment", loc (4, 1, 4), (15, 1, 15)
+
+
+---
+doc_comment
+---
+---
+doc
+---
+# expect
+DocComment "---\ndoc\n---", loc (0, 1, 0), (11, 3, 3)
+
+
+
+---
+block_trailing_blank_lines
+---
+foo
+  bar
+
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+  BlockStart loc (3, 1, 3), (6, 2, 2)
+  Ident 'bar', loc (6, 2, 2), (9, 2, 5)
+  BlockEnd loc (9, 2, 5), (9, 2, 5)
+
+
+---
+err_str_eof
+---
+'hello
+# expect - missing '
+StrStart "'", loc (0, 1, 0), (1, 1, 1)
+  StrText "hello", loc (1, 1, 1), (6, 1, 6)
+  Err "unterminated string", loc (6, 1, 6), (6, 1, 6)
+
+
+---
+err_doc_comment_eof
+---
+---
+hello
+# expect - missing ---
+Err "---\nhello", loc (0, 1, 0), (9, 2, 5)
+
+
+---
+err_bracket_eof
+---
+[foo
+# expect
+BracketOpen '[', loc (0, 1, 0), (1, 1, 1)
+  Ident 'foo', loc (1, 1, 1), (4, 1, 4)
+  Err "unclosed bracket", loc (4, 1, 4), (4, 1, 4)
+
+
+---
+err_bracket_mismatch
+---
+{foo]
+# expect
+BracketOpen '{', loc (0, 1, 0), (1, 1, 1)
+  Ident 'foo', loc (1, 1, 1), (4, 1, 4)
+  Err "]", loc (4, 1, 4), (5, 1, 5)
+  Err "unclosed bracket", loc (5, 1, 5), (5, 1, 5)
+
+
+---
+err_unexpected_dedent
+---
+foo
+    bar
+      ni
+   ham
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+  BlockStart loc (3, 1, 3), (8, 2, 4)
+  Ident 'bar', loc (8, 2, 4), (11, 2, 7)
+    BlockStart loc (11, 2, 7), (18, 3, 6)
+    Ident 'ni', loc (18, 3, 6), (20, 3, 8)
+    BlockEnd loc (20, 3, 8), (20, 3, 8)
+  Err "unexpected dedent", loc (20, 3, 8), (24, 4, 3)
+  Ident 'ham', loc (24, 4, 3), (27, 4, 6)
+
+
+---
+err_tab
+---
+a	b
+# expect
+Ident 'a', loc (0, 1, 0), (1, 1, 1)
+Err "tab character not allowed", loc (1, 1, 1), (2, 1, 2)
+Ident 'b', loc (2, 1, 2), (3, 1, 3)
+
+
+---
+bracket_multiline_flat
+---
+{
+  foo: 1
+  bar: 2
+}
+# expect
+BracketOpen '{', loc (0, 1, 0), (1, 1, 1)
+    BlockStart loc (1, 1, 1), (4, 2, 2)
+    Ident 'foo', loc (4, 2, 2), (7, 2, 5)
+    Colon ':', loc (7, 2, 5), (8, 2, 6)
+    Int '1', loc (9, 2, 7), (10, 2, 8)
+    BlockCont loc (10, 2, 8), (13, 3, 2)
+    Ident 'bar', loc (13, 3, 2), (16, 3, 5)
+    Colon ':', loc (16, 3, 5), (17, 3, 6)
+    Int '2', loc (18, 3, 7), (19, 3, 8)
+    BlockEnd loc (19, 3, 8), (19, 3, 8)
+BracketClose '}', loc (20, 4, 0), (21, 4, 1)
+
+
+---
+bracket_multiline_nested
+---
+{
+  foo: {
+    bar: 1
+  }
+}
+# expect
+BracketOpen '{', loc (0, 1, 0), (1, 1, 1)
+    BlockStart loc (1, 1, 1), (4, 2, 2)
+    Ident 'foo', loc (4, 2, 2), (7, 2, 5)
+    Colon ':', loc (7, 2, 5), (8, 2, 6)
+    BracketOpen '{', loc (9, 2, 7), (10, 2, 8)
+        BlockStart loc (10, 2, 8), (15, 3, 4)
+        Ident 'bar', loc (15, 3, 4), (18, 3, 7)
+        Colon ':', loc (18, 3, 7), (19, 3, 8)
+        Int '1', loc (20, 3, 9), (21, 3, 10)
+        BlockEnd loc (21, 3, 10), (21, 3, 10)
+    BracketClose '}', loc (24, 4, 2), (25, 4, 3)
+    BlockEnd loc (25, 4, 3), (25, 4, 3)
+BracketClose '}', loc (26, 5, 0), (27, 5, 1)
+
+
+---
+err_unknown_char
+---
+foo @ bar
+# expect
+Ident 'foo', loc (0, 1, 0), (3, 1, 3)
+Err "@", loc (4, 1, 4), (5, 1, 5)
+Ident 'bar', loc (6, 1, 6), (9, 1, 9)

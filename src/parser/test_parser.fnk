@@ -1,0 +1,18 @@
+--- --- ---
+parser tests index
+
+test files:
+  test_literals.fnk   — bool, int, float, decimal, string, seq, record, dict, set, tagged literals
+  test_operators.fnk    — arithmetic, logical, comparison, bitwise, member access
+  test_spread_ranges.fnk — spread into seq/rec, bare/guarded spread, exclusive/inclusive ranges
+  test_grouping.fnk     — parentheses, comma/semicolon/newline separators, precedence, disambiguation
+  test_bindings.fnk   — left/right-hand binding, destructure, patterns
+  test_functions.fnk  — fn definitions, fn match, application, pipes
+  test_match.fnk      — match/conditional, guards, type patterns, string/seq/record patterns
+  test_blocks.fnk     — custom named blocks, block with patterns/arms/body, inline block
+  test_try.fnk        — try keyword (unwrap Ok, propagate Err)
+
+# TODO: equivalence tests — two inputs producing identical ASTs, documented with `===` separator
+#   e.g. semicolon vs multiline args, single-line fn vs multiline fn, fn match vs fn n: match n:
+#   requires test runner support to parse and structurally compare two ASTs
+--- --- ---

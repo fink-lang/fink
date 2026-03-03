@@ -1,0 +1,202 @@
+--- --- ---
+spread and ranges
+--- --- ---
+
+
+--- --- ---
+spread
+--- --- ---
+
+---
+spread into sequence
+---
+[head, ..tail]
+# expect
+LitSeq
+  Ident 'head'
+  Spread
+    Ident 'tail'
+
+---
+spread concat sequences
+---
+[..seq1, ..seq2]
+# expect
+LitSeq
+  Spread
+    Ident 'seq1'
+  Spread
+    Ident 'seq2'
+
+---
+spread into record
+---
+{foo: bar, ..rest}
+# expect
+LitRec
+  Arm
+    Ident 'foo'
+    Ident 'bar'
+  Spread
+    Ident 'rest'
+
+---
+spread merge records
+---
+{..rec1, ..rec2}
+# expect
+LitRec
+  Spread
+    Ident 'rec1'
+  Spread
+    Ident 'rec2'
+
+---
+bare spread in sequence pattern
+---
+[..]
+# expect
+LitSeq
+  Spread
+
+---
+bare spread in record pattern
+---
+{..}
+# expect
+LitRec
+  Spread
+
+---
+spread with range guard
+---
+[head, ..(0..2), ..rest]
+# expect
+LitSeq
+  Ident 'head'
+  Spread
+    Range '..'
+      LitInt '0'
+      LitInt '2'
+  Spread
+    Ident 'rest'
+
+---
+spread with function guard
+---
+[..(is_odd), ..evens]
+# expect
+LitSeq
+  Spread
+    Ident 'is_odd'
+  Spread
+    Ident 'evens'
+
+
+---
+spread with range expression guard
+---
+[..(1 + 2)..(3 + 4)]
+# expect
+LitSeq
+  Spread
+    Range '..'
+      InfixOp '+'
+        LitInt '1'
+        LitInt '2'
+      InfixOp '+'
+        LitInt '3'
+        LitInt '4'
+
+---
+spread with ident range guard
+---
+[..foo...bar]
+# expect
+LitSeq
+  Spread
+    Range '...'
+      Ident 'foo'
+      Ident 'bar'
+
+---
+spread with bare range guard
+---
+[head, ..0..2, ..rest]
+# expect
+LitSeq
+  Ident 'head'
+  Spread
+    Range '..'
+      LitInt '0'
+      LitInt '2'
+  Spread
+    Ident 'rest'
+
+---
+spread with range to grouped expression
+---
+[..0..(l)]
+# expect
+LitSeq
+  Spread
+    Range '..'
+      LitInt '0'
+      Ident 'l'
+
+--- --- ---
+ranges
+--- --- ---
+
+---
+exclusive range
+---
+0..10
+# expect
+Range '..'
+  LitInt '0'
+  LitInt '10'
+
+---
+inclusive range
+---
+0...10
+# expect
+Range '...'
+  LitInt '0'
+  LitInt '10'
+
+---
+char range
+---
+'a'...'z'
+# expect
+Range '...'
+  LitStr 'a'
+  LitStr 'z'
+
+---
+expression range exclusive
+---
+(1 + 2)..(3 + 4)
+# expect
+Range '..'
+  InfixOp '+'
+    LitInt '1'
+    LitInt '2'
+  InfixOp '+'
+    LitInt '3'
+    LitInt '4'
+
+---
+expression range inclusive
+---
+(1 + 2)...(3 + 4)
+# expect
+Range '...'
+  InfixOp '+'
+    LitInt '1'
+    LitInt '2'
+  InfixOp '+'
+    LitInt '3'
+    LitInt '4'

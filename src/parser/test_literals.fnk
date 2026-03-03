@@ -1,0 +1,451 @@
+
+---
+true
+---
+true
+# expect
+LitBool true
+
+---
+false
+---
+false
+# expect
+LitBool false
+
+
+--- --- ---
+integers
+--- --- ---
+
+---
+integer
+---
+1_234_567
+# expect
+LitInt '1_234_567'
+
+---
+positive signed
+---
++1
+# expect
+LitInt '+1'
+
+---
+negative signed
+---
+-1
+# expect
+LitInt '-1'
+
+---
+hex
+---
+0xFFFF_FFFF
+# expect
+LitInt '0xFFFF_FFFF'
+
+---
+positive signed hex
+---
++0xFFFF_FFFF
+# expect
+LitInt '+0xFFFF_FFFF'
+
+---
+negative signed hex
+---
+-0xFFFF_FFFF
+# expect
+LitInt '-0xFFFF_FFFF'
+
+---
+octal
+---
+0o_1234_5670
+# expect
+LitInt '0o_1234_5670'
+
+---
+positive signed octal
+---
++0o_1234_5670
+# expect
+LitInt '+0o_1234_5670'
+
+---
+negative signed octal
+---
+-0o_1234_5670
+# expect
+LitInt '-0o_1234_5670'
+
+---
+binary
+---
+0b_0101_1111
+# expect
+LitInt '0b_0101_1111'
+
+---
+positive signed binary
+---
++0b_0101_1111
+# expect
+LitInt '+0b_0101_1111'
+
+---
+negative signed binary
+---
+-0b_0101_1111
+# expect
+LitInt '-0b_0101_1111'
+
+---
+positive signed with underscores
+---
++1_234_567
+# expect
+LitInt '+1_234_567'
+
+---
+negative signed with underscores
+---
+-1_234_567
+# expect
+LitInt '-1_234_567'
+
+
+--- --- ---
+floats
+--- --- ---
+
+---
+simple float
+---
+1.0
+# expect
+LitFloat '1.0'
+
+---
+float with exponent
+---
+1.0e100_000
+# expect
+LitFloat '1.0e100_000'
+
+
+--- --- ---
+decimals
+--- --- ---
+
+---
+simple decimal
+---
+1.0d
+# expect
+LitDecimal '1.0d'
+
+---
+decimal with negative exponent
+---
+1.0d-100
+# expect
+LitDecimal '1.0d-100'
+
+
+--- --- ---
+strings
+--- --- ---
+
+---
+simple string
+---
+'hello world'
+# expect
+LitStr 'hello world'
+
+---
+string escape sequences
+---
+'\n\t\r\\\''
+# expect
+LitStr '\n\t\r\\\''
+
+---
+string vertical tab backspace formfeed
+---
+'\v\b\f'
+# expect
+LitStr '\v\b\f'
+
+---
+string hex escape
+---
+'\x41\x42'
+# expect
+LitStr 'AB'
+
+---
+string unicode escape
+---
+'\u0041\u0042'
+# expect
+LitStr 'AB'
+
+---
+multiline string
+---
+'
+  hello
+  world
+'
+# expect
+LitStr '\n  hello\n  world\n'
+
+---
+string interpolation
+---
+'hello ${1 + 2}'
+# expect
+StrTempl
+  LitStr 'hello '
+  InfixOp '+'
+    LitInt '1'
+    LitInt '2'
+
+---
+string interpolation leading expression
+---
+'${1 + 2} world'
+# expect
+StrTempl
+  InfixOp '+'
+    LitInt '1'
+    LitInt '2'
+  LitStr ' world'
+
+---
+tagged template string
+---
+fmt'hello ${1 + 2}'
+# expect
+Apply
+  Ident 'fmt'
+  StrRawTempl
+    LitStr 'hello '
+    InfixOp '+'
+      LitInt '1'
+      LitInt '2'
+
+---
+rendered template string
+---
+fmt 'hello ${1 + 2}'
+# expect
+Apply
+  Ident 'fmt'
+  StrTempl
+    LitStr 'hello '
+    InfixOp '+'
+      LitInt '1'
+      LitInt '2'
+
+
+--- --- ---
+sequences
+--- --- ---
+
+---
+empty sequence
+---
+[]
+# expect
+LitSeq
+
+---
+sequence literal
+---
+[1, 2, 3]
+# expect
+LitSeq
+  LitInt '1'
+  LitInt '2'
+  LitInt '3'
+
+---
+sequence constructor
+---
+seq 1, 2, 3
+# expect
+Apply
+  Ident 'seq'
+  LitInt '1'
+  LitInt '2'
+  LitInt '3'
+
+---
+multiline sequence constructor
+---
+seq
+  1
+  2
+  seq 3, 4
+# expect
+Apply
+  Ident 'seq'
+  LitInt '1'
+  LitInt '2'
+  Apply
+    Ident 'seq'
+    LitInt '3'
+    LitInt '4'
+
+
+--- --- ---
+records
+--- --- ---
+
+---
+empty record
+---
+{}
+# expect
+LitRec
+
+---
+record literal
+---
+{foo: 1, bar: 2}
+# expect
+LitRec
+  Arm
+    Ident 'foo'
+    LitInt '1'
+  Arm
+    Ident 'bar'
+    LitInt '2'
+
+---
+record with computed key
+---
+{(a + b): 3}
+# expect
+LitRec
+  Arm
+    Group
+      InfixOp '+'
+        Ident 'a'
+        Ident 'b'
+    LitInt '3'
+
+---
+multiline record
+---
+{
+  foo: 1
+  bar: {
+    spam: 3
+  }
+}
+# expect
+LitRec
+  Arm
+    Ident 'foo'
+    LitInt '1'
+  Arm
+    Ident 'bar'
+    LitRec
+      Arm
+        Ident 'spam'
+        LitInt '3'
+
+---
+record shorthand fields
+---
+{foo, bar}
+# expect
+LitRec
+  Ident 'foo'
+  Ident 'bar'
+
+
+--- --- ---
+dicts
+--- --- ---
+
+---
+dict literal
+---
+dict {foo: 1, 'bar': 2, (key): 3}
+# expect
+Apply
+  Ident 'dict'
+  LitRec
+    Arm
+      Ident 'foo'
+      LitInt '1'
+    Arm
+      LitStr 'bar'
+      LitInt '2'
+    Arm
+      Group
+        Ident 'key'
+      LitInt '3'
+
+
+--- --- ---
+tagged literals
+--- --- ---
+
+---
+integer tagged literal
+---
+10sec
+# expect
+Apply
+  Ident 'sec'
+  LitInt '10'
+
+---
+float tagged literal
+---
+10.5min
+# expect
+Apply
+  Ident 'min'
+  LitFloat '10.5'
+
+---
+grouped tagged literal
+---
+(foo)min
+# expect
+Apply
+  Ident 'min'
+  Ident 'foo'
+
+---
+sequence tagged literal
+---
+[1, 2, 3]foo
+# expect
+Apply
+  Ident 'foo'
+  LitSeq
+    LitInt '1'
+    LitInt '2'
+    LitInt '3'
+
+---
+record tagged literal
+---
+{foo: bar}spam
+# expect
+Apply
+  Ident 'spam'
+  LitRec
+    Arm
+      Ident 'foo'
+      Ident 'bar'

@@ -1,0 +1,43 @@
+--- --- ---
+try
+--- --- ---
+
+---
+try bare
+---
+try foo
+# expect
+Try
+  Ident 'foo'
+
+---
+try with application
+---
+try foo bar
+# expect
+Try
+  Apply
+    Ident 'foo'
+    Ident 'bar'
+
+---
+try bound to name
+---
+a = try open 'file.txt'
+# expect
+Bind
+  Ident 'a'
+  Try
+    Apply
+      Ident 'open'
+      LitStr 'file.txt'
+
+---
+try in pipe
+---
+try foo | bar
+# expect
+Pipe
+  Try
+    Ident 'foo'
+  Ident 'bar'

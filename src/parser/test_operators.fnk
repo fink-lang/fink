@@ -1,0 +1,479 @@
+--- --- ---
+operators
+--- --- ---
+
+
+--- --- ---
+arithmetic
+--- --- ---
+
+---
+unary minus
+---
+-a
+# expect
+UnaryOp '-'
+  Ident 'a'
+
+---
+add
+---
+a + b
+# expect
+InfixOp '+'
+  Ident 'a'
+  Ident 'b'
+
+---
+subtract
+---
+a - b
+# expect
+InfixOp '-'
+  Ident 'a'
+  Ident 'b'
+
+---
+multiply
+---
+a * b
+# expect
+InfixOp '*'
+  Ident 'a'
+  Ident 'b'
+
+---
+divide
+---
+a / b
+# expect
+InfixOp '/'
+  Ident 'a'
+  Ident 'b'
+
+---
+integer divide
+---
+a // b
+# expect
+InfixOp '//'
+  Ident 'a'
+  Ident 'b'
+
+---
+power
+---
+a ** b
+# expect
+InfixOp '**'
+  Ident 'a'
+  Ident 'b'
+
+---
+remainder
+---
+a % b
+# expect
+InfixOp '%'
+  Ident 'a'
+  Ident 'b'
+
+---
+true modulus
+---
+a %% b
+# expect
+InfixOp '%%'
+  Ident 'a'
+  Ident 'b'
+
+---
+divmod
+---
+a /% b
+# expect
+InfixOp '/%'
+  Ident 'a'
+  Ident 'b'
+
+---
+power is right associative
+---
+a ** b ** c
+# expect
+InfixOp '**'
+  Ident 'a'
+  InfixOp '**'
+    Ident 'b'
+    Ident 'c'
+
+---
+multiply binds tighter than add
+---
+a + b * c
+# expect
+InfixOp '+'
+  Ident 'a'
+  InfixOp '*'
+    Ident 'b'
+    Ident 'c'
+
+
+--- --- ---
+logical
+--- --- ---
+
+---
+not
+---
+not a
+# expect
+UnaryOp 'not'
+  Ident 'a'
+
+---
+and
+---
+a and b
+# expect
+InfixOp 'and'
+  Ident 'a'
+  Ident 'b'
+
+---
+or
+---
+a or b
+# expect
+InfixOp 'or'
+  Ident 'a'
+  Ident 'b'
+
+---
+xor
+---
+a xor b
+# expect
+InfixOp 'xor'
+  Ident 'a'
+  Ident 'b'
+
+---
+not binds tighter than and
+---
+not a and not b
+# expect
+InfixOp 'and'
+  UnaryOp 'not'
+    Ident 'a'
+  UnaryOp 'not'
+    Ident 'b'
+
+---
+and binds tighter than or
+---
+a or b and c
+# expect
+InfixOp 'or'
+  Ident 'a'
+  InfixOp 'and'
+    Ident 'b'
+    Ident 'c'
+
+---
+add binds tighter than and
+---
+a + b and c + d
+# expect
+InfixOp 'and'
+  InfixOp '+'
+    Ident 'a'
+    Ident 'b'
+  InfixOp '+'
+    Ident 'c'
+    Ident 'd'
+
+
+--- --- ---
+comparison
+--- --- ---
+
+---
+greater than
+---
+a > b
+# expect
+InfixOp '>'
+  Ident 'a'
+  Ident 'b'
+
+---
+greater than or equal
+---
+a >= b
+# expect
+InfixOp '>='
+  Ident 'a'
+  Ident 'b'
+
+---
+less than
+---
+a < b
+# expect
+InfixOp '<'
+  Ident 'a'
+  Ident 'b'
+
+---
+less than or equal
+---
+a <= b
+# expect
+InfixOp '<='
+  Ident 'a'
+  Ident 'b'
+
+---
+equal
+---
+a == b
+# expect
+InfixOp '=='
+  Ident 'a'
+  Ident 'b'
+
+---
+not equal
+---
+a != b
+# expect
+InfixOp '!='
+  Ident 'a'
+  Ident 'b'
+
+---
+chained comparison same op
+---
+a > b > c
+# expect
+ChainedCmp
+  Ident 'a'
+  '>'
+  Ident 'b'
+  '>'
+  Ident 'c'
+
+---
+chained comparison mixed ops
+---
+a >= b > c
+# expect
+ChainedCmp
+  Ident 'a'
+  '>='
+  Ident 'b'
+  '>'
+  Ident 'c'
+
+---
+containment
+---
+a in b
+# expect
+InfixOp 'in'
+  Ident 'a'
+  Ident 'b'
+
+---
+not containment
+---
+a not in b
+# expect
+InfixOp 'not in'
+  Ident 'a'
+  Ident 'b'
+
+---
+disjoint
+---
+a >< b
+# expect
+InfixOp '><'
+  Ident 'a'
+  Ident 'b'
+
+---
+comparison binds tighter than and
+---
+a > 0 and b < 10
+# expect
+InfixOp 'and'
+  InfixOp '>'
+    Ident 'a'
+    LitInt '0'
+  InfixOp '<'
+    Ident 'b'
+    LitInt '10'
+
+
+--- --- ---
+bitwise
+--- --- ---
+
+---
+bitwise not
+---
+~a
+# expect
+UnaryOp '~'
+  Ident 'a'
+
+---
+bitwise and
+---
+a & b
+# expect
+InfixOp '&'
+  Ident 'a'
+  Ident 'b'
+
+---
+bitwise xor
+---
+a ^ b
+# expect
+InfixOp '^'
+  Ident 'a'
+  Ident 'b'
+
+---
+shift right
+---
+a >> b
+# expect
+InfixOp '>>'
+  Ident 'a'
+  Ident 'b'
+
+---
+shift left
+---
+a << b
+# expect
+InfixOp '<<'
+  Ident 'a'
+  Ident 'b'
+
+---
+rotate right
+---
+a >>> b
+# expect
+InfixOp '>>>'
+  Ident 'a'
+  Ident 'b'
+
+---
+rotate left
+---
+a <<< b
+# expect
+InfixOp '<<<'
+  Ident 'a'
+  Ident 'b'
+
+
+--- --- ---
+member access
+--- --- ---
+
+---
+member by name
+---
+foo.bar
+# expect
+Member
+  Ident 'foo'
+  Ident 'bar'
+
+---
+chained member access
+---
+foo.bar.spam
+# expect
+Member
+  Member
+    Ident 'foo'
+    Ident 'bar'
+  Ident 'spam'
+
+---
+member by hyphenated name
+---
+foo.bar-spam
+# expect
+Member
+  Ident 'foo'
+  Ident 'bar-spam'
+
+---
+member by expression
+---
+foo.(expr)
+# expect
+Member
+  Ident 'foo'
+  Group
+    Ident 'expr'
+
+---
+sequence index
+---
+[1, 2, 3].(0)
+# expect
+Member
+  LitSeq
+    LitInt '1'
+    LitInt '2'
+    LitInt '3'
+  Group
+    LitInt '0'
+
+---
+sequence range slice
+---
+[0, 1, 2, 3, 4].(2...3)
+# expect
+Member
+  LitSeq
+    LitInt '0'
+    LitInt '1'
+    LitInt '2'
+    LitInt '3'
+    LitInt '4'
+  Group
+    Range '...'
+      LitInt '2'
+      LitInt '3'
+
+---
+ident range
+---
+start..end
+# expect
+Range '..'
+  Ident 'start'
+  Ident 'end'
+
+---
+member access on record literal
+---
+{foo: 123}.foo
+# expect
+Member
+  LitRec
+    Arm
+      Ident 'foo'
+      LitInt '123'
+  Ident 'foo'

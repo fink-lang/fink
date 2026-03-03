@@ -1,0 +1,413 @@
+
+---
+match on literal values
+---
+match foo:
+  1: 'one'
+  2: 'two'
+  else: 'other'
+# expect
+Match
+  Patterns
+    Ident 'foo'
+  Arm
+    LitInt '1'
+    LitStr 'one'
+  Arm
+    LitInt '2'
+    LitStr 'two'
+  Arm
+    Ident 'else'
+    LitStr 'other'
+
+---
+match with binding
+---
+match foo:
+  [head, ..tail]: head
+  []: 'empty'
+# expect
+Match
+  Patterns
+    Ident 'foo'
+  Arm
+    LitSeq
+      Ident 'head'
+      Spread
+        Ident 'tail'
+    Ident 'head'
+  Arm
+    LitSeq
+    LitStr 'empty'
+
+---
+match with inline guard
+---
+match foo:
+  n > 0 and n < 10: 'small positive'
+  n > 0: 'large positive'
+  else: 'other'
+# expect
+Match
+  Patterns
+    Ident 'foo'
+  Arm
+    InfixOp 'and'
+      InfixOp '>'
+        Ident 'n'
+        LitInt '0'
+      InfixOp '<'
+        Ident 'n'
+        LitInt '10'
+    LitStr 'small positive'
+  Arm
+    InfixOp '>'
+      Ident 'n'
+      LitInt '0'
+    LitStr 'large positive'
+  Arm
+    Ident 'else'
+    LitStr 'other'
+
+---
+match on type
+---
+match foo:
+  str s: 'its a string'
+  u8 n: 'its a u8'
+# expect
+Match
+  Patterns
+    Ident 'foo'
+  Arm
+    Apply
+      Ident 'str'
+      Ident 's'
+    LitStr 'its a string'
+  Arm
+    Apply
+      Ident 'u8'
+      Ident 'n'
+    LitStr 'its a u8'
+
+---
+match string pattern
+---
+match s:
+  'hello ${..rest}': rest
+  'a'...'z': 'lowercase letter'
+# expect
+Match
+  Patterns
+    Ident 's'
+  Arm
+    StrTempl
+      LitStr 'hello '
+      Spread
+        Ident 'rest'
+    Ident 'rest'
+  Arm
+    Range '...'
+      LitStr 'a'
+      LitStr 'z'
+    LitStr 'lowercase letter'
+
+---
+match sequence patterns
+---
+match items:
+  []: 'empty'
+  [x]: 'one element'
+  [x, y]: 'two elements'
+  [x, ..]: 'one or more'
+# expect
+Match
+  Patterns
+    Ident 'items'
+  Arm
+    LitSeq
+    LitStr 'empty'
+  Arm
+    LitSeq
+      Ident 'x'
+    LitStr 'one element'
+  Arm
+    LitSeq
+      Ident 'x'
+      Ident 'y'
+    LitStr 'two elements'
+  Arm
+    LitSeq
+      Ident 'x'
+      Spread
+    LitStr 'one or more'
+
+---
+match sequence bare spread pattern
+---
+match items:
+  [..]: 'non-empty'
+  []: 'empty'
+# expect
+Match
+  Patterns
+    Ident 'items'
+  Arm
+    LitSeq
+      Spread
+    LitStr 'non-empty'
+  Arm
+    LitSeq
+    LitStr 'empty'
+
+---
+match record bare spread pattern
+---
+match foobar:
+  {..}: 'non-empty'
+  {}: 'empty'
+# expect
+Match
+  Patterns
+    Ident 'foobar'
+  Arm
+    LitRec
+      Spread
+    LitStr 'non-empty'
+  Arm
+    LitRec
+    LitStr 'empty'
+
+---
+match record patterns
+---
+match foobar:
+  {}: 'empty'
+  {foo: 1}: 'foo is 1'
+  {foo: 1, ..}: 'foo is 1 and more'
+# expect
+Match
+  Patterns
+    Ident 'foobar'
+  Arm
+    LitRec
+    LitStr 'empty'
+  Arm
+    LitRec
+      Arm
+        Ident 'foo'
+        LitInt '1'
+    LitStr 'foo is 1'
+  Arm
+    LitRec
+      Arm
+        Ident 'foo'
+        LitInt '1'
+      Spread
+    LitStr 'foo is 1 and more'
+
+---
+match nested record pattern
+---
+match foo:
+  {x: 1, y: {z}}: z
+# expect
+Match
+  Patterns
+    Ident 'foo'
+  Arm
+    LitRec
+      Arm
+        Ident 'x'
+        LitInt '1'
+      Arm
+        Ident 'y'
+        LitRec
+          Ident 'z'
+    Ident 'z'
+
+---
+inline match in application
+---
+log match a: x > 0: x
+# expect
+Apply
+  Ident 'log'
+  Match
+    Patterns
+      Ident 'a'
+    Arm
+      InfixOp '>'
+        Ident 'x'
+        LitInt '0'
+      Ident 'x'
+
+---
+multi-subject match
+---
+match a, b:
+  1, 2: 'one two'
+  1, x: 'one other'
+  else, else: 'other'
+# expect
+Match
+  Patterns
+    Ident 'a'
+    Ident 'b'
+  Arm
+    Patterns
+      LitInt '1'
+      LitInt '2'
+    LitStr 'one two'
+  Arm
+    Patterns
+      LitInt '1'
+      Ident 'x'
+    LitStr 'one other'
+  Arm
+    Patterns
+      Ident 'else'
+      Ident 'else'
+    LitStr 'other'
+
+---
+guard combined with spread in match arm
+---
+match items:
+  [x > 0, ..rest]: rest
+  else: []
+# expect
+Match
+  Patterns
+    Ident 'items'
+  Arm
+    LitSeq
+      InfixOp '>'
+        Ident 'x'
+        LitInt '0'
+      Spread
+        Ident 'rest'
+    Ident 'rest'
+  Arm
+    Ident 'else'
+    LitSeq
+
+---
+nested pattern with guard in binding
+---
+[[x, y], z > 0] = foo
+# expect
+Bind
+  LitSeq
+    LitSeq
+      Ident 'x'
+      Ident 'y'
+    InfixOp '>'
+      Ident 'z'
+      LitInt '0'
+  Ident 'foo'
+
+---
+multiline arm body
+---
+match n:
+  n > 0:
+    x = n * 2
+    x + 1
+  else: 0
+# expect
+Match
+  Patterns
+    Ident 'n'
+  Arm
+    InfixOp '>'
+      Ident 'n'
+      LitInt '0'
+    Bind
+      Ident 'x'
+      InfixOp '*'
+        Ident 'n'
+        LitInt '2'
+    InfixOp '+'
+      Ident 'x'
+      LitInt '1'
+  Arm
+    Ident 'else'
+    LitInt '0'
+
+---
+else arm body as application
+---
+match n:
+  0: true
+  else: is_odd n - 1
+# expect
+Match
+  Patterns
+    Ident 'n'
+  Arm
+    LitInt '0'
+    LitBool true
+  Arm
+    Ident 'else'
+    Apply
+      Ident 'is_odd'
+      InfixOp '-'
+        Ident 'n'
+        LitInt '1'
+
+---
+Ok and Err patterns in match
+---
+match bar result:
+  Ok x: x + 1
+  Err err: log err
+# expect
+Match
+  Patterns
+    Apply
+      Ident 'bar'
+      Ident 'result'
+  Arm
+    Apply
+      Ident 'Ok'
+      Ident 'x'
+    InfixOp '+'
+      Ident 'x'
+      LitInt '1'
+  Arm
+    Apply
+      Ident 'Err'
+      Ident 'err'
+    Apply
+      Ident 'log'
+      Ident 'err'
+
+---
+error chaining
+---
+Err e, 'foo failed'
+# expect
+Apply
+  Ident 'Err'
+  Ident 'e'
+  LitStr 'foo failed'
+
+---
+match arm with nested right-hand binding
+---
+match foobar:
+  {foo: f |= {bar}}: bar
+# expect
+Match
+  Patterns
+    Ident 'foobar'
+  Arm
+    LitRec
+      Arm
+        Ident 'foo'
+        BindRight
+          Ident 'f'
+          LitRec
+            Ident 'bar'
+    Ident 'bar'

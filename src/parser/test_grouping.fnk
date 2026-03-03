@@ -1,0 +1,141 @@
+--- --- ---
+grouping, separators, and precedence
+--- --- ---
+
+
+--- --- ---
+parentheses
+--- --- ---
+
+---
+grouping stripped in arithmetic
+---
+(1 + 2) * (2 + 3)
+# expect
+InfixOp '*'
+  InfixOp '+'
+    LitInt '1'
+    LitInt '2'
+  InfixOp '+'
+    LitInt '2'
+    LitInt '3'
+
+---
+grouping application args without comma
+---
+[(add 1, 2), (add 3, 4)]
+# expect
+LitSeq
+  Apply
+    Ident 'add'
+    LitInt '1'
+    LitInt '2'
+  Apply
+    Ident 'add'
+    LitInt '3'
+    LitInt '4'
+
+---
+grouping to override right-to-left application
+---
+foo (bar spam) ham
+# expect
+Apply
+  Ident 'foo'
+  Apply
+    Ident 'bar'
+    Ident 'spam'
+  Ident 'ham'
+
+
+--- --- ---
+comma vs semicolon
+--- --- ---
+
+---
+comma separates args weakly
+---
+add mul 2, 3, mul 3, 4
+# expect
+Apply
+  Ident 'add'
+  Apply
+    Ident 'mul'
+    LitInt '2'
+    LitInt '3'
+    Apply
+      Ident 'mul'
+      LitInt '3'
+      LitInt '4'
+
+---
+semicolon groups strongly — same AST as parenthesised
+---
+add mul 2, 3; mul 3, 4
+# expect
+Apply
+  Ident 'add'
+  Apply
+    Ident 'mul'
+    LitInt '2'
+    LitInt '3'
+  Apply
+    Ident 'mul'
+    LitInt '3'
+    LitInt '4'
+
+
+--- --- ---
+newline as separator
+--- --- ---
+
+---
+multiline args — same AST as inline with semicolons
+---
+add
+  mul 2, 3
+  mul 3, 4
+# expect
+Apply
+  Ident 'add'
+  Apply
+    Ident 'mul'
+    LitInt '2'
+    LitInt '3'
+  Apply
+    Ident 'mul'
+    LitInt '3'
+    LitInt '4'
+
+---
+trailing comma continues onto next line
+---
+foo bar,
+  spam
+# expect
+Apply
+  Ident 'foo'
+  Ident 'bar'
+  Ident 'spam'
+
+
+--- --- ---
+disambiguation with semicolon
+--- --- ---
+
+---
+semicolon makes spread guard boundary explicit
+---
+[is_odd head; ..tail] = [3, 4, 5]
+# expect
+Bind
+  LitSeq
+    Apply
+      Ident 'is_odd'
+      Ident 'head'
+    Spread
+      Ident 'tail'
+  LitSeq
+    LitInt '3'
+    LitInt '4'
+    LitInt '5'

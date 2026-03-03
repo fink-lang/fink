@@ -1,0 +1,317 @@
+
+--- --- ---
+left-hand binding
+--- --- ---
+
+---
+simple binding
+---
+foo = 1
+# expect
+Bind
+  Ident 'foo'
+  LitInt '1'
+
+---
+sequence destructure
+---
+[a, b] = [1, 2]
+# expect
+Bind
+  LitSeq
+    Ident 'a'
+    Ident 'b'
+  LitSeq
+    LitInt '1'
+    LitInt '2'
+
+---
+record destructure
+---
+{x, y} = point
+# expect
+Bind
+  LitRec
+    Ident 'x'
+    Ident 'y'
+  Ident 'point'
+
+---
+record destructure with rename
+---
+{x, y: z} = point
+# expect
+Bind
+  LitRec
+    Ident 'x'
+    Arm
+      Ident 'y'
+      Ident 'z'
+  Ident 'point'
+
+---
+nested record destructure
+---
+{a, b: {c, d}} = foo
+# expect
+Bind
+  LitRec
+    Ident 'a'
+    Arm
+      Ident 'b'
+      LitRec
+        Ident 'c'
+        Ident 'd'
+  Ident 'foo'
+
+---
+nested destructure
+---
+[a, [b, c]] = [1, [2, 3]]
+# expect
+Bind
+  LitSeq
+    Ident 'a'
+    LitSeq
+      Ident 'b'
+      Ident 'c'
+  LitSeq
+    LitInt '1'
+    LitSeq
+      LitInt '2'
+      LitInt '3'
+
+---
+spread head and tail
+---
+[head, ..tail] = [1, 2, 3, 4]
+# expect
+Bind
+  LitSeq
+    Ident 'head'
+    Spread
+      Ident 'tail'
+  LitSeq
+    LitInt '1'
+    LitInt '2'
+    LitInt '3'
+    LitInt '4'
+
+---
+spread head middle and end
+---
+[head, ..middle, end] = [1, 2, 3, 4]
+# expect
+Bind
+  LitSeq
+    Ident 'head'
+    Spread
+      Ident 'middle'
+    Ident 'end'
+  LitSeq
+    LitInt '1'
+    LitInt '2'
+    LitInt '3'
+    LitInt '4'
+
+---
+spread with guard
+---
+[head > 3, ..tail] = [4, 5, 6]
+# expect
+Bind
+  LitSeq
+    InfixOp '>'
+      Ident 'head'
+      LitInt '3'
+    Spread
+      Ident 'tail'
+  LitSeq
+    LitInt '4'
+    LitInt '5'
+    LitInt '6'
+
+---
+guard with function call in pattern
+---
+[(is_odd head), ..tail] = [3, 4, 5]
+# expect
+Bind
+  LitSeq
+    Apply
+      Ident 'is_odd'
+      Ident 'head'
+    Spread
+      Ident 'tail'
+  LitSeq
+    LitInt '3'
+    LitInt '4'
+    LitInt '5'
+
+---
+string pattern binding
+---
+'start ${middle} end' = 'foo bar spam'
+# expect
+Bind
+  StrTempl
+    LitStr 'start '
+    Ident 'middle'
+    LitStr ' end'
+  LitStr 'foo bar spam'
+
+
+--- --- ---
+right-hand binding
+--- --- ---
+
+---
+simple right-hand binding
+---
+123 |= b
+# expect
+BindRight
+  LitInt '123'
+  Ident 'b'
+
+---
+multiline right-hand binding
+---
+foo
+  arg1
+  arg2
+|= result
+# expect
+BindRight
+  Apply
+    Ident 'foo'
+    Ident 'arg1'
+    Ident 'arg2'
+  Ident 'result'
+
+---
+nested right-hand binding
+---
+[a |= [b, 2], [3, 4]] = [[1, 2], [3, 4]]
+# expect
+Bind
+  LitSeq
+    BindRight
+      Ident 'a'
+      LitSeq
+        Ident 'b'
+        LitInt '2'
+    LitSeq
+      LitInt '3'
+      LitInt '4'
+  LitSeq
+    LitSeq
+      LitInt '1'
+      LitInt '2'
+    LitSeq
+      LitInt '3'
+      LitInt '4'
+
+---
+right-hand binding with sequence destructure
+---
+get_pair foo |= [a, b]
+# expect
+BindRight
+  Apply
+    Ident 'get_pair'
+    Ident 'foo'
+  LitSeq
+    Ident 'a'
+    Ident 'b'
+
+---
+right-hand binding with record destructure
+---
+get_point foo |= {x, y}
+# expect
+BindRight
+  Apply
+    Ident 'get_point'
+    Ident 'foo'
+  LitRec
+    Ident 'x'
+    Ident 'y'
+
+---
+right-hand binding with nested destructure
+---
+compute foo |= {x, y: [a, b]}
+# expect
+BindRight
+  Apply
+    Ident 'compute'
+    Ident 'foo'
+  LitRec
+    Ident 'x'
+    Arm
+      Ident 'y'
+      LitSeq
+        Ident 'a'
+        Ident 'b'
+
+---
+nested right-hand binding in record pattern
+---
+{foo: f |= {bar, spam: num ni}} = {foo: {bar: 1, spam: 2}}
+# expect
+Bind
+  LitRec
+    Arm
+      Ident 'foo'
+      BindRight
+        Ident 'f'
+        LitRec
+          Ident 'bar'
+          Arm
+            Ident 'spam'
+            Apply
+              Ident 'num'
+              Ident 'ni'
+  LitRec
+    Arm
+      Ident 'foo'
+      LitRec
+        Arm
+          Ident 'bar'
+          LitInt '1'
+        Arm
+          Ident 'spam'
+          LitInt '2'
+
+---
+spread guard with right-hand binding
+---
+[..(str) |= strings, ..other] = [1, '2', 3, '4']
+# expect
+Bind
+  LitSeq
+    Spread
+      BindRight
+        Ident 'str'
+        Ident 'strings'
+    Spread
+      Ident 'other'
+  LitSeq
+    LitInt '1'
+    LitStr '2'
+    LitInt '3'
+    LitStr '4'
+
+---
+import
+---
+{foo, bar} = import './foobar.fnk'
+# expect
+Bind
+  LitRec
+    Ident 'foo'
+    Ident 'bar'
+  Apply
+    Ident 'import'
+    LitStr './foobar.fnk'

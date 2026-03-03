@@ -1,0 +1,126 @@
+--- --- ---
+custom blocks
+--- --- ---
+
+
+---
+block with no args and expression body
+---
+test_block: 'hello'
+# expect
+Block
+  Ident 'test_block'
+  Patterns
+  LitStr 'hello'
+
+---
+block with patterns and expression body
+---
+test_block a, b: a + b
+# expect
+Block
+  Ident 'test_block'
+  Patterns
+    Ident 'a'
+    Ident 'b'
+  InfixOp '+'
+    Ident 'a'
+    Ident 'b'
+
+---
+block with patterns and multiline body
+---
+test_block a, b:
+  x = a + b
+  x * 2
+# expect
+Block
+  Ident 'test_block'
+  Patterns
+    Ident 'a'
+    Ident 'b'
+  Bind
+    Ident 'x'
+    InfixOp '+'
+      Ident 'a'
+      Ident 'b'
+  InfixOp '*'
+    Ident 'x'
+    LitInt '2'
+
+---
+block with arms
+---
+test_block a:
+  1: 'one'
+  2: 'two'
+# expect
+Block
+  Ident 'test_block'
+  Patterns
+    Ident 'a'
+  Arm
+    LitInt '1'
+    LitStr 'one'
+  Arm
+    LitInt '2'
+    LitStr 'two'
+
+---
+block bound to name
+---
+result = test_block a, b:
+  a + b
+# expect
+Bind
+  Ident 'result'
+  Block
+    Ident 'test_block'
+    Patterns
+      Ident 'a'
+      Ident 'b'
+    InfixOp '+'
+      Ident 'a'
+      Ident 'b'
+
+---
+inline block in application
+---
+log test_block: 'hello'
+# expect
+Apply
+  Ident 'log'
+  Block
+    Ident 'test_block'
+    Patterns
+    LitStr 'hello'
+
+---
+block with sequence destructure param
+---
+test_block [a, b]: a + b
+# expect
+Block
+  Ident 'test_block'
+  Patterns
+    LitSeq
+      Ident 'a'
+      Ident 'b'
+  InfixOp '+'
+    Ident 'a'
+    Ident 'b'
+
+---
+block with record destructure param
+---
+test_block {x, y}: x + y
+# expect
+Block
+  Ident 'test_block'
+  Patterns
+    LitRec
+      Ident 'x'
+      Ident 'y'
+  InfixOp '+'
+    Ident 'x'
+    Ident 'y'
