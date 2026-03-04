@@ -1,0 +1,352 @@
+--- --- ---
+CPS IR — design notes and transform examples
+--- --- ---
+
+# Every function has the full calling convention: fn args, $env, $state, $cont:
+# $env  — captured env (record of captured bindings; carried by the closure object)
+# $state — opaque mutable state (I/O, heap, effects; threaded through every call)
+# $cont  — continuation (what to do with the result)
+#
+# Primitives injected into every module:
+#   reserve $env, 'name', ...  — pre-allocate slots in env for forward refs (module level)
+#   register $env, 'name', val — bind a name to a value in env; returns updated env
+#                                emitted for every param binding and local = binding
+#   resolve $env, 'name'       — look up a name in env, returns value
+#   apply func, $state, arg1, arg2, ..., fn $result, $state: ...
+#                              — dispatch to a closure; closure carries its own $env
+#                                $state is threaded through (may be updated by call)
+#   Fn $env, fn args, $env, $state, $cont: body
+#                              — construct a closure capturing current $env
+#
+# apply does NOT receive $env from the caller — the closure object carries its own.
+# $state IS passed by the caller — effects thread through every call.
+# register is explicit in CPS output — makes scoping mechanics visible.
+#
+# CPS IR nodes (subset of Fink AST):
+#   Fn      — fn params: body  (body is a single chained expression)
+#   Apply   — apply func, $state, arg1, ..., fn $result, $state:
+#   Bind    — name = value  (irrefutable; cont is the next expression in the chain)
+#   Match   — preserved for optimizer; lowered to branches at codegen
+#   Try     — preserved for optimizer
+#   Ident   — variable reference
+#   literals — Const values
+#
+# Eliminated during CPS:
+#   Pipe, Partial, Group (transparent), Block, BindRight, Spread, Range,
+#   Member, LitSeq, LitRec, ChainedCmp, StrTempl → all become Apply chains
+
+
+
+{test, expect, equals} = import '@fink/testing.fnk'
+{cps, module} = import '@fink/compiler/transform'
+
+--- --- ---
+closure — Fn captures env, apply does not receive env from caller
+--- --- ---
+
+test 'closure over outer variable', fn:
+  expect cps fn:
+    foo = fn a:
+      ni = fn b:
+        a + b
+      ni
+
+  , equals fn:
+    module fn {reserve, register, resolve, apply, Fn, $export}, $env, $state:
+      $env1 = reserve $env, 'foo'
+      foo = Fn $env1, fn a, $env, $state, $cont:
+        $env1 = register $env, 'a', a
+        ni = Fn $env1, fn b, $env, $state, $cont:
+          $env1 = register $env, 'b', b
+          $v0 = resolve $env1, '+'
+          $v1 = resolve $env1, 'a'
+          apply $v0, $state, $v1, b, fn $result, $state:
+            $cont $result, $state
+        $env1 = register $env1, 'ni', ni
+        $cont ni, $state
+      $export {foo}, $state
+
+
+--- --- ---
+literals and bindings
+--- --- ---
+
+test 'simple literal binding', fn:
+  expect cps fn:
+    foo = 1
+
+
+  , equals fn:
+    module fn {reserve, register, $export}, $env, $state:
+      $env1 = reserve $env, 'foo'
+      $env2 = register $env1, 'foo', 1
+      $export {foo}, $state
+
+test 'sequential bindings — cont is next expression in chain', fn:
+  expect cps fn:
+    foo = 1
+    bar = foo + 1
+
+
+  , equals fn:
+    module fn {reserve, register, resolve, apply, $export}, $env, $state:
+      $env1 = reserve $env, 'foo', 'bar'
+      $env2 = register $env1, 'foo', 1
+      $v0 = resolve $env2, '+'
+      $v1 = resolve $env2, 'foo'
+      apply $v0, $state, $v1, 1, fn bar, $state:
+        $env3 = register $env2, 'bar', bar
+        $export {foo, bar}, $state
+
+test 'binding rhs is a call', fn:
+  expect cps fn:
+    foo = add 1, 2
+
+
+  , equals fn:
+    module fn {reserve, register, resolve, apply, $export}, $env, $state:
+      $env1 = reserve $env, 'foo'
+      $v0 = resolve $env1, 'add'
+      apply $v0, $state, 1, 2, fn foo, $state:
+        $env2 = register $env1, 'foo', foo
+        $export {foo}, $state
+
+
+--- --- ---
+functions
+--- --- ---
+
+test 'identity function', fn:
+  expect cps fn:
+    fn x: x
+
+  , equals fn:
+    Fn $env, fn x, $env0, $state, $cont:
+      $env1 = register $env0, 'x', x
+      $cont x, $state
+
+
+test 'function with operator in body', fn:
+  expect cps fn:
+    fn x: x + 1
+  , equals fn:
+    Fn $env, fn x, $env0, $state, $cont:
+      $env1 = register $env0, 'x', x
+      $v0 = resolve $env1, '+'
+      apply $v0, $state, x, 1, fn $result, $state:
+        $cont $result, $state
+
+
+test 'function binding', fn:
+  expect cps fn:
+    inc = fn x: x + 1
+
+  , equals fn:
+    inc = Fn $env, fn x, $env0, $state, $cont:
+      $env1 = register $env0, 'x', x
+      $v0 = resolve $env1, '+'
+      apply $v0, $state, x, 1, fn $result, $state:
+        $cont $result, $state
+
+
+test 'multi-param function', fn:
+  expect cps fn:
+    fn x, y: x + y
+
+  , equals fn:
+    Fn $env, fn x, y, $env0, $state, $cont:
+      $env1 = register $env0, 'x', x
+      $env2 = register $env1, 'y', y
+      $v0 = resolve $env2, '+'
+      apply $v0, $state, x, y, fn $result, $state:
+        $cont $result, $state
+
+
+--- --- ---
+application
+--- --- ---
+
+test 'simple call', fn:
+  expect cps fn:
+    add 1, 2
+
+  , equals fn:
+    $v0 = resolve $env, 'add'
+    apply $v0, $state, 1, 2, $cont
+
+
+test 'nested call — inner result threaded to outer', fn:
+  expect cps fn:
+    add (mul 2, 3), 1
+
+  , equals fn:
+    $v0 = resolve $env, 'mul'
+    apply $v0, $state, 2, 3, fn $v1, $state:
+      $v2 = resolve $env, 'add'
+      apply $v2, $state, $v1, 1, $cont
+
+
+test 'calling a local — still goes through resolve', fn:
+  expect cps fn:
+    inc = fn x: x + 1
+    inc 5
+
+  , equals fn:
+    inc = Fn $env, fn x, $env0, $state, $cont:
+      $env1 = register $env0, 'x', x
+      $v0 = resolve $env1, '+'
+      apply $v0, $state, x, 1, fn $result, $state:
+        $cont $result, $state
+    $env1 = register $env, 'inc', inc
+    $v1 = resolve $env1, 'inc'
+    apply $v1, $state, 5, $cont
+
+
+--- --- ---
+pipe — inlined to nested calls
+--- --- ---
+
+test 'simple pipe', fn:
+  expect cps fn:
+    x | f
+
+  , equals fn:
+    $v0 = resolve $env, 'f'
+    apply $v0, $state, x, $cont
+
+
+test 'pipe chain', fn:
+  expect cps fn:
+    x | f | g
+
+  , equals fn:
+    $v0 = resolve $env, 'f'
+    apply $v0, $state, x, fn $v1, $state:
+      $v2 = resolve $env, 'g'
+      apply $v2, $state, $v1, $cont
+
+
+--- --- ---
+sequential expressions — each result threaded forward
+--- --- ---
+
+test 'three sequential bindings', fn:
+  expect cps fn:
+    a = 1
+    b = 2
+    c = a + b
+
+  , equals fn:
+    module fn {reserve, register, resolve, apply, $export}, $env, $state:
+      $env1 = reserve $env, 'a', 'b', 'c'
+      $env2 = register $env1, 'a', 1
+      $env3 = register $env2, 'b', 2
+      $v0 = resolve $env3, '+'
+      $v1 = resolve $env3, 'a'
+      $v2 = resolve $env3, 'b'
+      apply $v0, $state, $v1, $v2, fn c, $state:
+        $env4 = register $env3, 'c', c
+        $export {a, b, c}, $state
+
+
+test 'expression result discarded', fn:
+  expect cps fn:
+    foo = 1
+    log 'hello'
+    bar = 2
+
+  , equals fn:
+    module fn {reserve, register, resolve, apply, $export}, $env, $state:
+      $env1 = reserve $env, 'foo', 'bar'
+      $env2 = register $env1, 'foo', 1
+      $v0 = resolve $env2, 'log'
+      apply $v0, $state, 'hello', fn _, $state:
+        $env3 = register $env2, 'bar', 2
+        $export {foo, bar}, $state
+
+
+--- --- ---
+match — preserved for optimizer
+--- --- ---
+
+test 'simple match', fn:
+  expect cps fn:
+    match x:
+      1: 'one'
+      2: 'two'
+
+  , equals fn:
+    match x:
+      1: 'one'
+      2: 'two'
+
+
+test 'match with expression in arm', fn:
+  expect cps fn:
+    match x:
+      true: y + 1
+      false: y
+
+  , equals fn:
+    match x:
+      true:
+        $v0 = resolve $env, '+'
+        apply $v0, $state, y, 1, fn $result, $state:
+          $cont $result, $state
+      false:
+        $cont y, $state
+
+
+--- --- ---
+module level — forward refs hoisted
+--- --- ---
+
+test 'two bindings at module level', fn:
+  expect cps fn:
+    foo = 1
+    bar = 2
+
+  , equals fn:
+    module fn {reserve, register, $export}, $env, $state:
+      $env1 = reserve $env, 'foo', 'bar'
+      $env2 = register $env1, 'foo', 1
+      $env3 = register $env2, 'bar', 2
+      $export {foo, bar}, $state
+
+
+test 'mutual recursion — both slots pre-reserved, exports via $export', fn:
+  expect cps fn:
+    is_even = fn n:
+      match n:
+        0: true
+        _: is_odd n - 1
+
+    is_odd  = fn n:
+      match n:
+        0: false,
+        _: is_even n - 1
+
+  , equals fn:
+    module fn {reserve, register, resolve, apply, Fn, $export}, $env, $state:
+      $env1 = reserve $env, 'is_even', 'is_odd'
+      is_even = Fn $env1, fn n, $env0, $state, $cont:
+        $env1 = register $env0, 'n', n
+        match n:
+          0: $cont true, $state
+          _:
+            $v0 = resolve $env1, '-'
+            apply $v0, $state, n, 1, fn $v1, $state:
+              $v2 = resolve $env1, 'is_odd'
+              apply $v2, $state, $v1, $cont
+      $env2 = register $env1, 'is_even', is_even
+      is_odd = Fn $env2, fn n, $env0, $state, $cont:
+        $env1 = register $env0, 'n', n
+        match n:
+          0: $cont false, $state
+          _:
+            $v0 = resolve $env1, '-'
+            apply $v0, $state, n, 1, fn $v1, $state:
+              $v2 = resolve $env1, 'is_even'
+              apply $v2, $state, $v1, $cont
+      $env3 = register $env2, 'is_odd', is_odd
+      $export {is_even, is_odd}, $state

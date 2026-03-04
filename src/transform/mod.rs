@@ -1,3 +1,4 @@
+pub mod cps;
 pub mod partial;
 
 use crate::ast::{CmpPart, Node, NodeKind};
