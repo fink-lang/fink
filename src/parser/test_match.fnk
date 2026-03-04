@@ -207,6 +207,58 @@ Match
     LitStr 'foo is 1 and more'
 
 ---
+match record exact - empty rest
+---
+match foobar:
+  {foo: 1, ..{}}: 'foo is 1 and nothing else'
+# expect
+Match
+  Patterns
+    Ident 'foobar'
+  Arm
+    LitRec
+      Arm
+        Ident 'foo'
+        LitInt '1'
+      Spread
+        LitRec
+    LitStr 'foo is 1 and nothing else'
+
+---
+match record with bound rest
+---
+match foobar:
+  {foo: 1, ..rest}: rest
+# expect
+Match
+  Patterns
+    Ident 'foobar'
+  Arm
+    LitRec
+      Arm
+        Ident 'foo'
+        LitInt '1'
+      Spread
+        Ident 'rest'
+    Ident 'rest'
+
+---
+match seq exact - empty rest
+---
+match items:
+  [a, ..[]]:'only a'
+# expect
+Match
+  Patterns
+    Ident 'items'
+  Arm
+    LitSeq
+      Ident 'a'
+      Spread
+        LitSeq
+    LitStr 'only a'
+
+---
 match nested record pattern
 ---
 match foo:

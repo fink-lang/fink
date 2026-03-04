@@ -150,6 +150,53 @@ Bind
     LitInt '5'
 
 ---
+record destructure with spread rest
+---
+{x, ..rest} = point
+# expect
+Bind
+  LitRec
+    Ident 'x'
+    Spread
+      Ident 'rest'
+  Ident 'point'
+
+---
+record destructure with non-empty rest assertion
+---
+{x, ..} = point
+# expect
+Bind
+  LitRec
+    Ident 'x'
+    Spread
+  Ident 'point'
+
+---
+record destructure exact - empty rest
+---
+{x, ..{}} = point
+# expect
+Bind
+  LitRec
+    Ident 'x'
+    Spread
+      LitRec
+  Ident 'point'
+
+---
+seq destructure exact - empty rest
+---
+[a, ..[]] = foo
+# expect
+Bind
+  LitSeq
+    Ident 'a'
+    Spread
+      LitSeq
+  Ident 'foo'
+
+---
 string pattern binding
 ---
 'start ${middle} end' = 'foo bar spam'
