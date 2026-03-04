@@ -166,7 +166,7 @@ impl<'src> Parser<'src> {
       // BlockCont consumed but no "|" — problematic (can't put back).
       // This means the BlockCont was a statement separator, not a pipe continuation.
       // We'll handle this gracefully: the parse_expr caller saw BlockCont but it was consumed.
-      // This should not happen in valid Larix code at the pipe level.
+      // This should not happen in valid Fink code at the pipe level.
     }
     false
   }
