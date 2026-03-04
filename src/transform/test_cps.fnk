@@ -49,7 +49,7 @@ CPS IR — design notes and transform examples
 #                              — extract field by key; returns updated m
 #     match_has_more m, $state, fn m, $state: ..., fn m, $state:
 #                              — two conts: non-empty rest / empty rest
-#     drain m, $state, fn m, rest, $state:
+#     match_drain m, $state, fn m, rest, $state:
 #                              — consume all remaining into rest binding
 #     match_len m, n, $state, fn m, $state: ..., fn m, $state:
 #                              — check exact remaining length (SeqMatcher only)
@@ -413,7 +413,7 @@ test 'seq pattern with bound rest', fn:
     [a, ..rest] = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_at, drain, match_block, $panic, $export}, $env, $state:
+    module fn {reserve, resolve, register, apply, get_matcher, match_pop_at, match_drain, match_block, $panic, $export}, $env, $state:
       $env1 = reserve $env, 'a', 'rest'
       $v0 = resolve $env1, 'foo'
       match_block $v0, $state,
@@ -422,7 +422,7 @@ test 'seq pattern with bound rest', fn:
             fn m, $fail, $state:
               match_pop_at m, 0, $state,
                 fn m, a, $state:
-                  drain m, $state,
+                  match_drain m, $state,
                     fn m, rest, $state:
                       $env2 = register $env1, 'a', a
                       $env3 = register $env2, 'rest', rest
@@ -496,7 +496,7 @@ test 'rec pattern with bound rest', fn:
     {bar, ..rest} = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_field, drain, match_block, $panic, $export}, $env, $state:
+    module fn {reserve, resolve, register, apply, get_matcher, match_pop_field, match_drain, match_block, $panic, $export}, $env, $state:
       $env1 = reserve $env, 'bar', 'rest'
       $v0 = resolve $env1, 'foo'
       match_block $v0, $state,
@@ -505,7 +505,7 @@ test 'rec pattern with bound rest', fn:
             fn m, $fail, $state:
               match_pop_field m, 'bar', $state,
                 fn m, bar, $state:
-                  drain m, $state,
+                  match_drain m, $state,
                     fn m, rest, $state:
                       $env2 = register $env1, 'bar', bar
                       $env3 = register $env2, 'rest', rest
