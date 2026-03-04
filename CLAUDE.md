@@ -1,11 +1,11 @@
-# Larix Compiler
+# Fink Compiler
 
-Larix is a new functional programming language and compiler toolchain, built in Rust. It is a refined successor to [Fink](https://github.com/fink-lang) (which compiled to JS and was self-hosted). Long-term goal: self-hosting, targeting WASM.
+Fink is a functional programming language and compiler toolchain, built in Rust. It is a refined successor to the original [Fink](https://github.com/fink-lang) (which compiled to JS and was self-hosted). Long-term goal: self-hosting, targeting WASM.
 
 ## Project Structure
 
 ```
-larix/
+fink/
 ├── src/
 │   ├── lib.rs          # shared compiler library
 │   ├── lexer/
@@ -13,7 +13,7 @@ larix/
 │   ├── ast/
 │   ├── codegen/
 │   └── bin/
-│       └── larix.rs    # main compiler driver CLI
+│       └── fink.rs     # main compiler driver CLI
 ├── docs/
 │   └── examples/       # language spec by example (.fnk files)
 └── CLAUDE.md
