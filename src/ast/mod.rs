@@ -81,6 +81,9 @@ pub enum NodeKind<'src> {
   // Partial — ? hole for partial application
   Partial,
 
+  // Wildcard — _ non-binding placeholder; lexed as Ident("_"), promoted by parser
+  Wildcard,
+
   // --- binding ---
 
   // Bind lhs = rhs
@@ -237,6 +240,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       print_node(inner, out, depth + 1);
     }
     NodeKind::Partial => { out.push_str("Partial"); }
+    NodeKind::Wildcard => { out.push_str("Wildcard"); }
     NodeKind::Try(inner) => {
       out.push_str("Try");
       out.push('\n');

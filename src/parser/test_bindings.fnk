@@ -315,3 +315,88 @@ Bind
   Apply
     Ident 'import'
     LitStr './foobar.fnk'
+
+
+--- --- ---
+wildcard
+--- --- ---
+
+---
+bare wildcard
+---
+_
+# expect
+Wildcard
+
+---
+wildcard in sequence destructure
+---
+[_, x] = [1, 2]
+# expect
+Bind
+  LitSeq
+    Wildcard
+    Ident 'x'
+  LitSeq
+    LitInt '1'
+    LitInt '2'
+
+---
+wildcard in fn params
+---
+fn _, b: b
+# expect
+Fn
+  Patterns
+    Wildcard
+    Ident 'b'
+  Ident 'b'
+
+---
+wildcard does not match _foo
+---
+_foo
+# expect
+Ident '_foo'
+
+---
+implicit wildcard - middle slots
+---
+[_, _, n]
+# expect
+LitSeq
+  Wildcard
+  Wildcard
+  Ident 'n'
+
+---
+implicit wildcard - leading comma
+---
+[, , n]
+# expect
+LitSeq
+  Wildcard
+  Wildcard
+  Ident 'n'
+
+---
+implicit wildcard - mixed explicit and implicit
+---
+[_, , n]
+# expect
+LitSeq
+  Wildcard
+  Wildcard
+  Ident 'n'
+
+---
+implicit wildcard in fn params
+---
+fn , , c: c
+# expect
+Fn
+  Patterns
+    Wildcard
+    Wildcard
+    Ident 'c'
+  Ident 'c'

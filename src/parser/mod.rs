@@ -224,7 +224,7 @@ impl<'src> Parser<'src> {
     // Fast path for ident head: bump directly so `..` after ident is not consumed as a range.
     // Skip fast path for keywords/operators that need special handling downstream.
     if self.at(TokenKind::Ident)
-      && !matches!(self.peek().src, "true" | "false" | "not" | "and" | "or" | "xor" | "in" | "else" | "try")
+      && !matches!(self.peek().src, "true" | "false" | "_" | "not" | "and" | "or" | "xor" | "in" | "else" | "try")
     {
       let name_tok = self.bump();
       let name = name_tok.src;
@@ -999,6 +999,12 @@ impl<'src> Parser<'src> {
   fn parse_seq_items(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
     let mut items = vec![];
     self.skip_block_tokens();
+    // Consume leading commas as implicit wildcards: [, , n]
+    while self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
+      let sep = self.bump();
+      items.push(Node::new(NodeKind::Wildcard, sep.loc));
+      self.skip_block_tokens();
+    }
     while !self.at(TokenKind::BracketClose) && !self.at(TokenKind::EOF) {
       if self.at(TokenKind::Sep) && self.peek().src == ".." {
         items.push(self.parse_spread()?);
@@ -1007,8 +1013,14 @@ impl<'src> Parser<'src> {
       }
       self.skip_block_tokens();
       if self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
-        self.bump();
+        let sep = self.bump();
         self.skip_block_tokens();
+        // Implicit wildcard: consecutive comma with no expression between
+        while self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
+          items.push(Node::new(NodeKind::Wildcard, sep.loc));
+          self.bump();
+          self.skip_block_tokens();
+        }
       }
     }
     Ok(items)
@@ -1106,6 +1118,7 @@ impl<'src> Parser<'src> {
         let kind = match t.src {
           "true" => NodeKind::LitBool(true),
           "false" => NodeKind::LitBool(false),
+          "_" => NodeKind::Wildcard,
           _ => NodeKind::Ident(t.src),
         };
         Ok(Node::new(kind, t.loc))
@@ -1206,6 +1219,12 @@ impl<'src> Parser<'src> {
     let start = self.peek().loc.start;
     let mut items: Vec<Node<'src>> = vec![];
 
+    // Leading commas as implicit wildcards: fn , , c: c
+    while self.at(TokenKind::Comma) {
+      let sep = self.bump();
+      items.push(Node::new(NodeKind::Wildcard, sep.loc));
+    }
+
     while !self.at(TokenKind::Colon) && !self.at(TokenKind::EOF) {
       if self.at(TokenKind::Sep) && self.peek().src == ".." {
         items.push(self.parse_spread()?);
@@ -1224,7 +1243,12 @@ impl<'src> Parser<'src> {
         items.push(param);
       }
       if self.at(TokenKind::Comma) {
-        self.bump();
+        let sep = self.bump();
+        // Consecutive commas as implicit wildcards
+        while self.at(TokenKind::Comma) {
+          items.push(Node::new(NodeKind::Wildcard, sep.loc));
+          self.bump();
+        }
       } else {
         break;
       }

@@ -477,3 +477,35 @@ Member
       Ident 'foo'
       LitInt '123'
   Ident 'foo'
+
+---
+member by string key
+---
+{'ni nu': 123}.('ni nu')
+# expect
+Member
+  LitRec
+    Arm
+      LitStr 'ni nu'
+      LitInt '123'
+  Group
+    LitStr 'ni nu'
+
+---
+member by sequence key
+---
+[0, 1, 2, 3, 4].([2, 3])
+# expect
+Member
+  LitSeq
+    LitInt '0'
+    LitInt '1'
+    LitInt '2'
+    LitInt '3'
+    LitInt '4'
+  Group
+    LitSeq
+      LitInt '2'
+      LitInt '3'
+
+
