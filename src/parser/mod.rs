@@ -1166,12 +1166,8 @@ impl<'src> Parser<'src> {
           let loc = Loc { start: inner.loc.start, end: tag.loc.end };
           return Ok(Node::new(NodeKind::Apply { func: Box::new(func), args: vec![inner] }, loc));
         }
-        // Strip Group wrapper (not semantically significant in atom position)
-        if let NodeKind::Group(inner) = group.kind {
-          Ok(*inner)
-        } else {
-          Ok(group)
-        }
+        // Preserve Group — it's explicit syntax and semantically significant (e.g. partial scope boundary)
+        Ok(group)
       }
       _ => Err(ParseError {
         message: format!("unexpected token {:?}", tok.kind),

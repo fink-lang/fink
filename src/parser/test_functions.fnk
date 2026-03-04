@@ -234,9 +234,10 @@ Bind
             Spread
               Ident 'rest'
           LitSeq
-            Apply
-              Ident 'map_fn'
-              Ident 'item'
+            Group
+              Apply
+                Ident 'map_fn'
+                Ident 'item'
             Spread
               Apply
                 Ident 'map'
@@ -411,10 +412,11 @@ map (fn x: x + 1), items
 # expect
 Apply
   Ident 'map'
-  Fn
-    Patterns
-      Ident 'x'
-    InfixOp '+'
-      Ident 'x'
-      LitInt '1'
+  Group
+    Fn
+      Patterns
+        Ident 'x'
+      InfixOp '+'
+        Ident 'x'
+        LitInt '1'
   Ident 'items'

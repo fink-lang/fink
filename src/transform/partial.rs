@@ -1,7 +1,312 @@
 // Partial application pass — desugars `?` (Partial nodes) into `Fn` nodes.
 //
-// e.g.  add 5, ?        =>  fn _0: add 5, _0
-//       ? + 5           =>  fn _0: _0 + 5
-//       ? + ?           =>  fn _0, _1: _0 + _1
+// Scoping rules:
+//   - `?` bubbles up to the nearest enclosing scope boundary
+//   - Scope boundaries: Group (...), each segment of a Pipe, top of statement
+//   - Everything else is transparent: Apply, InfixOp, UnaryOp, Member, Range,
+//     Spread, LitSeq, LitRec, StrTempl, Bind (RHS only), BindRight (LHS only)
+//   - All `?` in the same scope become the same single param `$`
+//   - `?` in pattern position (Arm lhs, Bind lhs) is a compile error
 
-use crate::transform::Transform;
+use crate::ast::{CmpPart, Node, NodeKind};
+use crate::lexer::{Loc, Pos};
+use crate::transform::{Transform, TransformError, TransformResult};
+
+const PARAM: &str = "$";
+
+// --- public entry point ---
+
+pub fn apply(node: Node<'_>) -> Result<Node<'_>, TransformError> {
+  let mut pass = PartialPass;
+  pass.transform_stmt(node)
+}
+
+// --- helpers ---
+
+/// Returns true if the node tree contains any Partial node.
+fn has_partial(node: &Node) -> bool {
+  match &node.kind {
+    NodeKind::Partial => true,
+    NodeKind::LitBool(_)
+    | NodeKind::LitInt(_)
+    | NodeKind::LitFloat(_)
+    | NodeKind::LitDecimal(_)
+    | NodeKind::LitStr(_)
+    | NodeKind::Ident(_)
+    | NodeKind::Wildcard => false,
+
+    // Group is a boundary — don't look inside
+    NodeKind::Group(_) => false,
+
+    NodeKind::LitSeq(children) | NodeKind::LitRec(children) => {
+      children.iter().any(has_partial)
+    }
+    NodeKind::StrTempl(children) | NodeKind::StrRawTempl(children) => {
+      children.iter().any(has_partial)
+    }
+    NodeKind::UnaryOp { operand, .. } => has_partial(operand),
+    NodeKind::InfixOp { lhs, rhs, .. } => has_partial(lhs) || has_partial(rhs),
+    NodeKind::ChainedCmp(parts) => parts.iter().any(|p| match p {
+      CmpPart::Operand(n) => has_partial(n),
+      CmpPart::Op(_) => false,
+    }),
+    NodeKind::Range { start, end, .. } => has_partial(start) || has_partial(end),
+    NodeKind::Spread(inner) => inner.as_ref().map_or(false, |n| has_partial(n)),
+    NodeKind::Member { lhs, rhs } => {
+      // Member rhs may be Group (computed key) — look through it; it's not a scope boundary here
+      let rhs_inner = match &rhs.kind {
+        NodeKind::Group(inner) => inner.as_ref(),
+        _ => rhs.as_ref(),
+      };
+      has_partial(lhs) || has_partial(rhs_inner)
+    }
+    NodeKind::Bind { rhs, .. } => has_partial(rhs),      // lhs is pattern — skip
+    NodeKind::BindRight { lhs, .. } => has_partial(lhs), // rhs is pattern — skip
+    NodeKind::Apply { func, args } => {
+      has_partial(func) || args.iter().any(has_partial)
+    }
+    NodeKind::Pipe(children) => false, // Pipe children are independent segments
+    NodeKind::Fn { params, body } => {
+      has_partial(params) || body.iter().any(has_partial)
+    }
+    NodeKind::Patterns(children) => children.iter().any(has_partial),
+    NodeKind::Match { subjects, arms } => {
+      has_partial(subjects) || arms.iter().any(has_partial)
+    }
+    NodeKind::Arm { lhs, body } => {
+      lhs.iter().any(has_partial) || body.iter().any(has_partial)
+    }
+    NodeKind::Block { name, params, body } => {
+      has_partial(name) || has_partial(params) || body.iter().any(has_partial)
+    }
+    NodeKind::Try(inner) => has_partial(inner),
+  }
+}
+
+/// Replace all Partial nodes in the tree with Ident("$").
+/// Does NOT descend into Group boundaries (those are handled by transform_group).
+fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
+  let loc = node.loc;
+  match node.kind {
+    NodeKind::Partial => Node::new(NodeKind::Ident(PARAM), param_loc),
+
+    // Leaf — return as-is
+    NodeKind::LitBool(_)
+    | NodeKind::LitInt(_)
+    | NodeKind::LitFloat(_)
+    | NodeKind::LitDecimal(_)
+    | NodeKind::LitStr(_)
+    | NodeKind::Ident(_)
+    | NodeKind::Wildcard => node,
+
+    // Group is a boundary — don't replace inside, leave for transform_group
+    NodeKind::Group(_) => node,
+
+    NodeKind::LitSeq(children) => {
+      Node::new(NodeKind::LitSeq(replace_vec(children, param_loc)), loc)
+    }
+    NodeKind::LitRec(children) => {
+      Node::new(NodeKind::LitRec(replace_vec(children, param_loc)), loc)
+    }
+    NodeKind::StrTempl(children) => {
+      Node::new(NodeKind::StrTempl(replace_vec(children, param_loc)), loc)
+    }
+    NodeKind::StrRawTempl(children) => {
+      Node::new(NodeKind::StrRawTempl(replace_vec(children, param_loc)), loc)
+    }
+    NodeKind::UnaryOp { op, operand } => {
+      let operand = replace_partial(*operand, param_loc);
+      Node::new(NodeKind::UnaryOp { op, operand: Box::new(operand) }, loc)
+    }
+    NodeKind::InfixOp { op, lhs, rhs } => {
+      let lhs = replace_partial(*lhs, param_loc);
+      let rhs = replace_partial(*rhs, param_loc);
+      Node::new(NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc)
+    }
+    NodeKind::ChainedCmp(parts) => {
+      let parts = parts.into_iter().map(|p| match p {
+        CmpPart::Operand(n) => CmpPart::Operand(replace_partial(n, param_loc)),
+        CmpPart::Op(op) => CmpPart::Op(op),
+      }).collect();
+      Node::new(NodeKind::ChainedCmp(parts), loc)
+    }
+    NodeKind::Range { op, start, end } => {
+      let start = replace_partial(*start, param_loc);
+      let end = replace_partial(*end, param_loc);
+      Node::new(NodeKind::Range { op, start: Box::new(start), end: Box::new(end) }, loc)
+    }
+    NodeKind::Spread(inner) => {
+      let inner = inner.map(|n| Box::new(replace_partial(*n, param_loc)));
+      Node::new(NodeKind::Spread(inner), loc)
+    }
+    NodeKind::Member { lhs, rhs } => {
+      let lhs = replace_partial(*lhs, param_loc);
+      // Member rhs Group (computed key) is transparent — replace inside, preserve Group wrapper
+      let rhs = match rhs.kind {
+        NodeKind::Group(inner) => {
+          let rhs_loc = rhs.loc;
+          let inner = replace_partial(*inner, param_loc);
+          Node::new(NodeKind::Group(Box::new(inner)), rhs_loc)
+        }
+        _ => replace_partial(*rhs, param_loc),
+      };
+      Node::new(NodeKind::Member { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc)
+    }
+    NodeKind::Apply { func, args } => {
+      let func = replace_partial(*func, param_loc);
+      let args = replace_vec(args, param_loc);
+      Node::new(NodeKind::Apply { func: Box::new(func), args }, loc)
+    }
+    NodeKind::Bind { lhs, rhs } => {
+      // lhs is pattern — don't replace; rhs is value
+      let rhs = replace_partial(*rhs, param_loc);
+      Node::new(NodeKind::Bind { lhs, rhs: Box::new(rhs) }, loc)
+    }
+    NodeKind::BindRight { lhs, rhs } => {
+      // rhs is pattern — don't replace; lhs is value
+      let lhs = replace_partial(*lhs, param_loc);
+      Node::new(NodeKind::BindRight { lhs: Box::new(lhs), rhs }, loc)
+    }
+    NodeKind::Arm { lhs, body } => {
+      // In LitRec context: lhs is the key (Ident, not replaced), body has the value
+      let body = replace_vec(body, param_loc);
+      Node::new(NodeKind::Arm { lhs, body }, loc)
+    }
+
+    // For anything else, return as-is (Pipe, Fn, Match, Block, Try — complex)
+    other => Node::new(other, loc),
+  }
+}
+
+fn replace_vec<'src>(nodes: Vec<Node<'src>>, param_loc: Loc) -> Vec<Node<'src>> {
+  nodes.into_iter().map(|n| replace_partial(n, param_loc)).collect()
+}
+
+/// Wrap an expression in `fn $: expr` if it contains Partial nodes.
+fn wrap_if_partial<'src>(node: Node<'src>) -> Node<'src> {
+  if !has_partial(&node) {
+    return node;
+  }
+  let param_loc = node.loc;
+  let body = replace_partial(node, param_loc);
+  let body_loc = body.loc;
+  let param = Node::new(NodeKind::Ident(PARAM), param_loc);
+  let patterns = Node::new(NodeKind::Patterns(vec![param]), param_loc);
+  Node::new(NodeKind::Fn { params: Box::new(patterns), body: vec![body] }, body_loc)
+}
+
+// --- transformer ---
+
+struct PartialPass;
+
+impl<'src> PartialPass {
+  /// Transform a statement — top-level scope boundary.
+  /// Wraps in Fn if any Partial remains after processing inner scope boundaries.
+  fn transform_stmt(&mut self, node: Node<'src>) -> TransformResult<'src> {
+    let loc = node.loc;
+    match node.kind {
+      // Bind: only wrap RHS, never the whole Bind
+      NodeKind::Bind { lhs, rhs } => {
+        let rhs = self.transform_stmt(*rhs)?;
+        Ok(Node::new(NodeKind::Bind { lhs, rhs: Box::new(rhs) }, loc))
+      }
+
+      // BindRight: only wrap LHS value, never the whole BindRight
+      NodeKind::BindRight { lhs, rhs } => {
+        let lhs = self.transform_stmt(*lhs)?;
+        Ok(Node::new(NodeKind::BindRight { lhs: Box::new(lhs), rhs }, loc))
+      }
+
+      // Arm: body stmts are independent scopes, lhs is pattern (skip)
+      NodeKind::Arm { lhs, body } => {
+        let body = self.transform_body(body)?;
+        Ok(Node::new(NodeKind::Arm { lhs, body }, loc))
+      }
+
+      // Group: explicit scope boundary — process inner as independent stmt
+      NodeKind::Group(inner) => {
+        self.transform_stmt(*inner)
+      }
+
+      // Pipe: each segment is an independent scope
+      NodeKind::Pipe(children) => {
+        let mut new_children = Vec::with_capacity(children.len());
+        for child in children {
+          new_children.push(self.transform_stmt(child)?);
+        }
+        Ok(Node::new(NodeKind::Pipe(new_children), loc))
+      }
+
+      // Everything else: recurse into children (processing inner Group/Pipe boundaries),
+      // then wrap in Fn if any Partial remains
+      other => {
+        let node = self.transform(Node::new(other, loc))?;
+        Ok(wrap_if_partial(node))
+      }
+    }
+  }
+
+  fn transform_body(&mut self, body: Vec<Node<'src>>) -> Result<Vec<Node<'src>>, TransformError> {
+    body.into_iter().map(|n| self.transform_stmt(n)).collect()
+  }
+}
+
+impl<'src> Transform<'src> for PartialPass {
+  // The default walker recurses into all children.
+  // Scope boundaries (Group, Pipe, Bind, BindRight, Arm) are handled in transform_stmt.
+  // When the default walker hits a Group, it calls transform_group below.
+  fn transform_group(&mut self, inner: Node<'src>, _loc: Loc) -> TransformResult<'src> {
+    self.transform_stmt(inner)
+  }
+
+  // Member rhs Group (computed key) is transparent — don't create a scope boundary for it.
+  fn transform_member(
+    &mut self,
+    lhs: Node<'src>,
+    rhs: Node<'src>,
+    loc: Loc,
+  ) -> TransformResult<'src> {
+    let lhs = self.transform(lhs)?;
+    // If rhs is a Group (computed key), transform its inner directly — not as a scope boundary
+    let rhs = match rhs.kind {
+      NodeKind::Group(inner) => {
+        let rhs_loc = rhs.loc;
+        let inner = self.transform(*inner)?;
+        Node::new(NodeKind::Group(Box::new(inner)), rhs_loc)
+      }
+      _ => self.transform(rhs)?,
+    };
+    Ok(Node::new(NodeKind::Member { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
+  }
+}
+
+// --- test runner ---
+
+#[cfg(test)]
+mod tests {
+  use test_macros::test_template;
+  use pretty_assertions::assert_eq;
+
+  fn partial_debug(src: &str) -> String {
+    match crate::parser::parse(src) {
+      Err(e) => format!("PARSE ERROR: {}", e.message),
+      Ok(node) => match super::apply(node) {
+        Ok(node) => node.print(),
+        Err(e) => format!("ERROR: {}", e.message),
+      },
+    }
+  }
+
+  #[test_template(
+    "src/transform", "./test_partial.fnk",
+    r"(?ms)^---\n(?<name>.+?)\n.*?---\n(?<src>.+?)\n(^# expect.*?\n)(?<exp>^.+?((?=\n---)|(\z)))"
+  )]
+  fn test_partial(src: &str, exp: &str, path: &str) {
+    assert_eq!(
+      partial_debug(src),
+      exp.replace("\n\n", "\n").trim(),
+      "{}",
+      path
+    );
+  }
+}

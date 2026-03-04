@@ -138,9 +138,10 @@ guard with function call in pattern
 # expect
 Bind
   LitSeq
-    Apply
-      Ident 'is_odd'
-      Ident 'head'
+    Group
+      Apply
+        Ident 'is_odd'
+        Ident 'head'
     Spread
       Ident 'tail'
   LitSeq

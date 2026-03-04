@@ -1,0 +1,321 @@
+
+--- --- ---
+statement-level partial
+--- --- ---
+
+---
+partial in infix rhs
+---
+? + 5
+# expect
+Fn
+  Patterns
+    Ident '$'
+  InfixOp '+'
+    Ident '$'
+    LitInt '5'
+
+---
+partial in infix lhs
+---
+1 + ?
+# expect
+Fn
+  Patterns
+    Ident '$'
+  InfixOp '+'
+    LitInt '1'
+    Ident '$'
+
+---
+partial used twice - single param
+---
+? + ?
+# expect
+Fn
+  Patterns
+    Ident '$'
+  InfixOp '+'
+    Ident '$'
+    Ident '$'
+
+---
+partial in apply arg
+---
+add 5, ?
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Apply
+    Ident 'add'
+    LitInt '5'
+    Ident '$'
+
+---
+partial in unary
+---
+-?
+# expect
+Fn
+  Patterns
+    Ident '$'
+  UnaryOp '-'
+    Ident '$'
+
+---
+partial in member access
+---
+?.foo
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Member
+    Ident '$'
+    Ident 'foo'
+
+---
+partial in computed member access
+---
+?.(0)
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Member
+    Ident '$'
+    Group
+      LitInt '0'
+
+---
+partial in range
+---
+1..?
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Range '..'
+    LitInt '1'
+    Ident '$'
+
+---
+partial in spread
+---
+[..?]
+# expect
+Fn
+  Patterns
+    Ident '$'
+  LitSeq
+    Spread
+      Ident '$'
+
+---
+bare partial - identity function
+---
+(?)
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Ident '$'
+
+---
+partial in binding rhs
+---
+add5 = add 5, ?
+# expect
+Bind
+  Ident 'add5'
+  Fn
+    Patterns
+      Ident '$'
+    Apply
+      Ident 'add'
+      LitInt '5'
+      Ident '$'
+
+
+--- --- ---
+group as explicit scope boundary
+--- --- ---
+
+---
+group narrows scope - member expr key preserves group
+---
+foo.(?)
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Member
+    Ident 'foo'
+    Group
+      Ident '$'
+
+---
+group with multiple partial refs - same param
+---
+(foo ?.(1), ?.(2))
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Apply
+    Ident 'foo'
+    Member
+      Ident '$'
+      Group
+        LitInt '1'
+    Member
+      Ident '$'
+      Group
+        LitInt '2'
+
+---
+nested groups - each is its own scope
+---
+(foo (bar ?) ?)
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Apply
+    Ident 'foo'
+    Fn
+      Patterns
+        Ident '$'
+      Apply
+        Ident 'bar'
+        Ident '$'
+    Ident '$'
+
+
+--- --- ---
+transparent containers - partial bubbles through
+--- --- ---
+
+---
+partial in seq literal - seq is transparent
+---
+[?, ?]
+# expect
+Fn
+  Patterns
+    Ident '$'
+  LitSeq
+    Ident '$'
+    Ident '$'
+
+---
+partial with member projection in seq
+---
+[?.(0), ?.(1)]
+# expect
+Fn
+  Patterns
+    Ident '$'
+  LitSeq
+    Member
+      Ident '$'
+      Group
+        LitInt '0'
+    Member
+      Ident '$'
+      Group
+        LitInt '1'
+
+---
+partial in rec literal - rec is transparent
+---
+{foo: ?, bar: ?}
+# expect
+Fn
+  Patterns
+    Ident '$'
+  LitRec
+    Arm
+      Ident 'foo'
+      Ident '$'
+    Arm
+      Ident 'bar'
+      Ident '$'
+
+---
+partial in nested seq - all same param
+---
+[?, [?, ?]]
+# expect
+Fn
+  Patterns
+    Ident '$'
+  LitSeq
+    Ident '$'
+    LitSeq
+      Ident '$'
+      Ident '$'
+
+---
+partial in spread apply
+---
+foo ..?
+# expect
+Fn
+  Patterns
+    Ident '$'
+  Apply
+    Ident 'foo'
+    Spread
+      Ident '$'
+
+
+--- --- ---
+pipe segments as scope boundaries
+--- --- ---
+
+---
+partial in pipe segment
+---
+items
+| filter ? % 2 == 0
+# expect
+Pipe
+  Ident 'items'
+  Fn
+    Patterns
+      Ident '$'
+    Apply
+      Ident 'filter'
+      InfixOp '=='
+        InfixOp '%'
+          Ident '$'
+          LitInt '2'
+        LitInt '0'
+
+---
+partial in multiple pipe segments
+---
+items
+| filter is_even ?
+| map ? * 2
+# expect
+Pipe
+  Ident 'items'
+  Fn
+    Patterns
+      Ident '$'
+    Apply
+      Ident 'filter'
+      Apply
+        Ident 'is_even'
+        Ident '$'
+  Fn
+    Patterns
+      Ident '$'
+    Apply
+      Ident 'map'
+      InfixOp '*'
+        Ident '$'
+        LitInt '2'

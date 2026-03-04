@@ -8,17 +8,19 @@ parentheses
 --- --- ---
 
 ---
-grouping stripped in arithmetic
+grouping preserves Group node in arithmetic
 ---
 (1 + 2) * (2 + 3)
 # expect
 InfixOp '*'
-  InfixOp '+'
-    LitInt '1'
-    LitInt '2'
-  InfixOp '+'
-    LitInt '2'
-    LitInt '3'
+  Group
+    InfixOp '+'
+      LitInt '1'
+      LitInt '2'
+  Group
+    InfixOp '+'
+      LitInt '2'
+      LitInt '3'
 
 ---
 grouping application args without comma
@@ -26,14 +28,16 @@ grouping application args without comma
 [(add 1, 2), (add 3, 4)]
 # expect
 LitSeq
-  Apply
-    Ident 'add'
-    LitInt '1'
-    LitInt '2'
-  Apply
-    Ident 'add'
-    LitInt '3'
-    LitInt '4'
+  Group
+    Apply
+      Ident 'add'
+      LitInt '1'
+      LitInt '2'
+  Group
+    Apply
+      Ident 'add'
+      LitInt '3'
+      LitInt '4'
 
 ---
 grouping to override right-to-left application
@@ -42,9 +46,10 @@ foo (bar spam) ham
 # expect
 Apply
   Ident 'foo'
-  Apply
-    Ident 'bar'
-    Ident 'spam'
+  Group
+    Apply
+      Ident 'bar'
+      Ident 'spam'
   Ident 'ham'
 
 
@@ -69,7 +74,7 @@ Apply
       LitInt '4'
 
 ---
-semicolon groups strongly — same AST as parenthesised
+semicolon groups strongly
 ---
 add mul 2, 3; mul 3, 4
 # expect

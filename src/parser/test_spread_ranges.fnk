@@ -104,9 +104,10 @@ LitSeq
       InfixOp '+'
         LitInt '1'
         LitInt '2'
-      InfixOp '+'
-        LitInt '3'
-        LitInt '4'
+      Group
+        InfixOp '+'
+          LitInt '3'
+          LitInt '4'
 
 ---
 spread with ident range guard
@@ -142,7 +143,8 @@ LitSeq
   Spread
     Range '..'
       LitInt '0'
-      Ident 'l'
+      Group
+        Ident 'l'
 
 --- --- ---
 ranges
@@ -181,12 +183,14 @@ expression range exclusive
 (1 + 2)..(3 + 4)
 # expect
 Range '..'
-  InfixOp '+'
-    LitInt '1'
-    LitInt '2'
-  InfixOp '+'
-    LitInt '3'
-    LitInt '4'
+  Group
+    InfixOp '+'
+      LitInt '1'
+      LitInt '2'
+  Group
+    InfixOp '+'
+      LitInt '3'
+      LitInt '4'
 
 ---
 expression range inclusive
@@ -194,9 +198,11 @@ expression range inclusive
 (1 + 2)...(3 + 4)
 # expect
 Range '...'
-  InfixOp '+'
-    LitInt '1'
-    LitInt '2'
-  InfixOp '+'
-    LitInt '3'
-    LitInt '4'
+  Group
+    InfixOp '+'
+      LitInt '1'
+      LitInt '2'
+  Group
+    InfixOp '+'
+      LitInt '3'
+      LitInt '4'
