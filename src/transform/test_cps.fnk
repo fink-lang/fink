@@ -15,13 +15,14 @@ CPS IR — design notes and transform examples
 #                              — bind name→value; cont receives the value as the named param
 #   resolve $env, ident'name', fn val, $env:
 #                              — look up name
-#   apply func, $state, arg1, ..., fn $result, $state:
+#   apply func, $state, arg1, ..args, fn $result, $state:
 #                              — dispatch to closure; closure carries its own $env;
-#                                $state is threaded (may be updated by call)
-#   Fn $env, fn args, $env, $state, $cont: body
+#                                $state is threaded; ..args spreads an iterable as trailing args
+#   Fn $env, fn a, ..rest, $env, $state, $cont: body
 #   , fn fn_val, $child_env:   — always CPS; fn_val is the closure, $child_env is its
 #                                unsettled env; register names into $child_env for forward refs;
-#                                pass fn_val to $cont when no names need pre-registering
+#                                pass fn_val to $cont when no names need pre-registering;
+#                                ..rest collects trailing args as an iterable (no materialization)
 #   child_env $env, fn $env, $success: body, fn result, $state: cont
 #                              — create child scope; infallible; result delivered to outer cont
 #   seq_append seq, val, $state, fn $seq, $state:
@@ -511,6 +512,58 @@ test 'multi-param function', fn:
       $cont fn_val, $state
 
 --- --- ---
+varargs functions
+--- --- ---
+
+test 'varargs — collect rest', fn:
+  expect cps fn:
+    fn a, ..rest: rest
+
+  , equals fn:
+    Fn $env, fn a, ..rest, $env, $state, $cont:
+      register $env, ident'a', a, fn a, $env:
+        register $env, ident'rest', rest, fn rest, $env:
+          $cont rest, $state
+    , fn fn_val, _:
+      $cont fn_val, $state
+
+test 'varargs — call site spreads iterable', fn:
+  expect cps fn:
+    foo 1, ..items
+
+  , equals fn:
+    resolve $env, ident'foo', fn foo, $env:
+      resolve $env, ident'items', fn items, $env:
+        apply foo, $state, 1, ..items, $cont
+
+test 'varargs — complex destructuring desugars to pattern in body', fn:
+  expect cps fn:
+    fn a, [1, ..b]: b
+
+  , equals fn:
+    Fn $env, fn a, ..rest, $env, $state, $cont:
+      register $env, ident'a', a, fn a, $env:
+        match_single rest, $state,
+          fn v, $fail, $success, $state:
+            get_matcher v, 'SeqPattern', $state,
+              fn m, $fail, $state:
+                match_pop_at m, 0, $state,
+                  fn m, $v0, $fail, $state:
+                    resolve $env, op'==', fn $eq, $env:
+                      apply $eq, $state, $v0, 1, fn $result, $state:
+                        if $result,
+                          fn $state:
+                            match_drain m, $state,
+                              fn m, b, $state:
+                                register $env, ident'b', b, fn b, $env:
+                                  $success $env, $state
+                          fn $state: $fail $state
+          fn $state: $panic 'no match', $state
+          fn $result, $state: $cont $result, $state
+    , fn fn_val, _:
+      $cont fn_val, $state
+
+--- --- ---
 application
 --- --- ---
 
@@ -546,6 +599,37 @@ test 'calling a local — still goes through resolve', fn:
     , fn inc, $child_env:
       register $child_env, ident'inc', inc, fn inc, $env:
         apply inc, $state, 5, $cont
+
+test 'call with spread — trailing iterable', fn:
+  expect cps fn:
+    foo a, ..rest
+
+  , equals fn:
+    resolve $env, ident'foo', fn foo, $env:
+      resolve $env, ident'a', fn a, $env:
+        resolve $env, ident'rest', fn rest, $env:
+          apply foo, $state, a, ..rest, $cont
+
+test 'call with spread — spread only', fn:
+  expect cps fn:
+    foo ..items
+
+  , equals fn:
+    resolve $env, ident'foo', fn foo, $env:
+      resolve $env, ident'items', fn items, $env:
+        apply foo, $state, ..items, $cont
+
+test 'call with spread — passes through from varargs fn', fn:
+  expect cps fn:
+    fn ..args: foo ..args
+
+  , equals fn:
+    Fn $env, fn ..args, $env, $state, $cont:
+      register $env, ident'args', args, fn args, $env:
+        resolve $env, ident'foo', fn foo, $env:
+          apply foo, $state, ..args, $cont
+    , fn fn_val, _:
+      $cont fn_val, $state
 
 --- --- ---
 pipe — inlined to nested calls
@@ -986,6 +1070,60 @@ test 'multi-arm match — $fail chains to next arm', fn:
         $panic 'no match', $state
       fn match_result, $state:
         $cont match_result, $state
+
+--- --- ---
+multi-arg match
+--- --- ---
+
+test 'multi-arg match — fixed arity', fn:
+  expect cps fn:
+    match a, b:
+      1, 2: 'one two'
+      _, _: 'other'
+
+  , equals fn:
+    resolve $env, ident'a', fn a, $env:
+      resolve $env, ident'b', fn b, $env:
+        match_block a, b, $state,
+          match_branch $env, fn v0, v1, $env, $fail, $success, $state:
+            resolve $env, op'==', fn $eq, $env:
+              apply $eq, $state, v0, 1, fn $r0, $state:
+                if $r0,
+                  fn $state:
+                    apply $eq, $state, v1, 2, fn $r1, $state:
+                      if $r1,
+                        fn $state: $success 'one two', $state
+                        fn $state: $fail $state
+                  fn $state: $fail $state
+          match_branch $env, fn v0, v1, $env, $fail, $success, $state:
+            $success 'other', $state
+          fn $state:
+            $panic 'no match', $state
+          fn match_result, $state:
+            $cont match_result, $state
+
+test 'multi-arg match — varargs arm', fn:
+  expect cps fn:
+    match a, ..rest:
+      x, ..: 'has more'
+      x, ..[]: 'exactly one'
+
+  , equals fn:
+    resolve $env, ident'a', fn a, $env:
+      resolve $env, ident'rest', fn rest, $env:
+        match_block a, ..rest, $state,
+          match_branch $env, fn v0, ..vs, $env, $fail, $success, $state:
+            match_has_more vs, $state,
+              fn vs, $state: $success 'has more', $state
+              fn vs, $state: $fail $state
+          match_branch $env, fn v0, ..vs, $env, $fail, $success, $state:
+            match_len vs, 0, $state,
+              fn vs, $state: $success 'exactly one', $state
+              fn vs, $state: $fail $state
+          fn $state:
+            $panic 'no match', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 --- --- ---
 module level — settled env is the export; $cont receives it
