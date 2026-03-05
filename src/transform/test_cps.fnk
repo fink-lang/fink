@@ -15,7 +15,7 @@ CPS IR — design notes and transform examples
 #                              — bind name→value; cont receives the value as the named param
 #   resolve $env, ident'name', fn val, $env:
 #                              — look up name
-#   apply func, $state, arg1, ..args, fn $result, $state:
+#   apply func, arg1, ..args, $state, fn $result, $state:
 #                              — dispatch to closure; closure carries its own $env;
 #                                $state is threaded; ..args spreads an iterable as trailing args
 #   Fn $env, fn a, ..rest, $env, $state, $cont: body
@@ -46,7 +46,7 @@ CPS IR — design notes and transform examples
 #
 # CPS IR nodes (subset of Fink AST):
 #   Fn      — fn params: body  (body is a single chained expression)
-#   Apply   — apply func, $state, arg1, ..., fn $result, $state:
+#   Apply   — apply func, arg1, ..., $state, fn $result, $state:
 #   Bind    — name = value  (irrefutable; cont is the next expression in the chain)
 #   Try     — preserved for optimizer
 #   Ident   — variable reference
@@ -217,7 +217,7 @@ test 'string interpolation', fn:
   , equals fn:
     module fn {resolve, apply, str_fmt, str_raw, ident}, $env, $state, $cont:
       resolve $env, ident'name', fn name, $env:
-        apply str_fmt, $state, str_raw'hello ', name, str_raw'!', $cont
+        apply str_fmt, str_raw'hello ', name, str_raw'!', $state, $cont
 
 test 'string interpolation multiple exprs', fn:
   expect cps fn:
@@ -228,7 +228,7 @@ test 'string interpolation multiple exprs', fn:
       resolve $env, ident'a', fn a, $env:
         resolve $env, ident'b', fn b, $env:
           resolve $env, ident'c', fn c, $env:
-            apply str_fmt, $state, str_raw'', a, str_raw' + ', b, str_raw' = ', c, str_raw'', $cont
+            apply str_fmt, str_raw'', a, str_raw' + ', b, str_raw' = ', c, str_raw'', $state, $cont
 
 test 'tagged template', fn:
   expect cps fn:
@@ -238,7 +238,7 @@ test 'tagged template', fn:
     module fn {resolve, apply, str_raw, ident}, $env, $state, $cont:
       resolve $env, ident'fmt', fn fmt, $env:
         resolve $env, ident'name', fn name, $env:
-          apply fmt, $state, str_raw'hello ', name, str_raw'!', $cont
+          apply fmt, str_raw'hello ', name, str_raw'!', $state, $cont
 
 
 --- --- ---
@@ -260,7 +260,7 @@ test 'closure over outer variable', fn:
             register $env, ident'b', b, fn b, $env:
               resolve $env, op'+', fn $plus, $env:
                 resolve $env, ident'a', fn $a, $env:
-                  apply $plus, $state, $a, b, fn $result, $state:
+                  apply $plus, $a, b, $state, fn $result, $state:
                     $cont $result, $state
           , fn ni, $child_env:
             register $child_env, ident'ni', ni, fn ni, $env:
@@ -280,7 +280,7 @@ test 'boolean not', fn:
   , equals fn:
     resolve $env, ident'not', fn $not, $env:
       resolve $env, ident'x', fn x, $env:
-        apply $not, $state, x, $cont
+        apply $not, x, $state, $cont
 
 test 'numeric negation', fn:
   expect cps fn:
@@ -289,7 +289,7 @@ test 'numeric negation', fn:
   , equals fn:
     resolve $env, op'-', fn $neg, $env:
       resolve $env, ident'x', fn x, $env:
-        apply $neg, $state, x, $cont
+        apply $neg, x, $state, $cont
 
 
 --- --- ---
@@ -303,7 +303,7 @@ test 'static member access', fn:
   , equals fn:
     resolve $env, op'.', fn $dot, $env:
       resolve $env, ident'foo', fn foo, $env:
-        apply $dot, $state, foo, ident'bar', $cont
+        apply $dot, foo, ident'bar', $state, $cont
 
 test 'computed member access', fn:
   expect cps fn:
@@ -313,7 +313,7 @@ test 'computed member access', fn:
     resolve $env, op'.', fn $dot, $env:
       resolve $env, ident'foo', fn foo, $env:
         resolve $env, ident'key', fn key, $env:
-          apply $dot, $state, foo, key, $cont
+          apply $dot, foo, key, $state, $cont
 
 test 'chained member access', fn:
   expect cps fn:
@@ -322,8 +322,8 @@ test 'chained member access', fn:
   , equals fn:
     resolve $env, op'.', fn $dot, $env:
       resolve $env, ident'a', fn a, $env:
-        apply $dot, $state, a, ident'b', fn $v0, $state:
-          apply $dot, $state, $v0, ident'c', $cont
+        apply $dot, a, ident'b', $state, fn $v0, $state:
+          apply $dot, $v0, ident'c', $state, $cont
 
 
 --- --- ---
@@ -337,10 +337,10 @@ test 'chained comparison', fn:
   , equals fn:
     resolve $env, op'<', fn $lt, $env:
       resolve $env, ident'x', fn x, $env:
-        apply $lt, $state, 1, x, fn $v0, $state:
+        apply $lt, 1, x, $state, fn $v0, $state:
           if $v0,
             fn $state:
-              apply $lt, $state, x, 10, $cont
+              apply $lt, x, 10, $state, $cont
             fn $state:
               $cont false, $state
 
@@ -368,7 +368,7 @@ test 'sequential bindings — cont is next expression in chain', fn:
       register $env, ident'foo', 1, fn foo, $env:
         resolve $env, op'+', fn $plus, $env:
           resolve $env, ident'foo', fn $foo, $env:
-            apply $plus, $state, $foo, 1, fn bar, $state:
+            apply $plus, $foo, 1, $state, fn bar, $state:
               register $env, ident'bar', bar, fn bar, $env:
                 $cont $env, $state
 
@@ -379,7 +379,7 @@ test 'binding rhs is a call', fn:
   , equals fn:
     module fn {register, resolve, apply, ident}, $env, $state, $cont:
       resolve $env, ident'add', fn $add, $env:
-        apply $add, $state, 1, 2, fn foo, $state:
+        apply $add, 1, 2, $state, fn foo, $state:
           register $env, ident'foo', foo, fn foo, $env:
             $cont $env, $state
 
@@ -435,7 +435,7 @@ test 'try — bare expression', fn:
   , equals fn:
     module fn {resolve, apply, handle_err, ident}, $env, $state, $cont:
       resolve $env, ident'foo', fn foo, $env:
-        apply foo, $state, bar, fn res, $state:
+        apply foo, bar, $state, fn res, $state:
           handle_err res, $state,
             fn e, $state: $cont e, $state
             fn $v0, $state: $cont $v0, $state
@@ -448,13 +448,13 @@ test 'try — result bound, code continues', fn:
   , equals fn:
     module fn {register, resolve, apply, handle_err, ident, op}, $env, $state, $cont:
       resolve $env, ident'foo', fn foo, $env:
-        apply foo, $state, bar, fn res, $state:
+        apply foo, bar, $state, fn res, $state:
           handle_err res, $state,
             fn e, $state: $cont e, $state
             fn ni, $state:
               register $env, ident'ni', ni, fn ni, $env:
                 resolve $env, op'+', fn $plus, $env:
-                  apply $plus, $state, ni, 1, $cont
+                  apply $plus, ni, 1, $state, $cont
 
 --- --- ---
 functions
@@ -478,7 +478,7 @@ test 'function with operator in body', fn:
     Fn $env, fn x, $env, $state, $cont:
       register $env, ident'x', x, fn x, $env:
         resolve $env, op'+', fn $plus, $env:
-          apply $plus, $state, x, 1, fn $result, $state:
+          apply $plus, x, 1, $state, fn $result, $state:
             $cont $result, $state
     , fn fn_val, _:
       $cont fn_val, $state
@@ -491,7 +491,7 @@ test 'function binding', fn:
     Fn $env, fn x, $env, $state, $cont:
       register $env, ident'x', x, fn x, $env:
         resolve $env, op'+', fn $plus, $env:
-          apply $plus, $state, x, 1, fn $result, $state:
+          apply $plus, x, 1, $state, fn $result, $state:
             $cont $result, $state
     , fn inc, $child_env:
       register $child_env, ident'inc', inc, fn inc, $env:
@@ -506,7 +506,7 @@ test 'multi-param function', fn:
       register $env, ident'x', x, fn x, $env:
         register $env, ident'y', y, fn y, $env:
           resolve $env, op'+', fn $plus, $env:
-            apply $plus, $state, x, y, fn $result, $state:
+            apply $plus, x, y, $state, fn $result, $state:
               $cont $result, $state
     , fn fn_val, _:
       $cont fn_val, $state
@@ -534,7 +534,7 @@ test 'varargs — call site spreads iterable', fn:
   , equals fn:
     resolve $env, ident'foo', fn foo, $env:
       resolve $env, ident'items', fn items, $env:
-        apply foo, $state, 1, ..items, $cont
+        apply foo, 1, ..items, $state, $cont
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
   expect cps fn:
@@ -550,7 +550,7 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
                 match_pop_at m, 0, $state,
                   fn m, $v0, $fail, $state:
                     resolve $env, op'==', fn $eq, $env:
-                      apply $eq, $state, $v0, 1, fn $result, $state:
+                      apply $eq, $v0, 1, $state, fn $result, $state:
                         if $result,
                           fn $state:
                             match_drain m, $state,
@@ -573,7 +573,7 @@ test 'simple call', fn:
 
   , equals fn:
     resolve $env, ident'add', fn $add, $env:
-      apply $add, $state, 1, 2, $cont
+      apply $add, 1, 2, $state, $cont
 
 test 'nested call — inner result threaded to outer', fn:
   expect cps fn:
@@ -581,9 +581,9 @@ test 'nested call — inner result threaded to outer', fn:
 
   , equals fn:
     resolve $env, ident'mul', fn $mul, $env:
-      apply $mul, $state, 2, 3, fn $v0, $state:
+      apply $mul, 2, 3, $state, fn $v0, $state:
         resolve $env, ident'add', fn $add, $env:
-          apply $add, $state, $v0, 1, $cont
+          apply $add, $v0, 1, $state, $cont
 
 test 'calling a local — still goes through resolve', fn:
   expect cps fn:
@@ -594,11 +594,11 @@ test 'calling a local — still goes through resolve', fn:
     Fn $env, fn x, $env, $state, $cont:
       register $env, ident'x', x, fn x, $env:
         resolve $env, op'+', fn $plus, $env:
-          apply $plus, $state, x, 1, fn $result, $state:
+          apply $plus, x, 1, $state, fn $result, $state:
             $cont $result, $state
     , fn inc, $child_env:
       register $child_env, ident'inc', inc, fn inc, $env:
-        apply inc, $state, 5, $cont
+        apply inc, 5, $state, $cont
 
 test 'call with spread — trailing iterable', fn:
   expect cps fn:
@@ -608,7 +608,7 @@ test 'call with spread — trailing iterable', fn:
     resolve $env, ident'foo', fn foo, $env:
       resolve $env, ident'a', fn a, $env:
         resolve $env, ident'rest', fn rest, $env:
-          apply foo, $state, a, ..rest, $cont
+          apply foo, a, ..rest, $state, $cont
 
 test 'call with spread — spread only', fn:
   expect cps fn:
@@ -617,7 +617,7 @@ test 'call with spread — spread only', fn:
   , equals fn:
     resolve $env, ident'foo', fn foo, $env:
       resolve $env, ident'items', fn items, $env:
-        apply foo, $state, ..items, $cont
+        apply foo, ..items, $state, $cont
 
 test 'call with spread — passes through from varargs fn', fn:
   expect cps fn:
@@ -627,7 +627,7 @@ test 'call with spread — passes through from varargs fn', fn:
     Fn $env, fn ..args, $env, $state, $cont:
       register $env, ident'args', args, fn args, $env:
         resolve $env, ident'foo', fn foo, $env:
-          apply foo, $state, ..args, $cont
+          apply foo, ..args, $state, $cont
     , fn fn_val, _:
       $cont fn_val, $state
 
@@ -641,7 +641,7 @@ test 'simple pipe', fn:
 
   , equals fn:
     resolve $env, ident'f', fn $f, $env:
-      apply $f, $state, x, $cont
+      apply $f, x, $state, $cont
 
 test 'pipe chain', fn:
   expect cps fn:
@@ -649,9 +649,9 @@ test 'pipe chain', fn:
 
   , equals fn:
     resolve $env, ident'f', fn $f, $env:
-      apply $f, $state, x, fn $v0, $state:
+      apply $f, x, $state, fn $v0, $state:
         resolve $env, ident'g', fn $g, $env:
-          apply $g, $state, $v0, $cont
+          apply $g, $v0, $state, $cont
 
 --- --- ---
 sequential expressions — each result threaded forward
@@ -670,7 +670,7 @@ test 'three sequential bindings', fn:
           resolve $env, op'+', fn $plus, $env:
             resolve $env, ident'a', fn $a, $env:
               resolve $env, ident'b', fn $b, $env:
-                apply $plus, $state, $a, $b, fn c, $state:
+                apply $plus, $a, $b, $state, fn c, $state:
                   register $env, ident'c', c, fn c, $env:
                     $cont $env, $state
 
@@ -684,7 +684,7 @@ test 'expression result discarded', fn:
     module fn {register, resolve, apply, ident}, $env, $state, $cont:
       register $env, ident'foo', 1, fn foo, $env:
         resolve $env, ident'log', fn $log, $env:
-          apply $log, $state, 'hello', fn _, $state:
+          apply $log, 'hello', $state, fn _, $state:
             register $env, ident'bar', 2, fn bar, $env:
               $cont $env, $state
 
@@ -706,7 +706,7 @@ test 'child scopes', fn:
         match_branch $env, fn v, $env, $fail, $success, $state:
           resolve $env, op'>', fn $gt, $env:
             register $env, ident'a', v, fn a, $env:
-              apply $gt, $state, a, 1, fn $result, $state:
+              apply $gt, a, 1, $state, fn $result, $state:
                 if $result,
                   fn $state:
                     register $env, ident'ni', a, fn ni, $env:
@@ -731,7 +731,7 @@ test 'group with binding creates child scope', fn:
       child_env $env,
         fn $env, $success:
           resolve $env, ident'ham', fn ham, $env:
-            apply ham, $state, 1, fn $result, $state:
+            apply ham, 1, $state, fn $result, $state:
               register $env, ident'ni', $result, fn ni, $env:
                 $success ni, $state
         fn $block_result, $state:
@@ -781,7 +781,7 @@ test 'irrefutable binding with guard', fn:
         match_single $foo, $state,
           fn x, $fail, $success, $state:
             resolve $env, op'>', fn $cmp, $env:
-              apply $cmp, $state, x, 2, fn $result, $state:
+              apply $cmp, x, 2, $state, fn $result, $state:
                 if $result,
                   fn $state:
                     register $env, ident'x', x, fn x, $env:
@@ -811,7 +811,7 @@ test 'seq pattern', fn:
                         match_pop_at m, 1, $state,
                           fn m, $item1, $state:
                             resolve $env, op'==', fn $eq, $env:
-                              apply $eq, $state, $item1, 1, fn $result, $state:
+                              apply $eq, $item1, 1, $state, fn $result, $state:
                                 if $result,
                                   fn $state:
                                     register $env, ident'a', a, fn a, $env:
@@ -1003,17 +1003,17 @@ test 'match with expression in arm', fn:
     match_block x, $state,
       match_branch $env, fn v, $env, $fail, $success, $state:
         resolve $env, op'==', fn $eq, $env:
-          apply $eq, $state, v, true, fn $result, $state:
+          apply $eq, v, true, $state, fn $result, $state:
             if $result,
               fn $state:
                 resolve $env, op'+', fn $plus, $env:
-                  apply $plus, $state, y, 1, fn $result, $state:
+                  apply $plus, y, 1, $state, fn $result, $state:
                     $success $result, $state
               fn $state:
                 $fail $state
       match_branch $env, fn v, $env, $fail, $success, $state:
         resolve $env, op'==', fn $eq, $env:
-          apply $eq, $state, v, false, fn $result, $state:
+          apply $eq, v, false, $state, fn $result, $state:
             if $result,
               fn $state:
                 $success y, $state
@@ -1056,7 +1056,7 @@ test 'multi-arm match — $fail chains to next arm', fn:
                     match_pop_at m, 1, $state,
                       fn m, b, $state:
                         resolve $env, op'+', fn $plus, $env:
-                          apply $plus, $state, a, b, fn $result, $state:
+                          apply $plus, a, b, $state, fn $result, $state:
                             $success $result, $state
                       fn m, $state:
                         $fail $state
@@ -1087,10 +1087,10 @@ test 'multi-arg match — fixed arity', fn:
         match_block a, b, $state,
           match_branch $env, fn v0, v1, $env, $fail, $success, $state:
             resolve $env, op'==', fn $eq, $env:
-              apply $eq, $state, v0, 1, fn $r0, $state:
+              apply $eq, v0, 1, $state, fn $r0, $state:
                 if $r0,
                   fn $state:
-                    apply $eq, $state, v1, 2, fn $r1, $state:
+                    apply $eq, v1, 2, $state, fn $r1, $state:
                       if $r1,
                         fn $state: $success 'one two', $state
                         fn $state: $fail $state
@@ -1151,11 +1151,11 @@ test 'forward ref', fn:
         fn a, $env, $state, $cont:
           resolve $env, op'+', fn $plus, $env:
             resolve $env, ident'foo', fn $foo, $env:
-              apply $plus, $state, a, 1, fn $result, $state:
+              apply $plus, a, 1, $state, fn $result, $state:
                 $cont $result, $state
         fn fn_val, $child_env:
           register $child_env, ident'foo', fn_val, fn foo, $env:
-            apply foo, $state, 1, fn _, $state:
+            apply foo, 1, $state, fn _, $state:
               $cont $env, $state
 
 test 'mutual recursion', fn:
@@ -1177,15 +1177,15 @@ test 'mutual recursion', fn:
           match_block n, $state,
             match_branch $env, fn v, $env, $fail, $success, $state:
               resolve $env, op'==', fn $eq, $env:
-                apply $eq, $state, v, 0, fn $result, $state:
+                apply $eq, v, 0, $state, fn $result, $state:
                   if $result,
                     fn $state: $success true, $state
                     fn $state: $fail $state
             match_branch $env, fn v, $env, $fail, $success, $state:
               resolve $env, op'-', fn $minus, $env:
-                apply $minus, $state, n, 1, fn $v0, $state:
+                apply $minus, n, 1, $state, fn $v0, $state:
                   resolve $env, ident'is_odd', fn $is_odd, $env:
-                    apply $is_odd, $state, $v0, $success
+                    apply $is_odd, $v0, $state, $success
             fn $state:
               $panic 'no match', $state
             fn match_result, $state:
@@ -1196,15 +1196,15 @@ test 'mutual recursion', fn:
             match_block n, $state,
               match_branch $env, fn v, $env, $fail, $success, $state:
                 resolve $env, op'==', fn $eq, $env:
-                  apply $eq, $state, v, 0, fn $result, $state:
+                  apply $eq, v, 0, $state, fn $result, $state:
                     if $result,
                       fn $state: $success false, $state
                       fn $state: $fail $state
               match_branch $env, fn v, $env, $fail, $success, $state:
                 resolve $env, op'-', fn $minus, $env:
-                  apply $minus, $state, n, 1, fn $v0, $state:
+                  apply $minus, n, 1, $state, fn $v0, $state:
                     resolve $env, ident'is_even', fn $is_even, $env:
-                      apply $is_even, $state, $v0, $success
+                      apply $is_even, $v0, $state, $success
               fn $state:
                 $panic 'no match', $state
               fn match_result, $state:
