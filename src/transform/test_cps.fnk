@@ -107,12 +107,12 @@ test 'seq literal', fn:
   , equals fn:
     module fn {load, seq_append, id}, env, state, ƒ_cont:
       load env, id'a', fn ·a, env:
-        seq_append [], ·a, state, fn $seq, state:
+        seq_append [], ·a, state, fn v_seq, state:
           load env, id'b', fn ·b, env:
-            seq_append $seq, ·b, state, fn $seq, state:
+            seq_append v_seq, ·b, state, fn v_seq, state:
               load env, id'c', fn ·c, env:
-                seq_append $seq, ·c, state, fn $seq, state:
-                  ƒ_cont $seq, state
+                seq_append v_seq, ·c, state, fn v_seq, state:
+                  ƒ_cont v_seq, state
 
 test 'seq literal with spread', fn:
   expect cps fn:
@@ -120,11 +120,11 @@ test 'seq literal with spread', fn:
 
   , equals fn:
     module fn {load, seq_append, seq_concat, id}, env, state, ƒ_cont:
-      seq_append [], 1, state, fn $seq, state:
+      seq_append [], 1, state, fn v_seq, state:
         load env, id'a', fn ·a, env:
-          seq_concat $seq, ·a, state, fn $seq, state:
-            seq_append $seq, 2, state, fn $seq, state:
-              ƒ_cont $seq, state
+          seq_concat v_seq, ·a, state, fn v_seq, state:
+            seq_append v_seq, 2, state, fn v_seq, state:
+              ƒ_cont v_seq, state
 
 test 'seq literal leading spread', fn:
   # leading spread: a owns construction, no [] needed
@@ -135,8 +135,8 @@ test 'seq literal leading spread', fn:
     module fn {load, seq_concat, id}, env, state, ƒ_cont:
       load env, id'a', fn ·a, env:
         load env, id'b', fn ·b, env:
-          seq_concat ·a, ·b, state, fn $seq, state:
-            ƒ_cont $seq, state
+          seq_concat ·a, ·b, state, fn v_seq, state:
+            ƒ_cont v_seq, state
 
 
 --- --- ---
@@ -150,10 +150,10 @@ test 'rec literal', fn:
   , equals fn:
     module fn {load, rec_put, id}, env, state, ƒ_cont:
       load env, id'a', fn ·a, env:
-        rec_put {}, id'foo', ·a, state, fn $rec, state:
+        rec_put {}, id'foo', ·a, state, fn v_rec, state:
           load env, id'b', fn ·b, env:
-            rec_put $rec, id'bar', ·b, state, fn $rec, state:
-              ƒ_cont $rec, state
+            rec_put v_rec, id'bar', ·b, state, fn v_rec, state:
+              ƒ_cont v_rec, state
 
 
 test 'rec literal with spread', fn:
@@ -163,10 +163,10 @@ test 'rec literal with spread', fn:
   , equals fn:
     module fn {load, rec_put, rec_merge, id}, env, state, ƒ_cont:
       load env, id'a', fn ·a, env:
-        rec_put {}, id'foo', ·a, state, fn $rec, state:
+        rec_put {}, id'foo', ·a, state, fn v_rec, state:
           load env, id'b', fn ·b, env:
-            rec_merge $rec, ·b, state, fn $rec, state:
-              ƒ_cont $rec, state
+            rec_merge v_rec, ·b, state, fn v_rec, state:
+              ƒ_cont v_rec, state
 
 test 'rec literal leading spread', fn:
   # leading spread: a owns construction, no {} needed
@@ -177,8 +177,8 @@ test 'rec literal leading spread', fn:
     module fn {load, rec_merge, id}, env, state, ƒ_cont:
       load env, id'a', fn ·a, env:
         load env, id'b', fn ·b, env:
-          rec_merge ·a, ·b, state, fn $rec, state:
-            ƒ_cont $rec, state
+          rec_merge ·a, ·b, state, fn v_rec, state:
+            ƒ_cont v_rec, state
 
 
 --- --- ---
@@ -191,8 +191,8 @@ test 'exclusive range', fn:
 
   , equals fn:
     module fn {range_excl}, env, state, ƒ_cont:
-      range_excl 0, 10, state, fn $range, state:
-        ƒ_cont $range, state
+      range_excl 0, 10, state, fn v_range, state:
+        ƒ_cont v_range, state
 
 test 'inclusive range', fn:
   expect cps fn:
@@ -200,8 +200,8 @@ test 'inclusive range', fn:
 
   , equals fn:
     module fn {range_incl}, env, state, ƒ_cont:
-      range_incl 0, 10, state, fn $range, state:
-        ƒ_cont $range, state
+      range_incl 0, 10, state, fn v_range, state:
+        ƒ_cont v_range, state
 
 
 
@@ -258,10 +258,10 @@ test 'closure over outer variable', fn:
         store env, id'a', ·a, fn ·a, env:
           closure env, fn ·b, env, state, ƒ_cont:
             store env, id'b', ·b, fn ·b, env:
-              load env, op'+', fn ·plus, env:
+              load env, op'+', fn op_plus, env:
                 load env, id'a', fn ·a, env:
-                  apply ·plus, ·a, ·b, state, fn $result, state:
-                    ƒ_cont $result, state
+                  apply op_plus, ·a, ·b, state, fn v_result, state:
+                    ƒ_cont v_result, state
           , fn ·ni, chld_env:
             store chld_env, id'ni', ·ni, fn ·ni, env:
               ƒ_cont ·ni, state
@@ -278,18 +278,18 @@ test 'boolean not', fn:
     not x
 
   , equals fn:
-    load env, id'not', fn ·not, env:
+    load env, id'not', fn op_not, env:
       load env, id'x', fn ·x, env:
-        apply ·not, ·x, state, ƒ_cont
+        apply op_not, ·x, state, ƒ_cont
 
 test 'numeric negation', fn:
   expect cps fn:
     -x
 
   , equals fn:
-    load env, op'-', fn ·neg, env:
+    load env, op'-', fn op_neg, env:
       load env, id'x', fn ·x, env:
-        apply ·neg, ·x, state, ƒ_cont
+        apply op_neg, ·x, state, ƒ_cont
 
 
 --- --- ---
@@ -301,29 +301,29 @@ test 'static member access', fn:
     foo.bar
 
   , equals fn:
-    load env, op'.', fn ·dot, env:
+    load env, op'.', fn op_dot, env:
       load env, id'foo', fn ·foo, env:
-        apply ·dot, ·foo, id'bar', state, ƒ_cont
+        apply op_dot, ·foo, id'bar', state, ƒ_cont
 
 test 'computed member access', fn:
   expect cps fn:
     foo.(key)
 
   , equals fn:
-    load env, op'.', fn ·dot, env:
+    load env, op'.', fn op_dot, env:
       load env, id'foo', fn ·foo, env:
         load env, id'key', fn ·key, env:
-          apply ·dot, ·foo, ·key, state, ƒ_cont
+          apply op_dot, ·foo, ·key, state, ƒ_cont
 
 test 'chained member access', fn:
   expect cps fn:
     a.b.c
 
   , equals fn:
-    load env, op'.', fn ·dot, env:
+    load env, op'.', fn op_dot, env:
       load env, id'a', fn ·a, env:
-        apply ·dot, ·a, id'b', state, fn $v0, state:
-          apply ·dot, $v0, id'c', state, ƒ_cont
+        apply op_dot, ·a, id'b', state, fn v_0, state:
+          apply op_dot, v_0, id'c', state, ƒ_cont
 
 
 --- --- ---
@@ -335,12 +335,12 @@ test 'chained comparison', fn:
     1 < x < 10
 
   , equals fn:
-    load env, op'<', fn ·lt, env:
+    load env, op'<', fn op_lt, env:
       load env, id'x', fn ·x, env:
-        apply ·lt, 1, ·x, state, fn $v0, state:
-          if $v0,
+        apply op_lt, 1, ·x, state, fn v_0, state:
+          if v_0,
             fn state:
-              apply ·lt, ·x, 10, state, ƒ_cont
+              apply op_lt, ·x, 10, state, ƒ_cont
             fn state:
               ƒ_cont false, state
 
@@ -366,9 +366,9 @@ test 'sequential bindings — ƒ_cont is next expression in chain', fn:
   , equals fn:
     module fn {store, load, apply, id, op}, env, state, ƒ_cont:
       store env, id'foo', 1, fn ·foo, env:
-        load env, op'+', fn ·plus, env:
+        load env, op'+', fn op_plus, env:
           load env, id'foo', fn ·foo, env:
-            apply ·plus, ·foo, 1, state, fn ·bar, state:
+            apply op_plus, ·foo, 1, state, fn ·bar, state:
               store env, id'bar', ·bar, fn ·bar, env:
                 ƒ_cont env, state
 
@@ -398,7 +398,7 @@ test 'bind right — simple id', fn:
           store env, id'foo', v, fn ·foo, env:
             ƒ_ok env, state
         fn state: panic 'no match', state
-        fn $result, state: ƒ_cont $result, state
+        fn v_result, state: ƒ_cont v_result, state
 
 test 'bind right — destructuring pattern', fn:
   expect cps fn:
@@ -423,7 +423,7 @@ test 'bind right — destructuring pattern', fn:
                                 ƒ_ok env, state
                           fn m, state: ƒ_err state
           fn state: panic 'no match', state
-          fn $result, state: ƒ_cont $result, state
+          fn v_result, state: ƒ_cont v_result, state
 
 --- --- ---
 try — early escape on error
@@ -439,7 +439,7 @@ test 'try — bare expression', fn:
         apply ·foo, ·bar, state, fn res, state:
           err res, state,
             fn e, state: ƒ_cont e, state
-            fn $v0, state: ƒ_cont $v0, state
+            fn v_0, state: ƒ_cont v_0, state
 
 test 'try — result bound, code continues', fn:
   expect cps fn:
@@ -454,8 +454,8 @@ test 'try — result bound, code continues', fn:
             fn e, state: ƒ_cont e, state
             fn ·ni, state:
               store env, id'ni', ·ni, fn ·ni, env:
-                load env, op'+', fn ·plus, env:
-                  apply ·plus, ·ni, 1, state, ƒ_cont
+                load env, op'+', fn op_plus, env:
+                  apply op_plus, ·ni, 1, state, ƒ_cont
 
 --- --- ---
 functions
@@ -478,9 +478,9 @@ test 'function with operator in body', fn:
   , equals fn:
     closure env, fn ·x, env, state, ƒ_cont:
       store env, id'x', ·x, fn ·x, env:
-        load env, op'+', fn ·plus, env:
-          apply ·plus, ·x, 1, state, fn $result, state:
-            ƒ_cont $result, state
+        load env, op'+', fn op_plus, env:
+          apply op_plus, ·x, 1, state, fn v_result, state:
+            ƒ_cont v_result, state
     , fn ·fn_val, _:
       ƒ_cont ·fn_val, state
 
@@ -491,9 +491,9 @@ test 'function binding', fn:
   , equals fn:
     closure env, fn ·x, env, state, ƒ_cont:
       store env, id'x', ·x, fn ·x, env:
-        load env, op'+', fn ·plus, env:
-          apply ·plus, ·x, 1, state, fn $result, state:
-            ƒ_cont $result, state
+        load env, op'+', fn op_plus, env:
+          apply op_plus, ·x, 1, state, fn v_result, state:
+            ƒ_cont v_result, state
     , fn ·inc, chld_env:
       store chld_env, id'inc', ·inc, fn ·inc, env:
         ƒ_cont ·inc, state
@@ -506,9 +506,9 @@ test 'multi-param function', fn:
     closure env, fn ·x, ·y, env, state, ƒ_cont:
       store env, id'x', ·x, fn ·x, env:
         store env, id'y', ·y, fn ·y, env:
-          load env, op'+', fn ·plus, env:
-            apply ·plus, ·x, ·y, state, fn $result, state:
-              ƒ_cont $result, state
+          load env, op'+', fn op_plus, env:
+            apply op_plus, ·x, ·y, state, fn v_result, state:
+              ƒ_cont v_result, state
     , fn ·fn_val, _:
       ƒ_cont ·fn_val, state
 
@@ -549,10 +549,10 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
             matcher v, 'SeqPattern', state,
               fn m, ƒ_err, state:
                 match_pop_at m, 0, state,
-                  fn m, $v0, ƒ_err, state:
-                    load env, op'==', fn ·eq, env:
-                      apply ·eq, $v0, 1, state, fn $result, state:
-                        if $result,
+                  fn m, v_0, ƒ_err, state:
+                    load env, op'==', fn op_eq, env:
+                      apply op_eq, v_0, 1, state, fn v_result, state:
+                        if v_result,
                           fn state:
                             match_rest m, state,
                               fn m, b, state:
@@ -560,7 +560,7 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
                                   ƒ_ok env, state
                           fn state: ƒ_err state
           fn state: panic 'no match', state
-          fn $result, state: ƒ_cont $result, state
+          fn v_result, state: ƒ_cont v_result, state
     , fn ·fn_val, _:
       ƒ_cont ·fn_val, state
 
@@ -582,9 +582,9 @@ test 'nested call — inner result threaded to outer', fn:
 
   , equals fn:
     load env, id'mul', fn ·mul, env:
-      apply ·mul, 2, 3, state, fn $v0, state:
+      apply ·mul, 2, 3, state, fn v_0, state:
         load env, id'add', fn ·add, env:
-          apply ·add, $v0, 1, state, ƒ_cont
+          apply ·add, v_0, 1, state, ƒ_cont
 
 test 'calling a local — still goes through load', fn:
   expect cps fn:
@@ -594,9 +594,9 @@ test 'calling a local — still goes through load', fn:
   , equals fn:
     closure env, fn ·x, env, state, ƒ_cont:
       store env, id'x', ·x, fn ·x, env:
-        load env, op'+', fn ·plus, env:
-          apply ·plus, ·x, 1, state, fn $result, state:
-            ƒ_cont $result, state
+        load env, op'+', fn op_plus, env:
+          apply op_plus, ·x, 1, state, fn v_result, state:
+            ƒ_cont v_result, state
     , fn ·inc, chld_env:
       store chld_env, id'inc', ·inc, fn ·inc, env:
         apply ·inc, 5, state, ƒ_cont
@@ -650,9 +650,9 @@ test 'pipe chain', fn:
 
   , equals fn:
     load env, id'f', fn ·f, env:
-      apply ·f, ·x, state, fn $v0, state:
+      apply ·f, ·x, state, fn v_0, state:
         load env, id'g', fn ·g, env:
-          apply ·g, $v0, state, ƒ_cont
+          apply ·g, v_0, state, ƒ_cont
 
 --- --- ---
 sequential expressions — each result threaded forward
@@ -668,10 +668,10 @@ test 'three sequential bindings', fn:
     module fn {store, load, apply, id, op}, env, state, ƒ_cont:
       store env, id'a', 1, fn ·a, env:
         store env, id'b', 2, fn ·b, env:
-          load env, op'+', fn ·plus, env:
+          load env, op'+', fn op_plus, env:
             load env, id'a', fn ·a, env:
               load env, id'b', fn ·b, env:
-                apply ·plus, ·a, ·b, state, fn ·c, state:
+                apply op_plus, ·a, ·b, state, fn ·c, state:
                   store env, id'c', ·c, fn ·c, env:
                     ƒ_cont env, state
 
@@ -705,10 +705,10 @@ test 'child scopes', fn:
     module fn {store, load, apply, if, match_block, match_branch, panic, id, op}, env, state, ƒ_cont:
       match_block n, state,
         match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-          load env, op'>', fn ·gt, env:
+          load env, op'>', fn op_gt, env:
             store env, id'a', v, fn ·a, env:
-              apply ·gt, ·a, 1, state, fn $result, state:
-                if $result,
+              apply op_gt, ·a, 1, state, fn v_result, state:
+                if v_result,
                   fn state:
                     store env, id'ni', ·a, fn ·ni, env:
                       ƒ_ok ·ni, state
@@ -732,17 +732,17 @@ test 'group with binding creates child scope', fn:
       scope env,
         fn env, ƒ_ok:
           load env, id'ham', fn ·ham, env:
-            apply ·ham, 1, state, fn $result, state:
-              store env, id'ni', $result, fn ·ni, env:
+            apply ·ham, 1, state, fn v_result, state:
+              store env, id'ni', v_result, fn ·ni, env:
                 ƒ_ok ·ni, state
-        fn $block_result, state:
-          match_bind $block_result, state,
-            fn $v, state, ƒ_err, ƒ_ok:
-              store env, id'spam', $v, fn ·spam, env:
+        fn v_block_result, state:
+          match_bind v_block_result, state,
+            fn v_, state, ƒ_err, ƒ_ok:
+              store env, id'spam', v_, fn ·spam, env:
                 ƒ_ok ·spam, state
             fn state: panic 'pattern mismatch', state
-            fn $match_result, state:
-              ƒ_cont $match_result, state
+            fn match_result, state:
+              ƒ_cont match_result, state
 
 
 test 'chained binding is sequential store without child scope', fn:
@@ -781,9 +781,9 @@ test 'irrefutable binding with guard', fn:
       load env, id'foo', fn ·foo, env:
         match_bind ·foo, state,
           fn x, state, ƒ_err, ƒ_ok:
-            load env, op'>', fn ·cmp, env:
-              apply ·cmp, ·x, 2, state, fn $result, state:
-                if $result,
+            load env, op'>', fn op_cmp, env:
+              apply op_cmp, ·x, 2, state, fn v_result, state:
+                if v_result,
                   fn state:
                     store env, id'x', ·x, fn ·x, env:
                       ƒ_ok env, state
@@ -810,10 +810,10 @@ test 'seq pattern', fn:
                     match_pop_at m, 0, state,
                       fn m, a, state:
                         match_pop_at m, 1, state,
-                          fn m, $item1, state:
-                            load env, op'==', fn ·eq, env:
-                              apply ·eq, $item1, 1, state, fn $result, state:
-                                if $result,
+                          fn m, v_item1, state:
+                            load env, op'==', fn op_eq, env:
+                              apply op_eq, v_item1, 1, state, fn v_result, state:
+                                if v_result,
                                   fn state:
                                     store env, id'a', ·a, fn ·a, env:
                                       ƒ_ok env, state
@@ -1003,19 +1003,19 @@ test 'match with expression in arm', fn:
   , equals fn:
     match_block x, state,
       match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-        load env, op'==', fn ·eq, env:
-          apply ·eq, v, true, state, fn $result, state:
-            if $result,
+        load env, op'==', fn op_eq, env:
+          apply op_eq, v, true, state, fn v_result, state:
+            if v_result,
               fn state:
-                load env, op'+', fn ·plus, env:
-                  apply ·plus, ·y, 1, state, fn $result, state:
-                    ƒ_ok $result, state
+                load env, op'+', fn op_plus, env:
+                  apply op_plus, ·y, 1, state, fn v_result, state:
+                    ƒ_ok v_result, state
               fn state:
                 ƒ_err state
       match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-        load env, op'==', fn ·eq, env:
-          apply ·eq, v, false, state, fn $result, state:
-            if $result,
+        load env, op'==', fn op_eq, env:
+          apply op_eq, v, false, state, fn v_result, state:
+            if v_result,
               fn state:
                 ƒ_ok ·y, state
               fn state:
@@ -1056,9 +1056,9 @@ test 'multi-arm match — ƒ_err chains to next arm', fn:
                   fn m, a, state:
                     match_pop_at m, 1, state,
                       fn m, b, state:
-                        load env, op'+', fn ·plus, env:
-                          apply ·plus, ·a, ·b, state, fn $result, state:
-                            ƒ_ok $result, state
+                        load env, op'+', fn op_plus, env:
+                          apply op_plus, ·a, ·b, state, fn v_result, state:
+                            ƒ_ok v_result, state
                       fn m, state:
                         ƒ_err state
                   fn m, state:
@@ -1088,12 +1088,12 @@ test 'multi-arg match — fixed arity', fn:
         load env, id'b', fn ·b, env:
           match_block ·a, ·b, state,
             match_branch env, fn v0, v1, env, state, ƒ_err, ƒ_ok:
-              load env, op'==', fn ·eq, env:
-                apply ·eq, v0, 1, state, fn $r0, state:
-                  if $r0,
+              load env, op'==', fn op_eq, env:
+                apply op_eq, v0, 1, state, fn v_r0, state:
+                  if v_r0,
                     fn state:
-                      apply ·eq, v1, 2, state, fn $r1, state:
-                        if $r1,
+                      apply op_eq, v1, 2, state, fn v_r1, state:
+                        if v_r1,
                           fn state: ƒ_ok 'one two', state
                           fn state: ƒ_err state
                     fn state: ƒ_err state
@@ -1152,10 +1152,10 @@ test 'forward ref', fn:
     module fn {store, load, apply, closure, id, op}, env, state, ƒ_cont:
       closure env
         fn ·a, env, state, ƒ_cont:
-          load env, op'+', fn ·plus, env:
+          load env, op'+', fn op_plus, env:
             load env, id'foo', fn ·foo, env:
-              apply ·plus, ·a, 1, state, fn $result, state:
-                ƒ_cont $result, state
+              apply op_plus, ·a, 1, state, fn v_result, state:
+                ƒ_cont v_result, state
         fn ·fn_val, chld_env:
           store chld_env, id'foo', ·fn_val, fn ·foo, env:
             apply ·foo, 1, state, fn _, state:
@@ -1179,16 +1179,16 @@ test 'mutual recursion', fn:
         store env, id'n', ·n, fn ·n, env:
           match_block n, state,
             match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-              load env, op'==', fn ·eq, env:
-                apply ·eq, v, 0, state, fn $result, state:
-                  if $result,
+              load env, op'==', fn op_eq, env:
+                apply op_eq, v, 0, state, fn v_result, state:
+                  if v_result,
                     fn state: ƒ_ok true, state
                     fn state: ƒ_err state
             match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-              load env, op'-', fn ·minus, env:
-                apply ·minus, ·n, 1, state, fn $v0, state:
+              load env, op'-', fn op_minus, env:
+                apply op_minus, ·n, 1, state, fn v_0, state:
                   load env, id'is_odd', fn ·is_odd, env:
-                    apply ·is_odd, $v0, state, ƒ_ok
+                    apply ·is_odd, v_0, state, ƒ_ok
             fn state:
               panic 'no match', state
             fn match_result, state:
@@ -1198,16 +1198,16 @@ test 'mutual recursion', fn:
           store env, id'n', ·n, fn ·n, env:
             match_block n, state,
               match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-                load env, op'==', fn ·eq, env:
-                  apply ·eq, v, 0, state, fn $result, state:
-                    if $result,
+                load env, op'==', fn op_eq, env:
+                  apply op_eq, v, 0, state, fn v_result, state:
+                    if v_result,
                       fn state: ƒ_ok false, state
                       fn state: ƒ_err state
               match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-                load env, op'-', fn ·minus, env:
-                  apply ·minus, ·n, 1, state, fn $v0, state:
+                load env, op'-', fn op_minus, env:
+                  apply op_minus, ·n, 1, state, fn v_0, state:
                     load env, id'is_even', fn ·is_even, env:
-                      apply ·is_even, $v0, state, ƒ_ok
+                      apply ·is_even, v_0, state, ƒ_ok
               fn state:
                 panic 'no match', state
               fn match_result, state:
