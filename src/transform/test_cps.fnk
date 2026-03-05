@@ -7,29 +7,50 @@ CPS IR — design notes and transform examples
 # $state — opaque mutable state (I/O, heap, effects; threaded through every call)
 # $cont  — continuation (what to do with the result)
 #
-# Primitives injected into every module:
-#   reserve $env, 'name', ...  — pre-allocate slots in env for forward refs (module level)
-#   register $env, 'name', val — bind a name to a value in env; returns updated env
-#                                emitted for every param binding and local = binding
-#   resolve $env, 'name'       — look up a name in env, returns value
-#   apply func, $state, arg1, arg2, ..., fn $result, $state: ...
-#                              — dispatch to a closure; closure carries its own $env
-#                                $state is threaded through (may be updated by call)
-#   Fn $env, fn args, $env, $state, $cont: body
-#                              — construct a closure capturing current $env
+# Syntax convention:
+#   prim args, fn …: — CPS call (threads env/state through continuation)
 #
-# apply does NOT receive $env from the caller — the closure object carries its own.
-# $state IS passed by the caller — effects thread through every call.
-# register is explicit in CPS output — makes scoping mechanics visible.
+# Primitives:
+#   register $env, 'name', val, fn name, $env:
+#                              — bind name→value; cont receives the value as the named param
+#   resolve $env, 'name', fn val, $env:
+#                              — look up name
+#   apply func, $state, arg1, ..., fn $result, $state:
+#                              — dispatch to closure; closure carries its own $env;
+#                                $state is threaded (may be updated by call)
+#   Fn $env, fn args, $env, $state, $cont: body
+#   , fn fn_val, $child_env:   — always CPS; fn_val is the closure, $child_env is its
+#                                unsettled env; register names into $child_env for forward refs;
+#                                pass fn_val to $cont when no names need pre-registering
+#   child_env $env, fn $env, $success: body, fn result, $state: cont
+#                              — create child scope; infallible; result delivered to outer cont
+#   seq_append seq, val, $state, fn $seq, $state:
+#                              — append single element; [] is a valid literal base
+#   seq_concat seq, other, $state, fn $seq, $state:
+#                              — spread/concat; protocol-dispatches; leading spread uses a as base
+#   rec_set rec, 'key', val, $state, fn $rec, $state:
+#                              — set a field; {} is a valid literal base
+#   rec_merge rec, other, $state, fn $rec, $state:
+#                              — merge/spread; protocol-dispatches; leading spread uses a as base
+#   range_excl start, end, $state, fn $range, $state:
+#                              — exclusive range (0..10)
+#   range_incl start, end, $state, fn $range, $state:
+#                              — inclusive range (0...10)
+#   match_branch $env, fn v, $env, $fail, $success, $state:
+#                              — arm with child scope; takes parent $env, passes child $env
+#                                to body; used as arms inside match_block
+#
+# apply does NOT receive $env from caller — closure carries its own.
+# $state IS passed by caller — effects thread through every call.
 #
 # CPS IR nodes (subset of Fink AST):
 #   Fn      — fn params: body  (body is a single chained expression)
 #   Apply   — apply func, $state, arg1, ..., fn $result, $state:
 #   Bind    — name = value  (irrefutable; cont is the next expression in the chain)
-#   Match   — preserved for optimizer; lowered to branches at codegen
 #   Try     — preserved for optimizer
 #   Ident   — variable reference
-#   literals — Const values
+#   literals — LitBool, LitInt, LitFloat, LitDecimal, LitStr
+#              str_raw'...' — tagged template where str_raw is a built-in tag (always in scope)
 #
 # Eliminated during CPS:
 #   Pipe, Partial, Group (transparent), Block, BindRight, Spread, Range,
@@ -56,15 +77,168 @@ CPS IR — design notes and transform examples
 #
 #   m is threaded through every call — immutable context, each op returns new m.
 #
-#   match_block val, $state, fn v, $fail, $state: ..., fn v, $fail, $state: ..., fn $state:
-#                              — one or more arms; $fail of arm N = entry of arm N+1;
-#                                final fn $state: = exhaustion handler ($panic or $cont)
-#                                replaces match_single (which is just match_block with one arm)
-
-
+#   match_single val, $state,
+#     fn v, $fail, $success, $state: ...  — current env; irrefutable; $fail → $panic
+#     fn $state: $panic ...               — fail handler
+#     fn match_result, $state: ...        — result cont (called by $success)
+#
+#   match_block val, $state,
+#     match_branch $env, fn v, $env, $fail, $success, $state: ...  — one or more arms
+#     fn $state: $panic ...               — exhaustion handler
+#     fn match_result, $state: ...        — result cont (called by $success)
+#
+#   $fail    = fn $state:         — arm failed; wired to next arm / exhaustion by match_block
+#   $success = fn result, $state: — arm succeeded; wired to result cont by match_block
+#   Arms are tried in order; fail fast.
 
 {test, expect, equals} = import '@fink/testing.fnk'
 {cps, module} = import '@fink/compiler/transform'
+
+
+--- --- ---
+LitSeq — sequence construction
+--- --- ---
+
+test 'seq literal', fn:
+  expect cps fn:
+    [a, b, c]
+
+  , equals fn:
+    module fn {resolve, seq_append}, $env, $state, $cont:
+      resolve $env, 'a', fn a, $env:
+        seq_append [], a, $state, fn $seq, $state:
+          resolve $env, 'b', fn b, $env:
+            seq_append $seq, b, $state, fn $seq, $state:
+              resolve $env, 'c', fn c, $env:
+                seq_append $seq, c, $state, fn $seq, $state:
+                  $cont $seq, $state
+
+test 'seq literal with spread', fn:
+  expect cps fn:
+    [1, ..a, 2]
+
+  , equals fn:
+    module fn {resolve, seq_append, seq_concat}, $env, $state, $cont:
+      seq_append [], 1, $state, fn $seq, $state:
+        resolve $env, 'a', fn a, $env:
+          seq_concat $seq, a, $state, fn $seq, $state:
+            seq_append $seq, 2, $state, fn $seq, $state:
+              $cont $seq, $state
+
+test 'seq literal leading spread', fn:
+  # leading spread: a owns construction, no [] needed
+  expect cps fn:
+    [..a, ..b]
+
+  , equals fn:
+    module fn {resolve, seq_concat}, $env, $state, $cont:
+      resolve $env, 'a', fn a, $env:
+        resolve $env, 'b', fn b, $env:
+          seq_concat a, b, $state, fn $seq, $state:
+            $cont $seq, $state
+
+
+--- --- ---
+LitRec — record construction
+--- --- ---
+
+test 'rec literal', fn:
+  expect cps fn:
+    {foo: a, bar: b}
+
+  , equals fn:
+    module fn {resolve, rec_set}, $env, $state, $cont:
+      resolve $env, 'a', fn a, $env:
+        rec_set {}, 'foo', a, $state, fn $rec, $state:
+          resolve $env, 'b', fn b, $env:
+            rec_set $rec, 'bar', b, $state, fn $rec, $state:
+              $cont $rec, $state
+
+
+test 'rec literal with spread', fn:
+  expect cps fn:
+    {foo: a, ..b}
+
+  , equals fn:
+    module fn {resolve, rec_set, rec_merge}, $env, $state, $cont:
+      resolve $env, 'a', fn a, $env:
+        rec_set {}, 'foo', a, $state, fn $rec, $state:
+          resolve $env, 'b', fn b, $env:
+            rec_merge $rec, b, $state, fn $rec, $state:
+              $cont $rec, $state
+
+test 'rec literal leading spread', fn:
+  # leading spread: a owns construction, no {} needed
+  expect cps fn:
+    {..a, ..b}
+
+  , equals fn:
+    module fn {resolve, rec_merge}, $env, $state, $cont:
+      resolve $env, 'a', fn a, $env:
+        resolve $env, 'b', fn b, $env:
+          rec_merge a, b, $state, fn $rec, $state:
+            $cont $rec, $state
+
+
+--- --- ---
+Range — range construction
+--- --- ---
+
+test 'exclusive range', fn:
+  expect cps fn:
+    0..10
+
+  , equals fn:
+    module fn {range_excl}, $env, $state, $cont:
+      range_excl 0, 10, $state, fn $range, $state:
+        $cont $range, $state
+
+test 'inclusive range', fn:
+  expect cps fn:
+    0...10
+
+  , equals fn:
+    module fn {range_incl}, $env, $state, $cont:
+      range_incl 0, 10, $state, fn $range, $state:
+        $cont $range, $state
+
+
+
+
+--- --- ---
+StrTempl — string interpolation, StrRawTempl — tagged template
+--- --- ---
+
+test 'string interpolation', fn:
+  expect cps fn:
+    'hello ${name}!'
+
+  , equals fn:
+    module fn {resolve, apply, str_fmt, str_raw}, $env, $state, $cont:
+      resolve $env, 'name', fn name, $env:
+        apply str_fmt, $state, str_raw'hello ', name, str_raw'!', $cont
+
+test 'string interpolation multiple exprs', fn:
+  expect cps fn:
+    '${a} + ${b} = ${c}'
+
+  , equals fn:
+    module fn {resolve, apply, str_fmt, str_raw}, $env, $state, $cont:
+      resolve $env, 'a', fn a, $env:
+        resolve $env, 'b', fn b, $env:
+          resolve $env, 'c', fn c, $env:
+            apply str_fmt, $state, str_raw'', a, str_raw' + ', b, str_raw' = ', c, str_raw'', $cont
+
+test 'tagged template', fn:
+  expect cps fn:
+    fmt'hello ${name}!'
+
+  , equals fn:
+    module fn {resolve, apply, str_raw}, $env, $state, $cont:
+      resolve $env, 'fmt', fn fmt, $env:
+        resolve $env, 'name', fn name, $env:
+          apply fmt, $state, str_raw'hello ', name, str_raw'!', $cont
+
 
 --- --- ---
 closure — Fn captures env, apply does not receive env from caller
@@ -78,19 +252,43 @@ test 'closure over outer variable', fn:
       ni
 
   , equals fn:
-    module fn {reserve, register, resolve, apply, Fn, $export}, $env, $state:
-      $env1 = reserve $env, 'foo'
-      foo = Fn $env1, fn a, $env, $state, $cont:
-        $env1 = register $env, 'a', a
-        ni = Fn $env1, fn b, $env, $state, $cont:
-          $env1 = register $env, 'b', b
-          $v0 = resolve $env1, '+'
-          $v1 = resolve $env1, 'a'
-          apply $v0, $state, $v1, b, fn $result, $state:
-            $cont $result, $state
-        $env1 = register $env1, 'ni', ni
-        $cont ni, $state
-      $export {foo}, $state
+    module fn {register, resolve, apply, Fn}, $env, $state, $cont:
+      Fn $env, fn a, $env, $state, $cont:
+        register $env, 'a', a, fn a, $env:
+          Fn $env, fn b, $env, $state, $cont:
+            register $env, 'b', b, fn b, $env:
+              resolve $env, '+', fn $plus, $env:
+                resolve $env, 'a', fn $a, $env:
+                  apply $plus, $state, $a, b, fn $result, $state:
+                    $cont $result, $state
+          , fn ni, $child_env:
+            register $child_env, 'ni', ni, fn ni, $env:
+              $cont ni, $state
+      , fn foo, $child_env:
+        register $child_env, 'foo', foo, fn foo, $env:
+          $cont $env, $state
+
+--- --- ---
+UnaryOp — resolved and applied like a single-arg function
+--- --- ---
+
+test 'boolean not', fn:
+  expect cps fn:
+    not x
+
+  , equals fn:
+    resolve $env, 'not', fn $not, $env:
+      resolve $env, 'x', fn x, $env:
+        apply $not, $state, x, $cont
+
+test 'numeric negation', fn:
+  expect cps fn:
+    -x
+
+  , equals fn:
+    resolve $env, '-', fn $neg, $env:
+      resolve $env, 'x', fn x, $env:
+        apply $neg, $state, x, $cont
 
 
 --- --- ---
@@ -101,42 +299,35 @@ test 'simple literal binding', fn:
   expect cps fn:
     foo = 1
 
-
   , equals fn:
-    module fn {reserve, register, $export}, $env, $state:
-      $env1 = reserve $env, 'foo'
-      $env2 = register $env1, 'foo', 1
-      $export {foo}, $state
+    module fn {register}, $env, $state, $cont:
+      register $env, 'foo', 1, fn foo, $env:
+        $cont $env, $state
 
 test 'sequential bindings — cont is next expression in chain', fn:
   expect cps fn:
     foo = 1
     bar = foo + 1
 
-
   , equals fn:
-    module fn {reserve, register, resolve, apply, $export}, $env, $state:
-      $env1 = reserve $env, 'foo', 'bar'
-      $env2 = register $env1, 'foo', 1
-      $v0 = resolve $env2, '+'
-      $v1 = resolve $env2, 'foo'
-      apply $v0, $state, $v1, 1, fn bar, $state:
-        $env3 = register $env2, 'bar', bar
-        $export {foo, bar}, $state
+    module fn {register, resolve, apply}, $env, $state, $cont:
+      register $env, 'foo', 1, fn foo, $env:
+        resolve $env, '+', fn $plus, $env:
+          resolve $env, 'foo', fn $foo, $env:
+            apply $plus, $state, $foo, 1, fn bar, $state:
+              register $env, 'bar', bar, fn bar, $env:
+                $cont $env, $state
 
 test 'binding rhs is a call', fn:
   expect cps fn:
     foo = add 1, 2
 
-
   , equals fn:
-    module fn {reserve, register, resolve, apply, $export}, $env, $state:
-      $env1 = reserve $env, 'foo'
-      $v0 = resolve $env1, 'add'
-      apply $v0, $state, 1, 2, fn foo, $state:
-        $env2 = register $env1, 'foo', foo
-        $export {foo}, $state
-
+    module fn {register, resolve, apply}, $env, $state, $cont:
+      resolve $env, 'add', fn $add, $env:
+        apply $add, $state, 1, 2, fn foo, $state:
+          register $env, 'foo', foo, fn foo, $env:
+            $cont $env, $state
 
 --- --- ---
 functions
@@ -147,46 +338,51 @@ test 'identity function', fn:
     fn x: x
 
   , equals fn:
-    Fn $env, fn x, $env0, $state, $cont:
-      $env1 = register $env0, 'x', x
-      $cont x, $state
-
+    Fn $env, fn x, $env, $state, $cont:
+      register $env, 'x', x, fn x, $env:
+        $cont x, $state
+    , fn fn_val, _:
+      $cont fn_val, $state
 
 test 'function with operator in body', fn:
   expect cps fn:
     fn x: x + 1
   , equals fn:
-    Fn $env, fn x, $env0, $state, $cont:
-      $env1 = register $env0, 'x', x
-      $v0 = resolve $env1, '+'
-      apply $v0, $state, x, 1, fn $result, $state:
-        $cont $result, $state
-
+    Fn $env, fn x, $env, $state, $cont:
+      register $env, 'x', x, fn x, $env:
+        resolve $env, '+', fn $plus, $env:
+          apply $plus, $state, x, 1, fn $result, $state:
+            $cont $result, $state
+    , fn fn_val, _:
+      $cont fn_val, $state
 
 test 'function binding', fn:
   expect cps fn:
     inc = fn x: x + 1
 
   , equals fn:
-    inc = Fn $env, fn x, $env0, $state, $cont:
-      $env1 = register $env0, 'x', x
-      $v0 = resolve $env1, '+'
-      apply $v0, $state, x, 1, fn $result, $state:
-        $cont $result, $state
-
+    Fn $env, fn x, $env, $state, $cont:
+      register $env, 'x', x, fn x, $env:
+        resolve $env, '+', fn $plus, $env:
+          apply $plus, $state, x, 1, fn $result, $state:
+            $cont $result, $state
+    , fn inc, $child_env:
+      register $child_env, 'inc', inc, fn inc, $env:
+        $cont inc, $state
 
 test 'multi-param function', fn:
   expect cps fn:
     fn x, y: x + y
 
   , equals fn:
-    Fn $env, fn x, y, $env0, $state, $cont:
-      $env1 = register $env0, 'x', x
-      $env2 = register $env1, 'y', y
-      $v0 = resolve $env2, '+'
-      apply $v0, $state, x, y, fn $result, $state:
-        $cont $result, $state
-
+    Fn $env, fn x, y, $env, $state, $cont:
+      register $env, 'x', x, fn x, $env:
+        register $env, 'y', y, fn y, $env:
+          resolve $env, '+', fn $plus, $env:
+            apply $plus, $state, x, y, fn $result, $state:
+              $cont $result, $state
+    , fn fn_val, _:
+      $cont fn_val, $state
 
 --- --- ---
 application
@@ -197,20 +393,18 @@ test 'simple call', fn:
     add 1, 2
 
   , equals fn:
-    $v0 = resolve $env, 'add'
-    apply $v0, $state, 1, 2, $cont
-
+    resolve $env, 'add', fn $add, $env:
+      apply $add, $state, 1, 2, $cont
 
 test 'nested call — inner result threaded to outer', fn:
   expect cps fn:
     add (mul 2, 3), 1
 
   , equals fn:
-    $v0 = resolve $env, 'mul'
-    apply $v0, $state, 2, 3, fn $v1, $state:
-      $v2 = resolve $env, 'add'
-      apply $v2, $state, $v1, 1, $cont
-
+    resolve $env, 'mul', fn $mul, $env:
+      apply $mul, $state, 2, 3, fn $v0, $state:
+        resolve $env, 'add', fn $add, $env:
+          apply $add, $state, $v0, 1, $cont
 
 test 'calling a local — still goes through resolve', fn:
   expect cps fn:
@@ -218,15 +412,14 @@ test 'calling a local — still goes through resolve', fn:
     inc 5
 
   , equals fn:
-    inc = Fn $env, fn x, $env0, $state, $cont:
-      $env1 = register $env0, 'x', x
-      $v0 = resolve $env1, '+'
-      apply $v0, $state, x, 1, fn $result, $state:
-        $cont $result, $state
-    $env1 = register $env, 'inc', inc
-    $v1 = resolve $env1, 'inc'
-    apply $v1, $state, 5, $cont
-
+    Fn $env, fn x, $env, $state, $cont:
+      register $env, 'x', x, fn x, $env:
+        resolve $env, '+', fn $plus, $env:
+          apply $plus, $state, x, 1, fn $result, $state:
+            $cont $result, $state
+    , fn inc, $child_env:
+      register $child_env, 'inc', inc, fn inc, $env:
+        apply inc, $state, 5, $cont
 
 --- --- ---
 pipe — inlined to nested calls
@@ -237,20 +430,18 @@ test 'simple pipe', fn:
     x | f
 
   , equals fn:
-    $v0 = resolve $env, 'f'
-    apply $v0, $state, x, $cont
-
+    resolve $env, 'f', fn $f, $env:
+      apply $f, $state, x, $cont
 
 test 'pipe chain', fn:
   expect cps fn:
     x | f | g
 
   , equals fn:
-    $v0 = resolve $env, 'f'
-    apply $v0, $state, x, fn $v1, $state:
-      $v2 = resolve $env, 'g'
-      apply $v2, $state, $v1, $cont
-
+    resolve $env, 'f', fn $f, $env:
+      apply $f, $state, x, fn $v0, $state:
+        resolve $env, 'g', fn $g, $env:
+          apply $g, $state, $v0, $cont
 
 --- --- ---
 sequential expressions — each result threaded forward
@@ -263,17 +454,15 @@ test 'three sequential bindings', fn:
     c = a + b
 
   , equals fn:
-    module fn {reserve, register, resolve, apply, $export}, $env, $state:
-      $env1 = reserve $env, 'a', 'b', 'c'
-      $env2 = register $env1, 'a', 1
-      $env3 = register $env2, 'b', 2
-      $v0 = resolve $env3, '+'
-      $v1 = resolve $env3, 'a'
-      $v2 = resolve $env3, 'b'
-      apply $v0, $state, $v1, $v2, fn c, $state:
-        $env4 = register $env3, 'c', c
-        $export {a, b, c}, $state
-
+    module fn {register, resolve, apply}, $env, $state, $cont:
+      register $env, 'a', 1, fn a, $env:
+        register $env, 'b', 2, fn b, $env:
+          resolve $env, '+', fn $plus, $env:
+            resolve $env, 'a', fn $a, $env:
+              resolve $env, 'b', fn $b, $env:
+                apply $plus, $state, $a, $b, fn c, $state:
+                  register $env, 'c', c, fn c, $env:
+                    $cont $env, $state
 
 test 'expression result discarded', fn:
   expect cps fn:
@@ -282,13 +471,90 @@ test 'expression result discarded', fn:
     bar = 2
 
   , equals fn:
-    module fn {reserve, register, resolve, apply, $export}, $env, $state:
-      $env1 = reserve $env, 'foo', 'bar'
-      $env2 = register $env1, 'foo', 1
-      $v0 = resolve $env2, 'log'
-      apply $v0, $state, 'hello', fn _, $state:
-        $env3 = register $env2, 'bar', 2
-        $export {foo, bar}, $state
+    module fn {register, resolve, apply}, $env, $state, $cont:
+      register $env, 'foo', 1, fn foo, $env:
+        resolve $env, 'log', fn $log, $env:
+          apply $log, $state, 'hello', fn _, $state:
+            register $env, 'bar', 2, fn bar, $env:
+              $cont $env, $state
+
+
+--- --- ---
+scoping
+--- --- ---
+
+test 'child scopes', fn:
+  expect cps fn:
+    match n:
+      a > 1:
+        ni = a # ni is only available in the body of this arm
+        ni
+
+  , equals fn:
+    module fn {register, resolve, apply, if, match_block, match_branch, $panic}, $env, $state, $cont:
+      match_block n, $state,
+        match_branch $env, fn v, $env, $fail, $success, $state:
+          resolve $env, '>', fn $gt, $env:
+            register $env, 'a', v, fn a, $env:
+              apply $gt, $state, a, 1, fn $result, $state:
+                if $result,
+                  fn $state:
+                    register $env, 'ni', a, fn ni, $env:
+                      $success ni, $state
+                  fn $state:
+                    $fail $state
+        fn $state:
+          $panic "no match", $state
+        fn match_result, $state:
+          $cont match_result, $state
+
+
+test 'group with binding creates child scope', fn:
+  expect cps fn:
+    spam = ( # creates a block scope
+      ni = ham 1
+      ni # ni does not leak out
+    )
+
+  , equals fn:
+    module fn {register, resolve, apply, child_env, match_single, $panic}, $env, $state, $cont:
+      child_env $env,
+        fn $env, $success:
+          resolve $env, 'ham', fn ham, $env:
+            apply ham, $state, 1, fn $result, $state:
+              register $env, 'ni', $result, fn ni, $env:
+                $success ni, $state
+        fn $block_result, $state:
+          match_single $block_result, $state,
+            fn $v, $fail, $success, $state:
+              register $env, 'spam', $v, fn spam, $env:
+                $success spam, $state
+            fn $state: $panic 'pattern mismatch', $state
+            fn $match_result, $state:
+              $cont $match_result, $state
+
+
+test 'chained binding is sequential register without child scope', fn:
+  expect cps fn:
+    foo = spam = 1
+
+  , equals fn:
+    module fn {register, resolve, apply, match_single, $panic}, $env, $state, $cont:
+      match_single 1, $state,
+        fn spam, $fail, $success, $state:
+          register $env, 'spam', spam, fn spam, $env:
+            match_single spam, $state,
+              fn foo, $fail, $success, $state:
+                register $env, 'foo', foo, fn foo, $env:
+                  $success foo, $state
+              fn $state:
+                $panic 'pattern mismatch', $state
+              fn match_result, $state:
+                $cont match_result, $state
+        fn $state:
+          $panic 'pattern mismatch', $state
+        fn match_result, $state:
+          $cont match_result, $state
 
 
 --- --- ---
@@ -300,223 +566,222 @@ test 'irrefutable binding with guard', fn:
     x > 2 = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, if, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'x'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn x, $fail, $state:
-          $cmp = resolve $env1, '>'
-          apply $cmp, $state, x, 2, fn $result, $state:
-            if $result,
-              fn:
-                $env2 = register $env1, 'x', x
-                $export {x}, $state
-              fn:
-                $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
-
+    module fn {register, resolve, apply, if, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn x, $fail, $success, $state:
+            resolve $env, '>', fn $cmp, $env:
+              apply $cmp, $state, x, 2, fn $result, $state:
+                if $result,
+                  fn $state:
+                    register $env, 'x', x, fn x, $env:
+                      $success $env, $state
+                  fn $state:
+                    $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'seq pattern', fn:
   expect cps fn:
     [a, 1] = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, if, get_matcher, match_len, match_pop_at, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'a'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn seq, $fail, $state:
-          get_matcher seq, 'SeqPattern', $state,
-            fn m, $fail, $state:
-              match_len m, 2, $state,
-                fn m, $state:
-                  match_pop_at m, 0, $state,
-                    fn m, a, $state:
-                      match_pop_at m, 1, $state,
-                        fn m, $item1, $state:
-                          $eq = resolve $env1, '=='
-                          apply $eq, $state, $item1, 1, fn $result, $state:
-                            if $result,
-                              fn $state:
-                                $env2 = register $env1, 'a', a
-                                $export {a}, $state
-                              fn $state:
-                                $fail $state
-                        fn m, $state:
-                          $fail $state
-                    fn m, $state:
-                      $fail $state
-                fn m, $state:
-                  $fail $state
-            fn $state:
-              $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
+    module fn {register, resolve, apply, if, get_matcher, match_len, match_pop_at, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn seq, $fail, $success, $state:
+            get_matcher seq, 'SeqPattern', $state,
+              fn m, $fail, $state:
+                match_len m, 2, $state,
+                  fn m, $state:
+                    match_pop_at m, 0, $state,
+                      fn m, a, $state:
+                        match_pop_at m, 1, $state,
+                          fn m, $item1, $state:
+                            resolve $env, '==', fn $eq, $env:
+                              apply $eq, $state, $item1, 1, fn $result, $state:
+                                if $result,
+                                  fn $state:
+                                    register $env, 'a', a, fn a, $env:
+                                      $success $env, $state
+                                  fn $state:
+                                    $fail $state
+                          fn m, $state:
+                            $fail $state
+                      fn m, $state:
+                        $fail $state
+                  fn m, $state:
+                    $fail $state
+              fn $state:
+                $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'rec pattern', fn:
   expect cps fn:
     {bar} = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_field, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'bar'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn rec, $fail, $state:
-          get_matcher rec, 'RecPattern', $state,
-            fn m, $fail, $state:
-              match_pop_field m, 'bar', $state,
-                fn m, bar, $state:
-                  $env2 = register $env1, 'bar', bar
-                  $export {bar}, $state
-                fn m, $state:
-                  $fail $state
-            fn $state:
-              $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
+    module fn {register, resolve, get_matcher, match_pop_field, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn rec, $fail, $success, $state:
+            get_matcher rec, 'RecPattern', $state,
+              fn m, $fail, $state:
+                match_pop_field m, 'bar', $state,
+                  fn m, bar, $state:
+                    register $env, 'bar', bar, fn bar, $env:
+                      $success $env, $state
+                  fn m, $state:
+                    $fail $state
+              fn $state:
+                $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'seq pattern with non-empty rest', fn:
   expect cps fn:
     [a, ..] = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_at, match_has_more, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'a'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn seq, $fail, $state:
-          get_matcher seq, 'SeqPattern', $state,
-            fn m, $fail, $state:
-              match_pop_at m, 0, $state,
-                fn m, a, $state:
-                  match_has_more m, $state,
-                    fn m, $state:
-                      $env2 = register $env1, 'a', a
-                      $export {a}, $state
-                    fn m, $state:
-                      $fail $state
-                fn m, $state:
-                  $fail $state
-            fn $state:
-              $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
+    module fn {register, resolve, get_matcher, match_pop_at, match_has_more, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn seq, $fail, $success, $state:
+            get_matcher seq, 'SeqPattern', $state,
+              fn m, $fail, $state:
+                match_pop_at m, 0, $state,
+                  fn m, a, $state:
+                    match_has_more m, $state,
+                      fn m, $state:
+                        register $env, 'a', a, fn a, $env:
+                          $success $env, $state
+                      fn m, $state:
+                        $fail $state
+                  fn m, $state:
+                    $fail $state
+              fn $state:
+                $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'seq pattern with bound rest', fn:
   expect cps fn:
     [a, ..rest] = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_at, match_drain, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'a', 'rest'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn seq, $fail, $state:
-          get_matcher seq, 'SeqPattern', $state,
-            fn m, $fail, $state:
-              match_pop_at m, 0, $state,
-                fn m, a, $state:
-                  match_drain m, $state,
-                    fn m, rest, $state:
-                      $env2 = register $env1, 'a', a
-                      $env3 = register $env2, 'rest', rest
-                      $export {a, rest}, $state
-                fn m, $state:
-                  $fail $state
-            fn $state:
-              $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
+    module fn {register, resolve, get_matcher, match_pop_at, match_drain, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn seq, $fail, $success, $state:
+            get_matcher seq, 'SeqPattern', $state,
+              fn m, $fail, $state:
+                match_pop_at m, 0, $state,
+                  fn m, a, $state:
+                    match_drain m, $state,
+                      fn m, rest, $state:
+                        register $env, 'a', a, fn a, $env:
+                          register $env, 'rest', rest, fn rest, $env:
+                            $success $env, $state
+                  fn m, $state:
+                    $fail $state
+              fn $state:
+                $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'rec pattern with non-empty rest', fn:
   expect cps fn:
     {bar, ..} = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_field, match_has_more, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'bar'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn rec, $fail, $state:
-          get_matcher rec, 'RecPattern', $state,
-            fn m, $fail, $state:
-              match_pop_field m, 'bar', $state,
-                fn m, bar, $state:
-                  match_has_more m, $state,
-                    fn m, $state:
-                      $env2 = register $env1, 'bar', bar
-                      $export {bar}, $state
-                    fn m, $state:
-                      $fail $state
-                fn m, $state:
-                  $fail $state
-            fn $state:
-              $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
+    module fn {register, resolve, get_matcher, match_pop_field, match_has_more, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn rec, $fail, $success, $state:
+            get_matcher rec, 'RecPattern', $state,
+              fn m, $fail, $state:
+                match_pop_field m, 'bar', $state,
+                  fn m, bar, $state:
+                    match_has_more m, $state,
+                      fn m, $state:
+                        register $env, 'bar', bar, fn bar, $env:
+                          $success $env, $state
+                      fn m, $state:
+                        $fail $state
+                  fn m, $state:
+                    $fail $state
+              fn $state:
+                $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'rec pattern exact - empty rest', fn:
   expect cps fn:
     {bar, ..{}} = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_field, match_has_more, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'bar'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn rec, $fail, $state:
-          get_matcher rec, 'RecPattern', $state,
-            fn m, $fail, $state:
-              match_pop_field m, 'bar', $state,
-                fn m, bar, $state:
-                  match_has_more m, $state,
-                    fn m, $state:
-                      $fail $state
-                    fn m, $state:
-                      $env2 = register $env1, 'bar', bar
-                      $export {bar}, $state
-                fn m, $state:
-                  $fail $state
-            fn $state:
-              $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
+    module fn {register, resolve, get_matcher, match_pop_field, match_has_more, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn rec, $fail, $success, $state:
+            get_matcher rec, 'RecPattern', $state,
+              fn m, $fail, $state:
+                match_pop_field m, 'bar', $state,
+                  fn m, bar, $state:
+                    match_has_more m, $state,
+                      fn m, $state:
+                        $fail $state
+                      fn m, $state:
+                        register $env, 'bar', bar, fn bar, $env:
+                          $success $env, $state
+                  fn m, $state:
+                    $fail $state
+              fn $state:
+                $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'rec pattern with bound rest', fn:
   expect cps fn:
     {bar, ..rest} = foo
 
   , equals fn:
-    module fn {reserve, resolve, register, apply, get_matcher, match_pop_field, match_drain, match_block, $panic, $export}, $env, $state:
-      $env1 = reserve $env, 'bar', 'rest'
-      $v0 = resolve $env1, 'foo'
-      match_block $v0, $state,
-        fn rec, $fail, $state:
-          get_matcher rec, 'RecPattern', $state,
-            fn m, $fail, $state:
-              match_pop_field m, 'bar', $state,
-                fn m, bar, $state:
-                  match_drain m, $state,
-                    fn m, rest, $state:
-                      $env2 = register $env1, 'bar', bar
-                      $env3 = register $env2, 'rest', rest
-                      $export {bar, rest}, $state
-                fn m, $state:
-                  $fail $state
-            fn $state:
-              $fail $state
-        fn $state:
-          $panic 'pattern mismatch', $state
-
+    module fn {register, resolve, get_matcher, match_pop_field, match_drain, match_single, $panic}, $env, $state, $cont:
+      resolve $env, 'foo', fn $foo, $env:
+        match_single $foo, $state,
+          fn rec, $fail, $success, $state:
+            get_matcher rec, 'RecPattern', $state,
+              fn m, $fail, $state:
+                match_pop_field m, 'bar', $state,
+                  fn m, bar, $state:
+                    match_drain m, $state,
+                      fn m, rest, $state:
+                        register $env, 'bar', bar, fn bar, $env:
+                          register $env, 'rest', rest, fn rest, $env:
+                            $success $env, $state
+                  fn m, $state:
+                    $fail $state
+              fn $state:
+                $fail $state
+          fn $state:
+            $panic 'pattern mismatch', $state
+          fn match_result, $state:
+            $cont match_result, $state
 
 test 'match with expression in arm', fn:
   expect cps fn:
@@ -525,14 +790,29 @@ test 'match with expression in arm', fn:
       false: y
 
   , equals fn:
-    match x:
-      true:
-        $v0 = resolve $env, '+'
-        apply $v0, $state, y, 1, fn $result, $state:
-          $cont $result, $state
-      false:
-        $cont y, $state
-
+    match_block x, $state,
+      match_branch $env, fn v, $env, $fail, $success, $state:
+        resolve $env, '==', fn $eq, $env:
+          apply $eq, $state, v, true, fn $result, $state:
+            if $result,
+              fn $state:
+                resolve $env, '+', fn $plus, $env:
+                  apply $plus, $state, y, 1, fn $result, $state:
+                    $success $result, $state
+              fn $state:
+                $fail $state
+      match_branch $env, fn v, $env, $fail, $success, $state:
+        resolve $env, '==', fn $eq, $env:
+          apply $eq, $state, v, false, fn $result, $state:
+            if $result,
+              fn $state:
+                $success y, $state
+              fn $state:
+                $fail $state
+      fn $state:
+        $panic 'no match', $state
+      fn match_result, $state:
+        $cont match_result, $state
 
 test 'multi-arm match — $fail chains to next arm', fn:
   expect cps fn:
@@ -542,21 +822,21 @@ test 'multi-arm match — $fail chains to next arm', fn:
 
   , equals fn:
     match_block foo, $state,
-      fn seq, $fail, $state:
+      match_branch $env, fn seq, $env, $fail, $success, $state:
         get_matcher seq, 'SeqPattern', $state,
           fn m, $fail, $state:
             match_len m, 1, $state,
               fn m, $state:
                 match_pop_at m, 0, $state,
                   fn m, a, $state:
-                    $cont a, $state
+                    $success a, $state
                   fn m, $state:
                     $fail $state
               fn m, $state:
                 $fail $state
           fn $state:
             $fail $state
-      fn seq, $fail, $state:
+      match_branch $env, fn seq, $env, $fail, $success, $state:
         get_matcher seq, 'SeqPattern', $state,
           fn m, $fail, $state:
             match_len m, 2, $state,
@@ -565,9 +845,9 @@ test 'multi-arm match — $fail chains to next arm', fn:
                   fn m, a, $state:
                     match_pop_at m, 1, $state,
                       fn m, b, $state:
-                        $v0 = resolve $env, '+'
-                        apply $v0, $state, a, b, fn $result, $state:
-                          $cont $result, $state
+                        resolve $env, '+', fn $plus, $env:
+                          apply $plus, $state, a, b, fn $result, $state:
+                            $success $result, $state
                       fn m, $state:
                         $fail $state
                   fn m, $state:
@@ -578,10 +858,11 @@ test 'multi-arm match — $fail chains to next arm', fn:
             $fail $state
       fn $state:
         $panic 'no match', $state
-
+      fn match_result, $state:
+        $cont match_result, $state
 
 --- --- ---
-module level — forward refs hoisted
+module level — settled env is the export; $cont receives it
 --- --- ---
 
 test 'two bindings at module level', fn:
@@ -590,14 +871,30 @@ test 'two bindings at module level', fn:
     bar = 2
 
   , equals fn:
-    module fn {reserve, register, $export}, $env, $state:
-      $env1 = reserve $env, 'foo', 'bar'
-      $env2 = register $env1, 'foo', 1
-      $env3 = register $env2, 'bar', 2
-      $export {foo, bar}, $state
+    module fn {register}, $env, $state, $cont:
+      register $env, 'foo', 1, fn foo, $env:
+        register $env, 'bar', 2, fn bar, $env:
+          $cont $env, $state
 
+test 'forward ref', fn:
+  expect cps fn:
+    foo = fn a: foo a + 1
+    foo 1
 
-test 'mutual recursion — both slots pre-reserved, exports via $export', fn:
+  , equals fn:
+    module fn {register, resolve, apply, Fn}, $env, $state, $cont:
+      Fn $env
+        fn a, $env, $state, $cont:
+          resolve $env, '+', fn $plus, $env:
+            resolve $env, 'foo', fn $foo, $env:
+              apply $plus, $state, a, 1, fn $result, $state:
+                $cont $result, $state
+        fn fn_val, $child_env:
+          register $child_env, 'foo', fn_val, fn foo, $env:
+            apply foo, $state, 1, fn _, $state:
+              $cont $env, $state
+
+test 'mutual recursion', fn:
   expect cps fn:
     is_even = fn n:
       match n:
@@ -610,35 +907,45 @@ test 'mutual recursion — both slots pre-reserved, exports via $export', fn:
         _: is_even n - 1
 
   , equals fn:
-    module fn {reserve, register, resolve, apply, Fn, $export}, $env, $state:
-      $env1 = reserve $env, 'is_even', 'is_odd'
-      is_even = Fn $env1, fn n, $env0, $state, $cont:
-        $env1 = register $env0, 'n', n
-        match n:
-          0: $cont true, $state
-          _:
-            $v0 = resolve $env1, '-'
-            apply $v0, $state, n, 1, fn $v1, $state:
-              $v2 = resolve $env1, 'is_odd'
-              apply $v2, $state, $v1, $cont
-      $env2 = register $env1, 'is_even', is_even
-      is_odd = Fn $env2, fn n, $env0, $state, $cont:
-        $env1 = register $env0, 'n', n
-        match n:
-          0: $cont false, $state
-          _:
-            $v0 = resolve $env1, '-'
-            apply $v0, $state, n, 1, fn $v1, $state:
-              $v2 = resolve $env1, 'is_even'
-              apply $v2, $state, $v1, $cont
-      $env3 = register $env2, 'is_odd', is_odd
-      $export {is_even, is_odd}, $state
-
-
-
-
-
-
-
-
-
+    module fn {register, resolve, apply, if, get_matcher, match_block, $panic, Fn}, $env, $state, $cont:
+      Fn $env, fn n, $env, $state, $cont:
+        register $env, 'n', n, fn n, $env:
+          match_block n, $state,
+            match_branch $env, fn v, $env, $fail, $success, $state:
+              resolve $env, '==', fn $eq, $env:
+                apply $eq, $state, v, 0, fn $result, $state:
+                  if $result,
+                    fn $state: $success true, $state
+                    fn $state: $fail $state
+            match_branch $env, fn v, $env, $fail, $success, $state:
+              resolve $env, '-', fn $minus, $env:
+                apply $minus, $state, n, 1, fn $v0, $state:
+                  resolve $env, 'is_odd', fn $is_odd, $env:
+                    apply $is_odd, $state, $v0, $success
+            fn $state:
+              $panic 'no match', $state
+            fn match_result, $state:
+              $cont match_result, $state
+      , fn is_even, $child_env:
+        Fn $child_env, fn n, $env, $state, $cont:
+          register $env, 'n', n, fn n, $env:
+            match_block n, $state,
+              match_branch $env, fn v, $env, $fail, $success, $state:
+                resolve $env, '==', fn $eq, $env:
+                  apply $eq, $state, v, 0, fn $result, $state:
+                    if $result,
+                      fn $state: $success false, $state
+                      fn $state: $fail $state
+              match_branch $env, fn v, $env, $fail, $success, $state:
+                resolve $env, '-', fn $minus, $env:
+                  apply $minus, $state, n, 1, fn $v0, $state:
+                    resolve $env, 'is_even', fn $is_even, $env:
+                      apply $is_even, $state, $v0, $success
+              fn $state:
+                $panic 'no match', $state
+              fn match_result, $state:
+                $cont match_result, $state
+        , fn is_odd, $child_env:
+          register $child_env, 'is_even', is_even, fn is_even, $child_env:
+            register $child_env, 'is_odd', is_odd, fn is_odd, $env:
+              $cont $env, $state
