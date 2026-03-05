@@ -326,6 +326,25 @@ test 'chained member access', fn:
 
 
 --- --- ---
+chained comparison
+--- --- ---
+
+test 'chained comparison', fn:
+  expect cps fn:
+    1 < x < 10
+
+  , equals fn:
+    resolve $env, op'<', fn $lt, $env:
+      resolve $env, ident'x', fn x, $env:
+        apply $lt, $state, 1, x, fn $v0, $state:
+          if $v0,
+            fn $state:
+              apply $lt, $state, x, 10, $cont
+            fn $state:
+              $cont false, $state
+
+
+--- --- ---
 literals and bindings
 --- --- ---
 
@@ -362,6 +381,79 @@ test 'binding rhs is a call', fn:
         apply $add, $state, 1, 2, fn foo, $state:
           register $env, ident'foo', foo, fn foo, $env:
             $cont $env, $state
+
+--- --- ---
+bind right
+--- --- ---
+
+test 'bind right — simple ident', fn:
+  expect cps fn:
+    1 |= foo
+
+  , equals fn:
+    module fn {register, match_single, $panic, ident}, $env, $state, $cont:
+      match_single 1, $state,
+        fn v, $fail, $success, $state:
+          register $env, ident'foo', v, fn foo, $env:
+            $success $env, $state
+        fn $state: $panic 'no match', $state
+        fn $result, $state: $cont $result, $state
+
+test 'bind right — destructuring pattern', fn:
+  expect cps fn:
+    [a, b] |= foo
+
+  , equals fn:
+    module fn {register, resolve, match_single, get_matcher, match_pop_at, match_len, $panic, ident}, $env, $state, $cont:
+      resolve $env, ident'foo', fn foo, $env:
+        match_single foo, $state,
+          fn v, $fail, $success, $state:
+            get_matcher v, 'SeqPattern', $state,
+              fn m, $fail, $state:
+                match_pop_at m, 0, $state,
+                  fn m, a, $fail, $state:
+                    match_pop_at m, 1, $state,
+                      fn m, b, $fail, $state:
+                        match_len m, 0, $state,
+                          fn m, $state:
+                            register $env, ident'a', a, fn a, $env:
+                              register $env, ident'b', b, fn b, $env:
+                                $success $env, $state
+                          fn m, $state: $fail $state
+          fn $state: $panic 'no match', $state
+          fn $result, $state: $cont $result, $state
+
+--- --- ---
+try — early escape on error
+--- --- ---
+
+test 'try — bare expression', fn:
+  expect cps fn:
+    try foo bar
+
+  , equals fn:
+    module fn {resolve, apply, handle_err, ident}, $env, $state, $cont:
+      resolve $env, ident'foo', fn foo, $env:
+        apply foo, $state, bar, fn res, $state:
+          handle_err res, $state,
+            fn e, $state: $cont e, $state
+            fn $v0, $state: $cont $v0, $state
+
+test 'try — result bound, code continues', fn:
+  expect cps fn:
+    ni = try foo bar
+    ni + 1
+
+  , equals fn:
+    module fn {register, resolve, apply, handle_err, ident, op}, $env, $state, $cont:
+      resolve $env, ident'foo', fn foo, $env:
+        apply foo, $state, bar, fn res, $state:
+          handle_err res, $state,
+            fn e, $state: $cont e, $state
+            fn ni, $state:
+              register $env, ident'ni', ni, fn ni, $env:
+                resolve $env, op'+', fn $plus, $env:
+                  apply $plus, $state, ni, 1, $cont
 
 --- --- ---
 functions
