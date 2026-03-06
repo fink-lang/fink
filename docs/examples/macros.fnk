@@ -1,0 +1,22 @@
+---
+TODO: WIP
+---
+---
+macros
+---
+
+{macro, gen_ast, eval} = import 'fink/compile'
+
+# compile time evaluation
+eval_at_compile_time = macro fn ctx: fn ast_node:
+  result = eval ctx, ast_node
+  gen_ast result
+
+ni = eval_at_compile_time 1 + 2    # ni == 3 at compile time
+
+# import hook
+my_import = macro fn ctx: fn url:
+  gen_ast fn:
+    {shrub: url}
+
+{shrub} = my_import 'foo/bar/spam.ni'

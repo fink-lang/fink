@@ -1,0 +1,774 @@
+--- --- --- --- ---
+language features by example
+--- --- --- --- ---
+
+
+--- --- ---
+Literals
+--- --- ---
+
+---
+boolean
+---
+true
+false
+
+---
+integers — type inferred from literal size and sign
+---
+1_234_567               # u32
++1                      # i8
+-1                      # i8
+0xFF                    # u8
++0xFF                   # i8
+0xFfFf                  # u16
+0xFFFF_FFFF             # u32
+0xFFFF_FFFF_FFFF_FFFF   # u64
+0o_1234_5670            # octal notation
+0b_0101_1111            # binary
+
+---
+floats
+---
+1.0             # f32
+1.0e100_000     # f64 — too big for f32
+
+---
+decimals - cannot be mixed with floats
+---
+1.0d
+1.0d-100
+
+
+---
+tagged literals - postfix function application
+---
+10sec    # == sec 10
+10.5min  # == min 10, 5   TODO: should we just pass in a float (precision?!)
+(foo)min # == min foo
+
+
+---
+strings
+---
+
+'hello world'
+
+# multiline
+'
+  hello
+  world
+'
+
+# interpolation
+'hello ${1 + 2}'
+
+# escape sequences
+'
+  \n      - new line
+  \r      - carrige return
+  \v      - vertical tab
+  \t      - tab
+  \b      - backspace
+  \f      - formfeed
+  \\      - backslash
+  \'      - single quote
+  \b01    - binary code
+  \x0f    - hex code
+  \uff    - Unicode code point between U+0000 and U+10FFFF
+  \u10_ff_ff - Unicode code point between U+0000 and U+10FFFF
+'
+
+# tagged template strings - tagging func receives raw str parts and values
+fmt'hello ${1 + 2}'
+rx'(?<group>[a-z]+)'  # TODO: should it be possible to use rx for pattern matching?
+sql'SELECT * FROM users WHERE name = ${name}'
+
+
+
+---
+sequences - optimized as tuples if used as such, otherwise list
+---
+[]
+[1, 2, 3]
+seq 1, 2, 3
+seq
+  1
+  2
+  seq 3, 4
+
+
+---
+records - static compile time names
+---
+{}
+{foo: 1, bar: 2}
+{foo: 1, 'ni na': 2, (a + b): 3} # computed keys only if resolvable at compile time
+
+# multiline
+{
+  foo: 1
+  bar: {
+    spam: 3
+  }
+}
+
+
+---
+dictionaries — like records, but with runtime keys: hashable key, any value
+---
+dict {foo: 1, 'bar': 2, (key): 3}
+
+
+---
+sets - unique seq of items, seq syntax for pattern matching
+---
+set 1, 2, 3, 3
+# == set 3, 2, 1
+ordered_set 3, 2, 3, 1
+# == ordered_set 3, 2, 1
+# != ordered_set 1, 2, 3
+
+
+---
+identifiers/names
+---
+foo
+foo-bar
+foo_bar
+ni_1234
+
+# _ is the wildcard — a non-binding placeholder, not a regular identifier
+_           # discard in pattern or fn param position
+fn _, b: b  # ignore first arg
+[_, x] = [1, 2]  # discard first element
+
+# Any seq of UTF-8 graphemes excluding registered operators, seperators, terminators.
+# As most operators are surrounded by whitespace, things like `-` is fine
+# in the middle (prefix - has no whitespace to the rigth).
+
+
+--- --- ---
+ Operators
+
+ All operators each have a protocol, which can be implemented for types to
+ allow operator overloading. Custom operators can be added with compiler hooks.
+--- --- ---
+
+
+---
+arithmetic
+---
+
+-a          # unary minus
+a + b       # add
+a - b       # subtract
+a * b       # multiply
+a / b       # divide
+a // b      # integer divide
+a ** b      # power
+a % b       # remainder — sign follows dividend
+a %% b      # true modulus — sign follows divisor
+a /% b      # divmod — returns [quotient, remainder]
+
+
+---
+logical - operands must be bools, returns bool
+---
+
+not a
+a and b
+a or b
+a xor b
+
+
+---
+comparison — always returning bool
+---
+
+a > b
+a >= b
+a < b
+a <= b
+a == b
+a != b          # not equals, not the same identity/value
+a > b > c       # chained
+a >= b >= c     # chained
+a >< b          # disjoint - for types, sets, lists
+
+a in b          # containment
+a not in b      # does not contain
+
+
+---
+bitwise
+---
+
+~a         # not
+a & b      # and
+a or b     # or   TODO:
+a ^ b      # xor
+a >> b     # shift right
+a << b     # shift left
+a >>> b    # rotate right
+a <<< b    # rotate left
+
+
+---
+sets - operators
+---
+
+a + b       # union (ordered: left to right merge)
+a - b       # difference
+a ^ b       # symmetric difference
+a * b       # cartesian product
+a & b       # intersection
+
+# comparison — always return bool
+a == b      # equality
+a != b      # inequality
+a < b       # a is proper subset of b
+a <= b      # a is subset of or equal to b
+a > b       # a is proper superset of b
+a >= b      # a is superset of or equal to b
+a >< b      # a and b are disjoint
+
+a in b      # membership
+a not in b  # non membership
+
+
+---
+spread
+---
+[head, ..tail]
+[head, .. tail]
+[..seq1, ..seq2]   # concat
+
+{foo: bar, ..rest}
+{foo: bar, .. rest}
+{..rec1, ..rec2}   # merge with right "overwriting" left TODO: or other way?
+
+# see application, function
+foo bar, ..spam, ni
+fn x, ..ys, z: ()
+
+[..]    # matches non empty seq
+{..}    # matches no empty rec
+'${..}' # matches non empty str TODO: remove such syntax
+
+---
+ranges
+---
+
+0..10           # 0 inclusive to 10 exclusive
+0...10          # 0 inclusive to 10 inclusive
+'a'...'z'       # char range inclusive
+start..end
+start...end
+(1 + 2)..(3 + 4)
+(1 + 2)...(3 + 4)
+# TODO: what about commonly used steps?
+#       leave to range 1, 2, 3 or use e.g. 1..3..5
+
+
+---
+member access
+---
+
+# by name literal
+foo.bar
+foo.bar-spam
+foo.bar.spam == (foo.bar).spam
+
+
+# by member/key expressions including literals short forms
+# the expressions must be compile time static
+# or the L and R types must implement the . protocol
+foo.(expr)
+
+[1, 2, 3].(0) == 1
+n = 1
+[1, 2, 3].(n) == 2
+[0, 1, 2, 3, 4].(2...3) == [2, 3]
+[0, 1, 2, 3, 4].2...3 == [2, 3]  # TODO: decide later
+[0, 1, 2, 3, 4].[2, 3] == [2, 3]  # TODO: decide later — .([ ]) already works
+
+
+{foo: 123}.foo == 123
+{'ni nu': 123}.('ni ni') == 123
+{'ni nu': 123}.'ni ni' == 123.  # TODO: keep, or dictate .()
+k = 'ni nu'
+{'ni nu': 123}.(k) == 123
+{x: 1, y: 2, z: 3}.(['x', 'y']) == {x: 1, y: 1}
+{x: 1, y: 2, z: 3}.('x', 'y') == {x: 1, y: 1} # keep, or dictate .()
+{x: 1, y: 2, z: 3}.['x', 'y'] == {x: 1, y: 1} # keep, or dictate .()
+
+
+
+--- --- ---
+precedence
+--- --- ---
+
+---
+parenthesis for grouping expressions
+---
+15 == (1 + 2) * (2 + 3)
+[3, 7] == [(add 1, 2), (add 3, 4)]
+
+
+---
+new line as strong expression separators
+---
+[3, 7] == seq
+  add 1, 2
+  add 3, 4
+
+
+---
+`;` as a strong `,` separator
+---
+[3, 7] == [add 1, 2; add 3, 4] == [(add 1, 2), (add 3, 4)]
+
+
+
+--- --- ---
+bindings using pattern matching
+
+
+
+--- --- ---
+
+---
+left hand binding
+---
+foo = 1
+
+# TODO: default values
+
+[a, b] = [1, 2]
+{x, y} = point
+{x, y: z} = point         # bind x to point.x and y to point.y
+
+# patterns must match or will fail at compiletime
+[x, 3] = [1, 2] # fails as 1 != 2
+[x] =  [1, 2]   # fails as right hand has more items
+
+# using guards
+[x, y >= 2] = [1, 2]
+[x, is_even y] = [1, 2]
+
+# nested structures
+[a, [b, c]] = [1, [2, 3]]
+{a, b: {c, d}} = {a: 1, b: {2, 3}}
+
+
+# recs patterns match partially, seq patterns exact
+{a} = {a, b}
+{a, ..{}} = {a, b} # use explict empty check
+
+[a] = [1, 2]       # error
+[a, ..] = [1, 2]   # use rest discarding
+
+
+# rest of structures using spread
+[head, ..] = [1]
+[head, ..] = [1, 2, 3]
+[head, ..tail] = [1, 2, 3, 4]
+[head, ..middle, end] = [1, 2, 3, 4]
+
+# using guards
+[head > 3, ..tail] = [4, 5, 6]
+[(is_odd head), ..tail] = [3, 4, 5]
+[is_odd head, ..tail] = [3, 4, 5] # TODO: check ambiguity for is_odd args
+[is_odd head; ..tail] = [3, 4, 5] # `;` makes end of is_odd explicit
+
+# using spread guards
+[head, ..(0..2), ..rest] = [1, 2, 3, 4, 5]
+[head, ..0..2, ..rest] = [1, 2, 3, 4, 5]  # range literals can tag ..
+head == 1, rest == [4, 5]
+
+[..(is_odd), ..evens] = [1, 2, 3, 4, 5]
+evens == [2, 4]
+
+
+# simple string matching
+'start ${middle} end' = 'foo bar spam'
+middle == ' bar '
+
+# TODO bind range length - keep/support?
+[..0..(l)] = [1, 2, 3]
+l == 3
+
+---
+right hand binding
+
+Useful for results of multi line expressions
+or to capture bindings within nested structures.
+Same semantics as `=` just direction is switched.
+---
+123 |= b
+
+foo
+  arg1
+  arg2
+|= result
+
+
+# binding nested values having their own patterns
+[a |= [b, 2], [3, 4]] = [[1, 2], [3, 4]]
+a == [1, 2], b == 1
+
+{foo: f |= {bar, spam: num ni}} = {foo: {bar: 1, spam: 2}}
+f == {bar: 1, spam: 2}, bar == 1, ni == 2
+
+# binding results of spread guards (no other way as each item is applied to the guard)
+[..(str) |= strings, ..other] = [1, '2', 3, '4']
+strings = ['2', '4'], other == [1, 3]
+
+[..(is_divisable_by ?, 3) |= foo, ..rest] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+foo = [3, 6, 9], rest == [1, 2, 4, 5, 7, 8]
+
+
+---
+conditional - using pattern matching
+
+Any pattern can be on the left, if it fails to match, the next pattern is tried.
+Any bindings created via the matching branch is available to the righ code block.
+Only the first matching branch is executed.
+---
+
+# simple value matching against literals
+match foo:
+  1: 'one'
+  2: 'two'
+  else: 'other'
+
+# with binding
+match foo:
+  [head, ..tail]: head
+  []: 'empty'
+
+# binding with inline guards
+match foo:
+  n > 0 and n < 10: 'small positive ${n}'
+  n > 0: 'large positive ${n}'
+  even n: 'even number ${n}'
+  else: 'other number ${foo}'
+
+# deep structural with bindings
+match foo:
+  {x, y}: x + y
+
+# matching on types
+match foo:
+  str s: 'its a string ${s}'
+  u8 n: 'its a u8 ${n}'
+  [..str |= ss]: 'list of strings ${s}'
+
+# number mask patterns TODO add to pattern/binding explainer section above
+match n:
+  0b_xx11_xx11: 'bits match'
+  0x_FF_xx: 'high byte is FF'
+
+# string patterns
+match s:
+  'hello ${..rest}': rest
+  'a'..'z': 'lowercase letter'
+
+# sequence patterns
+match items:
+  []: 'empty'
+  [..]: 'non empty'
+  [x]: 'one element only'
+  [x, y]: 'two elements ${x} ${y}'
+  [x, ..]: 'unbound non empty rest'
+  [x, ..rest]: 'bound empty or non empty rest'
+  [..0..(l)]: 'is of length ${l}'
+  [head, ..0..3 chunk, last]: '${head}, chunk of 0 to 3 items ${chunk}, ${last}'
+
+
+# record patterns
+match foobar:
+  {}: 'empty'
+  {..}: 'non empty'
+  {foo: 1}: 'foobar has a field `foo` with value 1, and may have more fields'
+  {foo: 1, ..}: 'unbound non empty rest'
+  {foo: 1, ..{}}: 'unbound empty rest'
+  {foo: 1, ..rest}: 'bound empty or non-empty rest'
+
+  {x: 1, y: {z}}: 'matched z: ${z}'
+  {foo: f |= {bar, spam: num ni}}: {f, bar, no}
+
+
+---
+functions
+---
+
+fn a, b:
+  a + b
+
+# single line
+fn a, b: a + b
+
+
+# multiline
+add = fn a, b:
+  result = a + b
+  result
+
+# no args
+greet = fn: 'hello'
+
+# default args
+greet = fn name='world':
+  'hello ${name}'
+
+# pattern matching in args follows standard pattern matching
+foo = fn {x, y}: x + y
+bar = fn [head, ..tail]: head
+baz = fn arg, ..rest_args: a + b
+
+
+# fn match sugar for easy polymorphism
+classify = fn match n:
+  n > 0: 'positive'
+  n < 0: 'negative'
+  else: 'zero'
+
+# equiv to
+classify = fn n: match n:
+  n > 0: 'positive'
+  n < 0: 'negative'
+  else: 'zero'
+
+# TODO: match explainer needs to document match itself can have multiple args
+foo = fn a, ..b: match a, ..b:
+  1, ..: 1
+  2, x, ..y: 2
+# equiv to
+foo = fn match a, ..b:
+  1, ..: 1
+  2, x, ..y: 2
+
+
+# higher order with closures
+map = fn map_fn: fn match items:
+  []: []
+  [item, ..rest]:
+      [(map_fn item), .. (map map_fn) rest]
+      # equiv to [item | map_fn, .. rest | map map_fn]
+      ---
+      TODO: self referencing for easier recursion
+      ```
+        [item | map_fn, .. self rest]
+      ```
+      ---
+
+# mutual recursion at the module level
+is_even = fn n:
+  match n:
+    0: true
+    else is_odd n - 1
+
+is_odd = fn n:
+  match n:
+    0: false
+    else is_even n - 1
+
+
+
+---
+application
+---
+
+# simple
+log 'hello'
+add 1, 2
+
+# multiline args
+add
+  mul 2, 3
+  mul 3, 4
+
+# equiv to
+add (mul 2, 3), (mul 3, 4)
+
+# ; for inline grouping without need for (..),
+# i.e. ; is a stronger terminator the ,
+add mul 2, 3 mul 3, 4
+
+# nested application follows right to left
+foo bar spam ham
+# equiv to
+foo (bar (spam ham))
+# equiv to
+foo
+  bar
+    spam
+      ham
+
+# postfixed tagged application
+(foo)min       # == (min foo)
+[1, 2, 3]foo   # == foo [1, 2, 3]
+{foo: bar}spam # == spam {foo: bar}
+123sec
+
+
+# partial application
+add5 = add 5, ?
+add5 = ? + 5
+add5 = fn b: add 5, b
+
+(?) == fn $: $
+
+(1 + ?) == fn $: 1 + $
+
+[1, ?] == fn $: [1, $]
+[1, ..?] == fn $: [1, ..$]
+
+{foo, ..?} == fn $: {foo, ..$}
+
+(?.foo) == fn $: $.foo
+(?.(expr)) == fn $: $.(expr)
+
+(foo ?, bar) == fn $: foo $, bar
+(foo ..?) == fn $: foo ..$
+
+(foo bar a, ?) == (foo fn $: bar a, ?)
+
+foo = {
+  bar: ? + 2
+  spam: ? + 3
+}
+# == fn $: {bar: $ + 2, spam: $ + 3}   — one input, record built from it
+
+# ? scoping rules:
+# - Group (...) is the only explicit scope boundary
+# - pipe segment / statement top is the natural outer boundary
+# - everything else is transparent: Apply, InfixOp, Member, Range, Spread, LitSeq, LitRec
+# - all ? in the same scope refer to the same single parameter $
+
+# Group narrows scope — ? wraps only what's inside the parens
+(foo ?.(1), ?.(2)) == fn $: foo $.(1), $.(2)   # one $ projected twice
+(foo (bar ?)) == foo (fn $: bar $)              # inner group scopes, outer has no ?
+
+# nested groups — each Group is its own scope
+(foo (bar ?) ?) == foo (fn $: bar $) $          # outer ? wraps outer group
+
+# seq/rec transparent — all ? are the same $
+[?, ?] == fn $: [$, $]
+[?.(0), ?.(1)] == fn $: [$.(0), $.(1)]
+{foo: ?, bar: ?} == fn $: {foo: $, bar: $}
+
+# explicit groups to create independent fns within a record
+{bar: (? + 2), spam: (? + 3)} == {bar: fn $: $ + 2, spam: fn $: $ + 3}
+
+# pipe usage — most common case
+# each pipe segment is a scope boundary
+1..10
+| filter is_divisible ?, 2  # == filter (fn $: is_divisible $, 2)
+| map ? * 2                 # == map (fn $: $ * 2)
+| [..?]                     # == fn $: [..$]
+|= even_nums
+
+1..10
+| filter ? % 2 == 0         # == filter (fn $: $ % 2 == 0)
+| [..?]
+|= even_nums
+
+---
+pipes - left to rigt application
+---
+foo | bar | spam
+# equiv to
+spam bar foo
+# equiv to
+spam (bar foo)
+
+# multiline pipe - recommended
+'hello'
+| capitalize
+| log
+# equiv to
+log capitalize 'hello'
+log (capitalize 'hello')
+
+# using partial application to pass result as multiple arguments
+[1, 2] | add ..?
+# equiv to
+[1, 2] | fn [a, b]: add a, b
+
+
+--- --- ---
+error handling
+--- --- ---
+
+# try — unwrap if OK, otherwise return from func wit Err
+fn foo:
+  a = try bar ()
+  b = try baz a
+  Ok a + b
+
+# match — handle explicitly i.e. catch errors
+fn foo:
+  match bar ():
+    Ok x: x + 1
+    Err err: log 'error: ${trace err}'
+
+# error chaining
+fn foo:
+  match bar ():
+    Ok x: Ok x
+    Err e: Err e, 'foo failed'
+
+
+--- --- ---
+Block Scoping Rules
+--- --- ---
+
+spam = ( # creates a block scope
+  ni = ham 1
+  ni # ni does not leak out
+)
+
+{
+  foo: 12
+  bar: # new block scope
+    ni = 123       # ni never leaks out
+    shrub ni, 456. # the value for the field 'bar'
+}
+
+match 123:
+  # new block scope for each match arm
+  a :
+    ni = foo a # ni and a never leaks out
+    ni + 1
+
+foo = spam = ham # no new scopes, foo and spam will be the same as ham
+
+
+--- --- ---
+modules and imports
+--- --- ---
+
+# import another lib
+{foo, bar} = import './foobar.fnk'
+
+
+
+--- --- ---
+indentation handling
+TODO: more examples
+--- --- ---
+foo bar,
+  spam
+# equiv to
+foo bar, spam
+# equiv to
+foo
+  bar
+  spam
+
+
+
+

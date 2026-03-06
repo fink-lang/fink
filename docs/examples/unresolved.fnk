@@ -1,0 +1,84 @@
+---
+TODO: WIP
+---
+---
+patterns as first class values
+---
+
+oct = pattern:
+  ['0o', ..('0'..'8' | '_')]
+
+hex = pattern:
+  ['0x', ..('0'..'9' | 'a'..'f')]
+
+flt = pattern:
+  [..('0'..'9'), 'e-', ..('0'..'9')]
+
+number = pattern:
+  oct
+  hex
+  flt
+
+match s:
+  oct: parse_oct s
+  hex: parse_hex s
+  flt: parse_flt s
+
+
+
+--- --- ---
+async and concurrency
+--- --- ---
+
+{spawn, await_all, await_race} = import 'fink/concurrent'
+
+# spawn tasks
+task1 = spawn fetch 'url1'
+task2 = spawn fetch 'url2'
+
+# implicit await on access
+body = task1.body    # suspends until task1 completes
+
+# await all
+[r1, r2] = await_all task1, task2
+
+# await race — first done, rest still pending
+[first, ..rest_tasks] = await_race task1, task2
+
+# streaming — Iterator + Future
+fetch 'url'
+| map parse_chunk      # implicitly awaits each chunk
+| filter valid_chunk
+| fold [], accumulate
+|= result
+
+# cancellation via send
+{spawn, task_group} = import 'fink/concurrent'
+
+{group, send} = task_group ()
+
+with group:
+  task1 = spawn fetch 'url1'
+  task2 = spawn fetch 'url2'
+
+send ()    # cancel all tasks in group
+
+
+
+
+--- --- ---
+context / side effects / states
+--- --- ---
+
+{get_ctx} = import 'fink/ctx'
+
+DB_CTX = context DB
+
+# usage
+fn foo:
+  db = get_ctx DB_CTX
+  db.exec 'INSERT ...'
+
+# with block — introduce context
+with db_ctx:
+  result = foo ()
