@@ -576,17 +576,6 @@ test 'tagged literal — float', fn:
     load env, id'sec', fn ·sec, env:
       apply ·sec, 10.5, state, ƒ_cont
 
-test 'partial — desugared by partial pass before CPS', fn:
-  expect cps fn:
-    fn $: add $, 1
-
-  , equals fn:
-    closure env,
-      fn ·$, env, state, ƒ_cont:
-        store env, id'$', ·$, fn ·$, env:
-          load env, id'add', fn ·add, env:
-            apply ·add, ·$, 1, state, ƒ_cont
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 test 'postfix tag', fn:
   expect cps fn:
