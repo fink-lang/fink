@@ -1046,9 +1046,11 @@ test 'forward ref', fn:
   , equals fn:
     closure env,
       fn ·a, env, state, ƒ_cont:
-        load env, op'+', fn op_plus, env:
-          load env, id'foo', fn ·foo, env:
-            apply op_plus, ·a, 1, state, ƒ_cont
+        store env, id'a', ·a, fn ·a, env:
+          load env, op'+', fn op_plus, env:
+            apply op_plus, ·a, 1, state, fn v_0, state:
+              load env, id'foo', fn ·foo, env:
+                apply ·foo, v_0, state, ƒ_cont
       fn ·foo, chld_env:
         store chld_env, id'foo', ·foo, fn ·foo, env:
           apply ·foo, 1, state, ƒ_cont
