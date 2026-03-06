@@ -2,7 +2,7 @@
 CPS IR — design notes and transform examples
 --- --- ---
 
-# Every function has the full calling convention: fn args, env, state, ƒ_cont:
+# Every function has the full calling convention: fn ..args, env, state, ƒ_cont:
 # env  — captured env (record of captured bindings; carried by the closure object)
 # state — opaque mutable state (I/O, heap, effects; threaded through every call)
 # ƒ_cont  — continuation (what to do with the result)

@@ -1,3 +1,5 @@
+pub mod fmt;
+
 use crate::lexer::Loc;
 
 #[derive(Debug, Clone, PartialEq)]

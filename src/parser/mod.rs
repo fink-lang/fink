@@ -7,6 +7,7 @@ use crate::lexer::{Lexer, Loc, Token, TokenKind};
 
 // --- error ---
 
+#[derive(Debug)]
 pub struct ParseError {
   pub message: String,
   pub loc: Loc,
@@ -289,6 +290,17 @@ impl<'src> Parser<'src> {
         return self.parse_block(head.loc, name);
       }
       let func = Node::new(NodeKind::Ident(name), head.loc);
+
+      // Tagged template string in argument position: ident immediately adjacent to StrStart
+      if self.at(TokenKind::StrStart) && self.peek().loc.start.idx == func.loc.end.idx {
+        let raw_str = self.parse_string(true)?;
+        let end = raw_str.loc.end;
+        return Ok(Node::new(
+          NodeKind::Apply { func: Box::new(func), args: vec![raw_str] },
+          Loc { start: head.loc.start, end },
+        ));
+      }
+
       return self.collect_apply_args_no_block(func, true); // no block detection, nested=true to not eat ":"
     }
 

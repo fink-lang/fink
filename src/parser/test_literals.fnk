@@ -240,6 +240,20 @@ Apply
       LitInt '2'
 
 ---
+tagged template string in argument position
+---
+store env, id'foo', v
+# expect
+Apply
+  Ident 'store'
+  Ident 'env'
+  Apply
+    Ident 'id'
+    StrRawTempl
+      LitStr 'foo'
+  Ident 'v'
+
+---
 rendered template string
 ---
 fmt 'hello ${1 + 2}'
