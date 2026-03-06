@@ -100,6 +100,14 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
   }
 }
 
+fn is_complex_arg(node: &Node) -> bool {
+  // An arg that has fn args inside it — should go on its own indented line
+  match &node.kind {
+    NodeKind::Apply { args, .. } => args.iter().any(is_fn),
+    _ => false,
+  }
+}
+
 fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
   // Tagged string literal: `id'foo'`, `op'+'` — func ident + single string arg, no separator
   if let [arg] = args {
@@ -114,9 +122,11 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
 
   fmt_node(func, out, depth);
 
-  // Split args into leading non-fn args and trailing fn args
-  let fn_start = args.iter().rposition(|a| !is_fn(a)).map(|i| i + 1).unwrap_or(0);
-  let (plain, fns) = args.split_at(fn_start);
+  // Split args into leading non-fn args and trailing fn/complex args
+  // "Complex" args (applies with fn args) get treated like trailing fns — each on its own line
+  let trailing_start = args.iter().rposition(|a| !is_fn(a) && !is_complex_arg(a))
+    .map(|i| i + 1).unwrap_or(0);
+  let (plain, trailing) = args.split_at(trailing_start);
 
   // First plain arg: space separator; rest: ", "
   for (i, arg) in plain.iter().enumerate() {
@@ -124,28 +134,28 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
     fmt_node(arg, out, depth);
   }
 
-  if fns.is_empty() {
+  if trailing.is_empty() {
     return;
   }
 
-  // Single trailing fn → keep `fn params:` on same line, body always block (no apply inline)
-  if fns.len() == 1 {
-    if let NodeKind::Fn { params, body } = &fns[0].kind {
+  // Single trailing fn (no complex args) → keep `fn params:` on same line
+  if trailing.len() == 1 && is_fn(&trailing[0]) {
+    if let NodeKind::Fn { params, body } = &trailing[0].kind {
       if plain.is_empty() { out.push(' '); } else { out.push_str(", "); }
       fmt_fn_with_inline(params, body, out, depth, false);
       return;
     }
   }
 
-  // Multiple trailing fns → each on its own indented line; allow inline applies in bodies
+  // Multiple trailing fns/complex args → each on its own indented line
   if plain.is_empty() { out.push(' '); } else { out.push(','); }
-  for fn_node in fns {
+  for arg in trailing {
     out.push('\n');
     ind(out, depth + 1);
-    if let NodeKind::Fn { params, body } = &fn_node.kind {
+    if let NodeKind::Fn { params, body } = &arg.kind {
       fmt_fn_with_inline(params, body, out, depth + 1, true);
     } else {
-      fmt_node(fn_node, out, depth + 1);
+      fmt_node(arg, out, depth + 1);
     }
   }
 }

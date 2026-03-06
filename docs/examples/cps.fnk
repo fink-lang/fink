@@ -42,15 +42,16 @@ range_incl
 
 
 # pattern matching outer
-matcher
+seq_matcher
+rec_matcher
 match_bind
 match_block
 match_branch
 
-# patern matching
+# pattern matching
 match_pop_at
 match_pop_field
-match_done # inverses the return val, but more consisten with iter
+match_done # first cont = empty (success), second = non-empty (fail)
 match_rest
 match_len
 
