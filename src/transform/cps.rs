@@ -497,11 +497,8 @@ impl Cps {
         }
       }
       _ => {
-        // Pattern binding — use match_bind (not implemented yet)
-        CpsExpr::TailCall {
-          cont: Box::new(CpsVal::Str("bind pattern not implemented".into())),
-          args: vec![],
-        }
+        // Pattern lhs (seq/rec/guard): match_bind rhs-val against pattern.
+        self.pattern_bind_cps(lhs, rhs, rest)
       }
     }
   }
@@ -727,7 +724,10 @@ impl Cps {
       }
 
       NodeKind::LitBool(_) | NodeKind::LitInt(_) | NodeKind::LitFloat(_)
-      | NodeKind::LitDecimal(_) | NodeKind::LitStr(_) => k,
+      | NodeKind::LitDecimal(_) | NodeKind::LitStr(_) => {
+        let val = self.atom_val(node).unwrap_or(CpsVal::Str("?".into()));
+        self.val_result_of(val, k)
+      }
 
       NodeKind::Ident(s) => {
         // If `s` is already bound as a local (e.g. fn param), use it directly without Load.
@@ -944,6 +944,10 @@ impl Cps {
         self.bind_right_cps(lhs, rhs, k)
       }
 
+      NodeKind::Match { subjects, arms } => {
+        self.match_cps(subjects, arms, k)
+      }
+
       _ => CpsExpr::TailCall {
         cont: Box::new(CpsVal::Str("not implemented".into())),
         args: vec![],
@@ -980,6 +984,921 @@ impl Cps {
     } else {
       self.bind_cps(lhs, rhs, k)
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pattern matching
+  // ---------------------------------------------------------------------------
+
+  /// Determine the pattern var name based on the pattern kind.
+  fn pattern_var_name(&self, pat: &Node) -> String {
+    match &pat.kind {
+      NodeKind::LitSeq(_) => "seq".to_string(),
+      NodeKind::LitRec(_) => "rec".to_string(),
+      NodeKind::Ident(s) => format!("·{}", s),
+      NodeKind::InfixOp { lhs, .. } => {
+        // Guard pattern `x > 2` — name after the guard's lhs ident
+        if let NodeKind::Ident(s) = &lhs.kind { format!("·{}", s) } else { "v".to_string() }
+      }
+      _ => "v".to_string(),
+    }
+  }
+
+  /// `pattern |= rhs` or `pattern = rhs` where lhs is a destructuring pattern.
+  /// Evaluates rhs, then match_binds it against the pattern.
+  fn pattern_bind_cps<'src>(&mut self, lhs: &Node<'src>, rhs: &Node<'src>, rest: CpsExpr<'src>) -> CpsExpr<'src> {
+    let (fail, cont) = self.pattern_bind_fail_and_cont(rest);
+    let pat_var_name = self.pattern_var_name(lhs);
+    let pat_local: &'static str = self.alloc(pat_var_name);
+    let ok_body = CpsExpr::TailCall {
+      cont: Box::new(CpsVal::Ident("ƒ_ok")),
+      args: vec![CpsVal::Ident("env"), CpsVal::Ident("state")],
+    };
+    let arm_body = self.compile_pattern(lhs, pat_local, ok_body);
+    let arm = CpsFn {
+      params: vec![
+        CpsParam::Ident(pat_local),
+        CpsParam::Ident("state"),
+        CpsParam::Ident("ƒ_err"),
+        CpsParam::Ident("ƒ_ok"),
+      ],
+      body: Box::new(arm_body),
+    };
+    // Evaluate rhs to get the value
+    if let Some(val) = self.atom_val(rhs) {
+      CpsExpr::MatchBind { val: Box::new(val), state: "state", arm, fail, cont }
+    } else if let NodeKind::Ident(s) = &rhs.kind {
+      let loaded: &'static str = self.alloc(format!("·{}", s));
+      let match_expr = CpsExpr::MatchBind {
+        val: Box::new(CpsVal::Ident(loaded)),
+        state: "state", arm, fail, cont,
+      };
+      CpsExpr::Load {
+        env: "env",
+        key: CpsKey::Id(s),
+        cont: CpsFn {
+          params: vec![CpsParam::Ident(loaded), CpsParam::Ident("env")],
+          body: Box::new(match_expr),
+        },
+      }
+    } else {
+      let rhs_local = self.fresh("v_");
+      let match_expr = CpsExpr::MatchBind {
+        val: Box::new(CpsVal::Ident(rhs_local)),
+        state: "state", arm, fail, cont,
+      };
+      self.pending_cont_name = Some(rhs_local);
+      self.expr_cps(rhs, match_expr)
+    }
+  }
+
+  /// Compile a pattern node into a CPS chain.
+  /// `val_name` = the local holding the value to match.
+  /// `ok_body` = the body to emit when the pattern fully matches (deepest success path).
+  ///
+  /// Seq: matcher → match_len (if exact) → match_pop_at per elem → ok_body
+  /// Rec: matcher → match_pop_field per field → ok_body
+  /// Ident: store name → ok_body
+  /// Guard (infix op with ident lhs): load op, apply, if → ok or ƒ_err
+  fn compile_pattern<'src>(&mut self, pat: &Node<'src>, val_name: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    match &pat.kind {
+      NodeKind::LitSeq(elems) => self.compile_seq_pattern(elems, val_name, ok_body),
+      NodeKind::LitRec(fields) => self.compile_rec_pattern(fields, val_name, ok_body),
+      NodeKind::Ident(name) => {
+        // Simple binding: store name → ok_body
+        let local: &'static str = self.alloc(format!("·{}", name));
+        CpsExpr::Store {
+          env: "env",
+          key: name,
+          val: Box::new(CpsVal::Ident(val_name)),
+          cont: CpsFn {
+            params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
+            body: Box::new(ok_body),
+          },
+        }
+      }
+      NodeKind::InfixOp { op, lhs: guard_lhs, rhs: guard_rhs } => {
+        // Guard pattern: `x > 2` → load op, apply op(x, 2), if → ok or ƒ_err
+        // The lhs of the guard binds the name, rhs is the comparison value.
+        self.compile_guard_pattern(op, guard_lhs, guard_rhs, val_name, ok_body)
+      }
+      NodeKind::Wildcard => ok_body, // _ matches anything, binds nothing
+      NodeKind::LitBool(_) | NodeKind::LitInt(_) | NodeKind::LitFloat(_) | NodeKind::LitStr(_) => {
+        // Literal pattern: equality check
+        self.compile_literal_pattern(pat, val_name, ok_body)
+      }
+      _ => CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Str("pattern not implemented".into())),
+        args: vec![],
+      },
+    }
+  }
+
+  /// Compile `x > 2` guard pattern.
+  /// Binds `x` to `val_name`, then checks `x > 2`; success → ok_body, fail → ƒ_err.
+  fn compile_guard_pattern<'src>(&mut self, op: &'src str, guard_lhs: &Node<'src>, guard_rhs: &Node<'src>, val_name: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    let op_local: &'static str = self.alloc(op_local(op));
+    let key = if is_word_op(op) { CpsKey::Id(op) } else { CpsKey::Op(op) };
+    // The lhs (e.g. `x`) is the name being bound; rhs is the comparison value.
+    let (lhs_name, lhs_local) = if let NodeKind::Ident(n) = &guard_lhs.kind {
+      let local: &'static str = self.alloc(format!("·{}", n));
+      (*n, local)
+    } else {
+      ("v", self.fresh("v_"))
+    };
+    // rhs val (guard comparison value)
+    let rhs_val = if let Some(v) = self.atom_val(guard_rhs) { v } else { CpsVal::Str("?".into()) };
+
+    let store_and_ok = CpsExpr::Store {
+      env: "env",
+      key: lhs_name,
+      val: Box::new(CpsVal::Ident(val_name)),
+      cont: CpsFn {
+        params: vec![CpsParam::Ident(lhs_local), CpsParam::Ident("env")],
+        body: Box::new(ok_body),
+      },
+    };
+    let then_cont = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(store_and_ok),
+    };
+    let else_cont = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_err")),
+        args: vec![CpsVal::Ident("state")],
+      }),
+    };
+    let if_expr = CpsExpr::If {
+      cond: Box::new(CpsVal::Ident("v_result")),
+      then_cont,
+      else_cont,
+    };
+    let apply = CpsExpr::Apply {
+      func: Box::new(CpsVal::Ident(op_local)),
+      args: vec![CpsVal::Ident(val_name), rhs_val],
+      state: "state",
+      cont: Box::new(CpsVal::Fn(CpsFn {
+        params: vec![CpsParam::Ident("v_result"), CpsParam::Ident("state")],
+        body: Box::new(if_expr),
+      })),
+    };
+    CpsExpr::Load {
+      env: "env",
+      key,
+      cont: CpsFn {
+        params: vec![CpsParam::Ident(op_local), CpsParam::Ident("env")],
+        body: Box::new(apply),
+      },
+    }
+  }
+
+  /// Compile a literal pattern (equality check): apply op_eq, val_name, lit, → if → ok or ƒ_err.
+  fn compile_literal_pattern<'src>(&mut self, lit: &Node<'src>, val_name: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    let lit_val = self.atom_val(lit).unwrap_or(CpsVal::Str("?".into()));
+    let op_local_name: &'static str = self.alloc("op_eq".to_string());
+    let then_cont = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(ok_body),
+    };
+    let else_cont = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_err")),
+        args: vec![CpsVal::Ident("state")],
+      }),
+    };
+    let if_expr = CpsExpr::If {
+      cond: Box::new(CpsVal::Ident("v_result")),
+      then_cont,
+      else_cont,
+    };
+    let apply = CpsExpr::Apply {
+      func: Box::new(CpsVal::Ident(op_local_name)),
+      args: vec![CpsVal::Ident(val_name), lit_val],
+      state: "state",
+      cont: Box::new(CpsVal::Fn(CpsFn {
+        params: vec![CpsParam::Ident("v_result"), CpsParam::Ident("state")],
+        body: Box::new(if_expr),
+      })),
+    };
+    CpsExpr::Load {
+      env: "env",
+      key: CpsKey::Op("=="),
+      cont: CpsFn {
+        params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
+        body: Box::new(apply),
+      },
+    }
+  }
+
+  /// Compile a seq pattern `[a, 1, ..rest]` against `val_name`.
+  fn compile_seq_pattern<'src>(&mut self, elems: &[Node<'src>], val_name: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    // Classify elements: count non-spread elems, check for spread at end
+    let mut spread_pos: Option<usize> = None;
+    let mut plain_count = 0usize;
+    for (i, e) in elems.iter().enumerate() {
+      if matches!(e.kind, NodeKind::Spread(_)) { spread_pos = Some(i); break; }
+      plain_count += 1;
+    }
+
+    // Build the innermost body first, then wrap outward.
+    // After all pops, handle spread/rest, then stores, then ok_body.
+    // We build from inside out:
+
+    // 1. Determine if exact length check is needed
+    let has_spread = spread_pos.is_some();
+    let spread_elem = spread_pos.map(|i| &elems[i]);
+
+    // 2. Collect plain elem names (for pops)
+    let pop_elems: &[Node<'src>] = if has_spread { &elems[..plain_count] } else { elems };
+
+    // 3. Build innermost success: collect stores for bound names, then ok_body
+    // We build pop chain from last to first (so first pop is outermost).
+    // But stores go innermost first. Let's collect pop names and build from inside:
+    // Pop param names: idents get `·name` prefix (local var convention), others get generated names
+    let pop_names: Vec<&'static str> = pop_elems.iter().enumerate().map(|(i, e)| {
+      match &e.kind {
+        NodeKind::Ident(s) => self.alloc(format!("·{}", s)),
+        NodeKind::Wildcard => self.fresh("v_"),
+        _ => self.alloc(format!("v_item{}", i)),
+      }
+    }).collect();
+
+    // Inner body after all pops: handle spread, then compile each popped elem as pattern,
+    // then ok_body.
+    let inner = self.compile_seq_elems_after_pops(pop_elems, &pop_names, spread_elem, ok_body);
+
+    // 4. Wrap with match_pop_at calls (inside out: last pop innermost → reversed iteration)
+    // Actually we need: pop 0, then pop 1, ... so pop_at 0 is outermost.
+    // Build from last to first:
+    let mut body = inner;
+    for (idx, _elem) in pop_elems.iter().enumerate().rev() {
+      let name = pop_names[idx];
+      let fail_cont = CpsFn {
+        params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+        body: Box::new(CpsExpr::TailCall {
+          cont: Box::new(CpsVal::Ident("ƒ_err")),
+          args: vec![CpsVal::Ident("state")],
+        }),
+      };
+      body = CpsExpr::MatchPopAt {
+        matcher: Box::new(CpsVal::Ident("m")),
+        index: idx,
+        state: "state",
+        cont: CpsFn {
+          params: vec![CpsParam::Ident("m"), CpsParam::Ident(name), CpsParam::Ident("state")],
+          body: Box::new(body),
+        },
+        fail: fail_cont,
+      };
+    }
+
+    // 5. If exact (no spread), wrap with match_len
+    if !has_spread {
+      let fail_cont = CpsFn {
+        params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+        body: Box::new(CpsExpr::TailCall {
+          cont: Box::new(CpsVal::Ident("ƒ_err")),
+          args: vec![CpsVal::Ident("state")],
+        }),
+      };
+      body = CpsExpr::MatchLen {
+        matcher: Box::new(CpsVal::Ident("m")),
+        len: plain_count,
+        state: "state",
+        ok: CpsFn {
+          params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+          body: Box::new(body),
+        },
+        fail: fail_cont,
+      };
+    }
+
+    // 6. Wrap with matcher call
+    let fail_cont = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_err")),
+        args: vec![CpsVal::Ident("state")],
+      }),
+    };
+    CpsExpr::Matcher {
+      val: Box::new(CpsVal::Ident(val_name)),
+      kind: "SeqPattern",
+      state: "state",
+      cont: CpsFn {
+        params: vec![CpsParam::Ident("m"), CpsParam::Ident("ƒ_err"), CpsParam::Ident("state")],
+        body: Box::new(body),
+      },
+      fail: fail_cont,
+    }
+  }
+
+  /// After pops are done: build ident stores innermost, wrap with literal checks, then spread.
+  /// Order: ƒ_ok ← ident stores (plain, then rest) ← literal checks ← spread (outermost).
+  fn compile_seq_elems_after_pops<'src>(
+    &mut self,
+    elems: &[Node<'src>],
+    pop_names: &[&'static str],
+    spread_elem: Option<&Node<'src>>,
+    ok_body: CpsExpr<'src>,
+  ) -> CpsExpr<'src> {
+    // Collect ident bindings and literal checks separately
+    let mut ident_bindings: Vec<(&'src str, &'static str)> = Vec::new(); // (name, local_name=·name)
+    let mut literal_checks: Vec<(&Node<'src>, &'static str)> = Vec::new(); // (node, pop_name)
+
+    for (i, elem) in elems.iter().enumerate() {
+      let pop_name = pop_names[i]; // already has · prefix for idents
+      match &elem.kind {
+        NodeKind::Ident(name) => ident_bindings.push((*name, pop_name)),
+        NodeKind::Wildcard => {} // skip
+        _ => literal_checks.push((elem, pop_name)),
+      }
+    }
+
+    // Also include rest ident binding (if `..rest`) so it's stored in order after plain idents
+    let rest_binding: Option<(&'src str, &'static str)> = match spread_elem {
+      Some(Node { kind: NodeKind::Spread(Some(inner)), .. }) => {
+        if let NodeKind::Ident(name) = &inner.kind {
+          let local = self.alloc(format!("·{}", name));
+          Some((*name, local))
+        } else { None }
+      }
+      _ => None,
+    };
+    if let Some((name, local)) = rest_binding {
+      ident_bindings.push((name, local));
+    }
+
+    // Innermost: all ident stores (plain elems first, rest last) → ok_body
+    let mut stores_body = ok_body;
+    for (name, pop_name) in ident_bindings.iter().rev() {
+      let local: &'static str = self.alloc(format!("·{}", name));
+      stores_body = CpsExpr::Store {
+        env: "env",
+        key: name,
+        val: Box::new(CpsVal::Ident(pop_name)),
+        cont: CpsFn {
+          params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
+          body: Box::new(stores_body),
+        },
+      };
+    }
+
+    // Spread wraps the stores (rest store is already in stores_body)
+    let after_spread = self.compile_seq_spread(spread_elem, stores_body);
+
+    // Literal checks wrap spread (outside stores)
+    let mut result = after_spread;
+    for (node, pop_name) in literal_checks.into_iter().rev() {
+      result = self.compile_literal_pattern(node, pop_name, result);
+    }
+    result
+  }
+
+  /// Compile the spread part of a seq pattern (after plain elems are handled).
+  fn compile_seq_spread<'src>(&mut self, spread_elem: Option<&Node<'src>>, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    match spread_elem {
+      None => ok_body, // no spread
+      Some(spread_node) => match &spread_node.kind {
+        NodeKind::Spread(None) => {
+          // `..` — non-empty rest assertion
+          // non_empty renders FIRST but semantically = fail (empty rest); empty renders SECOND = success
+          let non_empty_cont = CpsFn {
+            params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+            body: Box::new(CpsExpr::TailCall {
+              cont: Box::new(CpsVal::Ident("ƒ_err")),
+              args: vec![CpsVal::Ident("state")],
+            }),
+          };
+          let empty_cont = CpsFn {
+            params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+            body: Box::new(ok_body),
+          };
+          CpsExpr::MatchDone {
+            matcher: Box::new(CpsVal::Ident("m")),
+            state: "state",
+            non_empty: non_empty_cont,
+            empty: empty_cont,
+          }
+        }
+        NodeKind::Spread(Some(inner)) => match &inner.kind {
+          NodeKind::Ident(name) => {
+            // `..rest` — bind rest; ok_body already contains all stores (pre-built by caller)
+            let rest_local: &'static str = self.alloc(format!("·{}", name));
+            CpsExpr::MatchRest {
+              matcher: Box::new(CpsVal::Ident("m")),
+              state: "state",
+              cont: CpsFn {
+                params: vec![CpsParam::Ident("m"), CpsParam::Ident(rest_local), CpsParam::Ident("state")],
+                body: Box::new(ok_body),
+              },
+            }
+          }
+          NodeKind::LitSeq(inner_elems) if inner_elems.is_empty() => {
+            // `..[]` — exact empty rest
+            let ok_cont = CpsFn {
+              params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+              body: Box::new(ok_body),
+            };
+            let fail_cont = CpsFn {
+              params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+              body: Box::new(CpsExpr::TailCall {
+                cont: Box::new(CpsVal::Ident("ƒ_err")),
+                args: vec![CpsVal::Ident("state")],
+              }),
+            };
+            CpsExpr::MatchLen {
+              matcher: Box::new(CpsVal::Ident("m")),
+              len: 0,
+              state: "state",
+              ok: ok_cont,
+              fail: fail_cont,
+            }
+          }
+          _ => ok_body,
+        },
+        _ => ok_body,
+      }
+    }
+  }
+
+  /// Compile a rec pattern `{bar, ..rest}` against `val_name`.
+  fn compile_rec_pattern<'src>(&mut self, fields: &[Node<'src>], val_name: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    // Classify fields: plain fields and optional spread at end
+    let mut spread_elem: Option<&Node<'src>> = None;
+    let mut plain_fields: Vec<&Node<'src>> = Vec::new();
+    for f in fields {
+      if matches!(f.kind, NodeKind::Spread(_)) { spread_elem = Some(f); break; }
+      plain_fields.push(f);
+    }
+
+    // Build inner body from inside out
+    let inner = self.compile_rec_fields_and_spread(plain_fields, spread_elem, ok_body);
+
+    // Wrap with matcher
+    let fail_cont = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_err")),
+        args: vec![CpsVal::Ident("state")],
+      }),
+    };
+    CpsExpr::Matcher {
+      val: Box::new(CpsVal::Ident(val_name)),
+      kind: "RecPattern",
+      state: "state",
+      cont: CpsFn {
+        params: vec![CpsParam::Ident("m"), CpsParam::Ident("ƒ_err"), CpsParam::Ident("state")],
+        body: Box::new(inner),
+      },
+      fail: fail_cont,
+    }
+  }
+
+  fn compile_rec_fields_and_spread<'src>(
+    &mut self,
+    fields: Vec<&Node<'src>>,
+    spread_elem: Option<&Node<'src>>,
+    ok_body: CpsExpr<'src>,
+  ) -> CpsExpr<'src> {
+    // Collect field specs
+    struct FieldSpec<'a> { key: &'a str, bind_name: &'a str, local: &'static str }
+    let specs: Vec<FieldSpec<'src>> = fields.iter().map(|field| {
+      let (key, bind_name) = match &field.kind {
+        NodeKind::Arm { lhs, body } if !lhs.is_empty() => {
+          let key = match &lhs[0].kind { NodeKind::Ident(s) => *s, _ => "?" };
+          let bind_name = if body.is_empty() { key } else {
+            match &body[0].kind { NodeKind::Ident(s) => *s, _ => key }
+          };
+          (key, bind_name)
+        }
+        NodeKind::Ident(s) => (*s, *s),
+        _ => ("?", "?"),
+      };
+      let local: &'static str = self.alloc(format!("·{}", bind_name));
+      FieldSpec { key, bind_name, local }
+    }).collect();
+
+    // Build the innermost "stores body": field stores → optional rest store → ok_body.
+    // For `..rest`, the rest store goes AFTER field stores but INSIDE match_rest cont.
+    // We need rest's local name to build the chain, so extract it now if applicable.
+    let rest_binding: Option<(&'src str, &'static str)> = match spread_elem {
+      Some(Node { kind: NodeKind::Spread(Some(inner)), .. }) => {
+        if let NodeKind::Ident(name) = &inner.kind {
+          let local = self.alloc(format!("·{}", name));
+          Some((*name, local))
+        } else { None }
+      }
+      _ => None,
+    };
+
+    // Build stores: field stores first, rest store last (innermost toward ok_body)
+    // Order (outer→inner): field1_store → field2_store → rest_store → ok_body
+    let mut stores_body = ok_body;
+    if let Some((name, local)) = rest_binding {
+      stores_body = CpsExpr::Store {
+        env: "env",
+        key: name,
+        val: Box::new(CpsVal::Ident(local)),
+        cont: CpsFn {
+          params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
+          body: Box::new(stores_body),
+        },
+      };
+    }
+    // Field stores in reverse order (last field innermost, first field outermost)
+    for spec in specs.iter().rev() {
+      stores_body = CpsExpr::Store {
+        env: "env",
+        key: spec.bind_name,
+        val: Box::new(CpsVal::Ident(spec.local)), // use ·bar (local) not bar (raw)
+        cont: CpsFn {
+          params: vec![CpsParam::Ident(spec.local), CpsParam::Ident("env")],
+          body: Box::new(stores_body),
+        },
+      };
+    }
+
+    // Spread wraps stores (using stores_body as the success ok_body)
+    let after_spread = self.compile_rec_spread(spread_elem, stores_body);
+
+    // Field pops wrap spread (outermost); pop param uses spec.local (·bar)
+    let mut body = after_spread;
+    for spec in specs.iter().rev() {
+      let fail_cont = CpsFn {
+        params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+        body: Box::new(CpsExpr::TailCall {
+          cont: Box::new(CpsVal::Ident("ƒ_err")),
+          args: vec![CpsVal::Ident("state")],
+        }),
+      };
+      body = CpsExpr::MatchPopField {
+        matcher: Box::new(CpsVal::Ident("m")),
+        key: spec.key,
+        state: "state",
+        cont: CpsFn {
+          params: vec![CpsParam::Ident("m"), CpsParam::Ident(spec.local), CpsParam::Ident("state")],
+          body: Box::new(body),
+        },
+        fail: fail_cont,
+      };
+    }
+    body
+  }
+
+  fn compile_rec_spread<'src>(&mut self, spread_elem: Option<&Node<'src>>, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    match spread_elem {
+      None => ok_body, // rec is open by default — no spread check needed
+      Some(spread_node) => match &spread_node.kind {
+        NodeKind::Spread(None) => {
+          // `..` — non-empty rest assertion
+          // non_empty renders FIRST = fail (empty rest fails); empty renders SECOND = success
+          let non_empty_cont = CpsFn {
+            params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+            body: Box::new(CpsExpr::TailCall {
+              cont: Box::new(CpsVal::Ident("ƒ_err")),
+              args: vec![CpsVal::Ident("state")],
+            }),
+          };
+          let empty_cont = CpsFn {
+            params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+            body: Box::new(ok_body),
+          };
+          CpsExpr::MatchDone {
+            matcher: Box::new(CpsVal::Ident("m")),
+            state: "state",
+            non_empty: non_empty_cont,
+            empty: empty_cont,
+          }
+        }
+        NodeKind::Spread(Some(inner)) => match &inner.kind {
+          NodeKind::Ident(name) => {
+            // `..rest` — bind rest; ok_body already includes all stores (pre-built by caller)
+            let local: &'static str = self.alloc(format!("·{}", name));
+            CpsExpr::MatchRest {
+              matcher: Box::new(CpsVal::Ident("m")),
+              state: "state",
+              cont: CpsFn {
+                params: vec![CpsParam::Ident("m"), CpsParam::Ident(local), CpsParam::Ident("state")],
+                body: Box::new(ok_body),
+              },
+            }
+          }
+          NodeKind::LitRec(inner_elems) if inner_elems.is_empty() => {
+            // `..{}` — exact empty rest (match_done: non_empty=fail, empty=ok)
+            let non_empty_cont = CpsFn {
+              params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+              body: Box::new(CpsExpr::TailCall {
+                cont: Box::new(CpsVal::Ident("ƒ_err")),
+                args: vec![CpsVal::Ident("state")],
+              }),
+            };
+            let empty_cont = CpsFn {
+              params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
+              body: Box::new(ok_body),
+            };
+            CpsExpr::MatchDone {
+              matcher: Box::new(CpsVal::Ident("m")),
+              state: "state",
+              non_empty: non_empty_cont,
+              empty: empty_cont,
+            }
+          }
+          _ => ok_body,
+        },
+        _ => ok_body,
+      }
+    }
+  }
+
+  /// Compile a `Match { subjects, arms }` expression.
+  fn match_cps<'src>(&mut self, subjects: &Node<'src>, arms: &[Node<'src>], k: CpsExpr<'src>) -> CpsExpr<'src> {
+    // Extract subject values
+    let subject_nodes: &[Node<'src>] = match &subjects.kind {
+      NodeKind::Patterns(ps) => ps,
+      _ => std::slice::from_ref(subjects),
+    };
+
+    let (fail, cont) = self.match_block_fail_and_cont(k);
+
+    // Classify subject args
+    let classified: Vec<ArgKind<'src>> = subject_nodes.iter().map(|n| self.classify_arg(n)).collect();
+    let vals: Vec<CpsVal<'src>> = classified.iter().map(|a| match a {
+      ArgKind::Val(v) => v.clone(),
+      ArgKind::Load { local, .. } => CpsVal::Ident(local),
+      ArgKind::LoadSpread { local, .. } => CpsVal::Spread(local),
+      ArgKind::Complex { result, .. } => CpsVal::Ident(result),
+    }).collect();
+
+    // Compile each arm as a match_branch
+    let branches: Vec<CpsExpr<'src>> = arms.iter().map(|arm| self.compile_match_arm(arm)).collect();
+
+    let match_block = CpsExpr::MatchBlock { vals, state: "state", branches, fail, cont };
+
+    // Wrap with arg loads (innermost = match_block)
+    let with_loads = classified.iter().rev().fold(match_block, |inner, kind| {
+      match kind {
+        ArgKind::Load { key, local } | ArgKind::LoadSpread { key, local } => {
+          CpsExpr::Load {
+            env: "env",
+            key: key.clone(),
+            cont: CpsFn {
+              params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
+              body: Box::new(inner),
+            },
+          }
+        }
+        _ => inner,
+      }
+    });
+    with_loads
+  }
+
+  fn match_block_fail_and_cont<'src>(&mut self, k: CpsExpr<'src>) -> (CpsFn<'src>, CpsFn<'src>) {
+    let fail = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::Panic {
+        message: Box::new(CpsVal::Str("no match".into())),
+        state: "state",
+      }),
+    };
+    let cont_body = self.result_of("match_result", k);
+    let cont = CpsFn {
+      params: vec![CpsParam::Ident("match_result"), CpsParam::Ident("state")],
+      body: Box::new(cont_body),
+    };
+    (fail, cont)
+  }
+
+  /// Compile a match arm node into a match_branch CpsExpr.
+  fn compile_match_arm<'src>(&mut self, arm: &Node<'src>) -> CpsExpr<'src> {
+    // Arm { lhs: [Patterns([p1, p2, ...])] or [pattern], body: [expr] }
+    let (raw_lhs, body_nodes) = match &arm.kind {
+      NodeKind::Arm { lhs, body } => (lhs.as_slice(), body.as_slice()),
+      _ => return CpsExpr::TailCall { cont: Box::new(CpsVal::Str("?".into())), args: vec![] },
+    };
+    // Unwrap single Patterns wrapper for multi-arg arms
+    let patterns: &[Node<'src>] = if raw_lhs.len() == 1 {
+      if let NodeKind::Patterns(ps) = &raw_lhs[0].kind { ps.as_slice() } else { raw_lhs }
+    } else { raw_lhs };
+
+    // The arm fn receives v (or v0, v1, ... for multi-arg), env, state, ƒ_err, ƒ_ok
+    // ƒ_ok receives the arm result
+    let ok_body_result = self.compile_arm_body(body_nodes);
+    let arm_body = self.compile_arm_patterns(patterns, ok_body_result);
+
+    let (arm_params, arm_env) = if patterns.len() == 1 {
+      let var_name: &'static str = self.alloc(self.pattern_var_name(&patterns[0]));
+      (vec![
+        CpsParam::Ident(var_name),
+        CpsParam::Ident("env"),
+        CpsParam::Ident("state"),
+        CpsParam::Ident("ƒ_err"),
+        CpsParam::Ident("ƒ_ok"),
+      ], "env")
+    } else {
+      // Multi-arg: v0, v1, ... (or v0, ..vs for varargs last)
+      // Check if last pattern is a Spread
+      let last = patterns.last().unwrap();
+      let has_spread_last = matches!(last.kind, NodeKind::Spread(_));
+      let plain_count = if has_spread_last { patterns.len() - 1 } else { patterns.len() };
+      let mut ps: Vec<CpsParam> = (0..plain_count).map(|i| {
+        CpsParam::Ident(self.alloc(format!("v{}", i)))
+      }).collect();
+      if has_spread_last {
+        ps.push(CpsParam::Spread("vs"));
+      }
+      ps.push(CpsParam::Ident("env"));
+      ps.push(CpsParam::Ident("state"));
+      ps.push(CpsParam::Ident("ƒ_err"));
+      ps.push(CpsParam::Ident("ƒ_ok"));
+      (ps, "env")
+    };
+
+    CpsExpr::MatchBranch {
+      env: arm_env,
+      arm: CpsFn { params: arm_params, body: Box::new(arm_body) },
+    }
+  }
+
+  fn compile_arm_body<'src>(&mut self, body_nodes: &[Node<'src>]) -> CpsExpr<'src> {
+    // Body is a sequence of stmts; last stmt's result goes to ƒ_ok
+    if body_nodes.is_empty() {
+      return CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_ok")),
+        args: vec![CpsVal::Ident("v_result"), CpsVal::Ident("state")],
+      };
+    }
+    // Use scope_body_cps-like approach but with ƒ_ok
+    // For now, just evaluate the last (or only) expr with ƒ_ok
+    if body_nodes.len() == 1 {
+      let tail = CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_ok")),
+        args: vec![CpsVal::Ident("v_result"), CpsVal::Ident("state")],
+      };
+      self.expr_cps(&body_nodes[0], tail)
+    } else {
+      self.scope_body_cps(body_nodes)
+    }
+  }
+
+  fn compile_arm_patterns<'src>(&mut self, patterns: &[Node<'src>], ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    if patterns.len() == 1 {
+      let var_name: &'static str = self.alloc(self.pattern_var_name(&patterns[0]));
+      self.compile_pattern(&patterns[0], var_name, ok_body)
+    } else {
+      // Multi-arg: v0, v1, ... (or v0, ..vs for varargs last)
+      // Plain Ident patterns are positional — not stored (arm fn params already capture them).
+      let last = patterns.last().unwrap();
+      let has_spread_last = matches!(last.kind, NodeKind::Spread(_));
+      let plain_pats = if has_spread_last { &patterns[..patterns.len()-1] } else { patterns };
+
+      let mut body = ok_body;
+
+      // Handle spread last (varargs)
+      if has_spread_last {
+        body = self.compile_multi_spread_pattern(last, "vs", body);
+      }
+
+      // Collect literal checks (position, value) — will be hoisted under one op_eq load
+      let literal_checks: Vec<(usize, CpsVal<'src>)> = plain_pats.iter().enumerate()
+        .filter_map(|(i, pat)| {
+          match &pat.kind {
+            NodeKind::LitBool(_) | NodeKind::LitInt(_) | NodeKind::LitFloat(_)
+            | NodeKind::LitDecimal(_) | NodeKind::LitStr(_) => {
+              let v = self.atom_val(pat).unwrap_or(CpsVal::Str("?".into()));
+              Some((i, v))
+            }
+            _ => None,
+          }
+        })
+        .collect();
+
+      // Compile complex patterns (seq/rec/guard) in reverse; skip Ident/Wildcard/literals
+      for (i, pat) in plain_pats.iter().enumerate().rev() {
+        match &pat.kind {
+          NodeKind::Ident(_) | NodeKind::Wildcard => {} // positional, no store
+          NodeKind::LitBool(_) | NodeKind::LitInt(_) | NodeKind::LitFloat(_)
+          | NodeKind::LitDecimal(_) | NodeKind::LitStr(_) => {} // handled below
+          _ => {
+            let var_name: &'static str = self.alloc(format!("v{}", i));
+            body = self.compile_pattern(pat, var_name, body);
+          }
+        }
+      }
+
+      // Wrap literal checks under a single op_eq load, with fresh v_r{i} result names
+      if !literal_checks.is_empty() {
+        let op_local_name: &'static str = self.alloc("op_eq".to_string());
+        for (pos, lit_val) in literal_checks.into_iter().rev() {
+          let var_name: &'static str = self.alloc(format!("v{}", pos));
+          let res_name: &'static str = self.alloc(format!("v_r{}", pos));
+          let if_expr = CpsExpr::If {
+            cond: Box::new(CpsVal::Ident(res_name)),
+            then_cont: CpsFn {
+              params: vec![CpsParam::Ident("state")],
+              body: Box::new(body),
+            },
+            else_cont: CpsFn {
+              params: vec![CpsParam::Ident("state")],
+              body: Box::new(CpsExpr::TailCall {
+                cont: Box::new(CpsVal::Ident("ƒ_err")),
+                args: vec![CpsVal::Ident("state")],
+              }),
+            },
+          };
+          body = CpsExpr::Apply {
+            func: Box::new(CpsVal::Ident(op_local_name)),
+            args: vec![CpsVal::Ident(var_name), lit_val],
+            state: "state",
+            cont: Box::new(CpsVal::Fn(CpsFn {
+              params: vec![CpsParam::Ident(res_name), CpsParam::Ident("state")],
+              body: Box::new(if_expr),
+            })),
+          };
+        }
+        body = CpsExpr::Load {
+          env: "env",
+          key: CpsKey::Op("=="),
+          cont: CpsFn {
+            params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
+            body: Box::new(body),
+          },
+        };
+      }
+
+      body
+    }
+  }
+
+  /// Compile the spread last pattern in a multi-arg arm against `vs` (the spread param).
+  fn compile_multi_spread_pattern<'src>(&mut self, spread_pat: &Node<'src>, vs: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    match &spread_pat.kind {
+      NodeKind::Spread(None) => {
+        // `..` — non-empty rest assertion on vs
+        let fail_cont = CpsFn {
+          params: vec![CpsParam::Ident(vs), CpsParam::Ident("state")],
+          body: Box::new(CpsExpr::TailCall {
+            cont: Box::new(CpsVal::Ident("ƒ_err")),
+            args: vec![CpsVal::Ident("state")],
+          }),
+        };
+        let ok_cont = CpsFn {
+          params: vec![CpsParam::Ident(vs), CpsParam::Ident("state")],
+          body: Box::new(ok_body),
+        };
+        CpsExpr::MatchDone {
+          matcher: Box::new(CpsVal::Ident(vs)),
+          state: "state",
+          non_empty: fail_cont,
+          empty: ok_cont,
+        }
+      }
+      NodeKind::Spread(Some(inner)) => match &inner.kind {
+        NodeKind::LitSeq(elems) if elems.is_empty() => {
+          // `..[]` — exact empty rest (len 0)
+          let ok_cont = CpsFn {
+            params: vec![CpsParam::Ident(vs), CpsParam::Ident("state")],
+            body: Box::new(ok_body),
+          };
+          let fail_cont = CpsFn {
+            params: vec![CpsParam::Ident(vs), CpsParam::Ident("state")],
+            body: Box::new(CpsExpr::TailCall {
+              cont: Box::new(CpsVal::Ident("ƒ_err")),
+              args: vec![CpsVal::Ident("state")],
+            }),
+          };
+          CpsExpr::MatchLen {
+            matcher: Box::new(CpsVal::Ident(vs)),
+            len: 0,
+            state: "state",
+            ok: ok_cont,
+            fail: fail_cont,
+          }
+        }
+        _ => ok_body,
+      },
+      _ => ok_body,
+    }
+  }
+
+  /// Fail and cont fns for pattern bindings (= / destructuring).
+  fn pattern_bind_fail_and_cont<'src>(&mut self, k: CpsExpr<'src>) -> (CpsFn<'src>, CpsFn<'src>) {
+    let fail = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::Panic {
+        message: Box::new(CpsVal::Str("pattern mismatch".into())),
+        state: "state",
+      }),
+    };
+    let cont_body = self.result_of("match_result", k);
+    let cont = CpsFn {
+      params: vec![CpsParam::Ident("match_result"), CpsParam::Ident("state")],
+      body: Box::new(cont_body),
+    };
+    (fail, cont)
   }
 
   /// Common fail and cont fns for match_bind.
@@ -1532,6 +2451,10 @@ impl Cps {
   /// If `k` is `ƒ_cont v_result, state` (the placeholder tail), replace `v_result` with `local`.
   /// Only substitutes the specific `v_result` placeholder — not arbitrary idents like `env`.
   fn result_of<'src>(&self, local: &'src str, k: CpsExpr<'src>) -> CpsExpr<'src> {
+    self.val_result_of(CpsVal::Ident(local), k)
+  }
+
+  fn val_result_of<'src>(&self, val: CpsVal<'src>, k: CpsExpr<'src>) -> CpsExpr<'src> {
     if let CpsExpr::TailCall { ref cont, ref args } = k {
       if let CpsVal::Ident(cont_name) = cont.as_ref() {
         if args.len() == 2 {
@@ -1539,7 +2462,7 @@ impl Cps {
             let cont_name: &'static str = Box::leak(cont_name.to_string().into_boxed_str());
             return CpsExpr::TailCall {
               cont: Box::new(CpsVal::Ident(cont_name)),
-              args: vec![CpsVal::Ident(local), CpsVal::Ident("state")],
+              args: vec![val, CpsVal::Ident("state")],
             };
           }
         }
@@ -1549,14 +2472,15 @@ impl Cps {
   }
 
   fn k_to_cont<'src>(&mut self, k: CpsExpr<'src>) -> CpsVal<'src> {
+    // If k is a direct tail call `cont v_result, state`, use cont directly (no wrapper needed)
     if let CpsExpr::TailCall { cont, args } = &k {
-      if let CpsVal::Ident("ƒ_cont") = cont.as_ref() {
+      if let CpsVal::Ident(cont_name) = cont.as_ref() {
         if args.len() == 2 {
-          if let (CpsVal::Ident(_), CpsVal::Ident("state")) = (&args[0], &args[1]) {
-            // Clear any pending hints — ƒ_cont used directly
+          if let (CpsVal::Ident("v_result"), CpsVal::Ident("state")) = (&args[0], &args[1]) {
             self.pending_cont_name = None;
             self.pending_wildcard = false;
-            return CpsVal::Ident("ƒ_cont");
+            let cont_name: &'static str = Box::leak(cont_name.to_string().into_boxed_str());
+            return CpsVal::Ident(cont_name);
           }
         }
       }
