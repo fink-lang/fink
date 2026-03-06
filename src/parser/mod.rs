@@ -1289,15 +1289,30 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn parse_block_stmts(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
-    let mut stmts = vec![];
+  fn parse_block_items<F>(&mut self, mut f: F) -> Result<Vec<Node<'src>>, ParseError>
+  where F: FnMut(&mut Self) -> ParseResult<'src> {
+    let mut items = vec![];
     loop {
       if self.at(TokenKind::BlockEnd) || self.at(TokenKind::EOF) { break; }
       if self.at(TokenKind::BlockCont) { self.bump(); continue; }
-      stmts.push(self.parse_expr()?);
+      items.push(f(self)?);
     }
     if self.at(TokenKind::BlockEnd) { self.bump(); }
-    Ok(stmts)
+    Ok(items)
+  }
+
+  fn parse_block_stmts(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
+    self.parse_block_items(|p| p.parse_expr())
+  }
+
+  // Parse BlockStart already consumed: inline expr or indented block stmts.
+  fn parse_block_body(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
+    if self.at(TokenKind::BlockStart) {
+      self.bump();
+      self.parse_block_stmts()
+    } else {
+      Ok(vec![self.parse_expr()?])
+    }
   }
 
   // --- match ---
@@ -1316,14 +1331,7 @@ impl<'src> Parser<'src> {
     self.expect(TokenKind::Colon)?;
     if self.at(TokenKind::BlockStart) {
       self.bump();
-      let mut arms = vec![];
-      loop {
-        if self.at(TokenKind::BlockEnd) || self.at(TokenKind::EOF) { break; }
-        if self.at(TokenKind::BlockCont) { self.bump(); continue; }
-        arms.push(self.parse_arm()?);
-      }
-      if self.at(TokenKind::BlockEnd) { self.bump(); }
-      Ok(arms)
+      self.parse_block_items(|p| p.parse_arm())
     } else {
       Ok(vec![self.parse_arm()?])
     }
@@ -1352,12 +1360,7 @@ impl<'src> Parser<'src> {
     self.expect(TokenKind::Colon)?;
     while self.at(TokenKind::BlockCont) { self.bump(); }
 
-    let body = if self.at(TokenKind::BlockStart) {
-      self.bump();
-      self.parse_block_stmts()?
-    } else {
-      vec![self.parse_expr()?]
-    };
+    let body = self.parse_block_body()?;
     let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(start);
 
     // For multi-pattern arms (fn match multi-arg): wrap in Patterns
@@ -1389,14 +1392,7 @@ impl<'src> Parser<'src> {
     self.expect(TokenKind::Colon)?;
     if self.at(TokenKind::BlockStart) {
       self.bump();
-      let mut items = vec![];
-      loop {
-        if self.at(TokenKind::BlockEnd) || self.at(TokenKind::EOF) { break; }
-        if self.at(TokenKind::BlockCont) { self.bump(); continue; }
-        items.push(self.parse_expr_or_arm()?);
-      }
-      if self.at(TokenKind::BlockEnd) { self.bump(); }
-      Ok(items)
+      self.parse_block_items(|p| p.parse_expr_or_arm())
     } else {
       Ok(vec![self.parse_expr()?])
     }
@@ -1410,12 +1406,7 @@ impl<'src> Parser<'src> {
       let start = expr.loc.start;
       self.bump();
       while self.at(TokenKind::BlockCont) { self.bump(); }
-      let body = if self.at(TokenKind::BlockStart) {
-        self.bump();
-        self.parse_block_stmts()?
-      } else {
-        vec![self.parse_expr()?]
-      };
+      let body = self.parse_block_body()?;
       let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(start);
       Ok(Node::new(NodeKind::Arm { lhs: vec![expr], body }, Loc { start, end }))
     } else {
