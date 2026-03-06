@@ -272,10 +272,18 @@ pub fn to_node(expr: &CpsExpr) -> Node<'static> {
       ])
     }
 
-    CpsExpr::Matcher { val, kind, state, cont, fail } => {
-      apply(ident("matcher"), vec![
+    CpsExpr::SeqMatcher { val, state, cont, fail } => {
+      apply(ident("seq_matcher"), vec![
         val_to_node(val),
-        node(NodeKind::LitStr(kind.to_string())),
+        ident(state),
+        fn_to_node(cont),
+        fn_to_node(fail),
+      ])
+    }
+
+    CpsExpr::RecMatcher { val, state, cont, fail } => {
+      apply(ident("rec_matcher"), vec![
+        val_to_node(val),
         ident(state),
         fn_to_node(cont),
         fn_to_node(fail),

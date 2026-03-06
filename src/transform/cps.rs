@@ -225,10 +225,17 @@ pub enum CpsExpr<'src> {
     arm: CpsFn<'src>,
   },
 
-  /// matcher val, 'PatternKind', state, fn m, ƒ_err, state: body, fn state: fail_body
-  Matcher {
+  /// seq_matcher val, state, fn m, ƒ_err, state: body, fn state: fail_body
+  SeqMatcher {
     val: Box<CpsVal<'src>>,
-    kind: &'src str,
+    state: &'src str,
+    cont: CpsFn<'src>,
+    fail: CpsFn<'src>,
+  },
+
+  /// rec_matcher val, state, fn m, ƒ_err, state: body, fn state: fail_body
+  RecMatcher {
+    val: Box<CpsVal<'src>>,
     state: &'src str,
     cont: CpsFn<'src>,
     fail: CpsFn<'src>,
@@ -1338,9 +1345,8 @@ impl Cps {
         args: vec![CpsVal::Ident("state")],
       }),
     };
-    CpsExpr::Matcher {
+    CpsExpr::SeqMatcher {
       val: Box::new(CpsVal::Ident(val_name)),
-      kind: "SeqPattern",
       state: "state",
       cont: CpsFn {
         params: vec![CpsParam::Ident("m"), CpsParam::Ident("ƒ_err"), CpsParam::Ident("state")],
@@ -1500,9 +1506,8 @@ impl Cps {
         args: vec![CpsVal::Ident("state")],
       }),
     };
-    CpsExpr::Matcher {
+    CpsExpr::RecMatcher {
       val: Box::new(CpsVal::Ident(val_name)),
-      kind: "RecPattern",
       state: "state",
       cont: CpsFn {
         params: vec![CpsParam::Ident("m"), CpsParam::Ident("ƒ_err"), CpsParam::Ident("state")],

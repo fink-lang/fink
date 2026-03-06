@@ -63,7 +63,8 @@ CPS IR — design notes and transform examples
 #   for SeqPattern?" — matcher IS the type check, no separate is_seq needed.
 #
 #   Matcher primitives (always available, injected like load/apply):
-#     matcher val, 'SeqPattern', state, fn m, ƒ_err, state:
+#     seq_matcher val, state, fn m, ƒ_err, state:
+#     rec_matcher val, state, fn m, ƒ_err, state:
 #                              — acquire matcher context m (or fail = type mismatch)
 #     match_pop_at m, i, state, fn m, val, ƒ_err, state:
 #                              — extract element at index i; returns updated m
@@ -396,7 +397,7 @@ test 'bind right — destructuring pattern', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
-          matcher seq, 'SeqPattern', state,
+          seq_matcher seq, state,
             fn m, ƒ_err, state:
               match_len m, 2, state,
                 fn m, state:
@@ -535,7 +536,7 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
         store env, id'a', ·a, fn ·a, env:
           match_bind v_rest_0, state,
             fn seq, state, ƒ_err, ƒ_ok:
-              matcher seq, 'SeqPattern', state,
+              seq_matcher seq, state,
                 fn m, ƒ_err, state:
                   match_pop_at m, 0, state,
                     fn m, v_item0, state:
@@ -768,7 +769,7 @@ test 'seq pattern', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
-          matcher seq, 'SeqPattern', state,
+          seq_matcher seq, state,
             fn m, ƒ_err, state:
               match_len m, 2, state,
                 fn m, state:
@@ -798,7 +799,7 @@ test 'rec pattern', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
-          matcher rec, 'RecPattern', state,
+          rec_matcher rec, state,
             fn m, ƒ_err, state:
               match_pop_field m, id'bar', state,
                 fn m, ·bar, state:
@@ -817,7 +818,7 @@ test 'seq pattern with non-empty rest', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
-          matcher seq, 'SeqPattern', state,
+          seq_matcher seq, state,
             fn m, ƒ_err, state:
               match_pop_at m, 0, state,
                 fn m, ·a, state:
@@ -839,7 +840,7 @@ test 'seq pattern with bound rest', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
-          matcher seq, 'SeqPattern', state,
+          seq_matcher seq, state,
             fn m, ƒ_err, state:
               match_pop_at m, 0, state,
                 fn m, ·a, state:
@@ -860,7 +861,7 @@ test 'rec pattern with non-empty rest', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
-          matcher rec, 'RecPattern', state,
+          rec_matcher rec, state,
             fn m, ƒ_err, state:
               match_pop_field m, id'bar', state,
                 fn m, ·bar, state:
@@ -882,7 +883,7 @@ test 'rec pattern exact - empty rest', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
-          matcher rec, 'RecPattern', state,
+          rec_matcher rec, state,
             fn m, ƒ_err, state:
               match_pop_field m, id'bar', state,
                 fn m, ·bar, state:
@@ -904,7 +905,7 @@ test 'rec pattern with bound rest', fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
-          matcher rec, 'RecPattern', state,
+          rec_matcher rec, state,
             fn m, ƒ_err, state:
               match_pop_field m, id'bar', state,
                 fn m, ·bar, state:
@@ -956,7 +957,7 @@ test 'multi-arm match — ƒ_err chains to next arm', fn:
     load env, id'foo', fn ·foo, env:
       match_block ·foo, state,
         match_branch env, fn seq, env, state, ƒ_err, ƒ_ok:
-          matcher seq, 'SeqPattern', state,
+          seq_matcher seq, state,
             fn m, ƒ_err, state:
               match_len m, 1, state,
                 fn m, state:
@@ -969,7 +970,7 @@ test 'multi-arm match — ƒ_err chains to next arm', fn:
                 fn m, state: ƒ_err state
             fn state: ƒ_err state
         match_branch env, fn seq, env, state, ƒ_err, ƒ_ok:
-          matcher seq, 'SeqPattern', state,
+          seq_matcher seq, state,
             fn m, ƒ_err, state:
               match_len m, 2, state,
                 fn m, state:
