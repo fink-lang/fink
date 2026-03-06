@@ -1112,9 +1112,19 @@ impl<'src> Parser<'src> {
 
   fn parse_group(&mut self) -> ParseResult<'src> {
     let open = self.bump(); // consume "("
-    self.skip_block_tokens();
-    let inner = self.parse_expr()?;
-    self.skip_block_tokens();
+    let inner = if self.at(TokenKind::BlockStart) {
+      // Multi-statement block group: wrap stmts in a zero-param Fn so the CPS pass
+      // can detect "group with bindings" and emit a scope.
+      self.bump(); // consume BlockStart
+      let stmts = self.parse_block_stmts()?;
+      let params = Node::new(NodeKind::Patterns(vec![]), open.loc);
+      Node::new(NodeKind::Fn { params: Box::new(params), body: stmts }, open.loc)
+    } else {
+      self.skip_block_tokens();
+      let expr = self.parse_expr()?;
+      self.skip_block_tokens();
+      expr
+    };
     let close = self.expect(TokenKind::BracketClose)?;
     let loc = Loc { start: open.loc.start, end: close.loc.end };
     Ok(Node::new(NodeKind::Group(Box::new(inner)), loc))

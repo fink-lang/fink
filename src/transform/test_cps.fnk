@@ -711,16 +711,13 @@ test 'group with binding creates child scope', fn:
     scope env,
       fn env, ƒ_ok:
         load env, id'ham', fn ·ham, env:
-          apply ·ham, 1, state, fn v_result, state:
-            store env, id'ni', v_result, fn ·ni, env:
-              ƒ_ok ·ni, state
-      fn v_block_result, state:
-        match_bind v_block_result, state,
-          fn v_, state, ƒ_err, ƒ_ok:
-            store env, id'spam', v_, fn ·spam, env:
-              ƒ_ok ·spam, state
-          fn state: panic 'pattern mismatch', state
-          fn match_result, state: ƒ_cont match_result, state
+          apply ·ham, 1, state, fn ·ni, state:
+            store env, id'ni', ·ni, fn ·ni, env:
+              load env, id'ni', fn ·ni, env:
+                ƒ_ok ·ni, state
+      fn ·spam, state:
+        store env, id'spam', ·spam, fn ·spam, env:
+          ƒ_cont ·spam, state
 
 
 test 'chained binding is sequential store without child scope', fn:
@@ -728,17 +725,9 @@ test 'chained binding is sequential store without child scope', fn:
     foo = spam = 1
 
   , equals fn:
-    match_bind 1, state,
-      fn spam, state, ƒ_err, ƒ_ok:
-        store env, id'spam', ·spam, fn ·spam, env:
-          match_bind spam, state,
-            fn foo, state, ƒ_err, ƒ_ok:
-              store env, id'foo', ·foo, fn ·foo, env:
-                ƒ_ok ·foo, state
-            fn state: panic 'pattern mismatch', state
-            fn match_result, state: ƒ_cont match_result, state
-      fn state: panic 'pattern mismatch', state
-      fn match_result, state: ƒ_cont match_result, state
+    store env, id'spam', 1, fn ·spam, env:
+      store env, id'foo', ·spam, fn ·foo, env:
+        ƒ_cont ·foo, state
 
 
 --- --- ---

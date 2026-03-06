@@ -406,6 +406,47 @@ impl Cps {
           // Pass `rest` directly so the outer cont body is: store chld_env, id'name', ·name, fn ·name, env: result_of(·name, rest)
           let rest_inner = store_cont.body; // = rest
           self.fn_cps_bound(params, body, name, local, *rest_inner)
+        } else if let NodeKind::Group(g) = &rhs.kind {
+          if let NodeKind::Fn { params, body } = &g.kind {
+            if let NodeKind::Patterns(ps) = &params.kind {
+              if ps.is_empty() {
+                // Block group rhs: `spam = (block)` → scope, cont stores local
+                let rest_subst = self.result_of(local, *store_cont.body);
+                let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+                let store_expr = CpsExpr::Store {
+                  env: "env",
+                  key: name,
+                  val: Box::new(CpsVal::Ident(local)),
+                  cont: store_cont2,
+                };
+                let scope_cont = CpsExpr::TailCall {
+                  cont: Box::new(CpsVal::Ident("ƒ_ok")),
+                  args: vec![CpsVal::Ident("v_result"), CpsVal::Ident("state")],
+                };
+                let inner_body = self.scope_body_cps(body);
+                let inner_fn = CpsFn {
+                  params: vec![CpsParam::Ident("env"), CpsParam::Ident("ƒ_ok")],
+                  body: Box::new(inner_body),
+                };
+                let cont_fn = CpsFn {
+                  params: vec![CpsParam::Ident(local), CpsParam::Ident("state")],
+                  body: Box::new(store_expr),
+                };
+                return CpsExpr::Scope { env: "env", inner: inner_fn, cont: cont_fn };
+              }
+            }
+          }
+          // Non-block group: fall through to complex rhs
+          let rest_subst = self.result_of(local, *store_cont.body);
+          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+          let store_expr = CpsExpr::Store {
+            env: "env",
+            key: name,
+            val: Box::new(CpsVal::Ident(local)),
+            cont: store_cont2,
+          };
+          self.pending_cont_name = Some(local);
+          return self.expr_cps(rhs, store_expr);
         } else if let NodeKind::Try(inner) = &rhs.kind {
           // Try rhs: ok_cont param is `local` directly, then store and continue.
           let rest_subst = self.result_of(local, *store_cont.body);
@@ -417,6 +458,28 @@ impl Cps {
             cont: store_cont2,
           };
           self.try_cps(inner, local, store_expr)
+        } else if let NodeKind::Bind { lhs: inner_lhs, rhs: inner_rhs } = &rhs.kind {
+          // Nested bind rhs: `foo = spam = 1` → store spam=1, then store foo=·spam, continue.
+          if let NodeKind::Ident(inner_name) = &inner_lhs.kind {
+            let inner_local: &'static str = self.alloc(format!("·{}", inner_name));
+            // Build: store env, id'name', ·inner_local, fn ·name, env: rest
+            let rest_subst = self.result_of(local, *store_cont.body);
+            let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+            let outer_store = CpsExpr::Store {
+              env: "env",
+              key: name,
+              val: Box::new(CpsVal::Ident(inner_local)),
+              cont: store_cont2,
+            };
+            // Now process inner bind with outer_store as the continuation
+            self.bind_cps(inner_lhs, inner_rhs, outer_store)
+          } else {
+            // inner lhs is a pattern — not yet supported
+            CpsExpr::TailCall {
+              cont: Box::new(CpsVal::Str("nested pattern bind not implemented".into())),
+              args: vec![],
+            }
+          }
         } else {
           // Complex rhs: evaluate rhs with result name = ·name, then store.
           // The store uses ·name as the value.
@@ -651,7 +714,17 @@ impl Cps {
   /// placed at the deepest continuation position.
   fn expr_cps<'src>(&mut self, node: &Node<'src>, k: CpsExpr<'src>) -> CpsExpr<'src> {
     match &node.kind {
-      NodeKind::Group(inner) => self.expr_cps(inner, k),
+      NodeKind::Group(inner) => {
+        // Group containing a zero-param Fn = block group → scope primitive
+        if let NodeKind::Fn { params, body } = &inner.kind {
+          if let NodeKind::Patterns(ps) = &params.kind {
+            if ps.is_empty() {
+              return self.group_scope_cps(body, k);
+            }
+          }
+        }
+        self.expr_cps(inner, k)
+      }
 
       NodeKind::LitBool(_) | NodeKind::LitInt(_) | NodeKind::LitFloat(_)
       | NodeKind::LitDecimal(_) | NodeKind::LitStr(_) => k,
@@ -860,6 +933,17 @@ impl Cps {
         self.try_cps(inner, ok_var, k)
       }
 
+      NodeKind::Bind { lhs, rhs } => {
+        // Bind as expression (e.g. rhs of outer bind `foo = spam = 1`):
+        // store the inner value, then continue with k — k receives the bound local as the result.
+        // We pass k directly; bind_cps threads the result value through.
+        self.bind_expr_cps(lhs, rhs, k)
+      }
+
+      NodeKind::BindRight { lhs, rhs } => {
+        self.bind_right_cps(lhs, rhs, k)
+      }
+
       _ => CpsExpr::TailCall {
         cont: Box::new(CpsVal::Str("not implemented".into())),
         args: vec![],
@@ -869,10 +953,137 @@ impl Cps {
 
 
 
+  /// Bind as an expression: `spam = 1` used as rhs of outer bind.
+  /// Store `lhs = rhs`, then pass `·lhs` as the result value into `k`.
+  /// This is like bind_cps but threads the bound local as the result.
+  fn bind_expr_cps<'src>(&mut self, lhs: &Node<'src>, rhs: &Node<'src>, k: CpsExpr<'src>) -> CpsExpr<'src> {
+    if let NodeKind::Ident(name) = &lhs.kind {
+      let local: &'static str = self.alloc(format!("·{}", name));
+      // k is the outer continuation; substitute v_result with local in k.
+      let k_subst = self.result_of(local, k);
+      let store_cont = CpsFn {
+        params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
+        body: Box::new(k_subst),
+      };
+      if let Some(val) = self.atom_val(rhs) {
+        CpsExpr::Store { env: "env", key: name, val: Box::new(val), cont: store_cont }
+      } else {
+        let store_expr = CpsExpr::Store {
+          env: "env",
+          key: name,
+          val: Box::new(CpsVal::Ident(local)),
+          cont: store_cont,
+        };
+        self.pending_cont_name = Some(local);
+        self.expr_cps(rhs, store_expr)
+      }
+    } else {
+      self.bind_cps(lhs, rhs, k)
+    }
+  }
+
+  /// Common fail and cont fns for match_bind.
+  fn match_bind_fail_and_cont<'src>(&mut self, k: CpsExpr<'src>) -> (CpsFn<'src>, CpsFn<'src>) {
+    let fail = CpsFn {
+      params: vec![CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::Panic {
+        message: Box::new(CpsVal::Str("no match".into())),
+        state: "state",
+      }),
+    };
+    let cont_body = self.result_of("v_result", k);
+    let cont = CpsFn {
+      params: vec![CpsParam::Ident("v_result"), CpsParam::Ident("state")],
+      body: Box::new(cont_body),
+    };
+    (fail, cont)
+  }
+
+  /// Transform `lhs |= rhs` (BindRight).
+  /// - Primitive lhs (literal): val = lhs, arm stores rhs-name bound to matched v.
+  /// - Pattern lhs (seq/rec): val = rhs (loaded ident), arm destructures into lhs bindings.
+  fn bind_right_cps<'src>(&mut self, lhs: &Node<'src>, rhs: &Node<'src>, k: CpsExpr<'src>) -> CpsExpr<'src> {
+    let (fail, cont) = self.match_bind_fail_and_cont(k);
+
+    if let Some(val) = self.atom_val(lhs) {
+      // Primitive lhs: `1 |= foo` → match_bind 1, state, fn v, ...: store id'foo' v, ƒ_ok
+      let name = match &rhs.kind { NodeKind::Ident(s) => *s, _ => "v" };
+      let local: &'static str = self.alloc(format!("·{}", name));
+      let arm = CpsFn {
+        params: vec![CpsParam::Ident("v"), CpsParam::Ident("state"), CpsParam::Ident("ƒ_err"), CpsParam::Ident("ƒ_ok")],
+        body: Box::new(CpsExpr::Store {
+          env: "env",
+          key: name,
+          val: Box::new(CpsVal::Ident("v")),
+          cont: CpsFn {
+            params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
+            body: Box::new(CpsExpr::TailCall {
+              cont: Box::new(CpsVal::Ident("ƒ_ok")),
+              args: vec![CpsVal::Ident("env"), CpsVal::Ident("state")],
+            }),
+          },
+        }),
+      };
+      CpsExpr::MatchBind { val: Box::new(val), state: "state", arm, fail, cont }
+    } else {
+      // Pattern lhs (seq/rec): `[a, b] |= foo` → load foo, match_bind foo, arm destructures
+      CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Str("bind_right pattern not implemented".into())),
+        args: vec![],
+      }
+    }
+  }
+
   /// Transform a `try` expression into `err` CPS.
   /// `ok_var` is the param name for the ok continuation (either a fresh v_N or a bound name).
   /// Evaluates `inner` with cont param "res", then emits:
   ///   err res, state, fn e, state: ƒ_cont e, state, fn ok_var, state: k
+  /// Transform `Group(Fn { params: [], body })` → scope primitive.
+  /// scope env, fn env, ƒ_ok: <body with ƒ_ok as terminal>, fn v_block_result, state: k
+  fn group_scope_cps<'src>(&mut self, stmts: &[Node<'src>], k: CpsExpr<'src>) -> CpsExpr<'src> {
+    let inner_body = self.scope_body_cps(stmts);
+    let inner = CpsFn {
+      params: vec![CpsParam::Ident("env"), CpsParam::Ident("ƒ_ok")],
+      body: Box::new(inner_body),
+    };
+    let cont_body = self.result_of("v_block_result", k);
+    let cont = CpsFn {
+      params: vec![CpsParam::Ident("v_block_result"), CpsParam::Ident("state")],
+      body: Box::new(cont_body),
+    };
+    CpsExpr::Scope { env: "env", inner, cont }
+  }
+
+  /// Like fn_body_cps but uses ƒ_ok instead of ƒ_cont as the terminal continuation.
+  fn scope_body_cps<'src>(&mut self, stmts: &[Node<'src>]) -> CpsExpr<'src> {
+    if stmts.is_empty() {
+      return CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_ok")),
+        args: vec![CpsVal::Ident("v_result"), CpsVal::Ident("state")],
+      };
+    }
+    let (head, rest) = stmts.split_first().unwrap();
+    match &head.kind {
+      NodeKind::Bind { lhs, rhs } => {
+        let rest_cps = self.scope_body_cps(rest);
+        self.bind_cps(lhs, rhs, rest_cps)
+      }
+      _ => {
+        if rest.is_empty() {
+          let tail = CpsExpr::TailCall {
+            cont: Box::new(CpsVal::Ident("ƒ_ok")),
+            args: vec![CpsVal::Ident("v_result"), CpsVal::Ident("state")],
+          };
+          self.expr_cps(head, tail)
+        } else {
+          let next = self.scope_body_cps(rest);
+          self.pending_wildcard = true;
+          self.expr_cps(head, next)
+        }
+      }
+    }
+  }
+
   fn try_cps<'src>(&mut self, inner: &Node<'src>, ok_var: &'static str, k: CpsExpr<'src>) -> CpsExpr<'src> {
     let err_cont = CpsFn {
       params: vec![CpsParam::Ident("e"), CpsParam::Ident("state")],
@@ -1322,12 +1533,15 @@ impl Cps {
   /// Only substitutes the specific `v_result` placeholder — not arbitrary idents like `env`.
   fn result_of<'src>(&self, local: &'src str, k: CpsExpr<'src>) -> CpsExpr<'src> {
     if let CpsExpr::TailCall { ref cont, ref args } = k {
-      if matches!(cont.as_ref(), CpsVal::Ident("ƒ_cont")) && args.len() == 2 {
-        if let (CpsVal::Ident("v_result"), CpsVal::Ident("state")) = (&args[0], &args[1]) {
-          return CpsExpr::TailCall {
-            cont: Box::new(CpsVal::Ident("ƒ_cont")),
-            args: vec![CpsVal::Ident(local), CpsVal::Ident("state")],
-          };
+      if let CpsVal::Ident(cont_name) = cont.as_ref() {
+        if args.len() == 2 {
+          if let (CpsVal::Ident("v_result"), CpsVal::Ident("state")) = (&args[0], &args[1]) {
+            let cont_name: &'static str = Box::leak(cont_name.to_string().into_boxed_str());
+            return CpsExpr::TailCall {
+              cont: Box::new(CpsVal::Ident(cont_name)),
+              args: vec![CpsVal::Ident(local), CpsVal::Ident("state")],
+            };
+          }
         }
       }
     }
