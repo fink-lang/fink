@@ -345,7 +345,7 @@ impl Cps {
 fn op_local(op: &str) -> String {
   let suffix = match op {
     "+" => "plus",
-    "-" => "neg",
+    "-" => "minus",
     "*" => "mul",
     "/" => "div",
     "%" => "rem",
@@ -356,6 +356,15 @@ fn op_local(op: &str) -> String {
     ">" => "gt",
     ">=" => "gte",
     "." => "dot",
+    _ => op,
+  };
+  format!("op_{}", suffix)
+}
+
+fn unary_op_local(op: &str) -> String {
+  let suffix = match op {
+    "-" => "neg",
+    "not" => "not",
     _ => op,
   };
   format!("op_{}", suffix)
@@ -608,6 +617,8 @@ impl Cps {
 
     let mut closure_params: Vec<CpsParam<'src>> = Vec::new();
     let mut stores: Vec<(&'src str, &'static str)> = Vec::new();
+    // Complex params (seq/rec patterns) desugar to `..·rest_N` + a match_bind in the body.
+    let mut complex_params: Vec<(&'static str, Node<'src>)> = Vec::new(); // (local, pattern)
 
     for p in raw_params {
       match &p.kind {
@@ -626,6 +637,12 @@ impl Cps {
           }
         }
         NodeKind::Wildcard => { closure_params.push(CpsParam::Wildcard); }
+        NodeKind::LitSeq(_) | NodeKind::LitRec(_) => {
+          // Complex pattern: desugar to `..·rest_N` param + match_bind in body
+          let rest_local: &'static str = self.fresh("·rest_");
+          closure_params.push(CpsParam::Spread(rest_local));
+          complex_params.push((rest_local, p.clone()));
+        }
         _ => { closure_params.push(CpsParam::Wildcard); }
       }
     }
@@ -640,13 +657,47 @@ impl Cps {
     for &(src_name, local) in &stores {
       self.locals.insert(src_name.to_string(), local);
     }
+    // Register complex param rest locals so they are accessible in the body
+    for &(rest_local, _) in &complex_params {
+      // Use the rest_local as its own key (pattern_bind_cps checks locals by source name)
+      // We need a user-visible name mapping; for now skip — the body will use rest_local directly
+      let _ = rest_local;
+    }
 
     let inner_body = self.fn_body_cps(body_nodes);
 
     // Restore outer locals.
     self.locals = saved_locals;
 
-    let closure_body = stores.iter().rev().fold(inner_body, |body, &(key, local)| {
+    // Wrap inner_body with match_bind for each complex param (innermost first, since we fold outward)
+    let body_after_complex = complex_params.into_iter().rev().fold(inner_body, |body, (rest_local, pattern)| {
+      let (fail, cont) = self.pattern_bind_fail_and_cont(body);
+      let pat_var_name = self.pattern_var_name(&pattern);
+      let pat_local: &'static str = self.alloc(pat_var_name);
+      let ok_body = CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_ok")),
+        args: vec![CpsVal::Ident("env"), CpsVal::Ident("state")],
+      };
+      let arm_body = self.compile_pattern(&pattern, pat_local, ok_body);
+      let arm = CpsFn {
+        params: vec![
+          CpsParam::Ident(pat_local),
+          CpsParam::Ident("state"),
+          CpsParam::Ident("ƒ_err"),
+          CpsParam::Ident("ƒ_ok"),
+        ],
+        body: Box::new(arm_body),
+      };
+      CpsExpr::MatchBind {
+        val: Box::new(CpsVal::Ident(rest_local)),
+        state: "state",
+        arm,
+        fail,
+        cont,
+      }
+    });
+
+    let closure_body = stores.iter().rev().fold(body_after_complex, |body, &(key, local)| {
       CpsExpr::Store {
         env: "env",
         key,
@@ -748,7 +799,7 @@ impl Cps {
       }
 
       NodeKind::UnaryOp { op, operand } => {
-        let op_local_name: &'static str = self.alloc(op_local(op));
+        let op_local_name: &'static str = self.alloc(unary_op_local(op));
         let key = if is_word_op(op) { CpsKey::Id(op) } else { CpsKey::Op(op) };
         let arg_kinds = self.classify_args(std::slice::from_ref(operand));
         let cont_val = self.k_to_cont(k);
@@ -1028,6 +1079,10 @@ impl Cps {
     if let Some(val) = self.atom_val(rhs) {
       CpsExpr::MatchBind { val: Box::new(val), state: "state", arm, fail, cont }
     } else if let NodeKind::Ident(s) = &rhs.kind {
+      // If rhs is already a local (fn param), use it directly without a load
+      if let Some(&local) = self.locals.get(*s) {
+        return CpsExpr::MatchBind { val: Box::new(CpsVal::Ident(local)), state: "state", arm, fail, cont };
+      }
       let loaded: &'static str = self.alloc(format!("·{}", s));
       let match_expr = CpsExpr::MatchBind {
         val: Box::new(CpsVal::Ident(loaded)),
@@ -1922,10 +1977,9 @@ impl Cps {
   /// - Primitive lhs (literal): val = lhs, arm stores rhs-name bound to matched v.
   /// - Pattern lhs (seq/rec): val = rhs (loaded ident), arm destructures into lhs bindings.
   fn bind_right_cps<'src>(&mut self, lhs: &Node<'src>, rhs: &Node<'src>, k: CpsExpr<'src>) -> CpsExpr<'src> {
-    let (fail, cont) = self.match_bind_fail_and_cont(k);
-
     if let Some(val) = self.atom_val(lhs) {
       // Primitive lhs: `1 |= foo` → match_bind 1, state, fn v, ...: store id'foo' v, ƒ_ok
+      let (fail, cont) = self.match_bind_fail_and_cont(k);
       let name = match &rhs.kind { NodeKind::Ident(s) => *s, _ => "v" };
       let local: &'static str = self.alloc(format!("·{}", name));
       let arm = CpsFn {
@@ -1945,11 +1999,8 @@ impl Cps {
       };
       CpsExpr::MatchBind { val: Box::new(val), state: "state", arm, fail, cont }
     } else {
-      // Pattern lhs (seq/rec): `[a, b] |= foo` → load foo, match_bind foo, arm destructures
-      CpsExpr::TailCall {
-        cont: Box::new(CpsVal::Str("bind_right pattern not implemented".into())),
-        args: vec![],
-      }
+      // Pattern lhs (seq/rec): `[a, b] |= foo` → load rhs, match_bind it against lhs pattern
+      self.pattern_bind_cps(lhs, rhs, k)
     }
   }
 
@@ -2379,6 +2430,9 @@ impl Cps {
       }
       NodeKind::Spread(Some(inner)) => match &inner.kind {
         NodeKind::Ident(s) => {
+          if let Some(&local) = self.locals.get(*s) {
+            return ArgKind::Val(CpsVal::Spread(local));
+          }
           let local: &'static str = self.alloc(format!("·{}", s));
           ArgKind::LoadSpread { key: CpsKey::Id(s), local }
         }
