@@ -1427,6 +1427,18 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<No
   p.parse_expr()
 }
 
+/// Parse all top-level statements (separated by BlockCont at the root level).
+pub fn parse_stmts(src: &str) -> Result<Vec<Node<'_>>, ParseError> {
+  let mut p = Parser::new(src);
+  let mut stmts = Vec::new();
+  loop {
+    if p.at(TokenKind::EOF) { break; }
+    if p.at(TokenKind::BlockCont) { p.bump(); continue; }
+    stmts.push(p.parse_expr()?);
+  }
+  Ok(stmts)
+}
+
 #[cfg(test)]
 mod tests {
   use test_macros::test_template;

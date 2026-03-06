@@ -91,6 +91,13 @@ CPS IR — design notes and transform examples
 #   ƒ_err    = fn state:         — arm failed; wired to next arm / exhaustion by match_block
 #   ƒ_ok = fn result, state: — arm succeeded; wired to result ƒ_cont by match_block
 #   Arms are tried in order; fail fast.
+#
+#
+#  TODO: add support for full modules, which would use something like:
+#     module fn {store, id, ..}, env, state, ƒ_cont:
+#       # return the `env` so that names can be exported
+#      ƒ_cont env
+
 
 {test, expect, equals} = import '@fink/testing.fnk'
 {cps, module} = import '@fink/compiler/transform'
@@ -105,38 +112,34 @@ test 'seq literal', fn:
     [a, b, c]
 
   , equals fn:
-    module fn {load, seq_append, id}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        seq_append [], ·a, state, fn v_seq, state:
-          load env, id'b', fn ·b, env:
-            seq_append v_seq, ·b, state, fn v_seq, state:
-              load env, id'c', fn ·c, env:
-                seq_append v_seq, ·c, state, fn v_seq, state:
-                  ƒ_cont v_seq, state
+    load env, id'a', fn ·a, env:
+      seq_append [], ·a, state, fn v_seq, state:
+        load env, id'b', fn ·b, env:
+          seq_append v_seq, ·b, state, fn v_seq, state:
+            load env, id'c', fn ·c, env:
+              seq_append v_seq, ·c, state, fn v_seq, state:
+                ƒ_cont v_seq, state
 
 test 'seq literal with spread', fn:
   expect cps fn:
     [1, ..a, 2]
 
   , equals fn:
-    module fn {load, seq_append, seq_concat, id}, env, state, ƒ_cont:
-      seq_append [], 1, state, fn v_seq, state:
-        load env, id'a', fn ·a, env:
-          seq_concat v_seq, ·a, state, fn v_seq, state:
-            seq_append v_seq, 2, state, fn v_seq, state:
-              ƒ_cont v_seq, state
+    seq_append [], 1, state, fn v_seq, state:
+      load env, id'a', fn ·a, env:
+        seq_concat v_seq, ·a, state, fn v_seq, state:
+          seq_append v_seq, 2, state, fn v_seq, state:
+            ƒ_cont v_seq, state
 
 test 'seq literal leading spread', fn:
-  # leading spread: a owns construction, no [] needed
   expect cps fn:
     [..a, ..b]
 
   , equals fn:
-    module fn {load, seq_concat, id}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        load env, id'b', fn ·b, env:
-          seq_concat ·a, ·b, state, fn v_seq, state:
-            ƒ_cont v_seq, state
+    load env, id'a', fn ·a, env:
+      load env, id'b', fn ·b, env:
+        seq_concat ·a, ·b, state, fn v_seq, state:
+          ƒ_cont v_seq, state
 
 
 --- --- ---
@@ -148,12 +151,11 @@ test 'rec literal', fn:
     {foo: a, bar: b}
 
   , equals fn:
-    module fn {load, rec_put, id}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        rec_put {}, id'foo', ·a, state, fn v_rec, state:
-          load env, id'b', fn ·b, env:
-            rec_put v_rec, id'bar', ·b, state, fn v_rec, state:
-              ƒ_cont v_rec, state
+    load env, id'a', fn ·a, env:
+      rec_put {}, id'foo', ·a, state, fn v_rec, state:
+        load env, id'b', fn ·b, env:
+          rec_put v_rec, id'bar', ·b, state, fn v_rec, state:
+            ƒ_cont v_rec, state
 
 
 test 'rec literal with spread', fn:
@@ -161,24 +163,21 @@ test 'rec literal with spread', fn:
     {foo: a, ..b}
 
   , equals fn:
-    module fn {load, rec_put, rec_merge, id}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        rec_put {}, id'foo', ·a, state, fn v_rec, state:
-          load env, id'b', fn ·b, env:
-            rec_merge v_rec, ·b, state, fn v_rec, state:
-              ƒ_cont v_rec, state
+    load env, id'a', fn ·a, env:
+      rec_put {}, id'foo', ·a, state, fn v_rec, state:
+        load env, id'b', fn ·b, env:
+          rec_merge v_rec, ·b, state, fn v_rec, state:
+            ƒ_cont v_rec, state
 
 test 'rec literal leading spread', fn:
-  # leading spread: a owns construction, no {} needed
   expect cps fn:
     {..a, ..b}
 
   , equals fn:
-    module fn {load, rec_merge, id}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        load env, id'b', fn ·b, env:
-          rec_merge ·a, ·b, state, fn v_rec, state:
-            ƒ_cont v_rec, state
+    load env, id'a', fn ·a, env:
+      load env, id'b', fn ·b, env:
+        rec_merge ·a, ·b, state, fn v_rec, state:
+          ƒ_cont v_rec, state
 
 
 --- --- ---
@@ -190,18 +189,16 @@ test 'exclusive range', fn:
     0..10
 
   , equals fn:
-    module fn {range_excl}, env, state, ƒ_cont:
-      range_excl 0, 10, state, fn v_range, state:
-        ƒ_cont v_range, state
+    range_excl 0, 10, state, fn v_range, state:
+      ƒ_cont v_range, state
 
 test 'inclusive range', fn:
   expect cps fn:
     0...10
 
   , equals fn:
-    module fn {range_incl}, env, state, ƒ_cont:
-      range_incl 0, 10, state, fn v_range, state:
-        ƒ_cont v_range, state
+    range_incl 0, 10, state, fn v_range, state:
+      ƒ_cont v_range, state
 
 
 
@@ -215,30 +212,27 @@ test 'string interpolation', fn:
     'hello ${name}!'
 
   , equals fn:
-    module fn {load, apply, str_fmt, str_raw, id}, env, state, ƒ_cont:
-      load env, id'name', fn ·name, env:
-        apply str_fmt, str_raw'hello ', ·name, str_raw'!', state, ƒ_cont
+    load env, id'name', fn ·name, env:
+      apply str_fmt, str_raw'hello ', ·name, str_raw'!', state, ƒ_cont
 
 test 'string interpolation multiple exprs', fn:
   expect cps fn:
     '${a} + ${b} = ${c}'
 
   , equals fn:
-    module fn {load, apply, str_fmt, str_raw, id}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        load env, id'b', fn ·b, env:
-          load env, id'c', fn ·c, env:
-            apply str_fmt, str_raw'', ·a, str_raw' + ', ·b, str_raw' = ', ·c, str_raw'', state, ƒ_cont
+    load env, id'a', fn ·a, env:
+      load env, id'b', fn ·b, env:
+        load env, id'c', fn ·c, env:
+          apply str_fmt, str_raw'', ·a, str_raw' + ', ·b, str_raw' = ', ·c, str_raw'', state, ƒ_cont
 
 test 'tagged template', fn:
   expect cps fn:
     fmt'hello ${name}!'
 
   , equals fn:
-    module fn {load, apply, str_raw, id}, env, state, ƒ_cont:
-      load env, id'fmt', fn ·fmt, env:
-        load env, id'name', fn ·name, env:
-          apply ·fmt, str_raw'hello ', ·name, str_raw'!', state, ƒ_cont
+    load env, id'fmt', fn ·fmt, env:
+      load env, id'name', fn ·name, env:
+        apply ·fmt, str_raw'hello ', ·name, str_raw'!', state, ƒ_cont
 
 
 --- --- ---
@@ -253,21 +247,21 @@ test 'closure over outer variable', fn:
       ni
 
   , equals fn:
-    module fn {store, load, apply, closure, id, op}, env, state, ƒ_cont:
-      closure env, fn ·a, env, state, ƒ_cont:
+    closure env,
+      fn ·a, env, state, ƒ_cont:
         store env, id'a', ·a, fn ·a, env:
-          closure env, fn ·b, env, state, ƒ_cont:
-            store env, id'b', ·b, fn ·b, env:
-              load env, op'+', fn op_plus, env:
-                load env, id'a', fn ·a, env:
-                  apply op_plus, ·a, ·b, state, fn v_result, state:
-                    ƒ_cont v_result, state
-          , fn ·ni, chld_env:
-            store chld_env, id'ni', ·ni, fn ·ni, env:
-              ƒ_cont ·ni, state
-      , fn ·foo, chld_env:
+          closure env,
+            fn ·b, env, state, ƒ_cont:
+              store env, id'b', ·b, fn ·b, env:
+                load env, op'+', fn op_plus, env:
+                  load env, id'a', fn ·a, env:
+                    apply op_plus, ·a, ·b, state, ƒ_cont
+            fn ·ni, chld_env:
+              store chld_env, id'ni', ·ni, fn ·ni, env:
+                ƒ_cont ·ni, state
+      fn ·foo, chld_env:
         store chld_env, id'foo', ·foo, fn ·foo, env:
-          ƒ_cont env, state
+          ƒ_cont ·foo, state
 
 --- --- ---
 UnaryOp — loadd and applied like a single-arg function
@@ -339,10 +333,8 @@ test 'chained comparison', fn:
       load env, id'x', fn ·x, env:
         apply op_lt, 1, ·x, state, fn v_0, state:
           if v_0,
-            fn state:
-              apply op_lt, ·x, 10, state, ƒ_cont
-            fn state:
-              ƒ_cont false, state
+            fn state: apply op_lt, ·x, 10, state, ƒ_cont
+            fn state: ƒ_cont false, state
 
 
 --- --- ---
@@ -354,9 +346,8 @@ test 'simple literal binding', fn:
     foo = 1
 
   , equals fn:
-    module fn {store, id}, env, state, ƒ_cont:
-      store env, id'foo', 1, fn ·foo, env:
-        ƒ_cont env, state
+    store env, id'foo', 1, fn ·foo, env:
+      ƒ_cont ·foo, state
 
 test 'sequential bindings — ƒ_cont is next expression in chain', fn:
   expect cps fn:
@@ -364,24 +355,22 @@ test 'sequential bindings — ƒ_cont is next expression in chain', fn:
     bar = foo + 1
 
   , equals fn:
-    module fn {store, load, apply, id, op}, env, state, ƒ_cont:
-      store env, id'foo', 1, fn ·foo, env:
-        load env, op'+', fn op_plus, env:
-          load env, id'foo', fn ·foo, env:
-            apply op_plus, ·foo, 1, state, fn ·bar, state:
-              store env, id'bar', ·bar, fn ·bar, env:
-                ƒ_cont env, state
+    store env, id'foo', 1, fn ·foo, env:
+      load env, op'+', fn op_plus, env:
+        load env, id'foo', fn ·foo, env:
+          apply op_plus, ·foo, 1, state, fn ·bar, state:
+            store env, id'bar', ·bar, fn ·bar, env:
+              ƒ_cont ·bar, state
 
 test 'binding rhs is a call', fn:
   expect cps fn:
     foo = add 1, 2
 
   , equals fn:
-    module fn {store, load, apply, id}, env, state, ƒ_cont:
-      load env, id'add', fn ·add, env:
-        apply ·add, 1, 2, state, fn ·foo, state:
-          store env, id'foo', ·foo, fn ·foo, env:
-            ƒ_cont env, state
+    load env, id'add', fn ·add, env:
+      apply ·add, 1, 2, state, fn ·foo, state:
+        store env, id'foo', ·foo, fn ·foo, env:
+          ƒ_cont ·foo, state
 
 --- --- ---
 bind right
@@ -392,38 +381,36 @@ test 'bind right — simple id', fn:
     1 |= foo
 
   , equals fn:
-    module fn {store, match_bind, panic, id}, env, state, ƒ_cont:
-      match_bind 1, state,
-        fn v, state, ƒ_err, ƒ_ok:
-          store env, id'foo', v, fn ·foo, env:
-            ƒ_ok env, state
-        fn state: panic 'no match', state
-        fn v_result, state: ƒ_cont v_result, state
+    match_bind 1, state,
+      fn v, state, ƒ_err, ƒ_ok:
+        store env, id'foo', v, fn ·foo, env:
+          ƒ_ok env, state
+      fn state: panic 'no match', state
+      fn v_result, state: ƒ_cont v_result, state
 
 test 'bind right — destructuring pattern', fn:
   expect cps fn:
     [a, b] |= foo
 
   , equals fn:
-    module fn {store, load, match_bind, matcher, match_pop_at, match_len, panic, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind foo, state,
-          fn v, state, ƒ_err, ƒ_ok:
-            # TODO: matcher, v, [], ...?
-            matcher v, 'SeqPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_at m, 0, state,
-                  fn m, a, ƒ_err, state:
-                    match_pop_at m, 1, state,
-                      fn m, b, ƒ_err, state:
-                        match_len m, 0, state,
-                          fn m, state:
-                            store env, id'a', ·a, fn ·a, env:
-                              store env, id'b', ·b, fn ·b, env:
-                                ƒ_ok env, state
-                          fn m, state: ƒ_err state
-          fn state: panic 'no match', state
-          fn v_result, state: ƒ_cont v_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind foo, state,
+        fn v, state, ƒ_err, ƒ_ok:
+          # TODO: matcher, v, [], ...?
+          matcher v, 'SeqPattern', state,
+            fn m, ƒ_err, state:
+              match_pop_at m, 0, state,
+                fn m, a, ƒ_err, state:
+                  match_pop_at m, 1, state,
+                    fn m, b, ƒ_err, state:
+                      match_len m, 0, state,
+                        fn m, state:
+                          store env, id'a', ·a, fn ·a, env:
+                            store env, id'b', ·b, fn ·b, env:
+                              ƒ_ok env, state
+                        fn m, state: ƒ_err state
+        fn state: panic 'no match', state
+        fn v_result, state: ƒ_cont v_result, state
 
 --- --- ---
 try — early escape on error
@@ -434,12 +421,11 @@ test 'try — bare expression', fn:
     try foo bar
 
   , equals fn:
-    module fn {load, apply, err, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        apply ·foo, ·bar, state, fn res, state:
-          err res, state,
-            fn e, state: ƒ_cont e, state
-            fn v_0, state: ƒ_cont v_0, state
+    load env, id'foo', fn ·foo, env:
+      apply ·foo, ·bar, state, fn res, state:
+        err res, state,
+          fn e, state: ƒ_cont e, state
+          fn v_0, state: ƒ_cont v_0, state
 
 test 'try — result bound, code continues', fn:
   expect cps fn:
@@ -447,15 +433,14 @@ test 'try — result bound, code continues', fn:
     ni + 1
 
   , equals fn:
-    module fn {store, load, apply, err, id, op}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        apply ·foo, ·bar, state, fn res, state:
-          err res, state,
-            fn e, state: ƒ_cont e, state
-            fn ·ni, state:
-              store env, id'ni', ·ni, fn ·ni, env:
-                load env, op'+', fn op_plus, env:
-                  apply op_plus, ·ni, 1, state, ƒ_cont
+    load env, id'foo', fn ·foo, env:
+      apply ·foo, ·bar, state, fn res, state:
+        err res, state,
+          fn e, state: ƒ_cont e, state
+          fn ·ni, state:
+            store env, id'ni', ·ni, fn ·ni, env:
+              load env, op'+', fn op_plus, env:
+                apply op_plus, ·ni, 1, state, ƒ_cont
 
 --- --- ---
 functions
@@ -466,51 +451,49 @@ test 'identity function', fn:
     fn x: x
 
   , equals fn:
-    closure env, fn ·x, env, state, ƒ_cont:
-      store env, id'x', ·x, fn ·x, env:
-        ƒ_cont ·x, state
-    , fn ·fn_val, _:
-      ƒ_cont ·fn_val, state
+    closure env,
+      fn ·x, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          ƒ_cont ·x, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 test 'function with operator in body', fn:
   expect cps fn:
     fn x: x + 1
   , equals fn:
-    closure env, fn ·x, env, state, ƒ_cont:
-      store env, id'x', ·x, fn ·x, env:
-        load env, op'+', fn op_plus, env:
-          apply op_plus, ·x, 1, state, fn v_result, state:
-            ƒ_cont v_result, state
-    , fn ·fn_val, _:
-      ƒ_cont ·fn_val, state
+    closure env,
+      fn ·x, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          load env, op'+', fn op_plus, env:
+            apply op_plus, ·x, 1, state, ƒ_cont
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 test 'function binding', fn:
   expect cps fn:
     inc = fn x: x + 1
 
   , equals fn:
-    closure env, fn ·x, env, state, ƒ_cont:
-      store env, id'x', ·x, fn ·x, env:
-        load env, op'+', fn op_plus, env:
-          apply op_plus, ·x, 1, state, fn v_result, state:
-            ƒ_cont v_result, state
-    , fn ·inc, chld_env:
-      store chld_env, id'inc', ·inc, fn ·inc, env:
-        ƒ_cont ·inc, state
+    closure env,
+      fn ·x, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          load env, op'+', fn op_plus, env:
+            apply op_plus, ·x, 1, state, ƒ_cont
+      fn ·inc, chld_env:
+        store chld_env, id'inc', ·inc, fn ·inc, env:
+          ƒ_cont ·inc, state
 
 test 'multi-param function', fn:
   expect cps fn:
     fn x, y: x + y
 
   , equals fn:
-    closure env, fn ·x, ·y, env, state, ƒ_cont:
-      store env, id'x', ·x, fn ·x, env:
-        store env, id'y', ·y, fn ·y, env:
-          load env, op'+', fn op_plus, env:
-            apply op_plus, ·x, ·y, state, fn v_result, state:
-              ƒ_cont v_result, state
-    , fn ·fn_val, _:
-      ƒ_cont ·fn_val, state
+    closure env,
+      fn ·x, ·y, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          store env, id'y', ·y, fn ·y, env:
+            load env, op'+', fn op_plus, env:
+              apply op_plus, ·x, ·y, state, ƒ_cont
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 --- --- ---
 varargs functions
@@ -521,12 +504,12 @@ test 'varargs — collect rest', fn:
     fn a, ..rest: rest
 
   , equals fn:
-    closure env, fn ·a, ..·rest, env, state, ƒ_cont:
-      store env, id'a', ·a, fn ·a, env:
-        store env, id'rest', ·rest, fn ·rest, env:
-          ƒ_cont ·rest, state
-    , fn ·fn_val, _:
-      ƒ_cont ·fn_val, state
+    closure env,
+      fn ·a, ..·rest, env, state, ƒ_cont:
+        store env, id'a', ·a, fn ·a, env:
+          store env, id'rest', ·rest, fn ·rest, env:
+            ƒ_cont ·rest, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 test 'varargs — call site spreads iterable', fn:
   expect cps fn:
@@ -542,27 +525,27 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
     fn a, [1, ..b]: b
 
   , equals fn:
-    closure env, fn ·a, ..·rest, env, state, ƒ_cont:
-      store env, id'a', ·a, fn ·a, env:
-        match_bind rest, state,
-          fn v, state, ƒ_err, ƒ_ok:
-            matcher v, 'SeqPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_at m, 0, state,
-                  fn m, v_0, ƒ_err, state:
-                    load env, op'==', fn op_eq, env:
-                      apply op_eq, v_0, 1, state, fn v_result, state:
-                        if v_result,
-                          fn state:
-                            match_rest m, state,
-                              fn m, b, state:
-                                store env, id'b', ·b, fn ·b, env:
-                                  ƒ_ok env, state
-                          fn state: ƒ_err state
-          fn state: panic 'no match', state
-          fn v_result, state: ƒ_cont v_result, state
-    , fn ·fn_val, _:
-      ƒ_cont ·fn_val, state
+    closure env,
+      fn ·a, ..·rest, env, state, ƒ_cont:
+        store env, id'a', ·a, fn ·a, env:
+          match_bind rest, state,
+            fn v, state, ƒ_err, ƒ_ok:
+              matcher v, 'SeqPattern', state,
+                fn m, ƒ_err, state:
+                  match_pop_at m, 0, state,
+                    fn m, v_0, ƒ_err, state:
+                      load env, op'==', fn op_eq, env:
+                        apply op_eq, v_0, 1, state, fn v_result, state:
+                          if v_result,
+                            fn state:
+                              match_rest m, state,
+                                fn m, b, state:
+                                  store env, id'b', ·b, fn ·b, env:
+                                    ƒ_ok env, state
+                            fn state: ƒ_err state
+            fn state: panic 'no match', state
+            fn v_result, state: ƒ_cont v_result, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 --- --- ---
 application
@@ -592,14 +575,14 @@ test 'calling a local — still goes through load', fn:
     inc 5
 
   , equals fn:
-    closure env, fn ·x, env, state, ƒ_cont:
-      store env, id'x', ·x, fn ·x, env:
-        load env, op'+', fn op_plus, env:
-          apply op_plus, ·x, 1, state, fn v_result, state:
-            ƒ_cont v_result, state
-    , fn ·inc, chld_env:
-      store chld_env, id'inc', ·inc, fn ·inc, env:
-        apply ·inc, 5, state, ƒ_cont
+    closure env,
+      fn ·x, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          load env, op'+', fn op_plus, env:
+            apply op_plus, ·x, 1, state, ƒ_cont
+      fn ·inc, chld_env:
+        store chld_env, id'inc', ·inc, fn ·inc, env:
+          apply ·inc, 5, state, ƒ_cont
 
 test 'call with spread — trailing iterable', fn:
   expect cps fn:
@@ -625,12 +608,12 @@ test 'call with spread — passes through from varargs fn', fn:
     fn ..args: foo ..args
 
   , equals fn:
-    closure env, fn ..·args, env, state, ƒ_cont:
-      store env, id'args', ·args, fn ·args, env:
-        load env, id'foo', fn ·foo, env:
-          apply ·foo, ..·args, state, ƒ_cont
-    , fn ·fn_val, _:
-      ƒ_cont ·fn_val, state
+    closure env,
+      fn ..·args, env, state, ƒ_cont:
+        store env, id'args', ·args, fn ·args, env:
+          load env, id'foo', fn ·foo, env:
+            apply ·foo, ..·args, state, ƒ_cont
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 --- --- ---
 pipe — inlined to nested calls
@@ -665,15 +648,14 @@ test 'three sequential bindings', fn:
     c = a + b
 
   , equals fn:
-    module fn {store, load, apply, id, op}, env, state, ƒ_cont:
-      store env, id'a', 1, fn ·a, env:
-        store env, id'b', 2, fn ·b, env:
-          load env, op'+', fn op_plus, env:
-            load env, id'a', fn ·a, env:
-              load env, id'b', fn ·b, env:
-                apply op_plus, ·a, ·b, state, fn ·c, state:
-                  store env, id'c', ·c, fn ·c, env:
-                    ƒ_cont env, state
+    store env, id'a', 1, fn ·a, env:
+      store env, id'b', 2, fn ·b, env:
+        load env, op'+', fn op_plus, env:
+          load env, id'a', fn ·a, env:
+            load env, id'b', fn ·b, env:
+              apply op_plus, ·a, ·b, state, fn ·c, state:
+                store env, id'c', ·c, fn ·c, env:
+                  ƒ_cont ·c, state
 
 test 'expression result discarded', fn:
   expect cps fn:
@@ -682,12 +664,11 @@ test 'expression result discarded', fn:
     bar = 2
 
   , equals fn:
-    module fn {store, load, apply, id}, env, state, ƒ_cont:
-      store env, id'foo', 1, fn ·foo, env:
-        load env, id'log', fn ·log, env:
-          apply ·log, 'hello', state, fn _, state:
-            store env, id'bar', 2, fn ·bar, env:
-              ƒ_cont env, state
+    store env, id'foo', 1, fn ·foo, env:
+      load env, id'log', fn ·log, env:
+        apply ·log, 'hello', state, fn _, state:
+          store env, id'bar', 2, fn ·bar, env:
+            ƒ_cont ·bar, state
 
 
 --- --- ---
@@ -702,22 +683,18 @@ test 'child scopes', fn:
         ni
 
   , equals fn:
-    module fn {store, load, apply, if, match_block, match_branch, panic, id, op}, env, state, ƒ_cont:
-      match_block n, state,
-        match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-          load env, op'>', fn op_gt, env:
-            store env, id'a', v, fn ·a, env:
-              apply op_gt, ·a, 1, state, fn v_result, state:
-                if v_result,
-                  fn state:
-                    store env, id'ni', ·a, fn ·ni, env:
-                      ƒ_ok ·ni, state
-                  fn state:
-                    ƒ_err state
-        fn state:
-          panic "no match", state
-        fn match_result, state:
-          ƒ_cont match_result, state
+    match_block n, state,
+      match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
+        load env, op'>', fn op_gt, env:
+          store env, id'a', v, fn ·a, env:
+            apply op_gt, ·a, 1, state, fn v_result, state:
+              if v_result,
+                fn state:
+                  store env, id'ni', ·a, fn ·ni, env:
+                    ƒ_ok ·ni, state
+                fn state: ƒ_err state
+      fn state: panic "no match", state
+      fn match_result, state: ƒ_cont match_result, state
 
 
 test 'group with binding creates child scope', fn:
@@ -728,21 +705,19 @@ test 'group with binding creates child scope', fn:
     )
 
   , equals fn:
-    module fn {store, load, apply, scope, match_bind, panic, id}, env, state, ƒ_cont:
-      scope env,
-        fn env, ƒ_ok:
-          load env, id'ham', fn ·ham, env:
-            apply ·ham, 1, state, fn v_result, state:
-              store env, id'ni', v_result, fn ·ni, env:
-                ƒ_ok ·ni, state
-        fn v_block_result, state:
-          match_bind v_block_result, state,
-            fn v_, state, ƒ_err, ƒ_ok:
-              store env, id'spam', v_, fn ·spam, env:
-                ƒ_ok ·spam, state
-            fn state: panic 'pattern mismatch', state
-            fn match_result, state:
-              ƒ_cont match_result, state
+    scope env,
+      fn env, ƒ_ok:
+        load env, id'ham', fn ·ham, env:
+          apply ·ham, 1, state, fn v_result, state:
+            store env, id'ni', v_result, fn ·ni, env:
+              ƒ_ok ·ni, state
+      fn v_block_result, state:
+        match_bind v_block_result, state,
+          fn v_, state, ƒ_err, ƒ_ok:
+            store env, id'spam', v_, fn ·spam, env:
+              ƒ_ok ·spam, state
+          fn state: panic 'pattern mismatch', state
+          fn match_result, state: ƒ_cont match_result, state
 
 
 test 'chained binding is sequential store without child scope', fn:
@@ -750,22 +725,17 @@ test 'chained binding is sequential store without child scope', fn:
     foo = spam = 1
 
   , equals fn:
-    module fn {store, load, apply, match_bind, panic, id}, env, state, ƒ_cont:
-      match_bind 1, state,
-        fn spam, state, ƒ_err, ƒ_ok:
-          store env, id'spam', ·spam, fn ·spam, env:
-            match_bind spam, state,
-              fn foo, state, ƒ_err, ƒ_ok:
-                store env, id'foo', ·foo, fn ·foo, env:
-                  ƒ_ok ·foo, state
-              fn state:
-                panic 'pattern mismatch', state
-              fn match_result, state:
-                ƒ_cont match_result, state
-        fn state:
-          panic 'pattern mismatch', state
-        fn match_result, state:
-          ƒ_cont match_result, state
+    match_bind 1, state,
+      fn spam, state, ƒ_err, ƒ_ok:
+        store env, id'spam', ·spam, fn ·spam, env:
+          match_bind spam, state,
+            fn foo, state, ƒ_err, ƒ_ok:
+              store env, id'foo', ·foo, fn ·foo, env:
+                ƒ_ok ·foo, state
+            fn state: panic 'pattern mismatch', state
+            fn match_result, state: ƒ_cont match_result, state
+      fn state: panic 'pattern mismatch', state
+      fn match_result, state: ƒ_cont match_result, state
 
 
 --- --- ---
@@ -777,222 +747,177 @@ test 'irrefutable binding with guard', fn:
     x > 2 = foo
 
   , equals fn:
-    module fn {store, load, apply, if, match_bind, panic, id, op}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn x, state, ƒ_err, ƒ_ok:
-            load env, op'>', fn op_cmp, env:
-              apply op_cmp, ·x, 2, state, fn v_result, state:
-                if v_result,
-                  fn state:
-                    store env, id'x', ·x, fn ·x, env:
-                      ƒ_ok env, state
-                  fn state:
-                    ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn x, state, ƒ_err, ƒ_ok:
+          load env, op'>', fn op_cmp, env:
+            apply op_cmp, ·x, 2, state, fn v_result, state:
+              if v_result,
+                fn state:
+                  store env, id'x', ·x, fn ·x, env:
+                    ƒ_ok env, state
+                fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'seq pattern', fn:
   expect cps fn:
     [a, 1] = foo
 
   , equals fn:
-    module fn {store, load, apply, if, matcher, match_len, match_pop_at, match_bind, panic, id, op}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn seq, state, ƒ_err, ƒ_ok:
-            matcher seq, 'SeqPattern', state,
-              fn m, ƒ_err, state:
-                match_len m, 2, state,
-                  fn m, state:
-                    match_pop_at m, 0, state,
-                      fn m, a, state:
-                        match_pop_at m, 1, state,
-                          fn m, v_item1, state:
-                            load env, op'==', fn op_eq, env:
-                              apply op_eq, v_item1, 1, state, fn v_result, state:
-                                if v_result,
-                                  fn state:
-                                    store env, id'a', ·a, fn ·a, env:
-                                      ƒ_ok env, state
-                                  fn state:
-                                    ƒ_err state
-                          fn m, state:
-                            ƒ_err state
-                      fn m, state:
-                        ƒ_err state
-                  fn m, state:
-                    ƒ_err state
-              fn state:
-                ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn seq, state, ƒ_err, ƒ_ok:
+          matcher seq, 'SeqPattern', state,
+            fn m, ƒ_err, state:
+              match_len m, 2, state,
+                fn m, state:
+                  match_pop_at m, 0, state,
+                    fn m, a, state:
+                      match_pop_at m, 1, state,
+                        fn m, v_item1, state:
+                          load env, op'==', fn op_eq, env:
+                            apply op_eq, v_item1, 1, state, fn v_result, state:
+                              if v_result,
+                                fn state:
+                                  store env, id'a', ·a, fn ·a, env:
+                                    ƒ_ok env, state
+                                fn state: ƒ_err state
+                        fn m, state: ƒ_err state
+                    fn m, state: ƒ_err state
+                fn m, state: ƒ_err state
+            fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern', fn:
   expect cps fn:
     {bar} = foo
 
   , equals fn:
-    module fn {store, load, matcher, match_pop_field, match_bind, panic, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn rec, state, ƒ_err, ƒ_ok:
-            matcher rec, 'RecPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_field m, id'bar', state,
-                  fn m, bar, state:
-                    store env, id'bar', ·bar, fn ·bar, env:
-                      ƒ_ok env, state
-                  fn m, state:
-                    ƒ_err state
-              fn state:
-                ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn rec, state, ƒ_err, ƒ_ok:
+          matcher rec, 'RecPattern', state,
+            fn m, ƒ_err, state:
+              match_pop_field m, id'bar', state,
+                fn m, bar, state:
+                  store env, id'bar', ·bar, fn ·bar, env:
+                    ƒ_ok env, state
+                fn m, state: ƒ_err state
+            fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'seq pattern with non-empty rest', fn:
   expect cps fn:
     [a, ..] = foo
 
   , equals fn:
-    module fn {store, load, matcher, match_pop_at, match_done, match_bind, panic, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn seq, state, ƒ_err, ƒ_ok:
-            matcher seq, 'SeqPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_at m, 0, state,
-                  fn m, a, state:
-                    match_done m, state,
-                      fn m, state:
-                        ƒ_err state
-                      fn m, state:
-                        store env, id'a', ·a, fn ·a, env:
-                          ƒ_ok env, state
-                  fn m, state:
-                    ƒ_err state
-              fn state:
-                ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn seq, state, ƒ_err, ƒ_ok:
+          matcher seq, 'SeqPattern', state,
+            fn m, ƒ_err, state:
+              match_pop_at m, 0, state,
+                fn m, a, state:
+                  match_done m, state,
+                    fn m, state: ƒ_err state
+                    fn m, state:
+                      store env, id'a', ·a, fn ·a, env:
+                        ƒ_ok env, state
+                fn m, state: ƒ_err state
+            fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'seq pattern with bound rest', fn:
   expect cps fn:
     [a, ..rest] = foo
 
   , equals fn:
-    module fn {store, load, matcher, match_pop_at, match_rest, match_bind, panic, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn seq, state, ƒ_err, ƒ_ok:
-            matcher seq, 'SeqPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_at m, 0, state,
-                  fn m, a, state:
-                    match_rest m, state,
-                      fn m, rest, state:
-                        store env, id'a', ·a, fn ·a, env:
-                          store env, id'rest', ·rest, fn ·rest, env:
-                            ƒ_ok env, state
-                  fn m, state:
-                    ƒ_err state
-              fn state:
-                ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn seq, state, ƒ_err, ƒ_ok:
+          matcher seq, 'SeqPattern', state,
+            fn m, ƒ_err, state:
+              match_pop_at m, 0, state,
+                fn m, a, state:
+                  match_rest m, state,
+                    fn m, rest, state:
+                      store env, id'a', ·a, fn ·a, env:
+                        store env, id'rest', ·rest, fn ·rest, env:
+                          ƒ_ok env, state
+                fn m, state: ƒ_err state
+            fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern with non-empty rest', fn:
   expect cps fn:
     {bar, ..} = foo
 
   , equals fn:
-    module fn {store, load, matcher, match_pop_field, match_done, match_bind, panic, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn rec, state, ƒ_err, ƒ_ok:
-            matcher rec, 'RecPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_field m, id'bar', state,
-                  fn m, bar, state:
-                    match_done m, state,
-                      fn m, state:
-                        ƒ_err state
-                      fn m, state:
-                        store env, id'bar', ·bar, fn ·bar, env:
-                          ƒ_ok env, state
-                  fn m, state:
-                    ƒ_err state
-              fn state:
-                ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn rec, state, ƒ_err, ƒ_ok:
+          matcher rec, 'RecPattern', state,
+            fn m, ƒ_err, state:
+              match_pop_field m, id'bar', state,
+                fn m, bar, state:
+                  match_done m, state,
+                    fn m, state: ƒ_err state
+                    fn m, state:
+                      store env, id'bar', ·bar, fn ·bar, env:
+                        ƒ_ok env, state
+                fn m, state: ƒ_err state
+            fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern exact - empty rest', fn:
   expect cps fn:
     {bar, ..{}} = foo
 
   , equals fn:
-    module fn {store, load, matcher, match_pop_field, match_done, match_bind, panic, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn rec, state, ƒ_err, ƒ_ok:
-            matcher rec, 'RecPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_field m, id'bar', state,
-                  fn m, bar, state:
-                    match_done m, state,
-                      fn m, state:
-                        ƒ_err state
-                      fn m, state:
-                        store env, id'bar', ·bar, fn ·bar, env:
-                          ƒ_ok env, state
-                  fn m, state:
-                    ƒ_err state
-              fn state:
-                ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn rec, state, ƒ_err, ƒ_ok:
+          matcher rec, 'RecPattern', state,
+            fn m, ƒ_err, state:
+              match_pop_field m, id'bar', state,
+                fn m, bar, state:
+                  match_done m, state,
+                    fn m, state: ƒ_err state
+                    fn m, state:
+                      store env, id'bar', ·bar, fn ·bar, env:
+                        ƒ_ok env, state
+                fn m, state: ƒ_err state
+            fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern with bound rest', fn:
   expect cps fn:
     {bar, ..rest} = foo
 
   , equals fn:
-    module fn {store, load, matcher, match_pop_field, match_rest, match_bind, panic, id}, env, state, ƒ_cont:
-      load env, id'foo', fn ·foo, env:
-        match_bind ·foo, state,
-          fn rec, state, ƒ_err, ƒ_ok:
-            matcher rec, 'RecPattern', state,
-              fn m, ƒ_err, state:
-                match_pop_field m, id'bar', state,
-                  fn m, bar, state:
-                    match_rest m, state,
-                      fn m, rest, state:
-                        store env, id'bar', ·bar, fn ·bar, env:
-                          store env, id'rest', ·rest, fn ·rest, env:
-                            ƒ_ok env, state
-                  fn m, state:
-                    ƒ_err state
-              fn state:
-                ƒ_err state
-          fn state:
-            panic 'pattern mismatch', state
-          fn match_result, state:
-            ƒ_cont match_result, state
+    load env, id'foo', fn ·foo, env:
+      match_bind ·foo, state,
+        fn rec, state, ƒ_err, ƒ_ok:
+          matcher rec, 'RecPattern', state,
+            fn m, ƒ_err, state:
+              match_pop_field m, id'bar', state,
+                fn m, bar, state:
+                  match_rest m, state,
+                    fn m, rest, state:
+                      store env, id'bar', ·bar, fn ·bar, env:
+                        store env, id'rest', ·rest, fn ·rest, env:
+                          ƒ_ok env, state
+                fn m, state: ƒ_err state
+            fn state: ƒ_err state
+        fn state: panic 'pattern mismatch', state
+        fn match_result, state: ƒ_cont match_result, state
 
 test 'match with expression in arm', fn:
   expect cps fn:
@@ -1010,20 +935,15 @@ test 'match with expression in arm', fn:
                 load env, op'+', fn op_plus, env:
                   apply op_plus, ·y, 1, state, fn v_result, state:
                     ƒ_ok v_result, state
-              fn state:
-                ƒ_err state
+              fn state: ƒ_err state
       match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
         load env, op'==', fn op_eq, env:
           apply op_eq, v, false, state, fn v_result, state:
             if v_result,
-              fn state:
-                ƒ_ok ·y, state
-              fn state:
-                ƒ_err state
-      fn state:
-        panic 'no match', state
-      fn match_result, state:
-        ƒ_cont match_result, state
+              fn state: ƒ_ok ·y, state
+              fn state: ƒ_err state
+      fn state: panic 'no match', state
+      fn match_result, state: ƒ_cont match_result, state
 
 test 'multi-arm match — ƒ_err chains to next arm', fn:
   expect cps fn:
@@ -1039,14 +959,10 @@ test 'multi-arm match — ƒ_err chains to next arm', fn:
             match_len m, 1, state,
               fn m, state:
                 match_pop_at m, 0, state,
-                  fn m, a, state:
-                    ƒ_ok ·a, state
-                  fn m, state:
-                    ƒ_err state
-              fn m, state:
-                ƒ_err state
-          fn state:
-            ƒ_err state
+                  fn m, a, state: ƒ_ok ·a, state
+                  fn m, state: ƒ_err state
+              fn m, state: ƒ_err state
+          fn state: ƒ_err state
       match_branch env, fn seq, env, state, ƒ_err, ƒ_ok:
         matcher seq, 'SeqPattern', state,
           fn m, ƒ_err, state:
@@ -1059,18 +975,12 @@ test 'multi-arm match — ƒ_err chains to next arm', fn:
                         load env, op'+', fn op_plus, env:
                           apply op_plus, ·a, ·b, state, fn v_result, state:
                             ƒ_ok v_result, state
-                      fn m, state:
-                        ƒ_err state
-                  fn m, state:
-                    ƒ_err state
-              fn m, state:
-                ƒ_err state
-          fn state:
-            ƒ_err state
-      fn state:
-        panic 'no match', state
-      fn match_result, state:
-        ƒ_cont match_result, state
+                      fn m, state: ƒ_err state
+                  fn m, state: ƒ_err state
+              fn m, state: ƒ_err state
+          fn state: ƒ_err state
+      fn state: panic 'no match', state
+      fn match_result, state: ƒ_cont match_result, state
 
 --- --- ---
 multi-arg match
@@ -1083,26 +993,23 @@ test 'multi-arg match — fixed arity', fn:
       _, _: 'other'
 
   , equals fn:
-    module fn {load, apply, if, match_block, match_branch, panic, id, op}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        load env, id'b', fn ·b, env:
-          match_block ·a, ·b, state,
-            match_branch env, fn v0, v1, env, state, ƒ_err, ƒ_ok:
-              load env, op'==', fn op_eq, env:
-                apply op_eq, v0, 1, state, fn v_r0, state:
-                  if v_r0,
-                    fn state:
-                      apply op_eq, v1, 2, state, fn v_r1, state:
-                        if v_r1,
-                          fn state: ƒ_ok 'one two', state
-                          fn state: ƒ_err state
-                    fn state: ƒ_err state
-            match_branch env, fn v0, v1, env, state, ƒ_err, ƒ_ok:
-              ƒ_ok 'other', state
-            fn state:
-              panic 'no match', state
-            fn match_result, state:
-              ƒ_cont match_result, state
+    load env, id'a', fn ·a, env:
+      load env, id'b', fn ·b, env:
+        match_block ·a, ·b, state,
+          match_branch env, fn v0, v1, env, state, ƒ_err, ƒ_ok:
+            load env, op'==', fn op_eq, env:
+              apply op_eq, v0, 1, state, fn v_r0, state:
+                if v_r0,
+                  fn state:
+                    apply op_eq, v1, 2, state, fn v_r1, state:
+                      if v_r1,
+                        fn state: ƒ_ok 'one two', state
+                        fn state: ƒ_err state
+                  fn state: ƒ_err state
+          match_branch env, fn v0, v1, env, state, ƒ_err, ƒ_ok:
+            ƒ_ok 'other', state
+          fn state: panic 'no match', state
+          fn match_result, state: ƒ_cont match_result, state
 
 test 'multi-arg match — varargs arm', fn:
   expect cps fn:
@@ -1111,22 +1018,19 @@ test 'multi-arg match — varargs arm', fn:
       x, ..[]: 'exactly one'
 
   , equals fn:
-    module fn {load, match_block, match_branch, match_done, match_len, panic, id}, env, state, ƒ_cont:
-      load env, id'a', fn ·a, env:
-        load env, id'rest', fn ·rest, env:
-          match_block ·a, ..·rest, state,
-            match_branch env, fn v0, ..vs, env, state, ƒ_err, ƒ_ok:
-              match_done vs, state,
-                fn vs, state: ƒ_err state
-                fn vs, state: ƒ_ok 'has more', state
-            match_branch env, fn v0, ..vs, env, state, ƒ_err, ƒ_ok:
-              match_len vs, 0, state,
-                fn vs, state: ƒ_ok 'exactly one', state
-                fn vs, state: ƒ_err state
-            fn state:
-              panic 'no match', state
-            fn match_result, state:
-              ƒ_cont match_result, state
+    load env, id'a', fn ·a, env:
+      load env, id'rest', fn ·rest, env:
+        match_block ·a, ..·rest, state,
+          match_branch env, fn v0, ..vs, env, state, ƒ_err, ƒ_ok:
+            match_done vs, state,
+              fn vs, state: ƒ_err state
+              fn vs, state: ƒ_ok 'has more', state
+          match_branch env, fn v0, ..vs, env, state, ƒ_err, ƒ_ok:
+            match_len vs, 0, state,
+              fn vs, state: ƒ_ok 'exactly one', state
+              fn vs, state: ƒ_err state
+          fn state: panic 'no match', state
+          fn match_result, state: ƒ_cont match_result, state
 
 --- --- ---
 module level — settled env is the export; ƒ_cont receives it
@@ -1138,10 +1042,9 @@ test 'two bindings at module level', fn:
     bar = 2
 
   , equals fn:
-    module fn {store, id}, env, state, ƒ_cont:
-      store env, id'foo', 1, fn ·foo, env:
-        store env, id'bar', 2, fn ·bar, env:
-          ƒ_cont env, state
+    store env, id'foo', 1, fn ·foo, env:
+      store env, id'bar', 2, fn ·bar, env:
+        ƒ_cont ·bar, state
 
 test 'forward ref', fn:
   expect cps fn:
@@ -1149,17 +1052,14 @@ test 'forward ref', fn:
     foo 1
 
   , equals fn:
-    module fn {store, load, apply, closure, id, op}, env, state, ƒ_cont:
-      closure env
-        fn ·a, env, state, ƒ_cont:
-          load env, op'+', fn op_plus, env:
-            load env, id'foo', fn ·foo, env:
-              apply op_plus, ·a, 1, state, fn v_result, state:
-                ƒ_cont v_result, state
-        fn ·fn_val, chld_env:
-          store chld_env, id'foo', ·fn_val, fn ·foo, env:
-            apply ·foo, 1, state, fn _, state:
-              ƒ_cont env, state
+    closure env,
+      fn ·a, env, state, ƒ_cont:
+        load env, op'+', fn op_plus, env:
+          load env, id'foo', fn ·foo, env:
+            apply op_plus, ·a, 1, state, ƒ_cont
+      fn ·foo, chld_env:
+        store chld_env, id'foo', ·foo, fn ·foo, env:
+          apply ·foo, 1, state, ƒ_cont
 
 test 'mutual recursion', fn:
   expect cps fn:
@@ -1174,8 +1074,8 @@ test 'mutual recursion', fn:
         _: is_even n - 1
 
   , equals fn:
-    module fn {store, load, apply, if, matcher, match_block, panic, closure, id, op}, env, state, ƒ_cont:
-      closure env, fn ·n, env, state, ƒ_cont:
+    closure env,
+      fn ·n, env, state, ƒ_cont:
         store env, id'n', ·n, fn ·n, env:
           match_block n, state,
             match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
@@ -1189,30 +1089,27 @@ test 'mutual recursion', fn:
                 apply op_minus, ·n, 1, state, fn v_0, state:
                   load env, id'is_odd', fn ·is_odd, env:
                     apply ·is_odd, v_0, state, ƒ_ok
-            fn state:
-              panic 'no match', state
-            fn match_result, state:
-              ƒ_cont match_result, state
-      , fn ·is_even, chld_env:
-        closure chld_env, fn ·n, env, state, ƒ_cont:
-          store env, id'n', ·n, fn ·n, env:
-            match_block n, state,
-              match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-                load env, op'==', fn op_eq, env:
-                  apply op_eq, v, 0, state, fn v_result, state:
-                    if v_result,
-                      fn state: ƒ_ok false, state
-                      fn state: ƒ_err state
-              match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-                load env, op'-', fn op_minus, env:
-                  apply op_minus, ·n, 1, state, fn v_0, state:
-                    load env, id'is_even', fn ·is_even, env:
-                      apply ·is_even, v_0, state, ƒ_ok
-              fn state:
-                panic 'no match', state
-              fn match_result, state:
-                ƒ_cont match_result, state
-        , fn ·is_odd, chld_env:
-          store chld_env, id'is_even', ·is_even, fn ·is_even, chld_env:
-            store chld_env, id'is_odd', ·is_odd, fn ·is_odd, env:
-              ƒ_cont env, state
+            fn state: panic 'no match', state
+            fn match_result, state: ƒ_cont match_result, state
+      fn ·is_even, chld_env:
+        closure chld_env,
+          fn ·n, env, state, ƒ_cont:
+            store env, id'n', ·n, fn ·n, env:
+              match_block n, state,
+                match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
+                  load env, op'==', fn op_eq, env:
+                    apply op_eq, v, 0, state, fn v_result, state:
+                      if v_result,
+                        fn state: ƒ_ok false, state
+                        fn state: ƒ_err state
+                match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
+                  load env, op'-', fn op_minus, env:
+                    apply op_minus, ·n, 1, state, fn v_0, state:
+                      load env, id'is_even', fn ·is_even, env:
+                        apply ·is_even, v_0, state, ƒ_ok
+                fn state: panic 'no match', state
+                fn match_result, state: ƒ_cont match_result, state
+          fn ·is_odd, chld_env:
+            store chld_env, id'is_even', ·is_even, fn ·is_even, chld_env:
+              store chld_env, id'is_odd', ·is_odd, fn ·is_odd, env:
+                ƒ_cont ·is_odd, state

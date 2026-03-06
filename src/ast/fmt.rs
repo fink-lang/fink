@@ -95,6 +95,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
         fmt_node(child, out, depth);
       }
     }
+    NodeKind::Wildcard => out.push('_'),
     _ => out.push_str("?"),
   }
 }
