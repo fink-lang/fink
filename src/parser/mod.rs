@@ -1113,12 +1113,12 @@ impl<'src> Parser<'src> {
   fn parse_group(&mut self) -> ParseResult<'src> {
     let open = self.bump(); // consume "("
     let inner = if self.at(TokenKind::BlockStart) {
-      // Multi-statement block group: wrap stmts in a zero-param Fn so the CPS pass
+      // Multi-expr block group: wrap in a zero-param Fn so the CPS pass
       // can detect "group with bindings" and emit a scope.
       self.bump(); // consume BlockStart
-      let stmts = self.parse_block_stmts()?;
+      let exprs = self.parse_block_exprs()?;
       let params = Node::new(NodeKind::Patterns(vec![]), open.loc);
-      Node::new(NodeKind::Fn { params: Box::new(params), body: stmts }, open.loc)
+      Node::new(NodeKind::Fn { params: Box::new(params), body: exprs }, open.loc)
     } else {
       self.skip_block_tokens();
       let expr = self.parse_expr()?;
@@ -1283,7 +1283,7 @@ impl<'src> Parser<'src> {
     self.expect(TokenKind::Colon)?;
     if self.at(TokenKind::BlockStart) {
       self.bump();
-      self.parse_block_stmts()
+      self.parse_block_exprs()
     } else {
       Ok(vec![self.parse_expr()?])
     }
@@ -1301,15 +1301,15 @@ impl<'src> Parser<'src> {
     Ok(items)
   }
 
-  fn parse_block_stmts(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
+  fn parse_block_exprs(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
     self.parse_block_items(|p| p.parse_expr())
   }
 
-  // Parse BlockStart already consumed: inline expr or indented block stmts.
+  // Parse BlockStart already consumed: inline expr or indented block.
   fn parse_block_body(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
     if self.at(TokenKind::BlockStart) {
       self.bump();
-      self.parse_block_stmts()
+      self.parse_block_exprs()
     } else {
       Ok(vec![self.parse_expr()?])
     }
@@ -1419,18 +1419,18 @@ pub fn parse(src: &str) -> Result<Node<'_>, ParseError> {
   let mut p = Parser::new(src);
   // Consume the implicit root BlockStart emitted by the lexer
   p.expect(TokenKind::BlockStart)?;
-  let stmts = p.parse_block_stmts()?;
-  match stmts.len() {
+  let exprs = p.parse_block_exprs()?;
+  match exprs.len() {
     0 => Err(ParseError {
       message: "empty input".into(),
       loc: p.peek().loc,
     }),
-    1 => Ok(stmts.into_iter().next().unwrap()),
+    1 => Ok(exprs.into_iter().next().unwrap()),
     _ => {
-      let start = stmts.first().unwrap().loc.start;
-      let end = stmts.last().unwrap().loc.end;
+      let start = exprs.first().unwrap().loc.start;
+      let end = exprs.last().unwrap().loc.end;
       Ok(Node::new(
-        NodeKind::Fn { params: Box::new(Node::new(NodeKind::Patterns(vec![]), Loc { start, end })), body: stmts },
+        NodeKind::Fn { params: Box::new(Node::new(NodeKind::Patterns(vec![]), Loc { start, end })), body: exprs },
         Loc { start, end },
       ))
     }
@@ -1443,18 +1443,18 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<No
     p.register_block(name);
   }
   p.expect(TokenKind::BlockStart)?;
-  let stmts = p.parse_block_stmts()?;
-  match stmts.len() {
+  let exprs = p.parse_block_exprs()?;
+  match exprs.len() {
     0 => Err(ParseError {
       message: "empty input".into(),
       loc: p.peek().loc,
     }),
-    1 => Ok(stmts.into_iter().next().unwrap()),
+    1 => Ok(exprs.into_iter().next().unwrap()),
     _ => {
-      let start = stmts.first().unwrap().loc.start;
-      let end = stmts.last().unwrap().loc.end;
+      let start = exprs.first().unwrap().loc.start;
+      let end = exprs.last().unwrap().loc.end;
       Ok(Node::new(
-        NodeKind::Fn { params: Box::new(Node::new(NodeKind::Patterns(vec![]), Loc { start, end })), body: stmts },
+        NodeKind::Fn { params: Box::new(Node::new(NodeKind::Patterns(vec![]), Loc { start, end })), body: exprs },
         Loc { start, end },
       ))
     }
