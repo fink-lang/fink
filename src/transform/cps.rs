@@ -617,7 +617,7 @@ impl Cps {
 
     let mut closure_params: Vec<CpsParam<'src>> = Vec::new();
     let mut stores: Vec<(&'src str, &'static str)> = Vec::new();
-    // Complex params (seq/rec patterns) desugar to `..·rest_N` + a match_bind in the body.
+    // Complex params (seq/rec patterns) desugar to `..v_rest_N` + a match_bind in the body.
     let mut complex_params: Vec<(&'static str, Node<'src>)> = Vec::new(); // (local, pattern)
 
     for p in raw_params {
@@ -638,8 +638,8 @@ impl Cps {
         }
         NodeKind::Wildcard => { closure_params.push(CpsParam::Wildcard); }
         NodeKind::LitSeq(_) | NodeKind::LitRec(_) => {
-          // Complex pattern: desugar to `..·rest_N` param + match_bind in body
-          let rest_local: &'static str = self.fresh("·rest_");
+          // Complex pattern: desugar to `..v_rest_N` param + match_bind in body
+          let rest_local: &'static str = self.fresh("v_rest_");
           closure_params.push(CpsParam::Spread(rest_local));
           complex_params.push((rest_local, p.clone()));
         }

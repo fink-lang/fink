@@ -531,9 +531,9 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
 
   , equals fn:
     closure env,
-      fn ·a, ..·rest_0, env, state, ƒ_cont:
+      fn ·a, ..v_rest_0, env, state, ƒ_cont:
         store env, id'a', ·a, fn ·a, env:
-          match_bind ·rest_0, state,
+          match_bind v_rest_0, state,
             fn seq, state, ƒ_err, ƒ_ok:
               matcher seq, 'SeqPattern', state,
                 fn m, ƒ_err, state:
