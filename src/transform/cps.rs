@@ -2878,7 +2878,7 @@ mod tests {
 
   #[test_template(
     "src/transform", "./test_cps.fnk",
-    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect \S+ fn:\n(?P<src>[\s\S]+?)\n\n?  , equals fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
+    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
   )]
   fn test_cps(src: &str, exp: &str, path: &str) {
     assert_eq!(

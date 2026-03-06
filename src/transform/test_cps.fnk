@@ -71,7 +71,7 @@ CPS IR — design notes and transform examples
 #     match_pop_field m, id'key', state, fn m, val, ƒ_err, state:
 #                              — extract field by key; returns updated m
 #     match_done m, state, fn m, state: ..., fn m, state:
-#                              — two conts: non-empty rest / empty rest
+#                              — two conts: empty rest (success) / non-empty rest (fail)
 #     match_rest m, state, fn m, rest, state:
 #                              — consume all remaining into rest binding
 #     match_len m, n, state, fn m, state: ..., fn m, state:
@@ -99,9 +99,12 @@ CPS IR — design notes and transform examples
 #       # return the `env` so that names can be exported
 #      ƒ_cont env
 
+{test, expect} = import 'fink/testing.fnk'
+{cps_expr, equals_fink} = import 'fink/compiler/transform'
 
-{test, expect, equals} = import '@fink/testing.fnk'
-{cps, module} = import '@fink/compiler/transform'
+# TODO: don't use, just to test syntax highlighting in vscode
+{module, load, store, seq_append, id, op} = import 'fink/fake'
+
 
 
 --- --- ---
@@ -109,10 +112,10 @@ LitSeq — sequence construction
 --- --- ---
 
 test 'seq literal', fn:
-  expect cps fn:
+  expect cps_expr fn:
     [a, b, c]
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       seq_append [], ·a, state, fn v_seq, state:
         load env, id'b', fn ·b, env:
@@ -122,10 +125,10 @@ test 'seq literal', fn:
                 ƒ_cont v_seq, state
 
 test 'seq literal with spread', fn:
-  expect cps fn:
+  expect cps_expr fn:
     [1, ..a, 2]
 
-  , equals fn:
+  | equals_fink fn:
     seq_append [], 1, state, fn v_seq, state:
       load env, id'a', fn ·a, env:
         seq_concat v_seq, ·a, state, fn v_seq, state:
@@ -133,10 +136,10 @@ test 'seq literal with spread', fn:
             ƒ_cont v_seq, state
 
 test 'seq literal leading spread', fn:
-  expect cps fn:
+  expect cps_expr fn:
     [..a, ..b]
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       load env, id'b', fn ·b, env:
         seq_concat ·a, ·b, state, fn v_seq, state:
@@ -148,10 +151,10 @@ LitRec — record construction
 --- --- ---
 
 test 'rec literal', fn:
-  expect cps fn:
+  expect cps_expr fn:
     {foo: a, bar: b}
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       rec_put {}, id'foo', ·a, state, fn v_rec, state:
         load env, id'b', fn ·b, env:
@@ -160,10 +163,10 @@ test 'rec literal', fn:
 
 
 test 'rec literal with spread', fn:
-  expect cps fn:
+  expect cps_expr fn:
     {foo: a, ..b}
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       rec_put {}, id'foo', ·a, state, fn v_rec, state:
         load env, id'b', fn ·b, env:
@@ -171,10 +174,10 @@ test 'rec literal with spread', fn:
             ƒ_cont v_rec, state
 
 test 'rec literal leading spread', fn:
-  expect cps fn:
+  expect cps_expr fn:
     {..a, ..b}
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       load env, id'b', fn ·b, env:
         rec_merge ·a, ·b, state, fn v_rec, state:
@@ -186,18 +189,18 @@ Range — range construction
 --- --- ---
 
 test 'exclusive range', fn:
-  expect cps fn:
+  expect cps_expr fn:
     0..10
 
-  , equals fn:
+  | equals_fink fn:
     range_excl 0, 10, state, fn v_range, state:
       ƒ_cont v_range, state
 
 test 'inclusive range', fn:
-  expect cps fn:
+  expect cps_expr fn:
     0...10
 
-  , equals fn:
+  | equals_fink fn:
     range_incl 0, 10, state, fn v_range, state:
       ƒ_cont v_range, state
 
@@ -209,28 +212,28 @@ StrTempl — string interpolation, StrRawTempl — tagged template
 --- --- ---
 
 test 'string interpolation', fn:
-  expect cps fn:
+  expect cps_expr fn:
     'hello ${name}!'
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'name', fn ·name, env:
       apply str_fmt, str_raw'hello ', ·name, str_raw'!', state, ƒ_cont
 
 test 'string interpolation multiple exprs', fn:
-  expect cps fn:
+  expect cps_expr fn:
     '${a} + ${b} = ${c}'
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       load env, id'b', fn ·b, env:
         load env, id'c', fn ·c, env:
           apply str_fmt, ·a, str_raw' + ', ·b, str_raw' = ', ·c, state, ƒ_cont
 
 test 'tagged template', fn:
-  expect cps fn:
+  expect cps_expr fn:
     fmt'hello ${name}!'
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'fmt', fn ·fmt, env:
       load env, id'name', fn ·name, env:
         apply ·fmt, str_raw'hello ', ·name, str_raw'!', state, ƒ_cont
@@ -241,13 +244,13 @@ closure — closure captures env, apply does not receive env from caller
 --- --- ---
 
 test 'closure over outer variable', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = fn a:
       ni = fn b:
         a + b
       ni
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·a, env, state, ƒ_cont:
         store env, id'a', ·a, fn ·a, env:
@@ -269,19 +272,19 @@ UnaryOp — loadd and applied like a single-arg function
 --- --- ---
 
 test 'boolean not', fn:
-  expect cps fn:
+  expect cps_expr fn:
     not x
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'not', fn op_not, env:
       load env, id'x', fn ·x, env:
         apply op_not, ·x, state, ƒ_cont
 
 test 'numeric negation', fn:
-  expect cps fn:
+  expect cps_expr fn:
     -x
 
-  , equals fn:
+  | equals_fink fn:
     load env, op'-', fn op_neg, env:
       load env, id'x', fn ·x, env:
         apply op_neg, ·x, state, ƒ_cont
@@ -292,29 +295,29 @@ Member — static and computed field access
 --- --- ---
 
 test 'static member access', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo.bar
 
-  , equals fn:
+  | equals_fink fn:
     load env, op'.', fn op_dot, env:
       load env, id'foo', fn ·foo, env:
         apply op_dot, ·foo, id'bar', state, ƒ_cont
 
 test 'computed member access', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo.(key)
 
-  , equals fn:
+  | equals_fink fn:
     load env, op'.', fn op_dot, env:
       load env, id'foo', fn ·foo, env:
         load env, id'key', fn ·key, env:
           apply op_dot, ·foo, ·key, state, ƒ_cont
 
 test 'chained member access', fn:
-  expect cps fn:
+  expect cps_expr fn:
     a.b.c
 
-  , equals fn:
+  | equals_fink fn:
     load env, op'.', fn op_dot, env:
       load env, id'a', fn ·a, env:
         apply op_dot, ·a, id'b', state, fn v_0, state:
@@ -326,10 +329,10 @@ chained comparison
 --- --- ---
 
 test 'chained comparison', fn:
-  expect cps fn:
+  expect cps_expr fn:
     1 < x < 10
 
-  , equals fn:
+  | equals_fink fn:
     load env, op'<', fn op_lt, env:
       load env, id'x', fn ·x, env:
         apply op_lt, 1, ·x, state, fn v_0, state:
@@ -343,19 +346,19 @@ literals and bindings
 --- --- ---
 
 test 'simple literal binding', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = 1
 
-  , equals fn:
+  | equals_fink fn:
     store env, id'foo', 1, fn ·foo, env:
       ƒ_cont ·foo, state
 
 test 'sequential bindings — ƒ_cont is next expression in chain', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = 1
     bar = foo + 1
 
-  , equals fn:
+  | equals_fink fn:
     store env, id'foo', 1, fn ·foo, env:
       load env, op'+', fn op_plus, env:
         load env, id'foo', fn ·foo, env:
@@ -364,10 +367,10 @@ test 'sequential bindings — ƒ_cont is next expression in chain', fn:
               ƒ_cont ·bar, state
 
 test 'binding rhs is a call', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = add 1, 2
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'add', fn ·add, env:
       apply ·add, 1, 2, state, fn ·foo, state:
         store env, id'foo', ·foo, fn ·foo, env:
@@ -378,10 +381,10 @@ bind right
 --- --- ---
 
 test 'bind right — simple id', fn:
-  expect cps fn:
+  expect cps_expr fn:
     1 |= foo
 
-  , equals fn:
+  | equals_fink fn:
     match_bind 1, state,
       fn v, state, ƒ_err, ƒ_ok:
         store env, id'foo', v, fn ·foo, env:
@@ -390,10 +393,10 @@ test 'bind right — simple id', fn:
       fn v_result, state: ƒ_cont v_result, state
 
 test 'bind right — destructuring pattern', fn:
-  expect cps fn:
+  expect cps_expr fn:
     [a, b] |= foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
@@ -420,10 +423,10 @@ try — early escape on error
 --- --- ---
 
 test 'try — bare expression', fn:
-  expect cps fn:
+  expect cps_expr fn:
     try foo bar
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       load env, id'bar', fn ·bar, env:
         apply ·foo, ·bar, state, fn res, state:
@@ -432,11 +435,11 @@ test 'try — bare expression', fn:
             fn v_0, state: ƒ_cont v_0, state
 
 test 'try — result bound, code continues', fn:
-  expect cps fn:
+  expect cps_expr fn:
     ni = try foo bar
     ni + 1
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       load env, id'bar', fn ·bar, env:
         apply ·foo, ·bar, state, fn res, state:
@@ -453,10 +456,10 @@ functions
 --- --- ---
 
 test 'identity function', fn:
-  expect cps fn:
+  expect cps_expr fn:
     fn x: x
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·x, env, state, ƒ_cont:
         store env, id'x', ·x, fn ·x, env:
@@ -464,9 +467,9 @@ test 'identity function', fn:
       fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 test 'function with operator in body', fn:
-  expect cps fn:
+  expect cps_expr fn:
     fn x: x + 1
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·x, env, state, ƒ_cont:
         store env, id'x', ·x, fn ·x, env:
@@ -475,10 +478,10 @@ test 'function with operator in body', fn:
       fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 test 'function binding', fn:
-  expect cps fn:
+  expect cps_expr fn:
     inc = fn x: x + 1
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·x, env, state, ƒ_cont:
         store env, id'x', ·x, fn ·x, env:
@@ -489,10 +492,10 @@ test 'function binding', fn:
           ƒ_cont ·inc, state
 
 test 'multi-param function', fn:
-  expect cps fn:
+  expect cps_expr fn:
     fn x, y: x + y
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·x, ·y, env, state, ƒ_cont:
         store env, id'x', ·x, fn ·x, env:
@@ -506,10 +509,10 @@ varargs functions
 --- --- ---
 
 test 'varargs — collect rest', fn:
-  expect cps fn:
+  expect cps_expr fn:
     fn a, ..rest: rest
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·a, ..·rest, env, state, ƒ_cont:
         store env, id'a', ·a, fn ·a, env:
@@ -518,19 +521,19 @@ test 'varargs — collect rest', fn:
       fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 test 'varargs — call site spreads iterable', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo 1, ..items
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       load env, id'items', fn ·items, env:
         apply ·foo, 1, ..·items, state, ƒ_cont
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
-  expect cps fn:
+  expect cps_expr fn:
     fn a, [1, ..b]: b
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·a, ..v_rest_0, env, state, ƒ_cont:
         store env, id'a', ·a, fn ·a, env:
@@ -561,27 +564,27 @@ application
 --- --- ---
 
 test 'tagged literal — int', fn:
-  expect cps fn:
+  expect cps_expr fn:
     10sec
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'sec', fn ·sec, env:
       apply ·sec, 10, state, ƒ_cont
 
 test 'tagged literal — float', fn:
-  expect cps fn:
+  expect cps_expr fn:
     10.5sec
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'sec', fn ·sec, env:
       apply ·sec, 10.5, state, ƒ_cont
 
 
 test 'postfix tag', fn:
-  expect cps fn:
+  expect cps_expr fn:
     (foo bar)tag
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       load env, id'bar', fn ·bar, env:
         apply ·foo, ·bar, state, fn v_0, state:
@@ -589,29 +592,29 @@ test 'postfix tag', fn:
             apply ·tag, v_0, state, ƒ_cont
 
 test 'simple call', fn:
-  expect cps fn:
+  expect cps_expr fn:
     add 1, 2
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'add', fn ·add, env:
       apply ·add, 1, 2, state, ƒ_cont
 
 test 'nested call — inner result threaded to outer', fn:
-  expect cps fn:
+  expect cps_expr fn:
     add (mul 2, 3), 1
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'mul', fn ·mul, env:
       apply ·mul, 2, 3, state, fn v_0, state:
         load env, id'add', fn ·add, env:
           apply ·add, v_0, 1, state, ƒ_cont
 
 test 'calling a local — still goes through load', fn:
-  expect cps fn:
+  expect cps_expr fn:
     inc = fn x: x + 1
     inc 5
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·x, env, state, ƒ_cont:
         store env, id'x', ·x, fn ·x, env:
@@ -622,29 +625,29 @@ test 'calling a local — still goes through load', fn:
           apply ·inc, 5, state, ƒ_cont
 
 test 'call with spread — trailing iterable', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo a, ..rest
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       load env, id'a', fn ·a, env:
         load env, id'rest', fn ·rest, env:
           apply ·foo, ·a, ..·rest, state, ƒ_cont
 
 test 'call with spread — spread only', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo ..items
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       load env, id'items', fn ·items, env:
         apply ·foo, ..·items, state, ƒ_cont
 
 test 'call with spread — passes through from varargs fn', fn:
-  expect cps fn:
+  expect cps_expr fn:
     fn ..args: foo ..args
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ..·args, env, state, ƒ_cont:
         store env, id'args', ·args, fn ·args, env:
@@ -657,18 +660,18 @@ pipe — inlined to nested calls
 --- --- ---
 
 test 'simple pipe', fn:
-  expect cps fn:
+  expect cps_expr fn:
     x | f
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'f', fn ·f, env:
       apply ·f, ·x, state, ƒ_cont
 
 test 'pipe chain', fn:
-  expect cps fn:
+  expect cps_expr fn:
     x | f | g
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'f', fn ·f, env:
       apply ·f, ·x, state, fn v_0, state:
         load env, id'g', fn ·g, env:
@@ -679,12 +682,12 @@ sequential expressions — each result threaded forward
 --- --- ---
 
 test 'three sequential bindings', fn:
-  expect cps fn:
+  expect cps_expr fn:
     a = 1
     b = 2
     c = a + b
 
-  , equals fn:
+  | equals_fink fn:
     store env, id'a', 1, fn ·a, env:
       store env, id'b', 2, fn ·b, env:
         load env, op'+', fn op_plus, env:
@@ -695,12 +698,12 @@ test 'three sequential bindings', fn:
                   ƒ_cont ·c, state
 
 test 'expression result discarded', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = 1
     log 'hello'
     bar = 2
 
-  , equals fn:
+  | equals_fink fn:
     store env, id'foo', 1, fn ·foo, env:
       load env, id'log', fn ·log, env:
         apply ·log, 'hello', state, fn _, state:
@@ -713,13 +716,13 @@ scoping
 --- --- ---
 
 test 'child scopes', fn:
-  expect cps fn:
+  expect cps_expr fn:
     match n:
       a > 1:
         ni = a # ni is only available in the body of this arm
         ni
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'n', fn ·n, env:
       match_block ·n, state,
         match_branch env, fn ·a, env, state, ƒ_err, ƒ_ok:
@@ -738,13 +741,13 @@ test 'child scopes', fn:
 
 
 test 'group with binding creates child scope', fn:
-  expect cps fn:
+  expect cps_expr fn:
     spam = ( # creates a block scope
       ni = ham 1
       ni # ni does not leak out
     )
 
-  , equals fn:
+  | equals_fink fn:
     scope env,
       fn env, ƒ_ok:
         load env, id'ham', fn ·ham, env:
@@ -758,10 +761,10 @@ test 'group with binding creates child scope', fn:
 
 
 test 'chained binding is sequential store without child scope', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = spam = 1
 
-  , equals fn:
+  | equals_fink fn:
     store env, id'spam', 1, fn ·spam, env:
       store env, id'foo', ·spam, fn ·foo, env:
         ƒ_cont ·foo, state
@@ -772,10 +775,10 @@ pattern bindings
 --- --- ---
 
 test 'irrefutable binding with guard', fn:
-  expect cps fn:
+  expect cps_expr fn:
     x > 2 = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn ·x, state, ƒ_err, ƒ_ok:
@@ -790,10 +793,10 @@ test 'irrefutable binding with guard', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'seq pattern', fn:
-  expect cps fn:
+  expect cps_expr fn:
     [a, 1] = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
@@ -820,10 +823,10 @@ test 'seq pattern', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern', fn:
-  expect cps fn:
+  expect cps_expr fn:
     {bar} = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
@@ -839,10 +842,10 @@ test 'rec pattern', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'seq pattern with non-empty rest', fn:
-  expect cps fn:
+  expect cps_expr fn:
     [a, ..] = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
@@ -861,10 +864,10 @@ test 'seq pattern with non-empty rest', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'seq pattern with bound rest', fn:
-  expect cps fn:
+  expect cps_expr fn:
     [a, ..rest] = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn seq, state, ƒ_err, ƒ_ok:
@@ -882,10 +885,10 @@ test 'seq pattern with bound rest', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern with non-empty rest', fn:
-  expect cps fn:
+  expect cps_expr fn:
     {bar, ..} = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
@@ -904,10 +907,10 @@ test 'rec pattern with non-empty rest', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern exact - empty rest', fn:
-  expect cps fn:
+  expect cps_expr fn:
     {bar, ..{}} = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
@@ -926,10 +929,10 @@ test 'rec pattern exact - empty rest', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'rec pattern with bound rest', fn:
-  expect cps fn:
+  expect cps_expr fn:
     {bar, ..rest} = foo
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_bind ·foo, state,
         fn rec, state, ƒ_err, ƒ_ok:
@@ -947,12 +950,12 @@ test 'rec pattern with bound rest', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'match with expression in arm', fn:
-  expect cps fn:
+  expect cps_expr fn:
     match x:
       true: y + 1
       false: y
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'x', fn ·x, env:
       match_block ·x, state,
         match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
@@ -976,12 +979,12 @@ test 'match with expression in arm', fn:
         fn match_result, state: ƒ_cont match_result, state
 
 test 'multi-arm match — ƒ_err chains to next arm', fn:
-  expect cps fn:
+  expect cps_expr fn:
     match foo:
       [a]: a
       [a, b]: a + b
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'foo', fn ·foo, env:
       match_block ·foo, state,
         match_branch env, fn seq, env, state, ƒ_err, ƒ_ok:
@@ -1024,12 +1027,12 @@ multi-arg match
 --- --- ---
 
 test 'multi-arg match — fixed arity', fn:
-  expect cps fn:
+  expect cps_expr fn:
     match a, b:
       1, 2: 'one two'
       _, _: 'other'
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       load env, id'b', fn ·b, env:
         match_block ·a, ·b, state,
@@ -1049,12 +1052,12 @@ test 'multi-arg match — fixed arity', fn:
           fn match_result, state: ƒ_cont match_result, state
 
 test 'multi-arg match — varargs arm', fn:
-  expect cps fn:
+  expect cps_expr fn:
     match a, ..rest:
       x, ..: 'has more'
       x, ..[]: 'exactly one'
 
-  , equals fn:
+  | equals_fink fn:
     load env, id'a', fn ·a, env:
       load env, id'rest', fn ·rest, env:
         match_block ·a, ..·rest, state,
@@ -1074,21 +1077,21 @@ module level — settled env is the export; ƒ_cont receives it
 --- --- ---
 
 test 'two bindings at module level', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = 1
     bar = 2
 
-  , equals fn:
+  | equals_fink fn:
     store env, id'foo', 1, fn ·foo, env:
       store env, id'bar', 2, fn ·bar, env:
         ƒ_cont ·bar, state
 
 test 'forward ref', fn:
-  expect cps fn:
+  expect cps_expr fn:
     foo = fn a: foo a + 1
     foo 1
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·a, env, state, ƒ_cont:
         store env, id'a', ·a, fn ·a, env:
@@ -1101,7 +1104,7 @@ test 'forward ref', fn:
           apply ·foo, 1, state, ƒ_cont
 
 test 'mutual recursion', fn:
-  expect cps fn:
+  expect cps_expr fn:
     is_even = fn n:
       match n:
         0: true
@@ -1112,7 +1115,7 @@ test 'mutual recursion', fn:
         0: false
         _: is_even n - 1
 
-  , equals fn:
+  | equals_fink fn:
     closure env,
       fn ·n, env, state, ƒ_cont:
         store env, id'n', ·n, fn ·n, env:
