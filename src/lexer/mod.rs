@@ -577,11 +577,10 @@ mod tests {
     ];
     let mut lexer = tokenize_with_seps(src, default_ops);
     let mut out = String::new();
-    let mut depth: usize = 0;
-    // Skip the implicit root BlockStart/BlockEnd so test output stays flat.
-    // Track block nesting to identify the matching root BlockEnd.
-    let mut root_skipped = false;
-    let mut block_depth: i32 = 0;
+    // block_depth tracks BlockStart/BlockEnd nesting for their own indentation
+    let mut block_depth: usize = 0;
+    // bracket_depth tracks BracketOpen/Close and Str* nesting within a block level
+    let mut bracket_depth: usize = 0;
 
     loop {
       let tok = lexer.next_token();
@@ -589,48 +588,34 @@ mod tests {
         break;
       }
       use super::TokenKind::*;
-      // Skip the root BlockStart (first token)
-      if !root_skipped && tok.kind == BlockStart {
-        root_skipped = true;
-        continue;
-      }
-      // Track block nesting to find the matching root BlockEnd
-      if tok.kind == BlockStart { block_depth += 1; }
-      if tok.kind == BlockEnd {
-        if block_depth == 0 {
-          // This is the root BlockEnd — skip it
-          continue;
-        }
-        block_depth -= 1;
-      }
+      let depth = block_depth + bracket_depth;
       let indent = "  ".repeat(depth);
       match &tok.kind {
         BlockStart => {
-          depth += 1;
-          let indent = "  ".repeat(depth);
           if !out.is_empty() {
             out.push('\n');
           }
           out.push_str(&format!("{indent}{tok}"));
+          block_depth += 1;
         }
         BlockEnd => {
-          let line = format!("{indent}{tok}");
-          depth = depth.saturating_sub(1);
+          block_depth = block_depth.saturating_sub(1);
+          let indent = "  ".repeat(block_depth + bracket_depth);
           if !out.is_empty() {
             out.push('\n');
           }
-          out.push_str(&line);
+          out.push_str(&format!("{indent}{tok}"));
         }
         BracketOpen | StrStart | StrExprStart => {
           if !out.is_empty() {
             out.push('\n');
           }
           out.push_str(&format!("{indent}{tok}"));
-          depth += 1;
+          bracket_depth += 1;
         }
         BracketClose | StrEnd | StrExprEnd => {
-          depth = depth.saturating_sub(1);
-          let indent = "  ".repeat(depth);
+          bracket_depth = bracket_depth.saturating_sub(1);
+          let indent = "  ".repeat(block_depth + bracket_depth);
           if !out.is_empty() {
             out.push('\n');
           }
