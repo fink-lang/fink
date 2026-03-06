@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use crate::ast::{CmpPart, Node, NodeKind};
-use crate::parser::parse;
 
 // ---------------------------------------------------------------------------
 // CPS IR types
@@ -383,22 +382,20 @@ fn is_word_op(op: &str) -> bool {
 }
 
 // TODO move into test.
-pub fn transform<'src>(src: &'src str) -> Result<CpsExpr<'src>, String> {
-  let node = parse(src).map_err(|e| e.message)?;
+pub fn transform(node: Node<'_>) -> CpsExpr<'_> {
   let mut cps = Cps::new();
   // Route through fn_chain_cps: unwrap transparent root Fn, or wrap single node in slice.
-  let stmts: Vec<Node<'src>> = match node.kind {
+  match node.kind {
     NodeKind::Fn { ref params, ref body } => {
       if let NodeKind::Patterns(ps) = &params.kind {
         if ps.is_empty() {
-          return Ok(cps.fn_chain_cps(body));
+          return cps.fn_chain_cps(body);
         }
       }
-      vec![node]
+      cps.fn_chain_cps(&[node])
     }
-    _ => vec![node],
-  };
-  Ok(cps.fn_chain_cps(&stmts))
+    _ => cps.fn_chain_cps(&[node]),
+  }
 }
 
 // An arg classification for apply_cps.
@@ -2868,6 +2865,7 @@ mod tests {
   use test_macros::test_template;
   use pretty_assertions::assert_eq;
   use super::{transform, super::cps_fmt};
+  use crate::parser::parse;
 
   fn dedent(s: &str) -> String {
     s.lines()
@@ -2876,9 +2874,14 @@ mod tests {
       .join("\n")
   }
 
+  fn transform_src(src: &str) -> Result<String, String> {
+    let node = parse(src).map_err(|e| e.message)?;
+    Ok(cps_fmt::fmt(&transform(node)))
+  }
+
   fn cps_debug(src: &str) -> String {
-    match transform(src) {
-      Ok(expr) => cps_fmt::fmt(&expr),
+    match transform_src(src) {
+      Ok(s) => s,
       Err(e) => format!("ERROR: {}", e),
     }
   }
