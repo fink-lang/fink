@@ -560,6 +560,45 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
 application
 --- --- ---
 
+test 'tagged literal — int', fn:
+  expect cps fn:
+    10sec
+
+  , equals fn:
+    load env, id'sec', fn ·sec, env:
+      apply ·sec, 10, state, ƒ_cont
+
+test 'tagged literal — float', fn:
+  expect cps fn:
+    10.5sec
+
+  , equals fn:
+    load env, id'sec', fn ·sec, env:
+      apply ·sec, 10.5, state, ƒ_cont
+
+test 'partial — desugared by partial pass before CPS', fn:
+  expect cps fn:
+    fn $: add $, 1
+
+  , equals fn:
+    closure env,
+      fn ·$, env, state, ƒ_cont:
+        store env, id'$', ·$, fn ·$, env:
+          load env, id'add', fn ·add, env:
+            apply ·add, ·$, 1, state, ƒ_cont
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
+test 'postfix tag', fn:
+  expect cps fn:
+    (foo bar)tag
+
+  , equals fn:
+    load env, id'foo', fn ·foo, env:
+      load env, id'bar', fn ·bar, env:
+        apply ·foo, ·bar, state, fn v_0, state:
+          load env, id'tag', fn ·tag, env:
+            apply ·tag, v_0, state, ƒ_cont
+
 test 'simple call', fn:
   expect cps fn:
     add 1, 2
