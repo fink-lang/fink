@@ -1426,7 +1426,24 @@ impl<'src> Parser<'src> {
 
 pub fn parse(src: &str) -> Result<Node<'_>, ParseError> {
   let mut p = Parser::new(src);
-  p.parse_expr()
+  // Consume the implicit root BlockStart emitted by the lexer
+  p.expect(TokenKind::BlockStart)?;
+  let stmts = p.parse_block_stmts()?;
+  match stmts.len() {
+    0 => Err(ParseError {
+      message: "empty input".into(),
+      loc: p.peek().loc,
+    }),
+    1 => Ok(stmts.into_iter().next().unwrap()),
+    _ => {
+      let start = stmts.first().unwrap().loc.start;
+      let end = stmts.last().unwrap().loc.end;
+      Ok(Node::new(
+        NodeKind::Fn { params: Box::new(Node::new(NodeKind::Patterns(vec![]), Loc { start, end })), body: stmts },
+        Loc { start, end },
+      ))
+    }
+  }
 }
 
 pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<Node<'a>, ParseError> {
@@ -1434,20 +1451,25 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<No
   for &name in blocks {
     p.register_block(name);
   }
-  p.parse_expr()
+  p.expect(TokenKind::BlockStart)?;
+  let stmts = p.parse_block_stmts()?;
+  match stmts.len() {
+    0 => Err(ParseError {
+      message: "empty input".into(),
+      loc: p.peek().loc,
+    }),
+    1 => Ok(stmts.into_iter().next().unwrap()),
+    _ => {
+      let start = stmts.first().unwrap().loc.start;
+      let end = stmts.last().unwrap().loc.end;
+      Ok(Node::new(
+        NodeKind::Fn { params: Box::new(Node::new(NodeKind::Patterns(vec![]), Loc { start, end })), body: stmts },
+        Loc { start, end },
+      ))
+    }
+  }
 }
 
-/// Parse all top-level statements (separated by BlockCont at the root level).
-pub fn parse_stmts(src: &str) -> Result<Vec<Node<'_>>, ParseError> {
-  let mut p = Parser::new(src);
-  let mut stmts = Vec::new();
-  loop {
-    if p.at(TokenKind::EOF) { break; }
-    if p.at(TokenKind::BlockCont) { p.bump(); continue; }
-    stmts.push(p.parse_expr()?);
-  }
-  Ok(stmts)
-}
 
 #[cfg(test)]
 mod tests {

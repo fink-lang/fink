@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use crate::ast::{CmpPart, Node, NodeKind};
-use crate::parser::{parse, parse_stmts};
+use crate::parser::parse;
 
 // ---------------------------------------------------------------------------
 // CPS IR types
@@ -382,15 +382,22 @@ fn is_word_op(op: &str) -> bool {
   op.chars().all(|c| c.is_alphabetic() || c == '_')
 }
 
+// TODO move into test.
 pub fn transform<'src>(src: &'src str) -> Result<CpsExpr<'src>, String> {
-  let stmts = parse_stmts(src).map_err(|e| e.message)?;
+  let node = parse(src).map_err(|e| e.message)?;
   let mut cps = Cps::new();
-  if stmts.is_empty() {
-    return Ok(CpsExpr::TailCall {
-      cont: Box::new(CpsVal::Ident("ƒ_cont")),
-      args: vec![CpsVal::Ident("v_result"), CpsVal::Ident("state")],
-    });
-  }
+  // Route through fn_chain_cps: unwrap transparent root Fn, or wrap single node in slice.
+  let stmts: Vec<Node<'src>> = match node.kind {
+    NodeKind::Fn { ref params, ref body } => {
+      if let NodeKind::Patterns(ps) = &params.kind {
+        if ps.is_empty() {
+          return Ok(cps.fn_chain_cps(body));
+        }
+      }
+      vec![node]
+    }
+    _ => vec![node],
+  };
   Ok(cps.fn_chain_cps(&stmts))
 }
 

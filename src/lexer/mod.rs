@@ -103,6 +103,7 @@ pub struct Lexer<'src> {
   mode: Vec<LexMode>,
   ind: Vec<usize>,
   seps: Vec<Vec<u8>>,
+  emitted_start: bool,
 }
 
 impl<'src> Lexer<'src> {
@@ -111,8 +112,9 @@ impl<'src> Lexer<'src> {
       src,
       pos: Pos { idx: 0, line: 1, col: 0 },
       mode: vec![LexMode::Block],
-      ind: vec![0],
+      ind: vec![0, 0],
       seps: vec![],
+      emitted_start: false,
     }
   }
 
@@ -381,6 +383,12 @@ impl<'src> Lexer<'src> {
   }
 
   pub fn next_token(&mut self) -> Token<'src> {
+    // Emit implicit BlockStart at the beginning of every source
+    if !self.emitted_start {
+      self.emitted_start = true;
+      return self.make_token(TokenKind::BlockStart, self.pos);
+    }
+
     // String mode
     if matches!(self.mode.last(), Some(LexMode::StrText)) {
       return match self.peek_bytes() {
@@ -570,6 +578,10 @@ mod tests {
     let mut lexer = tokenize_with_seps(src, default_ops);
     let mut out = String::new();
     let mut depth: usize = 0;
+    // Skip the implicit root BlockStart/BlockEnd so test output stays flat.
+    // Track block nesting to identify the matching root BlockEnd.
+    let mut root_skipped = false;
+    let mut block_depth: i32 = 0;
 
     loop {
       let tok = lexer.next_token();
@@ -577,6 +589,20 @@ mod tests {
         break;
       }
       use super::TokenKind::*;
+      // Skip the root BlockStart (first token)
+      if !root_skipped && tok.kind == BlockStart {
+        root_skipped = true;
+        continue;
+      }
+      // Track block nesting to find the matching root BlockEnd
+      if tok.kind == BlockStart { block_depth += 1; }
+      if tok.kind == BlockEnd {
+        if block_depth == 0 {
+          // This is the root BlockEnd — skip it
+          continue;
+        }
+        block_depth -= 1;
+      }
       let indent = "  ".repeat(depth);
       match &tok.kind {
         BlockStart => {
@@ -639,9 +665,13 @@ mod tests {
   fn test_tokenize_iterator() {
     use super::{tokenize, TokenKind};
     let mut lex = tokenize("foo");
+    // First token is the implicit root BlockStart
+    assert_eq!(lex.next().unwrap().kind, TokenKind::BlockStart);
     let tok = lex.next().unwrap();
     assert_eq!(tok.kind, TokenKind::Ident);
     assert_eq!(tok.src, "foo");
+    // BlockEnd closes the root block, then iterator exhausts
+    assert_eq!(lex.next().unwrap().kind, TokenKind::BlockEnd);
     assert!(lex.next().is_none());
   }
 
@@ -649,9 +679,12 @@ mod tests {
   fn test_register_separator_dedup() {
     use super::{tokenize_with_seps, TokenKind};
     // Registering '+' twice must not produce duplicate matches
+    // Token stream: BlockStart, Sep(+), BlockEnd
     let tokens: Vec<_> = tokenize_with_seps("+", &[b"+", b"+"]).collect();
-    assert_eq!(tokens.len(), 1);
-    assert_eq!(tokens[0].kind, TokenKind::Sep);
-    assert_eq!(tokens[0].src, "+");
+    assert_eq!(tokens.len(), 3);
+    assert_eq!(tokens[0].kind, TokenKind::BlockStart);
+    assert_eq!(tokens[1].kind, TokenKind::Sep);
+    assert_eq!(tokens[1].src, "+");
+    assert_eq!(tokens[2].kind, TokenKind::BlockEnd);
   }
 }
