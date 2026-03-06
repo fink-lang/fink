@@ -406,6 +406,17 @@ impl Cps {
           // Pass `rest` directly so the outer cont body is: store chld_env, id'name', ·name, fn ·name, env: result_of(·name, rest)
           let rest_inner = store_cont.body; // = rest
           self.fn_cps_bound(params, body, name, local, *rest_inner)
+        } else if let NodeKind::Try(inner) = &rhs.kind {
+          // Try rhs: ok_cont param is `local` directly, then store and continue.
+          let rest_subst = self.result_of(local, *store_cont.body);
+          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+          let store_expr = CpsExpr::Store {
+            env: "env",
+            key: name,
+            val: Box::new(CpsVal::Ident(local)),
+            cont: store_cont2,
+          };
+          self.try_cps(inner, local, store_expr)
         } else {
           // Complex rhs: evaluate rhs with result name = ·name, then store.
           // The store uses ·name as the value.
@@ -835,6 +846,20 @@ impl Cps {
         self.lit_rec_cps(elems, k)
       }
 
+      NodeKind::StrTempl(parts) => {
+        self.str_templ_cps(parts, k)
+      }
+
+      NodeKind::StrRawTempl(parts) => {
+        // Bare StrRawTempl (not as a tagged-template arg): treat like StrTempl.
+        self.str_templ_cps(parts, k)
+      }
+
+      NodeKind::Try(inner) => {
+        let ok_var = self.fresh("v_");
+        self.try_cps(inner, ok_var, k)
+      }
+
       _ => CpsExpr::TailCall {
         cont: Box::new(CpsVal::Str("not implemented".into())),
         args: vec![],
@@ -843,6 +868,33 @@ impl Cps {
   }
 
 
+
+  /// Transform a `try` expression into `err` CPS.
+  /// `ok_var` is the param name for the ok continuation (either a fresh v_N or a bound name).
+  /// Evaluates `inner` with cont param "res", then emits:
+  ///   err res, state, fn e, state: ƒ_cont e, state, fn ok_var, state: k
+  fn try_cps<'src>(&mut self, inner: &Node<'src>, ok_var: &'static str, k: CpsExpr<'src>) -> CpsExpr<'src> {
+    let err_cont = CpsFn {
+      params: vec![CpsParam::Ident("e"), CpsParam::Ident("state")],
+      body: Box::new(CpsExpr::TailCall {
+        cont: Box::new(CpsVal::Ident("ƒ_cont")),
+        args: vec![CpsVal::Ident("e"), CpsVal::Ident("state")],
+      }),
+    };
+    let k_body = self.result_of(ok_var, k);
+    let ok_cont = CpsFn {
+      params: vec![CpsParam::Ident(ok_var), CpsParam::Ident("state")],
+      body: Box::new(k_body),
+    };
+    let err_expr = CpsExpr::Err {
+      res: Box::new(CpsVal::Ident("res")),
+      state: "state",
+      err_cont,
+      ok_cont,
+    };
+    self.pending_cont_name = Some("res");
+    self.expr_cps(inner, err_expr)
+  }
 
   /// Build the inner part of a Member access, inside an already-loaded op_dot.
   /// For chained members (lhs is also a Member), reuses the same op_dot binding.
@@ -1123,6 +1175,12 @@ impl Cps {
     args: &[Node<'src>],
     k: CpsExpr<'src>,
   ) -> CpsExpr<'src> {
+    // Tagged template: Apply(func, [StrRawTempl(parts)]) → inline parts as individual args.
+    if args.len() == 1 {
+      if let NodeKind::StrRawTempl(parts) = &args[0].kind {
+        return self.tagged_templ_cps(func, parts, k);
+      }
+    }
     let arg_kinds = self.classify_args(args);
     let func_val = self.ident_val(func);
 
@@ -1357,6 +1415,94 @@ impl Cps {
 
   fn lit_to_val<'src>(&self, node: &Node<'src>) -> CpsVal<'src> {
     self.atom_val(node).unwrap_or(CpsVal::Str("?".into()))
+  }
+
+  /// Transform a `StrTempl` or bare `StrRawTempl` into `apply str_fmt, parts..., state, ƒ_cont`.
+  /// Parts: LitStr → str_raw'text', ident/expr → loaded value.
+  fn str_templ_cps<'src>(&mut self, parts: &[Node<'src>], k: CpsExpr<'src>) -> CpsExpr<'src> {
+    // Classify each part: LitStr → StrRaw val, ident → Load, complex → Complex.
+    let classified: Vec<ArgKind<'src>> = parts.iter().map(|p| match &p.kind {
+      NodeKind::LitStr(s) => ArgKind::Val(CpsVal::StrRaw(Box::leak(s.clone().into_boxed_str()))),
+      _ => self.classify_arg(p),
+    }).collect();
+
+    let cont_val = self.k_to_cont(k);
+    let arg_vals: Vec<CpsVal<'src>> = classified.iter().map(|a| match a {
+      ArgKind::Val(v) => v.clone(),
+      ArgKind::Load { local, .. } => CpsVal::Ident(local),
+      ArgKind::LoadSpread { local, .. } => CpsVal::Spread(local),
+      ArgKind::Complex { result, .. } => CpsVal::Ident(result),
+    }).collect();
+
+    let apply = CpsExpr::Apply {
+      func: Box::new(CpsVal::Ident("str_fmt")),
+      args: arg_vals,
+      state: "state",
+      cont: Box::new(cont_val),
+    };
+
+    // Wrap with ident loads (innermost = apply, first arg outermost).
+    let with_loads = classified.iter().rev().fold(apply, |inner, kind| {
+      match kind {
+        ArgKind::Load { key, local } => CpsExpr::Load {
+          env: "env", key: key.clone(),
+          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner) },
+        },
+        _ => inner,
+      }
+    });
+
+    // Wrap with complex evals (outermost).
+    classified.into_iter().rev().fold(with_loads, |inner, kind| {
+      match kind {
+        ArgKind::Complex { node, result } => self.eval_node_named(node, result, inner),
+        _ => inner,
+      }
+    })
+  }
+
+  /// Transform `fmt'parts...'` → `apply ·fmt, parts..., state, ƒ_cont`.
+  /// The func is loaded from env; raw string parts become StrRaw vals; idents are loaded.
+  fn tagged_templ_cps<'src>(&mut self, func: &Node<'src>, parts: &[Node<'src>], k: CpsExpr<'src>) -> CpsExpr<'src> {
+    let classified: Vec<ArgKind<'src>> = parts.iter().map(|p| match &p.kind {
+      NodeKind::LitStr(s) => ArgKind::Val(CpsVal::StrRaw(Box::leak(s.clone().into_boxed_str()))),
+      _ => self.classify_arg(p),
+    }).collect();
+
+    let func_val = self.ident_val(func);
+    let cont_val = self.k_to_cont(k);
+    let arg_vals: Vec<CpsVal<'src>> = classified.iter().map(|a| match a {
+      ArgKind::Val(v) => v.clone(),
+      ArgKind::Load { local, .. } => CpsVal::Ident(local),
+      ArgKind::LoadSpread { local, .. } => CpsVal::Spread(local),
+      ArgKind::Complex { result, .. } => CpsVal::Ident(result),
+    }).collect();
+
+    let apply = CpsExpr::Apply {
+      func: Box::new(func_val),
+      args: arg_vals,
+      state: "state",
+      cont: Box::new(cont_val),
+    };
+
+    let with_loads = classified.iter().rev().fold(apply, |inner, kind| {
+      match kind {
+        ArgKind::Load { key, local } => CpsExpr::Load {
+          env: "env", key: key.clone(),
+          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner) },
+        },
+        _ => inner,
+      }
+    });
+
+    let with_complex = classified.into_iter().rev().fold(with_loads, |inner, kind| {
+      match kind {
+        ArgKind::Complex { node, result } => self.eval_node_named(node, result, inner),
+        _ => inner,
+      }
+    });
+
+    self.wrap_ident_load(func, with_complex)
   }
 
   /// Transform `[elem, ...]` into a `seq_append`/`seq_concat` chain.

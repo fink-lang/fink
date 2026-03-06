@@ -223,7 +223,7 @@ test 'string interpolation multiple exprs', fn:
     load env, id'a', fn ·a, env:
       load env, id'b', fn ·b, env:
         load env, id'c', fn ·c, env:
-          apply str_fmt, str_raw'', ·a, str_raw' + ', ·b, str_raw' = ', ·c, str_raw'', state, ƒ_cont
+          apply str_fmt, ·a, str_raw' + ', ·b, str_raw' = ', ·c, state, ƒ_cont
 
 test 'tagged template', fn:
   expect cps fn:
@@ -422,10 +422,11 @@ test 'try — bare expression', fn:
 
   , equals fn:
     load env, id'foo', fn ·foo, env:
-      apply ·foo, ·bar, state, fn res, state:
-        err res, state,
-          fn e, state: ƒ_cont e, state
-          fn v_0, state: ƒ_cont v_0, state
+      load env, id'bar', fn ·bar, env:
+        apply ·foo, ·bar, state, fn res, state:
+          err res, state,
+            fn e, state: ƒ_cont e, state
+            fn v_0, state: ƒ_cont v_0, state
 
 test 'try — result bound, code continues', fn:
   expect cps fn:
@@ -434,13 +435,15 @@ test 'try — result bound, code continues', fn:
 
   , equals fn:
     load env, id'foo', fn ·foo, env:
-      apply ·foo, ·bar, state, fn res, state:
-        err res, state,
-          fn e, state: ƒ_cont e, state
-          fn ·ni, state:
-            store env, id'ni', ·ni, fn ·ni, env:
-              load env, op'+', fn op_plus, env:
-                apply op_plus, ·ni, 1, state, ƒ_cont
+      load env, id'bar', fn ·bar, env:
+        apply ·foo, ·bar, state, fn res, state:
+          err res, state,
+            fn e, state: ƒ_cont e, state
+            fn ·ni, state:
+              store env, id'ni', ·ni, fn ·ni, env:
+                load env, op'+', fn op_plus, env:
+                  load env, id'ni', fn ·ni, env:
+                    apply op_plus, ·ni, 1, state, ƒ_cont
 
 --- --- ---
 functions
