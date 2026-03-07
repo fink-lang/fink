@@ -490,7 +490,7 @@ mod tests {
   fn identity_preserves_load() {
     let expr = CpsExpr::Load {
       env: "env",
-      key: CpsKey::Id("foo"),
+      key: CpsKey::Id("foo", Loc { start: crate::lexer::Pos { idx: 0, line: 1, col: 0 }, end: crate::lexer::Pos { idx: 0, line: 1, col: 0 } }),
       cont: CpsFn {
         params: vec![CpsParam::Ident("·foo"), CpsParam::Ident("env")],
         body: Box::new(tail("ƒ_cont")),

@@ -105,8 +105,8 @@ fn val_to_node(v: &CpsVal) -> Node<'static> {
 
 fn key_to_node(k: &CpsKey) -> Node<'static> {
   match k {
-    CpsKey::Id(s) => id_tag(s),
-    CpsKey::Op(s) => op_tag(s),
+    CpsKey::Id(s, _) => id_tag(s),
+    CpsKey::Op(s, _) => op_tag(s),
   }
 }
 
@@ -378,7 +378,7 @@ fn to_node_ann<'a>(expr: &CpsExpr<'a>, captured: &HashSet<&str>) -> Node<'static
         // Render as a normal load call.
         apply(ident("load"), vec![
           ident(env),
-          match key { CpsKey::Id(s) => id_tag(s), CpsKey::Op(s) => op_tag(s) },
+          match key { CpsKey::Id(s, _) => id_tag(s), CpsKey::Op(s, _) => op_tag(s) },
           fn_to_node_ann(cont, captured),
         ])
       }

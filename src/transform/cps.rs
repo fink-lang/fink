@@ -299,10 +299,11 @@ pub enum CpsExpr<'src> {
 }
 
 /// The key used in a `load` call — either an ident name (`id'foo'`) or an op (`op'+'`).
+/// The `Loc` is the source location of the identifier or operator token.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CpsKey<'src> {
-  Id(&'src str),
-  Op(&'src str),
+  Id(&'src str, Loc),
+  Op(&'src str, Loc),
 }
 
 // ---------------------------------------------------------------------------
@@ -834,7 +835,7 @@ impl Cps {
         let body = self.result_of(local, k);
         CpsExpr::Load {
           env: "env",
-          key: CpsKey::Id(s),
+          key: CpsKey::Id(s, node.loc),
           cont: CpsFn {
             params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
             body: Box::new(body),
@@ -845,7 +846,7 @@ impl Cps {
 
       NodeKind::UnaryOp { op, operand } => {
         let op_local_name: &'static str = self.alloc(unary_op_local(op));
-        let key = if is_word_op(op) { CpsKey::Id(op) } else { CpsKey::Op(op) };
+        let key = if is_word_op(op) { CpsKey::Id(op, node.loc) } else { CpsKey::Op(op, node.loc) };
         let arg_kinds = self.classify_args(std::slice::from_ref(operand));
         let cont_val = self.k_to_cont(k);
         let arg_vals: Vec<CpsVal<'src>> = arg_kinds.iter().map(|a| match a {
@@ -894,7 +895,7 @@ impl Cps {
 
       NodeKind::InfixOp { op, lhs, rhs } => {
         let op_local_name: &'static str = self.alloc(op_local(op));
-        let key = if is_word_op(op) { CpsKey::Id(op) } else { CpsKey::Op(op) };
+        let key = if is_word_op(op) { CpsKey::Id(op, node.loc) } else { CpsKey::Op(op, node.loc) };
         let arg_kinds = self.classify_args(&[(**lhs).clone(), (**rhs).clone()]);
         let cont_val = self.k_to_cont(k);
         let arg_vals: Vec<CpsVal<'src>> = arg_kinds.iter().map(|a| match a {
@@ -949,7 +950,7 @@ impl Cps {
         let inner = self.member_inner(op_dot, lhs, rhs, k);
         CpsExpr::Load {
           env: "env",
-          key: CpsKey::Op("."),
+          key: CpsKey::Op(".", node.loc),
           cont: CpsFn {
             params: vec![CpsParam::Ident(op_dot), CpsParam::Ident("env")],
             body: Box::new(inner),
@@ -1143,7 +1144,7 @@ impl Cps {
       };
       CpsExpr::Load {
         env: "env",
-        key: CpsKey::Id(s),
+        key: CpsKey::Id(s, rhs.loc),
         cont: CpsFn {
           params: vec![CpsParam::Ident(loaded), CpsParam::Ident("env")],
           body: Box::new(match_expr),
@@ -1207,8 +1208,9 @@ impl Cps {
   /// Compile `x > 2` guard pattern.
   /// Binds `x` to `val_name`, then checks `x > 2`; success → ok_body, fail → ƒ_err.
   fn compile_guard_pattern<'src>(&mut self, op: &'src str, guard_lhs: &Node<'src>, guard_rhs: &Node<'src>, val_name: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    let loc = guard_lhs.loc;
     let op_local: &'static str = self.alloc(op_local(op));
-    let key = if is_word_op(op) { CpsKey::Id(op) } else { CpsKey::Op(op) };
+    let key = if is_word_op(op) { CpsKey::Id(op, loc) } else { CpsKey::Op(op, loc) };
     // The lhs (e.g. `x`) is the name being bound; rhs is the comparison value.
     let (lhs_name, lhs_local) = if let NodeKind::Ident(n) = &guard_lhs.kind {
       let local: &'static str = self.alloc(format!("·{}", n));
@@ -1270,6 +1272,7 @@ impl Cps {
 
   /// Compile a literal pattern (equality check): apply op_eq, val_name, lit, → if → ok or ƒ_err.
   fn compile_literal_pattern<'src>(&mut self, lit: &Node<'src>, val_name: &'static str, ok_body: CpsExpr<'src>) -> CpsExpr<'src> {
+    let loc = lit.loc;
     let lit_val = self.atom_val(lit).unwrap_or(CpsVal::Str("?".into()));
     let op_local_name: &'static str = self.alloc("op_eq".to_string());
     let then_cont = CpsFn {
@@ -1302,7 +1305,7 @@ impl Cps {
     };
     CpsExpr::Load {
       env: "env",
-      key: CpsKey::Op("=="),
+      key: CpsKey::Op("==", loc),
       cont: CpsFn {
         params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
         body: Box::new(apply),
@@ -1934,6 +1937,7 @@ impl Cps {
 
       // Wrap literal checks under a single op_eq load, with fresh v_r{i} result names
       if !literal_checks.is_empty() {
+        let lit_loc = patterns[0].loc;
         let op_local_name: &'static str = self.alloc("op_eq".to_string());
         for (pos, lit_val) in literal_checks.into_iter().rev() {
           let var_name: &'static str = self.alloc(format!("v{}", pos));
@@ -1967,7 +1971,7 @@ impl Cps {
         }
         body = CpsExpr::Load {
           env: "env",
-          key: CpsKey::Op("=="),
+          key: CpsKey::Op("==", lit_loc),
           cont: CpsFn {
             params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
             body: Box::new(body),
@@ -2244,7 +2248,7 @@ impl Cps {
         };
         CpsExpr::Load {
           env: "env",
-          key: CpsKey::Id(s),
+          key: CpsKey::Id(s, lhs.loc),
           cont: CpsFn {
             params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
             body: Box::new(with_rhs),
@@ -2334,8 +2338,9 @@ impl Cps {
     // In the test, `1 < x < 10` uses only `<`. Handle single op case.
     // The expected output loads the op ONCE and reuses it.
     let op = ops[0];
+    let loc = operands[0].loc;
     let op_local_name: &'static str = self.alloc(op_local(op));
-    let key = if is_word_op(op) { CpsKey::Id(op) } else { CpsKey::Op(op) };
+    let key = if is_word_op(op) { CpsKey::Id(op, loc) } else { CpsKey::Op(op, loc) };
 
     // Pre-load all ident operands.
     let classified: Vec<ArgKind<'src>> = operands.iter().map(|n| self.classify_arg(n)).collect();
@@ -2539,7 +2544,7 @@ impl Cps {
           return ArgKind::Val(CpsVal::Ident(local));
         }
         let local: &'static str = self.alloc(format!("·{}", s));
-        ArgKind::Load { key: CpsKey::Id(s), local }
+        ArgKind::Load { key: CpsKey::Id(s, arg.loc), local }
       }
       NodeKind::Spread(Some(inner)) => match &inner.kind {
         NodeKind::Ident(s) => {
@@ -2547,7 +2552,7 @@ impl Cps {
             return ArgKind::Val(CpsVal::Spread(local));
           }
           let local: &'static str = self.alloc(format!("·{}", s));
-          ArgKind::LoadSpread { key: CpsKey::Id(s), local }
+          ArgKind::LoadSpread { key: CpsKey::Id(s, inner.loc), local }
         }
         _ => {
           let tmp = self.fresh("v_");
@@ -2694,7 +2699,7 @@ impl Cps {
         let local: &'static str = self.alloc(format!("·{}", s));
         CpsExpr::Load {
           env: "env",
-          key: CpsKey::Id(s),
+          key: CpsKey::Id(s, node.loc),
           cont: CpsFn {
             params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
             body: Box::new(inner),
