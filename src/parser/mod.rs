@@ -1479,31 +1479,16 @@ mod tests {
     }
   }
 
-  fn strip_comments(s: &str) -> String {
-    s.lines()
-      .map(|line| {
-        let stripped = if let Some(idx) = line.find(" #") {
-          &line[..idx]
-        } else if line.starts_with('#') {
-          ""
-        } else {
-          line
-        };
-        stripped.trim_end()
-      })
-      .collect::<Vec<_>>()
-      .join("\n")
-  }
-
-  #[test_template(
+#[test_template(
     "src/parser", "./*.fnk",
-    r"(?ms)^---\n(?<name>.+?)\n.*?---\n(?<src>.+?)\n(^# expect.*?\n)(?<exp>^.+?((?=\n---)|(\z)))"
+    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect ast fn:\n(?P<src>[\s\S]+?)\n\n?  [|] equals_ast\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\ntest |\z)"
   )]
   fn test_parser(src: &str, exp: &str, path: &str) {
-    let cleaned = strip_comments(&exp.replace("\n\n", "\n"));
+    let src = src.lines().map(|l| l.strip_prefix("    ").unwrap_or(l)).collect::<Vec<_>>().join("\n");
+    let exp = exp.lines().map(|l| l.strip_prefix("    ").unwrap_or(l)).collect::<Vec<_>>().join("\n");
     pretty_assertions::assert_eq!(
-      parse_debug(src),
-      cleaned.trim(),
+      parse_debug(src.trim()),
+      exp.trim(),
       "{}",
       path
     );

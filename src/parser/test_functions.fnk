@@ -1,422 +1,397 @@
 
----
-multiline function
----
-fn a, b:
-  a + b
-# expect
-Fn
-  Patterns
-    Ident 'a'
-    Ident 'b'
-  InfixOp '+'
-    Ident 'a'
-    Ident 'b'
-
----
-single line function — same AST as multiline
----
-fn a, b: a + b
-# expect
-Fn
-  Patterns
-    Ident 'a'
-    Ident 'b'
-  InfixOp '+'
-    Ident 'a'
-    Ident 'b'
-
----
-named function binding
----
-add = fn a, b:
-  result = a + b
-  result
-# expect
-Bind
-  Ident 'add'
-  Fn
-    Patterns
-      Ident 'a'
-      Ident 'b'
-    Bind
-      Ident 'result'
+test 'multiline function', fn:
+  expect ast fn:
+    fn a, b:
+      a + b
+  | equals_ast
+    Fn
+      Patterns
+        Ident 'a'
+        Ident 'b'
       InfixOp '+'
         Ident 'a'
         Ident 'b'
-    Ident 'result'
 
----
-no-arg function
----
-greet = fn: 'hello'
-# expect
-Bind
-  Ident 'greet'
-  Fn
-    Patterns
-    LitStr 'hello'
-
----
-function with default arg
----
-greet = fn name='world':
-  'hello ${name}'
-# expect
-Bind
-  Ident 'greet'
-  Fn
-    Patterns
-      Bind             # TODO: that is a default asignment
-        Ident 'name'
-        LitStr 'world'
-    StrTempl
-      LitStr 'hello '
-      Ident 'name'
-
----
-function with record pattern arg
----
-foo = fn {x, y}: x + y
-# expect
-Bind
-  Ident 'foo'
-  Fn
-    Patterns
-      LitRec
-        Ident 'x'
-        Ident 'y'
-    InfixOp '+'
-      Ident 'x'
-      Ident 'y'
-
----
-function with sequence pattern arg
----
-bar = fn [head, ..tail]: head
-# expect
-Bind
-  Ident 'bar'
-  Fn
-    Patterns
-      LitSeq
-        Ident 'head'
-        Spread
-          Ident 'tail'
-    Ident 'head'
-
----
-function with rest args
----
-baz = fn arg, ..rest: arg
-# expect
-Bind
-  Ident 'baz'
-  Fn
-    Patterns
-      Ident 'arg'
-      Spread
-        Ident 'rest'
-    Ident 'arg'
-
----
-spread in middle of params
----
-baz = fn x, ..ys, z: x
-# expect
-Bind
-  Ident 'baz'
-  Fn
-    Patterns
-      Ident 'x'
-      Spread
-        Ident 'ys'
-      Ident 'z'
-    Ident 'x'
-
-
---- --- ---
-fn match sugar TODO: Jan to review
---- --- ---
-
----
-fn match single arg
----
-classify = fn match n:
-  n > 0: 'positive'
-  n < 0: 'negative'
-  else: 'zero'
-# expect
-Bind
-  Ident 'classify'
-  Fn
-    Patterns        # TODO not sure this is correct
-      Ident 'n'
-    Match
-      Patterns
-        Ident 'n'
-      Arm
-        InfixOp '>'
-          Ident 'n'
-          LitInt '0'
-        LitStr 'positive'
-      Arm
-        InfixOp '<'
-          Ident 'n'
-          LitInt '0'
-        LitStr 'negative'
-      Arm
-        Ident 'else'
-        LitStr 'zero'
-
----
-fn match multi arg
----
-foo = fn match a, ..b:
-  1, ..: 1
-  2, x, ..y: 2
-# expect
-Bind
-  Ident 'foo'
-  Fn
-    Patterns
-      Ident 'a'
-      Spread
-        Ident 'b'
-    Match
+test 'single line function', fn:
+  expect ast fn:
+    fn a, b: a + b
+  | equals_ast
+    Fn
       Patterns
         Ident 'a'
-        Spread
+        Ident 'b'
+      InfixOp '+'
+        Ident 'a'
+        Ident 'b'
+
+test 'named function binding', fn:
+  expect ast fn:
+    add = fn a, b:
+      result = a + b
+      result
+  | equals_ast
+    Bind
+      Ident 'add'
+      Fn
+        Patterns
+          Ident 'a'
           Ident 'b'
-      Arm
+        Bind
+          Ident 'result'
+          InfixOp '+'
+            Ident 'a'
+            Ident 'b'
+        Ident 'result'
+
+test 'no-arg function', fn:
+  expect ast fn:
+    greet = fn: 'hello'
+  | equals_ast
+    Bind
+      Ident 'greet'
+      Fn
         Patterns
-          LitInt '1'
+        LitStr 'hello'
+
+test 'function with default arg', fn:
+  expect ast fn:
+    greet = fn name='world':
+      'hello ${name}'
+  | equals_ast
+    Bind
+      Ident 'greet'
+      Fn
+        Patterns
+          Bind
+            Ident 'name'
+            LitStr 'world'
+        StrTempl
+          LitStr 'hello '
+          Ident 'name'
+
+test 'function with record pattern arg', fn:
+  expect ast fn:
+    foo = fn {x, y}: x + y
+  | equals_ast
+    Bind
+      Ident 'foo'
+      Fn
+        Patterns
+          LitRec
+            Ident 'x'
+            Ident 'y'
+        InfixOp '+'
+          Ident 'x'
+          Ident 'y'
+
+test 'function with sequence pattern arg', fn:
+  expect ast fn:
+    bar = fn [head, ..tail]: head
+  | equals_ast
+    Bind
+      Ident 'bar'
+      Fn
+        Patterns
+          LitSeq
+            Ident 'head'
+            Spread
+              Ident 'tail'
+        Ident 'head'
+
+test 'function with rest args', fn:
+  expect ast fn:
+    baz = fn arg, ..rest: arg
+  | equals_ast
+    Bind
+      Ident 'baz'
+      Fn
+        Patterns
+          Ident 'arg'
           Spread
-        LitInt '1'
-      Arm
+            Ident 'rest'
+        Ident 'arg'
+
+test 'spread in middle of params', fn:
+  expect ast fn:
+    baz = fn x, ..ys, z: x
+  | equals_ast
+    Bind
+      Ident 'baz'
+      Fn
         Patterns
-          LitInt '2'
           Ident 'x'
           Spread
-            Ident 'y'
-        LitInt '2'
+            Ident 'ys'
+          Ident 'z'
+        Ident 'x'
 
-
---- --- ---
-higher order TODO: Jan to check
---- --- ---
 
 ---
-returning a function
+fn match sugar
 ---
-map = fn map_fn: fn match items:
-  []: []
-  [item, ..rest]:
-    [(map_fn item), ..(map map_fn rest)]
-# expect
-Bind
-  Ident 'map'
-  Fn
-    Patterns
-      Ident 'map_fn'
-    Fn
-      Patterns
-        Ident 'items'
-      Match
+
+test 'fn match single arg', fn:
+  expect ast fn:
+    classify = fn match n:
+      n > 0: 'positive'
+      n < 0: 'negative'
+      else: 'zero'
+  | equals_ast
+    Bind
+      Ident 'classify'
+      Fn
         Patterns
-          Ident 'items'
-        Arm
-          LitSeq
-          LitSeq
-        Arm
-          LitSeq
-            Ident 'item'
+          Ident 'n'
+        Match
+          Patterns
+            Ident 'n'
+          Arm
+            InfixOp '>'
+              Ident 'n'
+              LitInt '0'
+            LitStr 'positive'
+          Arm
+            InfixOp '<'
+              Ident 'n'
+              LitInt '0'
+            LitStr 'negative'
+          Arm
+            Ident 'else'
+            LitStr 'zero'
+
+test 'fn match multi arg', fn:
+  expect ast fn:
+    foo = fn match a, ..b:
+      1, ..: 1
+      2, x, ..y: 2
+  | equals_ast
+    Bind
+      Ident 'foo'
+      Fn
+        Patterns
+          Ident 'a'
+          Spread
+            Ident 'b'
+        Match
+          Patterns
+            Ident 'a'
             Spread
-              Ident 'rest'
-          LitSeq
-            Group
-              Apply
-                Ident 'map_fn'
+              Ident 'b'
+          Arm
+            Patterns
+              LitInt '1'
+              Spread
+            LitInt '1'
+          Arm
+            Patterns
+              LitInt '2'
+              Ident 'x'
+              Spread
+                Ident 'y'
+            LitInt '2'
+
+
+---
+higher order
+---
+
+test 'returning a function', fn:
+  expect ast fn:
+    map = fn map_fn: fn match items:
+      []: []
+      [item, ..rest]:
+        [(map_fn item), ..(map map_fn rest)]
+  | equals_ast
+    Bind
+      Ident 'map'
+      Fn
+        Patterns
+          Ident 'map_fn'
+        Fn
+          Patterns
+            Ident 'items'
+          Match
+            Patterns
+              Ident 'items'
+            Arm
+              LitSeq
+              LitSeq
+            Arm
+              LitSeq
                 Ident 'item'
-            Spread
-              Apply
-                Ident 'map'
-                Apply
-                  Ident 'map_fn'
+                Spread
                   Ident 'rest'
+              LitSeq
+                Group
+                  Apply
+                    Ident 'map_fn'
+                    Ident 'item'
+                Spread
+                  Apply
+                    Ident 'map'
+                    Apply
+                      Ident 'map_fn'
+                      Ident 'rest'
 
 
---- --- ---
+---
 application
---- --- ---
+---
 
----
-simple application
----
-log 'hello'
-# expect
-Apply
-  Ident 'log'
-  LitStr 'hello'
-
----
-multi-arg application
----
-add 1, 2
-# expect
-Apply
-  Ident 'add'
-  LitInt '1'
-  LitInt '2'
-
----
-multiline args — same AST as inline
----
-add
-  mul 2, 3
-  mul 3, 4
-# expect
-Apply
-  Ident 'add'
-  Apply
-    Ident 'mul'
-    LitInt '2'
-    LitInt '3'
-  Apply
-    Ident 'mul'
-    LitInt '3'
-    LitInt '4'
-
----
-semicolon grouped args — same AST as multiline
----
-add mul 2, 3; mul 3, 4
-# expect
-Apply
-  Ident 'add'
-  Apply
-    Ident 'mul'
-    LitInt '2'
-    LitInt '3'
-  Apply
-    Ident 'mul'
-    LitInt '3'
-    LitInt '4'
-
----
-nested right-to-left application
----
-foo bar spam ham
-# expect
-Apply
-  Ident 'foo'
-  Apply
-    Ident 'bar'
+test 'simple application', fn:
+  expect ast fn:
+    log 'hello'
+  | equals_ast
     Apply
-      Ident 'spam'
-      Ident 'ham'
+      Ident 'log'
+      LitStr 'hello'
 
----
-postfix tagged application
----
-[1, 2, 3]foo
-# expect
-Apply
-  Ident 'foo'
-  LitSeq
-    LitInt '1'
-    LitInt '2'
-    LitInt '3'
+test 'multi-arg application', fn:
+  expect ast fn:
+    add 1, 2
+  | equals_ast
+    Apply
+      Ident 'add'
+      LitInt '1'
+      LitInt '2'
 
----
-partial application placeholder
----
-add5 = add 5, ?
-# expect
-Bind
-  Ident 'add5'
-  Apply
-    Ident 'add'
-    LitInt '5'
-    Partial
+test 'multiline args', fn:
+  expect ast fn:
+    add
+      mul 2, 3
+      mul 3, 4
+  | equals_ast
+    Apply
+      Ident 'add'
+      Apply
+        Ident 'mul'
+        LitInt '2'
+        LitInt '3'
+      Apply
+        Ident 'mul'
+        LitInt '3'
+        LitInt '4'
 
----
-partial operator
----
-add5 = ? + 5
-# expect
-Bind
-  Ident 'add5'
-  InfixOp '+'
-    Partial
-    LitInt '5'
+test 'semicolon grouped args', fn:
+  expect ast fn:
+    add mul 2, 3; mul 3, 4
+  | equals_ast
+    Apply
+      Ident 'add'
+      Apply
+        Ident 'mul'
+        LitInt '2'
+        LitInt '3'
+      Apply
+        Ident 'mul'
+        LitInt '3'
+        LitInt '4'
 
+test 'nested right-to-left application', fn:
+  expect ast fn:
+    foo bar spam ham
+  | equals_ast
+    Apply
+      Ident 'foo'
+      Apply
+        Ident 'bar'
+        Apply
+          Ident 'spam'
+          Ident 'ham'
 
---- --- ---
-pipes
---- --- ---
-
----
-simple pipe
----
-foo | bar | spam
-# expect
-Pipe
-  Ident 'foo'
-  Ident 'bar'
-  Ident 'spam'
-
----
-multiline pipe — same AST as inline
----
-'hello'
-| capitalize
-| log
-# expect
-Pipe
-  LitStr 'hello'
-  Ident 'capitalize'
-  Ident 'log'
-
----
-pipe with spread partial
----
-[1, 2] | add ..?
-# expect
-Pipe
-  LitSeq
-    LitInt '1'
-    LitInt '2'
-  Apply
-    Ident 'add'
-    Spread
-      Partial
-
----
-pipe with apply in each stage
----
-foo bar | spam ham
-# expect
-Pipe
-  Apply
-    Ident 'foo'
-    Ident 'bar'
-  Apply
-    Ident 'spam'
-    Ident 'ham'
-
----
-fn literal as grouped arg
----
-map (fn x: x + 1), items
-# expect
-Apply
-  Ident 'map'
-  Group
-    Fn
-      Patterns
-        Ident 'x'
-      InfixOp '+'
-        Ident 'x'
+test 'postfix tagged application', fn:
+  expect ast fn:
+    [1, 2, 3]foo
+  | equals_ast
+    Apply
+      Ident 'foo'
+      LitSeq
         LitInt '1'
-  Ident 'items'
+        LitInt '2'
+        LitInt '3'
+
+test 'partial application placeholder', fn:
+  expect ast fn:
+    add5 = add 5, ?
+  | equals_ast
+    Bind
+      Ident 'add5'
+      Apply
+        Ident 'add'
+        LitInt '5'
+        Partial
+
+test 'partial operator', fn:
+  expect ast fn:
+    add5 = ? + 5
+  | equals_ast
+    Bind
+      Ident 'add5'
+      InfixOp '+'
+        Partial
+        LitInt '5'
+
+
+---
+pipes
+---
+
+test 'simple pipe', fn:
+  expect ast fn:
+    foo | bar | spam
+  | equals_ast
+    Pipe
+      Ident 'foo'
+      Ident 'bar'
+      Ident 'spam'
+
+test 'multiline pipe', fn:
+  expect ast fn:
+    'hello'
+    | capitalize
+    | log
+  | equals_ast
+    Pipe
+      LitStr 'hello'
+      Ident 'capitalize'
+      Ident 'log'
+
+test 'pipe with spread partial', fn:
+  expect ast fn:
+    [1, 2] | add ..?
+  | equals_ast
+    Pipe
+      LitSeq
+        LitInt '1'
+        LitInt '2'
+      Apply
+        Ident 'add'
+        Spread
+          Partial
+
+test 'pipe with apply in each stage', fn:
+  expect ast fn:
+    foo bar | spam ham
+  | equals_ast
+    Pipe
+      Apply
+        Ident 'foo'
+        Ident 'bar'
+      Apply
+        Ident 'spam'
+        Ident 'ham'
+
+test 'fn literal as grouped arg', fn:
+  expect ast fn:
+    map (fn x: x + 1), items
+  | equals_ast
+    Apply
+      Ident 'map'
+      Group
+        Fn
+          Patterns
+            Ident 'x'
+          InfixOp '+'
+            Ident 'x'
+            LitInt '1'
+      Ident 'items'

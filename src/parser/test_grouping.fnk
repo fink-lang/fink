@@ -1,146 +1,133 @@
---- --- ---
-grouping, separators, and precedence
---- --- ---
-
-
---- --- ---
+---
 parentheses
---- --- ---
+---
+
+test 'grouping preserves Group node in arithmetic', fn:
+  expect ast fn:
+    (1 + 2) * (2 + 3)
+  | equals_ast
+    InfixOp '*'
+      Group
+        InfixOp '+'
+          LitInt '1'
+          LitInt '2'
+      Group
+        InfixOp '+'
+          LitInt '2'
+          LitInt '3'
+
+test 'grouping application args without comma', fn:
+  expect ast fn:
+    [(add 1, 2), (add 3, 4)]
+  | equals_ast
+    LitSeq
+      Group
+        Apply
+          Ident 'add'
+          LitInt '1'
+          LitInt '2'
+      Group
+        Apply
+          Ident 'add'
+          LitInt '3'
+          LitInt '4'
+
+test 'grouping to override right-to-left application', fn:
+  expect ast fn:
+    foo (bar spam) ham
+  | equals_ast
+    Apply
+      Ident 'foo'
+      Group
+        Apply
+          Ident 'bar'
+          Ident 'spam'
+      Ident 'ham'
+
 
 ---
-grouping preserves Group node in arithmetic
+comma vs semicolon
 ---
-(1 + 2) * (2 + 3)
-# expect
-InfixOp '*'
-  Group
-    InfixOp '+'
-      LitInt '1'
-      LitInt '2'
-  Group
-    InfixOp '+'
-      LitInt '2'
-      LitInt '3'
 
----
-grouping application args without comma
----
-[(add 1, 2), (add 3, 4)]
-# expect
-LitSeq
-  Group
+test 'comma separates args weakly', fn:
+  expect ast fn:
+    add mul 2, 3, mul 3, 4
+  | equals_ast
     Apply
       Ident 'add'
-      LitInt '1'
-      LitInt '2'
-  Group
+      Apply
+        Ident 'mul'
+        LitInt '2'
+        LitInt '3'
+        Apply
+          Ident 'mul'
+          LitInt '3'
+          LitInt '4'
+
+test 'semicolon groups strongly', fn:
+  expect ast fn:
+    add mul 2, 3; mul 3, 4
+  | equals_ast
     Apply
       Ident 'add'
-      LitInt '3'
-      LitInt '4'
+      Apply
+        Ident 'mul'
+        LitInt '2'
+        LitInt '3'
+      Apply
+        Ident 'mul'
+        LitInt '3'
+        LitInt '4'
+
 
 ---
-grouping to override right-to-left application
+newline as separator
 ---
-foo (bar spam) ham
-# expect
-Apply
-  Ident 'foo'
-  Group
+
+test 'multiline args - same AST as inline with semicolons', fn:
+  expect ast fn:
+    add
+      mul 2, 3
+      mul 3, 4
+  | equals_ast
     Apply
+      Ident 'add'
+      Apply
+        Ident 'mul'
+        LitInt '2'
+        LitInt '3'
+      Apply
+        Ident 'mul'
+        LitInt '3'
+        LitInt '4'
+
+test 'trailing comma continues onto next line', fn:
+  expect ast fn:
+    foo bar,
+      spam
+  | equals_ast
+    Apply
+      Ident 'foo'
       Ident 'bar'
       Ident 'spam'
-  Ident 'ham'
 
-
---- --- ---
-comma vs semicolon
---- --- ---
 
 ---
-comma separates args weakly
----
-add mul 2, 3, mul 3, 4
-# expect
-Apply
-  Ident 'add'
-  Apply
-    Ident 'mul'
-    LitInt '2'
-    LitInt '3'
-    Apply
-      Ident 'mul'
-      LitInt '3'
-      LitInt '4'
-
----
-semicolon groups strongly
----
-add mul 2, 3; mul 3, 4
-# expect
-Apply
-  Ident 'add'
-  Apply
-    Ident 'mul'
-    LitInt '2'
-    LitInt '3'
-  Apply
-    Ident 'mul'
-    LitInt '3'
-    LitInt '4'
-
-
---- --- ---
-newline as separator
---- --- ---
-
----
-multiline args — same AST as inline with semicolons
----
-add
-  mul 2, 3
-  mul 3, 4
-# expect
-Apply
-  Ident 'add'
-  Apply
-    Ident 'mul'
-    LitInt '2'
-    LitInt '3'
-  Apply
-    Ident 'mul'
-    LitInt '3'
-    LitInt '4'
-
----
-trailing comma continues onto next line
----
-foo bar,
-  spam
-# expect
-Apply
-  Ident 'foo'
-  Ident 'bar'
-  Ident 'spam'
-
-
---- --- ---
 disambiguation with semicolon
---- --- ---
+---
 
----
-semicolon makes spread guard boundary explicit
----
-[is_odd head; ..tail] = [3, 4, 5]
-# expect
-Bind
-  LitSeq
-    Apply
-      Ident 'is_odd'
-      Ident 'head'
-    Spread
-      Ident 'tail'
-  LitSeq
-    LitInt '3'
-    LitInt '4'
-    LitInt '5'
+test 'semicolon makes spread guard boundary explicit', fn:
+  expect ast fn:
+    [is_odd head; ..tail] = [3, 4, 5]
+  | equals_ast
+    Bind
+      LitSeq
+        Apply
+          Ident 'is_odd'
+          Ident 'head'
+        Spread
+          Ident 'tail'
+      LitSeq
+        LitInt '3'
+        LitInt '4'
+        LitInt '5'

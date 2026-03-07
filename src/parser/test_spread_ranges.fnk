@@ -1,208 +1,186 @@
---- --- ---
-spread and ranges
---- --- ---
-
-
---- --- ---
+---
 spread
---- --- ---
+---
+
+test 'spread into sequence', fn:
+  expect ast fn:
+    [head, ..tail]
+  | equals_ast
+    LitSeq
+      Ident 'head'
+      Spread
+        Ident 'tail'
+
+test 'spread concat sequences', fn:
+  expect ast fn:
+    [..seq1, ..seq2]
+  | equals_ast
+    LitSeq
+      Spread
+        Ident 'seq1'
+      Spread
+        Ident 'seq2'
+
+test 'spread into record', fn:
+  expect ast fn:
+    {foo: bar, ..rest}
+  | equals_ast
+    LitRec
+      Arm
+        Ident 'foo'
+        Ident 'bar'
+      Spread
+        Ident 'rest'
+
+test 'spread merge records', fn:
+  expect ast fn:
+    {..rec1, ..rec2}
+  | equals_ast
+    LitRec
+      Spread
+        Ident 'rec1'
+      Spread
+        Ident 'rec2'
+
+test 'bare spread in sequence pattern', fn:
+  expect ast fn:
+    [..]
+  | equals_ast
+    LitSeq
+      Spread
+
+test 'bare spread in record pattern', fn:
+  expect ast fn:
+    {..}
+  | equals_ast
+    LitRec
+      Spread
+
+test 'spread with range guard', fn:
+  expect ast fn:
+    [head, ..(0..2), ..rest]
+  | equals_ast
+    LitSeq
+      Ident 'head'
+      Spread
+        Range '..'
+          LitInt '0'
+          LitInt '2'
+      Spread
+        Ident 'rest'
+
+test 'spread with function guard', fn:
+  expect ast fn:
+    [..(is_odd), ..evens]
+  | equals_ast
+    LitSeq
+      Spread
+        Ident 'is_odd'
+      Spread
+        Ident 'evens'
+
+test 'spread with range expression guard', fn:
+  expect ast fn:
+    [..(1 + 2)..(3 + 4)]
+  | equals_ast
+    LitSeq
+      Spread
+        Range '..'
+          InfixOp '+'
+            LitInt '1'
+            LitInt '2'
+          Group
+            InfixOp '+'
+              LitInt '3'
+              LitInt '4'
+
+test 'spread with ident range guard', fn:
+  expect ast fn:
+    [..foo...bar]
+  | equals_ast
+    LitSeq
+      Spread
+        Range '...'
+          Ident 'foo'
+          Ident 'bar'
+
+test 'spread with bare range guard', fn:
+  expect ast fn:
+    [head, ..0..2, ..rest]
+  | equals_ast
+    LitSeq
+      Ident 'head'
+      Spread
+        Range '..'
+          LitInt '0'
+          LitInt '2'
+      Spread
+        Ident 'rest'
+
+test 'spread with range to grouped expression', fn:
+  expect ast fn:
+    [..0..(l)]
+  | equals_ast
+    LitSeq
+      Spread
+        Range '..'
+          LitInt '0'
+          Group
+            Ident 'l'
+
 
 ---
-spread into sequence
+ranges
 ---
-[head, ..tail]
-# expect
-LitSeq
-  Ident 'head'
-  Spread
-    Ident 'tail'
 
----
-spread concat sequences
----
-[..seq1, ..seq2]
-# expect
-LitSeq
-  Spread
-    Ident 'seq1'
-  Spread
-    Ident 'seq2'
-
----
-spread into record
----
-{foo: bar, ..rest}
-# expect
-LitRec
-  Arm
-    Ident 'foo'
-    Ident 'bar'
-  Spread
-    Ident 'rest'
-
----
-spread merge records
----
-{..rec1, ..rec2}
-# expect
-LitRec
-  Spread
-    Ident 'rec1'
-  Spread
-    Ident 'rec2'
-
----
-bare spread in sequence pattern
----
-[..]
-# expect
-LitSeq
-  Spread
-
----
-bare spread in record pattern
----
-{..}
-# expect
-LitRec
-  Spread
-
----
-spread with range guard
----
-[head, ..(0..2), ..rest]
-# expect
-LitSeq
-  Ident 'head'
-  Spread
+test 'exclusive range', fn:
+  expect ast fn:
+    0..10
+  | equals_ast
     Range '..'
       LitInt '0'
-      LitInt '2'
-  Spread
-    Ident 'rest'
+      LitInt '10'
 
----
-spread with function guard
----
-[..(is_odd), ..evens]
-# expect
-LitSeq
-  Spread
-    Ident 'is_odd'
-  Spread
-    Ident 'evens'
+test 'inclusive range', fn:
+  expect ast fn:
+    0...10
+  | equals_ast
+    Range '...'
+      LitInt '0'
+      LitInt '10'
 
+test 'char range', fn:
+  expect ast fn:
+    'a'...'z'
+  | equals_ast
+    Range '...'
+      LitStr 'a'
+      LitStr 'z'
 
----
-spread with range expression guard
----
-[..(1 + 2)..(3 + 4)]
-# expect
-LitSeq
-  Spread
+test 'expression range exclusive', fn:
+  expect ast fn:
+    (1 + 2)..(3 + 4)
+  | equals_ast
     Range '..'
-      InfixOp '+'
-        LitInt '1'
-        LitInt '2'
+      Group
+        InfixOp '+'
+          LitInt '1'
+          LitInt '2'
       Group
         InfixOp '+'
           LitInt '3'
           LitInt '4'
 
----
-spread with ident range guard
----
-[..foo...bar]
-# expect
-LitSeq
-  Spread
+test 'expression range inclusive', fn:
+  expect ast fn:
+    (1 + 2)...(3 + 4)
+  | equals_ast
     Range '...'
-      Ident 'foo'
-      Ident 'bar'
-
----
-spread with bare range guard
----
-[head, ..0..2, ..rest]
-# expect
-LitSeq
-  Ident 'head'
-  Spread
-    Range '..'
-      LitInt '0'
-      LitInt '2'
-  Spread
-    Ident 'rest'
-
----
-spread with range to grouped expression
----
-[..0..(l)]
-# expect
-LitSeq
-  Spread
-    Range '..'
-      LitInt '0'
       Group
-        Ident 'l'
-
---- --- ---
-ranges
---- --- ---
-
----
-exclusive range
----
-0..10
-# expect
-Range '..'
-  LitInt '0'
-  LitInt '10'
-
----
-inclusive range
----
-0...10
-# expect
-Range '...'
-  LitInt '0'
-  LitInt '10'
-
----
-char range
----
-'a'...'z'
-# expect
-Range '...'
-  LitStr 'a'
-  LitStr 'z'
-
----
-expression range exclusive
----
-(1 + 2)..(3 + 4)
-# expect
-Range '..'
-  Group
-    InfixOp '+'
-      LitInt '1'
-      LitInt '2'
-  Group
-    InfixOp '+'
-      LitInt '3'
-      LitInt '4'
-
----
-expression range inclusive
----
-(1 + 2)...(3 + 4)
-# expect
-Range '...'
-  Group
-    InfixOp '+'
-      LitInt '1'
-      LitInt '2'
-  Group
-    InfixOp '+'
-      LitInt '3'
-      LitInt '4'
+        InfixOp '+'
+          LitInt '1'
+          LitInt '2'
+      Group
+        InfixOp '+'
+          LitInt '3'
+          LitInt '4'

@@ -1,465 +1,443 @@
 
----
-match on literal values
----
-match foo:
-  1: 'one'
-  2: 'two'
-  else: 'other'
-# expect
-Match
-  Patterns
-    Ident 'foo'
-  Arm
-    LitInt '1'
-    LitStr 'one'
-  Arm
-    LitInt '2'
-    LitStr 'two'
-  Arm
-    Ident 'else'
-    LitStr 'other'
-
----
-match with binding
----
-match foo:
-  [head, ..tail]: head
-  []: 'empty'
-# expect
-Match
-  Patterns
-    Ident 'foo'
-  Arm
-    LitSeq
-      Ident 'head'
-      Spread
-        Ident 'tail'
-    Ident 'head'
-  Arm
-    LitSeq
-    LitStr 'empty'
-
----
-match with inline guard
----
-match foo:
-  n > 0 and n < 10: 'small positive'
-  n > 0: 'large positive'
-  else: 'other'
-# expect
-Match
-  Patterns
-    Ident 'foo'
-  Arm
-    InfixOp 'and'
-      InfixOp '>'
-        Ident 'n'
-        LitInt '0'
-      InfixOp '<'
-        Ident 'n'
-        LitInt '10'
-    LitStr 'small positive'
-  Arm
-    InfixOp '>'
-      Ident 'n'
-      LitInt '0'
-    LitStr 'large positive'
-  Arm
-    Ident 'else'
-    LitStr 'other'
-
----
-match on type
----
-match foo:
-  str s: 'its a string'
-  u8 n: 'its a u8'
-# expect
-Match
-  Patterns
-    Ident 'foo'
-  Arm
-    Apply
-      Ident 'str'
-      Ident 's'
-    LitStr 'its a string'
-  Arm
-    Apply
-      Ident 'u8'
-      Ident 'n'
-    LitStr 'its a u8'
-
----
-match string pattern
----
-match s:
-  'hello ${..rest}': rest
-  'a'...'z': 'lowercase letter'
-# expect
-Match
-  Patterns
-    Ident 's'
-  Arm
-    StrTempl
-      LitStr 'hello '
-      Spread
-        Ident 'rest'
-    Ident 'rest'
-  Arm
-    Range '...'
-      LitStr 'a'
-      LitStr 'z'
-    LitStr 'lowercase letter'
-
----
-match sequence patterns
----
-match items:
-  []: 'empty'
-  [x]: 'one element'
-  [x, y]: 'two elements'
-  [x, ..]: 'one or more'
-# expect
-Match
-  Patterns
-    Ident 'items'
-  Arm
-    LitSeq
-    LitStr 'empty'
-  Arm
-    LitSeq
-      Ident 'x'
-    LitStr 'one element'
-  Arm
-    LitSeq
-      Ident 'x'
-      Ident 'y'
-    LitStr 'two elements'
-  Arm
-    LitSeq
-      Ident 'x'
-      Spread
-    LitStr 'one or more'
-
----
-match sequence bare spread pattern
----
-match items:
-  [..]: 'non-empty'
-  []: 'empty'
-# expect
-Match
-  Patterns
-    Ident 'items'
-  Arm
-    LitSeq
-      Spread
-    LitStr 'non-empty'
-  Arm
-    LitSeq
-    LitStr 'empty'
-
----
-match record bare spread pattern
----
-match foobar:
-  {..}: 'non-empty'
-  {}: 'empty'
-# expect
-Match
-  Patterns
-    Ident 'foobar'
-  Arm
-    LitRec
-      Spread
-    LitStr 'non-empty'
-  Arm
-    LitRec
-    LitStr 'empty'
-
----
-match record patterns
----
-match foobar:
-  {}: 'empty'
-  {foo: 1}: 'foo is 1'
-  {foo: 1, ..}: 'foo is 1 and more'
-# expect
-Match
-  Patterns
-    Ident 'foobar'
-  Arm
-    LitRec
-    LitStr 'empty'
-  Arm
-    LitRec
-      Arm
+test 'match on literal values', fn:
+  expect ast fn:
+    match foo:
+      1: 'one'
+      2: 'two'
+      else: 'other'
+  | equals_ast
+    Match
+      Patterns
         Ident 'foo'
-        LitInt '1'
-    LitStr 'foo is 1'
-  Arm
-    LitRec
       Arm
-        Ident 'foo'
         LitInt '1'
-      Spread
-    LitStr 'foo is 1 and more'
-
----
-match record exact - empty rest
----
-match foobar:
-  {foo: 1, ..{}}: 'foo is 1 and nothing else'
-# expect
-Match
-  Patterns
-    Ident 'foobar'
-  Arm
-    LitRec
+        LitStr 'one'
       Arm
-        Ident 'foo'
-        LitInt '1'
-      Spread
-        LitRec
-    LitStr 'foo is 1 and nothing else'
-
----
-match record with bound rest
----
-match foobar:
-  {foo: 1, ..rest}: rest
-# expect
-Match
-  Patterns
-    Ident 'foobar'
-  Arm
-    LitRec
-      Arm
-        Ident 'foo'
-        LitInt '1'
-      Spread
-        Ident 'rest'
-    Ident 'rest'
-
----
-match seq exact - empty rest
----
-match items:
-  [a, ..[]]:'only a'
-# expect
-Match
-  Patterns
-    Ident 'items'
-  Arm
-    LitSeq
-      Ident 'a'
-      Spread
-        LitSeq
-    LitStr 'only a'
-
----
-match nested record pattern
----
-match foo:
-  {x: 1, y: {z}}: z
-# expect
-Match
-  Patterns
-    Ident 'foo'
-  Arm
-    LitRec
-      Arm
-        Ident 'x'
-        LitInt '1'
-      Arm
-        Ident 'y'
-        LitRec
-          Ident 'z'
-    Ident 'z'
-
----
-inline match in application
----
-log match a: x > 0: x
-# expect
-Apply
-  Ident 'log'
-  Match
-    Patterns
-      Ident 'a'
-    Arm
-      InfixOp '>'
-        Ident 'x'
-        LitInt '0'
-      Ident 'x'
-
----
-multi-subject match
----
-match a, b:
-  1, 2: 'one two'
-  1, x: 'one other'
-  else, else: 'other'
-# expect
-Match
-  Patterns
-    Ident 'a'
-    Ident 'b'
-  Arm
-    Patterns
-      LitInt '1'
-      LitInt '2'
-    LitStr 'one two'
-  Arm
-    Patterns
-      LitInt '1'
-      Ident 'x'
-    LitStr 'one other'
-  Arm
-    Patterns
-      Ident 'else'
-      Ident 'else'
-    LitStr 'other'
-
----
-guard combined with spread in match arm
----
-match items:
-  [x > 0, ..rest]: rest
-  else: []
-# expect
-Match
-  Patterns
-    Ident 'items'
-  Arm
-    LitSeq
-      InfixOp '>'
-        Ident 'x'
-        LitInt '0'
-      Spread
-        Ident 'rest'
-    Ident 'rest'
-  Arm
-    Ident 'else'
-    LitSeq
-
----
-nested pattern with guard in binding
----
-[[x, y], z > 0] = foo
-# expect
-Bind
-  LitSeq
-    LitSeq
-      Ident 'x'
-      Ident 'y'
-    InfixOp '>'
-      Ident 'z'
-      LitInt '0'
-  Ident 'foo'
-
----
-multiline arm body
----
-match n:
-  n > 0:
-    x = n * 2
-    x + 1
-  else: 0
-# expect
-Match
-  Patterns
-    Ident 'n'
-  Arm
-    InfixOp '>'
-      Ident 'n'
-      LitInt '0'
-    Bind
-      Ident 'x'
-      InfixOp '*'
-        Ident 'n'
         LitInt '2'
-    InfixOp '+'
-      Ident 'x'
-      LitInt '1'
-  Arm
-    Ident 'else'
-    LitInt '0'
+        LitStr 'two'
+      Arm
+        Ident 'else'
+        LitStr 'other'
 
----
-else arm body as application
----
-match n:
-  0: true
-  else: is_odd n - 1
-# expect
-Match
-  Patterns
-    Ident 'n'
-  Arm
-    LitInt '0'
-    LitBool true
-  Arm
-    Ident 'else'
-    Apply
-      Ident 'is_odd'
-      InfixOp '-'
-        Ident 'n'
-        LitInt '1'
+test 'match with binding', fn:
+  expect ast fn:
+    match foo:
+      [head, ..tail]: head
+      []: 'empty'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foo'
+      Arm
+        LitSeq
+          Ident 'head'
+          Spread
+            Ident 'tail'
+        Ident 'head'
+      Arm
+        LitSeq
+        LitStr 'empty'
 
----
-Ok and Err patterns in match
----
-match bar result:
-  Ok x: x + 1
-  Err err: log err
-# expect
-Match
-  Patterns
-    Apply
-      Ident 'bar'
-      Ident 'result'
-  Arm
-    Apply
-      Ident 'Ok'
-      Ident 'x'
-    InfixOp '+'
-      Ident 'x'
-      LitInt '1'
-  Arm
-    Apply
-      Ident 'Err'
-      Ident 'err'
+test 'match with inline guard', fn:
+  expect ast fn:
+    match foo:
+      n > 0 and n < 10: 'small positive'
+      n > 0: 'large positive'
+      else: 'other'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foo'
+      Arm
+        InfixOp 'and'
+          InfixOp '>'
+            Ident 'n'
+            LitInt '0'
+          InfixOp '<'
+            Ident 'n'
+            LitInt '10'
+        LitStr 'small positive'
+      Arm
+        InfixOp '>'
+          Ident 'n'
+          LitInt '0'
+        LitStr 'large positive'
+      Arm
+        Ident 'else'
+        LitStr 'other'
+
+test 'match on type', fn:
+  expect ast fn:
+    match foo:
+      str s: 'its a string'
+      u8 n: 'its a u8'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foo'
+      Arm
+        Apply
+          Ident 'str'
+          Ident 's'
+        LitStr 'its a string'
+      Arm
+        Apply
+          Ident 'u8'
+          Ident 'n'
+        LitStr 'its a u8'
+
+test 'match string pattern', fn:
+  expect ast fn:
+    match s:
+      'hello ${..rest}': rest
+      'a'...'z': 'lowercase letter'
+  | equals_ast
+    Match
+      Patterns
+        Ident 's'
+      Arm
+        StrTempl
+          LitStr 'hello '
+          Spread
+            Ident 'rest'
+        Ident 'rest'
+      Arm
+        Range '...'
+          LitStr 'a'
+          LitStr 'z'
+        LitStr 'lowercase letter'
+
+test 'match sequence patterns', fn:
+  expect ast fn:
+    match items:
+      []: 'empty'
+      [x]: 'one element'
+      [x, y]: 'two elements'
+      [x, ..]: 'one or more'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'items'
+      Arm
+        LitSeq
+        LitStr 'empty'
+      Arm
+        LitSeq
+          Ident 'x'
+        LitStr 'one element'
+      Arm
+        LitSeq
+          Ident 'x'
+          Ident 'y'
+        LitStr 'two elements'
+      Arm
+        LitSeq
+          Ident 'x'
+          Spread
+        LitStr 'one or more'
+
+test 'match sequence bare spread pattern', fn:
+  expect ast fn:
+    match items:
+      [..]: 'non-empty'
+      []: 'empty'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'items'
+      Arm
+        LitSeq
+          Spread
+        LitStr 'non-empty'
+      Arm
+        LitSeq
+        LitStr 'empty'
+
+test 'match record bare spread pattern', fn:
+  expect ast fn:
+    match foobar:
+      {..}: 'non-empty'
+      {}: 'empty'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foobar'
+      Arm
+        LitRec
+          Spread
+        LitStr 'non-empty'
+      Arm
+        LitRec
+        LitStr 'empty'
+
+test 'match record patterns', fn:
+  expect ast fn:
+    match foobar:
+      {}: 'empty'
+      {foo: 1}: 'foo is 1'
+      {foo: 1, ..}: 'foo is 1 and more'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foobar'
+      Arm
+        LitRec
+        LitStr 'empty'
+      Arm
+        LitRec
+          Arm
+            Ident 'foo'
+            LitInt '1'
+        LitStr 'foo is 1'
+      Arm
+        LitRec
+          Arm
+            Ident 'foo'
+            LitInt '1'
+          Spread
+        LitStr 'foo is 1 and more'
+
+test 'match record exact - empty rest', fn:
+  expect ast fn:
+    match foobar:
+      {foo: 1, ..{}}: 'foo is 1 and nothing else'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foobar'
+      Arm
+        LitRec
+          Arm
+            Ident 'foo'
+            LitInt '1'
+          Spread
+            LitRec
+        LitStr 'foo is 1 and nothing else'
+
+test 'match record with bound rest', fn:
+  expect ast fn:
+    match foobar:
+      {foo: 1, ..rest}: rest
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foobar'
+      Arm
+        LitRec
+          Arm
+            Ident 'foo'
+            LitInt '1'
+          Spread
+            Ident 'rest'
+        Ident 'rest'
+
+test 'match seq exact - empty rest', fn:
+  expect ast fn:
+    match items:
+      [a, ..[]]:'only a'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'items'
+      Arm
+        LitSeq
+          Ident 'a'
+          Spread
+            LitSeq
+        LitStr 'only a'
+
+test 'match nested record pattern', fn:
+  expect ast fn:
+    match foo:
+      {x: 1, y: {z}}: z
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foo'
+      Arm
+        LitRec
+          Arm
+            Ident 'x'
+            LitInt '1'
+          Arm
+            Ident 'y'
+            LitRec
+              Ident 'z'
+        Ident 'z'
+
+test 'inline match in application', fn:
+  expect ast fn:
+    log match a: x > 0: x
+  | equals_ast
     Apply
       Ident 'log'
-      Ident 'err'
+      Match
+        Patterns
+          Ident 'a'
+        Arm
+          InfixOp '>'
+            Ident 'x'
+            LitInt '0'
+          Ident 'x'
 
----
-error chaining
----
-Err e, 'foo failed'
-# expect
-Apply
-  Ident 'Err'
-  Ident 'e'
-  LitStr 'foo failed'
-
----
-match arm with nested right-hand binding
----
-match foobar:
-  {foo: f |= {bar}}: bar
-# expect
-Match
-  Patterns
-    Ident 'foobar'
-  Arm
-    LitRec
+test 'multi-subject match', fn:
+  expect ast fn:
+    match a, b:
+      1, 2: 'one two'
+      1, x: 'one other'
+      else, else: 'other'
+  | equals_ast
+    Match
+      Patterns
+        Ident 'a'
+        Ident 'b'
       Arm
-        Ident 'foo'
-        BindRight
-          Ident 'f'
-          LitRec
-            Ident 'bar'
-    Ident 'bar'
+        Patterns
+          LitInt '1'
+          LitInt '2'
+        LitStr 'one two'
+      Arm
+        Patterns
+          LitInt '1'
+          Ident 'x'
+        LitStr 'one other'
+      Arm
+        Patterns
+          Ident 'else'
+          Ident 'else'
+        LitStr 'other'
+
+test 'guard combined with spread in match arm', fn:
+  expect ast fn:
+    match items:
+      [x > 0, ..rest]: rest
+      else: []
+  | equals_ast
+    Match
+      Patterns
+        Ident 'items'
+      Arm
+        LitSeq
+          InfixOp '>'
+            Ident 'x'
+            LitInt '0'
+          Spread
+            Ident 'rest'
+        Ident 'rest'
+      Arm
+        Ident 'else'
+        LitSeq
+
+test 'nested pattern with guard in binding', fn:
+  expect ast fn:
+    [[x, y], z > 0] = foo
+  | equals_ast
+    Bind
+      LitSeq
+        LitSeq
+          Ident 'x'
+          Ident 'y'
+        InfixOp '>'
+          Ident 'z'
+          LitInt '0'
+      Ident 'foo'
+
+test 'multiline arm body', fn:
+  expect ast fn:
+    match n:
+      n > 0:
+        x = n * 2
+        x + 1
+      else: 0
+  | equals_ast
+    Match
+      Patterns
+        Ident 'n'
+      Arm
+        InfixOp '>'
+          Ident 'n'
+          LitInt '0'
+        Bind
+          Ident 'x'
+          InfixOp '*'
+            Ident 'n'
+            LitInt '2'
+        InfixOp '+'
+          Ident 'x'
+          LitInt '1'
+      Arm
+        Ident 'else'
+        LitInt '0'
+
+test 'else arm body as application', fn:
+  expect ast fn:
+    match n:
+      0: true
+      else: is_odd n - 1
+  | equals_ast
+    Match
+      Patterns
+        Ident 'n'
+      Arm
+        LitInt '0'
+        LitBool true
+      Arm
+        Ident 'else'
+        Apply
+          Ident 'is_odd'
+          InfixOp '-'
+            Ident 'n'
+            LitInt '1'
+
+test 'Ok and Err patterns in match', fn:
+  expect ast fn:
+    match bar result:
+      Ok x: x + 1
+      Err err: log err
+  | equals_ast
+    Match
+      Patterns
+        Apply
+          Ident 'bar'
+          Ident 'result'
+      Arm
+        Apply
+          Ident 'Ok'
+          Ident 'x'
+        InfixOp '+'
+          Ident 'x'
+          LitInt '1'
+      Arm
+        Apply
+          Ident 'Err'
+          Ident 'err'
+        Apply
+          Ident 'log'
+          Ident 'err'
+
+test 'error chaining', fn:
+  expect ast fn:
+    Err e, 'foo failed'
+  | equals_ast
+    Apply
+      Ident 'Err'
+      Ident 'e'
+      LitStr 'foo failed'
+
+test 'match arm with nested right-hand binding', fn:
+  expect ast fn:
+    match foobar:
+      {foo: f |= {bar}}: bar
+  | equals_ast
+    Match
+      Patterns
+        Ident 'foobar'
+      Arm
+        LitRec
+          Arm
+            Ident 'foo'
+            BindRight
+              Ident 'f'
+              LitRec
+                Ident 'bar'
+        Ident 'bar'

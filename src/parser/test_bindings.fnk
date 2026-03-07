@@ -1,450 +1,417 @@
-
---- --- ---
+---
 left-hand binding
---- --- ---
+---
 
----
-simple binding
----
-foo = 1
-# expect
-Bind
-  Ident 'foo'
-  LitInt '1'
-
----
-sequence destructure
----
-[a, b] = [1, 2]
-# expect
-Bind
-  LitSeq
-    Ident 'a'
-    Ident 'b'
-  LitSeq
-    LitInt '1'
-    LitInt '2'
-
----
-record destructure
----
-{x, y} = point
-# expect
-Bind
-  LitRec
-    Ident 'x'
-    Ident 'y'
-  Ident 'point'
-
----
-record destructure with rename
----
-{x, y: z} = point
-# expect
-Bind
-  LitRec
-    Ident 'x'
-    Arm
-      Ident 'y'
-      Ident 'z'
-  Ident 'point'
-
----
-nested record destructure
----
-{a, b: {c, d}} = foo
-# expect
-Bind
-  LitRec
-    Ident 'a'
-    Arm
-      Ident 'b'
-      LitRec
-        Ident 'c'
-        Ident 'd'
-  Ident 'foo'
-
----
-nested destructure
----
-[a, [b, c]] = [1, [2, 3]]
-# expect
-Bind
-  LitSeq
-    Ident 'a'
-    LitSeq
-      Ident 'b'
-      Ident 'c'
-  LitSeq
-    LitInt '1'
-    LitSeq
-      LitInt '2'
-      LitInt '3'
-
----
-spread head and tail
----
-[head, ..tail] = [1, 2, 3, 4]
-# expect
-Bind
-  LitSeq
-    Ident 'head'
-    Spread
-      Ident 'tail'
-  LitSeq
-    LitInt '1'
-    LitInt '2'
-    LitInt '3'
-    LitInt '4'
-
----
-spread head middle and end
----
-[head, ..middle, end] = [1, 2, 3, 4]
-# expect
-Bind
-  LitSeq
-    Ident 'head'
-    Spread
-      Ident 'middle'
-    Ident 'end'
-  LitSeq
-    LitInt '1'
-    LitInt '2'
-    LitInt '3'
-    LitInt '4'
-
----
-spread with guard
----
-[head > 3, ..tail] = [4, 5, 6]
-# expect
-Bind
-  LitSeq
-    InfixOp '>'
-      Ident 'head'
-      LitInt '3'
-    Spread
-      Ident 'tail'
-  LitSeq
-    LitInt '4'
-    LitInt '5'
-    LitInt '6'
-
----
-guard with function call in pattern
----
-[(is_odd head), ..tail] = [3, 4, 5]
-# expect
-Bind
-  LitSeq
-    Group
-      Apply
-        Ident 'is_odd'
-        Ident 'head'
-    Spread
-      Ident 'tail'
-  LitSeq
-    LitInt '3'
-    LitInt '4'
-    LitInt '5'
-
----
-record destructure with spread rest
----
-{x, ..rest} = point
-# expect
-Bind
-  LitRec
-    Ident 'x'
-    Spread
-      Ident 'rest'
-  Ident 'point'
-
----
-record destructure with non-empty rest assertion
----
-{x, ..} = point
-# expect
-Bind
-  LitRec
-    Ident 'x'
-    Spread
-  Ident 'point'
-
----
-record destructure exact - empty rest
----
-{x, ..{}} = point
-# expect
-Bind
-  LitRec
-    Ident 'x'
-    Spread
-      LitRec
-  Ident 'point'
-
----
-seq destructure exact - empty rest
----
-[a, ..[]] = foo
-# expect
-Bind
-  LitSeq
-    Ident 'a'
-    Spread
-      LitSeq
-  Ident 'foo'
-
----
-string pattern binding
----
-'start ${middle} end' = 'foo bar spam'
-# expect
-Bind
-  StrTempl
-    LitStr 'start '
-    Ident 'middle'
-    LitStr ' end'
-  LitStr 'foo bar spam'
-
-
---- --- ---
-right-hand binding
---- --- ---
-
----
-simple right-hand binding
----
-123 |= b
-# expect
-BindRight
-  LitInt '123'
-  Ident 'b'
-
----
-multiline right-hand binding
----
-foo
-  arg1
-  arg2
-|= result
-# expect
-BindRight
-  Apply
-    Ident 'foo'
-    Ident 'arg1'
-    Ident 'arg2'
-  Ident 'result'
-
----
-nested right-hand binding
----
-[a |= [b, 2], [3, 4]] = [[1, 2], [3, 4]]
-# expect
-Bind
-  LitSeq
-    BindRight
-      Ident 'a'
-      LitSeq
-        Ident 'b'
-        LitInt '2'
-    LitSeq
-      LitInt '3'
-      LitInt '4'
-  LitSeq
-    LitSeq
+test 'simple binding', fn:
+  expect ast fn:
+    foo = 1
+  | equals_ast
+    Bind
+      Ident 'foo'
       LitInt '1'
-      LitInt '2'
-    LitSeq
-      LitInt '3'
-      LitInt '4'
+
+test 'sequence destructure', fn:
+  expect ast fn:
+    [a, b] = [1, 2]
+  | equals_ast
+    Bind
+      LitSeq
+        Ident 'a'
+        Ident 'b'
+      LitSeq
+        LitInt '1'
+        LitInt '2'
+
+test 'record destructure', fn:
+  expect ast fn:
+    {x, y} = point
+  | equals_ast
+    Bind
+      LitRec
+        Ident 'x'
+        Ident 'y'
+      Ident 'point'
+
+test 'record destructure with rename', fn:
+  expect ast fn:
+    {x, y: z} = point
+  | equals_ast
+    Bind
+      LitRec
+        Ident 'x'
+        Arm
+          Ident 'y'
+          Ident 'z'
+      Ident 'point'
+
+test 'nested record destructure', fn:
+  expect ast fn:
+    {a, b: {c, d}} = foo
+  | equals_ast
+    Bind
+      LitRec
+        Ident 'a'
+        Arm
+          Ident 'b'
+          LitRec
+            Ident 'c'
+            Ident 'd'
+      Ident 'foo'
+
+test 'nested destructure', fn:
+  expect ast fn:
+    [a, [b, c]] = [1, [2, 3]]
+  | equals_ast
+    Bind
+      LitSeq
+        Ident 'a'
+        LitSeq
+          Ident 'b'
+          Ident 'c'
+      LitSeq
+        LitInt '1'
+        LitSeq
+          LitInt '2'
+          LitInt '3'
+
+test 'spread head and tail', fn:
+  expect ast fn:
+    [head, ..tail] = [1, 2, 3, 4]
+  | equals_ast
+    Bind
+      LitSeq
+        Ident 'head'
+        Spread
+          Ident 'tail'
+      LitSeq
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+        LitInt '4'
+
+test 'spread head middle and end', fn:
+  expect ast fn:
+    [head, ..middle, end] = [1, 2, 3, 4]
+  | equals_ast
+    Bind
+      LitSeq
+        Ident 'head'
+        Spread
+          Ident 'middle'
+        Ident 'end'
+      LitSeq
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+        LitInt '4'
+
+test 'spread with guard', fn:
+  expect ast fn:
+    [head > 3, ..tail] = [4, 5, 6]
+  | equals_ast
+    Bind
+      LitSeq
+        InfixOp '>'
+          Ident 'head'
+          LitInt '3'
+        Spread
+          Ident 'tail'
+      LitSeq
+        LitInt '4'
+        LitInt '5'
+        LitInt '6'
+
+test 'guard with function call in pattern', fn:
+  expect ast fn:
+    [(is_odd head), ..tail] = [3, 4, 5]
+  | equals_ast
+    Bind
+      LitSeq
+        Group
+          Apply
+            Ident 'is_odd'
+            Ident 'head'
+        Spread
+          Ident 'tail'
+      LitSeq
+        LitInt '3'
+        LitInt '4'
+        LitInt '5'
+
+test 'record destructure with spread rest', fn:
+  expect ast fn:
+    {x, ..rest} = point
+  | equals_ast
+    Bind
+      LitRec
+        Ident 'x'
+        Spread
+          Ident 'rest'
+      Ident 'point'
+
+test 'record destructure with non-empty rest assertion', fn:
+  expect ast fn:
+    {x, ..} = point
+  | equals_ast
+    Bind
+      LitRec
+        Ident 'x'
+        Spread
+      Ident 'point'
+
+test 'record destructure exact - empty rest', fn:
+  expect ast fn:
+    {x, ..{}} = point
+  | equals_ast
+    Bind
+      LitRec
+        Ident 'x'
+        Spread
+          LitRec
+      Ident 'point'
+
+test 'seq destructure exact - empty rest', fn:
+  expect ast fn:
+    [a, ..[]] = foo
+  | equals_ast
+    Bind
+      LitSeq
+        Ident 'a'
+        Spread
+          LitSeq
+      Ident 'foo'
+
+test 'string pattern binding', fn:
+  expect ast fn:
+    'start ${middle} end' = 'foo bar spam'
+  | equals_ast
+    Bind
+      StrTempl
+        LitStr 'start '
+        Ident 'middle'
+        LitStr ' end'
+      LitStr 'foo bar spam'
+
 
 ---
-right-hand binding with sequence destructure
+right-hand binding
 ---
-get_pair foo |= [a, b]
-# expect
-BindRight
-  Apply
-    Ident 'get_pair'
-    Ident 'foo'
-  LitSeq
-    Ident 'a'
-    Ident 'b'
 
----
-right-hand binding with record destructure
----
-get_point foo |= {x, y}
-# expect
-BindRight
-  Apply
-    Ident 'get_point'
-    Ident 'foo'
-  LitRec
-    Ident 'x'
-    Ident 'y'
+test 'simple right-hand binding', fn:
+  expect ast fn:
+    123 |= b
+  | equals_ast
+    BindRight
+      LitInt '123'
+      Ident 'b'
 
----
-right-hand binding with nested destructure
----
-compute foo |= {x, y: [a, b]}
-# expect
-BindRight
-  Apply
-    Ident 'compute'
-    Ident 'foo'
-  LitRec
-    Ident 'x'
-    Arm
-      Ident 'y'
+test 'multiline right-hand binding', fn:
+  expect ast fn:
+    foo
+      arg1
+      arg2
+    |= result
+  | equals_ast
+    BindRight
+      Apply
+        Ident 'foo'
+        Ident 'arg1'
+        Ident 'arg2'
+      Ident 'result'
+
+test 'nested right-hand binding', fn:
+  expect ast fn:
+    [a |= [b, 2], [3, 4]] = [[1, 2], [3, 4]]
+  | equals_ast
+    Bind
+      LitSeq
+        BindRight
+          Ident 'a'
+          LitSeq
+            Ident 'b'
+            LitInt '2'
+        LitSeq
+          LitInt '3'
+          LitInt '4'
+      LitSeq
+        LitSeq
+          LitInt '1'
+          LitInt '2'
+        LitSeq
+          LitInt '3'
+          LitInt '4'
+
+test 'right-hand binding with sequence destructure', fn:
+  expect ast fn:
+    get_pair foo |= [a, b]
+  | equals_ast
+    BindRight
+      Apply
+        Ident 'get_pair'
+        Ident 'foo'
       LitSeq
         Ident 'a'
         Ident 'b'
 
----
-nested right-hand binding in record pattern
----
-{foo: f |= {bar, spam: num ni}} = {foo: {bar: 1, spam: 2}}
-# expect
-Bind
-  LitRec
-    Arm
-      Ident 'foo'
-      BindRight
-        Ident 'f'
-        LitRec
-          Ident 'bar'
-          Arm
-            Ident 'spam'
-            Apply
-              Ident 'num'
-              Ident 'ni'
-  LitRec
-    Arm
-      Ident 'foo'
+test 'right-hand binding with record destructure', fn:
+  expect ast fn:
+    get_point foo |= {x, y}
+  | equals_ast
+    BindRight
+      Apply
+        Ident 'get_point'
+        Ident 'foo'
+      LitRec
+        Ident 'x'
+        Ident 'y'
+
+test 'right-hand binding with nested destructure', fn:
+  expect ast fn:
+    compute foo |= {x, y: [a, b]}
+  | equals_ast
+    BindRight
+      Apply
+        Ident 'compute'
+        Ident 'foo'
+      LitRec
+        Ident 'x'
+        Arm
+          Ident 'y'
+          LitSeq
+            Ident 'a'
+            Ident 'b'
+
+test 'nested right-hand binding in record pattern', fn:
+  expect ast fn:
+    {foo: f |= {bar, spam: num ni}} = {foo: {bar: 1, spam: 2}}
+  | equals_ast
+    Bind
       LitRec
         Arm
-          Ident 'bar'
-          LitInt '1'
+          Ident 'foo'
+          BindRight
+            Ident 'f'
+            LitRec
+              Ident 'bar'
+              Arm
+                Ident 'spam'
+                Apply
+                  Ident 'num'
+                  Ident 'ni'
+      LitRec
         Arm
-          Ident 'spam'
-          LitInt '2'
+          Ident 'foo'
+          LitRec
+            Arm
+              Ident 'bar'
+              LitInt '1'
+            Arm
+              Ident 'spam'
+              LitInt '2'
+
+test 'spread guard with right-hand binding', fn:
+  expect ast fn:
+    [..(str) |= strings, ..other] = [1, '2', 3, '4']
+  | equals_ast
+    Bind
+      LitSeq
+        Spread
+          BindRight
+            Ident 'str'
+            Ident 'strings'
+        Spread
+          Ident 'other'
+      LitSeq
+        LitInt '1'
+        LitStr '2'
+        LitInt '3'
+        LitStr '4'
+
+test 'import', fn:
+  expect ast fn:
+    {foo, bar} = import './foobar.fnk'
+  | equals_ast
+    Bind
+      LitRec
+        Ident 'foo'
+        Ident 'bar'
+      Apply
+        Ident 'import'
+        LitStr './foobar.fnk'
+
 
 ---
-spread guard with right-hand binding
----
-[..(str) |= strings, ..other] = [1, '2', 3, '4']
-# expect
-Bind
-  LitSeq
-    Spread
-      BindRight
-        Ident 'str'
-        Ident 'strings'
-    Spread
-      Ident 'other'
-  LitSeq
-    LitInt '1'
-    LitStr '2'
-    LitInt '3'
-    LitStr '4'
-
----
-import
----
-{foo, bar} = import './foobar.fnk'
-# expect
-Bind
-  LitRec
-    Ident 'foo'
-    Ident 'bar'
-  Apply
-    Ident 'import'
-    LitStr './foobar.fnk'
-
-
---- --- ---
 wildcard
---- --- ---
+---
 
----
-bare wildcard
----
-_
-# expect
-Wildcard
-
----
-wildcard in sequence destructure
----
-[_, x] = [1, 2]
-# expect
-Bind
-  LitSeq
+test 'bare wildcard', fn:
+  expect ast fn:
+    _
+  | equals_ast
     Wildcard
-    Ident 'x'
-  LitSeq
-    LitInt '1'
-    LitInt '2'
 
----
-wildcard in fn params
----
-fn _, b: b
-# expect
-Fn
-  Patterns
-    Wildcard
-    Ident 'b'
-  Ident 'b'
+test 'wildcard in sequence destructure', fn:
+  expect ast fn:
+    [_, x] = [1, 2]
+  | equals_ast
+    Bind
+      LitSeq
+        Wildcard
+        Ident 'x'
+      LitSeq
+        LitInt '1'
+        LitInt '2'
 
----
-wildcard does not match _foo
----
-_foo
-# expect
-Ident '_foo'
+test 'wildcard in fn params', fn:
+  expect ast fn:
+    fn _, b: b
+  | equals_ast
+    Fn
+      Patterns
+        Wildcard
+        Ident 'b'
+      Ident 'b'
 
----
-implicit wildcard - middle slots
----
-[_, _, n]
-# expect
-LitSeq
-  Wildcard
-  Wildcard
-  Ident 'n'
+test 'wildcard does not match _foo', fn:
+  expect ast fn:
+    _foo
+  | equals_ast
+    Ident '_foo'
 
----
-implicit wildcard - leading comma
----
-[, , n]
-# expect
-LitSeq
-  Wildcard
-  Wildcard
-  Ident 'n'
+test 'implicit wildcard - middle slots', fn:
+  expect ast fn:
+    [_, _, n]
+  | equals_ast
+    LitSeq
+      Wildcard
+      Wildcard
+      Ident 'n'
 
----
-implicit wildcard - mixed explicit and implicit
----
-[_, , n]
-# expect
-LitSeq
-  Wildcard
-  Wildcard
-  Ident 'n'
+test 'implicit wildcard - leading comma', fn:
+  expect ast fn:
+    [, , n]
+  | equals_ast
+    LitSeq
+      Wildcard
+      Wildcard
+      Ident 'n'
 
----
-implicit wildcard in fn params
----
-fn , , c: c
-# expect
-Fn
-  Patterns
-    Wildcard
-    Wildcard
-    Ident 'c'
-  Ident 'c'
+test 'implicit wildcard - mixed explicit and implicit', fn:
+  expect ast fn:
+    [_, , n]
+  | equals_ast
+    LitSeq
+      Wildcard
+      Wildcard
+      Ident 'n'
+
+test 'implicit wildcard in fn params', fn:
+  expect ast fn:
+    fn , , c: c
+  | equals_ast
+    Fn
+      Patterns
+        Wildcard
+        Wildcard
+        Ident 'c'
+      Ident 'c'

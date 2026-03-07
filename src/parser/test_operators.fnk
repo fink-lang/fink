@@ -1,511 +1,456 @@
---- --- ---
-operators
---- --- ---
-
-
---- --- ---
+---
 arithmetic
---- --- ---
+---
 
----
-unary minus
----
--a
-# expect
-UnaryOp '-'
-  Ident 'a'
+test 'unary minus', fn:
+  expect ast fn:
+    -a
+  | equals_ast
+    UnaryOp '-'
+      Ident 'a'
 
----
-add
----
-a + b
-# expect
-InfixOp '+'
-  Ident 'a'
-  Ident 'b'
+test 'add', fn:
+  expect ast fn:
+    a + b
+  | equals_ast
+    InfixOp '+'
+      Ident 'a'
+      Ident 'b'
 
----
-subtract
----
-a - b
-# expect
-InfixOp '-'
-  Ident 'a'
-  Ident 'b'
+test 'subtract', fn:
+  expect ast fn:
+    a - b
+  | equals_ast
+    InfixOp '-'
+      Ident 'a'
+      Ident 'b'
 
----
-multiply
----
-a * b
-# expect
-InfixOp '*'
-  Ident 'a'
-  Ident 'b'
+test 'multiply', fn:
+  expect ast fn:
+    a * b
+  | equals_ast
+    InfixOp '*'
+      Ident 'a'
+      Ident 'b'
 
----
-divide
----
-a / b
-# expect
-InfixOp '/'
-  Ident 'a'
-  Ident 'b'
+test 'divide', fn:
+  expect ast fn:
+    a / b
+  | equals_ast
+    InfixOp '/'
+      Ident 'a'
+      Ident 'b'
 
----
-integer divide
----
-a // b
-# expect
-InfixOp '//'
-  Ident 'a'
-  Ident 'b'
+test 'integer divide', fn:
+  expect ast fn:
+    a // b
+  | equals_ast
+    InfixOp '//'
+      Ident 'a'
+      Ident 'b'
 
----
-power
----
-a ** b
-# expect
-InfixOp '**'
-  Ident 'a'
-  Ident 'b'
+test 'power', fn:
+  expect ast fn:
+    a ** b
+  | equals_ast
+    InfixOp '**'
+      Ident 'a'
+      Ident 'b'
 
----
-remainder
----
-a % b
-# expect
-InfixOp '%'
-  Ident 'a'
-  Ident 'b'
+test 'remainder', fn:
+  expect ast fn:
+    a % b
+  | equals_ast
+    InfixOp '%'
+      Ident 'a'
+      Ident 'b'
 
----
-true modulus
----
-a %% b
-# expect
-InfixOp '%%'
-  Ident 'a'
-  Ident 'b'
+test 'true modulus', fn:
+  expect ast fn:
+    a %% b
+  | equals_ast
+    InfixOp '%%'
+      Ident 'a'
+      Ident 'b'
 
----
-divmod
----
-a /% b
-# expect
-InfixOp '/%'
-  Ident 'a'
-  Ident 'b'
+test 'divmod', fn:
+  expect ast fn:
+    a /% b
+  | equals_ast
+    InfixOp '/%'
+      Ident 'a'
+      Ident 'b'
 
----
-power is right associative
----
-a ** b ** c
-# expect
-InfixOp '**'
-  Ident 'a'
-  InfixOp '**'
-    Ident 'b'
-    Ident 'c'
+test 'power is right associative', fn:
+  expect ast fn:
+    a ** b ** c
+  | equals_ast
+    InfixOp '**'
+      Ident 'a'
+      InfixOp '**'
+        Ident 'b'
+        Ident 'c'
 
----
-multiply binds tighter than add
----
-a + b * c
-# expect
-InfixOp '+'
-  Ident 'a'
-  InfixOp '*'
-    Ident 'b'
-    Ident 'c'
+test 'multiply binds tighter than add', fn:
+  expect ast fn:
+    a + b * c
+  | equals_ast
+    InfixOp '+'
+      Ident 'a'
+      InfixOp '*'
+        Ident 'b'
+        Ident 'c'
 
 
---- --- ---
+---
 logical
---- --- ---
+---
 
----
-not
----
-not a
-# expect
-UnaryOp 'not'
-  Ident 'a'
+test 'not', fn:
+  expect ast fn:
+    not a
+  | equals_ast
+    UnaryOp 'not'
+      Ident 'a'
 
----
-and
----
-a and b
-# expect
-InfixOp 'and'
-  Ident 'a'
-  Ident 'b'
+test 'and', fn:
+  expect ast fn:
+    a and b
+  | equals_ast
+    InfixOp 'and'
+      Ident 'a'
+      Ident 'b'
 
----
-or
----
-a or b
-# expect
-InfixOp 'or'
-  Ident 'a'
-  Ident 'b'
+test 'or', fn:
+  expect ast fn:
+    a or b
+  | equals_ast
+    InfixOp 'or'
+      Ident 'a'
+      Ident 'b'
 
----
-xor
----
-a xor b
-# expect
-InfixOp 'xor'
-  Ident 'a'
-  Ident 'b'
+test 'xor', fn:
+  expect ast fn:
+    a xor b
+  | equals_ast
+    InfixOp 'xor'
+      Ident 'a'
+      Ident 'b'
 
----
-not binds tighter than and
----
-not a and not b
-# expect
-InfixOp 'and'
-  UnaryOp 'not'
-    Ident 'a'
-  UnaryOp 'not'
-    Ident 'b'
+test 'not binds tighter than and', fn:
+  expect ast fn:
+    not a and not b
+  | equals_ast
+    InfixOp 'and'
+      UnaryOp 'not'
+        Ident 'a'
+      UnaryOp 'not'
+        Ident 'b'
 
----
-and binds tighter than or
----
-a or b and c
-# expect
-InfixOp 'or'
-  Ident 'a'
-  InfixOp 'and'
-    Ident 'b'
-    Ident 'c'
+test 'and binds tighter than or', fn:
+  expect ast fn:
+    a or b and c
+  | equals_ast
+    InfixOp 'or'
+      Ident 'a'
+      InfixOp 'and'
+        Ident 'b'
+        Ident 'c'
 
----
-add binds tighter than and
----
-a + b and c + d
-# expect
-InfixOp 'and'
-  InfixOp '+'
-    Ident 'a'
-    Ident 'b'
-  InfixOp '+'
-    Ident 'c'
-    Ident 'd'
+test 'add binds tighter than and', fn:
+  expect ast fn:
+    a + b and c + d
+  | equals_ast
+    InfixOp 'and'
+      InfixOp '+'
+        Ident 'a'
+        Ident 'b'
+      InfixOp '+'
+        Ident 'c'
+        Ident 'd'
 
 
---- --- ---
+---
 comparison
---- --- ---
+---
 
----
-greater than
----
-a > b
-# expect
-InfixOp '>'
-  Ident 'a'
-  Ident 'b'
+test 'greater than', fn:
+  expect ast fn:
+    a > b
+  | equals_ast
+    InfixOp '>'
+      Ident 'a'
+      Ident 'b'
 
----
-greater than or equal
----
-a >= b
-# expect
-InfixOp '>='
-  Ident 'a'
-  Ident 'b'
+test 'greater than or equal', fn:
+  expect ast fn:
+    a >= b
+  | equals_ast
+    InfixOp '>='
+      Ident 'a'
+      Ident 'b'
 
----
-less than
----
-a < b
-# expect
-InfixOp '<'
-  Ident 'a'
-  Ident 'b'
+test 'less than', fn:
+  expect ast fn:
+    a < b
+  | equals_ast
+    InfixOp '<'
+      Ident 'a'
+      Ident 'b'
 
----
-less than or equal
----
-a <= b
-# expect
-InfixOp '<='
-  Ident 'a'
-  Ident 'b'
+test 'less than or equal', fn:
+  expect ast fn:
+    a <= b
+  | equals_ast
+    InfixOp '<='
+      Ident 'a'
+      Ident 'b'
 
----
-equal
----
-a == b
-# expect
-InfixOp '=='
-  Ident 'a'
-  Ident 'b'
+test 'equal', fn:
+  expect ast fn:
+    a == b
+  | equals_ast
+    InfixOp '=='
+      Ident 'a'
+      Ident 'b'
 
----
-not equal
----
-a != b
-# expect
-InfixOp '!='
-  Ident 'a'
-  Ident 'b'
+test 'not equal', fn:
+  expect ast fn:
+    a != b
+  | equals_ast
+    InfixOp '!='
+      Ident 'a'
+      Ident 'b'
 
----
-chained comparison same op
----
-a > b > c
-# expect
-ChainedCmp
-  Ident 'a'
-  '>'
-  Ident 'b'
-  '>'
-  Ident 'c'
+test 'chained comparison same op', fn:
+  expect ast fn:
+    a > b > c
+  | equals_ast
+    ChainedCmp
+      Ident 'a'
+      '>'
+      Ident 'b'
+      '>'
+      Ident 'c'
 
----
-chained comparison mixed ops
----
-a >= b > c
-# expect
-ChainedCmp
-  Ident 'a'
-  '>='
-  Ident 'b'
-  '>'
-  Ident 'c'
+test 'chained comparison mixed ops', fn:
+  expect ast fn:
+    a >= b > c
+  | equals_ast
+    ChainedCmp
+      Ident 'a'
+      '>='
+      Ident 'b'
+      '>'
+      Ident 'c'
 
----
-containment
----
-a in b
-# expect
-InfixOp 'in'
-  Ident 'a'
-  Ident 'b'
+test 'containment', fn:
+  expect ast fn:
+    a in b
+  | equals_ast
+    InfixOp 'in'
+      Ident 'a'
+      Ident 'b'
 
----
-not containment
----
-a not in b
-# expect
-InfixOp 'not in'
-  Ident 'a'
-  Ident 'b'
+test 'not containment', fn:
+  expect ast fn:
+    a not in b
+  | equals_ast
+    InfixOp 'not in'
+      Ident 'a'
+      Ident 'b'
 
----
-disjoint
----
-a >< b
-# expect
-InfixOp '><'
-  Ident 'a'
-  Ident 'b'
+test 'disjoint', fn:
+  expect ast fn:
+    a >< b
+  | equals_ast
+    InfixOp '><'
+      Ident 'a'
+      Ident 'b'
 
----
-comparison binds tighter than and
----
-a > 0 and b < 10
-# expect
-InfixOp 'and'
-  InfixOp '>'
-    Ident 'a'
-    LitInt '0'
-  InfixOp '<'
-    Ident 'b'
-    LitInt '10'
+test 'comparison binds tighter than and', fn:
+  expect ast fn:
+    a > 0 and b < 10
+  | equals_ast
+    InfixOp 'and'
+      InfixOp '>'
+        Ident 'a'
+        LitInt '0'
+      InfixOp '<'
+        Ident 'b'
+        LitInt '10'
 
 
---- --- ---
+---
 bitwise
---- --- ---
+---
 
----
-bitwise not
----
-~a
-# expect
-UnaryOp '~'
-  Ident 'a'
+test 'bitwise not', fn:
+  expect ast fn:
+    ~a
+  | equals_ast
+    UnaryOp '~'
+      Ident 'a'
 
----
-bitwise and
----
-a & b
-# expect
-InfixOp '&'
-  Ident 'a'
-  Ident 'b'
+test 'bitwise and', fn:
+  expect ast fn:
+    a & b
+  | equals_ast
+    InfixOp '&'
+      Ident 'a'
+      Ident 'b'
 
----
-bitwise xor
----
-a ^ b
-# expect
-InfixOp '^'
-  Ident 'a'
-  Ident 'b'
+test 'bitwise xor', fn:
+  expect ast fn:
+    a ^ b
+  | equals_ast
+    InfixOp '^'
+      Ident 'a'
+      Ident 'b'
 
----
-shift right
----
-a >> b
-# expect
-InfixOp '>>'
-  Ident 'a'
-  Ident 'b'
+test 'shift right', fn:
+  expect ast fn:
+    a >> b
+  | equals_ast
+    InfixOp '>>'
+      Ident 'a'
+      Ident 'b'
 
----
-shift left
----
-a << b
-# expect
-InfixOp '<<'
-  Ident 'a'
-  Ident 'b'
+test 'shift left', fn:
+  expect ast fn:
+    a << b
+  | equals_ast
+    InfixOp '<<'
+      Ident 'a'
+      Ident 'b'
 
----
-rotate right
----
-a >>> b
-# expect
-InfixOp '>>>'
-  Ident 'a'
-  Ident 'b'
+test 'rotate right', fn:
+  expect ast fn:
+    a >>> b
+  | equals_ast
+    InfixOp '>>>'
+      Ident 'a'
+      Ident 'b'
 
----
-rotate left
----
-a <<< b
-# expect
-InfixOp '<<<'
-  Ident 'a'
-  Ident 'b'
+test 'rotate left', fn:
+  expect ast fn:
+    a <<< b
+  | equals_ast
+    InfixOp '<<<'
+      Ident 'a'
+      Ident 'b'
 
 
---- --- ---
+---
 member access
---- --- ---
+---
 
----
-member by name
----
-foo.bar
-# expect
-Member
-  Ident 'foo'
-  Ident 'bar'
-
----
-chained member access
----
-foo.bar.spam
-# expect
-Member
-  Member
-    Ident 'foo'
-    Ident 'bar'
-  Ident 'spam'
-
----
-member by hyphenated name
----
-foo.bar-spam
-# expect
-Member
-  Ident 'foo'
-  Ident 'bar-spam'
-
----
-member by expression
----
-foo.(expr)
-# expect
-Member
-  Ident 'foo'
-  Group
-    Ident 'expr'
-
----
-sequence index
----
-[1, 2, 3].(0)
-# expect
-Member
-  LitSeq
-    LitInt '1'
-    LitInt '2'
-    LitInt '3'
-  Group
-    LitInt '0'
-
----
-sequence range slice
----
-[0, 1, 2, 3, 4].(2...3)
-# expect
-Member
-  LitSeq
-    LitInt '0'
-    LitInt '1'
-    LitInt '2'
-    LitInt '3'
-    LitInt '4'
-  Group
-    Range '...'
-      LitInt '2'
-      LitInt '3'
-
----
-ident range
----
-start..end
-# expect
-Range '..'
-  Ident 'start'
-  Ident 'end'
-
----
-member access on record literal
----
-{foo: 123}.foo
-# expect
-Member
-  LitRec
-    Arm
+test 'member by name', fn:
+  expect ast fn:
+    foo.bar
+  | equals_ast
+    Member
       Ident 'foo'
-      LitInt '123'
-  Ident 'foo'
+      Ident 'bar'
 
----
-member by string key
----
-{'ni nu': 123}.('ni nu')
-# expect
-Member
-  LitRec
-    Arm
-      LitStr 'ni nu'
-      LitInt '123'
-  Group
-    LitStr 'ni nu'
+test 'chained member access', fn:
+  expect ast fn:
+    foo.bar.spam
+  | equals_ast
+    Member
+      Member
+        Ident 'foo'
+        Ident 'bar'
+      Ident 'spam'
 
----
-member by sequence key
----
-[0, 1, 2, 3, 4].([2, 3])
-# expect
-Member
-  LitSeq
-    LitInt '0'
-    LitInt '1'
-    LitInt '2'
-    LitInt '3'
-    LitInt '4'
-  Group
-    LitSeq
-      LitInt '2'
-      LitInt '3'
+test 'member by hyphenated name', fn:
+  expect ast fn:
+    foo.bar-spam
+  | equals_ast
+    Member
+      Ident 'foo'
+      Ident 'bar-spam'
 
+test 'member by expression', fn:
+  expect ast fn:
+    foo.(expr)
+  | equals_ast
+    Member
+      Ident 'foo'
+      Group
+        Ident 'expr'
 
+test 'sequence index', fn:
+  expect ast fn:
+    [1, 2, 3].(0)
+  | equals_ast
+    Member
+      LitSeq
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+      Group
+        LitInt '0'
+
+test 'sequence range slice', fn:
+  expect ast fn:
+    [0, 1, 2, 3, 4].(2...3)
+  | equals_ast
+    Member
+      LitSeq
+        LitInt '0'
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+        LitInt '4'
+      Group
+        Range '...'
+          LitInt '2'
+          LitInt '3'
+
+test 'ident range', fn:
+  expect ast fn:
+    start..end
+  | equals_ast
+    Range '..'
+      Ident 'start'
+      Ident 'end'
+
+test 'member access on record literal', fn:
+  expect ast fn:
+    {foo: 123}.foo
+  | equals_ast
+    Member
+      LitRec
+        Arm
+          Ident 'foo'
+          LitInt '123'
+      Ident 'foo'
+
+test 'member by string key', fn:
+  expect ast fn:
+    {'ni nu': 123}.('ni nu')
+  | equals_ast
+    Member
+      LitRec
+        Arm
+          LitStr 'ni nu'
+          LitInt '123'
+      Group
+        LitStr 'ni nu'
+
+test 'member by sequence key', fn:
+  expect ast fn:
+    [0, 1, 2, 3, 4].([2, 3])
+  | equals_ast
+    Member
+      LitSeq
+        LitInt '0'
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+        LitInt '4'
+      Group
+        LitSeq
+          LitInt '2'
+          LitInt '3'
