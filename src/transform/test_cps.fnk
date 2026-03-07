@@ -1126,41 +1126,6 @@ test 'forward ref', fn:
           apply ·foo, 1, state, ƒ_cont
 
 
-test 'mutual recursion simple', fn:
-  expect cps_expr fn:
-    foo = fn bar:
-      spam bar
-
-    spam = fn ham:
-      foo ham
-
-  | equals_fink fn:
-    closure module_scope_env,
-      fn ·bar, foo_scope_env, state, ƒ_cont:
-        # load walks to foo's parent scope to resolve 'spam'
-        load foo_scope_env, id'spam', fn ·spam, _:
-          apply ·spam, ·bar, state, ƒ_cont
-
-      fn ·foo, module_scope_env:
-        # store cannot mutate the parent scope, but it can persist pending
-        # store requests for the module scope and all child envs would be
-        # able still be able to access them.
-        store module_scope_env, id'foo', ·foo, fn _, module_scope_env:
-          closure module_scope_env,
-            fn ·ham, spam_scope_env, state, ƒ_cont:
-              load spam_scope_env, id'foo', fn ·foo, _:
-                apply ·foo, ·ham, state, ƒ_cont
-            fn ·spam, module_scope_env:
-              store module_scope_env, id'spam', ·spam, fn ·spam, _:
-                ƒ_cont ·spam, state
-      # If we treat the module env conceptually as a future
-      # at this time the futures would be resolved by receving all store requests
-      # and loads in cloasures would work with the resolved envs
-      # This is purely conceptual and only for test display purposes i.e. runnable fink coode
-      # because the compiler itself just uses a mutable structs we don't implement it like above
-      # under the hood
-
-
 test 'mutual recursion', fn:
   expect cps_expr fn:
     is_even = fn n:

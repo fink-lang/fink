@@ -1,5 +1,7 @@
 // CpsExpr → Node → Fink source pretty-printer
 
+
+
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
 use super::cps::{CpsExpr, CpsFn, CpsKey, CpsParam, CpsVal};
@@ -147,16 +149,6 @@ pub fn to_node(expr: &CpsExpr) -> Node<'static> {
         fn_to_node(func),
         fn_to_node(cont),
       ])
-    }
-
-    CpsExpr::Module { imports, env, state, cont, body } => {
-      // module fn {imports…}, env, state, ƒ_cont: body
-      // Apply(module, [Fn(Patterns([LitRec(imports), env, state, cont]), body)])
-      let mut ps = vec![node(NodeKind::LitRec(imports.iter().map(|s| ident(s)).collect()))];
-      ps.push(ident(env));
-      ps.push(ident(state));
-      ps.push(ident(cont));
-      apply(ident("module"), vec![fn_node(patterns(ps), vec![to_node(body)])])
     }
 
     CpsExpr::Scope { env, inner, cont } => {

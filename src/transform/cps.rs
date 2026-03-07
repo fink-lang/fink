@@ -100,15 +100,6 @@ pub enum CpsExpr<'src> {
     cont: CpsFn<'src>,
   },
 
-  /// module fn {imports…}, env, state, ƒ_cont: body
-  Module {
-    imports: Vec<&'src str>,
-    env: &'src str,
-    state: &'src str,
-    cont: &'src str,
-    body: Box<CpsExpr<'src>>,
-  },
-
   // ---- scope ----
 
   /// scope env, fn env, ƒ_ok: body, fn result, state: ƒ_cont_body
