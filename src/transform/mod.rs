@@ -1,5 +1,6 @@
 pub mod cps;
 pub mod cps_fmt;
+pub mod cps_pass;
 pub mod partial;
 
 use crate::ast::{CmpPart, Node, NodeKind};
