@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use crate::ast::{CmpPart, Node, NodeKind};
+use crate::lexer::Loc;
 
 // ---------------------------------------------------------------------------
 // CPS IR types
@@ -39,6 +40,20 @@ pub enum CpsVal<'src> {
   Fn(CpsFn<'src>),
   /// Wildcard (ignored binding): _
   Wildcard,
+}
+
+/// A CPS node: a CpsExpr with a source location.
+/// Mirrors the AST's `Node`/`NodeKind` split for consistency.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CpsNode<'src> {
+  pub loc: Loc,
+  pub expr: CpsExpr<'src>,
+}
+
+impl<'src> CpsNode<'src> {
+  pub fn new(expr: CpsExpr<'src>, loc: Loc) -> Self {
+    Self { loc, expr }
+  }
 }
 
 /// A continuation function node used both as values and in closure/module bodies.
@@ -290,6 +305,22 @@ pub enum CpsKey<'src> {
 }
 
 // ---------------------------------------------------------------------------
+// Loc helpers
+// ---------------------------------------------------------------------------
+
+/// Placeholder loc for synthetic CPS nodes until real locs are threaded through.
+fn dummy_loc() -> Loc {
+  use crate::lexer::Pos;
+  let p = Pos { idx: 0, line: 1, col: 0 };
+  Loc { start: p, end: p }
+}
+
+/// Wrap a CpsExpr in a CpsNode with a dummy loc.
+fn dummy_node<'src>(expr: CpsExpr<'src>) -> CpsNode<'src> {
+  CpsNode::new(expr, dummy_loc())
+}
+
+// ---------------------------------------------------------------------------
 // Compiler — owns the generated-name arena
 // ---------------------------------------------------------------------------
 
@@ -373,20 +404,22 @@ fn is_word_op(op: &str) -> bool {
 }
 
 // TODO move into test.
-pub fn transform(node: Node<'_>) -> CpsExpr<'_> {
+pub fn transform(node: Node<'_>) -> CpsNode<'_> {
+  let loc = node.loc;
   let mut cps = Cps::new();
   // Route through fn_chain_cps: unwrap transparent root Fn, or wrap single node in slice.
-  match node.kind {
+  let expr = match node.kind {
     NodeKind::Fn { ref params, ref body } => {
       if let NodeKind::Patterns(ps) = &params.kind {
         if ps.is_empty() {
-          return cps.fn_chain_cps(body);
+          return CpsNode::new(cps.fn_chain_cps(body), loc);
         }
       }
       cps.fn_chain_cps(&[node])
     }
     _ => cps.fn_chain_cps(&[node]),
-  }
+  };
+  CpsNode::new(expr, loc)
 }
 
 // An arg classification for apply_cps.

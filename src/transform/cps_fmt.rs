@@ -4,14 +4,14 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{CpsExpr, CpsFn, CpsKey, CpsParam, CpsVal};
+use super::cps::{CpsExpr, CpsFn, CpsKey, CpsNode, CpsParam, CpsVal};
 
-pub fn fmt(expr: &CpsExpr<'_>) -> String {
-  ast::fmt::fmt(&to_node(expr))
+pub fn fmt(cps_node: &CpsNode<'_>) -> String {
+  ast::fmt::fmt(&to_node(&cps_node.expr))
 }
 
 // ---------------------------------------------------------------------------
-// dummy loc — CPS nodes have no source location
+// dummy loc — used for reconstructed AST nodes in the formatter
 // ---------------------------------------------------------------------------
 
 fn loc() -> Loc {
