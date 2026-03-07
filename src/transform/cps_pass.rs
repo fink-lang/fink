@@ -403,7 +403,7 @@ pub trait CpsPass<'src> {
 
   fn transform_fn(&mut self, f: CpsFn<'src>) -> Result<CpsFn<'src>, CpsPassError> {
     let body = self.transform_expr(*f.body)?;
-    Ok(CpsFn { params: f.params, body: Box::new(body) })
+    Ok(CpsFn { params: f.params, body: Box::new(body), captures: f.captures })
   }
 
   /// Recurse into inline `CpsVal::Fn` continuations; leave other vals unchanged.
@@ -459,6 +459,7 @@ mod tests {
       cont: CpsFn {
         params: vec![CpsParam::Ident("x"), CpsParam::Ident("env")],
         body: Box::new(inner),
+        captures: vec![],
       },
     }
   }
@@ -493,6 +494,7 @@ mod tests {
       cont: CpsFn {
         params: vec![CpsParam::Ident("·foo"), CpsParam::Ident("env")],
         body: Box::new(tail("ƒ_cont")),
+        captures: vec![],
       },
     };
     let result = Identity.transform_expr(expr.clone()).unwrap();
@@ -507,10 +509,12 @@ mod tests {
         params: vec![CpsParam::Ident("·x"), CpsParam::Ident("env"),
                      CpsParam::Ident("state"), CpsParam::Ident("ƒ_cont")],
         body: Box::new(tail("ƒ_cont")),
+        captures: vec![],
       },
       cont: CpsFn {
         params: vec![CpsParam::Ident("·f"), CpsParam::Wildcard],
         body: Box::new(tail("ƒ_cont")),
+        captures: vec![],
       },
     };
     let result = Identity.transform_expr(expr.clone()).unwrap();

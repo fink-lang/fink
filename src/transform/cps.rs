@@ -63,6 +63,7 @@ pub struct CpsFn<'src> {
   pub params: Vec<CpsParam<'src>>,
   /// The body — a single chained CPS expression.
   pub body: Box<CpsExpr<'src>>,
+  pub captures: Vec<&'src str>,
 }
 
 /// A parameter in a `fn` — plain name or spread.
@@ -439,11 +440,12 @@ impl Cps {
         let store_cont = CpsFn {
           params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
           body: Box::new(rest),
+          captures: vec![]
         };
         if let Some(val) = self.atom_val(rhs) {
           // Literal rhs: direct store; substitute v_result placeholder with ·name
           let rest_subst = self.result_of(local, *store_cont.body);
-          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst), captures: vec![] };
           CpsExpr::Store { env: "env", key: name, val: Box::new(val), cont: store_cont2 }
         } else if let NodeKind::Fn { params, body } = &rhs.kind {
           // Fn rhs: use closure outer cont = fn ·name, chld_env: store chld_env ...
@@ -456,7 +458,7 @@ impl Cps {
               if ps.is_empty() {
                 // Block group rhs: `spam = (block)` → scope, cont stores local
                 let rest_subst = self.result_of(local, *store_cont.body);
-                let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+                let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst), captures: vec![] };
                 let store_expr = CpsExpr::Store {
                   env: "env",
                   key: name,
@@ -471,10 +473,12 @@ impl Cps {
                 let inner_fn = CpsFn {
                   params: vec![CpsParam::Ident("env"), CpsParam::Ident("ƒ_ok")],
                   body: Box::new(inner_body),
+                  captures: vec![]
                 };
                 let cont_fn = CpsFn {
                   params: vec![CpsParam::Ident(local), CpsParam::Ident("state")],
                   body: Box::new(store_expr),
+                  captures: vec![]
                 };
                 return CpsExpr::Scope { env: "env", inner: inner_fn, cont: cont_fn };
               }
@@ -482,7 +486,7 @@ impl Cps {
           }
           // Non-block group: fall through to complex rhs
           let rest_subst = self.result_of(local, *store_cont.body);
-          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst), captures: vec![]};
           let store_expr = CpsExpr::Store {
             env: "env",
             key: name,
@@ -494,7 +498,7 @@ impl Cps {
         } else if let NodeKind::Try(inner) = &rhs.kind {
           // Try rhs: ok_cont param is `local` directly, then store and continue.
           let rest_subst = self.result_of(local, *store_cont.body);
-          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst), captures: vec![] };
           let store_expr = CpsExpr::Store {
             env: "env",
             key: name,
@@ -508,7 +512,7 @@ impl Cps {
             let inner_local: &'static str = self.alloc(format!("·{}", inner_name));
             // Build: store env, id'name', ·inner_local, fn ·name, env: rest
             let rest_subst = self.result_of(local, *store_cont.body);
-            let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+            let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst), captures: vec![] };
             let outer_store = CpsExpr::Store {
               env: "env",
               key: name,
@@ -528,7 +532,7 @@ impl Cps {
           // Complex rhs: evaluate rhs with result name = ·name, then store.
           // The store uses ·name as the value.
           let rest_subst = self.result_of(local, *store_cont.body);
-          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst) };
+          let store_cont2 = CpsFn { params: store_cont.params, body: Box::new(rest_subst), captures: vec![] };
           let store_expr = CpsExpr::Store {
             env: "env",
             key: name,
@@ -722,6 +726,7 @@ impl Cps {
           CpsParam::Ident("ƒ_ok"),
         ],
         body: Box::new(arm_body),
+        captures: vec![]
       };
       CpsExpr::MatchBind {
         val: Box::new(CpsVal::Ident(rest_local)),
@@ -740,11 +745,12 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
           body: Box::new(body),
+          captures: vec![]
         },
       }
     });
 
-    CpsFn { params: closure_params, body: Box::new(closure_body) }
+    CpsFn { params: closure_params, body: Box::new(closure_body), captures: vec![] }
   }
 
   /// Transform a bare `fn params: body` expression → Closure with anonymous outer cont.
@@ -760,6 +766,7 @@ impl Cps {
     let outer_cont = CpsFn {
       params: vec![CpsParam::Ident(fn_val), CpsParam::Wildcard],
       body: Box::new(cont_body),
+      captures: vec![]
     };
     CpsExpr::Closure { env: "env", func, cont: outer_cont }
   }
@@ -786,8 +793,10 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
           body: Box::new(after_store),
+          captures: vec![]
         },
       }),
+      captures: vec![]
     };
     CpsExpr::Closure { env: "env", func, cont: outer_cont }
   }
@@ -829,6 +838,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
             body: Box::new(body),
+            captures: vec![]
           },
         }
       }
@@ -860,6 +870,7 @@ impl Cps {
                 cont: CpsFn {
                   params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
                   body: Box::new(inner),
+                  captures: vec![]
                 },
               }
             }
@@ -872,6 +883,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
             body: Box::new(with_arg_loads),
+            captures: vec![]
           },
         }
       }
@@ -907,6 +919,7 @@ impl Cps {
                 cont: CpsFn {
                   params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
                   body: Box::new(inner),
+                  captures: vec![]
                 },
               }
             }
@@ -925,6 +938,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
             body: Box::new(with_complex),
+            captures: vec![]
           },
         }
       }
@@ -939,6 +953,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(op_dot), CpsParam::Ident("env")],
             body: Box::new(inner),
+            captures: vec![]
           },
         }
       }
@@ -970,6 +985,7 @@ impl Cps {
         let cont_fn = CpsFn {
           params: vec![CpsParam::Ident("v_range"), CpsParam::Ident("state")],
           body: Box::new(k_sub),
+          captures: vec![]
         };
         let range_expr = if is_excl {
           CpsExpr::RangeExcl { start: Box::new(start_val), end: Box::new(end_val), state: "state", cont: cont_fn }
@@ -980,14 +996,14 @@ impl Cps {
         let with_end = match &end_arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key: key.clone(),
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(range_expr) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(range_expr), captures: vec![] },
           },
           _ => range_expr,
         };
         match &start_arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key: key.clone(),
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(with_end) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(with_end), captures: vec![] },
           },
           _ => with_end,
         }
@@ -1054,6 +1070,7 @@ impl Cps {
       let store_cont = CpsFn {
         params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
         body: Box::new(k_subst),
+        captures: vec![]
       };
       if let Some(val) = self.atom_val(rhs) {
         CpsExpr::Store { env: "env", key: name, val: Box::new(val), cont: store_cont }
@@ -1109,6 +1126,7 @@ impl Cps {
         CpsParam::Ident("ƒ_ok"),
       ],
       body: Box::new(arm_body),
+      captures: vec![]
     };
     // Evaluate rhs to get the value
     if let Some(val) = self.atom_val(rhs) {
@@ -1129,6 +1147,7 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident(loaded), CpsParam::Ident("env")],
           body: Box::new(match_expr),
+          captures: vec![]
         },
       }
     } else {
@@ -1164,6 +1183,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
             body: Box::new(ok_body),
+            captures: vec![]
           },
         }
       }
@@ -1206,11 +1226,13 @@ impl Cps {
       cont: CpsFn {
         params: vec![CpsParam::Ident(lhs_local), CpsParam::Ident("env")],
         body: Box::new(ok_body),
+        captures: vec![]
       },
     };
     let then_cont = CpsFn {
       params: vec![CpsParam::Ident("state")],
       body: Box::new(store_and_ok),
+      captures: vec![]
     };
     let else_cont = CpsFn {
       params: vec![CpsParam::Ident("state")],
@@ -1218,6 +1240,7 @@ impl Cps {
         cont: Box::new(CpsVal::Ident("ƒ_err")),
         args: vec![CpsVal::Ident("state")],
       }),
+      captures: vec![]
     };
     let if_expr = CpsExpr::If {
       cond: Box::new(CpsVal::Ident("v_result")),
@@ -1231,6 +1254,7 @@ impl Cps {
       cont: Box::new(CpsVal::Fn(CpsFn {
         params: vec![CpsParam::Ident("v_result"), CpsParam::Ident("state")],
         body: Box::new(if_expr),
+        captures: vec![]
       })),
     };
     CpsExpr::Load {
@@ -1239,6 +1263,7 @@ impl Cps {
       cont: CpsFn {
         params: vec![CpsParam::Ident(op_local), CpsParam::Ident("env")],
         body: Box::new(apply),
+        captures: vec![]
       },
     }
   }
@@ -1250,6 +1275,7 @@ impl Cps {
     let then_cont = CpsFn {
       params: vec![CpsParam::Ident("state")],
       body: Box::new(ok_body),
+      captures: vec![]
     };
     let else_cont = CpsFn {
       params: vec![CpsParam::Ident("state")],
@@ -1257,6 +1283,7 @@ impl Cps {
         cont: Box::new(CpsVal::Ident("ƒ_err")),
         args: vec![CpsVal::Ident("state")],
       }),
+      captures: vec![]
     };
     let if_expr = CpsExpr::If {
       cond: Box::new(CpsVal::Ident("v_result")),
@@ -1270,6 +1297,7 @@ impl Cps {
       cont: Box::new(CpsVal::Fn(CpsFn {
         params: vec![CpsParam::Ident("v_result"), CpsParam::Ident("state")],
         body: Box::new(if_expr),
+        captures: vec![]
       })),
     };
     CpsExpr::Load {
@@ -1278,6 +1306,7 @@ impl Cps {
       cont: CpsFn {
         params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
         body: Box::new(apply),
+        captures: vec![]
       },
     }
   }
@@ -1331,6 +1360,7 @@ impl Cps {
           cont: Box::new(CpsVal::Ident("ƒ_err")),
           args: vec![CpsVal::Ident("state")],
         }),
+        captures: vec![]
       };
       body = CpsExpr::MatchPopAt {
         matcher: Box::new(CpsVal::Ident("m")),
@@ -1339,6 +1369,7 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident("m"), CpsParam::Ident(name), CpsParam::Ident("state")],
           body: Box::new(body),
+          captures: vec![]
         },
         fail: fail_cont,
       };
@@ -1352,6 +1383,7 @@ impl Cps {
           cont: Box::new(CpsVal::Ident("ƒ_err")),
           args: vec![CpsVal::Ident("state")],
         }),
+        captures: vec![]
       };
       body = CpsExpr::MatchLen {
         matcher: Box::new(CpsVal::Ident("m")),
@@ -1360,6 +1392,7 @@ impl Cps {
         ok: CpsFn {
           params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
           body: Box::new(body),
+          captures: vec![]
         },
         fail: fail_cont,
       };
@@ -1372,6 +1405,7 @@ impl Cps {
         cont: Box::new(CpsVal::Ident("ƒ_err")),
         args: vec![CpsVal::Ident("state")],
       }),
+      captures: vec![]
     };
     CpsExpr::SeqMatcher {
       val: Box::new(CpsVal::Ident(val_name)),
@@ -1379,6 +1413,7 @@ impl Cps {
       cont: CpsFn {
         params: vec![CpsParam::Ident("m"), CpsParam::Ident("ƒ_err"), CpsParam::Ident("state")],
         body: Box::new(body),
+        captures: vec![]
       },
       fail: fail_cont,
     }
@@ -1431,6 +1466,7 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
           body: Box::new(stores_body),
+          captures: vec![]
         },
       };
     }
@@ -1460,10 +1496,12 @@ impl Cps {
               cont: Box::new(CpsVal::Ident("ƒ_err")),
               args: vec![CpsVal::Ident("state")],
             }),
+            captures: vec![]
           };
           let empty_cont = CpsFn {
             params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
             body: Box::new(ok_body),
+            captures: vec![]
           };
           CpsExpr::MatchDone {
             matcher: Box::new(CpsVal::Ident("m")),
@@ -1482,6 +1520,7 @@ impl Cps {
               cont: CpsFn {
                 params: vec![CpsParam::Ident("m"), CpsParam::Ident(rest_local), CpsParam::Ident("state")],
                 body: Box::new(ok_body),
+                captures: vec![]
               },
             }
           }
@@ -1490,6 +1529,7 @@ impl Cps {
             let ok_cont = CpsFn {
               params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
               body: Box::new(ok_body),
+              captures: vec![]
             };
             let fail_cont = CpsFn {
               params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
@@ -1497,6 +1537,7 @@ impl Cps {
                 cont: Box::new(CpsVal::Ident("ƒ_err")),
                 args: vec![CpsVal::Ident("state")],
               }),
+              captures: vec![]
             };
             CpsExpr::MatchLen {
               matcher: Box::new(CpsVal::Ident("m")),
@@ -1533,6 +1574,7 @@ impl Cps {
         cont: Box::new(CpsVal::Ident("ƒ_err")),
         args: vec![CpsVal::Ident("state")],
       }),
+      captures: vec![]
     };
     CpsExpr::RecMatcher {
       val: Box::new(CpsVal::Ident(val_name)),
@@ -1540,6 +1582,7 @@ impl Cps {
       cont: CpsFn {
         params: vec![CpsParam::Ident("m"), CpsParam::Ident("ƒ_err"), CpsParam::Ident("state")],
         body: Box::new(inner),
+        captures: vec![]
       },
       fail: fail_cont,
     }
@@ -1593,6 +1636,7 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
           body: Box::new(stores_body),
+          captures: vec![]
         },
       };
     }
@@ -1605,6 +1649,7 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident(spec.local), CpsParam::Ident("env")],
           body: Box::new(stores_body),
+          captures: vec![]
         },
       };
     }
@@ -1621,6 +1666,7 @@ impl Cps {
           cont: Box::new(CpsVal::Ident("ƒ_err")),
           args: vec![CpsVal::Ident("state")],
         }),
+        captures: vec![]
       };
       body = CpsExpr::MatchPopField {
         matcher: Box::new(CpsVal::Ident("m")),
@@ -1629,6 +1675,7 @@ impl Cps {
         cont: CpsFn {
           params: vec![CpsParam::Ident("m"), CpsParam::Ident(spec.local), CpsParam::Ident("state")],
           body: Box::new(body),
+          captures: vec![]
         },
         fail: fail_cont,
       };
@@ -1649,10 +1696,12 @@ impl Cps {
               cont: Box::new(CpsVal::Ident("ƒ_err")),
               args: vec![CpsVal::Ident("state")],
             }),
+            captures: vec![]
           };
           let empty_cont = CpsFn {
             params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
             body: Box::new(ok_body),
+            captures: vec![]
           };
           CpsExpr::MatchDone {
             matcher: Box::new(CpsVal::Ident("m")),
@@ -1671,6 +1720,7 @@ impl Cps {
               cont: CpsFn {
                 params: vec![CpsParam::Ident("m"), CpsParam::Ident(local), CpsParam::Ident("state")],
                 body: Box::new(ok_body),
+                captures: vec![]
               },
             }
           }
@@ -1682,10 +1732,12 @@ impl Cps {
                 cont: Box::new(CpsVal::Ident("ƒ_err")),
                 args: vec![CpsVal::Ident("state")],
               }),
+              captures: vec![]
             };
             let empty_cont = CpsFn {
               params: vec![CpsParam::Ident("m"), CpsParam::Ident("state")],
               body: Box::new(ok_body),
+              captures: vec![]
             };
             CpsExpr::MatchDone {
               matcher: Box::new(CpsVal::Ident("m")),
@@ -1735,6 +1787,7 @@ impl Cps {
             cont: CpsFn {
               params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
               body: Box::new(inner),
+              captures: vec![]
             },
           }
         }
@@ -1751,11 +1804,13 @@ impl Cps {
         message: Box::new(CpsVal::Str("no match".into())),
         state: "state",
       }),
+      captures: vec![]
     };
     let cont_body = self.result_of("match_result", k);
     let cont = CpsFn {
       params: vec![CpsParam::Ident("match_result"), CpsParam::Ident("state")],
       body: Box::new(cont_body),
+      captures: vec![]
     };
     (fail, cont)
   }
@@ -1807,7 +1862,7 @@ impl Cps {
 
     CpsExpr::MatchBranch {
       env: arm_env,
-      arm: CpsFn { params: arm_params, body: Box::new(arm_body) },
+      arm: CpsFn { params: arm_params, body: Box::new(arm_body), captures: vec![] },
     }
   }
 
@@ -1888,6 +1943,7 @@ impl Cps {
             then_cont: CpsFn {
               params: vec![CpsParam::Ident("state")],
               body: Box::new(body),
+              captures: vec![]
             },
             else_cont: CpsFn {
               params: vec![CpsParam::Ident("state")],
@@ -1895,6 +1951,7 @@ impl Cps {
                 cont: Box::new(CpsVal::Ident("ƒ_err")),
                 args: vec![CpsVal::Ident("state")],
               }),
+              captures: vec![]
             },
           };
           body = CpsExpr::Apply {
@@ -1904,6 +1961,7 @@ impl Cps {
             cont: Box::new(CpsVal::Fn(CpsFn {
               params: vec![CpsParam::Ident(res_name), CpsParam::Ident("state")],
               body: Box::new(if_expr),
+              captures: vec![]
             })),
           };
         }
@@ -1913,6 +1971,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
             body: Box::new(body),
+            captures: vec![]
           },
         };
       }
@@ -1932,10 +1991,12 @@ impl Cps {
             cont: Box::new(CpsVal::Ident("ƒ_err")),
             args: vec![CpsVal::Ident("state")],
           }),
+          captures: vec![]
         };
         let ok_cont = CpsFn {
           params: vec![CpsParam::Ident(vs), CpsParam::Ident("state")],
           body: Box::new(ok_body),
+          captures: vec![]
         };
         CpsExpr::MatchDone {
           matcher: Box::new(CpsVal::Ident(vs)),
@@ -1950,6 +2011,7 @@ impl Cps {
           let ok_cont = CpsFn {
             params: vec![CpsParam::Ident(vs), CpsParam::Ident("state")],
             body: Box::new(ok_body),
+            captures: vec![]
           };
           let fail_cont = CpsFn {
             params: vec![CpsParam::Ident(vs), CpsParam::Ident("state")],
@@ -1957,6 +2019,7 @@ impl Cps {
               cont: Box::new(CpsVal::Ident("ƒ_err")),
               args: vec![CpsVal::Ident("state")],
             }),
+            captures: vec![]
           };
           CpsExpr::MatchLen {
             matcher: Box::new(CpsVal::Ident(vs)),
@@ -1980,11 +2043,13 @@ impl Cps {
         message: Box::new(CpsVal::Str("pattern mismatch".into())),
         state: "state",
       }),
+      captures: vec![]
     };
     let cont_body = self.result_of("match_result", k);
     let cont = CpsFn {
       params: vec![CpsParam::Ident("match_result"), CpsParam::Ident("state")],
       body: Box::new(cont_body),
+      captures: vec![]
     };
     (fail, cont)
   }
@@ -1997,11 +2062,13 @@ impl Cps {
         message: Box::new(CpsVal::Str("no match".into())),
         state: "state",
       }),
+      captures: vec![]
     };
     let cont_body = self.result_of("v_result", k);
     let cont = CpsFn {
       params: vec![CpsParam::Ident("v_result"), CpsParam::Ident("state")],
       body: Box::new(cont_body),
+      captures: vec![]
     };
     (fail, cont)
   }
@@ -2027,8 +2094,10 @@ impl Cps {
               cont: Box::new(CpsVal::Ident("ƒ_ok")),
               args: vec![CpsVal::Ident("env"), CpsVal::Ident("state")],
             }),
+            captures: vec![]
           },
         }),
+        captures: vec![]
       };
       CpsExpr::MatchBind { val: Box::new(val), state: "state", arm, fail, cont }
     } else {
@@ -2048,11 +2117,13 @@ impl Cps {
     let inner = CpsFn {
       params: vec![CpsParam::Ident("env"), CpsParam::Ident("ƒ_ok")],
       body: Box::new(inner_body),
+      captures: vec![]
     };
     let cont_body = self.result_of("v_block_result", k);
     let cont = CpsFn {
       params: vec![CpsParam::Ident("v_block_result"), CpsParam::Ident("state")],
       body: Box::new(cont_body),
+      captures: vec![]
     };
     CpsExpr::Scope { env: "env", inner, cont }
   }
@@ -2094,11 +2165,13 @@ impl Cps {
         cont: Box::new(CpsVal::Ident("ƒ_cont")),
         args: vec![CpsVal::Ident("e"), CpsVal::Ident("state")],
       }),
+      captures: vec![]
     };
     let k_body = self.result_of(ok_var, k);
     let ok_cont = CpsFn {
       params: vec![CpsParam::Ident(ok_var), CpsParam::Ident("state")],
       body: Box::new(k_body),
+      captures: vec![]
     };
     let err_expr = CpsExpr::Err {
       res: Box::new(CpsVal::Ident("res")),
@@ -2146,7 +2219,7 @@ impl Cps {
         let with_rhs = match rhs_arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(outer_apply) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(outer_apply), captures: vec![] },
           },
           _ => outer_apply,
         };
@@ -2165,7 +2238,7 @@ impl Cps {
         let with_rhs = match rhs_arg {
           ArgKind::Load { key, local: r_local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(r_local), CpsParam::Ident("env")], body: Box::new(apply) },
+            cont: CpsFn { params: vec![CpsParam::Ident(r_local), CpsParam::Ident("env")], body: Box::new(apply), captures: vec![] },
           },
           _ => apply,
         };
@@ -2175,6 +2248,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
             body: Box::new(with_rhs),
+            captures: vec![]
           },
         }
       }
@@ -2196,14 +2270,14 @@ impl Cps {
         let with_rhs = match rhs_arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(apply) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(apply), captures: vec![] },
           },
           _ => apply,
         };
         match lhs_arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(with_rhs) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(with_rhs), captures: vec![] },
           },
           ArgKind::Complex { node, result } => self.eval_node_named(node, result, with_rhs),
           _ => with_rhs,
@@ -2301,10 +2375,12 @@ impl Cps {
         then_cont: CpsFn {
           params: vec![CpsParam::Ident("state")],
           body: Box::new(body),
+          captures: vec![]
         },
         else_cont: CpsFn {
           params: vec![CpsParam::Ident("state")],
           body: Box::new(else_body),
+          captures: vec![]
         },
       };
       body = CpsExpr::Apply {
@@ -2314,6 +2390,7 @@ impl Cps {
         cont: Box::new(CpsVal::Fn(CpsFn {
           params: vec![CpsParam::Ident(v_tmp), CpsParam::Ident("state")],
           body: Box::new(if_expr),
+          captures: vec![]
         })),
       };
     }
@@ -2323,7 +2400,7 @@ impl Cps {
       match kind {
         ArgKind::Load { key, local } => CpsExpr::Load {
           env: "env", key,
-          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner) },
+          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner), captures: vec![] },
         },
         _ => inner,
       }
@@ -2336,6 +2413,7 @@ impl Cps {
       cont: CpsFn {
         params: vec![CpsParam::Ident(op_local_name), CpsParam::Ident("env")],
         body: Box::new(with_ident_loads),
+        captures: vec![]
       },
     }
   }
@@ -2370,6 +2448,7 @@ impl Cps {
       let cont_val = CpsVal::Fn(CpsFn {
         params: vec![CpsParam::Ident(tmp), CpsParam::Ident("state")],
         body: Box::new(next_k),
+        captures: vec![]
       });
       let apply = CpsExpr::Apply {
         func: Box::new(func_val),
@@ -2425,6 +2504,7 @@ impl Cps {
             cont: CpsFn {
               params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
               body: Box::new(inner),
+              captures: vec![]
             },
           }
         }
@@ -2583,6 +2663,7 @@ impl Cps {
     CpsVal::Fn(CpsFn {
       params: vec![param, CpsParam::Ident("state")],
       body: Box::new(k),
+      captures: vec![]
     })
   }
 
@@ -2617,6 +2698,7 @@ impl Cps {
           cont: CpsFn {
             params: vec![CpsParam::Ident(local), CpsParam::Ident("env")],
             body: Box::new(inner),
+            captures: vec![]
           },
         }
       }
@@ -2671,7 +2753,7 @@ impl Cps {
       match kind {
         ArgKind::Load { key, local } => CpsExpr::Load {
           env: "env", key: key.clone(),
-          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner) },
+          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner), captures: vec![] },
         },
         _ => inner,
       }
@@ -2714,7 +2796,7 @@ impl Cps {
       match kind {
         ArgKind::Load { key, local } => CpsExpr::Load {
           env: "env", key: key.clone(),
-          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner) },
+          cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(inner), captures: vec![] },
         },
         _ => inner,
       }
@@ -2747,7 +2829,7 @@ impl Cps {
     match base_arg {
       ArgKind::Load { key, local } => CpsExpr::Load {
         env: "env", key,
-        cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(chain) },
+        cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(chain), captures: vec![] },
       },
       _ => chain,
     }
@@ -2768,6 +2850,7 @@ impl Cps {
     let cont_fn = CpsFn {
       params: vec![CpsParam::Ident("v_seq"), CpsParam::Ident("state")],
       body: Box::new(inner_k),
+      captures: vec![]
     };
     match &head.kind {
       NodeKind::Spread(Some(inner)) => {
@@ -2777,7 +2860,7 @@ impl Cps {
         match arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(concat) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(concat), captures: vec![] },
           },
           _ => concat,
         }
@@ -2789,7 +2872,7 @@ impl Cps {
         match arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(append) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(append), captures: vec![] },
           },
           _ => append,
         }
@@ -2813,7 +2896,7 @@ impl Cps {
     match base_arg {
       ArgKind::Load { key, local } => CpsExpr::Load {
         env: "env", key,
-        cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(chain) },
+        cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(chain), captures: vec![] },
       },
       _ => chain,
     }
@@ -2833,14 +2916,14 @@ impl Cps {
     match &head.kind {
       NodeKind::Spread(Some(inner)) => {
         let inner_k = self.rec_chain_cps(rest, CpsVal::Ident("v_rec"), k);
-        let cont_fn = CpsFn { params: vec![CpsParam::Ident("v_rec"), CpsParam::Ident("state")], body: Box::new(inner_k) };
+        let cont_fn = CpsFn { params: vec![CpsParam::Ident("v_rec"), CpsParam::Ident("state")], body: Box::new(inner_k), captures: vec![] };
         let arg = self.classify_arg(inner);
         let other_val = match &arg { ArgKind::Val(v) => v.clone(), ArgKind::Load { local, .. } => CpsVal::Ident(local), _ => CpsVal::Str("?".into()) };
         let merge = CpsExpr::RecMerge { rec: Box::new(acc), other: Box::new(other_val), state: "state", cont: cont_fn };
         match arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(merge) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(merge), captures: vec![]},
           },
           _ => merge,
         }
@@ -2848,14 +2931,14 @@ impl Cps {
       NodeKind::Arm { lhs, body } if !lhs.is_empty() && !body.is_empty() => {
         let key_str: &'src str = match &lhs[0].kind { NodeKind::Ident(s) => s, _ => "" };
         let inner_k = self.rec_chain_cps(rest, CpsVal::Ident("v_rec"), k);
-        let cont_fn = CpsFn { params: vec![CpsParam::Ident("v_rec"), CpsParam::Ident("state")], body: Box::new(inner_k) };
+        let cont_fn = CpsFn { params: vec![CpsParam::Ident("v_rec"), CpsParam::Ident("state")], body: Box::new(inner_k), captures: vec![] };
         let arg = self.classify_arg(&body[0]);
         let val = match &arg { ArgKind::Val(v) => v.clone(), ArgKind::Load { local, .. } => CpsVal::Ident(local), _ => CpsVal::Str("?".into()) };
         let put = CpsExpr::RecPut { rec: Box::new(acc), key: key_str, val: Box::new(val), state: "state", cont: cont_fn };
         match arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(put) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(put), captures: vec![] },
           },
           _ => put,
         }
@@ -2863,14 +2946,18 @@ impl Cps {
       NodeKind::Ident(s) => {
         // Shorthand {foo} → rec_put acc, id'foo', ·foo, ...
         let inner_k = self.rec_chain_cps(rest, CpsVal::Ident("v_rec"), k);
-        let cont_fn = CpsFn { params: vec![CpsParam::Ident("v_rec"), CpsParam::Ident("state")], body: Box::new(inner_k) };
+        let cont_fn = CpsFn {
+          params: vec![CpsParam::Ident("v_rec"), CpsParam::Ident("state")],
+          body: Box::new(inner_k),
+          captures: vec![]
+        };
         let arg = self.classify_arg(head);
         let val = match &arg { ArgKind::Val(v) => v.clone(), ArgKind::Load { local, .. } => CpsVal::Ident(local), _ => CpsVal::Str("?".into()) };
         let put = CpsExpr::RecPut { rec: Box::new(acc), key: s, val: Box::new(val), state: "state", cont: cont_fn };
         match arg {
           ArgKind::Load { key, local } => CpsExpr::Load {
             env: "env", key,
-            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(put) },
+            cont: CpsFn { params: vec![CpsParam::Ident(local), CpsParam::Ident("env")], body: Box::new(put), captures: vec![] },
           },
           _ => put,
         }
