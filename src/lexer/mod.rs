@@ -53,7 +53,7 @@ fn escape_src(s: &str) -> String {
 
 impl std::fmt::Display for Pos {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "({}, {}, {})", self.idx, self.line, self.col)
+    write!(f, "[{}, {}, {}]", self.idx, self.line, self.col)
   }
 }
 
@@ -569,6 +569,13 @@ mod tests {
   use test_macros::test_template;
   use super::tokenize_with_seps;
 
+  fn dedent(s: &str) -> String {
+    s.lines()
+      .map(|line| line.strip_prefix("    ").unwrap_or(line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  }
+
   fn tokenize_debug(src: &str) -> String {
     let default_ops: &[&[u8]] = &[
       b"+", b"-", b"*", b"/", b"%", b"^",
@@ -577,70 +584,23 @@ mod tests {
     ];
     let mut lexer = tokenize_with_seps(src, default_ops);
     let mut out = String::new();
-    // block_depth tracks BlockStart/BlockEnd nesting for their own indentation
-    let mut block_depth: usize = 0;
-    // bracket_depth tracks BracketOpen/Close and Str* nesting within a block level
-    let mut bracket_depth: usize = 0;
-
     loop {
       let tok = lexer.next_token();
-      if tok.kind == super::TokenKind::EOF {
-        break;
-      }
-      use super::TokenKind::*;
-      let depth = block_depth + bracket_depth;
-      let indent = "  ".repeat(depth);
-      match &tok.kind {
-        BlockStart => {
-          if !out.is_empty() {
-            out.push('\n');
-          }
-          out.push_str(&format!("{indent}{tok}"));
-          block_depth += 1;
-        }
-        BlockEnd => {
-          block_depth = block_depth.saturating_sub(1);
-          let indent = "  ".repeat(block_depth + bracket_depth);
-          if !out.is_empty() {
-            out.push('\n');
-          }
-          out.push_str(&format!("{indent}{tok}"));
-        }
-        BracketOpen | StrStart | StrExprStart => {
-          if !out.is_empty() {
-            out.push('\n');
-          }
-          out.push_str(&format!("{indent}{tok}"));
-          bracket_depth += 1;
-        }
-        BracketClose | StrEnd | StrExprEnd => {
-          bracket_depth = bracket_depth.saturating_sub(1);
-          let indent = "  ".repeat(block_depth + bracket_depth);
-          if !out.is_empty() {
-            out.push('\n');
-          }
-          out.push_str(&format!("{indent}{tok}"));
-        }
-        _ => {
-          if !out.is_empty() {
-            out.push('\n');
-          }
-          out.push_str(&format!("{indent}{tok}"));
-        }
-      }
+      if tok.kind == super::TokenKind::EOF { break; }
+      if !out.is_empty() { out.push('\n'); }
+      out.push_str(&format!("{tok}"));
     }
-
     out
   }
 
   #[test_template(
     "src/lexer", "./*.fnk",
-    r"(?ms)^---\n(?<name>.+?)\n.*?---\n(?<src>.+?)\n(^# expect.*?\n)(?<exp>^.+?((?=\n---\n)|\z))"
+    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect tokenize fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals seq\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
   )]
   fn test_lexer(src: &str, exp: &str, path: &str) {
     pretty_assertions::assert_eq!(
-      tokenize_debug(src),
-      exp.replace("\n\n", "\n").trim(),
+      tokenize_debug(&dedent(src).trim().to_string()),
+      dedent(exp).trim().to_string(),
       "{}",
       path
     );
