@@ -34,6 +34,9 @@ pub enum TokenKind {
   StrEnd,
   Comment,
   BlockComment,
+  CommentStart,
+  CommentText,
+  CommentEnd,
   EOF,
   Err,
 }
@@ -81,6 +84,9 @@ impl<'src> std::fmt::Display for Token<'src> {
       StrEnd => write!(f, "StrEnd \"{}\", loc {start}, {end}", escape_src(self.src)),
       Comment => write!(f, "Comment \"{}\", loc {start}, {end}", escape_src(self.src)),
       BlockComment => write!(f, "DocComment \"{}\", loc {start}, {end}", escape_src(self.src)),
+      CommentStart => write!(f, "CommentStart \"{}\", loc {start}, {end}", escape_src(self.src)),
+      CommentText => write!(f, "CommentText \"{}\", loc {start}, {end}", escape_src(self.src)),
+      CommentEnd => write!(f, "CommentEnd \"{}\", loc {start}, {end}", escape_src(self.src)),
       BlockStart => write!(f, "BlockStart loc {start}, {end}"),
       BlockCont => write!(f, "BlockCont loc {start}, {end}"),
       BlockEnd => write!(f, "BlockEnd loc {start}, {end}"),
@@ -331,6 +337,16 @@ impl<'src> Lexer<'src> {
     }
   }
 
+  // Push BlockEnd tokens into self.pending for each ind level that is deeper
+  // than `col`. Used after string/comment error recovery to drain the block stack
+  // before the Err token.
+  fn push_block_ends(&mut self, col: usize, at: Pos) {
+    while self.ind.len() > 1 && *self.ind.last().unwrap() > col {
+      self.ind.pop();
+      self.pending.push(Token { kind: TokenKind::BlockEnd, loc: Loc { start: at, end: at }, src: "" });
+    }
+  }
+
   // Scan all lines of the current string segment (from self.pos to closing `'`,
   // `${`, or EOF). Fills self.pending with StrText tokens (one per line, stripped),
   // plus an Err token at the end if an indent violation or EOF is hit. Advances
@@ -436,6 +452,7 @@ impl<'src> Lexer<'src> {
       let ep = raw[ei].start;
       self.pos = ep; // stop at the offending line, don't consume it
       self.mode.pop();
+      self.push_block_ends(ep.col as usize, ep);
       self.pending.push(Token { kind: TokenKind::Err, loc: Loc { start: ep, end: ep }, src: "unterminated string - unexpected dedent" });
     } else {
       self.pos = p; // advance past everything scanned
@@ -465,20 +482,113 @@ impl<'src> Lexer<'src> {
   }
 
   fn consume_block_comment(&mut self) -> Token<'src> {
-    let start = self.pos;
-    self.advance(3); // consume opening ---
-    // Consume until next `---` at line start (preceded only by spaces/newline)
-    loop {
-      match self.peek_bytes() {
-        [] => return self.make_token(TokenKind::Err, start),
-        [b'\n', ..] => self.advance_line(),
-        [b'-', b'-', b'-', ..] => {
-          self.advance(3);
-          return self.make_token(TokenKind::BlockComment, start);
+    let ind_floor = *self.ind.last().unwrap();
+    let bytes = self.src.as_bytes();
+
+    // Emit CommentStart for opening `---`
+    let comment_start = self.pos;
+    self.advance(3);
+    let start_tok = self.make_token(TokenKind::CommentStart, comment_start);
+
+    // Check for single-line `---content---`
+    // After advancing past opening ---, we may have content followed by ---
+    // We'll handle this in pass 1 by treating --- as a closing marker on the first segment.
+
+    // --- Pass 1: collect raw lines of comment content ---
+    struct RawLine {
+      start: Pos,
+      end: Pos,
+      only_spaces: bool,
+      is_closing_only: bool, // only_spaces && terminated by ---
+      indent: usize,
+    }
+
+    let mut raw: Vec<RawLine> = vec![];
+    let mut p = self.pos;
+    let mut eof_err: Option<Token<'src>> = None;
+
+    'outer: loop {
+      let seg_start = p;
+      let mut i = p.idx as usize;
+      let mut only_spaces = true;
+      let leading_spaces = bytes[i..].iter().take_while(|&&b| b == b' ').count();
+
+      loop {
+        if i >= bytes.len() {
+          let ep = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+          eof_err = Some(Token { kind: TokenKind::Err, loc: Loc { start: ep, end: ep }, src: "unterminated block comment" });
+          raw.push(RawLine { start: seg_start, end: ep, only_spaces, is_closing_only: false, indent: leading_spaces });
+          p = ep;
+          break 'outer;
         }
-        _ => self.advance(1),
+        match bytes[i] {
+          b'\n' => {
+            let end = Pos { idx: i as u32 + 1, line: p.line + 1, col: 0 };
+            raw.push(RawLine { start: seg_start, end, only_spaces, is_closing_only: false, indent: leading_spaces });
+            p = end;
+            break;
+          }
+          b'-' if i + 2 < bytes.len() && bytes[i + 1] == b'-' && bytes[i + 2] == b'-' => {
+            // Closing ---
+            let end = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+            raw.push(RawLine { start: seg_start, end, only_spaces, is_closing_only: only_spaces, indent: leading_spaces });
+            p = end;
+            break 'outer;
+          }
+          b' ' => { i += 1; }
+          _    => { only_spaces = false; i += 1; }
+        }
       }
     }
+
+    // --- Pass 2: compute strip_level, find first indent error ---
+    let mut strip_level: usize = 0;
+    let mut strip_set = false;
+    let mut error_at: Option<usize> = None;
+
+    for (idx, line) in raw.iter().enumerate() {
+      if idx == 0 { continue; }
+      if line.only_spaces && !line.is_closing_only { continue; } // blank continuation
+      let col = line.indent;
+      if col < ind_floor {
+        error_at = Some(idx);
+        break;
+      }
+      strip_level = if strip_set { strip_level.min(col) } else { col };
+      strip_set = true;
+    }
+
+    // --- Pass 3: emit CommentText tokens into self.pending ---
+    let emit_count = error_at.unwrap_or(raw.len());
+    for (idx, line) in raw.iter().take(emit_count).enumerate() {
+      if line.is_closing_only { continue; }
+      let skip = if idx == 0 || line.only_spaces { 0usize } else { strip_level.min(line.indent) };
+      let content_idx = line.start.idx + skip as u32;
+      let content_col = if idx == 0 { line.start.col } else { skip as u32 };
+      let start = Pos { idx: content_idx, line: line.start.line, col: content_col };
+      let src = &self.src[content_idx as usize..line.end.idx as usize];
+      if src.is_empty() { continue; }
+      self.pending.push(Token { kind: TokenKind::CommentText, loc: Loc { start, end: line.end }, src });
+    }
+
+    // Append closing token or error
+    if let Some(ei) = error_at {
+      let ep = raw[ei].start;
+      self.pos = ep;
+      self.push_block_ends(ep.col as usize, ep);
+      self.pending.push(Token { kind: TokenKind::Err, loc: Loc { start: ep, end: ep }, src: "unterminated block comment - unexpected dedent" });
+    } else if let Some(e) = eof_err {
+      self.pos = p;
+      self.pending.push(e);
+    } else {
+      // Emit CommentEnd for closing `---`
+      self.pos = p;
+      let close_start = self.pos;
+      self.advance(3);
+      self.pending.push(self.make_token(TokenKind::CommentEnd, close_start));
+    }
+
+    start_tok
   }
 
   fn consume_op(&mut self) -> Option<Token<'src>> {
