@@ -982,7 +982,13 @@ impl<'src> Parser<'src> {
         TokenKind::StrText => {
           let t = self.bump();
           let text = Self::unescape(t.src);
-          parts.push(Node::new(NodeKind::LitStr(text), t.loc));
+          // Merge consecutive StrText tokens into a single LitStr
+          if let Some(Node { kind: NodeKind::LitStr(prev), loc: prev_loc }) = parts.last_mut() {
+            prev.push_str(&text);
+            prev_loc.end = t.loc.end;
+          } else {
+            parts.push(Node::new(NodeKind::LitStr(text), t.loc));
+          }
         }
         TokenKind::StrExprStart => {
           self.bump();

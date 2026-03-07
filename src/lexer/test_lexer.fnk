@@ -188,16 +188,67 @@ test 'string_escape', fn:
     BlockEnd loc [6, 1, 6], [6, 1, 6]
 
 
-test 'string_multiline', fn:
+
+test 'string_multiline_indentation', fn:
   expect tokenize fn:
-    'hello
-    world'
+    'foo
+        bar
+      spam'
+    'foo
+        bar
+      spam
+    '
   | equals seq
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart "'", loc [0, 1, 0], [1, 1, 1]
-    StrText "hello\nworld", loc [1, 1, 1], [12, 2, 5]
-    StrEnd "'", loc [12, 2, 5], [13, 2, 6]
-    BlockEnd loc [13, 2, 6], [13, 2, 6]
+    StrText "foo\n", loc [1, 1, 1], [5, 2, 0]
+    StrText "  bar\n", loc [7, 2, 2], [13, 3, 0]
+    StrText "spam", loc [15, 3, 2], [19, 3, 6]
+    StrEnd "'", loc [19, 3, 6], [20, 3, 7]
+    BlockCont loc [20, 3, 7], [21, 4, 0]
+    StrStart "'", loc [21, 4, 0], [22, 4, 1]
+    StrText "foo\n", loc [22, 4, 1], [26, 5, 0]
+    StrText "    bar\n", loc [26, 5, 0], [34, 6, 0]
+    StrText "  spam\n", loc [34, 6, 0], [41, 7, 0]
+    StrEnd "'", loc [41, 7, 0], [42, 7, 1]
+    BlockEnd loc [42, 7, 1], [42, 7, 1]
+
+test 'string_multiline_indentation_error', fn:
+  expect tokenize fn:
+    log
+      'foo
+    bar'
+  | equals seq
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    Ident 'log', loc [0, 1, 0], [3, 1, 3]
+    BlockStart loc [3, 1, 3], [6, 2, 2]
+    StrStart "'", loc [6, 2, 2], [7, 2, 3]
+    StrText "foo\n", loc [7, 2, 3], [11, 3, 0]
+    Err "unterminated string - unexpected dedent", loc [11, 3, 0], [11, 3, 0]
+    Ident 'bar', loc [11, 3, 0], [14, 3, 3]
+    StrStart "'", loc [14, 3, 3], [15, 3, 4]
+    Err "unterminated string", loc [15, 3, 4], [15, 3, 4]
+    BlockEnd loc [15, 3, 4], [15, 3, 4]
+    BlockEnd loc [15, 3, 4], [15, 3, 4]
+
+test 'string_multiline_indentation_closing_error', fn:
+  expect tokenize fn:
+    foo
+      bar 'foo
+    '
+  | equals seq
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    Ident 'foo', loc [0, 1, 0], [3, 1, 3]
+    BlockStart loc [3, 1, 3], [6, 2, 2]
+    Ident 'bar', loc [6, 2, 2], [9, 2, 5]
+    StrStart "'", loc [10, 2, 6], [11, 2, 7]
+    StrText "foo\n", loc [11, 2, 7], [15, 3, 0]
+    Err "unterminated string - unexpected dedent", loc [15, 3, 0], [15, 3, 0]
+    StrStart "'", loc [15, 3, 0], [16, 3, 1]
+    Err "unterminated string", loc [16, 3, 1], [16, 3, 1]
+    BlockEnd loc [16, 3, 1], [16, 3, 1]
+    BlockEnd loc [16, 3, 1], [16, 3, 1]
+
 
 
 test 'brackets', fn:
