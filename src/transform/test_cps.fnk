@@ -94,16 +94,38 @@ CPS IR — design notes and transform examples
 #   Arms are tried in order; fail fast.
 #
 #
-#  TODO: add support for full modules, which would use something like:
-#     module fn {store, id, ..}, env, state, ƒ_cont:
-#       # return the `env` so that names can be exported
-#      ƒ_cont env
+# --- Presentation vs. Implementation ---
+#
+# The CPS text shown in tests is a *conceptual representation* of what the
+# compiler produces. It is valid-looking Fink and should be runnable,
+# if all core functions correctly re-implemented Fink.
+# Fink has no mutable values so can't easily implement forward referencing
+# for e.g. mutual recursion.
+#
+# Internal implementation uses a mutable scope tree:
+#   - Each scope node is a mutable map of name → value
+#   - `store` mutates the node directly; all closures that captured a reference
+#     to that node see the update immediately — forward refs just work
+#   - `load` walks the scope chain (child → parent) until the name is found
+#
+# CPS text representation of env:
+#   Changes to the current scope/captured closure environments using `store`
+#   requires creating a modified copy and pass it forward, due to immutability.
+#   For a previously created closure to then sucessfully `load` a value, it's own
+#   env it received must be something like a future, which is only resolved once
+#   all `store` calls within a scope are completed.
+#   So, all scope creating constructures conceptually pass envs as futures.
+#   `store` sends/captures all bindings for a scope, it can do this immutably by
+#   forwarding modified copys of an env. At the end of a scope the futures
+#   are settled with all recorded binding.
+
+
 
 {test, expect} = import 'fink/testing.fnk'
 {cps_expr, equals_fink} = import 'fink/compiler/transform'
 
 # TODO: don't use, just to test syntax highlighting in vscode
-{module, load, store, seq_append, id, op} = import 'fink/fake'
+{load, store, seq_append, id, op} = import 'fink/fake'
 
 
 
@@ -1102,6 +1124,42 @@ test 'forward ref', fn:
       fn ·foo, chld_env:
         store chld_env, id'foo', ·foo, fn ·foo, env:
           apply ·foo, 1, state, ƒ_cont
+
+
+test 'mutual recursion simple', fn:
+  expect cps_expr fn:
+    foo = fn bar:
+      spam bar
+
+    spam = fn ham:
+      foo ham
+
+  | equals_fink fn:
+    closure module_scope_env,
+      fn ·bar, foo_scope_env, state, ƒ_cont:
+        # load walks to foo's parent scope to resolve 'spam'
+        load foo_scope_env, id'spam', fn ·spam, _:
+          apply ·spam, ·bar, state, ƒ_cont
+
+      fn ·foo, module_scope_env:
+        # store cannot mutate the parent scope, but it can persist pending
+        # store requests for the module scope and all child envs would be
+        # able still be able to access them.
+        store module_scope_env, id'foo', ·foo, fn _, module_scope_env:
+          closure module_scope_env,
+            fn ·ham, spam_scope_env, state, ƒ_cont:
+              load spam_scope_env, id'foo', fn ·foo, _:
+                apply ·foo, ·ham, state, ƒ_cont
+            fn ·spam, module_scope_env:
+              store module_scope_env, id'spam', ·spam, fn ·spam, _:
+                ƒ_cont ·spam, state
+      # If we treat the module env conceptually as a future
+      # at this time the futures would be resolved by receving all store requests
+      # and loads in cloasures would work with the resolved envs
+      # This is purely conceptual and only for test display purposes i.e. runnable fink coode
+      # because the compiler itself just uses a mutable structs we don't implement it like above
+      # under the hood
+
 
 test 'mutual recursion', fn:
   expect cps_expr fn:

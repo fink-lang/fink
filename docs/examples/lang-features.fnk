@@ -79,6 +79,31 @@ strings
   \u10_ff_ff - Unicode code point between U+0000 and U+10FFFF
 '
 
+# String indentation handling
+log
+  'foo
+  bar
+  spam'
+
+log '
+  foo
+    bar
+  spam'
+
+log 'foo
+    bar
+  spam'
+
+# this errors
+log
+  'foo
+bar
+'
+# unexpexted dedent
+
+
+
+
 # tagged template strings - tagging func receives raw str parts and values
 fmt'hello ${1 + 2}'
 rx'(?<group>[a-z]+)'  # TODO: should it be possible to use rx for pattern matching?
