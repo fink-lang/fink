@@ -87,7 +87,7 @@ impl<'src> Parser<'src> {
   }
 
   fn skip_trivia(&mut self) {
-    while matches!(self.current.kind, TokenKind::Comment | TokenKind::BlockComment | TokenKind::CommentStart | TokenKind::CommentText | TokenKind::CommentEnd) {
+    while matches!(self.current.kind, TokenKind::Comment | TokenKind::CommentStart | TokenKind::CommentText | TokenKind::CommentEnd) {
       self.current = self.lexer.next_token();
     }
   }
