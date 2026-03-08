@@ -452,14 +452,11 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
     PatKind::Bind(name)    => ident(&render_bind(*name)),
     PatKind::Lit(lit)      => lit_to_node(lit),
 
-    PatKind::Seq { elems, spread } => {
-      let mut children: Vec<Node<'static>> = elems.iter().map(|e| match e {
+    PatKind::Seq { elems } => {
+      let children: Vec<Node<'static>> = elems.iter().map(|e| match e {
         SeqElem::Pat(p)      => pat_to_node(p),
         SeqElem::Spread(s)   => spread_pat_to_node(s),
       }).collect();
-      if let Some(s) = spread {
-        children.push(spread_pat_to_node(s));
-      }
       node(NodeKind::LitSeq(children))
     }
 

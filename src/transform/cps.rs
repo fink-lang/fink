@@ -272,10 +272,9 @@ pub enum PatKind<'src> {
   /// 42, true, 'hello' — equality check against literal
   Lit(Lit<'src>),
 
-  /// [a, b, ..rest] — sequence pattern with optional spread
+  /// [a, b, ..rest] — sequence pattern; spreads appear as SeqElem::Spread in elems
   Seq {
     elems: Vec<SeqElem<'src>>,
-    spread: Option<Box<Spread<'src>>>,
   },
 
   /// {foo, bar: x, ..rest} — record pattern with optional spread
@@ -314,7 +313,7 @@ impl<'src> Pat<'src> {
       PatKind::Wildcard | PatKind::Lit(_) | PatKind::Range { .. } => {}
       PatKind::Bind(name) => out.push(*name),
       PatKind::Guard { pat, .. } => pat.collect_bindings(out),
-      PatKind::Seq { elems, spread } => {
+      PatKind::Seq { elems } => {
         for elem in elems {
           match elem {
             SeqElem::Pat(p) => p.collect_bindings(out),
@@ -323,10 +322,6 @@ impl<'src> Pat<'src> {
               if let Some(n) = s.bind { out.push(n); }
             }
           }
-        }
-        if let Some(s) = spread {
-          if let Some(n) = s.name { out.push(n); }
-          if let Some(n) = s.bind { out.push(n); }
         }
       }
       PatKind::Rec { fields, spread } => {
