@@ -14,7 +14,7 @@ cps_c IR — pretty-printer tests
 #       <expected cps output>
 
 {test, expect, equals_fink, cps_expr} = import '!fake'
-{·load, ·store, ·ƒ_cont, ·state, ·scope, ·id} = import '!fake'
+{·load, ·store, ·ƒ_cont, ·state, ·scope, ·id, ·apply} = import '!fake'
 
 --- --- ---
 literals — tail position, no synthesis needed
@@ -1218,12 +1218,11 @@ test 'multi-arm match', fn:
 
 
 --- --- ---
-varargs — spread preserved in IR (WIP: cps_transform not yet emitting spread)
+varargs — spread preserved in IR
 --- --- ---
 
 # Spread is valid in the CPS IR — ·apply and fn params can contain ..arg / ..name.
 # The IR stays readable Fink; codegen handles the actual flattening.
-# WIP: cps_transform currently drops the spread; these tests define the target shape.
 
 test 'varargs — call site spreads iterable', fn:
   expect cps_expr fn:
@@ -1306,7 +1305,7 @@ test 'two bindings at module level', fn:
 
 
 --- --- ---
-free variable analysis (WIP: not yet implemented on new IR)
+free variable analysis
 --- --- ---
 
 # Free var pass — annotates ·closure scope arg with captured names.

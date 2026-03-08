@@ -406,10 +406,9 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       ])
     }
 
-    // LetRec — not yet implemented; placeholder
-    ExprKind::LetRec { .. } => {
-      apply(ident("·let_rec"), vec![node(NodeKind::Wildcard)])
-    }
+    // LetRec is emitted only by the SCC pass (not yet implemented).
+    // The formatter never receives it from the CPS transform.
+    ExprKind::LetRec { .. } => unreachable!("LetRec should not reach the formatter before SCC analysis"),
 
     // Match { scrutinee, arms, result, body }
     // → ·match_block scrutinee, ·state,
