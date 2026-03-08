@@ -907,7 +907,7 @@ fn lower_pat<'src>(node: &'src Node<'src>) -> Pat<'src> {
           _ => pat_elems.push(SeqElem::Pat(lower_pat(elem))),
         }
       }
-      PatKind::Seq { elems: pat_elems }
+      PatKind::Seq(pat_elems)
     }
 
     NodeKind::LitRec(fields) => {
@@ -991,7 +991,7 @@ fn collect_into<'src>(pat: &Pat<'src>, names: &mut Vec<BindName<'src>>) {
   match &pat.kind {
     PatKind::Wildcard | PatKind::Lit(_) => {}
     PatKind::Bind(name) => names.push(*name),
-    PatKind::Seq { elems } => {
+    PatKind::Seq(elems) => {
       for elem in elems {
         match elem {
           SeqElem::Pat(p) => collect_into(p, names),

@@ -452,7 +452,7 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
     PatKind::Bind(name)    => ident(&render_bind(*name)),
     PatKind::Lit(lit)      => lit_to_node(lit),
 
-    PatKind::Seq { elems } => {
+    PatKind::Seq(elems) => {
       let children: Vec<Node<'static>> = elems.iter().map(|e| match e {
         SeqElem::Pat(p)      => pat_to_node(p),
         SeqElem::Spread(s)   => spread_pat_to_node(s),

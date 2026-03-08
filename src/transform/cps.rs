@@ -273,9 +273,7 @@ pub enum PatKind<'src> {
   Lit(Lit<'src>),
 
   /// [a, b, ..rest] — sequence pattern; spreads appear as SeqElem::Spread in elems
-  Seq {
-    elems: Vec<SeqElem<'src>>,
-  },
+  Seq(Vec<SeqElem<'src>>),
 
   /// {foo, bar: x, ..rest} — record pattern with optional spread
   Rec {
@@ -313,7 +311,7 @@ impl<'src> Pat<'src> {
       PatKind::Wildcard | PatKind::Lit(_) | PatKind::Range { .. } => {}
       PatKind::Bind(name) => out.push(*name),
       PatKind::Guard { pat, .. } => pat.collect_bindings(out),
-      PatKind::Seq { elems } => {
+      PatKind::Seq(elems) => {
         for elem in elems {
           match elem {
             SeqElem::Pat(p) => p.collect_bindings(out),

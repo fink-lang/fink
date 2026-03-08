@@ -245,7 +245,7 @@ fn collect_pat_keys<'src>(
       collect_pat_keys(pat, bound, seen, out);
       collect_key_from_val(guard, bound, seen, out);
     }
-    Seq { elems, .. } => {
+    Seq(elems) => {
       for elem in elems {
         use super::cps::SeqElem;
         match elem {
