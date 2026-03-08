@@ -101,6 +101,7 @@ fn val_to_node(v: &Val<'_>) -> Node<'static> {
     ValKind::Ident(name) => ident(&sigil(name)),
     ValKind::Key(key)    => match &key.kind {
       KeyKind::Name(name) => ident(&sigil(name)),
+      KeyKind::Prim(p)    => ident(&format!("·{}", p.as_str())),
       KeyKind::Op(op)     => ident(&sigil_op(op)),
     },
   }
@@ -114,6 +115,7 @@ fn resolved_name(v: &Val<'_>) -> String {
     ValKind::Ident(name) => sigil(name),
     ValKind::Key(key)    => match &key.kind {
       KeyKind::Name(name) => sigil(name),
+      KeyKind::Prim(p)    => format!("·{}", p.as_str()),
       KeyKind::Op(op)     => sigil_op(op),
     },
     ValKind::Lit(_)      => String::new(),  // literals don't have a name
@@ -130,6 +132,7 @@ fn needs_load(v: &Val<'_>) -> bool {
 fn emit_load(key: &super::cps::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
   let key_node = match &key.kind {
     KeyKind::Name(name) => id_tag(name),
+    KeyKind::Prim(p)    => id_tag(p.as_str()),
     KeyKind::Op(op)     => op_tag(op),
   };
   apply(ident("·load"), vec![
@@ -221,23 +224,7 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 // Maps plain IR name → rendered output name.
 // User names pass through unchanged; compiler temps and runtime names get ·.
 fn sigil(name: &str) -> String {
-  if name.starts_with("v_") || name.starts_with("fn_") || name.starts_with("op_")
-    || matches!(
-      name,
-      // ambient runtime slots
-      "scope" | "state" | "chld_scope"
-      // continuation names
-      | "ƒ_cont" | "ƒ_err" | "ƒ_ok"
-      // runtime primitives
-      | "store" | "load" | "apply" | "closure" | "id" | "err" | "panic" | "if"
-      | "range_excl" | "range_incl"
-      | "seq_append" | "seq_concat"
-      | "rec_put" | "rec_merge"
-      | "str_fmt" | "str_raw"
-      | "match_block" | "match_branch" | "match_bind" | "match_done"
-      | "match_pop_at" | "match_pop_field" | "match_rest" | "match_len"
-    )
-  {
+  if name.starts_with("v_") || name.starts_with("fn_") || name.starts_with("op_") {
     format!("·{}", name)
   } else {
     name.to_string()

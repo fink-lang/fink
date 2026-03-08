@@ -71,7 +71,38 @@ pub struct Key<'src> {
 #[derive(Debug, Clone)]
 pub enum KeyKind<'src> {
   Name(Name<'src>),  // user-defined name: foo, add, x
+  Prim(Prim),        // known runtime builtin — no scope resolution needed
   Op(&'src str),     // operator symbol: +, ==, .
+}
+
+/// Runtime builtin functions referenced in the IR.
+/// Emitted by the transform for built-in operations; resolved to runtime
+/// globals by codegen. Never appear as binding sites — reference only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Prim {
+  RangeExcl,   // 0..10
+  RangeIncl,   // 0...10
+  SeqAppend,   // [a, b, c] element construction
+  SeqConcat,   // [..xs, ..ys] spread merge
+  RecPut,      // {key: val} field construction
+  RecMerge,    // {..rec} spread merge
+  StrFmt,      // 'hello ${name}' interpolated string
+  StrRaw,      // fmt'...' raw tagged template
+}
+
+impl Prim {
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Prim::RangeExcl => "range_excl",
+      Prim::RangeIncl => "range_incl",
+      Prim::SeqAppend => "seq_append",
+      Prim::SeqConcat => "seq_concat",
+      Prim::RecPut    => "rec_put",
+      Prim::RecMerge  => "rec_merge",
+      Prim::StrFmt    => "str_fmt",
+      Prim::StrRaw    => "str_raw",
+    }
+  }
 }
 
 /// How a name reference resolves — populated by the semantic/SCC pass.

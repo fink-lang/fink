@@ -188,6 +188,9 @@ fn collect_key_from_val<'src>(
           out.push(n);
         }
       }
+      KeyKind::Prim(_) => {
+        // Prims are known builtins — not free variables, skip.
+      }
       KeyKind::Op(op) => {
         // Ops are stored as their rendered local name (op_plus etc.)
         // so that sigil() can prefix them consistently.
