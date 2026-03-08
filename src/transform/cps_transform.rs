@@ -771,25 +771,52 @@ fn lower_match<'src>(
   arms: &'src [Node<'src>],
   loc: Loc,
 ) -> Lower<'src> {
-  // `subjects` may be a Patterns node wrapping a single subject.
-  let subject_node = match &subjects.kind {
-    NodeKind::Patterns(ps) if ps.len() == 1 => &ps[0],
-    _ => subjects,
+  // Multi-arg match: Patterns([a, b, …]) → wrap subjects in a Tuple val.
+  // Single-arg: Patterns([x]) or a plain node → lower directly.
+  let (scrutinee, pending) = match &subjects.kind {
+    NodeKind::Patterns(ps) if ps.len() > 1 => lower_tuple(g, ps, loc),
+    NodeKind::Patterns(ps) if ps.len() == 1 => lower(g, &ps[0]),
+    _ => lower(g, subjects),
   };
-  let (scrutinee, pending) = lower(g, subject_node);
-  let cps_arms = arms.iter().map(|arm| lower_arm(g, arm)).collect();
+  let arity = match &subjects.kind {
+    NodeKind::Patterns(ps) if ps.len() > 1 => ps.len(),
+    _ => 0,  // 0 = single scrutinee, arms use plain patterns
+  };
+  let cps_arms = arms.iter().map(|arm| lower_arm(g, arm, arity)).collect();
   let result = g.fresh_result();
-  // Match is a terminal-style node that needs a body; use App-style Pending.
   let mut pending = pending;
   pending.push(Pending::Match { scrutinee, arms: cps_arms, result, loc });
   (ident_val(result, loc), pending)
 }
 
-fn lower_arm<'src>(g: &mut Gen, arm: &'src Node<'src>) -> Arm<'src> {
+/// Lower multiple subjects into a Tuple val synthesized via seq_append calls.
+/// The scrutinee is a runtime sequence but typed as Tuple by pattern lowering.
+fn lower_tuple<'src>(g: &mut Gen, subjects: &'src [Node<'src>], loc: Loc) -> Lower<'src> {
+  let mut acc = lit_val(Lit::Seq, loc);
+  let mut pending: Vec<Pending<'src>> = vec![];
+  for subject in subjects {
+    let (sv, sp) = lower(g, subject);
+    pending.extend(sp);
+    let op = key_val_prim(Prim::SeqAppend, loc);
+    let result = g.fresh_result();
+    pending.push(Pending::App { func: op, args: args_val(vec![acc, sv]), result, loc });
+    acc = ident_val(result, loc);
+  }
+  (acc, pending)
+}
+
+fn lower_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arity: usize) -> Arm<'src> {
   match &arm.kind {
     NodeKind::Arm { lhs, body } => {
       let loc = arm.loc;
-      let pat = if lhs.is_empty() {
+      let pat = if arity > 1 {
+        // Multi-arg: lhs[0] is a Patterns([x, y, …]) node — unwrap it.
+        let inner_pats = match lhs.first().map(|n| &n.kind) {
+          Some(NodeKind::Patterns(ps)) => ps.iter().map(lower_pat).collect(),
+          _ => lhs.iter().map(lower_pat).collect(),
+        };
+        Pat { kind: PatKind::Tuple(inner_pats), meta: Meta::at(loc) }
+      } else if lhs.is_empty() {
         Pat { kind: PatKind::Wildcard, meta: Meta::at(loc) }
       } else {
         lower_pat(&lhs[0])
@@ -990,6 +1017,9 @@ fn collect_into<'src>(pat: &Pat<'src>, names: &mut Vec<BindName<'src>>) {
   match &pat.kind {
     PatKind::Wildcard | PatKind::Lit(_) => {}
     PatKind::Bind(name) => names.push(*name),
+    PatKind::Tuple(pats) => {
+      for p in pats { collect_into(p, names); }
+    }
     PatKind::Seq(elems) => {
       for elem in elems {
         match elem {

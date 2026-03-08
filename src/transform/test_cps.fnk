@@ -1194,10 +1194,8 @@ test 'rec pattern with bound rest', fn:
 
 
 --- --- ---
-match — multi-arm and multi-arg (WIP)
+match — multi-arm and multi-arg
 --- --- ---
-
-# WIP: multi-arg match (Patterns len>1 subjects) panics in lower_match — omitted until fixed
 
 test 'multi-arm match', fn:
   expect cps_expr fn:
@@ -1215,6 +1213,25 @@ test 'multi-arm match', fn:
           ·load ·scope, ·id'a', fn a, ·scope:
             ·ƒ_cont a, ·state
         fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
+
+
+test 'multi-arg match', fn:
+  expect cps_expr fn:
+    match a, b:
+      x, y: x
+
+  | equals_fink fn:
+    ·load ·scope, ·id'seq_append', fn ·seq_append, ·scope:
+      ·load ·scope, ·id'a', fn a, ·scope:
+        ·apply ·seq_append, [], a, ·state, fn ·v_0, ·state:
+          ·load ·scope, ·id'seq_append', fn ·seq_append, ·scope:
+            ·load ·scope, ·id'b', fn b, ·scope:
+              ·apply ·seq_append, ·v_0, b, ·state, fn ·v_1, ·state:
+                ·match_block ·v_1, ·state,
+                  ·match_branch ·patt'x, y', fn x, y, ·scope, ·state, ·ƒ_cont:
+                    ·load ·scope, ·id'x', fn x, ·scope:
+                      ·ƒ_cont x, ·state
+                  fn ·v_2, ·state: ·ƒ_cont ·v_2, ·state
 
 
 --- --- ---

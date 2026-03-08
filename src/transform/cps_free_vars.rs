@@ -237,6 +237,9 @@ fn collect_pat_keys<'src>(
   use PatKind::*;
   match &pat.kind {
     Wildcard | Bind(_) | Lit(_) => {}
+    Tuple(pats) => {
+      for p in pats { collect_pat_keys(p, bound, seen, out); }
+    }
     Range { start, end, .. } => {
       collect_pat_keys(start, bound, seen, out);
       collect_pat_keys(end, bound, seen, out);

@@ -275,6 +275,11 @@ pub enum PatKind<'src> {
   /// [a, b, ..rest] — sequence pattern; spreads appear as SeqElem::Spread in elems
   Seq(Vec<SeqElem<'src>>),
 
+  /// (a, b, c) — fixed-arity positional pattern from multi-arg match/fn.
+  /// No spread allowed. Arity must match the number of scrutinees.
+  /// Distinct from Seq so the type checker can enforce arity statically.
+  Tuple(Vec<Pat<'src>>),
+
   /// {foo, bar: x, ..rest} — record pattern; spreads appear as RecElem::Spread in elems
   Rec(Vec<RecElem<'src>>),
 
@@ -308,6 +313,9 @@ impl<'src> Pat<'src> {
       PatKind::Wildcard | PatKind::Lit(_) | PatKind::Range { .. } => {}
       PatKind::Bind(name) => out.push(*name),
       PatKind::Guard { pat, .. } => pat.collect_bindings(out),
+      PatKind::Tuple(pats) => {
+        for p in pats { p.collect_bindings(out); }
+      }
       PatKind::Seq(elems) => {
         for elem in elems {
           match elem {
