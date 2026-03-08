@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, Arm, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, Val, ValKind};
+use super::cps::{Arg, Arm, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, RecField, SeqElem, Spread, StrPat, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -60,8 +60,34 @@ fn tagged(tag: &str, s: &str) -> Node<'static> {
   apply(ident(tag), vec![raw])
 }
 
-fn id_tag(s: &str)  -> Node<'static> { tagged("id",  s) }
-fn op_tag(s: &str)  -> Node<'static> { tagged("op",  s) }
+fn id_tag(s: &str)   -> Node<'static> { tagged("·id",   s) }
+fn op_tag(s: &str)   -> Node<'static> { tagged("·op",   s) }
+fn patt_tag(s: &str) -> Node<'static> { tagged("·patt", s) }
+
+/// `fn ·state: body` — state-only continuation (used in ·if branches).
+fn state_fn(body: Node<'static>) -> Node<'static> {
+  fn_node(patterns(vec![ident("·state")]), vec![body])
+}
+
+/// `fn name, ·state: body` — result continuation (used in ·apply and ·match_block).
+fn result_cont(name: &str, body: Node<'static>) -> Node<'static> {
+  fn_node(patterns(vec![ident(name), ident("·state")]), vec![body])
+}
+
+/// `fn local, ·scope: body` — scope continuation (used in ·load and ·store).
+fn scope_cont(local: &str, body: Node<'static>) -> Node<'static> {
+  fn_node(patterns(vec![ident(local), ident("·scope")]), vec![body])
+}
+
+/// Render a pattern as either a plain node (for simple patterns that are valid
+/// Fink values: wildcard, bind, lit) or a `patt'...'` tagged string for
+/// composite patterns that are not valid runtime values.
+fn pat_arg(pat: &Pat<'_>) -> Node<'static> {
+  match &pat.kind {
+    PatKind::Wildcard | PatKind::Bind(_) | PatKind::Lit(_) => pat_to_node(pat),
+    _ => patt_tag(&crate::ast::fmt::fmt(&pat_to_node(pat))),
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Val → Node
@@ -109,7 +135,7 @@ fn emit_load(key: &super::cps::Key<'_>, local: &str, body_node: Node<'static>) -
   apply(ident("·load"), vec![
     ident("·scope"),
     key_node,
-    fn_node(patterns(vec![ident(local), ident("·scope")]), vec![body_node]),
+    scope_cont(local, body_node),
   ])
 }
 
@@ -183,39 +209,37 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 //   App    { func, args, result, body } → ·apply func_loaded, arg…, ·state, fn result, ·state: body
 //   Ret(val)                   → ·ƒ_cont val, ·state
 //
-// Name sigil conventions (output only):
-//   user names → plain (foo, bar)
-//   runtime primitives → ·name (·store, ·load, ·scope, ·state, ·ƒ_cont, ·apply, ·closure, …)
-//   compiler temps → ·v_0, ·fn_3
-//   operator locals → ·op_plus, ·op_eq, …
+// Output name conventions (sigil() is the single mapping point):
+//   user names          → plain:  foo, bar
+//   compiler temps      → ·v_0, ·fn_3
+//   operator locals     → ·op_plus, ·op_eq
+//   runtime primitives  → ·store, ·load, ·scope, ·state, ·ƒ_cont, ·apply, ·closure, …
+//
+// IR names are always plain strings — · never appears in the IR itself.
 // ---------------------------------------------------------------------------
 
+// Maps plain IR name → rendered output name.
+// User names pass through unchanged; compiler temps and runtime names get ·.
 fn sigil(name: &str) -> String {
-  // User-defined names pass through plain.
-  // Compiler-generated temps (v_N, fn_N) and runtime-injected names get · prefix.
-  // Names already prefixed with · are left unchanged.
-  if name.starts_with('·') {
-    // already prefixed
-    name.to_string()
-  } else if name.starts_with("v_") || name.starts_with("fn_") || name.starts_with("op_")
+  if name.starts_with("v_") || name.starts_with("fn_") || name.starts_with("op_")
     || matches!(
       name,
-      "scope" | "state" | "_"
-      // runtime primitives that appear as loaded locals
+      // ambient runtime slots
+      "scope" | "state" | "chld_scope"
+      // continuation names
+      | "ƒ_cont" | "ƒ_err" | "ƒ_ok"
+      // runtime primitives
+      | "store" | "load" | "apply" | "closure" | "id" | "err" | "panic" | "if"
       | "range_excl" | "range_incl"
       | "seq_append" | "seq_concat"
       | "rec_put" | "rec_merge"
       | "str_fmt" | "str_raw"
-      | "apply" | "closure" | "store" | "load"
-      | "id" | "err" | "panic" | "if"
       | "match_block" | "match_branch" | "match_bind" | "match_done"
       | "match_pop_at" | "match_pop_field" | "match_rest" | "match_len"
-      | "chld_scope"
     )
   {
     format!("·{}", name)
   } else {
-    // user name — plain
     name.to_string()
   }
 }
@@ -261,12 +285,26 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
         ident("·scope"),
         id_tag(name),
         val_to_node(val),
-        fn_node(
-          patterns(vec![ident(&plain), ident("·scope")]),
-          vec![to_node(body)],
-        ),
+        scope_cont(&plain, to_node(body)),
       ]);
       with_loads(&[val], |_| store_node)
+    }
+
+    // LetPat { pat, val, body }
+    // → ·match_bind pat, val, fn bindings…, ·scope: body
+    // If val is a Key, wrap a load first.
+    ExprKind::LetPat { pat, val, body } => {
+      let bindings = pat.bindings();
+      let mut fn_params: Vec<Node<'static>> = bindings.iter()
+        .map(|b| ident(&sigil(b)))
+        .collect();
+      fn_params.push(ident("·scope"));
+      let bind_node = apply(ident("·match_bind"), vec![
+        pat_arg(pat),
+        val_to_node(val),
+        fn_node(patterns(fn_params), vec![to_node(body)]),
+      ]);
+      with_loads(&[val], |_| bind_node)
     }
 
     // LetFn { name, params, free_vars, fn_body, body }
@@ -313,10 +351,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // Spread args render as `..resolved_val`.
     ExprKind::App { func, args, result, body } => {
       let result_plain = sigil(result);
-      let result_fn = fn_node(
-        patterns(vec![ident(&result_plain), ident("·state")]),
-        vec![to_node(body)],
-      );
+      let result_fn = result_cont(&result_plain, to_node(body));
       // Extract vals from args, tracking which are spreads.
       let is_spread: Vec<bool> = args.iter().map(|a| matches!(a, Arg::Spread(_))).collect();
       let arg_vals: Vec<&Val<'_>> = args.iter().map(|a| match a {
@@ -342,8 +377,8 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     ExprKind::If { cond, then, else_ } => {
       apply(ident("·if"), vec![
         val_to_node(cond),
-        fn_node(patterns(vec![ident("·state")]), vec![to_node(then)]),
-        fn_node(patterns(vec![ident("·state")]), vec![to_node(else_)]),
+        state_fn(to_node(then)),
+        state_fn(to_node(else_)),
       ])
     }
 
@@ -359,10 +394,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     //     fn result, ·state: body
     ExprKind::Match { scrutinee, arms, result, body } => {
       let result_plain = sigil(result);
-      let result_fn = fn_node(
-        patterns(vec![ident(&result_plain), ident("·state")]),
-        vec![to_node(body)],
-      );
+      let result_fn = result_cont(&result_plain, to_node(body));
       with_loads(&[scrutinee], |resolved| {
         let scrutinee_node = resolved.into_iter().next().unwrap();
         let mut args = vec![scrutinee_node, ident("·state")];
@@ -386,7 +418,7 @@ fn arm_to_node(arm: &Arm<'_>) -> Node<'static> {
   fn_params.push(ident("·state"));
   fn_params.push(ident("·ƒ_cont"));
   apply(ident("·match_branch"), vec![
-    pat_to_node(&arm.pattern),
+    pat_arg(&arm.pattern),
     fn_node(patterns(fn_params), vec![to_node(&arm.fn_body)]),
   ])
 }
@@ -396,10 +428,38 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
     PatKind::Wildcard      => node(NodeKind::Wildcard),
     PatKind::Bind(name)    => ident(&sigil(name)),
     PatKind::Lit(lit)      => lit_to_node(lit),
-    // Composite patterns — render as their source equivalent for readability.
-    PatKind::Seq { .. }    => ident("_seq_pat"),    // placeholder; full rendering deferred
-    PatKind::Rec { .. }    => ident("_rec_pat"),    // placeholder
-    PatKind::Str(_)        => ident("_str_pat"),    // placeholder
+
+    PatKind::Seq { elems, spread } => {
+      let mut children: Vec<Node<'static>> = elems.iter().map(|e| match e {
+        SeqElem::Pat(p)      => pat_to_node(p),
+        SeqElem::Spread(s)   => spread_pat_to_node(s),
+      }).collect();
+      if let Some(s) = spread {
+        children.push(spread_pat_to_node(s));
+      }
+      node(NodeKind::LitSeq(children))
+    }
+
+    PatKind::Rec { fields, spread } => {
+      let mut children: Vec<Node<'static>> = fields.iter().map(rec_field_to_node).collect();
+      if let Some(s) = spread {
+        children.push(spread_pat_to_node(s));
+      }
+      node(NodeKind::LitRec(children))
+    }
+
+    PatKind::Str(parts) => {
+      // Render as a raw string template with spread captures.
+      let children: Vec<Node<'static>> = parts.iter().map(|p| match p {
+        StrPat::Lit(s) => {
+          let s: &'static str = Box::leak(s.to_string().into_boxed_str());
+          node(NodeKind::LitStr(s.to_string()))
+        }
+        StrPat::Spread(s) => spread_pat_to_node(s),
+      }).collect();
+      node(NodeKind::StrRawTempl(children))
+    }
+
     PatKind::Range { op, start, end } => {
       let op_s: &'static str = Box::leak(op.to_string().into_boxed_str());
       node(NodeKind::Range {
@@ -408,7 +468,33 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
         end: Box::new(pat_to_node(end)),
       })
     }
-    PatKind::Guard { pat, .. } => pat_to_node(pat),  // drop guard for now
+
+    PatKind::Guard { pat, guard } => {
+      // Render as `pat` — guard is dropped for now (pattern lowering pass handles it).
+      // TODO: render guard when pattern lowering is implemented.
+      let _ = guard;
+      pat_to_node(pat)
+    }
+  }
+}
+
+fn spread_pat_to_node(s: &Spread<'_>) -> Node<'static> {
+  // `..name`, `..bind`, or bare `..` if anonymous.
+  match s.name.or(s.bind) {
+    Some(name) => spread_node(ident(&sigil(name))),
+    None => node(NodeKind::Spread(None)),
+  }
+}
+
+fn rec_field_to_node(f: &RecField<'_>) -> Node<'static> {
+  // `{key}` shorthand — pattern is just a Bind to the same name: render as plain `key`.
+  // `{key: pat}` — render as `key = pat`.
+  match &f.pattern.kind {
+    PatKind::Bind(name) if *name == f.key => ident(&sigil(f.key)),
+    _ => node(NodeKind::Bind {
+      lhs: Box::new(ident(f.key)),
+      rhs: Box::new(pat_to_node(&f.pattern)),
+    }),
   }
 }
 
