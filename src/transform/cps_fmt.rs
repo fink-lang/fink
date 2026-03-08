@@ -225,9 +225,8 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 // Use for ident() call sites.
 fn render_bind(name: BindName<'_>) -> String {
   match name {
-    BindName::User(s)   => s.to_string(),
-    BindName::GenVal(n) => format!("·v_{}", n),
-    BindName::GenFn(n)  => format!("·fn_{}", n),
+    BindName::User(s) => s.to_string(),
+    BindName::Gen(n)  => format!("·v_{}", n),
   }
 }
 
@@ -235,9 +234,8 @@ fn render_bind(name: BindName<'_>) -> String {
 // Use for id_tag() call sites where the tag content is the bare name.
 fn bind_tag(name: BindName<'_>) -> Node<'static> {
   match name {
-    BindName::User(s)   => id_tag(s),
-    BindName::GenVal(n) => id_tag(&format!("v_{}", n)),
-    BindName::GenFn(n)  => id_tag(&format!("fn_{}", n)),
+    BindName::User(s) => id_tag(s),
+    BindName::Gen(n)  => id_tag(&format!("v_{}", n)),
   }
 }
 

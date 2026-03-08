@@ -42,11 +42,11 @@ impl Gen {
   }
 
   pub fn fresh_fn(&mut self) -> BindName<'static> {
-    BindName::GenFn(self.next())
+    BindName::Gen(self.next())
   }
 
   pub fn fresh_result(&mut self) -> BindName<'static> {
-    BindName::GenVal(self.next())
+    BindName::Gen(self.next())
   }
 }
 
@@ -73,9 +73,8 @@ fn key_val_name<'src>(name: Name<'src>, loc: Loc) -> Val<'src> {
 /// Gen temps need to be loaded from scope, so they are Keys not Idents here.
 fn key_val_gen(name: BindName<'_>, loc: Loc) -> Val<'static> {
   let s: &'static str = match name {
-    BindName::GenVal(n) => Box::leak(format!("v_{}", n).into_boxed_str()),
-    BindName::GenFn(n)  => Box::leak(format!("fn_{}", n).into_boxed_str()),
-    BindName::User(s)   => Box::leak(s.to_string().into_boxed_str()),
+    BindName::Gen(n)  => Box::leak(format!("v_{}", n).into_boxed_str()),
+    BindName::User(s) => Box::leak(s.to_string().into_boxed_str()),
   };
   Val {
     kind: ValKind::Key(Key { kind: KeyKind::Name(s), resolution: None, meta: Meta::at(loc) }),

@@ -58,7 +58,7 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       let bound: HashSet<Name<'_>> = params.iter().filter_map(|p| match p {
         Param::Name(n) | Param::Spread(n) => match n {
           BindName::User(s) => if *s == "_" { None } else { Some(*s) },
-          BindName::GenVal(_) | BindName::GenFn(_) => None,  // compiler temps are never free-var references
+          BindName::Gen(_) => None,  // compiler temps are never free-var references
         },
       }).collect();
       let mut seen: HashSet<Name<'_>> = HashSet::new();

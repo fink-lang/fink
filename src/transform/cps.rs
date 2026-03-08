@@ -42,12 +42,11 @@ pub type Name<'src> = &'src str;
 
 /// A binding site — introduces a name into scope.
 /// `User` carries the original source name; `Gen` carries a counter (no prefix string).
-/// The formatter is responsible for rendering Gen as `·v_N` / `·fn_N` etc.
+/// The formatter renders Gen as `·v_N`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BindName<'src> {
   User(Name<'src>),  // name from source: `foo`, `x`, `result`
-  GenVal(u32),       // compiler-generated value temp: rendered as ·v_N
-  GenFn(u32),        // compiler-generated function name: rendered as ·fn_N
+  Gen(u32),          // compiler-generated temp: rendered as ·v_N
 }
 
 /// A function parameter — either a plain name or a varargs spread (`..rest`).
