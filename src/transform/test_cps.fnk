@@ -1175,7 +1175,7 @@ test 'rec pattern exact - empty rest', fn:
   expect cps_expr fn:
     {bar, ..{}} = foo
 
-  # ..{} and .. are identical in IR — the empty-rec constraint is dropped by lower_spread.
+  # TODO: ..{} (exact/closed) and .. (open) should produce distinct IR — lower_spread drops the guard.
   | equals_fink fn:
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·store ·scope, ·id'v_0', foo, fn ·v_0, ·scope:

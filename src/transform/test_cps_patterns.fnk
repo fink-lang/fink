@@ -1,0 +1,345 @@
+--- --- ---
+CPS pattern lowering — design scratch pad (WIP)
+--- --- ---
+
+# WIP: design document for pattern lowering pass. Not yet wired to test runner.
+# Expected CPS expansion for every pattern form.
+#
+# Failure continuation convention:
+#   ·panic   — default; pattern mismatch is a compile/runtime error
+#   ·ƒ_fail  — inside a ·match_block arm; failure tries the next arm
+#
+# Every ·match_* primitive shape:
+#   ·match_* scrutinee, …args…, ·ƒ_fail, fn <bindings>, ·scope, ·state: body
+#
+# Cursor-based traversal primitives:
+#   ·match_seq      — initialize seq cursor from scrutinee
+#   ·match_next     — pop head from cursor, advance; fn ·v, ·cursor, …
+#   ·match_done     — assert cursor exhausted; ·ƒ_fail if not
+#   ·match_not_done — assert cursor not exhausted; ·ƒ_fail if empty
+#   ·match_rest     — bind remaining cursor as value (zero or more)
+#   ·match_rec      — initialize rec cursor from scrutinee
+#   ·match_field    — extract named field from rec cursor; fn ·v, ·cursor, …
+#   ·match_bind     — bind extracted temp to name; always succeeds
+#
+# Guard check — plain ·if with ·ƒ_fail as false branch:
+#   ·apply expr, …, fn ·v: ·if ·v, ·ƒ_fail, fn ·scope, ·state: body
+#
+# Optimization hint (not in IR yet):
+#   ·match_size  — early length check when collection is realized
+
+
+--- --- ---
+bind
+--- --- ---
+
+test 'plain bind', fn:
+  expect cps_pat fn:
+    x = foo
+
+  | equals_fink fn:
+    ·match_bind foo, ·panic, fn x, ·scope, ·state:
+      body
+
+
+--- --- ---
+seq patterns
+--- --- ---
+
+test 'seq — empty', fn:
+  expect cps_pat fn:
+    [] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_done ·seq, ·panic, fn ·scope, ·state:
+        body
+
+
+test 'seq — nested empty', fn:
+  expect cps_pat fn:
+    [a, []] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn a, ·scope, ·state:
+          ·match_next ·seq, ·panic, fn ·v_1, ·seq, ·scope, ·state:
+            ·match_done ·seq, ·panic, fn ·scope, ·state:
+              ·match_seq ·v_1, ·panic, fn ·seq, ·scope, ·state:
+                ·match_done ·seq, ·panic, fn ·scope, ·state:
+                  body
+
+
+test 'seq — exact two elements', fn:
+  expect cps_pat fn:
+    [a, b] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn a, ·scope, ·state:
+          ·match_next ·seq, ·panic, fn ·v_1, ·seq, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn b, ·scope, ·state:
+              ·match_done ·seq, ·panic, fn ·scope, ·state:
+                body
+
+
+
+test 'seq — lone spread non-empty discard', fn:
+  expect cps_pat fn:
+    [..] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_not_done ·seq, ·panic, fn ·scope, ·state:
+        body
+
+
+test 'seq — lone spread non-empty bound', fn:
+  expect cps_pat fn:
+    [..rest] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_rest ·seq, ·panic, fn ·v_0, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn rest, ·scope, ·state:
+          body
+
+
+test 'seq — head then spread discard', fn:
+  expect cps_pat fn:
+    [head, ..] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn head, ·scope, ·state:
+          ·match_not_done ·seq, ·panic, fn ·scope, ·state:
+            body
+
+
+test 'seq — head then spread bound', fn:
+  expect cps_pat fn:
+    [head, ..tail] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn head, ·scope, ·state:
+          ·match_rest ·seq, ·panic, fn ·v_1, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn tail, ·scope, ·state:
+              body
+
+
+test 'seq — rest in middle', fn:
+  expect cps_pat fn:
+    [head, ..middle, end] = foo
+
+  | equals_fink fn:
+    # TODO: decomposes as [head, ..rest1] then reverse rest1, pop last as end,
+    # reverse remainder as middle. Needs ·match_reverse. Deferred — does not
+    # affect the core primitive set.
+
+
+test 'seq — literal element', fn:
+  expect cps_pat fn:
+    [a, 1] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn a, ·scope, ·state:
+          ·match_next ·seq, ·panic, fn ·v_1, ·seq, ·scope, ·state:
+            ·apply ·op_eq, ·v_1, 1, ·state, fn ·v_2, ·state:
+              ·if ·v_2, ·panic, fn ·scope, ·state:
+                ·match_done ·seq, ·panic, fn ·scope, ·state:
+                  body
+
+
+test 'seq — guard expression', fn:
+  expect cps_pat fn:
+    [x, y >= 2] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn x, ·scope, ·state:
+          ·match_next ·seq, ·panic, fn ·v_1, ·seq, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn y, ·scope, ·state:
+              ·match_done ·seq, ·panic, fn ·scope, ·state:
+                ·apply ·op_gte, y, 2, ·state, fn ·v_2, ·state:
+                  ·if ·v_2, ·panic, fn ·scope, ·state:
+                    body
+
+
+test 'seq — predicate guard', fn:
+  expect cps_pat fn:
+    [x, is_even y] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn x, ·scope, ·state:
+          ·match_next ·seq, ·panic, fn ·v_1, ·seq, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn y, ·scope, ·state:
+              ·match_done ·seq, ·panic, fn ·scope, ·state:
+                ·apply is_even, y, ·state, fn ·v_2, ·state:
+                  ·if ·v_2, ·panic, fn ·scope, ·state:
+                    body
+
+
+test 'seq — nested', fn:
+  expect cps_pat fn:
+    [a, [b, c]] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn a, ·scope, ·state:
+          ·match_next ·seq, ·panic, fn ·v_1, ·seq, ·scope, ·state:
+            ·match_done ·seq, ·panic, fn ·scope, ·state:
+              ·match_seq ·v_1, ·panic, fn ·seq, ·scope, ·state:
+                ·match_next ·seq, ·panic, fn ·v_2, ·seq, ·scope, ·state:
+                  ·match_bind ·v_2, ·panic, fn b, ·scope, ·state:
+                    ·match_next ·seq, ·panic, fn ·v_3, ·seq, ·scope, ·state:
+                      ·match_bind ·v_3, ·panic, fn c, ·scope, ·state:
+                        ·match_done ·seq, ·panic, fn ·scope, ·state:
+                          body
+
+test 'seq — nested with bind-right', fn:
+  expect cps_pat fn:
+    [a, [b, c] |= d] = foo
+
+  | equals_fink fn:
+    ·match_seq foo, ·panic, fn ·seq, ·scope, ·state:
+      ·match_next ·seq, ·panic, fn ·v_0, ·seq, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn a, ·scope, ·state:
+          ·match_next ·seq, ·panic, fn ·v_1, ·seq, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn d, ·scope, ·state:
+              ·match_done ·seq, ·panic, fn ·scope, ·state:
+                ·match_seq ·v_1, ·panic, fn ·seq, ·scope, ·state:
+                  ·match_next ·seq, ·panic, fn ·v_2, ·seq, ·scope, ·state:
+                    ·match_bind ·v_2, ·panic, fn b, ·scope, ·state:
+                      ·match_next ·seq, ·panic, fn ·v_3, ·seq, ·scope, ·state:
+                        ·match_bind ·v_3, ·panic, fn c, ·scope, ·state:
+                          ·match_done ·seq, ·panic, fn ·scope, ·state:
+                            body
+
+
+--- --- ---
+rec patterns
+--- --- ---
+
+test 'rec — empty', fn:
+  expect cps_pat fn:
+    {} = foo
+
+  | equals_fink fn:
+    ·match_rec foo, ·panic, fn ·rec, ·scope, ·state:
+      ·match_done ·rec, ·panic, fn ·scope, ·state:
+        body
+
+
+test 'rec — non-empty', fn:
+  expect cps_pat fn:
+    {..} = foo
+
+  | equals_fink fn:
+    ·match_rec foo, ·panic, fn ·rec, ·scope, ·state:
+      ·match_not_done ·rec, ·panic, fn ·scope, ·state:
+        body
+
+
+test 'rec — partial match', fn:
+  expect cps_pat fn:
+    {x, y} = point
+
+  | equals_fink fn:
+    ·match_rec point, ·panic, fn ·rec, ·scope, ·state:
+      ·match_field ·rec, 'x', ·panic, fn ·v_0, ·rec, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn x, ·scope, ·state:
+          ·match_field ·rec, 'y', ·panic, fn ·v_1, ·rec, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn y, ·scope, ·state:
+              body
+
+
+test 'rec — field rename', fn:
+  expect cps_pat fn:
+    {x, y: z} = point
+
+  | equals_fink fn:
+    ·match_rec point, ·panic, fn ·rec, ·scope, ·state:
+      ·match_field ·rec, 'x', ·panic, fn ·v_0, ·rec, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn x, ·scope, ·state:
+          ·match_field ·rec, 'y', ·panic, fn ·v_1, ·rec, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn z, ·scope, ·state:
+              body
+
+
+test 'rec — open rest discarded', fn:
+  expect cps_pat fn:
+    {bar, ..} = foo
+
+  | equals_fink fn:
+    ·match_rec foo, ·panic, fn ·rec, ·scope, ·state:
+      ·match_field ·rec, 'bar', ·panic, fn ·v_0, ·rec, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn bar, ·scope, ·state:
+          body
+
+
+test 'rec — open rest bound', fn:
+  expect cps_pat fn:
+    {bar, ..rest} = foo
+
+  | equals_fink fn:
+    ·match_rec foo, ·panic, fn ·rec, ·scope, ·state:
+      ·match_field ·rec, 'bar', ·panic, fn ·v_0, ·rec, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn bar, ·scope, ·state:
+          ·match_rest ·rec, ·panic, fn ·v_1, ·scope, ·state:
+            ·match_bind ·v_1, ·panic, fn rest, ·scope, ·state:
+              body
+
+
+test 'rec — closed exact', fn:
+  expect cps_pat fn:
+    {bar, ..{}} = foo
+
+  | equals_fink fn:
+    ·match_rec foo, ·panic, fn ·rec, ·scope, ·state:
+      ·match_field ·rec, 'bar', ·panic, fn ·v_0, ·rec, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn bar, ·scope, ·state:
+          ·match_done ·rec, ·panic, fn ·scope, ·state:
+            body
+
+
+test 'rec — closed with sub-pattern', fn:
+  expect cps_pat fn:
+    {foo, ..{bar, spam}} = x
+
+  | equals_fink fn:
+    ·match_rec x, ·panic, fn ·rec, ·scope, ·state:
+      ·match_field ·rec, 'foo', ·panic, fn ·v_0, ·rec, ·scope, ·state:
+        ·match_bind ·v_0, ·panic, fn foo, ·scope, ·state:
+          ·match_rest ·rec, ·panic, fn ·v_1, ·scope, ·state:
+            ·match_rec ·v_1, ·panic, fn ·rec, ·scope, ·state:
+              ·match_field ·rec, 'bar', ·panic, fn ·v_2, ·rec, ·scope, ·state:
+                ·match_bind ·v_2, ·panic, fn bar, ·scope, ·state:
+                  ·match_field ·rec, 'spam', ·panic, fn ·v_3, ·rec, ·scope, ·state:
+                    ·match_bind ·v_3, ·panic, fn spam, ·scope, ·state:
+                      ·match_done ·rec, ·panic, fn ·scope, ·state:
+                        body
+
+
+--- --- ---
+match block arms (·ƒ_fail = next arm)
+--- --- ---
+
+# TODO: expand once ·match_block composition is designed
+
+
+--- --- ---
+fn params (·ƒ_fail = unreachable, type checker guarantees)
+--- --- ---
+
+# TODO: expand once fn param lowering is designed
