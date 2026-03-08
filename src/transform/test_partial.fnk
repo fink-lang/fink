@@ -106,7 +106,7 @@ test 'partial in range', fn:
     Fn
       Patterns
         Ident '$'
-      Range '..'
+      InfixOp '..'
         LitInt '1'
         Ident '$'
 

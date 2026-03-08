@@ -63,7 +63,7 @@ test 'spread with range guard', fn:
     LitSeq
       Ident 'head'
       Spread
-        Range '..'
+        InfixOp '..'
           LitInt '0'
           LitInt '2'
       Spread
@@ -85,7 +85,7 @@ test 'spread with range expression guard', fn:
   | equals_ast
     LitSeq
       Spread
-        Range '..'
+        InfixOp '..'
           InfixOp '+'
             LitInt '1'
             LitInt '2'
@@ -100,7 +100,7 @@ test 'spread with ident range guard', fn:
   | equals_ast
     LitSeq
       Spread
-        Range '...'
+        InfixOp '...'
           Ident 'foo'
           Ident 'bar'
 
@@ -111,7 +111,7 @@ test 'spread with bare range guard', fn:
     LitSeq
       Ident 'head'
       Spread
-        Range '..'
+        InfixOp '..'
           LitInt '0'
           LitInt '2'
       Spread
@@ -123,7 +123,7 @@ test 'spread with range to grouped expression', fn:
   | equals_ast
     LitSeq
       Spread
-        Range '..'
+        InfixOp '..'
           LitInt '0'
           Group
             Ident 'l'
@@ -137,7 +137,7 @@ test 'exclusive range', fn:
   expect ast fn:
     0..10
   | equals_ast
-    Range '..'
+    InfixOp '..'
       LitInt '0'
       LitInt '10'
 
@@ -145,7 +145,7 @@ test 'inclusive range', fn:
   expect ast fn:
     0...10
   | equals_ast
-    Range '...'
+    InfixOp '...'
       LitInt '0'
       LitInt '10'
 
@@ -153,7 +153,7 @@ test 'char range', fn:
   expect ast fn:
     'a'...'z'
   | equals_ast
-    Range '...'
+    InfixOp '...'
       LitStr 'a'
       LitStr 'z'
 
@@ -161,7 +161,7 @@ test 'expression range exclusive', fn:
   expect ast fn:
     (1 + 2)..(3 + 4)
   | equals_ast
-    Range '..'
+    InfixOp '..'
       Group
         InfixOp '+'
           LitInt '1'
@@ -175,7 +175,7 @@ test 'expression range inclusive', fn:
   expect ast fn:
     (1 + 2)...(3 + 4)
   | equals_ast
-    Range '...'
+    InfixOp '...'
       Group
         InfixOp '+'
           LitInt '1'

@@ -707,7 +707,7 @@ impl<'src> Parser<'src> {
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
         lhs = Node::new(
-          NodeKind::Range { op: tok.src, start: Box::new(lhs), end: Box::new(rhs) },
+          NodeKind::InfixOp { op: tok.src, lhs: Box::new(lhs), rhs: Box::new(rhs) },
           loc,
         );
         continue;
@@ -801,7 +801,7 @@ impl<'src> Parser<'src> {
         self.bump();
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-        lhs = Node::new(NodeKind::Range { op: tok.src, start: Box::new(lhs), end: Box::new(rhs) }, loc);
+        lhs = Node::new(NodeKind::InfixOp { op: tok.src, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
         continue;
       }
       if Self::is_cmp_op(&tok) {

@@ -13,8 +13,8 @@ cps_c IR — pretty-printer tests
 #     | equals_fink fn:
 #       <expected cps output>
 
-{test, expect, equals_fink, cps_c_expr} = import '!fake'
-{·load, ·store, ·ƒ_cont, ·state} = import '!fake'
+{test, expect, equals_fink, cps_expr} = import '!fake'
+{·load, ·store, ·ƒ_cont, ·state, ·scope, ·id} = import '!fake'
 
 --- --- ---
 literals — tail position, no synthesis needed

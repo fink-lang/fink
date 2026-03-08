@@ -102,7 +102,7 @@ test 'match string pattern', fn:
             Ident 'rest'
         Ident 'rest'
       Arm
-        Range '...'
+        InfixOp '...'
           LitStr 'a'
           LitStr 'z'
         LitStr 'lowercase letter'

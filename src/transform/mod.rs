@@ -51,7 +51,6 @@ pub trait Transform<'src> {
       NodeKind::UnaryOp { op, operand } => self.transform_unary_op(op, *operand, loc),
       NodeKind::InfixOp { op, lhs, rhs } => self.transform_infix_op(op, *lhs, *rhs, loc),
       NodeKind::ChainedCmp(parts) => self.transform_chained_cmp(parts, loc),
-      NodeKind::Range { op, start, end } => self.transform_range(op, *start, *end, loc),
       NodeKind::Spread(inner) => self.transform_spread(inner.map(|n| *n), loc),
       NodeKind::Member { lhs, rhs } => self.transform_member(*lhs, *rhs, loc),
       NodeKind::Group(inner) => self.transform_group(*inner, loc),
@@ -147,18 +146,6 @@ pub trait Transform<'src> {
       }
     }
     Ok(Node::new(NodeKind::ChainedCmp(new_parts), loc))
-  }
-
-  fn transform_range(
-    &mut self,
-    op: &'src str,
-    start: Node<'src>,
-    end: Node<'src>,
-    loc: Loc,
-  ) -> TransformResult<'src> {
-    let start = self.transform(start)?;
-    let end = self.transform(end)?;
-    Ok(Node::new(NodeKind::Range { op, start: Box::new(start), end: Box::new(end) }, loc))
   }
 
   fn transform_spread(

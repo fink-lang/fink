@@ -186,9 +186,6 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     // ---- chained cmp: `a < b < c` ----
     NodeKind::ChainedCmp(parts) => lower_chained_cmp(g, parts, loc),
 
-    // ---- range: `0..10`, `0...10` ----
-    NodeKind::Range { op, start, end } => lower_range(g, op, start, end, loc),
-
     // ---- member access: `lhs.rhs` ----
     NodeKind::Member { lhs, rhs } => lower_member(g, lhs, rhs, loc),
 
@@ -510,6 +507,9 @@ fn lower_infix<'src>(
   rhs: &'src Node<'src>,
   loc: Loc,
 ) -> Lower<'src> {
+  if matches!(op, ".." | "...") {
+    return lower_range(g, op, lhs, rhs, loc);
+  }
   let (lv, mut pending) = lower(g, lhs);
   let (rv, rp) = lower(g, rhs);
   pending.extend(rp);
@@ -941,8 +941,8 @@ fn lower_pat<'src>(node: &'src Node<'src>) -> Pat<'src> {
       PatKind::Rec { fields: rec_fields, spread }
     }
 
-    NodeKind::Range { op, start, end } => {
-      PatKind::Range { op, start: Box::new(lower_pat(start)), end: Box::new(lower_pat(end)) }
+    NodeKind::InfixOp { op, lhs, rhs } if matches!(*op, ".." | "...") => {
+      PatKind::Range { op, start: Box::new(lower_pat(lhs)), end: Box::new(lower_pat(rhs)) }
     }
 
     NodeKind::StrTempl(parts) => {

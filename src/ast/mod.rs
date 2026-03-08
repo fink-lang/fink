@@ -60,15 +60,12 @@ pub enum NodeKind<'src> {
   // UnaryOp '-' | 'not' | '~'
   UnaryOp { op: &'src str, operand: Box<Node<'src>> },
 
-  // InfixOp '+' | '-' | 'and' | '>' | '&' | ...
+  // InfixOp '+' | '-' | 'and' | '>' | '&' | '..' | '...' | ...
   InfixOp { op: &'src str, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // ChainedCmp — flat interleaved: operand, op, operand, op, operand, ...
   // e.g. a > b > c => [Operand(a), Op(">"), Operand(b), Op(">"), Operand(c)]
   ChainedCmp(Vec<CmpPart<'src>>),
-
-  // Range '..' | '...'
-  Range { op: &'src str, start: Box<Node<'src>>, end: Box<Node<'src>> },
 
   // Spread — bare (..) or with guard/expr child
   Spread(Option<Box<Node<'src>>>),
@@ -214,13 +211,6 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
           CmpPart::Op(op) => { indent(out, depth + 1); out.push('\''); out.push_str(op); out.push('\''); }
         }
       }
-    }
-    NodeKind::Range { op, start, end } => {
-      out.push_str("Range '"); out.push_str(op); out.push('\'');
-      out.push('\n');
-      print_node(start, out, depth + 1);
-      out.push('\n');
-      print_node(end, out, depth + 1);
     }
     NodeKind::Spread(child) => {
       out.push_str("Spread");

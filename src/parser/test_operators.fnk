@@ -404,7 +404,7 @@ test 'sequence range slice', fn:
         LitInt '3'
         LitInt '4'
       Group
-        Range '...'
+        InfixOp '...'
           LitInt '2'
           LitInt '3'
 
@@ -412,7 +412,7 @@ test 'ident range', fn:
   expect ast fn:
     start..end
   | equals_ast
-    Range '..'
+    InfixOp '..'
       Ident 'start'
       Ident 'end'
 

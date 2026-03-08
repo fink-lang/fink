@@ -486,10 +486,10 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
 
     PatKind::Range { op, start, end } => {
       let op_s: &'static str = Box::leak(op.to_string().into_boxed_str());
-      node(NodeKind::Range {
+      node(NodeKind::InfixOp {
         op: op_s,
-        start: Box::new(pat_to_node(start)),
-        end: Box::new(pat_to_node(end)),
+        lhs: Box::new(pat_to_node(start)),
+        rhs: Box::new(pat_to_node(end)),
       })
     }
 

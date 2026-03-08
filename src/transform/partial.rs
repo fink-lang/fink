@@ -50,7 +50,6 @@ fn has_partial(node: &Node) -> bool {
       CmpPart::Operand(n) => has_partial(n),
       CmpPart::Op(_) => false,
     }),
-    NodeKind::Range { start, end, .. } => has_partial(start) || has_partial(end),
     NodeKind::Spread(inner) => inner.as_ref().map_or(false, |n| has_partial(n)),
     NodeKind::Member { lhs, rhs } => {
       // Member rhs may be Group (computed key) — look through it; it's not a scope boundary here
@@ -129,11 +128,6 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
         CmpPart::Op(op) => CmpPart::Op(op),
       }).collect();
       Node::new(NodeKind::ChainedCmp(parts), loc)
-    }
-    NodeKind::Range { op, start, end } => {
-      let start = replace_partial(*start, param_loc);
-      let end = replace_partial(*end, param_loc);
-      Node::new(NodeKind::Range { op, start: Box::new(start), end: Box::new(end) }, loc)
     }
     NodeKind::Spread(inner) => {
       let inner = inner.map(|n| Box::new(replace_partial(*n, param_loc)));
