@@ -1221,17 +1221,13 @@ test 'multi-arg match', fn:
       x, y: x
 
   | equals_fink fn:
-    ·load ·scope, ·id'seq_append', fn ·seq_append, ·scope:
-      ·load ·scope, ·id'a', fn a, ·scope:
-        ·apply ·seq_append, [], a, ·state, fn ·v_0, ·state:
-          ·load ·scope, ·id'seq_append', fn ·seq_append, ·scope:
-            ·load ·scope, ·id'b', fn b, ·scope:
-              ·apply ·seq_append, ·v_0, b, ·state, fn ·v_1, ·state:
-                ·match_block ·v_1, ·state,
-                  ·match_branch ·patt'x, y', fn x, y, ·scope, ·state, ·ƒ_cont:
-                    ·load ·scope, ·id'x', fn x, ·scope:
-                      ·ƒ_cont x, ·state
-                  fn ·v_2, ·state: ·ƒ_cont ·v_2, ·state
+    ·load ·scope, ·id'a', fn a, ·scope:
+      ·load ·scope, ·id'b', fn b, ·scope:
+        ·match_block a, b, ·state,
+          ·match_branch ·patt'x, y', fn x, y, ·scope, ·state, ·ƒ_cont:
+            ·load ·scope, ·id'x', fn x, ·scope:
+              ·ƒ_cont x, ·state
+          fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---

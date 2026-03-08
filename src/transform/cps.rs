@@ -222,7 +222,7 @@ pub enum ExprKind<'src> {
   /// Pattern lowering to matcher primitives is a separate later pass.
   /// Type inference and semantic analysis work on the Pat tree directly.
   Match {
-    scrutinee: Box<Val<'src>>,
+    scrutinees: Vec<Val<'src>>,  // one for single-subject, many for multi-arg match
     arms: Vec<Arm<'src>>,
     result: BindName<'src>,
     body: Box<Expr<'src>>,

@@ -771,38 +771,23 @@ fn lower_match<'src>(
   arms: &'src [Node<'src>],
   loc: Loc,
 ) -> Lower<'src> {
-  // Multi-arg match: Patterns([a, b, …]) → wrap subjects in a Tuple val.
-  // Single-arg: Patterns([x]) or a plain node → lower directly.
-  let (scrutinee, pending) = match &subjects.kind {
-    NodeKind::Patterns(ps) if ps.len() > 1 => lower_tuple(g, ps, loc),
-    NodeKind::Patterns(ps) if ps.len() == 1 => lower(g, &ps[0]),
-    _ => lower(g, subjects),
+  // Collect subjects: multi-arg Patterns([a, b, …]) → multiple scrutinees;
+  // single Patterns([x]) or plain node → one scrutinee.
+  let subject_nodes: &[Node<'src>] = match &subjects.kind {
+    NodeKind::Patterns(ps) => ps.as_slice(),
+    _ => std::slice::from_ref(subjects),
   };
-  let arity = match &subjects.kind {
-    NodeKind::Patterns(ps) if ps.len() > 1 => ps.len(),
-    _ => 0,  // 0 = single scrutinee, arms use plain patterns
-  };
+  let arity = if subject_nodes.len() > 1 { subject_nodes.len() } else { 0 };
+  let mut pending: Vec<Pending<'src>> = vec![];
+  let scrutinees: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
+    let (v, sp) = lower(g, s);
+    pending.extend(sp);
+    v
+  }).collect();
   let cps_arms = arms.iter().map(|arm| lower_arm(g, arm, arity)).collect();
   let result = g.fresh_result();
-  let mut pending = pending;
-  pending.push(Pending::Match { scrutinee, arms: cps_arms, result, loc });
+  pending.push(Pending::Match { scrutinees, arms: cps_arms, result, loc });
   (ident_val(result, loc), pending)
-}
-
-/// Lower multiple subjects into a Tuple val synthesized via seq_append calls.
-/// The scrutinee is a runtime sequence but typed as Tuple by pattern lowering.
-fn lower_tuple<'src>(g: &mut Gen, subjects: &'src [Node<'src>], loc: Loc) -> Lower<'src> {
-  let mut acc = lit_val(Lit::Seq, loc);
-  let mut pending: Vec<Pending<'src>> = vec![];
-  for subject in subjects {
-    let (sv, sp) = lower(g, subject);
-    pending.extend(sp);
-    let op = key_val_prim(Prim::SeqAppend, loc);
-    let result = g.fresh_result();
-    pending.push(Pending::App { func: op, args: args_val(vec![acc, sv]), result, loc });
-    acc = ident_val(result, loc);
-  }
-  (acc, pending)
 }
 
 fn lower_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arity: usize) -> Arm<'src> {
@@ -865,7 +850,7 @@ enum Pending<'src> {
   Pat { pat: Pat<'src>, val: Val<'src>, loc: Loc },
   Fn { name: BindName<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
   App { func: Val<'src>, args: Vec<Arg<'src>>, result: BindName<'src>, loc: Loc },
-  Match { scrutinee: Val<'src>, arms: Vec<Arm<'src>>, result: BindName<'src>, loc: Loc },
+  Match { scrutinees: Vec<Val<'src>>, arms: Vec<Arm<'src>>, result: BindName<'src>, loc: Loc },
 }
 
 fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
@@ -897,9 +882,9 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       },
       meta: Meta::at(loc),
     },
-    Pending::Match { scrutinee, arms, result, loc } => Expr {
+    Pending::Match { scrutinees, arms, result, loc } => Expr {
       kind: ExprKind::Match {
-        scrutinee: Box::new(scrutinee),
+        scrutinees,
         arms,
         result,
         body: Box::new(body),

@@ -410,17 +410,18 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // The formatter never receives it from the CPS transform.
     ExprKind::LetRec { .. } => unreachable!("LetRec should not reach the formatter before SCC analysis"),
 
-    // Match { scrutinee, arms, result, body }
-    // → ·match_block scrutinee, ·state,
+    // Match { scrutinees, arms, result, body }
+    // → ·match_block s1, s2, …, ·state,
     //     ·match_branch pat, fn bindings…, ·scope, ·state, ·ƒ_cont: arm_body,
     //     …,
     //     fn result, ·state: body
-    ExprKind::Match { scrutinee, arms, result, body } => {
+    ExprKind::Match { scrutinees, arms, result, body } => {
       let result_plain = render_bind(*result);
       let result_fn = result_cont(&result_plain, to_node(body));
-      with_loads(&[scrutinee], |resolved| {
-        let scrutinee_node = resolved.into_iter().next().unwrap();
-        let mut args = vec![scrutinee_node, ident("·state")];
+      let refs: Vec<&Val<'_>> = scrutinees.iter().collect();
+      with_loads(&refs, |resolved| {
+        let mut args: Vec<Node<'static>> = resolved;
+        args.push(ident("·state"));
         for arm in arms {
           args.push(arm_to_node(arm));
         }

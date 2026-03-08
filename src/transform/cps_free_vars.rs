@@ -92,8 +92,8 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       else_: Box::new(transform_expr(*else_)),
     },
 
-    Match { scrutinee, arms, result, body } => Match {
-      scrutinee,
+    Match { scrutinees, arms, result, body } => Match {
+      scrutinees,
       arms: arms.into_iter().map(|mut arm| {
         arm.fn_body = Box::new(transform_expr(*arm.fn_body));
         arm
@@ -172,8 +172,8 @@ fn collect_keys<'src>(
       collect_keys(else_, bound, seen, out);
     }
 
-    Match { scrutinee, arms, body, .. } => {
-      collect_key_from_val(scrutinee, bound, seen, out);
+    Match { scrutinees, arms, body, .. } => {
+      for s in scrutinees { collect_key_from_val(s, bound, seen, out); }
       for arm in arms {
         collect_keys_from_arm(arm, bound, seen, out);
       }
