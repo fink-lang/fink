@@ -97,20 +97,6 @@ pub enum Prim {
   StrRaw,      // fmt'...' raw tagged template
 }
 
-impl Prim {
-  pub fn as_str(self) -> &'static str {
-    match self {
-      Prim::RangeExcl => "range_excl",
-      Prim::RangeIncl => "range_incl",
-      Prim::SeqAppend => "seq_append",
-      Prim::SeqConcat => "seq_concat",
-      Prim::RecPut    => "rec_put",
-      Prim::RecMerge  => "rec_merge",
-      Prim::StrFmt    => "str_fmt",
-      Prim::StrRaw    => "str_raw",
-    }
-  }
-}
 
 /// How a name reference resolves — populated by the semantic/SCC pass.
 #[derive(Debug, Clone, PartialEq)]

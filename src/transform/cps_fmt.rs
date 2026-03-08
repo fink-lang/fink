@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, Arm, BindName, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, RecField, SeqElem, Spread, StrPat, Val, ValKind};
+use super::cps::{Arg, Arm, BindName, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, Prim, RecField, SeqElem, Spread, StrPat, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -101,7 +101,7 @@ fn val_to_node(v: &Val<'_>) -> Node<'static> {
     ValKind::Ident(name) => ident(&render_bind(*name)),
     ValKind::Key(key)    => match &key.kind {
       KeyKind::Name(name) => ident(&sigil(name)),
-      KeyKind::Prim(p)    => ident(&format!("·{}", p.as_str())),
+      KeyKind::Prim(p)    => ident(&format!("·{}", prim_name(*p))),
       KeyKind::Op(op)     => ident(&sigil_op(op)),
     },
   }
@@ -115,7 +115,7 @@ fn resolved_name(v: &Val<'_>) -> String {
     ValKind::Ident(name) => render_bind(*name),
     ValKind::Key(key)    => match &key.kind {
       KeyKind::Name(name) => sigil(name),
-      KeyKind::Prim(p)    => format!("·{}", p.as_str()),
+      KeyKind::Prim(p)    => format!("·{}", prim_name(*p)),
       KeyKind::Op(op)     => sigil_op(op),
     },
     ValKind::Lit(_)      => String::new(),  // literals don't have a name
@@ -132,7 +132,7 @@ fn needs_load(v: &Val<'_>) -> bool {
 fn emit_load(key: &super::cps::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
   let key_node = match &key.kind {
     KeyKind::Name(name) => id_tag(name),
-    KeyKind::Prim(p)    => id_tag(p.as_str()),
+    KeyKind::Prim(p)    => id_tag(prim_name(*p)),
     KeyKind::Op(op)     => op_tag(op),
   };
   apply(ident("·load"), vec![
@@ -227,6 +227,20 @@ fn render_bind(name: BindName<'_>) -> String {
   match name {
     BindName::User(s) => s.to_string(),
     BindName::Gen(n)  => format!("·v_{}", n),
+  }
+}
+
+// Maps a Prim → its runtime name string (without · prefix).
+fn prim_name(p: Prim) -> &'static str {
+  match p {
+    Prim::RangeExcl => "range_excl",
+    Prim::RangeIncl => "range_incl",
+    Prim::SeqAppend => "seq_append",
+    Prim::SeqConcat => "seq_concat",
+    Prim::RecPut    => "rec_put",
+    Prim::RecMerge  => "rec_merge",
+    Prim::StrFmt    => "str_fmt",
+    Prim::StrRaw    => "str_raw",
   }
 }
 
