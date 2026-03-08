@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, Arm, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, RecField, SeqElem, Spread, StrPat, Val, ValKind};
+use super::cps::{Arg, Arm, BindName, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, RecField, SeqElem, Spread, StrPat, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -98,7 +98,7 @@ fn pat_arg(pat: &Pat<'_>) -> Node<'static> {
 fn val_to_node(v: &Val<'_>) -> Node<'static> {
   match &v.kind {
     ValKind::Lit(lit)    => lit_to_node(lit),
-    ValKind::Ident(name) => ident(&sigil(name)),
+    ValKind::Ident(name) => ident(&render_bind(*name)),
     ValKind::Key(key)    => match &key.kind {
       KeyKind::Name(name) => ident(&sigil(name)),
       KeyKind::Prim(p)    => ident(&format!("·{}", p.as_str())),
@@ -112,7 +112,7 @@ fn val_to_node(v: &Val<'_>) -> Node<'static> {
 /// bound by the synthesized load.
 fn resolved_name(v: &Val<'_>) -> String {
   match &v.kind {
-    ValKind::Ident(name) => sigil(name),
+    ValKind::Ident(name) => render_bind(*name),
     ValKind::Key(key)    => match &key.kind {
       KeyKind::Name(name) => sigil(name),
       KeyKind::Prim(p)    => format!("·{}", p.as_str()),
@@ -221,10 +221,30 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 // IR names are always plain strings — · never appears in the IR itself.
 // ---------------------------------------------------------------------------
 
-// Maps plain IR name → rendered output name.
-// User names pass through unchanged; compiler temps and runtime names get ·.
+// Maps a BindName → rendered identifier (with · prefix for Gen).
+// Use for ident() call sites.
+fn render_bind(name: BindName<'_>) -> String {
+  match name {
+    BindName::User(s)   => s.to_string(),
+    BindName::GenVal(n) => format!("·v_{}", n),
+    BindName::GenFn(n)  => format!("·fn_{}", n),
+  }
+}
+
+// Maps a BindName → raw tag string (no · prefix).
+// Use for id_tag() call sites where the tag content is the bare name.
+fn bind_tag(name: BindName<'_>) -> Node<'static> {
+  match name {
+    BindName::User(s)   => id_tag(s),
+    BindName::GenVal(n) => id_tag(&format!("v_{}", n)),
+    BindName::GenFn(n)  => id_tag(&format!("fn_{}", n)),
+  }
+}
+
+// Maps a plain Name (used in free_vars, KeyKind::Name, etc.) → rendered output name.
+// User names pass through unchanged; compiler temps and op locals get · prefix.
 fn sigil(name: &str) -> String {
-  if name.starts_with("v_") || name.starts_with("fn_") || name.starts_with("op_") {
+  if name.starts_with("op_") || name.starts_with("v_") || name.starts_with("fn_") {
     format!("·{}", name)
   } else {
     name.to_string()
@@ -267,10 +287,10 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // LetVal { name, val, body } → ·store ·scope, id'name', val, fn name, ·scope: body
     // If val is a Key, wrap a load first.
     ExprKind::LetVal { name, val, body } => {
-      let plain = sigil(name);
+      let plain = render_bind(*name);
       let store_node = apply(ident("·store"), vec![
         ident("·scope"),
-        id_tag(name),
+        bind_tag(*name),
         val_to_node(val),
         scope_cont(&plain, to_node(body)),
       ]);
@@ -283,7 +303,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     ExprKind::LetPat { pat, val, body } => {
       let bindings = pat.bindings();
       let mut fn_params: Vec<Node<'static>> = bindings.iter()
-        .map(|b| ident(&sigil(b)))
+        .map(|b| ident(&render_bind(*b)))
         .collect();
       fn_params.push(ident("·scope"));
       let bind_node = apply(ident("·match_bind"), vec![
@@ -300,13 +320,13 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // scope_arg = ·scope when free_vars is empty;
     //             {..·scope, name1, name2, …} when captures are present.
     ExprKind::LetFn { name, params, free_vars, fn_body, body } => {
-      let plain_name = sigil(name);
+      let plain_name = render_bind(*name);
       // Build fn params: p1, p2, …, scope_arg, ·state, ·ƒ_cont
       // Spread params render as `..name`.
       let mut fn_params: Vec<Node<'static>> = params.iter()
         .map(|p| match p {
-          Param::Name(n) => ident(&sigil(n)),
-          Param::Spread(n) => spread_node(ident(&sigil(n))),
+          Param::Name(n) => ident(&render_bind(*n)),
+          Param::Spread(n) => spread_node(ident(&render_bind(*n))),
         })
         .collect();
       let scope_arg = if free_vars.is_empty() {
@@ -337,7 +357,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // Loads synthesized for any Key vals in func or args.
     // Spread args render as `..resolved_val`.
     ExprKind::App { func, args, result, body } => {
-      let result_plain = sigil(result);
+      let result_plain = render_bind(*result);
       let result_fn = result_cont(&result_plain, to_node(body));
       // Extract vals from args, tracking which are spreads.
       let is_spread: Vec<bool> = args.iter().map(|a| matches!(a, Arg::Spread(_))).collect();
@@ -380,7 +400,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     //     …,
     //     fn result, ·state: body
     ExprKind::Match { scrutinee, arms, result, body } => {
-      let result_plain = sigil(result);
+      let result_plain = render_bind(*result);
       let result_fn = result_cont(&result_plain, to_node(body));
       with_loads(&[scrutinee], |resolved| {
         let scrutinee_node = resolved.into_iter().next().unwrap();
@@ -399,7 +419,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
 //   ·match_branch pat, fn bindings…, ·scope, ·state, ·ƒ_cont: arm_body
 fn arm_to_node(arm: &Arm<'_>) -> Node<'static> {
   let mut fn_params: Vec<Node<'static>> = arm.bindings.iter()
-    .map(|b| ident(&sigil(b)))
+    .map(|b| ident(&render_bind(*b)))
     .collect();
   fn_params.push(ident("·scope"));
   fn_params.push(ident("·state"));
@@ -413,7 +433,7 @@ fn arm_to_node(arm: &Arm<'_>) -> Node<'static> {
 fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
   match &pat.kind {
     PatKind::Wildcard      => node(NodeKind::Wildcard),
-    PatKind::Bind(name)    => ident(&sigil(name)),
+    PatKind::Bind(name)    => ident(&render_bind(*name)),
     PatKind::Lit(lit)      => lit_to_node(lit),
 
     PatKind::Seq { elems, spread } => {
@@ -468,7 +488,7 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
 fn spread_pat_to_node(s: &Spread<'_>) -> Node<'static> {
   // `..name`, `..bind`, or bare `..` if anonymous.
   match s.name.or(s.bind) {
-    Some(name) => spread_node(ident(&sigil(name))),
+    Some(name) => spread_node(ident(&render_bind(name))),
     None => node(NodeKind::Spread(None)),
   }
 }
@@ -477,7 +497,7 @@ fn rec_field_to_node(f: &RecField<'_>) -> Node<'static> {
   // `{key}` shorthand — pattern is just a Bind to the same name: render as plain `key`.
   // `{key: pat}` — render as `key = pat`.
   match &f.pattern.kind {
-    PatKind::Bind(name) if *name == f.key => ident(&sigil(f.key)),
+    PatKind::Bind(name) if *name == BindName::User(f.key) => ident(f.key),
     _ => node(NodeKind::Bind {
       lhs: Box::new(ident(f.key)),
       rhs: Box::new(pat_to_node(&f.pattern)),

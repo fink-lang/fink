@@ -37,17 +37,25 @@ impl Meta {
 // Names and keys
 // ---------------------------------------------------------------------------
 
-/// A bound name — parameters, let-bindings, synthetic temporaries.
-/// Sigil conventions are output-only; plain names here.
-/// Output convention: user names are plain; compiler/runtime names get · prefix.
+/// A plain source name — used for references to existing bindings (e.g. free_vars).
 pub type Name<'src> = &'src str;
+
+/// A binding site — introduces a name into scope.
+/// `User` carries the original source name; `Gen` carries a counter (no prefix string).
+/// The formatter is responsible for rendering Gen as `·v_N` / `·fn_N` etc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BindName<'src> {
+  User(Name<'src>),  // name from source: `foo`, `x`, `result`
+  GenVal(u32),       // compiler-generated value temp: rendered as ·v_N
+  GenFn(u32),        // compiler-generated function name: rendered as ·fn_N
+}
 
 /// A function parameter — either a plain name or a varargs spread (`..rest`).
 /// Only one `Spread` is valid, and only in trailing position; enforced by the transform.
 #[derive(Debug, Clone)]
 pub enum Param<'src> {
-  Name(Name<'src>),
-  Spread(Name<'src>),
+  Name(BindName<'src>),
+  Spread(BindName<'src>),
 }
 
 /// A call-site argument — either a plain value or a spread (`..items`).
@@ -127,9 +135,9 @@ pub struct Val<'src> {
 
 #[derive(Debug, Clone)]
 pub enum ValKind<'src> {
-  Ident(Name<'src>),  // a locally bound name (param or let-binding)
-  Key(Key<'src>),     // a scope lookup (user name or operator)
-  Lit(Lit<'src>),     // a literal value
+  Ident(BindName<'src>),  // a locally bound name (param or let-binding)
+  Key(Key<'src>),         // a scope lookup (user name or operator)
+  Lit(Lit<'src>),         // a literal value
 }
 
 #[derive(Debug, Clone)]
@@ -157,7 +165,7 @@ pub struct Expr<'src> {
 pub enum ExprKind<'src> {
   /// Bind a value to a name; visible in body.
   LetVal {
-    name: Name<'src>,
+    name: BindName<'src>,
     val: Box<Val<'src>>,
     body: Box<Expr<'src>>,
   },
@@ -168,9 +176,9 @@ pub enum ExprKind<'src> {
   /// Contains names read from outer scope (loads not covered by params/locals),
   /// in first-encounter order. Used by cps_fmt to emit `{..·scope, name, …}`.
   LetFn {
-    name: Name<'src>,
+    name: BindName<'src>,
     params: Vec<Param<'src>>,
-    free_vars: Vec<Name<'src>>,
+    free_vars: Vec<Name<'src>>,  // references to outer bindings, not definitions
     fn_body: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },
@@ -187,7 +195,7 @@ pub enum ExprKind<'src> {
   App {
     func: Box<Val<'src>>,
     args: Vec<Arg<'src>>,
-    result: Name<'src>,
+    result: BindName<'src>,
     body: Box<Expr<'src>>,
   },
 
@@ -216,7 +224,7 @@ pub enum ExprKind<'src> {
   Match {
     scrutinee: Box<Val<'src>>,
     arms: Vec<Arm<'src>>,
-    result: Name<'src>,
+    result: BindName<'src>,
     body: Box<Expr<'src>>,
   },
 
@@ -227,7 +235,7 @@ pub enum ExprKind<'src> {
 /// A single binding in a LetRec group.
 #[derive(Debug, Clone)]
 pub struct Binding<'src> {
-  pub name: Name<'src>,
+  pub name: BindName<'src>,
   pub params: Vec<Param<'src>>,
   pub fn_body: Box<Expr<'src>>,
   pub meta: Meta,
@@ -238,7 +246,7 @@ pub struct Binding<'src> {
 #[derive(Debug, Clone)]
 pub struct Arm<'src> {
   pub pattern: Pat<'src>,
-  pub bindings: Vec<Name<'src>>,  // names introduced by pattern, for scope analysis
+  pub bindings: Vec<BindName<'src>>,  // names introduced by pattern, for scope analysis
   pub fn_body: Box<Expr<'src>>,
   pub meta: Meta,
 }
@@ -259,7 +267,7 @@ pub enum PatKind<'src> {
   Wildcard,
 
   /// foo — bind scrutinee to name
-  Bind(Name<'src>),
+  Bind(BindName<'src>),
 
   /// 42, true, 'hello' — equality check against literal
   Lit(Lit<'src>),
@@ -295,16 +303,16 @@ pub enum PatKind<'src> {
 
 impl<'src> Pat<'src> {
   /// Collect all names bound by this pattern (depth-first, left-to-right).
-  pub fn bindings(&self) -> Vec<Name<'src>> {
+  pub fn bindings(&self) -> Vec<BindName<'src>> {
     let mut names = vec![];
     self.collect_bindings(&mut names);
     names
   }
 
-  fn collect_bindings(&self, out: &mut Vec<Name<'src>>) {
+  fn collect_bindings(&self, out: &mut Vec<BindName<'src>>) {
     match &self.kind {
       PatKind::Wildcard | PatKind::Lit(_) | PatKind::Range { .. } => {}
-      PatKind::Bind(name) => out.push(name),
+      PatKind::Bind(name) => out.push(*name),
       PatKind::Guard { pat, .. } => pat.collect_bindings(out),
       PatKind::Seq { elems, spread } => {
         for elem in elems {
@@ -350,9 +358,9 @@ pub enum SeqElem<'src> {
 /// A spread element — `..rest`, `..(guard)`, `..(guard) |= name`.
 #[derive(Debug, Clone)]
 pub struct Spread<'src> {
-  pub guard: Option<Box<Val<'src>>>,  // None = bare `..rest`
-  pub bind: Option<Name<'src>>,       // `|= name` binding
-  pub name: Option<Name<'src>>,       // `..rest` name
+  pub guard: Option<Box<Val<'src>>>,      // None = bare `..rest`
+  pub bind: Option<BindName<'src>>,       // `|= name` binding
+  pub name: Option<BindName<'src>>,       // `..rest` name
   pub meta: Meta,
 }
 

@@ -23,7 +23,7 @@
 // output.
 
 use std::collections::HashSet;
-use super::cps::{Arg, Arm, Expr, ExprKind, KeyKind, Name, Param, Pat, PatKind, Val, ValKind};
+use super::cps::{Arg, Arm, BindName, Expr, ExprKind, KeyKind, Name, Param, Pat, PatKind, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -56,7 +56,10 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       let body = transform_expr(*body);
       // Compute free vars for this fn.
       let bound: HashSet<Name<'_>> = params.iter().filter_map(|p| match p {
-        Param::Name(n) | Param::Spread(n) => if *n == "_" { None } else { Some(*n) },
+        Param::Name(n) | Param::Spread(n) => match n {
+          BindName::User(s) => if *s == "_" { None } else { Some(*s) },
+          BindName::GenVal(_) | BindName::GenFn(_) => None,  // compiler temps are never free-var references
+        },
       }).collect();
       let mut seen: HashSet<Name<'_>> = HashSet::new();
       let mut free_vars: Vec<Name<'_>> = vec![];
@@ -125,7 +128,9 @@ fn collect_keys<'src>(
       collect_key_from_val(val, bound, seen, out);
       // `name` is now settled — exclude it from captures in the continuation.
       let mut inner_bound = bound.clone();
-      inner_bound.insert(name);
+      if let BindName::User(s) = name {
+        inner_bound.insert(s);
+      }
       collect_keys(body, &inner_bound, seen, out);
     }
 
@@ -133,8 +138,10 @@ fn collect_keys<'src>(
       collect_key_from_val(val, bound, seen, out);
       // Names bound by the pattern are settled for the continuation.
       let mut inner_bound = bound.clone();
-      for name in pat.bindings() {
-        inner_bound.insert(name);
+      for bind_name in pat.bindings() {
+        if let BindName::User(s) = bind_name {
+          inner_bound.insert(s);
+        }
       }
       collect_keys(body, &inner_bound, seen, out);
     }
@@ -237,7 +244,9 @@ fn collect_keys_from_arm<'src>(
 ) {
   let mut arm_bound = bound.clone();
   for b in &arm.bindings {
-    arm_bound.insert(b);
+    if let BindName::User(s) = b {
+      arm_bound.insert(s);
+    }
   }
   collect_pat_keys(&arm.pattern, bound, seen, out);
   collect_keys(&arm.fn_body, &arm_bound, seen, out);

@@ -18,8 +18,8 @@
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use crate::transform::cps::{
-  Arg, Arm, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Pat, PatKind, Prim, RecField,
-  SeqElem, Spread, StrPat, Val, ValKind,
+  Arg, Arm, BindName, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Pat, PatKind, Prim,
+  RecField, SeqElem, Spread, StrPat, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -27,33 +27,26 @@ use crate::transform::cps::{
 // ---------------------------------------------------------------------------
 
 pub struct Gen {
-  counter: usize,
-  /// Leaked strings for synthetic names that outlive the source lifetime.
-  arena: Vec<String>,
+  counter: u32,
 }
 
 impl Gen {
   pub fn new() -> Self {
-    Gen { counter: 0, arena: Vec::new() }
+    Gen { counter: 0 }
   }
 
-  fn alloc(&mut self, s: String) -> &'static str {
-    self.arena.push(s);
-    Box::leak(self.arena.last().unwrap().clone().into_boxed_str())
-  }
-
-  pub fn fresh(&mut self, prefix: &str) -> &'static str {
+  fn next(&mut self) -> u32 {
     let n = self.counter;
     self.counter += 1;
-    self.alloc(format!("{}{}", prefix, n))
+    n
   }
 
-  pub fn fresh_fn(&mut self) -> &'static str {
-    self.fresh("fn_")
+  pub fn fresh_fn(&mut self) -> BindName<'static> {
+    BindName::GenFn(self.next())
   }
 
-  pub fn fresh_result(&mut self) -> &'static str {
-    self.fresh("v_")
+  pub fn fresh_result(&mut self) -> BindName<'static> {
+    BindName::GenVal(self.next())
   }
 }
 
@@ -65,13 +58,27 @@ impl Gen {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn ident_val(name: Name<'_>, loc: Loc) -> Val<'_> {
+fn ident_val(name: BindName<'_>, loc: Loc) -> Val<'_> {
   Val { kind: ValKind::Ident(name), meta: Meta::at(loc) }
 }
 
 fn key_val_name<'src>(name: Name<'src>, loc: Loc) -> Val<'src> {
   Val {
     kind: ValKind::Key(Key { kind: KeyKind::Name(name), resolution: None, meta: Meta::at(loc) }),
+    meta: Meta::at(loc),
+  }
+}
+
+/// Create a Key reference to a gen-temp BindName (for LetPat.val in prepend_let_pats).
+/// Gen temps need to be loaded from scope, so they are Keys not Idents here.
+fn key_val_gen(name: BindName<'_>, loc: Loc) -> Val<'static> {
+  let s: &'static str = match name {
+    BindName::GenVal(n) => Box::leak(format!("v_{}", n).into_boxed_str()),
+    BindName::GenFn(n)  => Box::leak(format!("fn_{}", n).into_boxed_str()),
+    BindName::User(s)   => Box::leak(s.to_string().into_boxed_str()),
+  };
+  Val {
+    kind: ValKind::Key(Key { kind: KeyKind::Name(s), resolution: None, meta: Meta::at(loc) }),
     meta: Meta::at(loc),
   }
 }
@@ -102,7 +109,7 @@ fn ret_expr(val: Val<'_>, loc: Loc) -> Expr<'_> {
 fn app_node<'src>(
   func: Val<'src>,
   args: Vec<Arg<'src>>,
-  result: Name<'src>,
+  result: BindName<'src>,
   body: Expr<'src>,
   loc: Loc,
 ) -> Expr<'src> {
@@ -275,7 +282,7 @@ fn lower_bind_stmt<'src>(
 ) -> (Pending<'src>, Vec<Pending<'src>>) {
   let (val, mut pending) = lower(g, rhs);
   let binding = match &lhs.kind {
-    NodeKind::Ident(name) => Pending::Val { name, val, loc },
+    NodeKind::Ident(name) => Pending::Val { name: BindName::User(name), val, loc },
     NodeKind::Wildcard => {
       let discard = g.fresh_result();
       Pending::Val { name: discard, val, loc }
@@ -300,7 +307,7 @@ fn lower_bind<'src>(
 ) -> Lower<'src> {
   let (val, mut pending) = lower(g, rhs);
   let name = match &lhs.kind {
-    NodeKind::Ident(name) => *name,
+    NodeKind::Ident(name) => BindName::User(name),
     NodeKind::Wildcard => {
       let discard = g.fresh_result();
       pending.push(Pending::Val { name: discard, val, loc });
@@ -357,12 +364,12 @@ fn lower_iife<'src>(
 }
 
 /// Extract params from a fn params node, returning:
-/// - the param list (with complex patterns replaced by fresh spread names)
-/// - a list of (Pat, spread_name) pairs to prepend as LetPat in the fn body
+/// - the param list (with complex patterns replaced by fresh Gen names)
+/// - a list of (Pat, BindName) pairs to prepend as LetPat in the fn body
 fn extract_params_with_gen<'src>(
   g: &mut Gen,
   params: &'src Node<'src>,
-) -> (Vec<Param<'src>>, Vec<(Pat<'src>, Name<'src>)>) {
+) -> (Vec<Param<'src>>, Vec<(Pat<'src>, BindName<'src>)>) {
   let mut param_list = vec![];
   let mut deferred = vec![];
   let nodes = match &params.kind {
@@ -371,26 +378,26 @@ fn extract_params_with_gen<'src>(
   };
   for p in nodes {
     match &p.kind {
-      NodeKind::Ident(name) => param_list.push(Param::Name(name)),
-      NodeKind::Wildcard => param_list.push(Param::Name("_")),
+      NodeKind::Ident(name) => param_list.push(Param::Name(BindName::User(name))),
+      NodeKind::Wildcard => param_list.push(Param::Name(BindName::User("_"))),
       NodeKind::Patterns(ps) => {
         for inner in ps {
           param_list.push(Param::Name(match &inner.kind {
-            NodeKind::Ident(name) => name,
-            _ => "_",
+            NodeKind::Ident(name) => BindName::User(name),
+            _ => BindName::User("_"),
           }));
         }
       }
       NodeKind::Spread(inner) => {
-        let name = match inner.as_deref() {
-          Some(Node { kind: NodeKind::Ident(name), .. }) => name,
-          _ => "_",
+        let bind_name = match inner.as_deref() {
+          Some(Node { kind: NodeKind::Ident(name), .. }) => BindName::User(name),
+          _ => BindName::User("_"),
         };
-        param_list.push(Param::Spread(name));
+        param_list.push(Param::Spread(bind_name));
       }
-      // Complex destructuring param — desugar to fresh spread param + LetPat in body.
+      // Complex destructuring param — desugar to fresh Gen param + LetPat in body.
       _ => {
-        let spread_name = g.fresh("v_");
+        let spread_name = g.fresh_result();
         param_list.push(Param::Spread(spread_name));
         deferred.push((lower_pat(p), spread_name));
       }
@@ -399,19 +406,24 @@ fn extract_params_with_gen<'src>(
   (param_list, deferred)
 }
 
-/// Wrap `body` in `LetPat` nodes for each (pat, spread_name) pair, innermost first.
+/// Wrap `body` in `LetPat` nodes for each (pat, bind_name) pair, innermost first.
+/// The bind_name is a BindName::Gen produced by fresh_result, rendered as a Key (Ident) ref.
 fn prepend_let_pats<'src>(
-  deferred: Vec<(Pat<'src>, Name<'src>)>,
+  deferred: Vec<(Pat<'src>, BindName<'src>)>,
   body: Expr<'src>,
   loc: Loc,
 ) -> Expr<'src> {
-  deferred.into_iter().rev().fold(body, |inner, (pat, spread_name)| Expr {
-    kind: ExprKind::LetPat {
-      pat: Box::new(pat),
-      val: Box::new(key_val_name(spread_name, loc)),
-      body: Box::new(inner),
-    },
-    meta: Meta::at(loc),
+  deferred.into_iter().rev().fold(body, |inner, (pat, bind_name)| {
+    // Gen temps need loading from scope, so use key_val_gen (not ident_val).
+    let val = key_val_gen(bind_name, loc);
+    Expr {
+      kind: ExprKind::LetPat {
+        pat: Box::new(pat),
+        val: Box::new(val),
+        body: Box::new(inner),
+      },
+      meta: Meta::at(loc),
+    }
   })
 }
 
@@ -424,16 +436,16 @@ fn extract_params<'src>(params: &'src Node<'src>) -> Vec<Param<'src>> {
 
 fn extract_param<'src>(param: &'src Node<'src>) -> Vec<Param<'src>> {
   match &param.kind {
-    NodeKind::Ident(name) => vec![Param::Name(name)],
-    NodeKind::Wildcard => vec![Param::Name("_")],
+    NodeKind::Ident(name) => vec![Param::Name(BindName::User(name))],
+    NodeKind::Wildcard => vec![Param::Name(BindName::User("_"))],
     NodeKind::Patterns(ps) => ps.iter().flat_map(|p| extract_param(p)).collect(),
     // `..rest` varargs param — trailing spread.
     NodeKind::Spread(inner) => {
-      let name = match inner.as_deref() {
-        Some(Node { kind: NodeKind::Ident(name), .. }) => name,
-        _ => "_",
+      let bind_name = match inner.as_deref() {
+        Some(Node { kind: NodeKind::Ident(name), .. }) => BindName::User(name),
+        _ => BindName::User("_"),
       };
-      vec![Param::Spread(name)]
+      vec![Param::Spread(bind_name)]
     }
     // Complex destructuring params — extract all bound names from pattern.
     _ => collect_pat_bindings(&lower_pat(param))
@@ -828,11 +840,11 @@ fn lower_block<'src>(
 
 // Extend Pending to handle App and Match, which need a body (the next expression).
 enum Pending<'src> {
-  Val { name: Name<'src>, val: Val<'src>, loc: Loc },
+  Val { name: BindName<'src>, val: Val<'src>, loc: Loc },
   Pat { pat: Pat<'src>, val: Val<'src>, loc: Loc },
-  Fn { name: Name<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
-  App { func: Val<'src>, args: Vec<Arg<'src>>, result: Name<'src>, loc: Loc },
-  Match { scrutinee: Val<'src>, arms: Vec<Arm<'src>>, result: Name<'src>, loc: Loc },
+  Fn { name: BindName<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
+  App { func: Val<'src>, args: Vec<Arg<'src>>, result: BindName<'src>, loc: Loc },
+  Match { scrutinee: Val<'src>, arms: Vec<Arm<'src>>, result: BindName<'src>, loc: Loc },
 }
 
 fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
@@ -884,7 +896,7 @@ fn lower_pat<'src>(node: &'src Node<'src>) -> Pat<'src> {
   let loc = node.loc;
   let kind = match &node.kind {
     NodeKind::Wildcard => PatKind::Wildcard,
-    NodeKind::Ident(name) => PatKind::Bind(name),
+    NodeKind::Ident(name) => PatKind::Bind(BindName::User(name)),
     NodeKind::LitBool(b)  => PatKind::Lit(Lit::Bool(*b)),
     NodeKind::LitInt(s)   => PatKind::Lit(Lit::Int(parse_int(s))),
     NodeKind::LitFloat(s) => PatKind::Lit(Lit::Float(parse_float(s))),
@@ -924,7 +936,7 @@ fn lower_pat<'src>(node: &'src Node<'src>) -> Pat<'src> {
           NodeKind::Ident(name) => {
             rec_fields.push(RecField {
               key: name,
-              pattern: Pat { kind: PatKind::Bind(name), meta: Meta::at(field.loc) },
+              pattern: Pat { kind: PatKind::Bind(BindName::User(name)), meta: Meta::at(field.loc) },
               meta: Meta::at(field.loc),
             });
           }
@@ -967,23 +979,23 @@ fn lower_spread<'src>(inner: Option<&'src Node<'src>>, loc: Loc) -> Spread<'src>
     None => Spread { guard: None, bind: None, name: None, meta: Meta::at(loc) },
     Some(node) => match &node.kind {
       NodeKind::Ident(name) => {
-        Spread { guard: None, bind: None, name: Some(name), meta: Meta::at(node.loc) }
+        Spread { guard: None, bind: None, name: Some(BindName::User(name)), meta: Meta::at(node.loc) }
       }
       _ => Spread { guard: None, bind: None, name: None, meta: Meta::at(loc) },
     }
   }
 }
 
-fn collect_pat_bindings<'src>(pat: &Pat<'src>) -> Vec<Name<'src>> {
+fn collect_pat_bindings<'src>(pat: &Pat<'src>) -> Vec<BindName<'src>> {
   let mut names = vec![];
   collect_into(pat, &mut names);
   names
 }
 
-fn collect_into<'src>(pat: &Pat<'src>, names: &mut Vec<Name<'src>>) {
+fn collect_into<'src>(pat: &Pat<'src>, names: &mut Vec<BindName<'src>>) {
   match &pat.kind {
     PatKind::Wildcard | PatKind::Lit(_) => {}
-    PatKind::Bind(name) => names.push(name),
+    PatKind::Bind(name) => names.push(*name),
     PatKind::Seq { elems, spread } => {
       for elem in elems {
         match elem {
