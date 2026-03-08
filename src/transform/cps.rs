@@ -96,14 +96,20 @@ pub enum KeyKind<'src> {
 /// globals by codegen. Never appear as binding sites — reference only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Prim {
-  RangeExcl,   // 0..10
-  RangeIncl,   // 0...10
   SeqAppend,   // [a, b, c] element construction
   SeqConcat,   // [..xs, ..ys] spread merge
   RecPut,      // {key: val} field construction
   RecMerge,    // {..rec} spread merge
   StrFmt,      // 'hello ${name}' interpolated string
   StrRaw,      // fmt'...' raw tagged template
+}
+
+/// Whether a range pattern is exclusive (`..`) or inclusive (`...`).
+/// Replaces the `op: &'src str` field in `PatKind::Range`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RangeKind {
+  Excl,  // `..`  — exclusive upper bound
+  Incl,  // `...` — inclusive upper bound
 }
 
 
@@ -283,7 +289,7 @@ pub enum PatKind<'src> {
 
   /// 'a'...'z' or 0..10 — range pattern
   Range {
-    op: &'src str,   // ".." or "..."
+    kind: RangeKind,
     start: Box<Pat<'src>>,
     end: Box<Pat<'src>>,
   },

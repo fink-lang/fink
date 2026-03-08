@@ -359,8 +359,8 @@ test 'range excl', fn:
     0..10
 
   | equals_fink fn:
-    ·load ·scope, ·id'range_excl', fn ·range_excl, ·scope:
-      ·apply ·range_excl, 0, 10, ·state, fn ·v_0, ·state:
+    ·load ·scope, ·op'..', fn ·op_rngex, ·scope:
+      ·apply ·op_rngex, 0, 10, ·state, fn ·v_0, ·state:
         ·ƒ_cont ·v_0, ·state
 
 
@@ -369,8 +369,8 @@ test 'range incl', fn:
     0...10
 
   | equals_fink fn:
-    ·load ·scope, ·id'range_incl', fn ·range_incl, ·scope:
-      ·apply ·range_incl, 0, 10, ·state, fn ·v_0, ·state:
+    ·load ·scope, ·op'...', fn ·op_rngin, ·scope:
+      ·apply ·op_rngin, 0, 10, ·state, fn ·v_0, ·state:
         ·ƒ_cont ·v_0, ·state
 
 --- --- ---

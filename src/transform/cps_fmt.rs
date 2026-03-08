@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Pat, PatKind, Prim, RecField, SeqElem, Spread, StrPat, Val, ValKind};
+use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Pat, PatKind, Prim, RangeKind, RecField, SeqElem, Spread, StrPat, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -245,8 +245,6 @@ fn raw_bind(name: BindName<'_>) -> String {
 // Maps a Prim → its runtime name string (without · prefix).
 fn prim_name(p: Prim) -> &'static str {
   match p {
-    Prim::RangeExcl => "range_excl",
-    Prim::RangeIncl => "range_incl",
     Prim::SeqAppend => "seq_append",
     Prim::SeqConcat => "seq_concat",
     Prim::RecPut    => "rec_put",
@@ -283,6 +281,8 @@ fn sigil_op(op: &str) -> String {
     "and" => "and",
     "or"  => "or",
     "not" => "not",
+    ".."  => "rngex",
+    "..."  => "rngin",
     _     => op,
   };
   format!("·op_{}", suffix)
@@ -484,10 +484,9 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
       node(NodeKind::StrRawTempl(children))
     }
 
-    PatKind::Range { op, start, end } => {
-      let op_s: &'static str = Box::leak(op.to_string().into_boxed_str());
+    PatKind::Range { kind, start, end } => {
       node(NodeKind::InfixOp {
-        op: op_s,
+        op: match kind { RangeKind::Excl => "..", RangeKind::Incl => "..." },
         lhs: Box::new(pat_to_node(start)),
         rhs: Box::new(pat_to_node(end)),
       })

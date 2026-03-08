@@ -19,7 +19,7 @@ use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use crate::transform::cps::{
   Arg, Arm, BindName, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Pat, PatKind, Prim,
-  RecField, SeqElem, Spread, StrPat, Val, ValKind,
+  RangeKind, RecField, SeqElem, Spread, StrPat, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -591,8 +591,7 @@ fn lower_range<'src>(
   let (sv, mut pending) = lower(g, start);
   let (ev, ep) = lower(g, end);
   pending.extend(ep);
-  let range_prim = if *op == *".." { Prim::RangeExcl } else { Prim::RangeIncl };
-  let range_key = key_val_prim(range_prim, loc);
+  let range_key = key_val_op(op, loc);
   let result = g.fresh_result();
   pending.push(Pending::App { func: range_key, args: args_val(vec![sv, ev]), result, loc });
   (ident_val(result, loc), pending)
@@ -942,7 +941,8 @@ fn lower_pat<'src>(node: &'src Node<'src>) -> Pat<'src> {
     }
 
     NodeKind::InfixOp { op, lhs, rhs } if matches!(*op, ".." | "...") => {
-      PatKind::Range { op, start: Box::new(lower_pat(lhs)), end: Box::new(lower_pat(rhs)) }
+      let kind = if *op == ".." { RangeKind::Excl } else { RangeKind::Incl };
+      PatKind::Range { kind, start: Box::new(lower_pat(lhs)), end: Box::new(lower_pat(rhs)) }
     }
 
     NodeKind::StrTempl(parts) => {
