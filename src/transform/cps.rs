@@ -41,6 +41,23 @@ impl Meta {
 /// Sigil conventions (·foo, ƒ_cont) are output-only; plain names here.
 pub type Name<'src> = &'src str;
 
+/// A function parameter — either a plain name or a varargs spread (`..rest`).
+/// Only one `Spread` is valid, and only in trailing position; enforced by the transform.
+#[derive(Debug, Clone)]
+pub enum Param<'src> {
+  Name(Name<'src>),
+  Spread(Name<'src>),
+}
+
+/// A call-site argument — either a plain value or a spread (`..items`).
+/// Restricting spread to this type (rather than `ValKind`) prevents spread
+/// from appearing in positions where it has no meaning (e.g. `LetVal`, `Ret`).
+#[derive(Debug, Clone)]
+pub enum Arg<'src> {
+  Val(Val<'src>),
+  Spread(Val<'src>),
+}
+
 /// A lookup key — how a name is referenced from scope.
 /// Annotated with resolution kind after SCC/semantic analysis.
 #[derive(Debug, Clone)]
@@ -117,7 +134,7 @@ pub enum ExprKind<'src> {
   /// Anonymous fns get a compiler-generated synthetic name.
   LetFn {
     name: Name<'src>,
-    params: Vec<Name<'src>>,
+    params: Vec<Param<'src>>,
     fn_body: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },
@@ -133,7 +150,7 @@ pub enum ExprKind<'src> {
   /// Call func with args; result bound to `result`, visible in body.
   App {
     func: Box<Val<'src>>,
-    args: Vec<Val<'src>>,
+    args: Vec<Arg<'src>>,
     result: Name<'src>,
     body: Box<Expr<'src>>,
   },
@@ -164,7 +181,7 @@ pub enum ExprKind<'src> {
 #[derive(Debug, Clone)]
 pub struct Binding<'src> {
   pub name: Name<'src>,
-  pub params: Vec<Name<'src>>,
+  pub params: Vec<Param<'src>>,
   pub fn_body: Box<Expr<'src>>,
   pub meta: Meta,
 }

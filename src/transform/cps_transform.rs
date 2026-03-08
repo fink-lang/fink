@@ -18,8 +18,8 @@
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use crate::transform::cps::{
-  Arm, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Pat, PatKind, RecField, SeqElem, Spread,
-  StrPat, Val, ValKind,
+  Arg, Arm, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Pat, PatKind, RecField,
+  SeqElem, Spread, StrPat, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ fn ret_expr(val: Val<'_>, loc: Loc) -> Expr<'_> {
 /// Emit an App node: func(args...) → result; body.
 fn app_node<'src>(
   func: Val<'src>,
-  args: Vec<Val<'src>>,
+  args: Vec<Arg<'src>>,
   result: Name<'src>,
   body: Expr<'src>,
   loc: Loc,
@@ -103,6 +103,16 @@ fn app_node<'src>(
     kind: ExprKind::App { func: Box::new(func), args, result, body: Box::new(body) },
     meta: Meta::at(loc),
   }
+}
+
+/// Wrap a plain `Val` as an `Arg::Val`.
+fn arg_val(val: Val<'_>) -> Arg<'_> {
+  Arg::Val(val)
+}
+
+/// Wrap a `Vec<Val>` as `Vec<Arg::Val>` — for internal primitives that never spread.
+fn args_val<'src>(vals: Vec<Val<'src>>) -> Vec<Arg<'src>> {
+  vals.into_iter().map(Arg::Val).collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -330,25 +340,36 @@ fn lower_iife<'src>(
   let result = g.fresh_result();
   let pending = vec![
     Pending::Fn { name: fn_name, params: param_names, fn_body, loc },
-    Pending::App { func: ident_val(fn_name, loc), args: vec![], result, loc },
+    Pending::App { func: ident_val(fn_name, loc), args: args_val(vec![]), result, loc },
   ];
   (ident_val(result, loc), pending)
 }
 
-fn extract_params<'src>(params: &'src Node<'src>) -> Vec<Name<'src>> {
+fn extract_params<'src>(params: &'src Node<'src>) -> Vec<Param<'src>> {
   match &params.kind {
     NodeKind::Patterns(ps) => ps.iter().flat_map(|p| extract_param(p)).collect(),
     _ => extract_param(params),
   }
 }
 
-fn extract_param<'src>(param: &'src Node<'src>) -> Vec<Name<'src>> {
+fn extract_param<'src>(param: &'src Node<'src>) -> Vec<Param<'src>> {
   match &param.kind {
-    NodeKind::Ident(name) => vec![name],
-    NodeKind::Wildcard => vec!["_"],
+    NodeKind::Ident(name) => vec![Param::Name(name)],
+    NodeKind::Wildcard => vec![Param::Name("_")],
     NodeKind::Patterns(ps) => ps.iter().flat_map(|p| extract_param(p)).collect(),
+    // `..rest` varargs param — trailing spread.
+    NodeKind::Spread(inner) => {
+      let name = match inner.as_deref() {
+        Some(Node { kind: NodeKind::Ident(name), .. }) => name,
+        _ => "_",
+      };
+      vec![Param::Spread(name)]
+    }
     // Complex destructuring params — extract all bound names from pattern.
-    _ => collect_pat_bindings(&lower_pat(param)),
+    _ => collect_pat_bindings(&lower_pat(param))
+        .into_iter()
+        .map(Param::Name)
+        .collect(),
   }
 }
 
@@ -365,19 +386,17 @@ fn lower_apply<'src>(
   let (func_val, mut pending) = lower(g, func);
   let mut arg_vals = vec![];
   for arg in args {
-    let (av, ap) = lower(g, arg);
+    let is_spread = matches!(arg.kind, NodeKind::Spread(_));
+    let inner = if is_spread {
+      if let NodeKind::Spread(Some(inner)) = &arg.kind { inner.as_ref() } else { arg }
+    } else {
+      arg
+    };
+    let (av, ap) = lower(g, inner);
     pending.extend(ap);
-    arg_vals.push(av);
+    arg_vals.push(if is_spread { Arg::Spread(av) } else { Arg::Val(av) });
   }
   let result = g.fresh_result();
-  // Emit App as a Pending? No — App has a `body` which we don't have yet.
-  // Instead, return a placeholder ident and defer the App construction.
-  // Actually, the accumulator approach breaks down for App because App needs a body.
-  // Solution: use a special Pending variant for App nodes too, or switch to building
-  // the body as we go by using a continuation-slot approach.
-  //
-  // Simplest fix: return an Expr builder via a dedicated type.
-  // For now: use an App variant in Pending.
   pending.push(Pending::App { func: func_val, args: arg_vals, result, loc });
   (ident_val(result, loc), pending)
 }
@@ -397,7 +416,7 @@ fn lower_pipe<'src>(g: &mut Gen, stages: &'src [Node<'src>], loc: Loc) -> Lower<
     let (func_val, sp) = lower(g, stage);
     pending.extend(sp);
     let result = g.fresh_result();
-    pending.push(Pending::App { func: func_val, args: vec![acc_val], result, loc });
+    pending.push(Pending::App { func: func_val, args: args_val(vec![acc_val]), result, loc });
     acc_val = ident_val(result, loc);
   }
   (acc_val, pending)
@@ -419,7 +438,7 @@ fn lower_infix<'src>(
   pending.extend(rp);
   let op_fn = key_val_op(op, loc);
   let result = g.fresh_result();
-  pending.push(Pending::App { func: op_fn, args: vec![lv, rv], result, loc });
+  pending.push(Pending::App { func: op_fn, args: args_val(vec![lv, rv]), result, loc });
   (ident_val(result, loc), pending)
 }
 
@@ -432,7 +451,7 @@ fn lower_unary<'src>(
   let (val, mut pending) = lower(g, operand);
   let op_fn = key_val_op(op, loc);
   let result = g.fresh_result();
-  pending.push(Pending::App { func: op_fn, args: vec![val], result, loc });
+  pending.push(Pending::App { func: op_fn, args: args_val(vec![val]), result, loc });
   (ident_val(result, loc), pending)
 }
 
@@ -466,7 +485,7 @@ fn lower_chained_cmp<'src>(
     let rv = operands[i + 1].clone();
     let op_fn = key_val_op(op, loc);
     let cmp_result = g.fresh_result();
-    pending.push(Pending::App { func: op_fn, args: vec![lv, rv], result: cmp_result, loc });
+    pending.push(Pending::App { func: op_fn, args: args_val(vec![lv, rv]), result: cmp_result, loc });
     cmp_vals.push(ident_val(cmp_result, loc));
   }
 
@@ -475,7 +494,7 @@ fn lower_chained_cmp<'src>(
   for cv in cmp_vals {
     let and_fn = key_val_op("and", loc);
     let and_result = g.fresh_result();
-    pending.push(Pending::App { func: and_fn, args: vec![acc, cv], result: and_result, loc });
+    pending.push(Pending::App { func: and_fn, args: args_val(vec![acc, cv]), result: and_result, loc });
     acc = ident_val(and_result, loc);
   }
   (acc, pending)
@@ -498,7 +517,7 @@ fn lower_range<'src>(
   let range_fn = if *op == *".." { "range_excl" } else { "range_incl" };
   let range_key = key_val_name(range_fn, loc);
   let result = g.fresh_result();
-  pending.push(Pending::App { func: range_key, args: vec![sv, ev], result, loc });
+  pending.push(Pending::App { func: range_key, args: args_val(vec![sv, ev]), result, loc });
   (ident_val(result, loc), pending)
 }
 
@@ -517,7 +536,7 @@ fn lower_member<'src>(
   pending.extend(rp);
   let dot_fn = key_val_op(".", loc);
   let result = g.fresh_result();
-  pending.push(Pending::App { func: dot_fn, args: vec![lv, rv], result, loc });
+  pending.push(Pending::App { func: dot_fn, args: args_val(vec![lv, rv]), result, loc });
   (ident_val(result, loc), pending)
 }
 
@@ -540,7 +559,7 @@ fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], loc: Loc) -> Lowe
     let op_name = if is_spread { "seq_concat" } else { "seq_append" };
     let op_fn = key_val_name(op_name, loc);
     let result = g.fresh_result();
-    pending.push(Pending::App { func: op_fn, args: vec![acc, ev], result, loc });
+    pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, ev]), result, loc });
     acc = ident_val(result, loc);
   }
   (acc, pending)
@@ -560,7 +579,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
         pending.extend(sp);
         let op_fn = key_val_name("rec_merge", loc);
         let result = g.fresh_result();
-        pending.push(Pending::App { func: op_fn, args: vec![acc, sv], result, loc });
+        pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, sv]), result, loc });
         acc = ident_val(result, loc);
       }
       NodeKind::Bind { lhs, rhs } => {
@@ -570,7 +589,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           pending.extend(fp);
           let op_fn = key_val_name("rec_put", loc);
           let result = g.fresh_result();
-          pending.push(Pending::App { func: op_fn, args: vec![acc, key_lit, fv], result, loc });
+          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, fv]), result, loc });
           acc = ident_val(result, loc);
         } else {
           // Computed key.
@@ -580,7 +599,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           pending.extend(fp);
           let op_fn = key_val_name("rec_put", loc);
           let result = g.fresh_result();
-          pending.push(Pending::App { func: op_fn, args: vec![acc, kv, fv], result, loc });
+          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, kv, fv]), result, loc });
           acc = ident_val(result, loc);
         }
       }
@@ -594,7 +613,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           pending.extend(fp);
           let op_fn = key_val_name("rec_put", loc);
           let result = g.fresh_result();
-          pending.push(Pending::App { func: op_fn, args: vec![acc, key_lit, fv], result, loc });
+          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, fv]), result, loc });
           acc = ident_val(result, loc);
         } else {
           let (kv, kp) = lower(g, key_node);
@@ -603,7 +622,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           pending.extend(fp);
           let op_fn = key_val_name("rec_put", loc);
           let result = g.fresh_result();
-          pending.push(Pending::App { func: op_fn, args: vec![acc, kv, fv], result, loc });
+          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, kv, fv]), result, loc });
           acc = ident_val(result, loc);
         }
       }
@@ -613,7 +632,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
         let id_val = key_val_name(name, field.loc);
         let op_fn = key_val_name("rec_put", loc);
         let result = g.fresh_result();
-        pending.push(Pending::App { func: op_fn, args: vec![acc, key_lit, id_val], result, loc });
+        pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, id_val]), result, loc });
         acc = ident_val(result, loc);
       }
       _ => {
@@ -621,7 +640,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
         pending.extend(fp);
         let op_fn = key_val_name("rec_merge", loc);
         let result = g.fresh_result();
-        pending.push(Pending::App { func: op_fn, args: vec![acc, fv], result, loc });
+        pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, fv]), result, loc });
         acc = ident_val(result, loc);
       }
     }
@@ -635,11 +654,11 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
 
 fn lower_str_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], loc: Loc) -> Lower<'src> {
   let mut pending: Vec<Pending<'src>> = vec![];
-  let mut part_vals = vec![];
+  let mut part_vals: Vec<Arg<'src>> = vec![];
   for part in parts {
     let (pv, pp) = lower(g, part);
     pending.extend(pp);
-    part_vals.push(pv);
+    part_vals.push(Arg::Val(pv));
   }
   let str_fmt_fn = key_val_name("str_fmt", loc);
   let result = g.fresh_result();
@@ -655,11 +674,11 @@ fn lower_str_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], loc: Loc) -> Lo
 fn lower_str_raw_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], loc: Loc) -> Lower<'src> {
   assert!(!parts.is_empty(), "empty raw string template");
   let (tag_fn, mut pending) = lower(g, &parts[0]);
-  let mut part_vals = vec![];
+  let mut part_vals: Vec<Arg<'src>> = vec![];
   for part in &parts[1..] {
     let (pv, pp) = lower(g, part);
     pending.extend(pp);
-    part_vals.push(pv);
+    part_vals.push(Arg::Val(pv));
   }
   let result = g.fresh_result();
   pending.push(Pending::App { func: tag_fn, args: part_vals, result, loc });
@@ -726,7 +745,7 @@ fn lower_block<'src>(
   let result = g.fresh_result();
   pending.push(Pending::App {
     func: name_val,
-    args: vec![ident_val(block_fn_name, loc)],
+    args: args_val(vec![ident_val(block_fn_name, loc)]),
     result,
     loc,
   });
@@ -740,8 +759,8 @@ fn lower_block<'src>(
 // Extend Pending to handle App and Match, which need a body (the next expression).
 enum Pending<'src> {
   Val { name: Name<'src>, val: Val<'src>, loc: Loc },
-  Fn { name: Name<'src>, params: Vec<Name<'src>>, fn_body: Expr<'src>, loc: Loc },
-  App { func: Val<'src>, args: Vec<Val<'src>>, result: Name<'src>, loc: Loc },
+  Fn { name: Name<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
+  App { func: Val<'src>, args: Vec<Arg<'src>>, result: Name<'src>, loc: Loc },
   Match { scrutinee: Val<'src>, arms: Vec<Arm<'src>>, result: Name<'src>, loc: Loc },
 }
 

@@ -1219,44 +1219,73 @@ test 'multi-arm match', fn:
 
 
 --- --- ---
-varargs — WIP: spread not preserved in params/args
+varargs — spread preserved in IR (WIP: cps_transform not yet emitting spread)
 --- --- ---
 
-# WIP: varargs call-site spread lost (flat arg instead of ..arg)
+# Spread is valid in the CPS IR — apply and fn params can contain ..arg / ..·name.
+# The IR stays readable Fink; codegen handles the actual flattening.
+# WIP: cps_transform currently drops the spread; these tests define the target shape.
+
 test 'varargs — call site spreads iterable', fn:
   expect cps_c_expr fn:
     foo 1, ..items
 
   | equals_fink fn:
-    PLACEHOLDER
+    load scope, id'foo', fn ·foo, scope:
+      load scope, id'items', fn ·items, scope:
+        apply ·foo, 1, ..·items, state, fn v_0, state:
+          ƒ_cont v_0, state
+
 
 test 'call with spread — trailing iterable', fn:
   expect cps_c_expr fn:
     foo a, ..rest
 
   | equals_fink fn:
-    PLACEHOLDER
+    load scope, id'foo', fn ·foo, scope:
+      load scope, id'a', fn ·a, scope:
+        load scope, id'rest', fn ·rest, scope:
+          apply ·foo, ·a, ..·rest, state, fn v_0, state:
+            ƒ_cont v_0, state
+
 
 test 'call with spread — spread only', fn:
   expect cps_c_expr fn:
     foo ..items
 
   | equals_fink fn:
-    PLACEHOLDER
+    load scope, id'foo', fn ·foo, scope:
+      load scope, id'items', fn ·items, scope:
+        apply ·foo, ..·items, state, fn v_0, state:
+          ƒ_cont v_0, state
+
 
 test 'call with spread — passes through from varargs fn', fn:
   expect cps_c_expr fn:
     fn ..args: foo ..args
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure scope,
+      fn ..·args, scope, state, ƒ_cont:
+        store scope, id'args', ·args, fn ·args, scope:
+          load scope, id'foo', fn ·foo, scope:
+            load scope, id'args', fn ·args, scope:
+              apply ·foo, ..·args, state, fn v_0, state:
+                ƒ_cont v_0, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
   expect cps_c_expr fn:
     fn a, [1, ..b]: b
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure scope,
+      fn ·a, _seq_pat, scope, state, ƒ_cont:
+        store scope, id'a', ·a, fn ·a, scope:
+          load scope, id'b', fn ·b, scope:
+            ƒ_cont ·b, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
 
 
 --- --- ---
@@ -1281,8 +1310,19 @@ test 'two bindings at module level', fn:
 free variable analysis (WIP: not yet implemented on new IR)
 --- --- ---
 
-# WIP: free var pass not yet ported to cps_c IR
-# Expected format once implemented: closure scope annotates fn param with {..scope, ·captured}
+# WIP: free var pass not yet ported to new IR.
+#
+# Expected output below was written against the OLD IR (env/chld_env, no chld_scope).
+# Treat it as a reference sketch, NOT ground truth — it will need updating once
+# the pass is implemented on the new IR (scope/chld_scope, store before load etc).
+#
+# Key difference to keep in mind:
+#   Old IR:  closure env, fn ·x, env, ...       — `env` param, no store-before-load
+#   New IR:  closure scope, fn ·x, scope, ...   — `scope` param, store comes first
+#
+# The annotation pattern itself should be the same:
+#   plain `scope` when nothing captured
+#   `{..scope, ·a, op_plus}` listing direct reads in load-encounter order
 
 test 'free vars — fn with no captures', fn:
   expect cps_c_expr fn:
@@ -1290,7 +1330,13 @@ test 'free vars — fn with no captures', fn:
       a + b
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·a, ·b, {..env, op_plus}, state, ƒ_cont:
+        store env, id'a', ·a, fn ·a, env:
+          store env, id'b', ·b, fn ·b, env:
+            apply op_plus, ·a, ·b, state, ƒ_cont
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
 
 test 'free vars — fn with only literals', fn:
   expect cps_c_expr fn:
@@ -1298,7 +1344,12 @@ test 'free vars — fn with only literals', fn:
       42
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·x, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          ƒ_cont 42, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
 
 test 'free vars — closure captures one outer var', fn:
   expect cps_c_expr fn:
@@ -1307,7 +1358,16 @@ test 'free vars — closure captures one outer var', fn:
         x + y
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·x, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          closure env,
+            fn ·y, {..env, op_plus, ·x}, state, ƒ_cont:
+              store env, id'y', ·y, fn ·y, env:
+                apply op_plus, ·x, ·y, state, ƒ_cont
+            fn ·fn_val, _: ƒ_cont ·fn_val, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
 
 test 'free vars — closure captures local binding', fn:
   expect cps_c_expr fn:
@@ -1317,7 +1377,18 @@ test 'free vars — closure captures local binding', fn:
         z + y
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·x, {..env, op_plus}, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          apply op_plus, ·x, 1, state, fn ·z, state:
+            store env, id'z', ·z, fn ·z, env:
+              closure env,
+                fn ·y, {..env, op_plus, ·z}, state, ƒ_cont:
+                  store env, id'y', ·y, fn ·y, env:
+                    apply op_plus, ·z, ·y, state, ƒ_cont
+                fn ·fn_val, _: ƒ_cont ·fn_val, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
 
 test 'free vars — named outer, inner captures param', fn:
   expect cps_c_expr fn:
@@ -1326,7 +1397,18 @@ test 'free vars — named outer, inner captures param', fn:
         x + y
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·x, env, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          closure env,
+            fn ·y, {..env, op_plus, ·x}, state, ƒ_cont:
+              store env, id'y', ·y, fn ·y, env:
+                apply op_plus, ·x, ·y, state, ƒ_cont
+            fn ·fn_val, _: ƒ_cont ·fn_val, state
+      fn ·add, chld_env:
+        store chld_env, id'add', ·add, fn ·add, env:
+          ƒ_cont ·add, state
+
 
 test 'free vars — two named fns no captures', fn:
   expect cps_c_expr fn:
@@ -1334,7 +1416,21 @@ test 'free vars — two named fns no captures', fn:
     triple = fn x: x + x + x
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·x, {..env, op_plus}, state, ƒ_cont:
+        store env, id'x', ·x, fn ·x, env:
+          apply op_plus, ·x, ·x, state, ƒ_cont
+      fn ·double, chld_env:
+        store chld_env, id'double', ·double, fn ·double, env:
+          closure env,
+            fn ·x, {..env, op_plus}, state, ƒ_cont:
+              store env, id'x', ·x, fn ·x, env:
+                apply op_plus, ·x, ·x, state, fn v_0, state:
+                  apply op_plus, v_0, ·x, state, ƒ_cont
+            fn ·triple, chld_env:
+              store chld_env, id'triple', ·triple, fn ·triple, env:
+                ƒ_cont ·triple, state
+
 
 test 'free vars — three levels of nesting', fn:
   expect cps_c_expr fn:
@@ -1344,7 +1440,21 @@ test 'free vars — three levels of nesting', fn:
           a + b + c
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·a, env, state, ƒ_cont:
+        store env, id'a', ·a, fn ·a, env:
+          closure env,
+            fn ·b, env, state, ƒ_cont:
+              store env, id'b', ·b, fn ·b, env:
+                closure env,
+                  fn ·c, {..env, op_plus, ·a, ·b}, state, ƒ_cont:
+                    store env, id'c', ·c, fn ·c, env:
+                      apply op_plus, ·a, ·b, state, fn v_0, state:
+                        apply op_plus, v_0, ·c, state, ƒ_cont
+                  fn ·fn_val, _: ƒ_cont ·fn_val, state
+            fn ·fn_val, _: ƒ_cont ·fn_val, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
 
 test 'free vars — match arm bindings are local', fn:
   expect cps_c_expr fn:
@@ -1354,7 +1464,23 @@ test 'free vars — match arm bindings are local', fn:
         n: n
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·val, {..env, op_eq}, state, ƒ_cont:
+        store env, id'val', ·val, fn ·val, env:
+          match_block ·val, state,
+            match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
+              apply op_eq, v, 1, state, fn v_result, state:
+                if v_result,
+                  fn state: ƒ_ok 'one', state
+                  fn state: ƒ_err state
+            match_branch env, fn ·n, env, state, ƒ_err, ƒ_ok:
+              store env, id'n', ·n, fn ·n, env:
+                load env, id'n', fn ·n, env:
+                  ƒ_ok ·n, state
+            fn state: panic 'no match', state
+            fn match_result, state: ƒ_cont match_result, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
+
 
 test 'free vars — closure inside match arm captures arm binding', fn:
   expect cps_c_expr fn:
@@ -1364,4 +1490,25 @@ test 'free vars — closure inside match arm captures arm binding', fn:
           fn x: head + x
 
   | equals_fink fn:
-    PLACEHOLDER
+    closure env,
+      fn ·val, env, state, ƒ_cont:
+        store env, id'val', ·val, fn ·val, env:
+          match_block ·val, state,
+            match_branch env, fn seq, env, state, ƒ_err, ƒ_ok:
+              seq_matcher seq, state,
+                fn m, ƒ_err, state:
+                  match_pop_at m, 0, state,
+                    fn m, ·head, state:
+                      match_rest m, state, fn m, ·tail, state:
+                        store env, id'head', ·head, fn ·head, env:
+                          store env, id'tail', ·tail, fn ·tail, env:
+                            closure env,
+                              fn ·x, {..env, op_plus, ·head}, state, ƒ_cont:
+                                store env, id'x', ·x, fn ·x, env:
+                                  apply op_plus, ·head, ·x, state, ƒ_cont
+                              fn ·fn_val, _: ƒ_ok ·fn_val, state
+                    fn m, state: ƒ_err state
+                fn state: ƒ_err state
+            fn state: panic 'no match', state
+            fn match_result, state: ƒ_cont match_result, state
+      fn ·fn_val, _: ƒ_cont ·fn_val, state
