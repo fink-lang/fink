@@ -197,12 +197,27 @@ impl<'src> Parser<'src> {
     Ok(first)
   }
 
+  // --- reserved keyword helpers ---
+
+  // Ident tokens that act as infix operators/control flow — cannot start an argument.
+  // Future: replace body with a registry lookup.
+  fn is_infix_keyword(s: &str) -> bool {
+    matches!(s, "and" | "or" | "xor" | "not" | "in" | "else")
+  }
+
+  // Broader set for apply fast-path dispatch: infix keywords plus literals/special forms
+  // that need their own parse path and must not be consumed as a plain ident.
+  // Future: replace body with a registry lookup.
+  fn is_dispatch_keyword(s: &str) -> bool {
+    Self::is_infix_keyword(s) || matches!(s, "true" | "false" | "_" | "try")
+  }
+
   // --- application ---
 
   // Returns true if the current token can start an argument.
   fn is_arg_start(&self) -> bool {
     match self.current.kind {
-      TokenKind::Ident => !matches!(self.current.src, "and" | "or" | "xor" | "not" | "in" | "else"),
+      TokenKind::Ident => !Self::is_infix_keyword(self.current.src),
       TokenKind::Int
       | TokenKind::Float
       | TokenKind::Decimal
@@ -225,7 +240,7 @@ impl<'src> Parser<'src> {
     // Fast path for ident head: bump directly so `..` after ident is not consumed as a range.
     // Skip fast path for keywords/operators that need special handling downstream.
     if self.at(TokenKind::Ident)
-      && !matches!(self.peek().src, "true" | "false" | "_" | "not" | "and" | "or" | "xor" | "in" | "else" | "try")
+      && !Self::is_dispatch_keyword(self.peek().src)
     {
       let name_tok = self.bump();
       let name = name_tok.src;
@@ -562,7 +577,7 @@ impl<'src> Parser<'src> {
     // Ident: may start a nested application or block
     // Skip fast path for keywords/operators handled by parse_infix.
     if self.at(TokenKind::Ident)
-      && !matches!(self.peek().src, "true" | "false" | "not" | "and" | "or" | "xor" | "in" | "else" | "try")
+      && !Self::is_dispatch_keyword(self.peek().src)
     {
       let name_tok = self.peek().clone();
       // Special keywords get full parse
@@ -624,9 +639,13 @@ impl<'src> Parser<'src> {
     }
   }
 
+  fn is_range_op(tok: &Token) -> bool {
+    tok.kind == TokenKind::Sep && matches!(tok.src, ".." | "...")
+  }
+
   fn is_cmp_op(tok: &Token) -> bool {
-    (tok.kind == TokenKind::Sep
-      && matches!(tok.src, "==" | "!=" | "<" | "<=" | ">" | ">=" | "><"))
+    // Comparison ops sit at bp 60 in infix_bp; "in" is also a comparison.
+    matches!(Self::infix_bp(tok), Some((60, 61)))
       || (tok.kind == TokenKind::Ident && tok.src == "in")
   }
 
@@ -683,7 +702,7 @@ impl<'src> Parser<'src> {
       }
 
       // Range: .. and ...
-      if tok.kind == TokenKind::Sep && (tok.src == ".." || tok.src == "...") {
+      if Self::is_range_op(&tok) {
         self.bump();
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
@@ -778,7 +797,7 @@ impl<'src> Parser<'src> {
         lhs = Node::new(NodeKind::Member { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
         continue;
       }
-      if tok.kind == TokenKind::Sep && (tok.src == ".." || tok.src == "...") {
+      if Self::is_range_op(&tok) {
         self.bump();
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
@@ -1087,7 +1106,7 @@ impl<'src> Parser<'src> {
       let group = self.parse_group()?;
       let inner = if let NodeKind::Group(inner) = group.kind { *inner } else { group };
       // ..(expr)..(expr) — `)` directly followed by `..`/`...` is a range, not a second spread
-      if self.at(TokenKind::Sep) && (self.peek().src == ".." || self.peek().src == "...") {
+      if Self::is_range_op(self.peek()) {
         Some(self.parse_infix_from(inner, 0)?)
       } else {
         Some(inner)
