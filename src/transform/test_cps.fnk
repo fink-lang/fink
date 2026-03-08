@@ -3,7 +3,7 @@ cps_c IR — pretty-printer tests
 --- --- ---
 
 # Input is a Fink expression; output is the synthesized CPS Fink source.
-# The formatter derives store/load/env/state from the clean structural IR.
+# The formatter derives ·store/·load/env/·state from the clean structural IR.
 #
 # Test format:
 #   test 'name', fn:
@@ -14,7 +14,7 @@ cps_c IR — pretty-printer tests
 #       <expected cps output>
 
 {test, expect, equals_fink, cps_c_expr} = import '!fake'
-{load, store, ƒ_cont, state} = import '!fake'
+{·load, ·store, ·ƒ_cont, ·state} = import '!fake'
 
 --- --- ---
 literals — tail position, no synthesis needed
@@ -25,7 +25,7 @@ test 'int literal', fn:
     42
 
   | equals_fink fn:
-    ƒ_cont 42, state
+    ·ƒ_cont 42, ·state
 
 
 test 'bool literal', fn:
@@ -33,7 +33,7 @@ test 'bool literal', fn:
     true
 
   | equals_fink fn:
-    ƒ_cont true, state
+    ·ƒ_cont true, ·state
 
 
 test 'string literal', fn:
@@ -41,11 +41,11 @@ test 'string literal', fn:
     'hello'
 
   | equals_fink fn:
-    ƒ_cont 'hello', state
+    ·ƒ_cont 'hello', ·state
 
 
 --- --- ---
-binding — store synthesis
+binding — ·store synthesis
 --- --- ---
 
 test 'bind literal', fn:
@@ -53,8 +53,8 @@ test 'bind literal', fn:
     x = 42
 
   | equals_fink fn:
-    store scope, id'x', 42, fn ·x, scope:
-      ƒ_cont ·x, state
+    ·store ·scope, id'x', 42, fn x, ·scope:
+      ·ƒ_cont x, ·state
 
 
 test 'bind ident', fn:
@@ -62,38 +62,38 @@ test 'bind ident', fn:
     x = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'x', ·foo, fn ·x, scope:
-        ƒ_cont ·x, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'x', foo, fn x, ·scope:
+        ·ƒ_cont x, ·state
 
 
 --- --- ---
-application — apply synthesis
+application — ·apply synthesis
 --- --- ---
 
-test 'apply ident to literal', fn:
+test '·apply ident to literal', fn:
   expect cps_c_expr fn:
     foo 42
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      apply ·foo, 42, state, fn v_0, state:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·apply foo, 42, ·state, fn ·v_0, ·state:
+        ·ƒ_cont ·v_0, ·state
 
 
-test 'apply ident to ident', fn:
+test '·apply ident to ident', fn:
   expect cps_c_expr fn:
     foo bar
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'bar', fn ·bar, scope:
-        apply ·foo, ·bar, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'bar', fn bar, ·scope:
+        ·apply foo, bar, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
-identifier reference — synthesize load
+identifier reference — synthesize ·load
 --- --- ---
 
 test 'ident ref', fn:
@@ -101,8 +101,8 @@ test 'ident ref', fn:
     foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      ƒ_cont ·foo, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·ƒ_cont foo, ·state
 
 
 --- --- ---
@@ -115,28 +115,28 @@ test 'block two stmts', fn:
     x
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        store scope, id'x', 1, fn ·x, scope:
-          load scope, id'x', fn ·x, scope:
-            ƒ_cont ·x, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·store ·scope, id'x', 1, fn x, ·scope:
+          ·load ·scope, id'x', fn x, ·scope:
+            ·ƒ_cont x, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
-test 'block bind then apply', fn:
+test 'block bind then ·apply', fn:
   expect cps_c_expr fn:
     x = 42
     foo x
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        store scope, id'x', 42, fn ·x, scope:
-          load scope, id'foo', fn ·foo, scope:
-            load scope, id'x', fn ·x, scope:
-              apply ·foo, ·x, state, fn v_1, state:
-                ƒ_cont v_1, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·store ·scope, id'x', 42, fn x, ·scope:
+          ·load ·scope, id'foo', fn foo, ·scope:
+            ·load ·scope, id'x', fn x, ·scope:
+              ·apply foo, x, ·state, fn ·v_1, ·state:
+                ·ƒ_cont ·v_1, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'fn body with bind', fn:
@@ -146,15 +146,15 @@ test 'fn body with bind', fn:
       x
 
   | equals_fink fn:
-    closure scope,
-      fn ·a, scope, state, ƒ_cont:
-        load scope, op'+', fn op_plus, scope:
-          load scope, id'a', fn ·a, scope:
-            apply op_plus, ·a, 1, state, fn v_1, state:
-              store scope, id'x', v_1, fn ·x, scope:
-                load scope, id'x', fn ·x, scope:
-                  ƒ_cont ·x, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn a, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, op'+', fn ·op_plus, ·scope:
+          ·load ·scope, id'a', fn a, ·scope:
+            ·apply ·op_plus, a, 1, ·state, fn ·v_1, ·state:
+              ·store ·scope, id'x', ·v_1, fn x, ·scope:
+                ·load ·scope, id'x', fn x, ·scope:
+                  ·ƒ_cont x, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 --- --- ---
@@ -166,10 +166,10 @@ test 'pipe two stages', fn:
     a | foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'a', fn ·a, scope:
-        apply ·foo, ·a, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·apply foo, a, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 test 'pipe three stages', fn:
@@ -177,16 +177,16 @@ test 'pipe three stages', fn:
     a | foo | bar
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'a', fn ·a, scope:
-        apply ·foo, ·a, state, fn v_0, state:
-          load scope, id'bar', fn ·bar, scope:
-            apply ·bar, v_0, state, fn v_1, state:
-              ƒ_cont v_1, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·apply foo, a, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'bar', fn bar, ·scope:
+            ·apply bar, ·v_0, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
 
 
 --- --- ---
-infix operators — op load + apply synthesis
+infix operators — op ·load + ·apply synthesis
 --- --- ---
 
 test 'infix add', fn:
@@ -194,11 +194,11 @@ test 'infix add', fn:
     a + b
 
   | equals_fink fn:
-    load scope, op'+', fn op_plus, scope:
-      load scope, id'a', fn ·a, scope:
-        load scope, id'b', fn ·b, scope:
-          apply op_plus, ·a, ·b, state, fn v_0, state:
-            ƒ_cont v_0, state
+    ·load ·scope, op'+', fn ·op_plus, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·load ·scope, id'b', fn b, ·scope:
+          ·apply ·op_plus, a, b, ·state, fn ·v_0, ·state:
+            ·ƒ_cont ·v_0, ·state
 
 
 test 'infix literal', fn:
@@ -206,14 +206,14 @@ test 'infix literal', fn:
     a + 1
 
   | equals_fink fn:
-    load scope, op'+', fn op_plus, scope:
-      load scope, id'a', fn ·a, scope:
-        apply op_plus, ·a, 1, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, op'+', fn ·op_plus, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·apply ·op_plus, a, 1, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
-function definition — closure synthesis
+function definition — ·closure synthesis
 --- --- ---
 
 test 'fn one param', fn:
@@ -221,11 +221,11 @@ test 'fn one param', fn:
     fn a: a
 
   | equals_fink fn:
-    closure scope,
-      fn ·a, scope, state, ƒ_cont:
-        load scope, id'a', fn ·a, scope:
-          ƒ_cont ·a, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn a, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'a', fn a, ·scope:
+          ·ƒ_cont a, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'fn two params', fn:
@@ -233,11 +233,11 @@ test 'fn two params', fn:
     fn a, b: a
 
   | equals_fink fn:
-    closure scope,
-      fn ·a, ·b, scope, state, ƒ_cont:
-        load scope, id'a', fn ·a, scope:
-          ƒ_cont ·a, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn a, b, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'a', fn a, ·scope:
+          ·ƒ_cont a, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'named fn', fn:
@@ -245,17 +245,17 @@ test 'named fn', fn:
     double = fn a: a
 
   | equals_fink fn:
-    closure scope,
-      fn ·a, scope, state, ƒ_cont:
-        load scope, id'a', fn ·a, scope:
-          ƒ_cont ·a, state
-      fn fn_0, chld_scope:
-        store scope, id'double', fn_0, fn ·double, scope:
-          ƒ_cont ·double, state
+    ·closure ·scope,
+      fn a, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'a', fn a, ·scope:
+          ·ƒ_cont a, ·state
+      fn ·fn_0, ·chld_scope:
+        ·store ·scope, id'double', ·fn_0, fn double, ·scope:
+          ·ƒ_cont double, ·state
 
 
 --- --- ---
-match — match_block synthesis
+match — ·match_block synthesis
 --- --- ---
 
 test 'match wildcard', fn:
@@ -264,11 +264,11 @@ test 'match wildcard', fn:
       _: 42
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      match_block ·foo, state,
-        match_branch _, fn scope, state, ƒ_cont:
-          ƒ_cont 42, state
-        fn v_0, state: ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·match_block foo, ·state,
+        ·match_branch _, fn ·scope, ·state, ·ƒ_cont:
+          ·ƒ_cont 42, ·state
+        fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 
 test 'match bind', fn:
@@ -277,12 +277,12 @@ test 'match bind', fn:
       x: x
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      match_block ·foo, state,
-        match_branch ·x, fn ·x, scope, state, ƒ_cont:
-          load scope, id'x', fn ·x, scope:
-            ƒ_cont ·x, state
-        fn v_0, state: ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·match_block foo, ·state,
+        ·match_branch x, fn x, ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, id'x', fn x, ·scope:
+            ·ƒ_cont x, ·state
+        fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 
 test 'match literal arms', fn:
@@ -293,15 +293,15 @@ test 'match literal arms', fn:
       _: 'other'
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      match_block ·foo, state,
-        match_branch 1, fn scope, state, ƒ_cont:
-          ƒ_cont 'one', state
-        match_branch 2, fn scope, state, ƒ_cont:
-          ƒ_cont 'two', state
-        match_branch _, fn scope, state, ƒ_cont:
-          ƒ_cont 'other', state
-        fn v_0, state: ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·match_block foo, ·state,
+        ·match_branch 1, fn ·scope, ·state, ·ƒ_cont:
+          ·ƒ_cont 'one', ·state
+        ·match_branch 2, fn ·scope, ·state, ·ƒ_cont:
+          ·ƒ_cont 'two', ·state
+        ·match_branch _, fn ·scope, ·state, ·ƒ_cont:
+          ·ƒ_cont 'other', ·state
+        fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
@@ -313,10 +313,10 @@ test 'unary not', fn:
     not x
 
   | equals_fink fn:
-    load scope, op'not', fn op_not, scope:
-      load scope, id'x', fn ·x, scope:
-        apply op_not, ·x, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, op'not', fn ·op_not, ·scope:
+      ·load ·scope, id'x', fn x, ·scope:
+        ·apply ·op_not, x, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 test 'unary minus', fn:
@@ -324,10 +324,10 @@ test 'unary minus', fn:
     -x
 
   | equals_fink fn:
-    load scope, op'-', fn op_minus, scope:
-      load scope, id'x', fn ·x, scope:
-        apply op_minus, ·x, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, op'-', fn ·op_minus, ·scope:
+      ·load ·scope, id'x', fn x, ·scope:
+        ·apply ·op_minus, x, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 --- --- ---
 chained comparisons
@@ -338,17 +338,17 @@ test 'chained cmp', fn:
     a < b < c
 
   | equals_fink fn:
-    load scope, op'<', fn op_lt, scope:
-      load scope, id'a', fn ·a, scope:
-        load scope, id'b', fn ·b, scope:
-          apply op_lt, ·a, ·b, state, fn v_0, state:
-            load scope, op'<', fn op_lt, scope:
-              load scope, id'b', fn ·b, scope:
-                load scope, id'c', fn ·c, scope:
-                  apply op_lt, ·b, ·c, state, fn v_1, state:
-                    load scope, op'and', fn op_and, scope:
-                      apply op_and, v_0, v_1, state, fn v_2, state:
-                        ƒ_cont v_2, state
+    ·load ·scope, op'<', fn ·op_lt, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·load ·scope, id'b', fn b, ·scope:
+          ·apply ·op_lt, a, b, ·state, fn ·v_0, ·state:
+            ·load ·scope, op'<', fn ·op_lt, ·scope:
+              ·load ·scope, id'b', fn b, ·scope:
+                ·load ·scope, id'c', fn c, ·scope:
+                  ·apply ·op_lt, b, c, ·state, fn ·v_1, ·state:
+                    ·load ·scope, op'and', fn ·op_and, ·scope:
+                      ·apply ·op_and, ·v_0, ·v_1, ·state, fn ·v_2, ·state:
+                        ·ƒ_cont ·v_2, ·state
 
 --- --- ---
 range
@@ -359,9 +359,9 @@ test 'range excl', fn:
     0..10
 
   | equals_fink fn:
-    load scope, id'range_excl', fn ·range_excl, scope:
-      apply ·range_excl, 0, 10, state, fn v_0, state:
-        ƒ_cont v_0, state
+    ·load ·scope, id'range_excl', fn ·range_excl, ·scope:
+      ·apply ·range_excl, 0, 10, ·state, fn ·v_0, ·state:
+        ·ƒ_cont ·v_0, ·state
 
 
 test 'range incl', fn:
@@ -369,9 +369,9 @@ test 'range incl', fn:
     0...10
 
   | equals_fink fn:
-    load scope, id'range_incl', fn ·range_incl, scope:
-      apply ·range_incl, 0, 10, state, fn v_0, state:
-        ƒ_cont v_0, state
+    ·load ·scope, id'range_incl', fn ·range_incl, ·scope:
+      ·apply ·range_incl, 0, 10, ·state, fn ·v_0, ·state:
+        ·ƒ_cont ·v_0, ·state
 
 --- --- ---
 string templates
@@ -382,10 +382,10 @@ test 'str templ', fn:
     'hello ${name}'
 
   | equals_fink fn:
-    load scope, id'str_fmt', fn ·str_fmt, scope:
-      load scope, id'name', fn ·name, scope:
-        apply ·str_fmt, 'hello ', ·name, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, id'str_fmt', fn ·str_fmt, ·scope:
+      ·load ·scope, id'name', fn name, ·scope:
+        ·apply ·str_fmt, 'hello ', name, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 test 'str templ two exprs', fn:
@@ -393,11 +393,11 @@ test 'str templ two exprs', fn:
     '${a} and ${b}'
 
   | equals_fink fn:
-    load scope, id'str_fmt', fn ·str_fmt, scope:
-      load scope, id'a', fn ·a, scope:
-        load scope, id'b', fn ·b, scope:
-          apply ·str_fmt, ·a, ' and ', ·b, state, fn v_0, state:
-            ƒ_cont v_0, state
+    ·load ·scope, id'str_fmt', fn ·str_fmt, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·load ·scope, id'b', fn b, ·scope:
+          ·apply ·str_fmt, a, ' and ', b, ·state, fn ·v_0, ·state:
+            ·ƒ_cont ·v_0, ·state
 
 --- --- ---
 sequence and record literals
@@ -408,13 +408,13 @@ test 'seq literal', fn:
     [1, 2, 3]
 
   | equals_fink fn:
-    load scope, id'seq_append', fn ·seq_append, scope:
-      apply ·seq_append, [], 1, state, fn v_0, state:
-        load scope, id'seq_append', fn ·seq_append, scope:
-          apply ·seq_append, v_0, 2, state, fn v_1, state:
-            load scope, id'seq_append', fn ·seq_append, scope:
-              apply ·seq_append, v_1, 3, state, fn v_2, state:
-                ƒ_cont v_2, state
+    ·load ·scope, id'seq_append', fn ·seq_append, ·scope:
+      ·apply ·seq_append, [], 1, ·state, fn ·v_0, ·state:
+        ·load ·scope, id'seq_append', fn ·seq_append, ·scope:
+          ·apply ·seq_append, ·v_0, 2, ·state, fn ·v_1, ·state:
+            ·load ·scope, id'seq_append', fn ·seq_append, ·scope:
+              ·apply ·seq_append, ·v_1, 3, ·state, fn ·v_2, ·state:
+                ·ƒ_cont ·v_2, ·state
 
 
 test 'empty seq literal', fn:
@@ -422,7 +422,7 @@ test 'empty seq literal', fn:
     []
 
   | equals_fink fn:
-    ƒ_cont [], state
+    ·ƒ_cont [], ·state
 
 
 test 'rec literal', fn:
@@ -430,11 +430,11 @@ test 'rec literal', fn:
     {x: 1, y: 2}
 
   | equals_fink fn:
-    load scope, id'rec_put', fn ·rec_put, scope:
-      apply ·rec_put, {}, 'x', 1, state, fn v_0, state:
-        load scope, id'rec_put', fn ·rec_put, scope:
-          apply ·rec_put, v_0, 'y', 2, state, fn v_1, state:
-            ƒ_cont v_1, state
+    ·load ·scope, id'rec_put', fn ·rec_put, ·scope:
+      ·apply ·rec_put, {}, 'x', 1, ·state, fn ·v_0, ·state:
+        ·load ·scope, id'rec_put', fn ·rec_put, ·scope:
+          ·apply ·rec_put, ·v_0, 'y', 2, ·state, fn ·v_1, ·state:
+            ·ƒ_cont ·v_1, ·state
 
 
 test 'empty rec literal', fn:
@@ -442,7 +442,7 @@ test 'empty rec literal', fn:
     {}
 
   | equals_fink fn:
-    ƒ_cont {}, state
+    ·ƒ_cont {}, ·state
 
 
 test 'rec shorthand', fn:
@@ -450,13 +450,13 @@ test 'rec shorthand', fn:
     {x, y}
 
   | equals_fink fn:
-    load scope, id'rec_put', fn ·rec_put, scope:
-      load scope, id'x', fn ·x, scope:
-        apply ·rec_put, {}, 'x', ·x, state, fn v_0, state:
-          load scope, id'rec_put', fn ·rec_put, scope:
-            load scope, id'y', fn ·y, scope:
-              apply ·rec_put, v_0, 'y', ·y, state, fn v_1, state:
-                ƒ_cont v_1, state
+    ·load ·scope, id'rec_put', fn ·rec_put, ·scope:
+      ·load ·scope, id'x', fn x, ·scope:
+        ·apply ·rec_put, {}, 'x', x, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'rec_put', fn ·rec_put, ·scope:
+            ·load ·scope, id'y', fn y, ·scope:
+              ·apply ·rec_put, ·v_0, 'y', y, ·state, fn ·v_1, ·state:
+                ·ƒ_cont ·v_1, ·state
 
 
 --- --- ---
@@ -468,11 +468,11 @@ test 'member static', fn:
     foo.bar
 
   | equals_fink fn:
-    load scope, op'.', fn op_dot, scope:
-      load scope, id'foo', fn ·foo, scope:
-        load scope, id'bar', fn ·bar, scope:
-          apply op_dot, ·foo, ·bar, state, fn v_0, state:
-            ƒ_cont v_0, state
+    ·load ·scope, op'.', fn ·op_dot, ·scope:
+      ·load ·scope, id'foo', fn foo, ·scope:
+        ·load ·scope, id'bar', fn bar, ·scope:
+          ·apply ·op_dot, foo, bar, ·state, fn ·v_0, ·state:
+            ·ƒ_cont ·v_0, ·state
 
 
 test 'member dynamic', fn:
@@ -480,11 +480,11 @@ test 'member dynamic', fn:
     foo.(key)
 
   | equals_fink fn:
-    load scope, op'.', fn op_dot, scope:
-      load scope, id'foo', fn ·foo, scope:
-        load scope, id'key', fn ·key, scope:
-          apply op_dot, ·foo, ·key, state, fn v_0, state:
-            ƒ_cont v_0, state
+    ·load ·scope, op'.', fn ·op_dot, ·scope:
+      ·load ·scope, id'foo', fn foo, ·scope:
+        ·load ·scope, id'key', fn key, ·scope:
+          ·apply ·op_dot, foo, key, ·state, fn ·v_0, ·state:
+            ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
@@ -496,12 +496,12 @@ test 'seq spread', fn:
     [..xs, 1]
 
   | equals_fink fn:
-    load scope, id'seq_concat', fn ·seq_concat, scope:
-      load scope, id'xs', fn ·xs, scope:
-        apply ·seq_concat, [], ·xs, state, fn v_0, state:
-          load scope, id'seq_append', fn ·seq_append, scope:
-            apply ·seq_append, v_0, 1, state, fn v_1, state:
-              ƒ_cont v_1, state
+    ·load ·scope, id'seq_concat', fn ·seq_concat, ·scope:
+      ·load ·scope, id'xs', fn xs, ·scope:
+        ·apply ·seq_concat, [], xs, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'seq_append', fn ·seq_append, ·scope:
+            ·apply ·seq_append, ·v_0, 1, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
 
 
 test 'rec spread', fn:
@@ -509,12 +509,12 @@ test 'rec spread', fn:
     {..base, x: 1}
 
   | equals_fink fn:
-    load scope, id'rec_merge', fn ·rec_merge, scope:
-      load scope, id'base', fn ·base, scope:
-        apply ·rec_merge, {}, ·base, state, fn v_0, state:
-          load scope, id'rec_put', fn ·rec_put, scope:
-            apply ·rec_put, v_0, 'x', 1, state, fn v_1, state:
-              ƒ_cont v_1, state
+    ·load ·scope, id'rec_merge', fn ·rec_merge, ·scope:
+      ·load ·scope, id'base', fn base, ·scope:
+        ·apply ·rec_merge, {}, base, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'rec_put', fn ·rec_put, ·scope:
+            ·apply ·rec_put, ·v_0, 'x', 1, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
 
 
 --- --- ---
@@ -526,8 +526,8 @@ test 'try', fn:
     try foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      ƒ_cont ·foo, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·ƒ_cont foo, ·state
 
 
 --- --- ---
@@ -539,9 +539,9 @@ test 'tagged literal', fn:
     10sec
 
   | equals_fink fn:
-    load scope, id'sec', fn ·sec, scope:
-      apply ·sec, 10, state, fn v_0, state:
-        ƒ_cont v_0, state
+    ·load ·scope, id'sec', fn sec, ·scope:
+      ·apply sec, 10, ·state, fn ·v_0, ·state:
+        ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
@@ -554,15 +554,15 @@ test 'sequential bindings', fn:
     bar = foo + 1
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        store scope, id'foo', 1, fn ·foo, scope:
-          load scope, op'+', fn op_plus, scope:
-            load scope, id'foo', fn ·foo, scope:
-              apply op_plus, ·foo, 1, state, fn v_1, state:
-                store scope, id'bar', v_1, fn ·bar, scope:
-                  ƒ_cont ·bar, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·store ·scope, id'foo', 1, fn foo, ·scope:
+          ·load ·scope, op'+', fn ·op_plus, ·scope:
+            ·load ·scope, id'foo', fn foo, ·scope:
+              ·apply ·op_plus, foo, 1, ·state, fn ·v_1, ·state:
+                ·store ·scope, id'bar', ·v_1, fn bar, ·scope:
+                  ·ƒ_cont bar, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'binding rhs is a call', fn:
@@ -570,10 +570,10 @@ test 'binding rhs is a call', fn:
     foo = add 1, 2
 
   | equals_fink fn:
-    load scope, id'add', fn ·add, scope:
-      apply ·add, 1, 2, state, fn v_0, state:
-        store scope, id'foo', v_0, fn ·foo, scope:
-          ƒ_cont ·foo, state
+    ·load ·scope, id'add', fn add, ·scope:
+      ·apply add, 1, 2, ·state, fn ·v_0, ·state:
+        ·store ·scope, id'foo', ·v_0, fn foo, ·scope:
+          ·ƒ_cont foo, ·state
 
 
 test 'expression result discarded', fn:
@@ -582,14 +582,14 @@ test 'expression result discarded', fn:
     bar
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        load scope, id'foo', fn ·foo, scope:
-          apply ·foo, 1, state, fn v_1, state:
-            store scope, id'v_2', v_1, fn v_2, scope:
-              load scope, id'bar', fn ·bar, scope:
-                ƒ_cont ·bar, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'foo', fn foo, ·scope:
+          ·apply foo, 1, ·state, fn ·v_1, ·state:
+            ·store ·scope, id'v_2', ·v_1, fn ·v_2, ·scope:
+              ·load ·scope, id'bar', fn bar, ·scope:
+                ·ƒ_cont bar, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'chained member access', fn:
@@ -597,14 +597,14 @@ test 'chained member access', fn:
     foo.bar.baz
 
   | equals_fink fn:
-    load scope, op'.', fn op_dot, scope:
-      load scope, id'foo', fn ·foo, scope:
-        load scope, id'bar', fn ·bar, scope:
-          apply op_dot, ·foo, ·bar, state, fn v_0, state:
-            load scope, op'.', fn op_dot, scope:
-              load scope, id'baz', fn ·baz, scope:
-                apply op_dot, v_0, ·baz, state, fn v_1, state:
-                  ƒ_cont v_1, state
+    ·load ·scope, op'.', fn ·op_dot, ·scope:
+      ·load ·scope, id'foo', fn foo, ·scope:
+        ·load ·scope, id'bar', fn bar, ·scope:
+          ·apply ·op_dot, foo, bar, ·state, fn ·v_0, ·state:
+            ·load ·scope, op'.', fn ·op_dot, ·scope:
+              ·load ·scope, id'baz', fn baz, ·scope:
+                ·apply ·op_dot, ·v_0, baz, ·state, fn ·v_1, ·state:
+                  ·ƒ_cont ·v_1, ·state
 
 
 --- --- ---
@@ -616,9 +616,9 @@ test 'simple call', fn:
     add 1, 2
 
   | equals_fink fn:
-    load scope, id'add', fn ·add, scope:
-      apply ·add, 1, 2, state, fn v_0, state:
-        ƒ_cont v_0, state
+    ·load ·scope, id'add', fn add, ·scope:
+      ·apply add, 1, 2, ·state, fn ·v_0, ·state:
+        ·ƒ_cont ·v_0, ·state
 
 
 test 'nested call', fn:
@@ -626,11 +626,11 @@ test 'nested call', fn:
     add (mul 2, 3), 1
 
   | equals_fink fn:
-    load scope, id'mul', fn ·mul, scope:
-      apply ·mul, 2, 3, state, fn v_0, state:
-        load scope, id'add', fn ·add, scope:
-          apply ·add, v_0, 1, state, fn v_1, state:
-            ƒ_cont v_1, state
+    ·load ·scope, id'mul', fn mul, ·scope:
+      ·apply mul, 2, 3, ·state, fn ·v_0, ·state:
+        ·load ·scope, id'add', fn add, ·scope:
+          ·apply add, ·v_0, 1, ·state, fn ·v_1, ·state:
+            ·ƒ_cont ·v_1, ·state
 
 
 test 'postfix tag', fn:
@@ -638,12 +638,12 @@ test 'postfix tag', fn:
     (foo bar)tag
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'bar', fn ·bar, scope:
-        apply ·foo, ·bar, state, fn v_0, state:
-          load scope, id'tag', fn ·tag, scope:
-            apply ·tag, v_0, state, fn v_1, state:
-              ƒ_cont v_1, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'bar', fn bar, ·scope:
+        ·apply foo, bar, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'tag', fn tag, ·scope:
+            ·apply tag, ·v_0, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
 
 
 test 'call with spread', fn:
@@ -651,11 +651,11 @@ test 'call with spread', fn:
     foo a, ..rest
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'a', fn ·a, scope:
-        load scope, id'rest', fn ·rest, scope:
-          apply ·foo, ·a, ..·rest, state, fn v_0, state:
-            ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·load ·scope, id'rest', fn rest, ·scope:
+          ·apply foo, a, ..rest, ·state, fn ·v_0, ·state:
+            ·ƒ_cont ·v_0, ·state
 
 
 test 'simple pipe', fn:
@@ -663,10 +663,10 @@ test 'simple pipe', fn:
     x | f
 
   | equals_fink fn:
-    load scope, id'f', fn ·f, scope:
-      load scope, id'x', fn ·x, scope:
-        apply ·f, ·x, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, id'f', fn f, ·scope:
+      ·load ·scope, id'x', fn x, ·scope:
+        ·apply f, x, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 test 'pipe chain', fn:
@@ -674,12 +674,12 @@ test 'pipe chain', fn:
     x | f | g
 
   | equals_fink fn:
-    load scope, id'f', fn ·f, scope:
-      load scope, id'x', fn ·x, scope:
-        apply ·f, ·x, state, fn v_0, state:
-          load scope, id'g', fn ·g, scope:
-            apply ·g, v_0, state, fn v_1, state:
-              ƒ_cont v_1, state
+    ·load ·scope, id'f', fn f, ·scope:
+      ·load ·scope, id'x', fn x, ·scope:
+        ·apply f, x, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'g', fn g, ·scope:
+            ·apply g, ·v_0, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
 
 
 --- --- ---
@@ -691,18 +691,18 @@ test 'function binding', fn:
     inc = fn x: x + 1
 
   | equals_fink fn:
-    closure scope,
-      fn ·x, scope, state, ƒ_cont:
-        load scope, op'+', fn op_plus, scope:
-          load scope, id'x', fn ·x, scope:
-            apply op_plus, ·x, 1, state, fn v_1, state:
-              ƒ_cont v_1, state
-      fn fn_0, chld_scope:
-        store scope, id'inc', fn_0, fn ·inc, scope:
-          ƒ_cont ·inc, state
+    ·closure ·scope,
+      fn x, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, op'+', fn ·op_plus, ·scope:
+          ·load ·scope, id'x', fn x, ·scope:
+            ·apply ·op_plus, x, 1, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
+      fn ·fn_0, ·chld_scope:
+        ·store ·scope, id'inc', ·fn_0, fn inc, ·scope:
+          ·ƒ_cont inc, ·state
 
 
-test 'closure over outer variable', fn:
+test '·closure over outer variable', fn:
   expect cps_c_expr fn:
     foo = fn a:
       ni = fn b:
@@ -710,22 +710,22 @@ test 'closure over outer variable', fn:
       ni
 
   | equals_fink fn:
-    closure scope,
-      fn ·a, scope, state, ƒ_cont:
-        closure scope,
-          fn ·b, scope, state, ƒ_cont:
-            load scope, op'+', fn op_plus, scope:
-              load scope, id'a', fn ·a, scope:
-                load scope, id'b', fn ·b, scope:
-                  apply op_plus, ·a, ·b, state, fn v_2, state:
-                    ƒ_cont v_2, state
-          fn fn_1, chld_scope:
-            store scope, id'ni', fn_1, fn ·ni, scope:
-              load scope, id'ni', fn ·ni, scope:
-                ƒ_cont ·ni, state
-      fn fn_0, chld_scope:
-        store scope, id'foo', fn_0, fn ·foo, scope:
-          ƒ_cont ·foo, state
+    ·closure ·scope,
+      fn a, ·scope, ·state, ·ƒ_cont:
+        ·closure ·scope,
+          fn b, ·scope, ·state, ·ƒ_cont:
+            ·load ·scope, op'+', fn ·op_plus, ·scope:
+              ·load ·scope, id'a', fn a, ·scope:
+                ·load ·scope, id'b', fn b, ·scope:
+                  ·apply ·op_plus, a, b, ·state, fn ·v_2, ·state:
+                    ·ƒ_cont ·v_2, ·state
+          fn ·fn_1, ·chld_scope:
+            ·store ·scope, id'ni', ·fn_1, fn ni, ·scope:
+              ·load ·scope, id'ni', fn ni, ·scope:
+                ·ƒ_cont ni, ·state
+      fn ·fn_0, ·chld_scope:
+        ·store ·scope, id'foo', ·fn_0, fn foo, ·scope:
+          ·ƒ_cont foo, ·state
 
 
 test 'three sequential bindings', fn:
@@ -735,17 +735,17 @@ test 'three sequential bindings', fn:
     c = a + b
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        store scope, id'a', 1, fn ·a, scope:
-          store scope, id'b', 2, fn ·b, scope:
-            load scope, op'+', fn op_plus, scope:
-              load scope, id'a', fn ·a, scope:
-                load scope, id'b', fn ·b, scope:
-                  apply op_plus, ·a, ·b, state, fn v_1, state:
-                    store scope, id'c', v_1, fn ·c, scope:
-                      ƒ_cont ·c, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·store ·scope, id'a', 1, fn a, ·scope:
+          ·store ·scope, id'b', 2, fn b, ·scope:
+            ·load ·scope, op'+', fn ·op_plus, ·scope:
+              ·load ·scope, id'a', fn a, ·scope:
+                ·load ·scope, id'b', fn b, ·scope:
+                  ·apply ·op_plus, a, b, ·state, fn ·v_1, ·state:
+                    ·store ·scope, id'c', ·v_1, fn c, ·scope:
+                      ·ƒ_cont c, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 --- --- ---
@@ -758,22 +758,22 @@ test 'forward ref', fn:
     foo 1
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        closure scope,
-          fn ·a, scope, state, ƒ_cont:
-            load scope, op'+', fn op_plus, scope:
-              load scope, id'a', fn ·a, scope:
-                apply op_plus, ·a, 1, state, fn v_2, state:
-                  load scope, id'foo', fn ·foo, scope:
-                    apply ·foo, v_2, state, fn v_3, state:
-                      ƒ_cont v_3, state
-          fn fn_1, chld_scope:
-            store scope, id'foo', fn_1, fn ·foo, scope:
-              load scope, id'foo', fn ·foo, scope:
-                apply ·foo, 1, state, fn v_4, state:
-                  ƒ_cont v_4, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·closure ·scope,
+          fn a, ·scope, ·state, ·ƒ_cont:
+            ·load ·scope, op'+', fn ·op_plus, ·scope:
+              ·load ·scope, id'a', fn a, ·scope:
+                ·apply ·op_plus, a, 1, ·state, fn ·v_2, ·state:
+                  ·load ·scope, id'foo', fn foo, ·scope:
+                    ·apply foo, ·v_2, ·state, fn ·v_3, ·state:
+                      ·ƒ_cont ·v_3, ·state
+          fn ·fn_1, ·chld_scope:
+            ·store ·scope, id'foo', ·fn_1, fn foo, ·scope:
+              ·load ·scope, id'foo', fn foo, ·scope:
+                ·apply foo, 1, ·state, fn ·v_4, ·state:
+                  ·ƒ_cont ·v_4, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'mutual recursion', fn:
@@ -782,26 +782,26 @@ test 'mutual recursion', fn:
     pong = fn x: ping x
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        closure scope,
-          fn ·x, scope, state, ƒ_cont:
-            load scope, id'pong', fn ·pong, scope:
-              load scope, id'x', fn ·x, scope:
-                apply ·pong, ·x, state, fn v_2, state:
-                  ƒ_cont v_2, state
-          fn fn_1, chld_scope:
-            store scope, id'ping', fn_1, fn ·ping, scope:
-              closure scope,
-                fn ·x, scope, state, ƒ_cont:
-                  load scope, id'ping', fn ·ping, scope:
-                    load scope, id'x', fn ·x, scope:
-                      apply ·ping, ·x, state, fn v_4, state:
-                        ƒ_cont v_4, state
-                fn fn_3, chld_scope:
-                  store scope, id'pong', fn_3, fn ·pong, scope:
-                    ƒ_cont ·pong, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·closure ·scope,
+          fn x, ·scope, ·state, ·ƒ_cont:
+            ·load ·scope, id'pong', fn pong, ·scope:
+              ·load ·scope, id'x', fn x, ·scope:
+                ·apply pong, x, ·state, fn ·v_2, ·state:
+                  ·ƒ_cont ·v_2, ·state
+          fn ·fn_1, ·chld_scope:
+            ·store ·scope, id'ping', ·fn_1, fn ping, ·scope:
+              ·closure ·scope,
+                fn x, ·scope, ·state, ·ƒ_cont:
+                  ·load ·scope, id'ping', fn ping, ·scope:
+                    ·load ·scope, id'x', fn x, ·scope:
+                      ·apply ping, x, ·state, fn ·v_4, ·state:
+                        ·ƒ_cont ·v_4, ·state
+                fn ·fn_3, ·chld_scope:
+                  ·store ·scope, id'pong', ·fn_3, fn pong, ·scope:
+                    ·ƒ_cont pong, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 --- --- ---
@@ -813,9 +813,9 @@ test 'bind right — simple id', fn:
     x = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'x', ·foo, fn ·x, scope:
-        ƒ_cont ·x, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'x', foo, fn x, ·scope:
+        ·ƒ_cont x, ·state
 
 
 # NOTE: complex patterns ([a,b], {bar}) are bound to a temp at this IR level;
@@ -826,9 +826,9 @@ test 'bind right — seq pattern', fn:
     [a, b] = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 
 test 'bind right — rec pattern', fn:
@@ -836,9 +836,9 @@ test 'bind right — rec pattern', fn:
     {bar} = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 
 # NOTE: composite patterns render as _seq_pat/_rec_pat placeholders until
@@ -850,12 +850,12 @@ test 'match — seq pattern arm', fn:
       [a, b]: a
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      match_block ·foo, state,
-        match_branch _seq_pat, fn ·a, ·b, scope, state, ƒ_cont:
-          load scope, id'a', fn ·a, scope:
-            ƒ_cont ·a, state
-        fn v_0, state: ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·match_block foo, ·state,
+        ·match_branch _seq_pat, fn a, b, ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, id'a', fn a, ·scope:
+            ·ƒ_cont a, ·state
+        fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 test 'match — rec pattern arm', fn:
   expect cps_c_expr fn:
@@ -863,12 +863,12 @@ test 'match — rec pattern arm', fn:
       {bar}: bar
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      match_block ·foo, state,
-        match_branch _rec_pat, fn ·bar, scope, state, ƒ_cont:
-          load scope, id'bar', fn ·bar, scope:
-            ƒ_cont ·bar, state
-        fn v_0, state: ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·match_block foo, ·state,
+        ·match_branch _rec_pat, fn bar, ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, id'bar', fn bar, ·scope:
+            ·ƒ_cont bar, ·state
+        fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 
 test 'match — expression in arm', fn:
@@ -878,17 +878,17 @@ test 'match — expression in arm', fn:
       false: y
 
   | equals_fink fn:
-    load scope, id'x', fn ·x, scope:
-      match_block ·x, state,
-        match_branch true, fn scope, state, ƒ_cont:
-          load scope, op'+', fn op_plus, scope:
-            load scope, id'y', fn ·y, scope:
-              apply op_plus, ·y, 1, state, fn v_0, state:
-                ƒ_cont v_0, state
-        match_branch false, fn scope, state, ƒ_cont:
-          load scope, id'y', fn ·y, scope:
-            ƒ_cont ·y, state
-        fn v_1, state: ƒ_cont v_1, state
+    ·load ·scope, id'x', fn x, ·scope:
+      ·match_block x, ·state,
+        ·match_branch true, fn ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, op'+', fn ·op_plus, ·scope:
+            ·load ·scope, id'y', fn y, ·scope:
+              ·apply ·op_plus, y, 1, ·state, fn ·v_0, ·state:
+                ·ƒ_cont ·v_0, ·state
+        ·match_branch false, fn ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, id'y', fn y, ·scope:
+            ·ƒ_cont y, ·state
+        fn ·v_1, ·state: ·ƒ_cont ·v_1, ·state
 
 
 --- --- ---
@@ -900,14 +900,14 @@ test 'multi-param function', fn:
     fn x, y: x + y
 
   | equals_fink fn:
-    closure scope,
-      fn ·x, ·y, scope, state, ƒ_cont:
-        load scope, op'+', fn op_plus, scope:
-          load scope, id'x', fn ·x, scope:
-            load scope, id'y', fn ·y, scope:
-              apply op_plus, ·x, ·y, state, fn v_1, state:
-                ƒ_cont v_1, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn x, y, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, op'+', fn ·op_plus, ·scope:
+          ·load ·scope, id'x', fn x, ·scope:
+            ·load ·scope, id'y', fn y, ·scope:
+              ·apply ·op_plus, x, y, ·state, fn ·v_1, ·state:
+                ·ƒ_cont ·v_1, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'varargs — collect rest', fn:
@@ -915,52 +915,52 @@ test 'varargs — collect rest', fn:
     fn a, ..rest: rest
 
   | equals_fink fn:
-    closure scope,
-      fn ·a, ..·rest, scope, state, ƒ_cont:
-        load scope, id'rest', fn ·rest, scope:
-          ƒ_cont ·rest, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn a, ..rest, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'rest', fn rest, ·scope:
+          ·ƒ_cont rest, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 --- --- ---
 scoping and sequential bindings
 --- --- ---
 
-test 'calling a local — still goes through load', fn:
+test 'calling a local — still goes through ·load', fn:
   expect cps_c_expr fn:
     inc = fn x: x + 1
     inc 5
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        closure scope,
-          fn ·x, scope, state, ƒ_cont:
-            load scope, op'+', fn op_plus, scope:
-              load scope, id'x', fn ·x, scope:
-                apply op_plus, ·x, 1, state, fn v_2, state:
-                  ƒ_cont v_2, state
-          fn fn_1, chld_scope:
-            store scope, id'inc', fn_1, fn ·inc, scope:
-              load scope, id'inc', fn ·inc, scope:
-                apply ·inc, 5, state, fn v_3, state:
-                  ƒ_cont v_3, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·closure ·scope,
+          fn x, ·scope, ·state, ·ƒ_cont:
+            ·load ·scope, op'+', fn ·op_plus, ·scope:
+              ·load ·scope, id'x', fn x, ·scope:
+                ·apply ·op_plus, x, 1, ·state, fn ·v_2, ·state:
+                  ·ƒ_cont ·v_2, ·state
+          fn ·fn_1, ·chld_scope:
+            ·store ·scope, id'inc', ·fn_1, fn inc, ·scope:
+              ·load ·scope, id'inc', fn inc, ·scope:
+                ·apply inc, 5, ·state, fn ·v_3, ·state:
+                  ·ƒ_cont ·v_3, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
-test 'chained binding is sequential store', fn:
+test 'chained binding is sequential ·store', fn:
   expect cps_c_expr fn:
     foo = spam = 1
 
   | equals_fink fn:
-    store scope, id'spam', 1, fn ·spam, scope:
-      store scope, id'foo', ·spam, fn ·foo, scope:
-        ƒ_cont ·foo, state
+    ·store ·scope, id'spam', 1, fn spam, ·scope:
+      ·store ·scope, id'foo', spam, fn foo, ·scope:
+        ·ƒ_cont foo, ·state
 
 
-# NOTE: Group with binding becomes an immediately-invoked zero-param closure;
-# old IR used a `scope` primitive. Result of the call is bound to spam.
-test 'group with binding — immediately-invoked closure', fn:
+# NOTE: Group with binding becomes an immediately-invoked zero-param ·closure;
+# old IR used a `·scope` primitive. Result of the call is bound to spam.
+test 'group with binding — immediately-invoked ·closure', fn:
   expect cps_c_expr fn:
     spam = (
       ni = ham 1
@@ -968,17 +968,17 @@ test 'group with binding — immediately-invoked closure', fn:
     )
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        load scope, id'ham', fn ·ham, scope:
-          apply ·ham, 1, state, fn v_1, state:
-            store scope, id'ni', v_1, fn ·ni, scope:
-              load scope, id'ni', fn ·ni, scope:
-                ƒ_cont ·ni, state
-      fn fn_0, chld_scope:
-        apply fn_0, state, fn v_2, state:
-          store scope, id'spam', v_2, fn ·spam, scope:
-            ƒ_cont ·spam, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'ham', fn ham, ·scope:
+          ·apply ham, 1, ·state, fn ·v_1, ·state:
+            ·store ·scope, id'ni', ·v_1, fn ni, ·scope:
+              ·load ·scope, id'ni', fn ni, ·scope:
+                ·ƒ_cont ni, ·state
+      fn ·fn_0, ·chld_scope:
+        ·apply ·fn_0, ·state, fn ·v_2, ·state:
+          ·store ·scope, id'spam', ·v_2, fn spam, ·scope:
+            ·ƒ_cont spam, ·state
 
 --- --- ---
 functions — additional
@@ -989,24 +989,24 @@ test 'identity function', fn:
     fn x: x
 
   | equals_fink fn:
-    closure scope,
-      fn ·x, scope, state, ƒ_cont:
-        load scope, id'x', fn ·x, scope:
-          ƒ_cont ·x, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn x, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'x', fn x, ·scope:
+          ·ƒ_cont x, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 test 'function with operator in body', fn:
   expect cps_c_expr fn:
     fn x: x + 1
 
   | equals_fink fn:
-    closure scope,
-      fn ·x, scope, state, ƒ_cont:
-        load scope, op'+', fn op_plus, scope:
-          load scope, id'x', fn ·x, scope:
-            apply op_plus, ·x, 1, state, fn v_1, state:
-              ƒ_cont v_1, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn x, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, op'+', fn ·op_plus, ·scope:
+          ·load ·scope, id'x', fn x, ·scope:
+            ·apply ·op_plus, x, 1, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 test 'try — result bound, code continues', fn:
   expect cps_c_expr fn:
@@ -1014,84 +1014,84 @@ test 'try — result bound, code continues', fn:
     ni + 1
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        load scope, id'foo', fn ·foo, scope:
-          load scope, id'bar', fn ·bar, scope:
-            apply ·foo, ·bar, state, fn v_1, state:
-              store scope, id'ni', v_1, fn ·ni, scope:
-                load scope, op'+', fn op_plus, scope:
-                  load scope, id'ni', fn ·ni, scope:
-                    apply op_plus, ·ni, 1, state, fn v_2, state:
-                      ƒ_cont v_2, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'foo', fn foo, ·scope:
+          ·load ·scope, id'bar', fn bar, ·scope:
+            ·apply foo, bar, ·state, fn ·v_1, ·state:
+              ·store ·scope, id'ni', ·v_1, fn ni, ·scope:
+                ·load ·scope, op'+', fn ·op_plus, ·scope:
+                  ·load ·scope, id'ni', fn ni, ·scope:
+                    ·apply ·op_plus, ni, 1, ·state, fn ·v_2, ·state:
+                      ·ƒ_cont ·v_2, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 --- --- ---
 seq/rec literals with spreads
 --- --- ---
 
-# NOTE: seq_append/seq_concat/rec_put/rec_merge are loaded from scope (not primitives)
+# NOTE: ·seq_append/·seq_concat/·rec_put/·rec_merge are loaded from ·scope (not primitives)
 # in cps_c — they're treated as regular identifier references.
 test 'seq literal with spread', fn:
   expect cps_c_expr fn:
     [1, ..a, 2]
 
   | equals_fink fn:
-    load scope, id'seq_append', fn ·seq_append, scope:
-      apply ·seq_append, [], 1, state, fn v_0, state:
-        load scope, id'seq_concat', fn ·seq_concat, scope:
-          load scope, id'a', fn ·a, scope:
-            apply ·seq_concat, v_0, ·a, state, fn v_1, state:
-              load scope, id'seq_append', fn ·seq_append, scope:
-                apply ·seq_append, v_1, 2, state, fn v_2, state:
-                  ƒ_cont v_2, state
+    ·load ·scope, id'seq_append', fn ·seq_append, ·scope:
+      ·apply ·seq_append, [], 1, ·state, fn ·v_0, ·state:
+        ·load ·scope, id'seq_concat', fn ·seq_concat, ·scope:
+          ·load ·scope, id'a', fn a, ·scope:
+            ·apply ·seq_concat, ·v_0, a, ·state, fn ·v_1, ·state:
+              ·load ·scope, id'seq_append', fn ·seq_append, ·scope:
+                ·apply ·seq_append, ·v_1, 2, ·state, fn ·v_2, ·state:
+                  ·ƒ_cont ·v_2, ·state
 
 test 'seq literal leading spread', fn:
   expect cps_c_expr fn:
     [..a, ..b]
 
   | equals_fink fn:
-    load scope, id'seq_concat', fn ·seq_concat, scope:
-      load scope, id'a', fn ·a, scope:
-        apply ·seq_concat, [], ·a, state, fn v_0, state:
-          load scope, id'seq_concat', fn ·seq_concat, scope:
-            load scope, id'b', fn ·b, scope:
-              apply ·seq_concat, v_0, ·b, state, fn v_1, state:
-                ƒ_cont v_1, state
+    ·load ·scope, id'seq_concat', fn ·seq_concat, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·apply ·seq_concat, [], a, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'seq_concat', fn ·seq_concat, ·scope:
+            ·load ·scope, id'b', fn b, ·scope:
+              ·apply ·seq_concat, ·v_0, b, ·state, fn ·v_1, ·state:
+                ·ƒ_cont ·v_1, ·state
 
 test 'rec literal with spread', fn:
   expect cps_c_expr fn:
     {foo: a, ..b}
 
   | equals_fink fn:
-    load scope, id'rec_put', fn ·rec_put, scope:
-      load scope, id'a', fn ·a, scope:
-        apply ·rec_put, {}, 'foo', ·a, state, fn v_0, state:
-          load scope, id'rec_merge', fn ·rec_merge, scope:
-            load scope, id'b', fn ·b, scope:
-              apply ·rec_merge, v_0, ·b, state, fn v_1, state:
-                ƒ_cont v_1, state
+    ·load ·scope, id'rec_put', fn ·rec_put, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·apply ·rec_put, {}, 'foo', a, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'rec_merge', fn ·rec_merge, ·scope:
+            ·load ·scope, id'b', fn b, ·scope:
+              ·apply ·rec_merge, ·v_0, b, ·state, fn ·v_1, ·state:
+                ·ƒ_cont ·v_1, ·state
 
 test 'rec literal leading spread', fn:
   expect cps_c_expr fn:
     {..a, ..b}
 
   | equals_fink fn:
-    load scope, id'rec_merge', fn ·rec_merge, scope:
-      load scope, id'a', fn ·a, scope:
-        apply ·rec_merge, {}, ·a, state, fn v_0, state:
-          load scope, id'rec_merge', fn ·rec_merge, scope:
-            load scope, id'b', fn ·b, scope:
-              apply ·rec_merge, v_0, ·b, state, fn v_1, state:
-                ƒ_cont v_1, state
+    ·load ·scope, id'rec_merge', fn ·rec_merge, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·apply ·rec_merge, {}, a, ·state, fn ·v_0, ·state:
+          ·load ·scope, id'rec_merge', fn ·rec_merge, ·scope:
+            ·load ·scope, id'b', fn b, ·scope:
+              ·apply ·rec_merge, ·v_0, b, ·state, fn ·v_1, ·state:
+                ·ƒ_cont ·v_1, ·state
 
 
 --- --- ---
 match — child scopes and guard patterns
 --- --- ---
 
-test 'match child scope — binding in arm body', fn:
+test 'match child ·scope — binding in arm body', fn:
   expect cps_c_expr fn:
     match n:
       a > 1:
@@ -1099,14 +1099,14 @@ test 'match child scope — binding in arm body', fn:
         ni
 
   | equals_fink fn:
-    load scope, id'n', fn ·n, scope:
-      match_block ·n, state,
-        match_branch ·a, fn ·a, scope, state, ƒ_cont:
-          load scope, id'a', fn ·a, scope:
-            store scope, id'ni', ·a, fn ·ni, scope:
-              load scope, id'ni', fn ·ni, scope:
-                ƒ_cont ·ni, state
-        fn v_0, state: ƒ_cont v_0, state
+    ·load ·scope, id'n', fn n, ·scope:
+      ·match_block n, ·state,
+        ·match_branch a, fn a, ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, id'a', fn a, ·scope:
+            ·store ·scope, id'ni', a, fn ni, ·scope:
+              ·load ·scope, id'ni', fn ni, ·scope:
+                ·ƒ_cont ni, ·state
+        fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 
 # NOTE: guard `x > 2 = foo` — guard is dropped; lhs bound to temp (pattern lowering deferred)
@@ -1115,9 +1115,9 @@ test 'irrefutable binding with guard', fn:
     x > 2 = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
@@ -1131,63 +1131,63 @@ test 'seq pattern', fn:
     [a, 1] = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 test 'seq pattern with non-empty rest', fn:
   expect cps_c_expr fn:
     [a, ..] = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 test 'seq pattern with bound rest', fn:
   expect cps_c_expr fn:
     [a, ..rest] = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 test 'rec pattern', fn:
   expect cps_c_expr fn:
     {bar} = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 test 'rec pattern with non-empty rest', fn:
   expect cps_c_expr fn:
     {bar, ..} = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 test 'rec pattern exact - empty rest', fn:
   expect cps_c_expr fn:
     {bar, ..{}} = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 test 'rec pattern with bound rest', fn:
   expect cps_c_expr fn:
     {bar, ..rest} = foo
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      store scope, id'v_0', ·foo, fn v_0, scope:
-        ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·store ·scope, id'v_0', foo, fn ·v_0, ·scope:
+        ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
@@ -1203,22 +1203,22 @@ test 'multi-arm match', fn:
       [a, b]: a
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      match_block ·foo, state,
-        match_branch _seq_pat, fn ·a, scope, state, ƒ_cont:
-          load scope, id'a', fn ·a, scope:
-            ƒ_cont ·a, state
-        match_branch _seq_pat, fn ·a, ·b, scope, state, ƒ_cont:
-          load scope, id'a', fn ·a, scope:
-            ƒ_cont ·a, state
-        fn v_0, state: ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·match_block foo, ·state,
+        ·match_branch _seq_pat, fn a, ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, id'a', fn a, ·scope:
+            ·ƒ_cont a, ·state
+        ·match_branch _seq_pat, fn a, b, ·scope, ·state, ·ƒ_cont:
+          ·load ·scope, id'a', fn a, ·scope:
+            ·ƒ_cont a, ·state
+        fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
 
 
 --- --- ---
 varargs — spread preserved in IR (WIP: cps_transform not yet emitting spread)
 --- --- ---
 
-# Spread is valid in the CPS IR — apply and fn params can contain ..arg / ..·name.
+# Spread is valid in the CPS IR — ·apply and fn params can contain ..arg / ..name.
 # The IR stays readable Fink; codegen handles the actual flattening.
 # WIP: cps_transform currently drops the spread; these tests define the target shape.
 
@@ -1227,10 +1227,10 @@ test 'varargs — call site spreads iterable', fn:
     foo 1, ..items
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'items', fn ·items, scope:
-        apply ·foo, 1, ..·items, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'items', fn items, ·scope:
+        ·apply foo, 1, ..items, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 test 'call with spread — trailing iterable', fn:
@@ -1238,11 +1238,11 @@ test 'call with spread — trailing iterable', fn:
     foo a, ..rest
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'a', fn ·a, scope:
-        load scope, id'rest', fn ·rest, scope:
-          apply ·foo, ·a, ..·rest, state, fn v_0, state:
-            ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'a', fn a, ·scope:
+        ·load ·scope, id'rest', fn rest, ·scope:
+          ·apply foo, a, ..rest, ·state, fn ·v_0, ·state:
+            ·ƒ_cont ·v_0, ·state
 
 
 test 'call with spread — spread only', fn:
@@ -1250,10 +1250,10 @@ test 'call with spread — spread only', fn:
     foo ..items
 
   | equals_fink fn:
-    load scope, id'foo', fn ·foo, scope:
-      load scope, id'items', fn ·items, scope:
-        apply ·foo, ..·items, state, fn v_0, state:
-          ƒ_cont v_0, state
+    ·load ·scope, id'foo', fn foo, ·scope:
+      ·load ·scope, id'items', fn items, ·scope:
+        ·apply foo, ..items, ·state, fn ·v_0, ·state:
+          ·ƒ_cont ·v_0, ·state
 
 
 test 'call with spread — passes through from varargs fn', fn:
@@ -1261,13 +1261,13 @@ test 'call with spread — passes through from varargs fn', fn:
     fn ..args: foo ..args
 
   | equals_fink fn:
-    closure scope,
-      fn ..·args, scope, state, ƒ_cont:
-        load scope, id'foo', fn ·foo, scope:
-          load scope, id'args', fn ·args, scope:
-            apply ·foo, ..·args, state, fn v_1, state:
-              ƒ_cont v_1, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ..args, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, id'foo', fn foo, ·scope:
+          ·load ·scope, id'args', fn args, ·scope:
+            ·apply foo, ..args, ·state, fn ·v_1, ·state:
+              ·ƒ_cont ·v_1, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
@@ -1275,12 +1275,12 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
     fn a, [1, ..b]: b
 
   | equals_fink fn:
-    closure scope,
-      fn ·a, _seq_pat, scope, state, ƒ_cont:
-        store scope, id'a', ·a, fn ·a, scope:
-          load scope, id'b', fn ·b, scope:
-            ƒ_cont ·b, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure ·scope,
+      fn a, _seq_pat, ·scope, ·state, ·ƒ_cont:
+        ·store ·scope, id'a', a, fn a, ·scope:
+          ·load ·scope, id'b', fn b, ·scope:
+            ·ƒ_cont b, ·state
+      fn fn_val, _: ·ƒ_cont fn_val, ·state
 
 
 --- --- ---
@@ -1293,12 +1293,12 @@ test 'two bindings at module level', fn:
     bar = 2
 
   | equals_fink fn:
-    closure scope,
-      fn scope, state, ƒ_cont:
-        store scope, id'foo', 1, fn ·foo, scope:
-          store scope, id'bar', 2, fn ·bar, scope:
-            ƒ_cont ·bar, state
-      fn fn_0, chld_scope: ƒ_cont fn_0, state
+    ·closure ·scope,
+      fn ·scope, ·state, ·ƒ_cont:
+        ·store ·scope, id'foo', 1, fn foo, ·scope:
+          ·store ·scope, id'bar', 2, fn bar, ·scope:
+            ·ƒ_cont bar, ·state
+      fn ·fn_0, ·chld_scope: ·ƒ_cont ·fn_0, ·state
 
 
 --- --- ---
@@ -1307,17 +1307,17 @@ free variable analysis (WIP: not yet implemented on new IR)
 
 # WIP: free var pass not yet ported to new IR.
 #
-# Expected output below was written against the OLD IR (env/chld_env, no chld_scope).
+# Expected output below was written against the OLD IR (env/chld_env, no ·chld_scope).
 # Treat it as a reference sketch, NOT ground truth — it will need updating once
-# the pass is implemented on the new IR (scope/chld_scope, store before load etc).
+# the pass is implemented on the new IR (·scope/·chld_scope, ·store before ·load etc).
 #
 # Key difference to keep in mind:
-#   Old IR:  closure env, fn ·x, env, ...       — `env` param, no store-before-load
-#   New IR:  closure scope, fn ·x, scope, ...   — `scope` param, store comes first
+#   Old IR:  ·closure env, fn x, env, ...       — `env` param, no ·store-before-·load
+#   New IR:  ·closure ·scope, fn x, ·scope, ...   — `·scope` param, ·store comes first
 #
 # The annotation pattern itself should be the same:
-#   plain `scope` when nothing captured
-#   `{..scope, ·a, op_plus}` listing direct reads in load-encounter order
+#   plain `·scope` when nothing captured
+#   `{..·scope, a, ·op_plus}` listing direct reads in ·load-encounter order
 
 test 'free vars — fn with no captures', fn:
   expect cps_c_expr fn:
@@ -1325,12 +1325,12 @@ test 'free vars — fn with no captures', fn:
       a + b
 
   | equals_fink fn:
-    closure env,
-      fn ·a, ·b, {..env, op_plus}, state, ƒ_cont:
-        store env, id'a', ·a, fn ·a, env:
-          store env, id'b', ·b, fn ·b, env:
-            apply op_plus, ·a, ·b, state, ƒ_cont
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure env,
+      fn a, b, {..env, ·op_plus}, ·state, ·ƒ_cont:
+        ·store env, id'a', a, fn a, env:
+          ·store env, id'b', b, fn b, env:
+            ·apply ·op_plus, a, b, ·state, ·ƒ_cont
+      fn fn_val, _: ·ƒ_cont fn_val, ·state
 
 
 test 'free vars — fn with only literals', fn:
@@ -1339,32 +1339,32 @@ test 'free vars — fn with only literals', fn:
       42
 
   | equals_fink fn:
-    closure env,
-      fn ·x, env, state, ƒ_cont:
-        store env, id'x', ·x, fn ·x, env:
-          ƒ_cont 42, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure env,
+      fn x, env, ·state, ·ƒ_cont:
+        ·store env, id'x', x, fn x, env:
+          ·ƒ_cont 42, ·state
+      fn fn_val, _: ·ƒ_cont fn_val, ·state
 
 
-test 'free vars — closure captures one outer var', fn:
+test 'free vars — ·closure captures one outer var', fn:
   expect cps_c_expr fn:
     fn x:
       fn y:
         x + y
 
   | equals_fink fn:
-    closure env,
-      fn ·x, env, state, ƒ_cont:
-        store env, id'x', ·x, fn ·x, env:
-          closure env,
-            fn ·y, {..env, op_plus, ·x}, state, ƒ_cont:
-              store env, id'y', ·y, fn ·y, env:
-                apply op_plus, ·x, ·y, state, ƒ_cont
-            fn ·fn_val, _: ƒ_cont ·fn_val, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure env,
+      fn x, env, ·state, ·ƒ_cont:
+        ·store env, id'x', x, fn x, env:
+          ·closure env,
+            fn y, {..env, ·op_plus, x}, ·state, ·ƒ_cont:
+              ·store env, id'y', y, fn y, env:
+                ·apply ·op_plus, x, y, ·state, ·ƒ_cont
+            fn fn_val, _: ·ƒ_cont fn_val, ·state
+      fn fn_val, _: ·ƒ_cont fn_val, ·state
 
 
-test 'free vars — closure captures local binding', fn:
+test 'free vars — ·closure captures local binding', fn:
   expect cps_c_expr fn:
     fn x:
       z = x + 1
@@ -1372,17 +1372,17 @@ test 'free vars — closure captures local binding', fn:
         z + y
 
   | equals_fink fn:
-    closure env,
-      fn ·x, {..env, op_plus}, state, ƒ_cont:
-        store env, id'x', ·x, fn ·x, env:
-          apply op_plus, ·x, 1, state, fn ·z, state:
-            store env, id'z', ·z, fn ·z, env:
-              closure env,
-                fn ·y, {..env, op_plus, ·z}, state, ƒ_cont:
-                  store env, id'y', ·y, fn ·y, env:
-                    apply op_plus, ·z, ·y, state, ƒ_cont
-                fn ·fn_val, _: ƒ_cont ·fn_val, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure env,
+      fn x, {..env, ·op_plus}, ·state, ·ƒ_cont:
+        ·store env, id'x', x, fn x, env:
+          ·apply ·op_plus, x, 1, ·state, fn z, ·state:
+            ·store env, id'z', z, fn z, env:
+              ·closure env,
+                fn y, {..env, ·op_plus, z}, ·state, ·ƒ_cont:
+                  ·store env, id'y', y, fn y, env:
+                    ·apply ·op_plus, z, y, ·state, ·ƒ_cont
+                fn fn_val, _: ·ƒ_cont fn_val, ·state
+      fn fn_val, _: ·ƒ_cont fn_val, ·state
 
 
 test 'free vars — named outer, inner captures param', fn:
@@ -1392,17 +1392,17 @@ test 'free vars — named outer, inner captures param', fn:
         x + y
 
   | equals_fink fn:
-    closure env,
-      fn ·x, env, state, ƒ_cont:
-        store env, id'x', ·x, fn ·x, env:
-          closure env,
-            fn ·y, {..env, op_plus, ·x}, state, ƒ_cont:
-              store env, id'y', ·y, fn ·y, env:
-                apply op_plus, ·x, ·y, state, ƒ_cont
-            fn ·fn_val, _: ƒ_cont ·fn_val, state
-      fn ·add, chld_env:
-        store chld_env, id'add', ·add, fn ·add, env:
-          ƒ_cont ·add, state
+    ·closure env,
+      fn x, env, ·state, ·ƒ_cont:
+        ·store env, id'x', x, fn x, env:
+          ·closure env,
+            fn y, {..env, ·op_plus, x}, ·state, ·ƒ_cont:
+              ·store env, id'y', y, fn y, env:
+                ·apply ·op_plus, x, y, ·state, ·ƒ_cont
+            fn fn_val, _: ·ƒ_cont fn_val, ·state
+      fn add, chld_env:
+        ·store chld_env, id'add', add, fn add, env:
+          ·ƒ_cont add, ·state
 
 
 test 'free vars — two named fns no captures', fn:
@@ -1411,20 +1411,20 @@ test 'free vars — two named fns no captures', fn:
     triple = fn x: x + x + x
 
   | equals_fink fn:
-    closure env,
-      fn ·x, {..env, op_plus}, state, ƒ_cont:
-        store env, id'x', ·x, fn ·x, env:
-          apply op_plus, ·x, ·x, state, ƒ_cont
-      fn ·double, chld_env:
-        store chld_env, id'double', ·double, fn ·double, env:
-          closure env,
-            fn ·x, {..env, op_plus}, state, ƒ_cont:
-              store env, id'x', ·x, fn ·x, env:
-                apply op_plus, ·x, ·x, state, fn v_0, state:
-                  apply op_plus, v_0, ·x, state, ƒ_cont
-            fn ·triple, chld_env:
-              store chld_env, id'triple', ·triple, fn ·triple, env:
-                ƒ_cont ·triple, state
+    ·closure env,
+      fn x, {..env, ·op_plus}, ·state, ·ƒ_cont:
+        ·store env, id'x', x, fn x, env:
+          ·apply ·op_plus, x, x, ·state, ·ƒ_cont
+      fn double, chld_env:
+        ·store chld_env, id'double', double, fn double, env:
+          ·closure env,
+            fn x, {..env, ·op_plus}, ·state, ·ƒ_cont:
+              ·store env, id'x', x, fn x, env:
+                ·apply ·op_plus, x, x, ·state, fn ·v_0, ·state:
+                  ·apply ·op_plus, ·v_0, x, ·state, ·ƒ_cont
+            fn triple, chld_env:
+              ·store chld_env, id'triple', triple, fn triple, env:
+                ·ƒ_cont triple, ·state
 
 
 test 'free vars — three levels of nesting', fn:
@@ -1435,20 +1435,20 @@ test 'free vars — three levels of nesting', fn:
           a + b + c
 
   | equals_fink fn:
-    closure env,
-      fn ·a, env, state, ƒ_cont:
-        store env, id'a', ·a, fn ·a, env:
-          closure env,
-            fn ·b, env, state, ƒ_cont:
-              store env, id'b', ·b, fn ·b, env:
-                closure env,
-                  fn ·c, {..env, op_plus, ·a, ·b}, state, ƒ_cont:
-                    store env, id'c', ·c, fn ·c, env:
-                      apply op_plus, ·a, ·b, state, fn v_0, state:
-                        apply op_plus, v_0, ·c, state, ƒ_cont
-                  fn ·fn_val, _: ƒ_cont ·fn_val, state
-            fn ·fn_val, _: ƒ_cont ·fn_val, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure env,
+      fn a, env, ·state, ·ƒ_cont:
+        ·store env, id'a', a, fn a, env:
+          ·closure env,
+            fn b, env, ·state, ·ƒ_cont:
+              ·store env, id'b', b, fn b, env:
+                ·closure env,
+                  fn c, {..env, ·op_plus, a, b}, ·state, ·ƒ_cont:
+                    ·store env, id'c', c, fn c, env:
+                      ·apply ·op_plus, a, b, ·state, fn ·v_0, ·state:
+                        ·apply ·op_plus, ·v_0, c, ·state, ·ƒ_cont
+                  fn fn_val, _: ·ƒ_cont fn_val, ·state
+            fn fn_val, _: ·ƒ_cont fn_val, ·state
+      fn fn_val, _: ·ƒ_cont fn_val, ·state
 
 
 test 'free vars — match arm bindings are local', fn:
@@ -1459,25 +1459,25 @@ test 'free vars — match arm bindings are local', fn:
         n: n
 
   | equals_fink fn:
-    closure env,
-      fn ·val, {..env, op_eq}, state, ƒ_cont:
-        store env, id'val', ·val, fn ·val, env:
-          match_block ·val, state,
-            match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
-              apply op_eq, v, 1, state, fn v_result, state:
-                if v_result,
-                  fn state: ƒ_ok 'one', state
-                  fn state: ƒ_err state
-            match_branch env, fn ·n, env, state, ƒ_err, ƒ_ok:
-              store env, id'n', ·n, fn ·n, env:
-                load env, id'n', fn ·n, env:
-                  ƒ_ok ·n, state
-            fn state: panic 'no match', state
-            fn match_result, state: ƒ_cont match_result, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure env,
+      fn val, {..env, ·op_eq}, ·state, ·ƒ_cont:
+        ·store env, id'val', val, fn val, env:
+          ·match_block val, ·state,
+            ·match_branch env, fn v, env, ·state, ƒ_err, ƒ_ok:
+              ·apply ·op_eq, v, 1, ·state, fn v_result, ·state:
+                ·if v_result,
+                  fn ·state: ƒ_ok 'one', ·state
+                  fn ·state: ƒ_err ·state
+            ·match_branch env, fn n, env, ·state, ƒ_err, ƒ_ok:
+              ·store env, id'n', n, fn n, env:
+                ·load env, id'n', fn n, env:
+                  ƒ_ok n, ·state
+            fn ·state: panic 'no match', ·state
+            fn match_result, ·state: ·ƒ_cont match_result, ·state
+      fn fn_val, _: ·ƒ_cont fn_val, ·state
 
 
-test 'free vars — closure inside match arm captures arm binding', fn:
+test 'free vars — ·closure inside match arm captures arm binding', fn:
   expect cps_c_expr fn:
     fn val:
       match val:
@@ -1485,25 +1485,25 @@ test 'free vars — closure inside match arm captures arm binding', fn:
           fn x: head + x
 
   | equals_fink fn:
-    closure env,
-      fn ·val, env, state, ƒ_cont:
-        store env, id'val', ·val, fn ·val, env:
-          match_block ·val, state,
-            match_branch env, fn seq, env, state, ƒ_err, ƒ_ok:
-              seq_matcher seq, state,
-                fn m, ƒ_err, state:
-                  match_pop_at m, 0, state,
-                    fn m, ·head, state:
-                      match_rest m, state, fn m, ·tail, state:
-                        store env, id'head', ·head, fn ·head, env:
-                          store env, id'tail', ·tail, fn ·tail, env:
-                            closure env,
-                              fn ·x, {..env, op_plus, ·head}, state, ƒ_cont:
-                                store env, id'x', ·x, fn ·x, env:
-                                  apply op_plus, ·head, ·x, state, ƒ_cont
-                              fn ·fn_val, _: ƒ_ok ·fn_val, state
-                    fn m, state: ƒ_err state
-                fn state: ƒ_err state
-            fn state: panic 'no match', state
-            fn match_result, state: ƒ_cont match_result, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+    ·closure env,
+      fn val, env, ·state, ·ƒ_cont:
+        ·store env, id'val', val, fn val, env:
+          ·match_block val, ·state,
+            ·match_branch env, fn seq, env, ·state, ƒ_err, ƒ_ok:
+              seq_matcher seq, ·state,
+                fn m, ƒ_err, ·state:
+                  match_pop_at m, 0, ·state,
+                    fn m, head, ·state:
+                      match_rest m, ·state, fn m, tail, ·state:
+                        ·store env, id'head', head, fn head, env:
+                          ·store env, id'tail', tail, fn tail, env:
+                            ·closure env,
+                              fn x, {..env, ·op_plus, head}, ·state, ·ƒ_cont:
+                                ·store env, id'x', x, fn x, env:
+                                  ·apply ·op_plus, head, x, ·state, ·ƒ_cont
+                              fn fn_val, _: ƒ_ok fn_val, ·state
+                    fn m, ·state: ƒ_err ·state
+                fn ·state: ƒ_err ·state
+            fn ·state: panic 'no match', ·state
+            fn match_result, ·state: ·ƒ_cont match_result, ·state
+      fn fn_val, _: ·ƒ_cont fn_val, ·state

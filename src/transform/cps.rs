@@ -38,7 +38,8 @@ impl Meta {
 // ---------------------------------------------------------------------------
 
 /// A bound name — parameters, let-bindings, synthetic temporaries.
-/// Sigil conventions (·foo, ƒ_cont) are output-only; plain names here.
+/// Sigil conventions are output-only; plain names here.
+/// Output convention: user names are plain; compiler/runtime names get · prefix.
 pub type Name<'src> = &'src str;
 
 /// A function parameter — either a plain name or a varargs spread (`..rest`).

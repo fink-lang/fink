@@ -1,6 +1,6 @@
 // cps::Expr → Node → Fink source pretty-printer.
 //
-// Synthesizes store/load/scope/state/ƒ_cont from the clean structural IR.
+// Synthesizes ·store/·load/·scope/·state/·ƒ_cont from the clean structural IR.
 // The output is valid runnable Fink — the visualization doubles as a runtime spec.
 
 use crate::ast::{self, Node, NodeKind};
@@ -99,17 +99,17 @@ fn needs_load(v: &Val<'_>) -> bool {
   matches!(v.kind, ValKind::Key(_))
 }
 
-/// Synthesize a `load` wrapping `body_node`:
-///   load scope, id'name' | op'sym', fn ·local, scope: body_node
+/// Synthesize a `·load` wrapping `body_node`:
+///   ·load ·scope, id'name' | op'sym', fn local, ·scope: body_node
 fn emit_load(key: &super::cps::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
   let key_node = match &key.kind {
     KeyKind::Name(name) => id_tag(name),
     KeyKind::Op(op)     => op_tag(op),
   };
-  apply(ident("load"), vec![
-    ident("scope"),
+  apply(ident("·load"), vec![
+    ident("·scope"),
     key_node,
-    fn_node(patterns(vec![ident(local), ident("scope")]), vec![body_node]),
+    fn_node(patterns(vec![ident(local), ident("·scope")]), vec![body_node]),
   ])
 }
 
@@ -177,32 +177,51 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 // Expr → Node
 //
 // Synthesis conventions:
-//   LetVal { name, val, body }  → store scope, id'name', val, fn ·name, scope: body
-//   LetFn  { name, params, ..} → closure scope, fn ·params…, scope, state, ƒ_cont: fn_body,
-//                                             fn ·name, chld_scope: body
-//   App    { func, args, result, body } → apply func_loaded, arg…, state, fn result, state: body
-//   Ret(val)                   → ƒ_cont val, state
+//   LetVal { name, val, body }  → ·store ·scope, id'name', val, fn name, ·scope: body
+//   LetFn  { name, params, ..} → ·closure ·scope, fn params…, ·scope, ·state, ·ƒ_cont: fn_body,
+//                                               fn name, ·chld_scope: body
+//   App    { func, args, result, body } → ·apply func_loaded, arg…, ·state, fn result, ·state: body
+//   Ret(val)                   → ·ƒ_cont val, ·state
 //
 // Name sigil conventions (output only):
-//   user names → ·name   operator funcs → op_plus etc.   continuations → ƒ_cont
-//   synthesized → v_0 etc.   scope handle → scope   state → state
+//   user names → plain (foo, bar)
+//   runtime primitives → ·name (·store, ·load, ·scope, ·state, ·ƒ_cont, ·apply, ·closure, …)
+//   compiler temps → ·v_0, ·fn_3
+//   operator locals → ·op_plus, ·op_eq, …
 // ---------------------------------------------------------------------------
 
 fn sigil(name: &str) -> String {
-  // Apply ·sigil to user-defined names that don't already have a sigil or prefix.
-  // Synthetic names (v_N, fn_N) and runtime names (env, state, ƒ_cont) are unchanged.
-  if name.starts_with('·') || name.starts_with('ƒ') || name.starts_with("v_")
-    || name.starts_with("fn_") || name.starts_with("op_")
-    || matches!(name, "scope" | "state" | "_")
-  {
+  // User-defined names pass through plain.
+  // Compiler-generated temps (v_N, fn_N) and runtime-injected names get · prefix.
+  // Names already prefixed with · are left unchanged.
+  if name.starts_with('·') {
+    // already prefixed
     name.to_string()
-  } else {
+  } else if name.starts_with("v_") || name.starts_with("fn_") || name.starts_with("op_")
+    || matches!(
+      name,
+      "scope" | "state" | "_"
+      // runtime primitives that appear as loaded locals
+      | "range_excl" | "range_incl"
+      | "seq_append" | "seq_concat"
+      | "rec_put" | "rec_merge"
+      | "str_fmt" | "str_raw"
+      | "apply" | "closure" | "store" | "load"
+      | "id" | "err" | "panic" | "if"
+      | "match_block" | "match_branch" | "match_bind" | "match_done"
+      | "match_pop_at" | "match_pop_field" | "match_rest" | "match_len"
+      | "chld_scope"
+    )
+  {
     format!("·{}", name)
+  } else {
+    // user name — plain
+    name.to_string()
   }
 }
 
 fn sigil_op(op: &str) -> String {
-  // Operators are loaded under a readable local name: `op_plus`, `op_eq`, etc.
+  // Operators are loaded under a readable local name: `·op_plus`, `·op_eq`, etc.
   let suffix = match op {
     "+"   => "plus",
     "-"   => "minus",
@@ -221,29 +240,29 @@ fn sigil_op(op: &str) -> String {
     "not" => "not",
     _     => op,
   };
-  format!("op_{}", suffix)
+  format!("·op_{}", suffix)
 }
 
 pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
   match &expr.kind {
-    // Ret(val) → ƒ_cont val, state
+    // Ret(val) → ·ƒ_cont val, ·state
     // If val is a Key, wrap in a load first.
     ExprKind::Ret(val) => {
       with_loads(&[val], |resolved| {
-        apply(ident("ƒ_cont"), vec![resolved.into_iter().next().unwrap(), ident("state")])
+        apply(ident("·ƒ_cont"), vec![resolved.into_iter().next().unwrap(), ident("·state")])
       })
     }
 
-    // LetVal { name, val, body } → store scope, id'name', val, fn ·name, scope: body
+    // LetVal { name, val, body } → ·store ·scope, id'name', val, fn name, ·scope: body
     // If val is a Key, wrap a load first.
     ExprKind::LetVal { name, val, body } => {
-      let dotted = sigil(name);
-      let store_node = apply(ident("store"), vec![
-        ident("scope"),
+      let plain = sigil(name);
+      let store_node = apply(ident("·store"), vec![
+        ident("·scope"),
         id_tag(name),
         val_to_node(val),
         fn_node(
-          patterns(vec![ident(&dotted), ident("scope")]),
+          patterns(vec![ident(&plain), ident("·scope")]),
           vec![to_node(body)],
         ),
       ]);
@@ -251,39 +270,39 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     }
 
     // LetFn { name, params, fn_body, body }
-    // → closure scope, fn ·params…, scope, state, ƒ_cont: fn_body,
-    //              fn ·name, chld_scope: body
+    // → ·closure ·scope, fn params…, ·scope, ·state, ·ƒ_cont: fn_body,
+    //               fn name, ·chld_scope: body
     ExprKind::LetFn { name, params, fn_body, body } => {
-      let dotted_name = sigil(name);
-      // Build fn params: ·p1, ·p2, …, scope, state, ƒ_cont
-      // Spread params render as `..·name`.
+      let plain_name = sigil(name);
+      // Build fn params: p1, p2, …, ·scope, ·state, ·ƒ_cont
+      // Spread params render as `..name`.
       let mut fn_params: Vec<Node<'static>> = params.iter()
         .map(|p| match p {
           Param::Name(n) => ident(&sigil(n)),
           Param::Spread(n) => spread_node(ident(&sigil(n))),
         })
         .collect();
-      fn_params.push(ident("scope"));
-      fn_params.push(ident("state"));
-      fn_params.push(ident("ƒ_cont"));
-      apply(ident("closure"), vec![
-        ident("scope"),
+      fn_params.push(ident("·scope"));
+      fn_params.push(ident("·state"));
+      fn_params.push(ident("·ƒ_cont"));
+      apply(ident("·closure"), vec![
+        ident("·scope"),
         fn_node(patterns(fn_params), vec![to_node(fn_body)]),
         fn_node(
-          patterns(vec![ident(&dotted_name), ident("chld_scope")]),
+          patterns(vec![ident(&plain_name), ident("·chld_scope")]),
           vec![to_node(body)],
         ),
       ])
     }
 
     // App { func, args, result, body }
-    // → apply func, arg…, state, fn result, state: body
+    // → ·apply func, arg…, ·state, fn result, ·state: body
     // Loads synthesized for any Key vals in func or args.
     // Spread args render as `..resolved_val`.
     ExprKind::App { func, args, result, body } => {
-      let result_dotted = sigil(result);
+      let result_plain = sigil(result);
       let result_fn = fn_node(
-        patterns(vec![ident(&result_dotted), ident("state")]),
+        patterns(vec![ident(&result_plain), ident("·state")]),
         vec![to_node(body)],
       );
       // Extract vals from args, tracking which are spreads.
@@ -301,60 +320,60 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
         apply_args.extend(resolved.into_iter()
           .zip(is_spread.iter())
           .map(|(n, &spread)| if spread { spread_node(n) } else { n }));
-        apply_args.push(ident("state"));
+        apply_args.push(ident("·state"));
         apply_args.push(result_fn);
-        apply(ident("apply"), apply_args)
+        apply(ident("·apply"), apply_args)
       })
     }
 
-    // If { cond, then, else_ } → if cond, fn state: then, fn state: else_
+    // If { cond, then, else_ } → ·if cond, fn ·state: then, fn ·state: else_
     ExprKind::If { cond, then, else_ } => {
-      apply(ident("if"), vec![
+      apply(ident("·if"), vec![
         val_to_node(cond),
-        fn_node(patterns(vec![ident("state")]), vec![to_node(then)]),
-        fn_node(patterns(vec![ident("state")]), vec![to_node(else_)]),
+        fn_node(patterns(vec![ident("·state")]), vec![to_node(then)]),
+        fn_node(patterns(vec![ident("·state")]), vec![to_node(else_)]),
       ])
     }
 
     // LetRec — not yet implemented; placeholder
     ExprKind::LetRec { .. } => {
-      apply(ident("let_rec"), vec![node(NodeKind::Wildcard)])
+      apply(ident("·let_rec"), vec![node(NodeKind::Wildcard)])
     }
 
     // Match { scrutinee, arms, result, body }
-    // → match_block scrutinee, state,
-    //     match_branch env, fn ·bindings…, env, state, ƒ_cont: arm_body,
+    // → ·match_block scrutinee, ·state,
+    //     ·match_branch pat, fn bindings…, ·scope, ·state, ·ƒ_cont: arm_body,
     //     …,
-    //     fn result, state: body
+    //     fn result, ·state: body
     ExprKind::Match { scrutinee, arms, result, body } => {
-      let result_dotted = sigil(result);
+      let result_plain = sigil(result);
       let result_fn = fn_node(
-        patterns(vec![ident(&result_dotted), ident("state")]),
+        patterns(vec![ident(&result_plain), ident("·state")]),
         vec![to_node(body)],
       );
       with_loads(&[scrutinee], |resolved| {
         let scrutinee_node = resolved.into_iter().next().unwrap();
-        let mut args = vec![scrutinee_node, ident("state")];
+        let mut args = vec![scrutinee_node, ident("·state")];
         for arm in arms {
           args.push(arm_to_node(arm));
         }
         args.push(result_fn);
-        apply(ident("match_block"), args)
+        apply(ident("·match_block"), args)
       })
     }
   }
 }
 
 // Render a single match arm as:
-//   match_branch scope, fn ·bindings…, scope, state, ƒ_cont: arm_body
+//   ·match_branch pat, fn bindings…, ·scope, ·state, ·ƒ_cont: arm_body
 fn arm_to_node(arm: &Arm<'_>) -> Node<'static> {
   let mut fn_params: Vec<Node<'static>> = arm.bindings.iter()
     .map(|b| ident(&sigil(b)))
     .collect();
-  fn_params.push(ident("scope"));
-  fn_params.push(ident("state"));
-  fn_params.push(ident("ƒ_cont"));
-  apply(ident("match_branch"), vec![
+  fn_params.push(ident("·scope"));
+  fn_params.push(ident("·state"));
+  fn_params.push(ident("·ƒ_cont"));
+  apply(ident("·match_branch"), vec![
     pat_to_node(&arm.pattern),
     fn_node(patterns(fn_params), vec![to_node(&arm.fn_body)]),
   ])
