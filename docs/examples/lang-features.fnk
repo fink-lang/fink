@@ -522,7 +522,10 @@ match foobar:
   {foo: 1, ..rest}: 'bound empty or non-empty rest'
 
   {x: 1, y: {z}}: 'matched z: ${z}'
+  # capture foo's value in f, and also match within it
   {foo: f |= {bar, spam: num ni}}: {f, bar, no}
+  # TODO support non destructive pattern for the above use case
+  {foo: {..f, bar, spam: num ni}}: {f, bar, no}
 
 
 ---

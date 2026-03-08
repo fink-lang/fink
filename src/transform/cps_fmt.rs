@@ -1,25 +1,22 @@
-// CpsExpr → Node → Fink source pretty-printer
+// cps::Expr → Node → Fink source pretty-printer.
 //
-// Two formatters:
-//   `fmt`           — standard output; ignores `captures`, renders Load calls verbatim
-//   `fmt_annotated` — debug output after free-var analysis; renders capture destructures
-//                     on closure fn env params and suppresses Load calls for captured names
+// Synthesizes store/load/scope/state/ƒ_cont from the clean structural IR.
+// The output is valid runnable Fink — the visualization doubles as a runtime spec.
 
-use std::collections::HashSet;
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{CpsExpr, CpsFn, CpsKey, CpsNode, CpsParam, CpsVal};
+use super::cps::{Arm, Expr, ExprKind, KeyKind, Lit, Pat, PatKind, Val, ValKind};
 
-pub fn fmt(cps_node: &CpsNode<'_>) -> String {
-  ast::fmt::fmt(&to_node(&cps_node.expr))
-}
+// ---------------------------------------------------------------------------
+// Entry points
+// ---------------------------------------------------------------------------
 
-pub fn fmt_annotated(cps_node: &CpsNode<'_>) -> String {
-  ast::fmt::fmt(&to_node_ann(&cps_node.expr, &HashSet::new()))
+pub fn fmt(expr: &Expr<'_>) -> String {
+  ast::fmt::fmt(&to_node(expr))
 }
 
 // ---------------------------------------------------------------------------
-// dummy loc — used for reconstructed AST nodes in the formatter
+// Dummy loc — all reconstructed AST nodes use this
 // ---------------------------------------------------------------------------
 
 fn loc() -> Loc {
@@ -32,11 +29,10 @@ fn node(kind: NodeKind<'static>) -> Node<'static> {
 }
 
 // ---------------------------------------------------------------------------
-// helpers to build common AST shapes
+// AST builder helpers
 // ---------------------------------------------------------------------------
 
 fn ident(s: &str) -> Node<'static> {
-  // Safety: s is always a literal or leaked string in this module
   let s: &'static str = Box::leak(s.to_string().into_boxed_str());
   node(NodeKind::Ident(s))
 }
@@ -54,567 +50,354 @@ fn fn_node(params: Node<'static>, body: Vec<Node<'static>>) -> Node<'static> {
 }
 
 fn tagged(tag: &str, s: &str) -> Node<'static> {
-  let str_node = node(NodeKind::StrRawTempl(vec![
-    node(NodeKind::LitStr(s.to_string()))
-  ]));
-  apply(ident(tag), vec![str_node])
+  let s: &'static str = Box::leak(s.to_string().into_boxed_str());
+  let str_node = node(NodeKind::LitStr(s.to_string()));
+  let raw = node(NodeKind::StrRawTempl(vec![str_node]));
+  apply(ident(tag), vec![raw])
 }
 
-fn id_tag(s: &str) -> Node<'static> { tagged("id", s) }
-fn op_tag(s: &str) -> Node<'static> { tagged("op", s) }
-fn str_raw_node(s: &str) -> Node<'static> { tagged("str_raw", s) }
+fn id_tag(s: &str)  -> Node<'static> { tagged("id",  s) }
+fn op_tag(s: &str)  -> Node<'static> { tagged("op",  s) }
 
 // ---------------------------------------------------------------------------
-// CpsParam → Node (fn parameter)
+// Val → Node
 // ---------------------------------------------------------------------------
 
-fn param_to_node(p: &CpsParam) -> Node<'static> {
-  match p {
-    CpsParam::Ident(s) => ident(s),
-    CpsParam::Spread(s) => node(NodeKind::Spread(Some(Box::new(ident(s))))),
-    CpsParam::Wildcard => node(NodeKind::Wildcard),
+/// Render a Val to an AST node for use in an already-resolved position.
+/// Keys are rendered as their plain name (caller must have issued a load first).
+fn val_to_node(v: &Val<'_>) -> Node<'static> {
+  match &v.kind {
+    ValKind::Lit(lit)    => lit_to_node(lit),
+    ValKind::Ident(name) => ident(&sigil(name)),
+    ValKind::Key(key)    => match &key.kind {
+      KeyKind::Name(name) => ident(&sigil(name)),
+      KeyKind::Op(op)     => ident(&sigil_op(op)),
+    },
   }
 }
 
-// ---------------------------------------------------------------------------
-// CpsVal → Node
-// ---------------------------------------------------------------------------
-
-fn val_to_node(v: &CpsVal) -> Node<'static> {
-  match v {
-    CpsVal::Bool(b) => node(NodeKind::LitBool(*b)),
-    CpsVal::Int(s) => { let s: &'static str = Box::leak(s.to_string().into_boxed_str()); node(NodeKind::LitInt(s)) }
-    CpsVal::Float(s) => { let s: &'static str = Box::leak(s.to_string().into_boxed_str()); node(NodeKind::LitFloat(s)) }
-    CpsVal::Decimal(s) => { let s: &'static str = Box::leak(s.to_string().into_boxed_str()); node(NodeKind::LitDecimal(s)) }
-    CpsVal::Str(s) => node(NodeKind::LitStr(s.clone())),
-    CpsVal::StrRaw(s) => str_raw_node(s),
-    CpsVal::EmptySeq => node(NodeKind::LitSeq(vec![])),
-    CpsVal::EmptyRec => node(NodeKind::LitRec(vec![])),
-    CpsVal::Ident(s) => ident(s),
-    CpsVal::Id(s) => id_tag(s),
-    CpsVal::Op(s) => op_tag(s),
-    CpsVal::Spread(s) => node(NodeKind::Spread(Some(Box::new(ident(s))))),
-    CpsVal::Wildcard => node(NodeKind::Wildcard),
-    CpsVal::Fn(f) => fn_to_node(f),
+/// Return the local name that a Val resolves to after loading.
+/// For Ident/Lit this is the val itself; for Key it's the name that will be
+/// bound by the synthesized load.
+fn resolved_name(v: &Val<'_>) -> String {
+  match &v.kind {
+    ValKind::Ident(name) => sigil(name),
+    ValKind::Key(key)    => match &key.kind {
+      KeyKind::Name(name) => sigil(name),
+      KeyKind::Op(op)     => sigil_op(op),
+    },
+    ValKind::Lit(_)      => String::new(),  // literals don't have a name
   }
 }
 
-// ---------------------------------------------------------------------------
-// CpsKey → Node
-// ---------------------------------------------------------------------------
-
-fn key_to_node(k: &CpsKey) -> Node<'static> {
-  match k {
-    CpsKey::Id(s, _) => id_tag(s),
-    CpsKey::Op(s, _) => op_tag(s),
-  }
+/// Whether a Val needs a `load` synthesis before use.
+fn needs_load(v: &Val<'_>) -> bool {
+  matches!(v.kind, ValKind::Key(_))
 }
 
-// ---------------------------------------------------------------------------
-// CpsFn → Node (Fn AST node)
-// ---------------------------------------------------------------------------
-
-fn fn_to_node(f: &CpsFn) -> Node<'static> {
-  let params = patterns(f.params.iter().map(param_to_node).collect());
-  let body = vec![to_node(&f.body)];
-  fn_node(params, body)
+/// Synthesize a `load` wrapping `body_node`:
+///   load scope, id'name' | op'sym', fn ·local, scope: body_node
+fn emit_load(key: &super::cps::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
+  let key_node = match &key.kind {
+    KeyKind::Name(name) => id_tag(name),
+    KeyKind::Op(op)     => op_tag(op),
+  };
+  apply(ident("load"), vec![
+    ident("scope"),
+    key_node,
+    fn_node(patterns(vec![ident(local), ident("scope")]), vec![body_node]),
+  ])
 }
 
-// ---------------------------------------------------------------------------
-// CpsExpr → Node
-// ---------------------------------------------------------------------------
-
-pub fn to_node(expr: &CpsExpr) -> Node<'static> {
-  match expr {
-    CpsExpr::Store { env, key, val, cont } => {
-      apply(ident("store"), vec![
-        ident(env),
-        id_tag(key),
-        val_to_node(val),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::Load { env, key, cont } => {
-      apply(ident("load"), vec![
-        ident(env),
-        key_to_node(key),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::Apply { func, args, state, cont } => {
-      let mut apply_args = vec![val_to_node(func)];
-      apply_args.extend(args.iter().map(val_to_node));
-      apply_args.push(ident(state));
-      apply_args.push(val_to_node(cont));
-      apply(ident("apply"), apply_args)
-    }
-
-    CpsExpr::Closure { env, func, cont } => {
-      apply(ident("closure"), vec![
-        ident(env),
-        fn_to_node(func),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::Scope { env, inner, cont } => {
-      apply(ident("scope"), vec![
-        ident(env),
-        fn_to_node(inner),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::SeqAppend { seq, val, state, cont } => {
-      apply(ident("seq_append"), vec![
-        val_to_node(seq),
-        val_to_node(val),
-        ident(state),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::SeqConcat { seq, other, state, cont } => {
-      apply(ident("seq_concat"), vec![
-        val_to_node(seq),
-        val_to_node(other),
-        ident(state),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::RecPut { rec, key, val, state, cont } => {
-      apply(ident("rec_put"), vec![
-        val_to_node(rec),
-        id_tag(key),
-        val_to_node(val),
-        ident(state),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::RecMerge { rec, other, state, cont } => {
-      apply(ident("rec_merge"), vec![
-        val_to_node(rec),
-        val_to_node(other),
-        ident(state),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::RangeExcl { start, end, state, cont } => {
-      apply(ident("range_excl"), vec![
-        val_to_node(start),
-        val_to_node(end),
-        ident(state),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::RangeIncl { start, end, state, cont } => {
-      apply(ident("range_incl"), vec![
-        val_to_node(start),
-        val_to_node(end),
-        ident(state),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::Err { res, state, err_cont, ok_cont } => {
-      apply(ident("err"), vec![
-        val_to_node(res),
-        ident(state),
-        fn_to_node(err_cont),
-        fn_to_node(ok_cont),
-      ])
-    }
-
-    CpsExpr::If { cond, then_cont, else_cont } => {
-      apply(ident("if"), vec![
-        val_to_node(cond),
-        fn_to_node(then_cont),
-        fn_to_node(else_cont),
-      ])
-    }
-
-    CpsExpr::Panic { message, state } => {
-      apply(ident("panic"), vec![
-        val_to_node(message),
-        ident(state),
-      ])
-    }
-
-    CpsExpr::MatchBind { val, state, arm, fail, cont } => {
-      apply(ident("match_bind"), vec![
-        val_to_node(val),
-        ident(state),
-        fn_to_node(arm),
-        fn_to_node(fail),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::MatchBlock { vals, state, branches, fail, cont } => {
-      let mut args: Vec<Node> = vals.iter().map(val_to_node).collect();
-      args.push(ident(state));
-      args.extend(branches.iter().map(to_node));
-      args.push(fn_to_node(fail));
-      args.push(fn_to_node(cont));
-      apply(ident("match_block"), args)
-    }
-
-    CpsExpr::MatchBranch { env, arm } => {
-      apply(ident("match_branch"), vec![
-        ident(env),
-        fn_to_node(arm),
-      ])
-    }
-
-    CpsExpr::SeqMatcher { val, state, cont, fail } => {
-      apply(ident("seq_matcher"), vec![
-        val_to_node(val),
-        ident(state),
-        fn_to_node(cont),
-        fn_to_node(fail),
-      ])
-    }
-
-    CpsExpr::RecMatcher { val, state, cont, fail } => {
-      apply(ident("rec_matcher"), vec![
-        val_to_node(val),
-        ident(state),
-        fn_to_node(cont),
-        fn_to_node(fail),
-      ])
-    }
-
-    CpsExpr::MatchPopAt { matcher, index, state, cont, fail } => {
-      // index as integer literal — we need a string representation
-      // We store index as usize; render as a static-lifetime str isn't possible,
-      // but we can use LitStr for numeric display (it prints without quotes in fmt...
-      // actually no). Better: allocate the string and leak it for display purposes.
-      // Since this is a formatter for debug output, leaking a handful of small strings is fine.
-      let index_str: &'static str = Box::leak(index.to_string().into_boxed_str());
-      apply(ident("match_pop_at"), vec![
-        val_to_node(matcher),
-        node(NodeKind::LitInt(index_str)),
-        ident(state),
-        fn_to_node(cont),
-        fn_to_node(fail),
-      ])
-    }
-
-    CpsExpr::MatchPopField { matcher, key, state, cont, fail } => {
-      apply(ident("match_pop_field"), vec![
-        val_to_node(matcher),
-        id_tag(key),
-        ident(state),
-        fn_to_node(cont),
-        fn_to_node(fail),
-      ])
-    }
-
-    CpsExpr::MatchDone { matcher, state, non_empty, empty } => {
-      apply(ident("match_done"), vec![
-        val_to_node(matcher),
-        ident(state),
-        fn_to_node(non_empty),
-        fn_to_node(empty),
-      ])
-    }
-
-    CpsExpr::MatchRest { matcher, state, cont } => {
-      apply(ident("match_rest"), vec![
-        val_to_node(matcher),
-        ident(state),
-        fn_to_node(cont),
-      ])
-    }
-
-    CpsExpr::MatchLen { matcher, len, state, ok, fail } => {
-      let len_str: &'static str = Box::leak(len.to_string().into_boxed_str());
-      apply(ident("match_len"), vec![
-        val_to_node(matcher),
-        node(NodeKind::LitInt(len_str)),
-        ident(state),
-        fn_to_node(ok),
-        fn_to_node(fail),
-      ])
-    }
-
-    CpsExpr::TailCall { cont, args } => {
-      if args.is_empty() {
-        val_to_node(cont)
-      } else {
-        apply(val_to_node(cont), args.iter().map(val_to_node).collect())
-      }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Annotated formatter — renders capture destructures, suppresses captured Loads
-// ---------------------------------------------------------------------------
-
-/// Render `CpsExpr` to a Node, using `captured` as the set of names that are
-/// available via the current closure's destructured env param.
-/// `Load` nodes whose key is in `captured` are suppressed (the name comes
-/// from the destructure, not a runtime load call).
-fn to_node_ann<'a>(expr: &CpsExpr<'a>, captured: &HashSet<&str>) -> Node<'static> {
-  match expr {
-    // Suppress Load when the bound name is in the current capture set.
-    CpsExpr::Load { env, key, cont } => {
-      // The bound name is the continuation's first param (e.g. `·foo` or `op_plus`).
-      let bound_name = match cont.params.first() {
-        Some(super::cps::CpsParam::Ident(s)) => *s,
-        _ => "",
-      };
-      if !bound_name.is_empty() && captured.contains(bound_name) {
-        // Skip this Load — emit the continuation body directly.
-        to_node_ann(&cont.body, captured)
-      } else {
-        // Render as a normal load call.
-        apply(ident("load"), vec![
-          ident(env),
-          match key { CpsKey::Id(s, _) => id_tag(s), CpsKey::Op(s, _) => op_tag(s) },
-          fn_to_node_ann(cont, captured),
-        ])
-      }
-    }
-
-    // Closure: render func with its captures as the env-param destructure.
-    CpsExpr::Closure { env, func, cont } => {
-      apply(ident("closure"), vec![
-        ident(env),
-        fn_to_node_closure_func(func),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    // All other variants: recurse with the same captured set (no new closure boundary).
-    CpsExpr::Store { env, key, val, cont } => {
-      apply(ident("store"), vec![
-        ident(env),
-        id_tag(key),
-        val_to_node(val),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::Apply { func, args, state, cont } => {
-      let mut apply_args = vec![val_to_node(func)];
-      apply_args.extend(args.iter().map(val_to_node));
-      apply_args.push(ident(state));
-      apply_args.push(val_to_node_ann(cont, captured));
-      apply(ident("apply"), apply_args)
-    }
-
-    CpsExpr::Scope { env, inner, cont } => {
-      apply(ident("scope"), vec![
-        ident(env),
-        fn_to_node_ann(inner, captured),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::SeqAppend { seq, val, state, cont } => {
-      apply(ident("seq_append"), vec![
-        val_to_node(seq), val_to_node(val), ident(state),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::SeqConcat { seq, other, state, cont } => {
-      apply(ident("seq_concat"), vec![
-        val_to_node(seq), val_to_node(other), ident(state),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::RecPut { rec, key, val, state, cont } => {
-      apply(ident("rec_put"), vec![
-        val_to_node(rec), id_tag(key), val_to_node(val), ident(state),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::RecMerge { rec, other, state, cont } => {
-      apply(ident("rec_merge"), vec![
-        val_to_node(rec), val_to_node(other), ident(state),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::RangeExcl { start, end, state, cont } => {
-      apply(ident("range_excl"), vec![
-        val_to_node(start), val_to_node(end), ident(state),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::RangeIncl { start, end, state, cont } => {
-      apply(ident("range_incl"), vec![
-        val_to_node(start), val_to_node(end), ident(state),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::Err { res, state, err_cont, ok_cont } => {
-      apply(ident("err"), vec![
-        val_to_node(res), ident(state),
-        fn_to_node_ann(err_cont, captured),
-        fn_to_node_ann(ok_cont, captured),
-      ])
-    }
-
-    CpsExpr::If { cond, then_cont, else_cont } => {
-      apply(ident("if"), vec![
-        val_to_node(cond),
-        fn_to_node_ann(then_cont, captured),
-        fn_to_node_ann(else_cont, captured),
-      ])
-    }
-
-    CpsExpr::Panic { message, state } => {
-      apply(ident("panic"), vec![val_to_node(message), ident(state)])
-    }
-
-    CpsExpr::MatchBind { val, state, arm, fail, cont } => {
-      apply(ident("match_bind"), vec![
-        val_to_node(val), ident(state),
-        fn_to_node_ann(arm, captured),
-        fn_to_node_ann(fail, captured),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::MatchBlock { vals, state, branches, fail, cont } => {
-      let mut args: Vec<Node> = vals.iter().map(val_to_node).collect();
-      args.push(ident(state));
-      args.extend(branches.iter().map(|b| to_node_ann(b, captured)));
-      args.push(fn_to_node_ann(fail, captured));
-      args.push(fn_to_node_ann(cont, captured));
-      apply(ident("match_block"), args)
-    }
-
-    CpsExpr::MatchBranch { env, arm } => {
-      apply(ident("match_branch"), vec![
-        ident(env),
-        fn_to_node_ann(arm, captured),
-      ])
-    }
-
-    CpsExpr::SeqMatcher { val, state, cont, fail } => {
-      apply(ident("seq_matcher"), vec![
-        val_to_node(val), ident(state),
-        fn_to_node_ann(cont, captured),
-        fn_to_node_ann(fail, captured),
-      ])
-    }
-
-    CpsExpr::RecMatcher { val, state, cont, fail } => {
-      apply(ident("rec_matcher"), vec![
-        val_to_node(val), ident(state),
-        fn_to_node_ann(cont, captured),
-        fn_to_node_ann(fail, captured),
-      ])
-    }
-
-    CpsExpr::MatchPopAt { matcher, index, state, cont, fail } => {
-      let index_str: &'static str = Box::leak(index.to_string().into_boxed_str());
-      apply(ident("match_pop_at"), vec![
-        val_to_node(matcher),
-        node(NodeKind::LitInt(index_str)),
-        ident(state),
-        fn_to_node_ann(cont, captured),
-        fn_to_node_ann(fail, captured),
-      ])
-    }
-
-    CpsExpr::MatchPopField { matcher, key, state, cont, fail } => {
-      apply(ident("match_pop_field"), vec![
-        val_to_node(matcher), id_tag(key), ident(state),
-        fn_to_node_ann(cont, captured),
-        fn_to_node_ann(fail, captured),
-      ])
-    }
-
-    CpsExpr::MatchDone { matcher, state, non_empty, empty } => {
-      apply(ident("match_done"), vec![
-        val_to_node(matcher), ident(state),
-        fn_to_node_ann(non_empty, captured),
-        fn_to_node_ann(empty, captured),
-      ])
-    }
-
-    CpsExpr::MatchRest { matcher, state, cont } => {
-      apply(ident("match_rest"), vec![
-        val_to_node(matcher), ident(state),
-        fn_to_node_ann(cont, captured),
-      ])
-    }
-
-    CpsExpr::MatchLen { matcher, len, state, ok, fail } => {
-      let len_str: &'static str = Box::leak(len.to_string().into_boxed_str());
-      apply(ident("match_len"), vec![
-        val_to_node(matcher),
-        node(NodeKind::LitInt(len_str)),
-        ident(state),
-        fn_to_node_ann(ok, captured),
-        fn_to_node_ann(fail, captured),
-      ])
-    }
-
-    CpsExpr::TailCall { cont, args } => {
-      if args.is_empty() {
-        val_to_node(cont)
-      } else {
-        apply(val_to_node(cont), args.iter().map(val_to_node).collect())
-      }
-    }
-  }
-}
-
-/// Render a `CpsFn` using the parent scope's capture set (non-closure fn).
-fn fn_to_node_ann<'a>(f: &CpsFn<'a>, captured: &HashSet<&str>) -> Node<'static> {
-  let params = patterns(f.params.iter().map(param_to_node).collect());
-  let body = vec![to_node_ann(&f.body, captured)];
-  fn_node(params, body)
-}
-
-/// Render a `CpsVal`, recursing into inline `Fn` with the parent capture set.
-fn val_to_node_ann<'a>(v: &CpsVal<'a>, captured: &HashSet<&str>) -> Node<'static> {
-  match v {
-    CpsVal::Fn(f) => fn_to_node_ann(f, captured),
-    other => val_to_node(other),
-  }
-}
-
-/// Render a closure's `func` CpsFn: replaces the `env` param with a
-/// destructure pattern `{..env, ·x, op_plus}` when `captures` is non-empty.
-/// The body is rendered with the closure's own capture set active.
-fn fn_to_node_closure_func(f: &CpsFn) -> Node<'static> {
-  // Build the capture set for suppressing Loads inside this closure body.
-  let captured: HashSet<&str> = f.captures.iter().copied().collect();
-
-  // Build the params list, replacing the `env` param with the destructure.
-  let params: Vec<Node<'static>> = f.params.iter().map(|p| match p {
-    CpsParam::Ident("env") if !f.captures.is_empty() => {
-      // {..env, ·x, op_plus, ...} — rest-first record destructure
-      let mut fields: Vec<Node<'static>> = Vec::new();
-      // ..env spread
-      fields.push(node(NodeKind::Spread(Some(Box::new(ident("env"))))));
-      // each captured name
-      for &name in &f.captures {
-        fields.push(ident(name));
-      }
-      node(NodeKind::LitRec(fields))
-    }
-    other => param_to_node(other),
+/// Wrap `inner_node` in loads for every `Key` val in `vals`.
+/// Keys are resolved left-to-right; `val_to_node` can then be used on each val
+/// since the name is now bound.
+fn with_loads<F>(vals: &[&Val<'_>], inner: F) -> Node<'static>
+where
+  F: FnOnce(Vec<Node<'static>>) -> Node<'static>,
+{
+  // Collect which vals need loads, build the resolved name list.
+  let resolved: Vec<(bool, String)> = vals.iter().map(|v| {
+    (needs_load(v), resolved_name(v))
   }).collect();
 
-  let body = vec![to_node_ann(&f.body, &captured)];
-  fn_node(patterns(params), body)
+  // Build inner node first (outermost continuation last = fold left).
+  let inner_nodes: Vec<Node<'static>> = vals.iter().zip(resolved.iter())
+    .map(|(v, (_, name))| {
+      if name.is_empty() {
+        val_to_node(v)  // literal
+      } else {
+        ident(name)     // already resolved (Ident or Key-after-load)
+      }
+    })
+    .collect();
+  let inner_node = inner(inner_nodes);
+
+  // Wrap in loads right-to-left (innermost first in the fold).
+  vals.iter().zip(resolved.iter()).rev()
+    .fold(inner_node, |body, (v, (load, name))| {
+      if *load {
+        if let ValKind::Key(key) = &v.kind {
+          emit_load(key, name, body)
+        } else {
+          body
+        }
+      } else {
+        body
+      }
+    })
+}
+
+fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
+  match lit {
+    Lit::Bool(b) => node(NodeKind::LitBool(*b)),
+    Lit::Int(n) => {
+      let s: &'static str = Box::leak(n.to_string().into_boxed_str());
+      node(NodeKind::LitInt(s))
+    }
+    Lit::Float(f) => {
+      let s: &'static str = Box::leak(f.to_string().into_boxed_str());
+      node(NodeKind::LitFloat(s))
+    }
+    Lit::Decimal(f) => {
+      let s: &'static str = Box::leak(format!("{}d", f).into_boxed_str());
+      node(NodeKind::LitDecimal(s))
+    }
+    Lit::Str(s) => node(NodeKind::LitStr(s.to_string())),
+    Lit::Seq   => node(NodeKind::LitSeq(vec![])),
+    Lit::Rec   => node(NodeKind::LitRec(vec![])),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Expr → Node
+//
+// Synthesis conventions:
+//   LetVal { name, val, body }  → store scope, id'name', val, fn ·name, scope: body
+//   LetFn  { name, params, ..} → closure scope, fn ·params…, scope, state, ƒ_cont: fn_body,
+//                                             fn ·name, chld_scope: body
+//   App    { func, args, result, body } → apply func_loaded, arg…, state, fn result, state: body
+//   Ret(val)                   → ƒ_cont val, state
+//
+// Name sigil conventions (output only):
+//   user names → ·name   operator funcs → op_plus etc.   continuations → ƒ_cont
+//   synthesized → v_0 etc.   scope handle → scope   state → state
+// ---------------------------------------------------------------------------
+
+fn sigil(name: &str) -> String {
+  // Apply ·sigil to user-defined names that don't already have a sigil or prefix.
+  // Synthetic names (v_N, fn_N) and runtime names (env, state, ƒ_cont) are unchanged.
+  if name.starts_with('·') || name.starts_with('ƒ') || name.starts_with("v_")
+    || name.starts_with("fn_") || name.starts_with("op_")
+    || matches!(name, "scope" | "state" | "_")
+  {
+    name.to_string()
+  } else {
+    format!("·{}", name)
+  }
+}
+
+fn sigil_op(op: &str) -> String {
+  // Operators are loaded under a readable local name: `op_plus`, `op_eq`, etc.
+  let suffix = match op {
+    "+"   => "plus",
+    "-"   => "minus",
+    "*"   => "mul",
+    "/"   => "div",
+    "%"   => "rem",
+    "=="  => "eq",
+    "!="  => "neq",
+    "<"   => "lt",
+    "<="  => "lte",
+    ">"   => "gt",
+    ">="  => "gte",
+    "."   => "dot",
+    "and" => "and",
+    "or"  => "or",
+    "not" => "not",
+    _     => op,
+  };
+  format!("op_{}", suffix)
+}
+
+pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
+  match &expr.kind {
+    // Ret(val) → ƒ_cont val, state
+    // If val is a Key, wrap in a load first.
+    ExprKind::Ret(val) => {
+      with_loads(&[val], |resolved| {
+        apply(ident("ƒ_cont"), vec![resolved.into_iter().next().unwrap(), ident("state")])
+      })
+    }
+
+    // LetVal { name, val, body } → store scope, id'name', val, fn ·name, scope: body
+    // If val is a Key, wrap a load first.
+    ExprKind::LetVal { name, val, body } => {
+      let dotted = sigil(name);
+      let store_node = apply(ident("store"), vec![
+        ident("scope"),
+        id_tag(name),
+        val_to_node(val),
+        fn_node(
+          patterns(vec![ident(&dotted), ident("scope")]),
+          vec![to_node(body)],
+        ),
+      ]);
+      with_loads(&[val], |_| store_node)
+    }
+
+    // LetFn { name, params, fn_body, body }
+    // → closure scope, fn ·params…, scope, state, ƒ_cont: fn_body,
+    //              fn ·name, chld_scope: body
+    ExprKind::LetFn { name, params, fn_body, body } => {
+      let dotted_name = sigil(name);
+      // Build fn params: ·p1, ·p2, …, scope, state, ƒ_cont
+      let mut fn_params: Vec<Node<'static>> = params.iter()
+        .map(|p| ident(&sigil(p)))
+        .collect();
+      fn_params.push(ident("scope"));
+      fn_params.push(ident("state"));
+      fn_params.push(ident("ƒ_cont"));
+      apply(ident("closure"), vec![
+        ident("scope"),
+        fn_node(patterns(fn_params), vec![to_node(fn_body)]),
+        fn_node(
+          patterns(vec![ident(&dotted_name), ident("chld_scope")]),
+          vec![to_node(body)],
+        ),
+      ])
+    }
+
+    // App { func, args, result, body }
+    // → apply func, arg…, state, fn result, state: body
+    // Loads synthesized for any Key vals in func or args.
+    ExprKind::App { func, args, result, body } => {
+      let result_dotted = sigil(result);
+      let result_fn = fn_node(
+        patterns(vec![ident(&result_dotted), ident("state")]),
+        vec![to_node(body)],
+      );
+      let all_vals: Vec<&Val<'_>> = std::iter::once(func.as_ref())
+        .chain(args.iter())
+        .collect();
+      with_loads(&all_vals, |resolved| {
+        let mut apply_args = resolved;
+        apply_args.push(ident("state"));
+        apply_args.push(result_fn);
+        apply(ident("apply"), apply_args)
+      })
+    }
+
+    // If { cond, then, else_ } → if cond, fn state: then, fn state: else_
+    ExprKind::If { cond, then, else_ } => {
+      apply(ident("if"), vec![
+        val_to_node(cond),
+        fn_node(patterns(vec![ident("state")]), vec![to_node(then)]),
+        fn_node(patterns(vec![ident("state")]), vec![to_node(else_)]),
+      ])
+    }
+
+    // LetRec — not yet implemented; placeholder
+    ExprKind::LetRec { .. } => {
+      apply(ident("let_rec"), vec![node(NodeKind::Wildcard)])
+    }
+
+    // Match { scrutinee, arms, result, body }
+    // → match_block scrutinee, state,
+    //     match_branch env, fn ·bindings…, env, state, ƒ_cont: arm_body,
+    //     …,
+    //     fn result, state: body
+    ExprKind::Match { scrutinee, arms, result, body } => {
+      let result_dotted = sigil(result);
+      let result_fn = fn_node(
+        patterns(vec![ident(&result_dotted), ident("state")]),
+        vec![to_node(body)],
+      );
+      with_loads(&[scrutinee], |resolved| {
+        let scrutinee_node = resolved.into_iter().next().unwrap();
+        let mut args = vec![scrutinee_node, ident("state")];
+        for arm in arms {
+          args.push(arm_to_node(arm));
+        }
+        args.push(result_fn);
+        apply(ident("match_block"), args)
+      })
+    }
+  }
+}
+
+// Render a single match arm as:
+//   match_branch scope, fn ·bindings…, scope, state, ƒ_cont: arm_body
+fn arm_to_node(arm: &Arm<'_>) -> Node<'static> {
+  let mut fn_params: Vec<Node<'static>> = arm.bindings.iter()
+    .map(|b| ident(&sigil(b)))
+    .collect();
+  fn_params.push(ident("scope"));
+  fn_params.push(ident("state"));
+  fn_params.push(ident("ƒ_cont"));
+  apply(ident("match_branch"), vec![
+    pat_to_node(&arm.pattern),
+    fn_node(patterns(fn_params), vec![to_node(&arm.fn_body)]),
+  ])
+}
+
+fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
+  match &pat.kind {
+    PatKind::Wildcard      => node(NodeKind::Wildcard),
+    PatKind::Bind(name)    => ident(&sigil(name)),
+    PatKind::Lit(lit)      => lit_to_node(lit),
+    // Composite patterns — render as their source equivalent for readability.
+    PatKind::Seq { .. }    => ident("_seq_pat"),    // placeholder; full rendering deferred
+    PatKind::Rec { .. }    => ident("_rec_pat"),    // placeholder
+    PatKind::Str(_)        => ident("_str_pat"),    // placeholder
+    PatKind::Range { op, start, end } => {
+      let op_s: &'static str = Box::leak(op.to_string().into_boxed_str());
+      node(NodeKind::Range {
+        op: op_s,
+        start: Box::new(pat_to_node(start)),
+        end: Box::new(pat_to_node(end)),
+      })
+    }
+    PatKind::Guard { pat, .. } => pat_to_node(pat),  // drop guard for now
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+  use test_macros::test_template;
+  use pretty_assertions::assert_eq;
+  use crate::parser::parse;
+  use crate::transform::cps_transform::lower_expr;
+  use super::fmt;
+
+  fn dedent(s: &str) -> String {
+    s.lines()
+      .map(|line| line.strip_prefix("    ").unwrap_or(line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  }
+
+  fn cps_debug(src: &str) -> String {
+    match parse(src) {
+      Ok(node) => fmt(&lower_expr(&node)),
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  #[test_template(
+    "src/transform", "./test_cps.fnk",
+    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
+  )]
+  fn test_cps(src: &str, exp: &str, path: &str) {
+    assert_eq!(
+      cps_debug(&dedent(src).trim().to_string()),
+      dedent(exp).trim().to_string(),
+      "{}",
+      path
+    );
+  }
 }
