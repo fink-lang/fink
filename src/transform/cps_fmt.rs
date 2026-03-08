@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Pat, PatKind, Prim, RangeKind, RecField, SeqElem, Spread, StrPat, Val, ValKind};
+use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Pat, PatKind, Prim, RangeKind, RecElem, RecField, SeqElem, Spread, StrPat, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -460,11 +460,11 @@ fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
       node(NodeKind::LitSeq(children))
     }
 
-    PatKind::Rec { fields, spread } => {
-      let mut children: Vec<Node<'static>> = fields.iter().map(rec_field_to_node).collect();
-      if let Some(s) = spread {
-        children.push(spread_pat_to_node(s));
-      }
+    PatKind::Rec(elems) => {
+      let children: Vec<Node<'static>> = elems.iter().map(|e| match e {
+        RecElem::Field(f)  => rec_field_to_node(f),
+        RecElem::Spread(s) => spread_pat_to_node(s),
+      }).collect();
       node(NodeKind::LitRec(children))
     }
 

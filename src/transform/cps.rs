@@ -275,11 +275,8 @@ pub enum PatKind<'src> {
   /// [a, b, ..rest] — sequence pattern; spreads appear as SeqElem::Spread in elems
   Seq(Vec<SeqElem<'src>>),
 
-  /// {foo, bar: x, ..rest} — record pattern with optional spread
-  Rec {
-    fields: Vec<RecField<'src>>,
-    spread: Option<Box<Spread<'src>>>,
-  },
+  /// {foo, bar: x, ..rest} — record pattern; spreads appear as RecElem::Spread in elems
+  Rec(Vec<RecElem<'src>>),
 
   /// 'hello ${..rest}' — string interpolation pattern
   Str(Vec<StrPat<'src>>),
@@ -322,11 +319,15 @@ impl<'src> Pat<'src> {
           }
         }
       }
-      PatKind::Rec { fields, spread } => {
-        for f in fields { f.pattern.collect_bindings(out); }
-        if let Some(s) = spread {
-          if let Some(n) = s.name { out.push(n); }
-          if let Some(n) = s.bind { out.push(n); }
+      PatKind::Rec(elems) => {
+        for elem in elems {
+          match elem {
+            RecElem::Field(f) => f.pattern.collect_bindings(out),
+            RecElem::Spread(s) => {
+              if let Some(n) = s.name { out.push(n); }
+              if let Some(n) = s.bind { out.push(n); }
+            }
+          }
         }
       }
       PatKind::Str(parts) => {
@@ -355,6 +356,13 @@ pub struct Spread<'src> {
   pub bind: Option<BindName<'src>>,       // `|= name` binding
   pub name: Option<BindName<'src>>,       // `..rest` name
   pub meta: Meta,
+}
+
+/// An element in a record pattern — either a named field or a spread.
+#[derive(Debug, Clone)]
+pub enum RecElem<'src> {
+  Field(RecField<'src>),
+  Spread(Spread<'src>),
 }
 
 /// A field in a record pattern.

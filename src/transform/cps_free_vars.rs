@@ -254,9 +254,13 @@ fn collect_pat_keys<'src>(
         }
       }
     }
-    Rec { fields, .. } => {
-      for f in fields {
-        collect_pat_keys(&f.pattern, bound, seen, out);
+    Rec(elems) => {
+      for elem in elems {
+        use super::cps::RecElem;
+        match elem {
+          RecElem::Field(f) => collect_pat_keys(&f.pattern, bound, seen, out),
+          RecElem::Spread(_) => {}
+        }
       }
     }
     Str(_) => {}

@@ -19,7 +19,7 @@ use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use crate::transform::cps::{
   Arg, Arm, BindName, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Pat, PatKind, Prim,
-  RangeKind, RecField, SeqElem, Spread, StrPat, Val, ValKind,
+  RangeKind, RecElem, RecField, SeqElem, Spread, StrPat, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -911,33 +911,32 @@ fn lower_pat<'src>(node: &'src Node<'src>) -> Pat<'src> {
     }
 
     NodeKind::LitRec(fields) => {
-      let mut rec_fields = vec![];
-      let mut spread = None;
+      let mut elems = vec![];
       for field in fields {
         match &field.kind {
           NodeKind::Spread(inner) => {
-            spread = Some(Box::new(lower_spread(inner.as_deref(), field.loc)));
+            elems.push(RecElem::Spread(lower_spread(inner.as_deref(), field.loc)));
           }
           NodeKind::Bind { lhs, rhs } => {
             if let NodeKind::Ident(key) = &lhs.kind {
-              rec_fields.push(RecField {
+              elems.push(RecElem::Field(RecField {
                 key,
                 pattern: lower_pat(rhs),
                 meta: Meta::at(field.loc),
-              });
+              }));
             }
           }
           NodeKind::Ident(name) => {
-            rec_fields.push(RecField {
+            elems.push(RecElem::Field(RecField {
               key: name,
               pattern: Pat { kind: PatKind::Bind(BindName::User(name)), meta: Meta::at(field.loc) },
               meta: Meta::at(field.loc),
-            });
+            }));
           }
           _ => {}
         }
       }
-      PatKind::Rec { fields: rec_fields, spread }
+      PatKind::Rec(elems)
     }
 
     NodeKind::InfixOp { op, lhs, rhs } if matches!(*op, ".." | "...") => {
@@ -1002,11 +1001,15 @@ fn collect_into<'src>(pat: &Pat<'src>, names: &mut Vec<BindName<'src>>) {
         }
       }
     }
-    PatKind::Rec { fields, spread } => {
-      for f in fields { collect_into(&f.pattern, names); }
-      if let Some(s) = spread {
-        if let Some(n) = s.name { names.push(n); }
-        if let Some(n) = s.bind { names.push(n); }
+    PatKind::Rec(elems) => {
+      for elem in elems {
+        match elem {
+          RecElem::Field(f) => collect_into(&f.pattern, names),
+          RecElem::Spread(s) => {
+            if let Some(n) = s.name { names.push(n); }
+            if let Some(n) = s.bind { names.push(n); }
+          }
+        }
       }
     }
     PatKind::Str(parts) => {
