@@ -646,8 +646,6 @@ test 'postfix tag', fn:
               ƒ_cont v_1, state
 
 
-# NOTE: spread `..rest` loses `..` — becomes `·rest` (flat arg, not spread).
-# Spread-at-call-site lowering not yet implemented in cps_c_transform.
 test 'call with spread', fn:
   expect cps_c_expr fn:
     foo a, ..rest
@@ -656,7 +654,7 @@ test 'call with spread', fn:
     load scope, id'foo', fn ·foo, scope:
       load scope, id'a', fn ·a, scope:
         load scope, id'rest', fn ·rest, scope:
-          apply ·foo, ·a, ·rest, state, fn v_0, state:
+          apply ·foo, ·a, ..·rest, state, fn v_0, state:
             ƒ_cont v_0, state
 
 
@@ -912,15 +910,13 @@ test 'multi-param function', fn:
       fn fn_0, chld_scope: ƒ_cont fn_0, state
 
 
-# NOTE: ..rest param — varargs spread not yet preserved in param list (same known
-# limitation as spread-at-call-site). rest is loaded from env instead.
 test 'varargs — collect rest', fn:
   expect cps_c_expr fn:
     fn a, ..rest: rest
 
   | equals_fink fn:
     closure scope,
-      fn ·a, scope, state, ƒ_cont:
+      fn ·a, ..·rest, scope, state, ƒ_cont:
         load scope, id'rest', fn ·rest, scope:
           ƒ_cont ·rest, state
       fn fn_0, chld_scope: ƒ_cont fn_0, state
@@ -1267,12 +1263,11 @@ test 'call with spread — passes through from varargs fn', fn:
   | equals_fink fn:
     closure scope,
       fn ..·args, scope, state, ƒ_cont:
-        store scope, id'args', ·args, fn ·args, scope:
-          load scope, id'foo', fn ·foo, scope:
-            load scope, id'args', fn ·args, scope:
-              apply ·foo, ..·args, state, fn v_0, state:
-                ƒ_cont v_0, state
-      fn ·fn_val, _: ƒ_cont ·fn_val, state
+        load scope, id'foo', fn ·foo, scope:
+          load scope, id'args', fn ·args, scope:
+            apply ·foo, ..·args, state, fn v_1, state:
+              ƒ_cont v_1, state
+      fn fn_0, chld_scope: ƒ_cont fn_0, state
 
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:

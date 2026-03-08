@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arm, Expr, ExprKind, KeyKind, Lit, Pat, PatKind, Val, ValKind};
+use super::cps::{Arg, Arm, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -35,6 +35,10 @@ fn node(kind: NodeKind<'static>) -> Node<'static> {
 fn ident(s: &str) -> Node<'static> {
   let s: &'static str = Box::leak(s.to_string().into_boxed_str());
   node(NodeKind::Ident(s))
+}
+
+fn spread_node(inner: Node<'static>) -> Node<'static> {
+  node(NodeKind::Spread(Some(Box::new(inner))))
 }
 
 fn apply(func: Node<'static>, args: Vec<Node<'static>>) -> Node<'static> {
@@ -252,8 +256,12 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     ExprKind::LetFn { name, params, fn_body, body } => {
       let dotted_name = sigil(name);
       // Build fn params: ·p1, ·p2, …, scope, state, ƒ_cont
+      // Spread params render as `..·name`.
       let mut fn_params: Vec<Node<'static>> = params.iter()
-        .map(|p| ident(&sigil(p)))
+        .map(|p| match p {
+          Param::Name(n) => ident(&sigil(n)),
+          Param::Spread(n) => spread_node(ident(&sigil(n))),
+        })
         .collect();
       fn_params.push(ident("scope"));
       fn_params.push(ident("state"));
@@ -271,17 +279,28 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // App { func, args, result, body }
     // → apply func, arg…, state, fn result, state: body
     // Loads synthesized for any Key vals in func or args.
+    // Spread args render as `..resolved_val`.
     ExprKind::App { func, args, result, body } => {
       let result_dotted = sigil(result);
       let result_fn = fn_node(
         patterns(vec![ident(&result_dotted), ident("state")]),
         vec![to_node(body)],
       );
+      // Extract vals from args, tracking which are spreads.
+      let is_spread: Vec<bool> = args.iter().map(|a| matches!(a, Arg::Spread(_))).collect();
+      let arg_vals: Vec<&Val<'_>> = args.iter().map(|a| match a {
+        Arg::Val(v) | Arg::Spread(v) => v,
+      }).collect();
       let all_vals: Vec<&Val<'_>> = std::iter::once(func.as_ref())
-        .chain(args.iter())
+        .chain(arg_vals.iter().copied())
         .collect();
-      with_loads(&all_vals, |resolved| {
-        let mut apply_args = resolved;
+      with_loads(&all_vals, |mut resolved| {
+        // resolved[0] = func, resolved[1..] = args
+        let func_node = resolved.remove(0);
+        let mut apply_args: Vec<Node<'static>> = vec![func_node];
+        apply_args.extend(resolved.into_iter()
+          .zip(is_spread.iter())
+          .map(|(n, &spread)| if spread { spread_node(n) } else { n }));
         apply_args.push(ident("state"));
         apply_args.push(result_fn);
         apply(ident("apply"), apply_args)
