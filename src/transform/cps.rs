@@ -37,8 +37,16 @@ impl Meta {
 // Names and keys
 // ---------------------------------------------------------------------------
 
-/// A plain source name — used for references to existing bindings (e.g. free_vars).
+/// A plain source name — used for references to existing bindings.
 pub type Name<'src> = &'src str;
+
+/// A free variable captured from an outer scope.
+/// Typed so the formatter can render each variant correctly without string inspection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FreeVar<'src> {
+  Name(Name<'src>),  // user-defined name: foo, x
+  Op(&'src str),     // operator symbol: +, ==, . (rendered as ·op_X in scope capture)
+}
 
 /// A binding site — introduces a name into scope.
 /// `User` carries the original source name; `Gen` carries a counter (no prefix string).
@@ -77,9 +85,10 @@ pub struct Key<'src> {
 
 #[derive(Debug, Clone)]
 pub enum KeyKind<'src> {
-  Name(Name<'src>),  // user-defined name: foo, add, x
-  Prim(Prim),        // known runtime builtin — no scope resolution needed
-  Op(&'src str),     // operator symbol: +, ==, .
+  Name(Name<'src>),      // user-defined name: foo, add, x
+  Bind(BindName<'src>),  // typed scope reference — load this binding (avoids string materialisation for Gen temps)
+  Prim(Prim),            // known runtime builtin — no scope resolution needed
+  Op(&'src str),         // operator symbol: +, ==, .
 }
 
 /// Runtime builtin functions referenced in the IR.
@@ -163,7 +172,7 @@ pub enum ExprKind<'src> {
   LetFn {
     name: BindName<'src>,
     params: Vec<Param<'src>>,
-    free_vars: Vec<Name<'src>>,  // references to outer bindings, not definitions
+    free_vars: Vec<FreeVar<'src>>,  // references to outer bindings, not definitions
     fn_body: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },

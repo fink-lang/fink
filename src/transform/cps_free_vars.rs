@@ -23,7 +23,7 @@
 // output.
 
 use std::collections::HashSet;
-use super::cps::{Arg, Arm, BindName, Expr, ExprKind, KeyKind, Name, Param, Pat, PatKind, Val, ValKind};
+use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Name, Param, Pat, PatKind, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -61,8 +61,8 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
           BindName::Gen(_) => None,  // compiler temps are never free-var references
         },
       }).collect();
-      let mut seen: HashSet<Name<'_>> = HashSet::new();
-      let mut free_vars: Vec<Name<'_>> = vec![];
+      let mut seen: HashSet<FreeVar<'_>> = HashSet::new();
+      let mut free_vars: Vec<FreeVar<'_>> = vec![];
       collect_keys(&fn_body, &bound, &mut seen, &mut free_vars);
       LetFn { name, params, free_vars, fn_body: Box::new(fn_body), body: Box::new(body) }
     }
@@ -117,8 +117,8 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
 fn collect_keys<'src>(
   expr: &Expr<'src>,
   bound: &HashSet<Name<'src>>,
-  seen: &mut HashSet<Name<'src>>,
-  out: &mut Vec<Name<'src>>,
+  seen: &mut HashSet<FreeVar<'src>>,
+  out: &mut Vec<FreeVar<'src>>,
 ) {
   use ExprKind::*;
   match &expr.kind {
@@ -185,52 +185,28 @@ fn collect_keys<'src>(
 fn collect_key_from_val<'src>(
   val: &Val<'src>,
   bound: &HashSet<Name<'src>>,
-  seen: &mut HashSet<Name<'src>>,
-  out: &mut Vec<Name<'src>>,
+  seen: &mut HashSet<FreeVar<'src>>,
+  out: &mut Vec<FreeVar<'src>>,
 ) {
   if let ValKind::Key(key) = &val.kind {
     match &key.kind {
       KeyKind::Name(n) => {
-        if *n != "_" && !bound.contains(n) && seen.insert(n) {
-          out.push(n);
+        if *n != "_" && !bound.contains(n) && seen.insert(FreeVar::Name(n)) {
+          out.push(FreeVar::Name(n));
         }
+      }
+      KeyKind::Bind(_) => {
+        // Gen param references — always bound in the enclosing fn, never free.
       }
       KeyKind::Prim(_) => {
         // Prims are known builtins — not free variables, skip.
       }
       KeyKind::Op(op) => {
-        // Ops are stored as their rendered local name (op_plus etc.)
-        // so that sigil() can prefix them consistently.
-        let rendered: &'static str = op_local_name(op);
-        if !seen.contains(rendered) {
-          seen.insert(rendered);
-          out.push(rendered);
+        if seen.insert(FreeVar::Op(op)) {
+          out.push(FreeVar::Op(op));
         }
       }
     }
-  }
-}
-
-/// Map an operator symbol to its local rendered name (without · prefix).
-/// Matches sigil_op() in cps_fmt.rs.
-fn op_local_name(op: &str) -> &'static str {
-  match op {
-    "+"   => "op_plus",
-    "-"   => "op_minus",
-    "*"   => "op_mul",
-    "/"   => "op_div",
-    "%"   => "op_rem",
-    "=="  => "op_eq",
-    "!="  => "op_neq",
-    "<"   => "op_lt",
-    "<="  => "op_lte",
-    ">"   => "op_gt",
-    ">="  => "op_gte",
-    "."   => "op_dot",
-    "and" => "op_and",
-    "or"  => "op_or",
-    "not" => "op_not",
-    _     => "op_unknown",
   }
 }
 
@@ -239,8 +215,8 @@ fn op_local_name(op: &str) -> &'static str {
 fn collect_keys_from_arm<'src>(
   arm: &Arm<'src>,
   bound: &HashSet<Name<'src>>,
-  seen: &mut HashSet<Name<'src>>,
-  out: &mut Vec<Name<'src>>,
+  seen: &mut HashSet<FreeVar<'src>>,
+  out: &mut Vec<FreeVar<'src>>,
 ) {
   let mut arm_bound = bound.clone();
   for b in &arm.bindings {
@@ -255,8 +231,8 @@ fn collect_keys_from_arm<'src>(
 fn collect_pat_keys<'src>(
   pat: &Pat<'src>,
   bound: &HashSet<Name<'src>>,
-  seen: &mut HashSet<Name<'src>>,
-  out: &mut Vec<Name<'src>>,
+  seen: &mut HashSet<FreeVar<'src>>,
+  out: &mut Vec<FreeVar<'src>>,
 ) {
   use PatKind::*;
   match &pat.kind {

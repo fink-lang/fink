@@ -69,15 +69,11 @@ fn key_val_name<'src>(name: Name<'src>, loc: Loc) -> Val<'src> {
   }
 }
 
-/// Create a Key reference to a gen-temp BindName (for LetPat.val in prepend_let_pats).
-/// Gen temps need to be loaded from scope, so they are Keys not Idents here.
-fn key_val_gen(name: BindName<'_>, loc: Loc) -> Val<'static> {
-  let s: &'static str = match name {
-    BindName::Gen(n)  => Box::leak(format!("v_{}", n).into_boxed_str()),
-    BindName::User(s) => Box::leak(s.to_string().into_boxed_str()),
-  };
+/// Create a Key reference to a BindName that needs loading from scope.
+/// Used in prepend_let_pats where the param is scope-stored by the runtime.
+fn key_val_bind(name: BindName<'_>, loc: Loc) -> Val<'_> {
   Val {
-    kind: ValKind::Key(Key { kind: KeyKind::Name(s), resolution: None, meta: Meta::at(loc) }),
+    kind: ValKind::Key(Key { kind: KeyKind::Bind(name), resolution: None, meta: Meta::at(loc) }),
     meta: Meta::at(loc),
   }
 }
@@ -413,8 +409,8 @@ fn prepend_let_pats<'src>(
   loc: Loc,
 ) -> Expr<'src> {
   deferred.into_iter().rev().fold(body, |inner, (pat, bind_name)| {
-    // Gen temps need loading from scope, so use key_val_gen (not ident_val).
-    let val = key_val_gen(bind_name, loc);
+    // Params are scope-stored by the runtime; use key_val_bind to emit a load.
+    let val = key_val_bind(bind_name, loc);
     Expr {
       kind: ExprKind::LetPat {
         pat: Box::new(pat),

@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, Arm, BindName, Expr, ExprKind, KeyKind, Lit, Param, Pat, PatKind, Prim, RecField, SeqElem, Spread, StrPat, Val, ValKind};
+use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Pat, PatKind, Prim, RecField, SeqElem, Spread, StrPat, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -100,7 +100,8 @@ fn val_to_node(v: &Val<'_>) -> Node<'static> {
     ValKind::Lit(lit)    => lit_to_node(lit),
     ValKind::Ident(name) => ident(&render_bind(*name)),
     ValKind::Key(key)    => match &key.kind {
-      KeyKind::Name(name) => ident(&sigil(name)),
+      KeyKind::Name(name) => ident(name),
+      KeyKind::Bind(name) => ident(&render_bind(*name)),
       KeyKind::Prim(p)    => ident(&format!("·{}", prim_name(*p))),
       KeyKind::Op(op)     => ident(&sigil_op(op)),
     },
@@ -114,7 +115,8 @@ fn resolved_name(v: &Val<'_>) -> String {
   match &v.kind {
     ValKind::Ident(name) => render_bind(*name),
     ValKind::Key(key)    => match &key.kind {
-      KeyKind::Name(name) => sigil(name),
+      KeyKind::Name(name) => name.to_string(),
+      KeyKind::Bind(name) => render_bind(*name),
       KeyKind::Prim(p)    => format!("·{}", prim_name(*p)),
       KeyKind::Op(op)     => sigil_op(op),
     },
@@ -132,6 +134,7 @@ fn needs_load(v: &Val<'_>) -> bool {
 fn emit_load(key: &super::cps::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
   let key_node = match &key.kind {
     KeyKind::Name(name) => id_tag(name),
+    KeyKind::Bind(name) => id_tag(&raw_bind(*name)),
     KeyKind::Prim(p)    => id_tag(prim_name(*p)),
     KeyKind::Op(op)     => op_tag(op),
   };
@@ -230,6 +233,15 @@ fn render_bind(name: BindName<'_>) -> String {
   }
 }
 
+// Maps a BindName → raw scope key (no · prefix).
+// Use inside id_tag() where the tag content is the storage key, not a rendered ident.
+fn raw_bind(name: BindName<'_>) -> String {
+  match name {
+    BindName::User(s) => s.to_string(),
+    BindName::Gen(n)  => format!("v_{}", n),
+  }
+}
+
 // Maps a Prim → its runtime name string (without · prefix).
 fn prim_name(p: Prim) -> &'static str {
   match p {
@@ -250,16 +262,6 @@ fn bind_tag(name: BindName<'_>) -> Node<'static> {
   match name {
     BindName::User(s) => id_tag(s),
     BindName::Gen(n)  => id_tag(&format!("v_{}", n)),
-  }
-}
-
-// Maps a plain Name (used in free_vars, KeyKind::Name, etc.) → rendered output name.
-// User names pass through unchanged; compiler temps and op locals get · prefix.
-fn sigil(name: &str) -> String {
-  if name.starts_with("op_") || name.starts_with("v_") || name.starts_with("fn_") {
-    format!("·{}", name)
-  } else {
-    name.to_string()
   }
 }
 
@@ -348,7 +350,10 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
         let mut fields: Vec<Node<'static>> = vec![
           node(NodeKind::Spread(Some(Box::new(ident("·scope"))))),
         ];
-        fields.extend(free_vars.iter().map(|n| ident(&sigil(n))));
+        fields.extend(free_vars.iter().map(|fv| match fv {
+          FreeVar::Name(n) => ident(n),
+          FreeVar::Op(op)  => ident(&sigil_op(op)),
+        }));
         node(NodeKind::LitRec(fields))
       };
       fn_params.push(scope_arg);

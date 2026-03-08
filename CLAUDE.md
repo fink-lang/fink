@@ -79,9 +79,19 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 - Edition 2024
 - Prefer `Edit` over `Write` for existing files
 
-## Formatter Style (`cps_fmt.rs`)
+## Code Style
 
-Prefer named builder helpers over inline `node(NodeKind::...)` calls.
-Every new output construct gets a small named function (e.g. `scope_fn`,
-`cont_fn`, `id_tag`). The goal is for `to_node` to read like a DSL, not
-like AST construction code.
+Prefer named builder helpers over ad-hoc inline construction. When a
+pattern recurs (e.g. building an AST node, synthesizing a continuation,
+constructing a test fixture), extract it into a small named function so
+the call site reads like a DSL rather than construction code.
+
+## No Stringly-Typed Logic
+
+Strings are for input parsing and output generation only — never for internal logic.
+
+- **Parsing**: strings are read from source and immediately converted to typed representations (enums, counters, slices).
+- **Internal code**: all branching and data representation uses types — enums, `u32` counters, source slices (`&'src str`). Never inspect string content (e.g. `starts_with`, `contains`, matching on string values) to make decisions.
+- **Output**: strings are only materialized at format/codegen time.
+
+If you find yourself switching on a string value or inspecting a string prefix to derive meaning, that distinction belongs in a typed enum variant instead.
