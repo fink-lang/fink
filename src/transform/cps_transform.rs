@@ -774,6 +774,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::LetFn {
         name,
         params,
+        free_vars: vec![],
         fn_body: Box::new(fn_body),
         body: Box::new(body),
       },

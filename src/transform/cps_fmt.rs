@@ -269,12 +269,14 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       with_loads(&[val], |_| store_node)
     }
 
-    // LetFn { name, params, fn_body, body }
-    // → ·closure ·scope, fn params…, ·scope, ·state, ·ƒ_cont: fn_body,
+    // LetFn { name, params, free_vars, fn_body, body }
+    // → ·closure ·scope, fn params…, scope_arg, ·state, ·ƒ_cont: fn_body,
     //               fn name, ·chld_scope: body
-    ExprKind::LetFn { name, params, fn_body, body } => {
+    // scope_arg = ·scope when free_vars is empty;
+    //             {..·scope, name1, name2, …} when captures are present.
+    ExprKind::LetFn { name, params, free_vars, fn_body, body } => {
       let plain_name = sigil(name);
-      // Build fn params: p1, p2, …, ·scope, ·state, ·ƒ_cont
+      // Build fn params: p1, p2, …, scope_arg, ·state, ·ƒ_cont
       // Spread params render as `..name`.
       let mut fn_params: Vec<Node<'static>> = params.iter()
         .map(|p| match p {
@@ -282,7 +284,17 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
           Param::Spread(n) => spread_node(ident(&sigil(n))),
         })
         .collect();
-      fn_params.push(ident("·scope"));
+      let scope_arg = if free_vars.is_empty() {
+        ident("·scope")
+      } else {
+        // {..·scope, name1, name2, …}
+        let mut fields: Vec<Node<'static>> = vec![
+          node(NodeKind::Spread(Some(Box::new(ident("·scope"))))),
+        ];
+        fields.extend(free_vars.iter().map(|n| ident(&sigil(n))));
+        node(NodeKind::LitRec(fields))
+      };
+      fn_params.push(scope_arg);
       fn_params.push(ident("·state"));
       fn_params.push(ident("·ƒ_cont"));
       apply(ident("·closure"), vec![
@@ -410,6 +422,7 @@ mod tests {
   use pretty_assertions::assert_eq;
   use crate::parser::parse;
   use crate::transform::cps_transform::lower_expr;
+  use crate::transform::cps_free_vars::annotate;
   use super::fmt;
 
   fn dedent(s: &str) -> String {
@@ -419,9 +432,18 @@ mod tests {
       .join("\n")
   }
 
-  fn cps_debug(src: &str) -> String {
+  /// Lower only — no free-var pass.
+  fn cps_expr(src: &str) -> String {
     match parse(src) {
       Ok(node) => fmt(&lower_expr(&node)),
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  /// Lower then annotate with free-var pass.
+  fn cps_c_expr(src: &str) -> String {
+    match parse(src) {
+      Ok(node) => fmt(&annotate(lower_expr(&node))),
       Err(e) => format!("ERROR: {}", e.message),
     }
   }
@@ -430,9 +452,13 @@ mod tests {
     "src/transform", "./test_cps.fnk",
     r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
   )]
-  fn test_cps(src: &str, exp: &str, path: &str) {
+  fn test_cps(src: &str, exp: &str, func: &str, path: &str) {
+    let actual = match func {
+      "cps_c_expr" => cps_c_expr(&dedent(src).trim().to_string()),
+      _            => cps_expr(&dedent(src).trim().to_string()),
+    };
     assert_eq!(
-      cps_debug(&dedent(src).trim().to_string()),
+      actual,
       dedent(exp).trim().to_string(),
       "{}",
       path

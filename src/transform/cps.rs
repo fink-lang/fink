@@ -133,9 +133,13 @@ pub enum ExprKind<'src> {
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
+  /// `free_vars` is populated by the free-variable analysis pass; empty until then.
+  /// Contains names read from outer scope (loads not covered by params/locals),
+  /// in first-encounter order. Used by cps_fmt to emit `{..·scope, name, …}`.
   LetFn {
     name: Name<'src>,
     params: Vec<Param<'src>>,
+    free_vars: Vec<Name<'src>>,
     fn_body: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },

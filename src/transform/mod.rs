@@ -1,5 +1,6 @@
 pub mod cps;
 pub mod cps_fmt;
+pub mod cps_free_vars;
 pub mod cps_transform;
 pub mod partial;
 
