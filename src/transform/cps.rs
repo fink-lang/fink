@@ -167,6 +167,17 @@ pub enum ExprKind<'src> {
     else_: Box<Expr<'src>>,
   },
 
+  /// Irrefutable pattern bind — deconstruct `val` against `pat`; names
+  /// introduced by the pattern are available in `body`.
+  /// Emitted by the transform for `[a, b] = foo` bind statements and for
+  /// complex destructuring params (desugared to a bind in the fn body).
+  /// Pattern lowering to matcher primitives is a separate later pass.
+  LetPat {
+    pat: Box<Pat<'src>>,
+    val: Box<Val<'src>>,
+    body: Box<Expr<'src>>,
+  },
+
   /// Pattern match — scrutinee against a list of arms.
   /// Arms are tried in order; first match wins.
   /// Pattern lowering to matcher primitives is a separate later pass.
@@ -249,6 +260,53 @@ pub enum PatKind<'src> {
     pat: Box<Pat<'src>>,
     guard: Box<Val<'src>>,
   },
+}
+
+impl<'src> Pat<'src> {
+  /// Collect all names bound by this pattern (depth-first, left-to-right).
+  pub fn bindings(&self) -> Vec<Name<'src>> {
+    let mut names = vec![];
+    self.collect_bindings(&mut names);
+    names
+  }
+
+  fn collect_bindings(&self, out: &mut Vec<Name<'src>>) {
+    match &self.kind {
+      PatKind::Wildcard | PatKind::Lit(_) | PatKind::Range { .. } => {}
+      PatKind::Bind(name) => out.push(name),
+      PatKind::Guard { pat, .. } => pat.collect_bindings(out),
+      PatKind::Seq { elems, spread } => {
+        for elem in elems {
+          match elem {
+            SeqElem::Pat(p) => p.collect_bindings(out),
+            SeqElem::Spread(s) => {
+              if let Some(n) = s.name { out.push(n); }
+              if let Some(n) = s.bind { out.push(n); }
+            }
+          }
+        }
+        if let Some(s) = spread {
+          if let Some(n) = s.name { out.push(n); }
+          if let Some(n) = s.bind { out.push(n); }
+        }
+      }
+      PatKind::Rec { fields, spread } => {
+        for f in fields { f.pattern.collect_bindings(out); }
+        if let Some(s) = spread {
+          if let Some(n) = s.name { out.push(n); }
+          if let Some(n) = s.bind { out.push(n); }
+        }
+      }
+      PatKind::Str(parts) => {
+        for p in parts {
+          if let StrPat::Spread(s) = p {
+            if let Some(n) = s.name { out.push(n); }
+            if let Some(n) = s.bind { out.push(n); }
+          }
+        }
+      }
+    }
+  }
 }
 
 /// An element in a sequence pattern.

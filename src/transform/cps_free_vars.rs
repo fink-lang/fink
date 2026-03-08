@@ -64,6 +64,12 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       LetFn { name, params, free_vars, fn_body: Box::new(fn_body), body: Box::new(body) }
     }
 
+    LetPat { pat, val, body } => LetPat {
+      pat,
+      val,
+      body: Box::new(transform_expr(*body)),
+    },
+
     LetRec { bindings, body } => LetRec {
       bindings: bindings.into_iter().map(|mut b| {
         b.fn_body = Box::new(transform_expr(*b.fn_body));
@@ -120,6 +126,16 @@ fn collect_keys<'src>(
       // `name` is now settled — exclude it from captures in the continuation.
       let mut inner_bound = bound.clone();
       inner_bound.insert(name);
+      collect_keys(body, &inner_bound, seen, out);
+    }
+
+    LetPat { val, pat, body } => {
+      collect_key_from_val(val, bound, seen, out);
+      // Names bound by the pattern are settled for the continuation.
+      let mut inner_bound = bound.clone();
+      for name in pat.bindings() {
+        inner_bound.insert(name);
+      }
       collect_keys(body, &inner_bound, seen, out);
     }
 

@@ -274,10 +274,11 @@ fn lower_bind_stmt<'src>(
       Pending::Val { name: discard, val, loc }
     }
     _ => {
-      // Pattern bind — bind to a temp, the pattern match is deferred.
-      // For now: bind to a fresh name (pattern analysis is a later pass).
+      // Load RHS into a temp so LetPat val is an Ident, avoiding double-loading.
       let tmp = g.fresh_result();
-      Pending::Val { name: tmp, val, loc }
+      pending.push(Pending::Val { name: tmp, val, loc });
+      let pat = lower_pat(lhs);
+      Pending::Pat { pat, val: ident_val(tmp, loc), loc }
     }
   };
   (binding, pending)
@@ -299,9 +300,12 @@ fn lower_bind<'src>(
       return (ident_val(discard, loc), pending);
     }
     _ => {
-      // Pattern bind — bind to temp; caller can lower the pattern.
+      // Pattern bind — load RHS into a temp, then emit LetPat against the temp.
+      // Using a temp (Ident) avoids double-loading the Key in the continuation.
       let tmp = g.fresh_result();
       pending.push(Pending::Val { name: tmp, val, loc });
+      let pat = lower_pat(lhs);
+      pending.push(Pending::Pat { pat, val: ident_val(tmp, loc), loc });
       return (ident_val(tmp, loc), pending);
     }
   };
@@ -320,8 +324,8 @@ fn lower_fn<'src>(
   loc: Loc,
 ) -> Lower<'src> {
   let fn_name = g.fresh_fn();
-  let param_names = extract_params(params);
-  let fn_body = lower_stmts(g, body);
+  let (param_names, deferred) = extract_params_with_gen(g, params);
+  let fn_body = prepend_let_pats(deferred, lower_stmts(g, body), loc);
   let pending = vec![Pending::Fn { name: fn_name, params: param_names, fn_body, loc }];
   (ident_val(fn_name, loc), pending)
 }
@@ -335,14 +339,73 @@ fn lower_iife<'src>(
   loc: Loc,
 ) -> Lower<'src> {
   let fn_name = g.fresh_fn();
-  let param_names = extract_params(params);
-  let fn_body = lower_stmts(g, body);
+  let (param_names, deferred) = extract_params_with_gen(g, params);
+  let fn_body = prepend_let_pats(deferred, lower_stmts(g, body), loc);
   let result = g.fresh_result();
   let pending = vec![
     Pending::Fn { name: fn_name, params: param_names, fn_body, loc },
     Pending::App { func: ident_val(fn_name, loc), args: args_val(vec![]), result, loc },
   ];
   (ident_val(result, loc), pending)
+}
+
+/// Extract params from a fn params node, returning:
+/// - the param list (with complex patterns replaced by fresh spread names)
+/// - a list of (Pat, spread_name) pairs to prepend as LetPat in the fn body
+fn extract_params_with_gen<'src>(
+  g: &mut Gen,
+  params: &'src Node<'src>,
+) -> (Vec<Param<'src>>, Vec<(Pat<'src>, Name<'src>)>) {
+  let mut param_list = vec![];
+  let mut deferred = vec![];
+  let nodes = match &params.kind {
+    NodeKind::Patterns(ps) => ps.as_slice(),
+    _ => std::slice::from_ref(params),
+  };
+  for p in nodes {
+    match &p.kind {
+      NodeKind::Ident(name) => param_list.push(Param::Name(name)),
+      NodeKind::Wildcard => param_list.push(Param::Name("_")),
+      NodeKind::Patterns(ps) => {
+        for inner in ps {
+          param_list.push(Param::Name(match &inner.kind {
+            NodeKind::Ident(name) => name,
+            _ => "_",
+          }));
+        }
+      }
+      NodeKind::Spread(inner) => {
+        let name = match inner.as_deref() {
+          Some(Node { kind: NodeKind::Ident(name), .. }) => name,
+          _ => "_",
+        };
+        param_list.push(Param::Spread(name));
+      }
+      // Complex destructuring param — desugar to fresh spread param + LetPat in body.
+      _ => {
+        let spread_name = g.fresh("v_");
+        param_list.push(Param::Spread(spread_name));
+        deferred.push((lower_pat(p), spread_name));
+      }
+    }
+  }
+  (param_list, deferred)
+}
+
+/// Wrap `body` in `LetPat` nodes for each (pat, spread_name) pair, innermost first.
+fn prepend_let_pats<'src>(
+  deferred: Vec<(Pat<'src>, Name<'src>)>,
+  body: Expr<'src>,
+  loc: Loc,
+) -> Expr<'src> {
+  deferred.into_iter().rev().fold(body, |inner, (pat, spread_name)| Expr {
+    kind: ExprKind::LetPat {
+      pat: Box::new(pat),
+      val: Box::new(key_val_name(spread_name, loc)),
+      body: Box::new(inner),
+    },
+    meta: Meta::at(loc),
+  })
 }
 
 fn extract_params<'src>(params: &'src Node<'src>) -> Vec<Param<'src>> {
@@ -759,6 +822,7 @@ fn lower_block<'src>(
 // Extend Pending to handle App and Match, which need a body (the next expression).
 enum Pending<'src> {
   Val { name: Name<'src>, val: Val<'src>, loc: Loc },
+  Pat { pat: Pat<'src>, val: Val<'src>, loc: Loc },
   Fn { name: Name<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
   App { func: Val<'src>, args: Vec<Arg<'src>>, result: Name<'src>, loc: Loc },
   Match { scrutinee: Val<'src>, arms: Vec<Arm<'src>>, result: Name<'src>, loc: Loc },
@@ -768,6 +832,10 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
   bindings.into_iter().rev().fold(tail, |body, pending| match pending {
     Pending::Val { name, val, loc } => Expr {
       kind: ExprKind::LetVal { name, val: Box::new(val), body: Box::new(body) },
+      meta: Meta::at(loc),
+    },
+    Pending::Pat { pat, val, loc } => Expr {
+      kind: ExprKind::LetPat { pat: Box::new(pat), val: Box::new(val), body: Box::new(body) },
       meta: Meta::at(loc),
     },
     Pending::Fn { name, params, fn_body, loc } => Expr {

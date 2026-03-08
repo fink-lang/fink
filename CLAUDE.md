@@ -78,3 +78,10 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 
 - Edition 2024
 - Prefer `Edit` over `Write` for existing files
+
+## Formatter Style (`cps_fmt.rs`)
+
+Prefer named builder helpers over inline `node(NodeKind::...)` calls.
+Every new output construct gets a small named function (e.g. `scope_fn`,
+`cont_fn`, `id_tag`). The goal is for `to_node` to read like a DSL, not
+like AST construction code.
