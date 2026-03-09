@@ -180,3 +180,60 @@ test 'free vars — three levels of nesting', fn:
               fn ·v_2, ·chld_scope: ·ƒ_cont ·v_2, ·state
           fn ·v_1, ·chld_scope: ·ƒ_cont ·v_1, ·state
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+
+--- --- ---
+free vars — match arms
+--- --- ---
+
+test 'free vars — match arm bindings are local', fn:
+  expect cps_free_vars fn:
+    fn val:
+      match val:
+        1: 'one'
+        n: n
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn val, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, ·id'val', fn val, ·scope:
+          ·match_block val, ·panic, ·state,
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·match_value ·v_1, 1, ·ƒ_fail, fn ·scope, ·state:
+                ·ƒ_cont 'one', ·state
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·match_store ·scope, ·id'n', ·v_1, fn n, ·scope:
+                ·load ·scope, ·id'n', fn n, ·scope:
+                  ·ƒ_cont n, ·state
+            fn ·v_3, ·scope, ·state: ·ƒ_cont ·v_3, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+
+test 'free vars — closure inside match arm captures arm binding', fn:
+  expect cps_free_vars fn:
+    fn val:
+      match val:
+        [head, ..tail]:
+          fn x: head + x
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn val, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, ·id'val', fn val, ·scope:
+          ·match_block val, ·panic, ·state,
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·match_seq ·v_1, ·ƒ_fail, fn ·m_2, ·scope, ·state:
+                ·match_next ·m_2, ·ƒ_fail, fn ·v_3, ·m_4, ·scope, ·state:
+                  ·match_store ·scope, ·id'head', ·v_3, fn head, ·scope:
+                    ·match_rest ·m_4, ·ƒ_fail, fn ·v_5, ·scope, ·state:
+                      ·match_store ·scope, ·id'tail', ·v_5, fn tail, ·scope:
+                        ·closure ·scope,
+                          fn x, {..·scope, ·op_plus, head}, ·state, ·ƒ_cont:
+                            ·load ·scope, ·op'+', fn ·op_plus, ·scope:
+                              ·load ·scope, ·id'head', fn head, ·scope:
+                                ·load ·scope, ·id'x', fn x, ·scope:
+                                  ·apply ·op_plus, head, x, ·state, fn ·v_8, ·state:
+                                    ·ƒ_cont ·v_8, ·state
+                          fn ·v_7, ·chld_scope: ·ƒ_cont ·v_7, ·state
+            fn ·v_9, ·scope, ·state: ·ƒ_cont ·v_9, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
