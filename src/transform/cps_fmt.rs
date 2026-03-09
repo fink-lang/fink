@@ -15,6 +15,10 @@ pub fn fmt(expr: &Expr<'_>) -> String {
   ast::fmt::fmt(&to_node(expr))
 }
 
+fn cursor_name(idx: u32) -> String {
+  format!("·seq_{}", idx)
+}
+
 // ---------------------------------------------------------------------------
 // Dummy loc — all reconstructed AST nodes use this
 // ---------------------------------------------------------------------------
@@ -298,6 +302,9 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       })
     }
 
+    // Panic — unconditional failure; renders as bare `·panic` identifier.
+    ExprKind::Panic => ident("·panic"),
+
     // LetVal { name, val, body } → ·store ·scope, id'name', val, fn name, ·scope: body
     // If val is a Key, wrap a load first.
     ExprKind::LetVal { name, val, body } => {
@@ -409,6 +416,149 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // LetRec is emitted only by the SCC pass (not yet implemented).
     // The formatter never receives it from the CPS transform.
     ExprKind::LetRec { .. } => unreachable!("LetRec should not reach the formatter before SCC analysis"),
+
+    // MatchLetVal { name, val, fail, body }
+    // → ·match_store ·scope, id'name', val, fn name, ·scope: body
+    // Like ·store but prefixed ·match_ to signal pattern context in output.
+    // If val is a Key, wrap a load first.
+    ExprKind::MatchLetVal { name, val, body, .. } => {
+      let plain = render_bind(*name);
+      let store_node = apply(ident("·match_store"), vec![
+        ident("·scope"),
+        bind_tag(*name),
+        val_to_node(val),
+        scope_cont(&plain, to_node(body)),
+      ]);
+      with_loads(&[val], |_| store_node)
+    }
+
+    // MatchApp { func, args, fail, result, body }
+    // → ·match_apply func, arg…, fail, fn result, ·scope, ·state: body
+    ExprKind::MatchApp { func, args, fail, result, body } => {
+      let result_str = render_bind(*result);
+      let cont = fn_node(
+        patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      let arg_vals: Vec<&Val<'_>> = args.iter().collect();
+      let all_vals: Vec<&Val<'_>> = std::iter::once(func.as_ref()).chain(arg_vals).collect();
+      with_loads(&all_vals, |mut resolved| {
+        let func_node = resolved.remove(0);
+        let mut apply_args = vec![func_node];
+        apply_args.extend(resolved);
+        apply_args.push(fail_node);
+        apply_args.push(cont);
+        apply(ident("·match_apply"), apply_args)
+      })
+    }
+
+    // MatchIf { func, args, fail, body }
+    // → ·match_if func, arg…, fail, fn ·scope, ·state: body
+    ExprKind::MatchIf { func, args, fail, body } => {
+      let cont = fn_node(
+        patterns(vec![ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      let arg_vals: Vec<&Val<'_>> = args.iter().collect();
+      let all_vals: Vec<&Val<'_>> = std::iter::once(func.as_ref()).chain(arg_vals).collect();
+      with_loads(&all_vals, |mut resolved| {
+        let func_node = resolved.remove(0);
+        let mut apply_args = vec![func_node];
+        apply_args.extend(resolved);
+        apply_args.push(fail_node);
+        apply_args.push(cont);
+        apply(ident("·match_if"), apply_args)
+      })
+    }
+
+    // MatchValue { val, lit, fail, body }
+    // → ·match_value val, lit, fail, fn ·scope, ·state: body
+    ExprKind::MatchValue { val, lit, fail, body } => {
+      let cont = fn_node(
+        patterns(vec![ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      with_loads(&[val], |mut resolved| {
+        let val_node = resolved.remove(0);
+        apply(ident("·match_value"), vec![val_node, lit_to_node(lit), fail_node, cont])
+      })
+    }
+
+    // MatchSeq { val, cursor, fail, body }
+    // → ·match_seq val, fail, fn ·seq_N, ·scope, ·state: body
+    ExprKind::MatchSeq { val, cursor, fail, body } => {
+      let cursor_name = cursor_name(*cursor);
+      let body_node = to_node(body);
+      let cont = fn_node(
+        patterns(vec![ident(&cursor_name), ident("·scope"), ident("·state")]),
+        vec![body_node],
+      );
+      let fail_node = to_node(fail);
+      with_loads(&[val], |mut resolved| {
+        let val_node = resolved.remove(0);
+        apply(ident("·match_seq"), vec![val_node, fail_node, cont])
+      })
+    }
+
+    // MatchNext { val, cursor, next_cursor, fail, elem, body }
+    // → ·match_next ·seq_N, fail, fn elem, ·seq_M, ·scope, ·state: body
+    ExprKind::MatchNext { cursor, next_cursor, fail, elem, body, .. } => {
+      let cur = cursor_name(*cursor);
+      let next = cursor_name(*next_cursor);
+      let body_node = to_node(body);
+      let elem_str = render_bind(*elem);
+      let cont = fn_node(
+        patterns(vec![ident(&elem_str), ident(&next), ident("·scope"), ident("·state")]),
+        vec![body_node],
+      );
+      let fail_node = to_node(fail);
+      apply(ident("·match_next"), vec![ident(&cur), fail_node, cont])
+    }
+
+    // MatchDone { val, cursor, fail, result, body }
+    // → ·match_done ·seq_N, fail, fn result, ·scope, ·state: body
+    ExprKind::MatchDone { cursor, fail, result, body, .. } => {
+      let cur = cursor_name(*cursor);
+      let result_str = render_bind(*result);
+      let cont = fn_node(
+        patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      apply(ident("·match_done"), vec![ident(&cur), fail_node, cont])
+    }
+
+    // MatchNotDone { val, cursor, fail, body }
+    // → ·match_not_done ·seq_N, fail, fn ·scope, ·state: body
+    ExprKind::MatchNotDone { cursor, fail, body, .. } => {
+      let cur = cursor_name(*cursor);
+      let cont = fn_node(
+        patterns(vec![ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      apply(ident("·match_not_done"), vec![ident(&cur), fail_node, cont])
+    }
+
+    // MatchRest { val, cursor, fail, result, body }
+    // → ·match_rest ·seq_N, fail, fn result, ·scope, ·state: body
+    ExprKind::MatchRest { cursor, fail, result, body, .. } => {
+      let cur = cursor_name(*cursor);
+      let result_str = render_bind(*result);
+      let cont = fn_node(
+        patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      apply(ident("·match_rest"), vec![ident(&cur), fail_node, cont])
+    }
+
+    // Remaining rec variants — deferred.
+    ExprKind::MatchRec { .. }
+    | ExprKind::MatchField { .. } => todo!("rec match primitives not yet formatted"),
 
     // Match { scrutinees, arms, result, body }
     // → ·match_block s1, s2, …, ·state,
@@ -531,10 +681,12 @@ fn rec_field_to_node(f: &RecField<'_>) -> Node<'static> {
 mod tests {
   use test_macros::test_template;
   use pretty_assertions::assert_eq;
+  use crate::lexer::{Loc, Pos};
   use crate::parser::parse;
-  use crate::transform::cps_transform::lower_expr;
+  use crate::transform::cps_transform::{lower_expr, lower_pat_bind};
   use crate::transform::cps_free_vars::annotate;
   use super::fmt;
+  use super::super::cps::{Expr, ExprKind, Key, KeyKind, Meta, Val, ValKind};
 
   fn dedent(s: &str) -> String {
     s.lines()
@@ -559,6 +711,15 @@ mod tests {
     }
   }
 
+  /// Pattern lowering — lower a bind statement to Match* primitives.
+  #[allow(dead_code)]
+  fn cps_pat(src: &str) -> String {
+    match parse(src) {
+      Ok(node) => fmt(&lower_pat_bind(&node)),
+      Err(e)   => format!("ERROR: {}", e.message),
+    }
+  }
+
   #[test_template(
     "src/transform", "./test_cps.fnk",
     r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
@@ -576,4 +737,44 @@ mod tests {
     );
   }
 
+}
+
+#[cfg(test)]
+mod pat_tests {
+  use test_macros::test_template;
+  use pretty_assertions::assert_eq;
+  use crate::parser::parse;
+  use crate::transform::cps_transform::lower_pat_bind;
+  use super::fmt;
+
+  fn dedent(s: &str) -> String {
+    s.lines()
+      .map(|line| line.strip_prefix("    ").unwrap_or(line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  }
+
+  fn cps_pat(src: &str) -> String {
+    match parse(src) {
+      Ok(node) => fmt(&lower_pat_bind(&node)),
+      Err(e)   => format!("ERROR: {}", e.message),
+    }
+  }
+
+  #[test_template(
+    "src/transform", "./test_cps_patterns.fnk",
+    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
+  )]
+  fn test_cps_patterns(src: &str, exp: &str, func: &str, path: &str) {
+    let actual = match func {
+      "cps_pat" => cps_pat(&dedent(src).trim().to_string()),
+      _         => format!("ERROR: unknown func {}", func),
+    };
+    assert_eq!(
+      actual,
+      dedent(exp).trim().to_string(),
+      "{}",
+      path
+    );
+  }
 }

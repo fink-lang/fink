@@ -48,6 +48,12 @@ impl Gen {
   pub fn fresh_result(&mut self) -> BindName<'static> {
     BindName::Gen(self.next())
   }
+
+  /// Allocate a cursor index for seq pattern traversal.
+  /// The formatter renders this as `·seq_N`.
+  pub fn fresh_cursor(&mut self) -> u32 {
+    self.next()
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +100,11 @@ fn key_val_op<'src>(op: &'src str, loc: Loc) -> Val<'src> {
 
 fn lit_val(lit: Lit<'_>, loc: Loc) -> Val<'_> {
   Val { kind: ValKind::Lit(lit), meta: Meta::at(loc) }
+}
+
+/// The `·panic` fail expression — irrefutable pattern failure; no recovery path.
+fn panic_expr(loc: Loc) -> Expr<'static> {
+  Expr { kind: ExprKind::Panic, meta: Meta::at(loc) }
 }
 
 fn ret_expr(val: Val<'_>, loc: Loc) -> Expr<'_> {
@@ -851,6 +862,22 @@ enum Pending<'src> {
   Fn { name: BindName<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
   App { func: Val<'src>, args: Vec<Arg<'src>>, result: BindName<'src>, loc: Loc },
   Match { scrutinees: Vec<Val<'src>>, arms: Vec<Arm<'src>>, result: BindName<'src>, loc: Loc },
+  /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
+  MatchBind { name: BindName<'src>, val: Val<'src>, loc: Loc },
+  /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
+  MatchGuard { func: Val<'src>, args: Vec<Val<'src>>, loc: Loc },
+  /// Literal equality check — emits MatchValue with ·panic as fail cont.
+  MatchValue { val: Val<'src>, lit: Lit<'src>, loc: Loc },
+  /// Seq pattern entry — emits MatchSeq with ·panic as fail cont.
+  MatchSeq { val: Val<'src>, cursor: u32, loc: Loc },
+  /// Pop head from seq — emits MatchNext with ·panic as fail cont.
+  MatchNext { val: Val<'src>, cursor: u32, next_cursor: u32, elem: BindName<'src>, loc: Loc },
+  /// Seq pattern exhaustion — emits MatchDone with ·panic as fail cont.
+  MatchDone { val: Val<'src>, cursor: u32, result: BindName<'src>, loc: Loc },
+  /// Assert cursor non-empty — emits MatchNotDone with ·panic as fail cont.
+  MatchNotDone { val: Val<'src>, cursor: u32, loc: Loc },
+  /// Bind remaining elements — emits MatchRest with ·panic as fail cont.
+  MatchRest { val: Val<'src>, cursor: u32, result: BindName<'src>, loc: Loc },
 }
 
 fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
@@ -886,6 +913,82 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::Match {
         scrutinees,
         arms,
+        result,
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchBind { name, val, loc } => Expr {
+      kind: ExprKind::MatchLetVal {
+        name,
+        val: Box::new(val),
+        fail: Box::new(panic_expr(loc)),
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchGuard { func, args, loc } => Expr {
+      kind: ExprKind::MatchIf {
+        func: Box::new(func),
+        args,
+        fail: Box::new(panic_expr(loc)),
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchValue { val, lit, loc } => Expr {
+      kind: ExprKind::MatchValue {
+        val: Box::new(val),
+        lit,
+        fail: Box::new(panic_expr(loc)),
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchSeq { val, cursor, loc } => Expr {
+      kind: ExprKind::MatchSeq {
+        val: Box::new(val),
+        cursor,
+        fail: Box::new(panic_expr(loc)),
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchNext { val, cursor, next_cursor, elem, loc } => Expr {
+      kind: ExprKind::MatchNext {
+        val: Box::new(val),
+        cursor,
+        next_cursor,
+        fail: Box::new(panic_expr(loc)),
+        elem,
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchDone { val, cursor, result, loc } => Expr {
+      kind: ExprKind::MatchDone {
+        val: Box::new(val),
+        cursor,
+        fail: Box::new(panic_expr(loc)),
+        result,
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchNotDone { val, cursor, loc } => Expr {
+      kind: ExprKind::MatchNotDone {
+        val: Box::new(val),
+        cursor,
+        fail: Box::new(panic_expr(loc)),
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchRest { val, cursor, result, loc } => Expr {
+      kind: ExprKind::MatchRest {
+        val: Box::new(val),
+        cursor,
+        fail: Box::new(panic_expr(loc)),
         result,
         body: Box::new(body),
       },
@@ -1083,6 +1186,192 @@ pub fn lower_expr<'src>(node: &'src Node<'src>) -> Expr<'src> {
   let (val, pending) = lower(&mut g, node);
   let tail = ret_expr(val, node.loc);
   wrap(pending, tail)
+}
+
+/// Lower a bind statement using pattern lowering — emits Match* primitives instead of LetVal/LetPat.
+/// Returns the bound value via Ret; a bind expression evaluates to the value it bound.
+pub fn lower_pat_bind<'src>(node: &'src Node<'src>) -> Expr<'src> {
+  let mut g = Gen::new();
+  let loc = node.loc;
+  let (lhs, rhs) = match &node.kind {
+    NodeKind::Bind { lhs, rhs } | NodeKind::BindRight { lhs: rhs, rhs: lhs } => (lhs, rhs),
+    _ => panic!("lower_pat_bind: expected a Bind node"),
+  };
+  let (val, mut all_pending) = lower(&mut g, rhs);
+  let bound = lower_pat_lhs(&mut g, lhs, val, loc, &mut all_pending);
+  let tail = ret_expr(ident_val(bound, loc), loc);
+  wrap(all_pending, tail)
+}
+
+/// Recursively lower a pattern lhs node, appending Match* pending entries.
+/// `val` is the scrutinee already lowered from the rhs.
+/// Returns the BindName of the primary binding (used by the caller to construct Ret).
+///
+/// Implemented: Ident, Wildcard, BindRight, InfixOp (guard), Apply (→ MatchGuard predicate),
+///              LitInt/Float/Bool/Str (→ MatchValue), LitSeq (plain elems + Spread tail).
+/// TODO: LitRec, Range, StrTempl, Apply → MatchApp (after name resolution).
+fn lower_pat_lhs<'src>(
+  g: &mut Gen,
+  lhs: &'src Node<'src>,
+  val: Val<'src>,
+  loc: Loc,
+  pending: &mut Vec<Pending<'src>>,
+) -> BindName<'src> {
+  match &lhs.kind {
+    // Plain bind: `x = foo`
+    NodeKind::Ident(name) => {
+      let bind_name = BindName::User(name);
+      pending.push(Pending::MatchBind { name: bind_name, val, loc });
+      bind_name
+    }
+
+    // Wildcard: `_` — no binding; pass the val through as-is for guard args.
+    // Val must be an Ident (always true when called from Apply arg lowering).
+    NodeKind::Wildcard => {
+      match val.kind {
+        ValKind::Ident(name) => name,
+        _ => panic!("lower_pat_lhs: Wildcard with non-Ident val"),
+      }
+    }
+
+    // Guarded bind: `a > 0 = foo` or `a > 0 or a < 9 = foo`
+    // The innermost ident is the binding; the infix is the guard.
+    NodeKind::InfixOp { op, lhs: guard_lhs, rhs: guard_rhs } => {
+      let bind_name = extract_bind_name(guard_lhs);
+      pending.push(Pending::MatchBind { name: bind_name, val, loc });
+      let (lv, lp) = lower(g, guard_lhs);
+      let (rv, rp) = lower(g, guard_rhs);
+      pending.extend(lp);
+      pending.extend(rp);
+      let op_fn = key_val_op(op, loc);
+      pending.push(Pending::MatchGuard { func: op_fn, args: vec![lv, rv], loc });
+      bind_name
+    }
+
+    // Predicate guard: `is_even y`, `Ok b`, `foo 2, a, 3`
+    // In pattern position, Apply args are either:
+    //   - Ident/Wildcard — sub-pattern: binds to or discards `val` (the seq element)
+    //   - Anything else  — expression: lowered normally and passed as-is to the guard
+    // Exactly one arg should be an Ident/Wildcard (the "binding slot"); others are
+    // literal/value args. All are assembled in order as arguments to MatchGuard.
+    NodeKind::Apply { func, args } => {
+      let mut arg_vals: Vec<Val<'src>> = vec![];
+      for arg in args.iter() {
+        let arg_val = match &arg.kind {
+          NodeKind::Ident(_) | NodeKind::Wildcard => {
+            let bound = lower_pat_lhs(g, arg, val.clone(), arg.loc, pending);
+            ident_val(bound, arg.loc)
+          }
+          _ => {
+            let (v, ap) = lower(g, arg);
+            pending.extend(ap);
+            v
+          }
+        };
+        arg_vals.push(arg_val);
+      }
+      let (func_val, func_pending) = lower(g, func);
+      pending.extend(func_pending);
+      pending.push(Pending::MatchGuard { func: func_val, args: arg_vals, loc });
+      g.fresh_result()
+    }
+
+    // Literal equality: `1`, `'hello'`, `true` — emits MatchValue; no binding produced.
+    // Returns val itself (the scrutinee) as the "result" for the caller — it's a check, not a bind.
+    NodeKind::LitInt(s) => {
+      pending.push(Pending::MatchValue { val: val.clone(), lit: Lit::Int(parse_int(s)), loc });
+      // MatchValue has no result binding; return a fresh slot so the caller can still chain.
+      g.fresh_result()
+    }
+    NodeKind::LitFloat(s) => {
+      pending.push(Pending::MatchValue { val: val.clone(), lit: Lit::Float(parse_float(s)), loc });
+      g.fresh_result()
+    }
+    NodeKind::LitBool(b) => {
+      pending.push(Pending::MatchValue { val: val.clone(), lit: Lit::Bool(*b), loc });
+      g.fresh_result()
+    }
+    NodeKind::LitStr(s) => {
+      pending.push(Pending::MatchValue { val: val.clone(), lit: Lit::Str(s), loc });
+      g.fresh_result()
+    }
+
+    // Seq pattern: `[] = foo`, `[a, b] = foo`, `[a, []] = foo`, `[head, ..tail] = foo`
+    NodeKind::LitSeq(elems) => {
+      let seq_cursor = g.fresh_cursor();
+      pending.push(Pending::MatchSeq { val: val.clone(), cursor: seq_cursor, loc });
+      let mut cur = seq_cursor;
+      let mut spread_seen = false;
+      for elem_node in elems.iter() {
+        match &elem_node.kind {
+          // Spread element: `..` (discard non-empty) or `..name` (bind rest)
+          NodeKind::Spread(inner) => {
+            spread_seen = true;
+            match inner {
+              None => {
+                // `[..]` — assert non-empty, discard rest
+                pending.push(Pending::MatchNotDone { val: val.clone(), cursor: cur, loc });
+              }
+              Some(name_node) => {
+                // `[..rest]` — bind remaining elements
+                let result = g.fresh_result();
+                pending.push(Pending::MatchRest { val: val.clone(), cursor: cur, result, loc });
+                // Bind the rest value to the name
+                if let NodeKind::Ident(name) = &name_node.kind {
+                  pending.push(Pending::MatchBind {
+                    name: BindName::User(name),
+                    val: ident_val(result, loc),
+                    loc,
+                  });
+                }
+              }
+            }
+            // Spread must be last — stop processing elements
+            break;
+          }
+          // Regular element: extract head, recurse
+          _ => {
+            let elem = g.fresh_result();
+            let next = g.fresh_cursor();
+            pending.push(Pending::MatchNext { val: val.clone(), cursor: cur, next_cursor: next, elem, loc });
+            cur = next;
+            let elem_val = ident_val(elem, loc);
+            lower_pat_lhs(g, elem_node, elem_val, elem_node.loc, pending);
+          }
+        }
+      }
+      // Only emit MatchDone if no spread consumed the tail
+      if spread_seen {
+        g.fresh_result()  // placeholder return; no MatchDone
+      } else {
+        let result = g.fresh_result();
+        pending.push(Pending::MatchDone { val, cursor: cur, result, loc });
+        result
+      }
+    }
+
+    // Bind-right: `pat |= name` — bind val to `name`, then also destructure as `pat`.
+    // e.g. `[b, c] |= d` binds the element as `d` and destructures it as `[b, c]`.
+    NodeKind::BindRight { lhs: pat, rhs: name_node } => {
+      let bind_name = match &name_node.kind {
+        NodeKind::Ident(n) => BindName::User(n),
+        _ => panic!("lower_pat_lhs: BindRight rhs must be an Ident"),
+      };
+      pending.push(Pending::MatchBind { name: bind_name, val: val.clone(), loc });
+      lower_pat_lhs(g, pat, val, loc, pending)
+    }
+
+    _ => todo!("lower_pat_lhs: pattern not yet implemented: {:?}", lhs.kind),
+  }
+}
+
+/// Extract the BindName from the innermost ident of a guarded pattern lhs.
+fn extract_bind_name<'src>(node: &'src Node<'src>) -> BindName<'src> {
+  match &node.kind {
+    NodeKind::Ident(name) => BindName::User(name),
+    NodeKind::InfixOp { lhs, .. } => extract_bind_name(lhs),
+    _ => panic!("extract_bind_name: expected ident in pattern lhs, got {:?}", node.kind),
+  }
 }
 
 // ---------------------------------------------------------------------------

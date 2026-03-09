@@ -210,7 +210,7 @@ pub enum ExprKind<'src> {
   /// introduced by the pattern are available in `body`.
   /// Emitted by the transform for `[a, b] = foo` bind statements and for
   /// complex destructuring params (desugared to a bind in the fn body).
-  /// Pattern lowering to matcher primitives is a separate later pass.
+  /// TODO: remove once pattern lowering pass is complete; replaced by Match* primitives.
   LetPat {
     pat: Box<Pat<'src>>,
     val: Box<Val<'src>>,
@@ -219,8 +219,7 @@ pub enum ExprKind<'src> {
 
   /// Pattern match — scrutinee against a list of arms.
   /// Arms are tried in order; first match wins.
-  /// Pattern lowering to matcher primitives is a separate later pass.
-  /// Type inference and semantic analysis work on the Pat tree directly.
+  /// TODO: remove once pattern lowering pass is complete; replaced by Match* primitives.
   Match {
     scrutinees: Vec<Val<'src>>,  // one for single-subject, many for multi-arg match
     arms: Vec<Arm<'src>>,
@@ -228,8 +227,130 @@ pub enum ExprKind<'src> {
     body: Box<Expr<'src>>,
   },
 
+  // ---------------------------------------------------------------------------
+  // Pattern lowering primitives — produced by the pattern lowering pass.
+  // LetPat and Match are eliminated; these replace them.
+  // All primitives carry an explicit `fail` continuation (·panic or a ·ƒ_fail ref).
+  // ---------------------------------------------------------------------------
+
+  /// Bind an extracted val to a name; always succeeds.
+  /// Parallel to LetVal but with an explicit fail cont (for structural uniformity).
+  /// Emitted for bare-ident pattern positions: `x = foo` → MatchLetVal(foo, name=x, body).
+  MatchLetVal {
+    name: BindName<'src>,
+    val: Box<Val<'src>>,
+    fail: Box<Expr<'src>>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Apply `func` to `args`; bind result to `result`; `fail` if tag is wrong.
+  /// Used for constructor/extractor patterns: `Ok b`, `Some x`.
+  /// Parallel to App but with an explicit fail cont.
+  MatchApp {
+    func: Box<Val<'src>>,
+    args: Vec<Val<'src>>,
+    fail: Box<Expr<'src>>,
+    result: BindName<'src>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Apply `func` to `args`; call `fail` if result is falsy; no result binding.
+  /// Used for guard predicates: `is_even x`, `a > 0`.
+  /// Fuses apply + boolean test into one node; no intermediate temp exposed.
+  MatchIf {
+    func: Box<Val<'src>>,
+    args: Vec<Val<'src>>,
+    fail: Box<Expr<'src>>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Assert val equals a literal; `fail` if not.
+  /// Used for literal element patterns: `[a, 1]`, `['hello']`.
+  MatchValue {
+    val: Box<Val<'src>>,
+    lit: Lit<'src>,
+    fail: Box<Expr<'src>>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Assert `val` is a sequence; `fail` if not.
+  MatchSeq {
+    val: Box<Val<'src>>,
+    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
+    /// The formatter renders this as `·seq_N`; codegen will derive position from structure.
+    cursor: u32,
+    fail: Box<Expr<'src>>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Pop the head element from `val` (the current seq/cursor); bind to `elem`.
+  /// `fail` if empty.
+  MatchNext {
+    val: Box<Val<'src>>,
+    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
+    /// `cursor` = incoming position, `next_cursor` = advanced position (both render as `·seq_N`).
+    cursor: u32,
+    next_cursor: u32,
+    fail: Box<Expr<'src>>,
+    elem: BindName<'src>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Assert `val` (cursor) is exhausted; `fail` if elements remain.
+  /// Forwards the matched value to `result` in the continuation.
+  MatchDone {
+    val: Box<Val<'src>>,
+    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
+    cursor: u32,
+    fail: Box<Expr<'src>>,
+    result: BindName<'src>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Assert `val` (cursor) is non-empty; `fail` if exhausted.
+  MatchNotDone {
+    val: Box<Val<'src>>,
+    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
+    cursor: u32,
+    fail: Box<Expr<'src>>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Bind remaining elements of `val` (cursor) as a value; zero-or-more.
+  /// Works on both seq and rec cursors.
+  MatchRest {
+    val: Box<Val<'src>>,
+    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
+    cursor: u32,
+    fail: Box<Expr<'src>>,
+    result: BindName<'src>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Assert `val` is a record; `fail` if not.
+  /// Entry point for rec pattern traversal. Cursor is a formatter artifact.
+  MatchRec {
+    val: Box<Val<'src>>,
+    fail: Box<Expr<'src>>,
+    body: Box<Expr<'src>>,
+  },
+
+  /// Extract named `field` from `val` (rec/cursor); bind extracted val to `elem`.
+  MatchField {
+    val: Box<Val<'src>>,
+    field: Name<'src>,
+    fail: Box<Expr<'src>>,
+    elem: BindName<'src>,
+    body: Box<Expr<'src>>,
+  },
+
   /// Tail position — return value to current continuation.
   Ret(Box<Val<'src>>),
+
+  /// Unconditional failure — pattern match with no recovery.
+  /// Used as the `fail` expr for irrefutable patterns (·panic equivalent).
+  /// Lets the compiler statically identify always-failing paths.
+  Panic,
 }
 
 /// A single binding in a LetRec group.

@@ -102,7 +102,66 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       body: Box::new(transform_expr(*body)),
     },
 
-    Ret(_) => expr.kind,
+    Ret(_) | Panic => expr.kind,
+
+    // Pattern lowering primitives — recurse into both fail and body.
+    // TODO: extend bound set with names introduced by each primitive when
+    // free-var analysis is run after pattern lowering.
+    MatchLetVal { name, val, fail, body } => MatchLetVal {
+      name, val,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchApp { func, args, fail, result, body } => MatchApp {
+      func, args, result,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchIf { func, args, fail, body } => MatchIf {
+      func, args,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchValue { val, lit, fail, body } => MatchValue {
+      val, lit,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchSeq { val, cursor, fail, body } => MatchSeq {
+      val, cursor,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchNext { val, cursor, next_cursor, fail, elem, body } => MatchNext {
+      val, cursor, next_cursor, elem,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchDone { val, cursor, fail, result, body } => MatchDone {
+      val, cursor, result,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchNotDone { val, cursor, fail, body } => MatchNotDone {
+      val, cursor,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchRest { val, cursor, fail, result, body } => MatchRest {
+      val, cursor, result,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchRec { val, fail, body } => MatchRec {
+      val,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchField { val, field, fail, elem, body } => MatchField {
+      val, field, elem,
+      fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
   };
   Expr { kind, meta }
 }
@@ -179,6 +238,64 @@ fn collect_keys<'src>(
       }
       collect_keys(body, bound, seen, out);
     }
+
+    // Pattern lowering primitives — collect keys from vals, recurse into fail and body.
+    // TODO: extend bound set with names introduced by each primitive when
+    // free-var analysis is run after pattern lowering.
+    MatchLetVal { val, fail, body, .. } => {
+      collect_key_from_val(val, bound, seen, out);
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchApp { func, args, fail, body, .. } => {
+      collect_key_from_val(func, bound, seen, out);
+      for v in args { collect_key_from_val(v, bound, seen, out); }
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchIf { func, args, fail, body } => {
+      collect_key_from_val(func, bound, seen, out);
+      for v in args { collect_key_from_val(v, bound, seen, out); }
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchValue { val, fail, body, .. } => {
+      collect_key_from_val(val, bound, seen, out);
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchSeq { val, fail, body, .. } => {
+      collect_key_from_val(val, bound, seen, out);
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchNext { fail, body, .. } => {
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchDone { fail, body, .. } => {
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchNotDone { fail, body, .. } => {
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchRest { fail, body, .. } => {
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchRec { val, fail, body, .. } => {
+      collect_key_from_val(val, bound, seen, out);
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+    MatchField { fail, body, .. } => {
+      collect_keys(fail, bound, seen, out);
+      collect_keys(body, bound, seen, out);
+    }
+
+    Panic => {}
   }
 }
 

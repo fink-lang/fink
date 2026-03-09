@@ -1046,7 +1046,27 @@ impl<'src> Parser<'src> {
       if self.at(TokenKind::Sep) && self.peek().src == ".." {
         items.push(self.parse_spread()?);
       } else {
-        items.push(self.parse_expr()?);
+        // Use parse_single_arg so that `;` acts as a seq element separator
+        // rather than being consumed as a strong-arg boundary by a nested apply.
+        // e.g. `[foo 1, 2; bar 3]` → two elements: `foo(1, 2)` and `bar(3)`.
+        // Then check for `=`/`|=` binding, which parse_single_arg does not cover.
+        let item = self.parse_single_arg()?;
+        let item = if self.at(TokenKind::Sep) && self.peek().src == "=" {
+          self.bump();
+          self.skip_block_tokens();
+          let rhs = self.parse_expr()?;
+          let loc = Loc { start: item.loc.start, end: rhs.loc.end };
+          Node::new(NodeKind::Bind { lhs: Box::new(item), rhs: Box::new(rhs) }, loc)
+        } else if self.at(TokenKind::Sep) && self.peek().src == "|=" {
+          self.bump();
+          self.skip_block_tokens();
+          let rhs = self.parse_expr()?;
+          let loc = Loc { start: item.loc.start, end: rhs.loc.end };
+          Node::new(NodeKind::BindRight { lhs: Box::new(item), rhs: Box::new(rhs) }, loc)
+        } else {
+          item
+        };
+        items.push(item);
       }
       self.skip_block_tokens();
       if self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {

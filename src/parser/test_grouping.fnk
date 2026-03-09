@@ -131,3 +131,20 @@ test 'semicolon makes spread guard boundary explicit', fn:
         LitInt '3'
         LitInt '4'
         LitInt '5'
+
+
+test 'semicolon separates seq elements when both are non-spread', fn:
+  expect ast fn:
+    [1, foo 1, 2; bar 3] = xs
+  | equals_ast
+    Bind
+      LitSeq
+        LitInt '1'
+        Apply
+          Ident 'foo'
+          LitInt '1'
+          LitInt '2'
+        Apply
+          Ident 'bar'
+          LitInt '3'
+      Ident 'xs'
