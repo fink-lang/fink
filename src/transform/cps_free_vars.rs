@@ -102,7 +102,7 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       body: Box::new(transform_expr(*body)),
     },
 
-    Ret(_) | Panic => expr.kind,
+    Ret(_) | Panic | FailCont => expr.kind,
 
     // Pattern lowering primitives — recurse into both fail and body.
     // TODO: extend bound set with names introduced by each primitive when
@@ -160,6 +160,14 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
     MatchField { val, cursor, next_cursor, field, fail, elem, body } => MatchField {
       val, cursor, next_cursor, field, elem,
       fail: Box::new(transform_expr(*fail)),
+      body: Box::new(transform_expr(*body)),
+    },
+    MatchBlock { scrutinee, scrutinee_param, fail, arms, result, body } => MatchBlock {
+      scrutinee,
+      scrutinee_param,
+      result,
+      fail: Box::new(transform_expr(*fail)),
+      arms: arms.into_iter().map(transform_expr).collect(),
       body: Box::new(transform_expr(*body)),
     },
   };
@@ -240,18 +248,21 @@ fn collect_keys<'src>(
     }
 
     // Pattern lowering primitives — collect keys from vals, recurse into fail and body.
-    // TODO: extend bound set with names introduced by each primitive when
-    // free-var analysis is run after pattern lowering.
-    MatchLetVal { val, fail, body, .. } => {
+    // Primitives that bind a name extend `bound` before recursing into `body`.
+    MatchLetVal { name, val, fail, body } => {
       collect_key_from_val(val, bound, seen, out);
       collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      let mut inner = bound.clone();
+      if let BindName::User(s) = name { inner.insert(s); }
+      collect_keys(body, &inner, seen, out);
     }
-    MatchApp { func, args, fail, body, .. } => {
+    MatchApp { func, args, result, fail, body } => {
       collect_key_from_val(func, bound, seen, out);
       for v in args { collect_key_from_val(v, bound, seen, out); }
       collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      let mut inner = bound.clone();
+      if let BindName::User(s) = result { inner.insert(s); }
+      collect_keys(body, &inner, seen, out);
     }
     MatchIf { func, args, fail, body } => {
       collect_key_from_val(func, bound, seen, out);
@@ -269,33 +280,49 @@ fn collect_keys<'src>(
       collect_keys(fail, bound, seen, out);
       collect_keys(body, bound, seen, out);
     }
-    MatchNext { fail, body, .. } => {
+    MatchNext { elem, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      let mut inner = bound.clone();
+      if let BindName::User(s) = elem { inner.insert(s); }
+      collect_keys(body, &inner, seen, out);
     }
-    MatchDone { fail, body, .. } => {
+    MatchDone { result, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      let mut inner = bound.clone();
+      if let BindName::User(s) = result { inner.insert(s); }
+      collect_keys(body, &inner, seen, out);
     }
     MatchNotDone { fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
       collect_keys(body, bound, seen, out);
     }
-    MatchRest { fail, body, .. } => {
+    MatchRest { result, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      let mut inner = bound.clone();
+      if let BindName::User(s) = result { inner.insert(s); }
+      collect_keys(body, &inner, seen, out);
     }
     MatchRec { val, fail, body, .. } => {
       collect_key_from_val(val, bound, seen, out);
       collect_keys(fail, bound, seen, out);
       collect_keys(body, bound, seen, out);
     }
-    MatchField { fail, body, .. } => {
+    MatchField { elem, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
+      let mut inner = bound.clone();
+      if let BindName::User(s) = elem { inner.insert(s); }
+      collect_keys(body, &inner, seen, out);
+    }
+    MatchBlock { scrutinee, fail, arms, body, .. } => {
+      collect_key_from_val(scrutinee, bound, seen, out);
+      collect_keys(fail, bound, seen, out);
+      for arm in arms {
+        collect_keys(arm, bound, seen, out);
+      }
       collect_keys(body, bound, seen, out);
     }
 
-    Panic => {}
+    Panic | FailCont => {}
   }
 }
 

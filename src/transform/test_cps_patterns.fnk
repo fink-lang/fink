@@ -370,8 +370,7 @@ test 'rec — partial match', fn:
           ·match_store ·scope, ·id'x', ·v_1, fn x, ·scope:
             ·match_field ·m_2, 'y', ·panic, fn ·v_3, ·m_4, ·scope, ·state:
               ·match_store ·scope, ·id'y', ·v_3, fn y, ·scope:
-                ·match_done ·m_4, ·panic, fn ·v_5, ·scope, ·state:
-                  ·ƒ_cont ·v_5, ·state
+                ·ƒ_cont ·v_5, ·state
 
 
 test 'rec — field rename', fn:
@@ -385,8 +384,7 @@ test 'rec — field rename', fn:
           ·match_store ·scope, ·id'x', ·v_1, fn x, ·scope:
             ·match_field ·m_2, 'y', ·panic, fn ·v_3, ·m_4, ·scope, ·state:
               ·match_store ·scope, ·id'z', ·v_3, fn z, ·scope:
-                ·match_done ·m_4, ·panic, fn ·v_5, ·scope, ·state:
-                  ·ƒ_cont ·v_5, ·state
+                ·ƒ_cont ·v_5, ·state
 
 
 test 'rec — open rest discarded', fn:
@@ -446,8 +444,26 @@ test 'rec — closed with sub-pattern', fn:
                   ·match_store ·scope, ·id'bar', ·v_5, fn bar, ·scope:
                     ·match_field ·m_6, 'spam', ·panic, fn ·v_7, ·m_8, ·scope, ·state:
                       ·match_store ·scope, ·id'spam', ·v_7, fn spam, ·scope:
-                        ·match_done ·m_8, ·panic, fn ·v_9, ·scope, ·state:
-                          ·ƒ_cont ·v_10, ·state
+                        ·ƒ_cont ·v_10, ·state
+
+
+test 'match block bind', fn:
+  expect cps_expr fn:
+    match foo:
+      1: 2
+      x: x
+
+  | equals_fink fn:
+    ·load ·scope, ·id'foo', fn foo, ·scope:
+      ·match_block foo, ·panic, ·state,
+        ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+          ·match_value ·v_0, 1, ·ƒ_fail, fn ·scope, ·state:
+            ·ƒ_cont 2, ·state
+        ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+          ·match_store ·scope, ·id'x', ·v_0, fn x, ·scope:
+            ·load ·scope, ·id'x', fn x, ·scope:
+              ·ƒ_cont x, ·state
+        fn ·v_2, ·scope, ·state: ·ƒ_cont ·v_2, ·state
 
 
 --- --- ---

@@ -351,6 +351,21 @@ pub enum ExprKind<'src> {
     body: Box<Expr<'src>>,
   },
 
+  /// Pattern match block — tries arms in order; first match wins.
+  /// The runtime injects the scrutinee into each arm as the first param.
+  /// `fail` is the exhaustion continuation (·panic, or outer ·ƒ_fail in nested matches).
+  /// Each arm expr is a lowered Match* primitive chain ending in ·ƒ_cont.
+  /// `result` names the value received by the result cont from whichever arm succeeds.
+  MatchBlock {
+    scrutinee: Box<Val<'src>>,
+    /// Name injected into each arm as the scrutinee param (e.g. `·v_0`).
+    scrutinee_param: BindName<'src>,
+    fail: Box<Expr<'src>>,
+    arms: Vec<Expr<'src>>,
+    result: BindName<'src>,
+    body: Box<Expr<'src>>,
+  },
+
   /// Tail position — return value to current continuation.
   Ret(Box<Val<'src>>),
 
@@ -358,6 +373,11 @@ pub enum ExprKind<'src> {
   /// Used as the `fail` expr for irrefutable patterns (·panic equivalent).
   /// Lets the compiler statically identify always-failing paths.
   Panic,
+
+  /// Reference to the enclosing `·ƒ_fail` continuation.
+  /// Used as the `fail` expr inside match arm bodies — failure delegates to next arm.
+  /// Only valid inside a MatchBlock arm.
+  FailCont,
 }
 
 /// A single binding in a LetRec group.

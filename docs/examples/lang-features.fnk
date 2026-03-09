@@ -623,7 +623,7 @@ add (mul 2, 3), (mul 3, 4)
 
 # ; for inline grouping without need for (..),
 # i.e. ; is a stronger terminator the ,
-add mul 2, 3 mul 3, 4
+add mul 2, 3; mul 3, 4
 
 # nested application follows right to left
 foo bar spam ham

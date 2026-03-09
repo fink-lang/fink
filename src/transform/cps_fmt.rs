@@ -305,6 +305,41 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // Panic — unconditional failure; renders as bare `·panic` identifier.
     ExprKind::Panic => ident("·panic"),
 
+    // FailCont — reference to enclosing ·ƒ_fail; renders as bare `·ƒ_fail`.
+    ExprKind::FailCont => ident("·ƒ_fail"),
+
+    // MatchBlock { scrutinee, fail, arms, result, body } →
+    //   ·match_block scrutinee, fail, ·state,
+    //     ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail: arm_body
+    //     …
+    //     fn result, ·scope, ·state: body
+    ExprKind::MatchBlock { scrutinee, scrutinee_param, fail, arms, result, body } => {
+      let result_plain = render_bind(*result);
+      let scrutinee_param_plain = render_bind(*scrutinee_param);
+      let result_fn = fn_node(
+        patterns(vec![ident(&result_plain), ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      let arm_nodes: Vec<Node<'static>> = arms.iter().map(|arm| {
+        fn_node(
+          patterns(vec![
+            ident(&scrutinee_param_plain), ident("·scope"), ident("·state"), ident("·ƒ_cont"), ident("·ƒ_fail"),
+          ]),
+          vec![to_node(arm)],
+        )
+      }).collect();
+      with_loads(&[scrutinee], |resolved| {
+        let scrutinee_node = resolved.into_iter().next().unwrap();
+        let mut args = vec![scrutinee_node, fail_node, ident("·state")];
+        args.extend(arm_nodes.iter().map(|n| {
+          apply(ident("·match_branch"), vec![n.clone()])
+        }));
+        args.push(result_fn);
+        apply(ident("·match_block"), args)
+      })
+    }
+
     // LetVal { name, val, body } → ·store ·scope, id'name', val, fn name, ·scope: body
     // If val is a Key, wrap a load first.
     ExprKind::LetVal { name, val, body } => {
@@ -770,7 +805,7 @@ mod pat_tests {
   use test_macros::test_template;
   use pretty_assertions::assert_eq;
   use crate::parser::parse;
-  use crate::transform::cps_transform::lower_pat_bind;
+  use crate::transform::cps_transform::{lower_expr, lower_pat_bind};
   use super::fmt;
 
   fn dedent(s: &str) -> String {
@@ -787,14 +822,22 @@ mod pat_tests {
     }
   }
 
+  fn cps_expr(src: &str) -> String {
+    match parse(src) {
+      Ok(node) => fmt(&lower_expr(&node)),
+      Err(e)   => format!("ERROR: {}", e.message),
+    }
+  }
+
   #[test_template(
     "src/transform", "./test_cps_patterns.fnk",
     r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
   )]
   fn test_cps_patterns(src: &str, exp: &str, func: &str, path: &str) {
     let actual = match func {
-      "cps_pat" => cps_pat(&dedent(src).trim().to_string()),
-      _         => format!("ERROR: unknown func {}", func),
+      "cps_pat"  => cps_pat(&dedent(src).trim().to_string()),
+      "cps_expr" => cps_expr(&dedent(src).trim().to_string()),
+      _          => format!("ERROR: unknown func {}", func),
     };
     assert_eq!(
       actual,

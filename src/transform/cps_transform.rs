@@ -107,6 +107,11 @@ fn panic_expr(loc: Loc) -> Expr<'static> {
   Expr { kind: ExprKind::Panic, meta: Meta::at(loc) }
 }
 
+/// A reference to `·ƒ_fail` — used as the fail cont inside match arm bodies.
+fn fail_cont_expr(loc: Loc) -> Expr<'static> {
+  Expr { kind: ExprKind::FailCont, meta: Meta::at(loc) }
+}
+
 fn ret_expr(val: Val<'_>, loc: Loc) -> Expr<'_> {
   Expr { kind: ExprKind::Ret(Box::new(val)), meta: Meta::at(loc) }
 }
@@ -782,23 +787,52 @@ fn lower_match<'src>(
   arms: &'src [Node<'src>],
   loc: Loc,
 ) -> Lower<'src> {
-  // Collect subjects: multi-arg Patterns([a, b, …]) → multiple scrutinees;
-  // single Patterns([x]) or plain node → one scrutinee.
   let subject_nodes: &[Node<'src>] = match &subjects.kind {
     NodeKind::Patterns(ps) => ps.as_slice(),
     _ => std::slice::from_ref(subjects),
   };
-  let arity = if subject_nodes.len() > 1 { subject_nodes.len() } else { 0 };
   let mut pending: Vec<Pending<'src>> = vec![];
-  let scrutinees: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
-    let (v, sp) = lower(g, s);
+
+  let result = if subject_nodes.len() > 1 {
+    // Multi-arg match — fall back to old Match IR node (lowering deferred).
+    let scrutinees: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
+      let (v, sp) = lower(g, s);
+      pending.extend(sp);
+      v
+    }).collect();
+    let arity = subject_nodes.len();
+    let cps_arms = arms.iter().map(|arm| lower_arm(g, arm, arity)).collect();
+    let result = g.fresh_result();
+    pending.push(Pending::Match { scrutinees, arms: cps_arms, result, loc });
+    result
+  } else {
+    // Single scrutinee — lower to MatchBlock with pattern-lowered arm chains.
+    let subject_node = &subject_nodes[0];
+    let (scrutinee, sp) = lower(g, subject_node);
     pending.extend(sp);
-    v
-  }).collect();
-  let cps_arms = arms.iter().map(|arm| lower_arm(g, arm, arity)).collect();
-  let result = g.fresh_result();
-  pending.push(Pending::Match { scrutinees, arms: cps_arms, result, loc });
+    let scrutinee_param = g.fresh_result();
+    let cps_arms: Vec<Expr<'src>> = arms.iter().map(|arm| lower_match_arm(g, arm, scrutinee_param, loc)).collect();
+    let result = g.fresh_result();
+    pending.push(Pending::MatchBlock { scrutinee, scrutinee_param, arms: cps_arms, result, loc });
+    result
+  };
   (ident_val(result, loc), pending)
+}
+
+fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, scrutinee_param: BindName<'src>, _loc: Loc) -> Expr<'src> {
+  match &arm.kind {
+    NodeKind::Arm { lhs, body } => {
+      let loc = arm.loc;
+      let scrutinee_val = ident_val(scrutinee_param, loc);
+      let mut arm_pending: Vec<Pending<'src>> = vec![];
+      if !lhs.is_empty() {
+        lower_pat_lhs(g, &lhs[0], scrutinee_val, loc, &mut arm_pending);
+      }
+      let arm_tail = lower_stmts(g, body);
+      wrap_with_fail(arm_pending, arm_tail, fail_cont_expr)
+    }
+    _ => panic!("lower_match_arm: expected Arm node"),
+  }
 }
 
 fn lower_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arity: usize) -> Arm<'src> {
@@ -862,6 +896,7 @@ enum Pending<'src> {
   Fn { name: BindName<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
   App { func: Val<'src>, args: Vec<Arg<'src>>, result: BindName<'src>, loc: Loc },
   Match { scrutinees: Vec<Val<'src>>, arms: Vec<Arm<'src>>, result: BindName<'src>, loc: Loc },
+  MatchBlock { scrutinee: Val<'src>, scrutinee_param: BindName<'src>, arms: Vec<Expr<'src>>, result: BindName<'src>, loc: Loc },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
   MatchBind { name: BindName<'src>, val: Val<'src>, loc: Loc },
   /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
@@ -885,6 +920,16 @@ enum Pending<'src> {
 }
 
 fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
+  wrap_with_fail(bindings, tail, panic_expr)
+}
+
+/// Like `wrap`, but uses `make_fail(loc)` to produce the fail cont for each Match* node.
+/// Used for arm bodies inside a MatchBlock, where failure should delegate to `·ƒ_fail`.
+fn wrap_with_fail<'src>(
+  bindings: Vec<Pending<'src>>,
+  tail: Expr<'src>,
+  make_fail: fn(Loc) -> Expr<'static>,
+) -> Expr<'src> {
   bindings.into_iter().rev().fold(tail, |body, pending| match pending {
     Pending::Val { name, val, loc } => Expr {
       kind: ExprKind::LetVal { name, val: Box::new(val), body: Box::new(body) },
@@ -922,11 +967,22 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       },
       meta: Meta::at(loc),
     },
+    Pending::MatchBlock { scrutinee, scrutinee_param, arms, result, loc } => Expr {
+      kind: ExprKind::MatchBlock {
+        scrutinee: Box::new(scrutinee),
+        scrutinee_param,
+        fail: Box::new(panic_expr(loc)),
+        arms,
+        result,
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
     Pending::MatchBind { name, val, loc } => Expr {
       kind: ExprKind::MatchLetVal {
         name,
         val: Box::new(val),
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -935,7 +991,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::MatchIf {
         func: Box::new(func),
         args,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -944,7 +1000,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::MatchValue {
         val: Box::new(val),
         lit,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -953,7 +1009,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::MatchSeq {
         val: Box::new(val),
         cursor,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -963,7 +1019,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
         val: Box::new(val),
         cursor,
         next_cursor,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         elem,
         body: Box::new(body),
       },
@@ -973,7 +1029,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::MatchDone {
         val: Box::new(val),
         cursor,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         result,
         body: Box::new(body),
       },
@@ -983,7 +1039,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::MatchNotDone {
         val: Box::new(val),
         cursor,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -992,7 +1048,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::MatchRest {
         val: Box::new(val),
         cursor,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         result,
         body: Box::new(body),
       },
@@ -1002,7 +1058,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
       kind: ExprKind::MatchRec {
         val: Box::new(val),
         cursor,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -1013,7 +1069,7 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
         cursor,
         next_cursor,
         field,
-        fail: Box::new(panic_expr(loc)),
+        fail: Box::new(make_fail(loc)),
         elem,
         body: Box::new(body),
       },
@@ -1461,13 +1517,15 @@ fn lower_pat_lhs<'src>(
           _ => {}
         }
       }
-      // Emit MatchDone only if no spread — exact/closed match requires cursor exhaustion
-      if spread_seen {
-        g.fresh_result()  // placeholder; no MatchDone
-      } else {
+      // Emit MatchDone only for `{}` (exact empty match). All other rec patterns
+      // are structurally partial — records match even when extra fields are present.
+      // Spread-terminated patterns (`..`, `..rest`, `..{}`) also omit MatchDone.
+      if fields.is_empty() {
         let result = g.fresh_result();
         pending.push(Pending::MatchDone { val, cursor: cur, result, loc });
         result
+      } else {
+        g.fresh_result()  // partial match — no cursor exhaustion check
       }
     }
 
