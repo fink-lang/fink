@@ -152,13 +152,13 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       fail: Box::new(transform_expr(*fail)),
       body: Box::new(transform_expr(*body)),
     },
-    MatchRec { val, fail, body } => MatchRec {
-      val,
+    MatchRec { val, cursor, fail, body } => MatchRec {
+      val, cursor,
       fail: Box::new(transform_expr(*fail)),
       body: Box::new(transform_expr(*body)),
     },
-    MatchField { val, field, fail, elem, body } => MatchField {
-      val, field, elem,
+    MatchField { val, cursor, next_cursor, field, fail, elem, body } => MatchField {
+      val, cursor, next_cursor, field, elem,
       fail: Box::new(transform_expr(*fail)),
       body: Box::new(transform_expr(*body)),
     },

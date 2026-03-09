@@ -328,16 +328,23 @@ pub enum ExprKind<'src> {
   },
 
   /// Assert `val` is a record; `fail` if not.
-  /// Entry point for rec pattern traversal. Cursor is a formatter artifact.
+  /// Entry point for rec pattern traversal.
+  /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
   MatchRec {
     val: Box<Val<'src>>,
+    /// TODO: formatting hack — mirrors MatchSeq; formatter renders this as `·rec_N`.
+    cursor: u32,
     fail: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },
 
   /// Extract named `field` from `val` (rec/cursor); bind extracted val to `elem`.
+  /// Advances the cursor: `cursor` is the incoming position, `next_cursor` the advanced one.
   MatchField {
     val: Box<Val<'src>>,
+    /// TODO: formatting hack — mirrors MatchNext cursor/next_cursor pair.
+    cursor: u32,
+    next_cursor: u32,
     field: Name<'src>,
     fail: Box<Expr<'src>>,
     elem: BindName<'src>,

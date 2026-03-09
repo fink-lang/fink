@@ -16,7 +16,7 @@ pub fn fmt(expr: &Expr<'_>) -> String {
 }
 
 fn cursor_name(idx: u32) -> String {
-  format!("·seq_{}", idx)
+  format!("·m_{}", idx)
 }
 
 // ---------------------------------------------------------------------------
@@ -556,9 +556,35 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       apply(ident("·match_rest"), vec![ident(&cur), fail_node, cont])
     }
 
-    // Remaining rec variants — deferred.
-    ExprKind::MatchRec { .. }
-    | ExprKind::MatchField { .. } => todo!("rec match primitives not yet formatted"),
+    // MatchRec { val, cursor, fail, body }
+    // → ·match_rec val, fail, fn ·rec_N, ·scope, ·state: body
+    ExprKind::MatchRec { val, cursor, fail, body } => {
+      let rec_name = cursor_name(*cursor);
+      let cont = fn_node(
+        patterns(vec![ident(&rec_name), ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      with_loads(&[val], |mut resolved| {
+        let val_node = resolved.remove(0);
+        apply(ident("·match_rec"), vec![val_node, fail_node, cont])
+      })
+    }
+
+    // MatchField { val, cursor, next_cursor, field, fail, elem, body }
+    // → ·match_field ·rec_N, 'field', fail, fn elem, ·rec_M, ·scope, ·state: body
+    ExprKind::MatchField { cursor, next_cursor, field, fail, elem, body, .. } => {
+      let cur = cursor_name(*cursor);
+      let next = cursor_name(*next_cursor);
+      let elem_str = render_bind(*elem);
+      let cont = fn_node(
+        patterns(vec![ident(&elem_str), ident(&next), ident("·scope"), ident("·state")]),
+        vec![to_node(body)],
+      );
+      let fail_node = to_node(fail);
+      let field_lit = node(NodeKind::LitStr(field.to_string()));
+      apply(ident("·match_field"), vec![ident(&cur), field_lit, fail_node, cont])
+    }
 
     // Match { scrutinees, arms, result, body }
     // → ·match_block s1, s2, …, ·state,

@@ -49,8 +49,8 @@ impl Gen {
     BindName::Gen(self.next())
   }
 
-  /// Allocate a cursor index for seq pattern traversal.
-  /// The formatter renders this as `·seq_N`.
+  /// Allocate a cursor index for seq/rec pattern traversal.
+  /// The formatter renders this as `·m_N`.
   pub fn fresh_cursor(&mut self) -> u32 {
     self.next()
   }
@@ -878,6 +878,10 @@ enum Pending<'src> {
   MatchNotDone { val: Val<'src>, cursor: u32, loc: Loc },
   /// Bind remaining elements — emits MatchRest with ·panic as fail cont.
   MatchRest { val: Val<'src>, cursor: u32, result: BindName<'src>, loc: Loc },
+  /// Rec pattern entry — emits MatchRec with ·panic as fail cont.
+  MatchRec { val: Val<'src>, cursor: u32, loc: Loc },
+  /// Extract named field from rec — emits MatchField with ·panic as fail cont.
+  MatchField { val: Val<'src>, cursor: u32, next_cursor: u32, field: &'src str, elem: BindName<'src>, loc: Loc },
 }
 
 fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
@@ -990,6 +994,27 @@ fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
         cursor,
         fail: Box::new(panic_expr(loc)),
         result,
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchRec { val, cursor, loc } => Expr {
+      kind: ExprKind::MatchRec {
+        val: Box::new(val),
+        cursor,
+        fail: Box::new(panic_expr(loc)),
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::MatchField { val, cursor, next_cursor, field, elem, loc } => Expr {
+      kind: ExprKind::MatchField {
+        val: Box::new(val),
+        cursor,
+        next_cursor,
+        field,
+        fail: Box::new(panic_expr(loc)),
+        elem,
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -1208,8 +1233,9 @@ pub fn lower_pat_bind<'src>(node: &'src Node<'src>) -> Expr<'src> {
 /// Returns the BindName of the primary binding (used by the caller to construct Ret).
 ///
 /// Implemented: Ident, Wildcard, BindRight, InfixOp (guard), Apply (→ MatchGuard predicate),
-///              LitInt/Float/Bool/Str (→ MatchValue), LitSeq (plain elems + Spread tail).
-/// TODO: LitRec, Range, StrTempl, Apply → MatchApp (after name resolution).
+///              LitInt/Float/Bool/Str (→ MatchValue), LitSeq (plain elems + Spread tail),
+///              LitRec (fields + spread variants).
+/// TODO: Range, StrTempl, Apply → MatchApp (after name resolution).
 fn lower_pat_lhs<'src>(
   g: &mut Gen,
   lhs: &'src Node<'src>,
@@ -1343,6 +1369,101 @@ fn lower_pat_lhs<'src>(
       // Only emit MatchDone if no spread consumed the tail
       if spread_seen {
         g.fresh_result()  // placeholder return; no MatchDone
+      } else {
+        let result = g.fresh_result();
+        pending.push(Pending::MatchDone { val, cursor: cur, result, loc });
+        result
+      }
+    }
+
+    // Rec pattern: `{} = foo`, `{x, y} = point`, `{bar, ..rest} = foo`, `{bar, ..{}} = foo`
+    // Mirrors LitSeq lowering: open cursor with MatchRec, extract fields with MatchField,
+    // close with MatchDone (closed/exact) or leave open (partial/open rest).
+    NodeKind::LitRec(fields) => {
+      let rec_cursor = g.fresh_cursor();
+      pending.push(Pending::MatchRec { val: val.clone(), cursor: rec_cursor, loc });
+      let mut cur = rec_cursor;
+      let mut spread_seen = false;
+      for field_node in fields.iter() {
+        match &field_node.kind {
+          // Spread element: `..` (discard non-empty), `..rest` (bind rest), `..{}` (exact close)
+          NodeKind::Spread(inner) => {
+            spread_seen = true;
+            match inner {
+              None => {
+                // `{..}` — assert non-empty, discard rest (open partial match)
+                pending.push(Pending::MatchNotDone { val: val.clone(), cursor: cur, loc });
+              }
+              Some(inner_node) => match &inner_node.kind {
+                // `{..rest}` — bind remaining fields as a record
+                NodeKind::Ident(name) => {
+                  let result = g.fresh_result();
+                  pending.push(Pending::MatchRest { val: val.clone(), cursor: cur, result, loc });
+                  pending.push(Pending::MatchBind {
+                    name: BindName::User(name),
+                    val: ident_val(result, loc),
+                    loc,
+                  });
+                }
+                // `{..{sub_pat}}` — bind rest then destructure as a rec sub-pattern
+                NodeKind::LitRec(_) => {
+                  let result = g.fresh_result();
+                  pending.push(Pending::MatchRest { val: val.clone(), cursor: cur, result, loc });
+                  let rest_val = ident_val(result, loc);
+                  lower_pat_lhs(g, inner_node, rest_val, inner_node.loc, pending);
+                }
+                _ => {}
+              }
+            }
+            break;
+          }
+          // `{x}` shorthand — extract field named x, bind to x
+          NodeKind::Ident(name) => {
+            let elem = g.fresh_result();
+            let next = g.fresh_cursor();
+            pending.push(Pending::MatchField {
+              val: val.clone(), cursor: cur, next_cursor: next,
+              field: name, elem, loc,
+            });
+            cur = next;
+            pending.push(Pending::MatchBind { name: BindName::User(name), val: ident_val(elem, loc), loc });
+          }
+          // `{x: pat}` — extract field x, lower pat against extracted val
+          // Parsed as Bind { lhs: Ident(key), rhs: pat } or Arm { lhs: [Ident(key)], body: [pat] }
+          NodeKind::Bind { lhs, rhs: pat_node } => {
+            if let NodeKind::Ident(key) = &lhs.kind {
+              let elem = g.fresh_result();
+              let next = g.fresh_cursor();
+              pending.push(Pending::MatchField {
+                val: val.clone(), cursor: cur, next_cursor: next,
+                field: key, elem, loc,
+              });
+              cur = next;
+              let elem_val = ident_val(elem, loc);
+              lower_pat_lhs(g, pat_node, elem_val, pat_node.loc, pending);
+            }
+          }
+          NodeKind::Arm { lhs: arm_lhs, body: arm_body } if !arm_lhs.is_empty() => {
+            if let NodeKind::Ident(key) = &arm_lhs[0].kind {
+              if let Some(pat_node) = arm_body.last() {
+                let elem = g.fresh_result();
+                let next = g.fresh_cursor();
+                pending.push(Pending::MatchField {
+                  val: val.clone(), cursor: cur, next_cursor: next,
+                  field: key, elem, loc,
+                });
+                cur = next;
+                let elem_val = ident_val(elem, loc);
+                lower_pat_lhs(g, pat_node, elem_val, pat_node.loc, pending);
+              }
+            }
+          }
+          _ => {}
+        }
+      }
+      // Emit MatchDone only if no spread — exact/closed match requires cursor exhaustion
+      if spread_seen {
+        g.fresh_result()  // placeholder; no MatchDone
       } else {
         let result = g.fresh_result();
         pending.push(Pending::MatchDone { val, cursor: cur, result, loc });
