@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Pat, PatKind, Prim, RangeKind, RecElem, RecField, SeqElem, Spread, StrPat, Val, ValKind};
+use super::cps::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Prim, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -66,7 +66,6 @@ fn tagged(tag: &str, s: &str) -> Node<'static> {
 
 fn id_tag(s: &str)   -> Node<'static> { tagged("·id",   s) }
 fn op_tag(s: &str)   -> Node<'static> { tagged("·op",   s) }
-fn patt_tag(s: &str) -> Node<'static> { tagged("·patt", s) }
 
 /// `fn ·state: body` — state-only continuation (used in ·if branches).
 fn state_fn(body: Node<'static>) -> Node<'static> {
@@ -81,16 +80,6 @@ fn result_cont(name: &str, body: Node<'static>) -> Node<'static> {
 /// `fn local, ·scope: body` — scope continuation (used in ·load and ·store).
 fn scope_cont(local: &str, body: Node<'static>) -> Node<'static> {
   fn_node(patterns(vec![ident(local), ident("·scope")]), vec![body])
-}
-
-/// Render a pattern as either a plain node (for simple patterns that are valid
-/// Fink values: wildcard, bind, lit) or a `patt'...'` tagged string for
-/// composite patterns that are not valid runtime values.
-fn pat_arg(pat: &Pat<'_>) -> Node<'static> {
-  match &pat.kind {
-    PatKind::Wildcard | PatKind::Bind(_) | PatKind::Lit(_) => pat_to_node(pat),
-    _ => patt_tag(&crate::ast::fmt::fmt(&pat_to_node(pat))),
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -308,30 +297,30 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // FailCont — reference to enclosing ·ƒ_fail; renders as bare `·ƒ_fail`.
     ExprKind::FailCont => ident("·ƒ_fail"),
 
-    // MatchBlock { scrutinee, fail, arms, result, body } →
-    //   ·match_block scrutinee, fail, ·state,
-    //     ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail: arm_body
+    // MatchBlock { scrutinees, scrutinee_params, fail, arms, result, body } →
+    //   ·match_block s0, s1, …, fail, ·state,
+    //     ·match_branch fn p0, p1, …, ·scope, ·state, ·ƒ_cont, ·ƒ_fail: arm_body
     //     …
     //     fn result, ·scope, ·state: body
-    ExprKind::MatchBlock { scrutinee, scrutinee_param, fail, arms, result, body } => {
+    ExprKind::MatchBlock { scrutinees, scrutinee_params, fail, arms, result, body } => {
       let result_plain = render_bind(*result);
-      let scrutinee_param_plain = render_bind(*scrutinee_param);
       let result_fn = fn_node(
         patterns(vec![ident(&result_plain), ident("·scope"), ident("·state")]),
         vec![to_node(body)],
       );
       let fail_node = to_node(fail);
       let arm_nodes: Vec<Node<'static>> = arms.iter().map(|arm| {
-        fn_node(
-          patterns(vec![
-            ident(&scrutinee_param_plain), ident("·scope"), ident("·state"), ident("·ƒ_cont"), ident("·ƒ_fail"),
-          ]),
-          vec![to_node(arm)],
-        )
+        let mut fn_params: Vec<Node<'static>> = scrutinee_params.iter()
+          .map(|p| ident(&render_bind(*p)))
+          .collect();
+        fn_params.extend([ident("·scope"), ident("·state"), ident("·ƒ_cont"), ident("·ƒ_fail")]);
+        fn_node(patterns(fn_params), vec![to_node(arm)])
       }).collect();
-      with_loads(&[scrutinee], |resolved| {
-        let scrutinee_node = resolved.into_iter().next().unwrap();
-        let mut args = vec![scrutinee_node, fail_node, ident("·state")];
+      let refs: Vec<&Val<'_>> = scrutinees.iter().collect();
+      with_loads(&refs, |resolved| {
+        let mut args = resolved;
+        args.push(fail_node);
+        args.push(ident("·state"));
         args.extend(arm_nodes.iter().map(|n| {
           apply(ident("·match_branch"), vec![n.clone()])
         }));
@@ -351,23 +340,6 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
         scope_cont(&plain, to_node(body)),
       ]);
       with_loads(&[val], |_| store_node)
-    }
-
-    // LetPat { pat, val, body }
-    // → ·match_bind pat, val, fn bindings…, ·scope: body
-    // If val is a Key, wrap a load first.
-    ExprKind::LetPat { pat, val, body } => {
-      let bindings = pat.bindings();
-      let mut fn_params: Vec<Node<'static>> = bindings.iter()
-        .map(|b| ident(&render_bind(*b)))
-        .collect();
-      fn_params.push(ident("·scope"));
-      let bind_node = apply(ident("·match_bind"), vec![
-        pat_arg(pat),
-        val_to_node(val),
-        fn_node(patterns(fn_params), vec![to_node(body)]),
-      ]);
-      with_loads(&[val], |_| bind_node)
     }
 
     // LetFn { name, params, free_vars, fn_body, body }
@@ -622,115 +594,6 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     }
 
     // Match { scrutinees, arms, result, body }
-    // → ·match_block s1, s2, …, ·state,
-    //     ·match_branch pat, fn bindings…, ·scope, ·state, ·ƒ_cont: arm_body,
-    //     …,
-    //     fn result, ·state: body
-    ExprKind::Match { scrutinees, arms, result, body } => {
-      let result_plain = render_bind(*result);
-      let result_fn = result_cont(&result_plain, to_node(body));
-      let refs: Vec<&Val<'_>> = scrutinees.iter().collect();
-      with_loads(&refs, |resolved| {
-        let mut args: Vec<Node<'static>> = resolved;
-        args.push(ident("·state"));
-        for arm in arms {
-          args.push(arm_to_node(arm));
-        }
-        args.push(result_fn);
-        apply(ident("·match_block"), args)
-      })
-    }
-  }
-}
-
-// Render a single match arm as:
-//   ·match_branch pat, fn bindings…, ·scope, ·state, ·ƒ_cont: arm_body
-fn arm_to_node(arm: &Arm<'_>) -> Node<'static> {
-  let mut fn_params: Vec<Node<'static>> = arm.bindings.iter()
-    .map(|b| ident(&render_bind(*b)))
-    .collect();
-  fn_params.push(ident("·scope"));
-  fn_params.push(ident("·state"));
-  fn_params.push(ident("·ƒ_cont"));
-  apply(ident("·match_branch"), vec![
-    pat_arg(&arm.pattern),
-    fn_node(patterns(fn_params), vec![to_node(&arm.fn_body)]),
-  ])
-}
-
-fn pat_to_node(pat: &Pat<'_>) -> Node<'static> {
-  match &pat.kind {
-    PatKind::Wildcard      => node(NodeKind::Wildcard),
-    PatKind::Bind(name)    => ident(&render_bind(*name)),
-    PatKind::Lit(lit)      => lit_to_node(lit),
-
-    PatKind::Tuple(pats) => {
-      let children: Vec<Node<'static>> = pats.iter().map(pat_to_node).collect();
-      node(NodeKind::Patterns(children))
-    }
-
-    PatKind::Seq(elems) => {
-      let children: Vec<Node<'static>> = elems.iter().map(|e| match e {
-        SeqElem::Pat(p)      => pat_to_node(p),
-        SeqElem::Spread(s)   => spread_pat_to_node(s),
-      }).collect();
-      node(NodeKind::LitSeq(children))
-    }
-
-    PatKind::Rec(elems) => {
-      let children: Vec<Node<'static>> = elems.iter().map(|e| match e {
-        RecElem::Field(f)  => rec_field_to_node(f),
-        RecElem::Spread(s) => spread_pat_to_node(s),
-      }).collect();
-      node(NodeKind::LitRec(children))
-    }
-
-    PatKind::Str(parts) => {
-      // Render as a raw string template with spread captures.
-      let children: Vec<Node<'static>> = parts.iter().map(|p| match p {
-        StrPat::Lit(s) => {
-          let s: &'static str = Box::leak(s.to_string().into_boxed_str());
-          node(NodeKind::LitStr(s.to_string()))
-        }
-        StrPat::Spread(s) => spread_pat_to_node(s),
-      }).collect();
-      node(NodeKind::StrRawTempl(children))
-    }
-
-    PatKind::Range { kind, start, end } => {
-      node(NodeKind::InfixOp {
-        op: match kind { RangeKind::Excl => "..", RangeKind::Incl => "..." },
-        lhs: Box::new(pat_to_node(start)),
-        rhs: Box::new(pat_to_node(end)),
-      })
-    }
-
-    PatKind::Guard { pat, guard } => {
-      // Render as `pat` — guard is dropped for now (pattern lowering pass handles it).
-      // TODO: render guard when pattern lowering is implemented.
-      let _ = guard;
-      pat_to_node(pat)
-    }
-  }
-}
-
-fn spread_pat_to_node(s: &Spread<'_>) -> Node<'static> {
-  // `..name`, `..bind`, or bare `..` if anonymous.
-  match s.name.or(s.bind) {
-    Some(name) => spread_node(ident(&render_bind(name))),
-    None => node(NodeKind::Spread(None)),
-  }
-}
-
-fn rec_field_to_node(f: &RecField<'_>) -> Node<'static> {
-  // `{key}` shorthand — pattern is just a Bind to the same name: render as plain `key`.
-  // `{key: pat}` — render as `key = pat`.
-  match &f.pattern.kind {
-    PatKind::Bind(name) if *name == BindName::User(f.key) => ident(f.key),
-    _ => node(NodeKind::Bind {
-      lhs: Box::new(ident(f.key)),
-      rhs: Box::new(pat_to_node(&f.pattern)),
-    }),
   }
 }
 

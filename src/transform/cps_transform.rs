@@ -1,3 +1,7 @@
+// TODO: Add named builder helpers for Expr construction (like cps_fmt.rs has).
+//       Each ExprKind variant is currently built inline with verbose struct literal
+//       syntax; extracting small fns would make callsites read like a DSL.
+//
 // AST → compiler-internal CPS IR transform.
 //
 // Produces `cps::Expr` trees — clean structural IR with no env/state plumbing.
@@ -18,8 +22,8 @@
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use crate::transform::cps::{
-  Arg, Arm, BindName, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Pat, PatKind, Prim,
-  RangeKind, RecElem, RecField, SeqElem, Spread, StrPat, Val, ValKind,
+  Arg, BindName, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Prim,
+  Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -429,11 +433,8 @@ fn extract_param<'src>(param: &'src Node<'src>) -> Vec<Param<'src>> {
       };
       vec![Param::Spread(bind_name)]
     }
-    // Complex destructuring params — extract all bound names from pattern.
-    _ => collect_pat_bindings(&lower_pat(param))
-        .into_iter()
-        .map(Param::Name)
-        .collect(),
+    // Complex destructuring params (e.g. `fn [a, b]: …`) — not yet implemented.
+    _ => vec![],
   }
 }
 
@@ -767,69 +768,38 @@ fn lower_match<'src>(
   };
   let mut pending: Vec<Pending<'src>> = vec![];
 
-  let result = if subject_nodes.len() > 1 {
-    // Multi-arg match — fall back to old Match IR node (lowering deferred).
-    let scrutinees: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
-      let (v, sp) = lower(g, s);
-      pending.extend(sp);
-      v
-    }).collect();
-    let arity = subject_nodes.len();
-    let cps_arms = arms.iter().map(|arm| lower_arm(g, arm, arity)).collect();
-    let result = g.fresh_result();
-    pending.push(Pending::Match { scrutinees, arms: cps_arms, result, loc });
-    result
-  } else {
-    // Single scrutinee — lower to MatchBlock with pattern-lowered arm chains.
-    let subject_node = &subject_nodes[0];
-    let (scrutinee, sp) = lower(g, subject_node);
+  let scrutinees: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
+    let (v, sp) = lower(g, s);
     pending.extend(sp);
-    let scrutinee_param = g.fresh_result();
-    let cps_arms: Vec<Expr<'src>> = arms.iter().map(|arm| lower_match_arm(g, arm, scrutinee_param, loc)).collect();
-    let result = g.fresh_result();
-    pending.push(Pending::MatchBlock { scrutinee, scrutinee_param, arms: cps_arms, result, loc });
-    result
-  };
+    v
+  }).collect();
+  let scrutinee_params: Vec<BindName<'src>> = scrutinees.iter().map(|_| g.fresh_result()).collect();
+  let cps_arms: Vec<Expr<'src>> = arms.iter()
+    .map(|arm| lower_match_arm(g, arm, &scrutinee_params, loc))
+    .collect();
+  let result = g.fresh_result();
+  pending.push(Pending::MatchBlock { scrutinees, scrutinee_params, arms: cps_arms, result, loc });
+  let result = result;
   (ident_val(result, loc), pending)
 }
 
-fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, scrutinee_param: BindName<'src>, _loc: Loc) -> Expr<'src> {
+fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, scrutinee_params: &[BindName<'src>], _loc: Loc) -> Expr<'src> {
   match &arm.kind {
     NodeKind::Arm { lhs, body } => {
       let loc = arm.loc;
-      let scrutinee_val = ident_val(scrutinee_param, loc);
+      let lhs_nodes: &[Node<'src>] = match lhs.first().map(|n| &n.kind) {
+        Some(NodeKind::Patterns(ps)) => ps.as_slice(),
+        _ => lhs.as_slice(),
+      };
       let mut arm_pending: Vec<Pending<'src>> = vec![];
-      if !lhs.is_empty() {
-        lower_pat_lhs(g, &lhs[0], scrutinee_val, loc, &mut arm_pending);
+      for (pat_node, &param) in lhs_nodes.iter().zip(scrutinee_params.iter()) {
+        let scrutinee_val = ident_val(param, loc);
+        lower_pat_lhs(g, pat_node, scrutinee_val, loc, &mut arm_pending);
       }
       let arm_tail = lower_stmts(g, body);
       wrap_with_fail(arm_pending, arm_tail, fail_cont_expr)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
-  }
-}
-
-fn lower_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arity: usize) -> Arm<'src> {
-  match &arm.kind {
-    NodeKind::Arm { lhs, body } => {
-      let loc = arm.loc;
-      let pat = if arity > 1 {
-        // Multi-arg: lhs[0] is a Patterns([x, y, …]) node — unwrap it.
-        let inner_pats = match lhs.first().map(|n| &n.kind) {
-          Some(NodeKind::Patterns(ps)) => ps.iter().map(lower_pat).collect(),
-          _ => lhs.iter().map(lower_pat).collect(),
-        };
-        Pat { kind: PatKind::Tuple(inner_pats), meta: Meta::at(loc) }
-      } else if lhs.is_empty() {
-        Pat { kind: PatKind::Wildcard, meta: Meta::at(loc) }
-      } else {
-        lower_pat(&lhs[0])
-      };
-      let bindings = collect_pat_bindings(&pat);
-      let fn_body = lower_stmts(g, body);
-      Arm { pattern: pat, bindings, fn_body: Box::new(fn_body), meta: Meta::at(loc) }
-    }
-    _ => panic!("expected Arm node"),
   }
 }
 
@@ -866,11 +836,9 @@ fn lower_block<'src>(
 // Extend Pending to handle App and Match, which need a body (the next expression).
 enum Pending<'src> {
   Val { name: BindName<'src>, val: Val<'src>, loc: Loc },
-  Pat { pat: Pat<'src>, val: Val<'src>, loc: Loc },
   Fn { name: BindName<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
   App { func: Val<'src>, args: Vec<Arg<'src>>, result: BindName<'src>, loc: Loc },
-  Match { scrutinees: Vec<Val<'src>>, arms: Vec<Arm<'src>>, result: BindName<'src>, loc: Loc },
-  MatchBlock { scrutinee: Val<'src>, scrutinee_param: BindName<'src>, arms: Vec<Expr<'src>>, result: BindName<'src>, loc: Loc },
+  MatchBlock { scrutinees: Vec<Val<'src>>, scrutinee_params: Vec<BindName<'src>>, arms: Vec<Expr<'src>>, result: BindName<'src>, loc: Loc },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
   MatchBind { name: BindName<'src>, val: Val<'src>, loc: Loc },
   /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
@@ -909,10 +877,6 @@ fn wrap_with_fail<'src>(
       kind: ExprKind::LetVal { name, val: Box::new(val), body: Box::new(body) },
       meta: Meta::at(loc),
     },
-    Pending::Pat { pat, val, loc } => Expr {
-      kind: ExprKind::LetPat { pat: Box::new(pat), val: Box::new(val), body: Box::new(body) },
-      meta: Meta::at(loc),
-    },
     Pending::Fn { name, params, fn_body, loc } => Expr {
       kind: ExprKind::LetFn {
         name,
@@ -932,19 +896,10 @@ fn wrap_with_fail<'src>(
       },
       meta: Meta::at(loc),
     },
-    Pending::Match { scrutinees, arms, result, loc } => Expr {
-      kind: ExprKind::Match {
-        scrutinees,
-        arms,
-        result,
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
-    },
-    Pending::MatchBlock { scrutinee, scrutinee_param, arms, result, loc } => Expr {
+    Pending::MatchBlock { scrutinees, scrutinee_params, arms, result, loc } => Expr {
       kind: ExprKind::MatchBlock {
-        scrutinee: Box::new(scrutinee),
-        scrutinee_param,
+        scrutinees,
+        scrutinee_params,
         fail: Box::new(panic_expr(loc)),
         arms,
         result,
@@ -1052,154 +1007,6 @@ fn wrap_with_fail<'src>(
   })
 }
 
-// ---------------------------------------------------------------------------
-// Pattern lowering: AST Node → cps::Pat
-// ---------------------------------------------------------------------------
-
-fn lower_pat<'src>(node: &'src Node<'src>) -> Pat<'src> {
-  let loc = node.loc;
-  let kind = match &node.kind {
-    NodeKind::Wildcard => PatKind::Wildcard,
-    NodeKind::Ident(name) => PatKind::Bind(BindName::User(name)),
-    NodeKind::LitBool(b)  => PatKind::Lit(Lit::Bool(*b)),
-    NodeKind::LitInt(s)   => PatKind::Lit(Lit::Int(parse_int(s))),
-    NodeKind::LitFloat(s) => PatKind::Lit(Lit::Float(parse_float(s))),
-    NodeKind::LitDecimal(s) => PatKind::Lit(Lit::Decimal(parse_decimal(s))),
-    NodeKind::LitStr(s)   => PatKind::Lit(Lit::Str(s)),
-
-    NodeKind::LitSeq(elems) => {
-      let mut pat_elems = vec![];
-      for elem in elems {
-        match &elem.kind {
-          NodeKind::Spread(inner) => {
-            pat_elems.push(SeqElem::Spread(lower_spread(inner.as_deref(), elem.loc)));
-          }
-          _ => pat_elems.push(SeqElem::Pat(lower_pat(elem))),
-        }
-      }
-      PatKind::Seq(pat_elems)
-    }
-
-    NodeKind::LitRec(fields) => {
-      let mut elems = vec![];
-      for field in fields {
-        match &field.kind {
-          NodeKind::Spread(inner) => {
-            elems.push(RecElem::Spread(lower_spread(inner.as_deref(), field.loc)));
-          }
-          NodeKind::Bind { lhs, rhs } => {
-            if let NodeKind::Ident(key) = &lhs.kind {
-              elems.push(RecElem::Field(RecField {
-                key,
-                pattern: lower_pat(rhs),
-                meta: Meta::at(field.loc),
-              }));
-            }
-          }
-          NodeKind::Ident(name) => {
-            elems.push(RecElem::Field(RecField {
-              key: name,
-              pattern: Pat { kind: PatKind::Bind(BindName::User(name)), meta: Meta::at(field.loc) },
-              meta: Meta::at(field.loc),
-            }));
-          }
-          _ => {}
-        }
-      }
-      PatKind::Rec(elems)
-    }
-
-    NodeKind::InfixOp { op, lhs, rhs } if matches!(*op, ".." | "...") => {
-      let kind = if *op == ".." { RangeKind::Excl } else { RangeKind::Incl };
-      PatKind::Range { kind, start: Box::new(lower_pat(lhs)), end: Box::new(lower_pat(rhs)) }
-    }
-
-    NodeKind::StrTempl(parts) => {
-      let str_pats = parts.iter().map(|p| match &p.kind {
-        NodeKind::LitStr(s)   => StrPat::Lit(s),
-        NodeKind::Spread(inner) => StrPat::Spread(lower_spread(inner.as_deref(), p.loc)),
-        _ => StrPat::Lit(""),
-      }).collect();
-      PatKind::Str(str_pats)
-    }
-
-    // Guard: `pat | guard` — encoded as InfixOp "|"
-    NodeKind::InfixOp { op: _, lhs, rhs: _ } => {
-      // Treat lhs as the pattern. Guard is a value expression — drop for now
-      // (guard lowering needs a value, which requires running the expression lowerer;
-      // deferred to semantic pass where guard context is available).
-      lower_pat(lhs).kind
-    }
-
-    NodeKind::Group(inner) => return lower_pat(inner),
-
-    _ => PatKind::Wildcard,
-  };
-  Pat { kind, meta: Meta::at(loc) }
-}
-
-fn lower_spread<'src>(inner: Option<&'src Node<'src>>, loc: Loc) -> Spread<'src> {
-  match inner {
-    None => Spread { guard: None, bind: None, name: None, meta: Meta::at(loc) },
-    Some(node) => match &node.kind {
-      NodeKind::Ident(name) => {
-        Spread { guard: None, bind: None, name: Some(BindName::User(name)), meta: Meta::at(node.loc) }
-      }
-      _ => Spread { guard: None, bind: None, name: None, meta: Meta::at(loc) },
-    }
-  }
-}
-
-fn collect_pat_bindings<'src>(pat: &Pat<'src>) -> Vec<BindName<'src>> {
-  let mut names = vec![];
-  collect_into(pat, &mut names);
-  names
-}
-
-fn collect_into<'src>(pat: &Pat<'src>, names: &mut Vec<BindName<'src>>) {
-  match &pat.kind {
-    PatKind::Wildcard | PatKind::Lit(_) => {}
-    PatKind::Bind(name) => names.push(*name),
-    PatKind::Tuple(pats) => {
-      for p in pats { collect_into(p, names); }
-    }
-    PatKind::Seq(elems) => {
-      for elem in elems {
-        match elem {
-          SeqElem::Pat(p) => collect_into(p, names),
-          SeqElem::Spread(s) => {
-            if let Some(n) = s.name { names.push(n); }
-            if let Some(n) = s.bind { names.push(n); }
-          }
-        }
-      }
-    }
-    PatKind::Rec(elems) => {
-      for elem in elems {
-        match elem {
-          RecElem::Field(f) => collect_into(&f.pattern, names),
-          RecElem::Spread(s) => {
-            if let Some(n) = s.name { names.push(n); }
-            if let Some(n) = s.bind { names.push(n); }
-          }
-        }
-      }
-    }
-    PatKind::Str(parts) => {
-      for p in parts {
-        if let StrPat::Spread(s) = p {
-          if let Some(n) = s.name { names.push(n); }
-          if let Some(n) = s.bind { names.push(n); }
-        }
-      }
-    }
-    PatKind::Range { start, end, .. } => {
-      collect_into(start, names);
-      collect_into(end, names);
-    }
-    PatKind::Guard { pat, .. } => collect_into(pat, names),
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Numeric helpers

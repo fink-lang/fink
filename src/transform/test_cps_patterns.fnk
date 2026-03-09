@@ -632,7 +632,6 @@ test 'multi-arm match', fn:
         fn ·v_11, ·scope, ·state: ·ƒ_cont ·v_11, ·state
 
 
-# Multi-arg match falls back to old Match IR (single-scrutinee MatchBlock is deferred)
 test 'multi-arg match', fn:
   expect cps_expr fn:
     match a, b:
@@ -641,11 +640,13 @@ test 'multi-arg match', fn:
   | equals_fink fn:
     ·load ·scope, ·id'a', fn a, ·scope:
       ·load ·scope, ·id'b', fn b, ·scope:
-        ·match_block a, b, ·state,
-          ·match_branch ·patt'x, y', fn x, y, ·scope, ·state, ·ƒ_cont:
-            ·load ·scope, ·id'x', fn x, ·scope:
-              ·ƒ_cont x, ·state
-          fn ·v_0, ·state: ·ƒ_cont ·v_0, ·state
+        ·match_block a, b, ·panic, ·state,
+          ·match_branch fn ·v_0, ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+            ·match_store ·scope, ·id'x', ·v_0, fn x, ·scope:
+              ·match_store ·scope, ·id'y', ·v_1, fn y, ·scope:
+                ·load ·scope, ·id'x', fn x, ·scope:
+                  ·ƒ_cont x, ·state
+          fn ·v_2, ·scope, ·state: ·ƒ_cont ·v_2, ·state
 
 
 --- --- ---

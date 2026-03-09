@@ -206,27 +206,6 @@ pub enum ExprKind<'src> {
     else_: Box<Expr<'src>>,
   },
 
-  /// Irrefutable pattern bind — deconstruct `val` against `pat`; names
-  /// introduced by the pattern are available in `body`.
-  /// Emitted by the transform for `[a, b] = foo` bind statements and for
-  /// complex destructuring params (desugared to a bind in the fn body).
-  /// TODO: remove once pattern lowering pass is complete; replaced by Match* primitives.
-  LetPat {
-    pat: Box<Pat<'src>>,
-    val: Box<Val<'src>>,
-    body: Box<Expr<'src>>,
-  },
-
-  /// Pattern match — scrutinee against a list of arms.
-  /// Arms are tried in order; first match wins.
-  /// TODO: remove once pattern lowering pass is complete; replaced by Match* primitives.
-  Match {
-    scrutinees: Vec<Val<'src>>,  // one for single-subject, many for multi-arg match
-    arms: Vec<Arm<'src>>,
-    result: BindName<'src>,
-    body: Box<Expr<'src>>,
-  },
-
   // ---------------------------------------------------------------------------
   // Pattern lowering primitives — produced by the pattern lowering pass.
   // LetPat and Match are eliminated; these replace them.
@@ -352,14 +331,14 @@ pub enum ExprKind<'src> {
   },
 
   /// Pattern match block — tries arms in order; first match wins.
-  /// The runtime injects the scrutinee into each arm as the first param.
+  /// `scrutinees` are the values passed into each arm (one per subject).
+  /// `scrutinee_params` are the names each arm receives them as (parallel vec).
   /// `fail` is the exhaustion continuation (·panic, or outer ·ƒ_fail in nested matches).
   /// Each arm expr is a lowered Match* primitive chain ending in ·ƒ_cont.
   /// `result` names the value received by the result cont from whichever arm succeeds.
   MatchBlock {
-    scrutinee: Box<Val<'src>>,
-    /// Name injected into each arm as the scrutinee param (e.g. `·v_0`).
-    scrutinee_param: BindName<'src>,
+    scrutinees: Vec<Val<'src>>,
+    scrutinee_params: Vec<BindName<'src>>,
     fail: Box<Expr<'src>>,
     arms: Vec<Expr<'src>>,
     result: BindName<'src>,
@@ -389,149 +368,3 @@ pub struct Binding<'src> {
   pub meta: Meta,
 }
 
-/// A single match arm — pattern + body.
-/// `bindings` lists names introduced by the pattern, available in fn_body.
-#[derive(Debug, Clone)]
-pub struct Arm<'src> {
-  pub pattern: Pat<'src>,
-  pub bindings: Vec<BindName<'src>>,  // names introduced by pattern, for scope analysis
-  pub fn_body: Box<Expr<'src>>,
-  pub meta: Meta,
-}
-
-// ---------------------------------------------------------------------------
-// Patterns — preserved from AST, lowered to matcher primitives only at codegen
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct Pat<'src> {
-  pub kind: PatKind<'src>,
-  pub meta: Meta,
-}
-
-#[derive(Debug, Clone)]
-pub enum PatKind<'src> {
-  /// _ — discard
-  Wildcard,
-
-  /// foo — bind scrutinee to name
-  Bind(BindName<'src>),
-
-  /// 42, true, 'hello' — equality check against literal
-  Lit(Lit<'src>),
-
-  /// [a, b, ..rest] — sequence pattern; spreads appear as SeqElem::Spread in elems
-  Seq(Vec<SeqElem<'src>>),
-
-  /// (a, b, c) — fixed-arity positional pattern from multi-arg match/fn.
-  /// No spread allowed. Arity must match the number of scrutinees.
-  /// Distinct from Seq so the type checker can enforce arity statically.
-  Tuple(Vec<Pat<'src>>),
-
-  /// {foo, bar: x, ..rest} — record pattern; spreads appear as RecElem::Spread in elems
-  Rec(Vec<RecElem<'src>>),
-
-  /// 'hello ${..rest}' — string interpolation pattern
-  Str(Vec<StrPat<'src>>),
-
-  /// 'a'...'z' or 0..10 — range pattern
-  Range {
-    kind: RangeKind,
-    start: Box<Pat<'src>>,
-    end: Box<Pat<'src>>,
-  },
-
-  /// guard: `head > 3` or `is_odd head` — pattern with predicate
-  Guard {
-    pat: Box<Pat<'src>>,
-    guard: Box<Val<'src>>,
-  },
-}
-
-impl<'src> Pat<'src> {
-  /// Collect all names bound by this pattern (depth-first, left-to-right).
-  pub fn bindings(&self) -> Vec<BindName<'src>> {
-    let mut names = vec![];
-    self.collect_bindings(&mut names);
-    names
-  }
-
-  fn collect_bindings(&self, out: &mut Vec<BindName<'src>>) {
-    match &self.kind {
-      PatKind::Wildcard | PatKind::Lit(_) | PatKind::Range { .. } => {}
-      PatKind::Bind(name) => out.push(*name),
-      PatKind::Guard { pat, .. } => pat.collect_bindings(out),
-      PatKind::Tuple(pats) => {
-        for p in pats { p.collect_bindings(out); }
-      }
-      PatKind::Seq(elems) => {
-        for elem in elems {
-          match elem {
-            SeqElem::Pat(p) => p.collect_bindings(out),
-            SeqElem::Spread(s) => {
-              if let Some(n) = s.name { out.push(n); }
-              if let Some(n) = s.bind { out.push(n); }
-            }
-          }
-        }
-      }
-      PatKind::Rec(elems) => {
-        for elem in elems {
-          match elem {
-            RecElem::Field(f) => f.pattern.collect_bindings(out),
-            RecElem::Spread(s) => {
-              if let Some(n) = s.name { out.push(n); }
-              if let Some(n) = s.bind { out.push(n); }
-            }
-          }
-        }
-      }
-      PatKind::Str(parts) => {
-        for p in parts {
-          if let StrPat::Spread(s) = p {
-            if let Some(n) = s.name { out.push(n); }
-            if let Some(n) = s.bind { out.push(n); }
-          }
-        }
-      }
-    }
-  }
-}
-
-/// An element in a sequence pattern.
-#[derive(Debug, Clone)]
-pub enum SeqElem<'src> {
-  Pat(Pat<'src>),
-  Spread(Spread<'src>),
-}
-
-/// A spread element — `..rest`, `..(guard)`, `..(guard) |= name`.
-#[derive(Debug, Clone)]
-pub struct Spread<'src> {
-  pub guard: Option<Box<Val<'src>>>,      // None = bare `..rest`
-  pub bind: Option<BindName<'src>>,       // `|= name` binding
-  pub name: Option<BindName<'src>>,       // `..rest` name
-  pub meta: Meta,
-}
-
-/// An element in a record pattern — either a named field or a spread.
-#[derive(Debug, Clone)]
-pub enum RecElem<'src> {
-  Field(RecField<'src>),
-  Spread(Spread<'src>),
-}
-
-/// A field in a record pattern.
-#[derive(Debug, Clone)]
-pub struct RecField<'src> {
-  pub key: Name<'src>,
-  pub pattern: Pat<'src>,
-  pub meta: Meta,
-}
-
-/// A segment in a string pattern.
-#[derive(Debug, Clone)]
-pub enum StrPat<'src> {
-  Lit(&'src str),         // literal text segment
-  Spread(Spread<'src>),   // `${..rest}` interpolation capture
-}

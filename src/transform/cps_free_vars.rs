@@ -23,7 +23,7 @@
 // output.
 
 use std::collections::HashSet;
-use super::cps::{Arg, Arm, BindName, Expr, ExprKind, FreeVar, KeyKind, Name, Param, Pat, PatKind, Val, ValKind};
+use super::cps::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Name, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -67,12 +67,6 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       LetFn { name, params, free_vars, fn_body: Box::new(fn_body), body: Box::new(body) }
     }
 
-    LetPat { pat, val, body } => LetPat {
-      pat,
-      val,
-      body: Box::new(transform_expr(*body)),
-    },
-
     LetRec { bindings, body } => LetRec {
       bindings: bindings.into_iter().map(|mut b| {
         b.fn_body = Box::new(transform_expr(*b.fn_body));
@@ -90,16 +84,6 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       cond,
       then: Box::new(transform_expr(*then)),
       else_: Box::new(transform_expr(*else_)),
-    },
-
-    Match { scrutinees, arms, result, body } => Match {
-      scrutinees,
-      arms: arms.into_iter().map(|mut arm| {
-        arm.fn_body = Box::new(transform_expr(*arm.fn_body));
-        arm
-      }).collect(),
-      result,
-      body: Box::new(transform_expr(*body)),
     },
 
     Ret(_) | Panic | FailCont => expr.kind,
@@ -162,9 +146,9 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       fail: Box::new(transform_expr(*fail)),
       body: Box::new(transform_expr(*body)),
     },
-    MatchBlock { scrutinee, scrutinee_param, fail, arms, result, body } => MatchBlock {
-      scrutinee,
-      scrutinee_param,
+    MatchBlock { scrutinees, scrutinee_params, fail, arms, result, body } => MatchBlock {
+      scrutinees,
+      scrutinee_params,
       result,
       fail: Box::new(transform_expr(*fail)),
       arms: arms.into_iter().map(transform_expr).collect(),
@@ -201,18 +185,6 @@ fn collect_keys<'src>(
       collect_keys(body, &inner_bound, seen, out);
     }
 
-    LetPat { val, pat, body } => {
-      collect_key_from_val(val, bound, seen, out);
-      // Names bound by the pattern are settled for the continuation.
-      let mut inner_bound = bound.clone();
-      for bind_name in pat.bindings() {
-        if let BindName::User(s) = bind_name {
-          inner_bound.insert(s);
-        }
-      }
-      collect_keys(body, &inner_bound, seen, out);
-    }
-
     // Stop at nested LetFn — its fn_body keys are its own.
     // Do continue into `body` (the continuation at our scope level).
     LetFn { body, .. } => {
@@ -237,14 +209,6 @@ fn collect_keys<'src>(
       collect_key_from_val(cond, bound, seen, out);
       collect_keys(then, bound, seen, out);
       collect_keys(else_, bound, seen, out);
-    }
-
-    Match { scrutinees, arms, body, .. } => {
-      for s in scrutinees { collect_key_from_val(s, bound, seen, out); }
-      for arm in arms {
-        collect_keys_from_arm(arm, bound, seen, out);
-      }
-      collect_keys(body, bound, seen, out);
     }
 
     // Pattern lowering primitives — collect keys from vals, recurse into fail and body.
@@ -313,8 +277,8 @@ fn collect_keys<'src>(
       if let BindName::User(s) = elem { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
-    MatchBlock { scrutinee, fail, arms, body, .. } => {
-      collect_key_from_val(scrutinee, bound, seen, out);
+    MatchBlock { scrutinees, fail, arms, body, .. } => {
+      for s in scrutinees { collect_key_from_val(s, bound, seen, out); }
       collect_keys(fail, bound, seen, out);
       for arm in arms {
         collect_keys(arm, bound, seen, out);
@@ -354,62 +318,3 @@ fn collect_key_from_val<'src>(
   }
 }
 
-/// Arms introduce their own bindings — exclude them from the outer capture set.
-/// (Arm bindings are params of the arm fn, not free vars of the enclosing fn.)
-fn collect_keys_from_arm<'src>(
-  arm: &Arm<'src>,
-  bound: &HashSet<Name<'src>>,
-  seen: &mut HashSet<FreeVar<'src>>,
-  out: &mut Vec<FreeVar<'src>>,
-) {
-  let mut arm_bound = bound.clone();
-  for b in &arm.bindings {
-    if let BindName::User(s) = b {
-      arm_bound.insert(s);
-    }
-  }
-  collect_pat_keys(&arm.pattern, bound, seen, out);
-  collect_keys(&arm.fn_body, &arm_bound, seen, out);
-}
-
-fn collect_pat_keys<'src>(
-  pat: &Pat<'src>,
-  bound: &HashSet<Name<'src>>,
-  seen: &mut HashSet<FreeVar<'src>>,
-  out: &mut Vec<FreeVar<'src>>,
-) {
-  use PatKind::*;
-  match &pat.kind {
-    Wildcard | Bind(_) | Lit(_) => {}
-    Tuple(pats) => {
-      for p in pats { collect_pat_keys(p, bound, seen, out); }
-    }
-    Range { start, end, .. } => {
-      collect_pat_keys(start, bound, seen, out);
-      collect_pat_keys(end, bound, seen, out);
-    }
-    Guard { pat, guard } => {
-      collect_pat_keys(pat, bound, seen, out);
-      collect_key_from_val(guard, bound, seen, out);
-    }
-    Seq(elems) => {
-      for elem in elems {
-        use super::cps::SeqElem;
-        match elem {
-          SeqElem::Pat(p) => collect_pat_keys(p, bound, seen, out),
-          SeqElem::Spread(_) => {}
-        }
-      }
-    }
-    Rec(elems) => {
-      for elem in elems {
-        use super::cps::RecElem;
-        match elem {
-          RecElem::Field(f) => collect_pat_keys(&f.pattern, bound, seen, out),
-          RecElem::Spread(_) => {}
-        }
-      }
-    }
-    Str(_) => {}
-  }
-}
