@@ -806,6 +806,7 @@ mod pat_tests {
   use pretty_assertions::assert_eq;
   use crate::parser::parse;
   use crate::transform::cps_transform::{lower_expr, lower_pat_bind};
+  use crate::transform::cps_free_vars::annotate;
   use super::fmt;
 
   fn dedent(s: &str) -> String {
@@ -829,15 +830,23 @@ mod pat_tests {
     }
   }
 
+  fn cps_c_expr(src: &str) -> String {
+    match parse(src) {
+      Ok(node) => fmt(&annotate(lower_expr(&node))),
+      Err(e)   => format!("ERROR: {}", e.message),
+    }
+  }
+
   #[test_template(
     "src/transform", "./test_cps_patterns.fnk",
     r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
   )]
   fn test_cps_patterns(src: &str, exp: &str, func: &str, path: &str) {
     let actual = match func {
-      "cps_pat"  => cps_pat(&dedent(src).trim().to_string()),
-      "cps_expr" => cps_expr(&dedent(src).trim().to_string()),
-      _          => format!("ERROR: unknown func {}", func),
+      "cps_pat"    => cps_pat(&dedent(src).trim().to_string()),
+      "cps_expr"   => cps_expr(&dedent(src).trim().to_string()),
+      "cps_c_expr" => cps_c_expr(&dedent(src).trim().to_string()),
+      _            => format!("ERROR: unknown func {}", func),
     };
     assert_eq!(
       actual,
