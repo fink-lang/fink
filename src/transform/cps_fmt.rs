@@ -843,7 +843,7 @@ mod free_var_tests {
       .join("\n")
   }
 
-  fn cps_c_expr(src: &str) -> String {
+  fn cps_free_vars(src: &str) -> String {
     match parse(src) {
       Ok(node) => fmt(&annotate(lower_expr(&node))),
       Err(e)   => format!("ERROR: {}", e.message),
@@ -856,7 +856,7 @@ mod free_var_tests {
   )]
   fn test_cps_free_vars(src: &str, exp: &str, func: &str, path: &str) {
     let actual = match func {
-      "cps_c_expr" => cps_c_expr(&dedent(src).trim().to_string()),
+      "cps_free_vars" => cps_free_vars(&dedent(src).trim().to_string()),
       _            => format!("ERROR: unknown func {}", func),
     };
     assert_eq!(

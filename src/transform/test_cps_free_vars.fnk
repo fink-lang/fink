@@ -15,13 +15,13 @@ cps_c IR — free variable analysis tests
 #
 # Test format:
 #   test 'name', fn:
-#     expect cps_c_expr fn:
+#     expect cps_free_vars fn:
 #       <fink source>
 #
 #     | equals_fink fn:
 #       <expected cps output>
 
-{test, expect, equals_fink, cps_c_expr} = import '!fake'
+{test, expect, equals_fink, cps_free_vars} = import '!fake'
 {·load, ·match_store, ·ƒ_cont, ·state, ·scope, ·id, ·op, ·apply, ·closure} = import '!fake'
 
 --- --- ---
@@ -29,7 +29,7 @@ free variable analysis
 --- --- ---
 
 test 'free vars — fn with no captures', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     fn a, b:
       a + b
 
@@ -45,7 +45,7 @@ test 'free vars — fn with no captures', fn:
 
 
 test 'free vars — fn with only literals', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     fn x:
       42
 
@@ -56,7 +56,7 @@ test 'free vars — fn with only literals', fn:
 
 
 test 'free vars — closure captures one outer var', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     fn x:
       fn y:
         x + y
@@ -76,7 +76,7 @@ test 'free vars — closure captures one outer var', fn:
 
 
 test 'free vars — closure captures local binding', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     fn x:
       z = x + 1
       fn y:
@@ -101,7 +101,7 @@ test 'free vars — closure captures local binding', fn:
 
 
 test 'free vars — named outer, inner captures param', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     add = fn x:
       fn y:
         x + y
@@ -123,7 +123,7 @@ test 'free vars — named outer, inner captures param', fn:
 
 
 test 'free vars — two named fns no captures', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     double = fn x: x + x
     triple = fn x: x + x + x
 
@@ -156,7 +156,7 @@ test 'free vars — two named fns no captures', fn:
 
 
 test 'free vars — three levels of nesting', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     fn a:
       fn b:
         fn c:
