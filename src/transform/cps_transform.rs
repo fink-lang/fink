@@ -397,12 +397,12 @@ fn extract_params_with_gen<'src>(
         };
         param_list.push(Param::Spread(bind_name));
       }
-      // Complex destructuring param — desugar to a fresh spread param + Match* lowering.
-      // The param value is already in scope as an ident (no load needed).
+      // Complex destructuring param — desugar to a fresh plain param + Match* lowering in body.
+      // The param receives a single value (not varargs); destructuring happens inside the fn.
       _ => {
-        let spread_name = g.fresh_result();
-        param_list.push(Param::Spread(spread_name));
-        lower_pat_lhs(g, p, ident_val(spread_name, p.loc), p.loc, &mut deferred);
+        let param_name = g.fresh_result();
+        param_list.push(Param::Name(param_name));
+        lower_pat_lhs(g, p, ident_val(param_name, p.loc), p.loc, &mut deferred);
       }
     }
   }

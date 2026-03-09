@@ -838,7 +838,39 @@ test 'range — bind-lhs check', fn:
 fn params (·ƒ_fail = unreachable, type checker guarantees)
 --- --- ---
 
-# TODO: fn param pattern lowering — `fn [a, b]: …` needs Match* lowering treatment
+test 'fn — seq destructuring param', fn:
+  expect cps_expr fn:
+    fn [a, b]: a
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn ·v_1, ·scope, ·state, ·ƒ_cont:
+        ·match_seq ·v_1, ·panic, fn ·m_2, ·scope, ·state:
+          ·match_next ·m_2, ·panic, fn ·v_3, ·m_4, ·scope, ·state:
+            ·match_store ·scope, ·id'a', ·v_3, fn a, ·scope:
+              ·match_next ·m_4, ·panic, fn ·v_5, ·m_6, ·scope, ·state:
+                ·match_store ·scope, ·id'b', ·v_5, fn b, ·scope:
+                  ·match_done ·m_6, ·panic, fn ·v_7, ·scope, ·state:
+                    ·load ·scope, ·id'a', fn a, ·scope:
+                      ·ƒ_cont a, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+test 'fn — seq destructuring param with rest', fn:
+  expect cps_expr fn:
+    fn [a, ..rest]: rest
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn ·v_1, ·scope, ·state, ·ƒ_cont:
+        ·match_seq ·v_1, ·panic, fn ·m_2, ·scope, ·state:
+          ·match_next ·m_2, ·panic, fn ·v_3, ·m_4, ·scope, ·state:
+            ·match_store ·scope, ·id'a', ·v_3, fn a, ·scope:
+              ·match_rest ·m_4, ·panic, fn ·v_5, ·scope, ·state:
+                ·match_store ·scope, ·id'rest', ·v_5, fn rest, ·scope:
+                  ·load ·scope, ·id'rest', fn rest, ·scope:
+                    ·ƒ_cont rest, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
   expect cps_expr fn:
@@ -846,7 +878,7 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
 
   | equals_fink fn:
     ·closure ·scope,
-      fn a, ..·v_1, ·scope, ·state, ·ƒ_cont:
+      fn a, ·v_1, ·scope, ·state, ·ƒ_cont:
         ·match_seq ·v_1, ·panic, fn ·m_2, ·scope, ·state:
           ·match_next ·m_2, ·panic, fn ·v_3, ·m_4, ·scope, ·state:
             ·match_value ·v_3, 1, ·panic, fn ·scope, ·state:
