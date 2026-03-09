@@ -146,9 +146,9 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       fail: Box::new(transform_expr(*fail)),
       body: Box::new(transform_expr(*body)),
     },
-    MatchBlock { scrutinees, scrutinee_params, fail, arms, result, body } => MatchBlock {
-      scrutinees,
-      scrutinee_params,
+    MatchBlock { params, arm_params, fail, arms, result, body } => MatchBlock {
+      params,
+      arm_params,
       result,
       fail: Box::new(transform_expr(*fail)),
       arms: arms.into_iter().map(transform_expr).collect(),
@@ -277,8 +277,8 @@ fn collect_keys<'src>(
       if let BindName::User(s) = elem { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
-    MatchBlock { scrutinees, fail, arms, body, .. } => {
-      for s in scrutinees { collect_key_from_val(s, bound, seen, out); }
+    MatchBlock { params, fail, arms, body, .. } => {
+      for s in params { collect_key_from_val(s, bound, seen, out); }
       collect_keys(fail, bound, seen, out);
       for arm in arms {
         collect_keys(arm, bound, seen, out);

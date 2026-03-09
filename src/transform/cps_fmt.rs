@@ -297,12 +297,12 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // FailCont — reference to enclosing ·ƒ_fail; renders as bare `·ƒ_fail`.
     ExprKind::FailCont => ident("·ƒ_fail"),
 
-    // MatchBlock { scrutinees, scrutinee_params, fail, arms, result, body } →
+    // MatchBlock { params, arm_params, fail, arms, result, body } →
     //   ·match_block s0, s1, …, fail, ·state,
     //     ·match_branch fn p0, p1, …, ·scope, ·state, ·ƒ_cont, ·ƒ_fail: arm_body
     //     …
     //     fn result, ·scope, ·state: body
-    ExprKind::MatchBlock { scrutinees, scrutinee_params, fail, arms, result, body } => {
+    ExprKind::MatchBlock { params, arm_params, fail, arms, result, body } => {
       let result_plain = render_bind(*result);
       let result_fn = fn_node(
         patterns(vec![ident(&result_plain), ident("·scope"), ident("·state")]),
@@ -310,13 +310,13 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       );
       let fail_node = to_node(fail);
       let arm_nodes: Vec<Node<'static>> = arms.iter().map(|arm| {
-        let mut fn_params: Vec<Node<'static>> = scrutinee_params.iter()
+        let mut fn_params: Vec<Node<'static>> = arm_params.iter()
           .map(|p| ident(&render_bind(*p)))
           .collect();
         fn_params.extend([ident("·scope"), ident("·state"), ident("·ƒ_cont"), ident("·ƒ_fail")]);
         fn_node(patterns(fn_params), vec![to_node(arm)])
       }).collect();
-      let refs: Vec<&Val<'_>> = scrutinees.iter().collect();
+      let refs: Vec<&Val<'_>> = params.iter().collect();
       with_loads(&refs, |resolved| {
         let mut args = resolved;
         args.push(fail_node);

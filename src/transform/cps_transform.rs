@@ -768,22 +768,22 @@ fn lower_match<'src>(
   };
   let mut pending: Vec<Pending<'src>> = vec![];
 
-  let scrutinees: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
+  let params: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
     let (v, sp) = lower(g, s);
     pending.extend(sp);
     v
   }).collect();
-  let scrutinee_params: Vec<BindName<'src>> = scrutinees.iter().map(|_| g.fresh_result()).collect();
+  let arm_params: Vec<BindName<'src>> = params.iter().map(|_| g.fresh_result()).collect();
   let cps_arms: Vec<Expr<'src>> = arms.iter()
-    .map(|arm| lower_match_arm(g, arm, &scrutinee_params, loc))
+    .map(|arm| lower_match_arm(g, arm, &arm_params, loc))
     .collect();
   let result = g.fresh_result();
-  pending.push(Pending::MatchBlock { scrutinees, scrutinee_params, arms: cps_arms, result, loc });
+  pending.push(Pending::MatchBlock { params, arm_params, arms: cps_arms, result, loc });
   let result = result;
   (ident_val(result, loc), pending)
 }
 
-fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, scrutinee_params: &[BindName<'src>], _loc: Loc) -> Expr<'src> {
+fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindName<'src>], _loc: Loc) -> Expr<'src> {
   match &arm.kind {
     NodeKind::Arm { lhs, body } => {
       let loc = arm.loc;
@@ -792,7 +792,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, scrutinee_params: &
         _ => lhs.as_slice(),
       };
       let mut arm_pending: Vec<Pending<'src>> = vec![];
-      for (pat_node, &param) in lhs_nodes.iter().zip(scrutinee_params.iter()) {
+      for (pat_node, &param) in lhs_nodes.iter().zip(arm_params.iter()) {
         let scrutinee_val = ident_val(param, loc);
         lower_pat_lhs(g, pat_node, scrutinee_val, loc, &mut arm_pending);
       }
@@ -838,7 +838,7 @@ enum Pending<'src> {
   Val { name: BindName<'src>, val: Val<'src>, loc: Loc },
   Fn { name: BindName<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, loc: Loc },
   App { func: Val<'src>, args: Vec<Arg<'src>>, result: BindName<'src>, loc: Loc },
-  MatchBlock { scrutinees: Vec<Val<'src>>, scrutinee_params: Vec<BindName<'src>>, arms: Vec<Expr<'src>>, result: BindName<'src>, loc: Loc },
+  MatchBlock { params: Vec<Val<'src>>, arm_params: Vec<BindName<'src>>, arms: Vec<Expr<'src>>, result: BindName<'src>, loc: Loc },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
   MatchBind { name: BindName<'src>, val: Val<'src>, loc: Loc },
   /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
@@ -896,10 +896,10 @@ fn wrap_with_fail<'src>(
       },
       meta: Meta::at(loc),
     },
-    Pending::MatchBlock { scrutinees, scrutinee_params, arms, result, loc } => Expr {
+    Pending::MatchBlock { params, arm_params, arms, result, loc } => Expr {
       kind: ExprKind::MatchBlock {
-        scrutinees,
-        scrutinee_params,
+        params,
+        arm_params,
         fail: Box::new(panic_expr(loc)),
         arms,
         result,
