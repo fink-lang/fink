@@ -35,8 +35,8 @@ CPS pattern lowering — design scratch pad (WIP)
 # Optimization hint (not in IR yet):
 #   ·match_size  — early length check when collection is realized
 
-{test, expect, equals_fink, cps_pat} = import '!fake'
-{·load, ·store, ·ƒ_cont, ·state, ·scope, ·id, ·apply} = import '!fake'
+{test, expect, equals_fink} = import '!fake'
+{·load, ·store, ·match_store, ·ƒ_cont, ·state, ·scope, ·id, ·apply} = import '!fake'
 
 
 --- --- ---
@@ -44,7 +44,7 @@ bind
 --- --- ---
 
 test 'plain bind', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     x = foo
 
   | equals_fink fn:
@@ -53,7 +53,7 @@ test 'plain bind', fn:
         ·ƒ_cont x, ·state
 
 test 'simple guard', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     a > 0 = foo
 
   | equals_fink fn:
@@ -66,7 +66,7 @@ test 'simple guard', fn:
 
 
 test 'nested guard', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     a > 0 or a < 9 = foo
 
   | equals_fink fn:
@@ -88,7 +88,7 @@ seq patterns
 --- --- ---
 
 test 'seq — empty', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [] = foo
 
   | equals_fink fn:
@@ -99,7 +99,7 @@ test 'seq — empty', fn:
 
 
 test 'seq — nested empty', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [a, []] = foo
 
   | equals_fink fn:
@@ -115,7 +115,7 @@ test 'seq — nested empty', fn:
 
 
 test 'seq — exact two elements', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [a, b] = foo
 
   | equals_fink fn:
@@ -131,7 +131,7 @@ test 'seq — exact two elements', fn:
 
 
 test 'seq — lone spread non-empty discard', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [..] = foo
 
   | equals_fink fn:
@@ -142,7 +142,7 @@ test 'seq — lone spread non-empty discard', fn:
 
 
 test 'seq — spread non-empty bound', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [..rest] = foo
 
   | equals_fink fn:
@@ -154,7 +154,7 @@ test 'seq — spread non-empty bound', fn:
 
 
 test 'seq — head then spread discard', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [head, ..] = foo
 
   | equals_fink fn:
@@ -167,7 +167,7 @@ test 'seq — head then spread discard', fn:
 
 
 test 'seq — head then spread bound', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [head, ..tail] = foo
 
   | equals_fink fn:
@@ -180,18 +180,19 @@ test 'seq — head then spread bound', fn:
                 ·ƒ_cont ·v_4, ·state
 
 
-test 'seq — rest in middle', fn:
-  expect cps_pat fn:
-    [head, ..middle, end] = foo
-
-  | equals_fink fn:
-    # TODO: decomposes as [head, ..rest1] then reverse rest1, pop last as end,
-    # reverse remainder as middle. Needs ·match_reverse. Deferred — does not
-    # affect the core primitive set.
+--- test 'seq — rest in middle' deferred: needs ·match_reverse ---
+# test 'seq — rest in middle', fn:
+#   expect cps_expr fn:
+#     [head, ..middle, end] = foo
+#
+#   | equals_fink fn:
+#     # TODO: decomposes as [head, ..rest1] then reverse rest1, pop last as end,
+#     # reverse remainder as middle. Needs ·match_reverse. Deferred — does not
+#     # affect the core primitive set.
 
 
 test 'seq — literal element', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [a, 1] = foo
 
   | equals_fink fn:
@@ -206,7 +207,7 @@ test 'seq — literal element', fn:
 
 
 test 'seq — infix guard', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [x, y >= 2] = foo
 
   | equals_fink fn:
@@ -224,7 +225,7 @@ test 'seq — infix guard', fn:
 
 
 test 'seq — predicate guard', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [x, is_even y] = foo
 
   | equals_fink fn:
@@ -241,7 +242,7 @@ test 'seq — predicate guard', fn:
 
 
 test 'seq — constructor guard with payload', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [x, Ok b] = foo
 
   | equals_fink fn:
@@ -258,7 +259,7 @@ test 'seq — constructor guard with payload', fn:
 
 
 test 'seq — constructor predicate with wildcard', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [x, is_none _] = foo
 
   | equals_fink fn:
@@ -274,7 +275,7 @@ test 'seq — constructor predicate with wildcard', fn:
 
 
 test 'seq — multi-arg guard with bound element', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [1, foo 2, a, 3; 4] = bar
 
   | equals_fink fn:
@@ -294,7 +295,7 @@ test 'seq — multi-arg guard with bound element', fn:
 
 
 test 'seq — nested', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [a, [b, c]] = foo
 
   | equals_fink fn:
@@ -313,7 +314,7 @@ test 'seq — nested', fn:
                             ·ƒ_cont ·v_11, ·state
 
 test 'seq — nested with bind-right', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     [a, [b, c] |= d] = foo
 
   | equals_fink fn:
@@ -338,7 +339,7 @@ rec patterns
 --- --- ---
 
 test 'rec — empty', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {} = foo
 
   | equals_fink fn:
@@ -349,7 +350,7 @@ test 'rec — empty', fn:
 
 
 test 'rec — non-empty', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {..} = foo
 
   | equals_fink fn:
@@ -360,7 +361,7 @@ test 'rec — non-empty', fn:
 
 
 test 'rec — partial match', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {x, y} = point
 
   | equals_fink fn:
@@ -374,7 +375,7 @@ test 'rec — partial match', fn:
 
 
 test 'rec — field rename', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {x, y: z} = point
 
   | equals_fink fn:
@@ -388,7 +389,7 @@ test 'rec — field rename', fn:
 
 
 test 'rec — open rest discarded', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {bar, ..} = foo
 
   | equals_fink fn:
@@ -401,7 +402,7 @@ test 'rec — open rest discarded', fn:
 
 
 test 'rec — open rest bound', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {bar, ..rest} = foo
 
   | equals_fink fn:
@@ -415,7 +416,7 @@ test 'rec — open rest bound', fn:
 
 
 test 'rec — closed exact', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {bar, ..{}} = foo
 
   | equals_fink fn:
@@ -430,7 +431,7 @@ test 'rec — closed exact', fn:
 
 
 test 'rec — closed with sub-pattern', fn:
-  expect cps_pat fn:
+  expect cps_expr fn:
     {foo, ..{bar, spam}} = x
 
   | equals_fink fn:
@@ -557,7 +558,7 @@ test 'match child ·scope — binding in arm body', fn:
               ·load ·scope, ·id'a', fn a, ·scope:
                 ·match_if ·op_gt, a, 1, ·ƒ_fail, fn ·scope, ·state:
                   ·load ·scope, ·id'a', fn a, ·scope:
-                    ·store ·scope, ·id'ni', a, fn ni, ·scope:
+                    ·match_store ·scope, ·id'ni', a, fn ni, ·scope:
                       ·load ·scope, ·id'ni', fn ni, ·scope:
                         ·ƒ_cont ni, ·state
         fn ·v_1, ·scope, ·state: ·ƒ_cont ·v_1, ·state

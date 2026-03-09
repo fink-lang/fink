@@ -76,7 +76,7 @@ fn key_val_name<'src>(name: Name<'src>, loc: Loc) -> Val<'src> {
 }
 
 /// Create a Key reference to a BindName that needs loading from scope.
-/// Used in prepend_let_pats where the param is scope-stored by the runtime.
+/// Used when a fn param needs to be referenced as a Key val (scope-stored by the runtime).
 fn key_val_bind(name: BindName<'_>, loc: Loc) -> Val<'_> {
   Val {
     kind: ValKind::Key(Key { kind: KeyKind::Bind(name), resolution: None, meta: Meta::at(loc) }),
@@ -259,9 +259,8 @@ fn lower_stmts<'src>(g: &mut Gen, stmts: &'src [Node<'src>]) -> Expr<'src> {
       match &stmt.kind {
         // Bind introduces a name available in subsequent stmts.
         NodeKind::Bind { lhs, rhs } | NodeKind::BindRight { rhs: lhs, lhs: rhs } => {
-          let (val, pending) = lower_bind_stmt(g, lhs, rhs, stmt.loc);
+          let pending = lower_bind_stmt(g, lhs, rhs, stmt.loc);
           all_pending.extend(pending);
-          all_pending.push(val);
         }
         // Any other statement: evaluate for effects, result discarded.
         _ => {
@@ -287,23 +286,18 @@ fn lower_bind_stmt<'src>(
   lhs: &'src Node<'src>,
   rhs: &'src Node<'src>,
   loc: Loc,
-) -> (Pending<'src>, Vec<Pending<'src>>) {
+) -> Vec<Pending<'src>> {
   let (val, mut pending) = lower(g, rhs);
-  let binding = match &lhs.kind {
-    NodeKind::Ident(name) => Pending::Val { name: BindName::User(name), val, loc },
+  match &lhs.kind {
     NodeKind::Wildcard => {
-      let discard = g.fresh_result();
-      Pending::Val { name: discard, val, loc }
+      // _ discards — no store, just evaluate for side effects.
     }
     _ => {
-      // Load RHS into a temp so LetPat val is an Ident, avoiding double-loading.
-      let tmp = g.fresh_result();
-      pending.push(Pending::Val { name: tmp, val, loc });
-      let pat = lower_pat(lhs);
-      Pending::Pat { pat, val: ident_val(tmp, loc), loc }
+      // All user binds (ident or pattern) are degenerate pattern matches.
+      lower_pat_lhs(g, lhs, val, loc, &mut pending);
     }
-  };
-  (binding, pending)
+  }
+  pending
 }
 
 /// Lower a bind expression (the result IS the bound value — last in block or standalone).
@@ -314,25 +308,18 @@ fn lower_bind<'src>(
   loc: Loc,
 ) -> Lower<'src> {
   let (val, mut pending) = lower(g, rhs);
-  let name = match &lhs.kind {
-    NodeKind::Ident(name) => BindName::User(name),
+  match &lhs.kind {
     NodeKind::Wildcard => {
-      let discard = g.fresh_result();
-      pending.push(Pending::Val { name: discard, val, loc });
-      return (ident_val(discard, loc), pending);
+      // _ discards the value — no store, just evaluate for side effects.
+      (val, pending)
     }
     _ => {
-      // Pattern bind — load RHS into a temp, then emit LetPat against the temp.
-      // Using a temp (Ident) avoids double-loading the Key in the continuation.
-      let tmp = g.fresh_result();
-      pending.push(Pending::Val { name: tmp, val, loc });
-      let pat = lower_pat(lhs);
-      pending.push(Pending::Pat { pat, val: ident_val(tmp, loc), loc });
-      return (ident_val(tmp, loc), pending);
+      // All user binds (ident or pattern) are degenerate pattern matches.
+      // lower_pat_lhs emits MatchLetVal for plain idents, Match* chains for patterns.
+      let bound = lower_pat_lhs(g, lhs, val, loc, &mut pending);
+      (ident_val(bound, loc), pending)
     }
-  };
-  pending.push(Pending::Val { name, val, loc });
-  (ident_val(name, loc), pending)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +334,7 @@ fn lower_fn<'src>(
 ) -> Lower<'src> {
   let fn_name = g.fresh_fn();
   let (param_names, deferred) = extract_params_with_gen(g, params);
-  let fn_body = prepend_let_pats(deferred, lower_stmts(g, body), loc);
+  let fn_body = prepend_pat_binds(deferred, lower_stmts(g, body));
   let pending = vec![Pending::Fn { name: fn_name, params: param_names, fn_body, loc }];
   (ident_val(fn_name, loc), pending)
 }
@@ -362,7 +349,7 @@ fn lower_iife<'src>(
 ) -> Lower<'src> {
   let fn_name = g.fresh_fn();
   let (param_names, deferred) = extract_params_with_gen(g, params);
-  let fn_body = prepend_let_pats(deferred, lower_stmts(g, body), loc);
+  let fn_body = prepend_pat_binds(deferred, lower_stmts(g, body));
   let result = g.fresh_result();
   let pending = vec![
     Pending::Fn { name: fn_name, params: param_names, fn_body, loc },
@@ -373,13 +360,15 @@ fn lower_iife<'src>(
 
 /// Extract params from a fn params node, returning:
 /// - the param list (with complex patterns replaced by fresh Gen names)
-/// - a list of (Pat, BindName) pairs to prepend as LetPat in the fn body
+/// - a list of Pending entries to prepend to the fn body via wrap().
+/// Complex destructuring params (e.g. `[1, ..b]`) are desugared to a fresh spread
+/// param `·v_N` and a set of Match* pending entries that destructure it.
 fn extract_params_with_gen<'src>(
   g: &mut Gen,
   params: &'src Node<'src>,
-) -> (Vec<Param<'src>>, Vec<(Pat<'src>, BindName<'src>)>) {
+) -> (Vec<Param<'src>>, Vec<Pending<'src>>) {
   let mut param_list = vec![];
-  let mut deferred = vec![];
+  let mut deferred: Vec<Pending<'src>> = vec![];
   let nodes = match &params.kind {
     NodeKind::Patterns(ps) => ps.as_slice(),
     _ => std::slice::from_ref(params),
@@ -403,36 +392,21 @@ fn extract_params_with_gen<'src>(
         };
         param_list.push(Param::Spread(bind_name));
       }
-      // Complex destructuring param — desugar to fresh Gen param + LetPat in body.
+      // Complex destructuring param — desugar to a fresh spread param + Match* lowering.
+      // The param value is already in scope as an ident (no load needed).
       _ => {
         let spread_name = g.fresh_result();
         param_list.push(Param::Spread(spread_name));
-        deferred.push((lower_pat(p), spread_name));
+        lower_pat_lhs(g, p, ident_val(spread_name, p.loc), p.loc, &mut deferred);
       }
     }
   }
   (param_list, deferred)
 }
 
-/// Wrap `body` in `LetPat` nodes for each (pat, bind_name) pair, innermost first.
-/// The bind_name is a BindName::Gen produced by fresh_result, rendered as a Key (Ident) ref.
-fn prepend_let_pats<'src>(
-  deferred: Vec<(Pat<'src>, BindName<'src>)>,
-  body: Expr<'src>,
-  loc: Loc,
-) -> Expr<'src> {
-  deferred.into_iter().rev().fold(body, |inner, (pat, bind_name)| {
-    // Params are scope-stored by the runtime; use key_val_bind to emit a load.
-    let val = key_val_bind(bind_name, loc);
-    Expr {
-      kind: ExprKind::LetPat {
-        pat: Box::new(pat),
-        val: Box::new(val),
-        body: Box::new(inner),
-      },
-      meta: Meta::at(loc),
-    }
-  })
+/// Wrap `body` in Match* nodes for each deferred pattern entry, innermost first.
+fn prepend_pat_binds<'src>(deferred: Vec<Pending<'src>>, body: Expr<'src>) -> Expr<'src> {
+  wrap(deferred, body)
 }
 
 fn extract_params<'src>(params: &'src Node<'src>) -> Vec<Param<'src>> {
@@ -1267,21 +1241,6 @@ pub fn lower_expr<'src>(node: &'src Node<'src>) -> Expr<'src> {
   let (val, pending) = lower(&mut g, node);
   let tail = ret_expr(val, node.loc);
   wrap(pending, tail)
-}
-
-/// Lower a bind statement using pattern lowering — emits Match* primitives instead of LetVal/LetPat.
-/// Returns the bound value via Ret; a bind expression evaluates to the value it bound.
-pub fn lower_pat_bind<'src>(node: &'src Node<'src>) -> Expr<'src> {
-  let mut g = Gen::new();
-  let loc = node.loc;
-  let (lhs, rhs) = match &node.kind {
-    NodeKind::Bind { lhs, rhs } | NodeKind::BindRight { lhs: rhs, rhs: lhs } => (lhs, rhs),
-    _ => panic!("lower_pat_bind: expected a Bind node"),
-  };
-  let (val, mut all_pending) = lower(&mut g, rhs);
-  let bound = lower_pat_lhs(&mut g, lhs, val, loc, &mut all_pending);
-  let tail = ret_expr(ident_val(bound, loc), loc);
-  wrap(all_pending, tail)
 }
 
 /// Recursively lower a pattern lhs node, appending Match* pending entries.

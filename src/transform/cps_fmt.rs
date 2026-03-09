@@ -744,7 +744,7 @@ mod tests {
   use pretty_assertions::assert_eq;
   use crate::lexer::{Loc, Pos};
   use crate::parser::parse;
-  use crate::transform::cps_transform::{lower_expr, lower_pat_bind};
+  use crate::transform::cps_transform::lower_expr;
   use crate::transform::cps_free_vars::annotate;
   use super::fmt;
   use super::super::cps::{Expr, ExprKind, Key, KeyKind, Meta, Val, ValKind};
@@ -772,15 +772,6 @@ mod tests {
     }
   }
 
-  /// Pattern lowering — lower a bind statement to Match* primitives.
-  #[allow(dead_code)]
-  fn cps_pat(src: &str) -> String {
-    match parse(src) {
-      Ok(node) => fmt(&lower_pat_bind(&node)),
-      Err(e)   => format!("ERROR: {}", e.message),
-    }
-  }
-
   #[test_template(
     "src/transform", "./test_cps.fnk",
     r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
@@ -805,7 +796,7 @@ mod pat_tests {
   use test_macros::test_template;
   use pretty_assertions::assert_eq;
   use crate::parser::parse;
-  use crate::transform::cps_transform::{lower_expr, lower_pat_bind};
+  use crate::transform::cps_transform::lower_expr;
   use crate::transform::cps_free_vars::annotate;
   use super::fmt;
 
@@ -814,13 +805,6 @@ mod pat_tests {
       .map(|line| line.strip_prefix("    ").unwrap_or(line))
       .collect::<Vec<_>>()
       .join("\n")
-  }
-
-  fn cps_pat(src: &str) -> String {
-    match parse(src) {
-      Ok(node) => fmt(&lower_pat_bind(&node)),
-      Err(e)   => format!("ERROR: {}", e.message),
-    }
   }
 
   fn cps_expr(src: &str) -> String {
@@ -843,7 +827,6 @@ mod pat_tests {
   )]
   fn test_cps_patterns(src: &str, exp: &str, func: &str, path: &str) {
     let actual = match func {
-      "cps_pat"    => cps_pat(&dedent(src).trim().to_string()),
       "cps_expr"   => cps_expr(&dedent(src).trim().to_string()),
       "cps_c_expr" => cps_c_expr(&dedent(src).trim().to_string()),
       _            => format!("ERROR: unknown func {}", func),
