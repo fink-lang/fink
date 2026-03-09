@@ -1058,7 +1058,9 @@ pub fn lower_expr<'src>(node: &'src Node<'src>) -> Expr<'src> {
 /// Implemented: Ident, Wildcard, BindRight, InfixOp (guard + range), Apply (→ MatchGuard predicate),
 ///              LitInt/Float/Bool/Str (→ MatchValue), LitSeq (plain elems + Spread tail),
 ///              LitRec (fields + spread variants), Range (→ lower_range + MatchGuard w/ ·op_in).
-/// TODO: StrTempl, Apply → MatchApp (after name resolution).
+/// TODO: Apply → MatchApp (after name resolution).
+/// TODO(future): StrTempl pattern matching — e.g. `'hello ${name}'` in pattern position;
+///               deferred, needs a string-matching primitive (·match_str_prefix or similar).
 fn lower_pat_lhs<'src>(
   g: &mut Gen,
   lhs: &'src Node<'src>,
@@ -1323,6 +1325,10 @@ fn lower_pat_lhs<'src>(
       pending.push(Pending::MatchBind { name: bind_name, val: val.clone(), loc });
       lower_pat_lhs(g, pat, val, loc, pending)
     }
+
+    // StrTempl in pattern position is deferred to a future version.
+    // It needs a dedicated string-matching primitive (e.g. ·match_str_prefix) not yet designed.
+    NodeKind::StrTempl(_) => todo!("lower_pat_lhs: StrTempl pattern matching not yet implemented"),
 
     _ => todo!("lower_pat_lhs: pattern not yet implemented: {:?}", lhs.kind),
   }
