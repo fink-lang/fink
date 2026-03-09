@@ -124,6 +124,7 @@ name = "test-macros"
 version = "0.1.0"
 dependencies = [
  "fancy-regex",
+ "fink",
  "glob",
  "proc-macro2",
  "quote",

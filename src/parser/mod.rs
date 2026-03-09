@@ -992,7 +992,9 @@ impl<'src> Parser<'src> {
           }
           if !raw && parts.len() == 1 {
             if let NodeKind::LitStr(_) = &parts[0].kind {
-              return Ok(parts.remove(0));
+              let mut node = parts.remove(0);
+              node.loc = loc;
+              return Ok(node);
             }
           }
           let kind = if raw { NodeKind::StrRawTempl(parts) } else { NodeKind::StrTempl(parts) };

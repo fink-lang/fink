@@ -49,6 +49,7 @@ pub struct Token<'src> {
 
 fn escape_src(s: &str) -> String {
   s.replace('\\', "\\\\")
+    .replace('\'', "\\'")
     .replace("${", r"\${")
     .replace('\n', r"\n")
 }
@@ -76,20 +77,20 @@ impl<'src> std::fmt::Display for Token<'src> {
       Partial => write!(f, "Partial '?', loc {start}, {end}"),
       BracketOpen => write!(f, "BracketOpen '{}', loc {start}, {end}", escape_src(self.src)),
       BracketClose => write!(f, "BracketClose '{}', loc {start}, {end}", escape_src(self.src)),
-      StrStart => write!(f, "StrStart \"{}\", loc {start}, {end}", escape_src(self.src)),
-      StrText => write!(f, "StrText \"{}\", loc {start}, {end}", escape_src(self.src)),
+      StrStart => write!(f, "StrStart '{}', loc {start}, {end}", escape_src(self.src)),
+      StrText => write!(f, "StrText '{}', loc {start}, {end}", escape_src(self.src)),
       StrExprStart => write!(f, r"StrExprStart '\${{', loc {start}, {end}"),
       StrExprEnd => write!(f, "StrExprEnd '}}', loc {start}, {end}"),
-      StrEnd => write!(f, "StrEnd \"{}\", loc {start}, {end}", escape_src(self.src)),
-      Comment => write!(f, "Comment \"{}\", loc {start}, {end}", escape_src(self.src)),
-      CommentStart => write!(f, "CommentStart \"{}\", loc {start}, {end}", escape_src(self.src)),
-      CommentText => write!(f, "CommentText \"{}\", loc {start}, {end}", escape_src(self.src)),
-      CommentEnd => write!(f, "CommentEnd \"{}\", loc {start}, {end}", escape_src(self.src)),
+      StrEnd => write!(f, "StrEnd '{}', loc {start}, {end}", escape_src(self.src)),
+      Comment => write!(f, "Comment '{}', loc {start}, {end}", escape_src(self.src)),
+      CommentStart => write!(f, "CommentStart '{}', loc {start}, {end}", escape_src(self.src)),
+      CommentText => write!(f, "CommentText '{}', loc {start}, {end}", escape_src(self.src)),
+      CommentEnd => write!(f, "CommentEnd '{}', loc {start}, {end}", escape_src(self.src)),
       BlockStart => write!(f, "BlockStart loc {start}, {end}"),
       BlockCont => write!(f, "BlockCont loc {start}, {end}"),
       BlockEnd => write!(f, "BlockEnd loc {start}, {end}"),
       EOF => write!(f, "EOF loc {start}, {end}"),
-      Err => write!(f, "Err \"{}\", loc {start}, {end}", escape_src(self.src)),
+      Err => write!(f, "Err '{}', loc {start}, {end}", escape_src(self.src)),
     }
   }
 }
@@ -146,9 +147,12 @@ impl<'src> Lexer<'src> {
   }
 
   fn advance_line(&mut self) {
-    self.pos.idx += 1;
-    self.pos.line += 1;
-    self.pos.col = 0;
+    let new_idx = self.pos.idx + 1;
+    if new_idx <= self.src.len() as u32 {
+      self.pos.idx = new_idx;
+      self.pos.line += 1;
+      self.pos.col = 0;
+    }
   }
 
   fn make_token(&self, kind: TokenKind, start: Pos) -> Token<'src> {
@@ -454,9 +458,15 @@ impl<'src> Lexer<'src> {
       self.pending.push(Token { kind: TokenKind::Err, loc: Loc { start: ep, end: ep }, src: "unterminated string - unexpected dedent" });
     } else {
       self.pos = p; // advance past everything scanned
-      if let Some(e) = eof_err {
+      if let Some(_) = eof_err {
         self.mode.pop();
-        self.pending.push(e);
+        if p.col < ind_floor as u32 {
+          // EOF at a lower indent than the string's context — treat as unexpected dedent
+          self.push_block_ends(p.col as usize, p);
+          self.pending.push(Token { kind: TokenKind::Err, loc: Loc { start: p, end: p }, src: "unterminated string - unexpected dedent" });
+        } else {
+          self.pending.push(Token { kind: TokenKind::Err, loc: Loc { start: p, end: p }, src: "unterminated string" });
+        }
       }
     }
 
@@ -790,17 +800,10 @@ pub fn tokenize_with_seps<'src>(src: &'src str, seps: &[&[u8]]) -> Lexer<'src> {
 
 #[cfg(test)]
 mod tests {
-  use test_macros::test_template;
+  use test_macros::include_fink_tests;
   use super::tokenize_with_seps;
 
-  fn dedent(s: &str) -> String {
-    s.lines()
-      .map(|line| line.strip_prefix("    ").unwrap_or(line))
-      .collect::<Vec<_>>()
-      .join("\n")
-  }
-
-  fn tokenize_debug(src: &str) -> String {
+fn tokenize_debug(src: &str) -> String {
     let default_ops: &[&[u8]] = &[
       b"+", b"-", b"*", b"/", b"%", b"^",
       b"=", b"==", b"!=", b"<", b">", b"<=", b">=",
@@ -817,16 +820,28 @@ mod tests {
     out
   }
 
-  #[test_template(
-    "src/lexer", "./*.fnk",
-    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect tokenize fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals seq\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
-  )]
-  fn test_lexer(src: &str, exp: &str, path: &str) {
+  #[test]
+  fn parse_test_file() {
+    let src = include_str!("test_lexer.fnk");
+    let result = crate::parser::parse(src);
+    match result {
+      Ok(_) => {}
+      Err(e) => panic!("parse error in test_lexer.fnk at line {}: {}", e.loc.start.line, e.message),
+    }
+  }
+
+  fn tokenize(src: &str) -> String {
+    tokenize_debug(src)
+  }
+
+  include_fink_tests!("src/lexer/test_lexer.fnk");
+
+  #[test]
+  fn test_err_unexpected_dedent() {
+    // Cannot express this in .fnk: input requires indent levels less than surrounding code.
     pretty_assertions::assert_eq!(
-      tokenize_debug(&dedent(src).trim().to_string()),
-      dedent(exp).trim().to_string(),
-      "{}",
-      path
+      tokenize("foo\n  bar\n    ni\n ham"),
+      "BlockStart loc [0, 1, 0], [0, 1, 0]\nIdent 'foo', loc [0, 1, 0], [3, 1, 3]\nBlockStart loc [3, 1, 3], [6, 2, 2]\nIdent 'bar', loc [6, 2, 2], [9, 2, 5]\nBlockStart loc [9, 2, 5], [14, 3, 4]\nIdent 'ni', loc [14, 3, 4], [16, 3, 6]\nBlockEnd loc [16, 3, 6], [16, 3, 6]\nErr 'unexpected dedent', loc [16, 3, 6], [18, 4, 1]\nIdent 'ham', loc [18, 4, 1], [21, 4, 4]\nBlockEnd loc [21, 4, 4], [21, 4, 4]"
     );
   }
 
