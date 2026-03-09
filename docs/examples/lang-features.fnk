@@ -596,12 +596,12 @@ map = fn map_fn: fn match items:
 is_even = fn n:
   match n:
     0: true
-    else is_odd n - 1
+    else: is_odd n - 1
 
 is_odd = fn n:
   match n:
     0: false
-    else is_even n - 1
+    else: is_even n - 1
 
 
 

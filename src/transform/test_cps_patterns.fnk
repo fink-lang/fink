@@ -784,6 +784,57 @@ test 'rec pattern with bound rest', fn:
 
 
 --- --- ---
+range patterns
+--- --- ---
+
+test 'range — exclusive in match arm', fn:
+  expect cps_expr fn:
+    match x:
+      0..10: 'low'
+
+  | equals_fink fn:
+    ·load ·scope, ·id'x', fn x, ·scope:
+      ·match_block x, ·panic, ·state,
+        ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+          ·load ·scope, ·op'..', fn ·op_rngex, ·scope:
+            ·apply ·op_rngex, 0, 10, ·state, fn ·v_1, ·state:
+              ·load ·scope, ·op'in', fn ·op_in, ·scope:
+                ·match_if ·op_in, ·v_0, ·v_1, ·ƒ_fail, fn ·scope, ·state:
+                  ·ƒ_cont 'low', ·state
+        fn ·v_2, ·scope, ·state: ·ƒ_cont ·v_2, ·state
+
+
+test 'range — inclusive in match arm', fn:
+  expect cps_expr fn:
+    match x:
+      0...10: 'low'
+
+  | equals_fink fn:
+    ·load ·scope, ·id'x', fn x, ·scope:
+      ·match_block x, ·panic, ·state,
+        ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+          ·load ·scope, ·op'...', fn ·op_rngin, ·scope:
+            ·apply ·op_rngin, 0, 10, ·state, fn ·v_1, ·state:
+              ·load ·scope, ·op'in', fn ·op_in, ·scope:
+                ·match_if ·op_in, ·v_0, ·v_1, ·ƒ_fail, fn ·scope, ·state:
+                  ·ƒ_cont 'low', ·state
+        fn ·v_2, ·scope, ·state: ·ƒ_cont ·v_2, ·state
+
+
+test 'range — bind-lhs check', fn:
+  expect cps_expr fn:
+    0..10 = foo
+
+  | equals_fink fn:
+    ·load ·scope, ·op'..', fn ·op_rngex, ·scope:
+      ·apply ·op_rngex, 0, 10, ·state, fn ·v_0, ·state:
+        ·load ·scope, ·op'in', fn ·op_in, ·scope:
+          ·load ·scope, ·id'foo', fn foo, ·scope:
+            ·match_if ·op_in, foo, ·v_0, ·panic, fn ·scope, ·state:
+              ·ƒ_cont foo, ·state
+
+
+--- --- ---
 fn params (·ƒ_fail = unreachable, type checker guarantees)
 --- --- ---
 

@@ -276,6 +276,7 @@ fn sigil_op(op: &str) -> String {
     "and" => "and",
     "or"  => "or",
     "not" => "not",
+    "in"  => "in",
     ".."  => "rngex",
     "..."  => "rngin",
     _     => op,

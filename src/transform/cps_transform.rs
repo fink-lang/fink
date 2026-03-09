@@ -1055,10 +1055,10 @@ pub fn lower_expr<'src>(node: &'src Node<'src>) -> Expr<'src> {
 /// `val` is the scrutinee already lowered from the rhs.
 /// Returns the BindName of the primary binding (used by the caller to construct Ret).
 ///
-/// Implemented: Ident, Wildcard, BindRight, InfixOp (guard), Apply (→ MatchGuard predicate),
+/// Implemented: Ident, Wildcard, BindRight, InfixOp (guard + range), Apply (→ MatchGuard predicate),
 ///              LitInt/Float/Bool/Str (→ MatchValue), LitSeq (plain elems + Spread tail),
-///              LitRec (fields + spread variants).
-/// TODO: Range, StrTempl, Apply → MatchApp (after name resolution).
+///              LitRec (fields + spread variants), Range (→ lower_range + MatchGuard w/ ·op_in).
+/// TODO: StrTempl, Apply → MatchApp (after name resolution).
 fn lower_pat_lhs<'src>(
   g: &mut Gen,
   lhs: &'src Node<'src>,
@@ -1080,6 +1080,23 @@ fn lower_pat_lhs<'src>(
       match val.kind {
         ValKind::Ident(name) => name,
         _ => panic!("lower_pat_lhs: Wildcard with non-Ident val"),
+      }
+    }
+
+    // Range pattern: `0..10` or `0...10` — assert val is in range; no binding produced.
+    // Evaluates the range as a value, then guards with `·op_in`.
+    // Returns val's ident directly (no binding allocation — range is a pure guard).
+    NodeKind::InfixOp { op, lhs: start, rhs: end } if matches!(*op, ".." | "...") => {
+      let (range_val, rp) = lower_range(g, op, start, end, loc);
+      pending.extend(rp);
+      let in_fn = key_val_op("in", loc);
+      pending.push(Pending::MatchGuard { func: in_fn, args: vec![val.clone(), range_val], loc });
+      // Extract the bind name from val: Ident → use directly; Key(Name) → wrap as User.
+      // Range is a pure guard; no new binding is allocated.
+      match val.kind {
+        ValKind::Ident(name)                               => name,
+        ValKind::Key(Key { kind: KeyKind::Name(n), .. })  => BindName::User(n),
+        _                                                  => g.fresh_result(),
       }
     }
 
