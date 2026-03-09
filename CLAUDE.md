@@ -79,6 +79,11 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 - Edition 2024
 - Prefer `Edit` over `Write` for existing files
 
+## Testing Conventions
+
+- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `#[test_template]`.
+- Never put tests for module A inside module B.
+
 ## Code Style
 
 Prefer named builder helpers over ad-hoc inline construction. When a
