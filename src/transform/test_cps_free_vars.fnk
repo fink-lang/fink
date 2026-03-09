@@ -237,3 +237,118 @@ test 'free vars — closure inside match arm captures arm binding', fn:
                           fn ·v_7, ·chld_scope: ·ƒ_cont ·v_7, ·state
             fn ·v_9, ·scope, ·state: ·ƒ_cont ·v_9, ·state
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+test 'free vars — range pattern loads operators as free vars', fn:
+  expect cps_free_vars fn:
+    fn val:
+      match val:
+        0..10: 'low'
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn val, {..·scope, ·op_rngex, ·op_in}, ·state, ·ƒ_cont:
+        ·load ·scope, ·id'val', fn val, ·scope:
+          ·match_block val, ·panic, ·state,
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·load ·scope, ·op'..', fn ·op_rngex, ·scope:
+                ·apply ·op_rngex, 0, 10, ·state, fn ·v_2, ·state:
+                  ·load ·scope, ·op'in', fn ·op_in, ·scope:
+                    ·match_if ·op_in, ·v_1, ·v_2, ·ƒ_fail, fn ·scope, ·state:
+                      ·ƒ_cont 'low', ·state
+            fn ·v_3, ·scope, ·state: ·ƒ_cont ·v_3, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+
+test 'free vars — guard pattern loads operator as free var', fn:
+  expect cps_free_vars fn:
+    fn val:
+      match val:
+        n > 0: n
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn val, {..·scope, ·op_gt}, ·state, ·ƒ_cont:
+        ·load ·scope, ·id'val', fn val, ·scope:
+          ·match_block val, ·panic, ·state,
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·match_store ·scope, ·id'n', ·v_1, fn n, ·scope:
+                ·load ·scope, ·op'>', fn ·op_gt, ·scope:
+                  ·load ·scope, ·id'n', fn n, ·scope:
+                    ·match_if ·op_gt, n, 0, ·ƒ_fail, fn ·scope, ·state:
+                      ·load ·scope, ·id'n', fn n, ·scope:
+                        ·ƒ_cont n, ·state
+            fn ·v_2, ·scope, ·state: ·ƒ_cont ·v_2, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+
+test 'free vars — rec pattern bindings are local', fn:
+  expect cps_free_vars fn:
+    fn val:
+      match val:
+        {a, b}: a
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn val, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, ·id'val', fn val, ·scope:
+          ·match_block val, ·panic, ·state,
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·match_rec ·v_1, ·ƒ_fail, fn ·m_2, ·scope, ·state:
+                ·match_field ·m_2, 'a', ·ƒ_fail, fn ·v_3, ·m_4, ·scope, ·state:
+                  ·match_store ·scope, ·id'a', ·v_3, fn a, ·scope:
+                    ·match_field ·m_4, 'b', ·ƒ_fail, fn ·v_5, ·m_6, ·scope, ·state:
+                      ·match_store ·scope, ·id'b', ·v_5, fn b, ·scope:
+                        ·load ·scope, ·id'a', fn a, ·scope:
+                          ·ƒ_cont a, ·state
+            fn ·v_8, ·scope, ·state: ·ƒ_cont ·v_8, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+
+test 'free vars — closure inside rec pattern arm captures field binding', fn:
+  expect cps_free_vars fn:
+    fn val:
+      match val:
+        {x}: fn y: x + y
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn val, ·scope, ·state, ·ƒ_cont:
+        ·load ·scope, ·id'val', fn val, ·scope:
+          ·match_block val, ·panic, ·state,
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·match_rec ·v_1, ·ƒ_fail, fn ·m_2, ·scope, ·state:
+                ·match_field ·m_2, 'x', ·ƒ_fail, fn ·v_3, ·m_4, ·scope, ·state:
+                  ·match_store ·scope, ·id'x', ·v_3, fn x, ·scope:
+                    ·closure ·scope,
+                      fn y, {..·scope, ·op_plus, x}, ·state, ·ƒ_cont:
+                        ·load ·scope, ·op'+', fn ·op_plus, ·scope:
+                          ·load ·scope, ·id'x', fn x, ·scope:
+                            ·load ·scope, ·id'y', fn y, ·scope:
+                              ·apply ·op_plus, x, y, ·state, fn ·v_7, ·state:
+                                ·ƒ_cont ·v_7, ·state
+                      fn ·v_6, ·chld_scope: ·ƒ_cont ·v_6, ·state
+            fn ·v_8, ·scope, ·state: ·ƒ_cont ·v_8, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
+
+test 'free vars — rec pattern arm body captures outer var', fn:
+  expect cps_free_vars fn:
+    fn val:
+      match val:
+        {x}: x + y
+
+  | equals_fink fn:
+    ·closure ·scope,
+      fn val, {..·scope, ·op_plus, y}, ·state, ·ƒ_cont:
+        ·load ·scope, ·id'val', fn val, ·scope:
+          ·match_block val, ·panic, ·state,
+            ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
+              ·match_rec ·v_1, ·ƒ_fail, fn ·m_2, ·scope, ·state:
+                ·match_field ·m_2, 'x', ·ƒ_fail, fn ·v_3, ·m_4, ·scope, ·state:
+                  ·match_store ·scope, ·id'x', ·v_3, fn x, ·scope:
+                    ·load ·scope, ·op'+', fn ·op_plus, ·scope:
+                      ·load ·scope, ·id'x', fn x, ·scope:
+                        ·load ·scope, ·id'y', fn y, ·scope:
+                          ·apply ·op_plus, x, y, ·state, fn ·v_6, ·state:
+                            ·ƒ_cont ·v_6, ·state
+            fn ·v_7, ·scope, ·state: ·ƒ_cont ·v_7, ·state
+      fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state

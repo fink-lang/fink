@@ -89,8 +89,6 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
     Ret(_) | Panic | FailCont => expr.kind,
 
     // Pattern lowering primitives — recurse into both fail and body.
-    // TODO: extend bound set with names introduced by each primitive when
-    // free-var analysis is run after pattern lowering.
     MatchLetVal { name, val, fail, body } => MatchLetVal {
       name, val,
       fail: Box::new(transform_expr(*fail)),
