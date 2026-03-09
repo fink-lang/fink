@@ -811,7 +811,7 @@ free vars — match arms
 --- --- ---
 
 test 'free vars — match arm bindings are local', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     fn val:
       match val:
         1: 'one'
@@ -834,7 +834,7 @@ test 'free vars — match arm bindings are local', fn:
 
 
 test 'free vars — closure inside match arm captures arm binding', fn:
-  expect cps_c_expr fn:
+  expect cps_free_vars fn:
     fn val:
       match val:
         [head, ..tail]:

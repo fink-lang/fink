@@ -17,8 +17,6 @@
 // This avoids the monomorphization explosion that closures-as-continuations
 // cause in Rust's type system.
 
-#![allow(dead_code, unused_imports)]
-
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use crate::transform::cps::{
@@ -81,6 +79,7 @@ fn key_val_name<'src>(name: Name<'src>, loc: Loc) -> Val<'src> {
 
 /// Create a Key reference to a BindName that needs loading from scope.
 /// Used when a fn param needs to be referenced as a Key val (scope-stored by the runtime).
+#[allow(dead_code)]
 fn key_val_bind(name: BindName<'_>, loc: Loc) -> Val<'_> {
   Val {
     kind: ValKind::Key(Key { kind: KeyKind::Bind(name), resolution: None, meta: Meta::at(loc) }),
@@ -121,6 +120,7 @@ fn ret_expr(val: Val<'_>, loc: Loc) -> Expr<'_> {
 }
 
 /// Emit an App node: func(args...) → result; body.
+#[allow(dead_code)]
 fn app_node<'src>(
   func: Val<'src>,
   args: Vec<Arg<'src>>,
@@ -135,6 +135,7 @@ fn app_node<'src>(
 }
 
 /// Wrap a plain `Val` as an `Arg::Val`.
+#[allow(dead_code)]
 fn arg_val(val: Val<'_>) -> Arg<'_> {
   Arg::Val(val)
 }
@@ -1205,12 +1206,12 @@ fn lower_pat_lhs<'src>(
       let rec_cursor = g.fresh_cursor();
       pending.push(Pending::MatchRec { val: val.clone(), cursor: rec_cursor, loc });
       let mut cur = rec_cursor;
-      let mut spread_seen = false;
+      let mut _spread_seen = false;
       for field_node in fields.iter() {
         match &field_node.kind {
           // Spread element: `..` (discard non-empty), `..rest` (bind rest), `..{}` (exact close)
           NodeKind::Spread(inner) => {
-            spread_seen = true;
+            _spread_seen = true;
             match inner {
               None => {
                 // `{..}` — assert non-empty, discard rest (open partial match)

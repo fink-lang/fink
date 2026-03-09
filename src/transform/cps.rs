@@ -83,6 +83,7 @@ pub struct Key<'src> {
   pub meta: Meta,
 }
 
+/// The variant of a key reference — how the name is stored and looked up.
 #[derive(Debug, Clone)]
 pub enum KeyKind<'src> {
   Name(Name<'src>),      // user-defined name: foo, add, x
@@ -105,7 +106,6 @@ pub enum Prim {
 }
 
 /// Whether a range pattern is exclusive (`..`) or inclusive (`...`).
-/// Replaces the `op: &'src str` field in `PatKind::Range`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RangeKind {
   Excl,  // `..`  — exclusive upper bound
@@ -127,6 +127,7 @@ pub enum Resolution {
 // Values — already-computed things
 // ---------------------------------------------------------------------------
 
+/// An already-computed value — a literal, a local binding reference, or a scope key.
 #[derive(Debug, Clone)]
 pub struct Val<'src> {
   pub kind: ValKind<'src>,
@@ -155,6 +156,7 @@ pub enum Lit<'src> {
 // Expressions
 // ---------------------------------------------------------------------------
 
+/// A CPS expression node — the core of the IR.
 #[derive(Debug, Clone)]
 pub struct Expr<'src> {
   pub kind: ExprKind<'src>,
@@ -208,7 +210,6 @@ pub enum ExprKind<'src> {
 
   // ---------------------------------------------------------------------------
   // Pattern lowering primitives — produced by the pattern lowering pass.
-  // LetPat and Match are eliminated; these replace them.
   // All primitives carry an explicit `fail` continuation (·panic or a ·ƒ_fail ref).
   // ---------------------------------------------------------------------------
 
@@ -359,7 +360,7 @@ pub enum ExprKind<'src> {
   FailCont,
 }
 
-/// A single binding in a LetRec group.
+/// A single named function binding in a `LetRec` group.
 #[derive(Debug, Clone)]
 pub struct Binding<'src> {
   pub name: BindName<'src>,

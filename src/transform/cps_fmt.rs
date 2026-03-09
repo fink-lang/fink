@@ -15,6 +15,8 @@ pub fn fmt(expr: &Expr<'_>) -> String {
   ast::fmt::fmt(&to_node(expr))
 }
 
+/// Render a cursor index as a formatter name (`·m_N`).
+/// Shared for both seq and rec cursors — the IR uses a plain `u32`.
 fn cursor_name(idx: u32) -> String {
   format!("·m_{}", idx)
 }
@@ -593,7 +595,6 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       apply(ident("·match_field"), vec![ident(&cur), field_lit, fail_node, cont])
     }
 
-    // Match { scrutinees, arms, result, body }
   }
 }
 
@@ -664,7 +665,7 @@ mod pat_tests {
     }
   }
 
-  fn cps_c_expr(src: &str) -> String {
+  fn cps_free_vars(src: &str) -> String {
     match parse(src) {
       Ok(node) => fmt(&annotate(lower_expr(&node))),
       Err(e)   => format!("ERROR: {}", e.message),
@@ -677,9 +678,9 @@ mod pat_tests {
   )]
   fn test_cps_patterns(src: &str, exp: &str, func: &str, path: &str) {
     let actual = match func {
-      "cps_expr"   => cps_expr(&dedent(src).trim().to_string()),
-      "cps_c_expr" => cps_c_expr(&dedent(src).trim().to_string()),
-      _            => format!("ERROR: unknown func {}", func),
+      "cps_expr"       => cps_expr(&dedent(src).trim().to_string()),
+      "cps_free_vars"  => cps_free_vars(&dedent(src).trim().to_string()),
+      _                => format!("ERROR: unknown func {}", func),
     };
     assert_eq!(
       actual,
