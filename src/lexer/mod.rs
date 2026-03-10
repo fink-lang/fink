@@ -216,6 +216,8 @@ impl<'src> Lexer<'src> {
       if curr_ind_after < ind {
         // Overshot — doesn't land on a known level.
         // Advance so we don't loop forever, then error.
+        // Push ind back so EOF can still emit the closing BlockEnd for this level.
+        self.ind.push(ind);
         self.advance_line();
         self.advance(ind as u32);
         return Token {
@@ -841,7 +843,7 @@ fn tokenize_debug(src: &str) -> String {
     // Cannot express this in .fnk: input requires indent levels less than surrounding code.
     pretty_assertions::assert_eq!(
       tokenize("foo\n  bar\n    ni\n ham"),
-      "BlockStart loc [0, 1, 0], [0, 1, 0]\nIdent 'foo', loc [0, 1, 0], [3, 1, 3]\nBlockStart loc [3, 1, 3], [6, 2, 2]\nIdent 'bar', loc [6, 2, 2], [9, 2, 5]\nBlockStart loc [9, 2, 5], [14, 3, 4]\nIdent 'ni', loc [14, 3, 4], [16, 3, 6]\nBlockEnd loc [16, 3, 6], [16, 3, 6]\nErr 'unexpected dedent', loc [16, 3, 6], [18, 4, 1]\nIdent 'ham', loc [18, 4, 1], [21, 4, 4]\nBlockEnd loc [21, 4, 4], [21, 4, 4]"
+      "BlockStart loc [0, 1, 0], [0, 1, 0]\nIdent 'foo', loc [0, 1, 0], [3, 1, 3]\nBlockStart loc [3, 1, 3], [6, 2, 2]\nIdent 'bar', loc [6, 2, 2], [9, 2, 5]\nBlockStart loc [9, 2, 5], [14, 3, 4]\nIdent 'ni', loc [14, 3, 4], [16, 3, 6]\nBlockEnd loc [16, 3, 6], [16, 3, 6]\nErr 'unexpected dedent', loc [16, 3, 6], [18, 4, 1]\nIdent 'ham', loc [18, 4, 1], [21, 4, 4]\nBlockEnd loc [21, 4, 4], [21, 4, 4]\nBlockEnd loc [21, 4, 4], [21, 4, 4]"
     );
   }
 

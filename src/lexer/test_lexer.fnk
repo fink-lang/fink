@@ -530,9 +530,8 @@ test 'err_unexpected_dedent', fn:
     BlockEnd loc [16, 3, 6], [16, 3, 6]
     Err 'unexpected dedent', loc [16, 3, 6], [18, 4, 1]
     Ident 'ham', loc [18, 4, 1], [21, 4, 4]
-    BlockCont loc [21, 4, 4], [21, 4, 4]
     BlockEnd loc [21, 4, 4], [21, 4, 4]
-    BlockEnd loc [21, 4, 4], [21, 4, 4]
+    BlockEnd loc [22, 5, 0], [22, 5, 0]
 
 
 test 'err_unexpected_dedent2', fn:
