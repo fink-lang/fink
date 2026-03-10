@@ -240,12 +240,19 @@ impl<'src> Lexer<'src> {
     loop {
       match self.peek_bytes() {
         [b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | 0x80..=0xFF, ..] => self.advance(1),
-        // `-` only if followed by a non-whitespace, non-structural byte
-        [b'-', next, ..] if !matches!(next,
-          b' ' | b'\t' | b'\n' |
-          b'(' | b')' | b'[' | b']' | b'{' | b'}' |
-          b'\'' | b',' | b';' | b':' | b'#'
-        ) => self.advance(1),
+        // `-` only if immediately followed by an ident-start byte (no spaces, no structural chars)
+        [b'-', b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | 0x80..=0xFF, ..] => self.advance(1),
+        // `-` not followed by an ident-start byte: unterminated identifier error
+        [b'-', ..] | [b'-'] => {
+          let ident = self.make_token(TokenKind::Ident, start);
+          let err_start = self.pos;
+          self.advance(1);
+          self.pending.push(self.make_token(TokenKind::Err, err_start));
+          // Overwrite src of the pending Err token with the error message
+          let err_idx = self.pending.len() - 1;
+          self.pending[err_idx].src = "unterminated identifier";
+          return ident;
+        }
         _ => return self.make_token(TokenKind::Ident, start),
       }
     }
