@@ -177,7 +177,19 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         let NodeKind::Ident(func_name) = &fn_ident.kind else { continue };
         let Some(body_node) = fn_args.first() else { continue };
         let text = match &body_node.kind {
-          NodeKind::LitStr(s) => fink::parser::Parser::unescape(s),
+          NodeKind::LitStr(s) => {
+            // TODO: the AST doesn't distinguish 'quoted' LitStr from raw: LitStr.
+            // Peek at the byte just before the node's loc start in the source —
+            // if it's `'` this came from a quoted string and needs unescape;
+            // otherwise it came from raw: and must be used verbatim.
+            let start = body_node.loc.start.idx as usize;
+            let preceded_by_quote = file_src.as_bytes().get(start) == Some(&b'\'');
+            if preceded_by_quote {
+              fink::parser::Parser::unescape(s)
+            } else {
+              s.to_string()
+            }
+          }
           _ => {
             let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
             text

@@ -608,6 +608,11 @@ impl<'src> Lexer<'src> {
   // Like consume_raw_text but supports ${} interpolation. Scans until dedent or ${}.
   // On ${}: emits StrText tokens up to ${}, sets pos to ${, returns first pending token.
   // On dedent/EOF: emits StrText tokens + StrEnd '', pops mode.
+  //
+  // TODO: consume_str_text and consume_str_block_text share almost identical scanning
+  // logic — they differ only in termination condition ('  vs dedent) and strip_level
+  // handling. Refactor into a single function with a termination strategy parameter
+  // to avoid the two copies diverging (e.g. escape handling added to one but not the other).
   fn consume_str_block_text(&mut self, ind_floor: usize) -> Token<'src> {
     let content_floor = ind_floor + 1;
     let bytes = self.src.as_bytes();
