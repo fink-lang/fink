@@ -275,7 +275,7 @@ spread
 
 # see application, function
 foo bar, ..spam, ni
-fn x, ..ys, z: ()
+fn x, ..ys, z: _
 
 [..]    # matches non empty seq
 {..}    # matches no empty rec
@@ -466,7 +466,7 @@ Only the first matching branch is executed.
 match foo:
   1: 'one'
   2: 'two'
-  else: 'other'
+  _: 'other'
 
 # with binding
 match foo:
@@ -478,7 +478,7 @@ match foo:
   n > 0 and n < 10: 'small positive ${n}'
   n > 0: 'large positive ${n}'
   even n: 'even number ${n}'
-  else: 'other number ${foo}'
+  _: 'other number ${foo}'
 
 # deep structural with bindings
 match foo:
@@ -561,13 +561,13 @@ baz = fn arg, ..rest_args: a + b
 classify = fn match n:
   n > 0: 'positive'
   n < 0: 'negative'
-  else: 'zero'
+  _: 'zero'
 
 # equiv to
 classify = fn n: match n:
   n > 0: 'positive'
   n < 0: 'negative'
-  else: 'zero'
+  _: 'zero'
 
 # TODO: match explainer needs to document match itself can have multiple args
 foo = fn a, ..b: match a, ..b:
@@ -596,12 +596,12 @@ map = fn map_fn: fn match items:
 is_even = fn n:
   match n:
     0: true
-    else: is_odd n - 1
+    _: is_odd n - 1
 
 is_odd = fn n:
   match n:
     0: false
-    else: is_even n - 1
+    _: is_even n - 1
 
 
 
@@ -733,19 +733,19 @@ error handling
 
 # try — unwrap if OK, otherwise return from func wit Err
 fn foo:
-  a = try bar ()
+  a = try bar _
   b = try baz a
   Ok a + b
 
 # match — handle explicitly i.e. catch errors
 fn foo:
-  match bar ():
+  match bar _:
     Ok x: x + 1
     Err err: log 'error: ${trace err}'
 
 # error chaining
 fn foo:
-  match bar ():
+  match bar _:
     Ok x: Ok x
     Err e: Err e, 'foo failed'
 
