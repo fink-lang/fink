@@ -124,6 +124,38 @@ test 'ident_hyphen_space_after', fn:
     BlockEnd loc [6, 1, 6], [6, 1, 6]
 
 
+test 'raw_block', fn:
+  expect tokenize 'raw:\n  foo\n  bar\n'
+  | equals text fn:
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
+    StrText 'foo\n', loc [7, 2, 2], [11, 3, 0]
+    StrText 'bar\n', loc [13, 3, 2], [17, 4, 0]
+    StrEnd '', loc [17, 4, 0], [17, 4, 0]
+    BlockEnd loc [17, 4, 0], [17, 4, 0]
+
+
+test 'raw_block_empty', fn:
+  expect tokenize 'raw:\nfoo\n'
+  | equals text fn:
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
+    StrEnd '', loc [5, 2, 0], [5, 2, 0]
+    Ident 'foo', loc [5, 2, 0], [8, 2, 3]
+    BlockCont loc [8, 2, 3], [9, 3, 0]
+    BlockEnd loc [9, 3, 0], [9, 3, 0]
+
+test 'raw_block_dedent_is_end', fn:
+  expect tokenize 'raw:\n  foo\nbar'
+  | equals text fn:
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
+    StrText 'foo\n', loc [7, 2, 2], [11, 3, 0]
+    StrEnd '', loc [11, 3, 0], [11, 3, 0]
+    Ident 'bar', loc [11, 3, 0], [14, 3, 3]
+    BlockEnd loc [14, 3, 3], [14, 3, 3]
+
+
 test 'int', fn:
   expect tokenize text fn:
     42
