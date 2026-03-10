@@ -149,25 +149,25 @@ test 'string escape sequences', fn:
   expect ast fn:
     '\n\t\r\\\''
   | equals_ast
-    LitStr '\n\t\r\\\''
+    LitStr '\\n\\t\\r\\\\\\\''
 
 test 'string vertical tab backspace formfeed', fn:
   expect ast fn:
     '\v\b\f'
   | equals_ast
-    LitStr '\v\b\f'
+    LitStr '\\v\\b\\f'
 
 test 'string hex escape', fn:
   expect ast fn:
     '\x41\x42'
   | equals_ast
-    LitStr 'AB'
+    LitStr '\\x41\\x42'
 
 test 'string unicode escape', fn:
   expect ast fn:
     '\u0041\u0042'
   | equals_ast
-    LitStr 'AB'
+    LitStr '\\u0041\\u0042'
 
 test 'multiline string', fn:
   expect ast fn:

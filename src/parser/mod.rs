@@ -202,7 +202,7 @@ impl<'src> Parser<'src> {
   // Ident tokens that act as infix operators/control flow — cannot start an argument.
   // Future: replace body with a registry lookup.
   fn is_infix_keyword(s: &str) -> bool {
-    matches!(s, "and" | "or" | "xor" | "not" | "in" | "else")
+    matches!(s, "and" | "or" | "xor" | "not" | "in")
   }
 
   // Broader set for apply fast-path dispatch: infix keywords plus literals/special forms
@@ -908,7 +908,7 @@ impl<'src> Parser<'src> {
     }
   }
 
-  fn unescape(raw: &str) -> String {
+  pub fn unescape(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let bytes = raw.as_bytes();
     let mut i = 0;
@@ -1002,7 +1002,7 @@ impl<'src> Parser<'src> {
         }
         TokenKind::StrText => {
           let t = self.bump();
-          let text = Self::unescape(t.src);
+          let text = t.src.to_string();
           // Merge consecutive StrText tokens into a single LitStr
           if let Some(Node { kind: NodeKind::LitStr(prev), loc: prev_loc }) = parts.last_mut() {
             prev.push_str(&text);

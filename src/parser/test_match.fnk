@@ -4,7 +4,7 @@ test 'match on literal values', fn:
     match foo:
       1: 'one'
       2: 'two'
-      else: 'other'
+      _: 'other'
   | equals_ast
     Match
       Patterns
@@ -16,7 +16,7 @@ test 'match on literal values', fn:
         LitInt '2'
         LitStr 'two'
       Arm
-        Ident 'else'
+        Wildcard
         LitStr 'other'
 
 test 'match with binding', fn:
@@ -43,7 +43,7 @@ test 'match with inline guard', fn:
     match foo:
       n > 0 and n < 10: 'small positive'
       n > 0: 'large positive'
-      else: 'other'
+      _: 'other'
   | equals_ast
     Match
       Patterns
@@ -63,7 +63,7 @@ test 'match with inline guard', fn:
           LitInt '0'
         LitStr 'large positive'
       Arm
-        Ident 'else'
+        Wildcard
         LitStr 'other'
 
 test 'match on type', fn:
@@ -285,7 +285,7 @@ test 'multi-subject match', fn:
     match a, b:
       1, 2: 'one two'
       1, x: 'one other'
-      else, else: 'other'
+      _, _: 'other'
   | equals_ast
     Match
       Patterns
@@ -303,15 +303,15 @@ test 'multi-subject match', fn:
         LitStr 'one other'
       Arm
         Patterns
-          Ident 'else'
-          Ident 'else'
+          Wildcard
+          Wildcard
         LitStr 'other'
 
 test 'guard combined with spread in match arm', fn:
   expect ast fn:
     match items:
       [x > 0, ..rest]: rest
-      else: []
+      _: []
   | equals_ast
     Match
       Patterns
@@ -325,7 +325,7 @@ test 'guard combined with spread in match arm', fn:
             Ident 'rest'
         Ident 'rest'
       Arm
-        Ident 'else'
+        Wildcard
         LitSeq
 
 test 'nested pattern with guard in binding', fn:
@@ -348,7 +348,7 @@ test 'multiline arm body', fn:
       n > 0:
         x = n * 2
         x + 1
-      else: 0
+      _: 0
   | equals_ast
     Match
       Patterns
@@ -366,14 +366,14 @@ test 'multiline arm body', fn:
           Ident 'x'
           LitInt '1'
       Arm
-        Ident 'else'
+        Wildcard
         LitInt '0'
 
-test 'else arm body as application', fn:
+test 'wildcard arm body as application', fn:
   expect ast fn:
     match n:
       0: true
-      else: is_odd n - 1
+      _: is_odd n - 1
   | equals_ast
     Match
       Patterns
@@ -382,7 +382,7 @@ test 'else arm body as application', fn:
         LitInt '0'
         LitBool true
       Arm
-        Ident 'else'
+        Wildcard
         Apply
           Ident 'is_odd'
           InfixOp '-'

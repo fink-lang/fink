@@ -177,7 +177,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         let NodeKind::Ident(func_name) = &fn_ident.kind else { continue };
         let Some(body_node) = fn_args.first() else { continue };
         let text = match &body_node.kind {
-          NodeKind::LitStr(s) => s.clone(),
+          NodeKind::LitStr(s) => fink::parser::Parser::unescape(s),
           _ => {
             let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
             text

@@ -135,7 +135,7 @@ test 'fn match single arg', fn:
     classify = fn match n:
       n > 0: 'positive'
       n < 0: 'negative'
-      else: 'zero'
+      _: 'zero'
   | equals_ast
     Bind
       Ident 'classify'
@@ -156,7 +156,7 @@ test 'fn match single arg', fn:
               LitInt '0'
             LitStr 'negative'
           Arm
-            Ident 'else'
+            Wildcard
             LitStr 'zero'
 
 test 'fn match multi arg', fn:
