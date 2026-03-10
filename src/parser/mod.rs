@@ -1309,6 +1309,9 @@ impl<'src> Parser<'src> {
       }
       if self.at(TokenKind::Comma) {
         let sep = self.bump();
+        // Trailing comma: continue onto indented next line
+        if self.at(TokenKind::BlockStart) { self.bump(); }
+        else if self.at(TokenKind::BlockCont) { self.bump(); }
         // Consecutive commas as implicit wildcards
         while self.at(TokenKind::Comma) {
           items.push(Node::new(NodeKind::Wildcard, sep.loc));
@@ -1332,8 +1335,19 @@ impl<'src> Parser<'src> {
       self.bump();
       self.parse_block_exprs()
     } else {
-      Ok(vec![self.parse_expr()?])
+      self.parse_inline_exprs()
     }
+  }
+
+  // Parse a comma-separated list of expressions on a single line (no block).
+  // `,` and `;` act as expression separators, equivalent to newlines in a block body.
+  fn parse_inline_exprs(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
+    let mut exprs = vec![self.parse_expr()?];
+    while self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
+      self.bump();
+      exprs.push(self.parse_expr()?);
+    }
+    Ok(exprs)
   }
 
   fn parse_block_items<F>(&mut self, mut f: F) -> Result<Vec<Node<'src>>, ParseError>

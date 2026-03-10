@@ -53,6 +53,26 @@ test 'no-arg function', fn:
         Patterns
         LitStr 'hello'
 
+test 'inline body comma separates expressions', fn:
+  expect ast fn:
+    fn: 1, 2
+  | equals_ast
+    Fn
+      Patterns
+      LitInt '1'
+      LitInt '2'
+
+test 'inline body comma equivalent to multiline block', fn:
+  expect ast fn:
+    fn a, b: a, b
+  | equals_ast
+    Fn
+      Patterns
+        Ident 'a'
+        Ident 'b'
+      Ident 'a'
+      Ident 'b'
+
 test 'function with default arg', fn:
   expect ast fn:
     greet = fn name='world':
@@ -395,3 +415,52 @@ test 'fn literal as grouped arg', fn:
             Ident 'x'
             LitInt '1'
       Ident 'items'
+
+
+test 'inline body comma is arg separator inside application', fn:
+  expect ast fn:
+    fn: foo a, b
+  | equals_ast
+    Fn
+      Patterns
+      Apply
+        Ident 'foo'
+        Ident 'a'
+        Ident 'b'
+
+test 'inline body comma after binding starts new expression', fn:
+  expect ast fn:
+    fn: a = 1, b
+  | equals_ast
+    Fn
+      Patterns
+      Bind
+        Ident 'a'
+        LitInt '1'
+      Ident 'b'
+
+
+test 'fn params multiline continuation', fn:
+  expect ast fn:
+    fn a,
+      b: a + b
+  | equals_ast
+    Fn
+      Patterns
+        Ident 'a'
+        Ident 'b'
+      InfixOp '+'
+        Ident 'a'
+        Ident 'b'
+
+
+test 'multiline application', fn:
+  expect ast fn:
+    ni = foo
+      bar
+  | equals_ast
+    Bind
+      Ident 'ni'
+      Apply
+        Ident 'foo'
+        Ident 'bar'
