@@ -100,7 +100,7 @@ enum LexMode {
   Bracket(u8, usize), // opening byte + ind.len() snapshot at open time
   StrText,
   StrExpr,
-  RawBlock(usize), // raw: block — col of `raw:` keyword; content must be strictly deeper
+  RawBlock(usize), // raw: block — enclosing ind_floor; content must be strictly deeper
 }
 
 pub struct Lexer<'src> {
@@ -492,9 +492,9 @@ impl<'src> Lexer<'src> {
   // Like consume_str_text but for `raw:` blocks: no `'` or `${}` terminators,
   // no escape processing. Dedent below ind_floor is normal block end (not an error).
   // Pushes StrText tokens to pending and returns the first. Caller emits StrEnd '' after.
-  fn consume_raw_text(&mut self, raw_col: usize) -> Token<'src> {
-    // Content must be strictly deeper than `raw:` col
-    let content_floor = raw_col + 1;
+  fn consume_raw_text(&mut self, ind_floor: usize) -> Token<'src> {
+    // Content must be strictly deeper than the enclosing block's indent floor
+    let content_floor = ind_floor + 1;
     let bytes = self.src.as_bytes();
 
     struct RawLine { start: Pos, end: Pos, only_spaces: bool, indent: usize }
@@ -740,8 +740,8 @@ impl<'src> Lexer<'src> {
     }
 
     // Raw block mode — verbatim text until dedent
-    if let Some(&LexMode::RawBlock(raw_col)) = self.mode.last() {
-      return self.consume_raw_text(raw_col);
+    if let Some(&LexMode::RawBlock(ind_floor)) = self.mode.last() {
+      return self.consume_raw_text(ind_floor);
     }
 
     // StrExpr close
@@ -860,7 +860,7 @@ impl<'src> Lexer<'src> {
       [b'r', b'a', b'w', b':', ..] => {
         let start = self.pos;
         self.advance(4); // consume `raw:`
-        self.mode.push(LexMode::RawBlock(start.col as usize));
+        self.mode.push(LexMode::RawBlock(*self.ind.last().unwrap()));
         Token { kind: TokenKind::StrStart, loc: Loc { start, end: self.pos }, src: &self.src[start.idx as usize..self.pos.idx as usize] }
       }
 

@@ -135,6 +135,20 @@ test 'raw_block', fn:
     BlockEnd loc [17, 4, 0], [17, 4, 0]
 
 
+test 'raw_block_alt', fn:
+  expect tokenize raw:
+    raw:
+      foo
+      bar
+  | equals text fn:
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
+    StrText 'foo\n', loc [7, 2, 2], [11, 3, 0]
+    StrText 'bar\n', loc [13, 3, 2], [17, 4, 0]
+    StrEnd '', loc [17, 4, 0], [17, 4, 0]
+    BlockEnd loc [17, 4, 0], [17, 4, 0]
+
+
 test 'raw_block_empty', fn:
   expect tokenize 'raw:\nfoo\n'
   | equals text fn:
@@ -664,3 +678,14 @@ test 'err_unknown_char', fn:
     Err '@', loc [4, 1, 4], [5, 1, 5]
     Ident 'bar', loc [6, 1, 6], [9, 1, 9]
     BlockEnd loc [9, 1, 9], [9, 1, 9]
+
+
+test 'raw_block_contains_raw_keyword', fn:
+  expect tokenize 'raw:\n  raw:\n    foo\n'
+  | equals text fn:
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
+    StrText 'raw:\n', loc [7, 2, 2], [12, 3, 0]
+    StrText '  foo\n', loc [14, 3, 2], [20, 4, 0]
+    StrEnd '', loc [20, 4, 0], [20, 4, 0]
+    BlockEnd loc [20, 4, 0], [20, 4, 0]

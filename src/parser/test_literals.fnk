@@ -417,3 +417,14 @@ test 'record tagged literal', fn:
         Arm
           Ident 'foo'
           Ident 'bar'
+
+
+test 'raw block produces LitStr', fn:
+  expect ast fn:
+    raw:
+      hello
+      world
+  | equals_ast
+    LitStr 'hello\nworld'
+
+
