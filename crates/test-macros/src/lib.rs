@@ -185,14 +185,15 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
             let start = body_node.loc.start.idx as usize;
             let preceded_by_quote = file_src.as_bytes().get(start) == Some(&b'\'');
             if preceded_by_quote {
-              fink::parser::Parser::unescape(s)
+              fink::strings::render(s)
             } else {
               s.to_string()
             }
           }
           _ => {
             if let Some(text) = extract_raw_templ(body_node) {
-              text
+              // raw": src: process escapes so e.g. \$ → $ before passing to tokenize
+              fink::strings::render(&text)
             } else {
               let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
               text
@@ -240,8 +241,8 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
 
 /// Extract the verbatim string content from a `raw":\n  ...` tagged template node.
 ///
-/// Matches `Apply { func: Ident("raw"), args: [StrRawTempl([LitStr(s)])] }` and
-/// returns `s` verbatim — no unescaping. This is the `raw":` form used in tests
+/// Matches `Apply { func: Ident("raw"), args: [LitStr(s) | StrRawTempl([LitStr(s)])] }` and
+/// returns `s` verbatim — no unescaping, no trimming. This is the `raw":` form used in tests
 /// as a replacement for the `raw:` block syntax.
 fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   use fink::ast::NodeKind;
@@ -250,7 +251,9 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   let arg = args.first()?;
   match &arg.kind {
     // No interpolation: raw": collapses to Apply(raw, LitStr) — verbatim, no unescape.
-    // Trim trailing newline to match raw: block behaviour.
+    // TODO: trailing \n comes from consume_str_block_text including \n in each line's end pos.
+    // The lexer should strip the trailing newline from the last line of a block string instead
+    // of having the macro paper over it here. Fix in lexer, then remove this trim.
     NodeKind::LitStr(s) => Some(s.trim_end_matches('\n').to_string()),
     // With interpolation: Apply(raw, StrRawTempl([LitStr, ...])) — only plain text supported in tests.
     NodeKind::StrRawTempl(children) => {

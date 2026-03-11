@@ -632,9 +632,22 @@ impl<'src> Lexer<'src> {
       let mut only_spaces = true;
 
       // Dedent ends the block — but skip indent check for mid-line resume (col > 0)
-      if !first && leading_spaces < content_floor {
+      let is_blank = matches!(bytes.get(i), Some(b'\n') | None);
+      if !first && !is_blank && leading_spaces < content_floor {
         done = true;
         break;
+      }
+      // Blank line: peek ahead to next non-blank line's indent.
+      // If that line dedents (or EOF), stop before this blank line (don't include trailing blanks).
+      if !first && is_blank {
+        let mut j = if i < bytes.len() { i + 1 } else { i };
+        while j < bytes.len() && bytes[j] == b'\n' { j += 1; }
+        let next_indent = bytes[j..].iter().take_while(|&&b| b == b' ').count();
+        let next_is_blank_or_eof = j >= bytes.len() || matches!(bytes.get(j), Some(b'\n'));
+        if !next_is_blank_or_eof && next_indent < content_floor {
+          done = true;
+          break;
+        }
       }
       first = false;
 
