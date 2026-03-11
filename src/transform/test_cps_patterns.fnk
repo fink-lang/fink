@@ -1,6 +1,6 @@
---- --- ---
+---
 CPS pattern lowering — design scratch pad (WIP)
---- --- ---
+---
 
 # WIP: design document for pattern lowering pass. Not yet wired to test runner.
 # Expected CPS expansion for every pattern form.
@@ -35,28 +35,24 @@ CPS pattern lowering — design scratch pad (WIP)
 # Optimization hint (not in IR yet):
 #   ·match_size  — early length check when collection is realized
 
-{test, expect, equals_fink} = import '!fake'
-{·load, ·store, ·match_store, ·ƒ_cont, ·state, ·scope, ·id, ·apply} = import '!fake'
 
 
---- --- ---
+---
 bind
---- --- ---
+---
 
 test 'plain bind', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_store ·scope, ·id'x', foo, fn x, ·scope:
         ·ƒ_cont x, ·state
 
 test 'simple guard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a > 0 = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_store ·scope, ·id'a', foo, fn a, ·scope:
         ·load ·scope, ·op'>', fn ·op_gt, ·scope:
@@ -66,10 +62,9 @@ test 'simple guard', fn:
 
 
 test 'nested guard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a > 0 or a < 9 = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_store ·scope, ·id'a', foo, fn a, ·scope:
         ·load ·scope, ·op'>', fn ·op_gt, ·scope:
@@ -83,15 +78,14 @@ test 'nested guard', fn:
                         ·ƒ_cont a, ·state
 
 
---- --- ---
+---
 seq patterns
---- --- ---
+---
 
 test 'seq — empty', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_done ·m_0, ·panic, fn ·v_1, ·scope, ·state:
@@ -99,10 +93,9 @@ test 'seq — empty', fn:
 
 
 test 'seq — nested empty', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, []] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -115,10 +108,9 @@ test 'seq — nested empty', fn:
 
 
 test 'seq — exact two elements', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, b] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -131,10 +123,9 @@ test 'seq — exact two elements', fn:
 
 
 test 'seq — lone spread non-empty discard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [..] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_not_done ·m_0, ·panic, fn ·scope, ·state:
@@ -142,10 +133,9 @@ test 'seq — lone spread non-empty discard', fn:
 
 
 test 'seq — spread non-empty bound', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [..rest] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_rest ·m_0, ·panic, fn ·v_1, ·scope, ·state:
@@ -154,10 +144,9 @@ test 'seq — spread non-empty bound', fn:
 
 
 test 'seq — head then spread discard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [head, ..] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -167,10 +156,9 @@ test 'seq — head then spread discard', fn:
 
 
 test 'seq — head then spread bound', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [head, ..tail] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -182,20 +170,19 @@ test 'seq — head then spread bound', fn:
 
 --- test 'seq — rest in middle' deferred: needs ·match_reverse ---
 # test 'seq — rest in middle', fn:
-#   expect cps_expr fn:
+#   expect cps_expr fink":
 #     [head, ..middle, end] = foo
 #
-#   | equals_fink fn:
+#   | equals fink":
 #     # TODO: decomposes as [head, ..rest1] then reverse rest1, pop last as end,
 #     # reverse remainder as middle. Needs ·match_reverse. Deferred — does not
 #     # affect the core primitive set.
 
 
 test 'seq — literal element', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, 1] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -207,10 +194,9 @@ test 'seq — literal element', fn:
 
 
 test 'seq — infix guard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [x, y >= 2] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -225,10 +211,9 @@ test 'seq — infix guard', fn:
 
 
 test 'seq — predicate guard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [x, is_even y] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -242,10 +227,9 @@ test 'seq — predicate guard', fn:
 
 
 test 'seq — constructor guard with payload', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [x, Ok b] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -259,10 +243,9 @@ test 'seq — constructor guard with payload', fn:
 
 
 test 'seq — constructor predicate with wildcard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [x, is_none _] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -275,10 +258,9 @@ test 'seq — constructor predicate with wildcard', fn:
 
 
 test 'seq — multi-arg guard with bound element', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [1, foo 2, a, 3; 4] = bar
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'bar', fn bar, ·scope:
       ·match_seq bar, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -295,10 +277,9 @@ test 'seq — multi-arg guard with bound element', fn:
 
 
 test 'seq — nested', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, [b, c]] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -314,10 +295,9 @@ test 'seq — nested', fn:
                             ·ƒ_cont ·v_11, ·state
 
 test 'seq — nested with bind-right', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, [b, c] |= d] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -334,15 +314,14 @@ test 'seq — nested with bind-right', fn:
                               ·ƒ_cont ·v_11, ·state
 
 
---- --- ---
+---
 rec patterns
---- --- ---
+---
 
 test 'rec — empty', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_done ·m_0, ·panic, fn ·v_1, ·scope, ·state:
@@ -350,10 +329,9 @@ test 'rec — empty', fn:
 
 
 test 'rec — non-empty', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {..} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_not_done ·m_0, ·panic, fn ·scope, ·state:
@@ -361,10 +339,9 @@ test 'rec — non-empty', fn:
 
 
 test 'rec — partial match', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {x, y} = point
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'point', fn point, ·scope:
       ·match_rec point, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'x', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -375,10 +352,9 @@ test 'rec — partial match', fn:
 
 
 test 'rec — field rename', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {x, y: z} = point
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'point', fn point, ·scope:
       ·match_rec point, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'x', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -389,10 +365,9 @@ test 'rec — field rename', fn:
 
 
 test 'rec — open rest discarded', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar, ..} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -402,10 +377,9 @@ test 'rec — open rest discarded', fn:
 
 
 test 'rec — open rest bound', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar, ..rest} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -416,10 +390,9 @@ test 'rec — open rest bound', fn:
 
 
 test 'rec — closed exact', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar, ..{}} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -431,10 +404,9 @@ test 'rec — closed exact', fn:
 
 
 test 'rec — closed with sub-pattern', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {foo, ..{bar, spam}} = x
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'x', fn x, ·scope:
       ·match_rec x, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'foo', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -449,12 +421,11 @@ test 'rec — closed with sub-pattern', fn:
 
 
 test 'match block bind', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match foo:
       1: 2
       x: x
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_block foo, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -467,16 +438,15 @@ test 'match block bind', fn:
         fn ·v_2, ·scope, ·state: ·ƒ_cont ·v_2, ·state
 
 
---- --- ---
+---
 match block — simple arms
---- --- ---
+---
 
 test 'match wildcard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match foo:
       _: 42
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_block foo, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -485,11 +455,10 @@ test 'match wildcard', fn:
 
 
 test 'match bind', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match foo:
       x: x
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_block foo, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -500,13 +469,12 @@ test 'match bind', fn:
 
 
 test 'match literal arms', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match foo:
       1: 'one'
       2: 'two'
       _: 'other'
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_block foo, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -521,12 +489,11 @@ test 'match literal arms', fn:
 
 
 test 'match — expression in arm', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match x:
       true: y + 1
       false: y
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'x', fn x, ·scope:
       ·match_block x, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -543,13 +510,12 @@ test 'match — expression in arm', fn:
 
 
 test 'match child ·scope — binding in arm body', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match n:
       a > 1:
         ni = a
         ni
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'n', fn n, ·scope:
       ·match_block n, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -564,16 +530,15 @@ test 'match child ·scope — binding in arm body', fn:
         fn ·v_1, ·scope, ·state: ·ƒ_cont ·v_1, ·state
 
 
---- --- ---
+---
 match block — seq/rec pattern arms
---- --- ---
+---
 
 test 'match — seq pattern arm', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match foo:
       [a, b]: a
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_block foo, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -588,11 +553,10 @@ test 'match — seq pattern arm', fn:
         fn ·v_7, ·scope, ·state: ·ƒ_cont ·v_7, ·state
 
 test 'match — rec pattern arm', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match foo:
       {bar}: bar
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_block foo, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -605,12 +569,11 @@ test 'match — rec pattern arm', fn:
 
 
 test 'multi-arm match', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match foo:
       [a]: a
       [a, b]: a
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_block foo, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -633,11 +596,10 @@ test 'multi-arm match', fn:
 
 
 test 'multi-arg match', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match a, b:
       x, y: x
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'a', fn a, ·scope:
       ·load ·scope, ·id'b', fn b, ·scope:
         ·match_block a, b, ·panic, ·state,
@@ -649,15 +611,14 @@ test 'multi-arg match', fn:
           fn ·v_2, ·scope, ·state: ·ƒ_cont ·v_2, ·state
 
 
---- --- ---
+---
 pattern bindings (bind-lhs, outside match)
---- --- ---
+---
 
 test 'irrefutable binding with guard', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x > 2 = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_store ·scope, ·id'x', foo, fn x, ·scope:
         ·load ·scope, ·op'>', fn ·op_gt, ·scope:
@@ -667,10 +628,9 @@ test 'irrefutable binding with guard', fn:
 
 
 test 'bind right — seq pattern', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, b] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -682,10 +642,9 @@ test 'bind right — seq pattern', fn:
 
 
 test 'bind right — rec pattern', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -694,10 +653,9 @@ test 'bind right — rec pattern', fn:
 
 
 test 'seq pattern', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, 1] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -708,10 +666,9 @@ test 'seq pattern', fn:
                   ·ƒ_cont ·v_6, ·state
 
 test 'seq pattern with non-empty rest', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, ..] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -720,10 +677,9 @@ test 'seq pattern with non-empty rest', fn:
               ·ƒ_cont ·v_3, ·state
 
 test 'seq pattern with bound rest', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [a, ..rest] = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_seq foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_next ·m_0, ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -733,10 +689,9 @@ test 'seq pattern with bound rest', fn:
                 ·ƒ_cont ·v_4, ·state
 
 test 'rec pattern', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -744,10 +699,9 @@ test 'rec pattern', fn:
             ·ƒ_cont ·v_3, ·state
 
 test 'rec pattern with non-empty rest', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar, ..} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -756,10 +710,9 @@ test 'rec pattern with non-empty rest', fn:
               ·ƒ_cont ·v_3, ·state
 
 test 'rec pattern exact - empty rest', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar, ..{}} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -770,10 +723,9 @@ test 'rec pattern exact - empty rest', fn:
                   ·ƒ_cont ·v_6, ·state
 
 test 'rec pattern with bound rest', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {bar, ..rest} = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_rec foo, ·panic, fn ·m_0, ·scope, ·state:
         ·match_field ·m_0, 'bar', ·panic, fn ·v_1, ·m_2, ·scope, ·state:
@@ -783,16 +735,15 @@ test 'rec pattern with bound rest', fn:
                 ·ƒ_cont ·v_4, ·state
 
 
---- --- ---
+---
 range patterns
---- --- ---
+---
 
 test 'range — exclusive in match arm', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match x:
       0..10: 'low'
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'x', fn x, ·scope:
       ·match_block x, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -805,11 +756,10 @@ test 'range — exclusive in match arm', fn:
 
 
 test 'range — inclusive in match arm', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     match x:
       0...10: 'low'
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'x', fn x, ·scope:
       ·match_block x, ·panic, ·state,
         ·match_branch fn ·v_0, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -822,10 +772,9 @@ test 'range — inclusive in match arm', fn:
 
 
 test 'range — bind-lhs check', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     0..10 = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'..', fn ·op_rngex, ·scope:
       ·apply ·op_rngex, 0, 10, ·state, fn ·v_0, ·state:
         ·load ·scope, ·op'in', fn ·op_in, ·scope:
@@ -834,15 +783,14 @@ test 'range — bind-lhs check', fn:
               ·ƒ_cont foo, ·state
 
 
---- --- ---
+---
 fn params (·ƒ_fail = unreachable, type checker guarantees)
---- --- ---
+---
 
 test 'fn — seq destructuring param', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn [a, b]: a
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·v_1, ·scope, ·state, ·ƒ_cont:
         ·match_seq ·v_1, ·panic, fn ·m_2, ·scope, ·state:
@@ -856,10 +804,9 @@ test 'fn — seq destructuring param', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 test 'fn — seq destructuring param with rest', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn [a, ..rest]: rest
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·v_1, ·scope, ·state, ·ƒ_cont:
         ·match_seq ·v_1, ·panic, fn ·m_2, ·scope, ·state:
@@ -873,10 +820,9 @@ test 'fn — seq destructuring param with rest', fn:
 
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn a, [1, ..b]: b
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, ·v_1, ·scope, ·state, ·ƒ_cont:
         ·match_seq ·v_1, ·panic, fn ·m_2, ·scope, ·state:

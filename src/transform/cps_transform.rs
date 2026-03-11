@@ -1391,18 +1391,9 @@ mod tests {
 
 #[cfg(test)]
 mod cps_tests {
-  use test_macros::test_template;
-  use pretty_assertions::assert_eq;
   use crate::parser::parse;
   use crate::transform::cps_fmt::fmt;
   use super::lower_expr;
-
-  fn dedent(s: &str) -> String {
-    s.lines()
-      .map(|line| line.strip_prefix("    ").unwrap_or(line))
-      .collect::<Vec<_>>()
-      .join("\n")
-  }
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
@@ -1411,31 +1402,15 @@ mod cps_tests {
     }
   }
 
-  #[test_template(
-    "src/transform", "./test_cps.fnk",
-    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
-  )]
-  fn test_cps(src: &str, exp: &str, func: &str, path: &str) {
-    let actual = cps_expr(&dedent(src).trim().to_string());
-    assert_eq!(actual, dedent(exp).trim().to_string(), "{}", path);
-  }
+  test_macros::include_fink_tests!("src/transform/test_cps.fnk");
 }
 
 #[cfg(test)]
 mod pat_tests {
-  use test_macros::test_template;
-  use pretty_assertions::assert_eq;
   use crate::parser::parse;
   use crate::transform::cps_fmt::fmt;
   use crate::transform::cps_free_vars::annotate;
   use super::lower_expr;
-
-  fn dedent(s: &str) -> String {
-    s.lines()
-      .map(|line| line.strip_prefix("    ").unwrap_or(line))
-      .collect::<Vec<_>>()
-      .join("\n")
-  }
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
@@ -1451,16 +1426,5 @@ mod pat_tests {
     }
   }
 
-  #[test_template(
-    "src/transform", "./test_cps_patterns.fnk",
-    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect (?P<func>\S+) fn:\n(?P<src>[\s\S]+?)\n\n?  [|,] equals(?:_fink)? fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
-  )]
-  fn test_cps_patterns(src: &str, exp: &str, func: &str, path: &str) {
-    let actual = match func {
-      "cps_expr"      => cps_expr(&dedent(src).trim().to_string()),
-      "cps_free_vars" => cps_free_vars(&dedent(src).trim().to_string()),
-      _               => format!("ERROR: unknown func {}", func),
-    };
-    assert_eq!(actual, dedent(exp).trim().to_string(), "{}", path);
-  }
+  test_macros::include_fink_tests!("src/transform/test_cps_patterns.fnk");
 }

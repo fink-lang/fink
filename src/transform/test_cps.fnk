@@ -1,121 +1,112 @@
---- --- ---
+---
 cps_c IR — pretty-printer tests
---- --- ---
+---
 
 # Input is a Fink expression; output is the synthesized CPS Fink source.
 # The formatter derives ·store/·load/env/·state from the clean structural IR.
 #
 # Test format:
 #   test 'name', fn:
-#     expect cps_expr fn:
+#     expect cps_expr fink":
 #       <fink source>
 #
-#     | equals_fink fn:
+#     | equals fink":
 #       <expected cps output>
 
 {test, expect, equals_fink, cps_expr} = import '!fake'
 {·load, ·store, ·match_store, ·ƒ_cont, ·state, ·scope, ·id, ·apply, ·closure} = import '!fake'
 # NOTE: ·store is used for compiler-internal temps (e.g. discarded expression results)
 
---- --- ---
+---
 literals — tail position, no synthesis needed
---- --- ---
+---
 
 test 'int literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     42
-
-  | equals_fink fn:
+  | equals fink":
     ·ƒ_cont 42, ·state
 
 
 test 'bool literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     true
-
-  | equals_fink fn:
+  | equals fink":
     ·ƒ_cont true, ·state
 
 
 test 'string literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     'hello'
-
-  | equals_fink fn:
+  | equals fink":
     ·ƒ_cont 'hello', ·state
 
 
---- --- ---
+---
 binding — ·match_store synthesis
---- --- ---
+---
 
 test 'bind literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x = 42
-
-  | equals_fink fn:
+  | equals fink":
     ·match_store ·scope, ·id'x', 42, fn x, ·scope:
       ·ƒ_cont x, ·state
 
 
 test 'bind ident', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_store ·scope, ·id'x', foo, fn x, ·scope:
         ·ƒ_cont x, ·state
 
 
---- --- ---
+---
 application — ·apply synthesis
---- --- ---
+---
 
 test '·apply ident to literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo 42
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·apply foo, 42, ·state, fn ·v_0, ·state:
         ·ƒ_cont ·v_0, ·state
 
 
 test '·apply ident to ident', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo bar
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'bar', fn bar, ·scope:
         ·apply foo, bar, ·state, fn ·v_0, ·state:
           ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 identifier reference — synthesize ·load
---- --- ---
+---
 
 test 'ident ref', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·ƒ_cont foo, ·state
 
 
---- --- ---
+---
 block — statement sequences
---- --- ---
+---
 
 test 'block two stmts', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x = 1
     x
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·match_store ·scope, ·id'x', 1, fn x, ·scope:
@@ -125,11 +116,10 @@ test 'block two stmts', fn:
 
 
 test 'block bind then ·apply', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x = 42
     foo x
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·match_store ·scope, ·id'x', 42, fn x, ·scope:
@@ -141,12 +131,11 @@ test 'block bind then ·apply', fn:
 
 
 test 'fn body with bind', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn a:
       x = a + 1
       x
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
@@ -158,15 +147,14 @@ test 'fn body with bind', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 pipe — lowered as application
---- --- ---
+---
 
 test 'pipe two stages', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a | foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·apply foo, a, ·state, fn ·v_0, ·state:
@@ -174,10 +162,9 @@ test 'pipe two stages', fn:
 
 
 test 'pipe three stages', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a | foo | bar
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·apply foo, a, ·state, fn ·v_0, ·state:
@@ -186,15 +173,14 @@ test 'pipe three stages', fn:
               ·ƒ_cont ·v_1, ·state
 
 
---- --- ---
+---
 infix operators — op ·load + ·apply synthesis
---- --- ---
+---
 
 test 'infix add', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a + b
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'+', fn ·op_plus, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·load ·scope, ·id'b', fn b, ·scope:
@@ -203,25 +189,23 @@ test 'infix add', fn:
 
 
 test 'infix literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a + 1
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'+', fn ·op_plus, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·apply ·op_plus, a, 1, ·state, fn ·v_0, ·state:
           ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 function definition — ·closure synthesis
---- --- ---
+---
 
 test 'fn one param', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn a: a
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'a', fn a, ·scope:
@@ -230,10 +214,9 @@ test 'fn one param', fn:
 
 
 test 'fn two params', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn a, b: a
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, b, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'a', fn a, ·scope:
@@ -242,10 +225,9 @@ test 'fn two params', fn:
 
 
 test 'named fn', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     double = fn a: a
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'a', fn a, ·scope:
@@ -255,15 +237,14 @@ test 'named fn', fn:
           ·ƒ_cont double, ·state
 
 
---- --- ---
+---
 unary ops
---- --- ---
+---
 
 test 'unary not', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     not x
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'not', fn ·op_not, ·scope:
       ·load ·scope, ·id'x', fn x, ·scope:
         ·apply ·op_not, x, ·state, fn ·v_0, ·state:
@@ -271,24 +252,22 @@ test 'unary not', fn:
 
 
 test 'unary minus', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     -x
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'-', fn ·op_minus, ·scope:
       ·load ·scope, ·id'x', fn x, ·scope:
         ·apply ·op_minus, x, ·state, fn ·v_0, ·state:
           ·ƒ_cont ·v_0, ·state
 
---- --- ---
+---
 chained comparisons
---- --- ---
+---
 
 test 'chained cmp', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a < b < c
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'<', fn ·op_lt, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·load ·scope, ·id'b', fn b, ·scope:
@@ -301,38 +280,35 @@ test 'chained cmp', fn:
                       ·apply ·op_and, ·v_0, ·v_1, ·state, fn ·v_2, ·state:
                         ·ƒ_cont ·v_2, ·state
 
---- --- ---
+---
 range
---- --- ---
+---
 
 test 'range excl', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     0..10
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'..', fn ·op_rngex, ·scope:
       ·apply ·op_rngex, 0, 10, ·state, fn ·v_0, ·state:
         ·ƒ_cont ·v_0, ·state
 
 
 test 'range incl', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     0...10
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'...', fn ·op_rngin, ·scope:
       ·apply ·op_rngin, 0, 10, ·state, fn ·v_0, ·state:
         ·ƒ_cont ·v_0, ·state
 
---- --- ---
+---
 string templates
---- --- ---
+---
 
 test 'str templ', fn:
-  expect cps_expr fn:
-    'hello ${name}'
-
-  | equals_fink fn:
+  expect cps_expr fink":
+    'hello \${name}'
+  | equals fink":
     ·load ·scope, ·id'str_fmt', fn ·str_fmt, ·scope:
       ·load ·scope, ·id'name', fn name, ·scope:
         ·apply ·str_fmt, 'hello ', name, ·state, fn ·v_0, ·state:
@@ -340,25 +316,23 @@ test 'str templ', fn:
 
 
 test 'str templ two exprs', fn:
-  expect cps_expr fn:
-    '${a} and ${b}'
-
-  | equals_fink fn:
+  expect cps_expr fink":
+    '\${a} and \${b}'
+  | equals fink":
     ·load ·scope, ·id'str_fmt', fn ·str_fmt, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·load ·scope, ·id'b', fn b, ·scope:
           ·apply ·str_fmt, a, ' and ', b, ·state, fn ·v_0, ·state:
             ·ƒ_cont ·v_0, ·state
 
---- --- ---
+---
 sequence and record literals
---- --- ---
+---
 
 test 'seq literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [1, 2, 3]
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'seq_append', fn ·seq_append, ·scope:
       ·apply ·seq_append, [], 1, ·state, fn ·v_0, ·state:
         ·load ·scope, ·id'seq_append', fn ·seq_append, ·scope:
@@ -369,18 +343,16 @@ test 'seq literal', fn:
 
 
 test 'empty seq literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     []
-
-  | equals_fink fn:
+  | equals fink":
     ·ƒ_cont [], ·state
 
 
 test 'rec literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {x: 1, y: 2}
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'rec_put', fn ·rec_put, ·scope:
       ·apply ·rec_put, {}, 'x', 1, ·state, fn ·v_0, ·state:
         ·load ·scope, ·id'rec_put', fn ·rec_put, ·scope:
@@ -389,18 +361,16 @@ test 'rec literal', fn:
 
 
 test 'empty rec literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {}
-
-  | equals_fink fn:
+  | equals fink":
     ·ƒ_cont {}, ·state
 
 
 test 'rec shorthand', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {x, y}
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'rec_put', fn ·rec_put, ·scope:
       ·load ·scope, ·id'x', fn x, ·scope:
         ·apply ·rec_put, {}, 'x', x, ·state, fn ·v_0, ·state:
@@ -410,15 +380,14 @@ test 'rec shorthand', fn:
                 ·ƒ_cont ·v_1, ·state
 
 
---- --- ---
+---
 member access
---- --- ---
+---
 
 test 'member static', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo.bar
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'.', fn ·op_dot, ·scope:
       ·load ·scope, ·id'foo', fn foo, ·scope:
         ·load ·scope, ·id'bar', fn bar, ·scope:
@@ -427,10 +396,9 @@ test 'member static', fn:
 
 
 test 'member dynamic', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo.(key)
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'.', fn ·op_dot, ·scope:
       ·load ·scope, ·id'foo', fn foo, ·scope:
         ·load ·scope, ·id'key', fn key, ·scope:
@@ -438,15 +406,14 @@ test 'member dynamic', fn:
             ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 spreads in seq and rec literals
---- --- ---
+---
 
 test 'seq spread', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [..xs, 1]
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'seq_concat', fn ·seq_concat, ·scope:
       ·load ·scope, ·id'xs', fn xs, ·scope:
         ·apply ·seq_concat, [], xs, ·state, fn ·v_0, ·state:
@@ -456,10 +423,9 @@ test 'seq spread', fn:
 
 
 test 'rec spread', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {..base, x: 1}
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'rec_merge', fn ·rec_merge, ·scope:
       ·load ·scope, ·id'base', fn base, ·scope:
         ·apply ·rec_merge, {}, base, ·state, fn ·v_0, ·state:
@@ -468,43 +434,40 @@ test 'rec spread', fn:
               ·ƒ_cont ·v_1, ·state
 
 
---- --- ---
+---
 try expression
---- --- ---
+---
 
 test 'try', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     try foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·ƒ_cont foo, ·state
 
 
---- --- ---
+---
 tagged literals
---- --- ---
+---
 
 test 'tagged literal', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     10sec
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'sec', fn sec, ·scope:
       ·apply sec, 10, ·state, fn ·v_0, ·state:
         ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 ported from test_cps — sequential and module-level
---- --- ---
+---
 
 test 'sequential bindings', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo = 1
     bar = foo + 1
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·match_store ·scope, ·id'foo', 1, fn foo, ·scope:
@@ -517,10 +480,9 @@ test 'sequential bindings', fn:
 
 
 test 'binding rhs is a call', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo = add 1, 2
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'add', fn add, ·scope:
       ·apply add, 1, 2, ·state, fn ·v_0, ·state:
         ·match_store ·scope, ·id'foo', ·v_0, fn foo, ·scope:
@@ -528,11 +490,10 @@ test 'binding rhs is a call', fn:
 
 
 test 'expression result discarded', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo 1
     bar
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'foo', fn foo, ·scope:
@@ -544,10 +505,9 @@ test 'expression result discarded', fn:
 
 
 test 'chained member access', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo.bar.baz
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·op'.', fn ·op_dot, ·scope:
       ·load ·scope, ·id'foo', fn foo, ·scope:
         ·load ·scope, ·id'bar', fn bar, ·scope:
@@ -558,25 +518,23 @@ test 'chained member access', fn:
                   ·ƒ_cont ·v_1, ·state
 
 
---- --- ---
+---
 ported from test_cps — calls and application
---- --- ---
+---
 
 test 'simple call', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     add 1, 2
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'add', fn add, ·scope:
       ·apply add, 1, 2, ·state, fn ·v_0, ·state:
         ·ƒ_cont ·v_0, ·state
 
 
 test 'nested call', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     add (mul 2, 3), 1
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'mul', fn mul, ·scope:
       ·apply mul, 2, 3, ·state, fn ·v_0, ·state:
         ·load ·scope, ·id'add', fn add, ·scope:
@@ -585,10 +543,9 @@ test 'nested call', fn:
 
 
 test 'postfix tag', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     (foo bar)tag
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'bar', fn bar, ·scope:
         ·apply foo, bar, ·state, fn ·v_0, ·state:
@@ -598,10 +555,9 @@ test 'postfix tag', fn:
 
 
 test 'call with spread', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo a, ..rest
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·load ·scope, ·id'rest', fn rest, ·scope:
@@ -610,10 +566,9 @@ test 'call with spread', fn:
 
 
 test 'simple pipe', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x | f
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'f', fn f, ·scope:
       ·load ·scope, ·id'x', fn x, ·scope:
         ·apply f, x, ·state, fn ·v_0, ·state:
@@ -621,10 +576,9 @@ test 'simple pipe', fn:
 
 
 test 'pipe chain', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x | f | g
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'f', fn f, ·scope:
       ·load ·scope, ·id'x', fn x, ·scope:
         ·apply f, x, ·state, fn ·v_0, ·state:
@@ -633,15 +587,14 @@ test 'pipe chain', fn:
               ·ƒ_cont ·v_1, ·state
 
 
---- --- ---
+---
 ported from test_cps — functions and closures
---- --- ---
+---
 
 test 'function binding', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     inc = fn x: x + 1
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
@@ -654,13 +607,12 @@ test 'function binding', fn:
 
 
 test '·closure over outer variable', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo = fn a:
       ni = fn b:
         a + b
       ni
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -680,12 +632,11 @@ test '·closure over outer variable', fn:
 
 
 test 'three sequential bindings', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     a = 1
     b = 2
     c = a + b
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·match_store ·scope, ·id'a', 1, fn a, ·scope:
@@ -699,16 +650,15 @@ test 'three sequential bindings', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 ported from test_cps — forward refs and mutual recursion
---- --- ---
+---
 
 test 'forward ref', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo = fn a: foo a + 1
     foo 1
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -728,11 +678,10 @@ test 'forward ref', fn:
 
 
 test 'mutual recursion', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     ping = fn x: pong x
     pong = fn x: ping x
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -755,29 +704,27 @@ test 'mutual recursion', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 pattern bindings (bind-right)
---- --- ---
+---
 
 test 'bind right — simple ·id', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     x = foo
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·match_store ·scope, ·id'x', foo, fn x, ·scope:
         ·ƒ_cont x, ·state
 
 
---- --- ---
+---
 varargs functions
---- --- ---
+---
 
 test 'multi-param function', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn x, y: x + y
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, y, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
@@ -789,10 +736,9 @@ test 'multi-param function', fn:
 
 
 test 'varargs — collect rest', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn a, ..rest: rest
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, ..rest, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'rest', fn rest, ·scope:
@@ -800,16 +746,15 @@ test 'varargs — collect rest', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 scoping and sequential bindings
---- --- ---
+---
 
 test 'calling a local — still goes through ·load', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     inc = fn x: x + 1
     inc 5
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -827,10 +772,9 @@ test 'calling a local — still goes through ·load', fn:
 
 
 test 'chained binding is sequential ·match_store', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo = spam = 1
-
-  | equals_fink fn:
+  | equals fink":
     ·match_store ·scope, ·id'spam', 1, fn spam, ·scope:
       ·match_store ·scope, ·id'foo', spam, fn foo, ·scope:
         ·ƒ_cont foo, ·state
@@ -839,13 +783,12 @@ test 'chained binding is sequential ·match_store', fn:
 # NOTE: Group with binding becomes an immediately-invoked zero-param ·closure;
 # old IR used a `·scope` primitive. Result of the call is bound to spam.
 test 'group with binding — immediately-invoked ·closure', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     spam = (
       ni = ham 1
       ni
     )
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'ham', fn ham, ·scope:
@@ -858,15 +801,14 @@ test 'group with binding — immediately-invoked ·closure', fn:
           ·match_store ·scope, ·id'spam', ·v_2, fn spam, ·scope:
             ·ƒ_cont spam, ·state
 
---- --- ---
+---
 functions — additional
---- --- ---
+---
 
 test 'identity function', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn x: x
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'x', fn x, ·scope:
@@ -874,10 +816,9 @@ test 'identity function', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 test 'function with operator in body', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn x: x + 1
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
@@ -887,11 +828,10 @@ test 'function with operator in body', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 test 'try — result bound, code continues', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     ni = try foo bar
     ni + 1
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'foo', fn foo, ·scope:
@@ -905,17 +845,16 @@ test 'try — result bound, code continues', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 seq/rec literals with spreads
---- --- ---
+---
 
 # NOTE: ·seq_append/·seq_concat/·rec_put/·rec_merge are loaded from ·scope (not primitives)
 # in cps_c — they're treated as regular identifier references.
 test 'seq literal with spread', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [1, ..a, 2]
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'seq_append', fn ·seq_append, ·scope:
       ·apply ·seq_append, [], 1, ·state, fn ·v_0, ·state:
         ·load ·scope, ·id'seq_concat', fn ·seq_concat, ·scope:
@@ -926,10 +865,9 @@ test 'seq literal with spread', fn:
                   ·ƒ_cont ·v_2, ·state
 
 test 'seq literal leading spread', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     [..a, ..b]
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'seq_concat', fn ·seq_concat, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·apply ·seq_concat, [], a, ·state, fn ·v_0, ·state:
@@ -939,10 +877,9 @@ test 'seq literal leading spread', fn:
                 ·ƒ_cont ·v_1, ·state
 
 test 'rec literal with spread', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {foo: a, ..b}
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'rec_put', fn ·rec_put, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·apply ·rec_put, {}, 'foo', a, ·state, fn ·v_0, ·state:
@@ -952,10 +889,9 @@ test 'rec literal with spread', fn:
                 ·ƒ_cont ·v_1, ·state
 
 test 'rec literal leading spread', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     {..a, ..b}
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'rec_merge', fn ·rec_merge, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·apply ·rec_merge, {}, a, ·state, fn ·v_0, ·state:
@@ -965,18 +901,17 @@ test 'rec literal leading spread', fn:
                 ·ƒ_cont ·v_1, ·state
 
 
---- --- ---
+---
 varargs — spread preserved in IR
---- --- ---
+---
 
 # Spread is valid in the CPS IR — ·apply and fn params can contain ..arg / ..name.
 # The IR stays readable Fink; codegen handles the actual flattening.
 
 test 'varargs — call site spreads iterable', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo 1, ..items
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'items', fn items, ·scope:
         ·apply foo, 1, ..items, ·state, fn ·v_0, ·state:
@@ -984,10 +919,9 @@ test 'varargs — call site spreads iterable', fn:
 
 
 test 'call with spread — trailing iterable', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo a, ..rest
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'a', fn a, ·scope:
         ·load ·scope, ·id'rest', fn rest, ·scope:
@@ -996,10 +930,9 @@ test 'call with spread — trailing iterable', fn:
 
 
 test 'call with spread — spread only', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo ..items
-
-  | equals_fink fn:
+  | equals fink":
     ·load ·scope, ·id'foo', fn foo, ·scope:
       ·load ·scope, ·id'items', fn items, ·scope:
         ·apply foo, ..items, ·state, fn ·v_0, ·state:
@@ -1007,10 +940,9 @@ test 'call with spread — spread only', fn:
 
 
 test 'call with spread — passes through from varargs fn', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     fn ..args: foo ..args
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ..args, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'foo', fn foo, ·scope:
@@ -1020,16 +952,15 @@ test 'call with spread — passes through from varargs fn', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 module level
---- --- ---
+---
 
 test 'two bindings at module level', fn:
-  expect cps_expr fn:
+  expect cps_expr fink":
     foo = 1
     bar = 2
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·match_store ·scope, ·id'foo', 1, fn foo, ·scope:
