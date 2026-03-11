@@ -625,6 +625,29 @@ impl<'src> Lexer<'src> {
     let mut interp = false;     // true when stopped at ${}
     let mut first = true;       // first segment may be mid-line (after ${})
 
+    // Error: first content line dedents immediately — empty ":" block is not valid.
+    // pos is already past the opening newline (advance_line was called by the caller).
+    // Check if the first non-blank line dedents; if so, emit Err and pop mode.
+    if p.col == 0 {
+      let i = p.idx as usize;
+      let is_blank = matches!(bytes.get(i), Some(b'\n') | None);
+      let first_non_blank_dedents = if is_blank {
+        let mut j = if i < bytes.len() { i + 1 } else { i };
+        while j < bytes.len() && bytes[j] == b'\n' { j += 1; }
+        let next_indent = bytes[j..].iter().take_while(|&&b| b == b' ').count();
+        let next_is_blank_or_eof = j >= bytes.len() || matches!(bytes.get(j), Some(b'\n'));
+        !next_is_blank_or_eof && next_indent < content_floor
+      } else {
+        let leading = bytes[i..].iter().take_while(|&&b| b == b' ').count();
+        leading < content_floor
+      };
+      if first_non_blank_dedents {
+        self.mode.pop();
+        self.pending.push(Token { kind: TokenKind::StrEnd, loc: Loc { start: p, end: p }, src: "" });
+        return Token { kind: TokenKind::Err, loc: Loc { start: p, end: p }, src: "empty block-string — no indented content" };
+      }
+    }
+
     loop {
       let seg_start = p;
       let mut i = p.idx as usize;
