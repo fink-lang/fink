@@ -1,9 +1,9 @@
 
 test 'multiline function', fn:
-  expect ast fn:
+  expect ast fink":
     fn a, b:
       a + b
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
         Ident 'a'
@@ -13,9 +13,9 @@ test 'multiline function', fn:
         Ident 'b'
 
 test 'single line function', fn:
-  expect ast fn:
+  expect ast fink":
     fn a, b: a + b
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
         Ident 'a'
@@ -25,11 +25,11 @@ test 'single line function', fn:
         Ident 'b'
 
 test 'named function binding', fn:
-  expect ast fn:
+  expect ast fink":
     add = fn a, b:
       result = a + b
       result
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'add'
       Fn
@@ -44,9 +44,9 @@ test 'named function binding', fn:
         Ident 'result'
 
 test 'no-arg function', fn:
-  expect ast fn:
+  expect ast fink":
     greet = fn: 'hello'
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'greet'
       Fn
@@ -54,18 +54,18 @@ test 'no-arg function', fn:
         LitStr 'hello'
 
 test 'inline body comma separates expressions', fn:
-  expect ast fn:
+  expect ast fink":
     fn: 1, 2
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
       LitInt '1'
       LitInt '2'
 
 test 'inline body comma equivalent to multiline block', fn:
-  expect ast fn:
+  expect ast fink":
     fn a, b: a, b
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
         Ident 'a'
@@ -74,10 +74,10 @@ test 'inline body comma equivalent to multiline block', fn:
       Ident 'b'
 
 test 'function with default arg', fn:
-  expect ast fn:
+  expect ast fink":
     greet = fn name='world':
-      'hello ${name}'
-  | equals_ast
+      'hello \${name}'
+  | equals fink":
     Bind
       Ident 'greet'
       Fn
@@ -90,9 +90,9 @@ test 'function with default arg', fn:
           Ident 'name'
 
 test 'function with record pattern arg', fn:
-  expect ast fn:
+  expect ast fink":
     foo = fn {x, y}: x + y
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'foo'
       Fn
@@ -105,9 +105,9 @@ test 'function with record pattern arg', fn:
           Ident 'y'
 
 test 'function with sequence pattern arg', fn:
-  expect ast fn:
+  expect ast fink":
     bar = fn [head, ..tail]: head
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'bar'
       Fn
@@ -119,9 +119,9 @@ test 'function with sequence pattern arg', fn:
         Ident 'head'
 
 test 'function with rest args', fn:
-  expect ast fn:
+  expect ast fink":
     baz = fn arg, ..rest: arg
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'baz'
       Fn
@@ -132,9 +132,9 @@ test 'function with rest args', fn:
         Ident 'arg'
 
 test 'spread in middle of params', fn:
-  expect ast fn:
+  expect ast fink":
     baz = fn x, ..ys, z: x
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'baz'
       Fn
@@ -151,12 +151,12 @@ fn match sugar
 ---
 
 test 'fn match single arg', fn:
-  expect ast fn:
+  expect ast fink":
     classify = fn match n:
       n > 0: 'positive'
       n < 0: 'negative'
       _: 'zero'
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'classify'
       Fn
@@ -180,11 +180,11 @@ test 'fn match single arg', fn:
             LitStr 'zero'
 
 test 'fn match multi arg', fn:
-  expect ast fn:
+  expect ast fink":
     foo = fn match a, ..b:
       1, ..: 1
       2, x, ..y: 2
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'foo'
       Fn
@@ -216,12 +216,12 @@ higher order
 ---
 
 test 'returning a function', fn:
-  expect ast fn:
+  expect ast fink":
     map = fn map_fn: fn match items:
       []: []
       [item, ..rest]:
         [(map_fn item), ..(map map_fn rest)]
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'map'
       Fn
@@ -259,28 +259,28 @@ application
 ---
 
 test 'simple application', fn:
-  expect ast fn:
+  expect ast fink":
     log 'hello'
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'log'
       LitStr 'hello'
 
 test 'multi-arg application', fn:
-  expect ast fn:
+  expect ast fink":
     add 1, 2
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'add'
       LitInt '1'
       LitInt '2'
 
 test 'multiline args', fn:
-  expect ast fn:
+  expect ast fink":
     add
       mul 2, 3
       mul 3, 4
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'add'
       Apply
@@ -293,9 +293,9 @@ test 'multiline args', fn:
         LitInt '4'
 
 test 'semicolon grouped args', fn:
-  expect ast fn:
+  expect ast fink":
     add mul 2, 3; mul 3, 4
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'add'
       Apply
@@ -308,9 +308,9 @@ test 'semicolon grouped args', fn:
         LitInt '4'
 
 test 'nested right-to-left application', fn:
-  expect ast fn:
+  expect ast fink":
     foo bar spam ham
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'foo'
       Apply
@@ -320,9 +320,9 @@ test 'nested right-to-left application', fn:
           Ident 'ham'
 
 test 'postfix tagged application', fn:
-  expect ast fn:
+  expect ast fink":
     [1, 2, 3]foo
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'foo'
       LitSeq
@@ -331,9 +331,9 @@ test 'postfix tagged application', fn:
         LitInt '3'
 
 test 'partial application placeholder', fn:
-  expect ast fn:
+  expect ast fink":
     add5 = add 5, ?
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'add5'
       Apply
@@ -342,9 +342,9 @@ test 'partial application placeholder', fn:
         Partial
 
 test 'partial operator', fn:
-  expect ast fn:
+  expect ast fink":
     add5 = ? + 5
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'add5'
       InfixOp '+'
@@ -357,29 +357,29 @@ pipes
 ---
 
 test 'simple pipe', fn:
-  expect ast fn:
+  expect ast fink":
     foo | bar | spam
-  | equals_ast
+  | equals fink":
     Pipe
       Ident 'foo'
       Ident 'bar'
       Ident 'spam'
 
 test 'multiline pipe', fn:
-  expect ast fn:
+  expect ast fink":
     'hello'
     | capitalize
     | log
-  | equals_ast
+  | equals fink":
     Pipe
       LitStr 'hello'
       Ident 'capitalize'
       Ident 'log'
 
 test 'pipe with spread partial', fn:
-  expect ast fn:
+  expect ast fink":
     [1, 2] | add ..?
-  | equals_ast
+  | equals fink":
     Pipe
       LitSeq
         LitInt '1'
@@ -390,9 +390,9 @@ test 'pipe with spread partial', fn:
           Partial
 
 test 'pipe with apply in each stage', fn:
-  expect ast fn:
+  expect ast fink":
     foo bar | spam ham
-  | equals_ast
+  | equals fink":
     Pipe
       Apply
         Ident 'foo'
@@ -402,9 +402,9 @@ test 'pipe with apply in each stage', fn:
         Ident 'ham'
 
 test 'fn literal as grouped arg', fn:
-  expect ast fn:
+  expect ast fink":
     map (fn x: x + 1), items
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'map'
       Group
@@ -418,9 +418,9 @@ test 'fn literal as grouped arg', fn:
 
 
 test 'inline body comma is arg separator inside application', fn:
-  expect ast fn:
+  expect ast fink":
     fn: foo a, b
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
       Apply
@@ -429,9 +429,9 @@ test 'inline body comma is arg separator inside application', fn:
         Ident 'b'
 
 test 'inline body comma after binding starts new expression', fn:
-  expect ast fn:
+  expect ast fink":
     fn: a = 1, b
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
       Bind
@@ -441,10 +441,10 @@ test 'inline body comma after binding starts new expression', fn:
 
 
 test 'fn params multiline continuation', fn:
-  expect ast fn:
+  expect ast fink":
     fn a,
       b: a + b
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
         Ident 'a'
@@ -455,10 +455,10 @@ test 'fn params multiline continuation', fn:
 
 
 test 'multiline application', fn:
-  expect ast fn:
+  expect ast fink":
     ni = foo
       bar
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'ni'
       Apply

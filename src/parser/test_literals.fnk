@@ -1,14 +1,14 @@
 
 test 'true', fn:
-  expect ast fn:
+  expect ast fink":
     true
-  | equals_ast
+  | equals fink":
     LitBool true
 
 test 'false', fn:
-  expect ast fn:
+  expect ast fink":
     false
-  | equals_ast
+  | equals fink":
     LitBool false
 
 
@@ -17,87 +17,87 @@ integers
 ---
 
 test 'integer', fn:
-  expect ast fn:
+  expect ast fink":
     1_234_567
-  | equals_ast
+  | equals fink":
     LitInt '1_234_567'
 
 test 'positive signed', fn:
-  expect ast fn:
+  expect ast fink":
     +1
-  | equals_ast
+  | equals fink":
     LitInt '+1'
 
 test 'negative signed', fn:
-  expect ast fn:
+  expect ast fink":
     -1
-  | equals_ast
+  | equals fink":
     LitInt '-1'
 
 test 'hex', fn:
-  expect ast fn:
+  expect ast fink":
     0xFFFF_FFFF
-  | equals_ast
+  | equals fink":
     LitInt '0xFFFF_FFFF'
 
 test 'positive signed hex', fn:
-  expect ast fn:
+  expect ast fink":
     +0xFFFF_FFFF
-  | equals_ast
+  | equals fink":
     LitInt '+0xFFFF_FFFF'
 
 test 'negative signed hex', fn:
-  expect ast fn:
+  expect ast fink":
     -0xFFFF_FFFF
-  | equals_ast
+  | equals fink":
     LitInt '-0xFFFF_FFFF'
 
 test 'octal', fn:
-  expect ast fn:
+  expect ast fink":
     0o_1234_5670
-  | equals_ast
+  | equals fink":
     LitInt '0o_1234_5670'
 
 test 'positive signed octal', fn:
-  expect ast fn:
+  expect ast fink":
     +0o_1234_5670
-  | equals_ast
+  | equals fink":
     LitInt '+0o_1234_5670'
 
 test 'negative signed octal', fn:
-  expect ast fn:
+  expect ast fink":
     -0o_1234_5670
-  | equals_ast
+  | equals fink":
     LitInt '-0o_1234_5670'
 
 test 'binary', fn:
-  expect ast fn:
+  expect ast fink":
     0b_0101_1111
-  | equals_ast
+  | equals fink":
     LitInt '0b_0101_1111'
 
 test 'positive signed binary', fn:
-  expect ast fn:
+  expect ast fink":
     +0b_0101_1111
-  | equals_ast
+  | equals fink":
     LitInt '+0b_0101_1111'
 
 test 'negative signed binary', fn:
-  expect ast fn:
+  expect ast fink":
     -0b_0101_1111
-  | equals_ast
+  | equals fink":
     LitInt '-0b_0101_1111'
 
 test 'positive signed with underscores', fn:
-  expect ast fn:
+  expect ast fink":
     +1_234_567
-  | equals_ast
+  | equals fink":
     LitInt '+1_234_567'
 
 test 'negative signed with underscores', fn:
-  expect ast fn:
+  expect ast fink":
     -1_234_567
-  | equals_ast
+  | equals fink":
     LitInt '-1_234_567'
 
 
@@ -106,15 +106,15 @@ floats
 ---
 
 test 'simple float', fn:
-  expect ast fn:
+  expect ast fink":
     1.0
-  | equals_ast
+  | equals fink":
     LitFloat '1.0'
 
 test 'float with exponent', fn:
-  expect ast fn:
+  expect ast fink":
     1.0e100_000
-  | equals_ast
+  | equals fink":
     LitFloat '1.0e100_000'
 
 
@@ -123,15 +123,15 @@ decimals
 ---
 
 test 'simple decimal', fn:
-  expect ast fn:
+  expect ast fink":
     1.0d
-  | equals_ast
+  | equals fink":
     LitDecimal '1.0d'
 
 test 'decimal with negative exponent', fn:
-  expect ast fn:
+  expect ast fink":
     1.0d-100
-  | equals_ast
+  | equals fink":
     LitDecimal '1.0d-100'
 
 
@@ -140,48 +140,48 @@ strings
 ---
 
 test 'simple string', fn:
-  expect ast fn:
+  expect ast fink":
     'hello world'
-  | equals_ast
+  | equals fink":
     LitStr 'hello world'
 
 test 'string escape sequences', fn:
-  expect ast fn:
+  expect ast fink":
     '\n\t\r\\\''
-  | equals_ast
+  | equals fink":
     LitStr '\\n\\t\\r\\\\\\\''
 
 test 'string vertical tab backspace formfeed', fn:
-  expect ast fn:
+  expect ast fink":
     '\v\b\f'
-  | equals_ast
+  | equals fink":
     LitStr '\\v\\b\\f'
 
 test 'string hex escape', fn:
-  expect ast fn:
+  expect ast fink":
     '\x41\x42'
-  | equals_ast
+  | equals fink":
     LitStr '\\x41\\x42'
 
 test 'string unicode escape', fn:
-  expect ast fn:
+  expect ast fink":
     '\u0041\u0042'
-  | equals_ast
+  | equals fink":
     LitStr '\\u0041\\u0042'
 
 test 'multiline string', fn:
-  expect ast fn:
+  expect ast fink":
     '
       hello
       world
     '
-  | equals_ast
+  | equals fink":
     LitStr '\nhello\nworld\n'
 
 test 'string interpolation', fn:
-  expect ast fn:
-    'hello ${1 + 2}'
-  | equals_ast
+  expect ast fink":
+    'hello \${1 + 2}'
+  | equals fink":
     StrTempl
       LitStr 'hello '
       InfixOp '+'
@@ -189,9 +189,9 @@ test 'string interpolation', fn:
         LitInt '2'
 
 test 'string interpolation leading expression', fn:
-  expect ast fn:
-    '${1 + 2} world'
-  | equals_ast
+  expect ast fink":
+    '\${1 + 2} world'
+  | equals fink":
     StrTempl
       InfixOp '+'
         LitInt '1'
@@ -199,9 +199,9 @@ test 'string interpolation leading expression', fn:
       LitStr ' world'
 
 test 'tagged template string', fn:
-  expect ast fn:
-    fmt'hello ${1 + 2}'
-  | equals_ast
+  expect ast fink":
+    fmt'hello \${1 + 2}'
+  | equals fink":
     Apply
       Ident 'fmt'
       StrRawTempl
@@ -211,9 +211,9 @@ test 'tagged template string', fn:
           LitInt '2'
 
 test 'tagged template string in argument position', fn:
-  expect ast fn:
+  expect ast fink":
     store env, id'foo', v
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'store'
       Ident 'env'
@@ -224,9 +224,9 @@ test 'tagged template string in argument position', fn:
       Ident 'v'
 
 test 'rendered template string', fn:
-  expect ast fn:
-    fmt 'hello ${1 + 2}'
-  | equals_ast
+  expect ast fink":
+    fmt 'hello \${1 + 2}'
+  | equals fink":
     Apply
       Ident 'fmt'
       StrTempl
@@ -237,43 +237,43 @@ test 'rendered template string', fn:
 
 
 test 'block string basic', fn:
-  expect ast fn:
+  expect ast fink":
     ":
       hello world
-  | equals_ast
+  | equals fink":
     LitStr 'hello world'
 
 test 'block string multiline', fn:
-  expect ast fn:
+  expect ast fink":
     ":
       hello
       world
-  | equals_ast
+  | equals fink":
     LitStr 'hello\nworld'
 
 test 'block string blank line', fn:
-  expect ast fn:
+  expect ast fink":
     ":
       foo
 
       bar
-  | equals_ast
+  | equals fink":
     LitStr 'foo\n\nbar'
 
 test 'block string indentation preserved', fn:
-  expect ast fn:
+  expect ast fink":
     ":
       foo
 
         bar
-  | equals_ast
+  | equals fink":
     LitStr 'foo\n\n  bar'
 
 test 'block string interpolation', fn:
-  expect ast fn:
+  expect ast fink":
     ":
-      hello ${name}
-  | equals_ast
+      hello \${name}
+  | equals fink":
     StrTempl
       LitStr 'hello '
       Ident 'name'
@@ -284,24 +284,24 @@ sequences
 ---
 
 test 'empty sequence', fn:
-  expect ast fn:
+  expect ast fink":
     []
-  | equals_ast
+  | equals fink":
     LitSeq
 
 test 'sequence literal', fn:
-  expect ast fn:
+  expect ast fink":
     [1, 2, 3]
-  | equals_ast
+  | equals fink":
     LitSeq
       LitInt '1'
       LitInt '2'
       LitInt '3'
 
 test 'sequence constructor', fn:
-  expect ast fn:
+  expect ast fink":
     seq 1, 2, 3
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'seq'
       LitInt '1'
@@ -309,12 +309,12 @@ test 'sequence constructor', fn:
       LitInt '3'
 
 test 'multiline sequence constructor', fn:
-  expect ast fn:
+  expect ast fink":
     seq
       1
       2
       seq 3, 4
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'seq'
       LitInt '1'
@@ -330,15 +330,15 @@ records
 ---
 
 test 'empty record', fn:
-  expect ast fn:
+  expect ast fink":
     {}
-  | equals_ast
+  | equals fink":
     LitRec
 
 test 'record literal', fn:
-  expect ast fn:
+  expect ast fink":
     {foo: 1, bar: 2}
-  | equals_ast
+  | equals fink":
     LitRec
       Arm
         Ident 'foo'
@@ -348,9 +348,9 @@ test 'record literal', fn:
         LitInt '2'
 
 test 'record with computed key', fn:
-  expect ast fn:
+  expect ast fink":
     {(a + b): 3}
-  | equals_ast
+  | equals fink":
     LitRec
       Arm
         Group
@@ -360,14 +360,14 @@ test 'record with computed key', fn:
         LitInt '3'
 
 test 'multiline record', fn:
-  expect ast fn:
+  expect ast fink":
     {
       foo: 1
       bar: {
         spam: 3
       }
     }
-  | equals_ast
+  | equals fink":
     LitRec
       Arm
         Ident 'foo'
@@ -380,9 +380,9 @@ test 'multiline record', fn:
             LitInt '3'
 
 test 'record shorthand fields', fn:
-  expect ast fn:
+  expect ast fink":
     {foo, bar}
-  | equals_ast
+  | equals fink":
     LitRec
       Ident 'foo'
       Ident 'bar'
@@ -393,9 +393,9 @@ dicts
 ---
 
 test 'dict literal', fn:
-  expect ast fn:
+  expect ast fink":
     dict {foo: 1, 'bar': 2, (key): 3}
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'dict'
       LitRec
@@ -416,33 +416,33 @@ tagged literals
 ---
 
 test 'integer tagged literal', fn:
-  expect ast fn:
+  expect ast fink":
     10sec
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'sec'
       LitInt '10'
 
 test 'float tagged literal', fn:
-  expect ast fn:
+  expect ast fink":
     10.5min
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'min'
       LitFloat '10.5'
 
 test 'grouped tagged literal', fn:
-  expect ast fn:
+  expect ast fink":
     (foo)min
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'min'
       Ident 'foo'
 
 test 'sequence tagged literal', fn:
-  expect ast fn:
+  expect ast fink":
     [1, 2, 3]foo
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'foo'
       LitSeq
@@ -451,9 +451,9 @@ test 'sequence tagged literal', fn:
         LitInt '3'
 
 test 'record tagged literal', fn:
-  expect ast fn:
+  expect ast fink":
     {foo: bar}spam
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'spam'
       LitRec

@@ -1,17 +1,17 @@
 
 test 'block with no args and expression body', fn:
-  expect ast fn:
+  expect ast fink":
     test_block: 'hello'
-  | equals_ast
+  | equals fink":
     Block
       Ident 'test_block'
       Patterns
       LitStr 'hello'
 
 test 'block with patterns and expression body', fn:
-  expect ast fn:
+  expect ast fink":
     test_block a, b: a + b
-  | equals_ast
+  | equals fink":
     Block
       Ident 'test_block'
       Patterns
@@ -22,11 +22,11 @@ test 'block with patterns and expression body', fn:
         Ident 'b'
 
 test 'block with patterns and multiline body', fn:
-  expect ast fn:
+  expect ast fink":
     test_block a, b:
       x = a + b
       x * 2
-  | equals_ast
+  | equals fink":
     Block
       Ident 'test_block'
       Patterns
@@ -42,11 +42,11 @@ test 'block with patterns and multiline body', fn:
         LitInt '2'
 
 test 'block with arms', fn:
-  expect ast fn:
+  expect ast fink":
     test_block a:
       1: 'one'
       2: 'two'
-  | equals_ast
+  | equals fink":
     Block
       Ident 'test_block'
       Patterns
@@ -59,10 +59,10 @@ test 'block with arms', fn:
         LitStr 'two'
 
 test 'block bound to name', fn:
-  expect ast fn:
+  expect ast fink":
     result = test_block a, b:
       a + b
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'result'
       Block
@@ -75,9 +75,9 @@ test 'block bound to name', fn:
           Ident 'b'
 
 test 'inline block in application', fn:
-  expect ast fn:
+  expect ast fink":
     log test_block: 'hello'
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'log'
       Block
@@ -86,9 +86,9 @@ test 'inline block in application', fn:
         LitStr 'hello'
 
 test 'block with sequence destructure param', fn:
-  expect ast fn:
+  expect ast fink":
     test_block [a, b]: a + b
-  | equals_ast
+  | equals fink":
     Block
       Ident 'test_block'
       Patterns
@@ -100,9 +100,9 @@ test 'block with sequence destructure param', fn:
         Ident 'b'
 
 test 'block with record destructure param', fn:
-  expect ast fn:
+  expect ast fink":
     test_block {x, y}: x + y
-  | equals_ast
+  | equals fink":
     Block
       Ident 'test_block'
       Patterns

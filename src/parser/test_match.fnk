@@ -1,11 +1,11 @@
 
 test 'match on literal values', fn:
-  expect ast fn:
+  expect ast fink":
     match foo:
       1: 'one'
       2: 'two'
       _: 'other'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foo'
@@ -20,11 +20,11 @@ test 'match on literal values', fn:
         LitStr 'other'
 
 test 'match with binding', fn:
-  expect ast fn:
+  expect ast fink":
     match foo:
       [head, ..tail]: head
       []: 'empty'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foo'
@@ -39,12 +39,12 @@ test 'match with binding', fn:
         LitStr 'empty'
 
 test 'match with inline guard', fn:
-  expect ast fn:
+  expect ast fink":
     match foo:
       n > 0 and n < 10: 'small positive'
       n > 0: 'large positive'
       _: 'other'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foo'
@@ -67,11 +67,11 @@ test 'match with inline guard', fn:
         LitStr 'other'
 
 test 'match on type', fn:
-  expect ast fn:
+  expect ast fink":
     match foo:
       str s: 'its a string'
       u8 n: 'its a u8'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foo'
@@ -87,11 +87,11 @@ test 'match on type', fn:
         LitStr 'its a u8'
 
 test 'match string pattern', fn:
-  expect ast fn:
+  expect ast fink":
     match s:
-      'hello ${..rest}': rest
+      'hello \${..rest}': rest
       'a'...'z': 'lowercase letter'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 's'
@@ -108,13 +108,13 @@ test 'match string pattern', fn:
         LitStr 'lowercase letter'
 
 test 'match sequence patterns', fn:
-  expect ast fn:
+  expect ast fink":
     match items:
       []: 'empty'
       [x]: 'one element'
       [x, y]: 'two elements'
       [x, ..]: 'one or more'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'items'
@@ -137,11 +137,11 @@ test 'match sequence patterns', fn:
         LitStr 'one or more'
 
 test 'match sequence bare spread pattern', fn:
-  expect ast fn:
+  expect ast fink":
     match items:
       [..]: 'non-empty'
       []: 'empty'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'items'
@@ -154,11 +154,11 @@ test 'match sequence bare spread pattern', fn:
         LitStr 'empty'
 
 test 'match record bare spread pattern', fn:
-  expect ast fn:
+  expect ast fink":
     match foobar:
       {..}: 'non-empty'
       {}: 'empty'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foobar'
@@ -171,12 +171,12 @@ test 'match record bare spread pattern', fn:
         LitStr 'empty'
 
 test 'match record patterns', fn:
-  expect ast fn:
+  expect ast fink":
     match foobar:
       {}: 'empty'
       {foo: 1}: 'foo is 1'
       {foo: 1, ..}: 'foo is 1 and more'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foobar'
@@ -198,10 +198,10 @@ test 'match record patterns', fn:
         LitStr 'foo is 1 and more'
 
 test 'match record exact - empty rest', fn:
-  expect ast fn:
+  expect ast fink":
     match foobar:
       {foo: 1, ..{}}: 'foo is 1 and nothing else'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foobar'
@@ -215,10 +215,10 @@ test 'match record exact - empty rest', fn:
         LitStr 'foo is 1 and nothing else'
 
 test 'match record with bound rest', fn:
-  expect ast fn:
+  expect ast fink":
     match foobar:
       {foo: 1, ..rest}: rest
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foobar'
@@ -232,10 +232,10 @@ test 'match record with bound rest', fn:
         Ident 'rest'
 
 test 'match seq exact - empty rest', fn:
-  expect ast fn:
+  expect ast fink":
     match items:
       [a, ..[]]:'only a'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'items'
@@ -247,10 +247,10 @@ test 'match seq exact - empty rest', fn:
         LitStr 'only a'
 
 test 'match nested record pattern', fn:
-  expect ast fn:
+  expect ast fink":
     match foo:
       {x: 1, y: {z}}: z
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foo'
@@ -266,9 +266,9 @@ test 'match nested record pattern', fn:
         Ident 'z'
 
 test 'inline match in application', fn:
-  expect ast fn:
+  expect ast fink":
     log match a: x > 0: x
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'log'
       Match
@@ -281,12 +281,12 @@ test 'inline match in application', fn:
           Ident 'x'
 
 test 'multi-subject match', fn:
-  expect ast fn:
+  expect ast fink":
     match a, b:
       1, 2: 'one two'
       1, x: 'one other'
       _, _: 'other'
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'a'
@@ -308,11 +308,11 @@ test 'multi-subject match', fn:
         LitStr 'other'
 
 test 'guard combined with spread in match arm', fn:
-  expect ast fn:
+  expect ast fink":
     match items:
       [x > 0, ..rest]: rest
       _: []
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'items'
@@ -329,9 +329,9 @@ test 'guard combined with spread in match arm', fn:
         LitSeq
 
 test 'nested pattern with guard in binding', fn:
-  expect ast fn:
+  expect ast fink":
     [[x, y], z > 0] = foo
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         LitSeq
@@ -343,13 +343,13 @@ test 'nested pattern with guard in binding', fn:
       Ident 'foo'
 
 test 'multiline arm body', fn:
-  expect ast fn:
+  expect ast fink":
     match n:
       n > 0:
         x = n * 2
         x + 1
       _: 0
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'n'
@@ -370,11 +370,11 @@ test 'multiline arm body', fn:
         LitInt '0'
 
 test 'wildcard arm body as application', fn:
-  expect ast fn:
+  expect ast fink":
     match n:
       0: true
       _: is_odd n - 1
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'n'
@@ -390,11 +390,11 @@ test 'wildcard arm body as application', fn:
             LitInt '1'
 
 test 'Ok and Err patterns in match', fn:
-  expect ast fn:
+  expect ast fink":
     match bar result:
       Ok x: x + 1
       Err err: log err
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Apply
@@ -416,19 +416,19 @@ test 'Ok and Err patterns in match', fn:
           Ident 'err'
 
 test 'error chaining', fn:
-  expect ast fn:
+  expect ast fink":
     Err e, 'foo failed'
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'Err'
       Ident 'e'
       LitStr 'foo failed'
 
 test 'match arm with nested right-hand binding', fn:
-  expect ast fn:
+  expect ast fink":
     match foobar:
       {foo: f |= {bar}}: bar
-  | equals_ast
+  | equals fink":
     Match
       Patterns
         Ident 'foobar'

@@ -1,24 +1,24 @@
 
 test 'try bare', fn:
-  expect ast fn:
+  expect ast fink":
     try foo
-  | equals_ast
+  | equals fink":
     Try
       Ident 'foo'
 
 test 'try with application', fn:
-  expect ast fn:
+  expect ast fink":
     try foo bar
-  | equals_ast
+  | equals fink":
     Try
       Apply
         Ident 'foo'
         Ident 'bar'
 
 test 'try bound to name', fn:
-  expect ast fn:
+  expect ast fink":
     a = try open 'file.txt'
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'a'
       Try
@@ -27,9 +27,9 @@ test 'try bound to name', fn:
           LitStr 'file.txt'
 
 test 'try in pipe', fn:
-  expect ast fn:
+  expect ast fink":
     try foo | bar
-  | equals_ast
+  | equals fink":
     Pipe
       Try
         Ident 'foo'

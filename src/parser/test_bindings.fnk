@@ -3,17 +3,17 @@ left-hand binding
 ---
 
 test 'simple binding', fn:
-  expect ast fn:
+  expect ast fink":
     foo = 1
-  | equals_ast
+  | equals fink":
     Bind
       Ident 'foo'
       LitInt '1'
 
 test 'sequence destructure', fn:
-  expect ast fn:
+  expect ast fink":
     [a, b] = [1, 2]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Ident 'a'
@@ -23,9 +23,9 @@ test 'sequence destructure', fn:
         LitInt '2'
 
 test 'record destructure', fn:
-  expect ast fn:
+  expect ast fink":
     {x, y} = point
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Ident 'x'
@@ -33,9 +33,9 @@ test 'record destructure', fn:
       Ident 'point'
 
 test 'record destructure with rename', fn:
-  expect ast fn:
+  expect ast fink":
     {x, y: z} = point
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Ident 'x'
@@ -45,9 +45,9 @@ test 'record destructure with rename', fn:
       Ident 'point'
 
 test 'nested record destructure', fn:
-  expect ast fn:
+  expect ast fink":
     {a, b: {c, d}} = foo
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Ident 'a'
@@ -59,9 +59,9 @@ test 'nested record destructure', fn:
       Ident 'foo'
 
 test 'nested destructure', fn:
-  expect ast fn:
+  expect ast fink":
     [a, [b, c]] = [1, [2, 3]]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Ident 'a'
@@ -75,9 +75,9 @@ test 'nested destructure', fn:
           LitInt '3'
 
 test 'spread head and tail', fn:
-  expect ast fn:
+  expect ast fink":
     [head, ..tail] = [1, 2, 3, 4]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Ident 'head'
@@ -90,9 +90,9 @@ test 'spread head and tail', fn:
         LitInt '4'
 
 test 'spread head middle and end', fn:
-  expect ast fn:
+  expect ast fink":
     [head, ..middle, end] = [1, 2, 3, 4]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Ident 'head'
@@ -106,9 +106,9 @@ test 'spread head middle and end', fn:
         LitInt '4'
 
 test 'spread with guard', fn:
-  expect ast fn:
+  expect ast fink":
     [head > 3, ..tail] = [4, 5, 6]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         InfixOp '>'
@@ -122,9 +122,9 @@ test 'spread with guard', fn:
         LitInt '6'
 
 test 'guard with function call in pattern', fn:
-  expect ast fn:
+  expect ast fink":
     [(is_odd head), ..tail] = [3, 4, 5]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Group
@@ -139,9 +139,9 @@ test 'guard with function call in pattern', fn:
         LitInt '5'
 
 test 'record destructure with spread rest', fn:
-  expect ast fn:
+  expect ast fink":
     {x, ..rest} = point
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Ident 'x'
@@ -150,9 +150,9 @@ test 'record destructure with spread rest', fn:
       Ident 'point'
 
 test 'record destructure with non-empty rest assertion', fn:
-  expect ast fn:
+  expect ast fink":
     {x, ..} = point
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Ident 'x'
@@ -160,9 +160,9 @@ test 'record destructure with non-empty rest assertion', fn:
       Ident 'point'
 
 test 'record destructure exact - empty rest', fn:
-  expect ast fn:
+  expect ast fink":
     {x, ..{}} = point
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Ident 'x'
@@ -171,9 +171,9 @@ test 'record destructure exact - empty rest', fn:
       Ident 'point'
 
 test 'seq destructure exact - empty rest', fn:
-  expect ast fn:
+  expect ast fink":
     [a, ..[]] = foo
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Ident 'a'
@@ -182,9 +182,9 @@ test 'seq destructure exact - empty rest', fn:
       Ident 'foo'
 
 test 'string pattern binding', fn:
-  expect ast fn:
-    'start ${middle} end' = 'foo bar spam'
-  | equals_ast
+  expect ast fink":
+    'start \${middle} end' = 'foo bar spam'
+  | equals fink":
     Bind
       StrTempl
         LitStr 'start '
@@ -198,20 +198,20 @@ right-hand binding
 ---
 
 test 'simple right-hand binding', fn:
-  expect ast fn:
+  expect ast fink":
     123 |= b
-  | equals_ast
+  | equals fink":
     BindRight
       LitInt '123'
       Ident 'b'
 
 test 'multiline right-hand binding', fn:
-  expect ast fn:
+  expect ast fink":
     foo
       arg1
       arg2
     |= result
-  | equals_ast
+  | equals fink":
     BindRight
       Apply
         Ident 'foo'
@@ -220,9 +220,9 @@ test 'multiline right-hand binding', fn:
       Ident 'result'
 
 test 'nested right-hand binding', fn:
-  expect ast fn:
+  expect ast fink":
     [a |= [b, 2], [3, 4]] = [[1, 2], [3, 4]]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         BindRight
@@ -242,9 +242,9 @@ test 'nested right-hand binding', fn:
           LitInt '4'
 
 test 'right-hand binding with sequence destructure', fn:
-  expect ast fn:
+  expect ast fink":
     get_pair foo |= [a, b]
-  | equals_ast
+  | equals fink":
     BindRight
       Apply
         Ident 'get_pair'
@@ -254,9 +254,9 @@ test 'right-hand binding with sequence destructure', fn:
         Ident 'b'
 
 test 'right-hand binding with record destructure', fn:
-  expect ast fn:
+  expect ast fink":
     get_point foo |= {x, y}
-  | equals_ast
+  | equals fink":
     BindRight
       Apply
         Ident 'get_point'
@@ -266,9 +266,9 @@ test 'right-hand binding with record destructure', fn:
         Ident 'y'
 
 test 'right-hand binding with nested destructure', fn:
-  expect ast fn:
+  expect ast fink":
     compute foo |= {x, y: [a, b]}
-  | equals_ast
+  | equals fink":
     BindRight
       Apply
         Ident 'compute'
@@ -282,9 +282,9 @@ test 'right-hand binding with nested destructure', fn:
             Ident 'b'
 
 test 'nested right-hand binding in record pattern', fn:
-  expect ast fn:
+  expect ast fink":
     {foo: f |= {bar, spam: num ni}} = {foo: {bar: 1, spam: 2}}
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Arm
@@ -310,9 +310,9 @@ test 'nested right-hand binding in record pattern', fn:
               LitInt '2'
 
 test 'spread guard with right-hand binding', fn:
-  expect ast fn:
+  expect ast fink":
     [..(str) |= strings, ..other] = [1, '2', 3, '4']
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Spread
@@ -328,9 +328,9 @@ test 'spread guard with right-hand binding', fn:
         LitStr '4'
 
 test 'import', fn:
-  expect ast fn:
+  expect ast fink":
     {foo, bar} = import './foobar.fnk'
-  | equals_ast
+  | equals fink":
     Bind
       LitRec
         Ident 'foo'
@@ -345,15 +345,15 @@ wildcard
 ---
 
 test 'bare wildcard', fn:
-  expect ast fn:
+  expect ast fink":
     _
-  | equals_ast
+  | equals fink":
     Wildcard
 
 test 'wildcard in sequence destructure', fn:
-  expect ast fn:
+  expect ast fink":
     [_, x] = [1, 2]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Wildcard
@@ -363,9 +363,9 @@ test 'wildcard in sequence destructure', fn:
         LitInt '2'
 
 test 'wildcard in fn params', fn:
-  expect ast fn:
+  expect ast fink":
     fn _, b: b
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
         Wildcard
@@ -373,42 +373,42 @@ test 'wildcard in fn params', fn:
       Ident 'b'
 
 test 'wildcard does not match _foo', fn:
-  expect ast fn:
+  expect ast fink":
     _foo
-  | equals_ast
+  | equals fink":
     Ident '_foo'
 
 test 'implicit wildcard - middle slots', fn:
-  expect ast fn:
+  expect ast fink":
     [_, _, n]
-  | equals_ast
+  | equals fink":
     LitSeq
       Wildcard
       Wildcard
       Ident 'n'
 
 test 'implicit wildcard - leading comma', fn:
-  expect ast fn:
+  expect ast fink":
     [, , n]
-  | equals_ast
+  | equals fink":
     LitSeq
       Wildcard
       Wildcard
       Ident 'n'
 
 test 'implicit wildcard - mixed explicit and implicit', fn:
-  expect ast fn:
+  expect ast fink":
     [_, , n]
-  | equals_ast
+  | equals fink":
     LitSeq
       Wildcard
       Wildcard
       Ident 'n'
 
 test 'implicit wildcard in fn params', fn:
-  expect ast fn:
+  expect ast fink":
     fn , , c: c
-  | equals_ast
+  | equals fink":
     Fn
       Patterns
         Wildcard

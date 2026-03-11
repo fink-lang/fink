@@ -3,9 +3,9 @@ parentheses
 ---
 
 test 'grouping preserves Group node in arithmetic', fn:
-  expect ast fn:
+  expect ast fink":
     (1 + 2) * (2 + 3)
-  | equals_ast
+  | equals fink":
     InfixOp '*'
       Group
         InfixOp '+'
@@ -17,9 +17,9 @@ test 'grouping preserves Group node in arithmetic', fn:
           LitInt '3'
 
 test 'grouping application args without comma', fn:
-  expect ast fn:
+  expect ast fink":
     [(add 1, 2), (add 3, 4)]
-  | equals_ast
+  | equals fink":
     LitSeq
       Group
         Apply
@@ -33,9 +33,9 @@ test 'grouping application args without comma', fn:
           LitInt '4'
 
 test 'grouping to override right-to-left application', fn:
-  expect ast fn:
+  expect ast fink":
     foo (bar spam) ham
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'foo'
       Group
@@ -50,9 +50,9 @@ comma vs semicolon
 ---
 
 test 'comma separates args weakly', fn:
-  expect ast fn:
+  expect ast fink":
     add mul 2, 3, mul 3, 4
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'add'
       Apply
@@ -65,9 +65,9 @@ test 'comma separates args weakly', fn:
           LitInt '4'
 
 test 'semicolon groups strongly', fn:
-  expect ast fn:
+  expect ast fink":
     add mul 2, 3; mul 3, 4
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'add'
       Apply
@@ -85,11 +85,11 @@ newline as separator
 ---
 
 test 'multiline args - same AST as inline with semicolons', fn:
-  expect ast fn:
+  expect ast fink":
     add
       mul 2, 3
       mul 3, 4
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'add'
       Apply
@@ -102,10 +102,10 @@ test 'multiline args - same AST as inline with semicolons', fn:
         LitInt '4'
 
 test 'trailing comma continues onto next line', fn:
-  expect ast fn:
+  expect ast fink":
     foo bar,
       spam
-  | equals_ast
+  | equals fink":
     Apply
       Ident 'foo'
       Ident 'bar'
@@ -117,9 +117,9 @@ disambiguation with semicolon
 ---
 
 test 'semicolon makes spread guard boundary explicit', fn:
-  expect ast fn:
+  expect ast fink":
     [is_odd head; ..tail] = [3, 4, 5]
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         Apply
@@ -134,9 +134,9 @@ test 'semicolon makes spread guard boundary explicit', fn:
 
 
 test 'semicolon separates seq elements when both are non-spread', fn:
-  expect ast fn:
+  expect ast fink":
     [1, foo 1, 2; bar 3] = xs
-  | equals_ast
+  | equals fink":
     Bind
       LitSeq
         LitInt '1'

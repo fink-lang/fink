@@ -3,18 +3,18 @@ spread
 ---
 
 test 'spread into sequence', fn:
-  expect ast fn:
+  expect ast fink":
     [head, ..tail]
-  | equals_ast
+  | equals fink":
     LitSeq
       Ident 'head'
       Spread
         Ident 'tail'
 
 test 'spread concat sequences', fn:
-  expect ast fn:
+  expect ast fink":
     [..seq1, ..seq2]
-  | equals_ast
+  | equals fink":
     LitSeq
       Spread
         Ident 'seq1'
@@ -22,9 +22,9 @@ test 'spread concat sequences', fn:
         Ident 'seq2'
 
 test 'spread into record', fn:
-  expect ast fn:
+  expect ast fink":
     {foo: bar, ..rest}
-  | equals_ast
+  | equals fink":
     LitRec
       Arm
         Ident 'foo'
@@ -33,9 +33,9 @@ test 'spread into record', fn:
         Ident 'rest'
 
 test 'spread merge records', fn:
-  expect ast fn:
+  expect ast fink":
     {..rec1, ..rec2}
-  | equals_ast
+  | equals fink":
     LitRec
       Spread
         Ident 'rec1'
@@ -43,23 +43,23 @@ test 'spread merge records', fn:
         Ident 'rec2'
 
 test 'bare spread in sequence pattern', fn:
-  expect ast fn:
+  expect ast fink":
     [..]
-  | equals_ast
+  | equals fink":
     LitSeq
       Spread
 
 test 'bare spread in record pattern', fn:
-  expect ast fn:
+  expect ast fink":
     {..}
-  | equals_ast
+  | equals fink":
     LitRec
       Spread
 
 test 'spread with range guard', fn:
-  expect ast fn:
+  expect ast fink":
     [head, ..(0..2), ..rest]
-  | equals_ast
+  | equals fink":
     LitSeq
       Ident 'head'
       Spread
@@ -70,9 +70,9 @@ test 'spread with range guard', fn:
         Ident 'rest'
 
 test 'spread with function guard', fn:
-  expect ast fn:
+  expect ast fink":
     [..(is_odd), ..evens]
-  | equals_ast
+  | equals fink":
     LitSeq
       Spread
         Ident 'is_odd'
@@ -80,9 +80,9 @@ test 'spread with function guard', fn:
         Ident 'evens'
 
 test 'spread with range expression guard', fn:
-  expect ast fn:
+  expect ast fink":
     [..(1 + 2)..(3 + 4)]
-  | equals_ast
+  | equals fink":
     LitSeq
       Spread
         InfixOp '..'
@@ -95,9 +95,9 @@ test 'spread with range expression guard', fn:
               LitInt '4'
 
 test 'spread with ident range guard', fn:
-  expect ast fn:
+  expect ast fink":
     [..foo...bar]
-  | equals_ast
+  | equals fink":
     LitSeq
       Spread
         InfixOp '...'
@@ -105,9 +105,9 @@ test 'spread with ident range guard', fn:
           Ident 'bar'
 
 test 'spread with bare range guard', fn:
-  expect ast fn:
+  expect ast fink":
     [head, ..0..2, ..rest]
-  | equals_ast
+  | equals fink":
     LitSeq
       Ident 'head'
       Spread
@@ -118,9 +118,9 @@ test 'spread with bare range guard', fn:
         Ident 'rest'
 
 test 'spread with range to grouped expression', fn:
-  expect ast fn:
+  expect ast fink":
     [..0..(l)]
-  | equals_ast
+  | equals fink":
     LitSeq
       Spread
         InfixOp '..'
@@ -134,33 +134,33 @@ ranges
 ---
 
 test 'exclusive range', fn:
-  expect ast fn:
+  expect ast fink":
     0..10
-  | equals_ast
+  | equals fink":
     InfixOp '..'
       LitInt '0'
       LitInt '10'
 
 test 'inclusive range', fn:
-  expect ast fn:
+  expect ast fink":
     0...10
-  | equals_ast
+  | equals fink":
     InfixOp '...'
       LitInt '0'
       LitInt '10'
 
 test 'char range', fn:
-  expect ast fn:
+  expect ast fink":
     'a'...'z'
-  | equals_ast
+  | equals fink":
     InfixOp '...'
       LitStr 'a'
       LitStr 'z'
 
 test 'expression range exclusive', fn:
-  expect ast fn:
+  expect ast fink":
     (1 + 2)..(3 + 4)
-  | equals_ast
+  | equals fink":
     InfixOp '..'
       Group
         InfixOp '+'
@@ -172,9 +172,9 @@ test 'expression range exclusive', fn:
           LitInt '4'
 
 test 'expression range inclusive', fn:
-  expect ast fn:
+  expect ast fink":
     (1 + 2)...(3 + 4)
-  | equals_ast
+  | equals fink":
     InfixOp '...'
       Group
         InfixOp '+'

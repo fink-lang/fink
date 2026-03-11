@@ -1525,8 +1525,6 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<No
 
 #[cfg(test)]
 mod tests {
-  use test_macros::test_template;
-
   #[test]
   fn test_str_escape_stored_verbatim() {
     // LitStr must store raw source bytes — no rendering at parse time.
@@ -1556,18 +1554,17 @@ mod tests {
     }
   }
 
-#[test_template(
-    "src/parser", "./*.fnk",
-    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect ast fn:\n(?P<src>[\s\S]+?)\n\n?  [|] equals_ast\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\ntest |\z)"
-  )]
-  fn test_parser(src: &str, exp: &str, path: &str) {
-    let src = src.lines().map(|l| l.strip_prefix("    ").unwrap_or(l)).collect::<Vec<_>>().join("\n");
-    let exp = exp.lines().map(|l| l.strip_prefix("    ").unwrap_or(l)).collect::<Vec<_>>().join("\n");
-    pretty_assertions::assert_eq!(
-      parse_debug(src.trim()),
-      exp.trim(),
-      "{}",
-      path
-    );
+  fn ast(src: &str) -> String {
+    parse_debug(src)
   }
+
+  test_macros::include_fink_tests!("src/parser/test_try.fnk");
+  test_macros::include_fink_tests!("src/parser/test_literals.fnk");
+  test_macros::include_fink_tests!("src/parser/test_operators.fnk");
+  test_macros::include_fink_tests!("src/parser/test_grouping.fnk");
+  test_macros::include_fink_tests!("src/parser/test_spread_ranges.fnk");
+  test_macros::include_fink_tests!("src/parser/test_bindings.fnk");
+  test_macros::include_fink_tests!("src/parser/test_functions.fnk");
+  test_macros::include_fink_tests!("src/parser/test_match.fnk");
+  test_macros::include_fink_tests!("src/parser/test_blocks.fnk");
 }

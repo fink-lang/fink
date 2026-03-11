@@ -3,88 +3,88 @@ arithmetic
 ---
 
 test 'unary minus', fn:
-  expect ast fn:
+  expect ast fink":
     -a
-  | equals_ast
+  | equals fink":
     UnaryOp '-'
       Ident 'a'
 
 test 'add', fn:
-  expect ast fn:
+  expect ast fink":
     a + b
-  | equals_ast
+  | equals fink":
     InfixOp '+'
       Ident 'a'
       Ident 'b'
 
 test 'subtract', fn:
-  expect ast fn:
+  expect ast fink":
     a - b
-  | equals_ast
+  | equals fink":
     InfixOp '-'
       Ident 'a'
       Ident 'b'
 
 test 'multiply', fn:
-  expect ast fn:
+  expect ast fink":
     a * b
-  | equals_ast
+  | equals fink":
     InfixOp '*'
       Ident 'a'
       Ident 'b'
 
 test 'divide', fn:
-  expect ast fn:
+  expect ast fink":
     a / b
-  | equals_ast
+  | equals fink":
     InfixOp '/'
       Ident 'a'
       Ident 'b'
 
 test 'integer divide', fn:
-  expect ast fn:
+  expect ast fink":
     a // b
-  | equals_ast
+  | equals fink":
     InfixOp '//'
       Ident 'a'
       Ident 'b'
 
 test 'power', fn:
-  expect ast fn:
+  expect ast fink":
     a ** b
-  | equals_ast
+  | equals fink":
     InfixOp '**'
       Ident 'a'
       Ident 'b'
 
 test 'remainder', fn:
-  expect ast fn:
+  expect ast fink":
     a % b
-  | equals_ast
+  | equals fink":
     InfixOp '%'
       Ident 'a'
       Ident 'b'
 
 test 'true modulus', fn:
-  expect ast fn:
+  expect ast fink":
     a %% b
-  | equals_ast
+  | equals fink":
     InfixOp '%%'
       Ident 'a'
       Ident 'b'
 
 test 'divmod', fn:
-  expect ast fn:
+  expect ast fink":
     a /% b
-  | equals_ast
+  | equals fink":
     InfixOp '/%'
       Ident 'a'
       Ident 'b'
 
 test 'power is right associative', fn:
-  expect ast fn:
+  expect ast fink":
     a ** b ** c
-  | equals_ast
+  | equals fink":
     InfixOp '**'
       Ident 'a'
       InfixOp '**'
@@ -92,9 +92,9 @@ test 'power is right associative', fn:
         Ident 'c'
 
 test 'multiply binds tighter than add', fn:
-  expect ast fn:
+  expect ast fink":
     a + b * c
-  | equals_ast
+  | equals fink":
     InfixOp '+'
       Ident 'a'
       InfixOp '*'
@@ -107,40 +107,40 @@ logical
 ---
 
 test 'not', fn:
-  expect ast fn:
+  expect ast fink":
     not a
-  | equals_ast
+  | equals fink":
     UnaryOp 'not'
       Ident 'a'
 
 test 'and', fn:
-  expect ast fn:
+  expect ast fink":
     a and b
-  | equals_ast
+  | equals fink":
     InfixOp 'and'
       Ident 'a'
       Ident 'b'
 
 test 'or', fn:
-  expect ast fn:
+  expect ast fink":
     a or b
-  | equals_ast
+  | equals fink":
     InfixOp 'or'
       Ident 'a'
       Ident 'b'
 
 test 'xor', fn:
-  expect ast fn:
+  expect ast fink":
     a xor b
-  | equals_ast
+  | equals fink":
     InfixOp 'xor'
       Ident 'a'
       Ident 'b'
 
 test 'not binds tighter than and', fn:
-  expect ast fn:
+  expect ast fink":
     not a and not b
-  | equals_ast
+  | equals fink":
     InfixOp 'and'
       UnaryOp 'not'
         Ident 'a'
@@ -148,9 +148,9 @@ test 'not binds tighter than and', fn:
         Ident 'b'
 
 test 'and binds tighter than or', fn:
-  expect ast fn:
+  expect ast fink":
     a or b and c
-  | equals_ast
+  | equals fink":
     InfixOp 'or'
       Ident 'a'
       InfixOp 'and'
@@ -158,9 +158,9 @@ test 'and binds tighter than or', fn:
         Ident 'c'
 
 test 'add binds tighter than and', fn:
-  expect ast fn:
+  expect ast fink":
     a + b and c + d
-  | equals_ast
+  | equals fink":
     InfixOp 'and'
       InfixOp '+'
         Ident 'a'
@@ -175,57 +175,57 @@ comparison
 ---
 
 test 'greater than', fn:
-  expect ast fn:
+  expect ast fink":
     a > b
-  | equals_ast
+  | equals fink":
     InfixOp '>'
       Ident 'a'
       Ident 'b'
 
 test 'greater than or equal', fn:
-  expect ast fn:
+  expect ast fink":
     a >= b
-  | equals_ast
+  | equals fink":
     InfixOp '>='
       Ident 'a'
       Ident 'b'
 
 test 'less than', fn:
-  expect ast fn:
+  expect ast fink":
     a < b
-  | equals_ast
+  | equals fink":
     InfixOp '<'
       Ident 'a'
       Ident 'b'
 
 test 'less than or equal', fn:
-  expect ast fn:
+  expect ast fink":
     a <= b
-  | equals_ast
+  | equals fink":
     InfixOp '<='
       Ident 'a'
       Ident 'b'
 
 test 'equal', fn:
-  expect ast fn:
+  expect ast fink":
     a == b
-  | equals_ast
+  | equals fink":
     InfixOp '=='
       Ident 'a'
       Ident 'b'
 
 test 'not equal', fn:
-  expect ast fn:
+  expect ast fink":
     a != b
-  | equals_ast
+  | equals fink":
     InfixOp '!='
       Ident 'a'
       Ident 'b'
 
 test 'chained comparison same op', fn:
-  expect ast fn:
+  expect ast fink":
     a > b > c
-  | equals_ast
+  | equals fink":
     ChainedCmp
       Ident 'a'
       '>'
@@ -234,9 +234,9 @@ test 'chained comparison same op', fn:
       Ident 'c'
 
 test 'chained comparison mixed ops', fn:
-  expect ast fn:
+  expect ast fink":
     a >= b > c
-  | equals_ast
+  | equals fink":
     ChainedCmp
       Ident 'a'
       '>='
@@ -245,33 +245,33 @@ test 'chained comparison mixed ops', fn:
       Ident 'c'
 
 test 'containment', fn:
-  expect ast fn:
+  expect ast fink":
     a in b
-  | equals_ast
+  | equals fink":
     InfixOp 'in'
       Ident 'a'
       Ident 'b'
 
 test 'not containment', fn:
-  expect ast fn:
+  expect ast fink":
     a not in b
-  | equals_ast
+  | equals fink":
     InfixOp 'not in'
       Ident 'a'
       Ident 'b'
 
 test 'disjoint', fn:
-  expect ast fn:
+  expect ast fink":
     a >< b
-  | equals_ast
+  | equals fink":
     InfixOp '><'
       Ident 'a'
       Ident 'b'
 
 test 'comparison binds tighter than and', fn:
-  expect ast fn:
+  expect ast fink":
     a > 0 and b < 10
-  | equals_ast
+  | equals fink":
     InfixOp 'and'
       InfixOp '>'
         Ident 'a'
@@ -286,56 +286,56 @@ bitwise
 ---
 
 test 'bitwise not', fn:
-  expect ast fn:
+  expect ast fink":
     ~a
-  | equals_ast
+  | equals fink":
     UnaryOp '~'
       Ident 'a'
 
 test 'bitwise and', fn:
-  expect ast fn:
+  expect ast fink":
     a & b
-  | equals_ast
+  | equals fink":
     InfixOp '&'
       Ident 'a'
       Ident 'b'
 
 test 'bitwise xor', fn:
-  expect ast fn:
+  expect ast fink":
     a ^ b
-  | equals_ast
+  | equals fink":
     InfixOp '^'
       Ident 'a'
       Ident 'b'
 
 test 'shift right', fn:
-  expect ast fn:
+  expect ast fink":
     a >> b
-  | equals_ast
+  | equals fink":
     InfixOp '>>'
       Ident 'a'
       Ident 'b'
 
 test 'shift left', fn:
-  expect ast fn:
+  expect ast fink":
     a << b
-  | equals_ast
+  | equals fink":
     InfixOp '<<'
       Ident 'a'
       Ident 'b'
 
 test 'rotate right', fn:
-  expect ast fn:
+  expect ast fink":
     a >>> b
-  | equals_ast
+  | equals fink":
     InfixOp '>>>'
       Ident 'a'
       Ident 'b'
 
 test 'rotate left', fn:
-  expect ast fn:
+  expect ast fink":
     a <<< b
-  | equals_ast
+  | equals fink":
     InfixOp '<<<'
       Ident 'a'
       Ident 'b'
@@ -346,17 +346,17 @@ member access
 ---
 
 test 'member by name', fn:
-  expect ast fn:
+  expect ast fink":
     foo.bar
-  | equals_ast
+  | equals fink":
     Member
       Ident 'foo'
       Ident 'bar'
 
 test 'chained member access', fn:
-  expect ast fn:
+  expect ast fink":
     foo.bar.spam
-  | equals_ast
+  | equals fink":
     Member
       Member
         Ident 'foo'
@@ -364,26 +364,26 @@ test 'chained member access', fn:
       Ident 'spam'
 
 test 'member by hyphenated name', fn:
-  expect ast fn:
+  expect ast fink":
     foo.bar-spam
-  | equals_ast
+  | equals fink":
     Member
       Ident 'foo'
       Ident 'bar-spam'
 
 test 'member by expression', fn:
-  expect ast fn:
+  expect ast fink":
     foo.(expr)
-  | equals_ast
+  | equals fink":
     Member
       Ident 'foo'
       Group
         Ident 'expr'
 
 test 'sequence index', fn:
-  expect ast fn:
+  expect ast fink":
     [1, 2, 3].(0)
-  | equals_ast
+  | equals fink":
     Member
       LitSeq
         LitInt '1'
@@ -393,9 +393,9 @@ test 'sequence index', fn:
         LitInt '0'
 
 test 'sequence range slice', fn:
-  expect ast fn:
+  expect ast fink":
     [0, 1, 2, 3, 4].(2...3)
-  | equals_ast
+  | equals fink":
     Member
       LitSeq
         LitInt '0'
@@ -409,17 +409,17 @@ test 'sequence range slice', fn:
           LitInt '3'
 
 test 'ident range', fn:
-  expect ast fn:
+  expect ast fink":
     start..end
-  | equals_ast
+  | equals fink":
     InfixOp '..'
       Ident 'start'
       Ident 'end'
 
 test 'member access on record literal', fn:
-  expect ast fn:
+  expect ast fink":
     {foo: 123}.foo
-  | equals_ast
+  | equals fink":
     Member
       LitRec
         Arm
@@ -428,9 +428,9 @@ test 'member access on record literal', fn:
       Ident 'foo'
 
 test 'member by string key', fn:
-  expect ast fn:
+  expect ast fink":
     {'ni nu': 123}.('ni nu')
-  | equals_ast
+  | equals fink":
     Member
       LitRec
         Arm
@@ -440,9 +440,9 @@ test 'member by string key', fn:
         LitStr 'ni nu'
 
 test 'member by sequence key', fn:
-  expect ast fn:
+  expect ast fink":
     [0, 1, 2, 3, 4].([2, 3])
-  | equals_ast
+  | equals fink":
     Member
       LitSeq
         LitInt '0'
