@@ -278,17 +278,7 @@ impl<'src> Transform<'src> for PartialPass {
 
 #[cfg(test)]
 mod tests {
-  use test_macros::test_template;
-  use pretty_assertions::assert_eq;
-
-  fn dedent(s: &str) -> String {
-    s.lines()
-      .map(|line| line.strip_prefix("    ").unwrap_or(line))
-      .collect::<Vec<_>>()
-      .join("\n")
-  }
-
-  fn partial_debug(src: &str) -> String {
+  fn partial(src: &str) -> String {
     match crate::parser::parse(src) {
       Err(e) => format!("PARSE ERROR: {}", e.message),
       Ok(node) => match super::apply(node) {
@@ -298,16 +288,5 @@ mod tests {
     }
   }
 
-  #[test_template(
-    "src/transform", "./test_partial.fnk",
-    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect \S+ fn:\n(?P<src>[\s\S]+?)\n\n?  , equals fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
-  )]
-  fn test_partial(src: &str, exp: &str, path: &str) {
-    assert_eq!(
-      partial_debug(&dedent(src).trim().to_string()),
-      dedent(exp).trim().to_string(),
-      "{}",
-      path
-    );
-  }
+  test_macros::include_fink_tests!("src/transform/test_partial.fnk");
 }

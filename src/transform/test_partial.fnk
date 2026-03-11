@@ -1,16 +1,13 @@
-{test, expect, equals} = import '@fink/testing.fnk'
-{partial} = import '@fink/compiler/transform'
 
 
---- --- ---
+---
 statement-level partial
---- --- ---
+---
 
 test 'partial in infix rhs', fn:
-  expect partial fn:
+  expect partial fink":
     ? + 5
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -20,10 +17,9 @@ test 'partial in infix rhs', fn:
 
 
 test 'partial in infix lhs', fn:
-  expect partial fn:
+  expect partial fink":
     1 + ?
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -33,10 +29,9 @@ test 'partial in infix lhs', fn:
 
 
 test 'partial used twice - single param', fn:
-  expect partial fn:
+  expect partial fink":
     ? + ?
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -46,10 +41,9 @@ test 'partial used twice - single param', fn:
 
 
 test 'partial in apply arg', fn:
-  expect partial fn:
+  expect partial fink":
     add 5, ?
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -60,10 +54,9 @@ test 'partial in apply arg', fn:
 
 
 test 'partial in unary', fn:
-  expect partial fn:
+  expect partial fink":
     -?
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -72,10 +65,9 @@ test 'partial in unary', fn:
 
 
 test 'partial in member access', fn:
-  expect partial fn:
+  expect partial fink":
     ?.foo
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -85,10 +77,9 @@ test 'partial in member access', fn:
 
 
 test 'partial in computed member access', fn:
-  expect partial fn:
+  expect partial fink":
     ?.(0)
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -99,10 +90,9 @@ test 'partial in computed member access', fn:
 
 
 test 'partial in range', fn:
-  expect partial fn:
+  expect partial fink":
     (1..?)
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -112,10 +102,9 @@ test 'partial in range', fn:
 
 
 test 'partial in spread', fn:
-  expect partial fn:
+  expect partial fink":
     [..?]
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -125,10 +114,9 @@ test 'partial in spread', fn:
 
 
 test 'bare partial - identity function', fn:
-  expect partial fn:
+  expect partial fink":
     (?)
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -136,10 +124,9 @@ test 'bare partial - identity function', fn:
 
 
 test 'partial in binding rhs', fn:
-  expect partial fn:
+  expect partial fink":
     add5 = add 5, ?
-
-  , equals fn:
+  | equals fink":
     Bind
       Ident 'add5'
       Fn
@@ -151,15 +138,14 @@ test 'partial in binding rhs', fn:
           Ident '$'
 
 
---- --- ---
+---
 group as explicit scope boundary
---- --- ---
+---
 
 test 'group narrows scope - member expr key preserves group', fn:
-  expect partial fn:
+  expect partial fink":
     foo.(?)
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -170,10 +156,9 @@ test 'group narrows scope - member expr key preserves group', fn:
 
 
 test 'group with multiple partial refs - same param', fn:
-  expect partial fn:
+  expect partial fink":
     (foo ?.(1), ?.(2))
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -190,10 +175,9 @@ test 'group with multiple partial refs - same param', fn:
 
 
 test 'nested groups - each is its own scope', fn:
-  expect partial fn:
+  expect partial fink":
     (foo (bar ?) ?)
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -208,15 +192,14 @@ test 'nested groups - each is its own scope', fn:
         Ident '$'
 
 
---- --- ---
+---
 transparent containers - partial bubbles through
---- --- ---
+---
 
 test 'partial in seq literal - seq is transparent', fn:
-  expect partial fn:
+  expect partial fink":
     [?, ?]
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -226,10 +209,9 @@ test 'partial in seq literal - seq is transparent', fn:
 
 
 test 'partial with member projection in seq', fn:
-  expect partial fn:
+  expect partial fink":
     [?.(0), ?.(1)]
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -245,10 +227,9 @@ test 'partial with member projection in seq', fn:
 
 
 test 'partial in rec literal - rec is transparent', fn:
-  expect partial fn:
+  expect partial fink":
     {foo: ?, bar: ?}
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -262,10 +243,9 @@ test 'partial in rec literal - rec is transparent', fn:
 
 
 test 'partial in nested seq - all same param', fn:
-  expect partial fn:
+  expect partial fink":
     [?, [?, ?]]
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -277,10 +257,9 @@ test 'partial in nested seq - all same param', fn:
 
 
 test 'partial in spread apply', fn:
-  expect partial fn:
+  expect partial fink":
     foo ..?
-
-  , equals fn:
+  | equals fink":
     Fn
       Patterns
         Ident '$'
@@ -290,16 +269,15 @@ test 'partial in spread apply', fn:
           Ident '$'
 
 
---- --- ---
+---
 pipe segments as scope boundaries
---- --- ---
+---
 
 test 'partial in pipe segment', fn:
-  expect partial fn:
+  expect partial fink":
     items
     | filter ? % 2 == 0
-
-  , equals fn:
+  | equals fink":
     Pipe
       Ident 'items'
       Fn
@@ -315,12 +293,11 @@ test 'partial in pipe segment', fn:
 
 
 test 'partial in multiple pipe segments', fn:
-  expect partial fn:
+  expect partial fink":
     items
     | filter is_even ?
     | map ? * 2
-
-  , equals fn:
+  | equals fink":
     Pipe
       Ident 'items'
       Fn
