@@ -250,6 +250,26 @@ test 'str_block_contains_quote', fn:
     StrEnd '', loc [14, 2, 11], [14, 2, 11]
     BlockEnd loc [14, 2, 11], [14, 2, 11]
 
+test 'raw_templ_basic', fn:
+  expect tokenize raw:
+    raw":
+      hello
+  | equals raw:
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    Ident 'raw', loc [0, 1, 0], [3, 1, 3]
+    StrStart '":', loc [3, 1, 3], [5, 1, 5]
+    StrText 'hello', loc [8, 2, 2], [13, 2, 7]
+    StrEnd '', loc [13, 2, 7], [13, 2, 7]
+    BlockEnd loc [13, 2, 7], [13, 2, 7]
+
+test 'raw_templ_via_macro', fn:
+  expect tokenize raw":
+    foo
+  | equals raw":
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    Ident 'foo', loc [0, 1, 0], [3, 1, 3]
+    BlockEnd loc [3, 1, 3], [3, 1, 3]
+
 test 'str_escapes', fn:
   expect tokenize raw:
     '\n\r\v\t\b\f\\\'\b01\x0f\uff\u10_ff_ff'

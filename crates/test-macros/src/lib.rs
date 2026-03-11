@@ -191,8 +191,12 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
             }
           }
           _ => {
-            let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
-            text
+            if let Some(text) = extract_raw_templ(body_node) {
+              text
+            } else {
+              let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
+              text
+            }
           }
         };
         (*func_name, text)
@@ -206,12 +210,16 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         if matches!(&func.kind, NodeKind::Ident(s) if s.starts_with("equals")) =>
       {
         let Some(body_node) = args.first() else { continue };
-        // Accept either a string literal or a fn/text fn body.
+        // Accept a string literal, raw": tagged template, or a fn/text fn body.
         match &body_node.kind {
           NodeKind::LitStr(s) => s.clone(),
           _ => {
-            let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
-            text
+            if let Some(text) = extract_raw_templ(body_node) {
+              text
+            } else {
+              let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
+              text
+            }
           }
         }
       }
@@ -228,6 +236,33 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
   }
 
   out
+}
+
+/// Extract the verbatim string content from a `raw":\n  ...` tagged template node.
+///
+/// Matches `Apply { func: Ident("raw"), args: [StrRawTempl([LitStr(s)])] }` and
+/// returns `s` verbatim — no unescaping. This is the `raw":` form used in tests
+/// as a replacement for the `raw:` block syntax.
+fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
+  use fink::ast::NodeKind;
+  let NodeKind::Apply { func, args } = &node.kind else { return None };
+  if !matches!(func.kind, NodeKind::Ident("raw")) { return None; }
+  let arg = args.first()?;
+  match &arg.kind {
+    // No interpolation: raw": collapses to Apply(raw, LitStr) — verbatim, no unescape.
+    // Trim trailing newline to match raw: block behaviour.
+    NodeKind::LitStr(s) => Some(s.trim_end_matches('\n').to_string()),
+    // With interpolation: Apply(raw, StrRawTempl([LitStr, ...])) — only plain text supported in tests.
+    NodeKind::StrRawTempl(children) => {
+      if let [child] = children.as_slice() {
+        if let NodeKind::LitStr(s) = &child.kind {
+          return Some(s.trim_end_matches('\n').to_string());
+        }
+      }
+      None
+    }
+    _ => None,
+  }
 }
 
 /// Extract and dedent the body text of a `fn:` or `text fn:` node.
