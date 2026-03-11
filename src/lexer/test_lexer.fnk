@@ -1,9 +1,9 @@
 
 test 'ops_ws_from_position', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     a + b
     a+b
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'a', loc [0, 1, 0], [1, 1, 1]
     Op '+', loc [2, 1, 2], [3, 1, 3]
@@ -16,12 +16,12 @@ test 'ops_ws_from_position', fn:
 
 
 test 'separators', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     [a, b]
     foo a; b
     {a: b}
     a ?
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     Ident 'a', loc [1, 1, 1], [2, 1, 2]
@@ -46,10 +46,10 @@ test 'separators', fn:
 
 
 test 'ops_greedy_longest_match', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     a = b
     a == b
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'a', loc [0, 1, 0], [1, 1, 1]
     Op '=', loc [2, 1, 2], [3, 1, 3]
@@ -71,7 +71,7 @@ test 'idents', fn:
     café
     $foo
     $foo$bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockCont loc [3, 1, 3], [4, 2, 0]
@@ -92,10 +92,10 @@ test 'idents', fn:
 
 
 test 'ident_hyphen_valid', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo-bar
     foo - bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo-bar', loc [0, 1, 0], [7, 1, 7]
     BlockCont loc [7, 1, 7], [8, 2, 0]
@@ -106,9 +106,9 @@ test 'ident_hyphen_valid', fn:
 
 
 test 'ident_hyphen_trailing_eol', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo-
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Err 'unterminated identifier', loc [3, 1, 3], [4, 1, 4]
@@ -116,9 +116,9 @@ test 'ident_hyphen_trailing_eol', fn:
 
 
 test 'ident_hyphen_space_after', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo- a
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Err 'unterminated identifier', loc [3, 1, 3], [4, 1, 4]
@@ -127,11 +127,11 @@ test 'ident_hyphen_space_after', fn:
 
 
 test 'raw_block', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     raw:
       foo
       bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
     StrText 'foo\n', loc [7, 2, 2], [11, 3, 0]
@@ -150,7 +150,7 @@ test 'raw_block_last_line_handling', fn:
       spam
 
     | ni
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     StrStart 'raw:', loc [4, 1, 4], [8, 1, 8]
@@ -176,7 +176,7 @@ test 'raw_block_blank_line', fn:
 
       ipsum
     bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     StrStart 'raw:', loc [4, 1, 4], [8, 1, 8]
@@ -189,10 +189,10 @@ test 'raw_block_blank_line', fn:
 
 
 test 'raw_block_empty', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     raw:
     foo
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
     StrEnd '', loc [5, 2, 0], [5, 2, 0]
@@ -200,11 +200,11 @@ test 'raw_block_empty', fn:
     BlockEnd loc [8, 2, 3], [8, 2, 3]
 
 test 'str_block_basic', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     ":
       foo
       bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo\n', loc [5, 2, 2], [9, 3, 0]
@@ -227,11 +227,11 @@ test 'str_block_interpolation', fn:
     BlockEnd loc [18, 2, 15], [18, 2, 15]
 
 test 'str_block_dedent_is_end', fn:
-  expect tokenize raw:
+  expect tokenize raw":
       ":
         foo
       bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo\n', loc [5, 2, 2], [9, 3, 0]
@@ -240,10 +240,10 @@ test 'str_block_dedent_is_end', fn:
     BlockEnd loc [12, 3, 3], [12, 3, 3]
 
 test 'str_block_contains_quote', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     ":
       it's fine
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'it\'s fine', loc [5, 2, 2], [14, 2, 11]
@@ -251,10 +251,10 @@ test 'str_block_contains_quote', fn:
     BlockEnd loc [14, 2, 11], [14, 2, 11]
 
 test 'raw_templ_basic', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     raw":
       hello
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'raw', loc [0, 1, 0], [3, 1, 3]
     StrStart '":', loc [3, 1, 3], [5, 1, 5]
@@ -271,9 +271,9 @@ test 'raw_templ_via_macro', fn:
     BlockEnd loc [3, 1, 3], [3, 1, 3]
 
 test 'str_escapes', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     '\n\r\v\t\b\f\\\'\b01\x0f\uff\u10_ff_ff'
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText '\\n\\r\\v\\t\\b\\f\\\\\\\'\\b01\\x0f\\uff\\u10_ff_ff', loc [1, 1, 1], [39, 1, 39]
@@ -281,10 +281,10 @@ test 'str_escapes', fn:
     BlockEnd loc [40, 1, 40], [40, 1, 40]
 
 test 'str_block_escapes', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     ":
       \n\r\v\t\b\f\\\'\b01\x0f\uff\u10_ff_ff
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText '\\n\\r\\v\\t\\b\\f\\\\\\\'\\b01\\x0f\\uff\\u10_ff_ff', loc [5, 2, 2], [43, 2, 40]
@@ -292,11 +292,11 @@ test 'str_block_escapes', fn:
     BlockEnd loc [43, 2, 40], [43, 2, 40]
 
 test 'raw_block_dedent_is_end', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     raw:
       foo
     bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
     StrText 'foo', loc [7, 2, 2], [10, 2, 5]
@@ -306,13 +306,13 @@ test 'raw_block_dedent_is_end', fn:
 
 
 test 'int', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     42
     1_000_000
     0xFF_aa_00
     0b1010_010
     0o777_111
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Int '42', loc [0, 1, 0], [2, 1, 2]
     BlockCont loc [2, 1, 2], [3, 2, 0]
@@ -327,12 +327,12 @@ test 'int', fn:
 
 
 test 'float', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     3.14
     1_000.123_456_789
     1.0e100_000
     1.0e-100
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Float '3.14', loc [0, 1, 0], [4, 1, 4]
     BlockCont loc [4, 1, 4], [5, 2, 0]
@@ -345,11 +345,11 @@ test 'float', fn:
 
 
 test 'decimal', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     1.0d
     1_000d
     1.0d-100_000
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Decimal '1.0d', loc [0, 1, 0], [4, 1, 4]
     BlockCont loc [4, 1, 4], [5, 2, 0]
@@ -381,7 +381,7 @@ test 'strings', fn:
 test 'string_escape', fn:
   expect tokenize text fn:
     'a\'b'
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText 'a\\\'b', loc [1, 1, 1], [5, 1, 5]
@@ -391,7 +391,7 @@ test 'string_escape', fn:
 
 
 test 'string_multiline_indentation', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     'foo
         bar
       spam'
@@ -399,7 +399,7 @@ test 'string_multiline_indentation', fn:
         bar
       spam
     '
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText 'foo\n', loc [1, 1, 1], [5, 2, 0]
@@ -419,7 +419,7 @@ test 'string_multiline_indentation_error', fn:
     'log
       \'foo
     bar\''
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'log', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -437,7 +437,7 @@ test 'string_multiline_indentation_closing_error', fn:
     'foo
       bar \'foo
     '
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -452,11 +452,11 @@ test 'string_multiline_indentation_closing_error', fn:
 
 test 'brackets', fn:
   # TODO: bug
-  expect tokenize raw:
+  expect tokenize raw":
     []
     {}
     ()
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     BracketClose ']', loc [1, 1, 1], [2, 1, 2]
@@ -470,13 +470,13 @@ test 'brackets', fn:
 
 
 test 'bracket_nesting', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     [
       {foo}
     ]
     {foo: [bar]}
     ((a + b) * c)
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     BlockStart loc [1, 1, 1], [4, 2, 2]
@@ -507,13 +507,13 @@ test 'bracket_nesting', fn:
 
 
 test 'block_indent', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo
       bar
         ni
       spam
     ham
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -530,12 +530,12 @@ test 'block_indent', fn:
 
 
 test 'block_dedent_multi', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo
       bar
         ni
     ham
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -554,7 +554,7 @@ test 'block_blank_lines', fn:
     foo
 
       bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [7, 3, 2]
@@ -564,9 +564,9 @@ test 'block_blank_lines', fn:
 
 
 test 'comment', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo # a comment
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Comment '# a comment', loc [4, 1, 4], [15, 1, 15]
@@ -574,11 +574,11 @@ test 'comment', fn:
 
 
 test 'doc_comment', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     ---
     doc
     ---
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText '\n', loc [3, 1, 3], [4, 2, 0]
@@ -588,9 +588,9 @@ test 'doc_comment', fn:
 
 
 test 'block_comment_inline', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     ---foo---
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText 'foo', loc [3, 1, 3], [6, 1, 6]
@@ -599,12 +599,12 @@ test 'block_comment_inline', fn:
 
 
 test 'block_comment_multiline', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     ---foo
         bar
       spam
     ---
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText 'foo\n', loc [3, 1, 3], [7, 2, 0]
@@ -615,12 +615,12 @@ test 'block_comment_multiline', fn:
 
 
 test 'block_comment_indent_error', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     log
       ---foo
     bar
     ---
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'log', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -636,11 +636,11 @@ test 'block_comment_indent_error', fn:
 
 
 test 'block_comment_closing_indent_error', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo
       ---bar
     ---
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -658,7 +658,7 @@ test 'block_trailing_blank_lines', fn:
     foo
       bar
 
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -669,7 +669,7 @@ test 'block_trailing_blank_lines', fn:
 
 test 'err_str_eof', fn:
   expect tokenize '\'hello'
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText 'hello', loc [1, 1, 1], [6, 1, 6]
@@ -678,10 +678,10 @@ test 'err_str_eof', fn:
 
 
 test 'err_doc_comment_eof', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     ---
     hello
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText '\n', loc [3, 1, 3], [4, 2, 0]
@@ -691,9 +691,9 @@ test 'err_doc_comment_eof', fn:
 
 
 test 'err_bracket_eof', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     [foo
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     Ident 'foo', loc [1, 1, 1], [4, 1, 4]
@@ -702,9 +702,9 @@ test 'err_bracket_eof', fn:
 
 
 test 'err_bracket_mismatch', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     {foo]
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '{', loc [0, 1, 0], [1, 1, 1]
     Ident 'foo', loc [1, 1, 1], [4, 1, 4]
@@ -714,12 +714,12 @@ test 'err_bracket_mismatch', fn:
 
 
 test 'err_unexpected_dedent', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo
       bar
         ni
      ham
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -735,7 +735,7 @@ test 'err_unexpected_dedent', fn:
 
 test 'err_unexpected_dedent2', fn:
   expect tokenize 'foo\n  bar\n    ni\n ham'
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -752,7 +752,7 @@ test 'err_unexpected_dedent2', fn:
 
 test 'err_tab', fn:
   expect tokenize 'a\tb'
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'a', loc [0, 1, 0], [1, 1, 1]
     Err 'tab character not allowed', loc [1, 1, 1], [2, 1, 2]
@@ -761,12 +761,12 @@ test 'err_tab', fn:
 
 
 test 'bracket_multiline_flat', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     {
       foo: 1
       bar: 2
     }
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '{', loc [0, 1, 0], [1, 1, 1]
     BlockStart loc [1, 1, 1], [4, 2, 2]
@@ -783,13 +783,13 @@ test 'bracket_multiline_flat', fn:
 
 
 test 'bracket_multiline_nested', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     {
       foo: {
         bar: 1
       }
     }
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '{', loc [0, 1, 0], [1, 1, 1]
     BlockStart loc [1, 1, 1], [4, 2, 2]
@@ -809,9 +809,9 @@ test 'bracket_multiline_nested', fn:
 
 
 test 'err_unknown_char', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     foo @ bar
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Err '@', loc [4, 1, 4], [5, 1, 5]
@@ -820,11 +820,11 @@ test 'err_unknown_char', fn:
 
 
 test 'raw_block_contains_raw_keyword', fn:
-  expect tokenize raw:
+  expect tokenize raw":
     raw:
       raw:
         foo
-  | equals raw:
+  | equals raw":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart 'raw:', loc [0, 1, 0], [4, 1, 4]
     StrText 'raw:\n', loc [7, 2, 2], [12, 3, 0]
