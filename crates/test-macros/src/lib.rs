@@ -178,10 +178,10 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         let Some(body_node) = fn_args.first() else { continue };
         let text = match &body_node.kind {
           NodeKind::LitStr(s) => {
-            // TODO: the AST doesn't distinguish 'quoted' LitStr from raw: LitStr.
+            // TODO: the AST doesn't distinguish 'quoted' LitStr from ":" block LitStr.
             // Peek at the byte just before the node's loc start in the source —
             // if it's `'` this came from a quoted string and needs unescape;
-            // otherwise it came from raw: and must be used verbatim.
+            // otherwise it came from a ":" block and must be used verbatim.
             let start = body_node.loc.start.idx as usize;
             let preceded_by_quote = file_src.as_bytes().get(start) == Some(&b'\'');
             if preceded_by_quote {
@@ -242,8 +242,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
 /// Extract the verbatim string content from a `raw":\n  ...` tagged template node.
 ///
 /// Matches `Apply { func: Ident("raw"), args: [LitStr(s) | StrRawTempl([LitStr(s)])] }` and
-/// returns `s` verbatim — no unescaping, no trimming. This is the `raw":` form used in tests
-/// as a replacement for the `raw:` block syntax.
+/// returns `s` verbatim — no unescaping, no trimming. This is the `raw":` form used in tests.
 fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   use fink::ast::NodeKind;
   let NodeKind::Apply { func, args } = &node.kind else { return None };

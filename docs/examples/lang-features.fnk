@@ -101,15 +101,20 @@ bar
 '
 # unexpexted dedent
 
-
-
+---
+string blocks
+---
+":
+  supports templating ${bar}
+  no need to escape 'spam'
 
 # tagged template strings - tagging func receives raw str parts and values
 fmt'hello ${1 + 2}'
 rx'(?<group>[a-z]+)'  # TODO: should it be possible to use rx for pattern matching?
 sql'SELECT * FROM users WHERE name = ${name}'
 
-
+# to get the raw string including escape characters
+raw'foo \n \t bar'
 
 ---
 sequences - optimized as tuples if used as such, otherwise list

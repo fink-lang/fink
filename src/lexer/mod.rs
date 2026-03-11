@@ -100,7 +100,6 @@ enum LexMode {
   Bracket(u8, usize), // opening byte + ind.len() snapshot at open time
   StrText,
   StrExpr,
-  RawBlock(usize), // raw: block — enclosing ind_floor; content must be strictly deeper
   StrBlock(usize), // "": block — enclosing ind_floor; dedent terminates, ${} supported
 }
 
@@ -490,122 +489,7 @@ impl<'src> Lexer<'src> {
     }
   }
 
-  // Like consume_str_text but for `raw:` blocks: no `'` or `${}` terminators,
-  // no escape processing. Dedent below ind_floor is normal block end (not an error).
-  // Pushes StrText tokens to pending and returns the first. Caller emits StrEnd '' after.
-  fn consume_raw_text(&mut self, ind_floor: usize) -> Token<'src> {
-    // Content must be strictly deeper than the enclosing block's indent floor
-    let content_floor = ind_floor + 1;
-    let bytes = self.src.as_bytes();
-
-    struct RawLine { start: Pos, end: Pos, only_spaces: bool, indent: usize }
-
-    let mut raw: Vec<RawLine> = vec![];
-    // Skip leading newline after `raw:` — the first line is the `raw:` line itself
-    let mut p = self.pos;
-    if let [b'\n', ..] = &bytes[p.idx as usize..] {
-      p = Pos { idx: p.idx + 1, line: p.line + 1, col: 0 };
-    }
-    let mut done = false; // true when next line dedents below ind_floor
-
-    loop {
-      let seg_start = p;
-      let mut i = p.idx as usize;
-      let leading_spaces = bytes[i..].iter().take_while(|&&b| b == b' ').count();
-      let mut only_spaces = true;
-
-      // Dedent of a non-blank line ends the block
-      let is_blank = matches!(bytes.get(i), Some(b'\n') | None);
-      if !is_blank && leading_spaces < content_floor {
-        done = true;
-        break;
-      }
-      // Blank line: peek ahead to next non-blank line's indent.
-      // If it dedents, stop before this blank line (don't include trailing blanks).
-      if is_blank {
-        // Peek ahead past all consecutive blank lines to the next non-blank line.
-        // If that line dedents (or EOF), stop before the blank lines.
-        let mut j = if i < bytes.len() { i + 1 } else { i }; // skip \n of this blank line
-        while j < bytes.len() && bytes[j] == b'\n' { j += 1; }
-        let next_indent = bytes[j..].iter().take_while(|&&b| b == b' ').count();
-        let next_is_blank_or_eof = j >= bytes.len() || matches!(bytes.get(j), Some(b'\n'));
-        if !next_is_blank_or_eof && next_indent < content_floor {
-          done = true;
-          break;
-        }
-      }
-
-      loop {
-        if i >= bytes.len() {
-          let ep = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
-          raw.push(RawLine { start: seg_start, end: ep, only_spaces, indent: leading_spaces });
-          p = ep;
-          done = true;
-          break;
-        }
-        match bytes[i] {
-          b'\n' => {
-            let end = Pos { idx: i as u32 + 1, line: p.line + 1, col: 0 };
-            raw.push(RawLine { start: seg_start, end, only_spaces, indent: leading_spaces });
-            p = end;
-            break;
-          }
-          b' ' => { i += 1; }
-          _    => { only_spaces = false; i += 1; }
-        }
-      }
-      if done { break; }
-    }
-
-    // Compute strip level from all non-blank content lines
-    let mut strip_level: usize = 0;
-    let mut strip_set = false;
-    for line in raw.iter() {
-      if line.only_spaces { continue; }
-      strip_level = if strip_set { strip_level.min(line.indent) } else { line.indent };
-      strip_set = true;
-    }
-
-    // Trim trailing \n from the last non-blank line — it's a block terminator, not content.
-    // end was pointing to start of next line (idx after \n, col 0, line+1).
-    // Step back: idx-=1, line-=1, col = distance from line start to new end.
-    if let Some(last) = raw.iter_mut().rev().find(|l| !l.only_spaces) {
-      if last.end.idx > last.start.idx && self.src.as_bytes().get(last.end.idx as usize - 1) == Some(&b'\n') {
-        last.end.idx -= 1;
-        last.end.line -= 1;
-        // col = new end idx minus the start of this line
-        // start of this line: last.start.idx - last.start.col
-        let line_start_idx = last.start.idx - last.start.col;
-        last.end.col = last.end.idx - line_start_idx;
-      }
-    }
-
-    // Emit StrText tokens — all lines are content lines (leading \n already skipped)
-    for (_idx, line) in raw.iter().enumerate() {
-      let skip = if line.only_spaces { 0usize } else { strip_level.min(line.indent) };
-      let content_idx = line.start.idx + skip as u32;
-      let start = Pos { idx: content_idx, line: line.start.line, col: line.start.col + skip as u32 };
-      let src = &self.src[content_idx as usize..line.end.idx as usize];
-      if src.is_empty() { continue; }
-      self.pending.push(Token { kind: TokenKind::StrText, loc: Loc { start, end: line.end }, src });
-    }
-
-    self.pos = p;
-
-    // Emit StrEnd '' — block ended by dedent (normal termination)
-    if done {
-      self.mode.pop();
-      self.pending.push(Token { kind: TokenKind::StrEnd, loc: Loc { start: p, end: p }, src: "" });
-    }
-
-    if self.pending.is_empty() {
-      Token { kind: TokenKind::StrEnd, loc: Loc { start: self.pos, end: self.pos }, src: "" }
-    } else {
-      self.pending.remove(0)
-    }
-  }
-
-  // Like consume_raw_text but supports ${} interpolation. Scans until dedent or ${}.
+  // Scans ":" block text until dedent or ${}.
   // On ${}: emits StrText tokens up to ${}, sets pos to ${, returns first pending token.
   // On dedent/EOF: emits StrText tokens + StrEnd '', pops mode.
   //
@@ -914,11 +798,6 @@ impl<'src> Lexer<'src> {
       };
     }
 
-    // Raw block mode — verbatim text until dedent
-    if let Some(&LexMode::RawBlock(ind_floor)) = self.mode.last() {
-      return self.consume_raw_text(ind_floor);
-    }
-
     // StrExpr close
     if matches!(self.mode.last(), Some(LexMode::StrExpr)) {
       if let [b'}', ..] = self.peek_bytes() {
@@ -1041,14 +920,6 @@ impl<'src> Lexer<'src> {
       [b'0', b'b', ..] => self.consume_bin(),
       [b'0', b'o', ..] => self.consume_oct(),
       [b'0'..=b'9', ..] => self.consume_number(),
-
-      // `raw:` block — verbatim text, no escaping, ends by dedent
-      [b'r', b'a', b'w', b':', ..] => {
-        let start = self.pos;
-        self.advance(4); // consume `raw:`
-        self.mode.push(LexMode::RawBlock(*self.ind.last().unwrap()));
-        Token { kind: TokenKind::StrStart, loc: Loc { start, end: self.pos }, src: &self.src[start.idx as usize..self.pos.idx as usize] }
-      }
 
       [b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | 0x80..=0xFF, ..] => self.consume_ident(),
 
