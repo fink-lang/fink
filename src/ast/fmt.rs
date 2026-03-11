@@ -238,33 +238,13 @@ fn fmt_body(body: &[Node], out: &mut String, depth: usize, allow_apply_inline: b
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use test_macros::test_template;
-  use pretty_assertions::assert_eq;
+  use super::fmt as ast_fmt;
   use crate::parser::parse;
 
-  fn dedent(s: &str) -> String {
-    s.lines()
-      .map(|line| line.strip_prefix("    ").unwrap_or(line))
-      .collect::<Vec<_>>()
-      .join("\n")
-  }
-
-  fn fmt_src(src: &str) -> String {
+  fn fmt(src: &str) -> String {
     let node = parse(src).expect("parse failed");
-    fmt(&node)
+    ast_fmt(&node)
   }
 
-  #[test_template(
-    "src/ast", "./test_fmt.fnk",
-    r"(?ms)^test '(?P<name>[^']+)', fn:\n  expect fmt fn:\n(?P<src>[\s\S]+?)\n\n?  , equals fn:\n(?P<exp>[\s\S]+?)(?=\n\n\n|\n\n---|\n\ntest |\z)"
-  )]
-  fn test_fmt(src: &str, exp: &str, path: &str) {
-    assert_eq!(
-      fmt_src(&dedent(src).trim().to_string()),
-      dedent(exp).trim().to_string(),
-      "{}",
-      path
-    );
-  }
+  test_macros::include_fink_tests!("src/ast/test_fmt.fnk");
 }
