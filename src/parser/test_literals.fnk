@@ -236,6 +236,49 @@ test 'rendered template string', fn:
           LitInt '2'
 
 
+test 'block string basic', fn:
+  expect ast fn:
+    ":
+      hello world
+  | equals_ast
+    LitStr 'hello world'
+
+test 'block string multiline', fn:
+  expect ast fn:
+    ":
+      hello
+      world
+  | equals_ast
+    LitStr 'hello\nworld'
+
+test 'block string blank line', fn:
+  expect ast fn:
+    ":
+      foo
+
+      bar
+  | equals_ast
+    LitStr 'foo\n\nbar'
+
+test 'block string indentation preserved', fn:
+  expect ast fn:
+    ":
+      foo
+
+        bar
+  | equals_ast
+    LitStr 'foo\n\n  bar'
+
+test 'block string interpolation', fn:
+  expect ast fn:
+    ":
+      hello ${name}
+  | equals_ast
+    StrTempl
+      LitStr 'hello '
+      Ident 'name'
+
+
 ---
 sequences
 ---
@@ -418,13 +461,5 @@ test 'record tagged literal', fn:
           Ident 'foo'
           Ident 'bar'
 
-
-test 'raw block produces LitStr', fn:
-  expect ast fn:
-    raw:
-      hello
-      world
-  | equals_ast
-    LitStr 'hello\nworld'
 
 
