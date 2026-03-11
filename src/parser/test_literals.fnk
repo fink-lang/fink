@@ -176,7 +176,7 @@ test 'multiline string', fn:
       world
     '
   | equals_ast
-    LitStr '\n  hello\n  world\n'
+    LitStr '\nhello\nworld\n'
 
 test 'string interpolation', fn:
   expect ast fn:

@@ -1527,6 +1527,28 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<No
 mod tests {
   use test_macros::test_template;
 
+  #[test]
+  fn test_str_escape_stored_verbatim() {
+    // LitStr must store raw source bytes — no rendering at parse time.
+    use crate::ast::NodeKind;
+    let node = super::parse_with_blocks(r"'\n\t\\'", &["test_block"]).unwrap();
+    let NodeKind::LitStr(s) = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
+    assert_eq!(*s, r"\n\t\\");
+  }
+
+  #[test]
+  fn test_multiline_str_escape_stored_verbatim() {
+    // Multi-StrText assembly must also preserve raw source bytes.
+    use crate::ast::NodeKind;
+    let src = r#"'
+  \n
+  \t
+'"#;
+    let node = super::parse_with_blocks(src, &["test_block"]).unwrap();
+    let NodeKind::LitStr(s) = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
+    assert_eq!(*s, "\n\\n\n\\t\n");
+  }
+
   fn parse_debug(src: &str) -> String {
     match super::parse_with_blocks(src, &["test_block"]) {
       Ok(node) => node.print(),

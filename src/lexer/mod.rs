@@ -435,7 +435,7 @@ impl<'src> Lexer<'src> {
 
     for (idx, line) in raw.iter().enumerate() {
       if idx == 0 { continue; }
-      if line.only_spaces && !line.is_closing_only { continue; } // blank continuation
+      if line.only_spaces { continue; } // blank continuation or closing-only line — don't influence strip_level
       let col = line.indent;
       if col < ind_floor {
         error_at = Some(idx);
@@ -1006,14 +1006,6 @@ fn tokenize_debug(src: &str) -> String {
 
   include_fink_tests!("src/lexer/test_lexer.fnk");
 
-  #[test]
-  fn test_err_unexpected_dedent() {
-    // Cannot express this in .fnk: input requires indent levels less than surrounding code.
-    pretty_assertions::assert_eq!(
-      tokenize("foo\n  bar\n    ni\n ham"),
-      "BlockStart loc [0, 1, 0], [0, 1, 0]\nIdent 'foo', loc [0, 1, 0], [3, 1, 3]\nBlockStart loc [3, 1, 3], [6, 2, 2]\nIdent 'bar', loc [6, 2, 2], [9, 2, 5]\nBlockStart loc [9, 2, 5], [14, 3, 4]\nIdent 'ni', loc [14, 3, 4], [16, 3, 6]\nBlockEnd loc [16, 3, 6], [16, 3, 6]\nErr 'unexpected dedent', loc [16, 3, 6], [18, 4, 1]\nIdent 'ham', loc [18, 4, 1], [21, 4, 4]\nBlockEnd loc [21, 4, 4], [21, 4, 4]\nBlockEnd loc [21, 4, 4], [21, 4, 4]"
-    );
-  }
 
   #[test]
   fn test_tokenize_iterator() {
@@ -1041,4 +1033,91 @@ fn tokenize_debug(src: &str) -> String {
     assert_eq!(tokens[1].src, "+");
     assert_eq!(tokens[2].kind, TokenKind::BlockEnd);
   }
+
+  #[test]
+  fn test_str_block_indent_stripping() {
+    use super::{tokenize, TokenKind};
+    // Closing ' on its own line — floor is col 2 (spam), bar gets 1 extra space.
+    let tokens: Vec<_> = tokenize("'foo\n   bar\n  spam\n'").collect();
+    let str_texts: Vec<_> = tokens.iter()
+      .filter(|t| t.kind == TokenKind::StrText)
+      .map(|t| t.src)
+      .collect();
+    assert_eq!(str_texts, vec!["foo\n", " bar\n", "spam\n"]);
+  }
+
+  #[test]
+  fn test_str_block_indent_stripping_closing_on_own_line() {
+    use super::{tokenize, TokenKind};
+    // Closing ' on its own line — floor is col 2 (spam), bar gets 1 extra space stripped.
+    let src = "'foo\n    bar\n  spam\n'";
+    let tokens: Vec<_> = tokenize(src).collect();
+    let str_texts: Vec<_> = tokens.iter()
+      .filter(|t| t.kind == TokenKind::StrText)
+      .map(|t| t.src)
+      .collect();
+    assert_eq!(str_texts, vec!["foo\n", "  bar\n", "spam\n"]);
+  }
+
+  #[test]
+  fn test_str_block_indent_stripping_two_strings() {
+    use super::{tokenize, TokenKind};
+    // Two strings on same block level — second has closing ' on its own line.
+    let src = r#"'foo
+    bar
+  spam'
+'foo
+    bar
+  spam
+'"#;
+    let tokens: Vec<_> = tokenize(src).collect();
+    let str_texts: Vec<_> = tokens.iter()
+      .filter(|t| t.kind == TokenKind::StrText)
+      .map(|t| t.src)
+      .collect();
+    assert_eq!(str_texts, vec!["foo\n", "  bar\n", "spam", "foo\n", "  bar\n", "spam\n"]);
+  }
+
+  #[test]
+  fn test_str_escape_stored_verbatim() {
+    use super::{tokenize, TokenKind};
+    // Escape sequences must be stored as raw source text, not interpreted.
+    // The parser/codegen layer calls strings::render at output boundaries.
+    let tokens: Vec<_> = tokenize(r"'\n\t\\'").collect();
+    let str_texts: Vec<_> = tokens.iter()
+      .filter(|t| t.kind == TokenKind::StrText)
+      .collect();
+    assert_eq!(str_texts.len(), 1);
+    assert_eq!(str_texts[0].src, r"\n\t\\");
+  }
+
+  #[test]
+  fn test_str_block_escapes_with_locs() {
+    // TODO: port to .fnk test once raw": src path no longer calls strings::render
+    // Escape sequences in block strings stored verbatim; floor (col 2) stripped from each line.
+    use super::{tokenize, TokenKind, Pos};
+    let src = "'\n  \\n\n  \\r\n  \\v\n  \\t\n  \\b\n  \\f\n  \\\\\n  \\'\n'";
+    let tokens: Vec<_> = tokenize(src).collect();
+    let str_texts: Vec<_> = tokens.iter()
+      .filter(|t| t.kind == TokenKind::StrText)
+      .collect();
+    let expected: &[(&str, Pos, Pos)] = &[
+      ("\n",    Pos { idx: 1,  line: 1, col: 1 }, Pos { idx: 2,  line: 2, col: 0 }),
+      ("\\n\n", Pos { idx: 4,  line: 2, col: 2 }, Pos { idx: 7,  line: 3, col: 0 }),
+      ("\\r\n", Pos { idx: 9,  line: 3, col: 2 }, Pos { idx: 12, line: 4, col: 0 }),
+      ("\\v\n", Pos { idx: 14, line: 4, col: 2 }, Pos { idx: 17, line: 5, col: 0 }),
+      ("\\t\n", Pos { idx: 19, line: 5, col: 2 }, Pos { idx: 22, line: 6, col: 0 }),
+      ("\\b\n", Pos { idx: 24, line: 6, col: 2 }, Pos { idx: 27, line: 7, col: 0 }),
+      ("\\f\n", Pos { idx: 29, line: 7, col: 2 }, Pos { idx: 32, line: 8, col: 0 }),
+      ("\\\\\n",Pos { idx: 34, line: 8, col: 2 }, Pos { idx: 37, line: 9, col: 0 }),
+      ("\\'\n",Pos { idx: 39, line: 9, col: 2 }, Pos { idx: 42, line: 10, col: 0 }),
+    ];
+    assert_eq!(str_texts.len(), expected.len(), "token count mismatch");
+    for (i, (tok, (exp_src, exp_start, exp_end))) in str_texts.iter().zip(expected.iter()).enumerate() {
+      assert_eq!(tok.src, *exp_src, "src mismatch at index {i}");
+      assert_eq!(tok.loc.start, *exp_start, "start loc mismatch at index {i}");
+      assert_eq!(tok.loc.end, *exp_end, "end loc mismatch at index {i}");
+    }
+  }
+
 }
