@@ -192,8 +192,9 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
           }
           _ => {
             if let Some(text) = extract_raw_templ(body_node) {
-              // raw": src: process escapes so e.g. \$ → $ before passing to tokenize
-              fink::strings::render(&text)
+              // Unescape \${ → ${ so interpolation syntax can appear in fink": src inputs
+              // without triggering the parser's own interpolation. Everything else verbatim.
+              text.replace("\\${", "${")
             } else {
               let Some(text) = extract_fn_body_text(body_node, file_src) else { continue };
               text
@@ -205,7 +206,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
       _ => continue,
     };
 
-    // equals[_fink] [text] fn: <exp>   OR   equals '...'
+    // equals[_fink] [text] fn: <exp>   OR   equals '...'   OR   equals fink": ...
     let exp_text = match &pipe_nodes.last().unwrap().kind {
       NodeKind::Apply { func, args }
         if matches!(&func.kind, NodeKind::Ident(s) if s.starts_with("equals")) =>
@@ -239,14 +240,14 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
   out
 }
 
-/// Extract the verbatim string content from a `raw":\n  ...` tagged template node.
+/// Extract the verbatim string content from a `fink":\n  ...` tagged template node.
 ///
-/// Matches `Apply { func: Ident("raw"), args: [LitStr(s) | StrRawTempl([LitStr(s)])] }` and
-/// returns `s` verbatim — no unescaping, no trimming. This is the `raw":` form used in tests.
+/// Matches `Apply { func: Ident("fink"), args: [LitStr(s) | StrRawTempl([LitStr(s)])] }` and
+/// returns `s` verbatim — no unescaping, no trimming. This is the `fink":` form used in tests.
 fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   use fink::ast::NodeKind;
   let NodeKind::Apply { func, args } = &node.kind else { return None };
-  if !matches!(func.kind, NodeKind::Ident("raw")) { return None; }
+  if !matches!(func.kind, NodeKind::Ident("fink")) { return None; }
   let arg = args.first()?;
   match &arg.kind {
     // No interpolation: raw": collapses to Apply(raw, LitStr) — verbatim, no unescape.

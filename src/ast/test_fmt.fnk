@@ -75,11 +75,11 @@ test 'tagged string — op', fn:
   , equals fn:
     op'+'
 
-test 'tagged string — str_raw', fn:
+test 'tagged string — str_fink', fn:
   expect fmt fn:
-    str_raw'hello '
+    str_fink'hello '
   , equals fn:
-    str_raw'hello '
+    str_fink'hello '
 
 
 --- --- ---
