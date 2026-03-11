@@ -1,6 +1,6 @@
---- --- ---
+---
 cps_c IR — free variable analysis tests
---- --- ---
+---
 
 # Free var pass — annotates ·closure scope arg with captured names.
 #
@@ -15,25 +15,22 @@ cps_c IR — free variable analysis tests
 #
 # Test format:
 #   test 'name', fn:
-#     expect cps_free_vars fn:
+#     expect cps_free_vars fink":
 #       <fink source>
 #
-#     | equals_fink fn:
+#     | equals fink":
 #       <expected cps output>
 
-{test, expect, equals_fink, cps_free_vars} = import '!fake'
-{·load, ·match_store, ·ƒ_cont, ·state, ·scope, ·id, ·op, ·apply, ·closure} = import '!fake'
 
---- --- ---
+---
 free variable analysis
---- --- ---
+---
 
 test 'free vars — fn with no captures', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn a, b:
       a + b
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, b, {..·scope, ·op_plus}, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
@@ -45,23 +42,21 @@ test 'free vars — fn with no captures', fn:
 
 
 test 'free vars — fn with only literals', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn x:
       42
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont: ·ƒ_cont 42, ·state
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
 test 'free vars — closure captures one outer var', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn x:
       fn y:
         x + y
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -76,13 +71,12 @@ test 'free vars — closure captures one outer var', fn:
 
 
 test 'free vars — closure captures local binding', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn x:
       z = x + 1
       fn y:
         z + y
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, {..·scope, ·op_plus}, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
@@ -101,12 +95,11 @@ test 'free vars — closure captures local binding', fn:
 
 
 test 'free vars — named outer, inner captures param', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     add = fn x:
       fn y:
         x + y
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -123,11 +116,10 @@ test 'free vars — named outer, inner captures param', fn:
 
 
 test 'free vars — two named fns no captures', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     double = fn x: x + x
     triple = fn x: x + x + x
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -156,13 +148,12 @@ test 'free vars — two named fns no captures', fn:
 
 
 test 'free vars — three levels of nesting', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn a:
       fn b:
         fn c:
           a + b + c
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn a, ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
@@ -182,18 +173,17 @@ test 'free vars — three levels of nesting', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 
---- --- ---
+---
 free vars — match arms
---- --- ---
+---
 
 test 'free vars — match arm bindings are local', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn val:
       match val:
         1: 'one'
         n: n
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn val, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
@@ -210,13 +200,12 @@ test 'free vars — match arm bindings are local', fn:
 
 
 test 'free vars — closure inside match arm captures arm binding', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn val:
       match val:
         [head, ..tail]:
           fn x: head + x
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn val, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
@@ -239,12 +228,11 @@ test 'free vars — closure inside match arm captures arm binding', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 test 'free vars — range pattern loads operators as free vars', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn val:
       match val:
         0..10: 'low'
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn val, {..·scope, ·op_rngex, ·op_in}, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
@@ -260,12 +248,11 @@ test 'free vars — range pattern loads operators as free vars', fn:
 
 
 test 'free vars — guard pattern loads operator as free var', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn val:
       match val:
         n > 0: n
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn val, {..·scope, ·op_gt}, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
@@ -282,12 +269,11 @@ test 'free vars — guard pattern loads operator as free var', fn:
 
 
 test 'free vars — rec pattern bindings are local', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn val:
       match val:
         {a, b}: a
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn val, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
@@ -305,12 +291,11 @@ test 'free vars — rec pattern bindings are local', fn:
 
 
 test 'free vars — closure inside rec pattern arm captures field binding', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn val:
       match val:
         {x}: fn y: x + y
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn val, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
@@ -331,12 +316,11 @@ test 'free vars — closure inside rec pattern arm captures field binding', fn:
       fn ·v_0, ·chld_scope: ·ƒ_cont ·v_0, ·state
 
 test 'free vars — rec pattern arm body captures outer var', fn:
-  expect cps_free_vars fn:
+  expect cps_free_vars fink":
     fn val:
       match val:
         {x}: x + y
-
-  | equals_fink fn:
+  | equals fink":
     ·closure ·scope,
       fn val, {..·scope, ·op_plus, y}, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
