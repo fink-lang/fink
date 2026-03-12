@@ -346,6 +346,20 @@ pub enum ExprKind<'src> {
     body: Box<Expr<'src>>,
   },
 
+  // ---------------------------------------------------------------------------
+  // Suspension
+  // ---------------------------------------------------------------------------
+
+  /// Yield — suspend execution, passing `value` to the scheduler.
+  /// The continuation receives the resumed value bound to `result`.
+  /// Later passes use Yield nodes to color the continuation graph:
+  /// every continuation reachable from a Yield is "suspendable."
+  Yield {
+    value: Box<Val<'src>>,
+    result: BindName<'src>,
+    body: Box<Expr<'src>>,
+  },
+
   /// Tail position — return value to current continuation.
   Ret(Box<Val<'src>>),
 

@@ -86,6 +86,11 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       else_: Box::new(transform_expr(*else_)),
     },
 
+    Yield { value, result, body } => Yield {
+      value, result,
+      body: Box::new(transform_expr(*body)),
+    },
+
     Ret(_) | Panic | FailCont => expr.kind,
 
     // Pattern lowering primitives — recurse into both fail and body.
@@ -201,6 +206,15 @@ fn collect_keys<'src>(
         collect_key_from_val(v, bound, seen, out);
       }
       collect_keys(body, bound, seen, out);
+    }
+
+    Yield { value, result, body } => {
+      collect_key_from_val(value, bound, seen, out);
+      let mut inner_bound = bound.clone();
+      if let BindName::User(s) = result {
+        inner_bound.insert(s);
+      }
+      collect_keys(body, &inner_bound, seen, out);
     }
 
     If { cond, then, else_ } => {

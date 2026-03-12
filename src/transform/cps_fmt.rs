@@ -84,6 +84,14 @@ fn scope_cont(local: &str, body: Node<'static>) -> Node<'static> {
   fn_node(patterns(vec![ident(local), ident("·scope")]), vec![body])
 }
 
+/// `·yield value, ·state, fn result, ·state: body` — yield suspension point.
+fn fmt_yield(value: &Val<'_>, result: BindName<'_>, body: &Expr<'_>) -> Node<'static> {
+  let cont = result_cont(&render_bind(result), to_node(body));
+  with_loads(&[value], |resolved| {
+    apply(ident("·yield"), vec![resolved.into_iter().next().unwrap(), ident("·state"), cont.clone()])
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Val → Node
 // ---------------------------------------------------------------------------
@@ -286,6 +294,9 @@ fn sigil_op(op: &str) -> String {
 
 pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
   match &expr.kind {
+    // Yield { value, result, body } → ·yield value, ·state, fn result, ·state: body
+    ExprKind::Yield { value, result, body } => fmt_yield(value, *result, body),
+
     // Ret(val) → ·ƒ_cont val, ·state
     // If val is a Key, wrap in a load first.
     ExprKind::Ret(val) => {

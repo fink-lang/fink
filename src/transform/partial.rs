@@ -79,6 +79,7 @@ fn has_partial(node: &Node) -> bool {
       has_partial(name) || has_partial(params) || body.iter().any(has_partial)
     }
     NodeKind::Try(inner) => has_partial(inner),
+    NodeKind::Yield(inner) => has_partial(inner),
   }
 }
 

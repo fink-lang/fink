@@ -121,6 +121,12 @@ pub enum NodeKind<'src> {
   // Try — unwrap Ok or propagate Err from enclosing function
   Try(Box<Node<'src>>),
 
+  // --- suspension ---
+
+  // Yield — suspend execution, yield a value; resumed with a result
+  // result = yield value
+  Yield(Box<Node<'src>>),
+
   // --- custom blocks ---
 
   // Block — name (Ident) + params (Patterns) + body (flat exprs/arms)
@@ -235,6 +241,11 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     NodeKind::Wildcard => { out.push_str("Wildcard"); }
     NodeKind::Try(inner) => {
       out.push_str("Try");
+      out.push('\n');
+      print_node(inner, out, depth + 1);
+    }
+    NodeKind::Yield(inner) => {
+      out.push_str("Yield");
       out.push('\n');
       print_node(inner, out, depth + 1);
     }

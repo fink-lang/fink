@@ -11,6 +11,7 @@ test files:
   test_match.fnk      — match/conditional, guards, type patterns, string/seq/record patterns
   test_blocks.fnk     — custom named blocks, block with patterns/arms/body, inline block
   test_try.fnk        — try keyword (unwrap Ok, propagate Err)
+  test_yield.fnk      — yield keyword (suspension point for async/generators/channels)
 
 # TODO: equivalence tests — two inputs producing identical ASTs, documented with `===` separator
 #   e.g. semicolon vs multiline args, single-line fn vs multiline fn, fn match vs fn n: match n:

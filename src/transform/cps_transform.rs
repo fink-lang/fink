@@ -183,6 +183,9 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     // ---- try: lower transparently for now ----
     NodeKind::Try(inner) => lower(g, inner),
 
+    // ---- yield: suspend execution, yield a value ----
+    NodeKind::Yield(inner) => lower_yield(g, inner, loc),
+
     // ---- bind: `name = rhs` ----
     NodeKind::Bind { lhs, rhs } => lower_bind(g, lhs, rhs, loc),
 
@@ -278,6 +281,19 @@ fn lower_stmts<'src>(g: &mut Gen, stmts: &'src [Node<'src>]) -> Expr<'src> {
     }
   }
   unreachable!()
+}
+
+// ---------------------------------------------------------------------------
+// Yield
+// ---------------------------------------------------------------------------
+
+/// Lower `yield inner` — suspend execution, yield the inner value.
+/// The continuation receives the resumed value bound to a fresh result.
+fn lower_yield<'src>(g: &mut Gen, inner: &'src Node<'src>, loc: Loc) -> Lower<'src> {
+  let (val, mut pending) = lower(g, inner);
+  let result = g.fresh_result();
+  pending.push(Pending::Yield { value: val, result, loc });
+  (ident_val(result, loc), pending)
 }
 
 // ---------------------------------------------------------------------------
@@ -860,6 +876,8 @@ enum Pending<'src> {
   MatchRec { val: Val<'src>, cursor: u32, loc: Loc },
   /// Extract named field from rec — emits MatchField with ·panic as fail cont.
   MatchField { val: Val<'src>, cursor: u32, next_cursor: u32, field: &'src str, elem: BindName<'src>, loc: Loc },
+  /// Yield — suspend execution, yield a value; result bound in continuation.
+  Yield { value: Val<'src>, result: BindName<'src>, loc: Loc },
 }
 
 fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
@@ -1001,6 +1019,14 @@ fn wrap_with_fail<'src>(
         field,
         fail: Box::new(make_fail(loc)),
         elem,
+        body: Box::new(body),
+      },
+      meta: Meta::at(loc),
+    },
+    Pending::Yield { value, result, loc } => Expr {
+      kind: ExprKind::Yield {
+        value: Box::new(value),
+        result,
         body: Box::new(body),
       },
       meta: Meta::at(loc),
@@ -1403,6 +1429,7 @@ mod cps_tests {
   }
 
   test_macros::include_fink_tests!("src/transform/test_cps.fnk");
+  test_macros::include_fink_tests!("src/transform/test_cps_yield.fnk");
 }
 
 #[cfg(test)]
