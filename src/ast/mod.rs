@@ -14,6 +14,10 @@ impl std::fmt::Debug for AstId {
   }
 }
 
+impl From<AstId> for usize {
+  fn from(id: AstId) -> usize { id.0 as usize }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node<'src> {
   pub id: AstId,
