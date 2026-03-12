@@ -11,6 +11,32 @@
 use crate::lexer::Loc;
 
 // ---------------------------------------------------------------------------
+// Node identity
+// ---------------------------------------------------------------------------
+
+/// Unique identifier for a CPS expression node, assigned by the transform.
+/// Used as a key into property graphs for attaching pass-computed metadata
+/// (types, resolution, etc.) without modifying the IR structure.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CpsId(pub u32);
+
+impl std::fmt::Debug for CpsId {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "cps#{}", self.0)
+  }
+}
+
+impl From<CpsId> for usize {
+  fn from(id: CpsId) -> usize { id.0 as usize }
+}
+
+/// Output of the CPS transform — the IR tree plus metadata.
+pub struct CpsResult<'src> {
+  pub root: Expr<'src>,
+  pub node_count: u32,
+}
+
+// ---------------------------------------------------------------------------
 // Metadata — attached to every IR node
 // ---------------------------------------------------------------------------
 
@@ -159,6 +185,7 @@ pub enum Lit<'src> {
 /// A CPS expression node — the core of the IR.
 #[derive(Debug, Clone)]
 pub struct Expr<'src> {
+  pub id: CpsId,
   pub kind: ExprKind<'src>,
   pub meta: Meta,
 }

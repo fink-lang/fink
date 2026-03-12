@@ -41,6 +41,7 @@ pub fn annotate(expr: Expr<'_>) -> Expr<'_> {
 
 fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
   use ExprKind::*;
+  let id = expr.id;
   let meta = expr.meta.clone();
   let kind = match expr.kind {
     LetVal { name, val, body } => LetVal {
@@ -158,7 +159,7 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       body: Box::new(transform_expr(*body)),
     },
   };
-  Expr { kind, meta }
+  Expr { id, kind, meta }
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +341,7 @@ mod free_var_tests {
 
   fn cps_free_vars(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&annotate(lower_expr(&r.root))),
+      Ok(r) => fmt(&annotate(lower_expr(&r.root).root)),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }

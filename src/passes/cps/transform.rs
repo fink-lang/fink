@@ -20,8 +20,8 @@
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use super::ir::{
-  Arg, BindName, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Prim,
-  Val, ValKind,
+  Arg, BindName, CpsId, CpsResult, Expr, ExprKind, Key, KeyKind, Lit, Meta,
+  Name, Param, Prim, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -30,11 +30,12 @@ use super::ir::{
 
 pub struct Gen {
   counter: u32,
+  next_id: u32,
 }
 
 impl Gen {
   pub fn new() -> Self {
-    Gen { counter: 0 }
+    Gen { counter: 0, next_id: 0 }
   }
 
   fn next(&mut self) -> u32 {
@@ -55,6 +56,13 @@ impl Gen {
   /// The formatter renders this as `·m_N`.
   pub fn fresh_cursor(&mut self) -> u32 {
     self.next()
+  }
+
+  /// Build an Expr with an auto-incrementing CpsId.
+  fn expr<'src>(&mut self, kind: ExprKind<'src>, loc: Loc) -> Expr<'src> {
+    let id = CpsId(self.next_id);
+    self.next_id += 1;
+    Expr { id, kind, meta: Meta::at(loc) }
   }
 }
 
@@ -106,32 +114,30 @@ fn lit_val(lit: Lit<'_>, loc: Loc) -> Val<'_> {
 }
 
 /// The `·panic` fail expression — irrefutable pattern failure; no recovery path.
-fn panic_expr(loc: Loc) -> Expr<'static> {
-  Expr { kind: ExprKind::Panic, meta: Meta::at(loc) }
+fn panic_expr(g: &mut Gen, loc: Loc) -> Expr<'static> {
+  g.expr(ExprKind::Panic, loc)
 }
 
 /// A reference to `·ƒ_fail` — used as the fail cont inside match arm bodies.
-fn fail_cont_expr(loc: Loc) -> Expr<'static> {
-  Expr { kind: ExprKind::FailCont, meta: Meta::at(loc) }
+fn fail_cont_expr(g: &mut Gen, loc: Loc) -> Expr<'static> {
+  g.expr(ExprKind::FailCont, loc)
 }
 
-fn ret_expr(val: Val<'_>, loc: Loc) -> Expr<'_> {
-  Expr { kind: ExprKind::Ret(Box::new(val)), meta: Meta::at(loc) }
+fn ret_expr<'src>(g: &mut Gen, val: Val<'src>, loc: Loc) -> Expr<'src> {
+  g.expr(ExprKind::Ret(Box::new(val)), loc)
 }
 
 /// Emit an App node: func(args...) → result; body.
 #[allow(dead_code)]
 fn app_node<'src>(
+  g: &mut Gen,
   func: Val<'src>,
   args: Vec<Arg<'src>>,
   result: BindName<'src>,
   body: Expr<'src>,
   loc: Loc,
 ) -> Expr<'src> {
-  Expr {
-    kind: ExprKind::App { func: Box::new(func), args, result, body: Box::new(body) },
-    meta: Meta::at(loc),
-  }
+  g.expr(ExprKind::App { func: Box::new(func), args, result, body: Box::new(body) }, loc)
 }
 
 /// Wrap a plain `Val` as an `Arg::Val`.
@@ -260,8 +266,8 @@ fn lower_stmts<'src>(g: &mut Gen, stmts: &'src [Node<'src>]) -> Expr<'src> {
     if is_last {
       let (val, pending) = lower(g, stmt);
       all_pending.extend(pending);
-      let tail = ret_expr(val, stmt.loc);
-      return wrap(all_pending, tail);
+      let tail = ret_expr(g, val, stmt.loc);
+      return wrap(g, all_pending, tail);
     } else {
       // Statement in non-tail position.
       match &stmt.kind {
@@ -355,7 +361,10 @@ fn lower_fn<'src>(
 ) -> Lower<'src> {
   let fn_name = g.fresh_fn();
   let (param_names, deferred) = extract_params_with_gen(g, params);
-  let fn_body = prepend_pat_binds(deferred, lower_stmts(g, body));
+  let fn_body = {
+      let body = lower_stmts(g, body);
+      prepend_pat_binds(g, deferred, body)
+    };
   let pending = vec![Pending::Fn { name: fn_name, params: param_names, fn_body, loc }];
   (ident_val(fn_name, loc), pending)
 }
@@ -370,7 +379,10 @@ fn lower_iife<'src>(
 ) -> Lower<'src> {
   let fn_name = g.fresh_fn();
   let (param_names, deferred) = extract_params_with_gen(g, params);
-  let fn_body = prepend_pat_binds(deferred, lower_stmts(g, body));
+  let fn_body = {
+      let body = lower_stmts(g, body);
+      prepend_pat_binds(g, deferred, body)
+    };
   let result = g.fresh_result();
   let pending = vec![
     Pending::Fn { name: fn_name, params: param_names, fn_body, loc },
@@ -426,8 +438,8 @@ fn extract_params_with_gen<'src>(
 }
 
 /// Wrap `body` in Match* nodes for each deferred pattern entry, innermost first.
-fn prepend_pat_binds<'src>(deferred: Vec<Pending<'src>>, body: Expr<'src>) -> Expr<'src> {
-  wrap(deferred, body)
+fn prepend_pat_binds<'src>(g: &mut Gen, deferred: Vec<Pending<'src>>, body: Expr<'src>) -> Expr<'src> {
+  wrap(g, deferred, body)
 }
 
 fn extract_params<'src>(params: &'src Node<'src>) -> Vec<Param<'src>> {
@@ -814,7 +826,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
         lower_pat_lhs(g, pat_node, scrutinee_val, loc, &mut arm_pending);
       }
       let arm_tail = lower_stmts(g, body);
-      wrap_with_fail(arm_pending, arm_tail, fail_cont_expr)
+      wrap_with_fail(g, arm_pending, arm_tail, |g, loc| fail_cont_expr(g, loc))
     }
     _ => panic!("lower_match_arm: expected Arm node"),
   }
@@ -880,157 +892,191 @@ enum Pending<'src> {
   Yield { value: Val<'src>, result: BindName<'src>, loc: Loc },
 }
 
-fn wrap<'src>(bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
-  wrap_with_fail(bindings, tail, panic_expr)
+fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
+  wrap_with_fail(g, bindings, tail, |g, loc| panic_expr(g, loc))
 }
 
 /// Like `wrap`, but uses `make_fail(loc)` to produce the fail cont for each Match* node.
 /// Used for arm bodies inside a MatchBlock, where failure should delegate to `·ƒ_fail`.
 fn wrap_with_fail<'src>(
+  g: &mut Gen,
   bindings: Vec<Pending<'src>>,
   tail: Expr<'src>,
-  make_fail: fn(Loc) -> Expr<'static>,
+  make_fail: fn(&mut Gen, Loc) -> Expr<'static>,
 ) -> Expr<'src> {
   bindings.into_iter().rev().fold(tail, |body, pending| match pending {
-    Pending::Val { name, val, loc } => Expr {
-      kind: ExprKind::LetVal { name, val: Box::new(val), body: Box::new(body) },
-      meta: Meta::at(loc),
-    },
-    Pending::Fn { name, params, fn_body, loc } => Expr {
-      kind: ExprKind::LetFn {
+    Pending::Val { name, val, loc } => g.expr(
+      ExprKind::LetVal { name, val: Box::new(val), body: Box::new(body) },
+      loc,
+    ),
+    Pending::Fn { name, params, fn_body, loc } => g.expr(
+      ExprKind::LetFn {
         name,
         params,
         free_vars: vec![],
         fn_body: Box::new(fn_body),
         body: Box::new(body),
       },
-      meta: Meta::at(loc),
-    },
-    Pending::App { func, args, result, loc } => Expr {
-      kind: ExprKind::App {
+      loc,
+    ),
+    Pending::App { func, args, result, loc } => g.expr(
+      ExprKind::App {
         func: Box::new(func),
         args,
         result,
         body: Box::new(body),
       },
-      meta: Meta::at(loc),
+      loc,
+    ),
+    Pending::MatchBlock { params, arm_params, arms, result, loc } => {
+      let fail = Box::new(panic_expr(g, loc));
+      g.expr(
+        ExprKind::MatchBlock {
+          params,
+          arm_params,
+          fail,
+          arms,
+          result,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchBlock { params, arm_params, arms, result, loc } => Expr {
-      kind: ExprKind::MatchBlock {
-        params,
-        arm_params,
-        fail: Box::new(panic_expr(loc)),
-        arms,
-        result,
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchBind { name, val, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchLetVal {
+          name,
+          val: Box::new(val),
+          fail,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchBind { name, val, loc } => Expr {
-      kind: ExprKind::MatchLetVal {
-        name,
-        val: Box::new(val),
-        fail: Box::new(make_fail(loc)),
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchGuard { func, args, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchIf {
+          func: Box::new(func),
+          args,
+          fail,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchGuard { func, args, loc } => Expr {
-      kind: ExprKind::MatchIf {
-        func: Box::new(func),
-        args,
-        fail: Box::new(make_fail(loc)),
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchValue { val, lit, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchValue {
+          val: Box::new(val),
+          lit,
+          fail,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchValue { val, lit, loc } => Expr {
-      kind: ExprKind::MatchValue {
-        val: Box::new(val),
-        lit,
-        fail: Box::new(make_fail(loc)),
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchSeq { val, cursor, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchSeq {
+          val: Box::new(val),
+          cursor,
+          fail,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchSeq { val, cursor, loc } => Expr {
-      kind: ExprKind::MatchSeq {
-        val: Box::new(val),
-        cursor,
-        fail: Box::new(make_fail(loc)),
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchNext { val, cursor, next_cursor, elem, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchNext {
+          val: Box::new(val),
+          cursor,
+          next_cursor,
+          fail,
+          elem,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchNext { val, cursor, next_cursor, elem, loc } => Expr {
-      kind: ExprKind::MatchNext {
-        val: Box::new(val),
-        cursor,
-        next_cursor,
-        fail: Box::new(make_fail(loc)),
-        elem,
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchDone { val, cursor, result, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchDone {
+          val: Box::new(val),
+          cursor,
+          fail,
+          result,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchDone { val, cursor, result, loc } => Expr {
-      kind: ExprKind::MatchDone {
-        val: Box::new(val),
-        cursor,
-        fail: Box::new(make_fail(loc)),
-        result,
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchNotDone { val, cursor, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchNotDone {
+          val: Box::new(val),
+          cursor,
+          fail,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchNotDone { val, cursor, loc } => Expr {
-      kind: ExprKind::MatchNotDone {
-        val: Box::new(val),
-        cursor,
-        fail: Box::new(make_fail(loc)),
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchRest { val, cursor, result, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchRest {
+          val: Box::new(val),
+          cursor,
+          fail,
+          result,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchRest { val, cursor, result, loc } => Expr {
-      kind: ExprKind::MatchRest {
-        val: Box::new(val),
-        cursor,
-        fail: Box::new(make_fail(loc)),
-        result,
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchRec { val, cursor, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchRec {
+          val: Box::new(val),
+          cursor,
+          fail,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchRec { val, cursor, loc } => Expr {
-      kind: ExprKind::MatchRec {
-        val: Box::new(val),
-        cursor,
-        fail: Box::new(make_fail(loc)),
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
+    Pending::MatchField { val, cursor, next_cursor, field, elem, loc } => {
+      let fail = Box::new(make_fail(g, loc));
+      g.expr(
+        ExprKind::MatchField {
+          val: Box::new(val),
+          cursor,
+          next_cursor,
+          field,
+          fail,
+          elem,
+          body: Box::new(body),
+        },
+        loc,
+      )
     },
-    Pending::MatchField { val, cursor, next_cursor, field, elem, loc } => Expr {
-      kind: ExprKind::MatchField {
-        val: Box::new(val),
-        cursor,
-        next_cursor,
-        field,
-        fail: Box::new(make_fail(loc)),
-        elem,
-        body: Box::new(body),
-      },
-      meta: Meta::at(loc),
-    },
-    Pending::Yield { value, result, loc } => Expr {
-      kind: ExprKind::Yield {
+    Pending::Yield { value, result, loc } => g.expr(
+      ExprKind::Yield {
         value: Box::new(value),
         result,
         body: Box::new(body),
       },
-      meta: Meta::at(loc),
-    },
+      loc,
+    ),
   })
 }
 
@@ -1057,24 +1103,27 @@ fn parse_decimal(s: &str) -> f64 {
 // ---------------------------------------------------------------------------
 
 /// Lower a top-level block of statements (module body).
-pub fn lower_module<'src>(stmts: &'src [Node<'src>]) -> Expr<'src> {
+pub fn lower_module<'src>(stmts: &'src [Node<'src>]) -> CpsResult<'src> {
+  let mut g = Gen::new();
   if stmts.is_empty() {
     let loc = crate::lexer::Loc {
       start: crate::lexer::Pos { idx: 0, line: 1, col: 0 },
       end:   crate::lexer::Pos { idx: 0, line: 1, col: 0 },
     };
-    return ret_expr(lit_val(Lit::Seq, loc), loc);
+    let root = ret_expr(&mut g, lit_val(Lit::Seq, loc), loc);
+    return CpsResult { root, node_count: g.next_id };
   }
-  let mut g = Gen::new();
-  lower_stmts(&mut g, stmts)
+  let root = lower_stmts(&mut g, stmts);
+  CpsResult { root, node_count: g.next_id }
 }
 
 /// Lower a single expression node.
-pub fn lower_expr<'src>(node: &'src Node<'src>) -> Expr<'src> {
+pub fn lower_expr<'src>(node: &'src Node<'src>) -> CpsResult<'src> {
   let mut g = Gen::new();
   let (val, pending) = lower(&mut g, node);
-  let tail = ret_expr(val, node.loc);
-  wrap(pending, tail)
+  let tail = ret_expr(&mut g, val, node.loc);
+  let root = wrap(&mut g, pending, tail);
+  CpsResult { root, node_count: g.next_id }
 }
 
 /// Recursively lower a pattern lhs node, appending Match* pending entries.
@@ -1387,9 +1436,9 @@ mod tests {
   fn lower_lit_int() {
     let src = Box::leak("42".to_string().into_boxed_str());
     let node = parse_single(src);
-    let expr = lower_expr(&node);
-    assert!(matches!(expr.kind, ExprKind::Ret(_)));
-    if let ExprKind::Ret(val) = &expr.kind {
+    let result = lower_expr(&node);
+    assert!(matches!(result.root.kind, ExprKind::Ret(_)));
+    if let ExprKind::Ret(val) = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Lit(Lit::Int(42))));
     }
   }
@@ -1398,9 +1447,9 @@ mod tests {
   fn lower_ident() {
     let src = Box::leak("foo".to_string().into_boxed_str());
     let node = parse_single(src);
-    let expr = lower_expr(&node);
-    assert!(matches!(expr.kind, ExprKind::Ret(_)));
-    if let ExprKind::Ret(val) = &expr.kind {
+    let result = lower_expr(&node);
+    assert!(matches!(result.root.kind, ExprKind::Ret(_)));
+    if let ExprKind::Ret(val) = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Key(_)));
     }
   }
@@ -1409,9 +1458,9 @@ mod tests {
   fn lower_apply_simple() {
     let src = Box::leak("foo bar".to_string().into_boxed_str());
     let node = parse_single(src);
-    let expr = lower_expr(&node);
+    let result = lower_expr(&node);
     // foo is a Key, bar is a Key, result is App with Ret inside.
-    assert!(matches!(expr.kind, ExprKind::App { .. }));
+    assert!(matches!(result.root.kind, ExprKind::App { .. }));
   }
 }
 
@@ -1423,7 +1472,7 @@ mod cps_tests {
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&lower_expr(&r.root)),
+      Ok(r) => fmt(&lower_expr(&r.root).root),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }
@@ -1441,14 +1490,14 @@ mod pat_tests {
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&lower_expr(&r.root)),
+      Ok(r) => fmt(&lower_expr(&r.root).root),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }
 
   fn cps_free_vars(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&annotate(lower_expr(&r.root))),
+      Ok(r) => fmt(&annotate(lower_expr(&r.root).root)),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }
