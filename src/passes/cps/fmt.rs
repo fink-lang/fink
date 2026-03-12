@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::ir::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Prim, Val, ValKind};
+use super::ir::{Arg, Bind, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Prim, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -85,8 +85,8 @@ fn scope_cont(local: &str, body: Node<'static>) -> Node<'static> {
 }
 
 /// `·yield value, ·state, fn result, ·state: body` — yield suspension point.
-fn fmt_yield(value: &Val<'_>, result: BindName<'_>, body: &Expr<'_>) -> Node<'static> {
-  let cont = result_cont(&render_bind(result), to_node(body));
+fn fmt_yield(value: &Val<'_>, result: &Bind<'_>, body: &Expr<'_>) -> Node<'static> {
+  let cont = result_cont(&render_bind(result.kind), to_node(body));
   with_loads(&[value], |resolved| {
     apply(ident("·yield"), vec![resolved.into_iter().next().unwrap(), ident("·state"), cont.clone()])
   })
@@ -295,7 +295,7 @@ fn sigil_op(op: &str) -> String {
 pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
   match &expr.kind {
     // Yield { value, result, body } → ·yield value, ·state, fn result, ·state: body
-    ExprKind::Yield { value, result, body } => fmt_yield(value, *result, body),
+    ExprKind::Yield { value, result, body } => fmt_yield(value, result, body),
 
     // Ret(val) → ·ƒ_cont val, ·state
     // If val is a Key, wrap in a load first.
@@ -317,7 +317,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     //     …
     //     fn result, ·scope, ·state: body
     ExprKind::MatchBlock { params, arm_params, fail, arms, result, body } => {
-      let result_plain = render_bind(*result);
+      let result_plain = render_bind(result.kind);
       let result_fn = fn_node(
         patterns(vec![ident(&result_plain), ident("·scope"), ident("·state")]),
         vec![to_node(body)],
@@ -325,7 +325,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       let fail_node = to_node(fail);
       let arm_nodes: Vec<Node<'static>> = arms.iter().map(|arm| {
         let mut fn_params: Vec<Node<'static>> = arm_params.iter()
-          .map(|p| ident(&render_bind(*p)))
+          .map(|p| ident(&render_bind(p.kind)))
           .collect();
         fn_params.extend([ident("·scope"), ident("·state"), ident("·ƒ_cont"), ident("·ƒ_fail")]);
         fn_node(patterns(fn_params), vec![to_node(arm)])
@@ -346,10 +346,10 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // LetVal { name, val, body } → ·store ·scope, id'name', val, fn name, ·scope: body
     // If val is a Key, wrap a load first.
     ExprKind::LetVal { name, val, body } => {
-      let plain = render_bind(*name);
+      let plain = render_bind(name.kind);
       let store_node = apply(ident("·store"), vec![
         ident("·scope"),
-        bind_tag(*name),
+        bind_tag(name.kind),
         val_to_node(val),
         scope_cont(&plain, to_node(body)),
       ]);
@@ -362,13 +362,13 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // scope_arg = ·scope when free_vars is empty;
     //             {..·scope, name1, name2, …} when captures are present.
     ExprKind::LetFn { name, params, free_vars, fn_body, body } => {
-      let plain_name = render_bind(*name);
+      let plain_name = render_bind(name.kind);
       // Build fn params: p1, p2, …, scope_arg, ·state, ·ƒ_cont
       // Spread params render as `..name`.
       let mut fn_params: Vec<Node<'static>> = params.iter()
         .map(|p| match p {
-          Param::Name(n) => ident(&render_bind(*n)),
-          Param::Spread(n) => spread_node(ident(&render_bind(*n))),
+          Param::Name(n) => ident(&render_bind(n.kind)),
+          Param::Spread(n) => spread_node(ident(&render_bind(n.kind))),
         })
         .collect();
       let scope_arg = if free_vars.is_empty() {
@@ -402,7 +402,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // Loads synthesized for any Key vals in func or args.
     // Spread args render as `..resolved_val`.
     ExprKind::App { func, args, result, body } => {
-      let result_plain = render_bind(*result);
+      let result_plain = render_bind(result.kind);
       let result_fn = result_cont(&result_plain, to_node(body));
       // Extract vals from args, tracking which are spreads.
       let is_spread: Vec<bool> = args.iter().map(|a| matches!(a, Arg::Spread(_))).collect();
@@ -443,10 +443,10 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // Like ·store but prefixed ·match_ to signal pattern context in output.
     // If val is a Key, wrap a load first.
     ExprKind::MatchLetVal { name, val, body, .. } => {
-      let plain = render_bind(*name);
+      let plain = render_bind(name.kind);
       let store_node = apply(ident("·match_store"), vec![
         ident("·scope"),
-        bind_tag(*name),
+        bind_tag(name.kind),
         val_to_node(val),
         scope_cont(&plain, to_node(body)),
       ]);
@@ -456,7 +456,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // MatchApp { func, args, fail, result, body }
     // → ·match_apply func, arg…, fail, fn result, ·scope, ·state: body
     ExprKind::MatchApp { func, args, fail, result, body } => {
-      let result_str = render_bind(*result);
+      let result_str = render_bind(result.kind);
       let cont = fn_node(
         patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
         vec![to_node(body)],
@@ -530,7 +530,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
       let cur = cursor_name(*cursor);
       let next = cursor_name(*next_cursor);
       let body_node = to_node(body);
-      let elem_str = render_bind(*elem);
+      let elem_str = render_bind(elem.kind);
       let cont = fn_node(
         patterns(vec![ident(&elem_str), ident(&next), ident("·scope"), ident("·state")]),
         vec![body_node],
@@ -543,7 +543,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // → ·match_done ·seq_N, fail, fn result, ·scope, ·state: body
     ExprKind::MatchDone { cursor, fail, result, body, .. } => {
       let cur = cursor_name(*cursor);
-      let result_str = render_bind(*result);
+      let result_str = render_bind(result.kind);
       let cont = fn_node(
         patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
         vec![to_node(body)],
@@ -568,7 +568,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     // → ·match_rest ·seq_N, fail, fn result, ·scope, ·state: body
     ExprKind::MatchRest { cursor, fail, result, body, .. } => {
       let cur = cursor_name(*cursor);
-      let result_str = render_bind(*result);
+      let result_str = render_bind(result.kind);
       let cont = fn_node(
         patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
         vec![to_node(body)],
@@ -597,7 +597,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
     ExprKind::MatchField { cursor, next_cursor, field, fail, elem, body, .. } => {
       let cur = cursor_name(*cursor);
       let next = cursor_name(*next_cursor);
-      let elem_str = render_bind(*elem);
+      let elem_str = render_bind(elem.kind);
       let cont = fn_node(
         patterns(vec![ident(&elem_str), ident(&next), ident("·scope"), ident("·state")]),
         vec![to_node(body)],

@@ -58,8 +58,8 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       let body = transform_expr(*body);
       // Compute free vars for this fn.
       let bound: HashSet<Name<'_>> = params.iter().filter_map(|p| match p {
-        Param::Name(n) | Param::Spread(n) => match n {
-          BindName::User(s) => if *s == "_" { None } else { Some(*s) },
+        Param::Name(n) | Param::Spread(n) => match n.kind {
+          BindName::User(s) => if s == "_" { None } else { Some(s) },
           BindName::Gen(_) => None,  // compiler temps are never free-var references
         },
       }).collect();
@@ -184,7 +184,7 @@ fn collect_keys<'src>(
       collect_key_from_val(val, bound, seen, out);
       // `name` is now settled — exclude it from captures in the continuation.
       let mut inner_bound = bound.clone();
-      if let BindName::User(s) = name {
+      if let BindName::User(s) = name.kind {
         inner_bound.insert(s);
       }
       collect_keys(body, &inner_bound, seen, out);
@@ -213,7 +213,7 @@ fn collect_keys<'src>(
     Yield { value, result, body } => {
       collect_key_from_val(value, bound, seen, out);
       let mut inner_bound = bound.clone();
-      if let BindName::User(s) = result {
+      if let BindName::User(s) = result.kind {
         inner_bound.insert(s);
       }
       collect_keys(body, &inner_bound, seen, out);
@@ -231,7 +231,7 @@ fn collect_keys<'src>(
       collect_key_from_val(val, bound, seen, out);
       collect_keys(fail, bound, seen, out);
       let mut inner = bound.clone();
-      if let BindName::User(s) = name { inner.insert(s); }
+      if let BindName::User(s) = name.kind { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
     MatchApp { func, args, result, fail, body } => {
@@ -239,7 +239,7 @@ fn collect_keys<'src>(
       for v in args { collect_key_from_val(v, bound, seen, out); }
       collect_keys(fail, bound, seen, out);
       let mut inner = bound.clone();
-      if let BindName::User(s) = result { inner.insert(s); }
+      if let BindName::User(s) = result.kind { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
     MatchIf { func, args, fail, body } => {
@@ -261,13 +261,13 @@ fn collect_keys<'src>(
     MatchNext { elem, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
       let mut inner = bound.clone();
-      if let BindName::User(s) = elem { inner.insert(s); }
+      if let BindName::User(s) = elem.kind { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
     MatchDone { result, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
       let mut inner = bound.clone();
-      if let BindName::User(s) = result { inner.insert(s); }
+      if let BindName::User(s) = result.kind { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
     MatchNotDone { fail, body, .. } => {
@@ -277,7 +277,7 @@ fn collect_keys<'src>(
     MatchRest { result, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
       let mut inner = bound.clone();
-      if let BindName::User(s) = result { inner.insert(s); }
+      if let BindName::User(s) = result.kind { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
     MatchRec { val, fail, body, .. } => {
@@ -288,7 +288,7 @@ fn collect_keys<'src>(
     MatchField { elem, fail, body, .. } => {
       collect_keys(fail, bound, seen, out);
       let mut inner = bound.clone();
-      if let BindName::User(s) = elem { inner.insert(s); }
+      if let BindName::User(s) = elem.kind { inner.insert(s); }
       collect_keys(body, &inner, seen, out);
     }
     MatchBlock { params, fail, arms, body, .. } => {
