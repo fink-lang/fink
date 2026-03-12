@@ -389,6 +389,7 @@ test 'pipe with spread partial', fn:
         Spread
           Partial
 
+# TODO: Jan, think about | precedence, should it be (foo (bar | (spam ham))?
 test 'pipe with apply in each stage', fn:
   expect ast fink":
     foo bar | spam ham
