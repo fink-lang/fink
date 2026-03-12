@@ -1574,14 +1574,14 @@ mod tests {
     parse_debug(src)
   }
 
-  test_macros::include_fink_tests!("src/parser/test_yield.fnk");
-  test_macros::include_fink_tests!("src/parser/test_try.fnk");
-  test_macros::include_fink_tests!("src/parser/test_literals.fnk");
-  test_macros::include_fink_tests!("src/parser/test_operators.fnk");
-  test_macros::include_fink_tests!("src/parser/test_grouping.fnk");
-  test_macros::include_fink_tests!("src/parser/test_spread_ranges.fnk");
-  test_macros::include_fink_tests!("src/parser/test_bindings.fnk");
-  test_macros::include_fink_tests!("src/parser/test_functions.fnk");
-  test_macros::include_fink_tests!("src/parser/test_match.fnk");
-  test_macros::include_fink_tests!("src/parser/test_blocks.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_yield.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_try.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_literals.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_operators.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_grouping.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_spread_ranges.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_bindings.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_functions.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_blocks.fnk");
 }

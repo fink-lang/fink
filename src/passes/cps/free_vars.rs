@@ -23,7 +23,7 @@
 // output.
 
 use std::collections::HashSet;
-use super::cps::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Name, Param, Val, ValKind};
+use super::ir::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Name, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -334,8 +334,8 @@ fn collect_key_from_val<'src>(
 #[cfg(test)]
 mod free_var_tests {
   use crate::parser::parse;
-  use crate::transform::cps_fmt::fmt;
-  use crate::transform::cps_transform::lower_expr;
+  use crate::passes::cps::fmt::fmt;
+  use crate::passes::cps::transform::lower_expr;
   use super::annotate;
 
   fn cps_free_vars(src: &str) -> String {
@@ -345,5 +345,5 @@ mod free_var_tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/transform/test_cps_free_vars.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_cps_free_vars.fnk");
 }

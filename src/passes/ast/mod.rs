@@ -1,6 +1,9 @@
 pub mod fmt;
+pub mod lexer;
+pub mod parser;
+pub mod transform;
 
-use crate::lexer::Loc;
+use lexer::Loc;
 
 /// Unique identifier for an AST node, assigned by the parser.
 /// Used as a key into property graphs for attaching pass-computed metadata

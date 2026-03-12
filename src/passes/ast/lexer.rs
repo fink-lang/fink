@@ -1004,7 +1004,7 @@ fn tokenize_debug(src: &str) -> String {
     tokenize_debug(src)
   }
 
-  include_fink_tests!("src/lexer/test_lexer.fnk");
+  include_fink_tests!("src/passes/ast/test_lexer.fnk");
 
 
   #[test]

@@ -246,5 +246,5 @@ mod tests {
     ast_fmt(&node)
   }
 
-  test_macros::include_fink_tests!("src/ast/test_fmt.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_fmt.fnk");
 }

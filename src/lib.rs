@@ -1,7 +1,9 @@
-pub mod ast;
 pub mod errors;
-pub mod lexer;
-pub mod parser;
+pub mod passes;
 pub mod propgraph;
 pub mod strings;
-pub mod transform;
+
+// Re-exports for convenience — short paths for foundational types.
+pub use passes::ast;
+pub use passes::ast::lexer;
+pub use passes::ast::parser;

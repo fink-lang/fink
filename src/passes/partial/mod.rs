@@ -10,7 +10,7 @@
 
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use crate::transform::{Transform, TransformError, TransformResult};
+use crate::ast::transform::{Transform, TransformError, TransformResult};
 
 const PARAM: &str = "$";
 
@@ -289,5 +289,5 @@ mod tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/transform/test_partial.fnk");
+  test_macros::include_fink_tests!("src/passes/partial/test_partial.fnk");
 }

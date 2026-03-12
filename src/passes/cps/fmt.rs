@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::cps::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Prim, Val, ValKind};
+use super::ir::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Prim, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -134,7 +134,7 @@ fn needs_load(v: &Val<'_>) -> bool {
 
 /// Synthesize a `·load` wrapping `body_node`:
 ///   ·load ·scope, id'name' | op'sym', fn local, ·scope: body_node
-fn emit_load(key: &super::cps::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
+fn emit_load(key: &super::ir::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
   let key_node = match &key.kind {
     KeyKind::Name(name) => id_tag(name),
     KeyKind::Bind(name) => id_tag(&raw_bind(*name)),

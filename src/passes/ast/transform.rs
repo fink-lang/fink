@@ -1,11 +1,5 @@
-pub mod cps;
-pub mod cps_fmt;
-pub mod cps_free_vars;
-pub mod cps_transform;
-pub mod partial;
-
-use crate::ast::{CmpPart, Node, NodeKind};
-use crate::lexer::Loc;
+use super::{CmpPart, Node, NodeKind};
+use super::lexer::Loc;
 
 // --- error ---
 

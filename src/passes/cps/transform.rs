@@ -19,7 +19,7 @@
 
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
-use crate::transform::cps::{
+use super::ir::{
   Arg, BindName, Expr, ExprKind, Key, KeyKind, Lit, Meta, Name, Param, Prim,
   Val, ValKind,
 };
@@ -1377,7 +1377,7 @@ fn extract_bind_name<'src>(node: &'src Node<'src>) -> BindName<'src> {
 mod tests {
   use super::*;
   use crate::parser::parse;
-  use crate::transform::cps::ExprKind;
+  use crate::passes::cps::ir::ExprKind;
 
   fn parse_single(src: &str) -> Node<'_> {
     parse(src).expect("parse failed")
@@ -1418,7 +1418,7 @@ mod tests {
 #[cfg(test)]
 mod cps_tests {
   use crate::parser::parse;
-  use crate::transform::cps_fmt::fmt;
+  use crate::passes::cps::fmt::fmt;
   use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
@@ -1428,15 +1428,15 @@ mod cps_tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/transform/test_cps.fnk");
-  test_macros::include_fink_tests!("src/transform/test_cps_yield.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_cps.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_cps_yield.fnk");
 }
 
 #[cfg(test)]
 mod pat_tests {
   use crate::parser::parse;
-  use crate::transform::cps_fmt::fmt;
-  use crate::transform::cps_free_vars::annotate;
+  use crate::passes::cps::fmt::fmt;
+  use crate::passes::cps::free_vars::annotate;
   use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
@@ -1453,5 +1453,5 @@ mod pat_tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/transform/test_cps_patterns.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_cps_patterns.fnk");
 }
