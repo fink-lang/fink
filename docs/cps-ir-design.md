@@ -1,133 +1,276 @@
 # CPS IR Design — Compiler Perspective
 
-This document works through the CPS IR design from the compiler's point of view.
+This document describes the CPS IR as implemented in `src/transform/cps.rs`.
 Output formatting (env handles, state threading, ƒ_cont naming) is intentionally
-ignored here — those are rendering artifacts, not semantic content.
+ignored here — those are rendering artifacts synthesized by the pretty-printer
+and codegen from the structural IR.
 
 ---
 
-## Core principle
+## Core principles
 
-Every intermediate result has an explicit name. Control flow is explicit.
-Scope is structural (nesting), not a runtime object.
+- Every intermediate result has an explicit name
+- Control flow is explicit — continuations, not implicit returns
+- Scope is structural (nesting), not a runtime object
+- Every function has an explicit name (user or compiler-generated)
+- No stringly-typed logic — all internal branching uses typed enums
+- Trees stay trees (`Box<Expr>`) — metadata lives in property graphs, not on nodes
 
 ---
 
-## Settled decisions
+## Metadata strategy
 
-### Store/Load
-Only needed for two cases:
-- **Mutual recursion** (`LetRec`) — names reference each other across bindings
-- **Protocols** — collapse into dispatch; an operator is a dispatcher, no mutable slot needed
+Pass-computed metadata (types, resolution, free vars, source locations) is stored
+in **property graphs** — typed `Vec<Option<T>>` indexed by node IDs — rather than
+on IR nodes directly. Each pass reads upstream property graphs and writes its own.
 
-Everything else is structural scope — no Store/Load in the IR.
+- `AstId(u32)` — assigned by the parser to every AST node
+- `CpsId` — planned for CPS nodes (not yet implemented)
+- `PropGraph<Id, T>` — generic property graph type (not yet implemented)
 
-### Mutual recursion — `LetRec`
-A `LetRec` block makes all its names mutually visible for name resolution purposes.
-Cross-references within the group are valid **only if they appear inside a `fn` body**
-(the function won't be called until after all bindings are initialized).
-Bare value references to not-yet-initialized names in the same group are a compile error:
+Currently, CPS nodes still carry a `Meta { loc, ty }` field as a transitional
+measure. This will be replaced by `PropGraph<CpsId, Loc>` when the property
+graph infrastructure lands.
+
+See also: `memory/project_property_graphs.md` for the full design rationale.
+
+---
+
+## Names and keys
 
 ```
-rec:
-  x = y + 1        # error — y has no value at this point
-  y = 42
+Name = &'src str              -- plain source name (reference to existing binding)
 
-rec:
-  foo = fn: bar 1  # ok — bar is called later, after both are bound
-  bar = fn n: foo n
+BindName                      -- a binding site (introduces a name into scope)
+  User(Name)                  -- from source: `foo`, `x`, `result`
+  Gen(u32)                    -- compiler-generated: rendered as ·v_N
+
+FreeVar                       -- a captured variable from an outer scope
+  Name(Name)                  -- user name: foo, x
+  Op(&str)                    -- operator: +, ==, . (rendered as ·op_X)
+
+Param                         -- function parameter
+  Name(BindName)              -- plain param
+  Spread(BindName)            -- varargs: ..rest (only one, trailing position)
+
+Arg                           -- call-site argument
+  Val(Val)                    -- plain argument
+  Spread(Val)                 -- spread: ..items
 ```
 
-### Env / scope
-The compiler tracks scope as a chain of binding sets during the walk.
-No Env node in the IR. Env handle threading is a rendering artifact for the pretty-printer.
+## Key — scope lookup
 
-### Closure vs LetFn
-All fns are potentially closures; captures are inferred by the free-var pass.
-Analysis IR uses plain `LetFn { name, params, fn_body, body }` — captures implicit from nesting.
-Codegen IR adds explicit captures after the free-var pass.
+```
+Key { kind: KeyKind, resolution: Option<Resolution>, meta: Meta }
 
-Every function has a name — either user-provided or a compiler-generated synthetic.
-Anonymous functions (e.g. `fn x: fn y: x + y`) get a fresh synthetic name at IR construction.
-This makes debugging, tracing, error messages, and closure hoisting all easier.
+KeyKind
+  Name(Name)                  -- user name: foo, add
+  Bind(BindName)              -- typed scope ref (avoids string materialisation for Gen temps)
+  Prim(Prim)                  -- runtime builtin (no scope resolution needed)
+  Op(&str)                    -- operator symbol: +, ==, .
+
+Prim                          -- runtime builtins (reference only, never binding sites)
+  SeqAppend                   -- [a, b, c] element construction
+  SeqConcat                   -- [..xs, ..ys] spread merge
+  RecPut                      -- {key: val} field construction
+  RecMerge                    -- {..rec} spread merge
+  StrFmt                      -- 'hello ${name}' interpolation
+  StrRaw                      -- fmt'...' tagged template
+```
+
+## Resolution — populated by semantic/SCC pass
+
+```
+Resolution
+  Local                       -- bound in current scope, already initialized
+  Captured                    -- free variable from outer scope
+  Recursive                   -- same LetRec group, behind fn boundary (valid)
+  ForwardRef                  -- same LetRec group, not behind fn boundary (compile error)
+  Global                      -- module-level binding
+```
+
+`Recursive` and `Global` refs need store/load in output; `Local` and `Captured`
+are structurally resolved.
 
 ---
 
-## Scenarios to walk through
-
-- [ ] Simple binding: `x = 42`
-- [ ] Function definition and call: `add = fn a, b: a + b`
-- [ ] Closure capture: `fn x: fn y: x + y`
-- [ ] Pattern match
-- [ ] Mutual recursion (`LetRec`)
-
-### Visualization as correctness check
-
-The pretty-printer derives `store`/`load` output from the clean IR annotations.
-That output is valid executable Fink — so if it's correct, the IR semantics are sound.
-The visualization doubles as a runtime spec. This was the original intent.
-
-### Scope vs Env vs State
-
-All three are output conventions only — none appear in the analysis IR:
-
-- **Scope** — compiler concept; chain of binding sets, structural, implicit, disappears after analysis
-- **Env** — runtime/codegen concept; heap-allocated record a lifted closure carries;
-  synthesized from scope/closure structure during hoisting
-- **State** — effect/mutation threading mechanism; synthesized by pretty-printer and codegen
-
-### Ident annotation
-
-After SCC analysis, each `Ident` reference is annotated with its resolution kind:
-- `Local` — bound in current scope, already initialized
-- `Recursive` — same `LetRec` group, behind a `fn` boundary (valid)
-- `ForwardRef` — same `LetRec` group, not behind a `fn` boundary (compile error)
-- `Captured` — from an outer scope (free variable)
-- `Global` — module level
-
-`Recursive` and `Global` refs need `store`/`load` in output; `Local` and `Captured` are structurally resolved.
-
----
-
-## IR sketch
+## Values — already-computed things
 
 ```
-Name = &str           -- all names are strings; sigils (·, ƒ_) are output conventions only
+Val { kind: ValKind, meta: Meta }
 
-Val:
-  Ident(Name)         -- a bound name
-  Lit(Lit)            -- literal value
+ValKind
+  Ident(BindName)             -- locally bound name (param or let-binding)
+  Key(Key)                    -- scope lookup (user name, operator, or builtin)
+  Lit(Lit)                    -- literal value
 
-Lit:
+Lit
   Bool(bool)
   Int(i64)
   Float(f64)
+  Decimal(f64)                -- distinct from Float for the type system
   Str(&str)
-
-Key:                  -- lookup key (for operators vs user names)
-  Name(Name)          -- user-defined name: foo, add, x
-  Op(&str)            -- operator symbol: +, ==, .
-
-Expr:
-  LetVal { name: Name, val: Val, body: Expr }
-    -- bind `name` to `val`; visible in `body`
-
-  LetFn { name: Name, params: Vec<Name>, fn_body: Expr, body: Expr }
-    -- bind a function; NOT recursive (name not visible in fn_body)
-
-  LetRec { bindings: Vec<(Name, Vec<Name>, Expr)>, body: Expr }
-    -- mutually recursive group; all names visible in all fn_bodies
-    -- each binding: (name, params, fn_body)
-    -- cross-refs not behind fn boundary → compile error (ForwardRef)
-
-  App { func: Val, args: Vec<Val>, result: Name, body: Expr }
-    -- call func with args; result bound to `result`, visible in `body`
-
-  If { cond: Val, then: Expr, else_: Expr }
-    -- branch on cond
-
-  Ret(Val)
-    -- tail position: return value to current continuation
+  Seq                         -- empty sequence []
+  Rec                         -- empty record {}
 ```
 
+---
 
+## Expressions
+
+```
+Expr { kind: ExprKind, meta: Meta }
+```
+
+### Core
+
+```
+LetVal { name, val, body }
+  -- bind val to name; visible in body
+
+LetFn { name, params, free_vars, fn_body, body }
+  -- bind a function; name NOT visible in fn_body (non-recursive)
+  -- free_vars populated by free-var pass; empty until then
+
+LetRec { bindings: Vec<Binding>, body }
+  -- mutually recursive group; all names visible in all fn_bodies
+  -- Binding = { name, params, fn_body, meta }
+
+App { func, args, result, body }
+  -- call func with args; bind result; visible in body
+
+If { cond, then, else_ }
+  -- branch on cond
+```
+
+### Suspension
+
+```
+Yield { value, result, body }
+  -- suspend execution, yield value to scheduler
+  -- continuation receives resumed value bound to result
+  -- used by later passes to color continuation graphs:
+     every continuation reachable from Yield is "suspendable"
+```
+
+### Terminal
+
+```
+Ret(val)                      -- return value to current continuation
+Panic                         -- unconditional failure (irrefutable pattern fail)
+FailCont                      -- delegate to enclosing ·ƒ_fail (inside MatchBlock arms)
+```
+
+### Pattern lowering primitives
+
+All pattern nodes carry an explicit `fail` continuation (Panic or FailCont).
+
+```
+MatchLetVal { name, val, fail, body }
+  -- bind val to name; always succeeds (structural uniformity with fail cont)
+
+MatchApp { func, args, fail, result, body }
+  -- apply func to args; fail if tag is wrong
+  -- constructor/extractor patterns: Ok b, Some x
+
+MatchIf { func, args, fail, body }
+  -- apply func to args; fail if falsy; no result binding
+  -- guard predicates: is_even x, a > 0
+
+MatchValue { val, lit, fail, body }
+  -- assert val equals literal; fail if not
+  -- literal patterns: [a, 1], ['hello']
+```
+
+### Sequence pattern traversal
+
+```
+MatchSeq { val, cursor, fail, body }
+  -- assert val is a sequence; open cursor
+
+MatchNext { val, cursor, next_cursor, fail, elem, body }
+  -- pop head from cursor; bind to elem; fail if empty
+
+MatchDone { val, cursor, fail, result, body }
+  -- assert cursor exhausted; forward matched value to result
+
+MatchNotDone { val, cursor, fail, body }
+  -- assert cursor non-empty; fail if exhausted
+
+MatchRest { val, cursor, fail, result, body }
+  -- bind remaining elements; zero-or-more; works on seq and rec cursors
+```
+
+### Record pattern traversal
+
+```
+MatchRec { val, cursor, fail, body }
+  -- assert val is a record; open cursor
+
+MatchField { val, cursor, next_cursor, field, fail, elem, body }
+  -- extract named field; bind to elem; advance cursor
+```
+
+Note: `cursor` fields are `u32` formatting hacks — they render as `·m_N` in
+the pretty-printer. Will be removed when codegen derives position from structure.
+
+### Match block
+
+```
+MatchBlock { params, fail, arm_params, arms, result, body }
+  -- try arms in order; first match wins
+  -- params: values passed into each arm
+  -- arm_params: names each arm receives them as
+  -- fail: exhaustion continuation (Panic or outer FailCont)
+  -- each arm: lowered Match* chain ending in ·ƒ_cont
+  -- result: value received by result cont from winning arm
+```
+
+---
+
+## Settled design decisions
+
+### Store/Load
+Only needed for mutual recursion (`LetRec`) and protocols (dispatch collapse).
+Everything else is structural scope.
+
+### Closure vs LetFn
+All fns are potentially closures; captures inferred by free-var pass.
+Analysis IR uses `LetFn` with implicit captures from nesting.
+Codegen IR adds explicit captures after free-var analysis.
+
+### Env / Scope / State
+All three are output conventions — none in the analysis IR:
+- **Scope** — compiler concept; structural binding chain; disappears after analysis
+- **Env** — runtime concept; heap record a lifted closure carries; synthesized during hoisting
+- **State** — effect/mutation threading; synthesized by pretty-printer and codegen
+
+### Yield as first-class primitive
+`yield` is a core IR node, not sugar. It's the foundation for:
+- Async IO (implicit futures via yield to scheduler)
+- Generators / producers / transducers
+- Channels
+- Tasks (spawn, join, race, cancel reduce to yield + scheduler)
+
+Later passes use Yield nodes to color the continuation graph — every
+continuation reachable from a Yield is "suspendable."
+
+---
+
+## Output conventions (pretty-printer only)
+
+The pretty-printer synthesizes these from the structural IR:
+
+**Variable sigils:**
+- User vars — plain: `foo`, `bar`
+- Compiler temps — `·v_N`, `·fn_N`
+- Match cursors — `·m_N`
+- Continuations — `·ƒ_cont`, `·ƒ_err`, `·ƒ_ok`, `·ƒ_fail`
+- Runtime/injected — `·scope`, `·state`, `·chld_scope`, `·op_plus`
+
+**Core primitives rendered:**
+`·store`, `·load`, `·apply`, `·closure`, `·scope`, `·seq_append`, `·seq_concat`,
+`·rec_put`, `·rec_merge`, `·id`, `·op`, `·str_fmt`, `·str_raw`, `·yield`,
+`·match_block`, `·match_branch`, `·match_store`, `·match_seq`, `·match_next`,
+`·match_done`, `·match_not_done`, `·match_rest`, `·match_rec`, `·match_field`,
+`·match_value`, `·match_if`, `·match_apply`, `·panic`, `·if`
