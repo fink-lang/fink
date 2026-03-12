@@ -27,6 +27,12 @@ impl<Id, T> PropGraph<Id, T> {
         &self.data[idx]
     }
 
+    pub fn try_get(&self, id: Id) -> Option<&T>
+    where Id: Into<usize> + Copy {
+        let idx: usize = id.into();
+        self.data.get(idx)
+    }
+
     pub fn len(&self) -> usize {
         self.data.len()
     }
@@ -85,6 +91,21 @@ mod tests {
         g.set(AstId(3), Some(42));
         assert_eq!(g.get(AstId(0)), &None);
         assert_eq!(g.get(AstId(3)), &Some(42));
+    }
+
+    #[test]
+    fn try_get_returns_none_for_out_of_bounds() {
+        let g: PropGraph<AstId, i32> = PropGraph::new();
+        assert_eq!(g.try_get(AstId(0)), None);
+        assert_eq!(g.try_get(AstId(999)), None);
+    }
+
+    #[test]
+    fn try_get_returns_some_for_valid_id() {
+        let mut g: PropGraph<AstId, &str> = PropGraph::new();
+        g.push("hello");
+        assert_eq!(g.try_get(AstId(0)), Some(&"hello"));
+        assert_eq!(g.try_get(AstId(1)), None);
     }
 
     #[test]

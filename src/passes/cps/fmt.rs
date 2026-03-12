@@ -28,14 +28,10 @@ impl<'a, 'src> Ctx<'a, 'src> {
   /// Returns None for compiler-generated nodes (prims, temps) or when the
   /// origin map is empty / doesn't cover this ID.
   fn ast_node(&self, cps_id: CpsId) -> Option<&'src Node<'src>> {
-    let idx: usize = cps_id.into();
-    if idx >= self.origin.len() { return None; }
-    let ast_id = *self.origin.get(cps_id);
-    ast_id.and_then(|id| {
-      let ast_idx: usize = id.into();
-      if ast_idx >= self.ast_index.len() { return None; }
-      *self.ast_index.get(id)
-    })
+    self.origin.try_get(cps_id)
+      .and_then(|opt| *opt)
+      .and_then(|ast_id| self.ast_index.try_get(ast_id))
+      .and_then(|opt| *opt)
   }
 
 }
