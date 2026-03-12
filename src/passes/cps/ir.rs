@@ -150,15 +150,28 @@ pub enum Resolution {
 }
 
 // ---------------------------------------------------------------------------
+// Node — generic shell shared by Val and Expr
+// ---------------------------------------------------------------------------
+
+/// A CPS IR node — generic over its kind type.
+/// Both trivial values (`Val`) and computation nodes (`Expr`) share the same
+/// `CpsId` space, so every node is addressable by property graphs.
+/// The kind parameter (`ValKind` vs `ExprKind`) enforces at compile time that
+/// value positions can only hold trivial nodes.
+#[derive(Debug, Clone)]
+pub struct Node<K> {
+  pub id: CpsId,
+  pub kind: K,
+  pub meta: Meta,
+}
+
+// ---------------------------------------------------------------------------
 // Values — already-computed things
 // ---------------------------------------------------------------------------
 
 /// An already-computed value — a literal, a local binding reference, or a scope key.
-#[derive(Debug, Clone)]
-pub struct Val<'src> {
-  pub kind: ValKind<'src>,
-  pub meta: Meta,
-}
+/// Shares the `CpsId` space with `Expr` via `Node<ValKind>`.
+pub type Val<'src> = Node<ValKind<'src>>;
 
 #[derive(Debug, Clone)]
 pub enum ValKind<'src> {
@@ -182,13 +195,9 @@ pub enum Lit<'src> {
 // Expressions
 // ---------------------------------------------------------------------------
 
-/// A CPS expression node — the core of the IR.
-#[derive(Debug, Clone)]
-pub struct Expr<'src> {
-  pub id: CpsId,
-  pub kind: ExprKind<'src>,
-  pub meta: Meta,
-}
+/// A CPS expression node — computation with continuations.
+/// Shares the `CpsId` space with `Val` via `Node<ExprKind>`.
+pub type Expr<'src> = Node<ExprKind<'src>>;
 
 #[derive(Debug, Clone)]
 pub enum ExprKind<'src> {

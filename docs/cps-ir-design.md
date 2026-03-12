@@ -25,12 +25,15 @@ in **property graphs** — typed `Vec<Option<T>>` indexed by node IDs — rather
 on IR nodes directly. Each pass reads upstream property graphs and writes its own.
 
 - `AstId(u32)` — assigned by the parser to every AST node
-- `CpsId` — planned for CPS nodes (not yet implemented)
-- `PropGraph<Id, T>` — generic property graph type (not yet implemented)
+- `CpsId(u32)` — assigned by the CPS transform to every node (both `Val` and `Expr`)
+- `PropGraph<Id, T>` — generic property graph type (`src/propgraph.rs`)
 
-Currently, CPS nodes still carry a `Meta { loc, ty }` field as a transitional
-measure. This will be replaced by `PropGraph<CpsId, Loc>` when the property
-graph infrastructure lands.
+Both `Val` and `Expr` are type aliases for `Node<K>`, which carries a `CpsId`.
+This gives every CPS node a uniform ID in a single address space, so property
+graphs keyed by `CpsId` can annotate values and expressions alike.
+
+CPS nodes still carry a `Meta { loc, ty }` field as a transitional measure.
+`loc` may move to `PropGraph<CpsId, Loc>` in the future; `ty` is a placeholder.
 
 See also: `memory/project_property_graphs.md` for the full design rationale.
 
@@ -97,7 +100,8 @@ are structurally resolved.
 ## Values — already-computed things
 
 ```
-Val { kind: ValKind, meta: Meta }
+Node<K> { id: CpsId, kind: K, meta: Meta }  -- generic shell
+Val = Node<ValKind>                          -- trivial value (has CpsId)
 
 ValKind
   Ident(BindName)             -- locally bound name (param or let-binding)
@@ -119,7 +123,7 @@ Lit
 ## Expressions
 
 ```
-Expr { kind: ExprKind, meta: Meta }
+Expr = Node<ExprKind>                        -- computation node (has CpsId)
 ```
 
 ### Core

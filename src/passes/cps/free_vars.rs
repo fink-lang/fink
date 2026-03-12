@@ -31,6 +31,7 @@ use super::ir::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Name, Param, Va
 
 /// Annotate every `LetFn` in `expr` with its free variables.
 /// Operates bottom-up: inner fns are annotated before outer ones.
+#[deprecated(note = "will be subsumed by name resolution / static analysis pass")]
 pub fn annotate(expr: Expr<'_>) -> Expr<'_> {
   transform_expr(expr)
 }
