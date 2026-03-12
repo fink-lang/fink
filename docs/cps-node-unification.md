@@ -31,7 +31,7 @@ type Val<'src>  = Node<'src, ValKind<'src>>;
 
 - `Val` gains an `id: CpsId` field (via the shared `Node` shell).
 - The CPS transform assigns IDs to Vals from the same counter as Exprs.
-- `CpsResult.node_count` grows to include Val nodes.
+- Node count is `CpsResult.origin.len()` (the origin prop graph covers all nodes).
 - PropGraph<CpsId, T> covers all nodes uniformly — no second ID space.
 
 ### What stays the same

@@ -5,7 +5,7 @@ fn dump_cps_ids() {
     let src = "a = 2\n\nfoo = fn b:\n  b + bar a\n\n\nbar = fn d:\n  d * e\n";
     let r = fink::parser::parse(src).unwrap();
     let cps = fink::passes::cps::transform::lower_expr(&r.root);
-    println!("\nnode_count: {}", cps.node_count);
+    println!("\nnode_count: {}", cps.origin.len());
     dump_expr(&cps.root, 0);
 }
 

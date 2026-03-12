@@ -240,12 +240,14 @@ fn raw_bind(name: BindName<'_>) -> String {
 }
 
 /// Whether a ref name is an operator — matches the set known to `sigil_op`.
+#[deprecated(note = "remove once resolve pass provides CpsId→AstId prop graph — recover syntactic category from AST origin")]
 fn is_op(name: &str) -> bool {
   matches!(name, "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | "<=" | ">" | ">="
     | "." | "and" | "or" | "not" | "in" | ".." | "...")
 }
 
 /// Render a RefKind::Name for display — operators get sigil_op, others stay as-is.
+#[deprecated(note = "remove with is_op — use CpsId→AstId prop graph instead")]
 fn render_ref_name(name: &str) -> String {
   if is_op(name) {
     sigil_op(name)
@@ -256,6 +258,7 @@ fn render_ref_name(name: &str) -> String {
 
 /// Produce the correct tag node for a ref name — op_tag for operators, id_tag otherwise.
 /// For prims (·seq_append), strips the · prefix for the tag content.
+#[deprecated(note = "remove with is_op — use CpsId→AstId prop graph instead")]
 fn ref_tag(name: &str) -> Node<'static> {
   if is_op(name) {
     op_tag(name)

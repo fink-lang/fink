@@ -8,8 +8,6 @@
 // Every function has an explicit name (user or synthetic).
 // Ident references are annotated with their resolution kind after SCC analysis.
 
-use crate::lexer::Loc;
-
 // ---------------------------------------------------------------------------
 // Node identity
 // ---------------------------------------------------------------------------
@@ -17,6 +15,11 @@ use crate::lexer::Loc;
 /// Unique identifier for a CPS expression node, assigned by the transform.
 /// Used as a key into property graphs for attaching pass-computed metadata
 /// (types, resolution, etc.) without modifying the IR structure.
+///
+/// The CPS transform produces a `PropGraph<CpsId, Option<AstId>>` (in `CpsResult.origin`)
+/// mapping each node back to the AST expression it was synthesized from. This provides
+/// AST origin tracking for all nodes — user bindings, refs, and compiler-generated
+/// temps alike — without encoding provenance in the IR.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpsId(pub u32);
 
@@ -30,33 +33,17 @@ impl From<CpsId> for usize {
   fn from(id: CpsId) -> usize { id.0 as usize }
 }
 
+impl From<usize> for CpsId {
+  fn from(n: usize) -> CpsId { CpsId(n as u32) }
+}
+
 /// Output of the CPS transform — the IR tree plus metadata.
 pub struct CpsResult<'src> {
   pub root: Expr<'src>,
-  pub node_count: u32,
-}
-
-// ---------------------------------------------------------------------------
-// Metadata — attached to every IR node
-// ---------------------------------------------------------------------------
-
-/// Per-node metadata. Loc is the source span; type info is a placeholder for
-/// the type inference pass. Both are Option so nodes can be constructed before
-/// loc threading or type inference is complete.
-#[derive(Debug, Clone)]
-pub struct Meta {
-  pub loc: Option<Loc>,
-  pub ty: Option<()>,  // placeholder — replaced when type system is designed
-}
-
-impl Meta {
-  pub fn none() -> Self {
-    Meta { loc: None, ty: None }
-  }
-
-  pub fn at(loc: Loc) -> Self {
-    Meta { loc: Some(loc), ty: None }
-  }
+  /// Maps each CPS node back to the AST expression it was synthesized from.
+  /// Compiler-generated nodes with no direct AST origin have `None`.
+  /// Node count is `origin.len()`.
+  pub origin: crate::propgraph::PropGraph<CpsId, Option<crate::ast::AstId>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -96,12 +83,13 @@ pub enum Arg<'src> {
 }
 
 /// A reference to a binding — how a name is used from scope.
-/// Annotated with resolution kind after SCC/semantic analysis.
+/// TODO [deprecated]: collapse into just `RefKind` — `resolution` moves to prop graph,
+/// `Ref` becomes unnecessary wrapper.
 #[derive(Debug, Clone)]
 pub struct Ref<'src> {
   pub kind: RefKind<'src>,
+  /// TODO [deprecated]: move to `PropGraph<CpsId, Option<Resolution>>`.
   pub resolution: Option<Resolution>,
-  pub meta: Meta,
 }
 
 /// The variant of a reference — how the name is stored and looked up.
@@ -110,6 +98,16 @@ pub struct Ref<'src> {
 /// distinguished only by their string content, not by RefKind variant.
 /// Operators and prims are pre-seeded into scope; a separate shadowing
 /// pass protects them from accidental override.
+///
+/// TODO [deprecated]: once `Ref` collapses (resolution moves to prop graph),
+/// inline `RefKind` directly into `ValKind` — `ValKind::Ref(RefKind)` instead
+/// of `ValKind::Ref(Ref { kind: RefKind, .. })`.
+///
+/// TODO: with `CpsId→AstId` origin map, `Name(&'src str)` may not need to carry
+/// the string at all — the name is recoverable from the AST via the origin map.
+/// The CPS IR would become purely structural, with no strings except
+/// `BindName::User` at binding sites. Operators, prims, and user refs would all
+/// be just a `CpsId` pointing back to their AST origin.
 #[derive(Debug, Clone)]
 pub enum RefKind<'src> {
   Name(Name<'src>),      // any name: user ("foo"), operator ("+"), prim ("·seq_append")
@@ -150,7 +148,6 @@ pub enum Resolution {
 pub struct Node<K> {
   pub id: CpsId,
   pub kind: K,
-  pub meta: Meta,
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +161,11 @@ pub type Val<'src> = Node<ValKind<'src>>;
 /// Has its own `CpsId` so name resolution can point directly at the binding.
 pub type Bind<'src> = Node<BindName<'src>>;
 
+/// TODO: once `Ref` collapses and `RefKind` inlines here, consider merging
+/// `Ident(BindName)` and the former `RefKind::Bind(BindName)` — both reference
+/// a `BindName`, and the distinction (direct use vs scope load) is a
+/// runtime/codegen concern, not semantic. The resolve pass could classify
+/// everything as just a name, with the prop graph recording how it resolves.
 #[derive(Debug, Clone)]
 pub enum ValKind<'src> {
   Ident(BindName<'src>),  // a locally bound name (param or let-binding)
@@ -206,7 +208,9 @@ pub enum ExprKind<'src> {
   LetFn {
     name: Bind<'src>,
     params: Vec<Param<'src>>,
-    free_vars: Vec<FreeVar<'src>>,  // references to outer bindings, not definitions
+    /// TODO [deprecated]: remove once resolve pass exists — free vars are derivable
+    /// from `Resolution::Captured` entries in the prop graph.
+    free_vars: Vec<FreeVar<'src>>,
     fn_body: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },
@@ -406,6 +410,5 @@ pub struct Binding<'src> {
   pub name: Bind<'src>,
   pub params: Vec<Param<'src>>,
   pub fn_body: Box<Expr<'src>>,
-  pub meta: Meta,
 }
 

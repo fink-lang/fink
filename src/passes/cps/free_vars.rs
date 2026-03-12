@@ -1,3 +1,8 @@
+// TODO [deprecated]: this entire pass is subsumed by the name resolution pass.
+// Once resolve produces `PropGraph<CpsId, Option<Resolution>>`, free vars are
+// derivable from `Resolution::Captured` entries. Remove this file and the
+// `free_vars` field on `LetFn` together.
+//
 // Free variable analysis pass.
 //
 // Annotates each `LetFn` with the names it reads directly from the enclosing
@@ -43,7 +48,6 @@ pub fn annotate(expr: Expr<'_>) -> Expr<'_> {
 fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
   use ExprKind::*;
   let id = expr.id;
-  let meta = expr.meta.clone();
   let kind = match expr.kind {
     LetVal { name, val, body } => LetVal {
       name,
@@ -160,7 +164,7 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       body: Box::new(transform_expr(*body)),
     },
   };
-  Expr { id, kind, meta }
+  Expr { id, kind }
 }
 
 // ---------------------------------------------------------------------------

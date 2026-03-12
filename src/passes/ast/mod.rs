@@ -27,6 +27,10 @@ impl From<AstId> for usize {
   fn from(id: AstId) -> usize { id.0 as usize }
 }
 
+impl From<usize> for AstId {
+  fn from(n: usize) -> AstId { AstId(n as u32) }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node<'src> {
   pub id: AstId,

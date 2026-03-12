@@ -27,8 +27,15 @@ impl<Id, T> PropGraph<Id, T> {
         &self.data[idx]
     }
 
-    pub fn push(&mut self, val: T) {
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn push(&mut self, val: T) -> Id
+    where Id: From<usize> {
+        let id = Id::from(self.data.len());
         self.data.push(val);
+        id
     }
 
     pub fn set(&mut self, id: Id, val: T)
