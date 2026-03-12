@@ -332,14 +332,23 @@ fn collect_ref_from_val<'src>(
 #[cfg(test)]
 mod free_var_tests {
   use crate::parser::parse;
-  use crate::passes::cps::fmt::fmt;
+  use crate::ast::build_index;
+  use crate::passes::cps::fmt::{fmt_with, Ctx};
   use crate::passes::cps::transform::lower_expr;
+  #[allow(deprecated)]
   use super::annotate;
 
+  #[allow(deprecated)]
   fn cps_free_vars(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&annotate(lower_expr(&r.root).root)),
-      Err(e)   => format!("ERROR: {}", e.message),
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let cps = lower_expr(&r.root);
+        let annotated = annotate(cps.root);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        fmt_with(&annotated, &ctx)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
     }
   }
 

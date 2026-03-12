@@ -34,6 +34,19 @@ impl<'a, 'src> Ctx<'a, 'src> {
       .and_then(|opt| *opt)
   }
 
+  /// Recover the source name for a CPS node from its AST origin.
+  /// Returns the name string and whether it's an operator.
+  /// Returns None for compiler-generated nodes with no AST origin.
+  fn source_name(&self, cps_id: CpsId) -> Option<(&'src str, bool)> {
+    let node = self.ast_node(cps_id)?;
+    match &node.kind {
+      NodeKind::Ident(s) => Some((s, false)),
+      NodeKind::InfixOp { op, .. } => Some((op, true)),
+      NodeKind::UnaryOp { op, .. } => Some((op, true)),
+      NodeKind::ChainedCmp(_) => None,  // chained cmp has multiple ops, handled by transform
+      _ => None,
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +134,7 @@ fn scope_cont(local: &str, body: Node<'static>) -> Node<'static> {
 
 /// `·yield value, ·state, fn result, ·state: body` — yield suspension point.
 fn fmt_yield(value: &Val<'_>, result: &Bind<'_>, body: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
-  let cont = result_cont(&render_bind(result.kind), to_node(body, ctx));
+  let cont = result_cont(&render_bind_ctx(result, ctx), to_node(body, ctx));
   with_loads(ctx, &[value], |resolved| {
     apply(ident("·yield"), vec![resolved.into_iter().next().unwrap(), ident("·state"), cont.clone()])
   })
@@ -132,28 +145,53 @@ fn fmt_yield(value: &Val<'_>, result: &Bind<'_>, body: &Expr<'_>, ctx: &Ctx<'_, 
 // ---------------------------------------------------------------------------
 
 /// Render a Val to an AST node for use in an already-resolved position.
-/// Uses origin map to determine operator vs ident rendering.
+/// Uses origin map to recover names from the AST.
 fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &v.kind {
     ValKind::Lit(lit)    => lit_to_node(lit),
-    ValKind::Ident(name) => ident(&render_bind(*name)),
+    ValKind::Ident(_) => ident(&render_val_name(v, ctx)),
     ValKind::Ref(ref_)    => match &ref_.kind {
       RefKind::Name(name) => ident(&render_ref_name_ctx(name, v.id, ctx)),
-      RefKind::Bind(name) => ident(&render_bind(*name)),
+      RefKind::Bind(_) => ident(&render_val_name(v, ctx)),
     },
   }
 }
 
 /// Return the local name that a Val resolves to after loading.
-/// Uses origin map to determine operator vs ident rendering.
+/// Uses origin map to recover names from the AST.
 fn resolved_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
   match &v.kind {
-    ValKind::Ident(name) => render_bind(*name),
+    ValKind::Ident(_) => render_val_name(v, ctx),
     ValKind::Ref(ref_)    => match &ref_.kind {
       RefKind::Name(name) => render_ref_name_ctx(name, v.id, ctx),
-      RefKind::Bind(name) => render_bind(*name),
+      RefKind::Bind(_) => render_val_name(v, ctx),
     },
     ValKind::Lit(_)      => String::new(),  // literals don't have a name
+  }
+}
+
+/// Render a Val's name using origin map. For Ident and RefKind::Bind positions.
+/// For Gen temps: always `·v_N` — origin tracks provenance, not the name.
+/// For User names: recovers source name from AST; falls back to BindName content.
+fn render_val_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
+  // Check if this is a Gen temp — if so, skip origin lookup.
+  let is_gen = match &v.kind {
+    ValKind::Ident(BindName::Gen(_)) => true,
+    ValKind::Ref(ref_) => matches!(ref_.kind, RefKind::Bind(BindName::Gen(_))),
+    _ => false,
+  };
+  if !is_gen {
+    if let Some((s, _)) = ctx.source_name(v.id) {
+      return s.to_string();
+    }
+  }
+  match &v.kind {
+    ValKind::Ident(name) => render_bind(*name),
+    ValKind::Ref(ref_) => match &ref_.kind {
+      RefKind::Bind(name) => render_bind(*name),
+      RefKind::Name(name) => name.to_string(),
+    },
+    ValKind::Lit(_) => String::new(),
   }
 }
 
@@ -168,7 +206,13 @@ fn needs_load(v: &Val<'_>) -> bool {
 fn emit_load(ref_: &super::ir::Ref<'_>, cps_id: CpsId, local: &str, body_node: Node<'static>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   let key_node = match &ref_.kind {
     RefKind::Name(name) => ref_tag_ctx(name, cps_id, ctx),
-    RefKind::Bind(name) => id_tag(&raw_bind(*name)),
+    RefKind::Bind(name) => {
+      let raw = match ctx.source_name(cps_id) {
+        Some((s, _)) => s.to_string(),
+        None => raw_bind(*name),
+      };
+      id_tag(&raw)
+    }
   };
   apply(ident("·load"), vec![
     ident("·scope"),
@@ -257,6 +301,7 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 
 // Maps a BindName → rendered identifier (with · prefix for Gen).
 // Use for ident() call sites.
+// TODO [deprecated]: replace with render_bind_ctx once all consumers thread Ctx.
 fn render_bind(name: BindName<'_>) -> String {
   match name {
     BindName::User(s) => s.to_string(),
@@ -264,8 +309,23 @@ fn render_bind(name: BindName<'_>) -> String {
   }
 }
 
+/// Render a Bind node's name using origin map.
+/// For User bindings: recovers the source name from the AST when available.
+/// For Gen temps: always renders as `·v_N` — the origin tracks provenance,
+/// not the binding's name.
+fn render_bind_ctx(bind: &Bind<'_>, ctx: &Ctx<'_, '_>) -> String {
+  match bind.kind {
+    BindName::Gen(n) => format!("·v_{}", n),
+    BindName::User(_) => match ctx.source_name(bind.id) {
+      Some((s, _)) => s.to_string(),
+      None => render_bind(bind.kind),
+    },
+  }
+}
+
 // Maps a BindName → raw scope key (no · prefix).
 // Use inside id_tag() where the tag content is the storage key, not a rendered ident.
+// TODO [deprecated]: replace with raw_bind_ctx once all consumers thread Ctx.
 fn raw_bind(name: BindName<'_>) -> String {
   match name {
     BindName::User(s) => s.to_string(),
@@ -273,32 +333,47 @@ fn raw_bind(name: BindName<'_>) -> String {
   }
 }
 
+/// Raw scope key for a Bind node using origin map (no · prefix).
+/// Used for id_tag() — the tag content is the storage key.
+/// For Gen temps: always `v_N` — origin tracks provenance, not storage key.
+fn raw_bind_ctx(bind: &Bind<'_>, ctx: &Ctx<'_, '_>) -> String {
+  match bind.kind {
+    BindName::Gen(n) => format!("v_{}", n),
+    BindName::User(_) => match ctx.source_name(bind.id) {
+      Some((s, _)) => s.to_string(),
+      None => raw_bind(bind.kind),
+    },
+  }
+}
+
 /// Render a RefKind::Name for display.
-/// Uses origin map when available; falls back to string-based detection for
-/// compiler-generated nodes (prims) that have no AST origin.
+/// Recovers the name from the AST via origin map when available.
+/// Falls back to the CPS string for compiler-generated nodes (prims) with no AST origin.
 fn render_ref_name_ctx(name: &str, cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
-  let is_op = match ctx.ast_node(cps_id) {
-    Some(node) => matches!(node.kind,
-      NodeKind::InfixOp { .. } | NodeKind::UnaryOp { .. } | NodeKind::ChainedCmp(_)),
-    None => is_op_str(name),  // no origin → fall back to string
-  };
-  if is_op { sigil_op(name) } else { name.to_string() }
+  match ctx.source_name(cps_id) {
+    Some((s, true))  => sigil_op(s),
+    Some((s, false)) => s.to_string(),
+    None => if is_op_str(name) { sigil_op(name) } else { name.to_string() },
+  }
 }
 
 /// Produce the correct tag node for a ref name.
-/// Uses origin map when available; falls back to string-based detection.
+/// Recovers the name from the AST via origin map when available.
+/// Falls back to the CPS string for compiler-generated nodes (prims) with no AST origin.
 fn ref_tag_ctx(name: &str, cps_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
-  let is_op = match ctx.ast_node(cps_id) {
-    Some(node) => matches!(node.kind,
-      NodeKind::InfixOp { .. } | NodeKind::UnaryOp { .. } | NodeKind::ChainedCmp(_)),
-    None => is_op_str(name),  // no origin → fall back to string
-  };
-  if is_op {
-    op_tag(name)
-  } else if let Some(stripped) = name.strip_prefix('·') {
-    id_tag(stripped)
-  } else {
-    id_tag(name)
+  match ctx.source_name(cps_id) {
+    Some((s, true))  => op_tag(s),
+    Some((s, false)) => id_tag(s),
+    None => {
+      // No AST origin — compiler-generated prim. Use the CPS string as fallback.
+      if is_op_str(name) {
+        op_tag(name)
+      } else if let Some(stripped) = name.strip_prefix('·') {
+        id_tag(stripped)
+      } else {
+        id_tag(name)
+      }
+    }
   }
 }
 
@@ -311,11 +386,17 @@ fn is_op_str(name: &str) -> bool {
 
 // Maps a BindName → raw tag string (no · prefix).
 // Use for id_tag() call sites where the tag content is the bare name.
+// TODO [deprecated]: replace with bind_tag_ctx once all consumers thread Ctx.
 fn bind_tag(name: BindName<'_>) -> Node<'static> {
   match name {
     BindName::User(s) => id_tag(s),
     BindName::Gen(n)  => id_tag(&format!("v_{}", n)),
   }
+}
+
+/// Produce the scope tag for a Bind node using origin map.
+fn bind_tag_ctx(bind: &Bind<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+  id_tag(&raw_bind_ctx(bind, ctx))
 }
 
 fn sigil_op(op: &str) -> String {
@@ -358,7 +439,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::FailCont => ident("·ƒ_fail"),
 
     ExprKind::MatchBlock { params, arm_params, fail, arms, result, body } => {
-      let result_plain = render_bind(result.kind);
+      let result_plain = render_bind_ctx(result, ctx);
       let result_fn = fn_node(
         patterns(vec![ident(&result_plain), ident("·scope"), ident("·state")]),
         vec![to_node(body, ctx)],
@@ -366,7 +447,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let fail_node = to_node(fail, ctx);
       let arm_nodes: Vec<Node<'static>> = arms.iter().map(|arm| {
         let mut fn_params: Vec<Node<'static>> = arm_params.iter()
-          .map(|p| ident(&render_bind(p.kind)))
+          .map(|p| ident(&render_bind_ctx(p, ctx)))
           .collect();
         fn_params.extend([ident("·scope"), ident("·state"), ident("·ƒ_cont"), ident("·ƒ_fail")]);
         fn_node(patterns(fn_params), vec![to_node(arm, ctx)])
@@ -385,10 +466,10 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     }
 
     ExprKind::LetVal { name, val, body } => {
-      let plain = render_bind(name.kind);
+      let plain = render_bind_ctx(name, ctx);
       let store_node = apply(ident("·store"), vec![
         ident("·scope"),
-        bind_tag(name.kind),
+        bind_tag_ctx(name, ctx),
         val_to_node(val, ctx),
         scope_cont(&plain, to_node(body, ctx)),
       ]);
@@ -396,11 +477,11 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     }
 
     ExprKind::LetFn { name, params, free_vars, fn_body, body } => {
-      let plain_name = render_bind(name.kind);
+      let plain_name = render_bind_ctx(name, ctx);
       let mut fn_params: Vec<Node<'static>> = params.iter()
         .map(|p| match p {
-          Param::Name(n) => ident(&render_bind(n.kind)),
-          Param::Spread(n) => spread_node(ident(&render_bind(n.kind))),
+          Param::Name(n) => ident(&render_bind_ctx(n, ctx)),
+          Param::Spread(n) => spread_node(ident(&render_bind_ctx(n, ctx))),
         })
         .collect();
       let scope_arg = if free_vars.is_empty() {
@@ -430,7 +511,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     }
 
     ExprKind::App { func, args, result, body } => {
-      let result_plain = render_bind(result.kind);
+      let result_plain = render_bind_ctx(result, ctx);
       let result_fn = result_cont(&result_plain, to_node(body, ctx));
       let is_spread: Vec<bool> = args.iter().map(|a| matches!(a, Arg::Spread(_))).collect();
       let arg_vals: Vec<&Val<'_>> = args.iter().map(|a| match a {
@@ -462,10 +543,10 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::LetRec { .. } => unreachable!("LetRec should not reach the formatter before SCC analysis"),
 
     ExprKind::MatchLetVal { name, val, body, .. } => {
-      let plain = render_bind(name.kind);
+      let plain = render_bind_ctx(name, ctx);
       let store_node = apply(ident("·match_store"), vec![
         ident("·scope"),
-        bind_tag(name.kind),
+        bind_tag_ctx(name, ctx),
         val_to_node(val, ctx),
         scope_cont(&plain, to_node(body, ctx)),
       ]);
@@ -473,7 +554,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     }
 
     ExprKind::MatchApp { func, args, fail, result, body } => {
-      let result_str = render_bind(result.kind);
+      let result_str = render_bind_ctx(result, ctx);
       let cont = fn_node(
         patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
         vec![to_node(body, ctx)],
@@ -539,7 +620,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let cur = cursor_name(*cursor);
       let next = cursor_name(*next_cursor);
       let body_node = to_node(body, ctx);
-      let elem_str = render_bind(elem.kind);
+      let elem_str = render_bind_ctx(elem, ctx);
       let cont = fn_node(
         patterns(vec![ident(&elem_str), ident(&next), ident("·scope"), ident("·state")]),
         vec![body_node],
@@ -550,7 +631,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 
     ExprKind::MatchDone { cursor, fail, result, body, .. } => {
       let cur = cursor_name(*cursor);
-      let result_str = render_bind(result.kind);
+      let result_str = render_bind_ctx(result, ctx);
       let cont = fn_node(
         patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
         vec![to_node(body, ctx)],
@@ -571,7 +652,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 
     ExprKind::MatchRest { cursor, fail, result, body, .. } => {
       let cur = cursor_name(*cursor);
-      let result_str = render_bind(result.kind);
+      let result_str = render_bind_ctx(result, ctx);
       let cont = fn_node(
         patterns(vec![ident(&result_str), ident("·scope"), ident("·state")]),
         vec![to_node(body, ctx)],
@@ -596,7 +677,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::MatchField { cursor, next_cursor, field, fail, elem, body, .. } => {
       let cur = cursor_name(*cursor);
       let next = cursor_name(*next_cursor);
-      let elem_str = render_bind(elem.kind);
+      let elem_str = render_bind_ctx(elem, ctx);
       let cont = fn_node(
         patterns(vec![ident(&elem_str), ident(&next), ident("·scope"), ident("·state")]),
         vec![to_node(body, ctx)],

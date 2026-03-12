@@ -435,11 +435,11 @@ fn extract_params_with_gen<'src>(
         }
       }
       NodeKind::Spread(inner) => {
-        let bind_kind = match inner.as_deref() {
-          Some(Node { kind: NodeKind::Ident(name), .. }) => BindName::User(name),
-          _ => BindName::User("_"),
+        let (bind_kind, bind_origin) = match inner.as_deref() {
+          Some(node @ Node { kind: NodeKind::Ident(name), .. }) => (BindName::User(name), Some(node.id)),
+          _ => (BindName::User("_"), Some(p.id)),
         };
-        param_list.push(Param::Spread(g.bind(bind_kind, Some(p.id))));
+        param_list.push(Param::Spread(g.bind(bind_kind, bind_origin)));
       }
       // Complex destructuring param — desugar to a fresh plain param + Match* lowering in body.
       // The param receives a single value (not varargs); destructuring happens inside the fn.
@@ -475,11 +475,11 @@ fn extract_param<'src>(g: &mut Gen, param: &'src Node<'src>) -> Vec<Param<'src>>
     NodeKind::Patterns(ps) => ps.iter().flat_map(|p| extract_param(g, p)).collect(),
     // `..rest` varargs param — trailing spread.
     NodeKind::Spread(inner) => {
-      let bind_kind = match inner.as_deref() {
-        Some(Node { kind: NodeKind::Ident(name), .. }) => BindName::User(name),
-        _ => BindName::User("_"),
+      let (bind_kind, bind_origin) = match inner.as_deref() {
+        Some(node @ Node { kind: NodeKind::Ident(name), .. }) => (BindName::User(name), Some(node.id)),
+        _ => (BindName::User("_"), origin),
       };
-      vec![Param::Spread(g.bind(bind_kind, origin))]
+      vec![Param::Spread(g.bind(bind_kind, bind_origin))]
     }
     // Complex destructuring params (e.g. `fn [a, b]: …`) — not yet implemented.
     _ => vec![],
@@ -1183,7 +1183,7 @@ fn lower_pat_lhs<'src>(
   match &lhs.kind {
     // Plain bind: `x = foo`
     NodeKind::Ident(name) => {
-      let bind = g.bind(BindName::User(name), origin);
+      let bind = g.bind(BindName::User(name), Some(lhs.id));
       let bind_kind = bind.kind;
       pending.push(Pending::MatchBind { name: bind, val,  origin });
       bind_kind
@@ -1218,8 +1218,8 @@ fn lower_pat_lhs<'src>(
     // Guarded bind: `a > 0 = foo` or `a > 0 or a < 9 = foo`
     // The innermost ident is the binding; the infix is the guard.
     NodeKind::InfixOp { op, lhs: guard_lhs, rhs: guard_rhs } => {
-      let bind_kind = extract_bind_name(guard_lhs);
-      let bind = g.bind(bind_kind, origin);
+      let (bind_kind, bind_ast_id) = extract_bind(guard_lhs);
+      let bind = g.bind(bind_kind, Some(bind_ast_id));
       let bind_kind = bind.kind;
       pending.push(Pending::MatchBind { name: bind, val,  origin });
       let (lv, lp) = lower(g, guard_lhs);
@@ -1302,7 +1302,7 @@ fn lower_pat_lhs<'src>(
                 pending.push(Pending::MatchRest { val: val.clone(), cursor: cur, result,  origin });
                 // Bind the rest value to the name
                 if let NodeKind::Ident(name) = &name_node.kind {
-                  let bind = g.bind(BindName::User(name), origin);
+                  let bind = g.bind(BindName::User(name), Some(name_node.id));
                   let rest_val = ident_val(g, result_kind, origin);
                   pending.push(Pending::MatchBind {
                     name: bind,
@@ -1362,7 +1362,7 @@ fn lower_pat_lhs<'src>(
                   let result = g.fresh_result(origin);
                   let result_kind = result.kind;
                   pending.push(Pending::MatchRest { val: val.clone(), cursor: cur, result,  origin });
-                  let bind = g.bind(BindName::User(name), origin);
+                  let bind = g.bind(BindName::User(name), Some(inner_node.id));
                   let rest_val = ident_val(g, result_kind, origin);
                   pending.push(Pending::MatchBind {
                     name: bind,
@@ -1393,7 +1393,7 @@ fn lower_pat_lhs<'src>(
               field: name, elem, origin,
             });
             cur = next;
-            let bind = g.bind(BindName::User(name), origin);
+            let bind = g.bind(BindName::User(name), Some(field_node.id));
             let elem_val = ident_val(g, elem_kind, origin);
             pending.push(Pending::MatchBind { name: bind, val: elem_val,  origin });
           }
@@ -1452,7 +1452,7 @@ fn lower_pat_lhs<'src>(
         NodeKind::Ident(n) => BindName::User(n),
         _ => panic!("lower_pat_lhs: BindRight rhs must be an Ident"),
       };
-      let bind = g.bind(bind_kind, origin);
+      let bind = g.bind(bind_kind, Some(name_node.id));
       pending.push(Pending::MatchBind { name: bind, val: val.clone(),  origin });
       lower_pat_lhs(g, pat, val, origin, pending)
     }
@@ -1467,10 +1467,16 @@ fn lower_pat_lhs<'src>(
 
 /// Extract the BindName from the innermost ident of a guarded pattern lhs.
 fn extract_bind_name<'src>(node: &'src Node<'src>) -> BindName<'src> {
+  extract_bind(node).0
+}
+
+/// Extract the binding name and its AST id from a pattern LHS.
+/// Recurses through nested InfixOps to find the innermost ident.
+fn extract_bind<'src>(node: &'src Node<'src>) -> (BindName<'src>, AstId) {
   match &node.kind {
-    NodeKind::Ident(name) => BindName::User(name),
-    NodeKind::InfixOp { lhs, .. } => extract_bind_name(lhs),
-    _ => panic!("extract_bind_name: expected ident in pattern lhs, got {:?}", node.kind),
+    NodeKind::Ident(name) => (BindName::User(name), node.id),
+    NodeKind::InfixOp { lhs, .. } => extract_bind(lhs),
+    _ => panic!("extract_bind: expected ident in pattern lhs, got {:?}", node.kind),
   }
 }
 
@@ -1523,13 +1529,19 @@ mod tests {
 #[cfg(test)]
 mod cps_tests {
   use crate::parser::parse;
-  use crate::passes::cps::fmt::fmt;
+  use crate::ast::build_index;
+  use crate::passes::cps::fmt::{fmt_with, Ctx};
   use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&lower_expr(&r.root).root),
-      Err(e)   => format!("ERROR: {}", e.message),
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let cps = lower_expr(&r.root);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        fmt_with(&cps.root, &ctx)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
     }
   }
 
@@ -1540,21 +1552,35 @@ mod cps_tests {
 #[cfg(test)]
 mod pat_tests {
   use crate::parser::parse;
-  use crate::passes::cps::fmt::fmt;
+  use crate::ast::build_index;
+  use crate::passes::cps::fmt::{fmt_with, Ctx};
+  #[allow(deprecated)]
   use crate::passes::cps::free_vars::annotate;
   use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&lower_expr(&r.root).root),
-      Err(e)   => format!("ERROR: {}", e.message),
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let cps = lower_expr(&r.root);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        fmt_with(&cps.root, &ctx)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
     }
   }
 
+  #[allow(deprecated)]
   fn cps_free_vars(src: &str) -> String {
     match parse(src) {
-      Ok(r) => fmt(&annotate(lower_expr(&r.root).root)),
-      Err(e)   => format!("ERROR: {}", e.message),
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let cps = lower_expr(&r.root);
+        let annotated = annotate(cps.root);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        fmt_with(&annotated, &ctx)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
     }
   }
 
