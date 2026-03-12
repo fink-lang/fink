@@ -23,13 +23,13 @@ fn main() {
     }
     Some("-ast") => {
       match fink::parser::parse(&src) {
-        Ok(node) => println!("{}", node.print()),
+        Ok(r) => println!("{}", r.root.print()),
         Err(e) => parse_error(&src, e),
       }
     }
     None => {
       match fink::parser::parse(&src) {
-        Ok(node) => print!("{}", fink::ast::fmt::fmt(&node)),
+        Ok(r) => print!("{}", fink::ast::fmt::fmt(&r.root)),
         Err(e) => parse_error(&src, e),
       }
     }

@@ -263,10 +263,10 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
   let src = fs::read_to_string(&abs_path)
     .unwrap_or_else(|_| panic!("include_fink_tests: cannot read {abs_path_str}"));
 
-  let node = fink::parser::parse(&src)
+  let result = fink::parser::parse(&src)
     .unwrap_or_else(|e| panic!("include_fink_tests: parse error in {abs_path_str}: {}", e.message));
 
-  let tests = extract_tests(&src, &node);
+  let tests = extract_tests(&src, &result.root);
 
   let mut output = proc_macro2::TokenStream::new();
 

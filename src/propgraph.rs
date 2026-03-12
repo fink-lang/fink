@@ -16,6 +16,11 @@ impl<Id, T> PropGraph<Id, T> {
         PropGraph { data: Vec::new(), _id: PhantomData }
     }
 
+    pub fn with_size(n: usize, default: T) -> Self
+    where T: Clone {
+        PropGraph { data: vec![default; n], _id: PhantomData }
+    }
+
     pub fn get(&self, id: Id) -> &T
     where Id: Into<usize> + Copy + std::fmt::Debug {
         let idx: usize = id.into();
@@ -24,6 +29,15 @@ impl<Id, T> PropGraph<Id, T> {
 
     pub fn push(&mut self, val: T) {
         self.data.push(val);
+    }
+
+    pub fn set(&mut self, id: Id, val: T)
+    where Id: Into<usize> + Copy, T: Default {
+        let idx: usize = id.into();
+        if idx >= self.data.len() {
+            self.data.resize_with(idx + 1, T::default);
+        }
+        self.data[idx] = val;
     }
 }
 
@@ -46,6 +60,24 @@ mod tests {
     fn get_out_of_bounds_panics() {
         let g: PropGraph<AstId, i32> = PropGraph::new();
         g.get(AstId(999));
+    }
+
+    #[test]
+    fn with_size_and_set() {
+        let mut g: PropGraph<AstId, &str> = PropGraph::with_size(3, "empty");
+        g.set(AstId(2), "last");
+        g.set(AstId(0), "first");
+        assert_eq!(g.get(AstId(0)), &"first");
+        assert_eq!(g.get(AstId(1)), &"empty");
+        assert_eq!(g.get(AstId(2)), &"last");
+    }
+
+    #[test]
+    fn set_grows_vec() {
+        let mut g: PropGraph<AstId, Option<i32>> = PropGraph::new();
+        g.set(AstId(3), Some(42));
+        assert_eq!(g.get(AstId(0)), &None);
+        assert_eq!(g.get(AstId(3)), &Some(42));
     }
 
     #[test]

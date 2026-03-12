@@ -5,6 +5,12 @@ pub mod transform;
 
 use lexer::Loc;
 
+/// Output of the parse pass — the AST tree plus metadata.
+pub struct ParseResult<'src> {
+  pub root: Node<'src>,
+  pub node_count: u32,
+}
+
 /// Unique identifier for an AST node, assigned by the parser.
 /// Used as a key into property graphs for attaching pass-computed metadata
 /// (name resolution, types, etc.) without modifying the AST structure.
@@ -82,7 +88,7 @@ pub enum NodeKind<'src> {
   // UnaryOp '-' | 'not' | '~'
   UnaryOp { op: &'src str, operand: Box<Node<'src>> },
 
-  // InfixOp '+' | '-' | 'and' | '>' | '&' | '..' | '...' | ...
+  // InfixOp '+' | '-' | 'srcnd' | '>' | '&' | '..' | '...' | ...
   InfixOp { op: &'src str, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // ChainedCmp — flat interleaved: operand, op, operand, op, operand, ...
@@ -160,6 +166,90 @@ pub enum NodeKind<'src> {
 pub enum CmpPart<'src> {
   Operand(Node<'src>),
   Op(&'src str),
+}
+
+// --- tree walker ---
+
+/// Walk every node in the AST in pre-order, calling `f` on each.
+pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) {
+  f(node);
+  match &node.kind {
+    NodeKind::LitBool(_)
+    | NodeKind::LitInt(_)
+    | NodeKind::LitFloat(_)
+    | NodeKind::LitDecimal(_)
+    | NodeKind::LitStr(_)
+    | NodeKind::Ident(_)
+    | NodeKind::Partial
+    | NodeKind::Wildcard => {}
+
+    NodeKind::LitSeq(children)
+    | NodeKind::LitRec(children)
+    | NodeKind::StrTempl(children)
+    | NodeKind::StrRawTempl(children)
+    | NodeKind::Pipe(children)
+    | NodeKind::Patterns(children) => {
+      for child in children { walk(child, f); }
+    }
+
+    NodeKind::UnaryOp { operand, .. } => walk(operand, f),
+    NodeKind::InfixOp { lhs, rhs, .. } => {
+      walk(lhs, f);
+      walk(rhs, f);
+    }
+    NodeKind::ChainedCmp(parts) => {
+      for part in parts {
+        if let CmpPart::Operand(n) = part { walk(n, f); }
+      }
+    }
+    NodeKind::Spread(inner) => {
+      if let Some(n) = inner { walk(n, f); }
+    }
+    NodeKind::Member { lhs, rhs } => {
+      walk(lhs, f);
+      walk(rhs, f);
+    }
+    NodeKind::Group(inner) => walk(inner, f),
+    NodeKind::Try(inner) | NodeKind::Yield(inner) => walk(inner, f),
+    NodeKind::Bind { lhs, rhs } | NodeKind::BindRight { lhs, rhs } => {
+      walk(lhs, f);
+      walk(rhs, f);
+    }
+    NodeKind::Apply { func, args } => {
+      walk(func, f);
+      for arg in args { walk(arg, f); }
+    }
+    NodeKind::Fn { params, body } => {
+      walk(params, f);
+      for stmt in body { walk(stmt, f); }
+    }
+    NodeKind::Match { subjects, arms } => {
+      walk(subjects, f);
+      for arm in arms { walk(arm, f); }
+    }
+    NodeKind::Arm { lhs, body } => {
+      for pat in lhs { walk(pat, f); }
+      for stmt in body { walk(stmt, f); }
+    }
+    NodeKind::Block { name, params, body } => {
+      walk(name, f);
+      walk(params, f);
+      for stmt in body { walk(stmt, f); }
+    }
+  }
+}
+
+// --- index builder ---
+
+/// Build a PropGraph mapping AstId → &Node for O(1) lookup by ID.
+/// Walks the tree once, placing each node at its AstId position.
+pub fn build_index<'src>(result: &'src ParseResult<'src>) -> crate::propgraph::PropGraph<AstId, Option<&'src Node<'src>>> {
+  let mut index: crate::propgraph::PropGraph<AstId, Option<&'src Node<'src>>> =
+    crate::propgraph::PropGraph::with_size(result.node_count as usize, None);
+  walk(&result.root, &mut |node| {
+    index.set(node.id, Some(node));
+  });
+  index
 }
 
 // --- s-expression printer ---
@@ -402,6 +492,43 @@ mod tests {
   fn print_patterns_empty() {
     let tree = node(NodeKind::Patterns(vec![]));
     assert_eq!(tree.print(), "Patterns");
+  }
+
+  #[test]
+  fn build_index_returns_nodes_by_id() {
+    let r = crate::parser::parse("foo = 1").unwrap();
+    assert_eq!(r.node_count, 3);
+    let index = super::build_index(&r);
+    // Verify each slot is populated and id matches position
+    for i in 0..3 {
+      let node = index.get(AstId(i)).unwrap();
+      assert_eq!(node.id, AstId(i));
+    }
+  }
+
+  #[test]
+  fn walk_visits_all_nodes() {
+    let r = crate::parser::parse("foo = [1, 2]").unwrap();
+    let mut kinds = vec![];
+    super::walk(&r.root, &mut |n| {
+      kinds.push(std::mem::discriminant(&n.kind));
+    });
+    // Bind, Ident("foo"), LitSeq, LitInt("1"), LitInt("2") = 5 nodes
+    assert_eq!(kinds.len(), 5);
+  }
+
+  #[test]
+  fn walk_visits_in_pre_order() {
+    let r = crate::parser::parse("a + b").unwrap();
+    let mut names = vec![];
+    super::walk(&r.root, &mut |n| {
+      match &n.kind {
+        NodeKind::InfixOp { op, .. } => names.push(*op),
+        NodeKind::Ident(s) => names.push(s),
+        _ => {}
+      }
+    });
+    assert_eq!(names, vec!["+", "a", "b"]);
   }
 
   #[test]

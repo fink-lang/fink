@@ -282,7 +282,7 @@ mod tests {
   fn partial(src: &str) -> String {
     match crate::parser::parse(src) {
       Err(e) => format!("PARSE ERROR: {}", e.message),
-      Ok(node) => match super::apply(node) {
+      Ok(result) => match super::apply(result.root) {
         Ok(node) => node.print(),
         Err(e) => format!("ERROR: {}", e.message),
       },

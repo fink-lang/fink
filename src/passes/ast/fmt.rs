@@ -242,8 +242,8 @@ mod tests {
   use crate::parser::parse;
 
   fn fmt(src: &str) -> String {
-    let node = parse(src).expect("parse failed");
-    ast_fmt(&node)
+    let result = parse(src).expect("parse failed");
+    ast_fmt(&result.root)
   }
 
   test_macros::include_fink_tests!("src/passes/ast/test_fmt.fnk");

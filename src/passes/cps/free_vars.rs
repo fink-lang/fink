@@ -340,7 +340,7 @@ mod free_var_tests {
 
   fn cps_free_vars(src: &str) -> String {
     match parse(src) {
-      Ok(node) => fmt(&annotate(lower_expr(&node))),
+      Ok(r) => fmt(&annotate(lower_expr(&r.root))),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }

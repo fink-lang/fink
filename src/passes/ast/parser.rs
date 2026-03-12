@@ -1490,52 +1490,54 @@ impl<'src> Parser<'src> {
   }
 }
 
-pub fn parse(src: &str) -> Result<Node<'_>, ParseError> {
+pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
   let mut p = Parser::new(src);
   // Consume the implicit root BlockStart emitted by the lexer
   p.expect(TokenKind::BlockStart)?;
   let exprs = p.parse_block_exprs()?;
-  match exprs.len() {
-    0 => Err(ParseError {
+  let root = match exprs.len() {
+    0 => return Err(ParseError {
       message: "empty input".into(),
       loc: p.peek().loc,
     }),
-    1 => Ok(exprs.into_iter().next().unwrap()),
+    1 => exprs.into_iter().next().unwrap(),
     _ => {
       let start = exprs.first().unwrap().loc.start;
       let end = exprs.last().unwrap().loc.end;
       let params = p.node(NodeKind::Patterns(vec![]), Loc { start, end });
-      Ok(p.node(
+      p.node(
         NodeKind::Fn { params: Box::new(params), body: exprs },
         Loc { start, end },
-      ))
+      )
     }
-  }
+  };
+  Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
-pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<Node<'a>, ParseError> {
+pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<crate::ast::ParseResult<'a>, ParseError> {
   let mut p = Parser::new(src);
   for &name in blocks {
     p.register_block(name);
   }
   p.expect(TokenKind::BlockStart)?;
   let exprs = p.parse_block_exprs()?;
-  match exprs.len() {
-    0 => Err(ParseError {
+  let root = match exprs.len() {
+    0 => return Err(ParseError {
       message: "empty input".into(),
       loc: p.peek().loc,
     }),
-    1 => Ok(exprs.into_iter().next().unwrap()),
+    1 => exprs.into_iter().next().unwrap(),
     _ => {
       let start = exprs.first().unwrap().loc.start;
       let end = exprs.last().unwrap().loc.end;
       let params = p.node(NodeKind::Patterns(vec![]), Loc { start, end });
-      Ok(p.node(
+      p.node(
         NodeKind::Fn { params: Box::new(params), body: exprs },
         Loc { start, end },
-      ))
+      )
     }
-  }
+  };
+  Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
 
@@ -1545,8 +1547,8 @@ mod tests {
   fn test_str_escape_stored_verbatim() {
     // LitStr must store raw source bytes — no rendering at parse time.
     use crate::ast::NodeKind;
-    let node = super::parse_with_blocks(r"'\n\t\\'", &["test_block"]).unwrap();
-    let NodeKind::LitStr(s) = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
+    let r = super::parse_with_blocks(r"'\n\t\\'", &["test_block"]).unwrap();
+    let NodeKind::LitStr(s) = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
     assert_eq!(*s, r"\n\t\\");
   }
 
@@ -1558,14 +1560,14 @@ mod tests {
   \n
   \t
 '"#;
-    let node = super::parse_with_blocks(src, &["test_block"]).unwrap();
-    let NodeKind::LitStr(s) = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
+    let r = super::parse_with_blocks(src, &["test_block"]).unwrap();
+    let NodeKind::LitStr(s) = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
     assert_eq!(*s, "\n\\n\n\\t\n");
   }
 
   fn parse_debug(src: &str) -> String {
     match super::parse_with_blocks(src, &["test_block"]) {
-      Ok(node) => node.print(),
+      Ok(r) => r.root.print(),
       Err(e) => format!("ERROR: {}", e.message),
     }
   }

@@ -1380,7 +1380,7 @@ mod tests {
   use crate::passes::cps::ir::ExprKind;
 
   fn parse_single(src: &str) -> Node<'_> {
-    parse(src).expect("parse failed")
+    parse(src).expect("parse failed").root
   }
 
   #[test]
@@ -1423,7 +1423,7 @@ mod cps_tests {
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
-      Ok(node) => fmt(&lower_expr(&node)),
+      Ok(r) => fmt(&lower_expr(&r.root)),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }
@@ -1441,14 +1441,14 @@ mod pat_tests {
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
-      Ok(node) => fmt(&lower_expr(&node)),
+      Ok(r) => fmt(&lower_expr(&r.root)),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }
 
   fn cps_free_vars(src: &str) -> String {
     match parse(src) {
-      Ok(node) => fmt(&annotate(lower_expr(&node))),
+      Ok(r) => fmt(&annotate(lower_expr(&r.root))),
       Err(e)   => format!("ERROR: {}", e.message),
     }
   }
