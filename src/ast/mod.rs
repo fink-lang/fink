@@ -2,15 +2,30 @@ pub mod fmt;
 
 use crate::lexer::Loc;
 
+/// Unique identifier for an AST node, assigned by the parser.
+/// Used as a key into property graphs for attaching pass-computed metadata
+/// (name resolution, types, etc.) without modifying the AST structure.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AstId(pub u32);
+
+impl std::fmt::Debug for AstId {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "#{}", self.0)
+  }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node<'src> {
+  pub id: AstId,
   pub kind: NodeKind<'src>,
   pub loc: Loc,
 }
 
 impl<'src> Node<'src> {
+  /// Create a node with a dummy ID. Used by transforms and formatters that
+  /// reconstruct or synthesize nodes outside the parser.
   pub fn new(kind: NodeKind<'src>, loc: Loc) -> Self {
-    Self { kind, loc }
+    Self { id: AstId(0), kind, loc }
   }
 }
 
