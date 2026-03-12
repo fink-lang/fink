@@ -152,17 +152,6 @@ impl<'src> Parser<'src> {
   // Returns true if the current position has a pipe operator,
   // possibly preceded by a BlockCont (multiline pipe continuation).
   // If a BlockCont precedes the "|", it is consumed.
-  // TODO: blank lines inside a block body emit BlockCont which is skipped by parse_block_items,
-  // so a pipe continuation after a blank line is not recognised — the "|" starts a new (invalid)
-  // expression instead. Fix: look ahead past multiple BlockCont tokens (including blank lines)
-  // to find "|", or treat blank lines as transparent for pipe continuations.
-  // Repro:
-  //   expect cps_free_vars fink":
-  //       fn a, b:
-  //         a + b
-  //
-  //     | equals fink":
-  //   ^^ blank line above breaks the pipe — parser sees "| equals" as a new expression
   fn try_consume_pipe(&mut self) -> bool {
     if self.at(TokenKind::Sep) && self.peek().src == "|" {
       self.bump(); // consume "|"

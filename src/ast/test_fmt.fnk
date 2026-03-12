@@ -11,48 +11,56 @@ Atoms
 test 'ident', fn:
   expect fmt fink":
     foo
+
   | equals fink":
     foo
 
 test 'int literal', fn:
   expect fmt fink":
     42
+
   | equals fink":
     42
 
 test 'float literal', fn:
   expect fmt fink":
     3.14
+
   | equals fink":
     3.14
 
 test 'bool literal true', fn:
   expect fmt fink":
     true
+
   | equals fink":
     true
 
 test 'bool literal false', fn:
   expect fmt fink":
     false
+
   | equals fink":
     false
 
 test 'string literal', fn:
   expect fmt fink":
     'hello'
+
   | equals fink":
     'hello'
 
 test 'empty seq literal', fn:
   expect fmt fink":
     []
+
   | equals fink":
     []
 
 test 'empty rec literal', fn:
   expect fmt fink":
     {}
+
   | equals fink":
     {}
 
@@ -64,18 +72,21 @@ Tagged string literals
 test 'tagged string — id', fn:
   expect fmt fink":
     id'foo'
+
   | equals fink":
     id'foo'
 
 test 'tagged string — op', fn:
   expect fmt fink":
     op'+'
+
   | equals fink":
     op'+'
 
 test 'tagged string — str_fink', fn:
   expect fmt fink":
     str_fink'hello '
+
   | equals fink":
     str_fink'hello '
 
@@ -87,12 +98,14 @@ Apply
 test 'apply — single arg', fn:
   expect fmt fink":
     foo bar
+
   | equals fink":
     foo bar
 
 test 'apply — multiple args', fn:
   expect fmt fink":
     foo a, b, c
+
   | equals fink":
     foo a, b, c
 
@@ -100,6 +113,7 @@ test 'apply — trailing fn arg breaks to next line', fn:
   expect fmt fink":
     foo a, b, fn x:
       bar x
+
   | equals fink":
     foo a, b, fn x:
       bar x
@@ -107,12 +121,14 @@ test 'apply — trailing fn arg breaks to next line', fn:
 test 'apply — fn arg inline single atom', fn:
   expect fmt fink":
     foo a, fn x: x
+
   | equals fink":
     foo a, fn x: x
 
 test 'apply — no args', fn:
   expect fmt fink":
     foo
+
   | equals fink":
     foo
 
@@ -124,24 +140,28 @@ Fn
 test 'fn — no params, single expr body', fn:
   expect fmt fink":
     fn: foo
+
   | equals fink":
     fn: foo
 
 test 'fn — single param, single expr body inline', fn:
   expect fmt fink":
     fn x: x
+
   | equals fink":
     fn x: x
 
 test 'fn — multi param', fn:
   expect fmt fink":
     fn a, b: a
+
   | equals fink":
     fn a, b: a
 
 test 'fn — body is apply, inline', fn:
   expect fmt fink":
     fn x: foo x
+
   | equals fink":
     fn x: foo x
 
@@ -150,6 +170,7 @@ test 'fn — multi-statement body', fn:
     fn x:
       foo x
       bar x
+
   | equals fink":
     fn x:
       foo x
@@ -158,6 +179,7 @@ test 'fn — multi-statement body', fn:
 test 'fn — spread param', fn:
   expect fmt fink":
     fn a, ..rest: rest
+
   | equals fink":
     fn a, ..rest: rest
 
@@ -169,12 +191,14 @@ Bind
 test 'bind — simple', fn:
   expect fmt fink":
     foo = bar
+
   | equals fink":
     foo = bar
 
 test 'bind — rhs is apply', fn:
   expect fmt fink":
     foo = bar baz
+
   | equals fink":
     foo = bar baz
 
@@ -188,6 +212,7 @@ test 'chained apply with fn continuations', fn:
     load env, id'x', fn ·x, env:
       apply foo, ·x, state, fn v_result, state:
         ƒ_cont v_result, state
+
   | equals fink":
     load env, id'x', fn ·x, env:
       apply foo, ·x, state, fn v_result, state:
@@ -198,6 +223,7 @@ test 'fn body is chained apply', fn:
     fn x:
       load env, id'x', fn ·x, env:
         ƒ_cont ·x, state
+
   | equals fink":
     fn x:
       load env, id'x', fn ·x, env:
@@ -208,6 +234,7 @@ test 'module wrapper', fn:
     module fn {load, apply, id}, env, state, ƒ_cont:
       load env, id'x', fn ·x, env:
         ƒ_cont ·x, state
+
   | equals fink":
     module fn {load, apply, id}, env, state, ƒ_cont:
       load env, id'x', fn ·x, env:
@@ -223,6 +250,7 @@ test 'apply — two trailing fn args', fn:
     match_done m, state,
       fn m, state: ƒ_err state
       fn m, state: ƒ_ok m, state
+
   | equals fink":
     match_done m, state,
       fn m, state: ƒ_err state
@@ -236,6 +264,7 @@ test 'apply — three trailing fn args', fn:
           ƒ_ok env, state
       fn state: panic 'no match', state
       fn v_result, state: ƒ_cont v_result, state
+
   | equals fink":
     match_bind val, state,
       fn v, state, ƒ_err, ƒ_ok:
@@ -254,6 +283,7 @@ test 'apply — non-fn arg followed by fn arg as positional arg', fn:
         panic 'no match', state
       fn match_result, state:
         ƒ_cont match_result, state
+
   | equals fink":
     match_block n, state,
       match_branch env, fn v, env, state, ƒ_err, ƒ_ok:

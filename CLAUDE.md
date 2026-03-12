@@ -83,6 +83,7 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 
 - Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `#[test_template]`.
 - Never put tests for module A inside module B.
+- **Bug workflow**: when investigating a bug, first write a failing test that reproduces it — don't dive into the code before you have a repro test.
 
 ## Code Style
 
