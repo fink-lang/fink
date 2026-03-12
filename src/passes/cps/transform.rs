@@ -20,7 +20,7 @@
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use super::ir::{
-  Arg, Bind, BindName, CpsId, CpsResult, Expr, ExprKind, Key, KeyKind, Lit, Meta,
+  Arg, Bind, BindName, CpsId, CpsResult, Expr, ExprKind, Ref, RefKind, Lit, Meta,
   Name, Param, Prim, Val, ValKind,
 };
 
@@ -98,22 +98,22 @@ fn ident_val<'src>(g: &mut Gen, name: BindName<'src>, loc: Loc) -> Val<'src> {
 }
 
 fn key_val_name<'src>(g: &mut Gen, name: Name<'src>, loc: Loc) -> Val<'src> {
-  g.val(ValKind::Key(Key { kind: KeyKind::Name(name), resolution: None, meta: Meta::at(loc) }), loc)
+  g.val(ValKind::Ref(Ref { kind: RefKind::Name(name), resolution: None, meta: Meta::at(loc) }), loc)
 }
 
-/// Create a Key reference to a BindName that needs loading from scope.
-/// Used when a fn param needs to be referenced as a Key val (scope-stored by the runtime).
+/// Create a Ref to a BindName that needs loading from scope.
+/// Used when a fn param needs to be referenced as a Ref val (scope-stored by the runtime).
 #[allow(dead_code)]
 fn key_val_bind<'src>(g: &mut Gen, name: BindName<'src>, loc: Loc) -> Val<'src> {
-  g.val(ValKind::Key(Key { kind: KeyKind::Bind(name), resolution: None, meta: Meta::at(loc) }), loc)
+  g.val(ValKind::Ref(Ref { kind: RefKind::Bind(name), resolution: None, meta: Meta::at(loc) }), loc)
 }
 
 fn key_val_prim(g: &mut Gen, prim: Prim, loc: Loc) -> Val<'static> {
-  g.val(ValKind::Key(Key { kind: KeyKind::Prim(prim), resolution: None, meta: Meta::at(loc) }), loc)
+  g.val(ValKind::Ref(Ref { kind: RefKind::Prim(prim), resolution: None, meta: Meta::at(loc) }), loc)
 }
 
 fn key_val_op<'src>(g: &mut Gen, op: &'src str, loc: Loc) -> Val<'src> {
-  g.val(ValKind::Key(Key { kind: KeyKind::Op(op), resolution: None, meta: Meta::at(loc) }), loc)
+  g.val(ValKind::Ref(Ref { kind: RefKind::Op(op), resolution: None, meta: Meta::at(loc) }), loc)
 }
 
 fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, loc: Loc) -> Val<'src> {
@@ -1205,11 +1205,11 @@ fn lower_pat_lhs<'src>(
       pending.extend(rp);
       let in_fn = key_val_op(g, "in", loc);
       pending.push(Pending::MatchGuard { func: in_fn, args: vec![val.clone(), range_val], loc });
-      // Extract the bind name from val: Ident → use directly; Key(Name) → wrap as User.
+      // Extract the bind name from val: Ident → use directly; Ref(Name) → wrap as User.
       // Range is a pure guard; no new binding is allocated.
       match val.kind {
         ValKind::Ident(name)                               => name,
-        ValKind::Key(Key { kind: KeyKind::Name(n), .. })  => BindName::User(n),
+        ValKind::Ref(Ref { kind: RefKind::Name(n), .. })  => BindName::User(n),
         _                                                  => g.fresh_result(loc).kind,
       }
     }
@@ -1505,7 +1505,7 @@ mod tests {
     let result = lower_expr(&node);
     assert!(matches!(result.root.kind, ExprKind::Ret(_)));
     if let ExprKind::Ret(val) = &result.root.kind {
-      assert!(matches!(val.kind, ValKind::Key(_)));
+      assert!(matches!(val.kind, ValKind::Ref(_)));
     }
   }
 
@@ -1514,7 +1514,7 @@ mod tests {
     let src = Box::leak("foo bar".to_string().into_boxed_str());
     let node = parse_single(src);
     let result = lower_expr(&node);
-    // foo is a Key, bar is a Key, result is App with Ret inside.
+    // foo is a Ref, bar is a Ref, result is App with Ret inside.
     assert!(matches!(result.root.kind, ExprKind::App { .. }));
   }
 }

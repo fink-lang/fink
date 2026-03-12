@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::ir::{Arg, Bind, BindName, Expr, ExprKind, FreeVar, KeyKind, Lit, Param, Prim, Val, ValKind};
+use super::ir::{Arg, Bind, BindName, Expr, ExprKind, FreeVar, RefKind, Lit, Param, Prim, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -102,26 +102,26 @@ fn val_to_node(v: &Val<'_>) -> Node<'static> {
   match &v.kind {
     ValKind::Lit(lit)    => lit_to_node(lit),
     ValKind::Ident(name) => ident(&render_bind(*name)),
-    ValKind::Key(key)    => match &key.kind {
-      KeyKind::Name(name) => ident(name),
-      KeyKind::Bind(name) => ident(&render_bind(*name)),
-      KeyKind::Prim(p)    => ident(&format!("·{}", prim_name(*p))),
-      KeyKind::Op(op)     => ident(&sigil_op(op)),
+    ValKind::Ref(ref_)    => match &ref_.kind {
+      RefKind::Name(name) => ident(name),
+      RefKind::Bind(name) => ident(&render_bind(*name)),
+      RefKind::Prim(p)    => ident(&format!("·{}", prim_name(*p))),
+      RefKind::Op(op)     => ident(&sigil_op(op)),
     },
   }
 }
 
 /// Return the local name that a Val resolves to after loading.
-/// For Ident/Lit this is the val itself; for Key it's the name that will be
+/// For Ident/Lit this is the val itself; for Ref it's the name that will be
 /// bound by the synthesized load.
 fn resolved_name(v: &Val<'_>) -> String {
   match &v.kind {
     ValKind::Ident(name) => render_bind(*name),
-    ValKind::Key(key)    => match &key.kind {
-      KeyKind::Name(name) => name.to_string(),
-      KeyKind::Bind(name) => render_bind(*name),
-      KeyKind::Prim(p)    => format!("·{}", prim_name(*p)),
-      KeyKind::Op(op)     => sigil_op(op),
+    ValKind::Ref(ref_)    => match &ref_.kind {
+      RefKind::Name(name) => name.to_string(),
+      RefKind::Bind(name) => render_bind(*name),
+      RefKind::Prim(p)    => format!("·{}", prim_name(*p)),
+      RefKind::Op(op)     => sigil_op(op),
     },
     ValKind::Lit(_)      => String::new(),  // literals don't have a name
   }
@@ -129,17 +129,17 @@ fn resolved_name(v: &Val<'_>) -> String {
 
 /// Whether a Val needs a `load` synthesis before use.
 fn needs_load(v: &Val<'_>) -> bool {
-  matches!(v.kind, ValKind::Key(_))
+  matches!(v.kind, ValKind::Ref(_))
 }
 
 /// Synthesize a `·load` wrapping `body_node`:
 ///   ·load ·scope, id'name' | op'sym', fn local, ·scope: body_node
-fn emit_load(key: &super::ir::Key<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
-  let key_node = match &key.kind {
-    KeyKind::Name(name) => id_tag(name),
-    KeyKind::Bind(name) => id_tag(&raw_bind(*name)),
-    KeyKind::Prim(p)    => id_tag(prim_name(*p)),
-    KeyKind::Op(op)     => op_tag(op),
+fn emit_load(ref_: &super::ir::Ref<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
+  let key_node = match &ref_.kind {
+    RefKind::Name(name) => id_tag(name),
+    RefKind::Bind(name) => id_tag(&raw_bind(*name)),
+    RefKind::Prim(p)    => id_tag(prim_name(*p)),
+    RefKind::Op(op)     => op_tag(op),
   };
   apply(ident("·load"), vec![
     ident("·scope"),
@@ -148,7 +148,7 @@ fn emit_load(key: &super::ir::Key<'_>, local: &str, body_node: Node<'static>) ->
   ])
 }
 
-/// Wrap `inner_node` in loads for every `Key` val in `vals`.
+/// Wrap `inner_node` in loads for every `Ref` val in `vals`.
 /// Keys are resolved left-to-right; `val_to_node` can then be used on each val
 /// since the name is now bound.
 fn with_loads<F>(vals: &[&Val<'_>], inner: F) -> Node<'static>
@@ -176,8 +176,8 @@ where
   vals.iter().zip(resolved.iter()).rev()
     .fold(inner_node, |body, (v, (load, name))| {
       if *load {
-        if let ValKind::Key(key) = &v.kind {
-          emit_load(key, name, body)
+        if let ValKind::Ref(ref_) = &v.kind {
+          emit_load(ref_, name, body)
         } else {
           body
         }

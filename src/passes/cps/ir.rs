@@ -60,7 +60,7 @@ impl Meta {
 }
 
 // ---------------------------------------------------------------------------
-// Names and keys
+// Names and references
 // ---------------------------------------------------------------------------
 
 /// A plain source name — used for references to existing bindings.
@@ -100,18 +100,18 @@ pub enum Arg<'src> {
   Spread(Val<'src>),
 }
 
-/// A lookup key — how a name is referenced from scope.
+/// A reference to a binding — how a name is used from scope.
 /// Annotated with resolution kind after SCC/semantic analysis.
 #[derive(Debug, Clone)]
-pub struct Key<'src> {
-  pub kind: KeyKind<'src>,
+pub struct Ref<'src> {
+  pub kind: RefKind<'src>,
   pub resolution: Option<Resolution>,
   pub meta: Meta,
 }
 
-/// The variant of a key reference — how the name is stored and looked up.
+/// The variant of a reference — how the name is stored and looked up.
 #[derive(Debug, Clone)]
-pub enum KeyKind<'src> {
+pub enum RefKind<'src> {
   Name(Name<'src>),      // user-defined name: foo, add, x
   Bind(BindName<'src>),  // typed scope reference — load this binding (avoids string materialisation for Gen temps)
   Prim(Prim),            // known runtime builtin — no scope resolution needed
@@ -178,7 +178,7 @@ pub type Bind<'src> = Node<BindName<'src>>;
 #[derive(Debug, Clone)]
 pub enum ValKind<'src> {
   Ident(BindName<'src>),  // a locally bound name (param or let-binding)
-  Key(Key<'src>),         // a scope lookup (user name or operator)
+  Ref(Ref<'src>),         // a reference to a binding (user name or operator)
   Lit(Lit<'src>),         // a literal value
 }
 

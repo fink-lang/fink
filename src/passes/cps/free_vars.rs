@@ -1,12 +1,12 @@
 // Free variable analysis pass.
 //
 // Annotates each `LetFn` with the names it reads directly from the enclosing
-// scope — i.e. names that are `Key` references in the fn body, not covered
+// scope — i.e. names that are `Ref` references in the fn body, not covered
 // by the fn's own params or by `LetVal` bindings settled within the same body.
 //
 // # Algorithm
 //
-// Walk the `LetFn.fn_body` and collect every `ValKind::Key` encountered, in
+// Walk the `LetFn.fn_body` and collect every `ValKind::Ref` encountered, in
 // first-encounter order, deduplicating via a seen set.  Exclude:
 //   - Names bound by the fn's own `params`
 //   - Names settled by `LetVal` bindings *within the same fn body*
@@ -23,7 +23,7 @@
 // output.
 
 use std::collections::HashSet;
-use super::ir::{Arg, BindName, Expr, ExprKind, FreeVar, KeyKind, Name, Param, Val, ValKind};
+use super::ir::{Arg, BindName, Expr, ExprKind, FreeVar, RefKind, Name, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -65,7 +65,7 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
       }).collect();
       let mut seen: HashSet<FreeVar<'_>> = HashSet::new();
       let mut free_vars: Vec<FreeVar<'_>> = vec![];
-      collect_keys(&fn_body, &bound, &mut seen, &mut free_vars);
+      collect_refs(&fn_body, &bound, &mut seen, &mut free_vars);
       LetFn { name, params, free_vars, fn_body: Box::new(fn_body), body: Box::new(body) }
     }
 
@@ -164,13 +164,13 @@ fn transform_expr(expr: Expr<'_>) -> Expr<'_> {
 }
 
 // ---------------------------------------------------------------------------
-// Key collector — walks an Expr, stops at LetFn boundaries
+// Ref collector — walks an Expr, stops at LetFn boundaries
 // ---------------------------------------------------------------------------
 
-/// Collect `Key` names from `expr` into `out` (dedup via `seen`),
+/// Collect `Ref` names from `expr` into `out` (dedup via `seen`),
 /// excluding names in `bound` (params + LetVal-settled names at this level).
 /// Does NOT descend into `LetFn.fn_body` (its keys are its own).
-fn collect_keys<'src>(
+fn collect_refs<'src>(
   expr: &Expr<'src>,
   bound: &HashSet<Name<'src>>,
   seen: &mut HashSet<FreeVar<'src>>,
@@ -178,152 +178,152 @@ fn collect_keys<'src>(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    Ret(val) => collect_key_from_val(val, bound, seen, out),
+    Ret(val) => collect_ref_from_val(val, bound, seen, out),
 
     LetVal { val, body, name } => {
-      collect_key_from_val(val, bound, seen, out);
+      collect_ref_from_val(val, bound, seen, out);
       // `name` is now settled — exclude it from captures in the continuation.
       let mut inner_bound = bound.clone();
       if let BindName::User(s) = name.kind {
         inner_bound.insert(s);
       }
-      collect_keys(body, &inner_bound, seen, out);
+      collect_refs(body, &inner_bound, seen, out);
     }
 
     // Stop at nested LetFn — its fn_body keys are its own.
     // Do continue into `body` (the continuation at our scope level).
     LetFn { body, .. } => {
-      collect_keys(body, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
 
     LetRec { body, .. } => {
       // Same as LetFn: don't descend into binding fn_bodies.
-      collect_keys(body, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
 
     App { func, args, body, .. } => {
-      collect_key_from_val(func, bound, seen, out);
+      collect_ref_from_val(func, bound, seen, out);
       for arg in args {
         let v = match arg { Arg::Val(v) | Arg::Spread(v) => v };
-        collect_key_from_val(v, bound, seen, out);
+        collect_ref_from_val(v, bound, seen, out);
       }
-      collect_keys(body, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
 
     Yield { value, result, body } => {
-      collect_key_from_val(value, bound, seen, out);
+      collect_ref_from_val(value, bound, seen, out);
       let mut inner_bound = bound.clone();
       if let BindName::User(s) = result.kind {
         inner_bound.insert(s);
       }
-      collect_keys(body, &inner_bound, seen, out);
+      collect_refs(body, &inner_bound, seen, out);
     }
 
     If { cond, then, else_ } => {
-      collect_key_from_val(cond, bound, seen, out);
-      collect_keys(then, bound, seen, out);
-      collect_keys(else_, bound, seen, out);
+      collect_ref_from_val(cond, bound, seen, out);
+      collect_refs(then, bound, seen, out);
+      collect_refs(else_, bound, seen, out);
     }
 
     // Pattern lowering primitives — collect keys from vals, recurse into fail and body.
     // Primitives that bind a name extend `bound` before recursing into `body`.
     MatchLetVal { name, val, fail, body } => {
-      collect_key_from_val(val, bound, seen, out);
-      collect_keys(fail, bound, seen, out);
+      collect_ref_from_val(val, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
       let mut inner = bound.clone();
       if let BindName::User(s) = name.kind { inner.insert(s); }
-      collect_keys(body, &inner, seen, out);
+      collect_refs(body, &inner, seen, out);
     }
     MatchApp { func, args, result, fail, body } => {
-      collect_key_from_val(func, bound, seen, out);
-      for v in args { collect_key_from_val(v, bound, seen, out); }
-      collect_keys(fail, bound, seen, out);
+      collect_ref_from_val(func, bound, seen, out);
+      for v in args { collect_ref_from_val(v, bound, seen, out); }
+      collect_refs(fail, bound, seen, out);
       let mut inner = bound.clone();
       if let BindName::User(s) = result.kind { inner.insert(s); }
-      collect_keys(body, &inner, seen, out);
+      collect_refs(body, &inner, seen, out);
     }
     MatchIf { func, args, fail, body } => {
-      collect_key_from_val(func, bound, seen, out);
-      for v in args { collect_key_from_val(v, bound, seen, out); }
-      collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      collect_ref_from_val(func, bound, seen, out);
+      for v in args { collect_ref_from_val(v, bound, seen, out); }
+      collect_refs(fail, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
     MatchValue { val, fail, body, .. } => {
-      collect_key_from_val(val, bound, seen, out);
-      collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      collect_ref_from_val(val, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
     MatchSeq { val, fail, body, .. } => {
-      collect_key_from_val(val, bound, seen, out);
-      collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      collect_ref_from_val(val, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
     MatchNext { elem, fail, body, .. } => {
-      collect_keys(fail, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
       let mut inner = bound.clone();
       if let BindName::User(s) = elem.kind { inner.insert(s); }
-      collect_keys(body, &inner, seen, out);
+      collect_refs(body, &inner, seen, out);
     }
     MatchDone { result, fail, body, .. } => {
-      collect_keys(fail, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
       let mut inner = bound.clone();
       if let BindName::User(s) = result.kind { inner.insert(s); }
-      collect_keys(body, &inner, seen, out);
+      collect_refs(body, &inner, seen, out);
     }
     MatchNotDone { fail, body, .. } => {
-      collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
     MatchRest { result, fail, body, .. } => {
-      collect_keys(fail, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
       let mut inner = bound.clone();
       if let BindName::User(s) = result.kind { inner.insert(s); }
-      collect_keys(body, &inner, seen, out);
+      collect_refs(body, &inner, seen, out);
     }
     MatchRec { val, fail, body, .. } => {
-      collect_key_from_val(val, bound, seen, out);
-      collect_keys(fail, bound, seen, out);
-      collect_keys(body, bound, seen, out);
+      collect_ref_from_val(val, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
     MatchField { elem, fail, body, .. } => {
-      collect_keys(fail, bound, seen, out);
+      collect_refs(fail, bound, seen, out);
       let mut inner = bound.clone();
       if let BindName::User(s) = elem.kind { inner.insert(s); }
-      collect_keys(body, &inner, seen, out);
+      collect_refs(body, &inner, seen, out);
     }
     MatchBlock { params, fail, arms, body, .. } => {
-      for s in params { collect_key_from_val(s, bound, seen, out); }
-      collect_keys(fail, bound, seen, out);
+      for s in params { collect_ref_from_val(s, bound, seen, out); }
+      collect_refs(fail, bound, seen, out);
       for arm in arms {
-        collect_keys(arm, bound, seen, out);
+        collect_refs(arm, bound, seen, out);
       }
-      collect_keys(body, bound, seen, out);
+      collect_refs(body, bound, seen, out);
     }
 
     Panic | FailCont => {}
   }
 }
 
-fn collect_key_from_val<'src>(
+fn collect_ref_from_val<'src>(
   val: &Val<'src>,
   bound: &HashSet<Name<'src>>,
   seen: &mut HashSet<FreeVar<'src>>,
   out: &mut Vec<FreeVar<'src>>,
 ) {
-  if let ValKind::Key(key) = &val.kind {
-    match &key.kind {
-      KeyKind::Name(n) => {
+  if let ValKind::Ref(ref_) = &val.kind {
+    match &ref_.kind {
+      RefKind::Name(n) => {
         if *n != "_" && !bound.contains(n) && seen.insert(FreeVar::Name(n)) {
           out.push(FreeVar::Name(n));
         }
       }
-      KeyKind::Bind(_) => {
+      RefKind::Bind(_) => {
         // Gen param references — always bound in the enclosing fn, never free.
       }
-      KeyKind::Prim(_) => {
+      RefKind::Prim(_) => {
         // Prims are known builtins — not free variables, skip.
       }
-      KeyKind::Op(op) => {
+      RefKind::Op(op) => {
         if seen.insert(FreeVar::Op(op)) {
           out.push(FreeVar::Op(op));
         }
