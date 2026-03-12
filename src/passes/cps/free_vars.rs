@@ -313,20 +313,12 @@ fn collect_ref_from_val<'src>(
   if let ValKind::Ref(ref_) = &val.kind {
     match &ref_.kind {
       RefKind::Name(n) => {
-        if *n != "_" && !bound.contains(n) && seen.insert(FreeVar::Name(n)) {
-          out.push(FreeVar::Name(n));
+        if *n != "_" && !bound.contains(n) && seen.insert(n) {
+          out.push(n);
         }
       }
       RefKind::Bind(_) => {
         // Gen param references — always bound in the enclosing fn, never free.
-      }
-      RefKind::Prim(_) => {
-        // Prims are known builtins — not free variables, skip.
-      }
-      RefKind::Op(op) => {
-        if seen.insert(FreeVar::Op(op)) {
-          out.push(FreeVar::Op(op));
-        }
       }
     }
   }

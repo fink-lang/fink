@@ -5,7 +5,7 @@
 
 use crate::ast::{self, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
-use super::ir::{Arg, Bind, BindName, Expr, ExprKind, FreeVar, RefKind, Lit, Param, Prim, Val, ValKind};
+use super::ir::{Arg, Bind, BindName, Expr, ExprKind, RefKind, Lit, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Entry points
@@ -103,10 +103,8 @@ fn val_to_node(v: &Val<'_>) -> Node<'static> {
     ValKind::Lit(lit)    => lit_to_node(lit),
     ValKind::Ident(name) => ident(&render_bind(*name)),
     ValKind::Ref(ref_)    => match &ref_.kind {
-      RefKind::Name(name) => ident(name),
+      RefKind::Name(name) => ident(&render_ref_name(name)),
       RefKind::Bind(name) => ident(&render_bind(*name)),
-      RefKind::Prim(p)    => ident(&format!("·{}", prim_name(*p))),
-      RefKind::Op(op)     => ident(&sigil_op(op)),
     },
   }
 }
@@ -118,10 +116,8 @@ fn resolved_name(v: &Val<'_>) -> String {
   match &v.kind {
     ValKind::Ident(name) => render_bind(*name),
     ValKind::Ref(ref_)    => match &ref_.kind {
-      RefKind::Name(name) => name.to_string(),
+      RefKind::Name(name) => render_ref_name(name),
       RefKind::Bind(name) => render_bind(*name),
-      RefKind::Prim(p)    => format!("·{}", prim_name(*p)),
-      RefKind::Op(op)     => sigil_op(op),
     },
     ValKind::Lit(_)      => String::new(),  // literals don't have a name
   }
@@ -136,10 +132,8 @@ fn needs_load(v: &Val<'_>) -> bool {
 ///   ·load ·scope, id'name' | op'sym', fn local, ·scope: body_node
 fn emit_load(ref_: &super::ir::Ref<'_>, local: &str, body_node: Node<'static>) -> Node<'static> {
   let key_node = match &ref_.kind {
-    RefKind::Name(name) => id_tag(name),
+    RefKind::Name(name) => ref_tag(name),
     RefKind::Bind(name) => id_tag(&raw_bind(*name)),
-    RefKind::Prim(p)    => id_tag(prim_name(*p)),
-    RefKind::Op(op)     => op_tag(op),
   };
   apply(ident("·load"), vec![
     ident("·scope"),
@@ -245,15 +239,30 @@ fn raw_bind(name: BindName<'_>) -> String {
   }
 }
 
-// Maps a Prim → its runtime name string (without · prefix).
-fn prim_name(p: Prim) -> &'static str {
-  match p {
-    Prim::SeqAppend => "seq_append",
-    Prim::SeqConcat => "seq_concat",
-    Prim::RecPut    => "rec_put",
-    Prim::RecMerge  => "rec_merge",
-    Prim::StrFmt    => "str_fmt",
-    Prim::StrRaw    => "str_raw",
+/// Whether a ref name is an operator — matches the set known to `sigil_op`.
+fn is_op(name: &str) -> bool {
+  matches!(name, "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | "<=" | ">" | ">="
+    | "." | "and" | "or" | "not" | "in" | ".." | "...")
+}
+
+/// Render a RefKind::Name for display — operators get sigil_op, others stay as-is.
+fn render_ref_name(name: &str) -> String {
+  if is_op(name) {
+    sigil_op(name)
+  } else {
+    name.to_string()
+  }
+}
+
+/// Produce the correct tag node for a ref name — op_tag for operators, id_tag otherwise.
+/// For prims (·seq_append), strips the · prefix for the tag content.
+fn ref_tag(name: &str) -> Node<'static> {
+  if is_op(name) {
+    op_tag(name)
+  } else if let Some(stripped) = name.strip_prefix('·') {
+    id_tag(stripped)
+  } else {
+    id_tag(name)
   }
 }
 
@@ -378,10 +387,7 @@ pub fn to_node(expr: &Expr<'_>) -> Node<'static> {
         let mut fields: Vec<Node<'static>> = vec![
           node(NodeKind::Spread(Some(Box::new(ident("·scope"))))),
         ];
-        fields.extend(free_vars.iter().map(|fv| match fv {
-          FreeVar::Name(n) => ident(n),
-          FreeVar::Op(op)  => ident(&sigil_op(op)),
-        }));
+        fields.extend(free_vars.iter().map(|fv| ident(&render_ref_name(fv))));
         node(NodeKind::LitRec(fields))
       };
       fn_params.push(scope_arg);

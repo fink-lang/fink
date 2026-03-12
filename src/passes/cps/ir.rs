@@ -67,12 +67,7 @@ impl Meta {
 pub type Name<'src> = &'src str;
 
 /// A free variable captured from an outer scope.
-/// Typed so the formatter can render each variant correctly without string inspection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FreeVar<'src> {
-  Name(Name<'src>),  // user-defined name: foo, x
-  Op(&'src str),     // operator symbol: +, ==, . (rendered as ·op_X in scope capture)
-}
+pub type FreeVar<'src> = Name<'src>;
 
 /// A binding site — introduces a name into scope.
 /// `User` carries the original source name; `Gen` carries a counter (no prefix string).
@@ -110,25 +105,15 @@ pub struct Ref<'src> {
 }
 
 /// The variant of a reference — how the name is stored and looked up.
+///
+/// All names — user-defined, operators, prims — are `Name`. They are
+/// distinguished only by their string content, not by RefKind variant.
+/// Operators and prims are pre-seeded into scope; a separate shadowing
+/// pass protects them from accidental override.
 #[derive(Debug, Clone)]
 pub enum RefKind<'src> {
-  Name(Name<'src>),      // user-defined name: foo, add, x
+  Name(Name<'src>),      // any name: user ("foo"), operator ("+"), prim ("·seq_append")
   Bind(BindName<'src>),  // typed scope reference — load this binding (avoids string materialisation for Gen temps)
-  Prim(Prim),            // known runtime builtin — no scope resolution needed
-  Op(&'src str),         // operator symbol: +, ==, .
-}
-
-/// Runtime builtin functions referenced in the IR.
-/// Emitted by the transform for built-in operations; resolved to runtime
-/// globals by codegen. Never appear as binding sites — reference only.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Prim {
-  SeqAppend,   // [a, b, c] element construction
-  SeqConcat,   // [..xs, ..ys] spread merge
-  RecPut,      // {key: val} field construction
-  RecMerge,    // {..rec} spread merge
-  StrFmt,      // 'hello ${name}' interpolated string
-  StrRaw,      // fmt'...' raw tagged template
 }
 
 /// Whether a range pattern is exclusive (`..`) or inclusive (`...`).
@@ -139,14 +124,18 @@ pub enum RangeKind {
 }
 
 
-/// How a name reference resolves — populated by the semantic/SCC pass.
+/// How a name reference resolves — populated by the resolve pass.
+///
+/// Every variant carries the CpsId of the Bind node at the definition site,
+/// so downstream passes go straight from use → definition.
+/// Absence of resolution (None in the PropGraph) = unresolved name error.
+/// No Global variant — scope is closed; builtins are pre-seeded Bind nodes.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Resolution {
-  Local,      // bound in current scope, already initialized
-  Captured,   // free variable from an outer scope
-  Recursive,  // same LetRec group, behind a fn boundary (valid)
-  ForwardRef, // same LetRec group, not behind a fn boundary (compile error)
-  Global,     // module-level binding
+  Local(CpsId),      // Bind node in current scope, already initialized
+  Captured(CpsId),   // Bind node, across a fn boundary
+  Recursive(CpsId),  // LetRec Bind, behind a fn boundary (valid)
+  ForwardRef(CpsId), // LetRec Bind, not behind a fn boundary (compile error)
 }
 
 // ---------------------------------------------------------------------------

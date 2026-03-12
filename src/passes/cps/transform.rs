@@ -21,7 +21,7 @@ use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::Loc;
 use super::ir::{
   Arg, Bind, BindName, CpsId, CpsResult, Expr, ExprKind, Ref, RefKind, Lit, Meta,
-  Name, Param, Prim, Val, ValKind,
+  Name, Param, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -108,12 +108,12 @@ fn key_val_bind<'src>(g: &mut Gen, name: BindName<'src>, loc: Loc) -> Val<'src> 
   g.val(ValKind::Ref(Ref { kind: RefKind::Bind(name), resolution: None, meta: Meta::at(loc) }), loc)
 }
 
-fn key_val_prim(g: &mut Gen, prim: Prim, loc: Loc) -> Val<'static> {
-  g.val(ValKind::Ref(Ref { kind: RefKind::Prim(prim), resolution: None, meta: Meta::at(loc) }), loc)
+fn key_val_op<'src>(g: &mut Gen, op: &'src str, loc: Loc) -> Val<'src> {
+  key_val_name(g, op, loc)
 }
 
-fn key_val_op<'src>(g: &mut Gen, op: &'src str, loc: Loc) -> Val<'src> {
-  g.val(ValKind::Ref(Ref { kind: RefKind::Op(op), resolution: None, meta: Meta::at(loc) }), loc)
+fn key_val_prim(g: &mut Gen, prim: &'static str, loc: Loc) -> Val<'static> {
+  key_val_name(g, prim, loc)
 }
 
 fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, loc: Loc) -> Val<'src> {
@@ -675,7 +675,7 @@ fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], loc: Loc) -> Lowe
     };
     let (ev, ep) = lower(g, inner);
     pending.extend(ep);
-    let op_prim = if is_spread { Prim::SeqConcat } else { Prim::SeqAppend };
+    let op_prim = if is_spread { "·seq_concat" } else { "·seq_append" };
     let op_fn = key_val_prim(g, op_prim, loc);
     let result = g.fresh_result(loc);
     let result_kind = result.kind;
@@ -697,7 +697,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
       NodeKind::Spread(Some(inner)) => {
         let (sv, sp) = lower(g, inner);
         pending.extend(sp);
-        let op_fn = key_val_prim(g, Prim::RecMerge, loc);
+        let op_fn = key_val_prim(g, "·rec_merge", loc);
         let result = g.fresh_result(loc);
         let rk = result.kind;
         pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, sv]), result, loc });
@@ -708,7 +708,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           let key_lit = lit_val(g, Lit::Str(key), field.loc);
           let (fv, fp) = lower(g, rhs);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, Prim::RecPut, loc);
+          let op_fn = key_val_prim(g, "·rec_put", loc);
           let result = g.fresh_result(loc);
           let rk = result.kind;
           pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, fv]), result, loc });
@@ -719,7 +719,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           let (fv, fp) = lower(g, rhs);
           pending.extend(kp);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, Prim::RecPut, loc);
+          let op_fn = key_val_prim(g, "·rec_put", loc);
           let result = g.fresh_result(loc);
           let rk = result.kind;
           pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, kv, fv]), result, loc });
@@ -734,7 +734,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           let key_lit = lit_val(g, Lit::Str(key), field.loc);
           let (fv, fp) = lower(g, val_node);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, Prim::RecPut, loc);
+          let op_fn = key_val_prim(g, "·rec_put", loc);
           let result = g.fresh_result(loc);
           let rk = result.kind;
           pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, fv]), result, loc });
@@ -744,7 +744,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
           let (fv, fp) = lower(g, val_node);
           pending.extend(kp);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, Prim::RecPut, loc);
+          let op_fn = key_val_prim(g, "·rec_put", loc);
           let result = g.fresh_result(loc);
           let rk = result.kind;
           pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, kv, fv]), result, loc });
@@ -755,7 +755,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
         // Shorthand `{foo}` == `{foo: foo}`
         let key_lit = lit_val(g, Lit::Str(name), field.loc);
         let id_val = key_val_name(g, name, field.loc);
-        let op_fn = key_val_prim(g, Prim::RecPut, loc);
+        let op_fn = key_val_prim(g, "·rec_put", loc);
         let result = g.fresh_result(loc);
         let rk = result.kind;
         pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, id_val]), result, loc });
@@ -764,7 +764,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], loc: Loc) -> Low
       _ => {
         let (fv, fp) = lower(g, field);
         pending.extend(fp);
-        let op_fn = key_val_prim(g, Prim::RecMerge, loc);
+        let op_fn = key_val_prim(g, "·rec_merge", loc);
         let result = g.fresh_result(loc);
         let rk = result.kind;
         pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, fv]), result, loc });
@@ -787,7 +787,7 @@ fn lower_str_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], loc: Loc) -> Lo
     pending.extend(pp);
     part_vals.push(Arg::Val(pv));
   }
-  let str_fmt_fn = key_val_prim(g, Prim::StrFmt, loc);
+  let str_fmt_fn = key_val_prim(g, "·str_fmt", loc);
   let result = g.fresh_result(loc);
   let result_kind = result.kind;
   pending.push(Pending::App { func: str_fmt_fn, args: part_vals, result, loc });
