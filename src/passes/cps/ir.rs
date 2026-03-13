@@ -6,7 +6,8 @@
 //
 // Scope is structural (nesting). Env and state are implicit.
 // Every function has an explicit name (user or synthetic).
-// Ident references are annotated with their resolution kind after SCC analysis.
+// Ref nodes carry `Ref::Name` (user) or `Ref::Gen(n)` (compiler temp);
+// resolution is a side-table populated by the resolve pass.
 
 // ---------------------------------------------------------------------------
 // Node identity
@@ -269,7 +270,7 @@ pub enum ExprKind<'src> {
   /// Anonymous fns get a compiler-generated synthetic name.
   /// `free_vars` is populated by the free-variable analysis pass; empty until then.
   /// Contains CpsIds of Ref nodes at capture sites — names recoverable from origin map.
-  /// In first-encounter order. Used by cps_fmt to emit `{..·scope, name, …}`.
+  /// In first-encounter order.
   LetFn {
     name: BindNode,
     params: Vec<Param>,

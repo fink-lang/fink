@@ -1,7 +1,7 @@
 # CPS IR Design — Compiler Perspective
 
-This document describes the CPS IR as implemented in `src/transform/cps.rs`.
-Output formatting (env handles, state threading, ƒ_cont naming) is intentionally
+This document describes the CPS IR as implemented in `src/passes/cps/ir.rs`.
+Output formatting (state threading, ƒ_cont naming) is intentionally
 ignored here — those are rendering artifacts synthesized by the pretty-printer
 and codegen from the structural IR.
 
@@ -32,80 +32,77 @@ Both `Val` and `Expr` are type aliases for `Node<K>`, which carries a `CpsId`.
 This gives every CPS node a uniform ID in a single address space, so property
 graphs keyed by `CpsId` can annotate values and expressions alike.
 
-CPS nodes still carry a `Meta { loc, ty }` field as a transitional measure.
-`loc` may move to `PropGraph<CpsId, Loc>` in the future; `ty` is a placeholder.
-
 See also: `memory/project_property_graphs.md` for the full design rationale.
 
 ---
 
-## Names and keys
+## Names and references
 
 ```
-Name = &'src str              -- plain source name (reference to existing binding)
+Bind                          -- a definition site (introduces a name into scope)
+  User                        -- from source; name recoverable via origin map
+  Gen(u32)                    -- compiler-generated temp: rendered as ·v_N
 
-BindName                      -- a binding site (introduces a name into scope)
-  User(Name)                  -- from source: `foo`, `x`, `result`
-  Gen(u32)                    -- compiler-generated: rendered as ·v_N
+Ref                           -- a use site (references a binding)
+  Name                        -- user ref; name recoverable via origin map
+  Gen(u32)                    -- compiler-generated temp: rendered as ·v_N
 
-FreeVar                       -- a captured variable from an outer scope
-  Name(Name)                  -- user name: foo, x
-  Op(&str)                    -- operator: +, ==, . (rendered as ·op_X)
+BindNode = Node<Bind>         -- definition site with its own CpsId
+
+FreeVar = CpsId               -- CpsId of a Ref node at a capture site
+                              -- (deprecated: subsumed by Resolution::Captured)
 
 Param                         -- function parameter
-  Name(BindName)              -- plain param
-  Spread(BindName)            -- varargs: ..rest (only one, trailing position)
+  Name(BindNode)              -- plain param
+  Spread(BindNode)            -- varargs: ..rest (only one, trailing position)
 
 Arg                           -- call-site argument
   Val(Val)                    -- plain argument
   Spread(Val)                 -- spread: ..items
 ```
 
-## Key — scope lookup
+## Compiler-known operations
 
 ```
-Key { kind: KeyKind, resolution: Option<Resolution>, meta: Meta }
+BuiltIn                       -- resolved statically, not by scope lookup
+  Add, Sub, Mul, Div, ...    -- arithmetic
+  Eq, Neq, Lt, Lte, ...      -- comparison
+  And, Or, Xor, Not          -- logical
+  BitAnd, BitXor, Shl, ...   -- bitwise
+  Range, RangeIncl, In, NotIn -- range
+  Get                         -- member access (.)
+  SeqAppend, SeqConcat        -- [] value construction
+  RecPut, RecMerge            -- {} value construction
+  StrFmt                      -- string interpolation
 
-KeyKind
-  Name(Name)                  -- user name: foo, add
-  Bind(BindName)              -- typed scope ref (avoids string materialisation for Gen temps)
-  Prim(Prim)                  -- runtime builtin (no scope resolution needed)
-  Op(&str)                    -- operator symbol: +, ==, .
-
-Prim                          -- runtime builtins (reference only, never binding sites)
-  SeqAppend                   -- [a, b, c] element construction
-  SeqConcat                   -- [..xs, ..ys] spread merge
-  RecPut                      -- {key: val} field construction
-  RecMerge                    -- {..rec} spread merge
-  StrFmt                      -- 'hello ${name}' interpolation
-  StrRaw                      -- fmt'...' tagged template
+Callable                      -- what an App calls
+  Val(Val)                    -- runtime value (function reference)
+  BuiltIn(BuiltIn)           -- compile-time tag, no CpsId
 ```
 
-## Resolution — populated by semantic/SCC pass
+## Resolution — populated by resolve pass
 
 ```
 Resolution
-  Local                       -- bound in current scope, already initialized
-  Captured                    -- free variable from outer scope
-  Recursive                   -- same LetRec group, behind fn boundary (valid)
-  ForwardRef                  -- same LetRec group, not behind fn boundary (compile error)
-  Global                      -- module-level binding
+  Local(CpsId)                -- bound in current scope, already initialized
+  Captured(CpsId)             -- free variable from outer scope
+  Recursive(CpsId)            -- same LetRec group, behind fn boundary (valid)
+  ForwardRef(CpsId)           -- same LetRec group, not behind fn boundary (error)
 ```
 
-`Recursive` and `Global` refs need store/load in output; `Local` and `Captured`
-are structurally resolved.
+Every variant carries the CpsId of the Bind node at the definition site.
+Stored in `PropGraph<CpsId, Option<Resolution>>` — not on the IR nodes.
 
 ---
 
 ## Values — already-computed things
 
 ```
-Node<K> { id: CpsId, kind: K, meta: Meta }  -- generic shell
-Val = Node<ValKind>                          -- trivial value (has CpsId)
+Node<K> { id: CpsId, kind: K }  -- generic shell
+Val = Node<ValKind>              -- trivial value (has CpsId)
 
 ValKind
-  Ident(BindName)             -- locally bound name (param or let-binding)
-  Key(Key)                    -- scope lookup (user name, operator, or builtin)
+  Ref(Ref)                    -- reference to a binding (user or compiler temp)
   Lit(Lit)                    -- literal value
 
 Lit
@@ -134,14 +131,15 @@ LetVal { name, val, body }
 
 LetFn { name, params, free_vars, fn_body, body }
   -- bind a function; name NOT visible in fn_body (non-recursive)
-  -- free_vars populated by free-var pass; empty until then
+  -- free_vars populated by free-var pass (deprecated); empty until then
 
 LetRec { bindings: Vec<Binding>, body }
   -- mutually recursive group; all names visible in all fn_bodies
-  -- Binding = { name, params, fn_body, meta }
+  -- Binding = { name, params, fn_body }
 
-App { func, args, result, body }
+App { func: Callable, args, result, body }
   -- call func with args; bind result; visible in body
+  -- func is either a Val (runtime) or BuiltIn (compile-time)
 
 If { cond, then, else_ }
   -- branch on cond
@@ -173,11 +171,11 @@ All pattern nodes carry an explicit `fail` continuation (Panic or FailCont).
 MatchLetVal { name, val, fail, body }
   -- bind val to name; always succeeds (structural uniformity with fail cont)
 
-MatchApp { func, args, fail, result, body }
+MatchApp { func: Callable, args, fail, result, body }
   -- apply func to args; fail if tag is wrong
   -- constructor/extractor patterns: Ok b, Some x
 
-MatchIf { func, args, fail, body }
+MatchIf { func: Callable, args, fail, body }
   -- apply func to args; fail if falsy; no result binding
   -- guard predicates: is_even x, a > 0
 
@@ -234,14 +232,16 @@ MatchBlock { params, fail, arm_params, arms, result, body }
 
 ## Settled design decisions
 
-### Store/Load
-Only needed for mutual recursion (`LetRec`) and protocols (dispatch collapse).
-Everything else is structural scope.
+### First-pass CPS — no load/store/scope
+First-pass CPS has no forward refs — all names are in scope by construction.
+The formatter outputs structural CPS directly (·let, ·fn, ·apply, ·ƒ_cont).
+Load/store/scope synthesis is deferred to later passes that need it (closure
+conversion, codegen).
 
 ### Closure vs LetFn
-All fns are potentially closures; captures inferred by free-var pass.
-Analysis IR uses `LetFn` with implicit captures from nesting.
-Codegen IR adds explicit captures after free-var analysis.
+All fns are potentially closures; captures inferred by free-var pass (deprecated,
+will be subsumed by name resolution). Analysis IR uses `LetFn` with implicit
+captures from nesting. Codegen IR will add explicit captures after resolution.
 
 ### Env / Scope / State
 All three are output conventions — none in the analysis IR:
@@ -267,14 +267,16 @@ The pretty-printer synthesizes these from the structural IR:
 
 **Variable sigils:**
 - User vars — plain: `foo`, `bar`
-- Compiler temps — `·v_N`, `·fn_N`
+- Compiler temps — `·v_N`
 - Match cursors — `·m_N`
-- Continuations — `·ƒ_cont`, `·ƒ_err`, `·ƒ_ok`, `·ƒ_fail`
-- Runtime/injected — `·scope`, `·state`, `·chld_scope`, `·op_plus`
+- Continuations — `·ƒ_cont`, `·ƒ_fail`
+- Runtime/injected — `·state`
 
-**Core primitives rendered:**
-`·store`, `·load`, `·apply`, `·closure`, `·scope`, `·seq_append`, `·seq_concat`,
-`·rec_put`, `·rec_merge`, `·id`, `·op`, `·str_fmt`, `·str_raw`, `·yield`,
-`·match_block`, `·match_branch`, `·match_store`, `·match_seq`, `·match_next`,
-`·match_done`, `·match_not_done`, `·match_rest`, `·match_rec`, `·match_field`,
-`·match_value`, `·match_if`, `·match_apply`, `·panic`, `·if`
+**Rendering conventions:**
+```
+LetVal  → ·let val, fn name: body
+LetFn   → ·fn fn params: fn_body, fn name: body
+App     → ·apply func, args, ·state, fn result, ·state: body
+Ret     → ·ƒ_cont val, ·state
+BuiltIn → rendered inline as ·op'sym' (operators) or ·prim (data construction)
+```
