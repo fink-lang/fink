@@ -165,7 +165,7 @@ test 'self recursion', fn:
     f = fn a:
       f a
   | equals fink":
-    (ref 2, f) == (captured 1, (bind 9, f)) in scope 14
+    (ref 2, f) == (recursive (bind 9, f)) in scope 14
     (ref 3, a) == (local (bind 1, a)) in scope 0
     (ref 10, f) == (local (bind 9, f)) in scope 14
 

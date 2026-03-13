@@ -108,7 +108,7 @@ pub fn resolve<'src>(
   let scope = ScopeMap::new();
   // The root expr is a LetFn wrapping the module body; its CpsId is the root scope.
   let root_scope = expr.id;
-  resolve_expr(expr, &scope, root_scope, 0, &ctx, &mut graphs);
+  resolve_expr(expr, &scope, root_scope, None, 0, &ctx, &mut graphs);
   ResolveResult {
     resolution: graphs.resolution,
     resolves_to: graphs.resolves_to,
@@ -166,13 +166,18 @@ fn bind_to_scope<'src>(
 // ---------------------------------------------------------------------------
 
 /// Classify a ref: compute fn boundary crossings between ref and bind.
+/// `self_bind` is the CpsId of the enclosing fn's own name bind (if any),
+/// used to detect self-recursion.
 fn classify(
   entry: &ScopeEntry,
   ref_fn_depth: u32,
+  self_bind: Option<CpsId>,
 ) -> Resolution {
   let depth = ref_fn_depth - entry.fn_depth;
   if depth == 0 {
     Resolution::Local(entry.bind_id)
+  } else if self_bind == Some(entry.bind_id) {
+    Resolution::Recursive(entry.bind_id)
   } else {
     Resolution::Captured { bind: entry.bind_id, depth }
   }
@@ -181,6 +186,7 @@ fn classify(
 fn resolve_val<'src>(
   val: &Val<'src>,
   scope: &ScopeMap<'src>,
+  self_bind: Option<CpsId>,
   fn_depth: u32,
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
@@ -190,7 +196,7 @@ fn resolve_val<'src>(
       Ref::Name => {
         if let Some(name) = ctx.source_name(val.id) {
           if let Some(entry) = scope.get(name) {
-            let resolution = classify(entry, fn_depth);
+            let resolution = classify(entry, fn_depth, self_bind);
             graphs.resolves_to.set(val.id, Some(entry.bind_id));
             graphs.resolution.set(val.id, Some(resolution));
           } else {
@@ -208,12 +214,13 @@ fn resolve_val<'src>(
 fn resolve_callable<'src>(
   callable: &Callable<'src>,
   scope: &ScopeMap<'src>,
+  self_bind: Option<CpsId>,
   fn_depth: u32,
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
   if let Callable::Val(val) = callable {
-    resolve_val(val, scope, fn_depth, ctx, graphs);
+    resolve_val(val, scope, self_bind, fn_depth, ctx, graphs);
   }
 }
 
@@ -262,21 +269,23 @@ fn resolve_expr<'src>(
   expr: &Expr<'src>,
   scope: &ScopeMap<'src>,
   current_scope: CpsId,
+  self_bind: Option<CpsId>,
   fn_depth: u32,
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
   use ExprKind::*;
+  let sb = self_bind;
   match &expr.kind {
     Ret(val) => {
-      resolve_val(val, scope, fn_depth, ctx, graphs);
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
     }
 
     LetVal { name, val, body } => {
-      resolve_val(val, scope, fn_depth, ctx, graphs);
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     LetFn { name, params, fn_body, body, .. } => {
@@ -290,6 +299,20 @@ fn resolve_expr<'src>(
       let fn_scope_id = name.id;
       graphs.parent_scope.set(fn_scope_id, Some(current_scope));
 
+      // Determine self_bind for the fn body: the hoisted name that binds
+      // this LetFn's result. The CPS transform produces the fn bind in the
+      // continuation — either as LetVal or MatchLetVal. Extract it from
+      // the continuation's first bind node.
+      let cont_bind_id = match &body.kind {
+        ExprKind::LetVal { name: cn, .. } => Some(cn.id),
+        ExprKind::MatchLetVal { name: cn, .. } => Some(cn.id),
+        _ => None,
+      };
+      let fn_self_bind = cont_bind_id
+        .and_then(|id| ctx.source_name(id))
+        .and_then(|n| hoisted.get(n))
+        .map(|entry| entry.bind_id);
+
       let mut fn_scope = hoisted.clone();
       for p in params {
         match p {
@@ -297,12 +320,12 @@ fn resolve_expr<'src>(
             bind_to_scope(&mut fn_scope, b, fn_scope_id, fn_depth + 1, ctx, graphs),
         }
       }
-      resolve_expr(fn_body, &fn_scope, fn_scope_id, fn_depth + 1, ctx, graphs);
+      resolve_expr(fn_body, &fn_scope, fn_scope_id, fn_self_bind, fn_depth + 1, ctx, graphs);
 
       // continuation scope: sequential (only names defined so far)
       let mut cont_scope = scope.clone();
       bind_to_scope(&mut cont_scope, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &cont_scope, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &cont_scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     LetRec { bindings, body } => {
@@ -315,6 +338,10 @@ fn resolve_expr<'src>(
         let fn_scope_id = b.name.id;
         graphs.parent_scope.set(fn_scope_id, Some(current_scope));
 
+        let rec_self_bind = ctx.source_name(b.name.id)
+          .and_then(|n| rec_scope.get(n))
+          .map(|entry| entry.bind_id);
+
         let mut fn_scope = rec_scope.clone();
         for p in &b.params {
           match p {
@@ -322,126 +349,126 @@ fn resolve_expr<'src>(
               bind_to_scope(&mut fn_scope, n, fn_scope_id, fn_depth + 1, ctx, graphs),
           }
         }
-        resolve_expr(&b.fn_body, &fn_scope, fn_scope_id, fn_depth + 1, ctx, graphs);
+        resolve_expr(&b.fn_body, &fn_scope, fn_scope_id, rec_self_bind, fn_depth + 1, ctx, graphs);
       }
-      resolve_expr(body, &rec_scope, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &rec_scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     App { func, args, result, body } => {
-      resolve_callable(func, scope, fn_depth, ctx, graphs);
+      resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for arg in args {
         match arg {
           Arg::Val(v) | Arg::Spread(v) =>
-            resolve_val(v, scope, fn_depth, ctx, graphs),
+            resolve_val(v, scope, sb, fn_depth, ctx, graphs),
         }
       }
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     If { cond, then, else_ } => {
-      resolve_val(cond, scope, fn_depth, ctx, graphs);
-      resolve_expr(then, scope, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(else_, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_val(cond, scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(then, scope, current_scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(else_, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     Yield { value, result, body } => {
-      resolve_val(value, scope, fn_depth, ctx, graphs);
+      resolve_val(value, scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     // -- Pattern lowering primitives --
 
     MatchLetVal { name, val, fail, body } => {
-      resolve_val(val, scope, fn_depth, ctx, graphs);
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchApp { func, args, fail, result, body } => {
-      resolve_callable(func, scope, fn_depth, ctx, graphs);
-      for v in args { resolve_val(v, scope, fn_depth, ctx, graphs); }
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
+      for v in args { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchIf { func, args, fail, body } => {
-      resolve_callable(func, scope, fn_depth, ctx, graphs);
-      for v in args { resolve_val(v, scope, fn_depth, ctx, graphs); }
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
+      for v in args { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchValue { val, fail, body, .. } => {
-      resolve_val(val, scope, fn_depth, ctx, graphs);
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchSeq { val, fail, body, .. } => {
-      resolve_val(val, scope, fn_depth, ctx, graphs);
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchNext { fail, elem, body, .. } => {
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchDone { fail, result, body, .. } => {
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchNotDone { fail, body, .. } => {
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchRest { fail, result, body, .. } => {
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchRec { val, fail, body, .. } => {
-      resolve_val(val, scope, fn_depth, ctx, graphs);
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
+      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchField { fail, elem, body, .. } => {
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     MatchBlock { params, fail, arm_params, arms, result, body } => {
-      for v in params { resolve_val(v, scope, fn_depth, ctx, graphs); }
-      resolve_expr(fail, scope, current_scope, fn_depth, ctx, graphs);
+      for v in params { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
+      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       // Each arm gets the arm_params in scope
       for (arm, param) in arms.iter().zip(arm_params.iter()) {
         let mut arm_scope = scope.clone();
         bind_to_scope(&mut arm_scope, param, current_scope, fn_depth, ctx, graphs);
-        resolve_expr(arm, &arm_scope, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(arm, &arm_scope, current_scope, sb, fn_depth, ctx, graphs);
       }
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, fn_depth, ctx, graphs);
+      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
     }
 
     Panic | FailCont => {}

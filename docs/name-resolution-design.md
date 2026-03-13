@@ -76,15 +76,24 @@ the CpsId of its parent scope (`None` for the module root).
 
 ## Classification algorithm
 
-During resolution, the pass already walks scopes. When a ref is resolved:
+Each bind stores its `fn_depth` (number of LetFn boundaries from root).
+Classification computes the delta between ref's fn_depth and bind's fn_depth:
 
-1. Find the ref's current scope (`ref_scope`).
-2. Find the bind's scope via `bind_scope`.
-3. If `ref_scope == bind_scope` → `Local(bind_id)`.
-4. If bind is the fn whose body we're inside → `Recursive(bind_id)`.
-5. Otherwise walk from `ref_scope` to `bind_scope` via `parent_scope`,
-   count `LetFn` boundaries crossed → `Captured { bind: bind_id, depth }`.
-6. If no bind found → `Unresolved`.
+1. `depth = ref_fn_depth - bind_fn_depth`.
+2. If `depth == 0` → `Local(bind_id)`.
+3. If bind is the fn whose body we're inside (`self_bind`) → `Recursive(bind_id)`.
+4. If `depth > 0` → `Captured { bind: bind_id, depth }`.
+5. If no bind found → `Unresolved`.
+
+Self-recursion detection: the CPS transform separates fn definitions (anonymous
+LetFn with Gen name) from their user-facing bindings (LetVal/MatchLetVal in the
+continuation). The resolver extracts `self_bind` by inspecting the continuation's
+first bind node and looking it up in the hoisted scope.
+
+Mutual recursion: sibling fn refs classify as `Captured { depth: 1 }`, which is
+correct for closure hoisting — the sibling's value must be threaded in. No
+separate variant needed; mutual-rec groups are detectable from the scope graph
+if a future pass needs them.
 
 ## Example — nested capture
 
