@@ -196,20 +196,6 @@ pub enum Callable<'src> {
 }
 
 
-/// How a name reference resolves — populated by the resolve pass.
-///
-/// Every variant carries the CpsId of the Bind node at the definition site,
-/// so downstream passes go straight from use → definition.
-/// Absence of resolution (None in the PropGraph) = unresolved name error.
-/// No Global variant — scope is closed; builtins are pre-seeded Bind nodes.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Resolution {
-  Local(CpsId),      // Bind node in current scope, already initialized
-  Captured(CpsId),   // Bind node, across a fn boundary
-  Recursive(CpsId),  // LetRec Bind, behind a fn boundary (valid)
-  ForwardRef(CpsId), // LetRec Bind, not behind a fn boundary (compile error)
-}
-
 // ---------------------------------------------------------------------------
 // Node — generic shell shared by Val and Expr
 // ---------------------------------------------------------------------------
