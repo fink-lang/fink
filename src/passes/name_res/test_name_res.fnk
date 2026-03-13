@@ -8,7 +8,7 @@ name resolution tests
 #   (ref <cps_id>, <name>) == (bind <cps_id>, <name>)
 #
 # Only Ref::Name nodes appear (Ref::Gen are structural, always resolved).
-# Unresolved names produce no entry (error case TBD).
+# Unresolved names:  (ref <cps_id>, <name>) == (unresolved <name>)
 #
 # Test format:
 #   test 'name', fn:
@@ -95,3 +95,107 @@ test 'fn application', fn:
   | equals fink":
     (ref 3, a) == (bind 2, a)
     (ref 7, f) == (bind 6, f)
+
+
+---
+unresolved names
+---
+
+test 'unresolved ref', fn:
+  expect cps_name_res fink":
+    x
+  | equals fink":
+    (ref 0, x) == (unresolved x)
+
+test 'mixed resolved and unresolved', fn:
+  expect cps_name_res fink":
+    x = 1
+    y = x
+    z = w
+  | equals fink":
+    (ref 3, x) == (bind 2, x)
+    (ref 5, w) == (unresolved w)
+    (ref 7, z) == (bind 6, z)
+
+test 'unresolved in fn body', fn:
+  expect cps_name_res fink":
+    fn a: b
+  | equals fink":
+    (ref 2, b) == (unresolved b)
+
+
+---
+shadowing
+---
+
+test 'shadow binding', fn:
+  expect cps_name_res fink":
+    x = 1
+    x = 2
+    y = x
+  | equals fink":
+    (ref 5, x) == (bind 4, x)
+    (ref 7, y) == (bind 6, y)
+
+test 'param shadows outer binding', fn:
+  expect cps_name_res fink":
+    a = 1
+    fn a:
+      a
+  | equals fink":
+    (ref 5, a) == (bind 4, a)
+
+test 'inner fn shadows outer binding', fn:
+  expect cps_name_res fink":
+    x = 1
+    fn x: x
+  | equals fink":
+    (ref 5, x) == (bind 4, x)
+
+
+---
+recursion — fn bodies see sibling LetFn names (hoisted),
+LetVal right-hand sides see only prior bindings (sequential).
+---
+
+test 'self recursion', fn:
+  expect cps_name_res fink":
+    f = fn a:
+      f a
+  | equals fink":
+    (ref 2, f) == (bind 9, f)
+    (ref 3, a) == (bind 1, a)
+    (ref 10, f) == (bind 9, f)
+
+test 'mutual recursion', fn:
+  expect cps_name_res fink":
+    f = fn a:
+      g a
+    g = fn b:
+      f b
+  | equals fink":
+    (ref 3, g) == (bind 20, g)
+    (ref 4, a) == (bind 2, a)
+    (ref 13, f) == (bind 10, f)
+    (ref 14, b) == (bind 12, b)
+    (ref 21, g) == (bind 20, g)
+
+test 'val ref to prior fn resolves', fn:
+  expect cps_name_res fink":
+    foo = fn a: a
+    bar = foo
+  | equals fink":
+    (ref 3, a) == (bind 2, a)
+    (ref 7, foo) == (bind 6, foo)
+    (ref 9, bar) == (bind 8, bar)
+
+test 'val forward ref still unresolved even if fn', fn:
+  expect cps_name_res fink":
+    bar = foo
+    foo = fn a: a
+    spam = foo
+  | equals fink":
+    (ref 1, foo) == (unresolved foo)
+    (ref 5, a) == (bind 4, a)
+    (ref 9, foo) == (bind 8, foo)
+    (ref 11, spam) == (bind 10, spam)

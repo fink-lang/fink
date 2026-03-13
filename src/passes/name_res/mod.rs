@@ -139,6 +139,40 @@ fn resolve_callable<'src>(
 // Recursive walk
 // ---------------------------------------------------------------------------
 
+/// Walk the continuation chain, collecting all User bind names.
+/// These are the names that fn bodies at this scope level can see.
+fn collect_scope_names<'src>(
+  expr: &Expr<'src>,
+  scope: &mut Scope<'src>,
+  ctx: &Ctx<'_, 'src>,
+) {
+  use ExprKind::*;
+  match &expr.kind {
+    LetFn { name, body, .. } => {
+      bind_to_scope(scope, name, ctx);
+      collect_scope_names(body, scope, ctx);
+    }
+    LetVal { name, body, .. } => {
+      bind_to_scope(scope, name, ctx);
+      collect_scope_names(body, scope, ctx);
+    }
+    MatchLetVal { name, body, .. } => {
+      bind_to_scope(scope, name, ctx);
+      collect_scope_names(body, scope, ctx);
+    }
+    App { result, body, .. } => {
+      bind_to_scope(scope, result, ctx);
+      collect_scope_names(body, scope, ctx);
+    }
+    Yield { result, body, .. } => {
+      bind_to_scope(scope, result, ctx);
+      collect_scope_names(body, scope, ctx);
+    }
+    // Terminal or branching — stop collecting
+    _ => {}
+  }
+}
+
 fn resolve_expr<'src>(
   expr: &Expr<'src>,
   scope: &Scope<'src>,
@@ -159,15 +193,22 @@ fn resolve_expr<'src>(
     }
 
     LetFn { name, params, fn_body, body, .. } => {
-      // fn_body gets its own scope with only params
-      let mut fn_scope = scope.clone();
+      // Fn bodies see all names at this scope level (hoisted), enabling
+      // self- and mutual recursion. Collect all User bind names from the
+      // entire continuation chain starting here.
+      let mut hoisted = scope.clone();
+      collect_scope_names(expr, &mut hoisted, ctx);
+
+      // fn_body sees hoisted scope + params
+      let mut fn_scope = hoisted.clone();
       for p in params {
         match p {
           Param::Name(b) | Param::Spread(b) => bind_to_scope(&mut fn_scope, b, ctx),
         }
       }
       resolve_expr(fn_body, &fn_scope, ctx, resolves_to);
-      // continuation scope includes the fn name
+
+      // continuation scope: sequential (only names defined so far)
       let mut cont_scope = scope.clone();
       bind_to_scope(&mut cont_scope, name, ctx);
       resolve_expr(body, &cont_scope, ctx, resolves_to);
@@ -332,13 +373,21 @@ fn emit_val<'src>(
   out: &mut Vec<String>,
 ) {
   if let ValKind::Ref(Ref::Name) = &val.kind {
-    if let Some(&Some(bind_id)) = resolves_to.try_get(val.id) {
-      let ref_name = ctx.source_name(val.id).unwrap_or("?");
-      let bind_name = ctx.source_name(bind_id).unwrap_or("?");
-      out.push(format!(
-        "(ref {}, {}) == (bind {}, {})",
-        val.id.0, ref_name, bind_id.0, bind_name
-      ));
+    let ref_name = ctx.source_name(val.id).unwrap_or("?");
+    match resolves_to.try_get(val.id) {
+      Some(&Some(bind_id)) => {
+        let bind_name = ctx.source_name(bind_id).unwrap_or("?");
+        out.push(format!(
+          "(ref {}, {}) == (bind {}, {})",
+          val.id.0, ref_name, bind_id.0, bind_name
+        ));
+      }
+      _ => {
+        out.push(format!(
+          "(ref {}, {}) == (unresolved {})",
+          val.id.0, ref_name, ref_name
+        ));
+      }
     }
   }
 }
