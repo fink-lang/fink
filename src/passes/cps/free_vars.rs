@@ -60,7 +60,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
   fn bind_name(&self, bind: &BindNode) -> Option<&'src str> {
     match bind.kind {
       Bind::User => self.source_name(bind.id),
-      Bind::Gen(_) => None,
+      Bind::Gen => None,
     }
   }
 }
@@ -108,7 +108,7 @@ fn transform_expr<'src>(expr: Expr<'src>, ctx: &Ctx<'_, 'src>) -> Expr<'src> {
             let s = ctx.source_name(n.id)?;
             if s == "_" { None } else { Some(s) }
           }
-          Bind::Gen(_) => None,
+          Bind::Gen => None,
         },
       }).collect();
       let mut seen: HashSet<&str> = HashSet::new();
@@ -365,7 +365,7 @@ fn collect_ref_from_val<'src>(
           }
         }
       }
-      Ref::Gen(_) => {
+      Ref::Gen(_cps_id) => {
         // Gen references — compiler temps, never free.
       }
     }

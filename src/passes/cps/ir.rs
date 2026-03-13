@@ -6,8 +6,9 @@
 //
 // Scope is structural (nesting). Env and state are implicit.
 // Every function has an explicit name (user or synthetic).
-// Ref nodes carry `Ref::Name` (user) or `Ref::Gen(n)` (compiler temp);
-// resolution is a side-table populated by the resolve pass.
+// Ref nodes carry `Ref::Name` (user) or `Ref::Gen(CpsId)` (compiler temp,
+// pointing at the Bind::Gen node); resolution is a side-table populated
+// by the resolve pass.
 
 // ---------------------------------------------------------------------------
 // Node identity
@@ -58,20 +59,21 @@ pub type FreeVar = CpsId;
 
 /// A definition site — introduces a name into scope.
 /// `User` marks a source-level binding; the name is recoverable from the
-/// origin map (CpsId → AstId → AST ident). `Gen` carries a counter.
-/// The formatter renders User via origin lookup, Gen as `·v_N`.
+/// origin map (CpsId → AstId → AST ident). `Gen` marks a compiler-generated
+/// temp; the formatter renders it as `·v_{cps_id}` using the node's own CpsId.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
-  User,      // name from source: recoverable via origin map
-  Gen(u32),  // compiler-generated temp: rendered as ·v_N
+  User,  // name from source: recoverable via origin map
+  Gen,   // compiler-generated temp: rendered as ·v_{cps_id}
 }
 
-/// A use site — references a binding. Mirrors `Bind`: `Name` for user names
-/// (identity from origin map), `Gen` for compiler temps.
+/// A use site — references a binding. `Name` for user names (identity from
+/// origin map), `Gen(CpsId)` for compiler temps (carries the CpsId of the
+/// `Bind::Gen` node it refers to — the only link, since Gen has no name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
-  Name,      // user ref: name recoverable from origin map
-  Gen(u32),  // compiler-generated temp: rendered as ·v_N
+  Name,          // user ref: name recoverable from origin map
+  Gen(CpsId),    // compiler-generated temp: refers to Bind::Gen at the given CpsId
 }
 
 impl Ref {
@@ -79,7 +81,7 @@ impl Ref {
   pub fn to_bind(self) -> Bind {
     match self {
       Ref::Name => Bind::User,
-      Ref::Gen(n) => Bind::Gen(n),
+      Ref::Gen(_) => Bind::Gen,
     }
   }
 }

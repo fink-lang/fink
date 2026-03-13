@@ -41,11 +41,11 @@ See also: `memory/project_property_graphs.md` for the full design rationale.
 ```
 Bind                          -- a definition site (introduces a name into scope)
   User                        -- from source; name recoverable via origin map
-  Gen(u32)                    -- compiler-generated temp: rendered as ·v_N
+  Gen                         -- compiler-generated temp: rendered as ·v_{cps_id}
 
 Ref                           -- a use site (references a binding)
   Name                        -- user ref; name recoverable via origin map
-  Gen(u32)                    -- compiler-generated temp: rendered as ·v_N
+  Gen(CpsId)                  -- compiler-generated temp: carries CpsId of the Bind::Gen it refers to
 
 BindNode = Node<Bind>         -- definition site with its own CpsId
 
@@ -267,7 +267,7 @@ The pretty-printer synthesizes these from the structural IR:
 
 **Variable sigils:**
 - User vars — plain: `foo`, `bar`
-- Compiler temps — `·v_N`
+- Compiler temps — `·v_{cps_id}`
 - Match cursors — `·m_N`
 - Continuations — `·ƒ_cont`, `·ƒ_fail`
 - Runtime/injected — `·state`

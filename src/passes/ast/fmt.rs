@@ -148,7 +148,7 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
   }
 
   // Multiple trailing fns/complex args → each on its own indented line
-  if plain.is_empty() { out.push(' '); } else { out.push(','); }
+  if !plain.is_empty() { out.push(','); }
   for arg in trailing {
     out.push('\n');
     ind(out, depth + 1);

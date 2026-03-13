@@ -133,21 +133,20 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &v.kind {
     ValKind::Lit(lit) => lit_to_node(lit),
     ValKind::Ref(Ref::Name) => ident(&render_ref_name_ctx(v.id, ctx)),
-    ValKind::Ref(Ref::Gen(_)) => ident(&render_val_name(v, ctx)),
+    ValKind::Ref(Ref::Gen(bind_id)) => ident(&format!("·v_{}", bind_id.0)),
   }
 }
 
 /// Render a Ref val's name using origin map.
-/// For Gen temps: always `·v_N`. For Name: recovers source name from AST.
+/// For Gen temps: renders as `·v_{bind_cps_id}`. For Name: recovers source name from AST.
 fn render_val_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
-  if !matches!(v.kind, ValKind::Ref(Ref::Gen(_))) {
-    if let Some((s, _)) = ctx.source_name(v.id) {
-      return s.to_string();
-    }
-  }
   match &v.kind {
-    ValKind::Ref(Ref::Gen(n)) => format!("·v_{}", n),
-    ValKind::Ref(Ref::Name) => unreachable!("Ref::Name should always have an origin"),
+    ValKind::Ref(Ref::Gen(bind_id)) => format!("·v_{}", bind_id.0),
+    ValKind::Ref(Ref::Name) => {
+      ctx.source_name(v.id)
+        .expect("Ref::Name should always have an origin")
+        .0.to_string()
+    }
     ValKind::Lit(_) => String::new(),
   }
 }
@@ -184,7 +183,7 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 //
 // Output name conventions:
 //   user names          → plain:  foo, bar
-//   compiler temps      → ·v_0
+//   compiler temps      → ·v_{cps_id}
 //   builtins            → ·op_plus, ·seq_append, …
 // ---------------------------------------------------------------------------
 
@@ -193,7 +192,7 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 /// For Gen temps: always renders as `·v_N`.
 fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
-    Bind::Gen(n) => format!("·v_{}", n),
+    Bind::Gen => format!("·v_{}", bind.id.0),
     Bind::User => ctx.source_name(bind.id)
       .expect("render_bind_ctx: User bind must have origin")
       .0.to_string(),

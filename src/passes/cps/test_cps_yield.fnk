@@ -8,7 +8,7 @@ yield — CPS lowering tests
 # In CPS:
 #   yield value
 # becomes:
-#   ·yield value, ·state, fn ·v_N, ·state:
+#   ·yield value, ·state, fn ·v_{cps_id}, ·state:
 #     <continuation>
 
 
@@ -17,8 +17,8 @@ test 'yield literal', fn:
     yield 42
 
   | equals fink":
-    ·yield 42, ·state, fn ·v_0, ·state:
-      ·ƒ_cont ·v_0, ·state
+    ·yield 42, ·state, fn ·v_1, ·state:
+      ·ƒ_cont ·v_1, ·state
 
 
 test 'yield ident', fn:
@@ -26,8 +26,8 @@ test 'yield ident', fn:
     yield foo
 
   | equals fink":
-    ·yield foo, ·state, fn ·v_0, ·state:
-      ·ƒ_cont ·v_0, ·state
+    ·yield foo, ·state, fn ·v_1, ·state:
+      ·ƒ_cont ·v_1, ·state
 
 
 test 'yield bound to name', fn:
@@ -35,8 +35,8 @@ test 'yield bound to name', fn:
     result = yield 42
 
   | equals fink":
-    ·yield 42, ·state, fn ·v_0, ·state:
-      ·let ·v_0, fn result:
+    ·yield 42, ·state, fn ·v_1, ·state:
+      ·let ·v_1, fn result:
         ·ƒ_cont result, ·state
 
 
@@ -45,6 +45,6 @@ test 'yield apply result', fn:
     yield foo bar
 
   | equals fink":
-    ·apply foo, bar, ·state, fn ·v_0, ·state:
-      ·yield ·v_0, ·state, fn ·v_1, ·state:
-        ·ƒ_cont ·v_1, ·state
+    ·apply foo, bar, ·state, fn ·v_2, ·state:
+      ·yield ·v_2, ·state, fn ·v_4, ·state:
+        ·ƒ_cont ·v_4, ·state
