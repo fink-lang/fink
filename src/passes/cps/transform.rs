@@ -98,7 +98,7 @@ impl Gen {
 /// `Bind::Gen(n)` → `Ref::Gen(n)`.
 fn ref_val<'src>(g: &mut Gen, bind: Bind, origin: Option<AstId>) -> Val<'src> {
   let kind = match bind {
-    Bind::User => Ref::Local,
+    Bind::User => Ref::Name,
     Bind::Gen(n) => Ref::Gen(n),
   };
   g.val(ValKind::Ref(kind), origin)

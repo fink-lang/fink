@@ -365,8 +365,8 @@ fn collect_ref_from_val<'src>(
           }
         }
       }
-      Ref::Local | Ref::Gen(_) => {
-        // Local/Gen references — already bound in the enclosing fn, never free.
+      Ref::Gen(_) => {
+        // Gen references — compiler temps, never free.
       }
     }
   }

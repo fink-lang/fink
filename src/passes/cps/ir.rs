@@ -69,8 +69,7 @@ pub enum Bind {
 /// (identity from origin map), `Gen` for compiler temps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
-  Name,      // user ref: needs ·load from scope, name recoverable from origin map
-  Local,     // user ref: already bound (continuation param), no ·load needed
+  Name,      // user ref: name recoverable from origin map
   Gen(u32),  // compiler-generated temp: rendered as ·v_N
 }
 
@@ -78,7 +77,7 @@ impl Ref {
   /// Convert a use-site Ref to the corresponding definition-site Bind.
   pub fn to_bind(self) -> Bind {
     match self {
-      Ref::Name | Ref::Local => Bind::User,
+      Ref::Name => Bind::User,
       Ref::Gen(n) => Bind::Gen(n),
     }
   }

@@ -133,7 +133,6 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &v.kind {
     ValKind::Lit(lit) => lit_to_node(lit),
     ValKind::Ref(Ref::Name) => ident(&render_ref_name_ctx(v.id, ctx)),
-    ValKind::Ref(Ref::Local) => ident(&render_ref_name_ctx(v.id, ctx)),
     ValKind::Ref(Ref::Gen(_)) => ident(&render_val_name(v, ctx)),
   }
 }
@@ -148,7 +147,7 @@ fn render_val_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
   }
   match &v.kind {
     ValKind::Ref(Ref::Gen(n)) => format!("·v_{}", n),
-    ValKind::Ref(Ref::Name | Ref::Local) => unreachable!("Ref::Name/Local should always have an origin"),
+    ValKind::Ref(Ref::Name) => unreachable!("Ref::Name should always have an origin"),
     ValKind::Lit(_) => String::new(),
   }
 }
