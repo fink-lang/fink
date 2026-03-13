@@ -308,16 +308,93 @@ test 'match result binding', fn:
 
 
 ---
-resolution classification — local, captured, recursive, unresolved
-uses cps_resolve helper (new format with classification + scope)
+nested captures
 ---
 
-test 'fn captures from outer scope', fn:
+test 'capture depth 2 — three levels of fn nesting', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn a:
+      fn b:
+        x
+  | equals fink":
+    (ref 7, x) == (captured 2, (bind 2, x)) in scope 0
+
+test 'capture depth 2 with local use too', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn a:
+      y = x
+      fn b:
+        x
+  | equals fink":
+    (ref 5, x) == (captured 1, (bind 2, x)) in scope 0
+    (ref 9, x) == (captured 2, (bind 2, x)) in scope 0
+
+test 'shadow in middle scope breaks capture chain', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn a:
+      x = 2
+      fn b:
+        x
+  | equals fink":
+    (ref 9, x) == (captured 1, (bind 6, x)) in scope 3
+
+test 'capture and local in same fn body', fn:
   expect cps_resolve fink":
     x = 1
     f = fn a:
-      x + a
+      y = a
+      z = x
   | equals fink":
-    (ref 5, x) == (captured 1, (bind 2, x)) in scope 0
-    (ref 6, a) == (local (bind 4, a)) in scope 3
-    (ref 13, f) == (local (bind 12, f)) in scope 0
+    (ref 5, a) == (local (bind 4, a)) in scope 3
+    (ref 7, x) == (captured 1, (bind 2, x)) in scope 0
+    (ref 9, z) == (local (bind 8, z)) in scope 3
+    (ref 17, f) == (local (bind 16, f)) in scope 0
+
+test 'match arm binding used in arm body', fn:
+  expect cps_resolve fink":
+    x = 1
+    match x:
+      a: a
+      b: b + a
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 7, a) == (local (bind 6, a)) in scope 10
+    (ref 13, b) == (local (bind 12, b)) in scope 20
+    (ref 14, a) == unresolved
+
+test 'binding inside match arm body', fn:
+  expect cps_resolve fink":
+    x = 1
+    match x:
+      a:
+        y = a
+        y
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 7, a) == (local (bind 6, a)) in scope 14
+    (ref 9, y) == (local (bind 8, y)) in scope 14
+
+test 'fn in match arm captures outer', fn:
+  expect cps_resolve fink":
+    x = 1
+    match x:
+      a: fn b: a
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 9, a) == (captured 1, (bind 6, a)) in scope 15
+
+test 'spread param resolves locally', fn:
+  expect cps_resolve fink":
+    fn a, ..b: b
+  | equals fink":
+    (ref 3, b) == (local (bind 2, b)) in scope 0
+
+test 'wildcard not in scope', fn:
+  expect cps_resolve fink":
+    _ = 1
+    _
+  | equals fink":
+    (ref 2, ?) == unresolved

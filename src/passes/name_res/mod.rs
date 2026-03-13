@@ -452,11 +452,16 @@ fn resolve_expr<'src>(
     MatchBlock { params, fail, arm_params, arms, result, body } => {
       for v in params { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      // Each arm gets the arm_params in scope
-      for (arm, param) in arms.iter().zip(arm_params.iter()) {
+      // Each arm introduces its own scope, identified by the arm Expr's CpsId.
+      // All arm_params (scrutinee binds) are available in each arm scope.
+      for arm in arms {
+        let arm_scope_id = arm.id;
+        graphs.parent_scope.set(arm_scope_id, Some(current_scope));
         let mut arm_scope = scope.clone();
-        bind_to_scope(&mut arm_scope, param, current_scope, fn_depth, ctx, graphs);
-        resolve_expr(arm, &arm_scope, current_scope, sb, fn_depth, ctx, graphs);
+        for param in arm_params.iter() {
+          bind_to_scope(&mut arm_scope, param, arm_scope_id, fn_depth, ctx, graphs);
+        }
+        resolve_expr(arm, &arm_scope, arm_scope_id, sb, fn_depth, ctx, graphs);
       }
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
