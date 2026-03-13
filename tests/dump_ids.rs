@@ -42,8 +42,7 @@ fn dump_val(v: &fink::passes::cps::ir::Val, depth: usize) {
     use fink::passes::cps::ir::ValKind::*;
     let i = indent(depth);
     match &v.kind {
-        Ident(n) => println!("{i}Val(#{}) Ident({:?})", v.id.0, n),
-        Ref(r) => println!("{i}Val(#{}) Ref({:?})", v.id.0, r.kind),
+        Ref(r) => println!("{i}Val(#{}) Ref({:?})", v.id.0, r),
         Lit(l) => println!("{i}Val(#{}) Lit({:?})", v.id.0, l),
     }
 }

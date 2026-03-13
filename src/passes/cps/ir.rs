@@ -55,22 +55,41 @@ pub struct CpsResult<'src> {
 /// origin map (CpsId → AstId → AST node → ident string).
 pub type FreeVar = CpsId;
 
-/// A binding site — introduces a name into scope.
+/// A definition site — introduces a name into scope.
 /// `User` marks a source-level binding; the name is recoverable from the
 /// origin map (CpsId → AstId → AST ident). `Gen` carries a counter.
 /// The formatter renders User via origin lookup, Gen as `·v_N`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BindName {
+pub enum Bind {
   User,      // name from source: recoverable via origin map
   Gen(u32),  // compiler-generated temp: rendered as ·v_N
+}
+
+/// A use site — references a binding. Mirrors `Bind`: `Name` for user names
+/// (identity from origin map), `Gen` for compiler temps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Ref {
+  Name,      // user ref: needs ·load from scope, name recoverable from origin map
+  Local,     // user ref: already bound (continuation param), no ·load needed
+  Gen(u32),  // compiler-generated temp: rendered as ·v_N
+}
+
+impl Ref {
+  /// Convert a use-site Ref to the corresponding definition-site Bind.
+  pub fn to_bind(self) -> Bind {
+    match self {
+      Ref::Name | Ref::Local => Bind::User,
+      Ref::Gen(n) => Bind::Gen(n),
+    }
+  }
 }
 
 /// A function parameter — either a plain name or a varargs spread (`..rest`).
 /// Only one `Spread` is valid, and only in trailing position; enforced by the transform.
 #[derive(Debug, Clone)]
 pub enum Param {
-  Name(Bind),
-  Spread(Bind),
+  Name(BindNode),
+  Spread(BindNode),
 }
 
 /// A call-site argument — either a plain value or a spread (`..items`).
@@ -80,30 +99,6 @@ pub enum Param {
 pub enum Arg<'src> {
   Val(Val<'src>),
   Spread(Val<'src>),
-}
-
-/// A reference to a binding — how a name is used from scope.
-/// TODO [deprecated]: collapse into just `RefKind` — `resolution` moves to prop graph,
-/// `Ref` becomes unnecessary wrapper.
-#[derive(Debug, Clone)]
-pub struct Ref {
-  pub kind: RefKind,
-  /// TODO [deprecated]: move to `PropGraph<CpsId, Option<Resolution>>`.
-  pub resolution: Option<Resolution>,
-}
-
-/// The variant of a reference — how the name is stored and looked up.
-///
-/// `Name` marks a user-defined reference whose identity is recoverable from
-/// the origin map (CpsId → AstId → AST ident). No string is carried.
-/// `Bind` is a typed scope reference to a `BindName` (avoids origin lookup for Gen temps).
-///
-/// TODO [deprecated]: once `Ref` collapses (resolution moves to prop graph),
-/// inline `RefKind` directly into `ValKind`.
-#[derive(Debug, Clone)]
-pub enum RefKind {
-  Name,            // user ref: name recoverable from origin map
-  Bind(BindName),  // typed scope reference (Gen temps, etc.)
 }
 
 /// Whether a range pattern is exclusive (`..`) or inclusive (`...`).
@@ -218,7 +213,7 @@ pub enum Resolution {
 // ---------------------------------------------------------------------------
 
 /// A CPS IR node — generic over its kind type.
-/// All three node types — `Val`, `Bind`, and `Expr` — share the same `CpsId`
+/// All three node types — `Val`, `BindNode`, and `Expr` — share the same `CpsId`
 /// space, so every node is addressable by property graphs.
 /// The kind parameter enforces at compile time which positions hold which nodes.
 #[derive(Debug, Clone)]
@@ -234,19 +229,13 @@ pub struct Node<K> {
 /// An already-computed value — a literal, a local binding reference, or a scope key.
 pub type Val<'src> = Node<ValKind<'src>>;
 
-/// A definition site — introduces a name into scope.
+/// A definition-site node — introduces a name into scope.
 /// Has its own `CpsId` so name resolution can point directly at the binding.
-pub type Bind = Node<BindName>;
+pub type BindNode = Node<Bind>;
 
-/// TODO: once `Ref` collapses and `RefKind` inlines here, consider merging
-/// `Ident(BindName)` and the former `RefKind::Bind(BindName)` — both reference
-/// a `BindName`, and the distinction (direct use vs scope load) is a
-/// runtime/codegen concern, not semantic. The resolve pass could classify
-/// everything as just a name, with the prop graph recording how it resolves.
 #[derive(Debug, Clone)]
 pub enum ValKind<'src> {
-  Ident(BindName),    // a locally bound name (param or let-binding)
-  Ref(Ref),           // a reference to a binding (user name or operator)
+  Ref(Ref),           // a reference to a binding (user name or compiler temp)
   Lit(Lit<'src>),     // a literal value
 }
 
@@ -272,7 +261,7 @@ pub type Expr<'src> = Node<ExprKind<'src>>;
 pub enum ExprKind<'src> {
   /// Bind a value to a name; visible in body.
   LetVal {
-    name: Bind,
+    name: BindNode,
     val: Box<Val<'src>>,
     body: Box<Expr<'src>>,
   },
@@ -283,7 +272,7 @@ pub enum ExprKind<'src> {
   /// Contains CpsIds of Ref nodes at capture sites — names recoverable from origin map.
   /// In first-encounter order. Used by cps_fmt to emit `{..·scope, name, …}`.
   LetFn {
-    name: Bind,
+    name: BindNode,
     params: Vec<Param>,
     /// TODO [deprecated]: remove once resolve pass exists — free vars are derivable
     /// from `Resolution::Captured` entries in the prop graph.
@@ -304,7 +293,7 @@ pub enum ExprKind<'src> {
   App {
     func: Callable<'src>,
     args: Vec<Arg<'src>>,
-    result: Bind,
+    result: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -324,7 +313,7 @@ pub enum ExprKind<'src> {
   /// Parallel to LetVal but with an explicit fail cont (for structural uniformity).
   /// Emitted for bare-ident pattern positions: `x = foo` → MatchLetVal(foo, name=x, body).
   MatchLetVal {
-    name: Bind,
+    name: BindNode,
     val: Box<Val<'src>>,
     fail: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
@@ -337,7 +326,7 @@ pub enum ExprKind<'src> {
     func: Callable<'src>,
     args: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
-    result: Bind,
+    result: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -379,7 +368,7 @@ pub enum ExprKind<'src> {
     cursor: u32,
     next_cursor: u32,
     fail: Box<Expr<'src>>,
-    elem: Bind,
+    elem: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -390,7 +379,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    result: Bind,
+    result: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -410,7 +399,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    result: Bind,
+    result: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -434,7 +423,7 @@ pub enum ExprKind<'src> {
     next_cursor: u32,
     field: &'src str,
     fail: Box<Expr<'src>>,
-    elem: Bind,
+    elem: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -447,9 +436,9 @@ pub enum ExprKind<'src> {
   MatchBlock {
     params: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
-    arm_params: Vec<Bind>,
+    arm_params: Vec<BindNode>,
     arms: Vec<Expr<'src>>,
-    result: Bind,
+    result: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -463,7 +452,7 @@ pub enum ExprKind<'src> {
   /// every continuation reachable from a Yield is "suspendable."
   Yield {
     value: Box<Val<'src>>,
-    result: Bind,
+    result: BindNode,
     body: Box<Expr<'src>>,
   },
 
@@ -484,7 +473,7 @@ pub enum ExprKind<'src> {
 /// A single named function binding in a `LetRec` group.
 #[derive(Debug, Clone)]
 pub struct Binding<'src> {
-  pub name: Bind,
+  pub name: BindNode,
   pub params: Vec<Param>,
   pub fn_body: Box<Expr<'src>>,
 }

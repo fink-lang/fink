@@ -33,7 +33,7 @@
 use std::collections::HashSet;
 use crate::ast::{AstId, Node as AstNode, NodeKind};
 use crate::propgraph::PropGraph;
-use super::ir::{Arg, BindName, Callable, CpsId, Expr, ExprKind, FreeVar, Param, Val, ValKind, RefKind};
+use super::ir::{Arg, Bind, BindNode, Callable, CpsId, Expr, ExprKind, FreeVar, Param, Ref, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Origin-based name lookup context
@@ -57,10 +57,10 @@ impl<'a, 'src> Ctx<'a, 'src> {
   }
 
   /// Recover the source name for a Bind node.
-  fn bind_name(&self, bind: &super::ir::Bind) -> Option<&'src str> {
+  fn bind_name(&self, bind: &BindNode) -> Option<&'src str> {
     match bind.kind {
-      BindName::User => self.source_name(bind.id),
-      BindName::Gen(_) => None,
+      Bind::User => self.source_name(bind.id),
+      Bind::Gen(_) => None,
     }
   }
 }
@@ -104,11 +104,11 @@ fn transform_expr<'src>(expr: Expr<'src>, ctx: &Ctx<'_, 'src>) -> Expr<'src> {
       // Compute free vars for this fn.
       let bound: HashSet<&str> = params.iter().filter_map(|p| match p {
         Param::Name(n) | Param::Spread(n) => match n.kind {
-          BindName::User => {
+          Bind::User => {
             let s = ctx.source_name(n.id)?;
             if s == "_" { None } else { Some(s) }
           }
-          BindName::Gen(_) => None,
+          Bind::Gen(_) => None,
         },
       }).collect();
       let mut seen: HashSet<&str> = HashSet::new();
@@ -357,16 +357,16 @@ fn collect_ref_from_val<'src>(
   ctx: &Ctx<'_, 'src>,
 ) {
   if let ValKind::Ref(ref_) = &val.kind {
-    match &ref_.kind {
-      RefKind::Name => {
+    match ref_ {
+      Ref::Name => {
         if let Some(n) = ctx.source_name(val.id) {
           if n != "_" && !bound.contains(n) && seen.insert(n) {
             out.push(val.id);
           }
         }
       }
-      RefKind::Bind(_) => {
-        // Gen param references — always bound in the enclosing fn, never free.
+      Ref::Local | Ref::Gen(_) => {
+        // Local/Gen references — already bound in the enclosing fn, never free.
       }
     }
   }
