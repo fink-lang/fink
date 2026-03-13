@@ -372,8 +372,8 @@ fn collect_ref_from_val<'src>(
   }
 }
 
-/// Collect free-variable references from a `Callable`. `Op` variants have no
-/// runtime references; only `Val` arms can introduce free vars.
+/// Collect free-variable references from a `Callable`. `BuiltIn` variants have
+/// no runtime references; only `Val` arms can introduce free vars.
 fn collect_ref_from_callable<'src>(
   callable: &Callable<'src>,
   bound: &HashSet<&'src str>,

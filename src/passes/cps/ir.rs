@@ -120,12 +120,8 @@ pub enum RangeKind {
 /// A compiler-known operation — resolved statically, not by scope lookup.
 /// Covers source operators, data construction, and string formatting.
 /// No runtime value — only valid in the func position of App/MatchApp/MatchIf.
-///
-/// NOTE: Consider renaming `Op` → `BuiltIn` — these aren't just operators,
-/// they include data construction (SeqAppend, RecPut) and string formatting.
-/// `BuiltIn` better conveys "compiler-known callable with a fixed protocol".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Op {
+pub enum BuiltIn {
   // Arithmetic
   Add, Sub, Mul, Div, IntDiv, Mod, IntMod, DivMod, Pow,
   // Comparison
@@ -144,61 +140,62 @@ pub enum Op {
   StrFmt,
 }
 
-impl Op {
-  /// Map a source operator string to its `Op` variant.
-  /// Returns `None` for unknown operators (user-defined functions).
-  pub fn from_str(s: &str) -> Option<Op> {
+impl BuiltIn {
+  /// Map a source operator string to its `BuiltIn` variant.
+  /// Panics on unknown operators — every operator the parser emits must be
+  /// covered here. Error recovery can be added later if needed.
+  pub fn from_str(s: &str) -> BuiltIn {
     match s {
       // Arithmetic
-      "+"   => Some(Op::Add),
-      "-"   => Some(Op::Sub),
-      "*"   => Some(Op::Mul),
-      "/"   => Some(Op::Div),
-      "//"  => Some(Op::IntDiv),
-      "%"   => Some(Op::Mod),
-      "%%"  => Some(Op::IntMod),
-      "/%"  => Some(Op::DivMod),
-      "**"  => Some(Op::Pow),
+      "+"   => BuiltIn::Add,
+      "-"   => BuiltIn::Sub,
+      "*"   => BuiltIn::Mul,
+      "/"   => BuiltIn::Div,
+      "//"  => BuiltIn::IntDiv,
+      "%"   => BuiltIn::Mod,
+      "%%"  => BuiltIn::IntMod,
+      "/%"  => BuiltIn::DivMod,
+      "**"  => BuiltIn::Pow,
       // Comparison
-      "=="  => Some(Op::Eq),
-      "!="  => Some(Op::Neq),
-      "<"   => Some(Op::Lt),
-      "<="  => Some(Op::Lte),
-      ">"   => Some(Op::Gt),
-      ">="  => Some(Op::Gte),
-      "><"  => Some(Op::Cmp),
+      "=="  => BuiltIn::Eq,
+      "!="  => BuiltIn::Neq,
+      "<"   => BuiltIn::Lt,
+      "<="  => BuiltIn::Lte,
+      ">"   => BuiltIn::Gt,
+      ">="  => BuiltIn::Gte,
+      "><"  => BuiltIn::Cmp,
       // Logical
-      "and" => Some(Op::And),
-      "or"  => Some(Op::Or),
-      "xor" => Some(Op::Xor),
-      "not" => Some(Op::Not),
+      "and" => BuiltIn::And,
+      "or"  => BuiltIn::Or,
+      "xor" => BuiltIn::Xor,
+      "not" => BuiltIn::Not,
       // Bitwise
-      "&"   => Some(Op::BitAnd),
-      "^"   => Some(Op::BitXor),
-      "<<"  => Some(Op::Shl),
-      ">>"  => Some(Op::Shr),
-      "<<<" => Some(Op::RotL),
-      ">>>" => Some(Op::RotR),
-      "~"   => Some(Op::BitNot),
+      "&"   => BuiltIn::BitAnd,
+      "^"   => BuiltIn::BitXor,
+      "<<"  => BuiltIn::Shl,
+      ">>"  => BuiltIn::Shr,
+      "<<<" => BuiltIn::RotL,
+      ">>>" => BuiltIn::RotR,
+      "~"   => BuiltIn::BitNot,
       // Range
-      ".."  => Some(Op::Range),
-      "..." => Some(Op::RangeIncl),
-      "in"  => Some(Op::In),
-      "not in" => Some(Op::NotIn),
+      ".."  => BuiltIn::Range,
+      "..." => BuiltIn::RangeIncl,
+      "in"  => BuiltIn::In,
+      "not in" => BuiltIn::NotIn,
       // Member access
-      "."   => Some(Op::Get),
-      _     => None,
+      "."   => BuiltIn::Get,
+      _     => panic!("BuiltIn::from_str: unknown operator {:?}", s),
     }
   }
 }
 
-/// What an App/MatchApp/MatchIf calls — either a runtime value or a known op.
-/// `Op` has no CpsId — it's a compile-time tag, not an IR node. The enclosing
-/// `App` node's CpsId carries the AST origin for the operation.
+/// What an App/MatchApp/MatchIf calls — either a runtime value or a built-in.
+/// `BuiltIn` has no CpsId — it's a compile-time tag, not an IR node. The
+/// enclosing `App` node's CpsId carries the AST origin for the operation.
 #[derive(Debug, Clone)]
 pub enum Callable<'src> {
   Val(Val<'src>),
-  Op(Op),
+  BuiltIn(BuiltIn),
 }
 
 

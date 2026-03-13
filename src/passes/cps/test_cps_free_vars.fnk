@@ -7,7 +7,7 @@ cps_c IR — free variable analysis tests
 # Convention:
 #   plain `·scope` when fn captures nothing from outer scope
 #   `{..·scope, x}` — captures listed in ·load-encounter order
-#     (user names plain; params excluded; ops are Callable::Op, not captures)
+#     (user names plain; params excluded; ops are Callable::BuiltIn, not captures)
 #
 # Analysis stops at nested ·closure boundaries (direct captures only).
 # Params are excluded (they arrive as arguments, not from scope).

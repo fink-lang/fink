@@ -10,7 +10,7 @@
 use crate::ast::{self, AstId, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
 use crate::propgraph::PropGraph;
-use super::ir::{Arg, Bind, BindName, Callable, CpsId, Expr, ExprKind, FreeVar, Op, RefKind, Lit, Param, Val, ValKind};
+use super::ir::{Arg, Bind, BindName, BuiltIn, Callable, CpsId, Expr, ExprKind, FreeVar, RefKind, Lit, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Formatter context — carries the prop graphs needed for origin lookups
@@ -401,17 +401,17 @@ fn sigil_op(op: &str) -> String {
   format!("·op_{}", suffix)
 }
 
-/// Emit a synthetic `·load` wrapping for a `Callable::Op`.
+/// Emit a synthetic `·load` wrapping for a `Callable::BuiltIn`.
 /// Operators: `·load ·scope, ·op'+', fn ·op_plus, ·scope: body`
 /// Prims: `·load ·scope, ·id'seq_append', fn ·seq_append, ·scope: body`
 ///
 /// TODO: Remove synthetic ·load emission once downstream consumers (codegen)
-/// handle Callable::Op directly. Ops are compile-time known — they don't need
-/// runtime scope lookup. The ·load wrapping exists only for formatter output
-/// compatibility with the current test expectations.
-fn emit_op_load(op: &Op, body_node: Node<'static>) -> Node<'static> {
-  let local = render_op(op);
-  let key_node = match op_source_sym(op) {
+/// handle Callable::BuiltIn directly. BuiltIns are compile-time known — they
+/// don't need runtime scope lookup. The ·load wrapping exists only for
+/// formatter output compatibility with the current test expectations.
+fn emit_builtin_load(op: &BuiltIn, body_node: Node<'static>) -> Node<'static> {
+  let local = render_builtin(op);
+  let key_node = match builtin_source_sym(op) {
     Some(sym) => op_tag(sym),
     None      => id_tag(&local.strip_prefix('·').unwrap_or(&local)),
   };
@@ -422,75 +422,75 @@ fn emit_op_load(op: &Op, body_node: Node<'static>) -> Node<'static> {
   ])
 }
 
-/// The source symbol for an operator `Op`, or `None` for prims.
-fn op_source_sym(op: &Op) -> Option<&'static str> {
+/// The source symbol for an operator `BuiltIn`, or `None` for prims.
+fn builtin_source_sym(op: &BuiltIn) -> Option<&'static str> {
   match op {
-    Op::Add => Some("+"), Op::Sub => Some("-"), Op::Mul => Some("*"),
-    Op::Div => Some("/"), Op::IntDiv => Some("//"), Op::Mod => Some("%"),
-    Op::IntMod => Some("%%"), Op::DivMod => Some("/%"), Op::Pow => Some("**"),
-    Op::Eq => Some("=="), Op::Neq => Some("!="), Op::Lt => Some("<"),
-    Op::Lte => Some("<="), Op::Gt => Some(">"), Op::Gte => Some(">="),
-    Op::Cmp => Some("><"),
-    Op::And => Some("and"), Op::Or => Some("or"), Op::Xor => Some("xor"), Op::Not => Some("not"),
-    Op::BitAnd => Some("&"), Op::BitXor => Some("^"),
-    Op::Shl => Some("<<"), Op::Shr => Some(">>"), Op::RotL => Some("<<<"), Op::RotR => Some(">>>"),
-    Op::BitNot => Some("~"),
-    Op::Range => Some(".."), Op::RangeIncl => Some("..."), Op::In => Some("in"), Op::NotIn => Some("not in"),
-    Op::Get => Some("."),
+    BuiltIn::Add => Some("+"), BuiltIn::Sub => Some("-"), BuiltIn::Mul => Some("*"),
+    BuiltIn::Div => Some("/"), BuiltIn::IntDiv => Some("//"), BuiltIn::Mod => Some("%"),
+    BuiltIn::IntMod => Some("%%"), BuiltIn::DivMod => Some("/%"), BuiltIn::Pow => Some("**"),
+    BuiltIn::Eq => Some("=="), BuiltIn::Neq => Some("!="), BuiltIn::Lt => Some("<"),
+    BuiltIn::Lte => Some("<="), BuiltIn::Gt => Some(">"), BuiltIn::Gte => Some(">="),
+    BuiltIn::Cmp => Some("><"),
+    BuiltIn::And => Some("and"), BuiltIn::Or => Some("or"), BuiltIn::Xor => Some("xor"), BuiltIn::Not => Some("not"),
+    BuiltIn::BitAnd => Some("&"), BuiltIn::BitXor => Some("^"),
+    BuiltIn::Shl => Some("<<"), BuiltIn::Shr => Some(">>"), BuiltIn::RotL => Some("<<<"), BuiltIn::RotR => Some(">>>"),
+    BuiltIn::BitNot => Some("~"),
+    BuiltIn::Range => Some(".."), BuiltIn::RangeIncl => Some("..."), BuiltIn::In => Some("in"), BuiltIn::NotIn => Some("not in"),
+    BuiltIn::Get => Some("."),
     // Prims have no source symbol
-    Op::SeqAppend | Op::SeqConcat | Op::RecPut | Op::RecMerge | Op::StrFmt => None,
+    BuiltIn::SeqAppend | BuiltIn::SeqConcat | BuiltIn::RecPut | BuiltIn::RecMerge | BuiltIn::StrFmt => None,
   }
 }
 
-/// Render an `Op` variant to a display name for the formatter.
+/// Render a `BuiltIn` variant to a display name for the formatter.
 /// Operators render as `·op_name`, prims as `·prim_name`.
-fn render_op(op: &Op) -> String {
+fn render_builtin(op: &BuiltIn) -> String {
   match op {
     // Arithmetic
-    Op::Add    => "·op_plus".into(),
-    Op::Sub    => "·op_minus".into(),
-    Op::Mul    => "·op_mul".into(),
-    Op::Div    => "·op_div".into(),
-    Op::IntDiv => "·op_intdiv".into(),
-    Op::Mod    => "·op_rem".into(),
-    Op::IntMod => "·op_intmod".into(),
-    Op::DivMod => "·op_divmod".into(),
-    Op::Pow    => "·op_pow".into(),
+    BuiltIn::Add    => "·op_plus".into(),
+    BuiltIn::Sub    => "·op_minus".into(),
+    BuiltIn::Mul    => "·op_mul".into(),
+    BuiltIn::Div    => "·op_div".into(),
+    BuiltIn::IntDiv => "·op_intdiv".into(),
+    BuiltIn::Mod    => "·op_rem".into(),
+    BuiltIn::IntMod => "·op_intmod".into(),
+    BuiltIn::DivMod => "·op_divmod".into(),
+    BuiltIn::Pow    => "·op_pow".into(),
     // Comparison
-    Op::Eq     => "·op_eq".into(),
-    Op::Neq    => "·op_neq".into(),
-    Op::Lt     => "·op_lt".into(),
-    Op::Lte    => "·op_lte".into(),
-    Op::Gt     => "·op_gt".into(),
-    Op::Gte    => "·op_gte".into(),
-    Op::Cmp    => "·op_cmp".into(),
+    BuiltIn::Eq     => "·op_eq".into(),
+    BuiltIn::Neq    => "·op_neq".into(),
+    BuiltIn::Lt     => "·op_lt".into(),
+    BuiltIn::Lte    => "·op_lte".into(),
+    BuiltIn::Gt     => "·op_gt".into(),
+    BuiltIn::Gte    => "·op_gte".into(),
+    BuiltIn::Cmp    => "·op_cmp".into(),
     // Logical
-    Op::And    => "·op_and".into(),
-    Op::Or     => "·op_or".into(),
-    Op::Xor    => "·op_xor".into(),
-    Op::Not    => "·op_not".into(),
+    BuiltIn::And    => "·op_and".into(),
+    BuiltIn::Or     => "·op_or".into(),
+    BuiltIn::Xor    => "·op_xor".into(),
+    BuiltIn::Not    => "·op_not".into(),
     // Bitwise
-    Op::BitAnd => "·op_bitand".into(),
-    Op::BitXor => "·op_bitxor".into(),
-    Op::Shl    => "·op_shl".into(),
-    Op::Shr    => "·op_shr".into(),
-    Op::RotL   => "·op_rotl".into(),
-    Op::RotR   => "·op_rotr".into(),
-    Op::BitNot => "·op_bitnot".into(),
+    BuiltIn::BitAnd => "·op_bitand".into(),
+    BuiltIn::BitXor => "·op_bitxor".into(),
+    BuiltIn::Shl    => "·op_shl".into(),
+    BuiltIn::Shr    => "·op_shr".into(),
+    BuiltIn::RotL   => "·op_rotl".into(),
+    BuiltIn::RotR   => "·op_rotr".into(),
+    BuiltIn::BitNot => "·op_bitnot".into(),
     // Range
-    Op::Range     => "·op_rngex".into(),
-    Op::RangeIncl => "·op_rngin".into(),
-    Op::In        => "·op_in".into(),
-    Op::NotIn     => "·op_notin".into(),
+    BuiltIn::Range     => "·op_rngex".into(),
+    BuiltIn::RangeIncl => "·op_rngin".into(),
+    BuiltIn::In        => "·op_in".into(),
+    BuiltIn::NotIn     => "·op_notin".into(),
     // Member access
-    Op::Get       => "·op_dot".into(),
+    BuiltIn::Get       => "·op_dot".into(),
     // Data construction
-    Op::SeqAppend => "·seq_append".into(),
-    Op::SeqConcat => "·seq_concat".into(),
-    Op::RecPut    => "·rec_put".into(),
-    Op::RecMerge  => "·rec_merge".into(),
+    BuiltIn::SeqAppend => "·seq_append".into(),
+    BuiltIn::SeqConcat => "·seq_concat".into(),
+    BuiltIn::RecPut    => "·rec_put".into(),
+    BuiltIn::RecMerge  => "·rec_merge".into(),
     // String interpolation
-    Op::StrFmt    => "·str_fmt".into(),
+    BuiltIn::StrFmt    => "·str_fmt".into(),
   }
 }
 
@@ -602,8 +602,8 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
             apply(ident("·apply"), apply_args)
           })
         }
-        Callable::Op(op) => {
-          let op_local = render_op(op);
+        Callable::BuiltIn(op) => {
+          let op_local = render_builtin(op);
           let inner = with_loads(ctx, &arg_vals, |resolved| {
             let mut apply_args: Vec<Node<'static>> = vec![ident(&op_local)];
             apply_args.extend(resolved.into_iter()
@@ -613,7 +613,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
             apply_args.push(result_fn);
             apply(ident("·apply"), apply_args)
           });
-          emit_op_load(op, inner)
+          emit_builtin_load(op, inner)
         }
       }
     }
@@ -659,8 +659,8 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
             apply(ident("·match_apply"), apply_args)
           })
         }
-        Callable::Op(op) => {
-          let op_local = render_op(op);
+        Callable::BuiltIn(op) => {
+          let op_local = render_builtin(op);
           let inner = with_loads(ctx, &arg_vals, |resolved| {
             let mut apply_args = vec![ident(&op_local)];
             apply_args.extend(resolved);
@@ -668,7 +668,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
             apply_args.push(cont);
             apply(ident("·match_apply"), apply_args)
           });
-          emit_op_load(op, inner)
+          emit_builtin_load(op, inner)
         }
       }
     }
@@ -692,8 +692,8 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
             apply(ident("·match_if"), apply_args)
           })
         }
-        Callable::Op(op) => {
-          let op_local = render_op(op);
+        Callable::BuiltIn(op) => {
+          let op_local = render_builtin(op);
           let inner = with_loads(ctx, &arg_vals, |resolved| {
             let mut apply_args = vec![ident(&op_local)];
             apply_args.extend(resolved);
@@ -701,7 +701,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
             apply_args.push(cont);
             apply(ident("·match_if"), apply_args)
           });
-          emit_op_load(op, inner)
+          emit_builtin_load(op, inner)
         }
       }
     }
