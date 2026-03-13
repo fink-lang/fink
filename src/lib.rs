@@ -1,6 +1,7 @@
 pub mod errors;
 pub mod passes;
 pub mod propgraph;
+pub mod sourcemap;
 pub mod strings;
 
 // Re-exports for convenience — short paths for foundational types.

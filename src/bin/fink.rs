@@ -3,11 +3,10 @@ use std::{env, fs, process};
 fn main() {
   let args: Vec<String> = env::args().collect();
 
-  let (switch, path) = match args.as_slice() {
-    [_, path] => (None, path),
-    [_, switch, path] if switch.starts_with('-') => (Some(switch.as_str()), path),
+  let (cmd, path) = match args.as_slice() {
+    [_, cmd, path] => (cmd.as_str(), path),
     _ => {
-      eprintln!("usage: fink [-tokens|-ast] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps> <file>");
       process::exit(1);
     }
   };
@@ -17,24 +16,39 @@ fn main() {
     process::exit(1);
   });
 
-  match switch {
-    Some("-tokens") => {
+  match cmd {
+    "tokens" => {
       println!("{}", fink::lexer::tokenize_debug(&src));
     }
-    Some("-ast") => {
+    "ast" => {
       match fink::parser::parse(&src) {
         Ok(r) => println!("{}", r.root.print()),
         Err(e) => parse_error(&src, e),
       }
     }
-    None => {
+    "fmt" => {
       match fink::parser::parse(&src) {
-        Ok(r) => print!("{}", fink::ast::fmt::fmt(&r.root)),
+        Ok(r) => println!("{}", fink::ast::fmt::fmt(&r.root)),
         Err(e) => parse_error(&src, e),
       }
     }
-    Some(s) => {
-      eprintln!("unknown switch: {s}");
+    "cps" => {
+      match fink::parser::parse(&src) {
+        Ok(r) => {
+          let ast_index = fink::ast::build_index(&r);
+          let cps = fink::passes::cps::transform::lower_expr(&r.root);
+          let ctx = fink::passes::cps::fmt::Ctx {
+            origin: &cps.origin,
+            ast_index: &ast_index,
+          };
+          println!("{}", fink::passes::cps::fmt::fmt_with(&cps.root, &ctx));
+        }
+        Err(e) => parse_error(&src, e),
+      }
+    }
+    _ => {
+      eprintln!("unknown command: {cmd}");
+      eprintln!("usage: fink <tokens|ast|fmt|cps> <file>");
       process::exit(1);
     }
   }
