@@ -199,3 +199,107 @@ test 'val forward ref still unresolved even if fn', fn:
     (ref 5, a) == (bind 4, a)
     (ref 9, foo) == (bind 8, foo)
     (ref 11, spam) == (bind 10, spam)
+
+
+---
+pattern assignments — LHS destructuring
+---
+
+test 'seq destructure', fn:
+  expect cps_name_res fink":
+    [a, b] = [1, 2]
+    a
+  | equals fink":
+    (ref 15, a) == (bind 10, a)
+
+test 'seq destructure uses both bindings', fn:
+  expect cps_name_res fink":
+    [a, b] = [1, 2]
+    c = a
+  | equals fink":
+    (ref 15, a) == (bind 10, a)
+    (ref 17, c) == (bind 16, c)
+
+test 'rec destructure', fn:
+  expect cps_name_res fink":
+    {a} = {a: 1}
+    a
+  | equals fink":
+    (ref 10, a) == (bind 7, a)
+
+test 'rec destructure uses binding', fn:
+  expect cps_name_res fink":
+    {a, b} = {a: 1, b: 2}
+    c = a
+  | equals fink":
+    (ref 17, a) == (bind 11, a)
+    (ref 19, c) == (bind 18, c)
+
+test 'nested seq destructure', fn:
+  expect cps_name_res fink":
+    [a, [b, c]] = [1, [2, 3]]
+    b
+  | equals fink":
+    (ref 27, b) == (bind 21, b)
+
+test 'seq destructure with ref rhs', fn:
+  expect cps_name_res fink":
+    x = [1, 2]
+    [a, b] = x
+    a
+  | equals fink":
+    (ref 9, x) == (bind 8, x)
+    (ref 17, a) == (bind 12, a)
+
+test 'rec destructure with ref rhs', fn:
+  expect cps_name_res fink":
+    x = {a: 1}
+    {a} = x
+    a
+  | equals fink":
+    (ref 7, x) == (bind 6, x)
+    (ref 12, a) == (bind 9, a)
+
+test 'nested seq destructure with ref rhs', fn:
+  expect cps_name_res fink":
+    x = [1, [2, 3]]
+    [a, [b, c]] = x
+    b
+  | equals fink":
+    (ref 15, x) == (bind 14, x)
+    (ref 29, b) == (bind 23, b)
+
+
+---
+match blocks
+---
+
+test 'match with literal arms', fn:
+  expect cps_name_res fink":
+    x = 1
+    match x:
+      1: 'one'
+      2: 'two'
+  | equals fink":
+    (ref 3, x) == (bind 2, x)
+
+test 'match with outer scope ref in arm', fn:
+  expect cps_name_res fink":
+    x = 1
+    y = 2
+    match x:
+      1: y
+      2: 'two'
+  | equals fink":
+    (ref 5, x) == (bind 2, x)
+    (ref 9, y) == (bind 4, y)
+
+test 'match result binding', fn:
+  expect cps_name_res fink":
+    x = 1
+    result = match x:
+      1: 'one'
+      2: 'two'
+  | equals fink":
+    (ref 3, x) == (bind 2, x)
+    (ref 20, result) == (bind 19, result)
