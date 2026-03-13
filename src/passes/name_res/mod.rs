@@ -55,9 +55,6 @@ pub enum Resolution {
 pub struct ResolveResult {
   /// Classified resolution for each Ref::Name node.
   pub resolution: PropGraph<CpsId, Option<Resolution>>,
-  /// Maps each Ref::Name's CpsId → CpsId of the Bind it resolves to.
-  /// Retained for backward compatibility with old test format.
-  pub resolves_to: PropGraph<CpsId, Option<CpsId>>,
   /// Maps each bind's CpsId → CpsId of the scope-introducing node that owns it.
   pub bind_scope: PropGraph<CpsId, Option<CpsId>>,
   /// Maps each scope-introducing node's CpsId → CpsId of its parent scope.
@@ -101,7 +98,6 @@ pub fn resolve<'src>(
   let ctx = Ctx { origin, ast_index };
   let mut graphs = Graphs {
     resolution: PropGraph::with_size(node_count, None),
-    resolves_to: PropGraph::with_size(node_count, None),
     bind_scope: PropGraph::with_size(node_count, None),
     parent_scope: PropGraph::with_size(node_count, None),
   };
@@ -111,7 +107,6 @@ pub fn resolve<'src>(
   resolve_expr(expr, &scope, root_scope, None, 0, &ctx, &mut graphs);
   ResolveResult {
     resolution: graphs.resolution,
-    resolves_to: graphs.resolves_to,
     bind_scope: graphs.bind_scope,
     parent_scope: graphs.parent_scope,
   }
@@ -123,22 +118,20 @@ pub fn resolve<'src>(
 
 struct Graphs {
   resolution: PropGraph<CpsId, Option<Resolution>>,
-  resolves_to: PropGraph<CpsId, Option<CpsId>>,
   bind_scope: PropGraph<CpsId, Option<CpsId>>,
   parent_scope: PropGraph<CpsId, Option<CpsId>>,
 }
 
 // ---------------------------------------------------------------------------
-// Scope — map from source name to (bind CpsId, scope CpsId)
+// Scope — map from source name to bind CpsId + fn_depth
 // ---------------------------------------------------------------------------
 
-/// Each entry: name → (bind_id, scope_id where the bind lives).
+/// Each entry: name → (bind_id, fn_depth at bind site).
 type ScopeMap<'src> = HashMap<&'src str, ScopeEntry>;
 
 #[derive(Clone, Copy)]
 struct ScopeEntry {
   bind_id: CpsId,
-  scope_id: CpsId,
   fn_depth: u32,
 }
 
@@ -154,7 +147,7 @@ fn bind_to_scope<'src>(
   if let Bind::User = bind.kind {
     if let Some(name) = ctx.source_name(bind.id) {
       if name != "_" {
-        scope.insert(name, ScopeEntry { bind_id: bind.id, scope_id, fn_depth });
+        scope.insert(name, ScopeEntry { bind_id: bind.id, fn_depth });
         graphs.bind_scope.set(bind.id, Some(scope_id));
       }
     }
@@ -162,7 +155,7 @@ fn bind_to_scope<'src>(
 }
 
 // ---------------------------------------------------------------------------
-// Resolve a Ref — look up in scope, record in resolves_to
+// Resolve a Ref — look up in scope, record classification
 // ---------------------------------------------------------------------------
 
 /// Classify a ref: compute fn boundary crossings between ref and bind.
@@ -197,7 +190,6 @@ fn resolve_val<'src>(
         if let Some(name) = ctx.source_name(val.id) {
           if let Some(entry) = scope.get(name) {
             let resolution = classify(entry, fn_depth, self_bind);
-            graphs.resolves_to.set(val.id, Some(entry.bind_id));
             graphs.resolution.set(val.id, Some(resolution));
           } else {
             graphs.resolution.set(val.id, Some(Resolution::Unresolved));
@@ -476,357 +468,6 @@ fn resolve_expr<'src>(
 }
 
 // ---------------------------------------------------------------------------
-// Test output formatter — produces `(ref N, name) == (bind M, name)` lines
-// ---------------------------------------------------------------------------
-
-fn fmt_resolutions<'src>(
-  expr: &Expr<'src>,
-  resolves_to: &PropGraph<CpsId, Option<CpsId>>,
-  ctx: &Ctx<'_, 'src>,
-) -> String {
-  let mut lines = Vec::new();
-  collect_resolution_lines(expr, resolves_to, ctx, &mut lines);
-  lines.join("\n")
-}
-
-fn emit_val<'src>(
-  val: &Val<'src>,
-  resolves_to: &PropGraph<CpsId, Option<CpsId>>,
-  ctx: &Ctx<'_, 'src>,
-  out: &mut Vec<String>,
-) {
-  if let ValKind::Ref(Ref::Name) = &val.kind {
-    let ref_name = ctx.source_name(val.id).unwrap_or("?");
-    match resolves_to.try_get(val.id) {
-      Some(&Some(bind_id)) => {
-        let bind_name = ctx.source_name(bind_id).unwrap_or("?");
-        out.push(format!(
-          "(ref {}, {}) == (bind {}, {})",
-          val.id.0, ref_name, bind_id.0, bind_name
-        ));
-      }
-      _ => {
-        out.push(format!(
-          "(ref {}, {}) == (unresolved {})",
-          val.id.0, ref_name, ref_name
-        ));
-      }
-    }
-  }
-}
-
-fn emit_callable<'src>(
-  callable: &Callable<'src>,
-  resolves_to: &PropGraph<CpsId, Option<CpsId>>,
-  ctx: &Ctx<'_, 'src>,
-  out: &mut Vec<String>,
-) {
-  if let Callable::Val(val) = callable {
-    emit_val(val, resolves_to, ctx, out);
-  }
-}
-
-fn collect_resolution_lines<'src>(
-  expr: &Expr<'src>,
-  resolves_to: &PropGraph<CpsId, Option<CpsId>>,
-  ctx: &Ctx<'_, 'src>,
-  out: &mut Vec<String>,
-) {
-  use ExprKind::*;
-  match &expr.kind {
-    Ret(val) => { emit_val(val, resolves_to, ctx, out); }
-
-    LetVal { val, body, .. } => {
-      emit_val(val, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-
-    LetFn { fn_body, body, .. } => {
-      collect_resolution_lines(fn_body, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-
-    LetRec { bindings, body } => {
-      for b in bindings {
-        collect_resolution_lines(&b.fn_body, resolves_to, ctx, out);
-      }
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-
-    App { func, args, body, .. } => {
-      emit_callable(func, resolves_to, ctx, out);
-      for arg in args {
-        match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, resolves_to, ctx, out) }
-      }
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-
-    If { cond, then, else_ } => {
-      emit_val(cond, resolves_to, ctx, out);
-      collect_resolution_lines(then, resolves_to, ctx, out);
-      collect_resolution_lines(else_, resolves_to, ctx, out);
-    }
-
-    Yield { value, body, .. } => {
-      emit_val(value, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-
-    MatchLetVal { val, fail, body, .. } => {
-      emit_val(val, resolves_to, ctx, out);
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchApp { func, args, fail, body, .. } => {
-      emit_callable(func, resolves_to, ctx, out);
-      for v in args { emit_val(v, resolves_to, ctx, out); }
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchIf { func, args, fail, body } => {
-      emit_callable(func, resolves_to, ctx, out);
-      for v in args { emit_val(v, resolves_to, ctx, out); }
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchValue { val, fail, body, .. } => {
-      emit_val(val, resolves_to, ctx, out);
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchSeq { val, fail, body, .. } => {
-      emit_val(val, resolves_to, ctx, out);
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchNext { fail, body, .. } => {
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchDone { fail, body, .. } => {
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchNotDone { fail, body, .. } => {
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchRest { fail, body, .. } => {
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchRec { val, fail, body, .. } => {
-      emit_val(val, resolves_to, ctx, out);
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchField { fail, body, .. } => {
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-    MatchBlock { params, fail, arms, body, .. } => {
-      for v in params { emit_val(v, resolves_to, ctx, out); }
-      collect_resolution_lines(fail, resolves_to, ctx, out);
-      for arm in arms {
-        collect_resolution_lines(arm, resolves_to, ctx, out);
-      }
-      collect_resolution_lines(body, resolves_to, ctx, out);
-    }
-
-    Panic | FailCont => {}
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Classified test output formatter
-// Produces: `(ref N, name) == (local (bind M, name)) in scope S` lines
-// ---------------------------------------------------------------------------
-
-fn fmt_classified<'src>(
-  expr: &Expr<'src>,
-  result: &ResolveResult,
-  ctx: &Ctx<'_, 'src>,
-) -> String {
-  let mut lines = Vec::new();
-  collect_classified_lines(expr, result, ctx, &mut lines);
-  lines.join("\n")
-}
-
-fn emit_classified_val<'src>(
-  val: &Val<'src>,
-  result: &ResolveResult,
-  ctx: &Ctx<'_, 'src>,
-  out: &mut Vec<String>,
-) {
-  if let ValKind::Ref(Ref::Name) = &val.kind {
-    let ref_name = ctx.source_name(val.id).unwrap_or("?");
-    match result.resolution.try_get(val.id) {
-      Some(Some(Resolution::Local(bind_id))) => {
-        let bind_name = ctx.source_name(*bind_id).unwrap_or("?");
-        let scope = result.bind_scope.try_get(*bind_id)
-          .and_then(|s| *s)
-          .map(|s| s.0)
-          .unwrap_or(0);
-        out.push(format!(
-          "(ref {}, {}) == (local (bind {}, {})) in scope {}",
-          val.id.0, ref_name, bind_id.0, bind_name, scope
-        ));
-      }
-      Some(Some(Resolution::Captured { bind, depth })) => {
-        let bind_name = ctx.source_name(*bind).unwrap_or("?");
-        let scope = result.bind_scope.try_get(*bind)
-          .and_then(|s| *s)
-          .map(|s| s.0)
-          .unwrap_or(0);
-        out.push(format!(
-          "(ref {}, {}) == (captured {}, (bind {}, {})) in scope {}",
-          val.id.0, ref_name, depth, bind.0, bind_name, scope
-        ));
-      }
-      Some(Some(Resolution::Recursive(bind_id))) => {
-        let bind_name = ctx.source_name(*bind_id).unwrap_or("?");
-        let scope = result.bind_scope.try_get(*bind_id)
-          .and_then(|s| *s)
-          .map(|s| s.0)
-          .unwrap_or(0);
-        out.push(format!(
-          "(ref {}, {}) == (recursive (bind {}, {})) in scope {}",
-          val.id.0, ref_name, bind_id.0, bind_name, scope
-        ));
-      }
-      Some(Some(Resolution::Unresolved)) | Some(None) | None => {
-        out.push(format!(
-          "(ref {}, {}) == unresolved",
-          val.id.0, ref_name
-        ));
-      }
-    }
-  }
-}
-
-fn emit_classified_callable<'src>(
-  callable: &Callable<'src>,
-  result: &ResolveResult,
-  ctx: &Ctx<'_, 'src>,
-  out: &mut Vec<String>,
-) {
-  if let Callable::Val(val) = callable {
-    emit_classified_val(val, result, ctx, out);
-  }
-}
-
-fn collect_classified_lines<'src>(
-  expr: &Expr<'src>,
-  result: &ResolveResult,
-  ctx: &Ctx<'_, 'src>,
-  out: &mut Vec<String>,
-) {
-  use ExprKind::*;
-  match &expr.kind {
-    Ret(val) => { emit_classified_val(val, result, ctx, out); }
-
-    LetVal { val, body, .. } => {
-      emit_classified_val(val, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-
-    LetFn { fn_body, body, .. } => {
-      collect_classified_lines(fn_body, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-
-    LetRec { bindings, body } => {
-      for b in bindings {
-        collect_classified_lines(&b.fn_body, result, ctx, out);
-      }
-      collect_classified_lines(body, result, ctx, out);
-    }
-
-    App { func, args, body, .. } => {
-      emit_classified_callable(func, result, ctx, out);
-      for arg in args {
-        match arg { Arg::Val(v) | Arg::Spread(v) => emit_classified_val(v, result, ctx, out) }
-      }
-      collect_classified_lines(body, result, ctx, out);
-    }
-
-    If { cond, then, else_ } => {
-      emit_classified_val(cond, result, ctx, out);
-      collect_classified_lines(then, result, ctx, out);
-      collect_classified_lines(else_, result, ctx, out);
-    }
-
-    Yield { value, body, .. } => {
-      emit_classified_val(value, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-
-    MatchLetVal { val, fail, body, .. } => {
-      emit_classified_val(val, result, ctx, out);
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchApp { func, args, fail, body, .. } => {
-      emit_classified_callable(func, result, ctx, out);
-      for v in args { emit_classified_val(v, result, ctx, out); }
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchIf { func, args, fail, body } => {
-      emit_classified_callable(func, result, ctx, out);
-      for v in args { emit_classified_val(v, result, ctx, out); }
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchValue { val, fail, body, .. } => {
-      emit_classified_val(val, result, ctx, out);
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchSeq { val, fail, body, .. } => {
-      emit_classified_val(val, result, ctx, out);
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchNext { fail, body, .. } => {
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchDone { fail, body, .. } => {
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchNotDone { fail, body, .. } => {
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchRest { fail, body, .. } => {
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchRec { val, fail, body, .. } => {
-      emit_classified_val(val, result, ctx, out);
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchField { fail, body, .. } => {
-      collect_classified_lines(fail, result, ctx, out);
-      collect_classified_lines(body, result, ctx, out);
-    }
-    MatchBlock { params, fail, arms, body, .. } => {
-      for v in params { emit_classified_val(v, result, ctx, out); }
-      collect_classified_lines(fail, result, ctx, out);
-      for arm in arms {
-        collect_classified_lines(arm, result, ctx, out);
-      }
-      collect_classified_lines(body, result, ctx, out);
-    }
-
-    Panic | FailCont => {}
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -837,6 +478,195 @@ mod tests {
   use crate::passes::cps::transform::lower_expr;
   use super::*;
 
+  // -------------------------------------------------------------------------
+  // Test output formatter — classified resolution
+  // Produces: `(ref N, name) == (local (bind M, name)) in scope S` lines
+  // -------------------------------------------------------------------------
+
+  fn fmt_classified<'src>(
+    expr: &Expr<'src>,
+    result: &ResolveResult,
+    ctx: &Ctx<'_, 'src>,
+  ) -> String {
+    let mut lines = Vec::new();
+    collect_classified_lines(expr, result, ctx, &mut lines);
+    lines.join("\n")
+  }
+
+  fn emit_classified_val<'src>(
+    val: &Val<'src>,
+    result: &ResolveResult,
+    ctx: &Ctx<'_, 'src>,
+    out: &mut Vec<String>,
+  ) {
+    if let ValKind::Ref(Ref::Name) = &val.kind {
+      let ref_name = ctx.source_name(val.id).unwrap_or("?");
+      match result.resolution.try_get(val.id) {
+        Some(Some(Resolution::Local(bind_id))) => {
+          let bind_name = ctx.source_name(*bind_id).unwrap_or("?");
+          let scope = result.bind_scope.try_get(*bind_id)
+            .and_then(|s| *s)
+            .map(|s| s.0)
+            .unwrap_or(0);
+          out.push(format!(
+            "(ref {}, {}) == (local (bind {}, {})) in scope {}",
+            val.id.0, ref_name, bind_id.0, bind_name, scope
+          ));
+        }
+        Some(Some(Resolution::Captured { bind, depth })) => {
+          let bind_name = ctx.source_name(*bind).unwrap_or("?");
+          let scope = result.bind_scope.try_get(*bind)
+            .and_then(|s| *s)
+            .map(|s| s.0)
+            .unwrap_or(0);
+          out.push(format!(
+            "(ref {}, {}) == (captured {}, (bind {}, {})) in scope {}",
+            val.id.0, ref_name, depth, bind.0, bind_name, scope
+          ));
+        }
+        Some(Some(Resolution::Recursive(bind_id))) => {
+          let bind_name = ctx.source_name(*bind_id).unwrap_or("?");
+          let scope = result.bind_scope.try_get(*bind_id)
+            .and_then(|s| *s)
+            .map(|s| s.0)
+            .unwrap_or(0);
+          out.push(format!(
+            "(ref {}, {}) == (recursive (bind {}, {})) in scope {}",
+            val.id.0, ref_name, bind_id.0, bind_name, scope
+          ));
+        }
+        Some(Some(Resolution::Unresolved)) | Some(None) | None => {
+          out.push(format!(
+            "(ref {}, {}) == unresolved",
+            val.id.0, ref_name
+          ));
+        }
+      }
+    }
+  }
+
+  fn emit_classified_callable<'src>(
+    callable: &Callable<'src>,
+    result: &ResolveResult,
+    ctx: &Ctx<'_, 'src>,
+    out: &mut Vec<String>,
+  ) {
+    if let Callable::Val(val) = callable {
+      emit_classified_val(val, result, ctx, out);
+    }
+  }
+
+  fn collect_classified_lines<'src>(
+    expr: &Expr<'src>,
+    result: &ResolveResult,
+    ctx: &Ctx<'_, 'src>,
+    out: &mut Vec<String>,
+  ) {
+    use ExprKind::*;
+    match &expr.kind {
+      Ret(val) => { emit_classified_val(val, result, ctx, out); }
+
+      LetVal { val, body, .. } => {
+        emit_classified_val(val, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+
+      LetFn { fn_body, body, .. } => {
+        collect_classified_lines(fn_body, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+
+      LetRec { bindings, body } => {
+        for b in bindings {
+          collect_classified_lines(&b.fn_body, result, ctx, out);
+        }
+        collect_classified_lines(body, result, ctx, out);
+      }
+
+      App { func, args, body, .. } => {
+        emit_classified_callable(func, result, ctx, out);
+        for arg in args {
+          match arg { Arg::Val(v) | Arg::Spread(v) => emit_classified_val(v, result, ctx, out) }
+        }
+        collect_classified_lines(body, result, ctx, out);
+      }
+
+      If { cond, then, else_ } => {
+        emit_classified_val(cond, result, ctx, out);
+        collect_classified_lines(then, result, ctx, out);
+        collect_classified_lines(else_, result, ctx, out);
+      }
+
+      Yield { value, body, .. } => {
+        emit_classified_val(value, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+
+      MatchLetVal { val, fail, body, .. } => {
+        emit_classified_val(val, result, ctx, out);
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchApp { func, args, fail, body, .. } => {
+        emit_classified_callable(func, result, ctx, out);
+        for v in args { emit_classified_val(v, result, ctx, out); }
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchIf { func, args, fail, body } => {
+        emit_classified_callable(func, result, ctx, out);
+        for v in args { emit_classified_val(v, result, ctx, out); }
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchValue { val, fail, body, .. } => {
+        emit_classified_val(val, result, ctx, out);
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchSeq { val, fail, body, .. } => {
+        emit_classified_val(val, result, ctx, out);
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchNext { fail, body, .. } => {
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchDone { fail, body, .. } => {
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchNotDone { fail, body, .. } => {
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchRest { fail, body, .. } => {
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchRec { val, fail, body, .. } => {
+        emit_classified_val(val, result, ctx, out);
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchField { fail, body, .. } => {
+        collect_classified_lines(fail, result, ctx, out);
+        collect_classified_lines(body, result, ctx, out);
+      }
+      MatchBlock { params, fail, arms, body, .. } => {
+        for v in params { emit_classified_val(v, result, ctx, out); }
+        collect_classified_lines(fail, result, ctx, out);
+        for arm in arms {
+          collect_classified_lines(arm, result, ctx, out);
+        }
+        collect_classified_lines(body, result, ctx, out);
+      }
+
+      Panic | FailCont => {}
+    }
+  }
+
   fn cps_resolve(src: &str) -> String {
     match parse(src) {
       Ok(r) => {
@@ -846,20 +676,6 @@ mod tests {
         let result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
         fmt_classified(&cps.root, &result, &ctx)
-      }
-      Err(e) => format!("ERROR: {}", e.message),
-    }
-  }
-
-  fn cps_name_res(src: &str) -> String {
-    match parse(src) {
-      Ok(r) => {
-        let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
-        let node_count = cps.origin.len();
-        let result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
-        fmt_resolutions(&cps.root, &result.resolves_to, &ctx)
       }
       Err(e) => format!("ERROR: {}", e.message),
     }
