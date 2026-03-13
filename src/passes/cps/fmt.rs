@@ -425,9 +425,14 @@ fn sigil_op(op: &str) -> String {
   format!("·op_{}", suffix)
 }
 
-/// Emit a `·load` wrapping for a `Callable::Op`.
+/// Emit a synthetic `·load` wrapping for a `Callable::Op`.
 /// Operators: `·load ·scope, ·op'+', fn ·op_plus, ·scope: body`
 /// Prims: `·load ·scope, ·id'seq_append', fn ·seq_append, ·scope: body`
+///
+/// TODO: Remove synthetic ·load emission once downstream consumers (codegen)
+/// handle Callable::Op directly. Ops are compile-time known — they don't need
+/// runtime scope lookup. The ·load wrapping exists only for formatter output
+/// compatibility with the current test expectations.
 fn emit_op_load(op: &Op, body_node: Node<'static>) -> Node<'static> {
   let local = render_op(op);
   let key_node = match op_source_sym(op) {

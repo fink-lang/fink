@@ -128,6 +128,10 @@ pub enum RangeKind {
 /// A compiler-known operation — resolved statically, not by scope lookup.
 /// Covers source operators, data construction, and string formatting.
 /// No runtime value — only valid in the func position of App/MatchApp/MatchIf.
+///
+/// NOTE: Consider renaming `Op` → `BuiltIn` — these aren't just operators,
+/// they include data construction (SeqAppend, RecPut) and string formatting.
+/// `BuiltIn` better conveys "compiler-known callable with a fixed protocol".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Op {
   // Arithmetic
