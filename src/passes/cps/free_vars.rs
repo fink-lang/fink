@@ -28,7 +28,7 @@
 // output.
 
 use std::collections::HashSet;
-use super::ir::{Arg, BindName, Expr, ExprKind, FreeVar, RefKind, Name, Param, Val, ValKind};
+use super::ir::{Arg, BindName, Callable, Expr, ExprKind, FreeVar, RefKind, Name, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -206,7 +206,7 @@ fn collect_refs<'src>(
     }
 
     App { func, args, body, .. } => {
-      collect_ref_from_val(func, bound, seen, out);
+      collect_ref_from_callable(func, bound, seen, out);
       for arg in args {
         let v = match arg { Arg::Val(v) | Arg::Spread(v) => v };
         collect_ref_from_val(v, bound, seen, out);
@@ -239,7 +239,7 @@ fn collect_refs<'src>(
       collect_refs(body, &inner, seen, out);
     }
     MatchApp { func, args, result, fail, body } => {
-      collect_ref_from_val(func, bound, seen, out);
+      collect_ref_from_callable(func, bound, seen, out);
       for v in args { collect_ref_from_val(v, bound, seen, out); }
       collect_refs(fail, bound, seen, out);
       let mut inner = bound.clone();
@@ -247,7 +247,7 @@ fn collect_refs<'src>(
       collect_refs(body, &inner, seen, out);
     }
     MatchIf { func, args, fail, body } => {
-      collect_ref_from_val(func, bound, seen, out);
+      collect_ref_from_callable(func, bound, seen, out);
       for v in args { collect_ref_from_val(v, bound, seen, out); }
       collect_refs(fail, bound, seen, out);
       collect_refs(body, bound, seen, out);
@@ -325,6 +325,19 @@ fn collect_ref_from_val<'src>(
         // Gen param references — always bound in the enclosing fn, never free.
       }
     }
+  }
+}
+
+/// Collect free-variable references from a `Callable`. `Op` variants have no
+/// runtime references; only `Val` arms can introduce free vars.
+fn collect_ref_from_callable<'src>(
+  callable: &Callable<'src>,
+  bound: &HashSet<Name<'src>>,
+  seen: &mut HashSet<FreeVar<'src>>,
+  out: &mut Vec<FreeVar<'src>>,
+) {
+  if let Callable::Val(val) = callable {
+    collect_ref_from_val(val, bound, seen, out);
   }
 }
 

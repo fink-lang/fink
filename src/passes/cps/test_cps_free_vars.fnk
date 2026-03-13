@@ -6,8 +6,8 @@ cps_c IR — free variable analysis tests
 #
 # Convention:
 #   plain `·scope` when fn captures nothing from outer scope
-#   `{..·scope, ·op_plus, x}` — captures listed in ·load-encounter order
-#     (ops first if encountered first; user names plain; params excluded)
+#   `{..·scope, x}` — captures listed in ·load-encounter order
+#     (user names plain; params excluded; ops are Callable::Op, not captures)
 #
 # Analysis stops at nested ·closure boundaries (direct captures only).
 # Params are excluded (they arrive as arguments, not from scope).
@@ -32,7 +32,7 @@ test 'free vars — fn with no captures', fn:
       a + b
   | equals fink":
     ·closure ·scope,
-      fn a, b, {..·scope, ·op_plus}, ·state, ·ƒ_cont:
+      fn a, b, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
           ·load ·scope, ·id'a', fn a, ·scope:
             ·load ·scope, ·id'b', fn b, ·scope:
@@ -60,7 +60,7 @@ test 'free vars — closure captures one outer var', fn:
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
-          fn y, {..·scope, ·op_plus, x}, ·state, ·ƒ_cont:
+          fn y, {..·scope, x}, ·state, ·ƒ_cont:
             ·load ·scope, ·op'+', fn ·op_plus, ·scope:
               ·load ·scope, ·id'x', fn x, ·scope:
                 ·load ·scope, ·id'y', fn y, ·scope:
@@ -78,13 +78,13 @@ test 'free vars — closure captures local binding', fn:
         z + y
   | equals fink":
     ·closure ·scope,
-      fn x, {..·scope, ·op_plus}, ·state, ·ƒ_cont:
+      fn x, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
           ·load ·scope, ·id'x', fn x, ·scope:
             ·apply ·op_plus, x, 1, ·state, fn ·v_1, ·state:
               ·match_store ·scope, ·id'z', ·v_1, fn z, ·scope:
                 ·closure ·scope,
-                  fn y, {..·scope, ·op_plus, z}, ·state, ·ƒ_cont:
+                  fn y, {..·scope, z}, ·state, ·ƒ_cont:
                     ·load ·scope, ·op'+', fn ·op_plus, ·scope:
                       ·load ·scope, ·id'z', fn z, ·scope:
                         ·load ·scope, ·id'y', fn y, ·scope:
@@ -103,7 +103,7 @@ test 'free vars — named outer, inner captures param', fn:
     ·closure ·scope,
       fn x, ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
-          fn y, {..·scope, ·op_plus, x}, ·state, ·ƒ_cont:
+          fn y, {..·scope, x}, ·state, ·ƒ_cont:
             ·load ·scope, ·op'+', fn ·op_plus, ·scope:
               ·load ·scope, ·id'x', fn x, ·scope:
                 ·load ·scope, ·id'y', fn y, ·scope:
@@ -123,7 +123,7 @@ test 'free vars — two named fns no captures', fn:
     ·closure ·scope,
       fn ·scope, ·state, ·ƒ_cont:
         ·closure ·scope,
-          fn x, {..·scope, ·op_plus}, ·state, ·ƒ_cont:
+          fn x, ·scope, ·state, ·ƒ_cont:
             ·load ·scope, ·op'+', fn ·op_plus, ·scope:
               ·load ·scope, ·id'x', fn x, ·scope:
                 ·load ·scope, ·id'x', fn x, ·scope:
@@ -132,7 +132,7 @@ test 'free vars — two named fns no captures', fn:
           fn ·v_1, ·chld_scope:
             ·match_store ·scope, ·id'double', ·v_1, fn double, ·scope:
               ·closure ·scope,
-                fn x, {..·scope, ·op_plus}, ·state, ·ƒ_cont:
+                fn x, ·scope, ·state, ·ƒ_cont:
                   ·load ·scope, ·op'+', fn ·op_plus, ·scope:
                     ·load ·scope, ·id'x', fn x, ·scope:
                       ·load ·scope, ·id'x', fn x, ·scope:
@@ -159,7 +159,7 @@ test 'free vars — three levels of nesting', fn:
         ·closure ·scope,
           fn b, ·scope, ·state, ·ƒ_cont:
             ·closure ·scope,
-              fn c, {..·scope, ·op_plus, a, b}, ·state, ·ƒ_cont:
+              fn c, {..·scope, a, b}, ·state, ·ƒ_cont:
                 ·load ·scope, ·op'+', fn ·op_plus, ·scope:
                   ·load ·scope, ·id'a', fn a, ·scope:
                     ·load ·scope, ·id'b', fn b, ·scope:
@@ -217,7 +217,7 @@ test 'free vars — closure inside match arm captures arm binding', fn:
                     ·match_rest ·m_4, ·ƒ_fail, fn ·v_5, ·scope, ·state:
                       ·match_store ·scope, ·id'tail', ·v_5, fn tail, ·scope:
                         ·closure ·scope,
-                          fn x, {..·scope, ·op_plus, head}, ·state, ·ƒ_cont:
+                          fn x, {..·scope, head}, ·state, ·ƒ_cont:
                             ·load ·scope, ·op'+', fn ·op_plus, ·scope:
                               ·load ·scope, ·id'head', fn head, ·scope:
                                 ·load ·scope, ·id'x', fn x, ·scope:
@@ -234,7 +234,7 @@ test 'free vars — range pattern loads operators as free vars', fn:
         0..10: 'low'
   | equals fink":
     ·closure ·scope,
-      fn val, {..·scope, ·op_rngex, ·op_in}, ·state, ·ƒ_cont:
+      fn val, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
           ·match_block val, ·panic, ·state,
             ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -254,7 +254,7 @@ test 'free vars — guard pattern loads operator as free var', fn:
         n > 0: n
   | equals fink":
     ·closure ·scope,
-      fn val, {..·scope, ·op_gt}, ·state, ·ƒ_cont:
+      fn val, ·scope, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
           ·match_block val, ·panic, ·state,
             ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:
@@ -305,7 +305,7 @@ test 'free vars — closure inside rec pattern arm captures field binding', fn:
                 ·match_field ·m_2, 'x', ·ƒ_fail, fn ·v_3, ·m_4, ·scope, ·state:
                   ·match_store ·scope, ·id'x', ·v_3, fn x, ·scope:
                     ·closure ·scope,
-                      fn y, {..·scope, ·op_plus, x}, ·state, ·ƒ_cont:
+                      fn y, {..·scope, x}, ·state, ·ƒ_cont:
                         ·load ·scope, ·op'+', fn ·op_plus, ·scope:
                           ·load ·scope, ·id'x', fn x, ·scope:
                             ·load ·scope, ·id'y', fn y, ·scope:
@@ -322,7 +322,7 @@ test 'free vars — rec pattern arm body captures outer var', fn:
         {x}: x + y
   | equals fink":
     ·closure ·scope,
-      fn val, {..·scope, ·op_plus, y}, ·state, ·ƒ_cont:
+      fn val, {..·scope, y}, ·state, ·ƒ_cont:
         ·load ·scope, ·id'val', fn val, ·scope:
           ·match_block val, ·panic, ·state,
             ·match_branch fn ·v_1, ·scope, ·state, ·ƒ_cont, ·ƒ_fail:

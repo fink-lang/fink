@@ -77,7 +77,10 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
         }
         App { func, args, result, body } => {
             println!("{i}Expr(#{}) App result={:?}", e.id.0, result);
-            dump_val(func, depth+1);
+            match func {
+                fink::passes::cps::ir::Callable::Val(v) => dump_val(v, depth+1),
+                fink::passes::cps::ir::Callable::Op(op) => println!("{}  Op({:?})", i, op),
+            }
             for a in args {
                 match a {
                     fink::passes::cps::ir::Arg::Val(v) => dump_val(v, depth+1),

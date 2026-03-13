@@ -121,6 +121,90 @@ pub enum RangeKind {
   Incl,  // `...` — inclusive upper bound
 }
 
+// ---------------------------------------------------------------------------
+// Compiler-known operations
+// ---------------------------------------------------------------------------
+
+/// A compiler-known operation — resolved statically, not by scope lookup.
+/// Covers source operators, data construction, and string formatting.
+/// No runtime value — only valid in the func position of App/MatchApp/MatchIf.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Op {
+  // Arithmetic
+  Add, Sub, Mul, Div, IntDiv, Mod, IntMod, DivMod, Pow,
+  // Comparison
+  Eq, Neq, Lt, Lte, Gt, Gte, Cmp,
+  // Logical
+  And, Or, Xor, Not,
+  // Bitwise
+  BitAnd, BitXor, Shl, Shr, RotL, RotR, BitNot,
+  // Range
+  Range, RangeIncl, In, NotIn,
+  // Member access
+  Get,
+  // Data construction
+  SeqAppend, SeqConcat, RecPut, RecMerge,
+  // String interpolation
+  StrFmt,
+}
+
+impl Op {
+  /// Map a source operator string to its `Op` variant.
+  /// Returns `None` for unknown operators (user-defined functions).
+  pub fn from_str(s: &str) -> Option<Op> {
+    match s {
+      // Arithmetic
+      "+"   => Some(Op::Add),
+      "-"   => Some(Op::Sub),
+      "*"   => Some(Op::Mul),
+      "/"   => Some(Op::Div),
+      "//"  => Some(Op::IntDiv),
+      "%"   => Some(Op::Mod),
+      "%%"  => Some(Op::IntMod),
+      "/%"  => Some(Op::DivMod),
+      "**"  => Some(Op::Pow),
+      // Comparison
+      "=="  => Some(Op::Eq),
+      "!="  => Some(Op::Neq),
+      "<"   => Some(Op::Lt),
+      "<="  => Some(Op::Lte),
+      ">"   => Some(Op::Gt),
+      ">="  => Some(Op::Gte),
+      "><"  => Some(Op::Cmp),
+      // Logical
+      "and" => Some(Op::And),
+      "or"  => Some(Op::Or),
+      "xor" => Some(Op::Xor),
+      "not" => Some(Op::Not),
+      // Bitwise
+      "&"   => Some(Op::BitAnd),
+      "^"   => Some(Op::BitXor),
+      "<<"  => Some(Op::Shl),
+      ">>"  => Some(Op::Shr),
+      "<<<" => Some(Op::RotL),
+      ">>>" => Some(Op::RotR),
+      "~"   => Some(Op::BitNot),
+      // Range
+      ".."  => Some(Op::Range),
+      "..." => Some(Op::RangeIncl),
+      "in"  => Some(Op::In),
+      "not in" => Some(Op::NotIn),
+      // Member access
+      "."   => Some(Op::Get),
+      _     => None,
+    }
+  }
+}
+
+/// What an App/MatchApp/MatchIf calls — either a runtime value or a known op.
+/// `Op` has no CpsId — it's a compile-time tag, not an IR node. The enclosing
+/// `App` node's CpsId carries the AST origin for the operation.
+#[derive(Debug, Clone)]
+pub enum Callable<'src> {
+  Val(Val<'src>),
+  Op(Op),
+}
+
 
 /// How a name reference resolves — populated by the resolve pass.
 ///
@@ -225,7 +309,7 @@ pub enum ExprKind<'src> {
 
   /// Call func with args; result bound to `result`, visible in body.
   App {
-    func: Box<Val<'src>>,
+    func: Callable<'src>,
     args: Vec<Arg<'src>>,
     result: Bind<'src>,
     body: Box<Expr<'src>>,
@@ -257,7 +341,7 @@ pub enum ExprKind<'src> {
   /// Used for constructor/extractor patterns: `Ok b`, `Some x`.
   /// Parallel to App but with an explicit fail cont.
   MatchApp {
-    func: Box<Val<'src>>,
+    func: Callable<'src>,
     args: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
     result: Bind<'src>,
@@ -268,7 +352,7 @@ pub enum ExprKind<'src> {
   /// Used for guard predicates: `is_even x`, `a > 0`.
   /// Fuses apply + boolean test into one node; no intermediate temp exposed.
   MatchIf {
-    func: Box<Val<'src>>,
+    func: Callable<'src>,
     args: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
     body: Box<Expr<'src>>,

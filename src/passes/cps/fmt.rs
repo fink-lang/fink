@@ -10,7 +10,7 @@
 use crate::ast::{self, AstId, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
 use crate::propgraph::PropGraph;
-use super::ir::{Arg, Bind, BindName, CpsId, Expr, ExprKind, RefKind, Lit, Param, Val, ValKind};
+use super::ir::{Arg, Bind, BindName, Callable, CpsId, Expr, ExprKind, Op, RefKind, Lit, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Formatter context — carries the prop graphs needed for origin lookups
@@ -425,6 +425,94 @@ fn sigil_op(op: &str) -> String {
   format!("·op_{}", suffix)
 }
 
+/// Emit a `·load` wrapping for a `Callable::Op`.
+/// Operators: `·load ·scope, ·op'+', fn ·op_plus, ·scope: body`
+/// Prims: `·load ·scope, ·id'seq_append', fn ·seq_append, ·scope: body`
+fn emit_op_load(op: &Op, body_node: Node<'static>) -> Node<'static> {
+  let local = render_op(op);
+  let key_node = match op_source_sym(op) {
+    Some(sym) => op_tag(sym),
+    None      => id_tag(&local.strip_prefix('·').unwrap_or(&local)),
+  };
+  apply(ident("·load"), vec![
+    ident("·scope"),
+    key_node,
+    scope_cont(&local, body_node),
+  ])
+}
+
+/// The source symbol for an operator `Op`, or `None` for prims.
+fn op_source_sym(op: &Op) -> Option<&'static str> {
+  match op {
+    Op::Add => Some("+"), Op::Sub => Some("-"), Op::Mul => Some("*"),
+    Op::Div => Some("/"), Op::IntDiv => Some("//"), Op::Mod => Some("%"),
+    Op::IntMod => Some("%%"), Op::DivMod => Some("/%"), Op::Pow => Some("**"),
+    Op::Eq => Some("=="), Op::Neq => Some("!="), Op::Lt => Some("<"),
+    Op::Lte => Some("<="), Op::Gt => Some(">"), Op::Gte => Some(">="),
+    Op::Cmp => Some("><"),
+    Op::And => Some("and"), Op::Or => Some("or"), Op::Xor => Some("xor"), Op::Not => Some("not"),
+    Op::BitAnd => Some("&"), Op::BitXor => Some("^"),
+    Op::Shl => Some("<<"), Op::Shr => Some(">>"), Op::RotL => Some("<<<"), Op::RotR => Some(">>>"),
+    Op::BitNot => Some("~"),
+    Op::Range => Some(".."), Op::RangeIncl => Some("..."), Op::In => Some("in"), Op::NotIn => Some("not in"),
+    Op::Get => Some("."),
+    // Prims have no source symbol
+    Op::SeqAppend | Op::SeqConcat | Op::RecPut | Op::RecMerge | Op::StrFmt => None,
+  }
+}
+
+/// Render an `Op` variant to a display name for the formatter.
+/// Operators render as `·op_name`, prims as `·prim_name`.
+fn render_op(op: &Op) -> String {
+  match op {
+    // Arithmetic
+    Op::Add    => "·op_plus".into(),
+    Op::Sub    => "·op_minus".into(),
+    Op::Mul    => "·op_mul".into(),
+    Op::Div    => "·op_div".into(),
+    Op::IntDiv => "·op_intdiv".into(),
+    Op::Mod    => "·op_rem".into(),
+    Op::IntMod => "·op_intmod".into(),
+    Op::DivMod => "·op_divmod".into(),
+    Op::Pow    => "·op_pow".into(),
+    // Comparison
+    Op::Eq     => "·op_eq".into(),
+    Op::Neq    => "·op_neq".into(),
+    Op::Lt     => "·op_lt".into(),
+    Op::Lte    => "·op_lte".into(),
+    Op::Gt     => "·op_gt".into(),
+    Op::Gte    => "·op_gte".into(),
+    Op::Cmp    => "·op_cmp".into(),
+    // Logical
+    Op::And    => "·op_and".into(),
+    Op::Or     => "·op_or".into(),
+    Op::Xor    => "·op_xor".into(),
+    Op::Not    => "·op_not".into(),
+    // Bitwise
+    Op::BitAnd => "·op_bitand".into(),
+    Op::BitXor => "·op_bitxor".into(),
+    Op::Shl    => "·op_shl".into(),
+    Op::Shr    => "·op_shr".into(),
+    Op::RotL   => "·op_rotl".into(),
+    Op::RotR   => "·op_rotr".into(),
+    Op::BitNot => "·op_bitnot".into(),
+    // Range
+    Op::Range     => "·op_rngex".into(),
+    Op::RangeIncl => "·op_rngin".into(),
+    Op::In        => "·op_in".into(),
+    Op::NotIn     => "·op_notin".into(),
+    // Member access
+    Op::Get       => "·op_dot".into(),
+    // Data construction
+    Op::SeqAppend => "·seq_append".into(),
+    Op::SeqConcat => "·seq_concat".into(),
+    Op::RecPut    => "·rec_put".into(),
+    Op::RecMerge  => "·rec_merge".into(),
+    // String interpolation
+    Op::StrFmt    => "·str_fmt".into(),
+  }
+}
+
 pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &expr.kind {
     ExprKind::Yield { value, result, body } => fmt_yield(value, result, body, ctx),
@@ -517,19 +605,36 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let arg_vals: Vec<&Val<'_>> = args.iter().map(|a| match a {
         Arg::Val(v) | Arg::Spread(v) => v,
       }).collect();
-      let all_vals: Vec<&Val<'_>> = std::iter::once(func.as_ref())
-        .chain(arg_vals.iter().copied())
-        .collect();
-      with_loads(ctx, &all_vals, |mut resolved| {
-        let func_node = resolved.remove(0);
-        let mut apply_args: Vec<Node<'static>> = vec![func_node];
-        apply_args.extend(resolved.into_iter()
-          .zip(is_spread.iter())
-          .map(|(n, &spread)| if spread { spread_node(n) } else { n }));
-        apply_args.push(ident("·state"));
-        apply_args.push(result_fn);
-        apply(ident("·apply"), apply_args)
-      })
+      match func {
+        Callable::Val(func_val) => {
+          let all_vals: Vec<&Val<'_>> = std::iter::once(func_val)
+            .chain(arg_vals.iter().copied())
+            .collect();
+          with_loads(ctx, &all_vals, |mut resolved| {
+            let func_node = resolved.remove(0);
+            let mut apply_args: Vec<Node<'static>> = vec![func_node];
+            apply_args.extend(resolved.into_iter()
+              .zip(is_spread.iter())
+              .map(|(n, &spread)| if spread { spread_node(n) } else { n }));
+            apply_args.push(ident("·state"));
+            apply_args.push(result_fn);
+            apply(ident("·apply"), apply_args)
+          })
+        }
+        Callable::Op(op) => {
+          let op_local = render_op(op);
+          let inner = with_loads(ctx, &arg_vals, |resolved| {
+            let mut apply_args: Vec<Node<'static>> = vec![ident(&op_local)];
+            apply_args.extend(resolved.into_iter()
+              .zip(is_spread.iter())
+              .map(|(n, &spread)| if spread { spread_node(n) } else { n }));
+            apply_args.push(ident("·state"));
+            apply_args.push(result_fn);
+            apply(ident("·apply"), apply_args)
+          });
+          emit_op_load(op, inner)
+        }
+      }
     }
 
     ExprKind::If { cond, then, else_ } => {
@@ -561,15 +666,30 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       );
       let fail_node = to_node(fail, ctx);
       let arg_vals: Vec<&Val<'_>> = args.iter().collect();
-      let all_vals: Vec<&Val<'_>> = std::iter::once(func.as_ref()).chain(arg_vals).collect();
-      with_loads(ctx, &all_vals, |mut resolved| {
-        let func_node = resolved.remove(0);
-        let mut apply_args = vec![func_node];
-        apply_args.extend(resolved);
-        apply_args.push(fail_node);
-        apply_args.push(cont);
-        apply(ident("·match_apply"), apply_args)
-      })
+      match func {
+        Callable::Val(func_val) => {
+          let all_vals: Vec<&Val<'_>> = std::iter::once(func_val).chain(arg_vals).collect();
+          with_loads(ctx, &all_vals, |mut resolved| {
+            let func_node = resolved.remove(0);
+            let mut apply_args = vec![func_node];
+            apply_args.extend(resolved);
+            apply_args.push(fail_node);
+            apply_args.push(cont);
+            apply(ident("·match_apply"), apply_args)
+          })
+        }
+        Callable::Op(op) => {
+          let op_local = render_op(op);
+          let inner = with_loads(ctx, &arg_vals, |resolved| {
+            let mut apply_args = vec![ident(&op_local)];
+            apply_args.extend(resolved);
+            apply_args.push(fail_node);
+            apply_args.push(cont);
+            apply(ident("·match_apply"), apply_args)
+          });
+          emit_op_load(op, inner)
+        }
+      }
     }
 
     ExprKind::MatchIf { func, args, fail, body } => {
@@ -579,15 +699,30 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       );
       let fail_node = to_node(fail, ctx);
       let arg_vals: Vec<&Val<'_>> = args.iter().collect();
-      let all_vals: Vec<&Val<'_>> = std::iter::once(func.as_ref()).chain(arg_vals).collect();
-      with_loads(ctx, &all_vals, |mut resolved| {
-        let func_node = resolved.remove(0);
-        let mut apply_args = vec![func_node];
-        apply_args.extend(resolved);
-        apply_args.push(fail_node);
-        apply_args.push(cont);
-        apply(ident("·match_if"), apply_args)
-      })
+      match func {
+        Callable::Val(func_val) => {
+          let all_vals: Vec<&Val<'_>> = std::iter::once(func_val).chain(arg_vals).collect();
+          with_loads(ctx, &all_vals, |mut resolved| {
+            let func_node = resolved.remove(0);
+            let mut apply_args = vec![func_node];
+            apply_args.extend(resolved);
+            apply_args.push(fail_node);
+            apply_args.push(cont);
+            apply(ident("·match_if"), apply_args)
+          })
+        }
+        Callable::Op(op) => {
+          let op_local = render_op(op);
+          let inner = with_loads(ctx, &arg_vals, |resolved| {
+            let mut apply_args = vec![ident(&op_local)];
+            apply_args.extend(resolved);
+            apply_args.push(fail_node);
+            apply_args.push(cont);
+            apply(ident("·match_if"), apply_args)
+          });
+          emit_op_load(op, inner)
+        }
+      }
     }
 
     ExprKind::MatchValue { val, lit, fail, body } => {

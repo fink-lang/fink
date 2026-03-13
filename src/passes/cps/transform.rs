@@ -22,7 +22,7 @@
 use crate::ast::{AstId, CmpPart, Node, NodeKind};
 use crate::propgraph::PropGraph;
 use super::ir::{
-  Arg, Bind, BindName, CpsId, CpsResult, Expr, ExprKind, Ref, RefKind, Lit,
+  Arg, Bind, BindName, Callable, CpsId, CpsResult, Expr, ExprKind, Op, Ref, RefKind, Lit,
   Name, Param, Val, ValKind,
 };
 
@@ -147,7 +147,7 @@ fn app_node<'src>(
   body: Expr<'src>,
   origin: Option<AstId>,
 ) -> Expr<'src> {
-  g.expr(ExprKind::App { func: Box::new(func), args, result, body: Box::new(body) }, origin)
+  g.expr(ExprKind::App { func: Callable::Val(func), args, result, body: Box::new(body) }, origin)
 }
 
 /// Wrap a plain `Val` as an `Arg::Val`.
@@ -401,7 +401,7 @@ fn lower_iife<'src>(
   let fn_name_val = ident_val(g, fn_name.kind, origin);
   let pending = vec![
     Pending::Fn { name: fn_name, params: param_names, fn_body,  origin },
-    Pending::App { func: fn_name_val, args: args_val(vec![]), result,  origin },
+    Pending::App { func: Callable::Val(fn_name_val), args: args_val(vec![]), result,  origin },
   ];
   (ident_val(g, result_kind, origin), pending)
 }
@@ -511,7 +511,7 @@ fn lower_apply<'src>(
   }
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
-  pending.push(Pending::App { func: func_val, args: arg_vals, result,  origin });
+  pending.push(Pending::App { func: Callable::Val(func_val), args: arg_vals, result,  origin });
   (ident_val(g, result_kind, origin), pending)
 }
 
@@ -531,7 +531,7 @@ fn lower_pipe<'src>(g: &mut Gen, stages: &'src [Node<'src>], origin: Option<AstI
     pending.extend(sp);
     let result = g.fresh_result(origin);
     let result_kind = result.kind;
-    pending.push(Pending::App { func: func_val, args: args_val(vec![acc_val]), result,  origin });
+    pending.push(Pending::App { func: Callable::Val(func_val), args: args_val(vec![acc_val]), result,  origin });
     acc_val = ident_val(g, result_kind, origin);
   }
   (acc_val, pending)
@@ -554,10 +554,9 @@ fn lower_infix<'src>(
   let (lv, mut pending) = lower(g, lhs);
   let (rv, rp) = lower(g, rhs);
   pending.extend(rp);
-  let op_fn = key_val_op(g, op, origin);
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
-  pending.push(Pending::App { func: op_fn, args: args_val(vec![lv, rv]), result,  origin });
+  pending.push(Pending::App { func: Callable::Op(Op::from_str(op).unwrap()), args: args_val(vec![lv, rv]), result,  origin });
   (ident_val(g, result_kind, origin), pending)
 }
 
@@ -568,10 +567,9 @@ fn lower_unary<'src>(
   origin: Option<AstId>,
 ) -> Lower<'src> {
   let (val, mut pending) = lower(g, operand);
-  let op_fn = key_val_op(g, op, origin);
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
-  pending.push(Pending::App { func: op_fn, args: args_val(vec![val]), result,  origin });
+  pending.push(Pending::App { func: Callable::Op(Op::from_str(op).unwrap()), args: args_val(vec![val]), result,  origin });
   (ident_val(g, result_kind, origin), pending)
 }
 
@@ -603,20 +601,18 @@ fn lower_chained_cmp<'src>(
   for (i, op) in ops.iter().enumerate() {
     let lv = operands[i].clone();
     let rv = operands[i + 1].clone();
-    let op_fn = key_val_op(g, op, origin);
     let cmp_result = g.fresh_result(origin);
     let cmp_result_kind = cmp_result.kind;
-    pending.push(Pending::App { func: op_fn, args: args_val(vec![lv, rv]), result: cmp_result,  origin });
+    pending.push(Pending::App { func: Callable::Op(Op::from_str(op).unwrap()), args: args_val(vec![lv, rv]), result: cmp_result,  origin });
     cmp_vals.push(ident_val(g, cmp_result_kind, origin));
   }
 
   // And all comparison results together.
   let mut acc = cmp_vals.remove(0);
   for cv in cmp_vals {
-    let and_fn = key_val_op(g, "and", origin);
     let and_result = g.fresh_result(origin);
     let and_result_kind = and_result.kind;
-    pending.push(Pending::App { func: and_fn, args: args_val(vec![acc, cv]), result: and_result,  origin });
+    pending.push(Pending::App { func: Callable::Op(Op::And), args: args_val(vec![acc, cv]), result: and_result,  origin });
     acc = ident_val(g, and_result_kind, origin);
   }
   (acc, pending)
@@ -636,10 +632,9 @@ fn lower_range<'src>(
   let (sv, mut pending) = lower(g, start);
   let (ev, ep) = lower(g, end);
   pending.extend(ep);
-  let range_key = key_val_op(g, op, origin);
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
-  pending.push(Pending::App { func: range_key, args: args_val(vec![sv, ev]), result,  origin });
+  pending.push(Pending::App { func: Callable::Op(Op::from_str(op).unwrap()), args: args_val(vec![sv, ev]), result,  origin });
   (ident_val(g, result_kind, origin), pending)
 }
 
@@ -656,10 +651,9 @@ fn lower_member<'src>(
   let (lv, mut pending) = lower(g, lhs);
   let (rv, rp) = lower(g, rhs);
   pending.extend(rp);
-  let dot_fn = key_val_op(g, ".", origin);
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
-  pending.push(Pending::App { func: dot_fn, args: args_val(vec![lv, rv]), result,  origin });
+  pending.push(Pending::App { func: Callable::Op(Op::Get), args: args_val(vec![lv, rv]), result,  origin });
   (ident_val(g, result_kind, origin), pending)
 }
 
@@ -679,11 +673,10 @@ fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], origin: Option<As
     };
     let (ev, ep) = lower(g, inner);
     pending.extend(ep);
-    let op_prim = if is_spread { "·seq_concat" } else { "·seq_append" };
-    let op_fn = key_val_prim(g, op_prim, origin);
+    let op = if is_spread { Op::SeqConcat } else { Op::SeqAppend };
     let result = g.fresh_result(origin);
     let result_kind = result.kind;
-    pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, ev]), result,  origin });
+    pending.push(Pending::App { func: Callable::Op(op), args: args_val(vec![acc, ev]), result,  origin });
     acc = ident_val(g, result_kind, origin);
   }
   (acc, pending)
@@ -701,10 +694,9 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
       NodeKind::Spread(Some(inner)) => {
         let (sv, sp) = lower(g, inner);
         pending.extend(sp);
-        let op_fn = key_val_prim(g, "·rec_merge", origin);
         let result = g.fresh_result(origin);
         let rk = result.kind;
-        pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, sv]), result,  origin });
+        pending.push(Pending::App { func: Callable::Op(Op::RecMerge), args: args_val(vec![acc, sv]), result,  origin });
         acc = ident_val(g, rk, origin);
       }
       NodeKind::Bind { lhs, rhs } => {
@@ -712,10 +704,9 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
           let key_lit = lit_val(g, Lit::Str(key), Some(field.id));
           let (fv, fp) = lower(g, rhs);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, "·rec_put", origin);
           let result = g.fresh_result(origin);
           let rk = result.kind;
-          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, fv]), result,  origin });
+          pending.push(Pending::App { func: Callable::Op(Op::RecPut), args: args_val(vec![acc, key_lit, fv]), result,  origin });
           acc = ident_val(g, rk, origin);
         } else {
           // Computed key.
@@ -723,10 +714,9 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
           let (fv, fp) = lower(g, rhs);
           pending.extend(kp);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, "·rec_put", origin);
           let result = g.fresh_result(origin);
           let rk = result.kind;
-          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, kv, fv]), result,  origin });
+          pending.push(Pending::App { func: Callable::Op(Op::RecPut), args: args_val(vec![acc, kv, fv]), result,  origin });
           acc = ident_val(g, rk, origin);
         }
       }
@@ -738,20 +728,18 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
           let key_lit = lit_val(g, Lit::Str(key), Some(field.id));
           let (fv, fp) = lower(g, val_node);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, "·rec_put", origin);
           let result = g.fresh_result(origin);
           let rk = result.kind;
-          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, fv]), result,  origin });
+          pending.push(Pending::App { func: Callable::Op(Op::RecPut), args: args_val(vec![acc, key_lit, fv]), result,  origin });
           acc = ident_val(g, rk, origin);
         } else {
           let (kv, kp) = lower(g, key_node);
           let (fv, fp) = lower(g, val_node);
           pending.extend(kp);
           pending.extend(fp);
-          let op_fn = key_val_prim(g, "·rec_put", origin);
           let result = g.fresh_result(origin);
           let rk = result.kind;
-          pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, kv, fv]), result,  origin });
+          pending.push(Pending::App { func: Callable::Op(Op::RecPut), args: args_val(vec![acc, kv, fv]), result,  origin });
           acc = ident_val(g, rk, origin);
         }
       }
@@ -759,19 +747,17 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
         // Shorthand `{foo}` == `{foo: foo}`
         let key_lit = lit_val(g, Lit::Str(name), Some(field.id));
         let id_val = key_val_name(g, name, Some(field.id));
-        let op_fn = key_val_prim(g, "·rec_put", origin);
         let result = g.fresh_result(origin);
         let rk = result.kind;
-        pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, key_lit, id_val]), result,  origin });
+        pending.push(Pending::App { func: Callable::Op(Op::RecPut), args: args_val(vec![acc, key_lit, id_val]), result,  origin });
         acc = ident_val(g, rk, origin);
       }
       _ => {
         let (fv, fp) = lower(g, field);
         pending.extend(fp);
-        let op_fn = key_val_prim(g, "·rec_merge", origin);
         let result = g.fresh_result(origin);
         let rk = result.kind;
-        pending.push(Pending::App { func: op_fn, args: args_val(vec![acc, fv]), result,  origin });
+        pending.push(Pending::App { func: Callable::Op(Op::RecMerge), args: args_val(vec![acc, fv]), result,  origin });
         acc = ident_val(g, rk, origin);
       }
     }
@@ -791,10 +777,9 @@ fn lower_str_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Option<
     pending.extend(pp);
     part_vals.push(Arg::Val(pv));
   }
-  let str_fmt_fn = key_val_prim(g, "·str_fmt", origin);
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
-  pending.push(Pending::App { func: str_fmt_fn, args: part_vals, result,  origin });
+  pending.push(Pending::App { func: Callable::Op(Op::StrFmt), args: part_vals, result,  origin });
   (ident_val(g, result_kind, origin), pending)
 }
 
@@ -814,7 +799,7 @@ fn lower_str_raw_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Opt
   }
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
-  pending.push(Pending::App { func: tag_fn, args: part_vals, result,  origin });
+  pending.push(Pending::App { func: Callable::Val(tag_fn), args: part_vals, result,  origin });
   (ident_val(g, result_kind, origin), pending)
 }
 
@@ -889,7 +874,7 @@ fn lower_block<'src>(
   let result = g.fresh_result(origin);
   let result_kind = result.kind;
   pending.push(Pending::App {
-    func: name_val,
+    func: Callable::Val(name_val),
     args: args_val(vec![block_fn_val]),
     result,
     origin,
@@ -905,12 +890,12 @@ fn lower_block<'src>(
 enum Pending<'src> {
   Val { name: Bind<'src>, val: Val<'src>, origin: Option<AstId> },
   Fn { name: Bind<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, origin: Option<AstId> },
-  App { func: Val<'src>, args: Vec<Arg<'src>>, result: Bind<'src>, origin: Option<AstId> },
+  App { func: Callable<'src>, args: Vec<Arg<'src>>, result: Bind<'src>, origin: Option<AstId> },
   MatchBlock { params: Vec<Val<'src>>, arm_params: Vec<Bind<'src>>, arms: Vec<Expr<'src>>, result: Bind<'src>, origin: Option<AstId> },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
   MatchBind { name: Bind<'src>, val: Val<'src>, origin: Option<AstId> },
   /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
-  MatchGuard { func: Val<'src>, args: Vec<Val<'src>>, origin: Option<AstId> },
+  MatchGuard { func: Callable<'src>, args: Vec<Val<'src>>, origin: Option<AstId> },
   /// Literal equality check — emits MatchValue with ·panic as fail cont.
   MatchValue { val: Val<'src>, lit: Lit<'src>, origin: Option<AstId> },
   /// Seq pattern entry — emits MatchSeq with ·panic as fail cont.
@@ -960,7 +945,7 @@ fn wrap_with_fail<'src>(
     ),
     Pending::App { func, args, result, origin } => g.expr(
       ExprKind::App {
-        func: Box::new(func),
+        func,
         args,
         result,
         body: Box::new(body),
@@ -997,7 +982,7 @@ fn wrap_with_fail<'src>(
       let fail = Box::new(make_fail(g, origin));
       g.expr(
         ExprKind::MatchIf {
-          func: Box::new(func),
+          func,
           args,
           fail,
           body: Box::new(body),
@@ -1204,8 +1189,7 @@ fn lower_pat_lhs<'src>(
     NodeKind::InfixOp { op, lhs: start, rhs: end } if matches!(*op, ".." | "...") => {
       let (range_val, rp) = lower_range(g, op, start, end, origin);
       pending.extend(rp);
-      let in_fn = key_val_op(g, "in", origin);
-      pending.push(Pending::MatchGuard { func: in_fn, args: vec![val.clone(), range_val],  origin });
+      pending.push(Pending::MatchGuard { func: Callable::Op(Op::In), args: vec![val.clone(), range_val],  origin });
       // Extract the bind name from val: Ident → use directly; Ref(Name) → wrap as User.
       // Range is a pure guard; no new binding is allocated.
       match val.kind {
@@ -1226,8 +1210,7 @@ fn lower_pat_lhs<'src>(
       let (rv, rp) = lower(g, guard_rhs);
       pending.extend(lp);
       pending.extend(rp);
-      let op_fn = key_val_op(g, op, origin);
-      pending.push(Pending::MatchGuard { func: op_fn, args: vec![lv, rv],  origin });
+      pending.push(Pending::MatchGuard { func: Callable::Op(Op::from_str(op).unwrap()), args: vec![lv, rv],  origin });
       bind_kind
     }
 
@@ -1255,7 +1238,7 @@ fn lower_pat_lhs<'src>(
       }
       let (func_val, func_pending) = lower(g, func);
       pending.extend(func_pending);
-      pending.push(Pending::MatchGuard { func: func_val, args: arg_vals,  origin });
+      pending.push(Pending::MatchGuard { func: Callable::Val(func_val), args: arg_vals,  origin });
       g.fresh_result(origin).kind
     }
 
