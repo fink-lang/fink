@@ -8,7 +8,7 @@
 // avoiding stringly-typed dispatch.
 
 use crate::ast::{self, AstId, Node, NodeKind};
-use crate::lexer::{Loc, Pos};
+use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::propgraph::PropGraph;
 use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
 
@@ -42,7 +42,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
     match &node.kind {
       NodeKind::Ident(s) => Some((s, false)),
       NodeKind::InfixOp { op, .. } => Some((op.src, true)),
-      NodeKind::UnaryOp { op, .. } => Some((op, true)),
+      NodeKind::UnaryOp { op, .. } => Some((op.src, true)),
       NodeKind::ChainedCmp(_) => None,  // chained cmp has multiple ops, handled by transform
       _ => None,
     }
@@ -82,6 +82,10 @@ fn node(kind: NodeKind<'static>) -> Node<'static> {
   Node::new(kind, loc())
 }
 
+fn dummy_tok() -> Token<'static> {
+  Token { kind: TokenKind::Sep, loc: loc(), src: "" }
+}
+
 // ---------------------------------------------------------------------------
 // AST builder helpers
 // ---------------------------------------------------------------------------
@@ -92,7 +96,7 @@ fn ident(s: &str) -> Node<'static> {
 }
 
 fn spread_node(inner: Node<'static>) -> Node<'static> {
-  node(NodeKind::Spread(Some(Box::new(inner))))
+  node(NodeKind::Spread { op: dummy_tok(), inner: Some(Box::new(inner)) })
 }
 
 fn apply(func: Node<'static>, args: Vec<Node<'static>>) -> Node<'static> {
@@ -104,7 +108,7 @@ fn patterns(params: Vec<Node<'static>>) -> Node<'static> {
 }
 
 fn fn_node(params: Node<'static>, body: Vec<Node<'static>>) -> Node<'static> {
-  node(NodeKind::Fn { params: Box::new(params), body })
+  node(NodeKind::Fn { params: Box::new(params), sep: dummy_tok(), body })
 }
 
 /// `fn ·state: body` — state-only continuation (used in ·if branches).
@@ -167,8 +171,8 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
       node(NodeKind::LitDecimal(s))
     }
     Lit::Str(s) => node(NodeKind::LitStr(s.to_string())),
-    Lit::Seq   => node(NodeKind::LitSeq(vec![])),
-    Lit::Rec   => node(NodeKind::LitRec(vec![])),
+    Lit::Seq   => node(NodeKind::LitSeq { open: dummy_tok(), close: dummy_tok(), items: vec![] }),
+    Lit::Rec   => node(NodeKind::LitRec { open: dummy_tok(), close: dummy_tok(), items: vec![] }),
   }
 }
 

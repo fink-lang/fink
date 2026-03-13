@@ -294,13 +294,13 @@ impl<'src> Parser<'src> {
       let op_tok = self.bump();
       let operand = self.parse_infix(35)?;
       let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
-      return Ok(self.node(NodeKind::UnaryOp { op: op_tok.src, operand: Box::new(operand) }, loc));
+      return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
     }
     if self.at(TokenKind::Sep) && self.peek().src == "~" {
       let op_tok = self.bump();
       let operand = self.parse_infix(130)?;
       let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
-      return Ok(self.node(NodeKind::UnaryOp { op: op_tok.src, operand: Box::new(operand) }, loc));
+      return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
     }
 
     let head = self.parse_infix(0)?;
@@ -401,10 +401,10 @@ impl<'src> Parser<'src> {
       if params.is_empty() {
         // "func: body" — func is the block name, no params
         let params_node = self.node(NodeKind::Patterns(vec![]), func_loc);
-        let body = self.parse_colon_body_or_arms()?;
+        let (sep, body) = self.parse_colon_body_or_arms()?;
         let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(func_loc.end);
         return Ok(self.node(
-          NodeKind::Block { name: Box::new(func), params: Box::new(params_node), body },
+          NodeKind::Block { name: Box::new(func), params: Box::new(params_node), sep, body },
           Loc { start: func_loc.start, end },
         ));
       }
@@ -427,10 +427,10 @@ impl<'src> Parser<'src> {
           let block_name = params.remove(0);
           let block_start = block_name.loc.start;
           let params_node = self.node(NodeKind::Patterns(vec![]), block_name.loc);
-          let body = self.parse_colon_body_or_arms()?;
+          let (sep, body) = self.parse_colon_body_or_arms()?;
           let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(block_name.loc.end);
           let block_node = self.node(
-            NodeKind::Block { name: Box::new(block_name), params: Box::new(params_node), body },
+            NodeKind::Block { name: Box::new(block_name), params: Box::new(params_node), sep, body },
             Loc { start: block_start, end },
           );
           // Wrap in Apply(func, [block_node])
@@ -445,10 +445,10 @@ impl<'src> Parser<'src> {
       let params_end = params.last().map(|n: &Node| n.loc.end).unwrap_or(func_loc.end);
       let params_loc = Loc { start: func_loc.end, end: params_end };
       let params_node = self.node(NodeKind::Patterns(params), params_loc);
-      let body = self.parse_colon_body_or_arms()?;
+      let (sep, body) = self.parse_colon_body_or_arms()?;
       let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
       return Ok(self.node(
-        NodeKind::Block { name: Box::new(func), params: Box::new(params_node), body },
+        NodeKind::Block { name: Box::new(func), params: Box::new(params_node), sep, body },
         Loc { start: func_loc.start, end },
       ));
     }
@@ -688,7 +688,7 @@ impl<'src> Parser<'src> {
           let operand = self.parse_infix(35)?;
           let loc = Loc { start: not_tok.loc.start, end: operand.loc.end };
           lhs = self.node(
-            NodeKind::UnaryOp { op: not_tok.src, operand: Box::new(operand) },
+            NodeKind::UnaryOp { op: not_tok, operand: Box::new(operand) },
             loc,
           );
           break;
@@ -701,7 +701,7 @@ impl<'src> Parser<'src> {
 
       // Member access: foo.bar or foo.(expr)
       if tok.kind == TokenKind::Sep && tok.src == "." {
-        self.bump(); // consume "."
+        let dot = self.bump(); // consume "."
         let rhs = if self.at(TokenKind::BracketOpen) && self.peek().src == "(" {
           // computed: foo.(expr)
           self.parse_group()?
@@ -710,7 +710,7 @@ impl<'src> Parser<'src> {
           self.node(NodeKind::Ident(t.src), t.loc)
         };
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-        lhs = self.node(NodeKind::Member { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
+        lhs = self.node(NodeKind::Member { op: dot, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
         continue;
       }
 
@@ -796,7 +796,7 @@ impl<'src> Parser<'src> {
         } else {
           let operand = self.parse_infix(35)?;
           let loc = Loc { start: not_tok.loc.start, end: operand.loc.end };
-          lhs = self.node(NodeKind::UnaryOp { op: not_tok.src, operand: Box::new(operand) }, loc);
+          lhs = self.node(NodeKind::UnaryOp { op: not_tok, operand: Box::new(operand) }, loc);
           break;
         }
       }
@@ -804,7 +804,7 @@ impl<'src> Parser<'src> {
       let Some((l_bp, r_bp)) = Self::infix_bp(&tok) else { break };
       if l_bp < min_bp { break; }
       if tok.kind == TokenKind::Sep && tok.src == "." {
-        self.bump();
+        let dot = self.bump();
         let rhs = if self.at(TokenKind::BracketOpen) && self.peek().src == "(" {
           self.parse_group()?
         } else {
@@ -812,7 +812,7 @@ impl<'src> Parser<'src> {
           self.node(NodeKind::Ident(t.src), t.loc)
         };
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-        lhs = self.node(NodeKind::Member { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
+        lhs = self.node(NodeKind::Member { op: dot, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
         continue;
       }
       if Self::is_range_op(&tok) {
@@ -870,14 +870,14 @@ impl<'src> Parser<'src> {
       let op_tok = self.bump();
       let operand = self.parse_infix(35)?;
       let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
-      return Ok(self.node(NodeKind::UnaryOp { op: op_tok.src, operand: Box::new(operand) }, loc));
+      return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
     }
     // "~" bitwise not
     if self.at(TokenKind::Sep) && self.peek().src == "~" {
       let op_tok = self.bump();
       let operand = self.parse_infix(130)?;
       let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
-      return Ok(self.node(NodeKind::UnaryOp { op: op_tok.src, operand: Box::new(operand) }, loc));
+      return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
     }
     // Handle prefix sign: +/- followed by number.
     // Consume the sign, check adjacency.
@@ -907,7 +907,7 @@ impl<'src> Parser<'src> {
         let operand = self.parse_unary_or_atom()?;
         let loc = Loc { start: sign.loc.start, end: operand.loc.end };
         return Ok(self.node(
-          NodeKind::UnaryOp { op: sign.src, operand: Box::new(operand) },
+          NodeKind::UnaryOp { op: sign, operand: Box::new(operand) },
           loc,
         ));
       }
@@ -1126,11 +1126,11 @@ impl<'src> Parser<'src> {
         };
         self.skip_block_tokens();
         if self.at(TokenKind::Colon) {
-          self.bump();
+          let sep = self.bump();
           self.skip_block_tokens();
           let val = self.parse_expr()?;
           let loc = Loc { start: first.loc.start, end: val.loc.end };
-          items.push(self.node(NodeKind::Arm { lhs: vec![first], body: vec![val] }, loc));
+          items.push(self.node(NodeKind::Arm { lhs: vec![first], sep, body: vec![val] }, loc));
         } else {
           items.push(first);
         }
@@ -1151,7 +1151,7 @@ impl<'src> Parser<'src> {
     let maybe_inner: Option<Node<'src>> = if self.at(TokenKind::BracketOpen) && self.peek().src == "(" {
       // ..(expr) — parse group and strip the Group wrapper
       let group = self.parse_group()?;
-      let inner = if let NodeKind::Group(inner) = group.kind { *inner } else { group };
+      let inner = if let NodeKind::Group { inner, .. } = group.kind { *inner } else { group };
       // ..(expr)..(expr) — `)` directly followed by `..`/`...` is a range, not a second spread
       if Self::is_range_op(self.peek()) {
         Some(self.parse_infix_from(inner, 0)?)
@@ -1176,9 +1176,10 @@ impl<'src> Parser<'src> {
         inner
       };
       let end = node.loc.end;
-      Ok(self.node(NodeKind::Spread(Some(Box::new(node))), Loc { start, end }))
+      Ok(self.node(NodeKind::Spread { op: op_tok, inner: Some(Box::new(node)) }, Loc { start, end }))
     } else {
-      Ok(self.node(NodeKind::Spread(None), op_tok.loc))
+      let loc = op_tok.loc;
+      Ok(self.node(NodeKind::Spread { op: op_tok, inner: None }, loc))
     }
   }
 
@@ -1190,7 +1191,8 @@ impl<'src> Parser<'src> {
       self.bump(); // consume BlockStart
       let exprs = self.parse_block_exprs()?;
       let params = self.node(NodeKind::Patterns(vec![]), open.loc);
-      self.node(NodeKind::Fn { params: Box::new(params), body: exprs }, open.loc)
+      let sep = Token { kind: TokenKind::Colon, loc: open.loc, src: ":" };
+      self.node(NodeKind::Fn { params: Box::new(params), sep, body: exprs }, open.loc)
     } else {
       self.skip_block_tokens();
       let expr = self.parse_expr()?;
@@ -1199,7 +1201,7 @@ impl<'src> Parser<'src> {
     };
     let close = self.expect(TokenKind::BracketClose)?;
     let loc = Loc { start: open.loc.start, end: close.loc.end };
-    Ok(self.node(NodeKind::Group(Box::new(inner)), loc))
+    Ok(self.node(NodeKind::Group { open, close, inner: Box::new(inner) }, loc))
   }
 
   // --- atom ---
@@ -1239,14 +1241,14 @@ impl<'src> Parser<'src> {
         let items = self.parse_seq_items()?;
         let close = self.expect(TokenKind::BracketClose)?;
         let loc = Loc { start: open.loc.start, end: close.loc.end };
-        Ok(self.node(NodeKind::LitSeq(items), loc))
+        Ok(self.node(NodeKind::LitSeq { open, close, items }, loc))
       }
       TokenKind::BracketOpen if tok.src == "{" => {
         let open = self.bump();
         let items = self.parse_rec_items()?;
         let close = self.expect(TokenKind::BracketClose)?;
         let loc = Loc { start: open.loc.start, end: close.loc.end };
-        Ok(self.node(NodeKind::LitRec(items), loc))
+        Ok(self.node(NodeKind::LitRec { open, close, items }, loc))
       }
       TokenKind::BracketOpen if tok.src == "(" => {
         // Parenthesised group — inner is a full expression (may be application)
@@ -1255,7 +1257,7 @@ impl<'src> Parser<'src> {
         // Postfix tag: (expr)tag where tag is immediately adjacent
         if self.at(TokenKind::Ident) && self.peek().loc.start.idx == group_end.idx {
           let tag = self.bump();
-          let inner = if let NodeKind::Group(inner) = group.kind { *inner } else { group };
+          let inner = if let NodeKind::Group { inner, .. } = group.kind { *inner } else { group };
           let func = self.node(NodeKind::Ident(tag.src), tag.loc);
           let loc = Loc { start: inner.loc.start, end: tag.loc.end };
           return Ok(self.node(NodeKind::Apply { func: Box::new(func), args: vec![inner] }, loc));
@@ -1284,23 +1286,23 @@ impl<'src> Parser<'src> {
     let fn_end_loc;
     if is_fn_match {
       // fn match: parse arms as the body
-      let arms = self.parse_colon_arms()?;
+      let (sep, arms) = self.parse_colon_arms()?;
       let subjects = params.clone();
       let match_end = arms.last().map(|n: &Node| n.loc.end).unwrap_or(subjects.loc.end);
       fn_end_loc = Loc { start: fn_loc.start, end: match_end };
       let match_node = self.node(
-        NodeKind::Match { subjects: Box::new(subjects), arms },
+        NodeKind::Match { subjects: Box::new(subjects), sep: sep.clone(), arms },
         fn_end_loc,
       );
       Ok(self.node(
-        NodeKind::Fn { params: Box::new(params), body: vec![match_node] },
+        NodeKind::Fn { params: Box::new(params), sep, body: vec![match_node] },
         fn_end_loc,
       ))
     } else {
-      let body = self.parse_colon_body()?;
+      let (sep, body) = self.parse_colon_body()?;
       let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(params.loc.end);
       fn_end_loc = Loc { start: fn_loc.start, end };
-      Ok(self.node(NodeKind::Fn { params: Box::new(params), body }, fn_end_loc))
+      Ok(self.node(NodeKind::Fn { params: Box::new(params), sep, body }, fn_end_loc))
     }
   }
 
@@ -1353,15 +1355,16 @@ impl<'src> Parser<'src> {
   }
 
   // Parse ":" then either inline expression(s) or indented block.
-  // Returns a Vec of statements/arms.
-  fn parse_colon_body(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
-    self.expect(TokenKind::Colon)?;
-    if self.at(TokenKind::BlockStart) {
+  // Returns the colon token and a Vec of statements/arms.
+  fn parse_colon_body(&mut self) -> Result<(Token<'src>, Vec<Node<'src>>), ParseError> {
+    let sep = self.expect(TokenKind::Colon)?;
+    let body = if self.at(TokenKind::BlockStart) {
       self.bump();
-      self.parse_block_exprs()
+      self.parse_block_exprs()?
     } else {
-      self.parse_inline_exprs()
-    }
+      self.parse_inline_exprs()?
+    };
+    Ok((sep, body))
   }
 
   // Parse a comma-separated list of expressions on a single line (no block).
@@ -1405,22 +1408,23 @@ impl<'src> Parser<'src> {
 
   fn parse_match_expr(&mut self, match_loc: Loc) -> ParseResult<'src> {
     let (subjects, _) = self.parse_params()?;
-    let arms = self.parse_colon_arms()?;
+    let (sep, arms) = self.parse_colon_arms()?;
     let end = arms.last().map(|n: &Node| n.loc.end).unwrap_or(subjects.loc.end);
     Ok(self.node(
-      NodeKind::Match { subjects: Box::new(subjects), arms },
+      NodeKind::Match { subjects: Box::new(subjects), sep, arms },
       Loc { start: match_loc.start, end },
     ))
   }
 
-  fn parse_colon_arms(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
-    self.expect(TokenKind::Colon)?;
-    if self.at(TokenKind::BlockStart) {
+  fn parse_colon_arms(&mut self) -> Result<(Token<'src>, Vec<Node<'src>>), ParseError> {
+    let sep = self.expect(TokenKind::Colon)?;
+    let arms = if self.at(TokenKind::BlockStart) {
       self.bump();
-      self.parse_block_items(|p| p.parse_arm())
+      self.parse_block_items(|p| p.parse_arm())?
     } else {
-      Ok(vec![self.parse_arm()?])
-    }
+      vec![self.parse_arm()?]
+    };
+    Ok((sep, arms))
   }
 
   // Parse one arm: pattern(s) ":" rhs
@@ -1443,7 +1447,7 @@ impl<'src> Parser<'src> {
       }
     }
 
-    self.expect(TokenKind::Colon)?;
+    let sep = self.expect(TokenKind::Colon)?;
     while self.at(TokenKind::BlockCont) { self.bump(); }
 
     let body = self.parse_block_body()?;
@@ -1457,7 +1461,7 @@ impl<'src> Parser<'src> {
       self.node(NodeKind::Patterns(patterns), Loc { start, end: pats_end })
     };
 
-    Ok(self.node(NodeKind::Arm { lhs: vec![lhs_node], body }, Loc { start, end }))
+    Ok(self.node(NodeKind::Arm { lhs: vec![lhs_node], sep, body }, Loc { start, end }))
   }
 
   // --- custom block ---
@@ -1465,23 +1469,24 @@ impl<'src> Parser<'src> {
   fn parse_block(&mut self, name_loc: Loc, name: &'src str) -> ParseResult<'src> {
     let name_node = self.node(NodeKind::Ident(name), name_loc);
     let (params, _) = self.parse_params()?;
-    let body = self.parse_colon_body_or_arms()?;
+    let (sep, body) = self.parse_colon_body_or_arms()?;
     let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(params.loc.end);
     Ok(self.node(
-      NodeKind::Block { name: Box::new(name_node), params: Box::new(params), body },
+      NodeKind::Block { name: Box::new(name_node), params: Box::new(params), sep, body },
       Loc { start: name_loc.start, end },
     ))
   }
 
   // For custom blocks: body may contain arms (key: val) or plain expressions
-  fn parse_colon_body_or_arms(&mut self) -> Result<Vec<Node<'src>>, ParseError> {
-    self.expect(TokenKind::Colon)?;
-    if self.at(TokenKind::BlockStart) {
+  fn parse_colon_body_or_arms(&mut self) -> Result<(Token<'src>, Vec<Node<'src>>), ParseError> {
+    let sep = self.expect(TokenKind::Colon)?;
+    let body = if self.at(TokenKind::BlockStart) {
       self.bump();
-      self.parse_block_items(|p| p.parse_expr_or_arm())
+      self.parse_block_items(|p| p.parse_expr_or_arm())?
     } else {
-      Ok(vec![self.parse_expr()?])
-    }
+      vec![self.parse_expr()?]
+    };
+    Ok((sep, body))
   }
 
   // Parse either an arm (pattern ":" body) or a plain expression
@@ -1490,11 +1495,11 @@ impl<'src> Parser<'src> {
     // If followed by ":", it was a pattern; convert to arm
     if self.at(TokenKind::Colon) {
       let start = expr.loc.start;
-      self.bump();
+      let sep = self.bump();
       while self.at(TokenKind::BlockCont) { self.bump(); }
       let body = self.parse_block_body()?;
       let end = body.last().map(|n: &Node| n.loc.end).unwrap_or(start);
-      Ok(self.node(NodeKind::Arm { lhs: vec![expr], body }, Loc { start, end }))
+      Ok(self.node(NodeKind::Arm { lhs: vec![expr], sep, body }, Loc { start, end }))
     } else {
       Ok(expr)
     }
@@ -1515,10 +1520,12 @@ pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
     _ => {
       let start = exprs.first().unwrap().loc.start;
       let end = exprs.last().unwrap().loc.end;
-      let params = p.node(NodeKind::Patterns(vec![]), Loc { start, end });
+      let loc = Loc { start, end };
+      let params = p.node(NodeKind::Patterns(vec![]), loc);
+      let sep = Token { kind: TokenKind::Colon, loc, src: ":" };
       p.node(
-        NodeKind::Fn { params: Box::new(params), body: exprs },
-        Loc { start, end },
+        NodeKind::Fn { params: Box::new(params), sep, body: exprs },
+        loc,
       )
     }
   };
@@ -1541,10 +1548,12 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<cr
     _ => {
       let start = exprs.first().unwrap().loc.start;
       let end = exprs.last().unwrap().loc.end;
-      let params = p.node(NodeKind::Patterns(vec![]), Loc { start, end });
+      let loc = Loc { start, end };
+      let params = p.node(NodeKind::Patterns(vec![]), loc);
+      let sep = Token { kind: TokenKind::Colon, loc, src: ":" };
       p.node(
-        NodeKind::Fn { params: Box::new(params), body: exprs },
-        Loc { start, end },
+        NodeKind::Fn { params: Box::new(params), sep, body: exprs },
+        loc,
       )
     }
   };

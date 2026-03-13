@@ -9,7 +9,7 @@
 //   - `?` in pattern position (Arm lhs, Bind lhs) is a compile error
 
 use crate::ast::{CmpPart, Node, NodeKind};
-use crate::lexer::{Loc, Pos};
+use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::ast::transform::{Transform, TransformError, TransformResult};
 
 const PARAM: &str = "$";
@@ -36,10 +36,10 @@ fn has_partial(node: &Node) -> bool {
     | NodeKind::Wildcard => false,
 
     // Group is a boundary — don't look inside
-    NodeKind::Group(_) => false,
+    NodeKind::Group { .. } => false,
 
-    NodeKind::LitSeq(children) | NodeKind::LitRec(children) => {
-      children.iter().any(has_partial)
+    NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
+      items.iter().any(has_partial)
     }
     NodeKind::StrTempl(children) | NodeKind::StrRawTempl(children) => {
       children.iter().any(has_partial)
@@ -50,11 +50,11 @@ fn has_partial(node: &Node) -> bool {
       CmpPart::Operand(n) => has_partial(n),
       CmpPart::Op(_) => false,
     }),
-    NodeKind::Spread(inner) => inner.as_ref().map_or(false, |n| has_partial(n)),
-    NodeKind::Member { lhs, rhs } => {
+    NodeKind::Spread { inner, .. } => inner.as_ref().map_or(false, |n| has_partial(n)),
+    NodeKind::Member { lhs, rhs, .. } => {
       // Member rhs may be Group (computed key) — look through it; it's not a scope boundary here
       let rhs_inner = match &rhs.kind {
-        NodeKind::Group(inner) => inner.as_ref(),
+        NodeKind::Group { inner, .. } => inner.as_ref(),
         _ => rhs.as_ref(),
       };
       has_partial(lhs) || has_partial(rhs_inner)
@@ -65,17 +65,17 @@ fn has_partial(node: &Node) -> bool {
       has_partial(func) || args.iter().any(has_partial)
     }
     NodeKind::Pipe(children) => false, // Pipe children are independent segments
-    NodeKind::Fn { params, body } => {
+    NodeKind::Fn { params, body, .. } => {
       has_partial(params) || body.iter().any(has_partial)
     }
     NodeKind::Patterns(children) => children.iter().any(has_partial),
-    NodeKind::Match { subjects, arms } => {
+    NodeKind::Match { subjects, arms, .. } => {
       has_partial(subjects) || arms.iter().any(has_partial)
     }
-    NodeKind::Arm { lhs, body } => {
+    NodeKind::Arm { lhs, body, .. } => {
       lhs.iter().any(has_partial) || body.iter().any(has_partial)
     }
-    NodeKind::Block { name, params, body } => {
+    NodeKind::Block { name, params, body, .. } => {
       has_partial(name) || has_partial(params) || body.iter().any(has_partial)
     }
     NodeKind::Try(inner) => has_partial(inner),
@@ -100,13 +100,13 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
     | NodeKind::Wildcard => node,
 
     // Group is a boundary — don't replace inside, leave for transform_group
-    NodeKind::Group(_) => node,
+    NodeKind::Group { .. } => node,
 
-    NodeKind::LitSeq(children) => {
-      Node::new(NodeKind::LitSeq(replace_vec(children, param_loc)), loc)
+    NodeKind::LitSeq { open, close, items } => {
+      Node::new(NodeKind::LitSeq { open, close, items: replace_vec(items, param_loc) }, loc)
     }
-    NodeKind::LitRec(children) => {
-      Node::new(NodeKind::LitRec(replace_vec(children, param_loc)), loc)
+    NodeKind::LitRec { open, close, items } => {
+      Node::new(NodeKind::LitRec { open, close, items: replace_vec(items, param_loc) }, loc)
     }
     NodeKind::StrTempl(children) => {
       Node::new(NodeKind::StrTempl(replace_vec(children, param_loc)), loc)
@@ -130,22 +130,22 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
       }).collect();
       Node::new(NodeKind::ChainedCmp(parts), loc)
     }
-    NodeKind::Spread(inner) => {
+    NodeKind::Spread { op, inner } => {
       let inner = inner.map(|n| Box::new(replace_partial(*n, param_loc)));
-      Node::new(NodeKind::Spread(inner), loc)
+      Node::new(NodeKind::Spread { op, inner }, loc)
     }
-    NodeKind::Member { lhs, rhs } => {
+    NodeKind::Member { op, lhs, rhs } => {
       let lhs = replace_partial(*lhs, param_loc);
       // Member rhs Group (computed key) is transparent — replace inside, preserve Group wrapper
       let rhs = match rhs.kind {
-        NodeKind::Group(inner) => {
+        NodeKind::Group { open, close, inner } => {
           let rhs_loc = rhs.loc;
           let inner = replace_partial(*inner, param_loc);
-          Node::new(NodeKind::Group(Box::new(inner)), rhs_loc)
+          Node::new(NodeKind::Group { open, close, inner: Box::new(inner) }, rhs_loc)
         }
         _ => replace_partial(*rhs, param_loc),
       };
-      Node::new(NodeKind::Member { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc)
+      Node::new(NodeKind::Member { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc)
     }
     NodeKind::Apply { func, args } => {
       let func = replace_partial(*func, param_loc);
@@ -162,10 +162,10 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
       let lhs = replace_partial(*lhs, param_loc);
       Node::new(NodeKind::BindRight { op, lhs: Box::new(lhs), rhs }, loc)
     }
-    NodeKind::Arm { lhs, body } => {
+    NodeKind::Arm { lhs, sep, body } => {
       // In LitRec context: lhs is the key (Ident, not replaced), body has the value
       let body = replace_vec(body, param_loc);
-      Node::new(NodeKind::Arm { lhs, body }, loc)
+      Node::new(NodeKind::Arm { lhs, sep, body }, loc)
     }
 
     // For anything else, return as-is (Pipe, Fn, Match, Block, Try — complex)
@@ -187,7 +187,8 @@ fn wrap_if_partial<'src>(node: Node<'src>) -> Node<'src> {
   let body_loc = body.loc;
   let param = Node::new(NodeKind::Ident(PARAM), param_loc);
   let patterns = Node::new(NodeKind::Patterns(vec![param]), param_loc);
-  Node::new(NodeKind::Fn { params: Box::new(patterns), body: vec![body] }, body_loc)
+  let sep = Token { kind: crate::lexer::TokenKind::Colon, loc: param_loc, src: ":" };
+  Node::new(NodeKind::Fn { params: Box::new(patterns), sep, body: vec![body] }, body_loc)
 }
 
 // --- transformer ---
@@ -213,13 +214,13 @@ impl<'src> PartialPass {
       }
 
       // Arm: body stmts are independent scopes, lhs is pattern (skip)
-      NodeKind::Arm { lhs, body } => {
+      NodeKind::Arm { lhs, sep, body } => {
         let body = self.transform_body(body)?;
-        Ok(Node::new(NodeKind::Arm { lhs, body }, loc))
+        Ok(Node::new(NodeKind::Arm { lhs, sep, body }, loc))
       }
 
       // Group: explicit scope boundary — process inner as independent stmt
-      NodeKind::Group(inner) => {
+      NodeKind::Group { inner, .. } => {
         self.transform_stmt(*inner)
       }
 
@@ -250,13 +251,14 @@ impl<'src> Transform<'src> for PartialPass {
   // The default walker recurses into all children.
   // Scope boundaries (Group, Pipe, Bind, BindRight, Arm) are handled in transform_stmt.
   // When the default walker hits a Group, it calls transform_group below.
-  fn transform_group(&mut self, inner: Node<'src>, _loc: Loc) -> TransformResult<'src> {
+  fn transform_group(&mut self, _open: Token<'src>, _close: Token<'src>, inner: Node<'src>, _loc: Loc) -> TransformResult<'src> {
     self.transform_stmt(inner)
   }
 
   // Member rhs Group (computed key) is transparent — don't create a scope boundary for it.
   fn transform_member(
     &mut self,
+    op: Token<'src>,
     lhs: Node<'src>,
     rhs: Node<'src>,
     loc: Loc,
@@ -264,14 +266,14 @@ impl<'src> Transform<'src> for PartialPass {
     let lhs = self.transform(lhs)?;
     // If rhs is a Group (computed key), transform its inner directly — not as a scope boundary
     let rhs = match rhs.kind {
-      NodeKind::Group(inner) => {
+      NodeKind::Group { open, close, inner } => {
         let rhs_loc = rhs.loc;
         let inner = self.transform(*inner)?;
-        Node::new(NodeKind::Group(Box::new(inner)), rhs_loc)
+        Node::new(NodeKind::Group { open, close, inner: Box::new(inner) }, rhs_loc)
       }
       _ => self.transform(rhs)?,
     };
-    Ok(Node::new(NodeKind::Member { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
+    Ok(Node::new(NodeKind::Member { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
   }
 }
 

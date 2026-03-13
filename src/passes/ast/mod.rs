@@ -69,10 +69,10 @@ pub enum NodeKind<'src> {
   LitStr(String),
 
   // LitSeq — children are elements
-  LitSeq(Vec<Node<'src>>),
+  LitSeq { open: Token<'src>, close: Token<'src>, items: Vec<Node<'src>> },
 
   // LitRec — children are Ident (shorthand), Arm (key:val), or Spread
-  LitRec(Vec<Node<'src>>),
+  LitRec { open: Token<'src>, close: Token<'src>, items: Vec<Node<'src>> },
 
   // --- string templates ---
 
@@ -90,7 +90,7 @@ pub enum NodeKind<'src> {
   // --- operators ---
 
   // UnaryOp '-' | 'not' | '~'
-  UnaryOp { op: &'src str, operand: Box<Node<'src>> },
+  UnaryOp { op: Token<'src>, operand: Box<Node<'src>> },
 
   // InfixOp '+' | '-' | 'srcnd' | '>' | '&' | '..' | '...' | ...
   InfixOp { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
@@ -100,14 +100,14 @@ pub enum NodeKind<'src> {
   ChainedCmp(Vec<CmpPart<'src>>),
 
   // Spread — bare (..) or with guard/expr child
-  Spread(Option<Box<Node<'src>>>),
+  Spread { op: Token<'src>, inner: Option<Box<Node<'src>>> },
 
   // Member — lhs.rhs; rhs is Ident (name) or Group (expr key)
-  Member { lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  Member { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // Group — parenthesised expr; only preserved where semantically significant
   // (record computed keys, member expression keys, spread guards)
-  Group(Box<Node<'src>>),
+  Group { open: Token<'src>, close: Token<'src>, inner: Box<Node<'src>> },
 
   // Partial — ? hole for partial application
   Partial,
@@ -133,20 +133,20 @@ pub enum NodeKind<'src> {
 
   // --- functions ---
 
-  // Fn — params (Patterns node) + body exprs (flat, may include Arms)
-  Fn { params: Box<Node<'src>>, body: Vec<Node<'src>> },
+  // Fn — params (Patterns node) + sep (:) + body exprs (flat, may include Arms)
+  Fn { params: Box<Node<'src>>, sep: Token<'src>, body: Vec<Node<'src>> },
 
   // Patterns — comma-separated param/subject list
   Patterns(Vec<Node<'src>>),
 
   // --- match ---
 
-  // Match — subjects (Patterns node) + arms
-  Match { subjects: Box<Node<'src>>, arms: Vec<Node<'src>> },
+  // Match — subjects (Patterns node) + sep (:) + arms
+  Match { subjects: Box<Node<'src>>, sep: Token<'src>, arms: Vec<Node<'src>> },
 
-  // Arm — lhs patterns : body exprs (flat, like Fn body)
+  // Arm — lhs patterns + sep (:) + body exprs (flat, like Fn body)
   // lhs is Vec to handle multi-pattern arms (match a, b: ...)
-  Arm { lhs: Vec<Node<'src>>, body: Vec<Node<'src>> },
+  Arm { lhs: Vec<Node<'src>>, sep: Token<'src>, body: Vec<Node<'src>> },
 
   // --- error handling ---
 
@@ -161,8 +161,8 @@ pub enum NodeKind<'src> {
 
   // --- custom blocks ---
 
-  // Block — name (Ident) + params (Patterns) + body (flat exprs/arms)
-  Block { name: Box<Node<'src>>, params: Box<Node<'src>>, body: Vec<Node<'src>> },
+  // Block — name (Ident) + params (Patterns) + sep (:) + body (flat exprs/arms)
+  Block { name: Box<Node<'src>>, params: Box<Node<'src>>, sep: Token<'src>, body: Vec<Node<'src>> },
 }
 
 // For ChainedCmp interleaved representation
@@ -187,9 +187,11 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::Partial
     | NodeKind::Wildcard => {}
 
-    NodeKind::LitSeq(children)
-    | NodeKind::LitRec(children)
-    | NodeKind::StrTempl(children)
+    NodeKind::LitSeq { items, .. }
+    | NodeKind::LitRec { items, .. } => {
+      for child in items { walk(child, f); }
+    }
+    NodeKind::StrTempl(children)
     | NodeKind::StrRawTempl(children)
     | NodeKind::Pipe(children)
     | NodeKind::Patterns(children) => {
@@ -206,14 +208,14 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
         if let CmpPart::Operand(n) = part { walk(n, f); }
       }
     }
-    NodeKind::Spread(inner) => {
+    NodeKind::Spread { inner, .. } => {
       if let Some(n) = inner { walk(n, f); }
     }
-    NodeKind::Member { lhs, rhs } => {
+    NodeKind::Member { lhs, rhs, .. } => {
       walk(lhs, f);
       walk(rhs, f);
     }
-    NodeKind::Group(inner) => walk(inner, f),
+    NodeKind::Group { inner, .. } => walk(inner, f),
     NodeKind::Try(inner) | NodeKind::Yield(inner) => walk(inner, f),
     NodeKind::Bind { lhs, rhs, .. } | NodeKind::BindRight { lhs, rhs, .. } => {
       walk(lhs, f);
@@ -223,19 +225,19 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
       walk(func, f);
       for arg in args { walk(arg, f); }
     }
-    NodeKind::Fn { params, body } => {
+    NodeKind::Fn { params, body, .. } => {
       walk(params, f);
       for stmt in body { walk(stmt, f); }
     }
-    NodeKind::Match { subjects, arms } => {
+    NodeKind::Match { subjects, arms, .. } => {
       walk(subjects, f);
       for arm in arms { walk(arm, f); }
     }
-    NodeKind::Arm { lhs, body } => {
+    NodeKind::Arm { lhs, body, .. } => {
       for pat in lhs { walk(pat, f); }
       for stmt in body { walk(stmt, f); }
     }
-    NodeKind::Block { name, params, body } => {
+    NodeKind::Block { name, params, body, .. } => {
       walk(name, f);
       walk(params, f);
       for stmt in body { walk(stmt, f); }
@@ -295,13 +297,13 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       );
       out.push('\'');
     }
-    NodeKind::LitSeq(children) => {
+    NodeKind::LitSeq { items, .. } => {
       out.push_str("LitSeq");
-      print_children(children, out, depth);
+      print_children(items, out, depth);
     }
-    NodeKind::LitRec(children) => {
+    NodeKind::LitRec { items, .. } => {
       out.push_str("LitRec");
-      print_children(children, out, depth);
+      print_children(items, out, depth);
     }
     NodeKind::StrTempl(children) => {
       out.push_str("StrTempl");
@@ -313,7 +315,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Ident(s) => { out.push_str("Ident '"); out.push_str(s); out.push('\''); }
     NodeKind::UnaryOp { op, operand } => {
-      out.push_str("UnaryOp '"); out.push_str(op); out.push('\'');
+      out.push_str("UnaryOp '"); out.push_str(op.src); out.push('\'');
       out.push('\n');
       print_node(operand, out, depth + 1);
     }
@@ -334,21 +336,21 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         }
       }
     }
-    NodeKind::Spread(child) => {
+    NodeKind::Spread { inner: child, .. } => {
       out.push_str("Spread");
       if let Some(n) = child {
         out.push('\n');
         print_node(n, out, depth + 1);
       }
     }
-    NodeKind::Member { lhs, rhs } => {
+    NodeKind::Member { lhs, rhs, .. } => {
       out.push_str("Member");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
-    NodeKind::Group(inner) => {
+    NodeKind::Group { inner, .. } => {
       out.push_str("Group");
       out.push('\n');
       print_node(inner, out, depth + 1);
@@ -392,7 +394,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Pipe");
       print_children(children, out, depth);
     }
-    NodeKind::Fn { params, body } => {
+    NodeKind::Fn { params, body, .. } => {
       out.push_str("Fn");
       out.push('\n');
       print_node(params, out, depth + 1);
@@ -405,7 +407,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Patterns");
       print_children(children, out, depth);
     }
-    NodeKind::Match { subjects, arms } => {
+    NodeKind::Match { subjects, arms, .. } => {
       out.push_str("Match");
       out.push('\n');
       print_node(subjects, out, depth + 1);
@@ -414,7 +416,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         print_node(arm, out, depth + 1);
       }
     }
-    NodeKind::Arm { lhs, body } => {
+    NodeKind::Arm { lhs, body, .. } => {
       out.push_str("Arm");
       for pat in lhs {
         out.push('\n');
@@ -425,7 +427,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         print_node(node, out, depth + 1);
       }
     }
-    NodeKind::Block { name, params, body } => {
+    NodeKind::Block { name, params, body, .. } => {
       out.push_str("Block");
       out.push('\n');
       print_node(name, out, depth + 1);
@@ -487,13 +489,13 @@ mod tests {
 
   #[test]
   fn print_lit_seq_empty() {
-    let tree = node(NodeKind::LitSeq(vec![]));
+    let tree = node(NodeKind::LitSeq { open: tok("["), close: tok("]"), items: vec![] });
     assert_eq!(tree.print(), "LitSeq");
   }
 
   #[test]
   fn print_spread_bare() {
-    let tree = node(NodeKind::Spread(None));
+    let tree = node(NodeKind::Spread { op: tok(".."), inner: None });
     assert_eq!(tree.print(), "Spread");
   }
 

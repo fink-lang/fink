@@ -41,19 +41,19 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str(s);
       out.push('\'');
     }
-    NodeKind::LitSeq(children) if children.is_empty() => out.push_str("[]"),
-    NodeKind::LitSeq(children) => {
+    NodeKind::LitSeq { items, .. } if items.is_empty() => out.push_str("[]"),
+    NodeKind::LitSeq { items, .. } => {
       out.push('[');
-      for (i, child) in children.iter().enumerate() {
+      for (i, child) in items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(child, out, depth);
       }
       out.push(']');
     }
-    NodeKind::LitRec(children) if children.is_empty() => out.push_str("{}"),
-    NodeKind::LitRec(children) => {
+    NodeKind::LitRec { items, .. } if items.is_empty() => out.push_str("{}"),
+    NodeKind::LitRec { items, .. } => {
       out.push('{');
-      for (i, child) in children.iter().enumerate() {
+      for (i, child) in items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(child, out, depth);
       }
@@ -76,7 +76,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       }
     }
     NodeKind::Ident(s) => out.push_str(s),
-    NodeKind::Spread(inner) => {
+    NodeKind::Spread { inner, .. } => {
       out.push_str("..");
       if let Some(n) = inner {
         fmt_node(n, out, depth);
@@ -88,7 +88,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, args, out, depth),
-    NodeKind::Fn { params, body } => fmt_fn(params, body, out, depth),
+    NodeKind::Fn { params, body, .. } => fmt_fn(params, body, out, depth),
     NodeKind::Patterns(children) => {
       for (i, child) in children.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
@@ -140,7 +140,7 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
 
   // Single trailing fn (no complex args) → keep `fn params:` on same line
   if trailing.len() == 1 && is_fn(&trailing[0]) {
-    if let NodeKind::Fn { params, body } = &trailing[0].kind {
+    if let NodeKind::Fn { params, body, .. } = &trailing[0].kind {
       if plain.is_empty() { out.push(' '); } else { out.push_str(", "); }
       fmt_fn_with_inline(params, body, out, depth, false);
       return;
@@ -152,7 +152,7 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
   for arg in trailing {
     out.push('\n');
     ind(out, depth + 1);
-    if let NodeKind::Fn { params, body } = &arg.kind {
+    if let NodeKind::Fn { params, body, .. } = &arg.kind {
       fmt_fn_with_inline(params, body, out, depth + 1, true);
     } else {
       fmt_node(arg, out, depth + 1);
