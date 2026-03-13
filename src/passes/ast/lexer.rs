@@ -40,7 +40,7 @@ pub enum TokenKind {
   Err,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token<'src> {
   pub kind: TokenKind,
   pub loc: Loc,

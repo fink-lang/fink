@@ -3,7 +3,7 @@ pub mod lexer;
 pub mod parser;
 pub mod transform;
 
-use lexer::Loc;
+use lexer::{Loc, Token};
 
 /// Output of the parse pass — the AST tree plus metadata.
 pub struct ParseResult<'src> {
@@ -93,7 +93,7 @@ pub enum NodeKind<'src> {
   UnaryOp { op: &'src str, operand: Box<Node<'src>> },
 
   // InfixOp '+' | '-' | 'srcnd' | '>' | '&' | '..' | '...' | ...
-  InfixOp { op: &'src str, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  InfixOp { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // ChainedCmp — flat interleaved: operand, op, operand, op, operand, ...
   // e.g. a > b > c => [Operand(a), Op(">"), Operand(b), Op(">"), Operand(c)]
@@ -118,10 +118,10 @@ pub enum NodeKind<'src> {
   // --- binding ---
 
   // Bind lhs = rhs
-  Bind { lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  Bind { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // BindRight lhs |= rhs
-  BindRight { lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  BindRight { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // --- application ---
 
@@ -215,7 +215,7 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     }
     NodeKind::Group(inner) => walk(inner, f),
     NodeKind::Try(inner) | NodeKind::Yield(inner) => walk(inner, f),
-    NodeKind::Bind { lhs, rhs } | NodeKind::BindRight { lhs, rhs } => {
+    NodeKind::Bind { lhs, rhs, .. } | NodeKind::BindRight { lhs, rhs, .. } => {
       walk(lhs, f);
       walk(rhs, f);
     }
@@ -318,7 +318,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       print_node(operand, out, depth + 1);
     }
     NodeKind::InfixOp { op, lhs, rhs } => {
-      out.push_str("InfixOp '"); out.push_str(op); out.push('\'');
+      out.push_str("InfixOp '"); out.push_str(op.src); out.push('\'');
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
@@ -365,14 +365,14 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push('\n');
       print_node(inner, out, depth + 1);
     }
-    NodeKind::Bind { lhs, rhs } => {
+    NodeKind::Bind { lhs, rhs, .. } => {
       out.push_str("Bind");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
-    NodeKind::BindRight { lhs, rhs } => {
+    NodeKind::BindRight { lhs, rhs, .. } => {
       out.push_str("BindRight");
       out.push('\n');
       print_node(lhs, out, depth + 1);
@@ -449,10 +449,14 @@ fn print_children(children: &[Node], out: &mut String, depth: usize) {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::lexer::{Loc, Pos};
+  use crate::lexer::{Loc, Pos, Token, TokenKind};
 
   fn loc() -> Loc {
     Loc { start: Pos { idx: 0, line: 1, col: 0 }, end: Pos { idx: 0, line: 1, col: 0 } }
+  }
+
+  fn tok(src: &str) -> Token {
+    Token { kind: TokenKind::Sep, loc: loc(), src }
   }
 
   fn node(kind: NodeKind) -> Node {
@@ -463,6 +467,7 @@ mod tests {
   fn print_simple_binding() {
     // foo = 1
     let tree = node(NodeKind::Bind {
+      op: tok("="),
       lhs: Box::new(node(NodeKind::Ident("foo"))),
       rhs: Box::new(node(NodeKind::LitInt("1"))),
     });
@@ -473,7 +478,7 @@ mod tests {
   fn print_infix_op() {
     // a + b
     let tree = node(NodeKind::InfixOp {
-      op: "+",
+      op: tok("+"),
       lhs: Box::new(node(NodeKind::Ident("a"))),
       rhs: Box::new(node(NodeKind::Ident("b"))),
     });
@@ -527,7 +532,7 @@ mod tests {
     let mut names = vec![];
     super::walk(&r.root, &mut |n| {
       match &n.kind {
-        NodeKind::InfixOp { op, .. } => names.push(*op),
+        NodeKind::InfixOp { op, .. } => names.push(op.src),
         NodeKind::Ident(s) => names.push(s),
         _ => {}
       }

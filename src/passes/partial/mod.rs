@@ -152,15 +152,15 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
       let args = replace_vec(args, param_loc);
       Node::new(NodeKind::Apply { func: Box::new(func), args }, loc)
     }
-    NodeKind::Bind { lhs, rhs } => {
+    NodeKind::Bind { op, lhs, rhs } => {
       // lhs is pattern — don't replace; rhs is value
       let rhs = replace_partial(*rhs, param_loc);
-      Node::new(NodeKind::Bind { lhs, rhs: Box::new(rhs) }, loc)
+      Node::new(NodeKind::Bind { op, lhs, rhs: Box::new(rhs) }, loc)
     }
-    NodeKind::BindRight { lhs, rhs } => {
+    NodeKind::BindRight { op, lhs, rhs } => {
       // rhs is pattern — don't replace; lhs is value
       let lhs = replace_partial(*lhs, param_loc);
-      Node::new(NodeKind::BindRight { lhs: Box::new(lhs), rhs }, loc)
+      Node::new(NodeKind::BindRight { op, lhs: Box::new(lhs), rhs }, loc)
     }
     NodeKind::Arm { lhs, body } => {
       // In LitRec context: lhs is the key (Ident, not replaced), body has the value
@@ -201,15 +201,15 @@ impl<'src> PartialPass {
     let loc = node.loc;
     match node.kind {
       // Bind: only wrap RHS, never the whole Bind
-      NodeKind::Bind { lhs, rhs } => {
+      NodeKind::Bind { op, lhs, rhs } => {
         let rhs = self.transform_stmt(*rhs)?;
-        Ok(Node::new(NodeKind::Bind { lhs, rhs: Box::new(rhs) }, loc))
+        Ok(Node::new(NodeKind::Bind { op, lhs, rhs: Box::new(rhs) }, loc))
       }
 
       // BindRight: only wrap LHS value, never the whole BindRight
-      NodeKind::BindRight { lhs, rhs } => {
+      NodeKind::BindRight { op, lhs, rhs } => {
         let lhs = self.transform_stmt(*lhs)?;
-        Ok(Node::new(NodeKind::BindRight { lhs: Box::new(lhs), rhs }, loc))
+        Ok(Node::new(NodeKind::BindRight { op, lhs: Box::new(lhs), rhs }, loc))
       }
 
       // Arm: body stmts are independent scopes, lhs is pattern (skip)

@@ -1,5 +1,5 @@
 use super::{CmpPart, Node, NodeKind};
-use super::lexer::Loc;
+use super::lexer::{Loc, Token};
 
 // --- error ---
 
@@ -50,8 +50,8 @@ pub trait Transform<'src> {
       NodeKind::Group(inner) => self.transform_group(*inner, loc),
       NodeKind::Try(inner) => self.transform_try(*inner, loc),
       NodeKind::Yield(inner) => self.transform_yield(*inner, loc),
-      NodeKind::Bind { lhs, rhs } => self.transform_bind(*lhs, *rhs, loc),
-      NodeKind::BindRight { lhs, rhs } => self.transform_bind_right(*lhs, *rhs, loc),
+      NodeKind::Bind { op, lhs, rhs } => self.transform_bind(op, *lhs, *rhs, loc),
+      NodeKind::BindRight { op, lhs, rhs } => self.transform_bind_right(op, *lhs, *rhs, loc),
       NodeKind::Apply { func, args } => self.transform_apply(*func, args, loc),
       NodeKind::Pipe(children) => self.transform_pipe(children, loc),
       NodeKind::Fn { params, body } => self.transform_fn(*params, body, loc),
@@ -118,7 +118,7 @@ pub trait Transform<'src> {
 
   fn transform_infix_op(
     &mut self,
-    op: &'src str,
+    op: Token<'src>,
     lhs: Node<'src>,
     rhs: Node<'src>,
     loc: Loc,
@@ -180,24 +180,26 @@ pub trait Transform<'src> {
 
   fn transform_bind(
     &mut self,
+    op: Token<'src>,
     lhs: Node<'src>,
     rhs: Node<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let lhs = self.transform(lhs)?;
     let rhs = self.transform(rhs)?;
-    Ok(Node::new(NodeKind::Bind { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
+    Ok(Node::new(NodeKind::Bind { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
   }
 
   fn transform_bind_right(
     &mut self,
+    op: Token<'src>,
     lhs: Node<'src>,
     rhs: Node<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let lhs = self.transform(lhs)?;
     let rhs = self.transform(rhs)?;
-    Ok(Node::new(NodeKind::BindRight { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
+    Ok(Node::new(NodeKind::BindRight { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
   }
 
   fn transform_apply(
@@ -284,13 +286,17 @@ pub trait Transform<'src> {
 mod tests {
   use super::*;
   use crate::ast::NodeKind;
-  use crate::lexer::{Loc, Pos};
+  use crate::lexer::{Loc, Pos, Token, TokenKind};
 
   fn dummy_loc() -> Loc {
     Loc {
       start: Pos { idx: 0, line: 1, col: 0 },
       end: Pos { idx: 0, line: 1, col: 0 },
     }
+  }
+
+  fn tok(src: &str) -> Token {
+    Token { kind: TokenKind::Sep, loc: dummy_loc(), src }
   }
 
   fn node(kind: NodeKind) -> Node {
@@ -335,6 +341,7 @@ mod tests {
   fn identity_preserves_nested() {
     // foo = 1
     let n = node(NodeKind::Bind {
+      op: tok("="),
       lhs: Box::new(node(NodeKind::Ident("foo"))),
       rhs: Box::new(node(NodeKind::LitInt("1"))),
     });
@@ -371,6 +378,7 @@ mod tests {
   fn rewrite_int_to_bool_in_bind() {
     // foo = 1  =>  foo = true
     let n = node(NodeKind::Bind {
+      op: tok("="),
       lhs: Box::new(node(NodeKind::Ident("foo"))),
       rhs: Box::new(node(NodeKind::LitInt("1"))),
     });
@@ -378,6 +386,7 @@ mod tests {
     assert_eq!(
       result,
       node(NodeKind::Bind {
+        op: tok("="),
         lhs: Box::new(node(NodeKind::Ident("foo"))),
         rhs: Box::new(node(NodeKind::LitBool(true))),
       })

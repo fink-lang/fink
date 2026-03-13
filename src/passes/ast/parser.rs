@@ -136,19 +136,19 @@ impl<'src> Parser<'src> {
     let lhs = self.parse_pipe()?;
 
     if self.at(TokenKind::Sep) && self.peek().src == "=" {
-      self.bump();
+      let op = self.bump();
       self.skip_block_tokens();
       let rhs = self.parse_expr()?;
       let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-      return Ok(self.node(NodeKind::Bind { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc));
+      return Ok(self.node(NodeKind::Bind { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc));
     }
 
     if self.at(TokenKind::Sep) && self.peek().src == "|=" {
-      self.bump();
+      let op = self.bump();
       self.skip_block_tokens();
       let rhs = self.parse_expr()?;
       let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-      return Ok(self.node(NodeKind::BindRight { lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc));
+      return Ok(self.node(NodeKind::BindRight { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc));
     }
 
     Ok(lhs)
@@ -668,11 +668,17 @@ impl<'src> Parser<'src> {
         // Speculatively consume "not" — check if next is "in"
         let not_tok = self.bump();
         if self.at(TokenKind::Ident) && self.peek().src == "in" {
-          self.bump(); // consume "in"
+          let in_tok = self.bump();
+          // Construct a token spanning "not in" from source
+          let op = Token {
+            kind: TokenKind::Sep,
+            loc: Loc { start: not_tok.loc.start, end: in_tok.loc.end },
+            src: &self.src[not_tok.loc.start.idx as usize..in_tok.loc.end.idx as usize],
+          };
           let rhs = self.parse_infix(41)?;
           let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
           lhs = self.node(
-            NodeKind::InfixOp { op: "not in", lhs: Box::new(lhs), rhs: Box::new(rhs) },
+            NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) },
             loc,
           );
           continue;
@@ -710,11 +716,11 @@ impl<'src> Parser<'src> {
 
       // Range: .. and ...
       if Self::is_range_op(&tok) {
-        self.bump();
+        let op = self.bump();
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
         lhs = self.node(
-          NodeKind::InfixOp { op: tok.src, lhs: Box::new(lhs), rhs: Box::new(rhs) },
+          NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) },
           loc,
         );
         continue;
@@ -722,14 +728,14 @@ impl<'src> Parser<'src> {
 
       // Comparison operators: chain into ChainedCmp or single InfixOp
       if Self::is_cmp_op(&tok) {
-        let first_op = self.bump().src;
+        let first_op = self.bump();
         let first_rhs = self.parse_infix(r_bp)?;
 
         // Check if next is also a comparison op (chained)
         if Self::is_cmp_op(self.peek()) {
           let mut parts = vec![
             CmpPart::Operand(lhs),
-            CmpPart::Op(first_op),
+            CmpPart::Op(first_op.src),
             CmpPart::Operand(first_rhs),
           ];
           while Self::is_cmp_op(self.peek()) {
@@ -753,11 +759,11 @@ impl<'src> Parser<'src> {
       }
 
       // General infix
-      let op_tok = self.bump();
+      let op = self.bump();
       let rhs = self.parse_infix(r_bp)?;
       let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
       lhs = self.node(
-        NodeKind::InfixOp { op: op_tok.src, lhs: Box::new(lhs), rhs: Box::new(rhs) },
+        NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) },
         loc,
       );
     }
@@ -777,10 +783,15 @@ impl<'src> Parser<'src> {
       {
         let not_tok = self.bump();
         if self.at(TokenKind::Ident) && self.peek().src == "in" {
-          self.bump();
+          let in_tok = self.bump();
+          let op = Token {
+            kind: TokenKind::Sep,
+            loc: Loc { start: not_tok.loc.start, end: in_tok.loc.end },
+            src: &self.src[not_tok.loc.start.idx as usize..in_tok.loc.end.idx as usize],
+          };
           let rhs = self.parse_infix(41)?;
           let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-          lhs = self.node(NodeKind::InfixOp { op: "not in", lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
+          lhs = self.node(NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
           continue;
         } else {
           let operand = self.parse_infix(35)?;
@@ -805,17 +816,17 @@ impl<'src> Parser<'src> {
         continue;
       }
       if Self::is_range_op(&tok) {
-        self.bump();
+        let op = self.bump();
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-        lhs = self.node(NodeKind::InfixOp { op: tok.src, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
+        lhs = self.node(NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
         continue;
       }
       if Self::is_cmp_op(&tok) {
-        let first_op = self.bump().src;
+        let first_op = self.bump();
         let first_rhs = self.parse_infix(r_bp)?;
         if Self::is_cmp_op(self.peek()) {
-          let mut parts = vec![CmpPart::Operand(lhs), CmpPart::Op(first_op), CmpPart::Operand(first_rhs)];
+          let mut parts = vec![CmpPart::Operand(lhs), CmpPart::Op(first_op.src), CmpPart::Operand(first_rhs)];
           while Self::is_cmp_op(self.peek()) {
             let next_op = self.bump().src;
             let next_rhs = self.parse_infix(r_bp)?;
@@ -831,10 +842,10 @@ impl<'src> Parser<'src> {
         }
         continue;
       }
-      let op_tok = self.bump();
+      let op = self.bump();
       let rhs = self.parse_infix(r_bp)?;
       let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
-      lhs = self.node(NodeKind::InfixOp { op: op_tok.src, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
+      lhs = self.node(NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc);
     }
     Ok(lhs)
   }
@@ -1068,17 +1079,17 @@ impl<'src> Parser<'src> {
         // Then check for `=`/`|=` binding, which parse_single_arg does not cover.
         let item = self.parse_single_arg()?;
         let item = if self.at(TokenKind::Sep) && self.peek().src == "=" {
-          self.bump();
+          let op = self.bump();
           self.skip_block_tokens();
           let rhs = self.parse_expr()?;
           let loc = Loc { start: item.loc.start, end: rhs.loc.end };
-          self.node(NodeKind::Bind { lhs: Box::new(item), rhs: Box::new(rhs) }, loc)
+          self.node(NodeKind::Bind { op, lhs: Box::new(item), rhs: Box::new(rhs) }, loc)
         } else if self.at(TokenKind::Sep) && self.peek().src == "|=" {
-          self.bump();
+          let op = self.bump();
           self.skip_block_tokens();
           let rhs = self.parse_expr()?;
           let loc = Loc { start: item.loc.start, end: rhs.loc.end };
-          self.node(NodeKind::BindRight { lhs: Box::new(item), rhs: Box::new(rhs) }, loc)
+          self.node(NodeKind::BindRight { op, lhs: Box::new(item), rhs: Box::new(rhs) }, loc)
         } else {
           item
         };
@@ -1156,11 +1167,11 @@ impl<'src> Parser<'src> {
     if let Some(inner) = maybe_inner {
       // ..(expr) |= name — spread guard with rhs binding
       let node = if self.at(TokenKind::Sep) && self.peek().src == "|=" {
-        self.bump();
+        let op = self.bump();
         self.skip_block_tokens();
         let rhs = self.parse_expr()?;
         let loc = Loc { start: inner.loc.start, end: rhs.loc.end };
-        self.node(NodeKind::BindRight { lhs: Box::new(inner), rhs: Box::new(rhs) }, loc)
+        self.node(NodeKind::BindRight { op, lhs: Box::new(inner), rhs: Box::new(rhs) }, loc)
       } else {
         inner
       };
@@ -1312,10 +1323,10 @@ impl<'src> Parser<'src> {
         // Also support default args: name = 'default'.
         let param = self.parse_apply_no_block()?;
         let param = if self.at(TokenKind::Sep) && self.peek().src == "=" {
-          self.bump();
+          let op = self.bump();
           let rhs = self.parse_infix(0)?;
           let loc = Loc { start: param.loc.start, end: rhs.loc.end };
-          self.node(NodeKind::Bind { lhs: Box::new(param), rhs: Box::new(rhs) }, loc)
+          self.node(NodeKind::Bind { op, lhs: Box::new(param), rhs: Box::new(rhs) }, loc)
         } else {
           param
         };

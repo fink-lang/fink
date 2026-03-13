@@ -41,7 +41,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
     let node = self.ast_node(cps_id)?;
     match &node.kind {
       NodeKind::Ident(s) => Some((s, false)),
-      NodeKind::InfixOp { op, .. } => Some((op, true)),
+      NodeKind::InfixOp { op, .. } => Some((op.src, true)),
       NodeKind::UnaryOp { op, .. } => Some((op, true)),
       NodeKind::ChainedCmp(_) => None,  // chained cmp has multiple ops, handled by transform
       _ => None,

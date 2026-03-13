@@ -82,7 +82,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
         fmt_node(n, out, depth);
       }
     }
-    NodeKind::Bind { lhs, rhs } => {
+    NodeKind::Bind { lhs, rhs, .. } => {
       fmt_node(lhs, out, depth);
       out.push_str(" = ");
       fmt_node(rhs, out, depth);
