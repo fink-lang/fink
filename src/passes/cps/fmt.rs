@@ -10,7 +10,7 @@
 use crate::ast::{self, AstId, Node, NodeKind};
 use crate::lexer::{Loc, Pos};
 use crate::propgraph::PropGraph;
-use super::ir::{Arg, Bind, BindName, Callable, CpsId, Expr, ExprKind, Op, RefKind, Lit, Param, Val, ValKind};
+use super::ir::{Arg, Bind, BindName, Callable, CpsId, Expr, ExprKind, FreeVar, Op, RefKind, Lit, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Formatter context — carries the prop graphs needed for origin lookups
@@ -133,7 +133,7 @@ fn scope_cont(local: &str, body: Node<'static>) -> Node<'static> {
 }
 
 /// `·yield value, ·state, fn result, ·state: body` — yield suspension point.
-fn fmt_yield(value: &Val<'_>, result: &Bind<'_>, body: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+fn fmt_yield(value: &Val<'_>, result: &Bind, body: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   let cont = result_cont(&render_bind_ctx(result, ctx), to_node(body, ctx));
   with_loads(ctx, &[value], |resolved| {
     apply(ident("·yield"), vec![resolved.into_iter().next().unwrap(), ident("·state"), cont.clone()])
@@ -148,10 +148,10 @@ fn fmt_yield(value: &Val<'_>, result: &Bind<'_>, body: &Expr<'_>, ctx: &Ctx<'_, 
 /// Uses origin map to recover names from the AST.
 fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &v.kind {
-    ValKind::Lit(lit)    => lit_to_node(lit),
+    ValKind::Lit(lit) => lit_to_node(lit),
     ValKind::Ident(_) => ident(&render_val_name(v, ctx)),
-    ValKind::Ref(ref_)    => match &ref_.kind {
-      RefKind::Name(name) => ident(&render_ref_name_ctx(name, v.id, ctx)),
+    ValKind::Ref(ref_) => match &ref_.kind {
+      RefKind::Name => ident(&render_ref_name_ctx(v.id, ctx)),
       RefKind::Bind(_) => ident(&render_val_name(v, ctx)),
     },
   }
@@ -162,17 +162,17 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 fn resolved_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
   match &v.kind {
     ValKind::Ident(_) => render_val_name(v, ctx),
-    ValKind::Ref(ref_)    => match &ref_.kind {
-      RefKind::Name(name) => render_ref_name_ctx(name, v.id, ctx),
+    ValKind::Ref(ref_) => match &ref_.kind {
+      RefKind::Name => render_ref_name_ctx(v.id, ctx),
       RefKind::Bind(_) => render_val_name(v, ctx),
     },
-    ValKind::Lit(_)      => String::new(),  // literals don't have a name
+    ValKind::Lit(_) => String::new(),
   }
 }
 
 /// Render a Val's name using origin map. For Ident and RefKind::Bind positions.
 /// For Gen temps: always `·v_N` — origin tracks provenance, not the name.
-/// For User names: recovers source name from AST; falls back to BindName content.
+/// For User names: recovers source name from AST via origin map.
 fn render_val_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
   // Check if this is a Gen temp — if so, skip origin lookup.
   let is_gen = match &v.kind {
@@ -189,7 +189,7 @@ fn render_val_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
     ValKind::Ident(name) => render_bind(*name),
     ValKind::Ref(ref_) => match &ref_.kind {
       RefKind::Bind(name) => render_bind(*name),
-      RefKind::Name(name) => name.to_string(),
+      RefKind::Name => unreachable!("RefKind::Name should always have an origin"),
     },
     ValKind::Lit(_) => String::new(),
   }
@@ -203,9 +203,9 @@ fn needs_load(v: &Val<'_>) -> bool {
 /// Synthesize a `·load` wrapping `body_node`:
 ///   ·load ·scope, id'name' | op'sym', fn local, ·scope: body_node
 /// Uses origin map for tag selection (op_tag vs id_tag).
-fn emit_load(ref_: &super::ir::Ref<'_>, cps_id: CpsId, local: &str, body_node: Node<'static>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+fn emit_load(ref_: &super::ir::Ref, cps_id: CpsId, local: &str, body_node: Node<'static>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   let key_node = match &ref_.kind {
-    RefKind::Name(name) => ref_tag_ctx(name, cps_id, ctx),
+    RefKind::Name => ref_tag_ctx(cps_id, ctx),
     RefKind::Bind(name) => {
       let raw = match ctx.source_name(cps_id) {
         Some((s, _)) => s.to_string(),
@@ -300,102 +300,78 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 // ---------------------------------------------------------------------------
 
 // Maps a BindName → rendered identifier (with · prefix for Gen).
-// Use for ident() call sites.
-// TODO [deprecated]: replace with render_bind_ctx once all consumers thread Ctx.
-fn render_bind(name: BindName<'_>) -> String {
+// Only meaningful for Gen temps — User requires origin map lookup.
+fn render_bind(name: BindName) -> String {
   match name {
-    BindName::User(s) => s.to_string(),
-    BindName::Gen(n)  => format!("·v_{}", n),
+    BindName::User => unreachable!("render_bind: User requires origin map"),
+    BindName::Gen(n) => format!("·v_{}", n),
   }
 }
 
 /// Render a Bind node's name using origin map.
-/// For User bindings: recovers the source name from the AST when available.
-/// For Gen temps: always renders as `·v_N` — the origin tracks provenance,
-/// not the binding's name.
-fn render_bind_ctx(bind: &Bind<'_>, ctx: &Ctx<'_, '_>) -> String {
+/// For User bindings: recovers the source name from the AST.
+/// For Gen temps: always renders as `·v_N`.
+fn render_bind_ctx(bind: &Bind, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     BindName::Gen(n) => format!("·v_{}", n),
-    BindName::User(_) => match ctx.source_name(bind.id) {
-      Some((s, _)) => s.to_string(),
-      None => render_bind(bind.kind),
-    },
+    BindName::User => ctx.source_name(bind.id)
+      .expect("render_bind_ctx: User bind must have origin")
+      .0.to_string(),
   }
 }
 
 // Maps a BindName → raw scope key (no · prefix).
-// Use inside id_tag() where the tag content is the storage key, not a rendered ident.
-// TODO [deprecated]: replace with raw_bind_ctx once all consumers thread Ctx.
-fn raw_bind(name: BindName<'_>) -> String {
+// Only meaningful for Gen temps — User requires origin map lookup.
+fn raw_bind(name: BindName) -> String {
   match name {
-    BindName::User(s) => s.to_string(),
-    BindName::Gen(n)  => format!("v_{}", n),
+    BindName::User => unreachable!("raw_bind: User requires origin map"),
+    BindName::Gen(n) => format!("v_{}", n),
   }
 }
 
 /// Raw scope key for a Bind node using origin map (no · prefix).
 /// Used for id_tag() — the tag content is the storage key.
-/// For Gen temps: always `v_N` — origin tracks provenance, not storage key.
-fn raw_bind_ctx(bind: &Bind<'_>, ctx: &Ctx<'_, '_>) -> String {
+fn raw_bind_ctx(bind: &Bind, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     BindName::Gen(n) => format!("v_{}", n),
-    BindName::User(_) => match ctx.source_name(bind.id) {
-      Some((s, _)) => s.to_string(),
-      None => raw_bind(bind.kind),
-    },
+    BindName::User => ctx.source_name(bind.id)
+      .expect("raw_bind_ctx: User bind must have origin")
+      .0.to_string(),
   }
 }
 
 /// Render a RefKind::Name for display.
-/// Recovers the name from the AST via origin map when available.
-/// Falls back to the CPS string for compiler-generated nodes (prims) with no AST origin.
-fn render_ref_name_ctx(name: &str, cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
+/// Recovers the name from the AST via origin map.
+fn render_ref_name_ctx(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   match ctx.source_name(cps_id) {
     Some((s, true))  => sigil_op(s),
     Some((s, false)) => s.to_string(),
-    None => if is_op_str(name) { sigil_op(name) } else { name.to_string() },
+    None => unreachable!("render_ref_name_ctx: RefKind::Name must have origin"),
   }
 }
 
 /// Produce the correct tag node for a ref name.
-/// Recovers the name from the AST via origin map when available.
-/// Falls back to the CPS string for compiler-generated nodes (prims) with no AST origin.
-fn ref_tag_ctx(name: &str, cps_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
+/// Recovers the name from the AST via origin map.
+fn ref_tag_ctx(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match ctx.source_name(cps_id) {
     Some((s, true))  => op_tag(s),
     Some((s, false)) => id_tag(s),
-    None => {
-      // No AST origin — compiler-generated prim. Use the CPS string as fallback.
-      if is_op_str(name) {
-        op_tag(name)
-      } else if let Some(stripped) = name.strip_prefix('·') {
-        id_tag(stripped)
-      } else {
-        id_tag(name)
-      }
-    }
+    None => unreachable!("ref_tag_ctx: RefKind::Name must have origin"),
   }
 }
 
-/// String-based operator detection — fallback when no origin map is available.
-/// Used for compiler-generated nodes (prims) that have no AST origin.
-fn is_op_str(name: &str) -> bool {
-  matches!(name, "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | "<=" | ">" | ">="
-    | "." | "and" | "or" | "not" | "in" | ".." | "...")
-}
-
-// Maps a BindName → raw tag string (no · prefix).
-// Use for id_tag() call sites where the tag content is the bare name.
-// TODO [deprecated]: replace with bind_tag_ctx once all consumers thread Ctx.
-fn bind_tag(name: BindName<'_>) -> Node<'static> {
-  match name {
-    BindName::User(s) => id_tag(s),
-    BindName::Gen(n)  => id_tag(&format!("v_{}", n)),
+/// Render a free variable CpsId to a display name.
+/// Recovers the source name from the origin map.
+fn render_free_var(fv: FreeVar, ctx: &Ctx<'_, '_>) -> String {
+  match ctx.source_name(fv) {
+    Some((s, true))  => sigil_op(s),
+    Some((s, false)) => s.to_string(),
+    None => unreachable!("render_free_var: free var must have origin"),
   }
 }
 
 /// Produce the scope tag for a Bind node using origin map.
-fn bind_tag_ctx(bind: &Bind<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+fn bind_tag_ctx(bind: &Bind, ctx: &Ctx<'_, '_>) -> Node<'static> {
   id_tag(&raw_bind_ctx(bind, ctx))
 }
 
@@ -583,11 +559,11 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         let mut fields: Vec<Node<'static>> = vec![
           node(NodeKind::Spread(Some(Box::new(ident("·scope"))))),
         ];
-        // free_vars are bare &str — no CpsId, use string-based rendering.
-        // TODO [deprecated]: remove with free_vars field.
-        fields.extend(free_vars.iter().map(|fv|
-          ident(&if is_op_str(fv) { sigil_op(fv) } else { fv.to_string() })
-        ));
+        // free_vars are CpsIds — recover names from origin map.
+        fields.extend(free_vars.iter().map(|fv| {
+          let name = render_free_var(*fv, ctx);
+          ident(&name)
+        }));
         node(NodeKind::LitRec(fields))
       };
       fn_params.push(scope_arg);

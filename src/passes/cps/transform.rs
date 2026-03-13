@@ -23,7 +23,7 @@ use crate::ast::{AstId, CmpPart, Node, NodeKind};
 use crate::propgraph::PropGraph;
 use super::ir::{
   Arg, Bind, BindName, Callable, CpsId, CpsResult, Expr, ExprKind, Op, Ref, RefKind, Lit,
-  Name, Param, Val, ValKind,
+  Param, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -47,12 +47,12 @@ impl Gen {
     n
   }
 
-  pub fn fresh_fn(&mut self, origin: Option<AstId>) -> Bind<'static> {
+  pub fn fresh_fn(&mut self, origin: Option<AstId>) -> Bind {
     let n = self.next();
     self.bind(BindName::Gen(n), origin)
   }
 
-  pub fn fresh_result(&mut self, origin: Option<AstId>) -> Bind<'static> {
+  pub fn fresh_result(&mut self, origin: Option<AstId>) -> Bind {
     let n = self.next();
     self.bind(BindName::Gen(n), origin)
   }
@@ -76,7 +76,7 @@ impl Gen {
   }
 
   /// Build a Bind with an auto-incrementing CpsId.
-  fn bind<'src>(&mut self, kind: BindName<'src>, origin: Option<AstId>) -> Bind<'src> {
+  fn bind(&mut self, kind: BindName, origin: Option<AstId>) -> Bind {
     let id = self.next_cps_id(origin);
     Bind { id, kind }
   }
@@ -94,29 +94,21 @@ impl Gen {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn ident_val<'src>(g: &mut Gen, name: BindName<'src>, origin: Option<AstId>) -> Val<'src> {
+fn ident_val<'src>(g: &mut Gen, name: BindName, origin: Option<AstId>) -> Val<'src> {
   g.val(ValKind::Ident(name), origin)
 }
 
-fn key_val_name<'src>(g: &mut Gen, name: Name<'src>, origin: Option<AstId>) -> Val<'src> {
-  g.val(ValKind::Ref(Ref { kind: RefKind::Name(name), resolution: None }), origin)
+/// Create a Ref val for a user name that needs loading from scope.
+/// The name itself is not carried — it's recoverable from the origin map.
+fn key_val_ref<'src>(g: &mut Gen, origin: Option<AstId>) -> Val<'src> {
+  g.val(ValKind::Ref(Ref { kind: RefKind::Name, resolution: None }), origin)
 }
 
 /// Create a Ref to a BindName that needs loading from scope.
 /// Used when a fn param needs to be referenced as a Ref val (scope-stored by the runtime).
 #[allow(dead_code)]
-fn key_val_bind<'src>(g: &mut Gen, name: BindName<'src>, origin: Option<AstId>) -> Val<'src> {
+fn key_val_bind<'src>(g: &mut Gen, name: BindName, origin: Option<AstId>) -> Val<'src> {
   g.val(ValKind::Ref(Ref { kind: RefKind::Bind(name), resolution: None }), origin)
-}
-
-#[deprecated(note = "inline into key_val_name — no longer distinct after RefKind unification")]
-fn key_val_op<'src>(g: &mut Gen, op: &'src str, origin: Option<AstId>) -> Val<'src> {
-  key_val_name(g, op, origin)
-}
-
-#[deprecated(note = "inline into key_val_name — no longer distinct after RefKind unification")]
-fn key_val_prim(g: &mut Gen, prim: &'static str, origin: Option<AstId>) -> Val<'static> {
-  key_val_name(g, prim, origin)
 }
 
 fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src> {
@@ -143,7 +135,7 @@ fn app_node<'src>(
   g: &mut Gen,
   func: Val<'src>,
   args: Vec<Arg<'src>>,
-  result: Bind<'src>,
+  result: Bind,
   body: Expr<'src>,
   origin: Option<AstId>,
 ) -> Expr<'src> {
@@ -178,10 +170,10 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     NodeKind::LitStr(s) => (lit_val(g, Lit::Str(s), o), vec![]),
 
     // ---- identifier reference — scope lookup ----
-    NodeKind::Ident(name) => (key_val_name(g, name, o), vec![]),
+    NodeKind::Ident(_) => (key_val_ref(g, o), vec![]),
 
     // ---- wildcard ----
-    NodeKind::Wildcard => (key_val_name(g, "_", o), vec![]),
+    NodeKind::Wildcard => (key_val_ref(g, o), vec![]),
 
     // ---- group ----
     // A plain group `(expr)` is transparent.
@@ -356,7 +348,18 @@ fn lower_bind<'src>(
       // All user binds (ident or pattern) are degenerate pattern matches.
       // lower_pat_lhs emits MatchLetVal for plain idents, Match* chains for patterns.
       let bound = lower_pat_lhs(g, lhs, val, origin, &mut pending);
-      (ident_val(g, bound, origin), pending)
+      // Origin for the result val: recover the bound ident's AstId.
+      // - Plain ident (`x = rhs`): lhs is the ident itself
+      // - Guarded bind (`a > 0 = rhs`): extract the innermost ident from the guard
+      // - Range (`0..10 = rhs`): pure guard, result is the rhs value
+      // - Structural patterns (Seq/Rec): result is a Gen temp — origin unused
+      let result_origin = match &lhs.kind {
+        NodeKind::Ident(_) => Some(lhs.id),
+        NodeKind::InfixOp { op, .. } if matches!(*op, ".." | "...") => Some(rhs.id),
+        NodeKind::InfixOp { .. } => Some(extract_bind(lhs).1),
+        _ => origin,
+      };
+      (ident_val(g, bound, result_origin), pending)
     }
   }
 }
@@ -414,7 +417,7 @@ fn lower_iife<'src>(
 fn extract_params_with_gen<'src>(
   g: &mut Gen,
   params: &'src Node<'src>,
-) -> (Vec<Param<'src>>, Vec<Pending<'src>>) {
+) -> (Vec<Param>, Vec<Pending<'src>>) {
   let mut param_list = vec![];
   let mut deferred: Vec<Pending<'src>> = vec![];
   let nodes = match &params.kind {
@@ -423,21 +426,21 @@ fn extract_params_with_gen<'src>(
   };
   for p in nodes {
     match &p.kind {
-      NodeKind::Ident(name) => param_list.push(Param::Name(g.bind(BindName::User(name), Some(p.id)))),
-      NodeKind::Wildcard => param_list.push(Param::Name(g.bind(BindName::User("_"), Some(p.id)))),
+      NodeKind::Ident(_) => param_list.push(Param::Name(g.bind(BindName::User, Some(p.id)))),
+      NodeKind::Wildcard => param_list.push(Param::Name(g.bind(BindName::User, Some(p.id)))),
       NodeKind::Patterns(ps) => {
         for inner in ps {
           let bind_kind = match &inner.kind {
-            NodeKind::Ident(name) => BindName::User(name),
-            _ => BindName::User("_"),
+            NodeKind::Ident(_) => BindName::User,
+            _ => BindName::User,
           };
           param_list.push(Param::Name(g.bind(bind_kind, Some(inner.id))));
         }
       }
       NodeKind::Spread(inner) => {
         let (bind_kind, bind_origin) = match inner.as_deref() {
-          Some(node @ Node { kind: NodeKind::Ident(name), .. }) => (BindName::User(name), Some(node.id)),
-          _ => (BindName::User("_"), Some(p.id)),
+          Some(node @ Node { kind: NodeKind::Ident(_), .. }) => (BindName::User, Some(node.id)),
+          _ => (BindName::User, Some(p.id)),
         };
         param_list.push(Param::Spread(g.bind(bind_kind, bind_origin)));
       }
@@ -460,24 +463,24 @@ fn prepend_pat_binds<'src>(g: &mut Gen, deferred: Vec<Pending<'src>>, body: Expr
   wrap(g, deferred, body)
 }
 
-fn extract_params<'src>(g: &mut Gen, params: &'src Node<'src>) -> Vec<Param<'src>> {
+fn extract_params<'src>(g: &mut Gen, params: &'src Node<'src>) -> Vec<Param> {
   match &params.kind {
     NodeKind::Patterns(ps) => ps.iter().flat_map(|p| extract_param(g, p)).collect(),
     _ => extract_param(g, params),
   }
 }
 
-fn extract_param<'src>(g: &mut Gen, param: &'src Node<'src>) -> Vec<Param<'src>> {
+fn extract_param<'src>(g: &mut Gen, param: &'src Node<'src>) -> Vec<Param> {
   let origin = Some(param.id);
   match &param.kind {
-    NodeKind::Ident(name) => vec![Param::Name(g.bind(BindName::User(name), origin))],
-    NodeKind::Wildcard => vec![Param::Name(g.bind(BindName::User("_"), origin))],
+    NodeKind::Ident(_) => vec![Param::Name(g.bind(BindName::User, origin))],
+    NodeKind::Wildcard => vec![Param::Name(g.bind(BindName::User, origin))],
     NodeKind::Patterns(ps) => ps.iter().flat_map(|p| extract_param(g, p)).collect(),
     // `..rest` varargs param — trailing spread.
     NodeKind::Spread(inner) => {
       let (bind_kind, bind_origin) = match inner.as_deref() {
-        Some(node @ Node { kind: NodeKind::Ident(name), .. }) => (BindName::User(name), Some(node.id)),
-        _ => (BindName::User("_"), origin),
+        Some(node @ Node { kind: NodeKind::Ident(_), .. }) => (BindName::User, Some(node.id)),
+        _ => (BindName::User, origin),
       };
       vec![Param::Spread(g.bind(bind_kind, bind_origin))]
     }
@@ -746,7 +749,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
       NodeKind::Ident(name) => {
         // Shorthand `{foo}` == `{foo: foo}`
         let key_lit = lit_val(g, Lit::Str(name), Some(field.id));
-        let id_val = key_val_name(g, name, Some(field.id));
+        let id_val = key_val_ref(g, Some(field.id));
         let result = g.fresh_result(origin);
         let rk = result.kind;
         pending.push(Pending::App { func: Callable::Op(Op::RecPut), args: args_val(vec![acc, key_lit, id_val]), result,  origin });
@@ -824,7 +827,7 @@ fn lower_match<'src>(
     pending.extend(sp);
     v
   }).collect();
-  let arm_params: Vec<Bind<'src>> = params.iter().map(|_| g.fresh_result(origin)).collect();
+  let arm_params: Vec<Bind> = params.iter().map(|_| g.fresh_result(origin)).collect();
   let cps_arms: Vec<Expr<'src>> = arms.iter()
     .map(|arm| lower_match_arm(g, arm, &arm_params, origin))
     .collect();
@@ -834,7 +837,7 @@ fn lower_match<'src>(
   (ident_val(g, result_kind, origin), pending)
 }
 
-fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[Bind<'src>], _origin: Option<AstId>) -> Expr<'src> {
+fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[Bind], _origin: Option<AstId>) -> Expr<'src> {
   match &arm.kind {
     NodeKind::Arm { lhs, body } => {
       let origin = Some(arm.id);
@@ -888,12 +891,12 @@ fn lower_block<'src>(
 
 // Extend Pending to handle App and Match, which need a body (the next expression).
 enum Pending<'src> {
-  Val { name: Bind<'src>, val: Val<'src>, origin: Option<AstId> },
-  Fn { name: Bind<'src>, params: Vec<Param<'src>>, fn_body: Expr<'src>, origin: Option<AstId> },
-  App { func: Callable<'src>, args: Vec<Arg<'src>>, result: Bind<'src>, origin: Option<AstId> },
-  MatchBlock { params: Vec<Val<'src>>, arm_params: Vec<Bind<'src>>, arms: Vec<Expr<'src>>, result: Bind<'src>, origin: Option<AstId> },
+  Val { name: Bind, val: Val<'src>, origin: Option<AstId> },
+  Fn { name: Bind, params: Vec<Param>, fn_body: Expr<'src>, origin: Option<AstId> },
+  App { func: Callable<'src>, args: Vec<Arg<'src>>, result: Bind, origin: Option<AstId> },
+  MatchBlock { params: Vec<Val<'src>>, arm_params: Vec<Bind>, arms: Vec<Expr<'src>>, result: Bind, origin: Option<AstId> },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
-  MatchBind { name: Bind<'src>, val: Val<'src>, origin: Option<AstId> },
+  MatchBind { name: Bind, val: Val<'src>, origin: Option<AstId> },
   /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
   MatchGuard { func: Callable<'src>, args: Vec<Val<'src>>, origin: Option<AstId> },
   /// Literal equality check — emits MatchValue with ·panic as fail cont.
@@ -901,19 +904,19 @@ enum Pending<'src> {
   /// Seq pattern entry — emits MatchSeq with ·panic as fail cont.
   MatchSeq { val: Val<'src>, cursor: u32, origin: Option<AstId> },
   /// Pop head from seq — emits MatchNext with ·panic as fail cont.
-  MatchNext { val: Val<'src>, cursor: u32, next_cursor: u32, elem: Bind<'src>, origin: Option<AstId> },
+  MatchNext { val: Val<'src>, cursor: u32, next_cursor: u32, elem: Bind, origin: Option<AstId> },
   /// Seq pattern exhaustion — emits MatchDone with ·panic as fail cont.
-  MatchDone { val: Val<'src>, cursor: u32, result: Bind<'src>, origin: Option<AstId> },
+  MatchDone { val: Val<'src>, cursor: u32, result: Bind, origin: Option<AstId> },
   /// Assert cursor non-empty — emits MatchNotDone with ·panic as fail cont.
   MatchNotDone { val: Val<'src>, cursor: u32, origin: Option<AstId> },
   /// Bind remaining elements — emits MatchRest with ·panic as fail cont.
-  MatchRest { val: Val<'src>, cursor: u32, result: Bind<'src>, origin: Option<AstId> },
+  MatchRest { val: Val<'src>, cursor: u32, result: Bind, origin: Option<AstId> },
   /// Rec pattern entry — emits MatchRec with ·panic as fail cont.
   MatchRec { val: Val<'src>, cursor: u32, origin: Option<AstId> },
   /// Extract named field from rec — emits MatchField with ·panic as fail cont.
-  MatchField { val: Val<'src>, cursor: u32, next_cursor: u32, field: &'src str, elem: Bind<'src>, origin: Option<AstId> },
+  MatchField { val: Val<'src>, cursor: u32, next_cursor: u32, field: &'src str, elem: Bind, origin: Option<AstId> },
   /// Yield — suspend execution, yield a value; result bound in continuation.
-  Yield { value: Val<'src>, result: Bind<'src>, origin: Option<AstId> },
+  Yield { value: Val<'src>, result: Bind, origin: Option<AstId> },
 }
 
 fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
@@ -1164,11 +1167,11 @@ fn lower_pat_lhs<'src>(
   val: Val<'src>,
   origin: Option<AstId>,
   pending: &mut Vec<Pending<'src>>,
-) -> BindName<'src> {
+) -> BindName {
   match &lhs.kind {
     // Plain bind: `x = foo`
-    NodeKind::Ident(name) => {
-      let bind = g.bind(BindName::User(name), Some(lhs.id));
+    NodeKind::Ident(_) => {
+      let bind = g.bind(BindName::User, Some(lhs.id));
       let bind_kind = bind.kind;
       pending.push(Pending::MatchBind { name: bind, val,  origin });
       bind_kind
@@ -1194,7 +1197,7 @@ fn lower_pat_lhs<'src>(
       // Range is a pure guard; no new binding is allocated.
       match val.kind {
         ValKind::Ident(name)                               => name,
-        ValKind::Ref(Ref { kind: RefKind::Name(n), .. })  => BindName::User(n),
+        ValKind::Ref(Ref { kind: RefKind::Name, .. })      => BindName::User,
         _                                                  => g.fresh_result(origin).kind,
       }
     }
@@ -1284,8 +1287,8 @@ fn lower_pat_lhs<'src>(
                 let result_kind = result.kind;
                 pending.push(Pending::MatchRest { val: val.clone(), cursor: cur, result,  origin });
                 // Bind the rest value to the name
-                if let NodeKind::Ident(name) = &name_node.kind {
-                  let bind = g.bind(BindName::User(name), Some(name_node.id));
+                if let NodeKind::Ident(_) = &name_node.kind {
+                  let bind = g.bind(BindName::User, Some(name_node.id));
                   let rest_val = ident_val(g, result_kind, origin);
                   pending.push(Pending::MatchBind {
                     name: bind,
@@ -1341,11 +1344,11 @@ fn lower_pat_lhs<'src>(
               }
               Some(inner_node) => match &inner_node.kind {
                 // `{..rest}` — bind remaining fields as a record
-                NodeKind::Ident(name) => {
+                NodeKind::Ident(_) => {
                   let result = g.fresh_result(origin);
                   let result_kind = result.kind;
                   pending.push(Pending::MatchRest { val: val.clone(), cursor: cur, result,  origin });
-                  let bind = g.bind(BindName::User(name), Some(inner_node.id));
+                  let bind = g.bind(BindName::User, Some(inner_node.id));
                   let rest_val = ident_val(g, result_kind, origin);
                   pending.push(Pending::MatchBind {
                     name: bind,
@@ -1376,7 +1379,7 @@ fn lower_pat_lhs<'src>(
               field: name, elem, origin,
             });
             cur = next;
-            let bind = g.bind(BindName::User(name), Some(field_node.id));
+            let bind = g.bind(BindName::User, Some(field_node.id));
             let elem_val = ident_val(g, elem_kind, origin);
             pending.push(Pending::MatchBind { name: bind, val: elem_val,  origin });
           }
@@ -1432,7 +1435,7 @@ fn lower_pat_lhs<'src>(
     // e.g. `[b, c] |= d` binds the element as `d` and destructures it as `[b, c]`.
     NodeKind::BindRight { lhs: pat, rhs: name_node } => {
       let bind_kind = match &name_node.kind {
-        NodeKind::Ident(n) => BindName::User(n),
+        NodeKind::Ident(_) => BindName::User,
         _ => panic!("lower_pat_lhs: BindRight rhs must be an Ident"),
       };
       let bind = g.bind(bind_kind, Some(name_node.id));
@@ -1448,16 +1451,12 @@ fn lower_pat_lhs<'src>(
   }
 }
 
-/// Extract the BindName from the innermost ident of a guarded pattern lhs.
-fn extract_bind_name<'src>(node: &'src Node<'src>) -> BindName<'src> {
-  extract_bind(node).0
-}
 
 /// Extract the binding name and its AST id from a pattern LHS.
 /// Recurses through nested InfixOps to find the innermost ident.
-fn extract_bind<'src>(node: &'src Node<'src>) -> (BindName<'src>, AstId) {
+fn extract_bind<'src>(node: &'src Node<'src>) -> (BindName, AstId) {
   match &node.kind {
-    NodeKind::Ident(name) => (BindName::User(name), node.id),
+    NodeKind::Ident(_) => (BindName::User, node.id),
     NodeKind::InfixOp { lhs, .. } => extract_bind(lhs),
     _ => panic!("extract_bind: expected ident in pattern lhs, got {:?}", node.kind),
   }
@@ -1537,8 +1536,6 @@ mod pat_tests {
   use crate::parser::parse;
   use crate::ast::build_index;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
-  #[allow(deprecated)]
-  use crate::passes::cps::free_vars::annotate;
   use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
@@ -1548,20 +1545,6 @@ mod pat_tests {
         let cps = lower_expr(&r.root);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
         fmt_with(&cps.root, &ctx)
-      }
-      Err(e) => format!("ERROR: {}", e.message),
-    }
-  }
-
-  #[allow(deprecated)]
-  fn cps_free_vars(src: &str) -> String {
-    match parse(src) {
-      Ok(r) => {
-        let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
-        let annotated = annotate(cps.root);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
-        fmt_with(&annotated, &ctx)
       }
       Err(e) => format!("ERROR: {}", e.message),
     }
