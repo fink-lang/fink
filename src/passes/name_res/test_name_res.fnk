@@ -1,0 +1,97 @@
+---
+name resolution tests
+---
+
+# Name resolution — maps each ref to the binding it resolves to.
+#
+# Output format: one line per resolved Ref::Name, walk order.
+#   (ref <cps_id>, <name>) == (bind <cps_id>, <name>)
+#
+# Only Ref::Name nodes appear (Ref::Gen are structural, always resolved).
+# Unresolved names produce no entry (error case TBD).
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_name_res fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected resolution edges>
+
+
+---
+local bindings
+---
+
+test 'ref to binding', fn:
+  expect cps_name_res fink":
+    x = 1
+    y = x
+  | equals fink":
+    (ref 3, x) == (bind 2, x)
+    (ref 5, y) == (bind 4, y)
+
+test 'ref to param', fn:
+  expect cps_name_res fink":
+    fn a: a
+  | equals fink":
+    (ref 2, a) == (bind 1, a)
+
+test 'chained bindings', fn:
+  expect cps_name_res fink":
+    x = 1
+    y = x
+    z = y
+  | equals fink":
+    (ref 3, x) == (bind 2, x)
+    (ref 5, y) == (bind 4, y)
+    (ref 7, z) == (bind 6, z)
+
+test 'multiple refs to same binding', fn:
+  expect cps_name_res fink":
+    x = 1
+    y = x
+    z = x
+  | equals fink":
+    (ref 3, x) == (bind 2, x)
+    (ref 5, x) == (bind 2, x)
+    (ref 7, z) == (bind 6, z)
+
+test 'fn with two params', fn:
+  expect cps_name_res fink":
+    fn a, b: a + b
+  | equals fink":
+    (ref 3, a) == (bind 1, a)
+    (ref 4, b) == (bind 2, b)
+
+
+---
+closures
+---
+
+test 'capture from outer scope', fn:
+  expect cps_name_res fink":
+    x = 1
+    fn a: x
+  | equals fink":
+    (ref 5, x) == (bind 2, x)
+
+test 'param not captured', fn:
+  expect cps_name_res fink":
+    fn a:
+      fn b: a
+  | equals fink":
+    (ref 4, a) == (bind 1, a)
+
+
+---
+application
+---
+
+test 'fn application', fn:
+  expect cps_name_res fink":
+    f = fn a: a
+    f 1
+  | equals fink":
+    (ref 3, a) == (bind 2, a)
+    (ref 7, f) == (bind 6, f)
