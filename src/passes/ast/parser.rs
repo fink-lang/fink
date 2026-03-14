@@ -87,7 +87,7 @@ impl<'src> Parser<'src> {
   }
 
   fn bump(&mut self) -> Token<'src> {
-    let tok = self.current.clone();
+    let tok = self.current;
     self.current = self.lexer.next_token();
     self.skip_trivia();
     tok
@@ -422,8 +422,8 @@ impl<'src> Parser<'src> {
       //
       // Decision: if there's exactly ONE param and it's a bare ident, treat THAT ident as the block.
       // Otherwise, func is the block name.
-      if params.len() == 1 {
-        if let NodeKind::Ident(_) = &params[0].kind {
+      if params.len() == 1
+        && let NodeKind::Ident(_) = &params[0].kind {
           // One bare ident param followed by ":": the ident is the block name
           let block_name = params.remove(0);
           let block_start = block_name.loc.start;
@@ -439,7 +439,6 @@ impl<'src> Parser<'src> {
             NodeKind::Apply { func: Box::new(func), args: Exprs { items: vec![block_node], seps: vec![] } },
             Loc { start: func_loc.start, end },
           ));
-        }
       }
 
       // Func is the block name, params are its patterns
@@ -590,7 +589,7 @@ impl<'src> Parser<'src> {
     if self.at(TokenKind::Ident)
       && !Self::is_dispatch_keyword(self.peek().src)
     {
-      let name_tok = self.peek().clone();
+      let name_tok = *self.peek();
       // Special keywords get full parse
       if name_tok.src == "fn" {
         self.bump();
@@ -706,7 +705,7 @@ impl<'src> Parser<'src> {
         }
       }
 
-      let tok = self.peek().clone();
+      let tok = *self.peek();
       let Some((l_bp, r_bp)) = Self::infix_bp(&tok) else { break };
       if l_bp < min_bp { break; }
 
@@ -811,7 +810,7 @@ impl<'src> Parser<'src> {
           break;
         }
       }
-      let tok = self.peek().clone();
+      let tok = *self.peek();
       let Some((l_bp, r_bp)) = Self::infix_bp(&tok) else { break };
       if l_bp < min_bp { break; }
       if tok.kind == TokenKind::Sep && tok.src == "." {
@@ -1031,12 +1030,11 @@ impl<'src> Parser<'src> {
           if !raw && parts.is_empty() {
             return Ok(self.node(NodeKind::LitStr { open: start_tok, close: end_tok, content: String::new() }, loc));
           }
-          if !raw && parts.len() == 1 {
-            if let NodeKind::LitStr { .. } = &parts[0].kind {
+          if !raw && parts.len() == 1
+            && let NodeKind::LitStr { .. } = &parts[0].kind {
               let mut node = parts.remove(0);
               node.loc = loc;
               return Ok(node);
-            }
           }
           let kind = if raw {
             NodeKind::StrRawTempl { open: start_tok, close: end_tok, children: parts }
@@ -1241,7 +1239,7 @@ impl<'src> Parser<'src> {
   // --- atom ---
 
   fn parse_atom(&mut self) -> ParseResult<'src> {
-    let tok = self.peek().clone();
+    let tok = *self.peek();
     match tok.kind {
       TokenKind::Ident => {
         let t = self.bump();
@@ -1325,7 +1323,7 @@ impl<'src> Parser<'src> {
       let match_end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(subjects.loc.end);
       fn_end_loc = Loc { start: fn_loc.start, end: match_end };
       let match_node = self.node(
-        NodeKind::Match { subjects: Box::new(subjects), sep: sep.clone(), arms },
+        NodeKind::Match { subjects: Box::new(subjects), sep, arms },
         fn_end_loc,
       );
       Ok(self.node(
@@ -1374,8 +1372,7 @@ impl<'src> Parser<'src> {
         let sep = self.bump();
         seps.push(sep);
         // Trailing comma: continue onto indented next line
-        if self.at(TokenKind::BlockStart) { self.bump(); }
-        else if self.at(TokenKind::BlockCont) { self.bump(); }
+        if self.at(TokenKind::BlockStart) || self.at(TokenKind::BlockCont) { self.bump(); }
         // Consecutive commas as implicit wildcards
         while self.at(TokenKind::Comma) {
           items.push(self.node(NodeKind::Wildcard, sep.loc));

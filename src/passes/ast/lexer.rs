@@ -134,7 +134,7 @@ impl<'src> Lexer<'src> {
     if !self.seps.iter().any(|existing| existing == sep) {
       self.seps.push(sep.to_vec());
       // Sort longest-first for greedy matching
-      self.seps.sort_by(|lhs, rhs| rhs.len().cmp(&lhs.len()));
+      self.seps.sort_by_key(|rhs| std::cmp::Reverse(rhs.len()));
     }
   }
 
@@ -179,17 +179,12 @@ impl<'src> Lexer<'src> {
     let start = self.pos;
 
     // Skip blank lines (only spaces then another newline or EOF)
-    loop {
-      match self.peek_bytes() {
-        [b'\n', rest @ ..] => {
-          let spaces = rest.iter().take_while(|&&byte| byte == b' ').count();
-          match rest.get(spaces) {
-            Some(&b'\n') | None => {
-              self.advance_line();
-              self.advance(spaces as u32);
-            }
-            _ => break,
-          }
+    while let [b'\n', rest @ ..] = self.peek_bytes() {
+      let spaces = rest.iter().take_while(|&&byte| byte == b' ').count();
+      match rest.get(spaces) {
+        Some(&b'\n') | None => {
+          self.advance_line();
+          self.advance(spaces as u32);
         }
         _ => break,
       }
@@ -244,7 +239,7 @@ impl<'src> Lexer<'src> {
         // `-` only if immediately followed by an ident-start byte (no spaces, no structural chars)
         [b'-', b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | 0x80..=0xFF, ..] => self.advance(1),
         // `-` not followed by an ident-start byte: unterminated identifier error
-        [b'-', ..] | [b'-'] => {
+        [b'-', ..] => {
           let ident = self.make_token(TokenKind::Ident, start);
           let err_start = self.pos;
           self.advance(1);
@@ -468,7 +463,7 @@ impl<'src> Lexer<'src> {
       self.pending.push(Token { kind: TokenKind::Err, loc: Loc { start: ep, end: ep }, src: "unterminated string - unexpected dedent" });
     } else {
       self.pos = p; // advance past everything scanned
-      if let Some(_) = eof_err {
+      if eof_err.is_some() {
         self.mode.pop();
         if p.col < ind_floor as u32 {
           // EOF at a lower indent than the string's context — treat as unexpected dedent
@@ -541,7 +536,6 @@ impl<'src> Lexer<'src> {
       // Dedent ends the block — but skip indent check for mid-line resume (col > 0)
       let is_blank = matches!(bytes.get(i), Some(b'\n') | None);
       if !first && !is_blank && leading_spaces < content_floor {
-        done = true;
         break;
       }
       // Blank line: peek ahead to next non-blank line's indent.
@@ -552,7 +546,6 @@ impl<'src> Lexer<'src> {
         let next_indent = bytes[j..].iter().take_while(|&&b| b == b' ').count();
         let next_is_blank_or_eof = j >= bytes.len() || matches!(bytes.get(j), Some(b'\n'));
         if !next_is_blank_or_eof && next_indent < content_floor {
-          done = true;
           break;
         }
       }
@@ -799,11 +792,10 @@ impl<'src> Lexer<'src> {
     }
 
     // StrExpr close
-    if matches!(self.mode.last(), Some(LexMode::StrExpr)) {
-      if let [b'}', ..] = self.peek_bytes() {
+    if matches!(self.mode.last(), Some(LexMode::StrExpr))
+      && let [b'}', ..] = self.peek_bytes() {
         self.mode.pop();
         return self.consume(1, TokenKind::StrExprEnd);
-      }
     }
 
     match self.peek_bytes() {
@@ -864,7 +856,7 @@ impl<'src> Lexer<'src> {
       // Doc comment: --- at line start (col == 0 or preceded only by indent)
       [b'-', b'-', b'-', ..] if self.pos.col == 0 || {
         let prefix = &self.src[..self.pos.idx as usize];
-        prefix.lines().last().map_or(true, |l| l.trim().is_empty())
+        prefix.lines().last().is_none_or(|l| l.trim().is_empty())
       } => self.consume_block_comment(),
 
       [b'\'', ..] => {
@@ -896,12 +888,11 @@ impl<'src> Lexer<'src> {
           _ => 0,
         };
         // Drain any open blocks before closing the bracket
-        if let Some(&LexMode::Bracket(_, saved_depth)) = self.mode.last() {
-          if self.ind.len() > saved_depth {
+        if let Some(&LexMode::Bracket(_, saved_depth)) = self.mode.last()
+          && self.ind.len() > saved_depth {
             self.ind.pop();
             let pos = self.pos;
             return Token { kind: TokenKind::BlockEnd, loc: Loc { start: pos, end: pos }, src: "" };
-          }
         }
         if expected == *close_byte {
           self.mode.pop();

@@ -45,7 +45,7 @@ fn is_multiline(node: &Node) -> bool {
   match &node.kind {
     NodeKind::LitStr { open, content, .. } => open.src == "\":" || content.contains('\n'),
     NodeKind::StrRawTempl { open, .. } => open.src == "\":",
-    NodeKind::Fn { body, .. } => body.items.len() > 1 || body.items.first().map_or(false, |b| !is_inline_expr(b)),
+    NodeKind::Fn { body, .. } => body.items.len() > 1 || body.items.first().is_some_and(|b| !is_inline_expr(b)),
     NodeKind::Match { .. } | NodeKind::Block { .. } => true,
     NodeKind::Apply { args, .. } => args.items.iter().any(|a| is_multiline(a) || is_fn(a)),
     NodeKind::Pipe(exprs) => exprs.items.iter().any(|e| is_multiline(e)),
@@ -384,14 +384,12 @@ fn is_complex_arg(node: &Node) -> bool {
 fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   // Tagged string literal: `id'foo'`, `op'+'` — func ident + single quoted string arg, no separator
   // Excludes block strings (`":`) which need a space separator
-  if let [arg] = args {
-    if matches!(func.kind, NodeKind::Ident(_)) && !is_multiline(arg) {
-      if matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
-        fmt_node(func, out, depth);
-        fmt_node(arg, out, depth);
-        return;
-      }
-    }
+  if let [arg] = args
+    && matches!(func.kind, NodeKind::Ident(_)) && !is_multiline(arg)
+    && matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
+      fmt_node(func, out, depth);
+      fmt_node(arg, out, depth);
+      return;
   }
 
   fmt_node(func, out, depth);
@@ -413,12 +411,11 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   }
 
   // Single trailing fn (no complex args) → keep `fn params:` on same line
-  if trailing.len() == 1 && is_fn(&trailing[0]) {
-    if let NodeKind::Fn { params, sep, body } = &trailing[0].kind {
+  if trailing.len() == 1 && is_fn(&trailing[0])
+    && let NodeKind::Fn { params, sep, body } = &trailing[0].kind {
       if plain.is_empty() { out.push(' '); } else { out.push_str(", "); }
       fmt_fn_with_inline(params, sep, &body.items, out, depth, false);
       return;
-    }
   }
 
   // Multiple trailing fns/complex args → each on its own indented line

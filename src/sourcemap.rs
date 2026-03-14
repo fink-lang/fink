@@ -28,6 +28,12 @@ pub struct MappedWriter {
   mappings: Vec<Mapping>,
 }
 
+impl Default for MappedWriter {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl MappedWriter {
   pub fn new() -> Self {
     Self {
@@ -112,6 +118,11 @@ impl SourceMap {
   /// Number of mapping entries.
   pub fn len(&self) -> usize {
     self.mappings.len()
+  }
+
+  /// Whether there are no mapping entries.
+  pub fn is_empty(&self) -> bool {
+    self.mappings.is_empty()
   }
 
   /// Iterator over mappings as (out_line, out_col, src_line, src_col) tuples.
@@ -218,7 +229,7 @@ const B64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0
 
 /// Encode bytes as standard Base64.
 pub fn base64_encode(data: &[u8]) -> String {
-  let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+  let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
   for chunk in data.chunks(3) {
     let b0 = chunk[0] as u32;
     let b1 = chunk.get(1).copied().unwrap_or(0) as u32;

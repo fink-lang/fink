@@ -73,6 +73,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
 /// Operates bottom-up: inner fns are annotated before outer ones.
 /// Requires origin map and AST index for name recovery.
 #[deprecated(note = "will be subsumed by name resolution / static analysis pass")]
+#[allow(deprecated)]
 pub fn annotate<'src>(
   expr: Expr<'src>,
   origin: &PropGraph<CpsId, Option<AstId>>,
@@ -359,10 +360,9 @@ fn collect_ref_from_val<'src>(
   if let ValKind::Ref(ref_) = &val.kind {
     match ref_ {
       Ref::Name => {
-        if let Some(n) = ctx.source_name(val.id) {
-          if n != "_" && !bound.contains(n) && seen.insert(n) {
+        if let Some(n) = ctx.source_name(val.id)
+          && n != "_" && !bound.contains(n) && seen.insert(n) {
             out.push(val.id);
-          }
         }
       }
       Ref::Gen(_cps_id) => {

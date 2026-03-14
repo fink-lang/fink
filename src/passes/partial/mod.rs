@@ -9,7 +9,7 @@
 //   - `?` in pattern position (Arm lhs, Bind lhs) is a compile error
 
 use crate::ast::{CmpPart, Exprs, Node, NodeKind};
-use crate::lexer::{Loc, Pos, Token, TokenKind};
+use crate::lexer::{Loc, Token};
 use crate::ast::transform::{Transform, TransformError, TransformResult};
 
 const PARAM: &str = "$";
@@ -50,7 +50,7 @@ fn has_partial(node: &Node) -> bool {
       CmpPart::Operand(n) => has_partial(n),
       CmpPart::Op(_) => false,
     }),
-    NodeKind::Spread { inner, .. } => inner.as_ref().map_or(false, |n| has_partial(n)),
+    NodeKind::Spread { inner, .. } => inner.as_ref().is_some_and(|n| has_partial(n)),
     NodeKind::Member { lhs, rhs, .. } => {
       // Member rhs may be Group (computed key) — look through it; it's not a scope boundary here
       let rhs_inner = match &rhs.kind {

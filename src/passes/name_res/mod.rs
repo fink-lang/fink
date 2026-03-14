@@ -144,13 +144,11 @@ fn bind_to_scope<'src>(
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  if let Bind::User = bind.kind {
-    if let Some(name) = ctx.source_name(bind.id) {
-      if name != "_" {
-        scope.insert(name, ScopeEntry { bind_id: bind.id, fn_depth });
-        graphs.bind_scope.set(bind.id, Some(scope_id));
-      }
-    }
+  if let Bind::User = bind.kind
+    && let Some(name) = ctx.source_name(bind.id)
+    && name != "_" {
+      scope.insert(name, ScopeEntry { bind_id: bind.id, fn_depth });
+      graphs.bind_scope.set(bind.id, Some(scope_id));
   }
 }
 

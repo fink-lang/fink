@@ -11,6 +11,12 @@ pub struct PropGraph<Id, T> {
     _id: PhantomData<Id>,
 }
 
+impl<Id, T> Default for PropGraph<Id, T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Id, T> PropGraph<Id, T> {
     pub fn new() -> Self {
         PropGraph { data: Vec::new(), _id: PhantomData }
@@ -35,6 +41,10 @@ impl<Id, T> PropGraph<Id, T> {
 
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 
     pub fn push(&mut self, val: T) -> Id

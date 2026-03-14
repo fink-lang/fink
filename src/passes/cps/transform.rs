@@ -37,6 +37,12 @@ pub struct Gen {
   origin: PropGraph<CpsId, Option<AstId>>,
 }
 
+impl Default for Gen {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 impl Gen {
   pub fn new() -> Self {
     Gen { cursor_counter: 0, origin: PropGraph::new() }
@@ -405,6 +411,7 @@ fn lower_iife<'src>(
 /// Extract params from a fn params node, returning:
 /// - the param list (with complex patterns replaced by fresh Gen names)
 /// - a list of Pending entries to prepend to the fn body via wrap().
+///
 /// Complex destructuring params (e.g. `[1, ..b]`) are desugared to a fresh spread
 /// param `·v_N` and a set of Match* pending entries that destructure it.
 fn extract_params_with_gen<'src>(
@@ -552,7 +559,7 @@ fn lower_infix<'src>(
   pending.extend(rp);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_str(op)), args: args_val(vec![lv, rv]), result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![lv, rv]), result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -565,7 +572,7 @@ fn lower_unary<'src>(
   let (val, mut pending) = lower(g, operand);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_str(op)), args: args_val(vec![val]), result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![val]), result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -599,7 +606,7 @@ fn lower_chained_cmp<'src>(
     let rv = operands[i + 1].clone();
     let cmp_result = g.fresh_result(origin);
     let (cmp_result_kind, cmp_result_id) = (cmp_result.kind, cmp_result.id);
-    pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_str(op)), args: args_val(vec![lv, rv]), result: cmp_result,  origin });
+    pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![lv, rv]), result: cmp_result,  origin });
     cmp_vals.push(ref_val(g, cmp_result_kind, cmp_result_id, origin));
   }
 
@@ -630,7 +637,7 @@ fn lower_range<'src>(
   pending.extend(ep);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_str(op)), args: args_val(vec![sv, ev]), result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![sv, ev]), result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -844,7 +851,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
         lower_pat_lhs(g, pat_node, scrutinee_val, origin, &mut arm_pending);
       }
       let arm_tail = lower_stmts(g, &body.items);
-      wrap_with_fail(g, arm_pending, arm_tail, |g, origin| fail_cont_expr(g, origin))
+      wrap_with_fail(g, arm_pending, arm_tail, fail_cont_expr)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
   }
@@ -913,7 +920,7 @@ enum Pending<'src> {
 }
 
 fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
-  wrap_with_fail(g, bindings, tail, |g, o| panic_expr(g, o))
+  wrap_with_fail(g, bindings, tail, panic_expr)
 }
 
 /// Like `wrap`, but uses `make_fail(origin)` to produce the fail cont for each Match* node.
@@ -1205,7 +1212,7 @@ fn lower_pat_lhs<'src>(
       let (rv, rp) = lower(g, guard_rhs);
       pending.extend(lp);
       pending.extend(rp);
-      pending.push(Pending::MatchGuard { func: Callable::BuiltIn(BuiltIn::from_str(op.src)), args: vec![lv, rv],  origin });
+      pending.push(Pending::MatchGuard { func: Callable::BuiltIn(BuiltIn::from_op_str(op.src)), args: vec![lv, rv],  origin });
       r
     }
 
@@ -1392,8 +1399,8 @@ fn lower_pat_lhs<'src>(
             }
           }
           NodeKind::Arm { lhs: arm_lhs, body: arm_body, .. } if !arm_lhs.items.is_empty() => {
-            if let NodeKind::Ident(key) = &arm_lhs.items[0].kind {
-              if let Some(pat_node) = arm_body.items.last() {
+            if let NodeKind::Ident(key) = &arm_lhs.items[0].kind
+              && let Some(pat_node) = arm_body.items.last() {
                 let elem = g.fresh_result(origin);
                 let (elem_kind, elem_id) = (elem.kind, elem.id);
                 let next = g.fresh_cursor();
@@ -1404,7 +1411,6 @@ fn lower_pat_lhs<'src>(
                 cur = next;
                 let elem_val = ref_val(g, elem_kind, elem_id, origin);
                 lower_pat_lhs(g, pat_node, elem_val, Some(pat_node.id), pending);
-              }
             }
           }
           _ => {}

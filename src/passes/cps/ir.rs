@@ -141,7 +141,7 @@ impl BuiltIn {
   /// Map a source operator string to its `BuiltIn` variant.
   /// Panics on unknown operators — every operator the parser emits must be
   /// covered here. Error recovery can be added later if needed.
-  pub fn from_str(s: &str) -> BuiltIn {
+  pub fn from_op_str(s: &str) -> BuiltIn {
     match s {
       // Arithmetic
       "+"   => BuiltIn::Add,
@@ -181,7 +181,7 @@ impl BuiltIn {
       "not in" => BuiltIn::NotIn,
       // Member access
       "."   => BuiltIn::Get,
-      _     => panic!("BuiltIn::from_str: unknown operator {:?}", s),
+      _     => panic!("BuiltIn::from_op_str: unknown operator {:?}", s),
     }
   }
 }

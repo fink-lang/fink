@@ -145,19 +145,6 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   }
 }
 
-/// Render a Ref val's name using origin map.
-/// For Gen temps: renders as `·v_{bind_cps_id}`. For Name: recovers source name from AST.
-fn render_val_name(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> String {
-  match &v.kind {
-    ValKind::Ref(Ref::Gen(bind_id)) => format!("·v_{}", bind_id.0),
-    ValKind::Ref(Ref::Name) => {
-      ctx.source_name(v.id)
-        .expect("Ref::Name should always have an origin")
-        .0.to_string()
-    }
-    ValKind::Lit(_) => String::new(),
-  }
-}
 
 fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
   match lit {
