@@ -3,10 +3,14 @@ use std::{env, fs, process};
 fn main() {
   let args: Vec<String> = env::args().collect();
 
-  let (cmd, path) = match args.as_slice() {
-    [_, cmd, path] => (cmd.as_str(), path),
+  let sourcemap = args.iter().any(|a| a == "--sourcemap");
+  let embed_source = args.iter().any(|a| a == "--embed-source");
+  let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("--")).map(|s| s.as_str()).collect();
+
+  let (cmd, path) = match positional.as_slice() {
+    [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|cps> <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps> [--sourcemap] <file>");
       process::exit(1);
     }
   };
@@ -28,7 +32,19 @@ fn main() {
     }
     "fmt" => {
       match fink::parser::parse(&src) {
-        Ok(r) => println!("{}", fink::ast::fmt::fmt(&r.root)),
+        Ok(r) => {
+          if sourcemap {
+            let (output, srcmap) = if embed_source {
+              fink::ast::fmt::fmt_mapped_with_content(&r.root, path, &src)
+            } else {
+              fink::ast::fmt::fmt_mapped(&r.root, path)
+            };
+            println!("{output}");
+            eprintln!("{}", srcmap.to_json());
+          } else {
+            println!("{}", fink::ast::fmt::fmt(&r.root));
+          }
+        }
         Err(e) => parse_error(&src, e),
       }
     }

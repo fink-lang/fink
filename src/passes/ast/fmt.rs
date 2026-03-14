@@ -1,14 +1,35 @@
 // AST → Fink source pretty-printer
+//
+// All output goes through MappedWriter so every emitted token is
+// associated with its source location.  The public API offers both
+// `fmt` (string only) and `fmt_mapped` (string + source map).
 
 use crate::ast::{Exprs, Node, NodeKind};
+use crate::sourcemap::{MappedWriter, SourceMap};
 
+/// Format an AST back to Fink source, discarding source-map info.
 pub fn fmt(node: &Node) -> String {
-  let mut out = String::new();
+  let mut out = MappedWriter::new();
   fmt_node(node, &mut out, 0);
-  out
+  out.finish_string()
 }
 
-fn ind(out: &mut String, depth: usize) {
+/// Format an AST back to Fink source, returning source + source map.
+pub fn fmt_mapped(node: &Node, source_name: &str) -> (String, SourceMap) {
+  let mut out = MappedWriter::new();
+  fmt_node(node, &mut out, 0);
+  out.finish(source_name)
+}
+
+/// Format an AST back to Fink source, returning source + source map
+/// with original source content embedded.
+pub fn fmt_mapped_with_content(node: &Node, source_name: &str, content: &str) -> (String, SourceMap) {
+  let mut out = MappedWriter::new();
+  fmt_node(node, &mut out, 0);
+  out.finish_with_content(source_name, content)
+}
+
+fn ind(out: &mut MappedWriter, depth: usize) {
   for _ in 0..depth {
     out.push_str("  ");
   }
@@ -30,7 +51,8 @@ fn is_atom(node: &Node) -> bool {
   )
 }
 
-fn fmt_node(node: &Node, out: &mut String, depth: usize) {
+fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
+  out.mark(node.loc);
   match &node.kind {
     NodeKind::LitBool(v) => out.push_str(if *v { "true" } else { "false" }),
     NodeKind::LitInt(s) => out.push_str(s),
@@ -108,7 +130,7 @@ fn is_complex_arg(node: &Node) -> bool {
   }
 }
 
-fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
+fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   // Tagged string literal: `id'foo'`, `op'+'` — func ident + single string arg, no separator
   if let [arg] = args {
     if matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
@@ -160,11 +182,11 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
   }
 }
 
-fn fmt_fn(params: &Node, body: &[Node], out: &mut String, depth: usize) {
+fn fmt_fn(params: &Node, body: &[Node], out: &mut MappedWriter, depth: usize) {
   fmt_fn_with_inline(params, body, out, depth, true);
 }
 
-fn fmt_fn_with_inline(params: &Node, body: &[Node], out: &mut String, depth: usize, allow_apply_inline: bool) {
+fn fmt_fn_with_inline(params: &Node, body: &[Node], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
   let inline = body.len() == 1 && if allow_apply_inline {
     is_inline_expr(&body[0])
   } else {
@@ -193,13 +215,13 @@ fn is_inline_single_trailing(node: &Node) -> bool {
   is_atom(node)
 }
 
-fn fmt_fn_inline(params: &Node, expr: &Node, out: &mut String, depth: usize) {
+fn fmt_fn_inline(params: &Node, expr: &Node, out: &mut MappedWriter, depth: usize) {
   fmt_fn_params(params, out);
   out.push_str(": ");
   fmt_node(expr, out, depth);
 }
 
-fn fmt_fn_params(params: &Node, out: &mut String) {
+fn fmt_fn_params(params: &Node, out: &mut MappedWriter) {
   out.push_str("fn");
   if let NodeKind::Patterns(exprs) = &params.kind {
     for (i, child) in exprs.items.iter().enumerate() {
@@ -212,7 +234,7 @@ fn fmt_fn_params(params: &Node, out: &mut String) {
   }
 }
 
-fn fmt_body(body: &[Node], out: &mut String, depth: usize, allow_apply_inline: bool) {
+fn fmt_body(body: &[Node], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
   if body.len() == 1 {
     let inline = if allow_apply_inline {
       is_inline_expr(&body[0])

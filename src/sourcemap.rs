@@ -77,9 +77,26 @@ impl MappedWriter {
   pub fn finish(self, source: &str) -> (String, SourceMap) {
     let srcmap = SourceMap {
       source: source.to_string(),
+      sources_content: None,
       mappings: self.mappings,
     };
     (self.out, srcmap)
+  }
+
+  /// Consume the writer and produce the output string and source map
+  /// with the original source content embedded.
+  pub fn finish_with_content(self, source: &str, content: &str) -> (String, SourceMap) {
+    let srcmap = SourceMap {
+      source: source.to_string(),
+      sources_content: Some(content.to_string()),
+      mappings: self.mappings,
+    };
+    (self.out, srcmap)
+  }
+
+  /// Consume the writer and return only the output string, discarding mappings.
+  pub fn finish_string(self) -> String {
+    self.out
   }
 }
 
@@ -87,6 +104,7 @@ impl MappedWriter {
 #[derive(Debug)]
 pub struct SourceMap {
   source: String,
+  sources_content: Option<String>,
   mappings: Vec<Mapping>,
 }
 
@@ -105,18 +123,18 @@ impl SourceMap {
   /// Encode as a Source Map v3 JSON string.
   pub fn to_json(&self) -> String {
     let mappings = encode_mappings(&self.mappings);
-    // Minimal valid v3 source map. Single source file, no names.
-    format!(
-      concat!(
-        "{{\n",
-        "  \"version\": 3,\n",
-        "  \"sources\": [\"{source}\"],\n",
-        "  \"mappings\": \"{mappings}\"\n",
-        "}}"
-      ),
-      source = json_escape(&self.source),
-      mappings = mappings,
-    )
+    let source = json_escape(&self.source);
+    let mut out = format!(
+      "{{\n  \"version\": 3,\n  \"sources\": [\"{source}\"],\n"
+    );
+    if let Some(content) = &self.sources_content {
+      out.push_str(&format!(
+        "  \"sourcesContent\": [\"{}\"],\n",
+        json_escape(content)
+      ));
+    }
+    out.push_str(&format!("  \"mappings\": \"{mappings}\"\n}}"));
+    out
   }
 }
 
@@ -311,6 +329,7 @@ mod tests {
   fn sourcemap_json_valid() {
     let srcmap = SourceMap {
       source: "test.fnk".to_string(),
+      sources_content: None,
       mappings: vec![Mapping {
         out_line: 0,
         out_col: 0,
@@ -321,6 +340,7 @@ mod tests {
     let json = srcmap.to_json();
     assert!(json.contains("\"version\": 3"));
     assert!(json.contains("\"sources\": [\"test.fnk\"]"));
+    assert!(!json.contains("\"sourcesContent\""));
     assert!(json.contains("\"mappings\": \"AAAA\""));
   }
 }
