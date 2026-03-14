@@ -349,7 +349,7 @@ test 'member by name', fn:
   expect ast fink":
     foo.bar
   | equals fink":
-    Member
+    Member '.'
       Ident 'foo'
       Ident 'bar'
 
@@ -357,8 +357,8 @@ test 'chained member access', fn:
   expect ast fink":
     foo.bar.spam
   | equals fink":
-    Member
-      Member
+    Member '.'
+      Member '.'
         Ident 'foo'
         Ident 'bar'
       Ident 'spam'
@@ -367,7 +367,7 @@ test 'member by hyphenated name', fn:
   expect ast fink":
     foo.bar-spam
   | equals fink":
-    Member
+    Member '.'
       Ident 'foo'
       Ident 'bar-spam'
 
@@ -375,35 +375,35 @@ test 'member by expression', fn:
   expect ast fink":
     foo.(expr)
   | equals fink":
-    Member
+    Member '.'
       Ident 'foo'
-      Group
+      Group '(..)'
         Ident 'expr'
 
 test 'sequence index', fn:
   expect ast fink":
     [1, 2, 3].(0)
   | equals fink":
-    Member
-      LitSeq
+    Member '.'
+      LitSeq '[..]'
         LitInt '1'
         LitInt '2'
         LitInt '3'
-      Group
+      Group '(..)'
         LitInt '0'
 
 test 'sequence range slice', fn:
   expect ast fink":
     [0, 1, 2, 3, 4].(2...3)
   | equals fink":
-    Member
-      LitSeq
+    Member '.'
+      LitSeq '[..]'
         LitInt '0'
         LitInt '1'
         LitInt '2'
         LitInt '3'
         LitInt '4'
-      Group
+      Group '(..)'
         InfixOp '...'
           LitInt '2'
           LitInt '3'
@@ -420,9 +420,9 @@ test 'member access on record literal', fn:
   expect ast fink":
     {foo: 123}.foo
   | equals fink":
-    Member
-      LitRec
-        Arm
+    Member '.'
+      LitRec '{..}'
+        Arm ':'
           Ident 'foo'
           LitInt '123'
       Ident 'foo'
@@ -431,26 +431,26 @@ test 'member by string key', fn:
   expect ast fink":
     {'ni nu': 123}.('ni nu')
   | equals fink":
-    Member
-      LitRec
-        Arm
+    Member '.'
+      LitRec '{..}'
+        Arm ':'
           LitStr 'ni nu'
           LitInt '123'
-      Group
+      Group '(..)'
         LitStr 'ni nu'
 
 test 'member by sequence key', fn:
   expect ast fink":
     [0, 1, 2, 3, 4].([2, 3])
   | equals fink":
-    Member
-      LitSeq
+    Member '.'
+      LitSeq '[..]'
         LitInt '0'
         LitInt '1'
         LitInt '2'
         LitInt '3'
         LitInt '4'
-      Group
-        LitSeq
+      Group '(..)'
+        LitSeq '[..]'
           LitInt '2'
           LitInt '3'

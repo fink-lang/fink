@@ -317,12 +317,12 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       );
       out.push('\'');
     }
-    NodeKind::LitSeq { items, .. } => {
-      out.push_str("LitSeq");
+    NodeKind::LitSeq { open, close, items } => {
+      out.push_str("LitSeq '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
       print_children(&items.items, out, depth);
     }
-    NodeKind::LitRec { items, .. } => {
-      out.push_str("LitRec");
+    NodeKind::LitRec { open, close, items } => {
+      out.push_str("LitRec '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
       print_children(&items.items, out, depth);
     }
     NodeKind::StrTempl(children) => {
@@ -356,22 +356,22 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         }
       }
     }
-    NodeKind::Spread { inner: child, .. } => {
-      out.push_str("Spread");
+    NodeKind::Spread { op, inner: child } => {
+      out.push_str("Spread '"); out.push_str(op.src); out.push('\'');
       if let Some(n) = child {
         out.push('\n');
         print_node(n, out, depth + 1);
       }
     }
-    NodeKind::Member { lhs, rhs, .. } => {
-      out.push_str("Member");
+    NodeKind::Member { op, lhs, rhs } => {
+      out.push_str("Member '"); out.push_str(op.src); out.push('\'');
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
-    NodeKind::Group { inner, .. } => {
-      out.push_str("Group");
+    NodeKind::Group { open, close, inner } => {
+      out.push_str("Group '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
       out.push('\n');
       print_node(inner, out, depth + 1);
     }
@@ -387,15 +387,15 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push('\n');
       print_node(inner, out, depth + 1);
     }
-    NodeKind::Bind { lhs, rhs, .. } => {
-      out.push_str("Bind");
+    NodeKind::Bind { op, lhs, rhs } => {
+      out.push_str("Bind '"); out.push_str(op.src); out.push('\'');
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
-    NodeKind::BindRight { lhs, rhs, .. } => {
-      out.push_str("BindRight");
+    NodeKind::BindRight { op, lhs, rhs } => {
+      out.push_str("BindRight '"); out.push_str(op.src); out.push('\'');
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
@@ -414,8 +414,8 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Pipe");
       print_children(&exprs.items, out, depth);
     }
-    NodeKind::Fn { params, body, .. } => {
-      out.push_str("Fn");
+    NodeKind::Fn { params, sep, body } => {
+      out.push_str("Fn '"); out.push_str(sep.src); out.push('\'');
       out.push('\n');
       print_node(params, out, depth + 1);
       for node in &body.items {
@@ -427,8 +427,8 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Patterns");
       print_children(&exprs.items, out, depth);
     }
-    NodeKind::Match { subjects, arms, .. } => {
-      out.push_str("Match");
+    NodeKind::Match { subjects, sep, arms } => {
+      out.push_str("Match '"); out.push_str(sep.src); out.push('\'');
       out.push('\n');
       print_node(subjects, out, depth + 1);
       for arm in &arms.items {
@@ -436,8 +436,8 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         print_node(arm, out, depth + 1);
       }
     }
-    NodeKind::Arm { lhs, body, .. } => {
-      out.push_str("Arm");
+    NodeKind::Arm { lhs, sep, body } => {
+      out.push_str("Arm '"); out.push_str(sep.src); out.push('\'');
       for pat in &lhs.items {
         out.push('\n');
         print_node(pat, out, depth + 1);
@@ -447,8 +447,8 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         print_node(node, out, depth + 1);
       }
     }
-    NodeKind::Block { name, params, body, .. } => {
-      out.push_str("Block");
+    NodeKind::Block { name, params, sep, body } => {
+      out.push_str("Block '"); out.push_str(sep.src); out.push('\'');
       out.push('\n');
       print_node(name, out, depth + 1);
       out.push('\n');
@@ -493,7 +493,7 @@ mod tests {
       lhs: Box::new(node(NodeKind::Ident("foo"))),
       rhs: Box::new(node(NodeKind::LitInt("1"))),
     });
-    assert_eq!(tree.print(), "Bind\n  Ident 'foo'\n  LitInt '1'");
+    assert_eq!(tree.print(), "Bind '='\n  Ident 'foo'\n  LitInt '1'");
   }
 
   #[test]
@@ -510,13 +510,13 @@ mod tests {
   #[test]
   fn print_lit_seq_empty() {
     let tree = node(NodeKind::LitSeq { open: tok("["), close: tok("]"), items: Exprs::empty() });
-    assert_eq!(tree.print(), "LitSeq");
+    assert_eq!(tree.print(), "LitSeq '[..]'");
   }
 
   #[test]
   fn print_spread_bare() {
     let tree = node(NodeKind::Spread { op: tok(".."), inner: None });
-    assert_eq!(tree.print(), "Spread");
+    assert_eq!(tree.print(), "Spread '..'");
   }
 
   #[test]

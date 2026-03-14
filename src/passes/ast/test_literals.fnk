@@ -287,13 +287,13 @@ test 'empty sequence', fn:
   expect ast fink":
     []
   | equals fink":
-    LitSeq
+    LitSeq '[..]'
 
 test 'sequence literal', fn:
   expect ast fink":
     [1, 2, 3]
   | equals fink":
-    LitSeq
+    LitSeq '[..]'
       LitInt '1'
       LitInt '2'
       LitInt '3'
@@ -333,17 +333,17 @@ test 'empty record', fn:
   expect ast fink":
     {}
   | equals fink":
-    LitRec
+    LitRec '{..}'
 
 test 'record literal', fn:
   expect ast fink":
     {foo: 1, bar: 2}
   | equals fink":
-    LitRec
-      Arm
+    LitRec '{..}'
+      Arm ':'
         Ident 'foo'
         LitInt '1'
-      Arm
+      Arm ':'
         Ident 'bar'
         LitInt '2'
 
@@ -351,9 +351,9 @@ test 'record with computed key', fn:
   expect ast fink":
     {(a + b): 3}
   | equals fink":
-    LitRec
-      Arm
-        Group
+    LitRec '{..}'
+      Arm ':'
+        Group '(..)'
           InfixOp '+'
             Ident 'a'
             Ident 'b'
@@ -368,14 +368,14 @@ test 'multiline record', fn:
       }
     }
   | equals fink":
-    LitRec
-      Arm
+    LitRec '{..}'
+      Arm ':'
         Ident 'foo'
         LitInt '1'
-      Arm
+      Arm ':'
         Ident 'bar'
-        LitRec
-          Arm
+        LitRec '{..}'
+          Arm ':'
             Ident 'spam'
             LitInt '3'
 
@@ -383,7 +383,7 @@ test 'record shorthand fields', fn:
   expect ast fink":
     {foo, bar}
   | equals fink":
-    LitRec
+    LitRec '{..}'
       Ident 'foo'
       Ident 'bar'
 
@@ -398,15 +398,15 @@ test 'dict literal', fn:
   | equals fink":
     Apply
       Ident 'dict'
-      LitRec
-        Arm
+      LitRec '{..}'
+        Arm ':'
           Ident 'foo'
           LitInt '1'
-        Arm
+        Arm ':'
           LitStr 'bar'
           LitInt '2'
-        Arm
-          Group
+        Arm ':'
+          Group '(..)'
             Ident 'key'
           LitInt '3'
 
@@ -445,7 +445,7 @@ test 'sequence tagged literal', fn:
   | equals fink":
     Apply
       Ident 'foo'
-      LitSeq
+      LitSeq '[..]'
         LitInt '1'
         LitInt '2'
         LitInt '3'
@@ -456,10 +456,9 @@ test 'record tagged literal', fn:
   | equals fink":
     Apply
       Ident 'spam'
-      LitRec
-        Arm
+      LitRec '{..}'
+        Arm ':'
           Ident 'foo'
           Ident 'bar'
-
 
 

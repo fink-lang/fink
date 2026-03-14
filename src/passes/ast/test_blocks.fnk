@@ -3,7 +3,7 @@ test 'block with no args and expression body', fn:
   expect ast fink":
     test_block: 'hello'
   | equals fink":
-    Block
+    Block ':'
       Ident 'test_block'
       Patterns
       LitStr 'hello'
@@ -12,7 +12,7 @@ test 'block with patterns and expression body', fn:
   expect ast fink":
     test_block a, b: a + b
   | equals fink":
-    Block
+    Block ':'
       Ident 'test_block'
       Patterns
         Ident 'a'
@@ -27,12 +27,12 @@ test 'block with patterns and multiline body', fn:
       x = a + b
       x * 2
   | equals fink":
-    Block
+    Block ':'
       Ident 'test_block'
       Patterns
         Ident 'a'
         Ident 'b'
-      Bind
+      Bind '='
         Ident 'x'
         InfixOp '+'
           Ident 'a'
@@ -47,14 +47,14 @@ test 'block with arms', fn:
       1: 'one'
       2: 'two'
   | equals fink":
-    Block
+    Block ':'
       Ident 'test_block'
       Patterns
         Ident 'a'
-      Arm
+      Arm ':'
         LitInt '1'
         LitStr 'one'
-      Arm
+      Arm ':'
         LitInt '2'
         LitStr 'two'
 
@@ -63,9 +63,9 @@ test 'block bound to name', fn:
     result = test_block a, b:
       a + b
   | equals fink":
-    Bind
+    Bind '='
       Ident 'result'
-      Block
+      Block ':'
         Ident 'test_block'
         Patterns
           Ident 'a'
@@ -80,7 +80,7 @@ test 'inline block in application', fn:
   | equals fink":
     Apply
       Ident 'log'
-      Block
+      Block ':'
         Ident 'test_block'
         Patterns
         LitStr 'hello'
@@ -89,10 +89,10 @@ test 'block with sequence destructure param', fn:
   expect ast fink":
     test_block [a, b]: a + b
   | equals fink":
-    Block
+    Block ':'
       Ident 'test_block'
       Patterns
-        LitSeq
+        LitSeq '[..]'
           Ident 'a'
           Ident 'b'
       InfixOp '+'
@@ -103,10 +103,10 @@ test 'block with record destructure param', fn:
   expect ast fink":
     test_block {x, y}: x + y
   | equals fink":
-    Block
+    Block ':'
       Ident 'test_block'
       Patterns
-        LitRec
+        LitRec '{..}'
           Ident 'x'
           Ident 'y'
       InfixOp '+'
