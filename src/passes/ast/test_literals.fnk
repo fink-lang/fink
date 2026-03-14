@@ -184,7 +184,7 @@ test 'string interpolation', fn:
   | equals fink":
     StrTempl
       LitStr 'hello '
-      InfixOp '+'
+      InfixOp '+',
         LitInt '1'
         LitInt '2'
 
@@ -193,7 +193,7 @@ test 'string interpolation leading expression', fn:
     '\${1 + 2} world'
   | equals fink":
     StrTempl
-      InfixOp '+'
+      InfixOp '+',
         LitInt '1'
         LitInt '2'
       LitStr ' world'
@@ -206,7 +206,7 @@ test 'tagged template string', fn:
       Ident 'fmt'
       StrRawTempl
         LitStr 'hello '
-        InfixOp '+'
+        InfixOp '+',
           LitInt '1'
           LitInt '2'
 
@@ -231,7 +231,7 @@ test 'rendered template string', fn:
       Ident 'fmt'
       StrTempl
         LitStr 'hello '
-        InfixOp '+'
+        InfixOp '+',
           LitInt '1'
           LitInt '2'
 
@@ -293,7 +293,7 @@ test 'sequence literal', fn:
   expect ast fink":
     [1, 2, 3]
   | equals fink":
-    LitSeq '[..]'
+    LitSeq '[..]',
       LitInt '1'
       LitInt '2'
       LitInt '3'
@@ -339,11 +339,11 @@ test 'record literal', fn:
   expect ast fink":
     {foo: 1, bar: 2}
   | equals fink":
-    LitRec '{..}'
-      Arm ':'
+    LitRec '{..}',
+      Arm ':',
         Ident 'foo'
         LitInt '1'
-      Arm ':'
+      Arm ':',
         Ident 'bar'
         LitInt '2'
 
@@ -351,10 +351,10 @@ test 'record with computed key', fn:
   expect ast fink":
     {(a + b): 3}
   | equals fink":
-    LitRec '{..}'
-      Arm ':'
-        Group '(..)'
-          InfixOp '+'
+    LitRec '{..}',
+      Arm ':',
+        Group '(..)',
+          InfixOp '+',
             Ident 'a'
             Ident 'b'
         LitInt '3'
@@ -368,14 +368,14 @@ test 'multiline record', fn:
       }
     }
   | equals fink":
-    LitRec '{..}'
-      Arm ':'
+    LitRec '{..}',
+      Arm ':',
         Ident 'foo'
         LitInt '1'
-      Arm ':'
+      Arm ':',
         Ident 'bar'
-        LitRec '{..}'
-          Arm ':'
+        LitRec '{..}',
+          Arm ':',
             Ident 'spam'
             LitInt '3'
 
@@ -383,7 +383,7 @@ test 'record shorthand fields', fn:
   expect ast fink":
     {foo, bar}
   | equals fink":
-    LitRec '{..}'
+    LitRec '{..}',
       Ident 'foo'
       Ident 'bar'
 
@@ -398,15 +398,15 @@ test 'dict literal', fn:
   | equals fink":
     Apply
       Ident 'dict'
-      LitRec '{..}'
-        Arm ':'
+      LitRec '{..}',
+        Arm ':',
           Ident 'foo'
           LitInt '1'
-        Arm ':'
+        Arm ':',
           LitStr 'bar'
           LitInt '2'
-        Arm ':'
-          Group '(..)'
+        Arm ':',
+          Group '(..)',
             Ident 'key'
           LitInt '3'
 
@@ -445,7 +445,7 @@ test 'sequence tagged literal', fn:
   | equals fink":
     Apply
       Ident 'foo'
-      LitSeq '[..]'
+      LitSeq '[..]',
         LitInt '1'
         LitInt '2'
         LitInt '3'
@@ -456,8 +456,8 @@ test 'record tagged literal', fn:
   | equals fink":
     Apply
       Ident 'spam'
-      LitRec '{..}'
-        Arm ':'
+      LitRec '{..}',
+        Arm ':',
           Ident 'foo'
           Ident 'bar'
 

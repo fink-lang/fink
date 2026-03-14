@@ -319,10 +319,12 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::LitSeq { open, close, items } => {
       out.push_str("LitSeq '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
+      if !items.items.is_empty() { out.push(','); }
       print_children(&items.items, out, depth);
     }
     NodeKind::LitRec { open, close, items } => {
       out.push_str("LitRec '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
+      if !items.items.is_empty() { out.push(','); }
       print_children(&items.items, out, depth);
     }
     NodeKind::StrTempl(children) => {
@@ -335,12 +337,12 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Ident(s) => { out.push_str("Ident '"); out.push_str(s); out.push('\''); }
     NodeKind::UnaryOp { op, operand } => {
-      out.push_str("UnaryOp '"); out.push_str(op.src); out.push('\'');
+      out.push_str("UnaryOp '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(operand, out, depth + 1);
     }
     NodeKind::InfixOp { op, lhs, rhs } => {
-      out.push_str("InfixOp '"); out.push_str(op.src); out.push('\'');
+      out.push_str("InfixOp '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
@@ -358,20 +360,21 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Spread { op, inner: child } => {
       out.push_str("Spread '"); out.push_str(op.src); out.push('\'');
+      if child.is_some() { out.push(','); }
       if let Some(n) = child {
         out.push('\n');
         print_node(n, out, depth + 1);
       }
     }
     NodeKind::Member { op, lhs, rhs } => {
-      out.push_str("Member '"); out.push_str(op.src); out.push('\'');
+      out.push_str("Member '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
     NodeKind::Group { open, close, inner } => {
-      out.push_str("Group '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
+      out.push_str("Group '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push_str("',");
       out.push('\n');
       print_node(inner, out, depth + 1);
     }
@@ -388,14 +391,14 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       print_node(inner, out, depth + 1);
     }
     NodeKind::Bind { op, lhs, rhs } => {
-      out.push_str("Bind '"); out.push_str(op.src); out.push('\'');
+      out.push_str("Bind '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
     NodeKind::BindRight { op, lhs, rhs } => {
-      out.push_str("BindRight '"); out.push_str(op.src); out.push('\'');
+      out.push_str("BindRight '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
@@ -415,7 +418,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       print_children(&exprs.items, out, depth);
     }
     NodeKind::Fn { params, sep, body } => {
-      out.push_str("Fn '"); out.push_str(sep.src); out.push('\'');
+      out.push_str("Fn '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
       print_node(params, out, depth + 1);
       for node in &body.items {
@@ -428,7 +431,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       print_children(&exprs.items, out, depth);
     }
     NodeKind::Match { subjects, sep, arms } => {
-      out.push_str("Match '"); out.push_str(sep.src); out.push('\'');
+      out.push_str("Match '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
       print_node(subjects, out, depth + 1);
       for arm in &arms.items {
@@ -437,7 +440,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       }
     }
     NodeKind::Arm { lhs, sep, body } => {
-      out.push_str("Arm '"); out.push_str(sep.src); out.push('\'');
+      out.push_str("Arm '"); out.push_str(sep.src); out.push_str("',");
       for pat in &lhs.items {
         out.push('\n');
         print_node(pat, out, depth + 1);
@@ -448,7 +451,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       }
     }
     NodeKind::Block { name, params, sep, body } => {
-      out.push_str("Block '"); out.push_str(sep.src); out.push('\'');
+      out.push_str("Block '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
       print_node(name, out, depth + 1);
       out.push('\n');
@@ -493,7 +496,7 @@ mod tests {
       lhs: Box::new(node(NodeKind::Ident("foo"))),
       rhs: Box::new(node(NodeKind::LitInt("1"))),
     });
-    assert_eq!(tree.print(), "Bind '='\n  Ident 'foo'\n  LitInt '1'");
+    assert_eq!(tree.print(), "Bind '=',\n  Ident 'foo'\n  LitInt '1'");
   }
 
   #[test]
@@ -504,7 +507,7 @@ mod tests {
       lhs: Box::new(node(NodeKind::Ident("a"))),
       rhs: Box::new(node(NodeKind::Ident("b"))),
     });
-    assert_eq!(tree.print(), "InfixOp '+'\n  Ident 'a'\n  Ident 'b'");
+    assert_eq!(tree.print(), "InfixOp '+',\n  Ident 'a'\n  Ident 'b'");
   }
 
   #[test]

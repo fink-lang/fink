@@ -6,13 +6,13 @@ test 'grouping preserves Group node in arithmetic', fn:
   expect ast fink":
     (1 + 2) * (2 + 3)
   | equals fink":
-    InfixOp '*'
-      Group '(..)'
-        InfixOp '+'
+    InfixOp '*',
+      Group '(..)',
+        InfixOp '+',
           LitInt '1'
           LitInt '2'
-      Group '(..)'
-        InfixOp '+'
+      Group '(..)',
+        InfixOp '+',
           LitInt '2'
           LitInt '3'
 
@@ -20,13 +20,13 @@ test 'grouping application args without comma', fn:
   expect ast fink":
     [(add 1, 2), (add 3, 4)]
   | equals fink":
-    LitSeq '[..]'
-      Group '(..)'
+    LitSeq '[..]',
+      Group '(..)',
         Apply
           Ident 'add'
           LitInt '1'
           LitInt '2'
-      Group '(..)'
+      Group '(..)',
         Apply
           Ident 'add'
           LitInt '3'
@@ -38,7 +38,7 @@ test 'grouping to override right-to-left application', fn:
   | equals fink":
     Apply
       Ident 'foo'
-      Group '(..)'
+      Group '(..)',
         Apply
           Ident 'bar'
           Ident 'spam'
@@ -120,14 +120,14 @@ test 'semicolon makes spread guard boundary explicit', fn:
   expect ast fink":
     [is_odd head; ..tail] = [3, 4, 5]
   | equals fink":
-    Bind '='
-      LitSeq '[..]'
+    Bind '=',
+      LitSeq '[..]',
         Apply
           Ident 'is_odd'
           Ident 'head'
-        Spread '..'
+        Spread '..',
           Ident 'tail'
-      LitSeq '[..]'
+      LitSeq '[..]',
         LitInt '3'
         LitInt '4'
         LitInt '5'
@@ -137,8 +137,8 @@ test 'semicolon separates seq elements when both are non-spread', fn:
   expect ast fink":
     [1, foo 1, 2; bar 3] = xs
   | equals fink":
-    Bind '='
-      LitSeq '[..]'
+    Bind '=',
+      LitSeq '[..]',
         LitInt '1'
         Apply
           Ident 'foo'
