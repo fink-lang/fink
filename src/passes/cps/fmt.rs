@@ -2,7 +2,7 @@
 //
 // First-pass CPS: renders the structural IR directly — no ·load/·store/·scope
 // synthesis. All names are in scope by construction (no forward refs in first
-// pass). Scope resolution and closure conversion are deferred to later passes.
+// pass). Scope resolution (name_res) is complete. Closure hoisting is next.
 //
 // Uses the CpsId→AstId origin map to recover source names from the AST,
 // avoiding stringly-typed dispatch.

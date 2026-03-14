@@ -7,15 +7,22 @@ Fink is a functional programming language and compiler toolchain, built in Rust.
 ```
 fink/
 ├── src/
-│   ├── lib.rs          # shared compiler library
-│   ├── lexer/
-│   ├── parser/
-│   ├── ast/
-│   ├── codegen/
+│   ├── lib.rs              # shared compiler library
+│   ├── propgraph.rs        # PropGraph<Id, T> — typed property graph storage
+│   ├── sourcemap.rs        # Source Map v3 (MappedWriter, VLQ, base64)
+│   ├── errors/             # diagnostic formatter
+│   ├── strings/            # string rendering and escape handling
+│   ├── passes/
+│   │   ├── ast/            # lexer, parser, AST types, formatter, transform
+│   │   ├── cps/            # CPS IR, transform (AST → CPS), formatter
+│   │   ├── partial/        # partial application pass
+│   │   └── name_res/       # name resolution — scope graph, Resolution enum
 │   └── bin/
-│       └── fink.rs     # main compiler driver CLI
+│       └── fink.rs         # main compiler driver CLI
+├── crates/
+│   └── test-macros/        # include_fink_tests! proc macro
 ├── docs/
-│   └── examples/       # language spec by example (.fnk files)
+│   └── examples/           # language spec by example (.fnk files)
 └── CLAUDE.md
 ```
 
@@ -70,8 +77,8 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 
 ## Implementation Notes
 
-- Use Pratt parser (used successfully in Fink via Prattler library)
-- Start with: tokenizer → parser → AST → codegen
+- Uses Pratt parser
+- Pipeline: tokenizer → parser → AST → partial → CPS transform → name resolution → closure hoisting → codegen
 - Flag before implementing anything that requires decisions on: protocols vs typeclasses, nominal vs structural typing
 
 ## Rust Conventions

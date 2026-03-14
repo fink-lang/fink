@@ -20,7 +20,7 @@ and codegen from the structural IR.
 
 ## Metadata strategy
 
-Pass-computed metadata (types, resolution, free vars, source locations) is stored
+Pass-computed metadata (types, resolution, source locations) is stored
 in **property graphs** — typed `Vec<Option<T>>` indexed by node IDs — rather than
 on IR nodes directly. Each pass reads upstream property graphs and writes its own.
 
@@ -48,9 +48,6 @@ Ref                           -- a use site (references a binding)
   Gen(CpsId)                  -- compiler-generated temp: carries CpsId of the Bind::Gen it refers to
 
 BindNode = Node<Bind>         -- definition site with its own CpsId
-
-FreeVar = CpsId               -- CpsId of a Ref node at a capture site
-                              -- (deprecated: subsumed by Resolution::Captured)
 
 Param                         -- function parameter
   Name(BindNode)              -- plain param
@@ -84,14 +81,16 @@ Callable                      -- what an App calls
 
 ```
 Resolution
-  Local(CpsId)                -- bound in current scope, already initialized
-  Captured(CpsId)             -- free variable from outer scope
-  Recursive(CpsId)            -- same LetRec group, behind fn boundary (valid)
-  ForwardRef(CpsId)           -- same LetRec group, not behind fn boundary (error)
+  Local(CpsId)                -- bound in current scope
+  Captured { bind: CpsId, depth: u32 }
+                              -- free variable from outer scope; depth = fn boundary crossings
+  Recursive(CpsId)            -- self-reference within same fn (recursive call)
+  Unresolved                  -- no binding found (name error)
 ```
 
-Every variant carries the CpsId of the Bind node at the definition site.
-Stored in `PropGraph<CpsId, Option<Resolution>>` — not on the IR nodes.
+Every variant (except `Unresolved`) carries the CpsId of the Bind node at the definition site.
+Stored in `PropGraph<CpsId, Option<Resolution>>` keyed by the Ref node's CpsId — not on the IR nodes.
+Complete: produced by `src/passes/name_res/`.
 
 ---
 
@@ -129,9 +128,9 @@ Expr = Node<ExprKind>                        -- computation node (has CpsId)
 LetVal { name, val, body }
   -- bind val to name; visible in body
 
-LetFn { name, params, free_vars, fn_body, body }
+LetFn { name, params, fn_body, body }
   -- bind a function; name NOT visible in fn_body (non-recursive)
-  -- free_vars populated by free-var pass (deprecated); empty until then
+  -- captures resolved by name resolution (Resolution::Captured entries)
 
 LetRec { bindings: Vec<Binding>, body }
   -- mutually recursive group; all names visible in all fn_bodies
@@ -239,9 +238,10 @@ Load/store/scope synthesis is deferred to later passes that need it (closure
 conversion, codegen).
 
 ### Closure vs LetFn
-All fns are potentially closures; captures inferred by free-var pass (deprecated,
-will be subsumed by name resolution). Analysis IR uses `LetFn` with implicit
-captures from nesting. Codegen IR will add explicit captures after resolution.
+All fns are potentially closures. The analysis IR uses `LetFn` with implicit
+captures from nesting. Name resolution (complete) identifies captures via
+`Resolution::Captured { bind, depth }`. Closure hoisting (next pass) will
+rewrite `LetFn` nodes to carry explicit capture lists for codegen.
 
 ### Env / Scope / State
 All three are output conventions — none in the analysis IR:

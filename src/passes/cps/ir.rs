@@ -260,7 +260,7 @@ pub enum ExprKind<'src> {
 
   /// Mutually recursive group — all names visible in all fn_bodies.
   /// Each binding: (name, params, fn_body).
-  /// Cross-refs not behind a fn boundary → ForwardRef error.
+  /// Cross-refs not behind a fn boundary → Unresolved or Captured with depth=0 (name error).
   LetRec {
     bindings: Vec<Binding<'src>>,
     body: Box<Expr<'src>>,
