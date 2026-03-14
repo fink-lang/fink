@@ -281,9 +281,63 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       out.push_str("yield ");
       fmt_node(inner, out, depth);
     }
-    NodeKind::StrTempl { children, .. } => {
-      for child in children {
-        fmt_node(child, out, depth);
+    NodeKind::StrTempl { open, close, children } => {
+      if open.src == "\":" {
+        // Block string with interpolation
+        out.push_str("\":");
+        // Track whether we're at start of a line (after \n) for indentation
+        let mut at_line_start = true;
+        for child in children {
+          match &child.kind {
+            NodeKind::LitStr { content: s, .. } => {
+              for (i, line) in s.split('\n').enumerate() {
+                if i > 0 || at_line_start {
+                  out.push('\n');
+                  ind(out, depth + 1);
+                }
+                out.push_str(line);
+              }
+              at_line_start = s.ends_with('\n');
+            }
+            _ => {
+              if at_line_start {
+                out.push('\n');
+                ind(out, depth + 1);
+                at_line_start = false;
+              }
+              out.push_str("${");
+              fmt_node(child, out, depth);
+              out.push('}');
+            }
+          }
+        }
+      } else {
+        // Quoted string with interpolation
+        out.push('\'');
+        for child in children {
+          match &child.kind {
+            NodeKind::LitStr { content: s, .. } => {
+              if s.contains('\n') {
+                for (i, line) in s.split('\n').enumerate() {
+                  if i > 0 {
+                    out.push('\n');
+                    ind(out, depth + 1);
+                  }
+                  out.push_str(line);
+                }
+              } else {
+                out.push_str(s);
+              }
+            }
+            _ => {
+              out.push_str("\\${");
+              fmt_node(child, out, depth);
+              out.push('}');
+            }
+          }
+        }
+        out.mark(close.loc);
+        out.push('\'');
       }
     }
     NodeKind::Block { name, params, sep, body } => {
@@ -463,6 +517,29 @@ mod tests {
     // Multiline string in apply inside fn body — continuation lines indented under apply
     let out = fmt("fn:\n  log 'foo\n  bar\n  spam'");
     assert_eq!(out, "fn:\n  log 'foo\n    bar\n    spam'");
+  }
+
+  // --- string interpolation (StrTempl) tests ---
+
+  #[test]
+  fn fmt_block_string_interpolation() {
+    // Block string with interpolation: ": \n  hello ${name}
+    let out = fmt("\":\n  supports templating ${bar}\n  no need to escape 'spam'");
+    assert_eq!(out, "\":\n  supports templating ${bar}\n  no need to escape 'spam'");
+  }
+
+  #[test]
+  fn fmt_quoted_string_interpolation() {
+    // Quoted string with interpolation: 'hello ${name}'
+    let out = fmt("'hello \\${name}'");
+    assert_eq!(out, "'hello \\${name}'");
+  }
+
+  #[test]
+  fn fmt_block_string_interpolation_in_fn_body() {
+    // Block string interpolation nested in fn body
+    let out = fmt("fn:\n  \":\n    hello ${name}");
+    assert_eq!(out, "fn:\n  \":\n    hello ${name}");
   }
 
   // --- source map tests ---
