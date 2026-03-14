@@ -3,7 +3,26 @@ pub mod lexer;
 pub mod parser;
 pub mod transform;
 
-use lexer::Loc;
+use lexer::{Loc, Token};
+
+/// Separated sequence of expressions — the shared structural building block
+/// for params, args, body statements, seq/rec items, and pipe segments.
+/// Separators are `,`, `;`, `|`, or block-continuation tokens.
+///
+/// Invariant: `seps.len() <= items.len()`. Typically `seps.len() == items.len() - 1`
+/// (no trailing separator) or `seps.len() == items.len()` (trailing separator present).
+/// Empty sequences have both vecs empty.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Exprs<'src> {
+  pub items: Vec<Node<'src>>,
+  pub seps: Vec<Token<'src>>,
+}
+
+impl<'src> Exprs<'src> {
+  pub fn empty() -> Self {
+    Self { items: vec![], seps: vec![] }
+  }
+}
 
 /// Output of the parse pass — the AST tree plus metadata.
 pub struct ParseResult<'src> {
@@ -25,6 +44,10 @@ impl std::fmt::Debug for AstId {
 
 impl From<AstId> for usize {
   fn from(id: AstId) -> usize { id.0 as usize }
+}
+
+impl From<usize> for AstId {
+  fn from(n: usize) -> AstId { AstId(n as u32) }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,24 +82,24 @@ pub enum NodeKind<'src> {
   // LitDecimal '1.0d' | '1.0d-100'
   LitDecimal(&'src str),
 
-  // LitStr 'hello world'
-  // TODO: is it fully resolved string value (escape sequences processed)
-  // owned since it differs from source
-  LitStr(String),
+  // LitStr — string literal or string segment inside a template
+  // open/close are delimiter tokens: ' .. ', ' .. ${, } .. ', } .. ${, ": .. dedent
+  // content is owned since escape sequences are processed at parse time
+  LitStr { open: Token<'src>, close: Token<'src>, content: String },
 
-  // LitSeq — children are elements
-  LitSeq(Vec<Node<'src>>),
+  // LitSeq — sequence literal; items are elements separated by , ; or block tokens
+  LitSeq { open: Token<'src>, close: Token<'src>, items: Exprs<'src> },
 
-  // LitRec — children are Ident (shorthand), Arm (key:val), or Spread
-  LitRec(Vec<Node<'src>>),
+  // LitRec — record literal; items are Ident (shorthand), Arm (key:val), or Spread
+  LitRec { open: Token<'src>, close: Token<'src>, items: Exprs<'src> },
 
   // --- string templates ---
 
-  // StrTempl — interpolated string; children are LitStr and expressions
-  StrTempl(Vec<Node<'src>>),
+  // StrTempl — interpolated string; open/close mirror first/last child's delimiters
+  StrTempl { open: Token<'src>, close: Token<'src>, children: Vec<Node<'src>> },
 
   // StrRawTempl — tagged template; raw parts + expressions, passed to tag fn unprocessed
-  StrRawTempl(Vec<Node<'src>>),
+  StrRawTempl { open: Token<'src>, close: Token<'src>, children: Vec<Node<'src>> },
 
   // --- identifiers ---
 
@@ -86,24 +109,24 @@ pub enum NodeKind<'src> {
   // --- operators ---
 
   // UnaryOp '-' | 'not' | '~'
-  UnaryOp { op: &'src str, operand: Box<Node<'src>> },
+  UnaryOp { op: Token<'src>, operand: Box<Node<'src>> },
 
   // InfixOp '+' | '-' | 'srcnd' | '>' | '&' | '..' | '...' | ...
-  InfixOp { op: &'src str, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  InfixOp { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // ChainedCmp — flat interleaved: operand, op, operand, op, operand, ...
   // e.g. a > b > c => [Operand(a), Op(">"), Operand(b), Op(">"), Operand(c)]
   ChainedCmp(Vec<CmpPart<'src>>),
 
   // Spread — bare (..) or with guard/expr child
-  Spread(Option<Box<Node<'src>>>),
+  Spread { op: Token<'src>, inner: Option<Box<Node<'src>>> },
 
   // Member — lhs.rhs; rhs is Ident (name) or Group (expr key)
-  Member { lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  Member { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // Group — parenthesised expr; only preserved where semantically significant
   // (record computed keys, member expression keys, spread guards)
-  Group(Box<Node<'src>>),
+  Group { open: Token<'src>, close: Token<'src>, inner: Box<Node<'src>> },
 
   // Partial — ? hole for partial application
   Partial,
@@ -114,35 +137,36 @@ pub enum NodeKind<'src> {
   // --- binding ---
 
   // Bind lhs = rhs
-  Bind { lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  Bind { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // BindRight lhs |= rhs
-  BindRight { lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  BindRight { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
 
   // --- application ---
 
   // Apply func arg arg ...
-  Apply { func: Box<Node<'src>>, args: Vec<Node<'src>> },
+  Apply { func: Box<Node<'src>>, args: Exprs<'src> },
 
-  // Pipe — left-to-right chain: [a, b, c] means c(b(a))
-  Pipe(Vec<Node<'src>>),
+  // Pipe — left-to-right chain: [a, b, c] means c(b(a)); separated by |
+  Pipe(Exprs<'src>),
 
   // --- functions ---
 
-  // Fn — params (Patterns node) + body exprs (flat, may include Arms)
-  Fn { params: Box<Node<'src>>, body: Vec<Node<'src>> },
+  // Fn — params (Patterns node) + sep (:) + body
+  Fn { params: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
 
-  // Patterns — comma-separated param/subject list
-  Patterns(Vec<Node<'src>>),
+  // Patterns — expression sequence in pattern position (fn params, match subjects)
+  // separated by , ; or block tokens
+  Patterns(Exprs<'src>),
 
   // --- match ---
 
-  // Match — subjects (Patterns node) + arms
-  Match { subjects: Box<Node<'src>>, arms: Vec<Node<'src>> },
+  // Match — subjects (Patterns node) + sep (:) + arms
+  Match { subjects: Box<Node<'src>>, sep: Token<'src>, arms: Exprs<'src> },
 
-  // Arm — lhs patterns : body exprs (flat, like Fn body)
-  // lhs is Vec to handle multi-pattern arms (match a, b: ...)
-  Arm { lhs: Vec<Node<'src>>, body: Vec<Node<'src>> },
+  // Arm — lhs patterns + sep (:) + body
+  // lhs is Exprs to handle multi-pattern arms (match a, b: ...)
+  Arm { lhs: Exprs<'src>, sep: Token<'src>, body: Exprs<'src> },
 
   // --- error handling ---
 
@@ -157,15 +181,15 @@ pub enum NodeKind<'src> {
 
   // --- custom blocks ---
 
-  // Block — name (Ident) + params (Patterns) + body (flat exprs/arms)
-  Block { name: Box<Node<'src>>, params: Box<Node<'src>>, body: Vec<Node<'src>> },
+  // Block — name (Ident) + params (Patterns) + sep (:) + body
+  Block { name: Box<Node<'src>>, params: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
 }
 
 // For ChainedCmp interleaved representation
 #[derive(Debug, Clone, PartialEq)]
 pub enum CmpPart<'src> {
   Operand(Node<'src>),
-  Op(&'src str),
+  Op(Token<'src>),
 }
 
 // --- tree walker ---
@@ -178,17 +202,19 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::LitInt(_)
     | NodeKind::LitFloat(_)
     | NodeKind::LitDecimal(_)
-    | NodeKind::LitStr(_)
+    | NodeKind::LitStr { .. }
     | NodeKind::Ident(_)
     | NodeKind::Partial
     | NodeKind::Wildcard => {}
 
-    NodeKind::LitSeq(children)
-    | NodeKind::LitRec(children)
-    | NodeKind::StrTempl(children)
-    | NodeKind::StrRawTempl(children)
-    | NodeKind::Pipe(children)
-    | NodeKind::Patterns(children) => {
+    NodeKind::LitSeq { items, .. }
+    | NodeKind::LitRec { items, .. }
+    | NodeKind::Pipe(items)
+    | NodeKind::Patterns(items) => {
+      for child in &items.items { walk(child, f); }
+    }
+    NodeKind::StrTempl { children, .. }
+    | NodeKind::StrRawTempl { children, .. } => {
       for child in children { walk(child, f); }
     }
 
@@ -202,39 +228,39 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
         if let CmpPart::Operand(n) = part { walk(n, f); }
       }
     }
-    NodeKind::Spread(inner) => {
+    NodeKind::Spread { inner, .. } => {
       if let Some(n) = inner { walk(n, f); }
     }
-    NodeKind::Member { lhs, rhs } => {
+    NodeKind::Member { lhs, rhs, .. } => {
       walk(lhs, f);
       walk(rhs, f);
     }
-    NodeKind::Group(inner) => walk(inner, f),
+    NodeKind::Group { inner, .. } => walk(inner, f),
     NodeKind::Try(inner) | NodeKind::Yield(inner) => walk(inner, f),
-    NodeKind::Bind { lhs, rhs } | NodeKind::BindRight { lhs, rhs } => {
+    NodeKind::Bind { lhs, rhs, .. } | NodeKind::BindRight { lhs, rhs, .. } => {
       walk(lhs, f);
       walk(rhs, f);
     }
     NodeKind::Apply { func, args } => {
       walk(func, f);
-      for arg in args { walk(arg, f); }
+      for arg in &args.items { walk(arg, f); }
     }
-    NodeKind::Fn { params, body } => {
+    NodeKind::Fn { params, body, .. } => {
       walk(params, f);
-      for stmt in body { walk(stmt, f); }
+      for stmt in &body.items { walk(stmt, f); }
     }
-    NodeKind::Match { subjects, arms } => {
+    NodeKind::Match { subjects, arms, .. } => {
       walk(subjects, f);
-      for arm in arms { walk(arm, f); }
+      for arm in &arms.items { walk(arm, f); }
     }
-    NodeKind::Arm { lhs, body } => {
-      for pat in lhs { walk(pat, f); }
-      for stmt in body { walk(stmt, f); }
+    NodeKind::Arm { lhs, body, .. } => {
+      for pat in &lhs.items { walk(pat, f); }
+      for stmt in &body.items { walk(stmt, f); }
     }
-    NodeKind::Block { name, params, body } => {
+    NodeKind::Block { name, params, body, .. } => {
       walk(name, f);
       walk(params, f);
-      for stmt in body { walk(stmt, f); }
+      for stmt in &body.items { walk(stmt, f); }
     }
   }
 }
@@ -277,10 +303,10 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     NodeKind::LitInt(s) => { out.push_str("LitInt '"); out.push_str(s); out.push('\''); }
     NodeKind::LitFloat(s) => { out.push_str("LitFloat '"); out.push_str(s); out.push('\''); }
     NodeKind::LitDecimal(s) => { out.push_str("LitDecimal '"); out.push_str(s); out.push('\''); }
-    NodeKind::LitStr(s) => {
+    NodeKind::LitStr { content, .. } => {
       out.push_str("LitStr '");
       out.push_str(
-        &s.replace('\\', "\\\\")
+        &content.replace('\\', "\\\\")
           .replace('\n', "\\n")
           .replace('\r', "\\r")
           .replace('\t', "\\t")
@@ -291,30 +317,32 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       );
       out.push('\'');
     }
-    NodeKind::LitSeq(children) => {
-      out.push_str("LitSeq");
-      print_children(children, out, depth);
+    NodeKind::LitSeq { open, close, items } => {
+      out.push_str("LitSeq '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
+      if !items.items.is_empty() { out.push(','); }
+      print_exprs(items, out, depth);
     }
-    NodeKind::LitRec(children) => {
-      out.push_str("LitRec");
-      print_children(children, out, depth);
+    NodeKind::LitRec { open, close, items } => {
+      out.push_str("LitRec '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
+      if !items.items.is_empty() { out.push(','); }
+      print_exprs(items, out, depth);
     }
-    NodeKind::StrTempl(children) => {
+    NodeKind::StrTempl { children, .. } => {
       out.push_str("StrTempl");
       print_children(children, out, depth);
     }
-    NodeKind::StrRawTempl(children) => {
+    NodeKind::StrRawTempl { children, .. } => {
       out.push_str("StrRawTempl");
       print_children(children, out, depth);
     }
     NodeKind::Ident(s) => { out.push_str("Ident '"); out.push_str(s); out.push('\''); }
     NodeKind::UnaryOp { op, operand } => {
-      out.push_str("UnaryOp '"); out.push_str(op); out.push('\'');
+      out.push_str("UnaryOp '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(operand, out, depth + 1);
     }
     NodeKind::InfixOp { op, lhs, rhs } => {
-      out.push_str("InfixOp '"); out.push_str(op); out.push('\'');
+      out.push_str("InfixOp '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
@@ -326,26 +354,27 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         out.push('\n');
         match part {
           CmpPart::Operand(n) => print_node(n, out, depth + 1),
-          CmpPart::Op(op) => { indent(out, depth + 1); out.push('\''); out.push_str(op); out.push('\''); }
+          CmpPart::Op(op) => { indent(out, depth + 1); out.push('\''); out.push_str(op.src); out.push('\''); }
         }
       }
     }
-    NodeKind::Spread(child) => {
-      out.push_str("Spread");
+    NodeKind::Spread { op, inner: child } => {
+      out.push_str("Spread '"); out.push_str(op.src); out.push('\'');
+      if child.is_some() { out.push(','); }
       if let Some(n) = child {
         out.push('\n');
         print_node(n, out, depth + 1);
       }
     }
-    NodeKind::Member { lhs, rhs } => {
-      out.push_str("Member");
+    NodeKind::Member { op, lhs, rhs } => {
+      out.push_str("Member '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
-    NodeKind::Group(inner) => {
-      out.push_str("Group");
+    NodeKind::Group { open, close, inner } => {
+      out.push_str("Group '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push_str("',");
       out.push('\n');
       print_node(inner, out, depth + 1);
     }
@@ -361,15 +390,15 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push('\n');
       print_node(inner, out, depth + 1);
     }
-    NodeKind::Bind { lhs, rhs } => {
-      out.push_str("Bind");
+    NodeKind::Bind { op, lhs, rhs } => {
+      out.push_str("Bind '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
       print_node(rhs, out, depth + 1);
     }
-    NodeKind::BindRight { lhs, rhs } => {
-      out.push_str("BindRight");
+    NodeKind::BindRight { op, lhs, rhs } => {
+      out.push_str("BindRight '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
       print_node(lhs, out, depth + 1);
       out.push('\n');
@@ -379,55 +408,52 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Apply");
       out.push('\n');
       print_node(func, out, depth + 1);
-      for arg in args {
-        out.push('\n');
-        print_node(arg, out, depth + 1);
-      }
+      print_exprs(args, out, depth);
     }
-    NodeKind::Pipe(children) => {
+    NodeKind::Pipe(exprs) => {
       out.push_str("Pipe");
-      print_children(children, out, depth);
+      print_children(&exprs.items, out, depth);
     }
-    NodeKind::Fn { params, body } => {
-      out.push_str("Fn");
+    NodeKind::Fn { params, sep, body } => {
+      out.push_str("Fn '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
       print_node(params, out, depth + 1);
-      for node in body {
+      for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);
       }
     }
-    NodeKind::Patterns(children) => {
+    NodeKind::Patterns(exprs) => {
       out.push_str("Patterns");
-      print_children(children, out, depth);
+      print_exprs(exprs, out, depth);
     }
-    NodeKind::Match { subjects, arms } => {
-      out.push_str("Match");
+    NodeKind::Match { subjects, sep, arms } => {
+      out.push_str("Match '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
       print_node(subjects, out, depth + 1);
-      for arm in arms {
+      for arm in &arms.items {
         out.push('\n');
         print_node(arm, out, depth + 1);
       }
     }
-    NodeKind::Arm { lhs, body } => {
-      out.push_str("Arm");
-      for pat in lhs {
+    NodeKind::Arm { lhs, sep, body } => {
+      out.push_str("Arm '"); out.push_str(sep.src); out.push_str("',");
+      for pat in &lhs.items {
         out.push('\n');
         print_node(pat, out, depth + 1);
       }
-      for node in body {
+      for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);
       }
     }
-    NodeKind::Block { name, params, body } => {
-      out.push_str("Block");
+    NodeKind::Block { name, params, sep, body } => {
+      out.push_str("Block '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
       print_node(name, out, depth + 1);
       out.push('\n');
       print_node(params, out, depth + 1);
-      for node in body {
+      for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);
       }
@@ -442,13 +468,21 @@ fn print_children(children: &[Node], out: &mut String, depth: usize) {
   }
 }
 
+fn print_exprs(exprs: &Exprs, out: &mut String, depth: usize) {
+  print_children(&exprs.items, out, depth);
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::lexer::{Loc, Pos};
+  use crate::lexer::{Loc, Pos, Token, TokenKind};
 
   fn loc() -> Loc {
     Loc { start: Pos { idx: 0, line: 1, col: 0 }, end: Pos { idx: 0, line: 1, col: 0 } }
+  }
+
+  fn tok(src: &str) -> Token<'_> {
+    Token { kind: TokenKind::Sep, loc: loc(), src }
   }
 
   fn node(kind: NodeKind) -> Node {
@@ -459,38 +493,39 @@ mod tests {
   fn print_simple_binding() {
     // foo = 1
     let tree = node(NodeKind::Bind {
+      op: tok("="),
       lhs: Box::new(node(NodeKind::Ident("foo"))),
       rhs: Box::new(node(NodeKind::LitInt("1"))),
     });
-    assert_eq!(tree.print(), "Bind\n  Ident 'foo'\n  LitInt '1'");
+    assert_eq!(tree.print(), "Bind '=',\n  Ident 'foo'\n  LitInt '1'");
   }
 
   #[test]
   fn print_infix_op() {
     // a + b
     let tree = node(NodeKind::InfixOp {
-      op: "+",
+      op: tok("+"),
       lhs: Box::new(node(NodeKind::Ident("a"))),
       rhs: Box::new(node(NodeKind::Ident("b"))),
     });
-    assert_eq!(tree.print(), "InfixOp '+'\n  Ident 'a'\n  Ident 'b'");
+    assert_eq!(tree.print(), "InfixOp '+',\n  Ident 'a'\n  Ident 'b'");
   }
 
   #[test]
   fn print_lit_seq_empty() {
-    let tree = node(NodeKind::LitSeq(vec![]));
-    assert_eq!(tree.print(), "LitSeq");
+    let tree = node(NodeKind::LitSeq { open: tok("["), close: tok("]"), items: Exprs::empty() });
+    assert_eq!(tree.print(), "LitSeq '[..]'");
   }
 
   #[test]
   fn print_spread_bare() {
-    let tree = node(NodeKind::Spread(None));
-    assert_eq!(tree.print(), "Spread");
+    let tree = node(NodeKind::Spread { op: tok(".."), inner: None });
+    assert_eq!(tree.print(), "Spread '..'");
   }
 
   #[test]
   fn print_patterns_empty() {
-    let tree = node(NodeKind::Patterns(vec![]));
+    let tree = node(NodeKind::Patterns(Exprs::empty()));
     assert_eq!(tree.print(), "Patterns");
   }
 
@@ -523,7 +558,7 @@ mod tests {
     let mut names = vec![];
     super::walk(&r.root, &mut |n| {
       match &n.kind {
-        NodeKind::InfixOp { op, .. } => names.push(*op),
+        NodeKind::InfixOp { op, .. } => names.push(op.src),
         NodeKind::Ident(s) => names.push(s),
         _ => {}
       }
@@ -536,9 +571,9 @@ mod tests {
     // a > b > c
     let tree = node(NodeKind::ChainedCmp(vec![
       CmpPart::Operand(node(NodeKind::Ident("a"))),
-      CmpPart::Op(">"),
+      CmpPart::Op(tok(">")),
       CmpPart::Operand(node(NodeKind::Ident("b"))),
-      CmpPart::Op(">"),
+      CmpPart::Op(tok(">")),
       CmpPart::Operand(node(NodeKind::Ident("c"))),
     ]));
     assert_eq!(tree.print(), "ChainedCmp\n  Ident 'a'\n  '>'\n  Ident 'b'\n  '>'\n  Ident 'c'");

@@ -19,7 +19,7 @@ test 'try bound to name', fn:
   expect ast fink":
     a = try open 'file.txt'
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'a'
       Try
         Apply

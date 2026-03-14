@@ -1,0 +1,400 @@
+---
+name resolution tests
+---
+
+# Name resolution — classified scope graph.
+#
+# Output format: one line per resolved Ref::Name, walk order.
+#   (ref ID, name) == (local (bind ID, name)) in scope ID
+#   (ref ID, name) == (captured DEPTH, (bind ID, name)) in scope ID
+#   (ref ID, name) == (recursive (bind ID, name)) in scope ID
+#   (ref ID, name) == unresolved
+#
+# Only Ref::Name nodes appear (Ref::Gen are structural, always resolved).
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_resolve fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected classified resolution>
+
+
+---
+local bindings
+---
+
+test 'ref to binding', fn:
+  expect cps_resolve fink":
+    x = 1
+    y = x
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 5, y) == (local (bind 4, y)) in scope 0
+
+test 'ref to param', fn:
+  expect cps_resolve fink":
+    fn a: a
+  | equals fink":
+    (ref 2, a) == (local (bind 1, a)) in scope 0
+
+test 'chained bindings', fn:
+  expect cps_resolve fink":
+    x = 1
+    y = x
+    z = y
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 5, y) == (local (bind 4, y)) in scope 0
+    (ref 7, z) == (local (bind 6, z)) in scope 0
+
+test 'multiple refs to same binding', fn:
+  expect cps_resolve fink":
+    x = 1
+    y = x
+    z = x
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 5, x) == (local (bind 2, x)) in scope 0
+    (ref 7, z) == (local (bind 6, z)) in scope 0
+
+test 'fn with two params', fn:
+  expect cps_resolve fink":
+    fn a, b: a + b
+  | equals fink":
+    (ref 3, a) == (local (bind 1, a)) in scope 0
+    (ref 4, b) == (local (bind 2, b)) in scope 0
+
+
+---
+closures
+---
+
+test 'capture from outer scope', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn a: x
+  | equals fink":
+    (ref 5, x) == (captured 1, (bind 2, x)) in scope 0
+
+test 'param not captured', fn:
+  expect cps_resolve fink":
+    fn a:
+      fn b: a
+  | equals fink":
+    (ref 4, a) == (captured 1, (bind 1, a)) in scope 0
+
+
+---
+application
+---
+
+test 'fn application', fn:
+  expect cps_resolve fink":
+    f = fn a: a
+    f 1
+  | equals fink":
+    (ref 3, a) == (local (bind 2, a)) in scope 1
+    (ref 7, f) == (local (bind 6, f)) in scope 0
+
+
+---
+unresolved names
+---
+
+test 'unresolved ref', fn:
+  expect cps_resolve fink":
+    x
+  | equals fink":
+    (ref 0, x) == unresolved
+
+test 'mixed resolved and unresolved', fn:
+  expect cps_resolve fink":
+    x = 1
+    y = x
+    z = w
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 5, w) == unresolved
+    (ref 7, z) == (local (bind 6, z)) in scope 0
+
+test 'unresolved in fn body', fn:
+  expect cps_resolve fink":
+    fn a: b
+  | equals fink":
+    (ref 2, b) == unresolved
+
+
+---
+shadowing
+---
+
+test 'shadow binding', fn:
+  expect cps_resolve fink":
+    x = 1
+    x = 2
+    y = x
+  | equals fink":
+    (ref 5, x) == (local (bind 4, x)) in scope 0
+    (ref 7, y) == (local (bind 6, y)) in scope 0
+
+test 'param shadows outer binding', fn:
+  expect cps_resolve fink":
+    a = 1
+    fn a:
+      a
+  | equals fink":
+    (ref 5, a) == (local (bind 4, a)) in scope 3
+
+test 'inner fn shadows outer binding', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn x: x
+  | equals fink":
+    (ref 5, x) == (local (bind 4, x)) in scope 3
+
+
+---
+recursion — fn bodies see sibling LetFn names (hoisted),
+LetVal right-hand sides see only prior bindings (sequential).
+---
+
+test 'self recursion', fn:
+  expect cps_resolve fink":
+    f = fn a:
+      f a
+  | equals fink":
+    (ref 2, f) == (recursive (bind 9, f)) in scope 14
+    (ref 3, a) == (local (bind 1, a)) in scope 0
+    (ref 10, f) == (local (bind 9, f)) in scope 14
+
+test 'mutual recursion', fn:
+  expect cps_resolve fink":
+    f = fn a:
+      g a
+    g = fn b:
+      f b
+  | equals fink":
+    (ref 3, g) == (captured 1, (bind 20, g)) in scope 0
+    (ref 4, a) == (local (bind 2, a)) in scope 1
+    (ref 13, f) == (captured 1, (bind 10, f)) in scope 0
+    (ref 14, b) == (local (bind 12, b)) in scope 11
+    (ref 21, g) == (local (bind 20, g)) in scope 0
+
+test 'val ref to prior fn resolves', fn:
+  expect cps_resolve fink":
+    foo = fn a: a
+    bar = foo
+  | equals fink":
+    (ref 3, a) == (local (bind 2, a)) in scope 1
+    (ref 7, foo) == (local (bind 6, foo)) in scope 0
+    (ref 9, bar) == (local (bind 8, bar)) in scope 0
+
+test 'val forward ref still unresolved even if fn', fn:
+  expect cps_resolve fink":
+    bar = foo
+    foo = fn a: a
+    spam = foo
+  | equals fink":
+    (ref 1, foo) == unresolved
+    (ref 5, a) == (local (bind 4, a)) in scope 3
+    (ref 9, foo) == (local (bind 8, foo)) in scope 0
+    (ref 11, spam) == (local (bind 10, spam)) in scope 0
+
+
+---
+pattern assignments — LHS destructuring
+---
+
+test 'seq destructure', fn:
+  expect cps_resolve fink":
+    [a, b] = [1, 2]
+    a
+  | equals fink":
+    (ref 15, a) == (local (bind 10, a)) in scope 0
+
+test 'seq destructure uses both bindings', fn:
+  expect cps_resolve fink":
+    [a, b] = [1, 2]
+    c = a
+  | equals fink":
+    (ref 15, a) == (local (bind 10, a)) in scope 0
+    (ref 17, c) == (local (bind 16, c)) in scope 0
+
+test 'rec destructure', fn:
+  expect cps_resolve fink":
+    {a} = {a: 1}
+    a
+  | equals fink":
+    (ref 10, a) == (local (bind 7, a)) in scope 0
+
+test 'rec destructure uses binding', fn:
+  expect cps_resolve fink":
+    {a, b} = {a: 1, b: 2}
+    c = a
+  | equals fink":
+    (ref 17, a) == (local (bind 11, a)) in scope 0
+    (ref 19, c) == (local (bind 18, c)) in scope 0
+
+test 'nested seq destructure', fn:
+  expect cps_resolve fink":
+    [a, [b, c]] = [1, [2, 3]]
+    b
+  | equals fink":
+    (ref 27, b) == (local (bind 21, b)) in scope 0
+
+test 'seq destructure with ref rhs', fn:
+  expect cps_resolve fink":
+    x = [1, 2]
+    [a, b] = x
+    a
+  | equals fink":
+    (ref 9, x) == (local (bind 8, x)) in scope 0
+    (ref 17, a) == (local (bind 12, a)) in scope 0
+
+test 'rec destructure with ref rhs', fn:
+  expect cps_resolve fink":
+    x = {a: 1}
+    {a} = x
+    a
+  | equals fink":
+    (ref 7, x) == (local (bind 6, x)) in scope 0
+    (ref 12, a) == (local (bind 9, a)) in scope 0
+
+test 'nested seq destructure with ref rhs', fn:
+  expect cps_resolve fink":
+    x = [1, [2, 3]]
+    [a, [b, c]] = x
+    b
+  | equals fink":
+    (ref 15, x) == (local (bind 14, x)) in scope 0
+    (ref 29, b) == (local (bind 23, b)) in scope 0
+
+
+---
+match blocks
+---
+
+test 'match with literal arms', fn:
+  expect cps_resolve fink":
+    x = 1
+    match x:
+      1: 'one'
+      2: 'two'
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+
+test 'match with outer scope ref in arm', fn:
+  expect cps_resolve fink":
+    x = 1
+    y = 2
+    match x:
+      1: y
+      2: 'two'
+  | equals fink":
+    (ref 5, x) == (local (bind 2, x)) in scope 0
+    (ref 9, y) == (local (bind 4, y)) in scope 0
+
+test 'match result binding', fn:
+  expect cps_resolve fink":
+    x = 1
+    result = match x:
+      1: 'one'
+      2: 'two'
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 20, result) == (local (bind 19, result)) in scope 0
+
+
+---
+nested captures
+---
+
+test 'capture depth 2 — three levels of fn nesting', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn a:
+      fn b:
+        x
+  | equals fink":
+    (ref 7, x) == (captured 2, (bind 2, x)) in scope 0
+
+test 'capture depth 2 with local use too', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn a:
+      y = x
+      fn b:
+        x
+  | equals fink":
+    (ref 5, x) == (captured 1, (bind 2, x)) in scope 0
+    (ref 9, x) == (captured 2, (bind 2, x)) in scope 0
+
+test 'shadow in middle scope breaks capture chain', fn:
+  expect cps_resolve fink":
+    x = 1
+    fn a:
+      x = 2
+      fn b:
+        x
+  | equals fink":
+    (ref 9, x) == (captured 1, (bind 6, x)) in scope 3
+
+test 'capture and local in same fn body', fn:
+  expect cps_resolve fink":
+    x = 1
+    f = fn a:
+      y = a
+      z = x
+  | equals fink":
+    (ref 5, a) == (local (bind 4, a)) in scope 3
+    (ref 7, x) == (captured 1, (bind 2, x)) in scope 0
+    (ref 9, z) == (local (bind 8, z)) in scope 3
+    (ref 17, f) == (local (bind 16, f)) in scope 0
+
+test 'match arm binding used in arm body', fn:
+  expect cps_resolve fink":
+    x = 1
+    match x:
+      a: a
+      b: b + a
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 7, a) == (local (bind 6, a)) in scope 10
+    (ref 13, b) == (local (bind 12, b)) in scope 20
+    (ref 14, a) == unresolved
+
+test 'binding inside match arm body', fn:
+  expect cps_resolve fink":
+    x = 1
+    match x:
+      a:
+        y = a
+        y
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 7, a) == (local (bind 6, a)) in scope 14
+    (ref 9, y) == (local (bind 8, y)) in scope 14
+
+test 'fn in match arm captures outer', fn:
+  expect cps_resolve fink":
+    x = 1
+    match x:
+      a: fn b: a
+  | equals fink":
+    (ref 3, x) == (local (bind 2, x)) in scope 0
+    (ref 9, a) == (captured 1, (bind 6, a)) in scope 15
+
+test 'spread param resolves locally', fn:
+  expect cps_resolve fink":
+    fn a, ..b: b
+  | equals fink":
+    (ref 3, b) == (local (bind 2, b)) in scope 0
+
+test 'wildcard not in scope', fn:
+  expect cps_resolve fink":
+    _ = 1
+    _
+  | equals fink":
+    (ref 2, ?) == unresolved

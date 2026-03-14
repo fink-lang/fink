@@ -4,11 +4,11 @@ test 'multiline function', fn:
     fn a, b:
       a + b
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident 'a'
         Ident 'b'
-      InfixOp '+'
+      InfixOp '+',
         Ident 'a'
         Ident 'b'
 
@@ -16,11 +16,11 @@ test 'single line function', fn:
   expect ast fink":
     fn a, b: a + b
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident 'a'
         Ident 'b'
-      InfixOp '+'
+      InfixOp '+',
         Ident 'a'
         Ident 'b'
 
@@ -30,15 +30,15 @@ test 'named function binding', fn:
       result = a + b
       result
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'add'
-      Fn
+      Fn ':',
         Patterns
           Ident 'a'
           Ident 'b'
-        Bind
+        Bind '=',
           Ident 'result'
-          InfixOp '+'
+          InfixOp '+',
             Ident 'a'
             Ident 'b'
         Ident 'result'
@@ -47,9 +47,9 @@ test 'no-arg function', fn:
   expect ast fink":
     greet = fn: 'hello'
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'greet'
-      Fn
+      Fn ':',
         Patterns
         LitStr 'hello'
 
@@ -57,7 +57,7 @@ test 'inline body comma separates expressions', fn:
   expect ast fink":
     fn: 1, 2
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
       LitInt '1'
       LitInt '2'
@@ -66,7 +66,7 @@ test 'inline body comma equivalent to multiline block', fn:
   expect ast fink":
     fn a, b: a, b
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident 'a'
         Ident 'b'
@@ -78,11 +78,11 @@ test 'function with default arg', fn:
     greet = fn name='world':
       'hello \${name}'
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'greet'
-      Fn
+      Fn ':',
         Patterns
-          Bind
+          Bind '=',
             Ident 'name'
             LitStr 'world'
         StrTempl
@@ -93,14 +93,14 @@ test 'function with record pattern arg', fn:
   expect ast fink":
     foo = fn {x, y}: x + y
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'foo'
-      Fn
+      Fn ':',
         Patterns
-          LitRec
+          LitRec '{..}',
             Ident 'x'
             Ident 'y'
-        InfixOp '+'
+        InfixOp '+',
           Ident 'x'
           Ident 'y'
 
@@ -108,13 +108,13 @@ test 'function with sequence pattern arg', fn:
   expect ast fink":
     bar = fn [head, ..tail]: head
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'bar'
-      Fn
+      Fn ':',
         Patterns
-          LitSeq
+          LitSeq '[..]',
             Ident 'head'
-            Spread
+            Spread '..',
               Ident 'tail'
         Ident 'head'
 
@@ -122,12 +122,12 @@ test 'function with rest args', fn:
   expect ast fink":
     baz = fn arg, ..rest: arg
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'baz'
-      Fn
+      Fn ':',
         Patterns
           Ident 'arg'
-          Spread
+          Spread '..',
             Ident 'rest'
         Ident 'arg'
 
@@ -135,12 +135,12 @@ test 'spread in middle of params', fn:
   expect ast fink":
     baz = fn x, ..ys, z: x
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'baz'
-      Fn
+      Fn ':',
         Patterns
           Ident 'x'
-          Spread
+          Spread '..',
             Ident 'ys'
           Ident 'z'
         Ident 'x'
@@ -157,25 +157,25 @@ test 'fn match single arg', fn:
       n < 0: 'negative'
       _: 'zero'
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'classify'
-      Fn
+      Fn ':',
         Patterns
           Ident 'n'
-        Match
+        Match ':',
           Patterns
             Ident 'n'
-          Arm
-            InfixOp '>'
+          Arm ':',
+            InfixOp '>',
               Ident 'n'
               LitInt '0'
             LitStr 'positive'
-          Arm
-            InfixOp '<'
+          Arm ':',
+            InfixOp '<',
               Ident 'n'
               LitInt '0'
             LitStr 'negative'
-          Arm
+          Arm ':',
             Wildcard
             LitStr 'zero'
 
@@ -185,28 +185,28 @@ test 'fn match multi arg', fn:
       1, ..: 1
       2, x, ..y: 2
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'foo'
-      Fn
+      Fn ':',
         Patterns
           Ident 'a'
-          Spread
+          Spread '..',
             Ident 'b'
-        Match
+        Match ':',
           Patterns
             Ident 'a'
-            Spread
+            Spread '..',
               Ident 'b'
-          Arm
+          Arm ':',
             Patterns
               LitInt '1'
-              Spread
+              Spread '..'
             LitInt '1'
-          Arm
+          Arm ':',
             Patterns
               LitInt '2'
               Ident 'x'
-              Spread
+              Spread '..',
                 Ident 'y'
             LitInt '2'
 
@@ -222,31 +222,31 @@ test 'returning a function', fn:
       [item, ..rest]:
         [(map_fn item), ..(map map_fn rest)]
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'map'
-      Fn
+      Fn ':',
         Patterns
           Ident 'map_fn'
-        Fn
+        Fn ':',
           Patterns
             Ident 'items'
-          Match
+          Match ':',
             Patterns
               Ident 'items'
-            Arm
-              LitSeq
-              LitSeq
-            Arm
-              LitSeq
+            Arm ':',
+              LitSeq '[..]'
+              LitSeq '[..]'
+            Arm ':',
+              LitSeq '[..]',
                 Ident 'item'
-                Spread
+                Spread '..',
                   Ident 'rest'
-              LitSeq
-                Group
+              LitSeq '[..]',
+                Group '(..)',
                   Apply
                     Ident 'map_fn'
                     Ident 'item'
-                Spread
+                Spread '..',
                   Apply
                     Ident 'map'
                     Apply
@@ -325,7 +325,7 @@ test 'postfix tagged application', fn:
   | equals fink":
     Apply
       Ident 'foo'
-      LitSeq
+      LitSeq '[..]',
         LitInt '1'
         LitInt '2'
         LitInt '3'
@@ -334,7 +334,7 @@ test 'partial application placeholder', fn:
   expect ast fink":
     add5 = add 5, ?
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'add5'
       Apply
         Ident 'add'
@@ -345,9 +345,9 @@ test 'partial operator', fn:
   expect ast fink":
     add5 = ? + 5
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'add5'
-      InfixOp '+'
+      InfixOp '+',
         Partial
         LitInt '5'
 
@@ -381,12 +381,12 @@ test 'pipe with spread partial', fn:
     [1, 2] | add ..?
   | equals fink":
     Pipe
-      LitSeq
+      LitSeq '[..]',
         LitInt '1'
         LitInt '2'
       Apply
         Ident 'add'
-        Spread
+        Spread '..',
           Partial
 
 # TODO: Jan, think about | precedence, should it be (foo (bar | (spam ham))?
@@ -408,11 +408,11 @@ test 'fn literal as grouped arg', fn:
   | equals fink":
     Apply
       Ident 'map'
-      Group
-        Fn
+      Group '(..)',
+        Fn ':',
           Patterns
             Ident 'x'
-          InfixOp '+'
+          InfixOp '+',
             Ident 'x'
             LitInt '1'
       Ident 'items'
@@ -422,7 +422,7 @@ test 'inline body comma is arg separator inside application', fn:
   expect ast fink":
     fn: foo a, b
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
       Apply
         Ident 'foo'
@@ -433,9 +433,9 @@ test 'inline body comma after binding starts new expression', fn:
   expect ast fink":
     fn: a = 1, b
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
-      Bind
+      Bind '=',
         Ident 'a'
         LitInt '1'
       Ident 'b'
@@ -446,11 +446,11 @@ test 'fn params multiline continuation', fn:
     fn a,
       b: a + b
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident 'a'
         Ident 'b'
-      InfixOp '+'
+      InfixOp '+',
         Ident 'a'
         Ident 'b'
 
@@ -460,7 +460,7 @@ test 'multiline application', fn:
     ni = foo
       bar
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'ni'
       Apply
         Ident 'foo'

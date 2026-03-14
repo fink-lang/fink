@@ -1,5 +1,7 @@
 
 
+
+
 ---
 statement-level partial
 ---
@@ -8,10 +10,10 @@ test 'partial in infix rhs', fn:
   expect partial fink":
     ? + 5
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      InfixOp '+'
+      InfixOp '+',
         Ident '$'
         LitInt '5'
 
@@ -20,10 +22,10 @@ test 'partial in infix lhs', fn:
   expect partial fink":
     1 + ?
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      InfixOp '+'
+      InfixOp '+',
         LitInt '1'
         Ident '$'
 
@@ -32,10 +34,10 @@ test 'partial used twice - single param', fn:
   expect partial fink":
     ? + ?
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      InfixOp '+'
+      InfixOp '+',
         Ident '$'
         Ident '$'
 
@@ -44,7 +46,7 @@ test 'partial in apply arg', fn:
   expect partial fink":
     add 5, ?
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
       Apply
@@ -57,10 +59,10 @@ test 'partial in unary', fn:
   expect partial fink":
     -?
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      UnaryOp '-'
+      UnaryOp '-',
         Ident '$'
 
 
@@ -68,10 +70,10 @@ test 'partial in member access', fn:
   expect partial fink":
     ?.foo
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      Member
+      Member '.',
         Ident '$'
         Ident 'foo'
 
@@ -80,12 +82,12 @@ test 'partial in computed member access', fn:
   expect partial fink":
     ?.(0)
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      Member
+      Member '.',
         Ident '$'
-        Group
+        Group '(..)',
           LitInt '0'
 
 
@@ -93,10 +95,10 @@ test 'partial in range', fn:
   expect partial fink":
     (1..?)
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      InfixOp '..'
+      InfixOp '..',
         LitInt '1'
         Ident '$'
 
@@ -105,11 +107,11 @@ test 'partial in spread', fn:
   expect partial fink":
     [..?]
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      LitSeq
-        Spread
+      LitSeq '[..]',
+        Spread '..',
           Ident '$'
 
 
@@ -117,7 +119,7 @@ test 'bare partial - identity function', fn:
   expect partial fink":
     (?)
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
       Ident '$'
@@ -127,9 +129,9 @@ test 'partial in binding rhs', fn:
   expect partial fink":
     add5 = add 5, ?
   | equals fink":
-    Bind
+    Bind '=',
       Ident 'add5'
-      Fn
+      Fn ':',
         Patterns
           Ident '$'
         Apply
@@ -146,12 +148,12 @@ test 'group narrows scope - member expr key preserves group', fn:
   expect partial fink":
     foo.(?)
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      Member
+      Member '.',
         Ident 'foo'
-        Group
+        Group '(..)',
           Ident '$'
 
 
@@ -159,18 +161,18 @@ test 'group with multiple partial refs - same param', fn:
   expect partial fink":
     (foo ?.(1), ?.(2))
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
       Apply
         Ident 'foo'
-        Member
+        Member '.',
           Ident '$'
-          Group
+          Group '(..)',
             LitInt '1'
-        Member
+        Member '.',
           Ident '$'
-          Group
+          Group '(..)',
             LitInt '2'
 
 
@@ -178,12 +180,12 @@ test 'nested groups - each is its own scope', fn:
   expect partial fink":
     (foo (bar ?) ?)
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
       Apply
         Ident 'foo'
-        Fn
+        Fn ':',
           Patterns
             Ident '$'
           Apply
@@ -200,10 +202,10 @@ test 'partial in seq literal - seq is transparent', fn:
   expect partial fink":
     [?, ?]
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      LitSeq
+      LitSeq '[..]',
         Ident '$'
         Ident '$'
 
@@ -212,17 +214,17 @@ test 'partial with member projection in seq', fn:
   expect partial fink":
     [?.(0), ?.(1)]
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      LitSeq
-        Member
+      LitSeq '[..]',
+        Member '.',
           Ident '$'
-          Group
+          Group '(..)',
             LitInt '0'
-        Member
+        Member '.',
           Ident '$'
-          Group
+          Group '(..)',
             LitInt '1'
 
 
@@ -230,14 +232,14 @@ test 'partial in rec literal - rec is transparent', fn:
   expect partial fink":
     {foo: ?, bar: ?}
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      LitRec
-        Arm
+      LitRec '{..}',
+        Arm ':',
           Ident 'foo'
           Ident '$'
-        Arm
+        Arm ':',
           Ident 'bar'
           Ident '$'
 
@@ -246,12 +248,12 @@ test 'partial in nested seq - all same param', fn:
   expect partial fink":
     [?, [?, ?]]
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
-      LitSeq
+      LitSeq '[..]',
         Ident '$'
-        LitSeq
+        LitSeq '[..]',
           Ident '$'
           Ident '$'
 
@@ -260,12 +262,12 @@ test 'partial in spread apply', fn:
   expect partial fink":
     foo ..?
   | equals fink":
-    Fn
+    Fn ':',
       Patterns
         Ident '$'
       Apply
         Ident 'foo'
-        Spread
+        Spread '..',
           Ident '$'
 
 
@@ -280,13 +282,13 @@ test 'partial in pipe segment', fn:
   | equals fink":
     Pipe
       Ident 'items'
-      Fn
+      Fn ':',
         Patterns
           Ident '$'
         Apply
           Ident 'filter'
-          InfixOp '=='
-            InfixOp '%'
+          InfixOp '==',
+            InfixOp '%',
               Ident '$'
               LitInt '2'
             LitInt '0'
@@ -300,7 +302,7 @@ test 'partial in multiple pipe segments', fn:
   | equals fink":
     Pipe
       Ident 'items'
-      Fn
+      Fn ':',
         Patterns
           Ident '$'
         Apply
@@ -308,11 +310,11 @@ test 'partial in multiple pipe segments', fn:
           Apply
             Ident 'is_even'
             Ident '$'
-      Fn
+      Fn ':',
         Patterns
           Ident '$'
         Apply
           Ident 'map'
-          InfixOp '*'
+          InfixOp '*',
             Ident '$'
             LitInt '2'

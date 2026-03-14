@@ -90,6 +90,27 @@ test 'tagged string — str_fink', fn:
   | equals fink":
     str_fink'hello '
 
+test 'tagged template — interpolation', fn:
+  expect fmt fink":
+    fmt'hello \${1 + 2} world'
+
+  | equals fink":
+    fmt'hello \${1 + 2} world'
+
+test 'tagged template — interpolation only expr', fn:
+  expect fmt fink":
+    fmt'\${x}'
+
+  | equals fink":
+    fmt'\${x}'
+
+test 'tagged template — multiple interpolations', fn:
+  expect fmt fink":
+    fmt'\${a} and \${b}'
+
+  | equals fink":
+    fmt'\${a} and \${b}'
+
 
 ---
 Apply
@@ -290,3 +311,192 @@ test 'apply — non-fn arg followed by fn arg as positional arg', fn:
         ƒ_ok v, state
       fn state: panic 'no match', state
       fn match_result, state: ƒ_cont match_result, state
+
+
+---
+Operators
+---
+
+test 'unary minus', fn:
+  expect fmt fink":
+    -a
+
+  | equals fink":
+    -a
+
+test 'unary not', fn:
+  expect fmt fink":
+    not a
+
+  | equals fink":
+    not a
+
+test 'infix add', fn:
+  expect fmt fink":
+    a + b
+
+  | equals fink":
+    a + b
+
+test 'infix multiply', fn:
+  expect fmt fink":
+    a * b
+
+  | equals fink":
+    a * b
+
+test 'chained comparison', fn:
+  expect fmt fink":
+    a > b > c
+
+  | equals fink":
+    a > b > c
+
+
+---
+Member access
+---
+
+test 'member — simple', fn:
+  expect fmt fink":
+    foo.bar
+
+  | equals fink":
+    foo.bar
+
+test 'member — chained', fn:
+  expect fmt fink":
+    foo.bar.spam
+
+  | equals fink":
+    foo.bar.spam
+
+
+---
+Pipe
+---
+
+test 'pipe — simple', fn:
+  expect fmt fink":
+    foo | bar | spam
+
+  | equals fink":
+    foo | bar | spam
+
+test 'pipe — with block string arg', fn:
+  expect fmt fink":
+    foo ":
+      bar
+    | spam
+  | equals fink":
+    foo ":
+      bar
+    | spam
+
+
+---
+Match
+---
+
+test 'match — simple arms', fn:
+  expect fmt fink":
+    match foo:
+      1: 'one'
+      2: 'two'
+      _: 'other'
+
+  | equals fink":
+    match foo:
+      1: 'one'
+      2: 'two'
+      _: 'other'
+
+test 'match — binding arm', fn:
+  expect fmt fink":
+    match foo:
+      [head, ..tail]: head
+      []: 'empty'
+
+  | equals fink":
+    match foo:
+      [head, ..tail]: head
+      []: 'empty'
+
+
+---
+Bind right
+---
+
+test 'bind right — simple', fn:
+  expect fmt fink":
+    123 |= b
+
+  | equals fink":
+    123 |= b
+
+
+---
+Try
+---
+
+test 'try — simple', fn:
+  expect fmt fink":
+    try foo bar
+
+  | equals fink":
+    try foo bar
+
+
+---
+Group
+---
+
+test 'group — parens', fn:
+  expect fmt fink":
+    (a + b) * c
+
+  | equals fink":
+    (a + b) * c
+
+
+---
+Partial
+---
+
+test 'partial — hole', fn:
+  expect fmt fink":
+    add 5, ?
+
+  | equals fink":
+    add 5, ?
+
+
+---
+Seq and Rec with items
+---
+
+test 'seq literal with items', fn:
+  expect fmt fink":
+    [1, 2, 3]
+
+  | equals fink":
+    [1, 2, 3]
+
+test 'rec literal with items', fn:
+  expect fmt fink":
+    {foo, bar}
+
+  | equals fink":
+    {foo, bar}
+
+
+---
+Decimal literal
+---
+
+test 'decimal literal', fn:
+  expect fmt fink":
+    1.0d
+
+  | equals fink":
+    1.0d

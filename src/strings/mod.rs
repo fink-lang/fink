@@ -6,7 +6,6 @@
 /// `LitStr` nodes in the AST hold raw source bytes — escape sequences are
 /// not yet processed. Functions here convert raw source to actual string
 /// values at the appropriate boundary (codegen, eval, test infrastructure).
-
 /// Render a `LitStr`'s raw source bytes into an actual string value by
 /// processing escape sequences.
 ///

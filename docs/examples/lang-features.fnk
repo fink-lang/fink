@@ -2,7 +2,6 @@
 language features by example
 --- --- --- --- ---
 
-
 --- --- ---
 Literals
 --- --- ---
@@ -76,7 +75,7 @@ strings
   \b01    - binary code
   \x0f    - hex code
   \uff    - Unicode code point between U+0000 and U+10FFFF
-  \u10_ff_ff - Unicode code point between U+0000 and U+10FFFF
+  \u{10_ff_ff} - Unicode code point between U+0000 and U+10FFFF
 '
 
 # String indentation handling
@@ -93,13 +92,6 @@ log '
 log 'foo
     bar
   spam'
-
-# this errors
-log
-  'foo
-bar
-'
-# unexpexted dedent
 
 ---
 string blocks
@@ -145,11 +137,15 @@ records - static compile time names
 {foo: 1, 'ni na': 2, (a + b): 3} # computed keys only if resolvable at compile time
 
 # multiline
+
 {
   foo: 1
   bar: {
     spam: 3
   }
+  ham: # TODO: AST parse fails
+    ni = own-scoped-block
+    n * 2 # value of ham field
 }
 
 
