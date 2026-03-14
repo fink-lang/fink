@@ -636,6 +636,18 @@ test 'block_comment_inline', fn:
     BlockEnd loc [9, 1, 9], [9, 1, 9]
 
 
+test 'block_comment_empty', fn:
+  # ------ is an empty block comment (open immediately followed by close)
+  expect tokenize fink":
+    ------
+  | equals fink":
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    CommentStart '---', loc [0, 1, 0], [3, 1, 3]
+    CommentEnd '---', loc [3, 1, 3], [6, 1, 6]
+    BlockEnd loc [6, 1, 6], [6, 1, 6]
+
+
+
 test 'block_comment_multiline', fn:
   expect tokenize fink":
     ---foo
