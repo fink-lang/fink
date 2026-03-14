@@ -4,8 +4,8 @@
 // associated with its source location.  The public API offers both
 // `fmt` (string only) and `fmt_mapped` (string + source map).
 
-use crate::ast::{CmpPart, Exprs, Node, NodeKind};
-use crate::lexer::{Loc, Pos};
+use crate::ast::{CmpPart, Node, NodeKind};
+use crate::lexer::{Loc, Pos, Token};
 use crate::sourcemap::{MappedWriter, SourceMap};
 
 /// Format an AST back to Fink source, discarding source-map info.
@@ -43,7 +43,7 @@ fn is_fn(node: &Node) -> bool {
 /// Check if a node produces multi-line output (block strings, fn bodies, match, etc.)
 fn is_multiline(node: &Node) -> bool {
   match &node.kind {
-    NodeKind::LitStr { open, .. } => open.src == "\":",
+    NodeKind::LitStr { open, content, .. } => open.src == "\":" || content.contains('\n'),
     NodeKind::StrRawTempl { open, .. } => open.src == "\":",
     NodeKind::Fn { body, .. } => body.items.len() > 1 || body.items.first().map_or(false, |b| !is_inline_expr(b)),
     NodeKind::Match { .. } | NodeKind::Block { .. } => true,
@@ -54,15 +54,17 @@ fn is_multiline(node: &Node) -> bool {
 }
 
 fn is_atom(node: &Node) -> bool {
-  matches!(
-    node.kind,
-    NodeKind::LitBool(_)
-      | NodeKind::LitInt(_)
-      | NodeKind::LitFloat(_)
-      | NodeKind::LitDecimal(_)
-      | NodeKind::LitStr { .. }
-      | NodeKind::Ident(_)
-  )
+  match &node.kind {
+    NodeKind::LitStr { content, .. } => !content.contains('\n'),
+    _ => matches!(
+      node.kind,
+      NodeKind::LitBool(_)
+        | NodeKind::LitInt(_)
+        | NodeKind::LitFloat(_)
+        | NodeKind::LitDecimal(_)
+        | NodeKind::Ident(_)
+    ),
+  }
 }
 
 fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
@@ -72,7 +74,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::LitInt(s) => out.push_str(s),
     NodeKind::LitFloat(s) => out.push_str(s),
     NodeKind::LitDecimal(s) => out.push_str(s),
-    NodeKind::LitStr { open, content: s, .. } => {
+    NodeKind::LitStr { open, close, content: s } => {
       if open.src == "\":" {
         // Block string: emit ": followed by indented content lines
         // Map each line back to its source line (content starts one line after ":")
@@ -90,29 +92,50 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       } else {
         out.push('\'');
         out.mark(Loc { start: open.loc.end, end: open.loc.end });
-        out.push_str(s);
+        if s.contains('\n') {
+          for (i, line) in s.split('\n').enumerate() {
+            if i > 0 {
+              out.push('\n');
+              ind(out, depth + 1);
+            }
+            out.push_str(line);
+          }
+        } else {
+          out.push_str(s);
+        }
+        out.mark(close.loc);
         out.push('\'');
       }
     }
-    NodeKind::LitSeq { items, .. } if items.items.is_empty() => out.push_str("[]"),
-    NodeKind::LitSeq { items, .. } => {
+    NodeKind::LitSeq { close, items, .. } if items.items.is_empty() => {
+      out.push('[');
+      out.mark(close.loc);
+      out.push(']');
+    }
+    NodeKind::LitSeq { close, items, .. } => {
       out.push('[');
       for (i, child) in items.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(child, out, depth);
       }
+      out.mark(close.loc);
       out.push(']');
     }
-    NodeKind::LitRec { items, .. } if items.items.is_empty() => out.push_str("{}"),
-    NodeKind::LitRec { items, .. } => {
+    NodeKind::LitRec { close, items, .. } if items.items.is_empty() => {
+      out.push('{');
+      out.mark(close.loc);
+      out.push('}');
+    }
+    NodeKind::LitRec { close, items, .. } => {
       out.push('{');
       for (i, child) in items.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(child, out, depth);
       }
+      out.mark(close.loc);
       out.push('}');
     }
-    NodeKind::StrRawTempl { open, children, .. } => {
+    NodeKind::StrRawTempl { open, close, children } => {
       // single LitStr child → raw string content (no quotes around the template itself;
       // the tag + quotes are handled by Apply above)
       if let [child] = children.as_slice() {
@@ -131,7 +154,9 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
             }
           } else {
             out.push('\'');
+            out.mark(Loc { start: open.loc.end, end: open.loc.end });
             out.push_str(s);
+            out.mark(close.loc);
             out.push('\'');
           }
           return;
@@ -143,19 +168,22 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::Ident(s) => out.push_str(s),
-    NodeKind::Spread { inner, .. } => {
+    NodeKind::Spread { op, inner } => {
+      out.mark(op.loc);
       out.push_str("..");
       if let Some(n) = inner {
         fmt_node(n, out, depth);
       }
     }
-    NodeKind::Bind { lhs, rhs, .. } => {
+    NodeKind::Bind { op, lhs, rhs } => {
       fmt_node(lhs, out, depth);
-      out.push_str(" = ");
+      out.push(' ');
+      out.mark(op.loc);
+      out.push_str("= ");
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
-    NodeKind::Fn { params, body, .. } => fmt_fn(params, &body.items, out, depth),
+    NodeKind::Fn { params, sep, body } => fmt_fn(params, sep, &body.items, out, depth),
     NodeKind::Patterns(exprs) => {
       for (i, child) in exprs.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
@@ -163,6 +191,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::UnaryOp { op, operand } => {
+      out.mark(op.loc);
       out.push_str(op.src);
       if !op.src.starts_with('-') { out.push(' '); }
       fmt_node(operand, out, depth);
@@ -170,37 +199,43 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::InfixOp { op, lhs, rhs } => {
       fmt_node(lhs, out, depth);
       out.push(' ');
+      out.mark(op.loc);
       out.push_str(op.src);
       out.push(' ');
       fmt_node(rhs, out, depth);
     }
     NodeKind::ChainedCmp(parts) => {
-      for (i, part) in parts.iter().enumerate() {
+      for part in parts.iter() {
         match part {
           CmpPart::Operand(n) => fmt_node(n, out, depth),
           CmpPart::Op(tok) => {
             out.push(' ');
+            out.mark(tok.loc);
             out.push_str(tok.src);
             out.push(' ');
           }
         }
       }
     }
-    NodeKind::Member { lhs, rhs, .. } => {
+    NodeKind::Member { op, lhs, rhs } => {
       fmt_node(lhs, out, depth);
+      out.mark(op.loc);
       out.push('.');
       fmt_node(rhs, out, depth);
     }
-    NodeKind::Group { inner, .. } => {
+    NodeKind::Group { close, inner, .. } => {
       out.push('(');
       fmt_node(inner, out, depth);
+      out.mark(close.loc);
       out.push(')');
     }
     NodeKind::Partial => out.push('?'),
     NodeKind::Wildcard => out.push('_'),
-    NodeKind::BindRight { lhs, rhs, .. } => {
+    NodeKind::BindRight { op, lhs, rhs } => {
       fmt_node(lhs, out, depth);
-      out.push_str(" |= ");
+      out.push(' ');
+      out.mark(op.loc);
+      out.push_str("|= ");
       fmt_node(rhs, out, depth);
     }
     NodeKind::Pipe(exprs) => {
@@ -218,9 +253,10 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         fmt_node(child, out, depth);
       }
     }
-    NodeKind::Match { subjects, arms, .. } => {
+    NodeKind::Match { subjects, sep, arms } => {
       out.push_str("match ");
       fmt_node(subjects, out, depth);
+      out.mark(sep.loc);
       out.push(':');
       for arm in &arms.items {
         out.push('\n');
@@ -228,11 +264,12 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         fmt_node(arm, out, depth + 1);
       }
     }
-    NodeKind::Arm { lhs, body, .. } => {
+    NodeKind::Arm { lhs, sep, body } => {
       for (i, pat) in lhs.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(pat, out, depth);
       }
+      out.mark(sep.loc);
       out.push(':');
       fmt_body(&body.items, out, depth, true);
     }
@@ -249,10 +286,11 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         fmt_node(child, out, depth);
       }
     }
-    NodeKind::Block { name, params, body, .. } => {
+    NodeKind::Block { name, params, sep, body } => {
       fmt_node(name, out, depth);
       out.push(' ');
       fmt_node(params, out, depth);
+      out.mark(sep.loc);
       out.push(':');
       fmt_body(&body.items, out, depth, true);
     }
@@ -300,9 +338,9 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
 
   // Single trailing fn (no complex args) → keep `fn params:` on same line
   if trailing.len() == 1 && is_fn(&trailing[0]) {
-    if let NodeKind::Fn { params, body, .. } = &trailing[0].kind {
+    if let NodeKind::Fn { params, sep, body } = &trailing[0].kind {
       if plain.is_empty() { out.push(' '); } else { out.push_str(", "); }
-      fmt_fn_with_inline(params, &body.items, out, depth, false);
+      fmt_fn_with_inline(params, sep, &body.items, out, depth, false);
       return;
     }
   }
@@ -312,28 +350,29 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   for arg in trailing {
     out.push('\n');
     ind(out, depth + 1);
-    if let NodeKind::Fn { params, body, .. } = &arg.kind {
-      fmt_fn_with_inline(params, &body.items, out, depth + 1, true);
+    if let NodeKind::Fn { params, sep, body } = &arg.kind {
+      fmt_fn_with_inline(params, sep, &body.items, out, depth + 1, true);
     } else {
       fmt_node(arg, out, depth + 1);
     }
   }
 }
 
-fn fmt_fn(params: &Node, body: &[Node], out: &mut MappedWriter, depth: usize) {
-  fmt_fn_with_inline(params, body, out, depth, true);
+fn fmt_fn(params: &Node, sep: &Token, body: &[Node], out: &mut MappedWriter, depth: usize) {
+  fmt_fn_with_inline(params, sep, body, out, depth, true);
 }
 
-fn fmt_fn_with_inline(params: &Node, body: &[Node], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
+fn fmt_fn_with_inline(params: &Node, sep: &Token, body: &[Node], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
   let inline = body.len() == 1 && if allow_apply_inline {
     is_inline_expr(&body[0])
   } else {
     is_inline_single_trailing(&body[0])
   };
   if inline {
-    fmt_fn_inline(params, &body[0], out, depth);
+    fmt_fn_inline(params, sep, &body[0], out, depth);
   } else {
     fmt_fn_params(params, out);
+    out.mark(sep.loc);
     out.push(':');
     fmt_body(body, out, depth, allow_apply_inline);
   }
@@ -341,9 +380,10 @@ fn fmt_fn_with_inline(params: &Node, body: &[Node], out: &mut MappedWriter, dept
 
 /// Inline after `fn params: ` in general (standalone fn, stacked fn args)
 fn is_inline_expr(node: &Node) -> bool {
+  if is_multiline(node) { return false; }
   match &node.kind {
-    // apply with no trailing fn args → inline
-    NodeKind::Apply { args, .. } => !args.items.iter().any(is_fn),
+    // apply with no trailing fn args and no multiline args → inline
+    NodeKind::Apply { args, .. } => !args.items.iter().any(|a| is_fn(a) || is_multiline(a)),
     _ => is_atom(node),
   }
 }
@@ -353,8 +393,9 @@ fn is_inline_single_trailing(node: &Node) -> bool {
   is_atom(node)
 }
 
-fn fmt_fn_inline(params: &Node, expr: &Node, out: &mut MappedWriter, depth: usize) {
+fn fmt_fn_inline(params: &Node, sep: &Token, expr: &Node, out: &mut MappedWriter, depth: usize) {
   fmt_fn_params(params, out);
+  out.mark(sep.loc);
   out.push_str(": ");
   fmt_node(expr, out, depth);
 }
@@ -408,6 +449,22 @@ mod tests {
 
   test_macros::include_fink_tests!("src/passes/ast/test_fmt.fnk");
 
+  // --- multiline string indentation tests ---
+
+  #[test]
+  fn fmt_multiline_string_at_top_level() {
+    // Multiline quoted string at depth 0 — continuation lines at depth+1
+    let out = fmt("'foo\nbar\nspam'");
+    assert_eq!(out, "'foo\n  bar\n  spam'");
+  }
+
+  #[test]
+  fn fmt_multiline_string_in_fn_body() {
+    // Multiline string in apply inside fn body — continuation lines indented under apply
+    let out = fmt("fn:\n  log 'foo\n  bar\n  spam'");
+    assert_eq!(out, "fn:\n  log 'foo\n    bar\n    spam'");
+  }
+
   // --- source map tests ---
 
   use super::fmt_mapped;
@@ -428,21 +485,23 @@ mod tests {
 
   #[test]
   fn sourcemap_string_literal() {
-    // "'hello'" → mapping for node start + string content
+    // "'hello'" → mapping for node start + string content + closing quote
     let m = mappings("'hello'");
     assert_eq!(m, vec![
       (0, 0, 0, 0),  // LitStr node (opening quote)
       (0, 1, 0, 1),  // string content
+      (0, 6, 0, 6),  // closing quote
     ]);
   }
 
   #[test]
   fn sourcemap_bind() {
-    // "foo = bar" → Bind, lhs Ident, rhs Ident
+    // "foo = bar" → Bind, lhs Ident, = operator, rhs Ident
     let m = mappings("foo = bar");
     assert_eq!(m, vec![
       (0, 0, 0, 0),  // Bind node
       (0, 0, 0, 0),  // Ident 'foo'
+      (0, 4, 0, 4),  // = operator
       (0, 6, 0, 6),  // Ident 'bar'
     ]);
   }
@@ -477,6 +536,7 @@ mod tests {
     assert_eq!(m, vec![
       (0, 0, 0, 0),   // Fn node
       (0, 3, 0, 3),   // Patterns → Ident 'x'
+      (0, 4, 0, 4),   // : separator
       (0, 6, 1, 2),   // Apply 'foo x'
       (0, 6, 1, 2),   // Ident 'foo'
       (0, 10, 1, 6),  // Ident 'x'
@@ -495,18 +555,19 @@ mod tests {
 
   #[test]
   fn sourcemap_infix() {
-    // "a + b" → InfixOp, lhs, rhs
+    // "a + b" → InfixOp, lhs, + operator, rhs
     let m = mappings("a + b");
     assert_eq!(m, vec![
       (0, 0, 0, 0),  // InfixOp node
       (0, 0, 0, 0),  // Ident 'a'
+      (0, 2, 0, 2),  // + operator
       (0, 4, 0, 4),  // Ident 'b'
     ]);
   }
 
   #[test]
   fn sourcemap_mapping_count() {
-    // Each node should produce exactly one mapping
+    // Each node produces one mapping; operators/delimiters add their own
     let m = mappings("foo");
     assert_eq!(m.len(), 1);
 
@@ -514,6 +575,6 @@ mod tests {
     assert_eq!(m.len(), 3); // Apply + func + arg
 
     let m = mappings("foo = bar baz");
-    assert_eq!(m.len(), 5); // Bind + lhs + Apply + func + arg
+    assert_eq!(m.len(), 6); // Bind + lhs + = + Apply + func + arg
   }
 }

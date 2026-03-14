@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+// TODO: multiline application as infix RHS operand fails —
+//   `[3, 7] == seq\n  add 1, 2\n  add 3, 4` gives "unexpected BlockStart".
+//   parse_apply doesn't consume BlockStart for indented args in infix position.
+
 use std::collections::HashSet;
 
 use crate::ast::{CmpPart, Exprs, Node, NodeKind};
