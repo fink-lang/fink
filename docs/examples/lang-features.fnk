@@ -2,7 +2,6 @@
 language features by example
 --- --- --- --- ---
 
-
 --- --- ---
 Literals
 --- --- ---
@@ -76,7 +75,7 @@ strings
   \b01    - binary code
   \x0f    - hex code
   \uff    - Unicode code point between U+0000 and U+10FFFF
-  \u10_ff_ff - Unicode code point between U+0000 and U+10FFFF
+  \u{10_ff_ff} - Unicode code point between U+0000 and U+10FFFF
 '
 
 # String indentation handling
@@ -93,13 +92,6 @@ log '
 log 'foo
     bar
   spam'
-
-# this errors
-log
-  'foo
-bar
-'
-# unexpexted dedent
 
 ---
 string blocks

@@ -17,10 +17,10 @@ test 'sequence destructure', fn:
     Bind '=',
       LitSeq '[..]',
         Ident 'a'
-        Ident 'b'
+        ',', Ident 'b'
       LitSeq '[..]',
         LitInt '1'
-        LitInt '2'
+        ',', LitInt '2'
 
 test 'record destructure', fn:
   expect ast fink":
@@ -29,7 +29,7 @@ test 'record destructure', fn:
     Bind '=',
       LitRec '{..}',
         Ident 'x'
-        Ident 'y'
+        ',', Ident 'y'
       Ident 'point'
 
 test 'record destructure with rename', fn:
@@ -39,7 +39,7 @@ test 'record destructure with rename', fn:
     Bind '=',
       LitRec '{..}',
         Ident 'x'
-        Arm ':',
+        ',', Arm ':',
           Ident 'y'
           Ident 'z'
       Ident 'point'
@@ -51,11 +51,11 @@ test 'nested record destructure', fn:
     Bind '=',
       LitRec '{..}',
         Ident 'a'
-        Arm ':',
+        ',', Arm ':',
           Ident 'b'
           LitRec '{..}',
             Ident 'c'
-            Ident 'd'
+            ',', Ident 'd'
       Ident 'foo'
 
 test 'nested destructure', fn:
@@ -65,14 +65,14 @@ test 'nested destructure', fn:
     Bind '=',
       LitSeq '[..]',
         Ident 'a'
-        LitSeq '[..]',
+        ',', LitSeq '[..]',
           Ident 'b'
-          Ident 'c'
+          ',', Ident 'c'
       LitSeq '[..]',
         LitInt '1'
-        LitSeq '[..]',
+        ',', LitSeq '[..]',
           LitInt '2'
-          LitInt '3'
+          ',', LitInt '3'
 
 test 'spread head and tail', fn:
   expect ast fink":
@@ -81,13 +81,13 @@ test 'spread head and tail', fn:
     Bind '=',
       LitSeq '[..]',
         Ident 'head'
-        Spread '..',
+        ',', Spread '..',
           Ident 'tail'
       LitSeq '[..]',
         LitInt '1'
-        LitInt '2'
-        LitInt '3'
-        LitInt '4'
+        ',', LitInt '2'
+        ',', LitInt '3'
+        ',', LitInt '4'
 
 test 'spread head middle and end', fn:
   expect ast fink":
@@ -96,14 +96,14 @@ test 'spread head middle and end', fn:
     Bind '=',
       LitSeq '[..]',
         Ident 'head'
-        Spread '..',
+        ',', Spread '..',
           Ident 'middle'
-        Ident 'end'
+        ',', Ident 'end'
       LitSeq '[..]',
         LitInt '1'
-        LitInt '2'
-        LitInt '3'
-        LitInt '4'
+        ',', LitInt '2'
+        ',', LitInt '3'
+        ',', LitInt '4'
 
 test 'spread with guard', fn:
   expect ast fink":
@@ -114,12 +114,12 @@ test 'spread with guard', fn:
         InfixOp '>',
           Ident 'head'
           LitInt '3'
-        Spread '..',
+        ',', Spread '..',
           Ident 'tail'
       LitSeq '[..]',
         LitInt '4'
-        LitInt '5'
-        LitInt '6'
+        ',', LitInt '5'
+        ',', LitInt '6'
 
 test 'guard with function call in pattern', fn:
   expect ast fink":
@@ -131,12 +131,12 @@ test 'guard with function call in pattern', fn:
           Apply
             Ident 'is_odd'
             Ident 'head'
-        Spread '..',
+        ',', Spread '..',
           Ident 'tail'
       LitSeq '[..]',
         LitInt '3'
-        LitInt '4'
-        LitInt '5'
+        ',', LitInt '4'
+        ',', LitInt '5'
 
 test 'record destructure with spread rest', fn:
   expect ast fink":
@@ -145,7 +145,7 @@ test 'record destructure with spread rest', fn:
     Bind '=',
       LitRec '{..}',
         Ident 'x'
-        Spread '..',
+        ',', Spread '..',
           Ident 'rest'
       Ident 'point'
 
@@ -156,7 +156,7 @@ test 'record destructure with non-empty rest assertion', fn:
     Bind '=',
       LitRec '{..}',
         Ident 'x'
-        Spread '..'
+        ',', Spread '..'
       Ident 'point'
 
 test 'record destructure exact - empty rest', fn:
@@ -166,7 +166,7 @@ test 'record destructure exact - empty rest', fn:
     Bind '=',
       LitRec '{..}',
         Ident 'x'
-        Spread '..',
+        ',', Spread '..',
           LitRec '{..}'
       Ident 'point'
 
@@ -177,7 +177,7 @@ test 'seq destructure exact - empty rest', fn:
     Bind '=',
       LitSeq '[..]',
         Ident 'a'
-        Spread '..',
+        ',', Spread '..',
           LitSeq '[..]'
       Ident 'foo'
 
@@ -229,17 +229,17 @@ test 'nested right-hand binding', fn:
           Ident 'a'
           LitSeq '[..]',
             Ident 'b'
-            LitInt '2'
-        LitSeq '[..]',
+            ',', LitInt '2'
+        ',', LitSeq '[..]',
           LitInt '3'
-          LitInt '4'
+          ',', LitInt '4'
       LitSeq '[..]',
         LitSeq '[..]',
           LitInt '1'
-          LitInt '2'
-        LitSeq '[..]',
+          ',', LitInt '2'
+        ',', LitSeq '[..]',
           LitInt '3'
-          LitInt '4'
+          ',', LitInt '4'
 
 test 'right-hand binding with sequence destructure', fn:
   expect ast fink":
@@ -251,7 +251,7 @@ test 'right-hand binding with sequence destructure', fn:
         Ident 'foo'
       LitSeq '[..]',
         Ident 'a'
-        Ident 'b'
+        ',', Ident 'b'
 
 test 'right-hand binding with record destructure', fn:
   expect ast fink":
@@ -263,7 +263,7 @@ test 'right-hand binding with record destructure', fn:
         Ident 'foo'
       LitRec '{..}',
         Ident 'x'
-        Ident 'y'
+        ',', Ident 'y'
 
 test 'right-hand binding with nested destructure', fn:
   expect ast fink":
@@ -275,11 +275,11 @@ test 'right-hand binding with nested destructure', fn:
         Ident 'foo'
       LitRec '{..}',
         Ident 'x'
-        Arm ':',
+        ',', Arm ':',
           Ident 'y'
           LitSeq '[..]',
             Ident 'a'
-            Ident 'b'
+            ',', Ident 'b'
 
 test 'nested right-hand binding in record pattern', fn:
   expect ast fink":
@@ -293,7 +293,7 @@ test 'nested right-hand binding in record pattern', fn:
             Ident 'f'
             LitRec '{..}',
               Ident 'bar'
-              Arm ':',
+              ',', Arm ':',
                 Ident 'spam'
                 Apply
                   Ident 'num'
@@ -305,7 +305,7 @@ test 'nested right-hand binding in record pattern', fn:
             Arm ':',
               Ident 'bar'
               LitInt '1'
-            Arm ':',
+            ',', Arm ':',
               Ident 'spam'
               LitInt '2'
 
@@ -319,13 +319,13 @@ test 'spread guard with right-hand binding', fn:
           BindRight '|=',
             Ident 'str'
             Ident 'strings'
-        Spread '..',
+        ',', Spread '..',
           Ident 'other'
       LitSeq '[..]',
         LitInt '1'
-        LitStr '2'
-        LitInt '3'
-        LitStr '4'
+        ',', LitStr '2'
+        ',', LitInt '3'
+        ',', LitStr '4'
 
 test 'import', fn:
   expect ast fink":
@@ -334,7 +334,7 @@ test 'import', fn:
     Bind '=',
       LitRec '{..}',
         Ident 'foo'
-        Ident 'bar'
+        ',', Ident 'bar'
       Apply
         Ident 'import'
         LitStr './foobar.fnk'
@@ -357,10 +357,10 @@ test 'wildcard in sequence destructure', fn:
     Bind '=',
       LitSeq '[..]',
         Wildcard
-        Ident 'x'
+        ',', Ident 'x'
       LitSeq '[..]',
         LitInt '1'
-        LitInt '2'
+        ',', LitInt '2'
 
 test 'wildcard in fn params', fn:
   expect ast fink":
@@ -369,7 +369,7 @@ test 'wildcard in fn params', fn:
     Fn ':',
       Patterns
         Wildcard
-        Ident 'b'
+        ',', Ident 'b'
       Ident 'b'
 
 test 'wildcard does not match _foo', fn:
@@ -384,8 +384,8 @@ test 'implicit wildcard - middle slots', fn:
   | equals fink":
     LitSeq '[..]',
       Wildcard
-      Wildcard
-      Ident 'n'
+      ',', Wildcard
+      ',', Ident 'n'
 
 test 'implicit wildcard - leading comma', fn:
   expect ast fink":
@@ -393,8 +393,8 @@ test 'implicit wildcard - leading comma', fn:
   | equals fink":
     LitSeq '[..]',
       Wildcard
-      Wildcard
-      Ident 'n'
+      ',', Wildcard
+      ',', Ident 'n'
 
 test 'implicit wildcard - mixed explicit and implicit', fn:
   expect ast fink":
@@ -402,8 +402,8 @@ test 'implicit wildcard - mixed explicit and implicit', fn:
   | equals fink":
     LitSeq '[..]',
       Wildcard
-      Wildcard
-      Ident 'n'
+      ',', Wildcard
+      ',', Ident 'n'
 
 test 'implicit wildcard in fn params', fn:
   expect ast fink":
@@ -412,6 +412,6 @@ test 'implicit wildcard in fn params', fn:
     Fn ':',
       Patterns
         Wildcard
-        Wildcard
-        Ident 'c'
+        ',', Wildcard
+        ',', Ident 'c'
       Ident 'c'

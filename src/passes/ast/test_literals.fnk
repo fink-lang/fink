@@ -295,8 +295,8 @@ test 'sequence literal', fn:
   | equals fink":
     LitSeq '[..]',
       LitInt '1'
-      LitInt '2'
-      LitInt '3'
+      ',', LitInt '2'
+      ',', LitInt '3'
 
 test 'sequence constructor', fn:
   expect ast fink":
@@ -322,7 +322,7 @@ test 'multiline sequence constructor', fn:
       Apply
         Ident 'seq'
         LitInt '3'
-        LitInt '4'
+        ',', LitInt '4'
 
 
 ---
@@ -343,7 +343,7 @@ test 'record literal', fn:
       Arm ':',
         Ident 'foo'
         LitInt '1'
-      Arm ':',
+      ',', Arm ':',
         Ident 'bar'
         LitInt '2'
 
@@ -385,7 +385,7 @@ test 'record shorthand fields', fn:
   | equals fink":
     LitRec '{..}',
       Ident 'foo'
-      Ident 'bar'
+      ',', Ident 'bar'
 
 
 ---
@@ -402,10 +402,10 @@ test 'dict literal', fn:
         Arm ':',
           Ident 'foo'
           LitInt '1'
-        Arm ':',
+        ',', Arm ':',
           LitStr 'bar'
           LitInt '2'
-        Arm ':',
+        ',', Arm ':',
           Group '(..)',
             Ident 'key'
           LitInt '3'
@@ -449,8 +449,8 @@ test 'sequence tagged literal', fn:
       Ident 'foo'
       LitSeq '[..]',
         LitInt '1'
-        LitInt '2'
-        LitInt '3'
+        ',', LitInt '2'
+        ',', LitInt '3'
 
 test 'record tagged literal', fn:
   expect ast fink":

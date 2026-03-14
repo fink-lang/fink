@@ -8,7 +8,7 @@ test 'spread into sequence', fn:
   | equals fink":
     LitSeq '[..]',
       Ident 'head'
-      Spread '..',
+      ',', Spread '..',
         Ident 'tail'
 
 test 'spread concat sequences', fn:
@@ -18,7 +18,7 @@ test 'spread concat sequences', fn:
     LitSeq '[..]',
       Spread '..',
         Ident 'seq1'
-      Spread '..',
+      ',', Spread '..',
         Ident 'seq2'
 
 test 'spread into record', fn:
@@ -29,7 +29,7 @@ test 'spread into record', fn:
       Arm ':',
         Ident 'foo'
         Ident 'bar'
-      Spread '..',
+      ',', Spread '..',
         Ident 'rest'
 
 test 'spread merge records', fn:
@@ -39,7 +39,7 @@ test 'spread merge records', fn:
     LitRec '{..}',
       Spread '..',
         Ident 'rec1'
-      Spread '..',
+      ',', Spread '..',
         Ident 'rec2'
 
 test 'bare spread in sequence pattern', fn:
@@ -62,11 +62,11 @@ test 'spread with range guard', fn:
   | equals fink":
     LitSeq '[..]',
       Ident 'head'
-      Spread '..',
+      ',', Spread '..',
         InfixOp '..',
           LitInt '0'
           LitInt '2'
-      Spread '..',
+      ',', Spread '..',
         Ident 'rest'
 
 test 'spread with function guard', fn:
@@ -76,7 +76,7 @@ test 'spread with function guard', fn:
     LitSeq '[..]',
       Spread '..',
         Ident 'is_odd'
-      Spread '..',
+      ',', Spread '..',
         Ident 'evens'
 
 test 'spread with range expression guard', fn:
@@ -110,11 +110,11 @@ test 'spread with bare range guard', fn:
   | equals fink":
     LitSeq '[..]',
       Ident 'head'
-      Spread '..',
+      ',', Spread '..',
         InfixOp '..',
           LitInt '0'
           LitInt '2'
-      Spread '..',
+      ',', Spread '..',
         Ident 'rest'
 
 test 'spread with range to grouped expression', fn:

@@ -207,7 +207,7 @@ test 'partial in seq literal - seq is transparent', fn:
         Ident '$'
       LitSeq '[..]',
         Ident '$'
-        Ident '$'
+        ',', Ident '$'
 
 
 test 'partial with member projection in seq', fn:
@@ -222,7 +222,7 @@ test 'partial with member projection in seq', fn:
           Ident '$'
           Group '(..)',
             LitInt '0'
-        Member '.',
+        ',', Member '.',
           Ident '$'
           Group '(..)',
             LitInt '1'
@@ -239,7 +239,7 @@ test 'partial in rec literal - rec is transparent', fn:
         Arm ':',
           Ident 'foo'
           Ident '$'
-        Arm ':',
+        ',', Arm ':',
           Ident 'bar'
           Ident '$'
 
@@ -253,9 +253,9 @@ test 'partial in nested seq - all same param', fn:
         Ident '$'
       LitSeq '[..]',
         Ident '$'
-        LitSeq '[..]',
+        ',', LitSeq '[..]',
           Ident '$'
-          Ident '$'
+          ',', Ident '$'
 
 
 test 'partial in spread apply', fn:
