@@ -136,35 +136,57 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       out.push('}');
     }
     NodeKind::StrRawTempl { open, close, children } => {
-      // single LitStr child → raw string content (no quotes around the template itself;
-      // the tag + quotes are handled by Apply above)
-      if let [child] = children.as_slice() {
-        if let NodeKind::LitStr { content: s, .. } = &child.kind {
-          if open.src == "\":" {
-            let content = s.trim_end_matches('\n');
-            let base_line = open.loc.end.line;
-            out.push_str("\":");
-            for (i, line) in content.split('\n').enumerate() {
-              out.push('\n');
-              ind(out, depth + 1);
-              let src_line = base_line + i as u32 + 1;
-              let src_pos = Pos { idx: 0, line: src_line, col: 0 };
-              out.mark(Loc { start: src_pos, end: src_pos });
-              out.push_str(line);
+      // The tag ident and opening quote are handled by Apply (fmt_apply).
+      // This node emits the quoted content: 'text ${expr} text'
+      // For block raw templates (":`), emit ":" + indented lines with ${expr} interpolation.
+      if open.src == "\":" {
+        let base_line = open.loc.end.line;
+        out.push_str("\":");
+        let mut at_line_start = true;
+        let mut src_line_offset = 0u32;
+        for child in children {
+          match &child.kind {
+            NodeKind::LitStr { content: s, .. } => {
+              for (i, line) in s.split('\n').enumerate() {
+                if i > 0 || at_line_start {
+                  out.push('\n');
+                  ind(out, depth + 1);
+                  let src_pos = Pos { idx: 0, line: base_line + src_line_offset + 1, col: 0 };
+                  out.mark(Loc { start: src_pos, end: src_pos });
+                  if i > 0 { src_line_offset += 1; }
+                }
+                out.push_str(line);
+              }
+              at_line_start = s.ends_with('\n');
             }
-          } else {
-            out.push('\'');
-            out.mark(Loc { start: open.loc.end, end: open.loc.end });
-            out.push_str(s);
-            out.mark(close.loc);
-            out.push('\'');
+            _ => {
+              if at_line_start {
+                out.push('\n');
+                ind(out, depth + 1);
+                at_line_start = false;
+              }
+              out.push_str("${");
+              fmt_node(child, out, depth);
+              out.push('}');
+            }
           }
-          return;
         }
-      }
-      // fallback: print children joined
-      for child in children {
-        fmt_node(child, out, depth);
+      } else {
+        // Quoted raw template: 'text \${expr} text'
+        // Interpolation uses \${...} syntax (unlike StrTempl which uses \${...} differently)
+        out.push('\'');
+        for child in children {
+          match &child.kind {
+            NodeKind::LitStr { content: s, .. } => out.push_str(s),
+            _ => {
+              out.push_str("\\${");
+              fmt_node(child, out, depth);
+              out.push('}');
+            }
+          }
+        }
+        out.mark(close.loc);
+        out.push('\'');
       }
     }
     NodeKind::Ident(s) => out.push_str(s),

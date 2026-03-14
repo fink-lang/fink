@@ -90,6 +90,27 @@ test 'tagged string — str_fink', fn:
   | equals fink":
     str_fink'hello '
 
+test 'tagged template — interpolation', fn:
+  expect fmt fink":
+    fmt'hello \${1 + 2} world'
+
+  | equals fink":
+    fmt'hello \${1 + 2} world'
+
+test 'tagged template — interpolation only expr', fn:
+  expect fmt fink":
+    fmt'\${x}'
+
+  | equals fink":
+    fmt'\${x}'
+
+test 'tagged template — multiple interpolations', fn:
+  expect fmt fink":
+    fmt'\${a} and \${b}'
+
+  | equals fink":
+    fmt'\${a} and \${b}'
+
 
 ---
 Apply
