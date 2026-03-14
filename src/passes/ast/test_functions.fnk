@@ -7,7 +7,7 @@ test 'multiline function', fn:
     Fn ':',
       Patterns
         Ident 'a'
-        ',', Ident 'b'
+        Ident 'b'
       InfixOp '+',
         Ident 'a'
         Ident 'b'
@@ -19,7 +19,7 @@ test 'single line function', fn:
     Fn ':',
       Patterns
         Ident 'a'
-        ',', Ident 'b'
+        Ident 'b'
       InfixOp '+',
         Ident 'a'
         Ident 'b'
@@ -35,7 +35,7 @@ test 'named function binding', fn:
       Fn ':',
         Patterns
           Ident 'a'
-          ',', Ident 'b'
+          Ident 'b'
         Bind '=',
           Ident 'result'
           InfixOp '+',
@@ -69,7 +69,7 @@ test 'inline body comma equivalent to multiline block', fn:
     Fn ':',
       Patterns
         Ident 'a'
-        ',', Ident 'b'
+        Ident 'b'
       Ident 'a'
       Ident 'b'
 
@@ -99,7 +99,7 @@ test 'function with record pattern arg', fn:
         Patterns
           LitRec '{..}',
             Ident 'x'
-            ',', Ident 'y'
+            Ident 'y'
         InfixOp '+',
           Ident 'x'
           Ident 'y'
@@ -114,7 +114,7 @@ test 'function with sequence pattern arg', fn:
         Patterns
           LitSeq '[..]',
             Ident 'head'
-            ',', Spread '..',
+            Spread '..',
               Ident 'tail'
         Ident 'head'
 
@@ -127,7 +127,7 @@ test 'function with rest args', fn:
       Fn ':',
         Patterns
           Ident 'arg'
-          ',', Spread '..',
+          Spread '..',
             Ident 'rest'
         Ident 'arg'
 
@@ -140,9 +140,9 @@ test 'spread in middle of params', fn:
       Fn ':',
         Patterns
           Ident 'x'
-          ',', Spread '..',
+          Spread '..',
             Ident 'ys'
-          ',', Ident 'z'
+          Ident 'z'
         Ident 'x'
 
 
@@ -190,23 +190,23 @@ test 'fn match multi arg', fn:
       Fn ':',
         Patterns
           Ident 'a'
-          ',', Spread '..',
+          Spread '..',
             Ident 'b'
         Match ':',
           Patterns
             Ident 'a'
-            ',', Spread '..',
+            Spread '..',
               Ident 'b'
           Arm ':',
             Patterns
               LitInt '1'
-              ',', Spread '..'
+              Spread '..'
             LitInt '1'
           Arm ':',
             Patterns
               LitInt '2'
-              ',', Ident 'x'
-              ',', Spread '..',
+              Ident 'x'
+              Spread '..',
                 Ident 'y'
             LitInt '2'
 
@@ -239,14 +239,14 @@ test 'returning a function', fn:
             Arm ':',
               LitSeq '[..]',
                 Ident 'item'
-                ',', Spread '..',
+                Spread '..',
                   Ident 'rest'
               LitSeq '[..]',
                 Group '(..)',
                   Apply
                     Ident 'map_fn'
                     Ident 'item'
-                ',', Spread '..',
+                Spread '..',
                   Apply
                     Ident 'map'
                     Apply
@@ -286,11 +286,11 @@ test 'multiline args', fn:
       Apply
         Ident 'mul'
         LitInt '2'
-        ',', LitInt '3'
+        LitInt '3'
       Apply
         Ident 'mul'
         LitInt '3'
-        ',', LitInt '4'
+        LitInt '4'
 
 test 'semicolon grouped args', fn:
   expect ast fink":
@@ -301,11 +301,11 @@ test 'semicolon grouped args', fn:
       Apply
         Ident 'mul'
         LitInt '2'
-        ',', LitInt '3'
+        LitInt '3'
       Apply
         Ident 'mul'
         LitInt '3'
-        ',', LitInt '4'
+        LitInt '4'
 
 test 'nested right-to-left application', fn:
   expect ast fink":
@@ -327,8 +327,8 @@ test 'postfix tagged application', fn:
       Ident 'foo'
       LitSeq '[..]',
         LitInt '1'
-        ',', LitInt '2'
-        ',', LitInt '3'
+        LitInt '2'
+        LitInt '3'
 
 test 'partial application placeholder', fn:
   expect ast fink":
@@ -383,7 +383,7 @@ test 'pipe with spread partial', fn:
     Pipe
       LitSeq '[..]',
         LitInt '1'
-        ',', LitInt '2'
+        LitInt '2'
       Apply
         Ident 'add'
         Spread '..',
@@ -449,7 +449,7 @@ test 'fn params multiline continuation', fn:
     Fn ':',
       Patterns
         Ident 'a'
-        ',', Ident 'b'
+        Ident 'b'
       InfixOp '+',
         Ident 'a'
         Ident 'b'

@@ -387,8 +387,8 @@ test 'sequence index', fn:
     Member '.',
       LitSeq '[..]',
         LitInt '1'
-        ',', LitInt '2'
-        ',', LitInt '3'
+        LitInt '2'
+        LitInt '3'
       Group '(..)',
         LitInt '0'
 
@@ -399,10 +399,10 @@ test 'sequence range slice', fn:
     Member '.',
       LitSeq '[..]',
         LitInt '0'
-        ',', LitInt '1'
-        ',', LitInt '2'
-        ',', LitInt '3'
-        ',', LitInt '4'
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+        LitInt '4'
       Group '(..)',
         InfixOp '...',
           LitInt '2'
@@ -446,14 +446,14 @@ test 'member by sequence key', fn:
     Member '.',
       LitSeq '[..]',
         LitInt '0'
-        ',', LitInt '1'
-        ',', LitInt '2'
-        ',', LitInt '3'
-        ',', LitInt '4'
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
+        LitInt '4'
       Group '(..)',
         LitSeq '[..]',
           LitInt '2'
-          ',', LitInt '3'
+          LitInt '3'
 
 
 test 'infix rhs multiline block application', fn:
@@ -465,14 +465,14 @@ test 'infix rhs multiline block application', fn:
     InfixOp '==',
       LitSeq '[..]',
         LitInt '3'
-        ',', LitInt '7'
+        LitInt '7'
       Apply
         Ident 'seq'
         Apply
           Ident 'add'
           LitInt '1'
-          ',', LitInt '2'
+          LitInt '2'
         Apply
           Ident 'add'
           LitInt '3'
-          ',', LitInt '4'
+          LitInt '4'

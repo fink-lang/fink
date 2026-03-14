@@ -26,7 +26,7 @@ test 'grouping application args without comma', fn:
           Ident 'add'
           LitInt '1'
           LitInt '2'
-      ',', Group '(..)',
+      Group '(..)',
         Apply
           Ident 'add'
           LitInt '3'
@@ -58,11 +58,11 @@ test 'comma separates args weakly', fn:
       Apply
         Ident 'mul'
         LitInt '2'
-        ',', LitInt '3'
-        ',', Apply
+        LitInt '3'
+        Apply
           Ident 'mul'
           LitInt '3'
-          ',', LitInt '4'
+          LitInt '4'
 
 test 'semicolon groups strongly', fn:
   expect ast fink":
@@ -73,11 +73,11 @@ test 'semicolon groups strongly', fn:
       Apply
         Ident 'mul'
         LitInt '2'
-        ',', LitInt '3'
+        LitInt '3'
       Apply
         Ident 'mul'
         LitInt '3'
-        ',', LitInt '4'
+        LitInt '4'
 
 
 ---
@@ -95,11 +95,11 @@ test 'multiline args - same AST as inline with semicolons', fn:
       Apply
         Ident 'mul'
         LitInt '2'
-        ',', LitInt '3'
+        LitInt '3'
       Apply
         Ident 'mul'
         LitInt '3'
-        ',', LitInt '4'
+        LitInt '4'
 
 test 'trailing comma continues onto next line', fn:
   expect ast fink":
@@ -125,12 +125,12 @@ test 'semicolon makes spread guard boundary explicit', fn:
         Apply
           Ident 'is_odd'
           Ident 'head'
-        ';', Spread '..',
+        Spread '..',
           Ident 'tail'
       LitSeq '[..]',
         LitInt '3'
-        ',', LitInt '4'
-        ',', LitInt '5'
+        LitInt '4'
+        LitInt '5'
 
 
 test 'semicolon separates seq elements when both are non-spread', fn:
@@ -140,11 +140,11 @@ test 'semicolon separates seq elements when both are non-spread', fn:
     Bind '=',
       LitSeq '[..]',
         LitInt '1'
-        ',', Apply
+        Apply
           Ident 'foo'
           LitInt '1'
           LitInt '2'
-        ';', Apply
+        Apply
           Ident 'bar'
           LitInt '3'
       Ident 'xs'

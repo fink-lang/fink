@@ -468,32 +468,8 @@ fn print_children(children: &[Node], out: &mut String, depth: usize) {
   }
 }
 
-// Print Exprs items. A ',' or ';' sep between items i-1 and i is printed as a
-// prefix on item i's line: `',', NodeName ...`
 fn print_exprs(exprs: &Exprs, out: &mut String, depth: usize) {
-  for (i, item) in exprs.items.iter().enumerate() {
-    out.push('\n');
-    let prefix = if i > 0 {
-      exprs.seps.get(i - 1).and_then(|sep| {
-        if sep.src == "," || sep.src == ";" { Some(sep.src) } else { None }
-      })
-    } else {
-      None
-    };
-    if let Some(s) = prefix {
-      // Print node into temp buffer, strip its leading indent, then re-indent with sep prefix
-      let mut buf = String::new();
-      print_node(item, &mut buf, depth + 1);
-      let trimmed = buf.trim_start_matches(' ');
-      indent(out, depth + 1);
-      out.push('\'');
-      out.push_str(s);
-      out.push_str("', ");
-      out.push_str(trimmed);
-    } else {
-      print_node(item, out, depth + 1);
-    }
-  }
+  print_children(&exprs.items, out, depth);
 }
 
 #[cfg(test)]
