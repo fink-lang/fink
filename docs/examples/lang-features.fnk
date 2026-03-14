@@ -1,11 +1,11 @@
----
+--- --- --- --- ---
 language features by example
----
+--- --- --- --- ---
 
 
----
+--- --- ---
 Literals
----
+--- --- ---
 
 ---
 boolean
@@ -151,7 +151,7 @@ records - static compile time names
   bar: {
     spam: 3
   }
-  ham: # TODO: AST parse fails!
+  ham: # TODO: AST parse fails
     ni = own-scoped-block
     n * 2 # value of ham field
 }

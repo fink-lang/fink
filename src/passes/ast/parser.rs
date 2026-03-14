@@ -663,6 +663,13 @@ impl<'src> Parser<'src> {
   fn parse_infix(&mut self, min_bp: u8) -> ParseResult<'src> {
     let mut lhs = self.parse_unary_or_atom()?;
 
+    // If the atom is a bare ident followed by a BlockStart, collect block args.
+    // This handles infix RHS like `a == seq\n  add 1, 2` where `seq` would
+    // otherwise be returned bare, leaving the BlockStart as an unexpected token.
+    if matches!(lhs.kind, NodeKind::Ident(_)) && self.at(TokenKind::BlockStart) {
+      lhs = self.collect_apply_or_block(lhs, false)?;
+    }
+
     loop {
       // Check for "not in" two-token operator
       if min_bp <= 40
