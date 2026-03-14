@@ -318,7 +318,7 @@ mod tests {
     }
   }
 
-  fn tok(src: &str) -> Token {
+  fn tok(src: &str) -> Token<'_> {
     Token { kind: TokenKind::Sep, loc: dummy_loc(), src }
   }
 

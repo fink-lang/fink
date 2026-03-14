@@ -388,15 +388,14 @@ fn collect_ref_from_callable<'src>(
 
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod free_var_tests {
   use crate::parser::parse;
   use crate::ast::build_index;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
   use crate::passes::cps::transform::lower_expr;
-  #[allow(deprecated)]
   use super::annotate;
 
-  #[allow(deprecated)]
   fn cps_free_vars(src: &str) -> String {
     match parse(src) {
       Ok(r) => {

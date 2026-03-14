@@ -481,7 +481,7 @@ mod tests {
     Loc { start: Pos { idx: 0, line: 1, col: 0 }, end: Pos { idx: 0, line: 1, col: 0 } }
   }
 
-  fn tok(src: &str) -> Token {
+  fn tok(src: &str) -> Token<'_> {
     Token { kind: TokenKind::Sep, loc: loc(), src }
   }
 

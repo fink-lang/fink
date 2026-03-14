@@ -975,7 +975,6 @@ pub fn tokenize_debug(src: &str) -> String {
 #[cfg(test)]
 mod tests {
   use test_macros::include_fink_tests;
-  use super::tokenize_with_seps;
 
 fn tokenize_debug(src: &str) -> String {
     super::tokenize_debug(src)
