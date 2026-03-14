@@ -4,7 +4,7 @@
 // associated with its source location.  The public API offers both
 // `fmt` (string only) and `fmt_mapped` (string + source map).
 
-use crate::ast::{Exprs, Node, NodeKind};
+use crate::ast::{CmpPart, Exprs, Node, NodeKind};
 use crate::sourcemap::{MappedWriter, SourceMap};
 
 /// Format an AST back to Fink source, discarding source-map info.
@@ -39,6 +39,19 @@ fn is_fn(node: &Node) -> bool {
   matches!(node.kind, NodeKind::Fn { .. })
 }
 
+/// Check if a node produces multi-line output (block strings, fn bodies, match, etc.)
+fn is_multiline(node: &Node) -> bool {
+  match &node.kind {
+    NodeKind::LitStr { open, .. } => open.src == "\":",
+    NodeKind::StrRawTempl { open, .. } => open.src == "\":",
+    NodeKind::Fn { body, .. } => body.items.len() > 1 || body.items.first().map_or(false, |b| !is_inline_expr(b)),
+    NodeKind::Match { .. } | NodeKind::Block { .. } => true,
+    NodeKind::Apply { args, .. } => args.items.iter().any(|a| is_multiline(a) || is_fn(a)),
+    NodeKind::Pipe(exprs) => exprs.items.iter().any(|e| is_multiline(e)),
+    _ => false,
+  }
+}
+
 fn is_atom(node: &Node) -> bool {
   matches!(
     node.kind,
@@ -58,10 +71,21 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::LitInt(s) => out.push_str(s),
     NodeKind::LitFloat(s) => out.push_str(s),
     NodeKind::LitDecimal(s) => out.push_str(s),
-    NodeKind::LitStr { content: s, .. } => {
-      out.push('\'');
-      out.push_str(s);
-      out.push('\'');
+    NodeKind::LitStr { open, content: s, .. } => {
+      if open.src == "\":" {
+        // Block string: emit ": followed by indented content lines
+        let content = s.trim_end_matches('\n');
+        out.push_str("\":");
+        for line in content.split('\n') {
+          out.push('\n');
+          ind(out, depth + 1);
+          out.push_str(line);
+        }
+      } else {
+        out.push('\'');
+        out.push_str(s);
+        out.push('\'');
+      }
     }
     NodeKind::LitSeq { items, .. } if items.items.is_empty() => out.push_str("[]"),
     NodeKind::LitSeq { items, .. } => {
@@ -81,14 +105,24 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
       out.push('}');
     }
-    NodeKind::StrRawTempl { children, .. } => {
+    NodeKind::StrRawTempl { open, children, .. } => {
       // single LitStr child → raw string content (no quotes around the template itself;
       // the tag + quotes are handled by Apply above)
       if let [child] = children.as_slice() {
         if let NodeKind::LitStr { content: s, .. } = &child.kind {
-          out.push('\'');
-          out.push_str(s);
-          out.push('\'');
+          if open.src == "\":" {
+            let content = s.trim_end_matches('\n');
+            out.push_str("\":");
+            for line in content.split('\n') {
+              out.push('\n');
+              ind(out, depth + 1);
+              out.push_str(line);
+            }
+          } else {
+            out.push('\'');
+            out.push_str(s);
+            out.push('\'');
+          }
           return;
         }
       }
@@ -117,8 +151,100 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         fmt_node(child, out, depth);
       }
     }
+    NodeKind::UnaryOp { op, operand } => {
+      out.push_str(op.src);
+      if !op.src.starts_with('-') { out.push(' '); }
+      fmt_node(operand, out, depth);
+    }
+    NodeKind::InfixOp { op, lhs, rhs } => {
+      fmt_node(lhs, out, depth);
+      out.push(' ');
+      out.push_str(op.src);
+      out.push(' ');
+      fmt_node(rhs, out, depth);
+    }
+    NodeKind::ChainedCmp(parts) => {
+      for (i, part) in parts.iter().enumerate() {
+        match part {
+          CmpPart::Operand(n) => fmt_node(n, out, depth),
+          CmpPart::Op(tok) => {
+            out.push(' ');
+            out.push_str(tok.src);
+            out.push(' ');
+          }
+        }
+      }
+    }
+    NodeKind::Member { lhs, rhs, .. } => {
+      fmt_node(lhs, out, depth);
+      out.push('.');
+      fmt_node(rhs, out, depth);
+    }
+    NodeKind::Group { inner, .. } => {
+      out.push('(');
+      fmt_node(inner, out, depth);
+      out.push(')');
+    }
+    NodeKind::Partial => out.push('?'),
     NodeKind::Wildcard => out.push('_'),
-    _ => out.push_str("?"),
+    NodeKind::BindRight { lhs, rhs, .. } => {
+      fmt_node(lhs, out, depth);
+      out.push_str(" |= ");
+      fmt_node(rhs, out, depth);
+    }
+    NodeKind::Pipe(exprs) => {
+      let multiline = exprs.items.iter().any(|e| is_multiline(e));
+      for (i, child) in exprs.items.iter().enumerate() {
+        if i > 0 {
+          if multiline {
+            out.push('\n');
+            ind(out, depth);
+            out.push_str("| ");
+          } else {
+            out.push_str(" | ");
+          }
+        }
+        fmt_node(child, out, depth);
+      }
+    }
+    NodeKind::Match { subjects, arms, .. } => {
+      out.push_str("match ");
+      fmt_node(subjects, out, depth);
+      out.push(':');
+      for arm in &arms.items {
+        out.push('\n');
+        ind(out, depth + 1);
+        fmt_node(arm, out, depth + 1);
+      }
+    }
+    NodeKind::Arm { lhs, body, .. } => {
+      for (i, pat) in lhs.items.iter().enumerate() {
+        if i > 0 { out.push_str(", "); }
+        fmt_node(pat, out, depth);
+      }
+      out.push(':');
+      fmt_body(&body.items, out, depth, true);
+    }
+    NodeKind::Try(inner) => {
+      out.push_str("try ");
+      fmt_node(inner, out, depth);
+    }
+    NodeKind::Yield(inner) => {
+      out.push_str("yield ");
+      fmt_node(inner, out, depth);
+    }
+    NodeKind::StrTempl { children, .. } => {
+      for child in children {
+        fmt_node(child, out, depth);
+      }
+    }
+    NodeKind::Block { name, params, body, .. } => {
+      fmt_node(name, out, depth);
+      out.push(' ');
+      fmt_node(params, out, depth);
+      out.push(':');
+      fmt_body(&body.items, out, depth, true);
+    }
   }
 }
 
@@ -131,10 +257,11 @@ fn is_complex_arg(node: &Node) -> bool {
 }
 
 fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
-  // Tagged string literal: `id'foo'`, `op'+'` — func ident + single string arg, no separator
+  // Tagged string literal: `id'foo'`, `op'+'` — func ident + single quoted string arg, no separator
+  // Excludes block strings (`":`) which need a space separator
   if let [arg] = args {
-    if matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
-      if matches!(func.kind, NodeKind::Ident(_)) {
+    if matches!(func.kind, NodeKind::Ident(_)) && !is_multiline(arg) {
+      if matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
         fmt_node(func, out, depth);
         fmt_node(arg, out, depth);
         return;
