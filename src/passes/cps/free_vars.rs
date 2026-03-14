@@ -72,8 +72,6 @@ impl<'a, 'src> Ctx<'a, 'src> {
 /// Annotate every `LetFn` in `expr` with its free variables.
 /// Operates bottom-up: inner fns are annotated before outer ones.
 /// Requires origin map and AST index for name recovery.
-#[deprecated(note = "will be subsumed by name resolution / static analysis pass")]
-#[allow(deprecated)]
 pub fn annotate<'src>(
   expr: Expr<'src>,
   origin: &PropGraph<CpsId, Option<AstId>>,
@@ -388,7 +386,6 @@ fn collect_ref_from_callable<'src>(
 
 
 #[cfg(test)]
-#[allow(deprecated)]
 mod free_var_tests {
   use crate::parser::parse;
   use crate::ast::build_index;
