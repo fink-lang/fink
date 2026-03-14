@@ -52,11 +52,6 @@ pub struct CpsResult<'src> {
 // Names and references
 // ---------------------------------------------------------------------------
 
-/// A free variable captured from an outer scope — identified by the CpsId
-/// of the Ref node at the capture site. The name is recoverable from the
-/// origin map (CpsId → AstId → AST node → ident string).
-pub type FreeVar = CpsId;
-
 /// A definition site — introduces a name into scope.
 /// `User` marks a source-level binding; the name is recoverable from the
 /// origin map (CpsId → AstId → AST ident). `Gen` marks a compiler-generated
@@ -256,15 +251,9 @@ pub enum ExprKind<'src> {
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
-  /// `free_vars` is populated by the free-variable analysis pass; empty until then.
-  /// Contains CpsIds of Ref nodes at capture sites — names recoverable from origin map.
-  /// In first-encounter order.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
-    /// TODO [deprecated]: remove once resolve pass exists — free vars are derivable
-    /// from `Resolution::Captured` entries in the prop graph.
-    free_vars: Vec<FreeVar>,
     fn_body: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },

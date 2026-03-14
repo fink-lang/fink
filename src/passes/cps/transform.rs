@@ -940,7 +940,6 @@ fn wrap_with_fail<'src>(
       ExprKind::LetFn {
         name,
         params,
-        free_vars: vec![],
         fn_body: Box::new(fn_body),
         body: Box::new(body),
       },
