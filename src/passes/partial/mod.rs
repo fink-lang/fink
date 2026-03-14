@@ -8,7 +8,7 @@
 //   - All `?` in the same scope become the same single param `$`
 //   - `?` in pattern position (Arm lhs, Bind lhs) is a compile error
 
-use crate::ast::{CmpPart, Node, NodeKind};
+use crate::ast::{CmpPart, Exprs, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::ast::transform::{Transform, TransformError, TransformResult};
 
@@ -39,7 +39,7 @@ fn has_partial(node: &Node) -> bool {
     NodeKind::Group { .. } => false,
 
     NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
-      items.iter().any(has_partial)
+      items.items.iter().any(has_partial)
     }
     NodeKind::StrTempl(children) | NodeKind::StrRawTempl(children) => {
       children.iter().any(has_partial)
@@ -62,21 +62,21 @@ fn has_partial(node: &Node) -> bool {
     NodeKind::Bind { rhs, .. } => has_partial(rhs),      // lhs is pattern — skip
     NodeKind::BindRight { lhs, .. } => has_partial(lhs), // rhs is pattern — skip
     NodeKind::Apply { func, args } => {
-      has_partial(func) || args.iter().any(has_partial)
+      has_partial(func) || args.items.iter().any(has_partial)
     }
-    NodeKind::Pipe(children) => false, // Pipe children are independent segments
+    NodeKind::Pipe(_) => false, // Pipe children are independent segments
     NodeKind::Fn { params, body, .. } => {
-      has_partial(params) || body.iter().any(has_partial)
+      has_partial(params) || body.items.iter().any(has_partial)
     }
-    NodeKind::Patterns(children) => children.iter().any(has_partial),
+    NodeKind::Patterns(children) => children.items.iter().any(has_partial),
     NodeKind::Match { subjects, arms, .. } => {
-      has_partial(subjects) || arms.iter().any(has_partial)
+      has_partial(subjects) || arms.items.iter().any(has_partial)
     }
     NodeKind::Arm { lhs, body, .. } => {
-      lhs.iter().any(has_partial) || body.iter().any(has_partial)
+      lhs.items.iter().any(has_partial) || body.items.iter().any(has_partial)
     }
     NodeKind::Block { name, params, body, .. } => {
-      has_partial(name) || has_partial(params) || body.iter().any(has_partial)
+      has_partial(name) || has_partial(params) || body.items.iter().any(has_partial)
     }
     NodeKind::Try(inner) => has_partial(inner),
     NodeKind::Yield(inner) => has_partial(inner),
@@ -103,10 +103,10 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
     NodeKind::Group { .. } => node,
 
     NodeKind::LitSeq { open, close, items } => {
-      Node::new(NodeKind::LitSeq { open, close, items: replace_vec(items, param_loc) }, loc)
+      Node::new(NodeKind::LitSeq { open, close, items: replace_exprs(items, param_loc) }, loc)
     }
     NodeKind::LitRec { open, close, items } => {
-      Node::new(NodeKind::LitRec { open, close, items: replace_vec(items, param_loc) }, loc)
+      Node::new(NodeKind::LitRec { open, close, items: replace_exprs(items, param_loc) }, loc)
     }
     NodeKind::StrTempl(children) => {
       Node::new(NodeKind::StrTempl(replace_vec(children, param_loc)), loc)
@@ -149,7 +149,7 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
     }
     NodeKind::Apply { func, args } => {
       let func = replace_partial(*func, param_loc);
-      let args = replace_vec(args, param_loc);
+      let args = replace_exprs(args, param_loc);
       Node::new(NodeKind::Apply { func: Box::new(func), args }, loc)
     }
     NodeKind::Bind { op, lhs, rhs } => {
@@ -164,7 +164,7 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
     }
     NodeKind::Arm { lhs, sep, body } => {
       // In LitRec context: lhs is the key (Ident, not replaced), body has the value
-      let body = replace_vec(body, param_loc);
+      let body = replace_exprs(body, param_loc);
       Node::new(NodeKind::Arm { lhs, sep, body }, loc)
     }
 
@@ -177,6 +177,10 @@ fn replace_vec<'src>(nodes: Vec<Node<'src>>, param_loc: Loc) -> Vec<Node<'src>> 
   nodes.into_iter().map(|n| replace_partial(n, param_loc)).collect()
 }
 
+fn replace_exprs<'src>(exprs: Exprs<'src>, param_loc: Loc) -> Exprs<'src> {
+  Exprs { items: replace_vec(exprs.items, param_loc), seps: exprs.seps }
+}
+
 /// Wrap an expression in `fn $: expr` if it contains Partial nodes.
 fn wrap_if_partial<'src>(node: Node<'src>) -> Node<'src> {
   if !has_partial(&node) {
@@ -186,9 +190,9 @@ fn wrap_if_partial<'src>(node: Node<'src>) -> Node<'src> {
   let body = replace_partial(node, param_loc);
   let body_loc = body.loc;
   let param = Node::new(NodeKind::Ident(PARAM), param_loc);
-  let patterns = Node::new(NodeKind::Patterns(vec![param]), param_loc);
+  let patterns = Node::new(NodeKind::Patterns(Exprs { items: vec![param], seps: vec![] }), param_loc);
   let sep = Token { kind: crate::lexer::TokenKind::Colon, loc: param_loc, src: ":" };
-  Node::new(NodeKind::Fn { params: Box::new(patterns), sep, body: vec![body] }, body_loc)
+  Node::new(NodeKind::Fn { params: Box::new(patterns), sep, body: Exprs { items: vec![body], seps: vec![] } }, body_loc)
 }
 
 // --- transformer ---
@@ -219,18 +223,19 @@ impl<'src> PartialPass {
         Ok(Node::new(NodeKind::Arm { lhs, sep, body }, loc))
       }
 
+
       // Group: explicit scope boundary — process inner as independent stmt
       NodeKind::Group { inner, .. } => {
         self.transform_stmt(*inner)
       }
 
       // Pipe: each segment is an independent scope
-      NodeKind::Pipe(children) => {
-        let mut new_children = Vec::with_capacity(children.len());
-        for child in children {
-          new_children.push(self.transform_stmt(child)?);
+      NodeKind::Pipe(exprs) => {
+        let mut new_items = Vec::with_capacity(exprs.items.len());
+        for child in exprs.items {
+          new_items.push(self.transform_stmt(child)?);
         }
-        Ok(Node::new(NodeKind::Pipe(new_children), loc))
+        Ok(Node::new(NodeKind::Pipe(Exprs { items: new_items, seps: exprs.seps }), loc))
       }
 
       // Everything else: recurse into children (processing inner Group/Pipe boundaries),
@@ -242,8 +247,9 @@ impl<'src> PartialPass {
     }
   }
 
-  fn transform_body(&mut self, body: Vec<Node<'src>>) -> Result<Vec<Node<'src>>, TransformError> {
-    body.into_iter().map(|n| self.transform_stmt(n)).collect()
+  fn transform_body(&mut self, body: Exprs<'src>) -> Result<Exprs<'src>, TransformError> {
+    let items = body.items.into_iter().map(|n| self.transform_stmt(n)).collect::<Result<_, _>>()?;
+    Ok(Exprs { items, seps: body.seps })
   }
 }
 

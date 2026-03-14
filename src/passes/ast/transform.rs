@@ -1,4 +1,4 @@
-use super::{CmpPart, Node, NodeKind};
+use super::{CmpPart, Exprs, Node, NodeKind};
 use super::lexer::{Loc, Token};
 
 // --- error ---
@@ -74,10 +74,10 @@ pub trait Transform<'src> {
     &mut self,
     open: Token<'src>,
     close: Token<'src>,
-    items: Vec<Node<'src>>,
+    items: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
-    let items = self.transform_vec(items)?;
+    let items = self.transform_exprs(items)?;
     Ok(Node::new(NodeKind::LitSeq { open, close, items }, loc))
   }
 
@@ -85,10 +85,10 @@ pub trait Transform<'src> {
     &mut self,
     open: Token<'src>,
     close: Token<'src>,
-    items: Vec<Node<'src>>,
+    items: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
-    let items = self.transform_vec(items)?;
+    let items = self.transform_exprs(items)?;
     Ok(Node::new(NodeKind::LitRec { open, close, items }, loc))
   }
 
@@ -211,61 +211,61 @@ pub trait Transform<'src> {
   fn transform_apply(
     &mut self,
     func: Node<'src>,
-    args: Vec<Node<'src>>,
+    args: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let func = self.transform(func)?;
-    let args = self.transform_vec(args)?;
+    let args = self.transform_exprs(args)?;
     Ok(Node::new(NodeKind::Apply { func: Box::new(func), args }, loc))
   }
 
-  fn transform_pipe(&mut self, children: Vec<Node<'src>>, loc: Loc) -> TransformResult<'src> {
-    let children = self.transform_vec(children)?;
-    Ok(Node::new(NodeKind::Pipe(children), loc))
+  fn transform_pipe(&mut self, exprs: Exprs<'src>, loc: Loc) -> TransformResult<'src> {
+    let exprs = self.transform_exprs(exprs)?;
+    Ok(Node::new(NodeKind::Pipe(exprs), loc))
   }
 
   fn transform_fn(
     &mut self,
     params: Node<'src>,
     sep: Token<'src>,
-    body: Vec<Node<'src>>,
+    body: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let params = self.transform(params)?;
-    let body = self.transform_vec(body)?;
+    let body = self.transform_exprs(body)?;
     Ok(Node::new(NodeKind::Fn { params: Box::new(params), sep, body }, loc))
   }
 
   fn transform_patterns(
     &mut self,
-    children: Vec<Node<'src>>,
+    exprs: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
-    let children = self.transform_vec(children)?;
-    Ok(Node::new(NodeKind::Patterns(children), loc))
+    let exprs = self.transform_exprs(exprs)?;
+    Ok(Node::new(NodeKind::Patterns(exprs), loc))
   }
 
   fn transform_match(
     &mut self,
     subjects: Node<'src>,
     sep: Token<'src>,
-    arms: Vec<Node<'src>>,
+    arms: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let subjects = self.transform(subjects)?;
-    let arms = self.transform_vec(arms)?;
+    let arms = self.transform_exprs(arms)?;
     Ok(Node::new(NodeKind::Match { subjects: Box::new(subjects), sep, arms }, loc))
   }
 
   fn transform_arm(
     &mut self,
-    lhs: Vec<Node<'src>>,
+    lhs: Exprs<'src>,
     sep: Token<'src>,
-    body: Vec<Node<'src>>,
+    body: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
-    let lhs = self.transform_vec(lhs)?;
-    let body = self.transform_vec(body)?;
+    let lhs = self.transform_exprs(lhs)?;
+    let body = self.transform_exprs(body)?;
     Ok(Node::new(NodeKind::Arm { lhs, sep, body }, loc))
   }
 
@@ -274,19 +274,24 @@ pub trait Transform<'src> {
     name: Node<'src>,
     params: Node<'src>,
     sep: Token<'src>,
-    body: Vec<Node<'src>>,
+    body: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let name = self.transform(name)?;
     let params = self.transform(params)?;
-    let body = self.transform_vec(body)?;
+    let body = self.transform_exprs(body)?;
     Ok(Node::new(NodeKind::Block { name: Box::new(name), params: Box::new(params), sep, body }, loc))
   }
 
-  // --- helper ---
+  // --- helpers ---
 
   fn transform_vec(&mut self, nodes: Vec<Node<'src>>) -> Result<Vec<Node<'src>>, TransformError> {
     nodes.into_iter().map(|n| self.transform(n)).collect()
+  }
+
+  fn transform_exprs(&mut self, exprs: Exprs<'src>) -> Result<Exprs<'src>, TransformError> {
+    let items = exprs.items.into_iter().map(|n| self.transform(n)).collect::<Result<_, _>>()?;
+    Ok(Exprs { items, seps: exprs.seps })
   }
 }
 
@@ -295,8 +300,12 @@ pub trait Transform<'src> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::ast::NodeKind;
+  use crate::ast::{Exprs, NodeKind};
   use crate::lexer::{Loc, Pos, Token, TokenKind};
+
+  fn exprs(items: Vec<Node>) -> Exprs {
+    Exprs { items, seps: vec![] }
+  }
 
   fn dummy_loc() -> Loc {
     Loc {
@@ -364,11 +373,11 @@ mod tests {
     // [a, b, c]
     let n = node(NodeKind::LitSeq {
       open: tok("["), close: tok("]"),
-      items: vec![
+      items: exprs(vec![
         node(NodeKind::Ident("a")),
         node(NodeKind::Ident("b")),
         node(NodeKind::Ident("c")),
-      ],
+      ]),
     });
     let mut counter = IdentCounter(0);
     counter.transform(n).unwrap();
@@ -380,7 +389,7 @@ mod tests {
     // add a, b  =>  Apply(Ident(add), [Ident(a), Ident(b)])
     let n = node(NodeKind::Apply {
       func: Box::new(node(NodeKind::Ident("add"))),
-      args: vec![node(NodeKind::Ident("a")), node(NodeKind::Ident("b"))],
+      args: exprs(vec![node(NodeKind::Ident("a")), node(NodeKind::Ident("b"))]),
     });
     let mut counter = IdentCounter(0);
     counter.transform(n).unwrap();
@@ -411,22 +420,22 @@ mod tests {
     // [1, 2, 3]  =>  [true, true, true]
     let n = node(NodeKind::LitSeq {
       open: tok("["), close: tok("]"),
-      items: vec![
+      items: exprs(vec![
         node(NodeKind::LitInt("1")),
         node(NodeKind::LitInt("2")),
         node(NodeKind::LitInt("3")),
-      ],
+      ]),
     });
     let result = IntToBool.transform(n).unwrap();
     assert_eq!(
       result,
       node(NodeKind::LitSeq {
         open: tok("["), close: tok("]"),
-        items: vec![
+        items: exprs(vec![
           node(NodeKind::LitBool(true)),
           node(NodeKind::LitBool(true)),
           node(NodeKind::LitBool(true)),
-        ],
+        ]),
       })
     );
   }
@@ -458,11 +467,11 @@ mod tests {
     }
     let n = node(NodeKind::LitSeq {
       open: tok("["), close: tok("]"),
-      items: vec![
+      items: exprs(vec![
         node(NodeKind::LitInt("1")),
         node(NodeKind::LitInt("2")),
         node(NodeKind::LitInt("3")),
-      ],
+      ]),
     });
     let mut t = FailOnSecond(0);
     assert!(t.transform(n).is_err());

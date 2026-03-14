@@ -35,17 +35,17 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
 
   let mut out = Vec::new();
 
-  for stmt in stmts {
+  for stmt in &stmts.items {
     // test 'name', fn: <body>
     let (name, fn_body) = match &stmt.kind {
       NodeKind::Apply { func, args } if matches!(func.kind, NodeKind::Ident("test")) => {
-        let Some(name_node) = args.first() else {
+        let Some(name_node) = args.items.first() else {
           panic!("include_fink_tests: `test` at line {} has no name argument", stmt.loc.start.line);
         };
         let NodeKind::LitStr(name) = &name_node.kind else {
           panic!("include_fink_tests: `test` at line {} — name is not a string literal", stmt.loc.start.line);
         };
-        let Some(fn_node) = args.get(1) else {
+        let Some(fn_node) = args.items.get(1) else {
           panic!("include_fink_tests: test '{}' at line {} has no fn body", name, stmt.loc.start.line);
         };
         let NodeKind::Fn { body, .. } = &fn_node.kind else {
@@ -57,9 +57,9 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
     };
 
     // fn body is a single Pipe node: [expect_call, equals_call]
-    let pipe_nodes: &[fink::ast::Node<'src>] = match fn_body.as_slice() {
+    let pipe_nodes: &[fink::ast::Node<'src>] = match fn_body.items.as_slice() {
       [single] => match &single.kind {
-        NodeKind::Pipe(parts) => parts,
+        NodeKind::Pipe(parts) => &parts.items,
         _ => panic!(
           "include_fink_tests: test '{}' at line {} — fn body is not a pipe expression \
            (did you leave a blank line before `| equals`?)",
@@ -82,7 +82,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
     // Parsed as: Apply(expect, [Apply(func, [body_node])])  (right-to-left application)
     let (func_name, src_text) = match &pipe_nodes[0].kind {
       NodeKind::Apply { func, args } if matches!(func.kind, NodeKind::Ident("expect")) => {
-        let Some(inner) = args.first() else {
+        let Some(inner) = args.items.first() else {
           panic!("include_fink_tests: test '{}' at line {} — `expect` has no arguments", name, stmt.loc.start.line);
         };
         // inner is Apply(func_name, [body_node])
@@ -92,7 +92,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         let NodeKind::Ident(func_name) = &fn_ident.kind else {
           panic!("include_fink_tests: test '{}' at line {} — expect function name is not an identifier", name, stmt.loc.start.line);
         };
-        let Some(body_node) = fn_args.first() else {
+        let Some(body_node) = fn_args.items.first() else {
           panic!("include_fink_tests: test '{}' at line {} — `expect {}` has no source body", name, stmt.loc.start.line, func_name);
         };
         let text = match &body_node.kind {
@@ -134,7 +134,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
       NodeKind::Apply { func, args }
         if matches!(&func.kind, NodeKind::Ident(s) if s.starts_with("equals")) =>
       {
-        let Some(body_node) = args.first() else {
+        let Some(body_node) = args.items.first() else {
           panic!("include_fink_tests: test '{}' at line {} — `equals` has no expected body", name, stmt.loc.start.line);
         };
         // Accept a string literal, raw": tagged template, or a fn/text fn body.
@@ -177,7 +177,7 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   use fink::ast::NodeKind;
   let NodeKind::Apply { func, args } = &node.kind else { return None };
   if !matches!(func.kind, NodeKind::Ident("fink")) { return None; }
-  let arg = args.first()?;
+  let arg = args.items.first()?;
   match &arg.kind {
     // No interpolation: raw": collapses to Apply(raw, LitStr) — verbatim, no unescape.
     // TODO: trailing \n comes from consume_str_block_text including \n in each line's end pos.
@@ -221,7 +221,7 @@ fn extract_fn_body_text<'src>(
     NodeKind::Apply { func, args }
       if matches!(func.kind, NodeKind::Ident("text")) =>
     {
-      args.first()?
+      args.items.first()?
     }
     _ => return None,
   };

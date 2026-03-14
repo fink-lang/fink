@@ -7,7 +7,7 @@
 // Uses the CpsId→AstId origin map to recover source names from the AST,
 // avoiding stringly-typed dispatch.
 
-use crate::ast::{self, AstId, Node, NodeKind};
+use crate::ast::{self, AstId, Exprs, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::propgraph::PropGraph;
 use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
@@ -99,16 +99,20 @@ fn spread_node(inner: Node<'static>) -> Node<'static> {
   node(NodeKind::Spread { op: dummy_tok(), inner: Some(Box::new(inner)) })
 }
 
+fn exprs(items: Vec<Node<'static>>) -> Exprs<'static> {
+  Exprs { items, seps: vec![] }
+}
+
 fn apply(func: Node<'static>, args: Vec<Node<'static>>) -> Node<'static> {
-  node(NodeKind::Apply { func: Box::new(func), args })
+  node(NodeKind::Apply { func: Box::new(func), args: exprs(args) })
 }
 
 fn patterns(params: Vec<Node<'static>>) -> Node<'static> {
-  node(NodeKind::Patterns(params))
+  node(NodeKind::Patterns(exprs(params)))
 }
 
 fn fn_node(params: Node<'static>, body: Vec<Node<'static>>) -> Node<'static> {
-  node(NodeKind::Fn { params: Box::new(params), sep: dummy_tok(), body })
+  node(NodeKind::Fn { params: Box::new(params), sep: dummy_tok(), body: exprs(body) })
 }
 
 /// `fn ·state: body` — state-only continuation (used in ·if branches).
@@ -171,8 +175,8 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
       node(NodeKind::LitDecimal(s))
     }
     Lit::Str(s) => node(NodeKind::LitStr(s.to_string())),
-    Lit::Seq   => node(NodeKind::LitSeq { open: dummy_tok(), close: dummy_tok(), items: vec![] }),
-    Lit::Rec   => node(NodeKind::LitRec { open: dummy_tok(), close: dummy_tok(), items: vec![] }),
+    Lit::Seq   => node(NodeKind::LitSeq { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }),
+    Lit::Rec   => node(NodeKind::LitRec { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }),
   }
 }
 

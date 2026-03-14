@@ -5,6 +5,25 @@ pub mod transform;
 
 use lexer::{Loc, Token};
 
+/// Separated sequence of expressions — the shared structural building block
+/// for params, args, body statements, seq/rec items, and pipe segments.
+/// Separators are `,`, `;`, `|`, or block-continuation tokens.
+///
+/// Invariant: `seps.len() <= items.len()`. Typically `seps.len() == items.len() - 1`
+/// (no trailing separator) or `seps.len() == items.len()` (trailing separator present).
+/// Empty sequences have both vecs empty.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Exprs<'src> {
+  pub items: Vec<Node<'src>>,
+  pub seps: Vec<Token<'src>>,
+}
+
+impl<'src> Exprs<'src> {
+  pub fn empty() -> Self {
+    Self { items: vec![], seps: vec![] }
+  }
+}
+
 /// Output of the parse pass — the AST tree plus metadata.
 pub struct ParseResult<'src> {
   pub root: Node<'src>,
@@ -68,11 +87,11 @@ pub enum NodeKind<'src> {
   // owned since it differs from source
   LitStr(String),
 
-  // LitSeq — children are elements
-  LitSeq { open: Token<'src>, close: Token<'src>, items: Vec<Node<'src>> },
+  // LitSeq — sequence literal; items are elements separated by , ; or block tokens
+  LitSeq { open: Token<'src>, close: Token<'src>, items: Exprs<'src> },
 
-  // LitRec — children are Ident (shorthand), Arm (key:val), or Spread
-  LitRec { open: Token<'src>, close: Token<'src>, items: Vec<Node<'src>> },
+  // LitRec — record literal; items are Ident (shorthand), Arm (key:val), or Spread
+  LitRec { open: Token<'src>, close: Token<'src>, items: Exprs<'src> },
 
   // --- string templates ---
 
@@ -126,27 +145,28 @@ pub enum NodeKind<'src> {
   // --- application ---
 
   // Apply func arg arg ...
-  Apply { func: Box<Node<'src>>, args: Vec<Node<'src>> },
+  Apply { func: Box<Node<'src>>, args: Exprs<'src> },
 
-  // Pipe — left-to-right chain: [a, b, c] means c(b(a))
-  Pipe(Vec<Node<'src>>),
+  // Pipe — left-to-right chain: [a, b, c] means c(b(a)); separated by |
+  Pipe(Exprs<'src>),
 
   // --- functions ---
 
-  // Fn — params (Patterns node) + sep (:) + body exprs (flat, may include Arms)
-  Fn { params: Box<Node<'src>>, sep: Token<'src>, body: Vec<Node<'src>> },
+  // Fn — params (Patterns node) + sep (:) + body
+  Fn { params: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
 
-  // Patterns — comma-separated param/subject list
-  Patterns(Vec<Node<'src>>),
+  // Patterns — expression sequence in pattern position (fn params, match subjects)
+  // separated by , ; or block tokens
+  Patterns(Exprs<'src>),
 
   // --- match ---
 
   // Match — subjects (Patterns node) + sep (:) + arms
-  Match { subjects: Box<Node<'src>>, sep: Token<'src>, arms: Vec<Node<'src>> },
+  Match { subjects: Box<Node<'src>>, sep: Token<'src>, arms: Exprs<'src> },
 
-  // Arm — lhs patterns + sep (:) + body exprs (flat, like Fn body)
-  // lhs is Vec to handle multi-pattern arms (match a, b: ...)
-  Arm { lhs: Vec<Node<'src>>, sep: Token<'src>, body: Vec<Node<'src>> },
+  // Arm — lhs patterns + sep (:) + body
+  // lhs is Exprs to handle multi-pattern arms (match a, b: ...)
+  Arm { lhs: Exprs<'src>, sep: Token<'src>, body: Exprs<'src> },
 
   // --- error handling ---
 
@@ -161,8 +181,8 @@ pub enum NodeKind<'src> {
 
   // --- custom blocks ---
 
-  // Block — name (Ident) + params (Patterns) + sep (:) + body (flat exprs/arms)
-  Block { name: Box<Node<'src>>, params: Box<Node<'src>>, sep: Token<'src>, body: Vec<Node<'src>> },
+  // Block — name (Ident) + params (Patterns) + sep (:) + body
+  Block { name: Box<Node<'src>>, params: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
 }
 
 // For ChainedCmp interleaved representation
@@ -188,13 +208,13 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::Wildcard => {}
 
     NodeKind::LitSeq { items, .. }
-    | NodeKind::LitRec { items, .. } => {
-      for child in items { walk(child, f); }
+    | NodeKind::LitRec { items, .. }
+    | NodeKind::Pipe(items)
+    | NodeKind::Patterns(items) => {
+      for child in &items.items { walk(child, f); }
     }
     NodeKind::StrTempl(children)
-    | NodeKind::StrRawTempl(children)
-    | NodeKind::Pipe(children)
-    | NodeKind::Patterns(children) => {
+    | NodeKind::StrRawTempl(children) => {
       for child in children { walk(child, f); }
     }
 
@@ -223,24 +243,24 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     }
     NodeKind::Apply { func, args } => {
       walk(func, f);
-      for arg in args { walk(arg, f); }
+      for arg in &args.items { walk(arg, f); }
     }
     NodeKind::Fn { params, body, .. } => {
       walk(params, f);
-      for stmt in body { walk(stmt, f); }
+      for stmt in &body.items { walk(stmt, f); }
     }
     NodeKind::Match { subjects, arms, .. } => {
       walk(subjects, f);
-      for arm in arms { walk(arm, f); }
+      for arm in &arms.items { walk(arm, f); }
     }
     NodeKind::Arm { lhs, body, .. } => {
-      for pat in lhs { walk(pat, f); }
-      for stmt in body { walk(stmt, f); }
+      for pat in &lhs.items { walk(pat, f); }
+      for stmt in &body.items { walk(stmt, f); }
     }
     NodeKind::Block { name, params, body, .. } => {
       walk(name, f);
       walk(params, f);
-      for stmt in body { walk(stmt, f); }
+      for stmt in &body.items { walk(stmt, f); }
     }
   }
 }
@@ -299,11 +319,11 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::LitSeq { items, .. } => {
       out.push_str("LitSeq");
-      print_children(items, out, depth);
+      print_children(&items.items, out, depth);
     }
     NodeKind::LitRec { items, .. } => {
       out.push_str("LitRec");
-      print_children(items, out, depth);
+      print_children(&items.items, out, depth);
     }
     NodeKind::StrTempl(children) => {
       out.push_str("StrTempl");
@@ -385,44 +405,44 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Apply");
       out.push('\n');
       print_node(func, out, depth + 1);
-      for arg in args {
+      for arg in &args.items {
         out.push('\n');
         print_node(arg, out, depth + 1);
       }
     }
-    NodeKind::Pipe(children) => {
+    NodeKind::Pipe(exprs) => {
       out.push_str("Pipe");
-      print_children(children, out, depth);
+      print_children(&exprs.items, out, depth);
     }
     NodeKind::Fn { params, body, .. } => {
       out.push_str("Fn");
       out.push('\n');
       print_node(params, out, depth + 1);
-      for node in body {
+      for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);
       }
     }
-    NodeKind::Patterns(children) => {
+    NodeKind::Patterns(exprs) => {
       out.push_str("Patterns");
-      print_children(children, out, depth);
+      print_children(&exprs.items, out, depth);
     }
     NodeKind::Match { subjects, arms, .. } => {
       out.push_str("Match");
       out.push('\n');
       print_node(subjects, out, depth + 1);
-      for arm in arms {
+      for arm in &arms.items {
         out.push('\n');
         print_node(arm, out, depth + 1);
       }
     }
     NodeKind::Arm { lhs, body, .. } => {
       out.push_str("Arm");
-      for pat in lhs {
+      for pat in &lhs.items {
         out.push('\n');
         print_node(pat, out, depth + 1);
       }
-      for node in body {
+      for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);
       }
@@ -433,7 +453,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       print_node(name, out, depth + 1);
       out.push('\n');
       print_node(params, out, depth + 1);
-      for node in body {
+      for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);
       }
@@ -489,7 +509,7 @@ mod tests {
 
   #[test]
   fn print_lit_seq_empty() {
-    let tree = node(NodeKind::LitSeq { open: tok("["), close: tok("]"), items: vec![] });
+    let tree = node(NodeKind::LitSeq { open: tok("["), close: tok("]"), items: Exprs::empty() });
     assert_eq!(tree.print(), "LitSeq");
   }
 
@@ -501,7 +521,7 @@ mod tests {
 
   #[test]
   fn print_patterns_empty() {
-    let tree = node(NodeKind::Patterns(vec![]));
+    let tree = node(NodeKind::Patterns(Exprs::empty()));
     assert_eq!(tree.print(), "Patterns");
   }
 

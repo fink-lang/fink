@@ -1,6 +1,6 @@
 // AST → Fink source pretty-printer
 
-use crate::ast::{Node, NodeKind};
+use crate::ast::{Exprs, Node, NodeKind};
 
 pub fn fmt(node: &Node) -> String {
   let mut out = String::new();
@@ -41,19 +41,19 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str(s);
       out.push('\'');
     }
-    NodeKind::LitSeq { items, .. } if items.is_empty() => out.push_str("[]"),
+    NodeKind::LitSeq { items, .. } if items.items.is_empty() => out.push_str("[]"),
     NodeKind::LitSeq { items, .. } => {
       out.push('[');
-      for (i, child) in items.iter().enumerate() {
+      for (i, child) in items.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(child, out, depth);
       }
       out.push(']');
     }
-    NodeKind::LitRec { items, .. } if items.is_empty() => out.push_str("{}"),
+    NodeKind::LitRec { items, .. } if items.items.is_empty() => out.push_str("{}"),
     NodeKind::LitRec { items, .. } => {
       out.push('{');
-      for (i, child) in items.iter().enumerate() {
+      for (i, child) in items.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(child, out, depth);
       }
@@ -87,10 +87,10 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str(" = ");
       fmt_node(rhs, out, depth);
     }
-    NodeKind::Apply { func, args } => fmt_apply(func, args, out, depth),
-    NodeKind::Fn { params, body, .. } => fmt_fn(params, body, out, depth),
-    NodeKind::Patterns(children) => {
-      for (i, child) in children.iter().enumerate() {
+    NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
+    NodeKind::Fn { params, body, .. } => fmt_fn(params, &body.items, out, depth),
+    NodeKind::Patterns(exprs) => {
+      for (i, child) in exprs.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
         fmt_node(child, out, depth);
       }
@@ -103,7 +103,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
 fn is_complex_arg(node: &Node) -> bool {
   // An arg that has fn args inside it — should go on its own indented line
   match &node.kind {
-    NodeKind::Apply { args, .. } => args.iter().any(is_fn),
+    NodeKind::Apply { args, .. } => args.items.iter().any(is_fn),
     _ => false,
   }
 }
@@ -142,7 +142,7 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
   if trailing.len() == 1 && is_fn(&trailing[0]) {
     if let NodeKind::Fn { params, body, .. } = &trailing[0].kind {
       if plain.is_empty() { out.push(' '); } else { out.push_str(", "); }
-      fmt_fn_with_inline(params, body, out, depth, false);
+      fmt_fn_with_inline(params, &body.items, out, depth, false);
       return;
     }
   }
@@ -153,7 +153,7 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
     out.push('\n');
     ind(out, depth + 1);
     if let NodeKind::Fn { params, body, .. } = &arg.kind {
-      fmt_fn_with_inline(params, body, out, depth + 1, true);
+      fmt_fn_with_inline(params, &body.items, out, depth + 1, true);
     } else {
       fmt_node(arg, out, depth + 1);
     }
@@ -183,7 +183,7 @@ fn fmt_fn_with_inline(params: &Node, body: &[Node], out: &mut String, depth: usi
 fn is_inline_expr(node: &Node) -> bool {
   match &node.kind {
     // apply with no trailing fn args → inline
-    NodeKind::Apply { args, .. } => !args.iter().any(is_fn),
+    NodeKind::Apply { args, .. } => !args.items.iter().any(is_fn),
     _ => is_atom(node),
   }
 }
@@ -201,8 +201,8 @@ fn fmt_fn_inline(params: &Node, expr: &Node, out: &mut String, depth: usize) {
 
 fn fmt_fn_params(params: &Node, out: &mut String) {
   out.push_str("fn");
-  if let NodeKind::Patterns(children) = &params.kind {
-    for (i, child) in children.iter().enumerate() {
+  if let NodeKind::Patterns(exprs) = &params.kind {
+    for (i, child) in exprs.items.iter().enumerate() {
       if i == 0 { out.push(' '); } else { out.push_str(", "); }
       fmt_node(child, out, 0);
     }
