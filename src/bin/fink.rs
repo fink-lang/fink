@@ -39,8 +39,10 @@ fn main() {
             } else {
               fink::ast::fmt::fmt_mapped(&r.root, path)
             };
+            let json = srcmap.to_json();
+            let b64 = fink::sourcemap::base64_encode(json.as_bytes());
             println!("{output}");
-            eprintln!("{}", srcmap.to_json());
+            println!("//# sourceMappingURL=data:application/json;base64,{b64}");
           } else {
             println!("{}", fink::ast::fmt::fmt(&r.root));
           }

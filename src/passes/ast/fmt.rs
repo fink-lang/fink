@@ -5,6 +5,7 @@
 // `fmt` (string only) and `fmt_mapped` (string + source map).
 
 use crate::ast::{CmpPart, Exprs, Node, NodeKind};
+use crate::lexer::{Loc, Pos};
 use crate::sourcemap::{MappedWriter, SourceMap};
 
 /// Format an AST back to Fink source, discarding source-map info.
@@ -74,15 +75,21 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::LitStr { open, content: s, .. } => {
       if open.src == "\":" {
         // Block string: emit ": followed by indented content lines
+        // Map each line back to its source line (content starts one line after ":")
         let content = s.trim_end_matches('\n');
+        let base_line = open.loc.end.line;  // line where ": appears
         out.push_str("\":");
-        for line in content.split('\n') {
+        for (i, line) in content.split('\n').enumerate() {
           out.push('\n');
           ind(out, depth + 1);
+          let src_line = base_line + i as u32 + 1;
+          let src_pos = Pos { idx: 0, line: src_line, col: 0 };
+          out.mark(Loc { start: src_pos, end: src_pos });
           out.push_str(line);
         }
       } else {
         out.push('\'');
+        out.mark(Loc { start: open.loc.end, end: open.loc.end });
         out.push_str(s);
         out.push('\'');
       }
@@ -112,10 +119,14 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         if let NodeKind::LitStr { content: s, .. } = &child.kind {
           if open.src == "\":" {
             let content = s.trim_end_matches('\n');
+            let base_line = open.loc.end.line;
             out.push_str("\":");
-            for line in content.split('\n') {
+            for (i, line) in content.split('\n').enumerate() {
               out.push('\n');
               ind(out, depth + 1);
+              let src_line = base_line + i as u32 + 1;
+              let src_pos = Pos { idx: 0, line: src_line, col: 0 };
+              out.mark(Loc { start: src_pos, end: src_pos });
               out.push_str(line);
             }
           } else {
@@ -396,4 +407,113 @@ mod tests {
   }
 
   test_macros::include_fink_tests!("src/passes/ast/test_fmt.fnk");
+
+  // --- source map tests ---
+
+  use super::fmt_mapped;
+
+  /// Parse source, format with source map, return mappings as (out_line, out_col, src_line, src_col).
+  fn mappings(src: &str) -> Vec<(u32, u32, u32, u32)> {
+    let result = parse(src).expect("parse failed");
+    let (_, srcmap) = fmt_mapped(&result.root, "test.fnk");
+    srcmap.iter().collect()
+  }
+
+  #[test]
+  fn sourcemap_ident() {
+    // "foo" → single mapping at (0,0) → source (0,0)
+    let m = mappings("foo");
+    assert_eq!(m, vec![(0, 0, 0, 0)]);
+  }
+
+  #[test]
+  fn sourcemap_string_literal() {
+    // "'hello'" → mapping for node start + string content
+    let m = mappings("'hello'");
+    assert_eq!(m, vec![
+      (0, 0, 0, 0),  // LitStr node (opening quote)
+      (0, 1, 0, 1),  // string content
+    ]);
+  }
+
+  #[test]
+  fn sourcemap_bind() {
+    // "foo = bar" → Bind, lhs Ident, rhs Ident
+    let m = mappings("foo = bar");
+    assert_eq!(m, vec![
+      (0, 0, 0, 0),  // Bind node
+      (0, 0, 0, 0),  // Ident 'foo'
+      (0, 6, 0, 6),  // Ident 'bar'
+    ]);
+  }
+
+  #[test]
+  fn sourcemap_apply() {
+    // "foo bar" → Apply, func Ident, arg Ident
+    let m = mappings("foo bar");
+    assert_eq!(m, vec![
+      (0, 0, 0, 0),  // Apply node
+      (0, 0, 0, 0),  // Ident 'foo'
+      (0, 4, 0, 4),  // Ident 'bar'
+    ]);
+  }
+
+  #[test]
+  fn sourcemap_apply_multiple_args() {
+    // "foo a, b" → Apply, func, arg, arg
+    let m = mappings("foo a, b");
+    assert_eq!(m, vec![
+      (0, 0, 0, 0),  // Apply node
+      (0, 0, 0, 0),  // Ident 'foo'
+      (0, 4, 0, 4),  // Ident 'a'
+      (0, 7, 0, 7),  // Ident 'b'
+    ]);
+  }
+
+  #[test]
+  fn sourcemap_fn_inline() {
+    // "fn x:\n  foo x" → inlined to "fn x: foo x" (single apply body)
+    let m = mappings("fn x:\n  foo x");
+    assert_eq!(m, vec![
+      (0, 0, 0, 0),   // Fn node
+      (0, 3, 0, 3),   // Patterns → Ident 'x'
+      (0, 6, 1, 2),   // Apply 'foo x'
+      (0, 6, 1, 2),   // Ident 'foo'
+      (0, 10, 1, 6),  // Ident 'x'
+    ]);
+  }
+
+  #[test]
+  fn sourcemap_fn_multiline_body() {
+    // Multi-statement body stays multi-line
+    let m = mappings("fn x:\n  foo x\n  bar x");
+    let lines: Vec<u32> = m.iter().map(|&(l, _, _, _)| l).collect();
+    assert!(lines.contains(&0), "should have line 0 mappings");
+    assert!(lines.contains(&1), "should have line 1 mappings");
+    assert!(lines.contains(&2), "should have line 2 mappings");
+  }
+
+  #[test]
+  fn sourcemap_infix() {
+    // "a + b" → InfixOp, lhs, rhs
+    let m = mappings("a + b");
+    assert_eq!(m, vec![
+      (0, 0, 0, 0),  // InfixOp node
+      (0, 0, 0, 0),  // Ident 'a'
+      (0, 4, 0, 4),  // Ident 'b'
+    ]);
+  }
+
+  #[test]
+  fn sourcemap_mapping_count() {
+    // Each node should produce exactly one mapping
+    let m = mappings("foo");
+    assert_eq!(m.len(), 1);
+
+    let m = mappings("foo bar");
+    assert_eq!(m.len(), 3); // Apply + func + arg
+
+    let m = mappings("foo = bar baz");
+    assert_eq!(m.len(), 5); // Bind + lhs + Apply + func + arg
+  }
 }
