@@ -25,7 +25,7 @@ fn is_atom(node: &Node) -> bool {
       | NodeKind::LitInt(_)
       | NodeKind::LitFloat(_)
       | NodeKind::LitDecimal(_)
-      | NodeKind::LitStr(_)
+      | NodeKind::LitStr { .. }
       | NodeKind::Ident(_)
   )
 }
@@ -36,7 +36,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
     NodeKind::LitInt(s) => out.push_str(s),
     NodeKind::LitFloat(s) => out.push_str(s),
     NodeKind::LitDecimal(s) => out.push_str(s),
-    NodeKind::LitStr(s) => {
+    NodeKind::LitStr { content: s, .. } => {
       out.push('\'');
       out.push_str(s);
       out.push('\'');
@@ -59,11 +59,11 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       }
       out.push('}');
     }
-    NodeKind::StrRawTempl(children) => {
+    NodeKind::StrRawTempl { children, .. } => {
       // single LitStr child → raw string content (no quotes around the template itself;
       // the tag + quotes are handled by Apply above)
       if let [child] = children.as_slice() {
-        if let NodeKind::LitStr(s) = &child.kind {
+        if let NodeKind::LitStr { content: s, .. } = &child.kind {
           out.push('\'');
           out.push_str(s);
           out.push('\'');
@@ -111,7 +111,7 @@ fn is_complex_arg(node: &Node) -> bool {
 fn fmt_apply(func: &Node, args: &[Node], out: &mut String, depth: usize) {
   // Tagged string literal: `id'foo'`, `op'+'` — func ident + single string arg, no separator
   if let [arg] = args {
-    if matches!(arg.kind, NodeKind::StrRawTempl(_) | NodeKind::LitStr(_)) {
+    if matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
       if matches!(func.kind, NodeKind::Ident(_)) {
         fmt_node(func, out, depth);
         fmt_node(arg, out, depth);

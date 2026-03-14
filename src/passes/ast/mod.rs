@@ -82,10 +82,10 @@ pub enum NodeKind<'src> {
   // LitDecimal '1.0d' | '1.0d-100'
   LitDecimal(&'src str),
 
-  // LitStr 'hello world'
-  // TODO: is it fully resolved string value (escape sequences processed)
-  // owned since it differs from source
-  LitStr(String),
+  // LitStr — string literal or string segment inside a template
+  // open/close are delimiter tokens: ' .. ', ' .. ${, } .. ', } .. ${, ": .. dedent
+  // content is owned since escape sequences are processed at parse time
+  LitStr { open: Token<'src>, close: Token<'src>, content: String },
 
   // LitSeq — sequence literal; items are elements separated by , ; or block tokens
   LitSeq { open: Token<'src>, close: Token<'src>, items: Exprs<'src> },
@@ -95,11 +95,11 @@ pub enum NodeKind<'src> {
 
   // --- string templates ---
 
-  // StrTempl — interpolated string; children are LitStr and expressions
-  StrTempl(Vec<Node<'src>>),
+  // StrTempl — interpolated string; open/close mirror first/last child's delimiters
+  StrTempl { open: Token<'src>, close: Token<'src>, children: Vec<Node<'src>> },
 
   // StrRawTempl — tagged template; raw parts + expressions, passed to tag fn unprocessed
-  StrRawTempl(Vec<Node<'src>>),
+  StrRawTempl { open: Token<'src>, close: Token<'src>, children: Vec<Node<'src>> },
 
   // --- identifiers ---
 
@@ -189,7 +189,7 @@ pub enum NodeKind<'src> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum CmpPart<'src> {
   Operand(Node<'src>),
-  Op(&'src str),
+  Op(Token<'src>),
 }
 
 // --- tree walker ---
@@ -202,7 +202,7 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::LitInt(_)
     | NodeKind::LitFloat(_)
     | NodeKind::LitDecimal(_)
-    | NodeKind::LitStr(_)
+    | NodeKind::LitStr { .. }
     | NodeKind::Ident(_)
     | NodeKind::Partial
     | NodeKind::Wildcard => {}
@@ -213,8 +213,8 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::Patterns(items) => {
       for child in &items.items { walk(child, f); }
     }
-    NodeKind::StrTempl(children)
-    | NodeKind::StrRawTempl(children) => {
+    NodeKind::StrTempl { children, .. }
+    | NodeKind::StrRawTempl { children, .. } => {
       for child in children { walk(child, f); }
     }
 
@@ -303,10 +303,10 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     NodeKind::LitInt(s) => { out.push_str("LitInt '"); out.push_str(s); out.push('\''); }
     NodeKind::LitFloat(s) => { out.push_str("LitFloat '"); out.push_str(s); out.push('\''); }
     NodeKind::LitDecimal(s) => { out.push_str("LitDecimal '"); out.push_str(s); out.push('\''); }
-    NodeKind::LitStr(s) => {
+    NodeKind::LitStr { content, .. } => {
       out.push_str("LitStr '");
       out.push_str(
-        &s.replace('\\', "\\\\")
+        &content.replace('\\', "\\\\")
           .replace('\n', "\\n")
           .replace('\r', "\\r")
           .replace('\t', "\\t")
@@ -327,11 +327,11 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       if !items.items.is_empty() { out.push(','); }
       print_children(&items.items, out, depth);
     }
-    NodeKind::StrTempl(children) => {
+    NodeKind::StrTempl { children, .. } => {
       out.push_str("StrTempl");
       print_children(children, out, depth);
     }
-    NodeKind::StrRawTempl(children) => {
+    NodeKind::StrRawTempl { children, .. } => {
       out.push_str("StrRawTempl");
       print_children(children, out, depth);
     }
@@ -354,7 +354,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
         out.push('\n');
         match part {
           CmpPart::Operand(n) => print_node(n, out, depth + 1),
-          CmpPart::Op(op) => { indent(out, depth + 1); out.push('\''); out.push_str(op); out.push('\''); }
+          CmpPart::Op(op) => { indent(out, depth + 1); out.push('\''); out.push_str(op.src); out.push('\''); }
         }
       }
     }
@@ -570,9 +570,9 @@ mod tests {
     // a > b > c
     let tree = node(NodeKind::ChainedCmp(vec![
       CmpPart::Operand(node(NodeKind::Ident("a"))),
-      CmpPart::Op(">"),
+      CmpPart::Op(tok(">")),
       CmpPart::Operand(node(NodeKind::Ident("b"))),
-      CmpPart::Op(">"),
+      CmpPart::Op(tok(">")),
       CmpPart::Operand(node(NodeKind::Ident("c"))),
     ]));
     assert_eq!(tree.print(), "ChainedCmp\n  Ident 'a'\n  '>'\n  Ident 'b'\n  '>'\n  Ident 'c'");

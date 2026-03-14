@@ -31,7 +31,7 @@ fn has_partial(node: &Node) -> bool {
     | NodeKind::LitInt(_)
     | NodeKind::LitFloat(_)
     | NodeKind::LitDecimal(_)
-    | NodeKind::LitStr(_)
+    | NodeKind::LitStr { .. }
     | NodeKind::Ident(_)
     | NodeKind::Wildcard => false,
 
@@ -41,7 +41,7 @@ fn has_partial(node: &Node) -> bool {
     NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
       items.items.iter().any(has_partial)
     }
-    NodeKind::StrTempl(children) | NodeKind::StrRawTempl(children) => {
+    NodeKind::StrTempl { children, .. } | NodeKind::StrRawTempl { children, .. } => {
       children.iter().any(has_partial)
     }
     NodeKind::UnaryOp { operand, .. } => has_partial(operand),
@@ -95,7 +95,7 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
     | NodeKind::LitInt(_)
     | NodeKind::LitFloat(_)
     | NodeKind::LitDecimal(_)
-    | NodeKind::LitStr(_)
+    | NodeKind::LitStr { .. }
     | NodeKind::Ident(_)
     | NodeKind::Wildcard => node,
 
@@ -108,11 +108,11 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
     NodeKind::LitRec { open, close, items } => {
       Node::new(NodeKind::LitRec { open, close, items: replace_exprs(items, param_loc) }, loc)
     }
-    NodeKind::StrTempl(children) => {
-      Node::new(NodeKind::StrTempl(replace_vec(children, param_loc)), loc)
+    NodeKind::StrTempl { open, close, children } => {
+      Node::new(NodeKind::StrTempl { open, close, children: replace_vec(children, param_loc) }, loc)
     }
-    NodeKind::StrRawTempl(children) => {
-      Node::new(NodeKind::StrRawTempl(replace_vec(children, param_loc)), loc)
+    NodeKind::StrRawTempl { open, close, children } => {
+      Node::new(NodeKind::StrRawTempl { open, close, children: replace_vec(children, param_loc) }, loc)
     }
     NodeKind::UnaryOp { op, operand } => {
       let operand = replace_partial(*operand, param_loc);

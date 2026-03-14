@@ -42,7 +42,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         let Some(name_node) = args.items.first() else {
           panic!("include_fink_tests: `test` at line {} has no name argument", stmt.loc.start.line);
         };
-        let NodeKind::LitStr(name) = &name_node.kind else {
+        let NodeKind::LitStr { content: name, .. } = &name_node.kind else {
           panic!("include_fink_tests: `test` at line {} — name is not a string literal", stmt.loc.start.line);
         };
         let Some(fn_node) = args.items.get(1) else {
@@ -96,7 +96,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
           panic!("include_fink_tests: test '{}' at line {} — `expect {}` has no source body", name, stmt.loc.start.line, func_name);
         };
         let text = match &body_node.kind {
-          NodeKind::LitStr(s) => {
+          NodeKind::LitStr { content: s, .. } => {
             // TODO: the AST doesn't distinguish 'quoted' LitStr from ":" block LitStr.
             // Peek at the byte just before the node's loc start in the source —
             // if it's `'` this came from a quoted string and needs unescape;
@@ -139,7 +139,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         };
         // Accept a string literal, raw": tagged template, or a fn/text fn body.
         match &body_node.kind {
-          NodeKind::LitStr(s) => s.clone(),
+          NodeKind::LitStr { content: s, .. } => s.clone(),
           _ => {
             if let Some(text) = extract_raw_templ(body_node) {
               text
@@ -171,7 +171,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
 
 /// Extract the verbatim string content from a `fink":\n  ...` tagged template node.
 ///
-/// Matches `Apply { func: Ident("fink"), args: [LitStr(s) | StrRawTempl([LitStr(s)])] }` and
+/// Matches `Apply { func: Ident("fink"), args: [LitStr { content: s } | StrRawTempl { children: [LitStr { content: s }] }] }` and
 /// returns `s` verbatim — no unescaping, no trimming. This is the `fink":` form used in tests.
 fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   use fink::ast::NodeKind;
@@ -183,13 +183,13 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
     // TODO: trailing \n comes from consume_str_block_text including \n in each line's end pos.
     // The lexer should strip the trailing newline from the last line of a block string instead
     // of having the macro paper over it here. Fix in lexer, then remove this trim.
-    NodeKind::LitStr(s) => Some(s.trim_end_matches('\n').to_string()),
+    NodeKind::LitStr { content: s, .. } => Some(s.trim_end_matches('\n').to_string()),
     // With interpolation: Apply(raw, StrRawTempl([LitStr, ...])).
     // A single plain-text child is fine (e.g. fink": with no ${}).
     // Multiple children means the fink": block contains an unescaped ${...} — use \${ instead.
-    NodeKind::StrRawTempl(children) => {
+    NodeKind::StrRawTempl { children, .. } => {
       if let [child] = children.as_slice() {
-        if let NodeKind::LitStr(s) = &child.kind {
+        if let NodeKind::LitStr { content: s, .. } = &child.kind {
           return Some(s.trim_end_matches('\n').to_string());
         }
       }

@@ -11,7 +11,7 @@ pub struct Loc {
   pub end: Pos,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
   Ident,
   Int,
@@ -40,7 +40,7 @@ pub enum TokenKind {
   Err,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Token<'src> {
   pub kind: TokenKind,
   pub loc: Loc,

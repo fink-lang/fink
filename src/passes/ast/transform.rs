@@ -33,15 +33,15 @@ pub trait Transform<'src> {
       | NodeKind::LitInt(_)
       | NodeKind::LitFloat(_)
       | NodeKind::LitDecimal(_)
-      | NodeKind::LitStr(_)
+      | NodeKind::LitStr { .. }
       | NodeKind::Ident(_)
       | NodeKind::Partial
       | NodeKind::Wildcard => self.transform_leaf(node),
 
       NodeKind::LitSeq { open, close, items } => self.transform_lit_seq(open, close, items, loc),
       NodeKind::LitRec { open, close, items } => self.transform_lit_rec(open, close, items, loc),
-      NodeKind::StrTempl(children) => self.transform_str_templ(children, loc),
-      NodeKind::StrRawTempl(children) => self.transform_str_raw_templ(children, loc),
+      NodeKind::StrTempl { open, close, children } => self.transform_str_templ(open, close, children, loc),
+      NodeKind::StrRawTempl { open, close, children } => self.transform_str_raw_templ(open, close, children, loc),
       NodeKind::UnaryOp { op, operand } => self.transform_unary_op(op, *operand, loc),
       NodeKind::InfixOp { op, lhs, rhs } => self.transform_infix_op(op, *lhs, *rhs, loc),
       NodeKind::ChainedCmp(parts) => self.transform_chained_cmp(parts, loc),
@@ -94,20 +94,24 @@ pub trait Transform<'src> {
 
   fn transform_str_templ(
     &mut self,
+    open: Token<'src>,
+    close: Token<'src>,
     children: Vec<Node<'src>>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let children = self.transform_vec(children)?;
-    Ok(Node::new(NodeKind::StrTempl(children), loc))
+    Ok(Node::new(NodeKind::StrTempl { open, close, children }, loc))
   }
 
   fn transform_str_raw_templ(
     &mut self,
+    open: Token<'src>,
+    close: Token<'src>,
     children: Vec<Node<'src>>,
     loc: Loc,
   ) -> TransformResult<'src> {
     let children = self.transform_vec(children)?;
-    Ok(Node::new(NodeKind::StrRawTempl(children), loc))
+    Ok(Node::new(NodeKind::StrRawTempl { open, close, children }, loc))
   }
 
   fn transform_unary_op(

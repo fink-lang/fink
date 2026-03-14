@@ -160,7 +160,7 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     NodeKind::LitInt(s)  => (lit_val(g, Lit::Int(parse_int(s)), o), vec![]),
     NodeKind::LitFloat(s) => (lit_val(g, Lit::Float(parse_float(s)), o), vec![]),
     NodeKind::LitDecimal(s) => (lit_val(g, Lit::Decimal(parse_decimal(s)), o), vec![]),
-    NodeKind::LitStr(s) => (lit_val(g, Lit::Str(s), o), vec![]),
+    NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(s), o), vec![]),
 
     // ---- identifier reference — scope lookup ----
     NodeKind::Ident(_) => (name_ref_val(g, o), vec![]),
@@ -221,10 +221,10 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     NodeKind::LitRec { items: fields, .. } => lower_lit_rec(g, &fields.items, o),
 
     // ---- string template ----
-    NodeKind::StrTempl(parts) => lower_str_templ(g, parts, o),
+    NodeKind::StrTempl { children: parts, .. } => lower_str_templ(g, parts, o),
 
     // ---- raw string template (tagged) ----
-    NodeKind::StrRawTempl(parts) => lower_str_raw_templ(g, parts, o),
+    NodeKind::StrRawTempl { children: parts, .. } => lower_str_raw_templ(g, parts, o),
 
     // ---- match ----
     NodeKind::Match { subjects, arms, .. } => lower_match(g, subjects, &arms.items, o),
@@ -587,7 +587,7 @@ fn lower_chained_cmp<'src>(
         pending.extend(p);
         operands.push(val);
       }
-      CmpPart::Op(op) => ops.push(op),
+      CmpPart::Op(op) => ops.push(op.src),
     }
   }
 
@@ -1252,7 +1252,7 @@ fn lower_pat_lhs<'src>(
       pending.push(Pending::MatchValue { val: val.clone(), lit: Lit::Bool(*b),  origin });
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
-    NodeKind::LitStr(s) => {
+    NodeKind::LitStr { content: s, .. } => {
       pending.push(Pending::MatchValue { val: val.clone(), lit: Lit::Str(s),  origin });
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
@@ -1437,7 +1437,7 @@ fn lower_pat_lhs<'src>(
 
     // StrTempl in pattern position is deferred to a future version.
     // It needs a dedicated string-matching primitive (e.g. ·match_str_prefix) not yet designed.
-    NodeKind::StrTempl(_) => todo!("lower_pat_lhs: StrTempl pattern matching not yet implemented"),
+    NodeKind::StrTempl { .. } => todo!("lower_pat_lhs: StrTempl pattern matching not yet implemented"),
 
     _ => todo!("lower_pat_lhs: pattern not yet implemented: {:?}", lhs.kind),
   }

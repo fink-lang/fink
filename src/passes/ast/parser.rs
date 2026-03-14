@@ -735,11 +735,11 @@ impl<'src> Parser<'src> {
         if Self::is_cmp_op(self.peek()) {
           let mut parts = vec![
             CmpPart::Operand(lhs),
-            CmpPart::Op(first_op.src),
+            CmpPart::Op(first_op),
             CmpPart::Operand(first_rhs),
           ];
           while Self::is_cmp_op(self.peek()) {
-            let next_op = self.bump().src;
+            let next_op = self.bump();
             let next_rhs = self.parse_infix(r_bp)?;
             parts.push(CmpPart::Op(next_op));
             parts.push(CmpPart::Operand(next_rhs));
@@ -826,9 +826,9 @@ impl<'src> Parser<'src> {
         let first_op = self.bump();
         let first_rhs = self.parse_infix(r_bp)?;
         if Self::is_cmp_op(self.peek()) {
-          let mut parts = vec![CmpPart::Operand(lhs), CmpPart::Op(first_op.src), CmpPart::Operand(first_rhs)];
+          let mut parts = vec![CmpPart::Operand(lhs), CmpPart::Op(first_op), CmpPart::Operand(first_rhs)];
           while Self::is_cmp_op(self.peek()) {
-            let next_op = self.bump().src;
+            let next_op = self.bump();
             let next_rhs = self.parse_infix(r_bp)?;
             parts.push(CmpPart::Op(next_op));
             parts.push(CmpPart::Operand(next_rhs));
@@ -1006,38 +1006,49 @@ impl<'src> Parser<'src> {
     let start_tok = self.expect(TokenKind::StrStart)?;
     let start_loc = start_tok.loc;
     let mut parts: Vec<Node<'src>> = vec![];
+    // Track the open token for the next LitStr segment.
+    // First segment opens with StrStart; after interpolation, opens with StrExprEnd.
+    let mut next_open = start_tok;
 
     loop {
       match self.peek().kind {
         TokenKind::StrEnd => {
           let end_tok = self.bump();
+          // Close the last LitStr segment if present
+          self.close_lit_str(&mut parts, end_tok);
           let loc = Loc { start: start_loc.start, end: end_tok.loc.end };
           if !raw && parts.is_empty() {
-            return Ok(self.node(NodeKind::LitStr(String::new()), loc));
+            return Ok(self.node(NodeKind::LitStr { open: start_tok, close: end_tok, content: String::new() }, loc));
           }
           if !raw && parts.len() == 1 {
-            if let NodeKind::LitStr(_) = &parts[0].kind {
+            if let NodeKind::LitStr { .. } = &parts[0].kind {
               let mut node = parts.remove(0);
               node.loc = loc;
               return Ok(node);
             }
           }
-          let kind = if raw { NodeKind::StrRawTempl(parts) } else { NodeKind::StrTempl(parts) };
+          let kind = if raw {
+            NodeKind::StrRawTempl { open: start_tok, close: end_tok, children: parts }
+          } else {
+            NodeKind::StrTempl { open: start_tok, close: end_tok, children: parts }
+          };
           return Ok(self.node(kind, loc));
         }
         TokenKind::StrText => {
           let t = self.bump();
           let text = t.src.to_string();
           // Merge consecutive StrText tokens into a single LitStr
-          if let Some(Node { kind: NodeKind::LitStr(prev), loc: prev_loc, .. }) = parts.last_mut() {
-            prev.push_str(&text);
+          if let Some(Node { kind: NodeKind::LitStr { content, .. }, loc: prev_loc, .. }) = parts.last_mut() {
+            content.push_str(&text);
             prev_loc.end = t.loc.end;
           } else {
-            parts.push(self.node(NodeKind::LitStr(text), t.loc));
+            parts.push(self.node(NodeKind::LitStr { open: next_open, close: next_open, content: text }, t.loc));
           }
         }
         TokenKind::StrExprStart => {
-          self.bump();
+          let expr_start = self.bump();
+          // Close the last LitStr segment if present
+          self.close_lit_str(&mut parts, expr_start);
           // Inside string interpolation: parse a full expression
           // But spread inside string is special: `..rest` in StrTempl
           let expr = if self.at(TokenKind::Sep) && self.peek().src == ".." {
@@ -1045,8 +1056,9 @@ impl<'src> Parser<'src> {
           } else {
             self.parse_expr()?
           };
-          self.expect(TokenKind::StrExprEnd)?;
+          let expr_end = self.expect(TokenKind::StrExprEnd)?;
           parts.push(expr);
+          next_open = expr_end;
         }
         _ => {
           return Err(ParseError {
@@ -1055,6 +1067,13 @@ impl<'src> Parser<'src> {
           });
         }
       }
+    }
+  }
+
+  /// Set the `close` token on the last LitStr in `parts`, if the last element is a LitStr.
+  fn close_lit_str(&self, parts: &mut [Node<'src>], close: Token<'src>) {
+    if let Some(Node { kind: NodeKind::LitStr { close: c, .. }, .. }) = parts.last_mut() {
+      *c = close;
     }
   }
 
@@ -1568,7 +1587,7 @@ mod tests {
     // LitStr must store raw source bytes — no rendering at parse time.
     use crate::ast::NodeKind;
     let r = super::parse_with_blocks(r"'\n\t\\'", &["test_block"]).unwrap();
-    let NodeKind::LitStr(s) = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
+    let NodeKind::LitStr { content: s, .. } = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
     assert_eq!(*s, r"\n\t\\");
   }
 
@@ -1581,7 +1600,7 @@ mod tests {
   \t
 '"#;
     let r = super::parse_with_blocks(src, &["test_block"]).unwrap();
-    let NodeKind::LitStr(s) = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
+    let NodeKind::LitStr { content: s, .. } = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
     assert_eq!(*s, "\n\\n\n\\t\n");
   }
 
