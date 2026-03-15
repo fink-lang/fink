@@ -50,7 +50,7 @@ test 'captured binding becomes leading param', fn:
 
   | equals fink":
     ·fn
-      fn ·v_20, b:
+      fn a, b:
         ·apply ·op_plus, a, b, ·state, fn ·v_6, ·state:
           ·ƒ_cont ·v_6, ·state
       fn ·v_22:

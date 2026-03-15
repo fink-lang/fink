@@ -99,10 +99,11 @@ pub fn lift<'src>(
   result: CpsResult<'src>,
   resolve: &ResolveResult,
   captures: &CaptureGraph<'src>,
+  ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
 ) -> CpsResult<'src> {
   let mut alloc = Alloc::new(result.origin);
   let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
-  let new_root = lift_expr(result.root, captures, resolve, &mut alloc, &mut hoisted);
+  let new_root = lift_expr(result.root, captures, resolve, ast_index, &mut alloc, &mut hoisted);
   // Any fns still pending after the root are wrapped at the top.
   let new_root = wrap_hoisted(new_root, hoisted, &mut alloc);
   CpsResult { root: new_root, origin: alloc.origin }
@@ -236,9 +237,37 @@ fn scan_val(
 ) {
   if let ValKind::Ref(Ref::Name) = &val.kind {
     if let Some(Some(Resolution::Captured { bind, .. })) = resolve.resolution.try_get(val.id) {
+      // bind → bind: we just want the set of captured bind CpsIds
       out.entry(*bind).or_insert(*bind);
     }
   }
+}
+
+/// Look up the bind CpsId for a captured name by scanning the fn body.
+/// Returns the bind CpsId whose source name (via origin map + AST) matches `name`.
+fn find_bind_for_capture<'src>(
+  fn_body: &Expr<'src>,
+  cap_name: &str,
+  resolve: &ResolveResult,
+  origin: &PropGraph<CpsId, Option<crate::ast::AstId>>,
+  ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
+) -> Option<CpsId> {
+  let mut found: Option<CpsId> = None;
+  let mut map = std::collections::HashMap::new();
+  collect_bind_ids(fn_body, resolve, &mut map);
+  for &bind_id in map.keys() {
+    if let Some(Some(ast_id)) = origin.try_get(bind_id) {
+      if let Some(Some(node)) = ast_index.try_get(*ast_id) {
+        if let crate::ast::NodeKind::Ident(s) = &node.kind {
+          if *s == cap_name {
+            found = Some(bind_id);
+            break;
+          }
+        }
+      }
+    }
+  }
+  found
 }
 
 // ---------------------------------------------------------------------------
@@ -249,6 +278,7 @@ fn lift_expr<'src>(
   expr: Expr<'src>,
   captures: &CaptureGraph<'src>,
   resolve: &ResolveResult,
+  ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn<'src>>,
 ) -> Expr<'src> {
@@ -261,8 +291,8 @@ fn lift_expr<'src>(
 
       // Recurse into fn_body and body; collect their hoisted fns.
       let mut inner_hoisted: Vec<HoistedFn<'src>> = Vec::new();
-      let rewritten_fn_body = lift_expr(*fn_body, captures, resolve, alloc, &mut inner_hoisted);
-      let rewritten_body    = lift_expr(*body, captures, resolve, alloc, hoisted);
+      let rewritten_fn_body = lift_expr(*fn_body, captures, resolve, ast_index, alloc, &mut inner_hoisted);
+      let rewritten_body    = lift_expr(*body, captures, resolve, ast_index, alloc, hoisted);
 
       if caps.is_empty() {
         // Pure function — bubble hoisted fns from fn_body upward to the outer scope.
@@ -280,19 +310,28 @@ fn lift_expr<'src>(
       } else {
         // Closure — hoist this fn to the outer scope.
         //
-        // 1. Scan the original fn_body to find bind CpsIds for each capture.
-        let mut cap_bind_map: std::collections::HashMap<CpsId, CpsId> =
-          std::collections::HashMap::new();
-        collect_bind_ids(&rewritten_fn_body, resolve, &mut cap_bind_map);
+        // 1. For each capture name (in order), find its bind CpsId so we can
+        //    copy the AST origin. This keeps cap params and cap args in the
+        //    same order as caps and gives them correct source names.
+        let cap_bind_ids: Vec<Option<CpsId>> = caps.iter().map(|cap_name| {
+          find_bind_for_capture(&rewritten_fn_body, cap_name, resolve, &alloc.origin, ast_index)
+        }).collect();
 
-        // 2. Build Gen bind nodes for capture params — rendered as ·v_N.
-        let cap_binds: Vec<BindNode> = caps.iter().map(|_| alloc.gen_bind()).collect();
-        let cap_params: Vec<Param> = cap_binds.iter().map(|b| Param::Name(b.clone())).collect();
+        // 2. Build User bind nodes for capture params — carry forward the
+        //    original binding's AST origin so the formatter renders the source name.
+        let cap_params: Vec<Param> = cap_bind_ids.iter().map(|bind_id| {
+          let ast_origin = bind_id
+            .and_then(|id| alloc.origin.try_get(id))
+            .and_then(|o| *o);
+          Param::Name(alloc.bind(Bind::User, ast_origin))
+        }).collect();
 
-        // 3. Build Val refs for the capture args at the call site.
-        //    Use Ref::Name with AST origin copied from the original binding.
-        let cap_ref_vals: Vec<Val<'src>> = cap_bind_map.values().map(|&bind_id| {
-          let ast_origin = alloc.origin.try_get(bind_id).and_then(|o| *o);
+        // 3. Build Val refs for the capture args at the call site (outer scope).
+        //    Same AST origin as the binding — the formatter renders the source name.
+        let cap_ref_vals: Vec<Val<'src>> = cap_bind_ids.iter().map(|bind_id| {
+          let ast_origin = bind_id
+            .and_then(|id| alloc.origin.try_get(id))
+            .and_then(|o| *o);
           alloc.val(ValKind::Ref(Ref::Name), ast_origin)
         }).collect();
 
@@ -344,7 +383,7 @@ fn lift_expr<'src>(
       kind: LetVal {
         name,
         val,
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -354,7 +393,7 @@ fn lift_expr<'src>(
         func,
         args,
         result,
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -362,8 +401,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: If {
         cond,
-        then: Box::new(lift_expr(*then, captures, resolve, alloc, hoisted)),
-        else_: Box::new(lift_expr(*else_, captures, resolve, alloc, hoisted)),
+        then: Box::new(lift_expr(*then, captures, resolve, ast_index, alloc, hoisted)),
+        else_: Box::new(lift_expr(*else_, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -372,14 +411,14 @@ fn lift_expr<'src>(
       kind: Yield {
         value,
         result,
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
     LetRec { bindings, body } => {
       let new_bindings = bindings.into_iter().map(|b| {
         crate::passes::cps::ir::Binding {
-          fn_body: Box::new(lift_expr(*b.fn_body, captures, resolve, alloc, hoisted)),
+          fn_body: Box::new(lift_expr(*b.fn_body, captures, resolve, ast_index, alloc, hoisted)),
           ..b
         }
       }).collect();
@@ -387,7 +426,7 @@ fn lift_expr<'src>(
         id: expr.id,
         kind: LetRec {
           bindings: new_bindings,
-          body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+          body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
         },
       }
     }
@@ -396,8 +435,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchLetVal {
         name, val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -405,8 +444,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchApp {
         func, args, result,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -414,8 +453,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchIf {
         func, args,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -423,8 +462,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchValue {
         val, lit,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -432,8 +471,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchSeq {
         val, cursor,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -441,8 +480,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchNext {
         val, cursor, next_cursor, elem,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -450,8 +489,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchDone {
         val, cursor, result,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -459,8 +498,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchNotDone {
         val, cursor,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -468,8 +507,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchRest {
         val, cursor, result,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -477,8 +516,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchRec {
         val, cursor,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
@@ -486,14 +525,14 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: MatchField {
         val, cursor, next_cursor, field, elem,
-        fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
+        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
       },
     },
 
     MatchBlock { params, fail, arm_params, arms, result, body } => {
       let new_arms = arms.into_iter()
-        .map(|a| lift_expr(a, captures, resolve, alloc, hoisted))
+        .map(|a| lift_expr(a, captures, resolve, ast_index, alloc, hoisted))
         .collect();
       Expr {
         id: expr.id,
@@ -501,9 +540,9 @@ fn lift_expr<'src>(
           params,
           arm_params,
           result,
-          fail: Box::new(lift_expr(*fail, captures, resolve, alloc, hoisted)),
+          fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
           arms: new_arms,
-          body: Box::new(lift_expr(*body, captures, resolve, alloc, hoisted)),
+          body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
         },
       }
     }
@@ -538,7 +577,7 @@ mod tests {
         let node_count = cps.origin.len();
         let resolve_result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
         let cap_graph = analyse(&cps, &resolve_result, &ast_index);
-        let lifted = lift(cps, &resolve_result, &cap_graph);
+        let lifted = lift(cps, &resolve_result, &cap_graph, &ast_index);
         let ctx = Ctx {
           origin: &lifted.origin,
           ast_index: &ast_index,
