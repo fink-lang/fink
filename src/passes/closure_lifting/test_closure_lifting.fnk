@@ -1,0 +1,64 @@
+---
+closure lifting tests
+---
+
+# Closure lifting — rewrites closure LetFn nodes so captured values are
+# threaded as explicit leading params. After this pass no fn closes over
+# anything — all values are passed explicitly.
+#
+# Output: CPS IR with captures promoted to params.
+#   Before:  fn {cap: [x]}, b: <body>
+#   After:   fn ·v_N, b: <body>          — ·v_N is the hoisted capture param
+#
+# Call sites that pass the fn around must partially apply the captures first
+# via ·fn_closure.
+#
+# Test format:
+#   test 'name', fn:
+#     expect closure_lift fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected rewritten cps>
+
+
+---
+pure functions — unchanged
+---
+
+test 'pure fn is unchanged', fn:
+  expect closure_lift fink":
+    f = fn x: x
+
+  | equals fink":
+    ·fn
+      fn x: ·ƒ_cont x, ·state
+      fn ·v_0:
+        ·let ·v_0, fn f:
+          ·ƒ_cont f, ·state
+
+
+---
+closure lifting
+---
+
+test 'captured binding becomes leading param', fn:
+  expect closure_lift fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    ·fn
+      fn ·v_20, b:
+        ·apply ·op_plus, a, b, ·state, fn ·v_6, ·state:
+          ·ƒ_cont ·v_6, ·state
+      fn ·v_22:
+        ·fn
+          fn a:
+            ·apply ·fn_closure, ·v_22, a, ·state, fn ·v_24, ·state:
+              ·let ·v_24, fn ·v_2:
+                ·ƒ_cont ·v_2, ·state
+          fn ·v_0:
+            ·let ·v_0, fn foo:
+              ·ƒ_cont foo, ·state

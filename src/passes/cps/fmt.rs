@@ -255,6 +255,8 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::RecMerge  => "·rec_merge".into(),
     // String interpolation
     BuiltIn::StrFmt    => "·str_fmt".into(),
+    // Closure construction
+    BuiltIn::FnClosure => "·fn_closure".into(),
   }
 }
 

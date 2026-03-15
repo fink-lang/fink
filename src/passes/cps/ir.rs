@@ -130,6 +130,9 @@ pub enum BuiltIn {
   SeqAppend, SeqConcat, RecPut, RecMerge,
   // String interpolation
   StrFmt,
+  // Closure construction — partially applies a lifted fn with its captures.
+  // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
+  FnClosure,
 }
 
 impl BuiltIn {
