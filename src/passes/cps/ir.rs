@@ -130,6 +130,9 @@ pub enum BuiltIn {
   SeqAppend, SeqConcat, RecPut, RecMerge,
   // String interpolation
   StrFmt,
+  // Closure construction — partially applies a lifted fn with its captures.
+  // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
+  FnClosure,
 }
 
 impl BuiltIn {
@@ -260,7 +263,7 @@ pub enum ExprKind<'src> {
 
   /// Mutually recursive group — all names visible in all fn_bodies.
   /// Each binding: (name, params, fn_body).
-  /// Cross-refs not behind a fn boundary → ForwardRef error.
+  /// Cross-refs not behind a fn boundary → Unresolved or Captured with depth=0 (name error).
   LetRec {
     bindings: Vec<Binding<'src>>,
     body: Box<Expr<'src>>,

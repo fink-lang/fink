@@ -1,0 +1,162 @@
+---
+closure lifting tests
+---
+
+# Closure lifting — rewrites closure LetFn nodes so captured values are
+# threaded as explicit leading params. After this pass no fn closes over
+# anything — all values are passed explicitly.
+#
+# Rewrite per closure LetFn (non-empty captures):
+#   Before:  fn {cap: [x]}, b: <body>
+#   After:   fn x, b: <body>    — x promoted to leading param; fn hoisted to top
+#
+# Call sites use ·fn_closure to partially apply the hoisted fn with its captures.
+#
+# Test format:
+#   test 'name', fn:
+#     expect closure_lift fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected rewritten cps>
+
+
+---
+pure functions — unchanged
+---
+
+test 'pure fn is unchanged', fn:
+  expect closure_lift fink":
+    f = fn x: x
+
+  | equals fink":
+    ·fn
+      fn x: ·ƒ_cont x, ·state
+      fn ·v_0:
+        ·let ·v_0, fn f:
+          ·ƒ_cont f, ·state
+
+
+test 'pure nested fn — inner fn stays nested', fn:
+  expect closure_lift fink":
+    foo = fn a:
+      fn b: b
+
+  | equals fink":
+    ·fn
+      fn a:
+        ·fn
+          fn b: ·ƒ_cont b, ·state
+          fn ·v_2: ·ƒ_cont ·v_2, ·state
+      fn ·v_0:
+        ·let ·v_0, fn foo:
+          ·ƒ_cont foo, ·state
+
+
+---
+closure lifting
+---
+
+test 'captured binding becomes leading param', fn:
+  expect closure_lift fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    ·fn
+      fn a, b:
+        ·apply ·op_plus, a, b, ·state, fn ·v_6, ·state:
+          ·ƒ_cont ·v_6, ·state
+      fn ·v_22:
+        ·fn
+          fn a:
+            ·apply ·fn_closure, ·v_22, a, ·state, fn ·v_24, ·state:
+              ·let ·v_24, fn ·v_2:
+                ·ƒ_cont ·v_2, ·state
+          fn ·v_0:
+            ·let ·v_0, fn foo:
+              ·ƒ_cont foo, ·state
+
+
+test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
+  expect closure_lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b + c
+
+  | equals fink":
+    ·fn
+      fn a, b, c:
+        ·apply ·op_plus, a, b, ·state, fn ·v_8, ·state:
+          ·apply ·op_plus, ·v_8, c, ·state, fn ·v_11, ·state:
+            ·ƒ_cont ·v_11, ·state
+      fn ·v_33:
+        ·fn
+          fn a:
+            ·fn
+              fn b:
+                ·apply ·fn_closure, ·v_33, a, b, ·state, fn ·v_35, ·state:
+                  ·let ·v_35, fn ·v_4:
+                    ·ƒ_cont ·v_4, ·state
+              fn ·v_2: ·ƒ_cont ·v_2, ·state
+          fn ·v_0:
+            ·let ·v_0, fn foo:
+              ·ƒ_cont foo, ·state
+
+
+test 'multiple captures — all captured vars become leading params', fn:
+  expect closure_lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b
+
+  | equals fink":
+    ·fn
+      fn a, b, c:
+        ·apply ·op_plus, a, b, ·state, fn ·v_8, ·state:
+          ·ƒ_cont ·v_8, ·state
+      fn ·v_29:
+        ·fn
+          fn a:
+            ·fn
+              fn b:
+                ·apply ·fn_closure, ·v_29, a, b, ·state, fn ·v_31, ·state:
+                  ·let ·v_31, fn ·v_4:
+                    ·ƒ_cont ·v_4, ·state
+              fn ·v_2: ·ƒ_cont ·v_2, ·state
+          fn ·v_0:
+            ·let ·v_0, fn foo:
+              ·ƒ_cont foo, ·state
+
+
+test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
+  expect closure_lift fink":
+    f = fn x: x
+    g = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    ·fn
+      fn a, b:
+        ·apply ·op_plus, a, b, ·state, fn ·v_13, ·state:
+          ·ƒ_cont ·v_13, ·state
+      fn ·v_35:
+        ·fn
+          fn:
+            ·fn
+              fn x: ·ƒ_cont x, ·state
+              fn ·v_1:
+                ·let ·v_1, fn f:
+                  ·fn
+                    fn a:
+                      ·apply ·fn_closure, ·v_35, a, ·state, fn ·v_37, ·state:
+                        ·let ·v_37, fn ·v_9:
+                          ·ƒ_cont ·v_9, ·state
+                    fn ·v_7:
+                      ·let ·v_7, fn g:
+                        ·ƒ_cont g, ·state
+          fn ·v_0: ·ƒ_cont ·v_0, ·state
