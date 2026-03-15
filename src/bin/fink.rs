@@ -58,6 +58,7 @@ fn main() {
           let ctx = fink::passes::cps::fmt::Ctx {
             origin: &cps.origin,
             ast_index: &ast_index,
+            captures: None,
           };
           println!("{}", fink::passes::cps::fmt::fmt_with(&cps.root, &ctx));
         }

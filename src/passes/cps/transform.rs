@@ -1517,7 +1517,7 @@ mod cps_tests {
       Ok(r) => {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
       }
       Err(e) => format!("ERROR: {}", e.message),
@@ -1540,7 +1540,7 @@ mod pat_tests {
       Ok(r) => {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
       }
       Err(e) => format!("ERROR: {}", e.message),

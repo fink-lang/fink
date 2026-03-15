@@ -21,6 +21,9 @@ use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, CpsId, Expr, ExprKind, R
 pub struct Ctx<'a, 'src> {
   pub origin: &'a PropGraph<CpsId, Option<AstId>>,
   pub ast_index: &'a PropGraph<AstId, Option<&'src Node<'src>>>,
+  /// Optional capture graph — when present, LetFn nodes that are closures
+  /// render with a leading `{cap: [x, y]}` param.
+  pub captures: Option<&'a PropGraph<CpsId, Vec<&'src str>>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -300,12 +303,27 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 
     ExprKind::LetFn { name, params, fn_body, body, .. } => {
       let plain_name = render_bind_ctx(name, ctx);
-      let fn_params: Vec<Node<'static>> = params.iter()
+      let mut fn_params: Vec<Node<'static>> = params.iter()
         .map(|p| match p {
           Param::Name(n) => ident(&render_bind_ctx(n, ctx)),
           Param::Spread(n) => spread_node(ident(&render_bind_ctx(n, ctx))),
         })
         .collect();
+
+      // If a capture graph is provided and this LetFn has captures, prepend
+      // a `{cap: [x, y]}` record literal to the param list.
+      // If a capture graph is provided and this LetFn has captures, prepend
+      // a `{cap: [x, y]}` annotation ident to the param list.
+      if let Some(cap_graph) = ctx.captures {
+        if let Some(caps) = cap_graph.try_get(name.id) {
+          if !caps.is_empty() {
+            let inner = caps.join(", ");
+            let label = format!("{{cap: [{}]}}", inner);
+            fn_params.insert(0, ident(&label));
+          }
+        }
+      }
+
       apply(ident("·fn"), vec![
         fn_node(patterns(fn_params), vec![to_node(fn_body, ctx)]),
         fn_node(
@@ -482,7 +500,7 @@ fn to_node_no_ctx(expr: &Expr<'_>) -> Node<'static> {
   // Build empty prop graphs as a dummy context.
   let origin: PropGraph<CpsId, Option<AstId>> = PropGraph::new();
   let ast_index: PropGraph<AstId, Option<&Node<'_>>> = PropGraph::new();
-  let ctx = Ctx { origin: &origin, ast_index: &ast_index };
+  let ctx = Ctx { origin: &origin, ast_index: &ast_index, captures: None };
   to_node(expr, &ctx)
 }
 
