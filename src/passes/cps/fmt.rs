@@ -316,14 +316,13 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       // a `{cap: [x, y]}` record literal to the param list.
       // If a capture graph is provided and this LetFn has captures, prepend
       // a `{cap: [x, y]}` annotation ident to the param list.
-      if let Some(cap_graph) = ctx.captures {
-        if let Some(caps) = cap_graph.try_get(name.id) {
-          if !caps.is_empty() {
-            let inner = caps.join(", ");
-            let label = format!("{{cap: [{}]}}", inner);
-            fn_params.insert(0, ident(&label));
-          }
-        }
+      if let Some(cap_graph) = ctx.captures
+        && let Some(caps) = cap_graph.try_get(name.id)
+        && !caps.is_empty()
+      {
+        let inner = caps.join(", ");
+        let label = format!("{{cap: [{}]}}", inner);
+        fn_params.insert(0, ident(&label));
       }
 
       apply(ident("·fn"), vec![

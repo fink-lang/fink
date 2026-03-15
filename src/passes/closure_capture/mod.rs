@@ -71,19 +71,17 @@ fn collect_val<'src>(
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   captures: &mut Vec<&'src str>,
 ) {
-  if let ValKind::Ref(Ref::Name) = &val.kind {
-    if let Some(Resolution::Captured { depth, bind }) =
+  if let ValKind::Ref(Ref::Name) = &val.kind
+    && let Some(Resolution::Captured { depth, bind }) =
       resolve.resolution.try_get(val.id).and_then(|r| r.as_ref())
+  {
+    // Any Captured ref seen in the fn body (with nested fn bodies skipped by
+    // collect_captured_in_body) is directly captured by this fn.
+    if *depth >= 1
+      && let Some(name) = source_name(*bind, origin, ast_index)
+      && !captures.contains(&name)
     {
-      // Any Captured ref seen in the fn body (with nested fn bodies skipped by
-      // collect_captured_in_body) is directly captured by this fn.
-      if *depth >= 1 {
-        if let Some(name) = source_name(*bind, origin, ast_index) {
-          if !captures.contains(&name) {
-            captures.push(name);
-          }
-        }
-      }
+      captures.push(name);
     }
   }
 }
@@ -227,6 +225,7 @@ fn collect_captured_in_body<'src>(
 
 /// Walk the full IR, registering captures for every LetFn.
 /// `fn_depth` is the absolute fn nesting depth at this point (0 = module root).
+#[allow(clippy::only_used_in_recursion)]
 fn collect_expr<'src>(
   expr: &Expr<'src>,
   resolve: &ResolveResult,

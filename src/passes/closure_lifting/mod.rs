@@ -235,11 +235,11 @@ fn scan_val(
   resolve: &ResolveResult,
   out: &mut std::collections::HashMap<CpsId, CpsId>,
 ) {
-  if let ValKind::Ref(Ref::Name) = &val.kind {
-    if let Some(Some(Resolution::Captured { bind, .. })) = resolve.resolution.try_get(val.id) {
-      // bind → bind: we just want the set of captured bind CpsIds
-      out.entry(*bind).or_insert(*bind);
-    }
+  if let ValKind::Ref(Ref::Name) = &val.kind
+    && let Some(Some(Resolution::Captured { bind, .. })) = resolve.resolution.try_get(val.id)
+  {
+    // bind → bind: we just want the set of captured bind CpsIds
+    out.entry(*bind).or_insert(*bind);
   }
 }
 
@@ -256,15 +256,13 @@ fn find_bind_for_capture<'src>(
   let mut map = std::collections::HashMap::new();
   collect_bind_ids(fn_body, resolve, &mut map);
   for &bind_id in map.keys() {
-    if let Some(Some(ast_id)) = origin.try_get(bind_id) {
-      if let Some(Some(node)) = ast_index.try_get(*ast_id) {
-        if let crate::ast::NodeKind::Ident(s) = &node.kind {
-          if *s == cap_name {
-            found = Some(bind_id);
-            break;
-          }
-        }
-      }
+    if let Some(Some(ast_id)) = origin.try_get(bind_id)
+      && let Some(Some(node)) = ast_index.try_get(*ast_id)
+      && let crate::ast::NodeKind::Ident(s) = &node.kind
+      && *s == cap_name
+    {
+      found = Some(bind_id);
+      break;
     }
   }
   found
