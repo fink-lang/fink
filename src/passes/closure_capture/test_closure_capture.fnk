@@ -90,6 +90,49 @@ test 'mutual recursion — each fn captures the other', fn:
 
 
 ---
+depth-2 captures
+---
+
+test 'depth-2 capture — fn b directly uses x, fn a does not', fn:
+  expect closure_capture fink":
+    x = 1
+    fn a:
+      fn b:
+        x
+
+  | equals fink":
+    ·fn
+      fn:
+        ·let 1, fn x:
+          ·fn
+            fn a:
+              ·fn
+                fn {cap: [x]}, b: ·ƒ_cont x, ·state
+                fn ·v_5: ·ƒ_cont ·v_5, ·state
+            fn ·v_3: ·ƒ_cont ·v_3, ·state
+      fn ·v_0: ·ƒ_cont ·v_0, ·state
+
+test 'multiple captures', fn:
+  expect closure_capture fink":
+    x = 1
+    y = 2
+    fn a:
+      x + y
+
+  | equals fink":
+    ·fn
+      fn:
+        ·let 1, fn x:
+          ·let 2, fn y:
+            ·fn
+              fn {cap: [x, y]}, a:
+                ·apply ·op_plus, x, y, ·state, fn ·v_9, ·state:
+                  ·ƒ_cont ·v_9, ·state
+              fn ·v_5: ·ƒ_cont ·v_5, ·state
+      fn ·v_0: ·ƒ_cont ·v_0, ·state
+
+
+---
 simple captures
 ---
 
