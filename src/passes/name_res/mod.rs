@@ -62,6 +62,19 @@ pub struct ResolveResult {
   pub parent_scope: PropGraph<CpsId, Option<CpsId>>,
 }
 
+impl ResolveResult {
+  /// Returns true if any ref in this result resolves as `Captured`.
+  /// Used by `lift_all` to decide whether another lifting pass is needed.
+  pub fn any_captured(&self) -> bool {
+    (0..self.resolution.len()).any(|i| {
+      matches!(
+        self.resolution.try_get(CpsId(i as u32)),
+        Some(Some(Resolution::Captured { .. }))
+      )
+    })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Name lookup context
 // ---------------------------------------------------------------------------

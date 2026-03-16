@@ -1,0 +1,74 @@
+---
+name resolution after closure lifting
+---
+
+# After closure lifting, name resolution is re-run on the lifted CPS IR.
+# Key invariants:
+#   - Former captures are now leading params → resolve as `local`
+#   - No `captured` refs remain in the lifted output
+#   - Hoisted fn names resolve as `local` at module scope
+#   - Pure fns are unchanged
+#
+# Test format:
+#   test 'name', fn:
+#     expect closure_lift_resolve fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected classified resolution>
+
+
+---
+pure fn — unchanged
+---
+
+test 'pure fn params resolve as local', fn:
+  expect closure_lift_resolve fink":
+    f = fn x: x
+
+  | equals fink":
+    (ref 2, x) == (local (bind 1, x)) in scope 0
+    (ref 6, f) == (local (bind 5, f)) in scope 10
+
+
+---
+simple closure — capture becomes leading param
+---
+
+test 'captured var resolves as local after lift', fn:
+  expect closure_lift_resolve fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    (ref 4, a) == (local (bind 20, a)) in scope 22
+    (ref 5, b) == (local (bind 3, b)) in scope 22
+    (ref 21, a) == (local (bind 1, a)) in scope 0
+    (ref 15, foo) == (local (bind 14, foo)) in scope 27
+
+
+---
+depth-2 closure — all captures become leading params
+---
+
+# BUG: `a` in the innermost fn still resolves as `captured` after lifting.
+# After lifting, `a` and `b` should both be leading params of the hoisted fn
+# and resolve as `local`. Fix: re-run closure lifting until no captured refs remain,
+# or fix the lifting pass to handle depth > 1 captures in a single pass.
+
+test 'depth-2: all captured vars resolve as local after lift', fn:
+  expect closure_lift_resolve fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b + c
+
+  | equals fink":
+    (ref 31, a) == (local (bind 39, a)) in scope 41
+    (ref 32, b) == (local (bind 3, b)) in scope 41
+    (ref 6, a) == (local (bind 29, a)) in scope 33
+    (ref 7, b) == (local (bind 30, b)) in scope 33
+    (ref 10, c) == (local (bind 5, c)) in scope 33
+    (ref 40, a) == (local (bind 1, a)) in scope 0
+    (ref 24, foo) == (local (bind 23, foo)) in scope 46

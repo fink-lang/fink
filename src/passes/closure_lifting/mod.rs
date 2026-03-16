@@ -94,8 +94,9 @@ struct HoistedFn<'src> {
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/// Rewrite all closure LetFn nodes to take their captures as explicit params.
-pub fn lift<'src>(
+/// Single lifting pass: rewrite all closure LetFn nodes found in `result`
+/// to take their captures as explicit params.
+fn lift_once<'src>(
   result: CpsResult<'src>,
   resolve: &ResolveResult,
   captures: &CaptureGraph<'src>,
@@ -104,9 +105,38 @@ pub fn lift<'src>(
   let mut alloc = Alloc::new(result.origin);
   let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
   let new_root = lift_expr(result.root, captures, resolve, ast_index, &mut alloc, &mut hoisted);
-  // Any fns still pending after the root are wrapped at the top.
   let new_root = wrap_hoisted(new_root, hoisted, &mut alloc);
   CpsResult { root: new_root, origin: alloc.origin }
+}
+
+/// Returns true if any ref in the IR still resolves as `Captured`.
+/// Scans the resolution prop graph directly — O(n) in node count, no tree walk.
+fn has_captures(resolve: &ResolveResult) -> bool {
+  resolve.any_captured()
+}
+
+/// Run lifting until no `Captured` refs remain, then return the lifted IR
+/// together with the final name resolution result.
+///
+/// After this call the caller has a capture-free CPS IR and an up-to-date
+/// `ResolveResult` — no further name resolution pass is needed before codegen.
+pub fn lift_all<'src>(
+  cps: CpsResult<'src>,
+  ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
+) -> (CpsResult<'src>, ResolveResult) {
+  use crate::passes::closure_capture::analyse;
+  use crate::passes::name_res::resolve;
+
+  let mut current = cps;
+  loop {
+    let node_count = current.origin.len();
+    let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count);
+    if !has_captures(&resolve_result) {
+      return (current, resolve_result);
+    }
+    let cap_graph = analyse(&current, &resolve_result, ast_index);
+    current = lift_once(current, &resolve_result, &cap_graph, ast_index);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -557,25 +587,25 @@ fn lift_expr<'src>(
 mod tests {
   use test_macros::include_fink_tests;
 
+  use crate::ast::{build_index, NodeKind};
   use crate::parser::parse;
-  use crate::ast::build_index;
-  use crate::passes::cps::transform::lower_expr;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
-  use crate::passes::name_res::resolve;
-  use crate::passes::closure_capture::analyse;
-  use super::lift;
+  use crate::passes::cps::ir::{Arg, Callable, Expr, ExprKind, Val, ValKind, Ref};
+  use crate::passes::name_res::{Resolution, ResolveResult};
+  use crate::passes::cps::transform::lower_expr;
+  use crate::propgraph::PropGraph;
+  use crate::ast::{AstId, Node as AstNode};
+  use crate::passes::cps::ir::CpsId;
+  use super::lift_all;
 
-  /// Run the full pipeline (parse → CPS → name_res → capture → lift) on `src`
-  /// and return the rewritten CPS IR.
+  /// Run the full pipeline (parse → CPS → lift_all) on `src` and return the
+  /// rewritten CPS IR formatted as Fink source.
   fn closure_lift(src: &str) -> String {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
-        let node_count = cps.origin.len();
-        let resolve_result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
-        let cap_graph = analyse(&cps, &resolve_result, &ast_index);
-        let lifted = lift(cps, &resolve_result, &cap_graph, &ast_index);
+        let (lifted, _) = lift_all(cps, &ast_index);
         let ctx = Ctx {
           origin: &lifted.origin,
           ast_index: &ast_index,
@@ -587,5 +617,204 @@ mod tests {
     }
   }
 
+  /// Run the full pipeline then return the final name resolution result
+  /// as classified resolution lines (same format as `cps_resolve` tests).
+  fn closure_lift_resolve(src: &str) -> String {
+    match parse(src) {
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let cps = lower_expr(&r.root);
+        let (lifted, lifted_resolve) = lift_all(cps, &ast_index);
+        fmt_classified(&lifted.root, &lifted_resolve, &lifted.origin, &ast_index)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Resolution formatter — duplicated from name_res tests (private there)
+  // ---------------------------------------------------------------------------
+
+  fn source_name<'src>(
+    cps_id: CpsId,
+    origin: &PropGraph<CpsId, Option<AstId>>,
+    ast_index: &PropGraph<AstId, Option<&'src AstNode<'src>>>,
+  ) -> Option<&'src str> {
+    let ast_id = (*origin.try_get(cps_id)?)?;
+    let node = (*ast_index.try_get(ast_id)?)?;
+    match &node.kind {
+      NodeKind::Ident(s) => Some(s),
+      _ => None,
+    }
+  }
+
+  fn emit_val<'src>(
+    val: &Val<'src>,
+    result: &ResolveResult,
+    origin: &PropGraph<CpsId, Option<AstId>>,
+    ast_index: &PropGraph<AstId, Option<&'src AstNode<'src>>>,
+    out: &mut Vec<String>,
+  ) {
+    if let ValKind::Ref(Ref::Name) = &val.kind {
+      let ref_name = source_name(val.id, origin, ast_index).unwrap_or("?");
+      match result.resolution.try_get(val.id) {
+        Some(Some(Resolution::Local(bind_id))) => {
+          let bind_name = source_name(*bind_id, origin, ast_index).unwrap_or("?");
+          let scope = result.bind_scope.try_get(*bind_id)
+            .and_then(|s| *s).map(|s| s.0).unwrap_or(0);
+          out.push(format!(
+            "(ref {}, {}) == (local (bind {}, {})) in scope {}",
+            val.id.0, ref_name, bind_id.0, bind_name, scope
+          ));
+        }
+        Some(Some(Resolution::Captured { bind, depth })) => {
+          let bind_name = source_name(*bind, origin, ast_index).unwrap_or("?");
+          let scope = result.bind_scope.try_get(*bind)
+            .and_then(|s| *s).map(|s| s.0).unwrap_or(0);
+          out.push(format!(
+            "(ref {}, {}) == (captured {}, (bind {}, {})) in scope {}",
+            val.id.0, ref_name, depth, bind.0, bind_name, scope
+          ));
+        }
+        Some(Some(Resolution::Recursive(bind_id))) => {
+          let bind_name = source_name(*bind_id, origin, ast_index).unwrap_or("?");
+          let scope = result.bind_scope.try_get(*bind_id)
+            .and_then(|s| *s).map(|s| s.0).unwrap_or(0);
+          out.push(format!(
+            "(ref {}, {}) == (recursive (bind {}, {})) in scope {}",
+            val.id.0, ref_name, bind_id.0, bind_name, scope
+          ));
+        }
+        Some(Some(Resolution::Unresolved)) | Some(None) | None => {
+          out.push(format!("(ref {}, {}) == unresolved", val.id.0, ref_name));
+        }
+      }
+    }
+  }
+
+  fn emit_callable<'src>(
+    callable: &Callable<'src>,
+    result: &ResolveResult,
+    origin: &PropGraph<CpsId, Option<AstId>>,
+    ast_index: &PropGraph<AstId, Option<&'src AstNode<'src>>>,
+    out: &mut Vec<String>,
+  ) {
+    if let Callable::Val(val) = callable {
+      emit_val(val, result, origin, ast_index, out);
+    }
+  }
+
+  fn collect_lines<'src>(
+    expr: &Expr<'src>,
+    result: &ResolveResult,
+    origin: &PropGraph<CpsId, Option<AstId>>,
+    ast_index: &PropGraph<AstId, Option<&'src AstNode<'src>>>,
+    out: &mut Vec<String>,
+  ) {
+    use ExprKind::*;
+    match &expr.kind {
+      Ret(val) => { emit_val(val, result, origin, ast_index, out); }
+      LetVal { val, body, .. } => {
+        emit_val(val, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      LetFn { fn_body, body, .. } => {
+        collect_lines(fn_body, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      LetRec { bindings, body } => {
+        for b in bindings { collect_lines(&b.fn_body, result, origin, ast_index, out); }
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      App { func, args, body, .. } => {
+        emit_callable(func, result, origin, ast_index, out);
+        for arg in args {
+          match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out) }
+        }
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      If { cond, then, else_ } => {
+        emit_val(cond, result, origin, ast_index, out);
+        collect_lines(then, result, origin, ast_index, out);
+        collect_lines(else_, result, origin, ast_index, out);
+      }
+      Yield { value, body, .. } => {
+        emit_val(value, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchLetVal { val, fail, body, .. } => {
+        emit_val(val, result, origin, ast_index, out);
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchApp { func, args, fail, body, .. } => {
+        emit_callable(func, result, origin, ast_index, out);
+        for v in args { emit_val(v, result, origin, ast_index, out); }
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchIf { func, args, fail, body } => {
+        emit_callable(func, result, origin, ast_index, out);
+        for v in args { emit_val(v, result, origin, ast_index, out); }
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchValue { val, fail, body, .. } => {
+        emit_val(val, result, origin, ast_index, out);
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchSeq { val, fail, body, .. } => {
+        emit_val(val, result, origin, ast_index, out);
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchNext { fail, body, .. } => {
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchDone { fail, body, .. } => {
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchNotDone { fail, body, .. } => {
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchRest { fail, body, .. } => {
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchRec { val, fail, body, .. } => {
+        emit_val(val, result, origin, ast_index, out);
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchField { fail, body, .. } => {
+        collect_lines(fail, result, origin, ast_index, out);
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      MatchBlock { params, fail, arms, body, .. } => {
+        for v in params { emit_val(v, result, origin, ast_index, out); }
+        collect_lines(fail, result, origin, ast_index, out);
+        for arm in arms { collect_lines(arm, result, origin, ast_index, out); }
+        collect_lines(body, result, origin, ast_index, out);
+      }
+      Panic | FailCont => {}
+    }
+  }
+
+  fn fmt_classified<'src>(
+    expr: &Expr<'src>,
+    result: &ResolveResult,
+    origin: &PropGraph<CpsId, Option<AstId>>,
+    ast_index: &PropGraph<AstId, Option<&'src AstNode<'src>>>,
+  ) -> String {
+    let mut lines = Vec::new();
+    collect_lines(expr, result, origin, ast_index, &mut lines);
+    lines.join("\n")
+  }
+
   include_fink_tests!("src/passes/closure_lifting/test_closure_lifting.fnk");
+  include_fink_tests!("src/passes/closure_lifting/test_closure_lift_resolve.fnk");
 }
