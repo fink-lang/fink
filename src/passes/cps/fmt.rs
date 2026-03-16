@@ -118,20 +118,20 @@ fn fn_node(params: Node<'static>, body: Vec<Node<'static>>) -> Node<'static> {
   node(NodeKind::Fn { params: Box::new(params), sep: dummy_tok(), body: exprs(body) })
 }
 
-/// `fn ·state: body` — state-only continuation (used in ·if branches).
+/// `fn: body` — state-only continuation (used in ·if branches).
 fn state_fn(body: Node<'static>) -> Node<'static> {
-  fn_node(patterns(vec![ident("·state")]), vec![body])
+  fn_node(patterns(vec![]), vec![body])
 }
 
-/// `fn name, ·state: body` — result continuation (used in ·apply and ·match_block).
+/// `fn name: body` — result continuation (used in ·apply and ·match_block).
 fn result_cont(name: &str, body: Node<'static>) -> Node<'static> {
-  fn_node(patterns(vec![ident(name), ident("·state")]), vec![body])
+  fn_node(patterns(vec![ident(name)]), vec![body])
 }
 
-/// `·yield value, ·state, fn result, ·state: body` — yield suspension point.
+/// `·yield value, fn result: body` — yield suspension point.
 fn fmt_yield(value: &Val<'_>, result: &BindNode, body: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   let cont = result_cont(&render_bind_ctx(result, ctx), to_node(body, ctx));
-  apply(ident("·yield"), vec![val_to_node(value, ctx), ident("·state"), cont])
+  apply(ident("·yield"), vec![val_to_node(value, ctx), cont])
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +265,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::Yield { value, result, body } => fmt_yield(value, result, body, ctx),
 
     ExprKind::Ret(val) => {
-      apply(ident("·ƒ_cont"), vec![val_to_node(val, ctx), ident("·state")])
+      apply(ident("·ƒ_cont"), vec![val_to_node(val, ctx)])
     }
 
     ExprKind::Panic => ident("·panic"),
@@ -274,7 +274,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::MatchBlock { params, arm_params, fail, arms, result, body } => {
       let result_plain = render_bind_ctx(result, ctx);
       let result_fn = fn_node(
-        patterns(vec![ident(&result_plain), ident("·state")]),
+        patterns(vec![ident(&result_plain)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -282,12 +282,11 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         let mut fn_params: Vec<Node<'static>> = arm_params.iter()
           .map(|p| ident(&render_bind_ctx(p, ctx)))
           .collect();
-        fn_params.extend([ident("·state"), ident("·ƒ_cont"), ident("·ƒ_fail")]);
+        fn_params.extend([ident("·ƒ_cont"), ident("·ƒ_fail")]);
         fn_node(patterns(fn_params), vec![to_node(arm, ctx)])
       }).collect();
       let mut args: Vec<Node<'static>> = params.iter().map(|v| val_to_node(v, ctx)).collect();
       args.push(fail_node);
-      args.push(ident("·state"));
       args.extend(arm_nodes.iter().map(|n| {
         apply(ident("·match_branch"), vec![n.clone()])
       }));
@@ -347,7 +346,6 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       };
       let mut apply_args: Vec<Node<'static>> = vec![func_node];
       apply_args.extend(arg_nodes);
-      apply_args.push(ident("·state"));
       apply_args.push(result_fn);
       apply(ident("·apply"), apply_args)
     }
@@ -373,7 +371,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::MatchApp { func, args, fail, result, body } => {
       let result_str = render_bind_ctx(result, ctx);
       let cont = fn_node(
-        patterns(vec![ident(&result_str), ident("·state")]),
+        patterns(vec![ident(&result_str)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -390,7 +388,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 
     ExprKind::MatchIf { func, args, fail, body } => {
       let cont = fn_node(
-        patterns(vec![ident("·state")]),
+        patterns(vec![]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -407,7 +405,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 
     ExprKind::MatchValue { val, lit, fail, body } => {
       let cont = fn_node(
-        patterns(vec![ident("·state")]),
+        patterns(vec![]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -417,7 +415,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::MatchSeq { val, cursor, fail, body } => {
       let cursor_name = cursor_name(*cursor);
       let cont = fn_node(
-        patterns(vec![ident(&cursor_name), ident("·state")]),
+        patterns(vec![ident(&cursor_name)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -429,7 +427,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let next = cursor_name(*next_cursor);
       let elem_str = render_bind_ctx(elem, ctx);
       let cont = fn_node(
-        patterns(vec![ident(&elem_str), ident(&next), ident("·state")]),
+        patterns(vec![ident(&elem_str), ident(&next)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -440,7 +438,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let cur = cursor_name(*cursor);
       let result_str = render_bind_ctx(result, ctx);
       let cont = fn_node(
-        patterns(vec![ident(&result_str), ident("·state")]),
+        patterns(vec![ident(&result_str)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -450,7 +448,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::MatchNotDone { cursor, fail, body, .. } => {
       let cur = cursor_name(*cursor);
       let cont = fn_node(
-        patterns(vec![ident("·state")]),
+        patterns(vec![]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -461,7 +459,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let cur = cursor_name(*cursor);
       let result_str = render_bind_ctx(result, ctx);
       let cont = fn_node(
-        patterns(vec![ident(&result_str), ident("·state")]),
+        patterns(vec![ident(&result_str)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -471,7 +469,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::MatchRec { val, cursor, fail, body } => {
       let rec_name = cursor_name(*cursor);
       let cont = fn_node(
-        patterns(vec![ident(&rec_name), ident("·state")]),
+        patterns(vec![ident(&rec_name)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
@@ -483,7 +481,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let next = cursor_name(*next_cursor);
       let elem_str = render_bind_ctx(elem, ctx);
       let cont = fn_node(
-        patterns(vec![ident(&elem_str), ident(&next), ident("·state")]),
+        patterns(vec![ident(&elem_str), ident(&next)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);

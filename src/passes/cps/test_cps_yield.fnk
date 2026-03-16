@@ -8,7 +8,7 @@ yield — CPS lowering tests
 # In CPS:
 #   yield value
 # becomes:
-#   ·yield value, ·state, fn ·v_{cps_id}, ·state:
+#   ·yield value, fn ·v_{cps_id}:
 #     <continuation>
 
 
@@ -17,8 +17,8 @@ test 'yield literal', fn:
     yield 42
 
   | equals fink":
-    ·yield 42, ·state, fn ·v_1, ·state:
-      ·ƒ_cont ·v_1, ·state
+    ·yield 42, fn ·v_1:
+      ·ƒ_cont ·v_1
 
 
 test 'yield ident', fn:
@@ -26,8 +26,8 @@ test 'yield ident', fn:
     yield foo
 
   | equals fink":
-    ·yield foo, ·state, fn ·v_1, ·state:
-      ·ƒ_cont ·v_1, ·state
+    ·yield foo, fn ·v_1:
+      ·ƒ_cont ·v_1
 
 
 test 'yield bound to name', fn:
@@ -35,9 +35,9 @@ test 'yield bound to name', fn:
     result = yield 42
 
   | equals fink":
-    ·yield 42, ·state, fn ·v_1, ·state:
+    ·yield 42, fn ·v_1:
       ·let ·v_1, fn result:
-        ·ƒ_cont result, ·state
+        ·ƒ_cont result
 
 
 test 'yield apply result', fn:
@@ -45,6 +45,6 @@ test 'yield apply result', fn:
     yield foo bar
 
   | equals fink":
-    ·apply foo, bar, ·state, fn ·v_2, ·state:
-      ·yield ·v_2, ·state, fn ·v_4, ·state:
-        ·ƒ_cont ·v_4, ·state
+    ·apply foo, bar, fn ·v_2:
+      ·yield ·v_2, fn ·v_4:
+        ·ƒ_cont ·v_4
