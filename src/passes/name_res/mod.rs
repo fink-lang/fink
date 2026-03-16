@@ -278,7 +278,7 @@ fn resolve_expr<'src>(
   use ExprKind::*;
   let sb = self_bind;
   match &expr.kind {
-    Ret(val) => {
+    Ret(val, _cont_id) => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
     }
 
@@ -594,7 +594,7 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      Ret(val) => { emit_classified_val(val, result, ctx, out); }
+      Ret(val, _) => { emit_classified_val(val, result, ctx, out); }
 
       LetVal { val, body, .. } => {
         emit_classified_val(val, result, ctx, out);

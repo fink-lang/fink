@@ -17,8 +17,8 @@ test 'yield literal', fn:
     yield 42
 
   | equals fink":
-    ·yield 42, fn ·v_1:
-      ·ƒ_cont ·v_1
+    ·yield 42, fn ·v_2:
+      ·ƒ_0 ·v_2
 
 
 test 'yield ident', fn:
@@ -26,8 +26,8 @@ test 'yield ident', fn:
     yield foo
 
   | equals fink":
-    ·yield foo, fn ·v_1:
-      ·ƒ_cont ·v_1
+    ·yield foo, fn ·v_2:
+      ·ƒ_0 ·v_2
 
 
 test 'yield bound to name', fn:
@@ -35,9 +35,9 @@ test 'yield bound to name', fn:
     result = yield 42
 
   | equals fink":
-    ·yield 42, fn ·v_1:
-      ·let ·v_1, fn result:
-        ·ƒ_cont result
+    ·yield 42, fn ·v_2:
+      ·let ·v_2, fn result:
+        ·ƒ_0 result
 
 
 test 'yield apply result', fn:
@@ -45,6 +45,6 @@ test 'yield apply result', fn:
     yield foo bar
 
   | equals fink":
-    ·apply foo, bar, fn ·v_2:
-      ·yield ·v_2, fn ·v_4:
-        ·ƒ_cont ·v_4
+    ·apply foo, bar, fn ·v_3:
+      ·yield ·v_3, fn ·v_5:
+        ·ƒ_0 ·v_5

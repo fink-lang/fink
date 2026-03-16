@@ -56,10 +56,13 @@ pub struct CpsResult<'src> {
 /// `User` marks a source-level binding; the name is recoverable from the
 /// origin map (CpsId → AstId → AST ident). `Gen` marks a compiler-generated
 /// temp; the formatter renders it as `·v_{cps_id}` using the node's own CpsId.
+/// `Cont` marks the continuation parameter of a `LetFn`; the formatter renders
+/// it as `·ƒ_cont` (or `·ƒ_halt` for the top-level module cont).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
   User,  // name from source: recoverable via origin map
   Gen,   // compiler-generated temp: rendered as ·v_{cps_id}
+  Cont,  // continuation parameter: rendered as ·ƒ_cont / ·ƒ_halt
 }
 
 /// A use site — references a binding. `Name` for user names (identity from
@@ -78,6 +81,13 @@ impl Ref {
       Ref::Name => Bind::User,
       Ref::Gen(_) => Bind::Gen,
     }
+  }
+}
+
+impl Bind {
+  /// True if this bind introduces a continuation parameter.
+  pub fn is_cont(self) -> bool {
+    matches!(self, Bind::Cont)
   }
 }
 
@@ -243,14 +253,15 @@ pub enum Lit<'src> {
 /// A continuation — either a reference to an existing function, or an inline
 /// expression with a result binding.
 ///
-/// `Ref(val)` — tail call: pass the result directly to `val` (e.g. `·ƒ_cont`).
+/// `Ref(id)` — tail call: pass the result directly to the binding at `id`
+/// (always a `Bind::Cont` or `Bind::Gen` node, e.g. `·ƒ_cont`).
 /// `Expr(bind, body)` — inline: bind the result to `bind`, then evaluate `body`.
 ///
 /// The `bind` in `Expr` carries a `CpsId` used by the formatter to render
 /// compiler-generated temps as `·v_N`. No pass indexes into any table by this id.
 #[derive(Debug, Clone)]
 pub enum Cont<'src> {
-  Ref(Val<'src>),
+  Ref(CpsId),
   Expr(BindNode, Box<Expr<'src>>),
 }
 
@@ -291,9 +302,11 @@ pub enum ExprKind<'src> {
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
+  /// `cont` is the explicit continuation parameter — always last in the calling convention.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
+    cont: BindNode,
     fn_body: Box<Expr<'src>>,
     body: Box<Expr<'src>>,
   },
@@ -465,8 +478,10 @@ pub enum ExprKind<'src> {
     cont: Cont<'src>,
   },
 
-  /// Tail position — return value to current continuation.
-  Ret(Box<Val<'src>>),
+  /// Tail call to a continuation — passes `val` to the cont identified by `cont`.
+  /// Replaces the anonymous `Ret(val)` — the cont is now the explicit `·ƒ_cont` parameter
+  /// allocated for the enclosing `LetFn`.
+  Ret(Box<Val<'src>>, CpsId),
 
   /// Unconditional failure — pattern match with no recovery.
   /// Used as the `fail` expr for irrefutable patterns (·panic equivalent).
@@ -484,6 +499,7 @@ pub enum ExprKind<'src> {
 pub struct Binding<'src> {
   pub name: BindNode,
   pub params: Vec<Param>,
+  pub cont: BindNode,
   pub fn_body: Box<Expr<'src>>,
 }
 

@@ -107,7 +107,7 @@ fn collect_cont<'src>(
   captures: &mut Vec<&'src str>,
 ) {
   match cont {
-    Cont::Ref(val) => collect_val(val, resolve, origin, ast_index, captures),
+    Cont::Ref(_cont_id) => {} // cont param ref — resolved by construction, no capture
     Cont::Expr(_, body) => collect_captured_in_body(body, resolve, origin, ast_index, captures),
   }
 }
@@ -123,7 +123,7 @@ fn collect_captured_in_body<'src>(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    Ret(val) => collect_val(val, resolve, origin, ast_index, captures),
+    Ret(val, _cont_id) => collect_val(val, resolve, origin, ast_index, captures),
 
     LetVal { val, body, .. } => {
       collect_val(val, resolve, origin, ast_index, captures);
@@ -346,7 +346,7 @@ fn collect_expr<'src>(
       if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
-    Ret(_) | Panic | FailCont => {}
+    Ret(..) | Panic | FailCont => {}
   }
 }
 

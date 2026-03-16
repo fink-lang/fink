@@ -39,10 +39,10 @@ test 'fn with no captures', fn:
 
   | equals fink":
     ·fn
-      fn x: ·ƒ_cont x
-      fn ·v_0:
-        ·let ·v_0, fn f:
-          ·ƒ_cont f
+      fn x, ·ƒ_3: ·ƒ_3 x
+      fn ·v_1:
+        ·let ·v_1, fn f:
+          ·ƒ_0 f
 
 
 ---
@@ -56,12 +56,12 @@ test 'self-recursive fn is pure', fn:
 
   | equals fink":
     ·fn
-      fn a:
-        ·apply f, a, fn ·v_4:
-          ·ƒ_cont ·v_4
-      fn ·v_0:
-        ·let ·v_0, fn f:
-          ·ƒ_cont f
+      fn a, ·ƒ_3:
+        ·apply f, a, fn ·v_6:
+          ·ƒ_3 ·v_6
+      fn ·v_1:
+        ·let ·v_1, fn f:
+          ·ƒ_0 f
 
 test 'mutual recursion — each fn captures the other', fn:
   expect closure_capture fink":
@@ -72,21 +72,21 @@ test 'mutual recursion — each fn captures the other', fn:
 
   | equals fink":
     ·fn
-      fn:
+      fn ·ƒ_2:
         ·fn
-          fn {cap: [g]}, a:
-            ·apply g, a, fn ·v_5:
-              ·ƒ_cont ·v_5
-          fn ·v_1:
-            ·let ·v_1, fn f:
+          fn {cap: [g]}, a, ·ƒ_5:
+            ·apply g, a, fn ·v_8:
+              ·ƒ_5 ·v_8
+          fn ·v_3:
+            ·let ·v_3, fn f:
               ·fn
-                fn {cap: [f]}, b:
-                  ·apply f, b, fn ·v_15:
-                    ·ƒ_cont ·v_15
-                fn ·v_11:
-                  ·let ·v_11, fn g:
-                    ·ƒ_cont g
-      fn ·v_0: ·ƒ_cont ·v_0
+                fn {cap: [f]}, b, ·ƒ_16:
+                  ·apply f, b, fn ·v_19:
+                    ·ƒ_16 ·v_19
+                fn ·v_14:
+                  ·let ·v_14, fn g:
+                    ·ƒ_2 g
+      fn ·v_1: ·ƒ_0 ·v_1
 
 
 ---
@@ -102,15 +102,15 @@ test 'depth-2 capture — fn b directly uses x, fn a does not', fn:
 
   | equals fink":
     ·fn
-      fn:
+      fn ·ƒ_2:
         ·let 1, fn x:
           ·fn
-            fn a:
+            fn a, ·ƒ_7:
               ·fn
-                fn {cap: [x]}, b: ·ƒ_cont x
-                fn ·v_5: ·ƒ_cont ·v_5
-            fn ·v_3: ·ƒ_cont ·v_3
-      fn ·v_0: ·ƒ_cont ·v_0
+                fn {cap: [x]}, b, ·ƒ_10: ·ƒ_10 x
+                fn ·v_8: ·ƒ_7 ·v_8
+            fn ·v_5: ·ƒ_2 ·v_5
+      fn ·v_1: ·ƒ_0 ·v_1
 
 test 'multiple captures', fn:
   expect closure_capture fink":
@@ -121,15 +121,15 @@ test 'multiple captures', fn:
 
   | equals fink":
     ·fn
-      fn:
+      fn ·ƒ_2:
         ·let 1, fn x:
           ·let 2, fn y:
             ·fn
-              fn {cap: [x, y]}, a:
-                ·apply ·op_plus, x, y, fn ·v_9:
-                  ·ƒ_cont ·v_9
-              fn ·v_5: ·ƒ_cont ·v_5
-      fn ·v_0: ·ƒ_cont ·v_0
+              fn {cap: [x, y]}, a, ·ƒ_9:
+                ·apply ·op_plus, x, y, fn ·v_12:
+                  ·ƒ_9 ·v_12
+              fn ·v_7: ·ƒ_2 ·v_7
+      fn ·v_1: ·ƒ_0 ·v_1
 
 
 ---
@@ -144,12 +144,12 @@ test 'fn captures one outer binding', fn:
 
   | equals fink":
     ·fn
-      fn a:
+      fn a, ·ƒ_3:
         ·fn
-          fn {cap: [a]}, b:
-            ·apply ·op_plus, a, b, fn ·v_6:
-              ·ƒ_cont ·v_6
-          fn ·v_2: ·ƒ_cont ·v_2
-      fn ·v_0:
-        ·let ·v_0, fn foo:
-          ·ƒ_cont foo
+          fn {cap: [a]}, b, ·ƒ_6:
+            ·apply ·op_plus, a, b, fn ·v_9:
+              ·ƒ_6 ·v_9
+          fn ·v_4: ·ƒ_3 ·v_4
+      fn ·v_1:
+        ·let ·v_1, fn foo:
+          ·ƒ_0 foo

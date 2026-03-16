@@ -18,7 +18,7 @@ fn variant_name(e: &fink::passes::cps::ir::Expr) -> &'static str {
         LetFn { .. } => "LetFn",
         LetRec { .. } => "LetRec",
         App { .. } => "App",
-        Ret(_) => "Ret",
+        Ret(..) => "Ret",
         If { .. } => "If",
         Panic => "Panic",
         FailCont => "FailCont",
@@ -91,7 +91,7 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                 dump_expr(body, depth+1);
             }
         }
-        Ret(val) => {
+        Ret(val, _) => {
             println!("{i}Expr(#{}) Ret", e.id.0);
             dump_val(val, depth+1);
         }

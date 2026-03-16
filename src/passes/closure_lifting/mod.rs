@@ -87,6 +87,7 @@ impl Alloc {
 struct HoistedFn<'src> {
   name:    BindNode,
   params:  Vec<Param>,
+  cont:    BindNode,
   fn_body: Expr<'src>,
 }
 
@@ -162,6 +163,7 @@ fn wrap_hoisted<'src>(
       kind: ExprKind::LetFn {
         name: h.name,
         params: h.params,
+        cont: h.cont,
         fn_body: Box::new(h.fn_body),
         body: Box::new(expr),
       },
@@ -181,7 +183,7 @@ fn collect_bind_ids(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    Ret(val) => scan_val(val, resolve, out),
+    Ret(val, _cont_id) => scan_val(val, resolve, out),
     LetVal { val, body, .. } => {
       scan_val(val, resolve, out);
       collect_bind_ids(body, resolve, out);
@@ -335,7 +337,7 @@ fn lift_expr<'src>(
 ) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
-    LetFn { name, params, fn_body, body } => {
+    LetFn { name, params, cont, fn_body, body } => {
       let caps: Vec<&'src str> = captures.try_get(name.id)
         .cloned()
         .unwrap_or_default();
@@ -354,6 +356,7 @@ fn lift_expr<'src>(
           kind: LetFn {
             name,
             params,
+            cont,
             fn_body: Box::new(rewritten_fn_body),
             body: Box::new(rewritten_body),
           },
@@ -394,9 +397,11 @@ fn lift_expr<'src>(
         let lifted_fn_bind = alloc.gen_bind();
         let lifted_fn_id = lifted_fn_bind.id;
 
+        let lifted_cont = alloc.bind(Bind::Cont, None);
         hoisted.push(HoistedFn {
           name:    lifted_fn_bind,
           params:  lifted_params,
+          cont:    lifted_cont,
           fn_body: rewritten_fn_body,
         });
 
@@ -594,7 +599,7 @@ fn lift_expr<'src>(
       }
     }
 
-    Ret(_) | Panic | FailCont => expr,
+    Ret(..) | Panic | FailCont => expr,
   }
 }
 
@@ -732,7 +737,7 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      Ret(val) => { emit_val(val, result, origin, ast_index, out); }
+      Ret(val, _) => { emit_val(val, result, origin, ast_index, out); }
       LetVal { val, body, .. } => {
         emit_val(val, result, origin, ast_index, out);
         collect_lines(body, result, origin, ast_index, out);

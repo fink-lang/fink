@@ -35,6 +35,9 @@ pub struct Gen {
   cursor_counter: u32,
   /// Maps each CPS node to its originating AST node (if any).
   origin: PropGraph<CpsId, Option<AstId>>,
+  /// The current continuation — the `·ƒ_cont` in scope for the current function body.
+  /// Set to the module-level cont at transform start; swapped per LetFn scope.
+  cont: CpsId,
 }
 
 impl Default for Gen {
@@ -45,7 +48,24 @@ impl Default for Gen {
 
 impl Gen {
   pub fn new() -> Self {
-    Gen { cursor_counter: 0, origin: PropGraph::new() }
+    let mut origin = PropGraph::new();
+    // Allocate the module-level cont (·ƒ_halt) — id 0.
+    let cont_id: CpsId = origin.push(None);
+    Gen { cursor_counter: 0, origin, cont: cont_id }
+  }
+
+  /// Allocate a fresh cont BindNode, set it as the current cont, and return
+  /// (the new cont BindNode, the previous cont id to restore after the fn body).
+  pub fn push_cont(&mut self, origin: Option<AstId>) -> (BindNode, CpsId) {
+    let bind = self.bind(Bind::Cont, origin);
+    let prev = self.cont;
+    self.cont = bind.id;
+    (bind, prev)
+  }
+
+  /// Restore the cont to a previously saved id (after leaving a fn scope).
+  pub fn pop_cont(&mut self, prev: CpsId) {
+    self.cont = prev;
   }
 
   pub fn fresh_fn(&mut self, origin: Option<AstId>) -> BindNode {
@@ -96,11 +116,11 @@ impl Gen {
 // ---------------------------------------------------------------------------
 
 /// Create a Ref val from a Bind kind and the bind node's CpsId.
-/// `Bind::User` → `Ref::Name`, `Bind::Gen` → `Ref::Gen(bind_id)`.
+/// `Bind::User` → `Ref::Name`, `Bind::Gen`/`Bind::Cont` → `Ref::Gen(bind_id)`.
 fn ref_val<'src>(g: &mut Gen, bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val<'src> {
   let kind = match bind {
     Bind::User => Ref::Name,
-    Bind::Gen => Ref::Gen(bind_id),
+    Bind::Gen | Bind::Cont => Ref::Gen(bind_id),
   };
   g.val(ValKind::Ref(kind), origin)
 }
@@ -124,8 +144,10 @@ fn fail_cont_expr(g: &mut Gen, origin: Option<AstId>) -> Expr<'static> {
   g.expr(ExprKind::FailCont, origin)
 }
 
+/// Emit a tail call to the current cont with `val` as argument.
+/// This is the leaf of every function body — `·ƒ_cont val` in the output.
 fn ret_expr<'src>(g: &mut Gen, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
-  g.expr(ExprKind::Ret(Box::new(val)), origin)
+  g.expr(ExprKind::Ret(Box::new(val), g.cont), origin)
 }
 
 /// Emit an App node: func(args...) → result; body.
@@ -376,11 +398,13 @@ fn lower_fn<'src>(
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let (param_names, deferred) = extract_params_with_gen(g, params);
+  let (cont, prev_cont) = g.push_cont(origin);
   let fn_body = {
       let body = lower_stmts(g, body);
       prepend_pat_binds(g, deferred, body)
     };
-  let pending = vec![Pending::Fn { name: fn_name, params: param_names, fn_body,  origin }];
+  g.pop_cont(prev_cont);
+  let pending = vec![Pending::Fn { name: fn_name, params: param_names, cont, fn_body, origin }];
   (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
 }
 
@@ -394,16 +418,18 @@ fn lower_iife<'src>(
 ) -> Lower<'src> {
   let fn_name = g.fresh_fn(origin);
   let (param_names, deferred) = extract_params_with_gen(g, params);
+  let (cont, prev_cont) = g.push_cont(origin);
   let fn_body = {
       let body = lower_stmts(g, body);
       prepend_pat_binds(g, deferred, body)
     };
+  g.pop_cont(prev_cont);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
   let fn_name_val = ref_val(g, fn_name.kind, fn_name.id, origin);
   let pending = vec![
-    Pending::Fn { name: fn_name, params: param_names, fn_body,  origin },
-    Pending::App { func: Callable::Val(fn_name_val), args: args_val(vec![]), result,  origin },
+    Pending::Fn { name: fn_name, params: param_names, cont, fn_body, origin },
+    Pending::App { func: Callable::Val(fn_name_val), args: args_val(vec![]), result, origin },
   ];
   (ref_val(g, result_kind, result_id, origin), pending)
 }
@@ -870,10 +896,12 @@ fn lower_block<'src>(
 ) -> Lower<'src> {
   let block_fn_name = g.fresh_fn(origin);
   let param_names = extract_params(g, params);
+  let (cont, prev_cont) = g.push_cont(origin);
   let fn_body = lower_stmts(g, body);
+  g.pop_cont(prev_cont);
   let (name_val, mut pending) = lower(g, name);
   let block_fn_val = ref_val(g, block_fn_name.kind, block_fn_name.id, origin);
-  pending.push(Pending::Fn { name: block_fn_name, params: param_names, fn_body,  origin });
+  pending.push(Pending::Fn { name: block_fn_name, params: param_names, cont, fn_body, origin });
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
   pending.push(Pending::App {
@@ -892,7 +920,7 @@ fn lower_block<'src>(
 // Extend Pending to handle App and Match, which need a body (the next expression).
 enum Pending<'src> {
   Val { name: BindNode, val: Val<'src>, origin: Option<AstId> },
-  Fn { name: BindNode, params: Vec<Param>, fn_body: Expr<'src>, origin: Option<AstId> },
+  Fn { name: BindNode, params: Vec<Param>, cont: BindNode, fn_body: Expr<'src>, origin: Option<AstId> },
   App { func: Callable<'src>, args: Vec<Arg<'src>>, result: BindNode, origin: Option<AstId> },
   MatchBlock { params: Vec<Val<'src>>, arm_params: Vec<BindNode>, arms: Vec<Expr<'src>>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
@@ -936,10 +964,11 @@ fn wrap_with_fail<'src>(
       ExprKind::LetVal { name, val: Box::new(val), body: Box::new(body) },
       origin,
     ),
-    Pending::Fn { name, params, fn_body, origin } => g.expr(
+    Pending::Fn { name, params, cont, fn_body, origin } => g.expr(
       ExprKind::LetFn {
         name,
         params,
+        cont,
         fn_body: Box::new(fn_body),
         body: Box::new(body),
       },
@@ -1471,8 +1500,8 @@ mod tests {
     let src = Box::leak("42".to_string().into_boxed_str());
     let node = parse_single(src);
     let result = lower_expr(&node);
-    assert!(matches!(result.root.kind, ExprKind::Ret(_)));
-    if let ExprKind::Ret(val) = &result.root.kind {
+    assert!(matches!(result.root.kind, ExprKind::Ret(..)));
+    if let ExprKind::Ret(val, _) = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Lit(Lit::Int(42))));
     }
   }
@@ -1482,8 +1511,8 @@ mod tests {
     let src = Box::leak("foo".to_string().into_boxed_str());
     let node = parse_single(src);
     let result = lower_expr(&node);
-    assert!(matches!(result.root.kind, ExprKind::Ret(_)));
-    if let ExprKind::Ret(val) = &result.root.kind {
+    assert!(matches!(result.root.kind, ExprKind::Ret(..)));
+    if let ExprKind::Ret(val, _) = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Ref(_)));
     }
   }
