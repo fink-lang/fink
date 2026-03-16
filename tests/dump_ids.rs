@@ -74,8 +74,8 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
             println!("{i}  rec_body:");
             dump_expr(body, depth+1);
         }
-        App { func, args, result, body } => {
-            println!("{i}Expr(#{}) App result={:?}", e.id.0, result);
+        App { func, args, cont } => {
+            println!("{i}Expr(#{}) App", e.id.0);
             match func {
                 fink::passes::cps::ir::Callable::Val(v) => dump_val(v, depth+1),
                 fink::passes::cps::ir::Callable::BuiltIn(b) => println!("{}  BuiltIn({:?})", i, b),
@@ -86,8 +86,10 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                     fink::passes::cps::ir::Arg::Spread(v) => dump_val(v, depth+1),
                 }
             }
-            println!("{i}  body:");
-            dump_expr(body, depth+1);
+            if let fink::passes::cps::ir::Cont::Expr(bind, body) = cont {
+                println!("{i}  cont bind={:?}:", bind);
+                dump_expr(body, depth+1);
+            }
         }
         Ret(val) => {
             println!("{i}Expr(#{}) Ret", e.id.0);
@@ -107,10 +109,13 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
             dump_expr(fail, depth+1);
             dump_expr(body, depth+1);
         }
-        Yield { value, result, body } => {
-            println!("{i}Expr(#{}) Yield result={:?}", e.id.0, result);
+        Yield { value, cont } => {
+            println!("{i}Expr(#{}) Yield", e.id.0);
             dump_val(value, depth+1);
-            dump_expr(body, depth+1);
+            if let fink::passes::cps::ir::Cont::Expr(bind, body) = cont {
+                println!("{i}  cont bind={:?}:", bind);
+                dump_expr(body, depth+1);
+            }
         }
         _ => println!("{i}Expr(#{}) <other:{}>", e.id.0, variant_name(e)),
     }

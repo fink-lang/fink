@@ -37,7 +37,7 @@
 use crate::passes::name_res::{Resolution, ResolveResult};
 use crate::passes::closure_capture::CaptureGraph;
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, CpsId, CpsResult, Expr, ExprKind,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
   Param, Ref, Val, ValKind,
 };
 use crate::propgraph::PropGraph;
@@ -187,32 +187,32 @@ fn collect_bind_ids(
       collect_bind_ids(body, resolve, out);
     }
     LetFn { body, .. } => collect_bind_ids(body, resolve, out),
-    App { func, args, body, .. } => {
+    App { func, args, cont } => {
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
       for arg in args {
         match arg { Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out) }
       }
-      collect_bind_ids(body, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
     }
     If { cond, then, else_ } => {
       scan_val(cond, resolve, out);
       collect_bind_ids(then, resolve, out);
       collect_bind_ids(else_, resolve, out);
     }
-    Yield { value, body, .. } => {
+    Yield { value, cont } => {
       scan_val(value, resolve, out);
-      collect_bind_ids(body, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchLetVal { val, fail, body, .. } => {
       scan_val(val, resolve, out);
       collect_bind_ids(fail, resolve, out);
       collect_bind_ids(body, resolve, out);
     }
-    MatchApp { func, args, fail, body, .. } => {
+    MatchApp { func, args, fail, cont } => {
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
       for v in args { scan_val(v, resolve, out); }
       collect_bind_ids(fail, resolve, out);
-      collect_bind_ids(body, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchIf { func, args, fail, body, .. } => {
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
@@ -230,27 +230,36 @@ fn collect_bind_ids(
       collect_bind_ids(fail, resolve, out);
       collect_bind_ids(body, resolve, out);
     }
-    MatchNext { fail, body, .. } |
-    MatchDone { fail, body, .. } |
-    MatchNotDone { fail, body, .. } |
-    MatchRest { fail, body, .. } => {
+    MatchNext { fail, cont, .. } => {
+      collect_bind_ids(fail, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+    }
+    MatchDone { fail, cont, .. } => {
+      collect_bind_ids(fail, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+    }
+    MatchNotDone { fail, body, .. } => {
       collect_bind_ids(fail, resolve, out);
       collect_bind_ids(body, resolve, out);
+    }
+    MatchRest { fail, cont, .. } => {
+      collect_bind_ids(fail, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchRec { val, fail, body, .. } => {
       scan_val(val, resolve, out);
       collect_bind_ids(fail, resolve, out);
       collect_bind_ids(body, resolve, out);
     }
-    MatchField { fail, body, .. } => {
+    MatchField { fail, cont, .. } => {
       collect_bind_ids(fail, resolve, out);
-      collect_bind_ids(body, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
     }
-    MatchBlock { params, fail, arms, body, .. } => {
+    MatchBlock { params, fail, arms, cont, .. } => {
       for v in params { scan_val(v, resolve, out); }
       collect_bind_ids(fail, resolve, out);
       for arm in arms { collect_bind_ids(arm, resolve, out); }
-      collect_bind_ids(body, resolve, out);
+      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
     }
     LetRec { bindings, body } => {
       for b in bindings { collect_bind_ids(&b.fn_body, resolve, out); }
@@ -301,6 +310,20 @@ fn find_bind_for_capture<'src>(
 // ---------------------------------------------------------------------------
 // Transform — walk and rewrite, bubble hoisted fns upward
 // ---------------------------------------------------------------------------
+
+fn lift_cont<'src>(
+  cont: Cont<'src>,
+  captures: &CaptureGraph<'src>,
+  resolve: &ResolveResult,
+  ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
+  alloc: &mut Alloc,
+  hoisted: &mut Vec<HoistedFn<'src>>,
+) -> Cont<'src> {
+  match cont {
+    Cont::Ref(val) => Cont::Ref(val),
+    Cont::Expr(bind, body) => Cont::Expr(bind, Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted))),
+  }
+}
 
 fn lift_expr<'src>(
   expr: Expr<'src>,
@@ -399,8 +422,7 @@ fn lift_expr<'src>(
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
           args: fn_closure_args,
-          result: result_bind,
-          body: Box::new(subst_body),
+          cont: Cont::Expr(result_bind, Box::new(subst_body)),
         }, None)
       }
     }
@@ -415,13 +437,12 @@ fn lift_expr<'src>(
       },
     },
 
-    App { func, args, result, body } => Expr {
+    App { func, args, cont } => Expr {
       id: expr.id,
       kind: App {
         func,
         args,
-        result,
-        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
@@ -434,12 +455,11 @@ fn lift_expr<'src>(
       },
     },
 
-    Yield { value, result, body } => Expr {
+    Yield { value, cont } => Expr {
       id: expr.id,
       kind: Yield {
         value,
-        result,
-        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
@@ -468,12 +488,12 @@ fn lift_expr<'src>(
       },
     },
 
-    MatchApp { func, args, fail, result, body } => Expr {
+    MatchApp { func, args, fail, cont } => Expr {
       id: expr.id,
       kind: MatchApp {
-        func, args, result,
+        func, args,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
@@ -504,21 +524,21 @@ fn lift_expr<'src>(
       },
     },
 
-    MatchNext { val, cursor, next_cursor, fail, elem, body } => Expr {
+    MatchNext { val, cursor, next_cursor, fail, cont } => Expr {
       id: expr.id,
       kind: MatchNext {
-        val, cursor, next_cursor, elem,
+        val, cursor, next_cursor,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchDone { val, cursor, fail, result, body } => Expr {
+    MatchDone { val, cursor, fail, cont } => Expr {
       id: expr.id,
       kind: MatchDone {
-        val, cursor, result,
+        val, cursor,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
@@ -531,12 +551,12 @@ fn lift_expr<'src>(
       },
     },
 
-    MatchRest { val, cursor, fail, result, body } => Expr {
+    MatchRest { val, cursor, fail, cont } => Expr {
       id: expr.id,
       kind: MatchRest {
-        val, cursor, result,
+        val, cursor,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
@@ -549,16 +569,16 @@ fn lift_expr<'src>(
       },
     },
 
-    MatchField { val, cursor, next_cursor, field, fail, elem, body } => Expr {
+    MatchField { val, cursor, next_cursor, field, fail, cont } => Expr {
       id: expr.id,
       kind: MatchField {
-        val, cursor, next_cursor, field, elem,
+        val, cursor, next_cursor, field,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchBlock { params, fail, arm_params, arms, result, body } => {
+    MatchBlock { params, fail, arm_params, arms, cont } => {
       let new_arms = arms.into_iter()
         .map(|a| lift_expr(a, captures, resolve, ast_index, alloc, hoisted))
         .collect();
@@ -567,10 +587,9 @@ fn lift_expr<'src>(
         kind: MatchBlock {
           params,
           arm_params,
-          result,
           fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
           arms: new_arms,
-          body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)),
+          cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
         },
       }
     }
@@ -590,7 +609,7 @@ mod tests {
   use crate::ast::{build_index, NodeKind};
   use crate::parser::parse;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
-  use crate::passes::cps::ir::{Arg, Callable, Expr, ExprKind, Val, ValKind, Ref};
+  use crate::passes::cps::ir::{Arg, Callable, Cont, Expr, ExprKind, Val, ValKind, Ref};
   use crate::passes::name_res::{Resolution, ResolveResult};
   use crate::passes::cps::transform::lower_expr;
   use crate::propgraph::PropGraph;
@@ -726,32 +745,32 @@ mod tests {
         for b in bindings { collect_lines(&b.fn_body, result, origin, ast_index, out); }
         collect_lines(body, result, origin, ast_index, out);
       }
-      App { func, args, body, .. } => {
+      App { func, args, cont } => {
         emit_callable(func, result, origin, ast_index, out);
         for arg in args {
           match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out) }
         }
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       If { cond, then, else_ } => {
         emit_val(cond, result, origin, ast_index, out);
         collect_lines(then, result, origin, ast_index, out);
         collect_lines(else_, result, origin, ast_index, out);
       }
-      Yield { value, body, .. } => {
+      Yield { value, cont } => {
         emit_val(value, result, origin, ast_index, out);
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchLetVal { val, fail, body, .. } => {
         emit_val(val, result, origin, ast_index, out);
         collect_lines(fail, result, origin, ast_index, out);
         collect_lines(body, result, origin, ast_index, out);
       }
-      MatchApp { func, args, fail, body, .. } => {
+      MatchApp { func, args, fail, cont } => {
         emit_callable(func, result, origin, ast_index, out);
         for v in args { emit_val(v, result, origin, ast_index, out); }
         collect_lines(fail, result, origin, ast_index, out);
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchIf { func, args, fail, body } => {
         emit_callable(func, result, origin, ast_index, out);
@@ -769,36 +788,36 @@ mod tests {
         collect_lines(fail, result, origin, ast_index, out);
         collect_lines(body, result, origin, ast_index, out);
       }
-      MatchNext { fail, body, .. } => {
+      MatchNext { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
-      MatchDone { fail, body, .. } => {
+      MatchDone { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchNotDone { fail, body, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
         collect_lines(body, result, origin, ast_index, out);
       }
-      MatchRest { fail, body, .. } => {
+      MatchRest { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchRec { val, fail, body, .. } => {
         emit_val(val, result, origin, ast_index, out);
         collect_lines(fail, result, origin, ast_index, out);
         collect_lines(body, result, origin, ast_index, out);
       }
-      MatchField { fail, body, .. } => {
+      MatchField { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
-      MatchBlock { params, fail, arms, body, .. } => {
+      MatchBlock { params, fail, arms, cont, .. } => {
         for v in params { emit_val(v, result, origin, ast_index, out); }
         collect_lines(fail, result, origin, ast_index, out);
         for arm in arms { collect_lines(arm, result, origin, ast_index, out); }
-        collect_lines(body, result, origin, ast_index, out);
+        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       Panic | FailCont => {}
     }

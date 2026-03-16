@@ -22,7 +22,7 @@
 use crate::ast::{AstId, CmpPart, Node, NodeKind};
 use crate::propgraph::PropGraph;
 use super::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, CpsId, CpsResult, Expr, ExprKind, Ref, Lit,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Ref, Lit,
   Param, Val, ValKind,
 };
 
@@ -138,7 +138,7 @@ fn app_node<'src>(
   body: Expr<'src>,
   origin: Option<AstId>,
 ) -> Expr<'src> {
-  g.expr(ExprKind::App { func: Callable::Val(func), args, result, body: Box::new(body) }, origin)
+  g.expr(ExprKind::App { func: Callable::Val(func), args, cont: Cont::Expr(result, Box::new(body)) }, origin)
 }
 
 /// Wrap a plain `Val` as an `Arg::Val`.
@@ -949,8 +949,7 @@ fn wrap_with_fail<'src>(
       ExprKind::App {
         func,
         args,
-        result,
-        body: Box::new(body),
+        cont: Cont::Expr(result, Box::new(body)),
       },
       origin,
     ),
@@ -962,8 +961,7 @@ fn wrap_with_fail<'src>(
           arm_params,
           fail,
           arms,
-          result,
-          body: Box::new(body),
+          cont: Cont::Expr(result, Box::new(body)),
         },
         origin,
       )
@@ -1024,8 +1022,7 @@ fn wrap_with_fail<'src>(
           cursor,
           next_cursor,
           fail,
-          elem,
-          body: Box::new(body),
+          cont: Cont::Expr(elem, Box::new(body)),
         },
         origin,
       )
@@ -1037,8 +1034,7 @@ fn wrap_with_fail<'src>(
           val: Box::new(val),
           cursor,
           fail,
-          result,
-          body: Box::new(body),
+          cont: Cont::Expr(result, Box::new(body)),
         },
         origin,
       )
@@ -1062,8 +1058,7 @@ fn wrap_with_fail<'src>(
           val: Box::new(val),
           cursor,
           fail,
-          result,
-          body: Box::new(body),
+          cont: Cont::Expr(result, Box::new(body)),
         },
         origin,
       )
@@ -1089,8 +1084,7 @@ fn wrap_with_fail<'src>(
           next_cursor,
           field,
           fail,
-          elem,
-          body: Box::new(body),
+          cont: Cont::Expr(elem, Box::new(body)),
         },
         origin,
       )
@@ -1098,8 +1092,7 @@ fn wrap_with_fail<'src>(
     Pending::Yield { value, result, origin } => g.expr(
       ExprKind::Yield {
         value: Box::new(value),
-        result,
-        body: Box::new(body),
+        cont: Cont::Expr(result, Box::new(body)),
       },
       origin,
     ),

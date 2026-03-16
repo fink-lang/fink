@@ -10,7 +10,7 @@
 use crate::ast::{self, AstId, Exprs, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::propgraph::PropGraph;
-use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
+use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Formatter context — carries the prop graphs needed for origin lookups
@@ -260,9 +260,22 @@ fn render_builtin(op: &BuiltIn) -> String {
   }
 }
 
+/// Unwrap a `Cont::Expr` for formatting. Panics on `Cont::Ref` — the formatter
+/// currently only handles inline continuations; `Cont::Ref` will be rendered
+/// once the transform produces them.
+fn cont_expr<'a, 'src>(cont: &'a Cont<'src>) -> (&'a BindNode, &'a Expr<'src>) {
+  match cont {
+    Cont::Expr(bind, body) => (bind, body),
+    Cont::Ref(_) => todo!("fmt: Cont::Ref rendering not yet implemented"),
+  }
+}
+
 pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &expr.kind {
-    ExprKind::Yield { value, result, body } => fmt_yield(value, result, body, ctx),
+    ExprKind::Yield { value, cont } => {
+      let (result, body) = cont_expr(cont);
+      fmt_yield(value, result, body, ctx)
+    }
 
     ExprKind::Ret(val) => {
       apply(ident("·ƒ_cont"), vec![val_to_node(val, ctx)])
@@ -271,7 +284,8 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::Panic => ident("·panic"),
     ExprKind::FailCont => ident("·ƒ_fail"),
 
-    ExprKind::MatchBlock { params, arm_params, fail, arms, result, body } => {
+    ExprKind::MatchBlock { params, arm_params, fail, arms, cont } => {
+      let (result, body) = cont_expr(cont);
       let result_plain = render_bind_ctx(result, ctx);
       let result_fn = fn_node(
         patterns(vec![ident(&result_plain)]),
@@ -333,7 +347,8 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       ])
     }
 
-    ExprKind::App { func, args, result, body } => {
+    ExprKind::App { func, args, cont } => {
+      let (result, body) = cont_expr(cont);
       let result_plain = render_bind_ctx(result, ctx);
       let result_fn = result_cont(&result_plain, to_node(body, ctx));
       let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
@@ -368,9 +383,10 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       ])
     }
 
-    ExprKind::MatchApp { func, args, fail, result, body } => {
+    ExprKind::MatchApp { func, args, fail, cont } => {
+      let (result, body) = cont_expr(cont);
       let result_str = render_bind_ctx(result, ctx);
-      let cont = fn_node(
+      let cont_node = fn_node(
         patterns(vec![ident(&result_str)]),
         vec![to_node(body, ctx)],
       );
@@ -382,7 +398,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let mut apply_args = vec![func_node];
       apply_args.extend(args.iter().map(|v| val_to_node(v, ctx)));
       apply_args.push(fail_node);
-      apply_args.push(cont);
+      apply_args.push(cont_node);
       apply(ident("·match_apply"), apply_args)
     }
 
@@ -422,27 +438,29 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       apply(ident("·match_seq"), vec![val_to_node(val, ctx), fail_node, cont])
     }
 
-    ExprKind::MatchNext { cursor, next_cursor, fail, elem, body, .. } => {
+    ExprKind::MatchNext { cursor, next_cursor, fail, cont, .. } => {
       let cur = cursor_name(*cursor);
       let next = cursor_name(*next_cursor);
+      let (elem, body) = cont_expr(cont);
       let elem_str = render_bind_ctx(elem, ctx);
-      let cont = fn_node(
+      let cont_node = fn_node(
         patterns(vec![ident(&elem_str), ident(&next)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
-      apply(ident("·match_next"), vec![ident(&cur), fail_node, cont])
+      apply(ident("·match_next"), vec![ident(&cur), fail_node, cont_node])
     }
 
-    ExprKind::MatchDone { cursor, fail, result, body, .. } => {
+    ExprKind::MatchDone { cursor, fail, cont, .. } => {
       let cur = cursor_name(*cursor);
+      let (result, body) = cont_expr(cont);
       let result_str = render_bind_ctx(result, ctx);
-      let cont = fn_node(
+      let cont_node = fn_node(
         patterns(vec![ident(&result_str)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
-      apply(ident("·match_done"), vec![ident(&cur), fail_node, cont])
+      apply(ident("·match_done"), vec![ident(&cur), fail_node, cont_node])
     }
 
     ExprKind::MatchNotDone { cursor, fail, body, .. } => {
@@ -455,15 +473,16 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       apply(ident("·match_not_done"), vec![ident(&cur), fail_node, cont])
     }
 
-    ExprKind::MatchRest { cursor, fail, result, body, .. } => {
+    ExprKind::MatchRest { cursor, fail, cont, .. } => {
       let cur = cursor_name(*cursor);
+      let (result, body) = cont_expr(cont);
       let result_str = render_bind_ctx(result, ctx);
-      let cont = fn_node(
+      let cont_node = fn_node(
         patterns(vec![ident(&result_str)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
-      apply(ident("·match_rest"), vec![ident(&cur), fail_node, cont])
+      apply(ident("·match_rest"), vec![ident(&cur), fail_node, cont_node])
     }
 
     ExprKind::MatchRec { val, cursor, fail, body } => {
@@ -476,17 +495,18 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       apply(ident("·match_rec"), vec![val_to_node(val, ctx), fail_node, cont])
     }
 
-    ExprKind::MatchField { cursor, next_cursor, field, fail, elem, body, .. } => {
+    ExprKind::MatchField { cursor, next_cursor, field, fail, cont, .. } => {
       let cur = cursor_name(*cursor);
       let next = cursor_name(*next_cursor);
+      let (elem, body) = cont_expr(cont);
       let elem_str = render_bind_ctx(elem, ctx);
-      let cont = fn_node(
+      let cont_node = fn_node(
         patterns(vec![ident(&elem_str), ident(&next)]),
         vec![to_node(body, ctx)],
       );
       let fail_node = to_node(fail, ctx);
       let field_lit = node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: field.to_string() });
-      apply(ident("·match_field"), vec![ident(&cur), field_lit, fail_node, cont])
+      apply(ident("·match_field"), vec![ident(&cur), field_lit, fail_node, cont_node])
     }
   }
 }

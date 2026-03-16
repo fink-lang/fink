@@ -16,7 +16,7 @@
 
 use crate::propgraph::PropGraph;
 use crate::passes::name_res::{Resolution, ResolveResult};
-use crate::passes::cps::ir::{Arg, Callable, CpsId, CpsResult, Expr, ExprKind, Ref, Val, ValKind};
+use crate::passes::cps::ir::{Arg, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Ref, Val, ValKind};
 use crate::ast::{AstId, NodeKind};
 
 // ---------------------------------------------------------------------------
@@ -98,6 +98,20 @@ fn collect_callable<'src>(
   }
 }
 
+/// Walk a Cont: if Ref, collect the val; if Expr, recurse into the body.
+fn collect_cont<'src>(
+  cont: &Cont<'src>,
+  resolve: &ResolveResult,
+  origin: &PropGraph<CpsId, Option<AstId>>,
+  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
+  captures: &mut Vec<&'src str>,
+) {
+  match cont {
+    Cont::Ref(val) => collect_val(val, resolve, origin, ast_index, captures),
+    Cont::Expr(_, body) => collect_captured_in_body(body, resolve, origin, ast_index, captures),
+  }
+}
+
 /// Collect all refs directly captured by the enclosing fn (Captured { depth: 1 }).
 /// Does not descend into nested LetFn bodies — those are handled by collect_expr.
 fn collect_captured_in_body<'src>(
@@ -123,14 +137,14 @@ fn collect_captured_in_body<'src>(
       collect_captured_in_body(body, resolve, origin, ast_index, captures);
     }
 
-    App { func, args, body, .. } => {
+    App { func, args, cont } => {
       collect_callable(func, resolve, origin, ast_index, captures);
       for arg in args {
         match arg {
           Arg::Val(v) | Arg::Spread(v) => collect_val(v, resolve, origin, ast_index, captures),
         }
       }
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
     If { cond, then, else_ } => {
@@ -139,9 +153,9 @@ fn collect_captured_in_body<'src>(
       collect_captured_in_body(else_, resolve, origin, ast_index, captures);
     }
 
-    Yield { value, body, .. } => {
+    Yield { value, cont } => {
       collect_val(value, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
     MatchLetVal { val, fail, body, .. } => {
@@ -150,11 +164,11 @@ fn collect_captured_in_body<'src>(
       collect_captured_in_body(body, resolve, origin, ast_index, captures);
     }
 
-    MatchApp { func, args, fail, body, .. } => {
+    MatchApp { func, args, fail, cont } => {
       collect_callable(func, resolve, origin, ast_index, captures);
       for v in args { collect_val(v, resolve, origin, ast_index, captures); }
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
     MatchIf { func, args, fail, body, .. } => {
@@ -176,14 +190,14 @@ fn collect_captured_in_body<'src>(
       collect_captured_in_body(body, resolve, origin, ast_index, captures);
     }
 
-    MatchNext { fail, body, .. } => {
+    MatchNext { fail, cont, .. } => {
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
-    MatchDone { fail, body, .. } => {
+    MatchDone { fail, cont, .. } => {
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
     MatchNotDone { fail, body, .. } => {
@@ -191,9 +205,9 @@ fn collect_captured_in_body<'src>(
       collect_captured_in_body(body, resolve, origin, ast_index, captures);
     }
 
-    MatchRest { fail, body, .. } => {
+    MatchRest { fail, cont, .. } => {
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
     MatchRec { val, fail, body, .. } => {
@@ -202,16 +216,16 @@ fn collect_captured_in_body<'src>(
       collect_captured_in_body(body, resolve, origin, ast_index, captures);
     }
 
-    MatchField { fail, body, .. } => {
+    MatchField { fail, cont, .. } => {
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
-    MatchBlock { params, fail, arms, body, .. } => {
+    MatchBlock { params, fail, arms, cont, .. } => {
       for v in params { collect_val(v, resolve, origin, ast_index, captures); }
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
       for arm in arms { collect_captured_in_body(arm, resolve, origin, ast_index, captures); }
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
     LetRec { body, .. } => {
@@ -251,14 +265,18 @@ fn collect_expr<'src>(
 
     LetVal { body, .. } => collect_expr(body, resolve, origin, ast_index, fn_depth, graph),
 
-    App { body, .. } => collect_expr(body, resolve, origin, ast_index, fn_depth, graph),
+    App { cont, .. } => {
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
+    }
 
     If { then, else_, .. } => {
       collect_expr(then, resolve, origin, ast_index, fn_depth, graph);
       collect_expr(else_, resolve, origin, ast_index, fn_depth, graph);
     }
 
-    Yield { body, .. } => collect_expr(body, resolve, origin, ast_index, fn_depth, graph),
+    Yield { cont, .. } => {
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
+    }
 
     LetRec { bindings, body } => {
       for b in bindings {
@@ -272,9 +290,9 @@ fn collect_expr<'src>(
       collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
     }
 
-    MatchApp { fail, body, .. } => {
+    MatchApp { fail, cont, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchIf { fail, body, .. } => {
@@ -292,14 +310,14 @@ fn collect_expr<'src>(
       collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
     }
 
-    MatchNext { fail, body, .. } => {
+    MatchNext { fail, cont, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
-    MatchDone { fail, body, .. } => {
+    MatchDone { fail, cont, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchNotDone { fail, body, .. } => {
@@ -307,9 +325,9 @@ fn collect_expr<'src>(
       collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
     }
 
-    MatchRest { fail, body, .. } => {
+    MatchRest { fail, cont, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchRec { fail, body, .. } => {
@@ -317,15 +335,15 @@ fn collect_expr<'src>(
       collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
     }
 
-    MatchField { fail, body, .. } => {
+    MatchField { fail, cont, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
-    MatchBlock { fail, arms, body, .. } => {
+    MatchBlock { fail, arms, cont, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
       for arm in arms { collect_expr(arm, resolve, origin, ast_index, fn_depth, graph); }
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     Ret(_) | Panic | FailCont => {}
