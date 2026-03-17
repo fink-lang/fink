@@ -17,8 +17,9 @@
 //       fn ·ƒ_N:
 //         ·apply func, args, ·ƒ_N   ← Cont::Ref(·ƒ_N)
 //
-// All Cont::Expr bodies are hoisted unconditionally — including trivial ones.
-// closure_lifting needs every cont to be a named LetFn to thread captures.
+// All Cont::Expr bodies are hoisted unconditionally — including trivial ones and
+// multi-arg conts (MatchNext/MatchField). closure_lifting needs every cont to be
+// a named LetFn to thread captures.
 //
 // CPS transform contract:
 //   1. Every new node gets a CpsId via the id allocator + origin entry.
@@ -123,33 +124,26 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
     MatchValue { val, lit, fail, body } =>
       hoist_cont(expr.id, body, alloc, |body| MatchValue { val, lit, fail, body }),
 
-    MatchSeq { val, cursor, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchSeq { val, cursor, fail, body }),
+    MatchSeq { val, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchSeq { val, fail, body }),
 
-    // MatchNext/MatchField conts carry two bindings (elem + cursor) — Cont::Expr
-    // only supports one arg. Cannot hoist until Cont supports Vec<BindNode>.
-    MatchNext { val, cursor, next_cursor, fail, cont } => {
-      let cont = recurse_cont(cont, alloc);
-      Expr { id: expr.id, kind: MatchNext { val, cursor, next_cursor, fail, cont } }
-    }
+    MatchNext { val, fail, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchNext { val, fail, cont }),
 
-    MatchDone { val, cursor, fail, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchDone { val, cursor, fail, cont }),
+    MatchDone { val, fail, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchDone { val, fail, cont }),
 
-    MatchNotDone { val, cursor, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchNotDone { val, cursor, fail, body }),
+    MatchNotDone { val, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchNotDone { val, fail, body }),
 
-    MatchRest { val, cursor, fail, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchRest { val, cursor, fail, cont }),
+    MatchRest { val, fail, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchRest { val, fail, cont }),
 
-    MatchRec { val, cursor, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchRec { val, cursor, fail, body }),
+    MatchRec { val, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchRec { val, fail, body }),
 
-    // See MatchNext — same two-binding limitation.
-    MatchField { val, cursor, next_cursor, field, fail, cont } => {
-      let cont = recurse_cont(cont, alloc);
-      Expr { id: expr.id, kind: MatchField { val, cursor, next_cursor, field, fail, cont } }
-    }
+    MatchField { val, field, fail, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchField { val, field, fail, cont }),
 
     MatchBlock { params, fail, arm_params, arms, cont } =>
       hoist_cont(expr.id, cont, alloc, |cont| MatchBlock { params, fail, arm_params, arms, cont }),
@@ -161,9 +155,9 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
 fn recurse_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'src> {
   match cont {
     Cont::Ref(_) => cont,
-    Cont::Expr { arg, body } => {
+    Cont::Expr { args, body } => {
       let body = lift_expr(*body, alloc);
-      Cont::Expr { arg, body: Box::new(body) }
+      Cont::Expr { args, body: Box::new(body) }
     }
   }
 }
@@ -187,19 +181,20 @@ where
 {
   match cont {
     Cont::Ref(_) => Expr { id: node_id, kind: make_kind(cont) },
-    Cont::Expr { arg, body } => {
+    Cont::Expr { args, body } => {
       let body = lift_expr(*body, alloc);
       let cont_name        = alloc.bind(Bind::Cont, None);
       let inner_cont_param = alloc.bind(Bind::Cont, None);
       let inner = alloc.expr(make_kind(Cont::Ref(cont_name.id)), None);
+      let params = args.into_iter().map(Param::Name).collect();
       Expr {
         id: node_id,
         kind: ExprKind::LetFn {
           name:    cont_name,
-          params:  vec![Param::Name(arg)],
+          params,
           cont:    inner_cont_param,
           fn_body: Box::new(body),
-          body:    Cont::Expr { arg: alloc.bind(Bind::Synth, None), body: Box::new(inner) },
+          body:    Cont::Expr { args: vec![alloc.bind(Bind::Synth, None)], body: Box::new(inner) },
         },
       }
     }

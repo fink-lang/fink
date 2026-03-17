@@ -166,7 +166,7 @@ fn wrap_hoisted<'src>(
         params: h.params,
         cont: h.cont,
         fn_body: Box::new(h.fn_body),
-        body: Cont::Expr { arg: result_bind, body: Box::new(expr) },
+        body: Cont::Expr { args: vec![result_bind], body: Box::new(expr) },
       },
     };
   }
@@ -325,7 +325,7 @@ fn lift_cont<'src>(
 ) -> Cont<'src> {
   match cont {
     Cont::Ref(val) => Cont::Ref(val),
-    Cont::Expr { arg: bind, body } => Cont::Expr { arg: bind, body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)) },
+    Cont::Expr { args, body } => Cont::Expr { args, body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)) },
   }
 }
 
@@ -429,7 +429,7 @@ fn lift_expr<'src>(
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
           args: fn_closure_args,
-          cont: Cont::Expr { arg: result_bind, body: Box::new(subst_body) },
+          cont: Cont::Expr { args: vec![result_bind], body: Box::new(subst_body) },
         }, None)
       }
     }
@@ -522,64 +522,64 @@ fn lift_expr<'src>(
       },
     },
 
-    MatchSeq { val, cursor, fail, body } => Expr {
+    MatchSeq { val, fail, body } => Expr {
       id: expr.id,
       kind: MatchSeq {
-        val, cursor,
+        val,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
         body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchNext { val, cursor, next_cursor, fail, cont } => Expr {
+    MatchNext { val, fail, cont } => Expr {
       id: expr.id,
       kind: MatchNext {
-        val, cursor, next_cursor,
+        val,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
         cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchDone { val, cursor, fail, cont } => Expr {
+    MatchDone { val, fail, cont } => Expr {
       id: expr.id,
       kind: MatchDone {
-        val, cursor,
+        val,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
         cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchNotDone { val, cursor, fail, body } => Expr {
+    MatchNotDone { val, fail, body } => Expr {
       id: expr.id,
       kind: MatchNotDone {
-        val, cursor,
+        val,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
         body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchRest { val, cursor, fail, cont } => Expr {
+    MatchRest { val, fail, cont } => Expr {
       id: expr.id,
       kind: MatchRest {
-        val, cursor,
+        val,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
         cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchRec { val, cursor, fail, body } => Expr {
+    MatchRec { val, fail, body } => Expr {
       id: expr.id,
       kind: MatchRec {
-        val, cursor,
+        val,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
         body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
       },
     },
 
-    MatchField { val, cursor, next_cursor, field, fail, cont } => Expr {
+    MatchField { val, field, fail, cont } => Expr {
       id: expr.id,
       kind: MatchField {
-        val, cursor, next_cursor, field,
+        val, field,
         fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
         cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
       },

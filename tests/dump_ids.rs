@@ -91,8 +91,8 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                     fink::passes::cps::ir::Arg::Spread(v) => dump_val(v, depth+1),
                 }
             }
-            if let fink::passes::cps::ir::Cont::Expr { arg: bind, body } = cont {
-                println!("{i}  cont bind={:?}:", bind);
+            if let fink::passes::cps::ir::Cont::Expr { args, body } = cont {
+                println!("{i}  cont args={:?}:", args);
                 dump_expr(body, depth+1);
             }
         }
@@ -115,8 +115,8 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
         Yield { value, cont } => {
             println!("{i}Expr(#{}) Yield", e.id.0);
             dump_val(value, depth+1);
-            if let fink::passes::cps::ir::Cont::Expr { arg: bind, body } = cont {
-                println!("{i}  cont bind={:?}:", bind);
+            if let fink::passes::cps::ir::Cont::Expr { args, body } = cont {
+                println!("{i}  cont args={:?}:", args);
                 dump_expr(body, depth+1);
             }
         }

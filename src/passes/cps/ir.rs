@@ -251,18 +251,20 @@ pub enum Lit<'src> {
 // ---------------------------------------------------------------------------
 
 /// A continuation — either a reference to an existing function, or an inline
-/// expression with a result binding.
+/// expression with one or more result bindings.
 ///
 /// `Ref(id)` — tail call: pass the result directly to the binding at `id`
 /// (always a `Bind::Cont` or `Bind::Synth` node).
-/// `Expr(bind, body)` — inline: bind the result to `bind`, then evaluate `body`.
+/// `Expr { args, body }` — inline: bind results to `args` in order, then evaluate `body`.
 ///
-/// The `bind` in `Expr` carries a `CpsId` used by the formatter to render
-/// compiler-generated temps as `·v_N`. No pass indexes into any table by this id.
+/// Single-result continuations use `args: vec![bind]`. Multi-result continuations
+/// (e.g. MatchNext/MatchField which yield elem + next_cursor) use two args.
+/// The `CpsId` of each bind is used by the formatter to render compiler-generated
+/// temps as `·v_N`. No pass indexes into any table by these ids.
 #[derive(Debug, Clone)]
 pub enum Cont<'src> {
   Ref(CpsId),
-  Expr { arg: BindNode, body: Box<Expr<'src>> },
+  Expr { args: Vec<BindNode>, body: Box<Expr<'src>> },
 }
 
 impl<'src> Cont<'src> {
@@ -276,9 +278,9 @@ impl<'src> Cont<'src> {
 
   /// Unwrap the inline body, panicking if this is `Cont::Ref`.
   /// Only use where `Cont::Ref` is structurally impossible.
-  pub fn unwrap_body(self) -> (BindNode, Box<Expr<'src>>) {
+  pub fn unwrap_body(self) -> (Vec<BindNode>, Box<Expr<'src>>) {
     match self {
-      Cont::Expr { arg, body } => (arg, body),
+      Cont::Expr { args, body } => (args, body),
       Cont::Ref(_) => panic!("Cont::unwrap_body called on Cont::Ref"),
     }
   }
@@ -379,74 +381,58 @@ pub enum ExprKind<'src> {
   },
 
   /// Assert `val` is a sequence; `fail` if not.
+  /// `body` receives the sequence cursor as its single arg.
   MatchSeq {
     val: Box<Val<'src>>,
-    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
-    /// The formatter renders this as `·seq_N`; codegen will derive position from structure.
-    cursor: u32,
     fail: Box<Expr<'src>>,
     body: Cont<'src>,
   },
 
-  /// Pop the head element from `val` (the current seq/cursor); bind to elem via cont.
+  /// Pop the head element from the cursor; bind to elem and next_cursor via cont.
   /// `fail` if empty.
+  /// `cont.args` = [elem_bind, next_cursor_bind].
   MatchNext {
     val: Box<Val<'src>>,
-    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
-    /// `cursor` = incoming position, `next_cursor` = advanced position (both render as `·seq_N`).
-    cursor: u32,
-    next_cursor: u32,
     fail: Box<Expr<'src>>,
     cont: Cont<'src>,
   },
 
-  /// Assert `val` (cursor) is exhausted; `fail` if elements remain.
-  /// Continuation receives the matched value.
+  /// Assert the cursor is exhausted; `fail` if elements remain.
+  /// `cont` receives the matched value as its single arg.
   MatchDone {
     val: Box<Val<'src>>,
-    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
-    cursor: u32,
     fail: Box<Expr<'src>>,
     cont: Cont<'src>,
   },
 
-  /// Assert `val` (cursor) is non-empty; `fail` if exhausted.
+  /// Assert the cursor is non-empty; `fail` if exhausted.
+  /// `body` receives no new bindings (no args).
   MatchNotDone {
     val: Box<Val<'src>>,
-    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
-    cursor: u32,
     fail: Box<Expr<'src>>,
     body: Cont<'src>,
   },
 
-  /// Bind remaining elements of `val` (cursor) as a value; zero-or-more.
-  /// Works on both seq and rec cursors.
+  /// Bind remaining elements of the cursor as a value; zero-or-more.
+  /// `cont` receives the rest value as its single arg.
   MatchRest {
     val: Box<Val<'src>>,
-    /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
-    cursor: u32,
     fail: Box<Expr<'src>>,
     cont: Cont<'src>,
   },
 
   /// Assert `val` is a record; `fail` if not.
-  /// Entry point for rec pattern traversal.
-  /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
+  /// `body` receives the record cursor as its single arg.
   MatchRec {
     val: Box<Val<'src>>,
-    /// TODO: formatting hack — mirrors MatchSeq; formatter renders this as `·rec_N`.
-    cursor: u32,
     fail: Box<Expr<'src>>,
     body: Cont<'src>,
   },
 
-  /// Extract named `field` from `val` (rec/cursor); continuation receives extracted val.
-  /// Advances the cursor: `cursor` is the incoming position, `next_cursor` the advanced one.
+  /// Extract named `field` from the cursor; advance cursor.
+  /// `cont.args` = [field_val_bind, next_cursor_bind].
   MatchField {
     val: Box<Val<'src>>,
-    /// TODO: formatting hack — mirrors MatchNext cursor/next_cursor pair.
-    cursor: u32,
-    next_cursor: u32,
     field: &'src str,
     fail: Box<Expr<'src>>,
     cont: Cont<'src>,

@@ -82,18 +82,23 @@ test 'seq destructure — MatchDone cont body hoisted', fn:
     ·fn
       fn foo, ·ƒ_3:
         ·fn
-          fn ·v_23, ·ƒ_38:
-            ·match_next ·m_0, ·panic, fn ·v_5, ·m_1:
-              ·let ·v_5, fn a:
-                ·fn
-                  fn ·v_8, ·ƒ_34:
-                    ·apply ·op_plus, a, 1, fn ·v_3:
-                      ·ƒ_3 ·v_3
-                  fn ·ƒ_33:
-                    ·match_done ·m_1, ·panic, fn ·v_33:
-                      ·ƒ_33 ·v_33
-          fn ·ƒ_37:
-            ·match_seq foo, ·panic, fn ·m_0: ·ƒ_37
+          fn ·v_5, ·ƒ_46:
+            ·fn
+              fn ·v_6, ·v_7, ·ƒ_42:
+                ·let ·v_6, fn a:
+                  ·fn
+                    fn ·v_11, ·ƒ_38:
+                      ·apply ·op_plus, a, 1, fn ·v_3:
+                        ·ƒ_3 ·v_3
+                    fn ·ƒ_37:
+                      ·match_done ·v_7, ·panic, fn ·v_37:
+                        ·ƒ_37 ·v_37
+              fn ·ƒ_41:
+                ·match_next ·v_5, ·panic, fn ·v_41:
+                  ·ƒ_41 ·v_41
+          fn ·ƒ_45:
+            ·match_seq foo, ·panic, fn ·v_45:
+              ·ƒ_45 ·v_45
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main

@@ -209,7 +209,7 @@ test 'seq destructure uses both bindings', fn:
     [a, b] = [1, 2]
     c = a
   | equals fink":
-    (ref 17, a) == (local (bind 12, a)) in scope 1
+    (ref 23, a) == (local (bind 15, a)) in scope 1
 
 test 'rec destructure', fn:
   expect cps_resolve fink":
@@ -222,7 +222,7 @@ test 'rec destructure uses binding', fn:
     {a, b} = {a: 1, b: 2}
     c = a
   | equals fink":
-    (ref 19, a) == (local (bind 13, a)) in scope 1
+    (ref 24, a) == (local (bind 16, a)) in scope 1
 
 test 'nested seq destructure', fn:
   expect cps_resolve fink":
