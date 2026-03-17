@@ -53,14 +53,14 @@ pub struct CpsResult<'src> {
 // ---------------------------------------------------------------------------
 
 /// A definition site — introduces a name into scope.
-/// `User` marks a source-level binding; the name is recoverable from the
+/// `Name` marks a source-level binding; the name is recoverable from the
 /// origin map (CpsId → AstId → AST ident). `Synth` marks a compiler-generated
 /// temp; the formatter renders it as `·v_{cps_id}` using the node's own CpsId.
 /// `Cont` marks the continuation parameter of a `LetFn`; the formatter renders
 /// it as `·ƒ_N` using the node's own CpsId.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
-  User,   // name from source: recoverable via origin map
+  Name,   // name from source: recoverable via origin map
   Synth,  // compiler-generated temp: rendered as ·v_{cps_id}
   Cont,   // continuation parameter: rendered as ·ƒ_{cps_id}
 }
@@ -70,7 +70,7 @@ pub enum Bind {
 /// of the `Bind::Synth` node it refers to — the only link, since Synth has no name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
-  Name,          // user ref: name recoverable from origin map
+  Name,          // source ref: name recoverable from origin map
   Synth(CpsId),  // compiler-generated temp: refers to Bind::Synth at the given CpsId
 }
 
@@ -78,7 +78,7 @@ impl Ref {
   /// Convert a use-site Ref to the corresponding definition-site Bind.
   pub fn to_bind(self) -> Bind {
     match self {
-      Ref::Name => Bind::User,
+      Ref::Name => Bind::Name,
       Ref::Synth(_) => Bind::Synth,
     }
   }

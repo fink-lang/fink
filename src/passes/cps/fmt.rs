@@ -180,14 +180,14 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 // ---------------------------------------------------------------------------
 
 /// Render a Bind node's name using origin map.
-/// For User bindings: recovers the source name from the AST.
+/// For Name bindings: recovers the source name from the AST.
 /// For Synth temps: always renders as `·v_N`.
 fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     Bind::Synth => format!("·v_{}", bind.id.0),
     Bind::Cont => format!("·ƒ_{}", bind.id.0),
-    Bind::User => ctx.source_name(bind.id)
-      .expect("render_bind_ctx: User bind must have origin")
+    Bind::Name => ctx.source_name(bind.id)
+      .expect("render_bind_ctx: Name bind must have origin")
       .0.to_string(),
   }
 }

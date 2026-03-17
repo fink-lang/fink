@@ -371,13 +371,13 @@ fn lift_expr<'src>(
           find_bind_for_capture(&rewritten_fn_body, cap_name, resolve, &alloc.origin, ast_index)
         }).collect();
 
-        // 2. Build User bind nodes for capture params — carry forward the
+        // 2. Build Name bind nodes for capture params — carry forward the
         //    original binding's AST origin so the formatter renders the source name.
         let cap_params: Vec<Param> = cap_bind_ids.iter().map(|bind_id| {
           let ast_origin = bind_id
             .and_then(|id| alloc.origin.try_get(id))
             .and_then(|o| *o);
-          Param::Name(alloc.bind(Bind::User, ast_origin))
+          Param::Name(alloc.bind(Bind::Name, ast_origin))
         }).collect();
 
         // 3. Build Val refs for the capture args at the call site (outer scope).
