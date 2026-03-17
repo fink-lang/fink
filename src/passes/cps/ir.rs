@@ -297,8 +297,7 @@ pub enum ExprKind<'src> {
   LetVal {
     name: BindNode,
     val: Box<Val<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
@@ -309,8 +308,7 @@ pub enum ExprKind<'src> {
     params: Vec<Param>,
     cont: BindNode,
     fn_body: Box<Expr<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Mutually recursive group — all names visible in all fn_bodies.
@@ -318,8 +316,7 @@ pub enum ExprKind<'src> {
   /// Cross-refs not behind a fn boundary → Unresolved or Captured with depth=0 (name error).
   LetRec {
     bindings: Vec<Binding<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Call func with args; continuation receives the result.
@@ -349,8 +346,7 @@ pub enum ExprKind<'src> {
     name: BindNode,
     val: Box<Val<'src>>,
     fail: Box<Expr<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Apply `func` to `args`; continuation receives the result; `fail` if tag is wrong.
@@ -370,8 +366,7 @@ pub enum ExprKind<'src> {
     func: Callable<'src>,
     args: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Assert val equals a literal; `fail` if not.
@@ -380,8 +375,7 @@ pub enum ExprKind<'src> {
     val: Box<Val<'src>>,
     lit: Lit<'src>,
     fail: Box<Expr<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Assert `val` is a sequence; `fail` if not.
@@ -391,8 +385,7 @@ pub enum ExprKind<'src> {
     /// The formatter renders this as `·seq_N`; codegen will derive position from structure.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Pop the head element from `val` (the current seq/cursor); bind to elem via cont.
@@ -423,8 +416,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Bind remaining elements of `val` (cursor) as a value; zero-or-more.
@@ -445,8 +437,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — mirrors MatchSeq; formatter renders this as `·rec_N`.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Extract named `field` from `val` (rec/cursor); continuation receives extracted val.
@@ -487,11 +478,6 @@ pub enum ExprKind<'src> {
     value: Box<Val<'src>>,
     cont: Cont<'src>,
   },
-
-  /// Tail call to a continuation — passes `val` to the cont identified by `cont`.
-  /// Replaces the anonymous `Ret(val)` — the cont is now the explicit `·ƒ_cont` parameter
-  /// allocated for the enclosing `LetFn`.
-  Ret(Box<Val<'src>>, CpsId),
 
   /// Unconditional failure — pattern match with no recovery.
   /// Used as the `fail` expr for irrefutable patterns (·panic equivalent).

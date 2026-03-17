@@ -245,15 +245,21 @@ fn collect_scope_names<'src>(
   match &expr.kind {
     LetFn { name, body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
+      }
     }
     LetVal { name, body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
+      }
     }
     MatchLetVal { name, body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
+      }
     }
     App { cont: Cont::Expr { arg: result, body }, .. } |
     Yield { cont: Cont::Expr { arg: result, body }, .. } => {
@@ -278,15 +284,13 @@ fn resolve_expr<'src>(
   use ExprKind::*;
   let sb = self_bind;
   match &expr.kind {
-    Ret(val, _cont_id) => {
-      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
-    }
-
     LetVal { name, val, body } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     LetFn { name, params, fn_body, body, .. } => {
@@ -303,11 +307,15 @@ fn resolve_expr<'src>(
       // Determine self_bind for the fn body: the hoisted name that binds
       // this LetFn's result. The CPS transform produces the fn bind in the
       // continuation — either as LetVal or MatchLetVal. Extract it from
-      // the continuation's first bind node.
-      let cont_bind_id = match &body.kind {
-        ExprKind::LetVal { name: cn, .. } => Some(cn.id),
-        ExprKind::MatchLetVal { name: cn, .. } => Some(cn.id),
-        _ => None,
+      // the continuation's first bind node (if it's Cont::Expr).
+      let cont_bind_id = if let Cont::Expr { body: cont_body, .. } = body {
+        match &cont_body.kind {
+          ExprKind::LetVal { name: cn, .. } => Some(cn.id),
+          ExprKind::MatchLetVal { name: cn, .. } => Some(cn.id),
+          _ => None,
+        }
+      } else {
+        None
       };
       let fn_self_bind = cont_bind_id
         .and_then(|id| ctx.source_name(id))
@@ -326,7 +334,9 @@ fn resolve_expr<'src>(
       // continuation scope: sequential (only names defined so far)
       let mut cont_scope = scope.clone();
       bind_to_scope(&mut cont_scope, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &cont_scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &cont_scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     LetRec { bindings, body } => {
@@ -352,7 +362,9 @@ fn resolve_expr<'src>(
         }
         resolve_expr(&b.fn_body, &fn_scope, fn_scope_id, rec_self_bind, fn_depth + 1, ctx, graphs);
       }
-      resolve_expr(body, &rec_scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &rec_scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     App { func, args, cont } => {
@@ -392,7 +404,9 @@ fn resolve_expr<'src>(
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchApp { func, args, fail, cont } => {
@@ -410,19 +424,25 @@ fn resolve_expr<'src>(
       resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for v in args { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchValue { val, fail, body, .. } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchSeq { val, fail, body, .. } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchNext { fail, cont, .. } => {
@@ -445,7 +465,9 @@ fn resolve_expr<'src>(
 
     MatchNotDone { fail, body, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchRest { fail, cont, .. } => {
@@ -460,7 +482,9 @@ fn resolve_expr<'src>(
     MatchRec { val, fail, body, .. } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchField { fail, cont, .. } => {
@@ -594,23 +618,27 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      Ret(val, _) => { emit_classified_val(val, result, ctx, out); }
-
       LetVal { val, body, .. } => {
         emit_classified_val(val, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_lines(body_expr, result, ctx, out);
+        }
       }
 
       LetFn { fn_body, body, .. } => {
         collect_classified_lines(fn_body, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_lines(body_expr, result, ctx, out);
+        }
       }
 
       LetRec { bindings, body } => {
         for b in bindings {
           collect_classified_lines(&b.fn_body, result, ctx, out);
         }
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_lines(body_expr, result, ctx, out);
+        }
       }
 
       App { func, args, cont } => {
@@ -635,7 +663,7 @@ mod tests {
       MatchLetVal { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchApp { func, args, fail, cont } => {
         emit_classified_callable(func, result, ctx, out);
@@ -647,17 +675,17 @@ mod tests {
         emit_classified_callable(func, result, ctx, out);
         for v in args { emit_classified_val(v, result, ctx, out); }
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchValue { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchSeq { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchNext { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
@@ -669,7 +697,7 @@ mod tests {
       }
       MatchNotDone { fail, body, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchRest { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
@@ -678,7 +706,7 @@ mod tests {
       MatchRec { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchField { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);

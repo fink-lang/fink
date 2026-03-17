@@ -39,7 +39,9 @@ test 'fn with no captures', fn:
 
   | equals fink":
     ·fn
-      fn x, ·ƒ_3: ·ƒ_3 x
+      fn x, ·ƒ_3:
+        ·let x, fn ·v_5:
+          ·ƒ_3 ·v_5
       fn ·v_1:
         ·let ·v_1, fn f:
           ·ƒ_0 f
@@ -57,8 +59,8 @@ test 'self-recursive fn is pure', fn:
   | equals fink":
     ·fn
       fn a, ·ƒ_3:
-        ·apply f, a, fn ·v_6:
-          ·ƒ_3 ·v_6
+        ·apply f, a, fn ·v_3:
+          ·ƒ_3 ·v_3
       fn ·v_1:
         ·let ·v_1, fn f:
           ·ƒ_0 f
@@ -75,16 +77,16 @@ test 'mutual recursion — each fn captures the other', fn:
       fn ·ƒ_2:
         ·fn
           fn {cap: [g]}, a, ·ƒ_5:
-            ·apply g, a, fn ·v_8:
-              ·ƒ_5 ·v_8
+            ·apply g, a, fn ·v_5:
+              ·ƒ_5 ·v_5
           fn ·v_3:
             ·let ·v_3, fn f:
               ·fn
-                fn {cap: [f]}, b, ·ƒ_16:
-                  ·apply f, b, fn ·v_19:
-                    ·ƒ_16 ·v_19
-                fn ·v_14:
-                  ·let ·v_14, fn g:
+                fn {cap: [f]}, b, ·ƒ_15:
+                  ·apply f, b, fn ·v_15:
+                    ·ƒ_15 ·v_15
+                fn ·v_13:
+                  ·let ·v_13, fn g:
                     ·ƒ_2 g
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -107,7 +109,9 @@ test 'depth-2 capture — fn b directly uses x, fn a does not', fn:
           ·fn
             fn a, ·ƒ_7:
               ·fn
-                fn {cap: [x]}, b, ·ƒ_10: ·ƒ_10 x
+                fn {cap: [x]}, b, ·ƒ_10:
+                  ·let x, fn ·v_12:
+                    ·ƒ_10 ·v_12
                 fn ·v_8: ·ƒ_7 ·v_8
             fn ·v_5: ·ƒ_2 ·v_5
       fn ·v_1: ·ƒ_0 ·v_1
@@ -126,8 +130,8 @@ test 'multiple captures', fn:
           ·let 2, fn y:
             ·fn
               fn {cap: [x, y]}, a, ·ƒ_9:
-                ·apply ·op_plus, x, y, fn ·v_12:
-                  ·ƒ_9 ·v_12
+                ·apply ·op_plus, x, y, fn ·v_9:
+                  ·ƒ_9 ·v_9
               fn ·v_7: ·ƒ_2 ·v_7
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -147,8 +151,8 @@ test 'fn captures one outer binding', fn:
       fn a, ·ƒ_3:
         ·fn
           fn {cap: [a]}, b, ·ƒ_6:
-            ·apply ·op_plus, a, b, fn ·v_9:
-              ·ƒ_6 ·v_9
+            ·apply ·op_plus, a, b, fn ·v_6:
+              ·ƒ_6 ·v_6
           fn ·v_4: ·ƒ_3 ·v_4
       fn ·v_1:
         ·let ·v_1, fn foo:

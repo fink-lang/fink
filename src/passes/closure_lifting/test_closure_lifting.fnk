@@ -31,7 +31,9 @@ test 'pure fn is unchanged', fn:
 
   | equals fink":
     ·fn
-      fn x, ·ƒ_3: ·ƒ_3 x
+      fn x, ·ƒ_3:
+        ·let x, fn ·v_5:
+          ·ƒ_3 ·v_5
       fn ·v_1:
         ·let ·v_1, fn f:
           ·ƒ_0 f
@@ -46,7 +48,9 @@ test 'pure nested fn — inner fn stays nested', fn:
     ·fn
       fn a, ·ƒ_3:
         ·fn
-          fn b, ·ƒ_6: ·ƒ_6 b
+          fn b, ·ƒ_6:
+            ·let b, fn ·v_8:
+              ·ƒ_6 ·v_8
           fn ·v_4: ·ƒ_3 ·v_4
       fn ·v_1:
         ·let ·v_1, fn foo:
@@ -65,14 +69,14 @@ test 'captured binding becomes leading param', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_26:
-        ·apply ·op_plus, a, b, fn ·v_9:
-          ·ƒ_6 ·v_9
-      fn ·v_25:
+      fn a, b, ·ƒ_24:
+        ·apply ·op_plus, a, b, fn ·v_6:
+          ·ƒ_6 ·v_6
+      fn ·v_23:
         ·fn
           fn a, ·ƒ_3:
-            ·apply ·fn_closure, ·v_25, a, fn ·v_28:
-              ·let ·v_28, fn ·v_4:
+            ·apply ·fn_closure, ·v_23, a, fn ·v_26:
+              ·let ·v_26, fn ·v_4:
                 ·ƒ_3 ·v_4
           fn ·v_1:
             ·let ·v_1, fn foo:
@@ -88,21 +92,21 @@ test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_47:
-        ·apply ·fn_closure, ·v_37, a, b, fn ·v_40:
-          ·let ·v_40, fn ·v_7:
+      fn a, b, ·ƒ_46:
+        ·apply ·fn_closure, ·v_35, a, b, fn ·v_38:
+          ·let ·v_38, fn ·v_7:
             ·ƒ_6 ·v_7
-      fn ·v_46:
+      fn ·v_45:
         ·fn
-          fn a, b, c, ·ƒ_38:
+          fn a, b, c, ·ƒ_36:
             ·apply ·op_plus, a, b, fn ·v_12:
-              ·apply ·op_plus, ·v_12, c, fn ·v_15:
-                ·ƒ_9 ·v_15
-          fn ·v_37:
+              ·apply ·op_plus, ·v_12, c, fn ·v_9:
+                ·ƒ_9 ·v_9
+          fn ·v_35:
             ·fn
               fn a, ·ƒ_3:
-                ·apply ·fn_closure, ·v_46, a, fn ·v_49:
-                  ·let ·v_49, fn ·v_4:
+                ·apply ·fn_closure, ·v_45, a, fn ·v_48:
+                  ·let ·v_48, fn ·v_4:
                     ·ƒ_3 ·v_4
               fn ·v_1:
                 ·let ·v_1, fn foo:
@@ -118,20 +122,20 @@ test 'multiple captures — all captured vars become leading params', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_43:
-        ·apply ·fn_closure, ·v_33, a, b, fn ·v_36:
-          ·let ·v_36, fn ·v_7:
+      fn a, b, ·ƒ_41:
+        ·apply ·fn_closure, ·v_30, a, b, fn ·v_33:
+          ·let ·v_33, fn ·v_7:
             ·ƒ_6 ·v_7
-      fn ·v_42:
+      fn ·v_40:
         ·fn
-          fn a, b, c, ·ƒ_34:
-            ·apply ·op_plus, a, b, fn ·v_12:
-              ·ƒ_9 ·v_12
-          fn ·v_33:
+          fn a, b, c, ·ƒ_31:
+            ·apply ·op_plus, a, b, fn ·v_9:
+              ·ƒ_9 ·v_9
+          fn ·v_30:
             ·fn
               fn a, ·ƒ_3:
-                ·apply ·fn_closure, ·v_42, a, fn ·v_45:
-                  ·let ·v_45, fn ·v_4:
+                ·apply ·fn_closure, ·v_40, a, fn ·v_43:
+                  ·let ·v_43, fn ·v_4:
                     ·ƒ_3 ·v_4
               fn ·v_1:
                 ·let ·v_1, fn foo:
@@ -148,22 +152,24 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
   | equals fink":
     ·fn
       fn a, b, ·ƒ_41:
-        ·apply ·op_plus, a, b, fn ·v_18:
-          ·ƒ_15 ·v_18
+        ·apply ·op_plus, a, b, fn ·v_16:
+          ·ƒ_16 ·v_16
       fn ·v_40:
         ·fn
           fn ·ƒ_2:
             ·fn
-              fn x, ·ƒ_5: ·ƒ_5 x
+              fn x, ·ƒ_5:
+                ·let x, fn ·v_7:
+                  ·ƒ_5 ·v_7
               fn ·v_3:
                 ·let ·v_3, fn f:
                   ·fn
-                    fn a, ·ƒ_12:
+                    fn a, ·ƒ_13:
                       ·apply ·fn_closure, ·v_40, a, fn ·v_43:
-                        ·let ·v_43, fn ·v_13:
-                          ·ƒ_12 ·v_13
-                    fn ·v_10:
-                      ·let ·v_10, fn g:
+                        ·let ·v_43, fn ·v_14:
+                          ·ƒ_13 ·v_14
+                    fn ·v_11:
+                      ·let ·v_11, fn g:
                         ·ƒ_2 g
           fn ·v_1: ·ƒ_0 ·v_1
 

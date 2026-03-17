@@ -144,10 +144,13 @@ fn fail_cont_expr(g: &mut Gen, origin: Option<AstId>) -> Expr<'static> {
   g.expr(ExprKind::FailCont, origin)
 }
 
-/// Emit a tail call to the current cont with `val` as argument.
-/// This is the leaf of every function body — `·ƒ_cont val` in the output.
-fn ret_expr<'src>(g: &mut Gen, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
-  g.expr(ExprKind::Ret(Box::new(val), g.cont), origin)
+/// Wrap a bare value as the leaf of a function body.
+/// Produces `LetVal { name: fresh, val, body: Cont::Ref(g.cont) }`.
+/// Only used when the last expression has no pending bindings (pure atom).
+fn wrap_val<'src>(g: &mut Gen, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
+  let name = g.fresh_result(origin);
+  let cont = g.cont;
+  g.expr(ExprKind::LetVal { name, val: Box::new(val), body: Cont::Ref(cont) }, origin)
 }
 
 /// Emit an App node: func(args...) → result; body.
@@ -290,8 +293,13 @@ fn lower_seq<'src>(g: &mut Gen, exprs: &'src [Node<'src>]) -> Expr<'src> {
     if is_last {
       let (val, pending) = lower(g, expr);
       all_pending.extend(pending);
-      let tail = ret_expr(g, val, o);
-      return wrap(g, all_pending, tail);
+      if all_pending.is_empty() {
+        // Bare atom — wrap directly.
+        return wrap_val(g, val, o);
+      }
+      // The innermost pending item will get Cont::Ref(g.cont) as its body.
+      // The val flows via the last bound name, so we don't need an extra wrapper.
+      return wrap(g, all_pending, Cont::Ref(g.cont));
     } else {
       match &expr.kind {
         // Bind introduces a name available in subsequent expressions.
@@ -485,7 +493,9 @@ fn extract_params_with_gen<'src>(
 
 /// Wrap `body` in Match* nodes for each deferred pattern entry, innermost first.
 fn prepend_pat_binds<'src>(g: &mut Gen, deferred: Vec<Pending<'src>>, body: Expr<'src>) -> Expr<'src> {
-  wrap(g, deferred, body)
+  if deferred.is_empty() { return body; }
+  let arg = g.fresh_result(None);
+  wrap(g, deferred, Cont::Expr { arg, body: Box::new(body) })
 }
 
 fn extract_params<'src>(g: &mut Gen, params: &'src Node<'src>) -> Vec<Param> {
@@ -876,7 +886,9 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
         lower_pat_lhs(g, pat_node, scrutinee_val, origin, &mut arm_pending);
       }
       let arm_tail = lower_seq(g, &body.items);
-      wrap_with_fail(g, arm_pending, arm_tail, fail_cont_expr)
+      if arm_pending.is_empty() { return arm_tail; }
+      let arg = g.fresh_result(origin);
+      wrap_with_fail(g, arm_pending, Cont::Expr { arg, body: Box::new(arm_tail) }, fail_cont_expr)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
   }
@@ -946,185 +958,165 @@ enum Pending<'src> {
   Yield { value: Val<'src>, result: BindNode, origin: Option<AstId> },
 }
 
-fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Expr<'src>) -> Expr<'src> {
+impl<'src> Pending<'src> {
+  fn origin(&self) -> Option<AstId> {
+    match self {
+      Pending::Val { origin, .. } | Pending::Fn { origin, .. } | Pending::App { origin, .. }
+      | Pending::MatchBlock { origin, .. } | Pending::MatchBind { origin, .. }
+      | Pending::MatchGuard { origin, .. } | Pending::MatchValue { origin, .. }
+      | Pending::MatchSeq { origin, .. } | Pending::MatchNext { origin, .. }
+      | Pending::MatchDone { origin, .. } | Pending::MatchNotDone { origin, .. }
+      | Pending::MatchRest { origin, .. } | Pending::MatchRec { origin, .. }
+      | Pending::MatchField { origin, .. } | Pending::Yield { origin, .. } => *origin,
+    }
+  }
+}
+
+/// For `cont:`-typed pending items (App, MatchNext, etc.): when the current item is at
+/// the leaf (`Cont::Ref`), use it directly; when non-leaf, wrap the inner body with the
+/// pre-allocated `result` bind node.
+fn cont_with_result<'src>(body_cont: Cont<'src>, result: BindNode) -> Cont<'src> {
+  match body_cont {
+    Cont::Ref(_) => body_cont,
+    Cont::Expr { body, .. } => Cont::Expr { arg: result, body },
+  }
+}
+
+fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Cont<'src>) -> Expr<'src> {
   wrap_with_fail(g, bindings, tail, panic_expr)
 }
 
 /// Like `wrap`, but uses `make_fail(origin)` to produce the fail cont for each Match* node.
 /// Used for arm bodies inside a MatchBlock, where failure should delegate to `·ƒ_fail`.
+/// `tail` is the continuation for the innermost (last) binding.
+/// Each non-leaf binding gets `Cont::Expr { arg: fresh, body: Box::new(next_expr) }`.
 fn wrap_with_fail<'src>(
   g: &mut Gen,
   bindings: Vec<Pending<'src>>,
-  tail: Expr<'src>,
+  tail: Cont<'src>,
   make_fail: fn(&mut Gen, Option<AstId>) -> Expr<'static>,
 ) -> Expr<'src> {
-  bindings.into_iter().rev().fold(tail, |body, pending| match pending {
-    Pending::Val { name, val, origin } => g.expr(
-      ExprKind::LetVal { name, val: Box::new(val), body: Box::new(body) },
-      origin,
-    ),
-    Pending::Fn { name, params, cont, fn_body, origin } => g.expr(
-      ExprKind::LetFn {
-        name,
-        params,
-        cont,
-        fn_body: Box::new(fn_body),
-        body: Box::new(body),
-      },
-      origin,
-    ),
-    Pending::App { func, args, result, origin } => g.expr(
-      ExprKind::App {
-        func,
-        args,
-        cont: Cont::Expr { arg: result, body: Box::new(body) },
-      },
-      origin,
-    ),
-    Pending::MatchBlock { params, arm_params, arms, result, origin } => {
-      let fail = Box::new(panic_expr(g, origin));
-      g.expr(
-        ExprKind::MatchBlock {
-          params,
-          arm_params,
-          fail,
-          arms,
-          cont: Cont::Expr { arg: result, body: Box::new(body) },
-        },
+  // Fold right-to-left. The accumulator starts as `tail: Cont` and becomes
+  // `Expr` after the first (innermost) pending item is processed.
+  // We use an enum to track whether we have a Cont (leaf) or Expr (non-leaf).
+  enum Acc<'s> {
+    Tail(Cont<'s>),
+    Expr(Expr<'s>),
+  }
+  let acc = bindings.into_iter().rev().fold(Acc::Tail(tail), |acc, pending| {
+    let body_cont: Cont<'src> = match acc {
+      Acc::Tail(cont) => cont,
+      Acc::Expr(inner) => {
+        let arg = g.fresh_result(pending.origin());
+        Cont::Expr { arg, body: Box::new(inner) }
+      }
+    };
+    Acc::Expr(match pending {
+      Pending::Val { name, val, origin } => g.expr(
+        ExprKind::LetVal { name, val: Box::new(val), body: body_cont },
         origin,
-      )
-    },
-    Pending::MatchBind { name, val, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchLetVal {
+      ),
+      Pending::Fn { name, params, cont, fn_body, origin } => g.expr(
+        ExprKind::LetFn {
           name,
-          val: Box::new(val),
-          fail,
-          body: Box::new(body),
+          params,
+          cont,
+          fn_body: Box::new(fn_body),
+          body: body_cont,
         },
         origin,
-      )
-    },
-    Pending::MatchGuard { func, args, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchIf {
-          func,
-          args,
-          fail,
-          body: Box::new(body),
-        },
+      ),
+      Pending::App { func, args, result, origin } => g.expr(
+        ExprKind::App { func, args, cont: cont_with_result(body_cont, result) },
         origin,
-      )
-    },
-    Pending::MatchValue { val, lit, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchValue {
-          val: Box::new(val),
-          lit,
-          fail,
-          body: Box::new(body),
-        },
-        origin,
-      )
-    },
-    Pending::MatchSeq { val, cursor, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchSeq {
-          val: Box::new(val),
-          cursor,
-          fail,
-          body: Box::new(body),
-        },
-        origin,
-      )
-    },
-    Pending::MatchNext { val, cursor, next_cursor, elem, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchNext {
-          val: Box::new(val),
-          cursor,
-          next_cursor,
-          fail,
-          cont: Cont::Expr { arg: elem, body: Box::new(body) },
-        },
-        origin,
-      )
-    },
-    Pending::MatchDone { val, cursor, result, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchDone {
-          val: Box::new(val),
-          cursor,
-          fail,
-          cont: Cont::Expr { arg: result, body: Box::new(body) },
-        },
-        origin,
-      )
-    },
-    Pending::MatchNotDone { val, cursor, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchNotDone {
-          val: Box::new(val),
-          cursor,
-          fail,
-          body: Box::new(body),
-        },
-        origin,
-      )
-    },
-    Pending::MatchRest { val, cursor, result, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchRest {
-          val: Box::new(val),
-          cursor,
-          fail,
-          cont: Cont::Expr { arg: result, body: Box::new(body) },
-        },
-        origin,
-      )
-    },
-    Pending::MatchRec { val, cursor, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchRec {
-          val: Box::new(val),
-          cursor,
-          fail,
-          body: Box::new(body),
-        },
-        origin,
-      )
-    },
-    Pending::MatchField { val, cursor, next_cursor, field, elem, origin } => {
-      let fail = Box::new(make_fail(g, origin));
-      g.expr(
-        ExprKind::MatchField {
-          val: Box::new(val),
-          cursor,
-          next_cursor,
-          field,
-          fail,
-          cont: Cont::Expr { arg: elem, body: Box::new(body) },
-        },
-        origin,
-      )
-    },
-    Pending::Yield { value, result, origin } => g.expr(
-      ExprKind::Yield {
-        value: Box::new(value),
-        cont: Cont::Expr { arg: result, body: Box::new(body) },
+      ),
+      Pending::MatchBlock { params, arm_params, arms, result, origin } => {
+        let fail = Box::new(panic_expr(g, origin));
+        g.expr(
+          ExprKind::MatchBlock { params, arm_params, fail, arms, cont: cont_with_result(body_cont, result) },
+          origin,
+        )
       },
-      origin,
-    ),
-  })
+      Pending::MatchBind { name, val, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchLetVal { name, val: Box::new(val), fail, body: body_cont },
+          origin,
+        )
+      },
+      Pending::MatchGuard { func, args, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchIf { func, args, fail, body: body_cont },
+          origin,
+        )
+      },
+      Pending::MatchValue { val, lit, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchValue { val: Box::new(val), lit, fail, body: body_cont },
+          origin,
+        )
+      },
+      Pending::MatchSeq { val, cursor, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchSeq { val: Box::new(val), cursor, fail, body: body_cont },
+          origin,
+        )
+      },
+      Pending::MatchNext { val, cursor, next_cursor, elem, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchNext { val: Box::new(val), cursor, next_cursor, fail, cont: cont_with_result(body_cont, elem) },
+          origin,
+        )
+      },
+      Pending::MatchDone { val, cursor, result, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchDone { val: Box::new(val), cursor, fail, cont: cont_with_result(body_cont, result) },
+          origin,
+        )
+      },
+      Pending::MatchNotDone { val, cursor, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchNotDone { val: Box::new(val), cursor, fail, body: body_cont },
+          origin,
+        )
+      },
+      Pending::MatchRest { val, cursor, result, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchRest { val: Box::new(val), cursor, fail, cont: cont_with_result(body_cont, result) },
+          origin,
+        )
+      },
+      Pending::MatchRec { val, cursor, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchRec { val: Box::new(val), cursor, fail, body: body_cont },
+          origin,
+        )
+      },
+      Pending::MatchField { val, cursor, next_cursor, field, elem, origin } => {
+        let fail = Box::new(make_fail(g, origin));
+        g.expr(
+          ExprKind::MatchField { val: Box::new(val), cursor, next_cursor, field, fail, cont: cont_with_result(body_cont, elem) },
+          origin,
+        )
+      },
+      Pending::Yield { value, result, origin } => g.expr(
+        ExprKind::Yield { value: Box::new(value), cont: cont_with_result(body_cont, result) },
+        origin,
+      ),
+    })
+  });
+  match acc {
+    Acc::Expr(e) => e,
+    Acc::Tail(_) => unreachable!("wrap_with_fail called with empty bindings"),
+  }
 }
 
 
@@ -1155,7 +1147,7 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>]) -> CpsResult<'src> {
   if exprs.is_empty() {
     let origin: Option<AstId> = None;
     let empty_seq = lit_val(&mut g, Lit::Seq, origin);
-    let root = ret_expr(&mut g, empty_seq, origin);
+    let root = wrap_val(&mut g, empty_seq, origin);
     return CpsResult { root, origin: g.origin };
   }
   let root = lower_seq(&mut g, exprs);
@@ -1166,8 +1158,12 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>]) -> CpsResult<'src> {
 pub fn lower_expr<'src>(node: &'src Node<'src>) -> CpsResult<'src> {
   let mut g = Gen::new();
   let (val, pending) = lower(&mut g, node);
-  let tail = ret_expr(&mut g, val, Some(node.id));
-  let root = wrap(&mut g, pending, tail);
+  let cont = g.cont;
+  let root = if pending.is_empty() {
+    wrap_val(&mut g, val, Some(node.id))
+  } else {
+    wrap(&mut g, pending, Cont::Ref(cont))
+  };
   CpsResult { root, origin: g.origin }
 }
 
@@ -1499,8 +1495,9 @@ mod tests {
     let src = Box::leak("42".to_string().into_boxed_str());
     let node = parse_single(src);
     let result = lower_expr(&node);
-    assert!(matches!(result.root.kind, ExprKind::Ret(..)));
-    if let ExprKind::Ret(val, _) = &result.root.kind {
+    // After the Ret removal, a bare value lowers to LetVal { val, body: Cont::Ref }
+    assert!(matches!(result.root.kind, ExprKind::LetVal { .. }));
+    if let ExprKind::LetVal { val, body: Cont::Ref(_), .. } = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Lit(Lit::Int(42))));
     }
   }
@@ -1510,8 +1507,9 @@ mod tests {
     let src = Box::leak("foo".to_string().into_boxed_str());
     let node = parse_single(src);
     let result = lower_expr(&node);
-    assert!(matches!(result.root.kind, ExprKind::Ret(..)));
-    if let ExprKind::Ret(val, _) = &result.root.kind {
+    // After the Ret removal, a bare ref lowers to LetVal { val: Ref, body: Cont::Ref }
+    assert!(matches!(result.root.kind, ExprKind::LetVal { .. }));
+    if let ExprKind::LetVal { val, body: Cont::Ref(_), .. } = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Ref(_)));
     }
   }

@@ -123,18 +123,16 @@ fn collect_captured_in_body<'src>(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    Ret(val, _cont_id) => collect_val(val, resolve, origin, ast_index, captures),
-
     LetVal { val, body, .. } => {
       collect_val(val, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     LetFn { body, .. } => {
       // Don't descend into fn_body — captures inside nested fns belong to those
       // fns and are registered separately by collect_expr. Only walk the
       // continuation (same scope level as the outer fn).
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     App { func, args, cont } => {
@@ -161,7 +159,7 @@ fn collect_captured_in_body<'src>(
     MatchLetVal { val, fail, body, .. } => {
       collect_val(val, resolve, origin, ast_index, captures);
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     MatchApp { func, args, fail, cont } => {
@@ -175,19 +173,19 @@ fn collect_captured_in_body<'src>(
       collect_callable(func, resolve, origin, ast_index, captures);
       for v in args { collect_val(v, resolve, origin, ast_index, captures); }
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     MatchValue { val, fail, body, .. } => {
       collect_val(val, resolve, origin, ast_index, captures);
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     MatchSeq { val, fail, body, .. } => {
       collect_val(val, resolve, origin, ast_index, captures);
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     MatchNext { fail, cont, .. } => {
@@ -202,7 +200,7 @@ fn collect_captured_in_body<'src>(
 
     MatchNotDone { fail, body, .. } => {
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     MatchRest { fail, cont, .. } => {
@@ -213,7 +211,7 @@ fn collect_captured_in_body<'src>(
     MatchRec { val, fail, body, .. } => {
       collect_val(val, resolve, origin, ast_index, captures);
       collect_captured_in_body(fail, resolve, origin, ast_index, captures);
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     MatchField { fail, cont, .. } => {
@@ -230,7 +228,7 @@ fn collect_captured_in_body<'src>(
 
     LetRec { body, .. } => {
       // Don't descend into rec fn bodies — handled by collect_expr.
-      collect_captured_in_body(body, resolve, origin, ast_index, captures);
+      collect_cont(body, resolve, origin, ast_index, captures);
     }
 
     Panic | FailCont => {}
@@ -258,12 +256,14 @@ fn collect_expr<'src>(
 
       // Recurse into fn_body (deeper) and continuation (same depth).
       collect_expr(fn_body, resolve, origin, ast_index, fn_depth + 1, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
 
       let _ = params;
     }
 
-    LetVal { body, .. } => collect_expr(body, resolve, origin, ast_index, fn_depth, graph),
+    LetVal { body, .. } => {
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
+    }
 
     App { cont, .. } => {
       if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
@@ -282,12 +282,12 @@ fn collect_expr<'src>(
       for b in bindings {
         collect_expr(&b.fn_body, resolve, origin, ast_index, fn_depth + 1, graph);
       }
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchLetVal { fail, body, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchApp { fail, cont, .. } => {
@@ -297,17 +297,17 @@ fn collect_expr<'src>(
 
     MatchIf { fail, body, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchValue { fail, body, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchSeq { fail, body, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchNext { fail, cont, .. } => {
@@ -322,7 +322,7 @@ fn collect_expr<'src>(
 
     MatchNotDone { fail, body, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchRest { fail, cont, .. } => {
@@ -332,7 +332,7 @@ fn collect_expr<'src>(
 
     MatchRec { fail, body, .. } => {
       collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(body, resolve, origin, ast_index, fn_depth, graph);
+      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     MatchField { fail, cont, .. } => {
@@ -346,7 +346,7 @@ fn collect_expr<'src>(
       if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
-    Ret(..) | Panic | FailCont => {}
+    Panic | FailCont => {}
   }
 }
 
