@@ -6,8 +6,8 @@
 //
 // Scope is structural (nesting). Env and state are implicit.
 // Every function has an explicit name (user or synthetic).
-// Ref nodes carry `Ref::Name` (user) or `Ref::Gen(CpsId)` (compiler temp,
-// pointing at the Bind::Gen node); resolution is a side-table populated
+// Ref nodes carry `Ref::Name` (user) or `Ref::Synth(CpsId)` (compiler temp,
+// pointing at the Bind::Synth node); resolution is a side-table populated
 // by the resolve pass.
 
 // ---------------------------------------------------------------------------
@@ -53,31 +53,41 @@ pub struct CpsResult<'src> {
 // ---------------------------------------------------------------------------
 
 /// A definition site — introduces a name into scope.
-/// `User` marks a source-level binding; the name is recoverable from the
-/// origin map (CpsId → AstId → AST ident). `Gen` marks a compiler-generated
+/// `Name` marks a source-level binding; the name is recoverable from the
+/// origin map (CpsId → AstId → AST ident). `Synth` marks a compiler-generated
 /// temp; the formatter renders it as `·v_{cps_id}` using the node's own CpsId.
+/// `Cont` marks the continuation parameter of a `LetFn`; the formatter renders
+/// it as `·ƒ_N` using the node's own CpsId.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
-  User,  // name from source: recoverable via origin map
-  Gen,   // compiler-generated temp: rendered as ·v_{cps_id}
+  Name,   // name from source: recoverable via origin map
+  Synth,  // compiler-generated temp: rendered as ·v_{cps_id}
+  Cont,   // continuation parameter: rendered as ·ƒ_{cps_id}
 }
 
 /// A use site — references a binding. `Name` for user names (identity from
-/// origin map), `Gen(CpsId)` for compiler temps (carries the CpsId of the
-/// `Bind::Gen` node it refers to — the only link, since Gen has no name).
+/// origin map), `Synth(CpsId)` for compiler-generated temps (carries the CpsId
+/// of the `Bind::Synth` node it refers to — the only link, since Synth has no name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
-  Name,          // user ref: name recoverable from origin map
-  Gen(CpsId),    // compiler-generated temp: refers to Bind::Gen at the given CpsId
+  Name,          // source ref: name recoverable from origin map
+  Synth(CpsId),  // compiler-generated temp: refers to Bind::Synth at the given CpsId
 }
 
 impl Ref {
   /// Convert a use-site Ref to the corresponding definition-site Bind.
   pub fn to_bind(self) -> Bind {
     match self {
-      Ref::Name => Bind::User,
-      Ref::Gen(_) => Bind::Gen,
+      Ref::Name => Bind::Name,
+      Ref::Synth(_) => Bind::Synth,
     }
+  }
+}
+
+impl Bind {
+  /// True if this bind introduces a continuation parameter.
+  pub fn is_cont(self) -> bool {
+    matches!(self, Bind::Cont)
   }
 }
 
@@ -237,6 +247,44 @@ pub enum Lit<'src> {
 }
 
 // ---------------------------------------------------------------------------
+// Continuations
+// ---------------------------------------------------------------------------
+
+/// A continuation — either a reference to an existing function, or an inline
+/// expression with a result binding.
+///
+/// `Ref(id)` — tail call: pass the result directly to the binding at `id`
+/// (always a `Bind::Cont` or `Bind::Synth` node).
+/// `Expr(bind, body)` — inline: bind the result to `bind`, then evaluate `body`.
+///
+/// The `bind` in `Expr` carries a `CpsId` used by the formatter to render
+/// compiler-generated temps as `·v_N`. No pass indexes into any table by this id.
+#[derive(Debug, Clone)]
+pub enum Cont<'src> {
+  Ref(CpsId),
+  Expr { arg: BindNode, body: Box<Expr<'src>> },
+}
+
+impl<'src> Cont<'src> {
+  /// Return the inline body if this is `Cont::Expr`, else `None`.
+  pub fn body(&self) -> Option<&Expr<'src>> {
+    match self {
+      Cont::Ref(_) => None,
+      Cont::Expr { body, .. } => Some(body),
+    }
+  }
+
+  /// Unwrap the inline body, panicking if this is `Cont::Ref`.
+  /// Only use where `Cont::Ref` is structurally impossible.
+  pub fn unwrap_body(self) -> (BindNode, Box<Expr<'src>>) {
+    match self {
+      Cont::Expr { arg, body } => (arg, body),
+      Cont::Ref(_) => panic!("Cont::unwrap_body called on Cont::Ref"),
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Expressions
 // ---------------------------------------------------------------------------
 
@@ -249,16 +297,18 @@ pub enum ExprKind<'src> {
   LetVal {
     name: BindNode,
     val: Box<Val<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
+  /// `cont` is the explicit continuation parameter — always last in the calling convention.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
+    cont: BindNode,
     fn_body: Box<Expr<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Mutually recursive group — all names visible in all fn_bodies.
@@ -266,20 +316,20 @@ pub enum ExprKind<'src> {
   /// Cross-refs not behind a fn boundary → Unresolved or Captured with depth=0 (name error).
   LetRec {
     bindings: Vec<Binding<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
-  /// Call func with args; result bound to `result`, visible in body.
+  /// Call func with args; continuation receives the result.
   App {
     func: Callable<'src>,
     args: Vec<Arg<'src>>,
-    result: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
 
   /// Branch on cond.
   If {
     cond: Box<Val<'src>>,
+    // TODO: investigate whether then/else_ should be Cont (structurally same as App cont — "what comes next")
     then: Box<Expr<'src>>,
     else_: Box<Expr<'src>>,
   },
@@ -296,18 +346,17 @@ pub enum ExprKind<'src> {
     name: BindNode,
     val: Box<Val<'src>>,
     fail: Box<Expr<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
-  /// Apply `func` to `args`; bind result to `result`; `fail` if tag is wrong.
+  /// Apply `func` to `args`; continuation receives the result; `fail` if tag is wrong.
   /// Used for constructor/extractor patterns: `Ok b`, `Some x`.
   /// Parallel to App but with an explicit fail cont.
   MatchApp {
     func: Callable<'src>,
     args: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
-    result: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
 
   /// Apply `func` to `args`; call `fail` if result is falsy; no result binding.
@@ -317,7 +366,7 @@ pub enum ExprKind<'src> {
     func: Callable<'src>,
     args: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Assert val equals a literal; `fail` if not.
@@ -326,7 +375,7 @@ pub enum ExprKind<'src> {
     val: Box<Val<'src>>,
     lit: Lit<'src>,
     fail: Box<Expr<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Assert `val` is a sequence; `fail` if not.
@@ -336,10 +385,10 @@ pub enum ExprKind<'src> {
     /// The formatter renders this as `·seq_N`; codegen will derive position from structure.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
-  /// Pop the head element from `val` (the current seq/cursor); bind to `elem`.
+  /// Pop the head element from `val` (the current seq/cursor); bind to elem via cont.
   /// `fail` if empty.
   MatchNext {
     val: Box<Val<'src>>,
@@ -348,19 +397,17 @@ pub enum ExprKind<'src> {
     cursor: u32,
     next_cursor: u32,
     fail: Box<Expr<'src>>,
-    elem: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
 
   /// Assert `val` (cursor) is exhausted; `fail` if elements remain.
-  /// Forwards the matched value to `result` in the continuation.
+  /// Continuation receives the matched value.
   MatchDone {
     val: Box<Val<'src>>,
     /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    result: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
 
   /// Assert `val` (cursor) is non-empty; `fail` if exhausted.
@@ -369,7 +416,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
   /// Bind remaining elements of `val` (cursor) as a value; zero-or-more.
@@ -379,8 +426,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    result: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
 
   /// Assert `val` is a record; `fail` if not.
@@ -391,10 +437,10 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — mirrors MatchSeq; formatter renders this as `·rec_N`.
     cursor: u32,
     fail: Box<Expr<'src>>,
-    body: Box<Expr<'src>>,
+    body: Cont<'src>,
   },
 
-  /// Extract named `field` from `val` (rec/cursor); bind extracted val to `elem`.
+  /// Extract named `field` from `val` (rec/cursor); continuation receives extracted val.
   /// Advances the cursor: `cursor` is the incoming position, `next_cursor` the advanced one.
   MatchField {
     val: Box<Val<'src>>,
@@ -403,8 +449,7 @@ pub enum ExprKind<'src> {
     next_cursor: u32,
     field: &'src str,
     fail: Box<Expr<'src>>,
-    elem: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
 
   /// Pattern match block — tries arms in order; first match wins.
@@ -412,14 +457,13 @@ pub enum ExprKind<'src> {
   /// `arm_params` are the names each arm receives them as (parallel vec).
   /// `fail` is the exhaustion continuation (·panic, or outer ·ƒ_fail in nested matches).
   /// Each arm expr is a lowered Match* primitive chain ending in ·ƒ_cont.
-  /// `result` names the value received by the result cont from whichever arm succeeds.
+  /// `cont` receives the value from whichever arm succeeds.
   MatchBlock {
     params: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
     arm_params: Vec<BindNode>,
     arms: Vec<Expr<'src>>,
-    result: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
 
   // ---------------------------------------------------------------------------
@@ -427,17 +471,13 @@ pub enum ExprKind<'src> {
   // ---------------------------------------------------------------------------
 
   /// Yield — suspend execution, passing `value` to the scheduler.
-  /// The continuation receives the resumed value bound to `result`.
+  /// The continuation receives the resumed value.
   /// Later passes use Yield nodes to color the continuation graph:
   /// every continuation reachable from a Yield is "suspendable."
   Yield {
     value: Box<Val<'src>>,
-    result: BindNode,
-    body: Box<Expr<'src>>,
+    cont: Cont<'src>,
   },
-
-  /// Tail position — return value to current continuation.
-  Ret(Box<Val<'src>>),
 
   /// Unconditional failure — pattern match with no recovery.
   /// Used as the `fail` expr for irrefutable patterns (·panic equivalent).
@@ -455,6 +495,7 @@ pub enum ExprKind<'src> {
 pub struct Binding<'src> {
   pub name: BindNode,
   pub params: Vec<Param>,
+  pub cont: BindNode,
   pub fn_body: Box<Expr<'src>>,
 }
 

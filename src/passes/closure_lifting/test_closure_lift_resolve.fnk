@@ -27,8 +27,7 @@ test 'pure fn params resolve as local', fn:
     f = fn x: x
 
   | equals fink":
-    (ref 2, x) == (local (bind 1, x)) in scope 0
-    (ref 6, f) == (local (bind 5, f)) in scope 10
+    (ref 4, x) == (local (bind 2, x)) in scope 1
 
 
 ---
@@ -42,10 +41,9 @@ test 'captured var resolves as local after lift', fn:
         a + b
 
   | equals fink":
-    (ref 4, a) == (local (bind 20, a)) in scope 22
-    (ref 5, b) == (local (bind 3, b)) in scope 22
-    (ref 21, a) == (local (bind 1, a)) in scope 0
-    (ref 15, foo) == (local (bind 14, foo)) in scope 27
+    (ref 7, a) == (local (bind 21, a)) in scope 23
+    (ref 8, b) == (local (bind 5, b)) in scope 23
+    (ref 22, a) == (local (bind 2, a)) in scope 1
 
 
 ---
@@ -65,10 +63,9 @@ test 'depth-2: all captured vars resolve as local after lift', fn:
           a + b + c
 
   | equals fink":
-    (ref 31, a) == (local (bind 39, a)) in scope 41
-    (ref 32, b) == (local (bind 3, b)) in scope 41
-    (ref 6, a) == (local (bind 29, a)) in scope 33
-    (ref 7, b) == (local (bind 30, b)) in scope 33
-    (ref 10, c) == (local (bind 5, c)) in scope 33
-    (ref 40, a) == (local (bind 1, a)) in scope 0
-    (ref 24, foo) == (local (bind 23, foo)) in scope 46
+    (ref 33, a) == (local (bind 43, a)) in scope 45
+    (ref 34, b) == (local (bind 5, b)) in scope 45
+    (ref 10, a) == (local (bind 31, a)) in scope 35
+    (ref 11, b) == (local (bind 32, b)) in scope 35
+    (ref 14, c) == (local (bind 8, c)) in scope 35
+    (ref 44, a) == (local (bind 2, a)) in scope 1

@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use crate::ast::{AstId, Node as AstNode, NodeKind};
 use crate::propgraph::PropGraph;
 use super::cps::ir::{
-  Arg, Bind, BindNode, Callable, CpsId, Expr, ExprKind,
+  Arg, Bind, BindNode, Callable, Cont, CpsId, Expr, ExprKind,
   Param, Ref, Val, ValKind,
 };
 
@@ -157,7 +157,7 @@ fn bind_to_scope<'src>(
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  if let Bind::User = bind.kind
+  if let Bind::Name = bind.kind
     && let Some(name) = ctx.source_name(bind.id)
     && name != "_" {
       scope.insert(name, ScopeEntry { bind_id: bind.id, fn_depth });
@@ -207,7 +207,7 @@ fn resolve_val<'src>(
           }
         }
       }
-      Ref::Gen(_) => {
+      Ref::Synth(_) => {
         // Structural — already resolved by construction, skip.
       }
     }
@@ -245,24 +245,28 @@ fn collect_scope_names<'src>(
   match &expr.kind {
     LetFn { name, body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
+      }
     }
     LetVal { name, body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
+      }
     }
     MatchLetVal { name, body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
+      }
     }
-    App { result, body, .. } => {
+    App { cont: Cont::Expr { arg: result, body }, .. } |
+    Yield { cont: Cont::Expr { arg: result, body }, .. } => {
       bind_to_scope(scope, result, scope_id, fn_depth, ctx, graphs);
       collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
     }
-    Yield { result, body, .. } => {
-      bind_to_scope(scope, result, scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
-    }
+    App { .. } | Yield { .. } => {}
     // Terminal or branching — stop collecting
     _ => {}
   }
@@ -280,15 +284,13 @@ fn resolve_expr<'src>(
   use ExprKind::*;
   let sb = self_bind;
   match &expr.kind {
-    Ret(val) => {
-      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
-    }
-
     LetVal { name, val, body } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     LetFn { name, params, fn_body, body, .. } => {
@@ -305,11 +307,15 @@ fn resolve_expr<'src>(
       // Determine self_bind for the fn body: the hoisted name that binds
       // this LetFn's result. The CPS transform produces the fn bind in the
       // continuation — either as LetVal or MatchLetVal. Extract it from
-      // the continuation's first bind node.
-      let cont_bind_id = match &body.kind {
-        ExprKind::LetVal { name: cn, .. } => Some(cn.id),
-        ExprKind::MatchLetVal { name: cn, .. } => Some(cn.id),
-        _ => None,
+      // the continuation's first bind node (if it's Cont::Expr).
+      let cont_bind_id = if let Cont::Expr { body: cont_body, .. } = body {
+        match &cont_body.kind {
+          ExprKind::LetVal { name: cn, .. } => Some(cn.id),
+          ExprKind::MatchLetVal { name: cn, .. } => Some(cn.id),
+          _ => None,
+        }
+      } else {
+        None
       };
       let fn_self_bind = cont_bind_id
         .and_then(|id| ctx.source_name(id))
@@ -328,7 +334,9 @@ fn resolve_expr<'src>(
       // continuation scope: sequential (only names defined so far)
       let mut cont_scope = scope.clone();
       bind_to_scope(&mut cont_scope, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &cont_scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &cont_scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     LetRec { bindings, body } => {
@@ -354,10 +362,12 @@ fn resolve_expr<'src>(
         }
         resolve_expr(&b.fn_body, &fn_scope, fn_scope_id, rec_self_bind, fn_depth + 1, ctx, graphs);
       }
-      resolve_expr(body, &rec_scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &rec_scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
-    App { func, args, result, body } => {
+    App { func, args, cont } => {
       resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for arg in args {
         match arg {
@@ -365,9 +375,11 @@ fn resolve_expr<'src>(
             resolve_val(v, scope, sb, fn_depth, ctx, graphs),
         }
       }
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: result, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     If { cond, then, else_ } => {
@@ -376,11 +388,13 @@ fn resolve_expr<'src>(
       resolve_expr(else_, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
-    Yield { value, result, body } => {
+    Yield { value, cont } => {
       resolve_val(value, scope, sb, fn_depth, ctx, graphs);
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: result, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     // -- Pattern lowering primitives --
@@ -390,77 +404,99 @@ fn resolve_expr<'src>(
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
-    MatchApp { func, args, fail, result, body } => {
+    MatchApp { func, args, fail, cont } => {
       resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for v in args { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: result, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchIf { func, args, fail, body } => {
       resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for v in args { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchValue { val, fail, body, .. } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchSeq { val, fail, body, .. } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
-    MatchNext { fail, elem, body, .. } => {
+    MatchNext { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: elem, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
-    MatchDone { fail, result, body, .. } => {
+    MatchDone { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: result, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchNotDone { fail, body, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
-    MatchRest { fail, result, body, .. } => {
+    MatchRest { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: result, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     MatchRec { val, fail, body, .. } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { body: body_expr, .. } = body {
+        resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
-    MatchField { fail, elem, body, .. } => {
+    MatchField { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: elem, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
-    MatchBlock { params, fail, arm_params, arms, result, body } => {
+    MatchBlock { params, fail, arm_params, arms, cont } => {
       for v in params { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       // Each arm introduces its own scope, identified by the arm Expr's CpsId.
@@ -474,9 +510,11 @@ fn resolve_expr<'src>(
         }
         resolve_expr(arm, &arm_scope, arm_scope_id, sb, fn_depth, ctx, graphs);
       }
-      let mut inner = scope.clone();
-      bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
-      resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      if let Cont::Expr { arg: result, body } = cont {
+        let mut inner = scope.clone();
+        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
     }
 
     Panic | FailCont => {}
@@ -580,31 +618,35 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      Ret(val) => { emit_classified_val(val, result, ctx, out); }
-
       LetVal { val, body, .. } => {
         emit_classified_val(val, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_lines(body_expr, result, ctx, out);
+        }
       }
 
       LetFn { fn_body, body, .. } => {
         collect_classified_lines(fn_body, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_lines(body_expr, result, ctx, out);
+        }
       }
 
       LetRec { bindings, body } => {
         for b in bindings {
           collect_classified_lines(&b.fn_body, result, ctx, out);
         }
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_lines(body_expr, result, ctx, out);
+        }
       }
 
-      App { func, args, body, .. } => {
+      App { func, args, cont } => {
         emit_classified_callable(func, result, ctx, out);
         for arg in args {
           match arg { Arg::Val(v) | Arg::Spread(v) => emit_classified_val(v, result, ctx, out) }
         }
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
 
       If { cond, then, else_ } => {
@@ -613,70 +655,70 @@ mod tests {
         collect_classified_lines(else_, result, ctx, out);
       }
 
-      Yield { value, body, .. } => {
+      Yield { value, cont } => {
         emit_classified_val(value, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
 
       MatchLetVal { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
-      MatchApp { func, args, fail, body, .. } => {
+      MatchApp { func, args, fail, cont } => {
         emit_classified_callable(func, result, ctx, out);
         for v in args { emit_classified_val(v, result, ctx, out); }
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchIf { func, args, fail, body } => {
         emit_classified_callable(func, result, ctx, out);
         for v in args { emit_classified_val(v, result, ctx, out); }
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchValue { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
       MatchSeq { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
-      MatchNext { fail, body, .. } => {
+      MatchNext { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
-      MatchDone { fail, body, .. } => {
+      MatchDone { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchNotDone { fail, body, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
-      MatchRest { fail, body, .. } => {
+      MatchRest { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchRec { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body { collect_classified_lines(body_expr, result, ctx, out); }
       }
-      MatchField { fail, body, .. } => {
+      MatchField { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
-      MatchBlock { params, fail, arms, body, .. } => {
+      MatchBlock { params, fail, arms, cont, .. } => {
         for v in params { emit_classified_val(v, result, ctx, out); }
         collect_classified_lines(fail, result, ctx, out);
         for arm in arms {
           collect_classified_lines(arm, result, ctx, out);
         }
-        collect_classified_lines(body, result, ctx, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
 
       Panic | FailCont => {}

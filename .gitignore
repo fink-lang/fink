@@ -1,4 +1,4 @@
 /target
-/.claude
-/notes
+/.claude/settings.local.json
+/.claude.local/
 .DS_Store

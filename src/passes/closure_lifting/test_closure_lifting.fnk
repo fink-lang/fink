@@ -31,10 +31,12 @@ test 'pure fn is unchanged', fn:
 
   | equals fink":
     ·fn
-      fn x: ·ƒ_cont x, ·state
-      fn ·v_0:
-        ·let ·v_0, fn f:
-          ·ƒ_cont f, ·state
+      fn x, ·ƒ_3:
+        ·let x, fn ·v_5:
+          ·ƒ_3 ·v_5
+      fn ·v_1:
+        ·let ·v_1, fn f:
+          ·ƒ_0 f
 
 
 test 'pure nested fn — inner fn stays nested', fn:
@@ -44,13 +46,15 @@ test 'pure nested fn — inner fn stays nested', fn:
 
   | equals fink":
     ·fn
-      fn a:
+      fn a, ·ƒ_3:
         ·fn
-          fn b: ·ƒ_cont b, ·state
-          fn ·v_2: ·ƒ_cont ·v_2, ·state
-      fn ·v_0:
-        ·let ·v_0, fn foo:
-          ·ƒ_cont foo, ·state
+          fn b, ·ƒ_6:
+            ·let b, fn ·v_8:
+              ·ƒ_6 ·v_8
+          fn ·v_4: ·ƒ_3 ·v_4
+      fn ·v_1:
+        ·let ·v_1, fn foo:
+          ·ƒ_0 foo
 
 
 ---
@@ -65,18 +69,18 @@ test 'captured binding becomes leading param', fn:
 
   | equals fink":
     ·fn
-      fn a, b:
-        ·apply ·op_plus, a, b, ·state, fn ·v_6, ·state:
-          ·ƒ_cont ·v_6, ·state
-      fn ·v_22:
+      fn a, b, ·ƒ_24:
+        ·apply ·op_plus, a, b, fn ·v_6:
+          ·ƒ_6 ·v_6
+      fn ·v_23:
         ·fn
-          fn a:
-            ·apply ·fn_closure, ·v_22, a, ·state, fn ·v_24, ·state:
-              ·let ·v_24, fn ·v_2:
-                ·ƒ_cont ·v_2, ·state
-          fn ·v_0:
-            ·let ·v_0, fn foo:
-              ·ƒ_cont foo, ·state
+          fn a, ·ƒ_3:
+            ·apply ·fn_closure, ·v_23, a, fn ·v_26:
+              ·let ·v_26, fn ·v_4:
+                ·ƒ_3 ·v_4
+          fn ·v_1:
+            ·let ·v_1, fn foo:
+              ·ƒ_0 foo
 
 
 test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
@@ -88,25 +92,25 @@ test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
 
   | equals fink":
     ·fn
-      fn a, b:
-        ·apply ·fn_closure, ·v_33, a, b, ·state, fn ·v_35, ·state:
-          ·let ·v_35, fn ·v_4:
-            ·ƒ_cont ·v_4, ·state
-      fn ·v_41:
+      fn a, b, ·ƒ_46:
+        ·apply ·fn_closure, ·v_35, a, b, fn ·v_38:
+          ·let ·v_38, fn ·v_7:
+            ·ƒ_6 ·v_7
+      fn ·v_45:
         ·fn
-          fn a, b, c:
-            ·apply ·op_plus, a, b, ·state, fn ·v_8, ·state:
-              ·apply ·op_plus, ·v_8, c, ·state, fn ·v_11, ·state:
-                ·ƒ_cont ·v_11, ·state
-          fn ·v_33:
+          fn a, b, c, ·ƒ_36:
+            ·apply ·op_plus, a, b, fn ·v_12:
+              ·apply ·op_plus, ·v_12, c, fn ·v_9:
+                ·ƒ_9 ·v_9
+          fn ·v_35:
             ·fn
-              fn a:
-                ·apply ·fn_closure, ·v_41, a, ·state, fn ·v_43, ·state:
-                  ·let ·v_43, fn ·v_2:
-                    ·ƒ_cont ·v_2, ·state
-              fn ·v_0:
-                ·let ·v_0, fn foo:
-                  ·ƒ_cont foo, ·state
+              fn a, ·ƒ_3:
+                ·apply ·fn_closure, ·v_45, a, fn ·v_48:
+                  ·let ·v_48, fn ·v_4:
+                    ·ƒ_3 ·v_4
+              fn ·v_1:
+                ·let ·v_1, fn foo:
+                  ·ƒ_0 foo
 
 
 test 'multiple captures — all captured vars become leading params', fn:
@@ -118,24 +122,24 @@ test 'multiple captures — all captured vars become leading params', fn:
 
   | equals fink":
     ·fn
-      fn a, b:
-        ·apply ·fn_closure, ·v_29, a, b, ·state, fn ·v_31, ·state:
-          ·let ·v_31, fn ·v_4:
-            ·ƒ_cont ·v_4, ·state
-      fn ·v_37:
+      fn a, b, ·ƒ_41:
+        ·apply ·fn_closure, ·v_30, a, b, fn ·v_33:
+          ·let ·v_33, fn ·v_7:
+            ·ƒ_6 ·v_7
+      fn ·v_40:
         ·fn
-          fn a, b, c:
-            ·apply ·op_plus, a, b, ·state, fn ·v_8, ·state:
-              ·ƒ_cont ·v_8, ·state
-          fn ·v_29:
+          fn a, b, c, ·ƒ_31:
+            ·apply ·op_plus, a, b, fn ·v_9:
+              ·ƒ_9 ·v_9
+          fn ·v_30:
             ·fn
-              fn a:
-                ·apply ·fn_closure, ·v_37, a, ·state, fn ·v_39, ·state:
-                  ·let ·v_39, fn ·v_2:
-                    ·ƒ_cont ·v_2, ·state
-              fn ·v_0:
-                ·let ·v_0, fn foo:
-                  ·ƒ_cont foo, ·state
+              fn a, ·ƒ_3:
+                ·apply ·fn_closure, ·v_40, a, fn ·v_43:
+                  ·let ·v_43, fn ·v_4:
+                    ·ƒ_3 ·v_4
+              fn ·v_1:
+                ·let ·v_1, fn foo:
+                  ·ƒ_0 foo
 
 
 test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
@@ -147,25 +151,27 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
 
   | equals fink":
     ·fn
-      fn a, b:
-        ·apply ·op_plus, a, b, ·state, fn ·v_13, ·state:
-          ·ƒ_cont ·v_13, ·state
-      fn ·v_35:
+      fn a, b, ·ƒ_41:
+        ·apply ·op_plus, a, b, fn ·v_16:
+          ·ƒ_16 ·v_16
+      fn ·v_40:
         ·fn
-          fn:
+          fn ·ƒ_2:
             ·fn
-              fn x: ·ƒ_cont x, ·state
-              fn ·v_1:
-                ·let ·v_1, fn f:
+              fn x, ·ƒ_5:
+                ·let x, fn ·v_7:
+                  ·ƒ_5 ·v_7
+              fn ·v_3:
+                ·let ·v_3, fn f:
                   ·fn
-                    fn a:
-                      ·apply ·fn_closure, ·v_35, a, ·state, fn ·v_37, ·state:
-                        ·let ·v_37, fn ·v_9:
-                          ·ƒ_cont ·v_9, ·state
-                    fn ·v_7:
-                      ·let ·v_7, fn g:
-                        ·ƒ_cont g, ·state
-          fn ·v_0: ·ƒ_cont ·v_0, ·state
+                    fn a, ·ƒ_13:
+                      ·apply ·fn_closure, ·v_40, a, fn ·v_43:
+                        ·let ·v_43, fn ·v_14:
+                          ·ƒ_13 ·v_14
+                    fn ·v_11:
+                      ·let ·v_11, fn g:
+                        ·ƒ_2 g
+          fn ·v_1: ·ƒ_0 ·v_1
 
 # NOTE: depth-1 closure (g captures a) — lift_all terminates in 1 pass since
 # the ·fn_closure call site's args (a) resolve as local after lifting.

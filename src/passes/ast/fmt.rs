@@ -383,9 +383,11 @@ fn is_complex_arg(node: &Node) -> bool {
 
 fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   // Tagged string literal: `id'foo'`, `op'+'` — func ident + single quoted string arg, no separator
-  // Excludes block strings (`":`) which need a space separator
+  // Excludes block strings (`":`) which need a space separator.
+  // Excludes CPS primitives (·-prefixed idents) which are not user-level tagged templates.
   if let [arg] = args
-    && matches!(func.kind, NodeKind::Ident(_)) && !is_multiline(arg)
+    && let NodeKind::Ident(func_name) = &func.kind
+    && !func_name.starts_with('·') && !is_multiline(arg)
     && matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
       fmt_node(func, out, depth);
       fmt_node(arg, out, depth);
