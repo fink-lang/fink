@@ -157,7 +157,7 @@ fn bind_to_scope<'src>(
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  if let Bind::User = bind.kind
+  if let Bind::Name = bind.kind
     && let Some(name) = ctx.source_name(bind.id)
     && name != "_" {
       scope.insert(name, ScopeEntry { bind_id: bind.id, fn_depth });
