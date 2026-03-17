@@ -108,7 +108,7 @@ fn collect_cont<'src>(
 ) {
   match cont {
     Cont::Ref(_cont_id) => {} // cont param ref — resolved by construction, no capture
-    Cont::Expr(_, body) => collect_captured_in_body(body, resolve, origin, ast_index, captures),
+    Cont::Expr { body, .. } => collect_captured_in_body(body, resolve, origin, ast_index, captures),
   }
 }
 

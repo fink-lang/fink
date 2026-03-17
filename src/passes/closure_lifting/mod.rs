@@ -194,7 +194,7 @@ fn collect_bind_ids(
       for arg in args {
         match arg { Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out) }
       }
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     If { cond, then, else_ } => {
       scan_val(cond, resolve, out);
@@ -203,7 +203,7 @@ fn collect_bind_ids(
     }
     Yield { value, cont } => {
       scan_val(value, resolve, out);
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchLetVal { val, fail, body, .. } => {
       scan_val(val, resolve, out);
@@ -214,7 +214,7 @@ fn collect_bind_ids(
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
       for v in args { scan_val(v, resolve, out); }
       collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchIf { func, args, fail, body, .. } => {
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
@@ -234,11 +234,11 @@ fn collect_bind_ids(
     }
     MatchNext { fail, cont, .. } => {
       collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchDone { fail, cont, .. } => {
       collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchNotDone { fail, body, .. } => {
       collect_bind_ids(fail, resolve, out);
@@ -246,7 +246,7 @@ fn collect_bind_ids(
     }
     MatchRest { fail, cont, .. } => {
       collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchRec { val, fail, body, .. } => {
       scan_val(val, resolve, out);
@@ -255,13 +255,13 @@ fn collect_bind_ids(
     }
     MatchField { fail, cont, .. } => {
       collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     MatchBlock { params, fail, arms, cont, .. } => {
       for v in params { scan_val(v, resolve, out); }
       collect_bind_ids(fail, resolve, out);
       for arm in arms { collect_bind_ids(arm, resolve, out); }
-      if let Cont::Expr(_, body) = cont { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     LetRec { bindings, body } => {
       for b in bindings { collect_bind_ids(&b.fn_body, resolve, out); }
@@ -323,7 +323,7 @@ fn lift_cont<'src>(
 ) -> Cont<'src> {
   match cont {
     Cont::Ref(val) => Cont::Ref(val),
-    Cont::Expr(bind, body) => Cont::Expr(bind, Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted))),
+    Cont::Expr { arg: bind, body } => Cont::Expr { arg: bind, body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)) },
   }
 }
 
@@ -427,7 +427,7 @@ fn lift_expr<'src>(
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
           args: fn_closure_args,
-          cont: Cont::Expr(result_bind, Box::new(subst_body)),
+          cont: Cont::Expr { arg: result_bind, body: Box::new(subst_body) },
         }, None)
       }
     }
@@ -755,7 +755,7 @@ mod tests {
         for arg in args {
           match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out) }
         }
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       If { cond, then, else_ } => {
         emit_val(cond, result, origin, ast_index, out);
@@ -764,7 +764,7 @@ mod tests {
       }
       Yield { value, cont } => {
         emit_val(value, result, origin, ast_index, out);
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchLetVal { val, fail, body, .. } => {
         emit_val(val, result, origin, ast_index, out);
@@ -775,7 +775,7 @@ mod tests {
         emit_callable(func, result, origin, ast_index, out);
         for v in args { emit_val(v, result, origin, ast_index, out); }
         collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchIf { func, args, fail, body } => {
         emit_callable(func, result, origin, ast_index, out);
@@ -795,11 +795,11 @@ mod tests {
       }
       MatchNext { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchDone { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchNotDone { fail, body, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
@@ -807,7 +807,7 @@ mod tests {
       }
       MatchRest { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchRec { val, fail, body, .. } => {
         emit_val(val, result, origin, ast_index, out);
@@ -816,13 +816,13 @@ mod tests {
       }
       MatchField { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchBlock { params, fail, arms, cont, .. } => {
         for v in params { emit_val(v, result, origin, ast_index, out); }
         collect_lines(fail, result, origin, ast_index, out);
         for arm in arms { collect_lines(arm, result, origin, ast_index, out); }
-        if let Cont::Expr(_, body) = cont { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       Panic | FailCont => {}
     }

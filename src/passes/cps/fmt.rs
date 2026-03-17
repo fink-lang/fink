@@ -260,7 +260,7 @@ fn render_builtin(op: &BuiltIn) -> String {
 /// Panics on `Cont::Ref` — callers that need to handle both must match directly.
 fn cont_expr<'a, 'src>(cont: &'a Cont<'src>) -> (&'a BindNode, &'a Expr<'src>) {
   match cont {
-    Cont::Expr(bind, body) => (bind, body),
+    Cont::Expr { arg: bind, body } => (bind, body),
     Cont::Ref(_) => panic!("cont_expr: unexpected Cont::Ref — caller must handle Ref directly"),
   }
 }
@@ -273,7 +273,7 @@ fn cont_expr<'a, 'src>(cont: &'a Cont<'src>) -> (&'a BindNode, &'a Expr<'src>) {
 /// display; the `·ƒ_cont` name is fixed (all conts render as `·ƒ_cont` in param position).
 fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
-    Cont::Expr(bind, body) => {
+    Cont::Expr { arg: bind, body } => {
       let name = render_bind_ctx(bind, ctx);
       result_cont(&name, to_node(body, ctx))
     }

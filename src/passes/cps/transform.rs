@@ -160,7 +160,7 @@ fn app_node<'src>(
   body: Expr<'src>,
   origin: Option<AstId>,
 ) -> Expr<'src> {
-  g.expr(ExprKind::App { func: Callable::Val(func), args, cont: Cont::Expr(result, Box::new(body)) }, origin)
+  g.expr(ExprKind::App { func: Callable::Val(func), args, cont: Cont::Expr { arg: result, body: Box::new(body) } }, origin)
 }
 
 /// Wrap a plain `Val` as an `Arg::Val`.
@@ -978,7 +978,7 @@ fn wrap_with_fail<'src>(
       ExprKind::App {
         func,
         args,
-        cont: Cont::Expr(result, Box::new(body)),
+        cont: Cont::Expr { arg: result, body: Box::new(body) },
       },
       origin,
     ),
@@ -990,7 +990,7 @@ fn wrap_with_fail<'src>(
           arm_params,
           fail,
           arms,
-          cont: Cont::Expr(result, Box::new(body)),
+          cont: Cont::Expr { arg: result, body: Box::new(body) },
         },
         origin,
       )
@@ -1051,7 +1051,7 @@ fn wrap_with_fail<'src>(
           cursor,
           next_cursor,
           fail,
-          cont: Cont::Expr(elem, Box::new(body)),
+          cont: Cont::Expr { arg: elem, body: Box::new(body) },
         },
         origin,
       )
@@ -1063,7 +1063,7 @@ fn wrap_with_fail<'src>(
           val: Box::new(val),
           cursor,
           fail,
-          cont: Cont::Expr(result, Box::new(body)),
+          cont: Cont::Expr { arg: result, body: Box::new(body) },
         },
         origin,
       )
@@ -1087,7 +1087,7 @@ fn wrap_with_fail<'src>(
           val: Box::new(val),
           cursor,
           fail,
-          cont: Cont::Expr(result, Box::new(body)),
+          cont: Cont::Expr { arg: result, body: Box::new(body) },
         },
         origin,
       )
@@ -1113,7 +1113,7 @@ fn wrap_with_fail<'src>(
           next_cursor,
           field,
           fail,
-          cont: Cont::Expr(elem, Box::new(body)),
+          cont: Cont::Expr { arg: elem, body: Box::new(body) },
         },
         origin,
       )
@@ -1121,7 +1121,7 @@ fn wrap_with_fail<'src>(
     Pending::Yield { value, result, origin } => g.expr(
       ExprKind::Yield {
         value: Box::new(value),
-        cont: Cont::Expr(result, Box::new(body)),
+        cont: Cont::Expr { arg: result, body: Box::new(body) },
       },
       origin,
     ),

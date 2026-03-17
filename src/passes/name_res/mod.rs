@@ -255,8 +255,8 @@ fn collect_scope_names<'src>(
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
       collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
     }
-    App { cont: Cont::Expr(result, body), .. } |
-    Yield { cont: Cont::Expr(result, body), .. } => {
+    App { cont: Cont::Expr { arg: result, body }, .. } |
+    Yield { cont: Cont::Expr { arg: result, body }, .. } => {
       bind_to_scope(scope, result, scope_id, fn_depth, ctx, graphs);
       collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
     }
@@ -363,7 +363,7 @@ fn resolve_expr<'src>(
             resolve_val(v, scope, sb, fn_depth, ctx, graphs),
         }
       }
-      if let Cont::Expr(result, body) = cont {
+      if let Cont::Expr { arg: result, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -378,7 +378,7 @@ fn resolve_expr<'src>(
 
     Yield { value, cont } => {
       resolve_val(value, scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr(result, body) = cont {
+      if let Cont::Expr { arg: result, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -399,7 +399,7 @@ fn resolve_expr<'src>(
       resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for v in args { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr(result, body) = cont {
+      if let Cont::Expr { arg: result, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -427,7 +427,7 @@ fn resolve_expr<'src>(
 
     MatchNext { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr(elem, body) = cont {
+      if let Cont::Expr { arg: elem, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -436,7 +436,7 @@ fn resolve_expr<'src>(
 
     MatchDone { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr(result, body) = cont {
+      if let Cont::Expr { arg: result, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -450,7 +450,7 @@ fn resolve_expr<'src>(
 
     MatchRest { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr(result, body) = cont {
+      if let Cont::Expr { arg: result, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -465,7 +465,7 @@ fn resolve_expr<'src>(
 
     MatchField { fail, cont, .. } => {
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr(elem, body) = cont {
+      if let Cont::Expr { arg: elem, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -486,7 +486,7 @@ fn resolve_expr<'src>(
         }
         resolve_expr(arm, &arm_scope, arm_scope_id, sb, fn_depth, ctx, graphs);
       }
-      if let Cont::Expr(result, body) = cont {
+      if let Cont::Expr { arg: result, body } = cont {
         let mut inner = scope.clone();
         bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
@@ -618,7 +618,7 @@ mod tests {
         for arg in args {
           match arg { Arg::Val(v) | Arg::Spread(v) => emit_classified_val(v, result, ctx, out) }
         }
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
 
       If { cond, then, else_ } => {
@@ -629,7 +629,7 @@ mod tests {
 
       Yield { value, cont } => {
         emit_classified_val(value, result, ctx, out);
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
 
       MatchLetVal { val, fail, body, .. } => {
@@ -641,7 +641,7 @@ mod tests {
         emit_classified_callable(func, result, ctx, out);
         for v in args { emit_classified_val(v, result, ctx, out); }
         collect_classified_lines(fail, result, ctx, out);
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchIf { func, args, fail, body } => {
         emit_classified_callable(func, result, ctx, out);
@@ -661,11 +661,11 @@ mod tests {
       }
       MatchNext { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchDone { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchNotDone { fail, body, .. } => {
         collect_classified_lines(fail, result, ctx, out);
@@ -673,7 +673,7 @@ mod tests {
       }
       MatchRest { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchRec { val, fail, body, .. } => {
         emit_classified_val(val, result, ctx, out);
@@ -682,7 +682,7 @@ mod tests {
       }
       MatchField { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
       MatchBlock { params, fail, arms, cont, .. } => {
         for v in params { emit_classified_val(v, result, ctx, out); }
@@ -690,7 +690,7 @@ mod tests {
         for arm in arms {
           collect_classified_lines(arm, result, ctx, out);
         }
-        if let Cont::Expr(_, body) = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
 
       Panic | FailCont => {}

@@ -262,7 +262,7 @@ pub enum Lit<'src> {
 #[derive(Debug, Clone)]
 pub enum Cont<'src> {
   Ref(CpsId),
-  Expr(BindNode, Box<Expr<'src>>),
+  Expr { arg: BindNode, body: Box<Expr<'src>> },
 }
 
 impl<'src> Cont<'src> {
@@ -270,7 +270,7 @@ impl<'src> Cont<'src> {
   pub fn body(&self) -> Option<&Expr<'src>> {
     match self {
       Cont::Ref(_) => None,
-      Cont::Expr(_, body) => Some(body),
+      Cont::Expr { body, .. } => Some(body),
     }
   }
 
@@ -278,7 +278,7 @@ impl<'src> Cont<'src> {
   /// Only use where `Cont::Ref` is structurally impossible.
   pub fn unwrap_body(self) -> (BindNode, Box<Expr<'src>>) {
     match self {
-      Cont::Expr(bind, body) => (bind, body),
+      Cont::Expr { arg, body } => (arg, body),
       Cont::Ref(_) => panic!("Cont::unwrap_body called on Cont::Ref"),
     }
   }
