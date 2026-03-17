@@ -65,8 +65,8 @@ impl Alloc {
     BindNode { id, kind }
   }
 
-  fn gen_bind(&mut self) -> BindNode {
-    self.bind(Bind::Gen, None)
+  fn synth_bind(&mut self) -> BindNode {
+    self.bind(Bind::Synth, None)
   }
 
   fn expr<'src>(&mut self, kind: ExprKind<'src>, origin: Option<AstId>) -> Expr<'src> {
@@ -394,7 +394,7 @@ fn lift_expr<'src>(
         hoisted.extend(inner_hoisted);
         let mut lifted_params = cap_params;
         lifted_params.extend(params);
-        let lifted_fn_bind = alloc.gen_bind();
+        let lifted_fn_bind = alloc.synth_bind();
         let lifted_fn_id = lifted_fn_bind.id;
 
         let lifted_cont = alloc.bind(Bind::Cont, None);
@@ -406,9 +406,9 @@ fn lift_expr<'src>(
         });
 
         // 5. At the original site: emit ·fn_closure call, bind result as original name.
-        let lifted_ref  = alloc.val(ValKind::Ref(Ref::Gen(lifted_fn_id)), None);
-        let result_bind = alloc.gen_bind();
-        let result_ref  = alloc.val(ValKind::Ref(Ref::Gen(result_bind.id)), None);
+        let lifted_ref  = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
+        let result_bind = alloc.synth_bind();
+        let result_ref  = alloc.val(ValKind::Ref(Ref::Synth(result_bind.id)), None);
 
         // Bind the closure val under the original closure name, then run body.
         let closure_bind = name;

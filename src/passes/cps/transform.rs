@@ -27,7 +27,7 @@ use super::ir::{
 };
 
 // ---------------------------------------------------------------------------
-// Name generator
+// Node allocator
 // ---------------------------------------------------------------------------
 
 pub struct Gen {
@@ -69,11 +69,11 @@ impl Gen {
   }
 
   pub fn fresh_fn(&mut self, origin: Option<AstId>) -> BindNode {
-    self.bind(Bind::Gen, origin)
+    self.bind(Bind::Synth, origin)
   }
 
   pub fn fresh_result(&mut self, origin: Option<AstId>) -> BindNode {
-    self.bind(Bind::Gen, origin)
+    self.bind(Bind::Synth, origin)
   }
 
   /// Allocate a cursor index for seq/rec pattern traversal.
@@ -116,11 +116,11 @@ impl Gen {
 // ---------------------------------------------------------------------------
 
 /// Create a Ref val from a Bind kind and the bind node's CpsId.
-/// `Bind::User` → `Ref::Name`, `Bind::Gen`/`Bind::Cont` → `Ref::Gen(bind_id)`.
+/// `Bind::User` → `Ref::Name`, `Bind::Synth`/`Bind::Cont` → `Ref::Synth(bind_id)`.
 fn ref_val<'src>(g: &mut Gen, bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val<'src> {
   let kind = match bind {
     Bind::User => Ref::Name,
-    Bind::Gen | Bind::Cont => Ref::Gen(bind_id),
+    Bind::Synth | Bind::Cont => Ref::Synth(bind_id),
   };
   g.val(ValKind::Ref(kind), origin)
 }
@@ -373,7 +373,7 @@ fn lower_bind<'src>(
       // - Plain ident (`x = rhs`): lhs is the ident itself
       // - Guarded bind (`a > 0 = rhs`): extract the innermost ident from the guard
       // - Range (`0..10 = rhs`): pure guard, result is the rhs value
-      // - Structural patterns (Seq/Rec): result is a Gen temp — origin unused
+      // - Structural patterns (Seq/Rec): result is a Synth temp — origin unused
       let result_origin = match &lhs.kind {
         NodeKind::Ident(_) => Some(lhs.id),
         NodeKind::InfixOp { op, .. } if matches!(op.src, ".." | "...") => Some(rhs.id),
@@ -435,7 +435,7 @@ fn lower_iife<'src>(
 }
 
 /// Extract params from a fn params node, returning:
-/// - the param list (with complex patterns replaced by fresh Gen names)
+/// - the param list (with complex patterns replaced by fresh Synth names)
 /// - a list of Pending entries to prepend to the fn body via wrap().
 ///
 /// Complex destructuring params (e.g. `[1, ..b]`) are desugared to a fresh spread
@@ -1203,7 +1203,7 @@ fn lower_pat_lhs<'src>(
     NodeKind::Wildcard => {
       match &val.kind {
         ValKind::Ref(Ref::Name) => (Bind::User, val.id),
-        ValKind::Ref(Ref::Gen(cps_id)) => (Bind::Gen, *cps_id),
+        ValKind::Ref(Ref::Synth(cps_id)) => (Bind::Synth, *cps_id),
         _ => panic!("lower_pat_lhs: Wildcard with non-Ref val"),
       }
     }
@@ -1217,7 +1217,7 @@ fn lower_pat_lhs<'src>(
       pending.push(Pending::MatchGuard { func: Callable::BuiltIn(BuiltIn::In), args: vec![val.clone(), range_val],  origin });
       match &val.kind {
         ValKind::Ref(Ref::Name) => (Bind::User, val.id),
-        ValKind::Ref(Ref::Gen(cps_id)) => (Bind::Gen, *cps_id),
+        ValKind::Ref(Ref::Synth(cps_id)) => (Bind::Synth, *cps_id),
         _ => { let r = g.fresh_result(origin); (r.kind, r.id) }
       }
     }

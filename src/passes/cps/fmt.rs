@@ -138,7 +138,7 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &v.kind {
     ValKind::Lit(lit) => lit_to_node(lit),
     ValKind::Ref(Ref::Name) => ident(&render_ref_name_ctx(v.id, ctx)),
-    ValKind::Ref(Ref::Gen(bind_id)) => ident(&format!("·v_{}", bind_id.0)),
+    ValKind::Ref(Ref::Synth(bind_id)) => ident(&format!("·v_{}", bind_id.0)),
   }
 }
 
@@ -181,10 +181,10 @@ fn lit_to_node(lit: &Lit<'_>) -> Node<'static> {
 
 /// Render a Bind node's name using origin map.
 /// For User bindings: recovers the source name from the AST.
-/// For Gen temps: always renders as `·v_N`.
+/// For Synth temps: always renders as `·v_N`.
 fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
-    Bind::Gen => format!("·v_{}", bind.id.0),
+    Bind::Synth => format!("·v_{}", bind.id.0),
     Bind::Cont => format!("·ƒ_{}", bind.id.0),
     Bind::User => ctx.source_name(bind.id)
       .expect("render_bind_ctx: User bind must have origin")
@@ -266,7 +266,7 @@ fn cont_expr<'a, 'src>(cont: &'a Cont<'src>) -> (&'a BindNode, &'a Expr<'src>) {
 }
 
 /// Render a `Cont` as a result-binding lambda for use in `·apply` / `·match_*` etc.
-/// - `Cont::Expr(bind, body)` → `fn ·v_N: body`
+/// - `Cont::Expr(bind, body)` → `fn ·v_N: body`  (N from bind.id)
 /// - `Cont::Ref(cont_id)` → `fn ·v_N: ·ƒ_cont ·v_N`  (cosmetic lambda sugar for the tail call)
 ///
 /// For `Cont::Ref`, the result param name is synthesised from the cont_id for a stable

@@ -6,8 +6,8 @@
 //
 // Scope is structural (nesting). Env and state are implicit.
 // Every function has an explicit name (user or synthetic).
-// Ref nodes carry `Ref::Name` (user) or `Ref::Gen(CpsId)` (compiler temp,
-// pointing at the Bind::Gen node); resolution is a side-table populated
+// Ref nodes carry `Ref::Name` (user) or `Ref::Synth(CpsId)` (compiler temp,
+// pointing at the Bind::Synth node); resolution is a side-table populated
 // by the resolve pass.
 
 // ---------------------------------------------------------------------------
@@ -54,24 +54,24 @@ pub struct CpsResult<'src> {
 
 /// A definition site — introduces a name into scope.
 /// `User` marks a source-level binding; the name is recoverable from the
-/// origin map (CpsId → AstId → AST ident). `Gen` marks a compiler-generated
+/// origin map (CpsId → AstId → AST ident). `Synth` marks a compiler-generated
 /// temp; the formatter renders it as `·v_{cps_id}` using the node's own CpsId.
 /// `Cont` marks the continuation parameter of a `LetFn`; the formatter renders
-/// it as `·ƒ_cont` (or `·ƒ_halt` for the top-level module cont).
+/// it as `·ƒ_N` using the node's own CpsId.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
-  User,  // name from source: recoverable via origin map
-  Gen,   // compiler-generated temp: rendered as ·v_{cps_id}
-  Cont,  // continuation parameter: rendered as ·ƒ_cont / ·ƒ_halt
+  User,   // name from source: recoverable via origin map
+  Synth,  // compiler-generated temp: rendered as ·v_{cps_id}
+  Cont,   // continuation parameter: rendered as ·ƒ_{cps_id}
 }
 
 /// A use site — references a binding. `Name` for user names (identity from
-/// origin map), `Gen(CpsId)` for compiler temps (carries the CpsId of the
-/// `Bind::Gen` node it refers to — the only link, since Gen has no name).
+/// origin map), `Synth(CpsId)` for compiler-generated temps (carries the CpsId
+/// of the `Bind::Synth` node it refers to — the only link, since Synth has no name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
   Name,          // user ref: name recoverable from origin map
-  Gen(CpsId),    // compiler-generated temp: refers to Bind::Gen at the given CpsId
+  Synth(CpsId),  // compiler-generated temp: refers to Bind::Synth at the given CpsId
 }
 
 impl Ref {
@@ -79,7 +79,7 @@ impl Ref {
   pub fn to_bind(self) -> Bind {
     match self {
       Ref::Name => Bind::User,
-      Ref::Gen(_) => Bind::Gen,
+      Ref::Synth(_) => Bind::Synth,
     }
   }
 }
@@ -254,7 +254,7 @@ pub enum Lit<'src> {
 /// expression with a result binding.
 ///
 /// `Ref(id)` — tail call: pass the result directly to the binding at `id`
-/// (always a `Bind::Cont` or `Bind::Gen` node, e.g. `·ƒ_cont`).
+/// (always a `Bind::Cont` or `Bind::Synth` node).
 /// `Expr(bind, body)` — inline: bind the result to `bind`, then evaluate `body`.
 ///
 /// The `bind` in `Expr` carries a `CpsId` used by the formatter to render
@@ -297,6 +297,7 @@ pub enum ExprKind<'src> {
   LetVal {
     name: BindNode,
     val: Box<Val<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -308,6 +309,7 @@ pub enum ExprKind<'src> {
     params: Vec<Param>,
     cont: BindNode,
     fn_body: Box<Expr<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -316,6 +318,7 @@ pub enum ExprKind<'src> {
   /// Cross-refs not behind a fn boundary → Unresolved or Captured with depth=0 (name error).
   LetRec {
     bindings: Vec<Binding<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -329,6 +332,7 @@ pub enum ExprKind<'src> {
   /// Branch on cond.
   If {
     cond: Box<Val<'src>>,
+    // TODO: investigate whether then/else_ should be Cont (structurally same as App cont — "what comes next")
     then: Box<Expr<'src>>,
     else_: Box<Expr<'src>>,
   },
@@ -345,6 +349,7 @@ pub enum ExprKind<'src> {
     name: BindNode,
     val: Box<Val<'src>>,
     fail: Box<Expr<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -365,6 +370,7 @@ pub enum ExprKind<'src> {
     func: Callable<'src>,
     args: Vec<Val<'src>>,
     fail: Box<Expr<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -374,6 +380,7 @@ pub enum ExprKind<'src> {
     val: Box<Val<'src>>,
     lit: Lit<'src>,
     fail: Box<Expr<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -384,6 +391,7 @@ pub enum ExprKind<'src> {
     /// The formatter renders this as `·seq_N`; codegen will derive position from structure.
     cursor: u32,
     fail: Box<Expr<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -415,6 +423,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — remove when codegen no longer needs readable cursor names.
     cursor: u32,
     fail: Box<Expr<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 
@@ -436,6 +445,7 @@ pub enum ExprKind<'src> {
     /// TODO: formatting hack — mirrors MatchSeq; formatter renders this as `·rec_N`.
     cursor: u32,
     fail: Box<Expr<'src>>,
+    // TODO: investigate whether body should be Cont (structurally same as App cont — "what comes next")
     body: Box<Expr<'src>>,
   },
 

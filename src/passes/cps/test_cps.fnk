@@ -19,7 +19,7 @@ cps_c IR — pretty-printer tests
 #     | equals fink":
 #       <expected cps output>
 
-{test, expect, equals_fink, cps_expr} = import '!fake'
+{test, expect, equals, fink, cps_expr} = import '!fake'
 {·let, ·fn, ·ƒ_cont, ·apply} = import '!fake'
 
 ---

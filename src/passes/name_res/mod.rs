@@ -207,7 +207,7 @@ fn resolve_val<'src>(
           }
         }
       }
-      Ref::Gen(_) => {
+      Ref::Synth(_) => {
         // Structural — already resolved by construction, skip.
       }
     }
