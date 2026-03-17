@@ -1,4 +1,5 @@
 pub mod errors;
+pub mod fmt;
 pub mod passes;
 pub mod propgraph;
 pub mod sourcemap;
