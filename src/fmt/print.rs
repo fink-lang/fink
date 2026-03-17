@@ -98,6 +98,49 @@ impl Writer {
         self.write(tok.loc.start, tok.src);
     }
 
+    /// Write block string content (":" syntax).
+    /// The content has the indent floor stripped; we re-emit each line prefixed
+    /// by `indent_col` spaces, separated by newlines.
+    ///
+    /// Handles both standalone block strings (`content = "line1\nline2\n"`) and
+    /// mid-template segments (`content = "\ncontinuation"` after an interpolation).
+    /// Write block string content (":" syntax).
+    /// The content has the indent floor stripped; we re-emit each line prefixed
+    /// by `indent_col` spaces, separated by newlines.
+    ///
+    /// Handles both standalone block strings (`content = "line1\nline2\n"`) and
+    /// mid-template segments (`content = "\ncontinuation"` after an interpolation):
+    /// the leading `\n` in mid-template content means "start the next line", so
+    /// leading empty elements are skipped.
+    fn write_block_str_content(&mut self, content: &str, indent_col: u32) {
+        let indent: String = " ".repeat(indent_col as usize);
+        // Split by \n. Skip leading empty elements (from a leading \n in mid-template
+        // content) and the trailing empty element (after a trailing \n).
+        let parts: Vec<&str> = content.split('\n').collect();
+        let n = parts.len();
+        let mut started = false;
+        for (i, &line) in parts.iter().enumerate() {
+            // Skip leading empty element — just marks "content starts on new line".
+            if !started && line.is_empty() {
+                continue;
+            }
+            // Skip trailing empty element (after final \n).
+            if i == n - 1 && line.is_empty() {
+                break;
+            }
+            started = true;
+            // Each non-empty-prefix part starts a new line.
+            self.buf.push('\n');
+            self.buf.push_str(&indent);
+            self.buf.push_str(line);
+            self.pos = Pos {
+                idx: self.pos.idx + 1 + indent_col + line.len() as u32,
+                line: self.pos.line + 1,
+                col: indent_col + line.len() as u32,
+            };
+        }
+    }
+
     fn node(&mut self, node: &Node) {
         match &node.kind {
             // --- leaves ---
@@ -114,11 +157,19 @@ impl Writer {
             NodeKind::Wildcard => self.write(node.loc.start, "_"),
 
             // --- string literal ---
-            NodeKind::LitStr { open, close, content } => {
+            NodeKind::LitStr { open, close, content, indent } => {
                 self.tok(open);
-                // Content sits between open.end and close.start — gap() handles spacing.
-                self.write(open.loc.end, content);
-                self.tok(close);
+                // Block strings (":" syntax) have multi-line content with the indent floor
+                // stripped. Re-emit each line with the original strip_level (stored in indent).
+                // Gap() cannot handle this because content has embedded newlines that
+                // write() does not track, so we handle it explicitly here.
+                if open.src == "\":" {
+                    self.write_block_str_content(content, *indent);
+                } else {
+                    // Quoted strings: content sits between open.end and close.start.
+                    self.write(open.loc.end, content);
+                    self.tok(close);
+                }
             }
 
             // --- collections ---
@@ -278,14 +329,21 @@ impl Writer {
     /// Between open and content, and content and close, gap() fills spaces.
     fn templ_child(&mut self, node: &Node) {
         use crate::lexer::TokenKind;
-        if let NodeKind::LitStr { open, close, content } = &node.kind {
+        if let NodeKind::LitStr { open, close, content, indent } = &node.kind {
             // Write `}` if this segment follows an expression interpolation.
             if open.kind == TokenKind::StrExprEnd {
                 self.tok(open);
             }
             // Write content (may be empty).
             if !content.is_empty() {
-                self.write(open.loc.end, content);
+                // Block string segments (indent > 0): re-emit with proper indentation.
+                // This covers both the first segment (open.src == "\":") and
+                // mid-template continuation segments (open.src == "}").
+                if *indent > 0 {
+                    self.write_block_str_content(content, *indent);
+                } else {
+                    self.write(open.loc.end, content);
+                }
             }
             // Write `${` if this segment precedes an expression interpolation.
             if close.kind == TokenKind::StrExprStart {

@@ -1020,6 +1020,11 @@ impl<'src> Parser<'src> {
     // Track the open token for the next LitStr segment.
     // First segment opens with StrStart; after interpolation, opens with StrExprEnd.
     let mut next_open = start_tok;
+    // For block strings (":" syntax), track the strip_level (indent floor) which is
+    // the col of the first StrText token. All segments of the same block string share
+    // the same strip_level; it's 0 for quoted strings.
+    let mut block_indent: u32 = 0;
+    let is_block_str = start_tok.src == "\":" ;
 
     loop {
       match self.peek().kind {
@@ -1029,7 +1034,7 @@ impl<'src> Parser<'src> {
           self.close_lit_str(&mut parts, end_tok);
           let loc = Loc { start: start_loc.start, end: end_tok.loc.end };
           if !raw && parts.is_empty() {
-            return Ok(self.node(NodeKind::LitStr { open: start_tok, close: end_tok, content: String::new() }, loc));
+            return Ok(self.node(NodeKind::LitStr { open: start_tok, close: end_tok, content: String::new(), indent: 0 }, loc));
           }
           if !raw && parts.len() == 1
             && let NodeKind::LitStr { .. } = &parts[0].kind {
@@ -1052,7 +1057,15 @@ impl<'src> Parser<'src> {
             content.push_str(&text);
             prev_loc.end = t.loc.end;
           } else {
-            parts.push(self.node(NodeKind::LitStr { open: next_open, close: next_open, content: text }, t.loc));
+            // For block strings, strip_level == the first StrText token's col.
+            // Capture it once from the first segment; subsequent segments reuse it.
+            let indent = if is_block_str {
+              if block_indent == 0 && next_open.src == "\":" {
+                block_indent = t.loc.start.col;
+              }
+              block_indent
+            } else { 0 };
+            parts.push(self.node(NodeKind::LitStr { open: next_open, close: next_open, content: text, indent }, t.loc));
           }
         }
         TokenKind::StrExprStart => {
