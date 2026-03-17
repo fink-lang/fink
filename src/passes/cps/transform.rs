@@ -278,31 +278,30 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
   }
 }
 
-/// Lower a sequence of statements and return an Expr for the whole sequence.
-/// The last statement's value becomes the return value.
-fn lower_stmts<'src>(g: &mut Gen, stmts: &'src [Node<'src>]) -> Expr<'src> {
-  assert!(!stmts.is_empty(), "empty statement list");
+/// Lower a sequence of expressions and return an Expr for the whole sequence.
+/// The last expression's value is returned to the current continuation.
+fn lower_seq<'src>(g: &mut Gen, exprs: &'src [Node<'src>]) -> Expr<'src> {
+  assert!(!exprs.is_empty(), "empty expression sequence");
   let mut all_pending: Vec<Pending<'src>> = vec![];
-  let n = stmts.len();
-  for (i, stmt) in stmts.iter().enumerate() {
+  let n = exprs.len();
+  for (i, expr) in exprs.iter().enumerate() {
     let is_last = i + 1 == n;
-    let o = Some(stmt.id);
+    let o = Some(expr.id);
     if is_last {
-      let (val, pending) = lower(g, stmt);
+      let (val, pending) = lower(g, expr);
       all_pending.extend(pending);
       let tail = ret_expr(g, val, o);
       return wrap(g, all_pending, tail);
     } else {
-      // Statement in non-tail position.
-      match &stmt.kind {
-        // Bind introduces a name available in subsequent stmts.
+      match &expr.kind {
+        // Bind introduces a name available in subsequent expressions.
         NodeKind::Bind { lhs, rhs, .. } | NodeKind::BindRight { rhs: lhs, lhs: rhs, .. } => {
           let pending = lower_bind_stmt(g, lhs, rhs, o);
           all_pending.extend(pending);
         }
-        // Any other statement: evaluate for effects, result discarded.
+        // Non-tail expression: evaluate, result discarded.
         _ => {
-          let (val, pending) = lower(g, stmt);
+          let (val, pending) = lower(g, expr);
           all_pending.extend(pending);
           let discard = g.fresh_result(o);
           all_pending.push(Pending::Val { name: discard, val, origin: o });
@@ -400,7 +399,7 @@ fn lower_fn<'src>(
   let (param_names, deferred) = extract_params_with_gen(g, params);
   let (cont, prev_cont) = g.push_cont(origin);
   let fn_body = {
-      let body = lower_stmts(g, body);
+      let body = lower_seq(g, body);
       prepend_pat_binds(g, deferred, body)
     };
   g.pop_cont(prev_cont);
@@ -408,7 +407,7 @@ fn lower_fn<'src>(
   (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
 }
 
-/// Lower a block group `(stmt; stmt)` — immediately-invoked zero-param closure.
+/// Lower a block group `(expr; expr)` — immediately-invoked zero-param closure.
 /// Defines the closure then emits an App that calls it right away.
 fn lower_iife<'src>(
   g: &mut Gen,
@@ -420,7 +419,7 @@ fn lower_iife<'src>(
   let (param_names, deferred) = extract_params_with_gen(g, params);
   let (cont, prev_cont) = g.push_cont(origin);
   let fn_body = {
-      let body = lower_stmts(g, body);
+      let body = lower_seq(g, body);
       prepend_pat_binds(g, deferred, body)
     };
   g.pop_cont(prev_cont);
@@ -876,7 +875,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
         let scrutinee_val = ref_val(g, param.kind, param.id, origin);
         lower_pat_lhs(g, pat_node, scrutinee_val, origin, &mut arm_pending);
       }
-      let arm_tail = lower_stmts(g, &body.items);
+      let arm_tail = lower_seq(g, &body.items);
       wrap_with_fail(g, arm_pending, arm_tail, fail_cont_expr)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
@@ -897,7 +896,7 @@ fn lower_block<'src>(
   let block_fn_name = g.fresh_fn(origin);
   let param_names = extract_params(g, params);
   let (cont, prev_cont) = g.push_cont(origin);
-  let fn_body = lower_stmts(g, body);
+  let fn_body = lower_seq(g, body);
   g.pop_cont(prev_cont);
   let (name_val, mut pending) = lower(g, name);
   let block_fn_val = ref_val(g, block_fn_name.kind, block_fn_name.id, origin);
@@ -1151,15 +1150,15 @@ fn parse_decimal(s: &str) -> f64 {
 // ---------------------------------------------------------------------------
 
 /// Lower a top-level block of statements (module body).
-pub fn lower_module<'src>(stmts: &'src [Node<'src>]) -> CpsResult<'src> {
+pub fn lower_module<'src>(exprs: &'src [Node<'src>]) -> CpsResult<'src> {
   let mut g = Gen::new();
-  if stmts.is_empty() {
+  if exprs.is_empty() {
     let origin: Option<AstId> = None;
     let empty_seq = lit_val(&mut g, Lit::Seq, origin);
     let root = ret_expr(&mut g, empty_seq, origin);
     return CpsResult { root, origin: g.origin };
   }
-  let root = lower_stmts(&mut g, stmts);
+  let root = lower_seq(&mut g, exprs);
   CpsResult { root, origin: g.origin }
 }
 
