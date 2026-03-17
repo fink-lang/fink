@@ -66,12 +66,6 @@ pub fn fmt(expr: &Expr<'_>) -> String {
   ast::fmt::fmt(&to_node_no_ctx(expr))
 }
 
-/// Render a cursor index as a formatter name (`·m_N`).
-/// Shared for both seq and rec cursors — the IR uses a plain `u32`.
-fn cursor_name(idx: u32) -> String {
-  format!("·m_{}", idx)
-}
-
 // ---------------------------------------------------------------------------
 // Dummy loc — all reconstructed AST nodes use this
 // ---------------------------------------------------------------------------
@@ -255,16 +249,6 @@ fn render_builtin(op: &BuiltIn) -> String {
   }
 }
 
-/// Unwrap a `Cont::Expr` for formatting. Panics on `Cont::Ref` — the formatter
-/// Unwrap an inline continuation for rendering.
-/// Panics on `Cont::Ref` — callers that need to handle both must match directly.
-fn cont_expr<'a, 'src>(cont: &'a Cont<'src>) -> (&'a BindNode, &'a Expr<'src>) {
-  match cont {
-    Cont::Expr { arg: bind, body } => (bind, body),
-    Cont::Ref(_) => panic!("cont_expr: unexpected Cont::Ref — caller must handle Ref directly"),
-  }
-}
-
 /// Render a `Cont` as a result-binding lambda for use in `·apply` / `·match_*` etc.
 /// - `Cont::Expr(bind, body)` → `fn ·v_N: body`  (N from bind.id)
 /// - `Cont::Ref(cont_id)` → `fn ·v_N: ·ƒ_cont ·v_N`  (cosmetic lambda sugar for the tail call)
@@ -273,9 +257,11 @@ fn cont_expr<'a, 'src>(cont: &'a Cont<'src>) -> (&'a BindNode, &'a Expr<'src>) {
 /// display; the `·ƒ_cont` name is fixed (all conts render as `·ƒ_cont` in param position).
 fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
-    Cont::Expr { arg: bind, body } => {
-      let name = render_bind_ctx(bind, ctx);
-      result_cont(&name, to_node(body, ctx))
+    Cont::Expr { args, body } => {
+      let params: Vec<Node<'static>> = args.iter()
+        .map(|b| ident(&render_bind_ctx(b, ctx)))
+        .collect();
+      fn_node(patterns(params), vec![to_node(body, ctx)])
     }
     Cont::Ref(cont_id) => {
       // Cosmetic: synthesise `fn ·v_N: ·ƒ_N ·v_N`.
@@ -299,6 +285,23 @@ fn render_cont_body(cont: &Cont<'_>, bound_name: &str, ctx: &Ctx<'_, '_>) -> Nod
     Cont::Ref(cont_id) => {
       let cont_name = format!("·ƒ_{}", cont_id.0);
       apply(ident(&cont_name), vec![ident(bound_name)])
+    }
+  }
+}
+
+/// Render a `body: Cont` field that introduces a cursor binding — used for
+/// MatchSeq and MatchRec, where the cont's single arg is the outgoing cursor.
+fn render_cont_with_cursor(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+  match cont {
+    Cont::Expr { args, body } => {
+      let cursor_name = render_bind_ctx(&args[0], ctx);
+      fn_node(patterns(vec![ident(&cursor_name)]), vec![to_node(body, ctx)])
+    }
+    Cont::Ref(cont_id) => {
+      let result_name = format!("·v_{}", cont_id.0);
+      let cont_name = format!("·ƒ_{}", cont_id.0);
+      let body = apply(ident(&cont_name), vec![ident(&result_name)]);
+      result_cont(&result_name, body)
     }
   }
 }
@@ -461,77 +464,48 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       apply(ident("·match_value"), vec![val_to_node(val, ctx), lit_to_node(lit), fail_node, cont])
     }
 
-    ExprKind::MatchSeq { val, cursor, fail, body } => {
-      let cursor_name = cursor_name(*cursor);
-      let body_inner = render_cont_as_expr(body, ctx);
-      let cont = fn_node(
-        patterns(vec![ident(&cursor_name)]),
-        vec![body_inner],
-      );
+    ExprKind::MatchSeq { val, fail, body } => {
+      let cont = render_cont_with_cursor(body, ctx);
       let fail_node = to_node(fail, ctx);
       apply(ident("·match_seq"), vec![val_to_node(val, ctx), fail_node, cont])
     }
 
-    ExprKind::MatchNext { cursor, next_cursor, fail, cont, .. } => {
-      let cur = cursor_name(*cursor);
-      let next = cursor_name(*next_cursor);
-      // MatchNext cont always carries the elem binding + next cursor — must be Expr.
-      let (elem, body) = cont_expr(cont);
-      let elem_str = render_bind_ctx(elem, ctx);
-      let cont_node = fn_node(
-        patterns(vec![ident(&elem_str), ident(&next)]),
-        vec![to_node(body, ctx)],
-      );
+    ExprKind::MatchNext { val, fail, cont } => {
       let fail_node = to_node(fail, ctx);
-      apply(ident("·match_next"), vec![ident(&cur), fail_node, cont_node])
+      let cont_node = render_cont(cont, ctx);
+      apply(ident("·match_next"), vec![val_to_node(val, ctx), fail_node, cont_node])
     }
 
-    ExprKind::MatchDone { cursor, fail, cont, .. } => {
-      let cur = cursor_name(*cursor);
+    ExprKind::MatchDone { val, fail, cont } => {
       let cont_node = render_cont(cont, ctx);
       let fail_node = to_node(fail, ctx);
-      apply(ident("·match_done"), vec![ident(&cur), fail_node, cont_node])
+      apply(ident("·match_done"), vec![val_to_node(val, ctx), fail_node, cont_node])
     }
 
-    ExprKind::MatchNotDone { cursor, fail, body, .. } => {
-      let cur = cursor_name(*cursor);
+    ExprKind::MatchNotDone { val, fail, body } => {
       let body_inner = render_cont_as_expr(body, ctx);
       let cont = fn_node(patterns(vec![]), vec![body_inner]);
       let fail_node = to_node(fail, ctx);
-      apply(ident("·match_not_done"), vec![ident(&cur), fail_node, cont])
+      apply(ident("·match_not_done"), vec![val_to_node(val, ctx), fail_node, cont])
     }
 
-    ExprKind::MatchRest { cursor, fail, cont, .. } => {
-      let cur = cursor_name(*cursor);
+    ExprKind::MatchRest { val, fail, cont } => {
       let cont_node = render_cont(cont, ctx);
       let fail_node = to_node(fail, ctx);
-      apply(ident("·match_rest"), vec![ident(&cur), fail_node, cont_node])
+      apply(ident("·match_rest"), vec![val_to_node(val, ctx), fail_node, cont_node])
     }
 
-    ExprKind::MatchRec { val, cursor, fail, body } => {
-      let rec_name = cursor_name(*cursor);
-      let body_inner = render_cont_as_expr(body, ctx);
-      let cont = fn_node(
-        patterns(vec![ident(&rec_name)]),
-        vec![body_inner],
-      );
+    ExprKind::MatchRec { val, fail, body } => {
+      let cont = render_cont_with_cursor(body, ctx);
       let fail_node = to_node(fail, ctx);
       apply(ident("·match_rec"), vec![val_to_node(val, ctx), fail_node, cont])
     }
 
-    ExprKind::MatchField { cursor, next_cursor, field, fail, cont, .. } => {
-      let cur = cursor_name(*cursor);
-      let next = cursor_name(*next_cursor);
-      // MatchField cont always carries the field binding + next cursor — must be Expr.
-      let (elem, body) = cont_expr(cont);
-      let elem_str = render_bind_ctx(elem, ctx);
-      let cont_node = fn_node(
-        patterns(vec![ident(&elem_str), ident(&next)]),
-        vec![to_node(body, ctx)],
-      );
+    ExprKind::MatchField { val, field, fail, cont } => {
       let fail_node = to_node(fail, ctx);
+      let cont_node = render_cont(cont, ctx);
       let field_lit = node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: field.to_string() });
-      apply(ident("·match_field"), vec![ident(&cur), field_lit, fail_node, cont_node])
+      apply(ident("·match_field"), vec![val_to_node(val, ctx), field_lit, fail_node, cont_node])
     }
   }
 }

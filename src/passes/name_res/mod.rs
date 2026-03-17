@@ -261,9 +261,9 @@ fn collect_scope_names<'src>(
         collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
       }
     }
-    App { cont: Cont::Expr { arg: result, body }, .. } |
-    Yield { cont: Cont::Expr { arg: result, body }, .. } => {
-      bind_to_scope(scope, result, scope_id, fn_depth, ctx, graphs);
+    App { cont: Cont::Expr { args, body }, .. } |
+    Yield { cont: Cont::Expr { args, body }, .. } => {
+      bind_to_scope(scope, &args[0], scope_id, fn_depth, ctx, graphs);
       collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
     }
     App { .. } | Yield { .. } => {}
@@ -375,9 +375,9 @@ fn resolve_expr<'src>(
             resolve_val(v, scope, sb, fn_depth, ctx, graphs),
         }
       }
-      if let Cont::Expr { arg: result, body } = cont {
+      if let Cont::Expr { args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
@@ -390,9 +390,9 @@ fn resolve_expr<'src>(
 
     Yield { value, cont } => {
       resolve_val(value, scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr { arg: result, body } = cont {
+      if let Cont::Expr { args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
@@ -413,9 +413,9 @@ fn resolve_expr<'src>(
       resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for v in args { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr { arg: result, body } = cont {
+      if let Cont::Expr { args: cont_args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        bind_to_scope(&mut inner, &cont_args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
@@ -445,36 +445,41 @@ fn resolve_expr<'src>(
       }
     }
 
-    MatchNext { fail, cont, .. } => {
+    MatchNext { val, fail, cont } => {
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr { arg: elem, body } = cont {
+      if let Cont::Expr { args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
+        // args[0] = elem bind, args[1] = next_cursor bind (cursor is synthetic, no source name)
+        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
 
-    MatchDone { fail, cont, .. } => {
+    MatchDone { val, fail, cont } => {
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr { arg: result, body } = cont {
+      if let Cont::Expr { args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
 
-    MatchNotDone { fail, body, .. } => {
+    MatchNotDone { val, fail, body } => {
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       if let Cont::Expr { body: body_expr, .. } = body {
         resolve_expr(body_expr, scope, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
 
-    MatchRest { fail, cont, .. } => {
+    MatchRest { val, fail, cont } => {
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr { arg: result, body } = cont {
+      if let Cont::Expr { args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
@@ -487,11 +492,13 @@ fn resolve_expr<'src>(
       }
     }
 
-    MatchField { fail, cont, .. } => {
+    MatchField { val, fail, cont, .. } => {
+      resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
-      if let Cont::Expr { arg: elem, body } = cont {
+      if let Cont::Expr { args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, elem, current_scope, fn_depth, ctx, graphs);
+        // args[0] = field val bind, args[1] = next_cursor bind (synthetic)
+        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
@@ -510,9 +517,9 @@ fn resolve_expr<'src>(
         }
         resolve_expr(arm, &arm_scope, arm_scope_id, sb, fn_depth, ctx, graphs);
       }
-      if let Cont::Expr { arg: result, body } = cont {
+      if let Cont::Expr { args, body } = cont {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, result, current_scope, fn_depth, ctx, graphs);
+        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
