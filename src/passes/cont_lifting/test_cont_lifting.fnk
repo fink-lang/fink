@@ -32,12 +32,98 @@ test 'trivial App body (Ret) is unchanged', fn:
   expect cont_lift fink":
     main = fn a, b:
       a + b
-
   | equals fink":
     ·fn
       fn a, b, ·ƒ_4:
         ·apply ·op_plus, a, b, fn ·v_4:
           ·ƒ_4 ·v_4
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+
+---
+yield with non-trivial cont body — hoisting
+---
+
+test 'yield — cont body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn:
+      yield 42
+      1 + 2
+
+  | equals fink":
+    ·fn
+      fn ·ƒ_2:
+        ·fn
+          fn ·v_4, ·ƒ_24:
+            ·let ·v_4, fn ·v_6:
+              ·apply ·op_plus, 1, 2, fn ·v_2:
+                ·ƒ_2 ·v_2
+          fn ·ƒ_23:
+            ·yield 42, fn ·v_23:
+              ·ƒ_23 ·v_23
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+
+---
+match nodes with non-trivial cont bodies — hoisting
+---
+
+test 'seq destructure — MatchDone cont body hoisted', fn:
+  expect cont_lift fink":
+    main = fn foo:
+      [a] = foo
+      a + 1
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·fn
+          fn ·v_23, ·ƒ_38:
+            ·match_next ·m_0, ·panic, fn ·v_5, ·m_1:
+              ·let ·v_5, fn a:
+                ·fn
+                  fn ·v_8, ·ƒ_34:
+                    ·apply ·op_plus, a, 1, fn ·v_3:
+                      ·ƒ_3 ·v_3
+                  fn ·ƒ_33:
+                    ·match_done ·m_1, ·panic, fn ·v_33:
+                      ·ƒ_33 ·v_33
+          fn ·ƒ_37:
+            ·match_seq foo, ·panic, fn ·m_0: ·ƒ_37
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+
+---
+MatchIf body — hoisting
+---
+
+test 'MatchIf — body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn foo:
+      a > 0 = foo
+      a * 2 + 1
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·let foo, fn a:
+          ·fn
+            fn ·v_18, ·ƒ_36:
+              ·fn
+                fn ·v_10, ·ƒ_32:
+                  ·apply ·op_plus, ·v_10, 1, fn ·v_3:
+                    ·ƒ_3 ·v_3
+                fn ·ƒ_31:
+                  ·apply ·op_mul, a, 2, fn ·v_31:
+                    ·ƒ_31 ·v_31
+            fn ·ƒ_35:
+              ·match_if ·op_gt, a, 0, ·panic, fn: ·ƒ_35
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -52,7 +138,6 @@ test 'chained arithmetic — App body hoisted to LetFn', fn:
     main = fn:
       x = 2 * 3
       x + 4
-
   | equals fink":
     ·fn
       fn ·ƒ_2:
@@ -67,3 +152,6 @@ test 'chained arithmetic — App body hoisted to LetFn', fn:
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
+
+
+

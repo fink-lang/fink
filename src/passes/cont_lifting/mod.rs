@@ -1,26 +1,24 @@
 // Continuation lifting pass.
 //
-// Hoists inline App continuation bodies into top-level LetFn nodes so that
+// Hoists all inline continuation bodies (Cont::Expr) into LetFn nodes so that
 // every continuation is a named function by the time closure_lifting runs.
+// closure_lifting requires named fns — it cannot hoist anonymous inline closures.
 //
 // Input:  CpsResult (after CPS transform)
-// Output: CpsResult (inline App bodies replaced by LetFn + Cont::Ref)
+// Output: CpsResult (all Cont::Expr bodies replaced by LetFn + Cont::Ref)
 //
-// Rewrite for each App { func, args, cont: Cont::Expr { arg, body } } where body is non-trivial:
+// Rewrite for each node with cont: Cont::Expr { arg, body }:
 //
 //   Before:
-//     ·apply func, args, fn arg: <non-trivial body>
+//     ·apply func, args, fn arg: <body>
 //
 //   After:
-//     ·fn fn arg: <non-trivial body>     ← new LetFn (Bind::Cont)
+//     ·fn fn arg: <body>     ← new LetFn (Bind::Cont)
 //       fn ·ƒ_N:
-//         ·apply func, args, ·ƒ_N        ← App with Cont::Ref(·ƒ_N)
+//         ·apply func, args, ·ƒ_N   ← Cont::Ref(·ƒ_N)
 //
-// The new LetFn is left in place (not hoisted here). closure_lifting then treats it
-// as a closure if its body captures anything, and hoists it to module top.
-//
-// Only App is handled for now — other continuation-carrying nodes (Yield, Match*)
-// will be added when needed.
+// All Cont::Expr bodies are hoisted unconditionally — including trivial ones.
+// closure_lifting needs every cont to be a named LetFn to thread captures.
 //
 // CPS transform contract:
 //   1. Every new node gets a CpsId via the id allocator + origin entry.
@@ -81,54 +79,25 @@ pub fn lift<'src>(result: CpsResult<'src>) -> CpsResult<'src> {
 fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
-    // App — hoist non-trivial cont body into a LetFn.
-    App { func, args, cont } => {
-      match cont {
-        Cont::Ref(_) => Expr { id: expr.id, kind: App { func, args, cont } },
-        Cont::Expr { arg, body } => {
-          let body = lift_expr(*body, alloc);
-          if is_trivial_body(&body) {
-            Expr { id: expr.id, kind: App { func, args, cont: Cont::Expr { arg, body: Box::new(body) } } }
-          } else {
-            // Hoist: wrap the body in a LetFn, replace App cont with Cont::Ref.
-            let cont_name = alloc.bind(Bind::Cont, None);
-            let inner_cont_param = alloc.bind(Bind::Cont, None);
-            let inner_app = alloc.expr(
-              App { func, args, cont: Cont::Ref(cont_name.id) },
-              None,
-            );
-            Expr {
-              id: expr.id,
-              kind: LetFn {
-                name:    cont_name,
-                params:  vec![Param::Name(arg)],
-                cont:    inner_cont_param,
-                fn_body: Box::new(body),
-                body:    Cont::Expr {
-                  arg:  alloc.bind(Bind::Synth, None),
-                  body: Box::new(inner_app),
-                },
-              },
-            }
-          }
-        }
-      }
-    }
+    App { func, args, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| App { func, args, cont }),
 
-    // Pass-through for all other nodes — recurse into sub-expressions.
+    Yield { value, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| Yield { value, cont }),
+
     LetVal { name, val, body } => {
-      let body = lift_cont(body, alloc);
+      let body = recurse_cont(body, alloc);
       Expr { id: expr.id, kind: LetVal { name, val, body } }
     }
 
     LetFn { name, params, cont, fn_body, body } => {
       let fn_body = lift_expr(*fn_body, alloc);
-      let body    = lift_cont(body, alloc);
+      let body    = recurse_cont(body, alloc);
       Expr { id: expr.id, kind: LetFn { name, params, cont, fn_body: Box::new(fn_body), body } }
     }
 
     LetRec { bindings, body } => {
-      let body = lift_cont(body, alloc);
+      let body = recurse_cont(body, alloc);
       Expr { id: expr.id, kind: LetRec { bindings, body } }
     }
 
@@ -138,67 +107,58 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       Expr { id: expr.id, kind: If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
 
-    Yield { value, cont } => {
-      let cont = lift_cont(cont, alloc);
-      Expr { id: expr.id, kind: Yield { value, cont } }
-    }
-
-    // Terminals — no sub-expressions.
     Panic | FailCont => expr,
 
     MatchLetVal { name, val, fail, body } => {
-      let body = lift_cont(body, alloc);
+      let body = recurse_cont(body, alloc);
       Expr { id: expr.id, kind: MatchLetVal { name, val, fail, body } }
     }
-    MatchApp { func, args, fail, cont } => {
-      let cont = lift_cont(cont, alloc);
-      Expr { id: expr.id, kind: MatchApp { func, args, fail, cont } }
-    }
-    MatchIf { func, args, fail, body } => {
-      let body = lift_cont(body, alloc);
-      Expr { id: expr.id, kind: MatchIf { func, args, fail, body } }
-    }
-    MatchValue { val, lit, fail, body } => {
-      let body = lift_cont(body, alloc);
-      Expr { id: expr.id, kind: MatchValue { val, lit, fail, body } }
-    }
-    MatchSeq { val, cursor, fail, body } => {
-      let body = lift_cont(body, alloc);
-      Expr { id: expr.id, kind: MatchSeq { val, cursor, fail, body } }
-    }
+
+    MatchApp { func, args, fail, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchApp { func, args, fail, cont }),
+
+    MatchIf { func, args, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchIf { func, args, fail, body }),
+
+    MatchValue { val, lit, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchValue { val, lit, fail, body }),
+
+    MatchSeq { val, cursor, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchSeq { val, cursor, fail, body }),
+
+    // MatchNext/MatchField conts carry two bindings (elem + cursor) — Cont::Expr
+    // only supports one arg. Cannot hoist until Cont supports Vec<BindNode>.
     MatchNext { val, cursor, next_cursor, fail, cont } => {
-      let cont = lift_cont(cont, alloc);
+      let cont = recurse_cont(cont, alloc);
       Expr { id: expr.id, kind: MatchNext { val, cursor, next_cursor, fail, cont } }
     }
-    MatchDone { val, cursor, fail, cont } => {
-      let cont = lift_cont(cont, alloc);
-      Expr { id: expr.id, kind: MatchDone { val, cursor, fail, cont } }
-    }
-    MatchNotDone { val, cursor, fail, body } => {
-      let body = lift_cont(body, alloc);
-      Expr { id: expr.id, kind: MatchNotDone { val, cursor, fail, body } }
-    }
-    MatchRest { val, cursor, fail, cont } => {
-      let cont = lift_cont(cont, alloc);
-      Expr { id: expr.id, kind: MatchRest { val, cursor, fail, cont } }
-    }
-    MatchRec { val, cursor, fail, body } => {
-      let body = lift_cont(body, alloc);
-      Expr { id: expr.id, kind: MatchRec { val, cursor, fail, body } }
-    }
+
+    MatchDone { val, cursor, fail, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchDone { val, cursor, fail, cont }),
+
+    MatchNotDone { val, cursor, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchNotDone { val, cursor, fail, body }),
+
+    MatchRest { val, cursor, fail, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchRest { val, cursor, fail, cont }),
+
+    MatchRec { val, cursor, fail, body } =>
+      hoist_cont(expr.id, body, alloc, |body| MatchRec { val, cursor, fail, body }),
+
+    // See MatchNext — same two-binding limitation.
     MatchField { val, cursor, next_cursor, field, fail, cont } => {
-      let cont = lift_cont(cont, alloc);
+      let cont = recurse_cont(cont, alloc);
       Expr { id: expr.id, kind: MatchField { val, cursor, next_cursor, field, fail, cont } }
     }
-    MatchBlock { params, fail, arm_params, arms, cont } => {
-      let cont = lift_cont(cont, alloc);
-      Expr { id: expr.id, kind: MatchBlock { params, fail, arm_params, arms, cont } }
-    }
+
+    MatchBlock { params, fail, arm_params, arms, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchBlock { params, fail, arm_params, arms, cont }),
   }
 }
 
-/// Recurse into a `Cont`, lifting any inline body.
-fn lift_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'src> {
+/// Recurse into a `Cont` without hoisting — for `body:` fields on `LetVal`/`LetFn`/`LetRec`
+/// where the continuation is lexical sequencing, not a call result closure.
+fn recurse_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'src> {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { arg, body } => {
@@ -208,17 +168,41 @@ fn lift_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'src> {
   }
 }
 
-/// Returns true if `expr` is a trivial App continuation body —
-/// one that codegen can handle without hoisting. A body is trivial if it
-/// has no further App with a non-trivial cont (i.e. no chained calls).
-fn is_trivial_body(expr: &Expr<'_>) -> bool {
-  match &expr.kind {
-    ExprKind::App { cont, .. } => matches!(cont, Cont::Ref(_)),
-    ExprKind::LetVal { body, .. } | ExprKind::MatchLetVal { body, .. } => {
-      matches!(body, Cont::Ref(_))
+/// Hoist a `Cont::Expr` body into a `LetFn`, replacing it with `Cont::Ref`.
+/// `make_kind` rebuilds the parent node's kind given the (possibly rewritten) cont.
+///
+/// If `cont` is `Cont::Ref` — return the node unchanged.
+/// If `cont` is `Cont::Expr { arg, body }` — lift body, wrap parent in a LetFn:
+///
+///   LetFn { name: ·ƒ_N, params: [arg], fn_body: body,
+///           body: Cont::Expr { <parent node with Cont::Ref(·ƒ_N)> } }
+fn hoist_cont<'src, F>(
+  node_id: CpsId,
+  cont: Cont<'src>,
+  alloc: &mut Alloc,
+  make_kind: F,
+) -> Expr<'src>
+where
+  F: FnOnce(Cont<'src>) -> ExprKind<'src>,
+{
+  match cont {
+    Cont::Ref(_) => Expr { id: node_id, kind: make_kind(cont) },
+    Cont::Expr { arg, body } => {
+      let body = lift_expr(*body, alloc);
+      let cont_name        = alloc.bind(Bind::Cont, None);
+      let inner_cont_param = alloc.bind(Bind::Cont, None);
+      let inner = alloc.expr(make_kind(Cont::Ref(cont_name.id)), None);
+      Expr {
+        id: node_id,
+        kind: ExprKind::LetFn {
+          name:    cont_name,
+          params:  vec![Param::Name(arg)],
+          cont:    inner_cont_param,
+          fn_body: Box::new(body),
+          body:    Cont::Expr { arg: alloc.bind(Bind::Synth, None), body: Box::new(inner) },
+        },
+      }
     }
-    ExprKind::Panic | ExprKind::FailCont => true,
-    _ => false,
   }
 }
 
