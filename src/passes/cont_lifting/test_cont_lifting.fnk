@@ -105,6 +105,177 @@ test 'seq destructure — MatchDone cont body hoisted', fn:
 
 
 ---
+MatchLetVal — plain ident destructure
+---
+
+test 'MatchLetVal — body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn foo:
+      a = foo
+      a + 1
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·let foo, fn a:
+          ·apply ·op_plus, a, 1, fn ·v_3:
+            ·ƒ_3 ·v_3
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchValue — literal pattern
+---
+
+test 'MatchValue — body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn foo:
+      1 = foo
+      foo + 2
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·fn
+          fn ·v_11, ·ƒ_22:
+            ·apply ·op_plus, foo, 2, fn ·v_3:
+              ·ƒ_3 ·v_3
+          fn ·ƒ_21:
+            ·match_value foo, 1, ·panic, fn: ·ƒ_21
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchRec + MatchField — record destructure
+---
+
+test 'MatchRec/MatchField — body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn foo:
+      {x} = foo
+      x + 1
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·fn
+          fn ·v_5, ·ƒ_38:
+            ·fn
+              fn ·v_6, ·v_7, ·ƒ_34:
+                ·let ·v_6, fn x:
+                  ·apply ·op_plus, x, 1, fn ·v_3:
+                    ·ƒ_3 ·v_3
+              fn ·ƒ_33:
+                ·match_field ·v_5, 'x', ·panic, fn ·v_33:
+                  ·ƒ_33 ·v_33
+          fn ·ƒ_37:
+            ·match_rec foo, ·panic, fn ·v_37:
+              ·ƒ_37 ·v_37
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchRest — spread tail in seq
+---
+
+test 'MatchRest — body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn foo:
+      [..rest] = foo
+      rest
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·fn
+          fn ·v_5, ·ƒ_32:
+            ·fn
+              fn ·v_7, ·ƒ_28:
+                ·let ·v_7, fn rest:
+                  ·ƒ_3 rest
+              fn ·ƒ_27:
+                ·match_rest ·v_5, ·panic, fn ·v_27:
+                  ·ƒ_27 ·v_27
+          fn ·ƒ_31:
+            ·match_seq foo, ·panic, fn ·v_31:
+              ·ƒ_31 ·v_31
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchNotDone — spread with no binding
+---
+
+test 'MatchNotDone — body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn foo:
+      [a, ..] = foo
+      a + 1
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·fn
+          fn ·v_5, ·ƒ_46:
+            ·fn
+              fn ·v_6, ·v_7, ·ƒ_42:
+                ·let ·v_6, fn a:
+                  ·fn
+                    fn ·v_18, ·ƒ_38:
+                      ·apply ·op_plus, a, 1, fn ·v_3:
+                        ·ƒ_3 ·v_3
+                    fn ·ƒ_37:
+                      ·match_not_done ·v_7, ·panic, fn: ·ƒ_37
+              fn ·ƒ_41:
+                ·match_next ·v_5, ·panic, fn ·v_41:
+                  ·ƒ_41 ·v_41
+          fn ·ƒ_45:
+            ·match_seq foo, ·panic, fn ·v_45:
+              ·ƒ_45 ·v_45
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchBlock — match expression
+---
+
+test 'MatchBlock — cont body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn x:
+      r = match x:
+        1: 10
+        2: 20
+      r + 1
+
+  | equals fink":
+    ·fn
+      fn x, ·ƒ_3:
+        ·fn
+          fn ·v_22, ·ƒ_44:
+            ·let ·v_22, fn r:
+              ·apply ·op_plus, r, 1, fn ·v_3:
+                ·ƒ_3 ·v_3
+          fn ·ƒ_43:
+            ·match_block x, ·panic,
+              ·match_branch fn ·v_5, ·ƒ_cont, ·ƒ_fail:
+                ·match_value ·v_5, 1, ·ƒ_fail, fn:
+                  ·let 10, fn ·v_9:
+                    ·ƒ_3 ·v_9
+              ·match_branch fn ·v_5, ·ƒ_cont, ·ƒ_fail:
+                ·match_value ·v_5, 2, ·ƒ_fail, fn:
+                  ·let 20, fn ·v_17:
+                    ·ƒ_3 ·v_17
+              fn ·v_43: ·ƒ_43 ·v_43
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
 MatchIf body — hoisting
 ---
 
