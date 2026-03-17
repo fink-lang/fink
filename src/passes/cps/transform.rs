@@ -13,8 +13,8 @@
 // where `Binding` is a deferred let-binding. Bindings are woven into an
 // Expr chain by `wrap(val, bindings, tail)` which builds right-to-left:
 //
-//   wrap(v, [LetVal(a,x), LetFn(f,p,b)], Ret(v))
-//   → LetVal { name: a, val: x, body: LetFn { name: f, ... body: Ret(v) } }
+//   wrap(v, [LetVal(a,x), LetFn(f,p,b)], Cont::Ref(·ƒ_cont))
+//   → LetVal { name: a, val: x, body: LetFn { name: f, ... body: Cont::Ref(·ƒ_cont) } }
 //
 // This avoids the monomorphization explosion that closures-as-continuations
 // cause in Rust's type system.
@@ -153,24 +153,6 @@ fn wrap_val<'src>(g: &mut Gen, val: Val<'src>, origin: Option<AstId>) -> Expr<'s
   g.expr(ExprKind::LetVal { name, val: Box::new(val), body: Cont::Ref(cont) }, origin)
 }
 
-/// Emit an App node: func(args...) → result; body.
-#[allow(dead_code)]
-fn app_node<'src>(
-  g: &mut Gen,
-  func: Val<'src>,
-  args: Vec<Arg<'src>>,
-  result: BindNode,
-  body: Expr<'src>,
-  origin: Option<AstId>,
-) -> Expr<'src> {
-  g.expr(ExprKind::App { func: Callable::Val(func), args, cont: Cont::Expr { arg: result, body: Box::new(body) } }, origin)
-}
-
-/// Wrap a plain `Val` as an `Arg::Val`.
-#[allow(dead_code)]
-fn arg_val(val: Val<'_>) -> Arg<'_> {
-  Arg::Val(val)
-}
 
 /// Wrap a `Vec<Val>` as `Vec<Arg::Val>` — for internal primitives that never spread.
 fn args_val<'src>(vals: Vec<Val<'src>>) -> Vec<Arg<'src>> {
