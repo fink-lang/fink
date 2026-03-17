@@ -1,0 +1,69 @@
+---
+continuation lifting tests
+---
+
+# Continuation lifting — hoists inline App continuation bodies into LetFn nodes
+# so that every continuation is a named function by the time closure_lifting runs.
+#
+# Rewrite for App { func, args, cont: Cont::Expr { arg, body } } where body is non-trivial:
+#
+#   Before:
+#     ·apply func, args, fn arg: <non-trivial body>
+#
+#   After:
+#     ·fn fn arg: <non-trivial body>     ← new LetFn (Bind::Cont)
+#       fn ·ƒ_N:
+#         ·apply func, args, ·ƒ_N        ← App with Cont::Ref(·ƒ_N)
+#
+# Test format:
+#   test 'name', fn:
+#     expect cont_lift fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected rewritten cps>
+
+
+---
+trivial App body — no hoisting
+---
+
+test 'trivial App body (Ret) is unchanged', fn:
+  expect cont_lift fink":
+    main = fn a, b:
+      a + b
+
+  | equals fink":
+    ·fn
+      fn a, b, ·ƒ_4:
+        ·apply ·op_plus, a, b, fn ·v_4:
+          ·ƒ_4 ·v_4
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+
+---
+non-trivial App body — hoisting
+---
+
+test 'chained arithmetic — App body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+
+  | equals fink":
+    ·fn
+      fn ·ƒ_2:
+        ·fn
+          fn ·v_5, ·ƒ_26:
+            ·let ·v_5, fn x:
+              ·apply ·op_plus, x, 4, fn ·v_2:
+                ·ƒ_2 ·v_2
+          fn ·ƒ_25:
+            ·apply ·op_mul, 2, 3, fn ·v_25:
+              ·ƒ_25 ·v_25
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
