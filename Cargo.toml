@@ -11,6 +11,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+v8 = "146.8.0"
+wat = "1"
+tungstenite = "0.26"
 
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }

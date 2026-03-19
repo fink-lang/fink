@@ -7,10 +7,16 @@ fn main() {
   let embed_source = args.iter().any(|a| a == "--embed-source");
   let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("--")).map(|s| s.as_str()).collect();
 
+  let dbg = args.iter().any(|a| a == "--dbg");
+  let inspect_port: u16 = args.iter()
+    .find_map(|a| a.strip_prefix("--inspect-port="))
+    .and_then(|s| s.parse().ok())
+    .unwrap_or(9229);
+
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|cps> [--sourcemap] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|run> [--sourcemap] [--dbg] <file>");
       process::exit(1);
     }
   };
@@ -65,9 +71,16 @@ fn main() {
         Err(e) => parse_error(&src, e),
       }
     }
+    "run" => {
+      let opts = fink::runner::RunOptions { debug: dbg, inspect_port, ..Default::default() };
+      if let Err(e) = fink::runner::run_file(opts, path) {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|cps> <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|run> [--dbg] [--inspect-port=N] <file>");
       process::exit(1);
     }
   }

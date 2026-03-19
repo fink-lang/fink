@@ -1,4 +1,5 @@
 pub mod errors;
+pub mod runner;
 pub mod passes;
 pub mod propgraph;
 pub mod sourcemap;
