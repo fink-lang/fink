@@ -190,7 +190,7 @@ fn send_to_ws(mut msg: v8::UniquePtr<StringBuffer>) {
     let script_id = extract_json_str(&text, "scriptId");
     // Determine the URL to use for source lookup.
     let lookup_url: Option<String> = if text.contains("\"scriptLanguage\":\"WebAssembly\"") {
-      // WASM script: V8 emits url="" — inject our registered source URL.
+      // WASM script: V8 emits wasm:// url — inject our registered WAT source URL.
       WASM_SOURCE_URL.lock().ok().and_then(|u| u.clone())
     } else {
       extract_json_str(&text, "url").map(str::to_string)
@@ -203,11 +203,20 @@ fn send_to_ws(mut msg: v8::UniquePtr<StringBuffer>) {
     {
       sources.insert(sid.to_string(), source);
     }
-    // Patch url="" in WASM scriptParsed so VSCode opens the WAT source file.
+    // Patch the wasm:// url in WASM scriptParsed so VSCode opens the WAT source file.
+    // V8 emits url="wasm://wasm/<hash>" for WASM modules; replace it with the
+    // registered WAT file URL. Also set hasSourceURL=true so VSCode trusts the
+    // URL without comparing hashes against the binary WASM content.
     if text.contains("\"scriptLanguage\":\"WebAssembly\"")
-      && let Some(ref url) = lookup_url
+      && let Some(ref wat_url) = lookup_url
+      && let Some(wasm_url) = extract_json_str(&text, "url")
     {
-      text.replacen("\"url\":\"\"", &format!("\"url\":\"{url}\""), 1)
+      // Clear hash so VSCode skips binary-vs-source content verification.
+      let wasm_hash = extract_json_str(&text, "hash").unwrap_or("");
+      text
+        .replacen(&format!("\"url\":\"{wasm_url}\""), &format!("\"url\":\"{wat_url}\""), 1)
+        .replacen("\"hasSourceURL\":false", "\"hasSourceURL\":true", 1)
+        .replacen(&format!("\"hash\":\"{wasm_hash}\""), "\"hash\":\"\"", 1)
     } else {
       text
     }

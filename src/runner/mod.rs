@@ -84,12 +84,11 @@ pub fn run(opts: RunOptions, wasm: &[u8]) -> Result<(), String> {
   let ctx_copy = context; // Local<Context> is Copy
   let scope = &mut v8::ContextScope::new(scope, context);
 
-  // If debugging: register context, wait for the debugger, then pause on the
-  // first JS statement (--inspect-brk style) so the user can set breakpoints
-  // or step before any code runs.
+  // If debugging: register context and wait for the debugger to attach.
+  // The JS runner contains a `debugger` statement just before WASM instantiation
+  // so the first pause lands immediately before WASM runs (not in JS boilerplate).
   let _session = if let Some(insp) = insp_opt {
     let session = inspector::attach(insp, scope, ctx_copy, opts.inspect_port)?;
-    session.schedule_pause();
     Some(session)
   } else {
     None
@@ -104,31 +103,26 @@ pub fn run(opts: RunOptions, wasm: &[u8]) -> Result<(), String> {
   // Instantiate the module via the JS WebAssembly API.
   // Provides env.print(i32) as a host import so WASM modules can call back.
   //
-  // `//# sourceURL=` at the end sets callFrame.url so VSCode can show line
-  // highlighting in the correct file.  ScriptOrigin::resource_name only sets
-  // embedderName; the actual URL used by the debugger comes from this comment.
-  let script_url = format!("file://{}", opts.source_label);
-  let js = format!(r#"
+  // No //# sourceURL= comment: the JS runner scaffold is internal plumbing and
+  // doesn't need a source view. The WASM scriptParsed url is patched separately
+  // to point at the WAT source file.
+  let script_url = "fink://runner".to_string();
+  let js = r#"
       const output = [];
-      const imports = {{
-        env: {{
+      const imports = {
+        env: {
           print: (n) => output.push(String(n)),
-        }},
-      }};
+        },
+      };
       const mod = new WebAssembly.Module(__wasm_bytes);
+      debugger;
       const inst = new WebAssembly.Instance(mod, imports);
       const exportList = WebAssembly.Module.exports(mod)
-        .map(e => `  ${{e.name}} (${{e.kind}})`)
+        .map(e => `  ${e.name} (${e.kind})`)
         .join('\n');
-      const printed = output.map(s => `[wasm] ${{s}}`).join('\n');
+      const printed = output.map(s => `[wasm] ${s}`).join('\n');
       [exportList, printed].filter(Boolean).join('\n')
-    //# sourceURL={script_url}
-    "#);
-
-  // Register the JS source so Debugger.getScriptSource can return it while paused.
-  if _session.is_some() {
-    inspector::register_script_source(&script_url, &js);
-  }
+    "#.to_string();
 
   let exports = run_js(scope, &js, &script_url)?;
   if !exports.trim().is_empty() {
