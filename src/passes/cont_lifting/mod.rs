@@ -108,7 +108,7 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       Expr { id: expr.id, kind: If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
 
-    Panic | FailCont => expr,
+    Panic | FailCont | FailRef(_) => expr,
 
     MatchLetVal { name, val, fail, body } => {
       let body = recurse_cont(body, alloc);
@@ -150,8 +150,10 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       hoist_cont(expr.id, body, alloc, |body| MatchArm { matcher, body })
     }
 
-    MatchBlock { params, arm_params, arms, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchBlock { params, arm_params, arms, cont }),
+    MatchBlock { params, arm_params, arms, cont } => {
+      let arms = arms.into_iter().map(|arm| lift_expr(arm, alloc)).collect();
+      hoist_cont(expr.id, cont, alloc, |cont| MatchBlock { params, arm_params, arms, cont })
+    }
   }
 }
 

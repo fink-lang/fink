@@ -11,6 +11,7 @@ yield — CPS lowering tests
 #   ·yield value, fn ·v_{cps_id}:
 #     <continuation>
 
+{test, equals, expect, fink, cps_expr} = import 'fake!'
 
 test 'yield literal', fn:
   expect cps_expr fink":

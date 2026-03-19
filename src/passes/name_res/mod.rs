@@ -538,7 +538,7 @@ fn resolve_expr<'src>(
       }
     }
 
-    Panic | FailCont => {}
+    Panic | FailCont | FailRef(_) => {}
   }
 }
 
@@ -745,7 +745,7 @@ mod tests {
         if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
 
-      Panic | FailCont => {}
+      Panic | FailCont | FailRef(_) => {}
     }
   }
 

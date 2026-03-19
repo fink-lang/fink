@@ -482,6 +482,11 @@ pub enum ExprKind<'src> {
   /// Used as the `fail` expr inside match arm bodies — failure delegates to next arm.
   /// Only valid inside a MatchBlock arm.
   FailCont,
+
+  /// Tail call to an explicit continuation by id (no args).
+  /// Used as the `fail` expr inside MatchArm matchers where the fail cont is an
+  /// explicit parameter rather than the implicit `·ƒ_fail`.
+  FailRef(CpsId),
 }
 
 /// A single named function binding in a `LetRec` group.

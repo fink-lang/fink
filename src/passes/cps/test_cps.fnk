@@ -20,7 +20,6 @@ cps_c IR — pretty-printer tests
 #       <expected cps output>
 
 {test, expect, equals, fink, cps_expr} = import '!fake'
-{·let, ·fn, ·ƒ_cont, ·apply} = import '!fake'
 
 ---
 literals — tail position, no synthesis needed

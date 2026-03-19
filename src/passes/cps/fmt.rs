@@ -261,7 +261,12 @@ fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let params: Vec<Node<'static>> = args.iter()
         .map(|b| ident(&render_bind_ctx(b, ctx)))
         .collect();
-      fn_node(patterns(params), vec![to_node(body, ctx)])
+      // FailRef as a cont body is a no-arg tail call — render as `·ƒ_N _`.
+      let body_node = match &body.kind {
+        ExprKind::FailRef(id) => ident(&format!("·ƒ_{} _", id.0)),
+        _ => to_node(body, ctx),
+      };
+      fn_node(patterns(params), vec![body_node])
     }
     Cont::Ref(cont_id) => {
       // Cosmetic: synthesise `fn ·v_N: ·ƒ_N ·v_N`.
@@ -315,9 +320,11 @@ fn render_cont_as_expr(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { body, .. } => to_node(body, ctx),
     Cont::Ref(cont_id) => {
-      // Should not normally occur for body-only conts, but handle gracefully.
-      let cont_name = format!("·ƒ_{}", cont_id.0);
-      ident(&cont_name)
+      // A bare cont ref in a no-arg body position means "call this cont".
+      // Render as `·ƒ_N _` — an application with a wildcard arg, since
+      // a bare `·ƒ_N` is just a reference in Fink syntax, not a call.
+      // Use a single ident token (with space) so the pretty-printer keeps it inline.
+      ident(&format!("·ƒ_{} _", cont_id.0))
     }
   }
 }
@@ -331,6 +338,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 
     ExprKind::Panic => ident("·panic"),
     ExprKind::FailCont => ident("·ƒ_fail"),
+    ExprKind::FailRef(id) => ident(&format!("·ƒ_{}", id.0)),
 
     ExprKind::MatchArm { matcher, body } => {
       apply(ident("·match_arm"), vec![render_cont(matcher, ctx), render_cont(body, ctx)])

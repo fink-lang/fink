@@ -273,7 +273,7 @@ fn collect_bind_ids(
       for b in bindings { collect_bind_ids(&b.fn_body, resolve, out); }
       if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
     }
-    Panic | FailCont => {}
+    Panic | FailCont | FailRef(_) => {}
   }
 }
 
@@ -612,7 +612,7 @@ fn lift_expr<'src>(
       }
     }
 
-    Panic | FailCont => expr,
+    Panic | FailCont | FailRef(_) => expr,
   }
 }
 
@@ -839,7 +839,7 @@ mod tests {
         for arm in arms { collect_lines(arm, result, origin, ast_index, out); }
         if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
-      Panic | FailCont => {}
+      Panic | FailCont | FailRef(_) => {}
     }
   }
 

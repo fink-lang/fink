@@ -129,15 +129,7 @@ fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src
   g.val(ValKind::Lit(lit), origin)
 }
 
-/// The `·panic` fail expression — irrefutable pattern failure; no recovery path.
-fn panic_expr(g: &mut Gen, origin: Option<AstId>) -> Expr<'static> {
-  g.expr(ExprKind::Panic, origin)
-}
 
-/// A reference to `·ƒ_fail` — used as the fail cont inside match arm bodies.
-fn fail_cont_expr(g: &mut Gen, origin: Option<AstId>) -> Expr<'static> {
-  g.expr(ExprKind::FailCont, origin)
-}
 
 /// Wrap a bare value as the leaf of a function body.
 /// Produces `LetVal { name: fresh, val, body: Cont::Ref(g.cont) }`.
@@ -857,41 +849,60 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
         Some(NodeKind::Patterns(ps)) => ps.items.as_slice(),
         _ => lhs.items.as_slice(),
       };
+
+      // Allocate explicit Bind::Cont params for the matcher:
+      //   [scrutinee_0, ..., fail_bind, succ_bind]
+      // fail_bind: called on pattern mismatch (tries next arm)
+      // succ_bind: called on success — this is the body cont ref
+      let fail_bind = g.bind(Bind::Cont, origin);
+      let succ_bind = g.bind(Bind::Cont, origin);
+      let succ_id   = succ_bind.id;
+
+      // Lower patterns using the matcher's own scrutinee params (fresh per arm).
+      let matcher_scrutinee_params: Vec<BindNode> =
+        arm_params.iter().map(|_| g.fresh_result(origin)).collect();
       let mut arm_pending: Vec<Pending<'src>> = vec![];
-      for (pat_node, param) in lhs_nodes.iter().zip(arm_params.iter()) {
+      for (pat_node, param) in lhs_nodes.iter().zip(matcher_scrutinee_params.iter()) {
         let scrutinee_val = ref_val(g, param.kind, param.id, origin);
         lower_pat_lhs(g, pat_node, scrutinee_val, origin, &mut arm_pending);
       }
-      // Collect pattern-bound names from arm_pending — these become the explicit args
-      // of the body cont, making the binding set visible in the IR without tracing the
-      // LetVal chain inside the matcher.
+
+      // Collect pattern-bound names — become explicit args of the body cont so
+      // name_res and downstream passes see the binding set without tracing LetVal chains.
       let bound_names: Vec<BindNode> = arm_pending.iter().filter_map(|p| match p {
         Pending::MatchBind { name, .. } => Some(name.clone()),
         _ => None,
       }).collect();
 
+      // Allocate block_cont_bind — last arg of body cont, called by arm body with result.
+      let block_cont_bind = g.bind(Bind::Cont, origin);
+      let block_cont_id   = block_cont_bind.id;
+
+      // Lower arm body with block_cont as the current cont so lower_seq terminates
+      // by calling it rather than the outer ·ƒ_0.
+      let prev_cont = g.cont;
+      g.cont = block_cont_id;
       let arm_tail = lower_seq(g, &body.items);
-      // Allocate a Bind::Cont node as the body cont ref — its id is used in Cont::Ref
-      // so the matcher can call the body cont by reference at the end of the pattern chain.
-      let body_cont_ref = g.bind(Bind::Cont, origin);
-      let body_cont_id  = body_cont_ref.id;
-      let body_args = if bound_names.is_empty() {
-        vec![body_cont_ref]
-      } else {
-        let mut args = vec![body_cont_ref];
-        args.extend(bound_names);
-        args
-      };
+      g.cont = prev_cont;
+
+      // Body cont: [bound_names..., block_cont_bind]
+      let mut body_args = bound_names;
+      body_args.push(block_cont_bind);
       let arm_body = Cont::Expr { args: body_args, body: Box::new(arm_tail) };
-      let matcher = if arm_pending.is_empty() {
-        // No pattern checks — matcher trivially succeeds.
-        let matcher_args: Vec<BindNode> = arm_params.iter().map(|_| g.fresh_result(origin)).collect();
-        Cont::Expr { args: matcher_args, body: Box::new(g.expr(ExprKind::FailCont, origin)) }
+
+      // Matcher cont: [scrutinee_params..., fail_bind, succ_bind]
+      // Pattern chain uses fail_bind.id for failure, succ_bind.id for success.
+      let matcher_body = if arm_pending.is_empty() {
+        // Wildcard / no checks — matcher immediately calls succ (body cont).
+        g.expr(ExprKind::FailRef(succ_id), origin)
       } else {
-        let matcher_args: Vec<BindNode> = arm_params.iter().map(|_| g.fresh_result(origin)).collect();
-        let pattern_expr = wrap_with_fail(g, arm_pending, Cont::Ref(body_cont_id), fail_cont_expr);
-        Cont::Expr { args: matcher_args, body: Box::new(pattern_expr) }
+        wrap_with_fail(g, arm_pending, Cont::Ref(succ_id), Some(fail_bind.id))
       };
+      let mut matcher_args = matcher_scrutinee_params;
+      matcher_args.push(fail_bind);
+      matcher_args.push(succ_bind);
+      let matcher = Cont::Expr { args: matcher_args, body: Box::new(matcher_body) };
+
       g.expr(ExprKind::MatchArm { matcher, body: arm_body }, origin)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
@@ -998,18 +1009,19 @@ fn cont_with_two_results<'src>(body_cont: Cont<'src>, first: BindNode, second: B
 }
 
 fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Cont<'src>) -> Expr<'src> {
-  wrap_with_fail(g, bindings, tail, panic_expr)
+  wrap_with_fail(g, bindings, tail, None)
 }
 
-/// Like `wrap`, but uses `make_fail(origin)` to produce the fail cont for each Match* node.
-/// Used for arm bodies inside a MatchBlock, where failure should delegate to `·ƒ_fail`.
+/// Like `wrap`, but with an explicit fail cont.
+/// `fail_id`: `None` → emit `·panic`; `Some(id)` → emit a call to that cont.
+/// Used for arm matchers inside a MatchBlock where `fail_id` is the matcher's fail param.
 /// `tail` is the continuation for the innermost (last) binding.
 /// Each non-leaf binding gets `Cont::Expr { args: vec![fresh], body: Box::new(next_expr) }`.
 fn wrap_with_fail<'src>(
   g: &mut Gen,
   bindings: Vec<Pending<'src>>,
   tail: Cont<'src>,
-  make_fail: fn(&mut Gen, Option<AstId>) -> Expr<'static>,
+  fail_id: Option<CpsId>,
 ) -> Expr<'src> {
   // Fold right-to-left. The accumulator starts as `tail: Cont` and becomes
   // `Expr` after the first (innermost) pending item is processed.
@@ -1018,6 +1030,12 @@ fn wrap_with_fail<'src>(
     Tail(Cont<'s>),
     Expr(Expr<'s>),
   }
+  let make_fail = |g: &mut Gen, origin: Option<AstId>| -> Expr<'src> {
+    match fail_id {
+      None     => g.expr(ExprKind::Panic, origin),
+      Some(id) => g.expr(ExprKind::FailRef(id), origin),
+    }
+  };
   let acc = bindings.into_iter().rev().fold(Acc::Tail(tail), |acc, pending| {
     let body_cont: Cont<'src> = match acc {
       Acc::Tail(cont) => cont,

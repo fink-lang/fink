@@ -20,6 +20,7 @@ closure lifting tests
 #     | equals fink":
 #       <expected rewritten cps>
 
+{test, equals, expect, fink, closure_lift} = import 'fake!'
 
 ---
 pure functions — unchanged

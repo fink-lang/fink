@@ -28,6 +28,7 @@ closure capture tests
 #     | equals fink":
 #       <expected cps with capture annotations>
 
+{test, equals, expect, fink, closure_capture} = import 'fake!'
 
 ---
 pure functions

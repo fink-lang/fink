@@ -17,6 +17,7 @@ name resolution after closure lifting
 #     | equals fink":
 #       <expected classified resolution>
 
+{test, equals, expect, fink, closure_lift_resolve} = import 'fake!'
 
 ---
 pure fn — unchanged

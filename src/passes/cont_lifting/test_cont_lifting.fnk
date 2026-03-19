@@ -23,6 +23,7 @@ continuation lifting tests
 #     | equals fink":
 #       <expected rewritten cps>
 
+{test, equals, expect, fink, cont_lift} = import 'fake!'
 
 ---
 trivial App body — no hoisting
@@ -142,7 +143,7 @@ test 'MatchValue — body hoisted to LetFn', fn:
             ·apply ·op_plus, foo, 2, fn ·v_3:
               ·ƒ_3 ·v_3
           fn ·ƒ_21:
-            ·match_value foo, 1, ·panic, fn: ·ƒ_21
+            ·match_value foo, 1, ·panic, fn: ·ƒ_21 _
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -229,7 +230,7 @@ test 'MatchNotDone — body hoisted to LetFn', fn:
                       ·apply ·op_plus, a, 1, fn ·v_3:
                         ·ƒ_3 ·v_3
                     fn ·ƒ_37:
-                      ·match_not_done ·v_7, ·panic, fn: ·ƒ_37
+                      ·match_not_done ·v_7, ·panic, fn: ·ƒ_37 _
               fn ·ƒ_41:
                 ·match_next ·v_5, ·panic, fn ·v_41:
                   ·ƒ_41 ·v_41
@@ -256,25 +257,72 @@ test 'MatchBlock — cont body hoisted to LetFn', fn:
     ·fn
       fn x, ·ƒ_3:
         ·fn
-          fn ·v_26, ·ƒ_47:
-            ·let ·v_26, fn r:
+          fn ·v_30, ·ƒ_59:
+            ·let ·v_30, fn r:
               ·apply ·op_plus, r, 1, fn ·v_3:
                 ·ƒ_3 ·v_3
-          fn ·ƒ_46:
+          fn ·ƒ_58:
             ·match_block x,
-              ·match_arm
-                fn ·v_12:
-                  ·match_value ·v_5, 1, ·ƒ_fail, fn: ·ƒ_11
-                fn ·ƒ_11:
-                  ·let 10, fn ·v_9:
-                    ·ƒ_3 ·v_9
-              ·match_arm
-                fn ·v_22:
-                  ·match_value ·v_5, 2, ·ƒ_fail, fn: ·ƒ_21
-                fn ·ƒ_21:
-                  ·let 20, fn ·v_19:
-                    ·ƒ_3 ·v_19
-              fn ·v_46: ·ƒ_46 ·v_46
+              ·fn
+                fn ·ƒ_11, ·ƒ_51:
+                  ·let 10, fn ·v_13:
+                    ·ƒ_11 ·v_13
+                fn ·ƒ_50:
+                  ·match_arm
+                    fn ·v_8, ·ƒ_6, ·ƒ_7:
+                      ·match_value ·v_8, 1, ·ƒ_6, fn: ·ƒ_7 _
+                    fn ·v_50: ·ƒ_50 ·v_50
+              ·fn
+                fn ·ƒ_23, ·ƒ_55:
+                  ·let 20, fn ·v_25:
+                    ·ƒ_23 ·v_25
+                fn ·ƒ_54:
+                  ·match_arm
+                    fn ·v_20, ·ƒ_18, ·ƒ_19:
+                      ·match_value ·v_20, 2, ·ƒ_18, fn: ·ƒ_19 _
+                    fn ·v_54: ·ƒ_54 ·v_54
+              fn ·v_58: ·ƒ_58 ·v_58
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchBlock — arm body with non-trivial computation
+---
+
+test 'MatchBlock — chained App inside arm body hoisted to LetFn', fn:
+  expect cont_lift fink":
+    main = fn n:
+      r = match n:
+        _:
+          x = 1 + 2
+          x + 3
+      r
+
+  | equals fink":
+    ·fn
+      fn n, ·ƒ_3:
+        ·fn
+          fn ·v_28, ·ƒ_52:
+            ·let ·v_28, fn r:
+              ·ƒ_3 r
+          fn ·ƒ_51:
+            ·match_block n,
+              ·fn
+                fn ·ƒ_10, ·ƒ_48:
+                  ·fn
+                    fn ·v_13, ·ƒ_44:
+                      ·let ·v_13, fn x:
+                        ·apply ·op_plus, x, 3, fn ·v_10:
+                          ·ƒ_10 ·v_10
+                    fn ·ƒ_43:
+                      ·apply ·op_plus, 1, 2, fn ·v_43:
+                        ·ƒ_43 ·v_43
+                fn ·ƒ_47:
+                  ·match_arm
+                    fn ·v_8, ·ƒ_6, ·ƒ_7: ·ƒ_7 _
+                    fn ·v_47: ·ƒ_47 ·v_47
+              fn ·v_51: ·ƒ_51 ·v_51
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -303,7 +351,7 @@ test 'MatchIf — body hoisted to LetFn', fn:
                   ·apply ·op_mul, a, 2, fn ·v_31:
                     ·ƒ_31 ·v_31
             fn ·ƒ_35:
-              ·match_if ·op_gt, a, 0, ·panic, fn: ·ƒ_35
+              ·match_if ·op_gt, a, 0, ·panic, fn: ·ƒ_35 _
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main

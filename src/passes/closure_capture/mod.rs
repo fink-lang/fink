@@ -235,7 +235,7 @@ fn collect_captured_in_body<'src>(
       collect_cont(body, resolve, origin, ast_index, captures);
     }
 
-    Panic | FailCont => {}
+    Panic | FailCont | FailRef(_) => {}
   }
 }
 
@@ -354,7 +354,7 @@ fn collect_expr<'src>(
       if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
-    Panic | FailCont => {}
+    Panic | FailCont | FailRef(_) => {}
   }
 }
 

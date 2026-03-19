@@ -35,6 +35,7 @@ fn variant_name(e: &fink::passes::cps::ir::Expr) -> &'static str {
         MatchArm { .. } => "MatchArm",
         MatchBlock { .. } => "MatchBlock",
         Yield { .. } => "Yield",
+        FailRef(_) => "FailRef",
     }
 }
 

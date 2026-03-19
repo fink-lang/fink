@@ -35,6 +35,7 @@ CPS pattern lowering — design scratch pad (WIP)
 # Optimization hint (not in IR yet):
 #   ·match_size  — early length check when collection is realized
 
+{test, equals, expect, fink, cps_expr} = import 'fake!'
 
 
 ---
@@ -53,7 +54,7 @@ test 'simple guard', fn:
     a > 0 = foo
   | equals fink":
     ·let foo, fn a:
-      ·match_if ·op_gt, a, 0, ·panic, fn: ·ƒ_0
+      ·match_if ·op_gt, a, 0, ·panic, fn: ·ƒ_0 _
 
 
 test 'nested guard', fn:
@@ -63,7 +64,7 @@ test 'nested guard', fn:
     ·let foo, fn a:
       ·apply ·op_gt, a, 0, fn ·v_5:
         ·apply ·op_lt, a, 9, fn ·v_9:
-          ·match_if ·op_or, ·v_5, ·v_9, ·panic, fn: ·ƒ_0
+          ·match_if ·op_or, ·v_5, ·v_9, ·panic, fn: ·ƒ_0 _
 
 
 ---
@@ -112,7 +113,7 @@ test 'seq — lone spread non-empty discard', fn:
     [..] = foo
   | equals fink":
     ·match_seq foo, ·panic, fn ·v_2:
-      ·match_not_done ·v_2, ·panic, fn: ·ƒ_0
+      ·match_not_done ·v_2, ·panic, fn: ·ƒ_0 _
 
 
 test 'seq — spread non-empty bound', fn:
@@ -132,7 +133,7 @@ test 'seq — head then spread discard', fn:
     ·match_seq foo, ·panic, fn ·v_2:
       ·match_next ·v_2, ·panic, fn ·v_3, ·v_4:
         ·let ·v_3, fn head:
-          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0
+          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0 _
 
 
 test 'seq — head then spread bound', fn:
@@ -297,7 +298,7 @@ test 'rec — non-empty', fn:
     {..} = foo
   | equals fink":
     ·match_rec foo, ·panic, fn ·v_2:
-      ·match_not_done ·v_2, ·panic, fn: ·ƒ_0
+      ·match_not_done ·v_2, ·panic, fn: ·ƒ_0 _
 
 
 test 'rec — partial match', fn:
@@ -331,7 +332,7 @@ test 'rec — open rest discarded', fn:
     ·match_rec foo, ·panic, fn ·v_2:
       ·match_field ·v_2, 'bar', ·panic, fn ·v_3, ·v_4:
         ·let ·v_3, fn bar:
-          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0
+          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0 _
 
 
 test 'rec — open rest bound', fn:
@@ -383,18 +384,18 @@ test 'match block bind', fn:
   | equals fink":
     ·match_block foo,
       ·match_arm
-        fn ·v_9:
-          ·match_value ·v_2, 1, ·ƒ_fail, fn: ·ƒ_8
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·match_value ·v_5, 1, ·ƒ_3, fn: ·ƒ_4 _
         fn ·ƒ_8:
-          ·let 2, fn ·v_6:
-            ·ƒ_0 ·v_6
+          ·let 2, fn ·v_10:
+            ·ƒ_8 ·v_10
       ·match_arm
-        fn ·v_19:
-          ·let ·v_2, fn x:
-            ·ƒ_18 x
-        fn ·ƒ_18, x:
-          ·let x, fn ·v_16:
-            ·ƒ_0 ·v_16
+        fn ·v_17, ·ƒ_15, ·ƒ_16:
+          ·let ·v_17, fn x:
+            ·ƒ_16 x
+        fn x, ·ƒ_20:
+          ·let x, fn ·v_22:
+            ·ƒ_20 ·v_22
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -409,10 +410,10 @@ test 'match wildcard', fn:
   | equals fink":
     ·match_block foo,
       ·match_arm
-        fn ·v_8: ·ƒ_fail
+        fn ·v_5, ·ƒ_3, ·ƒ_4: ·ƒ_4 _
         fn ·ƒ_7:
-          ·let 42, fn ·v_5:
-            ·ƒ_0 ·v_5
+          ·let 42, fn ·v_9:
+            ·ƒ_7 ·v_9
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -423,12 +424,12 @@ test 'match bind', fn:
   | equals fink":
     ·match_block foo,
       ·match_arm
-        fn ·v_9:
-          ·let ·v_2, fn x:
-            ·ƒ_8 x
-        fn ·ƒ_8, x:
-          ·let x, fn ·v_6:
-            ·ƒ_0 ·v_6
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·let ·v_5, fn x:
+            ·ƒ_4 x
+        fn x, ·ƒ_8:
+          ·let x, fn ·v_10:
+            ·ƒ_8 ·v_10
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -441,22 +442,22 @@ test 'match literal arms', fn:
   | equals fink":
     ·match_block foo,
       ·match_arm
-        fn ·v_9:
-          ·match_value ·v_2, 1, ·ƒ_fail, fn: ·ƒ_8
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·match_value ·v_5, 1, ·ƒ_3, fn: ·ƒ_4 _
         fn ·ƒ_8:
-          ·let 'one', fn ·v_6:
-            ·ƒ_0 ·v_6
+          ·let 'one', fn ·v_10:
+            ·ƒ_8 ·v_10
       ·match_arm
-        fn ·v_19:
-          ·match_value ·v_2, 2, ·ƒ_fail, fn: ·ƒ_18
-        fn ·ƒ_18:
-          ·let 'two', fn ·v_16:
-            ·ƒ_0 ·v_16
+        fn ·v_17, ·ƒ_15, ·ƒ_16:
+          ·match_value ·v_17, 2, ·ƒ_15, fn: ·ƒ_16 _
+        fn ·ƒ_20:
+          ·let 'two', fn ·v_22:
+            ·ƒ_20 ·v_22
       ·match_arm
-        fn ·v_28: ·ƒ_fail
-        fn ·ƒ_27:
-          ·let 'other', fn ·v_25:
-            ·ƒ_0 ·v_25
+        fn ·v_29, ·ƒ_27, ·ƒ_28: ·ƒ_28 _
+        fn ·ƒ_31:
+          ·let 'other', fn ·v_33:
+            ·ƒ_31 ·v_33
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -468,17 +469,17 @@ test 'match — expression in arm', fn:
   | equals fink":
     ·match_block x,
       ·match_arm
-        fn ·v_11:
-          ·match_value ·v_2, true, ·ƒ_fail, fn: ·ƒ_10
-        fn ·ƒ_10:
-          ·apply ·op_plus, y, 1, fn ·v_0:
-            ·ƒ_0 ·v_0
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·match_value ·v_5, true, ·ƒ_3, fn: ·ƒ_4 _
+        fn ·ƒ_8:
+          ·apply ·op_plus, y, 1, fn ·v_8:
+            ·ƒ_8 ·v_8
       ·match_arm
-        fn ·v_21:
-          ·match_value ·v_2, false, ·ƒ_fail, fn: ·ƒ_20
-        fn ·ƒ_20:
-          ·let y, fn ·v_18:
-            ·ƒ_0 ·v_18
+        fn ·v_19, ·ƒ_17, ·ƒ_18:
+          ·match_value ·v_19, false, ·ƒ_17, fn: ·ƒ_18 _
+        fn ·ƒ_22:
+          ·let y, fn ·v_24:
+            ·ƒ_22 ·v_24
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -491,12 +492,12 @@ test 'match child ·scope — binding in arm body', fn:
   | equals fink":
     ·match_block n,
       ·match_arm
-        fn ·v_13:
-          ·let ·v_2, fn a:
-            ·match_if ·op_gt, a, 1, ·ƒ_fail, fn: ·ƒ_12
-        fn ·ƒ_12, a:
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·let ·v_5, fn a:
+            ·match_if ·op_gt, a, 1, ·ƒ_3, fn: ·ƒ_4 _
+        fn a, ·ƒ_10:
           ·let a, fn ni:
-            ·ƒ_0 ni
+            ·ƒ_10 ni
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -511,17 +512,17 @@ test 'match — seq pattern arm', fn:
   | equals fink":
     ·match_block foo,
       ·match_arm
-        fn ·v_21:
-          ·match_seq ·v_2, ·ƒ_fail, fn ·v_4:
-            ·match_next ·v_4, ·ƒ_fail, fn ·v_5, ·v_6:
-              ·let ·v_5, fn a:
-                ·match_next ·v_6, ·ƒ_fail, fn ·v_10, ·v_11:
-                  ·let ·v_10, fn b:
-                    ·match_done ·v_11, ·ƒ_fail, fn ·v_20:
-                      ·ƒ_20 ·v_20
-        fn ·ƒ_20, a, b:
-          ·let a, fn ·v_18:
-            ·ƒ_0 ·v_18
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·match_seq ·v_5, ·ƒ_3, fn ·v_7:
+            ·match_next ·v_7, ·ƒ_3, fn ·v_8, ·v_9:
+              ·let ·v_8, fn a:
+                ·match_next ·v_9, ·ƒ_3, fn ·v_13, ·v_14:
+                  ·let ·v_13, fn b:
+                    ·match_done ·v_14, ·ƒ_3, fn ·v_4:
+                      ·ƒ_4 ·v_4
+        fn a, b, ·ƒ_20:
+          ·let a, fn ·v_22:
+            ·ƒ_20 ·v_22
       fn ·v_0: ·ƒ_0 ·v_0
 
 test 'match — rec pattern arm', fn:
@@ -531,14 +532,14 @@ test 'match — rec pattern arm', fn:
   | equals fink":
     ·match_block foo,
       ·match_arm
-        fn ·v_15:
-          ·match_rec ·v_2, ·ƒ_fail, fn ·v_4:
-            ·match_field ·v_4, 'bar', ·ƒ_fail, fn ·v_5, ·v_6:
-              ·let ·v_5, fn bar:
-                ·ƒ_14 bar
-        fn ·ƒ_14, bar:
-          ·let bar, fn ·v_12:
-            ·ƒ_0 ·v_12
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·match_rec ·v_5, ·ƒ_3, fn ·v_7:
+            ·match_field ·v_7, 'bar', ·ƒ_3, fn ·v_8, ·v_9:
+              ·let ·v_8, fn bar:
+                ·ƒ_4 bar
+        fn bar, ·ƒ_14:
+          ·let bar, fn ·v_16:
+            ·ƒ_14 ·v_16
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -550,27 +551,27 @@ test 'multi-arm match', fn:
   | equals fink":
     ·match_block foo,
       ·match_arm
-        fn ·v_16:
-          ·match_seq ·v_2, ·ƒ_fail, fn ·v_4:
-            ·match_next ·v_4, ·ƒ_fail, fn ·v_5, ·v_6:
-              ·let ·v_5, fn a:
-                ·match_done ·v_6, ·ƒ_fail, fn ·v_15:
-                  ·ƒ_15 ·v_15
-        fn ·ƒ_15, a:
-          ·let a, fn ·v_13:
-            ·ƒ_0 ·v_13
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·match_seq ·v_5, ·ƒ_3, fn ·v_7:
+            ·match_next ·v_7, ·ƒ_3, fn ·v_8, ·v_9:
+              ·let ·v_8, fn a:
+                ·match_done ·v_9, ·ƒ_3, fn ·v_4:
+                  ·ƒ_4 ·v_4
+        fn a, ·ƒ_15:
+          ·let a, fn ·v_17:
+            ·ƒ_15 ·v_17
       ·match_arm
-        fn ·v_47:
-          ·match_seq ·v_2, ·ƒ_fail, fn ·v_30:
-            ·match_next ·v_30, ·ƒ_fail, fn ·v_31, ·v_32:
-              ·let ·v_31, fn a:
-                ·match_next ·v_32, ·ƒ_fail, fn ·v_36, ·v_37:
-                  ·let ·v_36, fn b:
-                    ·match_done ·v_37, ·ƒ_fail, fn ·v_46:
-                      ·ƒ_46 ·v_46
-        fn ·ƒ_46, a, b:
-          ·let a, fn ·v_44:
-            ·ƒ_0 ·v_44
+        fn ·v_33, ·ƒ_31, ·ƒ_32:
+          ·match_seq ·v_33, ·ƒ_31, fn ·v_35:
+            ·match_next ·v_35, ·ƒ_31, fn ·v_36, ·v_37:
+              ·let ·v_36, fn a:
+                ·match_next ·v_37, ·ƒ_31, fn ·v_41, ·v_42:
+                  ·let ·v_41, fn b:
+                    ·match_done ·v_42, ·ƒ_31, fn ·v_32:
+                      ·ƒ_32 ·v_32
+        fn a, b, ·ƒ_48:
+          ·let a, fn ·v_50:
+            ·ƒ_48 ·v_50
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -581,13 +582,13 @@ test 'multi-arg match', fn:
   | equals fink":
     ·match_block a, b,
       ·match_arm
-        fn ·v_13, ·v_14:
-          ·let ·v_3, fn x:
-            ·let ·v_4, fn y:
-              ·ƒ_12 y
-        fn ·ƒ_12, x, y:
-          ·let x, fn ·v_10:
-            ·ƒ_0 ·v_10
+        fn ·v_7, ·v_8, ·ƒ_5, ·ƒ_6:
+          ·let ·v_7, fn x:
+            ·let ·v_8, fn y:
+              ·ƒ_6 y
+        fn x, y, ·ƒ_13:
+          ·let x, fn ·v_15:
+            ·ƒ_13 ·v_15
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -600,7 +601,7 @@ test 'irrefutable binding with guard', fn:
     x > 2 = foo
   | equals fink":
     ·let foo, fn x:
-      ·match_if ·op_gt, x, 2, ·panic, fn: ·ƒ_0
+      ·match_if ·op_gt, x, 2, ·panic, fn: ·ƒ_0 _
 
 
 test 'bind right — seq pattern', fn:
@@ -645,7 +646,7 @@ test 'seq pattern with non-empty rest', fn:
     ·match_seq foo, ·panic, fn ·v_2:
       ·match_next ·v_2, ·panic, fn ·v_3, ·v_4:
         ·let ·v_3, fn a:
-          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0
+          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0 _
 
 test 'seq pattern with bound rest', fn:
   expect cps_expr fink":
@@ -674,7 +675,7 @@ test 'rec pattern with non-empty rest', fn:
     ·match_rec foo, ·panic, fn ·v_2:
       ·match_field ·v_2, 'bar', ·panic, fn ·v_3, ·v_4:
         ·let ·v_3, fn bar:
-          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0
+          ·match_not_done ·v_4, ·panic, fn: ·ƒ_0 _
 
 test 'rec pattern exact - empty rest', fn:
   expect cps_expr fink":
@@ -711,12 +712,12 @@ test 'range — exclusive in match arm', fn:
   | equals fink":
     ·match_block x,
       ·match_arm
-        fn ·v_12:
-          ·apply ·op_rngex, 0, 10, fn ·v_6:
-            ·match_if ·op_in, ·v_2, ·v_6, ·ƒ_fail, fn: ·ƒ_11
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·apply ·op_rngex, 0, 10, fn ·v_9:
+            ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn: ·ƒ_4 _
         fn ·ƒ_11:
-          ·let 'low', fn ·v_9:
-            ·ƒ_0 ·v_9
+          ·let 'low', fn ·v_13:
+            ·ƒ_11 ·v_13
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -727,12 +728,12 @@ test 'range — inclusive in match arm', fn:
   | equals fink":
     ·match_block x,
       ·match_arm
-        fn ·v_12:
-          ·apply ·op_rngin, 0, 10, fn ·v_6:
-            ·match_if ·op_in, ·v_2, ·v_6, ·ƒ_fail, fn: ·ƒ_11
+        fn ·v_5, ·ƒ_3, ·ƒ_4:
+          ·apply ·op_rngin, 0, 10, fn ·v_9:
+            ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn: ·ƒ_4 _
         fn ·ƒ_11:
-          ·let 'low', fn ·v_9:
-            ·ƒ_0 ·v_9
+          ·let 'low', fn ·v_13:
+            ·ƒ_11 ·v_13
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -741,7 +742,7 @@ test 'range — bind-lhs check', fn:
     0..10 = foo
   | equals fink":
     ·apply ·op_rngex, 0, 10, fn ·v_4:
-      ·match_if ·op_in, foo, ·v_4, ·panic, fn: ·ƒ_0
+      ·match_if ·op_in, foo, ·v_4, ·panic, fn: ·ƒ_0 _
 
 
 ---
