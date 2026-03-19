@@ -1,4 +1,5 @@
 pub mod errors;
+#[cfg(feature = "runner")]
 pub mod runner;
 pub mod passes;
 pub mod propgraph;
