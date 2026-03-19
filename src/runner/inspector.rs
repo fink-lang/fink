@@ -241,7 +241,15 @@ fn dispatch_pause_message(bytes: &[u8]) {
     "Debugger.pause",
   ];
 
-  if execution_control.contains(&method) {
+  // WASM disassembly/source methods: safe to dispatch while paused because
+  // they are read-only queries that don't resume execution.
+  let safe_query = [
+    "Debugger.disassembleWasmModule",
+    "Debugger.nextWasmDisassemblyChunk",
+    "Debugger.getScriptSource",
+  ];
+
+  if execution_control.contains(&method) || safe_query.contains(&method) {
     dispatch_message_inner(bytes);
     return;
   }
@@ -260,19 +268,7 @@ fn dispatch_pause_message(bytes: &[u8]) {
     return;
   }
 
-  let result_json = if method == "Debugger.getScriptSource" {
-    // Return the registered source text for the requested scriptId, if available.
-    let script_id = extract_json_str(text, "scriptId").unwrap_or("");
-    let source = SCRIPT_SOURCES
-      .lock()
-      .ok()
-      .and_then(|m| m.get(script_id).cloned())
-      .unwrap_or_default();
-    eprintln!("[fink] -> (Debugger.getScriptSource scriptId={script_id} len={})  id={id}", source.len());
-    // CDP spec: result = { scriptSource: string }
-    let escaped = source.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r");
-    format!("{{\"scriptSource\":\"{escaped}\"}}")
-  } else if method == "Runtime.evaluate" || method == "Debugger.evaluateOnCallFrame" {
+  let result_json = if method == "Runtime.evaluate" || method == "Debugger.evaluateOnCallFrame" {
     eprintln!("[fink] -> (synthetic {method})  id={id}");
     r#"{"result":{"type":"undefined"}}"#.to_string()
   } else if method == "Debugger.enable" {
