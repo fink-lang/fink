@@ -862,10 +862,37 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
         let scrutinee_val = ref_val(g, param.kind, param.id, origin);
         lower_pat_lhs(g, pat_node, scrutinee_val, origin, &mut arm_pending);
       }
+      // Collect pattern-bound names from arm_pending — these become the explicit args
+      // of the body cont, making the binding set visible in the IR without tracing the
+      // LetVal chain inside the matcher.
+      let bound_names: Vec<BindNode> = arm_pending.iter().filter_map(|p| match p {
+        Pending::MatchBind { name, .. } => Some(name.clone()),
+        _ => None,
+      }).collect();
+
       let arm_tail = lower_seq(g, &body.items);
-      if arm_pending.is_empty() { return arm_tail; }
-      let arg = g.fresh_result(origin);
-      wrap_with_fail(g, arm_pending, Cont::Expr { args: vec![arg], body: Box::new(arm_tail) }, fail_cont_expr)
+      // Allocate a Bind::Cont node as the body cont ref — its id is used in Cont::Ref
+      // so the matcher can call the body cont by reference at the end of the pattern chain.
+      let body_cont_ref = g.bind(Bind::Cont, origin);
+      let body_cont_id  = body_cont_ref.id;
+      let body_args = if bound_names.is_empty() {
+        vec![body_cont_ref]
+      } else {
+        let mut args = vec![body_cont_ref];
+        args.extend(bound_names);
+        args
+      };
+      let arm_body = Cont::Expr { args: body_args, body: Box::new(arm_tail) };
+      let matcher = if arm_pending.is_empty() {
+        // No pattern checks — matcher trivially succeeds.
+        let matcher_args: Vec<BindNode> = arm_params.iter().map(|_| g.fresh_result(origin)).collect();
+        Cont::Expr { args: matcher_args, body: Box::new(g.expr(ExprKind::FailCont, origin)) }
+      } else {
+        let matcher_args: Vec<BindNode> = arm_params.iter().map(|_| g.fresh_result(origin)).collect();
+        let pattern_expr = wrap_with_fail(g, arm_pending, Cont::Ref(body_cont_id), fail_cont_expr);
+        Cont::Expr { args: matcher_args, body: Box::new(pattern_expr) }
+      };
+      g.expr(ExprKind::MatchArm { matcher, body: arm_body }, origin)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
   }

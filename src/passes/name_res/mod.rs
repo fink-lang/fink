@@ -503,6 +503,21 @@ fn resolve_expr<'src>(
       }
     }
 
+    MatchArm { matcher, body } => {
+      // matcher and body both execute in the arm scope (already established by MatchBlock).
+      // matcher args are arm_params — already bound by MatchBlock, not re-bound here.
+      // body args are a fresh result bind (the bridge from matcher to body) — not pattern vars.
+      // Pattern vars are bound inside matcher's body via LetVal nodes; they're in scope already.
+      if let Cont::Expr { body, .. } = matcher {
+        resolve_expr(body, scope, current_scope, sb, fn_depth, ctx, graphs);
+      }
+      if let Cont::Expr { args, body } = body {
+        let mut inner = scope.clone();
+        for arg in args.iter() { bind_to_scope(&mut inner, arg, current_scope, fn_depth, ctx, graphs); }
+        resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
+      }
+    }
+
     MatchBlock { params, arm_params, arms, cont } => {
       for v in params { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
       // Each arm introduces its own scope, identified by the arm Expr's CpsId.
@@ -717,6 +732,10 @@ mod tests {
       MatchField { fail, cont, .. } => {
         collect_classified_lines(fail, result, ctx, out);
         if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
+      }
+      MatchArm { matcher, body } => {
+        if let Cont::Expr { body, .. } = matcher { collect_classified_lines(body, result, ctx, out); }
+        if let Cont::Expr { body, .. } = body    { collect_classified_lines(body, result, ctx, out); }
       }
       MatchBlock { params, arms, cont, .. } => {
         for v in params { emit_classified_val(v, result, ctx, out); }

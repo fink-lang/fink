@@ -438,12 +438,21 @@ pub enum ExprKind<'src> {
     cont: Cont<'src>,
   },
 
+  /// A single match arm — pattern matcher continuation + body continuation.
+  /// `matcher` is called with arm_params + fail + succ; it runs the Match* primitive
+  /// chain and either calls `fail` (no match) or falls through to `body` via succ.
+  /// `body` is the arm body continuation — called with the bound pattern variables.
+  /// Only valid as a direct child of `MatchBlock.arms`.
+  MatchArm {
+    matcher: Cont<'src>,
+    body: Cont<'src>,
+  },
+
   /// Pattern match block — tries arms in order; first match wins.
-  /// `params` are the values passed into each arm (one per subject).
-  /// `arm_params` are the names each arm receives them as (parallel vec).
-  /// Each arm expr is a lowered Match* primitive chain ending in ·ƒ_cont.
-  /// `cont` receives the value from whichever arm succeeds.
-  /// Exhaustion (no arm matches) always panics — there is no `fail` field.
+  /// `params` are the subject values passed into each arm.
+  /// `arm_params` are the names each arm receives the subjects as (shared across all arms).
+  /// `arms` are `MatchArm` exprs; exhaustion always panics.
+  /// `cont` receives the result value from whichever arm body succeeds.
   MatchBlock {
     params: Vec<Val<'src>>,
     arm_params: Vec<BindNode>,

@@ -32,6 +32,7 @@ fn variant_name(e: &fink::passes::cps::ir::Expr) -> &'static str {
         MatchRest { .. } => "MatchRest",
         MatchRec { .. } => "MatchRec",
         MatchField { .. } => "MatchField",
+        MatchArm { .. } => "MatchArm",
         MatchBlock { .. } => "MatchBlock",
         Yield { .. } => "Yield",
     }

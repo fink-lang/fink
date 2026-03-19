@@ -332,19 +332,15 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::Panic => ident("·panic"),
     ExprKind::FailCont => ident("·ƒ_fail"),
 
+    ExprKind::MatchArm { matcher, body } => {
+      apply(ident("·match_arm"), vec![render_cont(matcher, ctx), render_cont(body, ctx)])
+    }
+
     ExprKind::MatchBlock { params, arm_params, arms, cont } => {
       let result_fn = render_cont(cont, ctx);
-      let arm_nodes: Vec<Node<'static>> = arms.iter().map(|arm| {
-        let mut fn_params: Vec<Node<'static>> = arm_params.iter()
-          .map(|p| ident(&render_bind_ctx(p, ctx)))
-          .collect();
-        fn_params.extend([ident("·ƒ_cont"), ident("·ƒ_fail")]);
-        fn_node(patterns(fn_params), vec![to_node(arm, ctx)])
-      }).collect();
       let mut args: Vec<Node<'static>> = params.iter().map(|v| val_to_node(v, ctx)).collect();
-      args.extend(arm_nodes.iter().map(|n| {
-        apply(ident("·match_branch"), vec![n.clone()])
-      }));
+      let _ = arm_params; // arm_params are rendered inside each MatchArm's matcher cont
+      args.extend(arms.iter().map(|arm| to_node(arm, ctx)));
       args.push(result_fn);
       apply(ident("·match_block"), args)
     }

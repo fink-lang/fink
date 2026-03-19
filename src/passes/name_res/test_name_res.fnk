@@ -341,9 +341,9 @@ test 'match arm binding used in arm body', fn:
       b: b + a
   | equals fink":
     (ref 5, x) == (local (bind 4, x)) in scope 1
-    (ref 9, a) == (local (bind 8, a)) in scope 14
-    (ref 17, b) == (local (bind 16, b)) in scope 24
-    (ref 18, a) == unresolved
+    (ref 9, a) == (local (bind 8, a)) in scope 16
+    (ref 19, b) == (local (bind 18, b)) in scope 28
+    (ref 20, a) == unresolved
 
 test 'binding inside match arm body', fn:
   expect cps_resolve fink":
@@ -354,7 +354,7 @@ test 'binding inside match arm body', fn:
         y
   | equals fink":
     (ref 5, x) == (local (bind 4, x)) in scope 1
-    (ref 9, a) == (local (bind 8, a)) in scope 16
+    (ref 9, a) == (local (bind 8, a)) in scope 18
 
 test 'fn in match arm captures outer', fn:
   expect cps_resolve fink":
@@ -363,7 +363,7 @@ test 'fn in match arm captures outer', fn:
       a: fn b: a
   | equals fink":
     (ref 5, x) == (local (bind 4, x)) in scope 1
-    (ref 12, a) == (captured 1, (bind 8, a)) in scope 19
+    (ref 12, a) == (captured 1, (bind 8, a)) in scope 21
 
 test 'spread param resolves locally', fn:
   expect cps_resolve fink":

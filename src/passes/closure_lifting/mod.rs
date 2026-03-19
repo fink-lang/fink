@@ -259,6 +259,11 @@ fn collect_bind_ids(
       collect_bind_ids(fail, resolve, out);
       if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
+    MatchArm { matcher, body } => {
+      if let Cont::Expr { body, .. } = matcher { collect_bind_ids(body, resolve, out); }
+      if let Cont::Expr { body, .. } = body    { collect_bind_ids(body, resolve, out); }
+    }
+
     MatchBlock { params, arms, cont, .. } => {
       for v in params { scan_val(v, resolve, out); }
       for arm in arms { collect_bind_ids(arm, resolve, out); }
@@ -584,6 +589,14 @@ fn lift_expr<'src>(
       },
     },
 
+    MatchArm { matcher, body } => Expr {
+      id: expr.id,
+      kind: MatchArm {
+        matcher: lift_cont(matcher, captures, resolve, ast_index, alloc, hoisted),
+        body:    lift_cont(body,    captures, resolve, ast_index, alloc, hoisted),
+      },
+    },
+
     MatchBlock { params, arm_params, arms, cont } => {
       let new_arms = arms.into_iter()
         .map(|a| lift_expr(a, captures, resolve, ast_index, alloc, hoisted))
@@ -816,6 +829,10 @@ mod tests {
       MatchField { fail, cont, .. } => {
         collect_lines(fail, result, origin, ast_index, out);
         if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
+      }
+      MatchArm { matcher, body } => {
+        if let Cont::Expr { body, .. } = matcher { collect_lines(body, result, origin, ast_index, out); }
+        if let Cont::Expr { body, .. } = body    { collect_lines(body, result, origin, ast_index, out); }
       }
       MatchBlock { params, arms, cont, .. } => {
         for v in params { emit_val(v, result, origin, ast_index, out); }
