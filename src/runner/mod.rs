@@ -50,6 +50,12 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
 
 pub fn run_wat(opts: RunOptions, path: &str, wat_src: &str) -> Result<(), String> {
   // In debug mode, embed DWARF so V8 can map WASM bytecode offsets → WAT source lines.
+  // Register the WAT source before compiling so the debug session can serve it via
+  // Debugger.getScriptSource when VSCode opens the source file.
+  if opts.debug {
+    let wat_url = format!("file://{path}");
+    inspector::register_wasm_source(&wat_url, wat_src);
+  }
   let wasm = if opts.debug {
     wat::Parser::new()
       .generate_dwarf(wat::GenerateDwarf::Full)

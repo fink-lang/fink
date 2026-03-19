@@ -128,9 +128,27 @@ static SCRIPT_SOURCES: std::sync::LazyLock<Arc<Mutex<HashMap<String, String>>>> 
 static PENDING_SOURCES: std::sync::LazyLock<Arc<Mutex<HashMap<String, String>>>> =
   std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 
+/// The `file://` URL of the WASM/WAT source being debugged.
+/// Injected into the outgoing Debugger.scriptParsed notification for WASM scripts
+/// (V8 emits url="" for WASM; we patch it so VSCode can open the source file).
+static WASM_SOURCE_URL: std::sync::LazyLock<Arc<Mutex<Option<String>>>> =
+  std::sync::LazyLock::new(|| Arc::new(Mutex::new(None)));
+
 /// Register a JS source for a given URL so that Debugger.getScriptSource can return
 /// it once V8 assigns the scriptId via the Debugger.scriptParsed notification.
 pub fn register_script_source(url: &str, source: &str) {
+  if let Ok(mut map) = PENDING_SOURCES.lock() {
+    map.insert(url.to_string(), source.to_string());
+  }
+}
+
+/// Register the WAT/WASM source file URL + text for WASM script patching.
+/// When V8 emits scriptParsed for the WASM module (with url=""), the outgoing
+/// notification is patched to use this URL so VSCode can open the source.
+pub fn register_wasm_source(url: &str, source: &str) {
+  if let Ok(mut u) = WASM_SOURCE_URL.lock() {
+    *u = Some(url.to_string());
+  }
   if let Ok(mut map) = PENDING_SOURCES.lock() {
     map.insert(url.to_string(), source.to_string());
   }
@@ -152,7 +170,6 @@ impl ChannelImpl for WsChannel {
 
 fn send_to_ws(mut msg: v8::UniquePtr<StringBuffer>) {
   let text = string_view_to_string(msg.as_mut().unwrap().string());
-  eprintln!("[fink] -> {text}");
   // Capture debuggerId from V8's Debugger.enable response.
   if text.contains("\"debuggerId\"")
     && let Some(id) = extract_json_str(&text, "debuggerId")
@@ -166,17 +183,37 @@ fn send_to_ws(mut msg: v8::UniquePtr<StringBuffer>) {
   }
   // When V8 emits scriptParsed, correlate with any pending source registration
   // so Debugger.getScriptSource can return the source text later.
-  if text.contains("\"method\":\"Debugger.scriptParsed\"")
-    && let (Some(script_id), Some(url)) = (
-      extract_json_str(&text, "scriptId"),
-      extract_json_str(&text, "url"),
-    )
-    && let Ok(mut pending) = PENDING_SOURCES.lock()
-    && let Some(source) = pending.remove(url)
-    && let Ok(mut sources) = SCRIPT_SOURCES.lock()
-  {
-    sources.insert(script_id.to_string(), source);
-  }
+  //
+  // For WASM scripts V8 emits url="" — patch the notification to use the
+  // registered WAT source URL so VSCode can open the original source file.
+  let text = if text.contains("\"method\":\"Debugger.scriptParsed\"") {
+    let script_id = extract_json_str(&text, "scriptId");
+    // Determine the URL to use for source lookup.
+    let lookup_url: Option<String> = if text.contains("\"scriptLanguage\":\"WebAssembly\"") {
+      // WASM script: V8 emits url="" — inject our registered source URL.
+      WASM_SOURCE_URL.lock().ok().and_then(|u| u.clone())
+    } else {
+      extract_json_str(&text, "url").map(str::to_string)
+    };
+    // Store scriptId → source if we have a pending registration for this URL.
+    if let (Some(sid), Some(url)) = (script_id, &lookup_url)
+      && let Ok(mut pending) = PENDING_SOURCES.lock()
+      && let Some(source) = pending.remove(url.as_str())
+      && let Ok(mut sources) = SCRIPT_SOURCES.lock()
+    {
+      sources.insert(sid.to_string(), source);
+    }
+    // Patch url="" in WASM scriptParsed so VSCode opens the WAT source file.
+    if text.contains("\"scriptLanguage\":\"WebAssembly\"")
+      && let Some(ref url) = lookup_url
+    {
+      text.replacen("\"url\":\"\"", &format!("\"url\":\"{url}\""), 1)
+    } else {
+      text
+    }
+  } else {
+    text
+  };
   if let Ok(guard) = WS_TX.lock()
     && let Some(tx) = guard.as_ref()
   {
@@ -211,13 +248,11 @@ unsafe extern "C" fn dispatch_interrupt(
 /// Must only be called at a V8-safe point (interrupt callback or outside pause).
 fn dispatch_message_inner(bytes: &[u8]) {
   let view = StringView::from(bytes);
-  eprintln!("[fink] dispatching to V8...");
   unsafe {
     if !SESSION_PTR.is_null() {
       (*SESSION_PTR).dispatch_protocol_message(view);
     }
   }
-  eprintln!("[fink] dispatch returned");
 }
 
 /// Dispatch a CDP message from within run_message_loop_on_pause.
@@ -241,12 +276,10 @@ fn dispatch_pause_message(bytes: &[u8]) {
     "Debugger.pause",
   ];
 
-  // WASM disassembly/source methods: safe to dispatch while paused because
-  // they are read-only queries that don't resume execution.
+  // WASM disassembly methods: safe to dispatch while paused (read-only, no execution).
   let safe_query = [
     "Debugger.disassembleWasmModule",
     "Debugger.nextWasmDisassemblyChunk",
-    "Debugger.getScriptSource",
   ];
 
   if execution_control.contains(&method) || safe_query.contains(&method) {
@@ -263,26 +296,36 @@ fn dispatch_pause_message(bytes: &[u8]) {
     let resp = format!(
       "{{\"id\":{id},\"error\":{{\"code\":-32601,\"message\":\"'{method}' wasn't found\"}}}}"
     );
-    eprintln!("[fink] -> {resp}  (synthetic methodNotFound)");
     send_str_to_ws(resp);
     return;
   }
 
-  let result_json = if method == "Runtime.evaluate" || method == "Debugger.evaluateOnCallFrame" {
-    eprintln!("[fink] -> (synthetic {method})  id={id}");
+  let result_json = if method == "Debugger.getScriptSource" {
+    // Return the registered source text for the requested scriptId.
+    let script_id = extract_json_str(text, "scriptId").unwrap_or("");
+    let source = SCRIPT_SOURCES
+      .lock()
+      .ok()
+      .and_then(|m| m.get(script_id).cloned())
+      .unwrap_or_default();
+    // CDP spec: result = { scriptSource: string }
+    let escaped = source
+      .replace('\\', "\\\\")
+      .replace('"', "\\\"")
+      .replace('\n', "\\n")
+      .replace('\r', "\\r");
+    format!("{{\"scriptSource\":\"{escaped}\"}}")
+  } else if method == "Runtime.evaluate" || method == "Debugger.evaluateOnCallFrame" {
     r#"{"result":{"type":"undefined"}}"#.to_string()
   } else if method == "Debugger.enable" {
     let dbg_id = DEBUGGER_ID.with(|d| d.borrow().clone()).unwrap_or_default();
-    eprintln!("[fink] -> (synthetic Debugger.enable debuggerId={dbg_id})  id={id}");
     // Also replay the last Debugger.paused notification so VSCode has a valid
     // call frame and enables step/resume commands after re-enabling.
     if let Some(paused) = LAST_PAUSED.with(|p| p.borrow().clone()) {
-      eprintln!("[fink] -> (replaying Debugger.paused)");
       send_str_to_ws(paused);
     }
     format!("{{\"debuggerId\":\"{dbg_id}\"}}")
   } else {
-    eprintln!("[fink] -> (synthetic {method})  id={id}");
     "{}".to_string()
   };
 
@@ -306,7 +349,6 @@ impl V8InspectorClientImpl for InspectorClient {
   /// terminate_execution to break the loop.
   fn run_message_loop_on_pause(&self, _context_group_id: i32) {
     let depth = PAUSE_DEPTH.with(|d| { let v = d.get(); d.set(v + 1); v + 1 });
-    eprintln!("[fink] paused (depth={depth})");
 
     // Dispatch CDP messages from the pause callback.
     // Only execution-control methods (resume/step) are dispatched to V8 — they
@@ -329,14 +371,11 @@ impl V8InspectorClientImpl for InspectorClient {
         std::thread::park();
       }
     }
-
-    eprintln!("[fink] resuming (depth={depth})");
   }
 
   fn quit_message_loop_on_pause(&self) {
     PAUSE_DEPTH.with(|d| {
       let v = d.get();
-      eprintln!("[fink] quit_message_loop_on_pause depth={v}");
       if v > 0 { d.set(v - 1); }
     });
     // Unpark the main thread so the park loop in run_message_loop_on_pause
@@ -356,9 +395,8 @@ impl V8InspectorClientImpl for InspectorClient {
   /// Pattern follows Deno's JsRuntimeInspectorState implementation.
   fn ensure_default_context_in_group(
     &self,
-    context_group_id: i32,
+    _context_group_id: i32,
   ) -> Option<v8::Local<'_, v8::Context>> {
-    eprintln!("[fink] ensure_default_context_in_group(group={context_group_id})");
     let mut isolate_ptr = ISOLATE_PTR.with(|p| *p.borrow())?;
     CONTEXT_GLOBAL.with(|g| {
       let guard = g.borrow();
@@ -475,9 +513,7 @@ pub fn attach(
 
   // Pump handshake messages synchronously on the main thread until VSCode
   // sends Runtime.runIfWaitingForDebugger. Safe: no JS executes, no interrupts.
-  eprintln!("[fink] Debugger connected — waiting for client ready signal...");
   pump_until_ready();
-  eprintln!("[fink] Debugger ready");
 
   // Store main thread handle for park/unpark from reader thread and quit callback.
   *MAIN_THREAD.lock().unwrap() = Some(std::thread::current());
@@ -508,7 +544,6 @@ fn reader_thread() {
 
     match read_result {
       Some(Ok(Message::Text(text))) => {
-        eprintln!("[fink] <- {text}");
         MSG_QUEUE.lock().unwrap().push_back(text.to_string());
         // Request interrupt so V8 dispatches at the next safe point inside
         // its internal pause event loop. Also unpark in case the main thread
@@ -525,7 +560,6 @@ fn reader_thread() {
         }
       }
       Some(Ok(Message::Close(_))) | None => {
-        eprintln!("[fink] debugger disconnected");
         // Decrement pause depth and unpark so the pause loop exits cleanly.
         PAUSE_DEPTH.with(|d| { if d.get() > 0 { d.set(0); } });
         if let Ok(guard) = MAIN_THREAD.lock()
@@ -563,7 +597,6 @@ fn pump_until_ready() {
     });
     match msg {
       Some(Message::Text(text)) => {
-        eprintln!("[fink] <- {text}");
         // NodeWorker and other unknown domains get synthetic methodNotFound.
         // Everything else goes directly to V8 (safe during handshake).
         let method = extract_json_str(&text, "method").unwrap_or("");
@@ -574,7 +607,6 @@ fn pump_until_ready() {
             let resp = format!(
               "{{\"id\":{id},\"error\":{{\"code\":-32601,\"message\":\"'{method}' wasn't found\"}}}}"
             );
-            eprintln!("[fink] -> {resp}  (synthetic methodNotFound)");
             send_str_to_ws(resp);
           }
         } else {
@@ -604,12 +636,8 @@ fn wait_for_ws(port: u16) -> Result<WebSocket<TcpStream>, String> {
   let listener =
     TcpListener::bind(("127.0.0.1", port)).map_err(|e| e.to_string())?;
 
-  eprintln!("[fink] starting");
-  eprintln!("[fink] waiting for debugger");
-  eprintln!(
-    "[fink]   {{\"type\":\"node\",\"request\":\"attach\",\
-     \"websocketAddress\":\"ws://localhost:{port}\"}}"
-  );
+  eprintln!("Waiting for debugger on ws://localhost:{port}");
+  eprintln!("VSCode launch.json: {{\"type\":\"node\",\"request\":\"attach\",\"websocketAddress\":\"ws://localhost:{port}\"}}");
 
   loop {
     let (stream, _addr) = listener.accept().map_err(|e| e.to_string())?;
