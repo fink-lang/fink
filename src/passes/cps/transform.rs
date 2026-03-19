@@ -1019,9 +1019,8 @@ fn wrap_with_fail<'src>(
         origin,
       ),
       Pending::MatchBlock { params, arm_params, arms, result, origin } => {
-        let fail = Box::new(panic_expr(g, origin));
         g.expr(
-          ExprKind::MatchBlock { params, arm_params, fail, arms, cont: cont_with_result(body_cont, result) },
+          ExprKind::MatchBlock { params, arm_params, arms, cont: cont_with_result(body_cont, result) },
           origin,
         )
       },

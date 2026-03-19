@@ -381,7 +381,7 @@ test 'match block bind', fn:
       1: 2
       x: x
   | equals fink":
-    ·match_block foo, ·panic,
+    ·match_block foo,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·match_value ·v_2, 1, ·ƒ_fail, fn:
           ·let 2, fn ·v_6:
@@ -402,7 +402,7 @@ test 'match wildcard', fn:
     match foo:
       _: 42
   | equals fink":
-    ·match_block foo, ·panic,
+    ·match_block foo,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·let 42, fn ·v_5:
           ·ƒ_0 ·v_5
@@ -414,7 +414,7 @@ test 'match bind', fn:
     match foo:
       x: x
   | equals fink":
-    ·match_block foo, ·panic,
+    ·match_block foo,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·let ·v_2, fn x:
           ·let x, fn ·v_6:
@@ -429,7 +429,7 @@ test 'match literal arms', fn:
       2: 'two'
       _: 'other'
   | equals fink":
-    ·match_block foo, ·panic,
+    ·match_block foo,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·match_value ·v_2, 1, ·ƒ_fail, fn:
           ·let 'one', fn ·v_6:
@@ -450,7 +450,7 @@ test 'match — expression in arm', fn:
       true: y + 1
       false: y
   | equals fink":
-    ·match_block x, ·panic,
+    ·match_block x,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·match_value ·v_2, true, ·ƒ_fail, fn:
           ·apply ·op_plus, y, 1, fn ·v_0:
@@ -469,7 +469,7 @@ test 'match child ·scope — binding in arm body', fn:
         ni = a
         ni
   | equals fink":
-    ·match_block n, ·panic,
+    ·match_block n,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·let ·v_2, fn a:
           ·match_if ·op_gt, a, 1, ·ƒ_fail, fn:
@@ -487,7 +487,7 @@ test 'match — seq pattern arm', fn:
     match foo:
       [a, b]: a
   | equals fink":
-    ·match_block foo, ·panic,
+    ·match_block foo,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·match_seq ·v_2, ·ƒ_fail, fn ·v_4:
           ·match_next ·v_4, ·ƒ_fail, fn ·v_5, ·v_6:
@@ -504,7 +504,7 @@ test 'match — rec pattern arm', fn:
     match foo:
       {bar}: bar
   | equals fink":
-    ·match_block foo, ·panic,
+    ·match_block foo,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·match_rec ·v_2, ·ƒ_fail, fn ·v_4:
           ·match_field ·v_4, 'bar', ·ƒ_fail, fn ·v_5, ·v_6:
@@ -520,7 +520,7 @@ test 'multi-arm match', fn:
       [a]: a
       [a, b]: a
   | equals fink":
-    ·match_block foo, ·panic,
+    ·match_block foo,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·match_seq ·v_2, ·ƒ_fail, fn ·v_4:
           ·match_next ·v_4, ·ƒ_fail, fn ·v_5, ·v_6:
@@ -545,7 +545,7 @@ test 'multi-arg match', fn:
     match a, b:
       x, y: x
   | equals fink":
-    ·match_block a, b, ·panic,
+    ·match_block a, b,
       ·match_branch fn ·v_3, ·v_4, ·ƒ_cont, ·ƒ_fail:
         ·let ·v_3, fn x:
           ·let ·v_4, fn y:
@@ -672,7 +672,7 @@ test 'range — exclusive in match arm', fn:
     match x:
       0..10: 'low'
   | equals fink":
-    ·match_block x, ·panic,
+    ·match_block x,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·apply ·op_rngex, 0, 10, fn ·v_6:
           ·match_if ·op_in, ·v_2, ·v_6, ·ƒ_fail, fn:
@@ -686,7 +686,7 @@ test 'range — inclusive in match arm', fn:
     match x:
       0...10: 'low'
   | equals fink":
-    ·match_block x, ·panic,
+    ·match_block x,
       ·match_branch fn ·v_2, ·ƒ_cont, ·ƒ_fail:
         ·apply ·op_rngin, 0, 10, fn ·v_6:
           ·match_if ·op_in, ·v_2, ·v_6, ·ƒ_fail, fn:

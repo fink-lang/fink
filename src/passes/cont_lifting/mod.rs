@@ -145,8 +145,8 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
     MatchField { val, field, fail, cont } =>
       hoist_cont(expr.id, cont, alloc, |cont| MatchField { val, field, fail, cont }),
 
-    MatchBlock { params, fail, arm_params, arms, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchBlock { params, fail, arm_params, arms, cont }),
+    MatchBlock { params, arm_params, arms, cont } =>
+      hoist_cont(expr.id, cont, alloc, |cont| MatchBlock { params, arm_params, arms, cont }),
   }
 }
 

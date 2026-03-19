@@ -441,12 +441,11 @@ pub enum ExprKind<'src> {
   /// Pattern match block — tries arms in order; first match wins.
   /// `params` are the values passed into each arm (one per subject).
   /// `arm_params` are the names each arm receives them as (parallel vec).
-  /// `fail` is the exhaustion continuation (·panic, or outer ·ƒ_fail in nested matches).
   /// Each arm expr is a lowered Match* primitive chain ending in ·ƒ_cont.
   /// `cont` receives the value from whichever arm succeeds.
+  /// Exhaustion (no arm matches) always panics — there is no `fail` field.
   MatchBlock {
     params: Vec<Val<'src>>,
-    fail: Box<Expr<'src>>,
     arm_params: Vec<BindNode>,
     arms: Vec<Expr<'src>>,
     cont: Cont<'src>,

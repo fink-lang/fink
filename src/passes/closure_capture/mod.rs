@@ -219,9 +219,8 @@ fn collect_captured_in_body<'src>(
       collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
-    MatchBlock { params, fail, arms, cont, .. } => {
+    MatchBlock { params, arms, cont, .. } => {
       for v in params { collect_val(v, resolve, origin, ast_index, captures); }
-      collect_captured_in_body(fail, resolve, origin, ast_index, captures);
       for arm in arms { collect_captured_in_body(arm, resolve, origin, ast_index, captures); }
       collect_cont(cont, resolve, origin, ast_index, captures);
     }
@@ -340,8 +339,7 @@ fn collect_expr<'src>(
       if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
-    MatchBlock { fail, arms, cont, .. } => {
-      collect_expr(fail, resolve, origin, ast_index, fn_depth, graph);
+    MatchBlock { arms, cont, .. } => {
       for arm in arms { collect_expr(arm, resolve, origin, ast_index, fn_depth, graph); }
       if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }

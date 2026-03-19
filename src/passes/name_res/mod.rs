@@ -503,9 +503,8 @@ fn resolve_expr<'src>(
       }
     }
 
-    MatchBlock { params, fail, arm_params, arms, cont } => {
+    MatchBlock { params, arm_params, arms, cont } => {
       for v in params { resolve_val(v, scope, sb, fn_depth, ctx, graphs); }
-      resolve_expr(fail, scope, current_scope, sb, fn_depth, ctx, graphs);
       // Each arm introduces its own scope, identified by the arm Expr's CpsId.
       // All arm_params (scrutinee binds) are available in each arm scope.
       for arm in arms {
@@ -719,9 +718,8 @@ mod tests {
         collect_classified_lines(fail, result, ctx, out);
         if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }
-      MatchBlock { params, fail, arms, cont, .. } => {
+      MatchBlock { params, arms, cont, .. } => {
         for v in params { emit_classified_val(v, result, ctx, out); }
-        collect_classified_lines(fail, result, ctx, out);
         for arm in arms {
           collect_classified_lines(arm, result, ctx, out);
         }

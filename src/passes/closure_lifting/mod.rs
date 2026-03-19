@@ -259,9 +259,8 @@ fn collect_bind_ids(
       collect_bind_ids(fail, resolve, out);
       if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
-    MatchBlock { params, fail, arms, cont, .. } => {
+    MatchBlock { params, arms, cont, .. } => {
       for v in params { scan_val(v, resolve, out); }
-      collect_bind_ids(fail, resolve, out);
       for arm in arms { collect_bind_ids(arm, resolve, out); }
       if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
@@ -585,7 +584,7 @@ fn lift_expr<'src>(
       },
     },
 
-    MatchBlock { params, fail, arm_params, arms, cont } => {
+    MatchBlock { params, arm_params, arms, cont } => {
       let new_arms = arms.into_iter()
         .map(|a| lift_expr(a, captures, resolve, ast_index, alloc, hoisted))
         .collect();
@@ -594,7 +593,6 @@ fn lift_expr<'src>(
         kind: MatchBlock {
           params,
           arm_params,
-          fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
           arms: new_arms,
           cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
         },
@@ -819,9 +817,8 @@ mod tests {
         collect_lines(fail, result, origin, ast_index, out);
         if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
-      MatchBlock { params, fail, arms, cont, .. } => {
+      MatchBlock { params, arms, cont, .. } => {
         for v in params { emit_val(v, result, origin, ast_index, out); }
-        collect_lines(fail, result, origin, ast_index, out);
         for arm in arms { collect_lines(arm, result, origin, ast_index, out); }
         if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
