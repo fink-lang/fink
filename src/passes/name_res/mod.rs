@@ -373,6 +373,7 @@ fn resolve_expr<'src>(
         match arg {
           Arg::Val(v) | Arg::Spread(v) =>
             resolve_val(v, scope, sb, fn_depth, ctx, graphs),
+          Arg::Cont(_) | Arg::Expr(_) => {} // produced by match_lower, not present during name resolution
         }
       }
       if let Cont::Expr { args, body } = cont {
@@ -665,7 +666,7 @@ mod tests {
       App { func, args, cont } => {
         emit_classified_callable(func, result, ctx, out);
         for arg in args {
-          match arg { Arg::Val(v) | Arg::Spread(v) => emit_classified_val(v, result, ctx, out) }
+          match arg { Arg::Val(v) | Arg::Spread(v) => emit_classified_val(v, result, ctx, out), Arg::Cont(_) | Arg::Expr(_) => {} }
         }
         if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
       }

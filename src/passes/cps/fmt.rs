@@ -133,6 +133,8 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ValKind::Lit(lit) => lit_to_node(lit),
     ValKind::Ref(Ref::Name) => ident(&render_ref_name_ctx(v.id, ctx)),
     ValKind::Ref(Ref::Synth(bind_id)) => ident(&format!("·v_{}", bind_id.0)),
+    ValKind::Panic => ident("·panic"),
+    ValKind::ContRef(id) => ident(&format!("·ƒ_{}", id.0)),
   }
 }
 
@@ -246,6 +248,19 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
     BuiltIn::FnClosure => "·fn_closure".into(),
+    // Pattern matching primitives
+    BuiltIn::MatchValue   => "·ƒmatch_value".into(),
+    BuiltIn::MatchSeq     => "·ƒmatch_seq".into(),
+    BuiltIn::MatchNext    => "·ƒmatch_next".into(),
+    BuiltIn::MatchDone    => "·ƒmatch_done".into(),
+    BuiltIn::MatchNotDone => "·ƒmatch_not_done".into(),
+    BuiltIn::MatchRest    => "·ƒmatch_rest".into(),
+    BuiltIn::MatchRec     => "·ƒmatch_rec".into(),
+    BuiltIn::MatchField   => "·ƒmatch_field".into(),
+    BuiltIn::MatchIf      => "·ƒmatch_if".into(),
+    BuiltIn::MatchApp     => "·ƒmatch_app".into(),
+    BuiltIn::MatchBlock   => "·ƒmatch_block".into(),
+    BuiltIn::MatchArm     => "·ƒmatch_arm".into(),
   }
 }
 
@@ -396,19 +411,46 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     }
 
     ExprKind::App { func, args, cont } => {
-      let result_fn = render_cont(cont, ctx);
       let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
         Arg::Val(v) => val_to_node(v, ctx),
         Arg::Spread(v) => spread_node(val_to_node(v, ctx)),
+        Arg::Cont(c) => render_cont(c, ctx),
+        Arg::Expr(e) => to_node(e, ctx),
       }).collect();
       let func_node = match func {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
         Callable::BuiltIn(op) => ident(&render_builtin(op)),
       };
-      let mut apply_args: Vec<Node<'static>> = vec![func_node];
-      apply_args.extend(arg_nodes);
-      apply_args.push(result_fn);
-      apply(ident("·apply"), apply_args)
+      // Match builtins with no-arg body use render_cont_as_expr (renders as `fn: body`).
+      let is_noarg_match = matches!(func, Callable::BuiltIn(
+        BuiltIn::MatchValue | BuiltIn::MatchNotDone | BuiltIn::MatchIf
+      ));
+      // Match builtins render as `·match_* args, cont` (no ·apply prefix).
+      let is_match_builtin = is_noarg_match || matches!(func, Callable::BuiltIn(
+        BuiltIn::MatchSeq | BuiltIn::MatchNext |
+        BuiltIn::MatchDone | BuiltIn::MatchRest |
+        BuiltIn::MatchRec | BuiltIn::MatchField |
+        BuiltIn::MatchApp | BuiltIn::MatchBlock | BuiltIn::MatchArm
+      ));
+      let no_cont = matches!(func, Callable::BuiltIn(BuiltIn::MatchArm));
+      if is_match_builtin {
+        let mut match_args = arg_nodes;
+        if !no_cont {
+          let cont_node = if is_noarg_match {
+            state_fn(render_cont_as_expr(cont, ctx))
+          } else {
+            render_cont(cont, ctx)
+          };
+          match_args.push(cont_node);
+        }
+        apply(func_node, match_args)
+      } else {
+        let result_fn = render_cont(cont, ctx);
+        let mut apply_args: Vec<Node<'static>> = vec![func_node];
+        apply_args.extend(arg_nodes);
+        apply_args.push(result_fn);
+        apply(ident("·apply"), apply_args)
+      }
     }
 
     ExprKind::If { cond, then, else_ } => {

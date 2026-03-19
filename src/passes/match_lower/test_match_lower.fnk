@@ -1,0 +1,166 @@
+---
+match lowering tests
+---
+
+# Match lowering — converts match constructs into plain App calls with BuiltIn
+# functions, so that cont_lifting can hoist all continuations uniformly.
+#
+# Test format:
+#   test 'name', fn:
+#     expect match_lower fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected lowered cps>
+
+{test, equals, expect, fink, match_lower} = import 'fake!'
+
+---
+MatchLetVal — plain ident destructure (identity — already ·let)
+---
+
+test 'MatchLetVal — identity', fn:
+  expect match_lower fink":
+    main = fn foo:
+      a = foo
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·let foo, fn a:
+          ·ƒ_3 a
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchValue — literal pattern
+---
+
+test 'MatchValue — lowered', fn:
+  expect match_lower fink":
+    main = fn foo:
+      1 = foo
+      foo + 2
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·ƒmatch_value foo, 1, ·panic, fn:
+          ·apply ·op_plus, foo, 2, fn ·v_3:
+            ·ƒ_3 ·v_3
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchBlock — two literal arms
+---
+
+test 'MatchBlock — two literal arms', fn:
+  expect match_lower fink":
+    main = fn x:
+      r = match x:
+        1: 10
+        2: 20
+      r + 1
+
+  | equals fink":
+    ·fn
+      fn x, ·ƒ_3:
+        ·ƒmatch_block x,
+          ·ƒmatch_arm
+            fn ·v_8, ·ƒ_6, ·ƒ_7:
+              ·ƒmatch_value ·v_8, 1, ·ƒ_6, fn: ·ƒ_7 _
+            fn ·ƒ_11:
+              ·let 10, fn ·v_13:
+                ·ƒ_11 ·v_13
+          ·ƒmatch_arm
+            fn ·v_20, ·ƒ_18, ·ƒ_19:
+              ·ƒmatch_value ·v_20, 2, ·ƒ_18, fn: ·ƒ_19 _
+            fn ·ƒ_23:
+              ·let 20, fn ·v_25:
+                ·ƒ_23 ·v_25
+          fn ·v_30:
+            ·let ·v_30, fn r:
+              ·apply ·op_plus, r, 1, fn ·v_3:
+                ·ƒ_3 ·v_3
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+MatchBlock — wildcard arm
+---
+
+test 'MatchBlock — wildcard arm', fn:
+  expect match_lower fink":
+    main = fn n:
+      r = match n:
+        _:
+          x = 1 + 2
+          x + 3
+      r
+
+  | equals fink":
+    ·fn
+      fn n, ·ƒ_3:
+        ·ƒmatch_block n,
+          ·ƒmatch_arm
+            fn ·v_8, ·ƒ_6, ·ƒ_7: ·ƒ_7 _
+            fn ·ƒ_10:
+              ·apply ·op_plus, 1, 2, fn ·v_13:
+                ·let ·v_13, fn x:
+                  ·apply ·op_plus, x, 3, fn ·v_10:
+                    ·ƒ_10 ·v_10
+          fn ·v_28:
+            ·let ·v_28, fn r:
+              ·ƒ_3 r
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+seq destructure — MatchSeq/MatchNext/MatchDone chain
+---
+
+test 'seq destructure — Match* chain', fn:
+  expect match_lower fink":
+    main = fn foo:
+      [a] = foo
+      a + 1
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·ƒmatch_seq foo, ·panic, fn ·v_5:
+          ·ƒmatch_next ·v_5, ·panic, fn ·v_6, ·v_7:
+            ·let ·v_6, fn a:
+              ·ƒmatch_done ·v_7, ·panic, fn ·v_11:
+                ·apply ·op_plus, a, 1, fn ·v_3:
+                  ·ƒ_3 ·v_3
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+
+---
+record destructure — MatchRec/MatchField chain
+---
+
+test 'record destructure — Match* chain', fn:
+  expect match_lower fink":
+    main = fn foo:
+      {x} = foo
+      x + 1
+
+  | equals fink":
+    ·fn
+      fn foo, ·ƒ_3:
+        ·ƒmatch_rec foo, ·panic, fn ·v_5:
+          ·ƒmatch_field ·v_5, 'x', ·panic, fn ·v_6, ·v_7:
+            ·let ·v_6, fn x:
+              ·apply ·op_plus, x, 1, fn ·v_3:
+                ·ƒ_3 ·v_3
+      fn ·v_1:
+        ·let ·v_1, fn main:
+          ·ƒ_0 main
+

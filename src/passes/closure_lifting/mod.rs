@@ -194,7 +194,7 @@ fn collect_bind_ids(
     App { func, args, cont } => {
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
       for arg in args {
-        match arg { Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out) }
+        match arg { Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out), Arg::Cont(_) | Arg::Expr(_) => {} }
       }
       if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
@@ -765,7 +765,7 @@ mod tests {
       App { func, args, cont } => {
         emit_callable(func, result, origin, ast_index, out);
         for arg in args {
-          match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out) }
+          match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out), Arg::Cont(_) | Arg::Expr(_) => {} }
         }
         if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }

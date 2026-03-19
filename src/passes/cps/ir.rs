@@ -106,6 +106,8 @@ pub enum Param {
 pub enum Arg<'src> {
   Val(Val<'src>),
   Spread(Val<'src>),
+  Cont(Cont<'src>),
+  Expr(Box<Expr<'src>>),
 }
 
 /// Whether a range pattern is exclusive (`..`) or inclusive (`...`).
@@ -143,6 +145,11 @@ pub enum BuiltIn {
   // Closure construction — partially applies a lifted fn with its captures.
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
+  // Pattern matching primitives — produced by match_lower from Match* ExprKind nodes.
+  // Each takes val + fail as args; cont receives match results.
+  MatchValue, MatchSeq, MatchNext, MatchDone, MatchNotDone,
+  MatchRest, MatchRec, MatchField, MatchIf, MatchApp,
+  MatchBlock, MatchArm,
 }
 
 impl BuiltIn {
@@ -233,6 +240,8 @@ pub type BindNode = Node<Bind>;
 pub enum ValKind<'src> {
   Ref(Ref),           // a reference to a binding (user name or compiler temp)
   Lit(Lit<'src>),     // a literal value
+  Panic,              // fail sentinel — irrefutable pattern failure (unreachable)
+  ContRef(CpsId),     // reference to a continuation as a value (for fail args)
 }
 
 #[derive(Debug, Clone)]
@@ -322,6 +331,9 @@ pub enum ExprKind<'src> {
   },
 
   /// Call func with args; continuation receives the result.
+  // TODO: investigate making `cont` just another Arg — `apply f, ...args` where
+  // the continuation is a regular arg, not a special field. This would remove the
+  // need for dummy conts on nodes like MatchArm that don't have a result cont.
   App {
     func: Callable<'src>,
     args: Vec<Arg<'src>>,

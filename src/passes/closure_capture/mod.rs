@@ -140,6 +140,7 @@ fn collect_captured_in_body<'src>(
       for arg in args {
         match arg {
           Arg::Val(v) | Arg::Spread(v) => collect_val(v, resolve, origin, ast_index, captures),
+          Arg::Cont(_) | Arg::Expr(_) => {} // produced by match_lower, not present before capture analysis
         }
       }
       collect_cont(cont, resolve, origin, ast_index, captures);
