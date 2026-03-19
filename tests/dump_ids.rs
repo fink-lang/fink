@@ -45,6 +45,8 @@ fn dump_val(v: &fink::passes::cps::ir::Val, depth: usize) {
     match &v.kind {
         Ref(r) => println!("{i}Val(#{}) Ref({:?})", v.id.0, r),
         Lit(l) => println!("{i}Val(#{}) Lit({:?})", v.id.0, l),
+        Panic => println!("{i}Val(#{}) Panic", v.id.0),
+        ContRef(id) => println!("{i}Val(#{}) ContRef(#{})", v.id.0, id.0),
     }
 }
 
@@ -81,7 +83,7 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                 dump_expr(inner, depth+1);
             }
         }
-        App { func, args, cont } => {
+        App { func, args } => {
             println!("{i}Expr(#{}) App", e.id.0);
             match func {
                 fink::passes::cps::ir::Callable::Val(v) => dump_val(v, depth+1),
@@ -91,11 +93,14 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                 match a {
                     fink::passes::cps::ir::Arg::Val(v) => dump_val(v, depth+1),
                     fink::passes::cps::ir::Arg::Spread(v) => dump_val(v, depth+1),
+                    fink::passes::cps::ir::Arg::Cont(c) => {
+                        if let fink::passes::cps::ir::Cont::Expr { args: ca, body } = c {
+                            println!("{i}  cont args={:?}:", ca);
+                            dump_expr(body, depth+1);
+                        }
+                    }
+                    fink::passes::cps::ir::Arg::Expr(e) => dump_expr(e, depth+1),
                 }
-            }
-            if let fink::passes::cps::ir::Cont::Expr { args, body } = cont {
-                println!("{i}  cont args={:?}:", args);
-                dump_expr(body, depth+1);
             }
         }
         If { cond, then, else_ } => {

@@ -191,12 +191,15 @@ fn collect_bind_ids(
     LetFn { body, .. } => {
       if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
     }
-    App { func, args, cont } => {
+    App { func, args } => {
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
       for arg in args {
-        match arg { Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out), Arg::Cont(_) | Arg::Expr(_) => {} }
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out),
+          Arg::Cont(Cont::Expr { body, .. }) => collect_bind_ids(body, resolve, out),
+          Arg::Cont(_) | Arg::Expr(_) => {}
+        }
       }
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     If { cond, then, else_ } => {
       scan_val(cond, resolve, out);
@@ -429,11 +432,11 @@ fn lift_expr<'src>(
 
         let mut fn_closure_args: Vec<Arg<'src>> = vec![Arg::Val(lifted_ref)];
         fn_closure_args.extend(cap_ref_vals.into_iter().map(Arg::Val));
+        fn_closure_args.push(Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(subst_body) }));
 
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
           args: fn_closure_args,
-          cont: Cont::Expr { args: vec![result_bind], body: Box::new(subst_body) },
         }, None)
       }
     }
@@ -448,14 +451,13 @@ fn lift_expr<'src>(
       },
     },
 
-    App { func, args, cont } => Expr {
-      id: expr.id,
-      kind: App {
-        func,
-        args,
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
+    App { func, args } => {
+      let args = args.into_iter().map(|a| match a {
+        Arg::Cont(c) => Arg::Cont(lift_cont(c, captures, resolve, ast_index, alloc, hoisted)),
+        other => other,
+      }).collect();
+      Expr { id: expr.id, kind: App { func, args } }
+    }
 
     If { cond, then, else_ } => Expr {
       id: expr.id,
@@ -762,12 +764,15 @@ mod tests {
         for b in bindings { collect_lines(&b.fn_body, result, origin, ast_index, out); }
         if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
       }
-      App { func, args, cont } => {
+      App { func, args } => {
         emit_callable(func, result, origin, ast_index, out);
         for arg in args {
-          match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out), Arg::Cont(_) | Arg::Expr(_) => {} }
+          match arg {
+            Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out),
+            Arg::Cont(Cont::Expr { body, .. }) => collect_lines(body, result, origin, ast_index, out),
+            Arg::Cont(_) | Arg::Expr(_) => {}
+          }
         }
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       If { cond, then, else_ } => {
         emit_val(cond, result, origin, ast_index, out);

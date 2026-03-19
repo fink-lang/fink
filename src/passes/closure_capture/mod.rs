@@ -135,15 +135,15 @@ fn collect_captured_in_body<'src>(
       collect_cont(body, resolve, origin, ast_index, captures);
     }
 
-    App { func, args, cont } => {
+    App { func, args } => {
       collect_callable(func, resolve, origin, ast_index, captures);
       for arg in args {
         match arg {
           Arg::Val(v) | Arg::Spread(v) => collect_val(v, resolve, origin, ast_index, captures),
-          Arg::Cont(_) | Arg::Expr(_) => {} // produced by match_lower, not present before capture analysis
+          Arg::Cont(c) => collect_cont(c, resolve, origin, ast_index, captures),
+          Arg::Expr(_) => {} // produced by match_lower, not present before capture analysis
         }
       }
-      collect_cont(cont, resolve, origin, ast_index, captures);
     }
 
     If { cond, then, else_ } => {
@@ -270,8 +270,9 @@ fn collect_expr<'src>(
       if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
     }
 
-    App { cont, .. } => {
-      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
+    App { args, .. } => {
+      if let Some(Arg::Cont(c)) = args.last()
+        && let Some(body) = c.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
     }
 
     If { then, else_, .. } => {

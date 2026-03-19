@@ -261,12 +261,17 @@ fn collect_scope_names<'src>(
         collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
       }
     }
-    App { cont: Cont::Expr { args, body }, .. } |
+    App { args, .. } => {
+      if let Some(Arg::Cont(Cont::Expr { args: cont_args, body })) = args.last() {
+        bind_to_scope(scope, &cont_args[0], scope_id, fn_depth, ctx, graphs);
+        collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
+      }
+    }
     Yield { cont: Cont::Expr { args, body }, .. } => {
       bind_to_scope(scope, &args[0], scope_id, fn_depth, ctx, graphs);
       collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
     }
-    App { .. } | Yield { .. } => {}
+    Yield { .. } => {}
     // Terminal or branching — stop collecting
     _ => {}
   }
@@ -367,7 +372,7 @@ fn resolve_expr<'src>(
       }
     }
 
-    App { func, args, cont } => {
+    App { func, args } => {
       resolve_callable(func, scope, sb, fn_depth, ctx, graphs);
       for arg in args {
         match arg {
@@ -376,9 +381,9 @@ fn resolve_expr<'src>(
           Arg::Cont(_) | Arg::Expr(_) => {} // produced by match_lower, not present during name resolution
         }
       }
-      if let Cont::Expr { args, body } = cont {
+      if let Some(Arg::Cont(Cont::Expr { args: cont_args, body })) = args.last() {
         let mut inner = scope.clone();
-        bind_to_scope(&mut inner, &args[0], current_scope, fn_depth, ctx, graphs);
+        bind_to_scope(&mut inner, &cont_args[0], current_scope, fn_depth, ctx, graphs);
         resolve_expr(body, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
@@ -663,12 +668,12 @@ mod tests {
         }
       }
 
-      App { func, args, cont } => {
+      App { func, args } => {
         emit_classified_callable(func, result, ctx, out);
         for arg in args {
           match arg { Arg::Val(v) | Arg::Spread(v) => emit_classified_val(v, result, ctx, out), Arg::Cont(_) | Arg::Expr(_) => {} }
         }
-        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
+        if let Some(Arg::Cont(Cont::Expr { body, .. })) = args.last() { collect_classified_lines(body, result, ctx, out); }
       }
 
       If { cond, then, else_ } => {

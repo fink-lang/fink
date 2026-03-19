@@ -1060,7 +1060,7 @@ fn wrap_with_fail<'src>(
         origin,
       ),
       Pending::App { func, args, result, origin } => g.expr(
-        ExprKind::App { func, args, cont: cont_with_result(body_cont, result) },
+        ExprKind::App { func, args: { let mut a = args; a.push(Arg::Cont(cont_with_result(body_cont, result))); a } },
         origin,
       ),
       Pending::MatchBlock { params, arm_params, arms, result, origin } => {

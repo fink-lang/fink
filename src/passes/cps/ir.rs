@@ -330,14 +330,10 @@ pub enum ExprKind<'src> {
     body: Cont<'src>,
   },
 
-  /// Call func with args; continuation receives the result.
-  // TODO: investigate making `cont` just another Arg — `apply f, ...args` where
-  // the continuation is a regular arg, not a special field. This would remove the
-  // need for dummy conts on nodes like MatchArm that don't have a result cont.
+  /// Call func with args; the last `Arg::Cont` is the result continuation.
   App {
     func: Callable<'src>,
     args: Vec<Arg<'src>>,
-    cont: Cont<'src>,
   },
 
   /// Branch on cond.

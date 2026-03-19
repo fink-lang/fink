@@ -62,9 +62,12 @@ fn lower_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
     // Core CPS — recurse into sub-expressions and conts.
-    App { func, args, cont } => {
-      let cont = lower_cont(cont, alloc);
-      Expr { id: expr.id, kind: App { func, args, cont } }
+    App { func, args } => {
+      let args = args.into_iter().map(|a| match a {
+        Arg::Cont(c) => Arg::Cont(lower_cont(c, alloc)),
+        other => other,
+      }).collect();
+      Expr { id: expr.id, kind: App { func, args } }
     }
 
     LetVal { name, val, body } => {
@@ -106,119 +109,111 @@ fn lower_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       Expr { id: expr.id, kind: LetVal { name, val, body } }
     }
 
-    // MatchValue { val, lit, fail, body } → App { MatchValue, [val, lit, fail], body }
+    // MatchValue { val, lit, fail, body } → App { MatchValue, [val, lit, fail, body] }
     MatchValue { val, lit, fail, body } => {
       let fail_val = fail_to_val(*fail, alloc);
       let lit_val = alloc.val(ValKind::Lit(lit), None);
       let body = lower_cont(body, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchValue),
-        args: vec![Arg::Val(*val), Arg::Val(lit_val), Arg::Val(fail_val)],
-        cont: body,
+        args: vec![Arg::Val(*val), Arg::Val(lit_val), Arg::Val(fail_val), Arg::Cont(body)],
       }}
     }
 
-    // MatchSeq { val, fail, body } → App { MatchSeq, [val, fail], body }
+    // MatchSeq { val, fail, body } → App { MatchSeq, [val, fail, body] }
     MatchSeq { val, fail, body } => {
       let fail_val = fail_to_val(*fail, alloc);
       let body = lower_cont(body, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchSeq),
-        args: vec![Arg::Val(*val), Arg::Val(fail_val)],
-        cont: body,
+        args: vec![Arg::Val(*val), Arg::Val(fail_val), Arg::Cont(body)],
       }}
     }
 
-    // MatchNext { val, fail, cont } → App { MatchNext, [val, fail], cont }
+    // MatchNext { val, fail, cont } → App { MatchNext, [val, fail, cont] }
     MatchNext { val, fail, cont } => {
       let fail_val = fail_to_val(*fail, alloc);
       let cont = lower_cont(cont, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchNext),
-        args: vec![Arg::Val(*val), Arg::Val(fail_val)],
-        cont,
+        args: vec![Arg::Val(*val), Arg::Val(fail_val), Arg::Cont(cont)],
       }}
     }
 
-    // MatchDone { val, fail, cont } → App { MatchDone, [val, fail], cont }
+    // MatchDone { val, fail, cont } → App { MatchDone, [val, fail, cont] }
     MatchDone { val, fail, cont } => {
       let fail_val = fail_to_val(*fail, alloc);
       let cont = lower_cont(cont, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchDone),
-        args: vec![Arg::Val(*val), Arg::Val(fail_val)],
-        cont,
+        args: vec![Arg::Val(*val), Arg::Val(fail_val), Arg::Cont(cont)],
       }}
     }
 
-    // MatchNotDone { val, fail, body } → App { MatchNotDone, [val, fail], body }
+    // MatchNotDone { val, fail, body } → App { MatchNotDone, [val, fail, body] }
     MatchNotDone { val, fail, body } => {
       let fail_val = fail_to_val(*fail, alloc);
       let body = lower_cont(body, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchNotDone),
-        args: vec![Arg::Val(*val), Arg::Val(fail_val)],
-        cont: body,
+        args: vec![Arg::Val(*val), Arg::Val(fail_val), Arg::Cont(body)],
       }}
     }
 
-    // MatchRest { val, fail, cont } → App { MatchRest, [val, fail], cont }
+    // MatchRest { val, fail, cont } → App { MatchRest, [val, fail, cont] }
     MatchRest { val, fail, cont } => {
       let fail_val = fail_to_val(*fail, alloc);
       let cont = lower_cont(cont, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchRest),
-        args: vec![Arg::Val(*val), Arg::Val(fail_val)],
-        cont,
+        args: vec![Arg::Val(*val), Arg::Val(fail_val), Arg::Cont(cont)],
       }}
     }
 
-    // MatchRec { val, fail, body } → App { MatchRec, [val, fail], body }
+    // MatchRec { val, fail, body } → App { MatchRec, [val, fail, body] }
     MatchRec { val, fail, body } => {
       let fail_val = fail_to_val(*fail, alloc);
       let body = lower_cont(body, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchRec),
-        args: vec![Arg::Val(*val), Arg::Val(fail_val)],
-        cont: body,
+        args: vec![Arg::Val(*val), Arg::Val(fail_val), Arg::Cont(body)],
       }}
     }
 
-    // MatchField { val, field, fail, cont } → App { MatchField, [val, field, fail], cont }
+    // MatchField { val, field, fail, cont } → App { MatchField, [val, field, fail, cont] }
     MatchField { val, field, fail, cont } => {
       let fail_val = fail_to_val(*fail, alloc);
       let field_val = alloc.val(ValKind::Lit(Lit::Str(field)), None);
       let cont = lower_cont(cont, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchField),
-        args: vec![Arg::Val(*val), Arg::Val(field_val), Arg::Val(fail_val)],
-        cont,
+        args: vec![Arg::Val(*val), Arg::Val(field_val), Arg::Val(fail_val), Arg::Cont(cont)],
       }}
     }
 
-    // MatchIf { func, args, fail, body } → App { func, [...args, fail], body }
+    // MatchIf { func, args, fail, body } → App { func, [...args, fail, body] }
     MatchIf { func, args, fail, body } => {
       let fail_val = fail_to_val(*fail, alloc);
       let mut new_args: Vec<Arg<'src>> = args.into_iter().map(Arg::Val).collect();
       new_args.push(Arg::Val(fail_val));
       let body = lower_cont(body, alloc);
+      new_args.push(Arg::Cont(body));
       Expr { id: expr.id, kind: App {
         func,
         args: new_args,
-        cont: body,
       }}
     }
 
-    // MatchApp { func, args, fail, cont } → App { func, [...args, fail], cont }
+    // MatchApp { func, args, fail, cont } → App { func, [...args, fail, cont] }
     MatchApp { func, args, fail, cont } => {
       let fail_val = fail_to_val(*fail, alloc);
       let mut new_args: Vec<Arg<'src>> = args.into_iter().map(Arg::Val).collect();
       new_args.push(Arg::Val(fail_val));
       let cont = lower_cont(cont, alloc);
+      new_args.push(Arg::Cont(cont));
       Expr { id: expr.id, kind: App {
         func,
         args: new_args,
-        cont,
       }}
     }
 
@@ -227,19 +222,18 @@ fn lower_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
     // -----------------------------------------------------------------------
 
     // MatchArm { matcher, body } → App { MatchArm, [Cont(matcher), Cont(body)] }
-    // Both conts become Arg::Cont entries.
+    // Both conts become Arg::Cont entries. No result cont needed.
     MatchArm { matcher, body } => {
       let matcher = lower_cont(matcher, alloc);
       let body = lower_cont(body, alloc);
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchArm),
         args: vec![Arg::Cont(matcher), Arg::Cont(body)],
-        cont: Cont::Ref(expr.id), // unused — MatchArm delegates to its body cont
       }}
     }
 
     // MatchBlock { params, arm_params, arms, cont }
-    // → App { MatchBlock, [..params, ..Expr(arms)], cont }
+    // → App { MatchBlock, [..params, ..Expr(arms), cont] }
     // arm_params are dropped — they're implicit in the matcher cont params.
     MatchBlock { params, arm_params: _, arms, cont } => {
       let mut new_args: Vec<Arg<'src>> = params.into_iter().map(Arg::Val).collect();
@@ -248,10 +242,10 @@ fn lower_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
         new_args.push(Arg::Expr(Box::new(lowered)));
       }
       let cont = lower_cont(cont, alloc);
+      new_args.push(Arg::Cont(cont));
       Expr { id: expr.id, kind: App {
         func: Callable::BuiltIn(BuiltIn::MatchBlock),
         args: new_args,
-        cont,
       }}
     }
   }

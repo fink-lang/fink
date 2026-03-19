@@ -29,7 +29,7 @@
 
 use crate::ast::AstId;
 use crate::passes::cps::ir::{
-  Bind, BindNode, Cont, CpsId, CpsResult, Expr, ExprKind, Param,
+  Arg, Bind, BindNode, Cont, CpsId, CpsResult, Expr, ExprKind, Param,
 };
 use crate::propgraph::PropGraph;
 
@@ -80,8 +80,17 @@ pub fn lift<'src>(result: CpsResult<'src>) -> CpsResult<'src> {
 fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
-    App { func, args, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| App { func, args, cont }),
+    App { func, mut args } => {
+      // The last Arg::Cont is the result continuation — split it off for hoisting.
+      let cont = match args.pop() {
+        Some(Arg::Cont(c)) => c,
+        _ => unreachable!("App must have trailing Arg::Cont"),
+      };
+      hoist_cont(expr.id, cont, alloc, |cont| {
+        args.push(Arg::Cont(cont));
+        App { func, args }
+      })
+    }
 
     Yield { value, cont } =>
       hoist_cont(expr.id, cont, alloc, |cont| Yield { value, cont }),

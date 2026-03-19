@@ -410,13 +410,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       ])
     }
 
-    ExprKind::App { func, args, cont } => {
-      let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
-        Arg::Val(v) => val_to_node(v, ctx),
-        Arg::Spread(v) => spread_node(val_to_node(v, ctx)),
-        Arg::Cont(c) => render_cont(c, ctx),
-        Arg::Expr(e) => to_node(e, ctx),
-      }).collect();
+    ExprKind::App { func, args } => {
       let func_node = match func {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
         Callable::BuiltIn(op) => ident(&render_builtin(op)),
@@ -432,23 +426,28 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         BuiltIn::MatchRec | BuiltIn::MatchField |
         BuiltIn::MatchApp | BuiltIn::MatchBlock | BuiltIn::MatchArm
       ));
-      let no_cont = matches!(func, Callable::BuiltIn(BuiltIn::MatchArm));
       if is_match_builtin {
-        let mut match_args = arg_nodes;
-        if !no_cont {
-          let cont_node = if is_noarg_match {
-            state_fn(render_cont_as_expr(cont, ctx))
-          } else {
-            render_cont(cont, ctx)
-          };
-          match_args.push(cont_node);
-        }
-        apply(func_node, match_args)
+        // Match builtins: render all args inline (Arg::Cont renders as lambdas).
+        // For no-arg match builtins, the last Arg::Cont uses render_cont_as_expr.
+        let arg_nodes: Vec<Node<'static>> = args.iter().enumerate().map(|(i, a)| match a {
+          Arg::Val(v) => val_to_node(v, ctx),
+          Arg::Spread(v) => spread_node(val_to_node(v, ctx)),
+          Arg::Cont(c) if is_noarg_match && i == args.len() - 1 =>
+            state_fn(render_cont_as_expr(c, ctx)),
+          Arg::Cont(c) => render_cont(c, ctx),
+          Arg::Expr(e) => to_node(e, ctx),
+        }).collect();
+        apply(func_node, arg_nodes)
       } else {
-        let result_fn = render_cont(cont, ctx);
+        // Regular App: all args render normally (last Arg::Cont is the result cont).
+        let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
+          Arg::Val(v) => val_to_node(v, ctx),
+          Arg::Spread(v) => spread_node(val_to_node(v, ctx)),
+          Arg::Cont(c) => render_cont(c, ctx),
+          Arg::Expr(e) => to_node(e, ctx),
+        }).collect();
         let mut apply_args: Vec<Node<'static>> = vec![func_node];
         apply_args.extend(arg_nodes);
-        apply_args.push(result_fn);
         apply(ident("·apply"), apply_args)
       }
     }
