@@ -13,6 +13,8 @@ use std::sync::OnceLock;
 
 pub struct RunOptions {
   pub debug: bool,
+  /// Pause before WASM runs (--dbg=brk). When false, only user breakpoints stop execution.
+  pub break_on_start: bool,
   pub inspect_port: u16,
   /// Source label shown in the debugger (e.g. the input file path).
   pub source_label: String,
@@ -20,7 +22,7 @@ pub struct RunOptions {
 
 impl Default for RunOptions {
   fn default() -> Self {
-    Self { debug: false, inspect_port: 9229, source_label: "fink".into() }
+    Self { debug: false, break_on_start: false, inspect_port: 9229, source_label: "fink".into() }
   }
 }
 
@@ -107,22 +109,23 @@ pub fn run(opts: RunOptions, wasm: &[u8]) -> Result<(), String> {
   // doesn't need a source view. The WASM scriptParsed url is patched separately
   // to point at the WAT source file.
   let script_url = "fink://runner".to_string();
-  let js = r#"
+  let brk = if opts.break_on_start { "debugger;" } else { "" };
+  let js = format!(r#"
       const output = [];
-      const imports = {
-        env: {
+      const imports = {{
+        env: {{
           print: (n) => output.push(String(n)),
-        },
-      };
+        }},
+      }};
       const mod = new WebAssembly.Module(__wasm_bytes);
-      debugger;
+      {brk}
       const inst = new WebAssembly.Instance(mod, imports);
       const exportList = WebAssembly.Module.exports(mod)
-        .map(e => `  ${e.name} (${e.kind})`)
+        .map(e => `  ${{e.name}} (${{e.kind}})`)
         .join('\n');
-      const printed = output.map(s => `[wasm] ${s}`).join('\n');
+      const printed = output.map(s => `[wasm] ${{s}}`).join('\n');
       [exportList, printed].filter(Boolean).join('\n')
-    "#.to_string();
+    "#);
 
   let exports = run_js(scope, &js, &script_url)?;
   if !exports.trim().is_empty() {
