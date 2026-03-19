@@ -42,14 +42,22 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
   if path.ends_with(".wat") {
     let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
-    run_wat(opts, src)
+    run_wat(opts, path, src)
   } else {
     run(opts, &bytes)
   }
 }
 
-pub fn run_wat(opts: RunOptions, wat_src: &str) -> Result<(), String> {
-  let wasm = wat::parse_str(wat_src).map_err(|e| e.to_string())?;
+pub fn run_wat(opts: RunOptions, path: &str, wat_src: &str) -> Result<(), String> {
+  // In debug mode, embed DWARF so V8 can map WASM bytecode offsets → WAT source lines.
+  let wasm = if opts.debug {
+    wat::Parser::new()
+      .generate_dwarf(wat::GenerateDwarf::Full)
+      .parse_str(Some(std::path::Path::new(path)), wat_src)
+      .map_err(|e| e.to_string())?
+  } else {
+    wat::parse_str(wat_src).map_err(|e| e.to_string())?
+  };
   run(opts, &wasm)
 }
 
@@ -89,26 +97,34 @@ pub fn run(opts: RunOptions, wasm: &[u8]) -> Result<(), String> {
 
   // Instantiate the module via the JS WebAssembly API.
   // Provides env.print(i32) as a host import so WASM modules can call back.
-  let js = r#"
+  //
+  // `//# sourceURL=` at the end sets callFrame.url so VSCode can show line
+  // highlighting in the correct file.  ScriptOrigin::resource_name only sets
+  // embedderName; the actual URL used by the debugger comes from this comment.
+  let script_url = format!("file://{}", opts.source_label);
+  let js = format!(r#"
       const output = [];
-      const imports = {
-        env: {
+      const imports = {{
+        env: {{
           print: (n) => output.push(String(n)),
-        },
-      };
+        }},
+      }};
       const mod = new WebAssembly.Module(__wasm_bytes);
       const inst = new WebAssembly.Instance(mod, imports);
       const exportList = WebAssembly.Module.exports(mod)
-        .map(e => `  ${e.name} (${e.kind})`)
+        .map(e => `  ${{e.name}} (${{e.kind}})`)
         .join('\n');
-      const printed = output.map(s => `[wasm] ${s}`).join('\n');
+      const printed = output.map(s => `[wasm] ${{s}}`).join('\n');
       [exportList, printed].filter(Boolean).join('\n')
-    "#;
-  // Use a file:// URL so VSCode can open the source file from disk when paused.
-  // The JS line numbers won't match the source file, but source loads correctly.
-  // A source map will fix line mapping later.
-  let script_url = format!("file://{}", opts.source_label);
-  let exports = run_js(scope, js, &script_url)?;
+    //# sourceURL={script_url}
+    "#);
+
+  // Register the JS source so Debugger.getScriptSource can return it while paused.
+  if _session.is_some() {
+    inspector::register_script_source(&script_url, &js);
+  }
+
+  let exports = run_js(scope, &js, &script_url)?;
   if !exports.trim().is_empty() {
     println!("module exports:\n{exports}");
   }

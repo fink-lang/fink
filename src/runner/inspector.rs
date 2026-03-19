@@ -44,6 +44,7 @@
 //     "websocketAddress": "ws://localhost:9229" }
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
@@ -115,6 +116,26 @@ static ISOLATE_HANDLE: std::sync::LazyLock<Arc<Mutex<Option<v8::IsolateHandle>>>
 static MAIN_THREAD: std::sync::LazyLock<Arc<Mutex<Option<std::thread::Thread>>>> =
   std::sync::LazyLock::new(|| Arc::new(Mutex::new(None)));
 
+/// Script source texts keyed by V8 scriptId string.
+/// Populated when Debugger.scriptParsed is sent (scriptId extracted from notification);
+/// used to answer Debugger.getScriptSource while paused.
+static SCRIPT_SOURCES: std::sync::LazyLock<Arc<Mutex<HashMap<String, String>>>> =
+  std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+/// Pending source registrations: URL → source text.
+/// Call register_script_source(url, src) before running JS; when scriptParsed fires
+/// with a matching URL, the scriptId→source mapping is stored in SCRIPT_SOURCES.
+static PENDING_SOURCES: std::sync::LazyLock<Arc<Mutex<HashMap<String, String>>>> =
+  std::sync::LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+/// Register a JS source for a given URL so that Debugger.getScriptSource can return
+/// it once V8 assigns the scriptId via the Debugger.scriptParsed notification.
+pub fn register_script_source(url: &str, source: &str) {
+  if let Ok(mut map) = PENDING_SOURCES.lock() {
+    map.insert(url.to_string(), source.to_string());
+  }
+}
+
 // ── Channel — forwards outgoing CDP messages over the WebSocket ───────────────
 
 struct WsChannel;
@@ -142,6 +163,19 @@ fn send_to_ws(mut msg: v8::UniquePtr<StringBuffer>) {
   // a synthetic Debugger.enable response while paused.
   if text.contains("\"method\":\"Debugger.paused\"") {
     LAST_PAUSED.with(|p| *p.borrow_mut() = Some(text.clone()));
+  }
+  // When V8 emits scriptParsed, correlate with any pending source registration
+  // so Debugger.getScriptSource can return the source text later.
+  if text.contains("\"method\":\"Debugger.scriptParsed\"")
+    && let (Some(script_id), Some(url)) = (
+      extract_json_str(&text, "scriptId"),
+      extract_json_str(&text, "url"),
+    )
+    && let Ok(mut pending) = PENDING_SOURCES.lock()
+    && let Some(source) = pending.remove(url)
+    && let Ok(mut sources) = SCRIPT_SOURCES.lock()
+  {
+    sources.insert(script_id.to_string(), source);
   }
   if let Ok(guard) = WS_TX.lock()
     && let Some(tx) = guard.as_ref()
@@ -226,7 +260,19 @@ fn dispatch_pause_message(bytes: &[u8]) {
     return;
   }
 
-  let result_json = if method == "Runtime.evaluate" || method == "Debugger.evaluateOnCallFrame" {
+  let result_json = if method == "Debugger.getScriptSource" {
+    // Return the registered source text for the requested scriptId, if available.
+    let script_id = extract_json_str(text, "scriptId").unwrap_or("");
+    let source = SCRIPT_SOURCES
+      .lock()
+      .ok()
+      .and_then(|m| m.get(script_id).cloned())
+      .unwrap_or_default();
+    eprintln!("[fink] -> (Debugger.getScriptSource scriptId={script_id} len={})  id={id}", source.len());
+    // CDP spec: result = { scriptSource: string }
+    let escaped = source.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r");
+    format!("{{\"scriptSource\":\"{escaped}\"}}")
+  } else if method == "Runtime.evaluate" || method == "Debugger.evaluateOnCallFrame" {
     eprintln!("[fink] -> (synthetic {method})  id={id}");
     r#"{"result":{"type":"undefined"}}"#.to_string()
   } else if method == "Debugger.enable" {

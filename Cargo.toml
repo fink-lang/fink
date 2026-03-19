@@ -12,7 +12,7 @@ edition = "2024"
 
 [dependencies]
 v8 = "146.8.0"
-wat = "1"
+wat = { version = "1", features = ["dwarf"] }
 tungstenite = "0.26"
 
 [dev-dependencies]
