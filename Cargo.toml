@@ -13,10 +13,13 @@ edition = "2024"
 
 [features]
 default = ["runner"]
-runner = ["dep:wat", "dep:wasmtime", "dep:dap", "dep:tokio"]
+runner = ["dep:wat", "dep:wasmprinter", "dep:wasmtime", "dep:dap", "dep:tokio"]
 
 [dependencies]
+wasm-encoder = "0.245"
+wasmparser = "0.245"
 wat = { version = "1", features = ["dwarf"], optional = true }
+wasmprinter = { version = "0.245", optional = true }
 wasmtime = { version = "43", features = ["debug"], optional = true }
 dap = { version = "0.4.1-alpha1", optional = true }
 tokio = { version = "1", features = ["rt"], optional = true }

@@ -436,6 +436,9 @@ dependencies = [
  "pretty_assertions",
  "test-macros",
  "tokio",
+ "wasm-encoder",
+ "wasmparser",
+ "wasmprinter",
  "wasmtime",
  "wat",
 ]

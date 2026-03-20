@@ -5,5 +5,6 @@
 // The compiler passes (CPS → WAT codegen) emit WAT text as the readable,
 // debuggable intermediate form. This module handles everything after that.
 
+pub mod codegen;
 pub mod compile;
 pub mod sourcemap;

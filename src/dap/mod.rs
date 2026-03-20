@@ -28,21 +28,24 @@ use crate::passes::wasm::compile::{self, CompileOptions};
 
 // ── Source map (hardcoded for tests/wat/add.wat → tests/fnk/add.fnk) ────────
 
-/// Map a WASM PC offset to a (line, col) in the Fink source. 0-indexed internally,
-/// converted to 1-indexed for DAP.
-fn pc_to_source_location(pc: u32) -> Option<(i64, i64)> {
-  // Hardcoded for add.wat. The real compiler will produce these from origin maps.
-  // PC offsets from wasm-tools dump of add.wat:
-  match pc {
-    0x46 => Some((2, 3)),   // local.get $a → "a" in "a + b" (line 2, col 3)
-    0x48 => Some((2, 7)),   // local.get $b → "b" in "a + b"
-    0x4a => Some((2, 5)),   // i32.add     → "+" in "a + b"
-    0x4e => Some((5, 7)),   // i32.const 2 → "2" in "add 2, 3"
-    0x50 => Some((5, 10)),  // i32.const 3 → "3" in "add 2, 3"
-    0x52 => Some((5, 3)),   // call $add   → "add" in "add 2, 3"
-    0x54 => Some((6, 5)),   // call $print → "print" in "| print"
-    _ => None,
+/// Map a WASM PC offset to a (line, col) in the Fink source.
+/// Returns 1-indexed line and column for DAP.
+fn pc_to_source_location(
+  pc: u32,
+  mappings: &[crate::passes::wasm::sourcemap::WasmMapping],
+) -> Option<(i64, i64)> {
+  // Find the closest mapping at or before the PC offset.
+  // Mappings are in emission order, which is roughly ascending by offset.
+  let mut best: Option<&crate::passes::wasm::sourcemap::WasmMapping> = None;
+  for m in mappings {
+    if m.wasm_offset <= pc {
+      match best {
+        Some(b) if b.wasm_offset > m.wasm_offset => {}
+        _ => best = Some(m),
+      }
+    }
   }
+  best.map(|m| (m.src_line as i64, m.src_col as i64))
 }
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -139,22 +142,30 @@ pub fn run<R: Read, W: Write>(
   eprintln!("[fink dap] starting for: {program}");
   let mut server = Server::new(BufReader::new(input), BufWriter::new(output));
 
-  // Load the WAT/WASM file.
-  let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
-  let wasm = if bytes.starts_with(b"\0asm") {
-    bytes
+  // Load or compile the program.
+  let (wasm, source_file, mappings) = if program.ends_with(".fnk") {
+    // Fink source: compile through the full pipeline (returns WASM binary directly).
+    let src = std::fs::read_to_string(program).map_err(|e| e.to_string())?;
+    let result = crate::runner::compile_fnk(&src)?;
+    (result.wasm, program.to_string(), result.mappings)
   } else {
-    let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
-    compile::wat_to_wasm(src, &CompileOptions::default())?
+    let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
+    let wasm = if bytes.starts_with(b"\0asm") {
+      bytes
+    } else {
+      let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
+      compile::wat_to_wasm(src, &CompileOptions::default())?
+    };
+    let fnk_path = find_fnk_source(program);
+    let source_file = fnk_path.as_deref().unwrap_or(program).to_string();
+    (wasm, source_file, vec![])
   };
-
-  // Find sibling .fnk source file (test scaffolding).
-  let fnk_path = find_fnk_source(program);
-  let source_file = fnk_path.as_deref().unwrap_or(program).to_string();
 
   // Set up Wasmtime with debug support.
   let mut config = wasmtime::Config::new();
   config.wasm_gc(true);
+  config.wasm_tail_call(true);
+  config.wasm_function_references(true);
   config.guest_debug(true);
   config.cranelift_opt_level(wasmtime::OptLevel::None);
 
@@ -277,7 +288,7 @@ pub fn run<R: Read, W: Write>(
 
           Command::StackTrace(_) => {
             let (line, col, name) = if let Some(ref frame) = last_frame {
-              let (l, c) = pc_to_source_location(frame.pc).unwrap_or((1, 1));
+              let (l, c) = pc_to_source_location(frame.pc, &mappings).unwrap_or((1, 1));
               (l, c, frame.func_name.clone())
             } else {
               (1, 1, "?".to_string())

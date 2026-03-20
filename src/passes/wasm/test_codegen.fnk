@@ -1,0 +1,61 @@
+{test, expect, equals, fink, run} = import '!fake'
+
+
+
+test 'literal int', fn:
+  expect run fink":
+    main = fn:
+      42
+  | equals fink":
+    42
+
+test 'let binding', fn:
+  expect run fink":
+    main = fn:
+      x = 42
+      x
+  | equals fink":
+    42
+
+test 'add two literals', fn:
+  expect run fink":
+    main = fn:
+      2 + 3
+  | equals fink":
+    5
+
+test 'chained arithmetic', fn:
+  expect run fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+  | equals fink":
+    10
+
+test 'multiple let bindings used', fn:
+  expect run fink":
+    main = fn:
+      x = 2
+      y = 3
+      x + y
+  | equals fink":
+    5
+
+# TODO: user fn call — needs proper CpsId→local resolution for module-level
+# function bindings (add ref can't find its local because CpsIds diverge
+# between LetVal name and Cont::Expr arg after lifting).
+# test 'user fn call', fn:
+#   expect run fink":
+#     add = fn a, b: a + b
+#     main = fn: add 3, 4
+#   | equals fink":
+#     7
+
+test 'chained let', fn:
+  expect run fink":
+    main = fn:
+      x = 2
+      y = 3
+      y
+  | equals fink":
+    3

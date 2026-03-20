@@ -11,6 +11,8 @@ use crate::passes::wasm::compile::{self, CompileOptions};
 pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
   let mut config = Config::new();
   config.wasm_gc(true);
+  config.wasm_tail_call(true);
+  config.wasm_function_references(true);
   if opts.debug {
     config.debug_info(true);
     config.cranelift_opt_level(OptLevel::None);
@@ -38,6 +40,14 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
   if !output.is_empty() {
     for line in output {
       println!("[wasm] {line}");
+    }
+  }
+
+  // Print the result global if present.
+  if let Some(result) = instance.get_global(&mut store, "result") {
+    match result.get(&mut store) {
+      Val::I32(v) => println!("{v}"),
+      v => println!("{v:?}"),
     }
   }
 
