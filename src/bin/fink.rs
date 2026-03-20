@@ -13,6 +13,14 @@ fn main() {
     .find_map(|a| a.strip_prefix("--inspect-port="))
     .and_then(|s| s.parse().ok())
     .unwrap_or(9229);
+  let runtime = match args.iter().find_map(|a| a.strip_prefix("--runtime=")) {
+    Some("v8") => fink::runner::Runtime::V8,
+    Some("wasmtime") | None => fink::runner::Runtime::Wasmtime,
+    Some(other) => {
+      eprintln!("unknown runtime: {other} (expected v8 or wasmtime)");
+      process::exit(1);
+    }
+  };
 
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
@@ -73,7 +81,7 @@ fn main() {
       }
     }
     "run" => {
-      let opts = fink::runner::RunOptions { debug: dbg, break_on_start: brk, inspect_port, ..Default::default() };
+      let opts = fink::runner::RunOptions { runtime, debug: dbg, break_on_start: brk, inspect_port, ..Default::default() };
       if let Err(e) = fink::runner::run_file(opts, path) {
         eprintln!("error: {e}");
         process::exit(1);

@@ -1,17 +1,23 @@
-// Runner: compiles WAT or loads WASM, runs it in an embedded V8 isolate.
+// Runner: compiles WAT or loads WASM, runs it in an embedded runtime.
 //
-// WASM bytes are exposed as `__wasm_bytes` (ArrayBuffer) on the JS global.
-// Instantiation and export enumeration happens via normal JS WebAssembly API
-// because the v8 Rust bindings don't expose WasmInstanceObject::new directly.
+// Two backends:
+//   - V8:       full CDP debugging (--dbg), heavier (~30MB)
+//   - Wasmtime: lightweight (~2MB), WasmGC support, no debug inspector yet
 //
-// Debug mode (`--dbg`): starts a CDP inspector WebSocket on `inspect_port`
-// (default 9229) — VSCode / Chrome DevTools can attach using:
-//   {"type":"node","request":"attach","websocketAddress":"ws://localhost:9229"}
+// Selected via `--runtime=v8|wasmtime` (default: wasmtime).
 
 pub mod inspector;
+pub mod wasmtime_runner;
 use std::sync::OnceLock;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Runtime {
+  V8,
+  Wasmtime,
+}
+
 pub struct RunOptions {
+  pub runtime: Runtime,
   pub debug: bool,
   /// Pause before WASM runs (--dbg=brk). When false, only user breakpoints stop execution.
   pub break_on_start: bool,
@@ -22,7 +28,7 @@ pub struct RunOptions {
 
 impl Default for RunOptions {
   fn default() -> Self {
-    Self { debug: false, break_on_start: false, inspect_port: 9229, source_label: "fink".into() }
+    Self { runtime: Runtime::Wasmtime, debug: false, break_on_start: false, inspect_port: 9229, source_label: "fink".into() }
   }
 }
 
@@ -41,17 +47,28 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
   }
+  // Debug mode requires V8 (CDP inspector).
+  if opts.debug && opts.runtime != Runtime::V8 {
+    eprintln!("[fink] debug mode requires V8 runtime, switching to --runtime=v8");
+    opts.runtime = Runtime::V8;
+  }
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
   // WASM binaries start with magic bytes \0asm; everything else is WAT text.
   if bytes.starts_with(b"\0asm") {
-    run(opts, &bytes)
+    match opts.runtime {
+      Runtime::Wasmtime => wasmtime_runner::run(&opts, &bytes),
+      Runtime::V8 => run_v8(opts, &bytes),
+    }
   } else {
     let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
-    run_wat(opts, path, src)
+    match opts.runtime {
+      Runtime::Wasmtime => wasmtime_runner::run_wat(&opts, src),
+      Runtime::V8 => run_wat_v8(opts, path, src),
+    }
   }
 }
 
-pub fn run_wat(opts: RunOptions, path: &str, wat_src: &str) -> Result<(), String> {
+fn run_wat_v8(opts: RunOptions, path: &str, wat_src: &str) -> Result<(), String> {
   // In debug mode, embed DWARF so V8 can map WASM bytecode offsets → WAT source lines.
   // Register the WAT source before compiling so the debug session can serve it via
   // Debugger.getScriptSource when VSCode opens the source file.
@@ -67,10 +84,10 @@ pub fn run_wat(opts: RunOptions, path: &str, wat_src: &str) -> Result<(), String
   } else {
     wat::parse_str(wat_src).map_err(|e| e.to_string())?
   };
-  run(opts, &wasm)
+  run_v8(opts, &wasm)
 }
 
-pub fn run(opts: RunOptions, wasm: &[u8]) -> Result<(), String> {
+fn run_v8(opts: RunOptions, wasm: &[u8]) -> Result<(), String> {
   init_v8();
 
   let isolate = &mut v8::Isolate::new(Default::default());

@@ -13,12 +13,13 @@ edition = "2024"
 
 [features]
 default = ["runner"]
-runner = ["dep:v8", "dep:wat", "dep:tungstenite"]
+runner = ["dep:v8", "dep:wat", "dep:tungstenite", "dep:wasmtime"]
 
 [dependencies]
 v8 = { version = "146.8.0", optional = true }
 wat = { version = "1", features = ["dwarf"], optional = true }
 tungstenite = { version = "0.26", optional = true }
+wasmtime = { version = "31", optional = true }
 
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }
