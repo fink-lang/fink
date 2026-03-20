@@ -437,6 +437,7 @@ dependencies = [
  "test-macros",
  "tokio",
  "wasm-encoder",
+ "wasmparser",
  "wasmprinter",
  "wasmtime",
  "wat",

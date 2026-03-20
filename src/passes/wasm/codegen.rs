@@ -57,7 +57,7 @@ pub fn codegen(
   // Collect all top-level functions from the CPS tree.
   collect_funcs(&cps.root, &mut ctx);
 
-  let wasm = emit_module(&cps.root, &ctx);
+  let wasm = emit_module(&cps.root, &mut ctx);
   CodegenResult { wasm, mappings: ctx.mappings }
 }
 
@@ -104,8 +104,22 @@ struct CollectedFn<'a, 'src> {
 // Context
 // ---------------------------------------------------------------------------
 
+/// A source mapping recorded during emission: function-relative byte offset.
+struct RelativeMapping {
+  /// Index of the function (in emission order within the code section).
+  func_idx: u32,
+  /// Byte offset within the function body.
+  offset_in_body: u32,
+  /// 0-indexed source line.
+  src_line: u32,
+  /// 0-indexed source column.
+  src_col: u32,
+}
+
 struct Ctx<'a, 'src> {
   mappings: Vec<WasmMapping>,
+  /// Relative mappings collected during emission — resolved after module.finish().
+  relative_mappings: Vec<RelativeMapping>,
   origin: &'a PropGraph<CpsId, Option<AstId>>,
   ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
   /// Collected top-level functions (LetFn nodes), in order.
@@ -117,7 +131,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
     origin: &'a PropGraph<CpsId, Option<AstId>>,
     ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
   ) -> Self {
-    Self { mappings: Vec::new(), origin, ast_index, funcs: Vec::new() }
+    Self { mappings: Vec::new(), relative_mappings: Vec::new(), origin, ast_index, funcs: Vec::new() }
   }
 
   /// Get the WASM function index for a collected function by CpsId.
@@ -141,7 +155,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
 // Module emission
 // ---------------------------------------------------------------------------
 
-fn emit_module(root: &Expr<'_>, ctx: &Ctx) -> Vec<u8> {
+fn emit_module<'a, 'src>(root: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) -> Vec<u8> {
   let mut module = Module::new();
 
   // Sections must be added in the canonical WASM order.
@@ -153,7 +167,46 @@ fn emit_module(root: &Expr<'_>, ctx: &Ctx) -> Vec<u8> {
   emit_elem_section(&mut module, ctx);
   emit_code_section(root, &mut module, ctx);
 
-  module.finish()
+  let wasm = module.finish();
+
+  // Resolve relative mappings to absolute WASM byte offsets.
+  resolve_mappings(&wasm, ctx);
+
+  wasm
+}
+
+// ---------------------------------------------------------------------------
+// Source map resolution
+// ---------------------------------------------------------------------------
+
+/// Convert function-relative byte offsets to absolute WASM module offsets.
+///
+/// Uses wasmparser to walk the code section and find each function body's
+/// starting offset within the module binary.
+fn resolve_mappings(wasm: &[u8], ctx: &mut Ctx) {
+  use wasmparser::{Parser, Payload};
+
+  // Parse the binary to find code section function body offsets.
+  let mut func_body_offsets: Vec<u32> = Vec::new();
+
+  for payload in Parser::new(0).parse_all(wasm) {
+    if let Ok(Payload::CodeSectionEntry(body)) = payload {
+      // body.range().start is the absolute offset of the function body
+      // within the module binary (after the body size LEB128).
+      func_body_offsets.push(body.range().start as u32);
+    }
+  }
+
+  // Convert relative mappings to absolute WasmMapping entries.
+  for rm in &ctx.relative_mappings {
+    if let Some(&body_start) = func_body_offsets.get(rm.func_idx as usize) {
+      ctx.mappings.push(WasmMapping {
+        wasm_offset: body_start + rm.offset_in_body,
+        src_line: rm.src_line,
+        src_col: rm.src_col,
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -330,22 +383,28 @@ fn emit_elem_section(module: &mut Module, ctx: &Ctx) {
 // Code section
 // ---------------------------------------------------------------------------
 
-fn emit_code_section(root: &Expr<'_>, module: &mut Module, ctx: &Ctx) {
+fn emit_code_section<'a, 'src>(root: &'a Expr<'src>, module: &mut Module, ctx: &mut Ctx<'a, 'src>) {
   let mut code = CodeSection::new();
+  let mut rel = Vec::new();
 
-  // $__halt
+  // $__halt (code_idx 0)
   code.function(&build_halt());
 
-  // $__call_closure
+  // $__call_closure (code_idx 1)
   code.function(&build_call_closure());
 
-  // Compiled Fink functions
-  for collected in &ctx.funcs {
-    code.function(&build_fink_fn(collected.fn_body, ctx));
+  // Compiled Fink functions (code_idx 2..)
+  let n_funcs = ctx.funcs.len();
+  for i in 0..n_funcs {
+    let body = ctx.funcs[i].fn_body;
+    code.function(&build_fink_fn(body, FN_COMPILED_START + i as u32, ctx, &mut rel));
   }
 
   // $__main
-  code.function(&build_fink_fn(root, ctx));
+  let main_code_idx = FN_COMPILED_START + n_funcs as u32;
+  code.function(&build_fink_fn(root, main_code_idx, ctx, &mut rel));
+
+  ctx.relative_mappings = rel;
 
   // fink_main — entry point
   code.function(&build_fink_main(root, ctx));
@@ -490,9 +549,13 @@ fn build_call_closure() -> Function {
 // Compiled Fink function
 // ---------------------------------------------------------------------------
 
-fn build_fink_fn(body: &Expr<'_>, ctx: &Ctx) -> Function {
+fn build_fink_fn<'a, 'b, 'src>(
+  body: &Expr<'_>,
+  code_idx: u32,
+  ctx: &'a Ctx<'b, 'src>,
+  rel: &mut Vec<RelativeMapping>,
+) -> Function {
   // All Fink functions: (param $args (ref $AnyArray)) (param $cont anyref)
-  // Locals: we'll need temporaries for closure unpacking etc.
   let mut locals = vec![];
   let mut local_count: u32 = 2; // $args=0, $cont=1
 
@@ -507,7 +570,7 @@ fn build_fink_fn(body: &Expr<'_>, ctx: &Ctx) -> Function {
   }
 
   let mut f = Function::new(locals);
-  let mut fc = FnCtx { local_count, ctx };
+  let mut fc = FnCtx { local_count, code_idx, ctx, rel };
   emit_expr(body, &mut f, &mut fc);
   f.instruction(&Instruction::End);
   f
@@ -515,7 +578,27 @@ fn build_fink_fn(body: &Expr<'_>, ctx: &Ctx) -> Function {
 
 struct FnCtx<'a, 'b, 'src> {
   local_count: u32,
+  /// Index of this function in the code section (0-based, matching code_idx in RelativeMapping).
+  code_idx: u32,
   ctx: &'a Ctx<'b, 'src>,
+  /// Mutable reference to the relative mappings vec (owned by emit_code_section).
+  rel: &'a mut Vec<RelativeMapping>,
+}
+
+impl FnCtx<'_, '_, '_> {
+  /// Record a source mapping for the current byte offset in the function body.
+  fn mark(&mut self, f: &Function, cps_id: CpsId) {
+    if let Some(Some(ast_id)) = self.ctx.origin.try_get(cps_id)
+      && let Some(Some(ast_node)) = self.ctx.ast_index.try_get(*ast_id)
+    {
+      self.rel.push(RelativeMapping {
+        func_idx: self.code_idx,
+        offset_in_body: f.byte_len() as u32,
+        src_line: ast_node.loc.start.line,
+        src_col: ast_node.loc.start.col,
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -523,6 +606,9 @@ struct FnCtx<'a, 'b, 'src> {
 // ---------------------------------------------------------------------------
 
 fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
+  // Record source mapping for this expression.
+  fc.mark(f, expr.id);
+
   match &expr.kind {
     ExprKind::LetVal { val, body, .. } => {
       match body {
@@ -733,6 +819,22 @@ mod tests {
       wasmtime::Val::I32(v) => v,
       v => panic!("expected i32 result, got {:?}", v),
     }
+  }
+
+  #[test]
+  fn source_mappings_produced() {
+    let r = parse("main = fn: 42").expect("parse failed");
+    let ast_index = build_index(&r);
+    let cps = lower_expr(&r.root);
+    let cps = lift(cps);
+    let (lifted, resolved) = lift_all(cps, &ast_index);
+    let lifted = lift(lifted);
+    let result = codegen(&lifted, &resolved, &ast_index);
+
+    assert!(!result.mappings.is_empty(), "should produce source mappings");
+    // At least one mapping should point to the literal 42 (line 1, col 11, 1-indexed)
+    let has_literal = result.mappings.iter().any(|m| m.src_line == 1 && m.src_col == 11);
+    assert!(has_literal, "should map to literal 42; got: {:?}", result.mappings);
   }
 
   test_macros::include_fink_tests!("src/passes/wasm/test_codegen.fnk");
