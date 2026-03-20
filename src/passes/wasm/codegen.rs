@@ -1272,7 +1272,6 @@ mod tests {
   use crate::ast::build_index;
   use crate::parser::parse;
   use crate::passes::closure_lifting::lift_all;
-  use crate::passes::cont_lifting::lift;
   use crate::passes::cps::transform::lower_expr;
   use super::codegen;
 
@@ -1280,10 +1279,7 @@ mod tests {
     let r = parse(src).expect("parse failed");
     let ast_index = build_index(&r);
     let cps = lower_expr(&r.root);
-    let cps = lift(cps);
-    let (lifted, _) = lift_all(cps, &ast_index);
-    let lifted = lift(lifted);
-    let resolved = crate::passes::name_res::resolve(&lifted.root, &lifted.origin, &ast_index, lifted.origin.len());
+    let (lifted, resolved) = lift_all(cps, &ast_index);
     codegen(&lifted, &resolved, &ast_index).wasm
   }
 
@@ -1316,10 +1312,7 @@ mod tests {
     let r = parse("main = fn: 42").expect("parse failed");
     let ast_index = build_index(&r);
     let cps = lower_expr(&r.root);
-    let cps = crate::passes::cont_lifting::lift(cps);
-    let (lifted, _) = lift_all(cps, &ast_index);
-    let lifted = crate::passes::cont_lifting::lift(lifted);
-    let resolved = crate::passes::name_res::resolve(&lifted.root, &lifted.origin, &ast_index, lifted.origin.len());
+    let (lifted, resolved) = lift_all(cps, &ast_index);
     let result = codegen(&lifted, &resolved, &ast_index);
 
     assert!(!result.mappings.is_empty(), "should produce source mappings");

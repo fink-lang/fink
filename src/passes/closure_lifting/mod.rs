@@ -126,13 +126,27 @@ pub fn lift_all<'src>(
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
 ) -> (CpsResult<'src>, ResolveResult) {
   use crate::passes::closure_capture::analyse;
+  use crate::passes::cont_lifting::lift as cont_lift;
   use crate::passes::name_res::resolve;
 
-  let mut current = cps;
+  // Iterate cont_lifting + closure_lifting until no captures remain.
+  // cont_lifting may create new closures (hoisted conts that reference outer
+  // bindings), and closure_lifting may introduce new inline conts (FnClosure
+  // construction). The loop converges because each round reduces closures.
+  // cont_lift before closure_lifting — hoists inline conts so closure_lifting
+  // can see all named functions. Then iterate closure_lifting until no captures.
+  // Final cont_lift after the loop handles any inline conts created by
+  // FnClosure construction during closure_lifting.
+  let mut current = cont_lift(cps);
   loop {
     let node_count = current.origin.len();
     let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count);
     if !has_captures(&resolve_result) {
+      // Final cont_lift: FnClosure App nodes from closure_lifting may have
+      // inline conts that need hoisting.
+      current = cont_lift(current);
+      let node_count = current.origin.len();
+      let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count);
       return (current, resolve_result);
     }
     let cap_graph = analyse(&current, &resolve_result, ast_index);
