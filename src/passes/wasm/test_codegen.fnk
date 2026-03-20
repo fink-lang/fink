@@ -1,0 +1,6 @@
+{test, expect, equals, fink, run} = import '!fake'
+
+test 'literal int', fn:
+  expect run fink":
+    main = fn: 42
+  | equals '42'

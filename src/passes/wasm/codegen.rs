@@ -386,9 +386,11 @@ mod tests {
     codegen(&lifted, &resolved, &ast_index).wat
   }
 
-  fn run(src: &str) -> i32 {
+  /// Compile and run Fink source, return the i32 result as a string.
+  /// Used by the .fnk test macro as `expect run fink": ...`.
+  fn run(src: &str) -> String {
     let wat = compile_wat(src);
-    exec_wat(&wat)
+    exec_wat(&wat).to_string()
   }
 
   fn exec_wat(wat: &str) -> i32 {
@@ -414,8 +416,5 @@ mod tests {
     }
   }
 
-  #[test]
-  fn literal_int() {
-    assert_eq!(run("main = fn: 42"), 42);
-  }
+  test_macros::include_fink_tests!("src/passes/wasm/test_codegen.fnk");
 }
