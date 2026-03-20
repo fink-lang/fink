@@ -890,7 +890,7 @@ fn split_app_args<'a, 'src>(args: &'a [Arg<'src>]) -> (Vec<&'a Arg<'src>>, CpsId
 }
 
 /// Emit an Arg as a value onto the WASM stack.
-fn emit_arg_val(arg: &Arg<'_>, f: &mut Function, fc: &FnCtx) {
+fn emit_arg_val(arg: &Arg<'_>, f: &mut Function, fc: &mut FnCtx) {
   match arg {
     Arg::Val(val) => emit_val(val, f, fc),
     _ => {
@@ -900,7 +900,7 @@ fn emit_arg_val(arg: &Arg<'_>, f: &mut Function, fc: &FnCtx) {
 }
 
 /// Tail-call a cont with the anyref value already on the stack.
-fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &FnCtx) {
+fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) {
   // Check if cont_id refers to a known compiled function.
   if let Some(fn_idx) = fc.ctx.func_index(cont_id) {
     // The target function may need additional params beyond the result value.
@@ -939,7 +939,7 @@ fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &FnCtx) {
 ///
 /// If the cont is a known compiled function, use return_call directly.
 /// Otherwise, the cont is the $cont param — call it via return_call_ref.
-fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: &FnCtx) {
+fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) {
   // Check if cont_id refers to a known compiled function.
   if let Some(fn_idx) = fc.ctx.func_index(cont_id) {
     // Direct call: push value, return_call
@@ -964,7 +964,10 @@ fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: 
 // Value emission
 // ---------------------------------------------------------------------------
 
-fn emit_val(val: &Val<'_>, f: &mut Function, fc: &FnCtx) {
+fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
+  // Mark the source location of this value.
+  fc.mark(f, val.id);
+
   match &val.kind {
     ValKind::Lit(Lit::Int(n)) => {
       f.instruction(&Instruction::I32Const(*n as i32));
