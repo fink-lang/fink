@@ -11,17 +11,6 @@ fn dump_cps_ids() {
 
 fn indent(depth: usize) -> String { "  ".repeat(depth) }
 
-fn variant_name(e: &fink::passes::cps::ir::Expr) -> &'static str {
-    use fink::passes::cps::ir::ExprKind::*;
-    match &e.kind {
-        LetVal { .. } => "LetVal",
-        LetFn { .. } => "LetFn",
-        App { .. } => "App",
-        If { .. } => "If",
-        Yield { .. } => "Yield",
-    }
-}
-
 fn dump_val(v: &fink::passes::cps::ir::Val, depth: usize) {
     use fink::passes::cps::ir::ValKind::*;
     let i = indent(depth);
@@ -89,6 +78,5 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                 dump_expr(body, depth+1);
             }
         }
-        _ => println!("{i}Expr(#{}) <other:{}>", e.id.0, variant_name(e)),
     }
 }
