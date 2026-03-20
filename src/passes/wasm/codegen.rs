@@ -166,6 +166,7 @@ fn emit_module<'a, 'src>(root: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) -> Vec<u
   emit_exports(&mut module, ctx);
   emit_elem_section(&mut module, ctx);
   emit_code_section(root, &mut module, ctx);
+  emit_name_section(&mut module, ctx);
 
   let wasm = module.finish();
 
@@ -206,6 +207,64 @@ fn resolve_mappings(wasm: &[u8], ctx: &mut Ctx) {
         src_col: rm.src_col,
       });
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Name section (custom section with debug names for functions, types, etc.)
+// ---------------------------------------------------------------------------
+
+fn emit_name_section(module: &mut Module, ctx: &Ctx) {
+  use wasm_encoder::{NameMap, NameSection};
+
+  let mut names = NameSection::new();
+
+  // Function names
+  let mut func_names = NameMap::new();
+  func_names.append(FN_HALT, "__halt");
+  func_names.append(FN_CALL_CLOSURE, "__call_closure");
+
+  for (i, collected) in ctx.funcs.iter().enumerate() {
+    let idx = FN_COMPILED_START + i as u32;
+    let name = func_name(collected, ctx);
+    func_names.append(idx, &name);
+  }
+
+  func_names.append(ctx.main_fn_index(), "__main");
+  func_names.append(ctx.fink_main_index(), "fink_main");
+
+  names.functions(&func_names);
+
+  // Type names
+  let mut type_names = NameMap::new();
+  type_names.append(TY_ANY, "Any");
+  type_names.append(TY_ANY_ARRAY, "AnyArray");
+  type_names.append(TY_INT, "Int");
+  type_names.append(TY_FINK_FN, "FinkFn");
+  type_names.append(TY_FN_CLOSURE, "FnClosure");
+  type_names.append(TY_VOID, "void");
+  names.types(&type_names);
+
+  module.section(&names);
+}
+
+/// Derive a debug name for a collected function.
+fn func_name(collected: &CollectedFn, ctx: &Ctx) -> String {
+  use crate::ast::NodeKind;
+
+  match collected.bind {
+    Bind::Name => {
+      // Look up the source name via origin map → AST node
+      if let Some(Some(ast_id)) = ctx.origin.try_get(collected.name_id)
+        && let Some(Some(ast_node)) = ctx.ast_index.try_get(*ast_id)
+        && let NodeKind::Ident(name) = &ast_node.kind
+      {
+        return name.to_string();
+      }
+      format!("name_{}", collected.name_id.0)
+    }
+    Bind::Synth => format!("v_{}", collected.name_id.0),
+    Bind::Cont => format!("k_{}", collected.name_id.0),
   }
 }
 
