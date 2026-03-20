@@ -32,6 +32,19 @@ impl Default for RunOptions {
   }
 }
 
+/// Test scaffolding: look for a .fnk source file corresponding to a .wat file.
+/// e.g. tests/wat/add.wat → tests/fnk/add.fnk
+fn find_fnk_source(wat_path: &str) -> Option<String> {
+  let p = std::path::Path::new(wat_path);
+  let stem = p.file_stem()?.to_str()?;
+  let fnk_path = p.parent()?.parent()?.join("fnk").join(format!("{stem}.fnk"));
+  if fnk_path.exists() {
+    Some(fnk_path.to_string_lossy().into_owned())
+  } else {
+    None
+  }
+}
+
 pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
@@ -51,9 +64,14 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
     }
   } else {
     let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
+    // Look for a sibling .fnk file to use as source map target (test scaffolding).
+    let fnk_source = find_fnk_source(path);
+    if let Some(ref fnk) = fnk_source {
+      eprintln!("[fink] source map: {path} → {fnk}");
+    }
     match opts.runtime {
       Runtime::Wasmtime => wasmtime_runner::run_wat(&opts, Some(path), src),
-      Runtime::V8 => v8_runner::run_wat(opts, path, src),
+      Runtime::V8 => v8_runner::run_wat(opts, path, src, fnk_source.as_deref()),
     }
   }
 }

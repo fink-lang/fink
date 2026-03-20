@@ -45,7 +45,7 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
 }
 
 pub fn run_wat(opts: &RunOptions, path: Option<&str>, wat_src: &str) -> Result<(), String> {
-  let compile_opts = CompileOptions { debug: opts.debug, source_path: path };
+  let compile_opts = CompileOptions { debug: opts.debug, source_path: path, ..Default::default() };
   let wasm = compile::wat_to_wasm(wat_src, &compile_opts)?;
   run(opts, &wasm)
 }

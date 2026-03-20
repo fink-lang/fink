@@ -6,3 +6,4 @@
 // debuggable intermediate form. This module handles everything after that.
 
 pub mod compile;
+pub mod sourcemap;

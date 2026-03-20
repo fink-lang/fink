@@ -1,5 +1,12 @@
-;; Simple add function: exports add(i32, i32) -> i32
-;; fink_main calls add(2, 3) and prints the result.
+;; Compiled from tests/fnk/add.fnk
+;;
+;; add = fn a, b:        ;; line 1
+;;   a + b               ;; line 2
+;;
+;; fink_main = fn:       ;; line 4
+;;   add 2, 3            ;; line 5
+;;   | print             ;; line 6
+
 (module
   (import "env" "print" (func $print (param i32)))
   (func $add (export "add") (param $a i32) (param $b i32) (result i32)

@@ -19,16 +19,61 @@ fn init_v8() {
   });
 }
 
-pub fn run_wat(opts: RunOptions, path: &str, wat_src: &str) -> Result<(), String> {
-  // Register the WAT source before compiling so the debug session can serve it
-  // via Debugger.getScriptSource when VSCode opens the source file.
-  if opts.debug {
-    let wat_url = format!("file://{path}");
-    inspector::register_wasm_source(&wat_url, wat_src);
+pub fn run_wat(
+  opts: RunOptions,
+  path: &str,
+  wat_src: &str,
+  fnk_source: Option<&str>,
+) -> Result<(), String> {
+  use crate::passes::wasm::compile::{CompileOptions, SourceMapInfo};
+  use crate::passes::wasm::sourcemap::WasmMapping;
+
+  // When a .fnk source file exists, build a source map pointing to it.
+  // The mappings are hardcoded for the test WAT files — the real compiler
+  // will produce these from AST/CPS origin tracking.
+  let fnk_content;
+  let mappings;
+  let source_map_info;
+  let source_path;
+
+  if let Some(fnk_path) = fnk_source {
+    fnk_content = std::fs::read_to_string(fnk_path).ok();
+    // Hardcoded mappings for tests/wat/add.wat → tests/fnk/add.fnk
+    // These offsets are determined by compiling add.wat and inspecting the binary.
+    mappings = vec![
+      // $add body: a + b (fnk line 1, "a + b")
+      WasmMapping { wasm_offset: 0x46, src_line: 1, src_col: 2 },  // local.get $a → a
+      WasmMapping { wasm_offset: 0x48, src_line: 1, src_col: 6 },  // local.get $b → b
+      WasmMapping { wasm_offset: 0x4a, src_line: 1, src_col: 4 },  // i32.add     → +
+      // fink_main body: add 2, 3 | print
+      WasmMapping { wasm_offset: 0x4e, src_line: 4, src_col: 6 },  // i32.const 2 → 2
+      WasmMapping { wasm_offset: 0x50, src_line: 4, src_col: 9 },  // i32.const 3 → 3
+      WasmMapping { wasm_offset: 0x52, src_line: 4, src_col: 2 },  // call $add   → add
+      WasmMapping { wasm_offset: 0x54, src_line: 5, src_col: 4 },  // call $print → print
+    ];
+    source_map_info = Some(SourceMapInfo {
+      mappings: &mappings,
+      source_content: fnk_content.as_deref(),
+    });
+    source_path = fnk_path;
+
+    // When a source map is present, don't register a WASM source URL.
+    // Let V8 keep its wasm:// URL and let the sourceMapURL in the binary
+    // drive VSCode to open the .fnk file via source map resolution.
+  } else {
+    source_map_info = None;
+    source_path = path;
+    // Register the WAT source for getScriptSource.
+    if opts.debug {
+      let wat_url = format!("file://{path}");
+      inspector::register_wasm_source(&wat_url, wat_src);
+    }
   }
-  let compile_opts = crate::passes::wasm::compile::CompileOptions {
+
+  let compile_opts = CompileOptions {
     debug: opts.debug,
-    source_path: Some(path),
+    source_path: Some(source_path),
+    source_map: source_map_info,
   };
   let wasm = crate::passes::wasm::compile::wat_to_wasm(wat_src, &compile_opts)?;
   run(opts, &wasm)

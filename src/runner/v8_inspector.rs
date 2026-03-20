@@ -187,6 +187,9 @@ fn send_to_ws(mut msg: v8::UniquePtr<StringBuffer>) {
   // For WASM scripts V8 emits url="" — patch the notification to use the
   // registered WAT source URL so VSCode can open the original source file.
   let text = if text.contains("\"method\":\"Debugger.scriptParsed\"") {
+    if text.contains("\"scriptLanguage\":\"WebAssembly\"") {
+      eprintln!("[fink] WASM scriptParsed: {text}");
+    }
     let script_id = extract_json_str(&text, "scriptId");
     // Determine the URL to use for source lookup.
     let lookup_url: Option<String> = if text.contains("\"scriptLanguage\":\"WebAssembly\"") {
