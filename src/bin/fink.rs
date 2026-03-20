@@ -10,7 +10,7 @@ fn main() {
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|cps> [--sourcemap] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|run|dap> [--sourcemap] <file>");
       process::exit(1);
     }
   };
@@ -65,9 +65,21 @@ fn main() {
         Err(e) => parse_error(&src, e),
       }
     }
+    "run" => {
+      if let Err(e) = fink::runner::run_file(Default::default(), path) {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
+    "dap" => {
+      if let Err(e) = fink::dap::run(std::io::stdin(), std::io::stdout(), path) {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|cps> <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|run|dap> <file>");
       process::exit(1);
     }
   }

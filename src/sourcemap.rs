@@ -115,6 +115,36 @@ pub struct SourceMap {
 }
 
 impl SourceMap {
+  /// Build a source map from raw (out_line, out_col, src_line, src_col) tuples.
+  /// All values are 0-indexed.
+  pub fn from_raw(
+    source: &str,
+    mappings: impl Iterator<Item = (u32, u32, u32, u32)>,
+  ) -> Self {
+    Self {
+      source: source.to_string(),
+      sources_content: None,
+      mappings: mappings
+        .map(|(out_line, out_col, src_line, src_col)| Mapping { out_line, out_col, src_line, src_col })
+        .collect(),
+    }
+  }
+
+  /// Build a source map with embedded source content from raw tuples.
+  pub fn from_raw_with_content(
+    source: &str,
+    content: &str,
+    mappings: impl Iterator<Item = (u32, u32, u32, u32)>,
+  ) -> Self {
+    Self {
+      source: source.to_string(),
+      sources_content: Some(content.to_string()),
+      mappings: mappings
+        .map(|(out_line, out_col, src_line, src_col)| Mapping { out_line, out_col, src_line, src_col })
+        .collect(),
+    }
+  }
+
   /// Number of mapping entries.
   pub fn len(&self) -> usize {
     self.mappings.len()

@@ -10,7 +10,16 @@ name = "fink"
 version = "0.1.0"
 edition = "2024"
 
+
+[features]
+default = ["runner"]
+runner = ["dep:wat", "dep:wasmtime", "dep:dap", "dep:tokio"]
+
 [dependencies]
+wat = { version = "1", features = ["dwarf"], optional = true }
+wasmtime = { version = "43", features = ["debug"], optional = true }
+dap = { version = "0.4.1-alpha1", optional = true }
+tokio = { version = "1", features = ["rt"], optional = true }
 
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }
