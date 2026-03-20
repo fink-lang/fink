@@ -142,6 +142,11 @@ impl<'src> Lexer<'src> {
     &self.src.as_bytes()[self.pos.idx as usize..]
   }
 
+  // TODO: col tracks byte offset, not character/grapheme offset.
+  // Multi-byte UTF-8 (e.g. `·` = 2 bytes, CJK, emoji) causes col to diverge
+  // from the visual column. This breaks VSCode extension, Monaco editor, source
+  // maps (v3 spec), and DAP positioning. Fix: count grapheme clusters or at
+  // minimum Unicode scalar values instead of bytes.
   fn advance(&mut self, num_bytes: u32) {
     self.pos.idx += num_bytes;
     self.pos.col += num_bytes;
