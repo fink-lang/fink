@@ -676,13 +676,11 @@ fn build_fink_fn<'a, 'b, 'src>(
 ) -> Function {
   // Function params are all anyref: N value params + 1 cont param.
   // The last param (index arity-1) is the cont.
-  let mut f = Function::new([]);
   let cont_local = if arity > 0 { arity - 1 } else { 0 };
 
   // Build CpsId → local index mapping from collected function params.
   let mut locals = Vec::new();
   if let Some(func_info) = ctx.funcs.iter().find(|cf| {
-    // Match by fn_body pointer — the collected fn whose body we're building
     std::ptr::eq(cf.fn_body as *const _, body as *const _)
   }) {
     for (i, &param_id) in func_info.param_ids.iter().enumerate() {
@@ -690,11 +688,31 @@ fn build_fink_fn<'a, 'b, 'src>(
     }
     locals.push((func_info.cont_id, cont_local));
   }
-  // Walk LetVal alias chains: `LetVal { name: x, val: Ref(Synth(param_id)) }`
-  // means `x` is an alias for the param. Map x's CpsId to the same local.
+  // Pre-scan fn_body for LetVal bindings that need WASM locals.
+  let mut extra_locals: Vec<CpsId> = Vec::new();
+  collect_letval_locals(body, &mut extra_locals);
+  let extra_count = extra_locals.len() as u32;
+
+  // Assign local indices for LetVal bindings (after params).
+  let mut local_idx = arity;
+  for cps_id in &extra_locals {
+    locals.push((*cps_id, local_idx));
+    local_idx += 1;
+  }
+
+  // Walk LetVal alias chains — must run after locals are assigned so
+  // we can map LetVal names to the Cont::Expr arg locals.
   discover_aliases(body, &mut locals);
 
-  let mut fc = FnCtx { local_count: arity, cont_local, locals, code_idx, ctx, rel };
+  // Declare extra locals (all anyref).
+  let wasm_locals: Vec<(u32, ValType)> = if extra_count > 0 {
+    vec![(extra_count, ValType::Ref(RefType::ANYREF))]
+  } else {
+    vec![]
+  };
+
+  let mut f = Function::new(wasm_locals);
+  let mut fc = FnCtx { local_count: local_idx, cont_local, locals, code_idx, ctx, rel };
   emit_expr(body, &mut f, &mut fc);
   f.instruction(&Instruction::End);
   f
@@ -766,11 +784,23 @@ fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
       match body {
         Cont::Ref(cont_id) => {
           // Pass val to the continuation.
-          // The cont is either $cont param or a known function.
           emit_cont_call_with_val(val, *cont_id, f, fc);
         }
-        Cont::Expr { body: cont_body, .. } => {
-          // Inline continuation — just emit the body.
+        Cont::Expr { args, body: cont_body, .. } => {
+          // Inline continuation: compute val, store in local for the bound name,
+          // then emit the body.
+          emit_val(val, f, fc);
+          // The first arg is the bound name — store the value in its local.
+          if let Some(bind) = args.first() {
+            if let Some(local_idx) = fc.local_for(bind.id) {
+              f.instruction(&Instruction::LocalSet(local_idx));
+            } else {
+              // No local found — drop the value (shouldn't happen if collect_letval_locals works).
+              f.instruction(&Instruction::Drop);
+            }
+          } else {
+            f.instruction(&Instruction::Drop);
+          }
           emit_expr(cont_body, f, fc);
         }
       }
@@ -1037,6 +1067,29 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
   }
 }
 
+/// Pre-scan a function body to collect CpsIds that need WASM locals.
+/// A LetVal with Cont::Expr binds a value to a name in the continuation —
+/// that name needs a local so it can be referenced later.
+fn collect_letval_locals(expr: &Expr<'_>, out: &mut Vec<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetVal { body: Cont::Expr { args, body }, .. } => {
+      for arg in args {
+        out.push(arg.id);
+      }
+      collect_letval_locals(body, out);
+    }
+    ExprKind::LetVal { body: Cont::Ref(_), .. } => {}
+    ExprKind::LetFn { fn_body, body, .. } => {
+      // Don't recurse into fn_body — that's a separate function.
+      // Only recurse into the continuation body.
+      if let Cont::Expr { body: cont_body, .. } = body {
+        collect_letval_locals(cont_body, out);
+      }
+    }
+    ExprKind::App { .. } | ExprKind::If { .. } | ExprKind::Yield { .. } => {}
+  }
+}
+
 /// Walk a function body's LetVal chain to discover aliases.
 /// After cont_lifting, param values are often rebound: `·let ·v_N, fn x: ...`
 /// where `·v_N` is Ref(Synth(param_id)). This means `x` (name.id) is an alias
@@ -1045,10 +1098,17 @@ fn discover_aliases(expr: &Expr<'_>, locals: &mut Vec<(CpsId, u32)>) {
   let mut current = expr;
   loop {
     match &current.kind {
-      ExprKind::LetVal { name, val, body: Cont::Expr { body: cont_body, .. } } => {
-        // Check if val is a Ref to an existing local
+      ExprKind::LetVal { name, val, body: Cont::Expr { args, body: cont_body } } => {
+        // Check if val is a Ref to an existing local — alias the name to it.
         if let ValKind::Ref(crate::passes::cps::ir::Ref::Synth(ref_id)) = &val.kind {
           if let Some(local_idx) = locals.iter().find(|(id, _)| id == ref_id).map(|(_, idx)| *idx) {
+            locals.push((name.id, local_idx));
+          }
+        }
+        // The LetVal name and the Cont::Expr arg refer to the same binding.
+        // Map name.id → same local as args[0].id so refs resolving to name.id find the local.
+        if let Some(arg) = args.first() {
+          if let Some(local_idx) = locals.iter().find(|(id, _)| *id == arg.id).map(|(_, idx)| *idx) {
             locals.push((name.id, local_idx));
           }
         }

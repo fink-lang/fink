@@ -32,6 +32,15 @@ test 'chained arithmetic', fn:
   | equals fink":
     10
 
+test 'multiple let bindings used', fn:
+  expect run fink":
+    main = fn:
+      x = 2
+      y = 3
+      x + y
+  | equals fink":
+    5
+
 test 'chained let', fn:
   expect run fink":
     main = fn:
