@@ -141,11 +141,10 @@ pub fn run<R: Read, W: Write>(
 
   // Load or compile the program.
   let (wasm, source_file) = if program.ends_with(".fnk") {
-    // Fink source: compile through the full pipeline.
+    // Fink source: compile through the full pipeline (returns WASM binary directly).
     let src = std::fs::read_to_string(program).map_err(|e| e.to_string())?;
-    let wat = crate::runner::compile_fnk(&src)?;
-    let wasm = compile::wat_to_wasm(&wat, &CompileOptions::default())?;
-    (wasm, program.to_string())
+    let result = crate::runner::compile_fnk(&src)?;
+    (result.wasm, program.to_string())
   } else {
     let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
     let wasm = if bytes.starts_with(b"\0asm") {
