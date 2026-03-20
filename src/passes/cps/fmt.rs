@@ -70,6 +70,12 @@ pub fn fmt(expr: &Expr<'_>) -> String {
 // Dummy loc — all reconstructed AST nodes use this
 // ---------------------------------------------------------------------------
 
+// TODO: All synthesized AST nodes get dummy Loc (1:0). This means the CPS
+// formatter's output has no source map back to the original Fink source.
+// Fix: when creating AST nodes for CPS nodes, look up the original Loc via
+// the origin map (CpsId → AstId → ast_node.loc). The Ctx already carries
+// both origin and ast_index. This would make the AST formatter's source map
+// output (via MappedWriter) map CPS-formatted text → original Fink source.
 fn loc() -> Loc {
   let p = Pos { idx: 0, line: 1, col: 0 };
   Loc { start: p, end: p }
