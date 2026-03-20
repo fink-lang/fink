@@ -7,7 +7,10 @@
 // Architecture:
 //   VSCode ←DAP stdin/stdout→ fink dap ←Wasmtime debug API→ WASM
 //
-// Usage: `fink dap <file>`
+// The WASM thread runs in Wasmtime with guest_debug enabled. When a
+// breakpoint fires, the DebugHandler sends frame info to the DAP server
+// via a channel, then blocks waiting for a resume command. The DAP server
+// translates the WASM PC to a source location and reports it to VSCode.
 
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::sync::{Arc, Mutex, mpsc};
@@ -23,12 +26,117 @@ use dap::types::*;
 
 use crate::passes::wasm::compile::{self, CompileOptions};
 
-/// Run the DAP server on the given input/output streams.
+// ── Source map (hardcoded for tests/wat/add.wat → tests/fnk/add.fnk) ────────
+
+/// Map a WASM PC offset to a (line, col) in the Fink source. 0-indexed internally,
+/// converted to 1-indexed for DAP.
+fn pc_to_source_location(pc: u32) -> Option<(i64, i64)> {
+  // Hardcoded for add.wat. The real compiler will produce these from origin maps.
+  // PC offsets from wasm-tools dump of add.wat:
+  match pc {
+    0x46 => Some((2, 3)),   // local.get $a → "a" in "a + b" (line 2, col 3)
+    0x48 => Some((2, 7)),   // local.get $b → "b" in "a + b"
+    0x4a => Some((2, 5)),   // i32.add     → "+" in "a + b"
+    0x4e => Some((5, 7)),   // i32.const 2 → "2" in "add 2, 3"
+    0x50 => Some((5, 10)),  // i32.const 3 → "3" in "add 2, 3"
+    0x52 => Some((5, 3)),   // call $add   → "add" in "add 2, 3"
+    0x54 => Some((6, 5)),   // call $print → "print" in "| print"
+    _ => None,
+  }
+}
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+/// Info about a stopped frame, sent from WASM thread → DAP server.
+struct StoppedFrame {
+  /// Function name (from WASM export or debug name).
+  func_name: String,
+  /// WASM PC offset within the module.
+  pc: u32,
+}
+
+/// Commands sent from DAP server → WASM thread.
+enum ResumeAction {
+  /// Continue execution (disable single-step).
+  Continue,
+  /// Step to next instruction (enable single-step).
+  Step,
+}
+
+/// State stored in the Wasmtime Store.
+#[derive(Default)]
+struct DebugState {
+  output: Vec<String>,
+}
+
+// ── Debug handler ───────────────────────────────────────────────────────────
+
+/// Bridges Wasmtime debug events to the DAP server via channels.
+#[derive(Clone)]
+struct FinkDebugHandler {
+  /// Send stopped frame info to the DAP server.
+  stopped_tx: mpsc::SyncSender<StoppedFrame>,
+  /// Receive resume commands from the DAP server.
+  resume_rx: Arc<Mutex<mpsc::Receiver<ResumeAction>>>,
+}
+
+impl wasmtime::DebugHandler for FinkDebugHandler {
+  type Data = DebugState;
+
+  fn handle(
+    &self,
+    mut store: wasmtime::StoreContextMut<'_, Self::Data>,
+    event: wasmtime::DebugEvent<'_>,
+  ) -> impl std::future::Future<Output = ()> + Send {
+    // Collect frame info while we have access to the store.
+    let should_stop = matches!(event, wasmtime::DebugEvent::Breakpoint);
+    let frame_info = if should_stop {
+      let mut func_name = String::from("<unknown>");
+      let mut pc = 0u32;
+      let frames: Vec<_> = store.debug_exit_frames().collect();
+      if let Some(frame) = frames.first()
+        && let Ok(Some((func_idx, wasm_pc))) = frame.wasm_function_index_and_pc(&mut store)
+      {
+        pc = wasm_pc;
+        func_name = format!("func[{}]", func_idx.as_u32());
+      }
+      Some(StoppedFrame { func_name, pc })
+    } else {
+      None
+    };
+
+    // Send frame info and wait for resume — must happen synchronously
+    // while we still have store access (for single_step toggling).
+    if let Some(ref frame) = frame_info {
+      let _ = self.stopped_tx.send(StoppedFrame {
+        func_name: frame.func_name.clone(),
+        pc: frame.pc,
+      });
+      // Block until DAP server tells us to resume.
+      if let Ok(guard) = self.resume_rx.lock()
+        && let Ok(action) = guard.recv()
+      {
+        // Toggle single-step based on action.
+        let enable_step = matches!(action, ResumeAction::Step);
+        if let Some(mut edit) = store.edit_breakpoints() {
+          edit.single_step(enable_step).ok();
+        }
+      }
+    }
+
+    // Return a no-op future (all work done synchronously above).
+    async {}
+  }
+}
+
+// ── DAP server ──────────────────────────────────────────────────────────────
+
 pub fn run<R: Read, W: Write>(
   input: R,
   output: W,
   program: &str,
 ) -> Result<(), String> {
+  eprintln!("[fink dap] starting for: {program}");
   let mut server = Server::new(BufReader::new(input), BufWriter::new(output));
 
   // Load the WAT/WASM file.
@@ -53,21 +161,21 @@ pub fn run<R: Read, W: Write>(
   let engine = wasmtime::Engine::new(&config).map_err(|e| e.to_string())?;
   let module = wasmtime::Module::new(&engine, &wasm).map_err(|e| e.to_string())?;
 
-  // Channel for debug events → DAP server loop.
-  let (event_tx, _event_rx) = mpsc::sync_channel::<DebugAction>(1);
-  let event_tx_for_wasm = event_tx.clone();
-
-  // Channel for DAP commands → debug handler (resume/step).
-  let (cmd_tx, cmd_rx) = mpsc::sync_channel::<ResumeAction>(1);
+  // Channels between DAP server (main thread) and WASM execution thread.
+  let (stopped_tx, stopped_rx) = mpsc::sync_channel::<StoppedFrame>(1);
+  let (resume_tx, resume_rx) = mpsc::sync_channel::<ResumeAction>(1);
 
   let mut store = wasmtime::Store::new(&engine, DebugState::default());
 
-  // Install debug handler.
-  let handler = FinkDebugHandler {
-    event_tx: event_tx.clone(),
-    cmd_rx: Arc::new(Mutex::new(cmd_rx)),
-  };
-  store.set_debug_handler(handler);
+  // Enable single-step so we break on the first instruction.
+  if let Some(mut edit) = store.edit_breakpoints() {
+    edit.single_step(true).ok();
+  }
+
+  store.set_debug_handler(FinkDebugHandler {
+    stopped_tx: stopped_tx.clone(),
+    resume_rx: Arc::new(Mutex::new(resume_rx)),
+  });
 
   let mut linker = wasmtime::Linker::new(&engine);
   linker
@@ -76,37 +184,54 @@ pub fn run<R: Read, W: Write>(
     })
     .map_err(|e| e.to_string())?;
 
-  // Spawn WASM execution in a separate thread — it blocks on breakpoints.
+  // Spawn WASM execution thread with async runtime (required by guest_debug).
+  let terminated_tx = stopped_tx;
   let wasm_thread = std::thread::spawn(move || {
-    match linker.instantiate(&mut store, &module) {
-      Ok(inst) => {
-        if let Ok(main) = inst.get_typed_func::<(), ()>(&mut store, "fink_main")
-          && let Err(e) = main.call(&mut store, ())
-        {
-          eprintln!("[fink dap] wasm error: {e}");
+    let rt = tokio::runtime::Builder::new_current_thread()
+      .enable_all()
+      .build()
+      .expect("failed to build tokio runtime");
+    rt.block_on(async {
+      match linker.instantiate_async(&mut store, &module).await {
+        Ok(inst) => {
+          if let Ok(main) = inst.get_typed_func::<(), ()>(&mut store, "fink_main")
+            && let Err(e) = main.call_async(&mut store, ()).await
+          {
+            eprintln!("[fink dap] wasm error: {e}");
+          }
+          for line in &store.data().output {
+            eprintln!("[wasm] {line}");
+          }
         }
-        for line in &store.data().output {
-          eprintln!("[wasm] {line}");
-        }
+        Err(e) => eprintln!("[fink dap] instantiation error: {e}"),
       }
-      Err(e) => eprintln!("[fink dap] instantiation error: {e}"),
-    }
-    let _ = event_tx_for_wasm.send(DebugAction::Terminated);
+    });
+    // Signal termination with a sentinel.
+    let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
   });
 
-  // DAP server loop.
+  // Track the last stopped frame for stackTrace requests.
+  let mut last_frame: Option<StoppedFrame> = None;
   let mut stop_on_entry = false;
+  let mut running = false;
+
+  let abs_path = std::fs::canonicalize(&source_file)
+    .map(|p| p.to_string_lossy().to_string())
+    .unwrap_or_else(|_| source_file.clone());
+  let file_name = std::path::Path::new(&source_file)
+    .file_name()
+    .map(|f| f.to_string_lossy().to_string())
+    .unwrap_or_default();
 
   loop {
     match server.poll_request() {
       Ok(Some(req)) => {
         match &req.command {
           Command::Initialize { .. } => {
-            let resp = req.success(ResponseBody::Initialize(Capabilities {
+            server.respond(req.success(ResponseBody::Initialize(Capabilities {
               supports_configuration_done_request: Some(true),
               ..Default::default()
-            }));
-            server.respond(resp).ok();
+            }))).ok();
             server.send_event(Event::Initialized).ok();
           }
 
@@ -121,16 +246,26 @@ pub fn run<R: Read, W: Write>(
 
           Command::ConfigurationDone => {
             server.respond(req.success(ResponseBody::ConfigurationDone)).ok();
-            if stop_on_entry {
-              server.send_event(Event::Stopped(StoppedEventBody {
-                reason: StoppedEventReason::Entry,
-                description: None,
-                thread_id: Some(1),
-                preserve_focus_hint: None,
-                text: None,
-                all_threads_stopped: Some(true),
-                hit_breakpoint_ids: None,
-              })).ok();
+            // WASM thread is running with single_step enabled.
+            // Wait for the first breakpoint event.
+            if stop_on_entry
+              && let Ok(frame) = stopped_rx.recv()
+            {
+              if frame.pc == u32::MAX {
+                server.send_event(Event::Terminated(None)).ok();
+              } else {
+                last_frame = Some(frame);
+                running = true;
+                server.send_event(Event::Stopped(StoppedEventBody {
+                  reason: StoppedEventReason::Entry,
+                  description: None,
+                  thread_id: Some(1),
+                  preserve_focus_hint: None,
+                  text: None,
+                  all_threads_stopped: Some(true),
+                  hit_breakpoint_ids: None,
+                })).ok();
+              }
             }
           }
 
@@ -141,24 +276,22 @@ pub fn run<R: Read, W: Write>(
           }
 
           Command::StackTrace(_) => {
-            let abs_path = std::fs::canonicalize(&source_file)
-              .map(|p| p.to_string_lossy().to_string())
-              .unwrap_or_else(|_| source_file.clone());
-            let name = std::path::Path::new(&source_file)
-              .file_name()
-              .map(|f| f.to_string_lossy().to_string())
-              .unwrap_or_default();
-
+            let (line, col, name) = if let Some(ref frame) = last_frame {
+              let (l, c) = pc_to_source_location(frame.pc).unwrap_or((1, 1));
+              (l, c, frame.func_name.clone())
+            } else {
+              (1, 1, "?".to_string())
+            };
             let frames = vec![StackFrame {
               id: 1,
-              name: "fink_main".to_string(),
+              name,
               source: Some(Source {
-                name: Some(name),
-                path: Some(abs_path),
+                name: Some(file_name.clone()),
+                path: Some(abs_path.clone()),
                 ..Default::default()
               }),
-              line: 4,
-              column: 0,
+              line,
+              column: col,
               ..Default::default()
             }];
             server.respond(req.success(ResponseBody::StackTrace(StackTraceResponse {
@@ -200,25 +333,72 @@ pub fn run<R: Read, W: Write>(
           }
 
           Command::Continue(_) => {
-            let _ = cmd_tx.send(ResumeAction::Continue);
             server.respond(req.success(ResponseBody::Continue(ContinueResponse {
               all_threads_continued: Some(true),
             }))).ok();
+            if running {
+              // Resume without single-step — run until next breakpoint or end.
+              let _ = resume_tx.send(ResumeAction::Continue);
+              // Wait for next stop or termination.
+              match stopped_rx.recv() {
+                Ok(frame) if frame.pc == u32::MAX => {
+                  running = false;
+                  server.send_event(Event::Terminated(None)).ok();
+                }
+                Ok(frame) => {
+                  last_frame = Some(frame);
+                  server.send_event(Event::Stopped(StoppedEventBody {
+                    reason: StoppedEventReason::Breakpoint,
+                    description: None,
+                    thread_id: Some(1),
+                    preserve_focus_hint: None,
+                    text: None,
+                    all_threads_stopped: Some(true),
+                    hit_breakpoint_ids: None,
+                  })).ok();
+                }
+                Err(_) => {
+                  running = false;
+                  server.send_event(Event::Terminated(None)).ok();
+                }
+              }
+            }
           }
 
-          Command::Next(_) => {
-            let _ = cmd_tx.send(ResumeAction::StepOver);
-            server.respond(req.success(ResponseBody::Next)).ok();
-          }
-
-          Command::StepIn(_) => {
-            let _ = cmd_tx.send(ResumeAction::StepIn);
-            server.respond(req.success(ResponseBody::StepIn)).ok();
-          }
-
-          Command::StepOut(_) => {
-            let _ = cmd_tx.send(ResumeAction::StepOut);
-            server.respond(req.success(ResponseBody::StepOut)).ok();
+          Command::Next(_) | Command::StepIn(_) | Command::StepOut(_) => {
+            let resp = match &req.command {
+              Command::Next(_) => ResponseBody::Next,
+              Command::StepIn(_) => ResponseBody::StepIn,
+              _ => ResponseBody::StepOut,
+            };
+            server.respond(req.success(resp)).ok();
+            if running {
+              // Resume with single-step — break at next instruction.
+              let _ = resume_tx.send(ResumeAction::Step);
+              // Wait for next stop or termination.
+              match stopped_rx.recv() {
+                Ok(frame) if frame.pc == u32::MAX => {
+                  running = false;
+                  server.send_event(Event::Terminated(None)).ok();
+                }
+                Ok(frame) => {
+                  last_frame = Some(frame);
+                  server.send_event(Event::Stopped(StoppedEventBody {
+                    reason: StoppedEventReason::Step,
+                    description: None,
+                    thread_id: Some(1),
+                    preserve_focus_hint: None,
+                    text: None,
+                    all_threads_stopped: Some(true),
+                    hit_breakpoint_ids: None,
+                  })).ok();
+                }
+                Err(_) => {
+                  running = false;
+                  server.send_event(Event::Terminated(None)).ok();
+                }
+              }
+            }
           }
 
           Command::Disconnect(_) => {
@@ -227,7 +407,6 @@ pub fn run<R: Read, W: Write>(
           }
 
           _ => {
-            // Unknown request — ack with empty response.
             server.respond(req.success(ResponseBody::Disconnect)).ok();
           }
         }
@@ -242,58 +421,6 @@ pub fn run<R: Read, W: Write>(
 
   let _ = wasm_thread.join();
   Ok(())
-}
-
-/// Debug events sent from the WASM thread to the DAP server.
-#[allow(dead_code)]
-enum DebugAction {
-  Stopped,
-  Terminated,
-}
-
-/// Resume commands sent from the DAP server to the WASM thread.
-#[allow(dead_code)]
-enum ResumeAction {
-  Continue,
-  StepOver,
-  StepIn,
-  StepOut,
-}
-
-/// State stored in the Wasmtime Store.
-#[derive(Default)]
-struct DebugState {
-  output: Vec<String>,
-}
-
-/// Debug handler that bridges Wasmtime debug events to the DAP server.
-#[derive(Clone)]
-struct FinkDebugHandler {
-  event_tx: mpsc::SyncSender<DebugAction>,
-  cmd_rx: Arc<Mutex<mpsc::Receiver<ResumeAction>>>,
-}
-
-impl wasmtime::DebugHandler for FinkDebugHandler {
-  type Data = DebugState;
-
-  fn handle(
-    &self,
-    _store: wasmtime::StoreContextMut<'_, Self::Data>,
-    event: wasmtime::DebugEvent<'_>,
-  ) -> impl std::future::Future<Output = ()> + Send {
-    let event_tx = self.event_tx.clone();
-    let cmd_rx = self.cmd_rx.clone();
-    async move {
-      if matches!(event, wasmtime::DebugEvent::Breakpoint) {
-        // Notify the DAP server that we've stopped.
-        let _ = event_tx.send(DebugAction::Stopped);
-        // Block until the DAP server tells us to resume.
-        if let Ok(guard) = cmd_rx.lock() {
-          let _ = guard.recv();
-        }
-      }
-    }
-  }
 }
 
 /// Test scaffolding: look for a .fnk source file corresponding to a .wat file.
