@@ -59,7 +59,6 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
   let cps = lift(cps);
   let (lifted, _) = lift_all(cps, &ast_index);
   let lifted = lift(lifted);
-  // Re-resolve after all lifting so refs map to final params.
   let resolved = crate::passes::name_res::resolve(&lifted.root, &lifted.origin, &ast_index, lifted.origin.len());
   let result = codegen(&lifted, &resolved, &ast_index);
   Ok(CompileResult { wasm: result.wasm, mappings: result.mappings })
