@@ -7,25 +7,10 @@ fn main() {
   let embed_source = args.iter().any(|a| a == "--embed-source");
   let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("--")).map(|s| s.as_str()).collect();
 
-  let dbg = args.iter().any(|a| a == "--dbg" || a.starts_with("--dbg="));
-  let brk = args.iter().any(|a| a == "--dbg=brk");
-  let inspect_port: u16 = args.iter()
-    .find_map(|a| a.strip_prefix("--inspect-port="))
-    .and_then(|s| s.parse().ok())
-    .unwrap_or(9229);
-  let runtime = match args.iter().find_map(|a| a.strip_prefix("--runtime=")) {
-    Some("v8") => fink::runner::Runtime::V8,
-    Some("wasmtime") | None => fink::runner::Runtime::Wasmtime,
-    Some(other) => {
-      eprintln!("unknown runtime: {other} (expected v8 or wasmtime)");
-      process::exit(1);
-    }
-  };
-
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|cps|run> [--sourcemap] [--dbg[=brk]] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|run|dap> [--sourcemap] <file>");
       process::exit(1);
     }
   };
@@ -81,8 +66,7 @@ fn main() {
       }
     }
     "run" => {
-      let opts = fink::runner::RunOptions { runtime, debug: dbg, break_on_start: brk, inspect_port, ..Default::default() };
-      if let Err(e) = fink::runner::run_file(opts, path) {
+      if let Err(e) = fink::runner::run_file(Default::default(), path) {
         eprintln!("error: {e}");
         process::exit(1);
       }
@@ -95,7 +79,7 @@ fn main() {
     }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|cps|dap|run> [--dbg[=brk]] [--inspect-port=N] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|run|dap> <file>");
       process::exit(1);
     }
   }
