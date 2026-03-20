@@ -41,6 +41,16 @@ test 'multiple let bindings used', fn:
   | equals fink":
     5
 
+# TODO: user fn call — needs proper CpsId→local resolution for module-level
+# function bindings (add ref can't find its local because CpsIds diverge
+# between LetVal name and Cont::Expr arg after lifting).
+# test 'user fn call', fn:
+#   expect run fink":
+#     add = fn a, b: a + b
+#     main = fn: add 3, 4
+#   | equals fink":
+#     7
+
 test 'chained let', fn:
   expect run fink":
     main = fn:

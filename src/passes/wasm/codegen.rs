@@ -806,10 +806,30 @@ fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
       }
     }
 
-    ExprKind::LetFn { body, .. } => {
-      // The fn was already emitted at top level. Continue with body.
+    ExprKind::LetFn { name, body, .. } => {
+      // The fn was already emitted at top level.
+      // Create a FnClosure value for it and store in the cont arg's local,
+      // then continue with the body.
       match body {
-        Cont::Expr { body: cont_body, .. } => emit_expr(cont_body, f, fc),
+        Cont::Expr { args, body: cont_body } => {
+          // Create FnClosure { ref.func $fn, empty_caps }
+          if let Some(fn_idx) = fc.ctx.func_index(name.id) {
+            f.instruction(&Instruction::RefFunc(fn_idx));
+            f.instruction(&Instruction::ArrayNewFixed { array_type_index: TY_ANY_ARRAY, array_size: 0 });
+            f.instruction(&Instruction::StructNew(TY_FN_CLOSURE));
+            // Store in the local for the cont arg
+            if let Some(arg) = args.first() {
+              if let Some(local_idx) = fc.local_for(arg.id) {
+                f.instruction(&Instruction::LocalSet(local_idx));
+              } else {
+                f.instruction(&Instruction::Drop);
+              }
+            } else {
+              f.instruction(&Instruction::Drop);
+            }
+          }
+          emit_expr(cont_body, f, fc);
+        }
         Cont::Ref(_) => {
           f.instruction(&Instruction::Unreachable);
         }
@@ -864,8 +884,61 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], _expr_id: CpsId, f: &mut Func
       }
     }
 
-    _ => {
-      f.instruction(&Instruction::Unreachable);
+    Callable::Val(val) => {
+      let (val_args, cont_id) = split_app_args(args);
+
+      // Resolve the function reference to a known compiled function.
+      let target_fn_idx = match &val.kind {
+        ValKind::Ref(crate::passes::cps::ir::Ref::Name) => {
+          use crate::passes::name_res::Resolution;
+          let bind_id = match fc.ctx.resolve.resolution.try_get(val.id) {
+            Some(Some(Resolution::Local(id))) => Some(*id),
+            _ => None,
+          };
+          bind_id.and_then(|id| fc.ctx.func_index(id))
+            .or_else(|| {
+              // Fallback: try origin-based lookup
+              bind_id.and_then(|id| {
+                if let Some(Some(ast_id)) = fc.ctx.origin.try_get(id) {
+                  fc.ctx.funcs.iter().enumerate().find(|(_, cf)| {
+                    fc.ctx.origin.try_get(cf.name_id)
+                      .and_then(|o| o.as_ref())
+                      == Some(ast_id)
+                  }).map(|(i, _)| FN_COMPILED_START + i as u32)
+                } else { None }
+              })
+            })
+        }
+        ValKind::Ref(crate::passes::cps::ir::Ref::Synth(id)) => fc.ctx.func_index(*id),
+        _ => None,
+      };
+
+      if let Some(fn_idx) = target_fn_idx {
+        // Direct call: push all value args, then cont, then return_call.
+        for arg in &val_args {
+          emit_arg_val(arg, f, fc);
+        }
+        // Forward our cont as the callee's cont param.
+        f.instruction(&Instruction::LocalGet(fc.cont_local));
+        f.instruction(&Instruction::ReturnCall(fn_idx));
+      } else {
+        // Function is in a local (FnClosure). Unpack and call via return_call_ref.
+        // Push value args first, then cont, then unpack closure for funcref.
+        for arg in &val_args {
+          emit_arg_val(arg, f, fc);
+        }
+        // Push our cont (as anyref — the callee will unpack it).
+        f.instruction(&Instruction::LocalGet(fc.cont_local));
+        // Get the function closure from the resolved local.
+        emit_val(val, f, fc);  // pushes the FnClosure anyref
+        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_FN_CLOSURE)));
+        f.instruction(&Instruction::StructGet { struct_type_index: TY_FN_CLOSURE, field_index: 0 });
+        // Cast funcref to the right type based on arity (val_args + cont).
+        let call_arity = val_args.len() as u32 + 1;
+        let call_type = fc.ctx.type_for_arity(call_arity);
+        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(call_type)));
+        f.instruction(&Instruction::ReturnCallRef(call_type));
+      }
     }
   }
 }
@@ -1018,21 +1091,64 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
 
 fn build_fink_main(_root: &Expr<'_>, ctx: &Ctx) -> Function {
   // fink_main: no params, no results. Entry point.
-  // Calls the $__main function (or the first compiled fn) with a halt closure as cont.
+  //
+  // Calls $__main with a FnClosure as module cont. The module cont
+  // (implemented inline here) receives the `main` function value,
+  // then calls it with $__halt as the result cont.
+  //
+  // $__main defines all module-level bindings, then returns `main` fn value
+  // to its cont. The cont unpacks the fn and calls it.
+
+  // fink_main is TY_VOID, but we need locals for the invoke logic.
+  // We'll implement this as: call $__main with an invoke closure that
+  // calls the received fn with halt.
+  //
+  // For now, simpler: $__main's module cont is a $Cont that receives
+  // the main fn value (anyref = FnClosure). We make fink_main act as
+  // a wrapper that calls $__main, and $__main tail-calls its cont with
+  // the main fn value. The cont is our invoke fn.
+
+  // We need an $__invoke function that receives a fn value and calls it.
+  // But we don't have that yet. Simplest approach: make fink_main itself
+  // be the module cont callback.
+  //
+  // Actually, simplest: call $__main with a FnClosure whose fn is $__invoke.
+  // $__invoke receives (main_fn_value), unpacks it as FnClosure, calls it
+  // with halt as cont.
+  //
+  // But we don't have $__invoke. Let me just inline it.
+  // fink_main calls $__main(invoke_closure).
+  // invoke_closure = FnClosure { $__invoke, [halt_closure] }
+  // $__invoke receives (fn_value), gets halt from captures... no, FnClosure
+  // captures aren't implemented yet.
+  //
+  // Simplest possible: find `main` directly and call it.
+
   let mut f = Function::new([]);
 
-  // Find the main function — it takes 1 param (the cont)
-  let main_fn_idx = find_main_fn_index(&ctx.funcs)
-    .map(|i| FN_COMPILED_START + i as u32)
-    .unwrap_or(ctx.main_fn_index());
+  // Find the `main` entry function. It's the function body whose LetFn
+  // is followed by a LetVal binding named "main".
+  // For now: find the LetFn body whose name resolves to "main" via origin.
+  // The LetFn name is synthetic (·v_N), but the LetVal that follows binds
+  // it to "main". We look for the fn body that corresponds to a LetFn
+  // whose value eventually gets bound to "main".
+  //
+  // Simplification: use the first collected function whose fn_body
+  // takes exactly 1 param (the cont) — that's the `main = fn:` body.
+  // Multi-param fns like `add = fn a, b:` have arity > 1.
+  // TODO: proper "main" lookup by tracing LetVal bindings.
+  let main_fn = ctx.funcs.iter().enumerate().rev().find(|(_, cf)| cf.arity == 1 && cf.bind == Bind::Synth);
 
-  // cont: FnClosure { $__halt, [] }
-  f.instruction(&Instruction::RefFunc(FN_HALT));
-  f.instruction(&Instruction::ArrayNewFixed { array_type_index: TY_ANY_ARRAY, array_size: 0 });
-  f.instruction(&Instruction::StructNew(TY_FN_CLOSURE));
-
-  // Call main(cont)
-  f.instruction(&Instruction::Call(main_fn_idx));
+  if let Some((idx, _)) = main_fn {
+    let fn_idx = FN_COMPILED_START + idx as u32;
+    // Call main with halt closure as cont
+    f.instruction(&Instruction::RefFunc(FN_HALT));
+    f.instruction(&Instruction::ArrayNewFixed { array_type_index: TY_ANY_ARRAY, array_size: 0 });
+    f.instruction(&Instruction::StructNew(TY_FN_CLOSURE));
+    f.instruction(&Instruction::Call(fn_idx));
+  } else {
+    f.instruction(&Instruction::Unreachable);
+  }
 
   f.instruction(&Instruction::End);
   f
@@ -1082,10 +1198,13 @@ fn collect_letval_locals(expr: &Expr<'_>, out: &mut Vec<CpsId>) {
       collect_letval_locals(body, out);
     }
     ExprKind::LetVal { body: Cont::Ref(_), .. } => {}
-    ExprKind::LetFn { fn_body, body, .. } => {
-      // Don't recurse into fn_body — that's a separate function.
-      // Only recurse into the continuation body.
-      if let Cont::Expr { body: cont_body, .. } = body {
+    ExprKind::LetFn { body, .. } => {
+      // Don't recurse into fn_body — that's a separate WASM function.
+      // The LetFn's body cont may bind the function value.
+      if let Cont::Expr { args, body: cont_body } = body {
+        for arg in args {
+          out.push(arg.id);
+        }
         collect_letval_locals(cont_body, out);
       }
     }
@@ -1117,7 +1236,18 @@ fn discover_aliases(expr: &Expr<'_>, locals: &mut Vec<(CpsId, u32)>) {
         }
         current = cont_body;
       }
-      ExprKind::LetFn { body: Cont::Expr { body: cont_body, .. }, .. } => {
+      ExprKind::LetFn { body: Cont::Expr { args, body: cont_body }, .. } => {
+        // Map LetFn cont arg aliases (same as LetVal pattern).
+        // The Cont::Expr arg receives the function value.
+        // The LetVal that follows binds it to a name.
+        // Walk into cont_body to find and alias the LetVal name.
+        if let ExprKind::LetVal { name, .. } = &cont_body.kind {
+          if let Some(arg) = args.first() {
+            if let Some(local_idx) = locals.iter().find(|(id, _)| *id == arg.id).map(|(_, idx)| *idx) {
+              locals.push((name.id, local_idx));
+            }
+          }
+        }
         current = cont_body;
       }
       _ => break,
