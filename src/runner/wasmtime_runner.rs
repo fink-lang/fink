@@ -6,6 +6,7 @@
 use wasmtime::*;
 
 use super::RunOptions;
+use crate::passes::wasm::compile::{self, CompileOptions};
 
 pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
   let mut config = Config::new();
@@ -43,17 +44,9 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
   Ok(())
 }
 
-pub fn run_wat(opts: &RunOptions, wat_src: &str) -> Result<(), String> {
-  // Wasmtime can load WAT directly via Module::new, but we pre-parse here
-  // so we can embed DWARF when debugging (needed for LLDB source mapping).
-  let wasm = if opts.debug {
-    wat::Parser::new()
-      .generate_dwarf(wat::GenerateDwarf::Full)
-      .parse_str(None, wat_src)
-      .map_err(|e| e.to_string())?
-  } else {
-    wat::parse_str(wat_src).map_err(|e| e.to_string())?
-  };
+pub fn run_wat(opts: &RunOptions, path: Option<&str>, wat_src: &str) -> Result<(), String> {
+  let compile_opts = CompileOptions { debug: opts.debug, source_path: path };
+  let wasm = compile::wat_to_wasm(wat_src, &compile_opts)?;
   run(opts, &wasm)
 }
 

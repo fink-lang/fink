@@ -63,28 +63,24 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
   } else {
     let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
     match opts.runtime {
-      Runtime::Wasmtime => wasmtime_runner::run_wat(&opts, src),
+      Runtime::Wasmtime => wasmtime_runner::run_wat(&opts, Some(path), src),
       Runtime::V8 => run_wat_v8(opts, path, src),
     }
   }
 }
 
 fn run_wat_v8(opts: RunOptions, path: &str, wat_src: &str) -> Result<(), String> {
-  // In debug mode, embed DWARF so V8 can map WASM bytecode offsets → WAT source lines.
-  // Register the WAT source before compiling so the debug session can serve it via
-  // Debugger.getScriptSource when VSCode opens the source file.
+  // Register the WAT source before compiling so the debug session can serve it
+  // via Debugger.getScriptSource when VSCode opens the source file.
   if opts.debug {
     let wat_url = format!("file://{path}");
     inspector::register_wasm_source(&wat_url, wat_src);
   }
-  let wasm = if opts.debug {
-    wat::Parser::new()
-      .generate_dwarf(wat::GenerateDwarf::Full)
-      .parse_str(Some(std::path::Path::new(path)), wat_src)
-      .map_err(|e| e.to_string())?
-  } else {
-    wat::parse_str(wat_src).map_err(|e| e.to_string())?
+  let compile_opts = crate::passes::wasm::compile::CompileOptions {
+    debug: opts.debug,
+    source_path: Some(path),
   };
+  let wasm = crate::passes::wasm::compile::wat_to_wasm(wat_src, &compile_opts)?;
   run_v8(opts, &wasm)
 }
 
