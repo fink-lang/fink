@@ -10,7 +10,7 @@ fn main() {
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps> [--sourcemap] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [--sourcemap] <file>");
       process::exit(1);
     }
   };
@@ -75,9 +75,32 @@ fn main() {
         Err(e) => parse_error(&src, e),
       }
     }
+    "wat" => {
+      let result = fink::runner::compile_fnk(&src).unwrap_or_else(|e| {
+        eprintln!("error: {e}");
+        process::exit(1);
+      });
+      let wat = wasmprinter::print_bytes(&result.wasm).unwrap_or_else(|e| {
+        eprintln!("error: {e}");
+        process::exit(1);
+      });
+      println!("{wat}");
+    }
+    "run" => {
+      if let Err(e) = fink::runner::run_file(Default::default(), path) {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
+    "dap" => {
+      if let Err(e) = fink::dap::run(std::io::stdin(), std::io::stdout(), path) {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|cps> <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|wat|run|dap> <file>");
       process::exit(1);
     }
   }

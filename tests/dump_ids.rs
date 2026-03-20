@@ -11,38 +11,15 @@ fn dump_cps_ids() {
 
 fn indent(depth: usize) -> String { "  ".repeat(depth) }
 
-fn variant_name(e: &fink::passes::cps::ir::Expr) -> &'static str {
-    use fink::passes::cps::ir::ExprKind::*;
-    match &e.kind {
-        LetVal { .. } => "LetVal",
-        LetFn { .. } => "LetFn",
-        LetRec { .. } => "LetRec",
-        App { .. } => "App",
-        If { .. } => "If",
-        Panic => "Panic",
-        FailCont => "FailCont",
-        MatchLetVal { .. } => "MatchLetVal",
-        MatchApp { .. } => "MatchApp",
-        MatchIf { .. } => "MatchIf",
-        MatchValue { .. } => "MatchValue",
-        MatchSeq { .. } => "MatchSeq",
-        MatchNext { .. } => "MatchNext",
-        MatchDone { .. } => "MatchDone",
-        MatchNotDone { .. } => "MatchNotDone",
-        MatchRest { .. } => "MatchRest",
-        MatchRec { .. } => "MatchRec",
-        MatchField { .. } => "MatchField",
-        MatchBlock { .. } => "MatchBlock",
-        Yield { .. } => "Yield",
-    }
-}
-
 fn dump_val(v: &fink::passes::cps::ir::Val, depth: usize) {
     use fink::passes::cps::ir::ValKind::*;
     let i = indent(depth);
     match &v.kind {
         Ref(r) => println!("{i}Val(#{}) Ref({:?})", v.id.0, r),
         Lit(l) => println!("{i}Val(#{}) Lit({:?})", v.id.0, l),
+        Panic => println!("{i}Val(#{}) Panic", v.id.0),
+        ContRef(id) => println!("{i}Val(#{}) ContRef(#{})", v.id.0, id.0),
+        BuiltIn(op) => println!("{i}Val(#{}) BuiltIn({:?})", v.id.0, op),
     }
 }
 
@@ -67,19 +44,7 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                 dump_expr(inner, depth+1);
             }
         }
-        LetRec { bindings, body } => {
-            println!("{i}Expr(#{}) LetRec ({} bindings)", e.id.0, bindings.len());
-            for b in bindings {
-                let p: Vec<_> = b.params.iter().map(|p| format!("{:?}", p)).collect();
-                println!("{i}  binding {:?} [{}]:", b.name, p.join(", "));
-                dump_expr(&b.fn_body, depth+2);
-            }
-            println!("{i}  rec_body:");
-            if let fink::passes::cps::ir::Cont::Expr { body: inner, .. } = body {
-                dump_expr(inner, depth+1);
-            }
-        }
-        App { func, args, cont } => {
+        App { func, args } => {
             println!("{i}Expr(#{}) App", e.id.0);
             match func {
                 fink::passes::cps::ir::Callable::Val(v) => dump_val(v, depth+1),
@@ -89,11 +54,14 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
                 match a {
                     fink::passes::cps::ir::Arg::Val(v) => dump_val(v, depth+1),
                     fink::passes::cps::ir::Arg::Spread(v) => dump_val(v, depth+1),
+                    fink::passes::cps::ir::Arg::Cont(c) => {
+                        if let fink::passes::cps::ir::Cont::Expr { args: ca, body } = c {
+                            println!("{i}  cont args={:?}:", ca);
+                            dump_expr(body, depth+1);
+                        }
+                    }
+                    fink::passes::cps::ir::Arg::Expr(e) => dump_expr(e, depth+1),
                 }
-            }
-            if let fink::passes::cps::ir::Cont::Expr { arg: bind, body } = cont {
-                println!("{i}  cont bind={:?}:", bind);
-                dump_expr(body, depth+1);
             }
         }
         If { cond, then, else_ } => {
@@ -102,24 +70,13 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
             dump_expr(then, depth+1);
             dump_expr(else_, depth+1);
         }
-        Panic => println!("{i}Expr(#{}) Panic", e.id.0),
-        FailCont => println!("{i}Expr(#{}) FailCont", e.id.0),
-        MatchLetVal { name, val, fail, body } => {
-            println!("{i}Expr(#{}) MatchLetVal {:?}", e.id.0, name);
-            dump_val(val, depth+1);
-            dump_expr(fail, depth+1);
-            if let fink::passes::cps::ir::Cont::Expr { body: inner, .. } = body {
-                dump_expr(inner, depth+1);
-            }
-        }
         Yield { value, cont } => {
             println!("{i}Expr(#{}) Yield", e.id.0);
             dump_val(value, depth+1);
-            if let fink::passes::cps::ir::Cont::Expr { arg: bind, body } = cont {
-                println!("{i}  cont bind={:?}:", bind);
+            if let fink::passes::cps::ir::Cont::Expr { args, body } = cont {
+                println!("{i}  cont args={:?}:", args);
                 dump_expr(body, depth+1);
             }
         }
-        _ => println!("{i}Expr(#{}) <other:{}>", e.id.0, variant_name(e)),
     }
 }
