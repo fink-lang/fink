@@ -47,9 +47,10 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
   }
-  // Debug mode requires V8 (CDP inspector).
-  if opts.debug && opts.runtime != Runtime::V8 {
-    eprintln!("[fink] debug mode requires V8 runtime, switching to --runtime=v8");
+  // CDP inspector (break_on_start, WebSocket attach) requires V8.
+  // Wasmtime supports LLDB-based debugging via DWARF — no auto-switch needed.
+  if opts.break_on_start && opts.runtime != Runtime::V8 {
+    eprintln!("[fink] --dbg=brk requires V8 runtime, switching to --runtime=v8");
     opts.runtime = Runtime::V8;
   }
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
@@ -138,6 +139,7 @@ fn run_v8(opts: RunOptions, wasm: &[u8]) -> Result<(), String> {
       const mod = new WebAssembly.Module(__wasm_bytes);
       {brk}
       const inst = new WebAssembly.Instance(mod, imports);
+      if (inst.exports.fink_main) inst.exports.fink_main();
       const exportList = WebAssembly.Module.exports(mod)
         .map(e => `  ${{e.name}} (${{e.kind}})`)
         .join('\n');

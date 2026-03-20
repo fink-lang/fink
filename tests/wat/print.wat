@@ -1,12 +1,10 @@
-;; Calls imported env.print(i32) from a start function.
+;; Calls imported env.print(i32).
 ;; The host provides the print implementation.
 (module
   (import "env" "print" (func $print (param i32)))
 
-  (func $main
+  (func (export "fink_main")
     i32.const 42
     call $print
   )
-
-  (start $main)
 )
