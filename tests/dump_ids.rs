@@ -16,26 +16,9 @@ fn variant_name(e: &fink::passes::cps::ir::Expr) -> &'static str {
     match &e.kind {
         LetVal { .. } => "LetVal",
         LetFn { .. } => "LetFn",
-        LetRec { .. } => "LetRec",
         App { .. } => "App",
         If { .. } => "If",
-        Panic => "Panic",
-        FailCont => "FailCont",
-        MatchLetVal { .. } => "MatchLetVal",
-        MatchApp { .. } => "MatchApp",
-        MatchIf { .. } => "MatchIf",
-        MatchValue { .. } => "MatchValue",
-        MatchSeq { .. } => "MatchSeq",
-        MatchNext { .. } => "MatchNext",
-        MatchDone { .. } => "MatchDone",
-        MatchNotDone { .. } => "MatchNotDone",
-        MatchRest { .. } => "MatchRest",
-        MatchRec { .. } => "MatchRec",
-        MatchField { .. } => "MatchField",
-        MatchArm { .. } => "MatchArm",
-        MatchBlock { .. } => "MatchBlock",
         Yield { .. } => "Yield",
-        FailRef(_) => "FailRef",
     }
 }
 
@@ -47,6 +30,7 @@ fn dump_val(v: &fink::passes::cps::ir::Val, depth: usize) {
         Lit(l) => println!("{i}Val(#{}) Lit({:?})", v.id.0, l),
         Panic => println!("{i}Val(#{}) Panic", v.id.0),
         ContRef(id) => println!("{i}Val(#{}) ContRef(#{})", v.id.0, id.0),
+        BuiltIn(op) => println!("{i}Val(#{}) BuiltIn({:?})", v.id.0, op),
     }
 }
 
@@ -67,18 +51,6 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
             println!("{i}  fn_body:");
             dump_expr(fn_body, depth+2);
             println!("{i}  body:");
-            if let fink::passes::cps::ir::Cont::Expr { body: inner, .. } = body {
-                dump_expr(inner, depth+1);
-            }
-        }
-        LetRec { bindings, body } => {
-            println!("{i}Expr(#{}) LetRec ({} bindings)", e.id.0, bindings.len());
-            for b in bindings {
-                let p: Vec<_> = b.params.iter().map(|p| format!("{:?}", p)).collect();
-                println!("{i}  binding {:?} [{}]:", b.name, p.join(", "));
-                dump_expr(&b.fn_body, depth+2);
-            }
-            println!("{i}  rec_body:");
             if let fink::passes::cps::ir::Cont::Expr { body: inner, .. } = body {
                 dump_expr(inner, depth+1);
             }
@@ -108,16 +80,6 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
             dump_val(cond, depth+1);
             dump_expr(then, depth+1);
             dump_expr(else_, depth+1);
-        }
-        Panic => println!("{i}Expr(#{}) Panic", e.id.0),
-        FailCont => println!("{i}Expr(#{}) FailCont", e.id.0),
-        MatchLetVal { name, val, fail, body } => {
-            println!("{i}Expr(#{}) MatchLetVal {:?}", e.id.0, name);
-            dump_val(val, depth+1);
-            dump_expr(fail, depth+1);
-            if let fink::passes::cps::ir::Cont::Expr { body: inner, .. } = body {
-                dump_expr(inner, depth+1);
-            }
         }
         Yield { value, cont } => {
             println!("{i}Expr(#{}) Yield", e.id.0);

@@ -696,8 +696,8 @@ test 'group with binding — immediately-invoked ·closure', fn:
           ·let ·v_5, fn ni:
             ·ƒ_2 ni
       fn ·v_1:
-        ·apply ·v_1, fn ·v_13:
-          ·let ·v_13, fn spam:
+        ·apply ·v_1, fn ·v_12:
+          ·let ·v_12, fn spam:
             ·ƒ_0 spam
 
 ---

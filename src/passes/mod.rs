@@ -8,6 +8,5 @@ pub mod closure_capture;
 pub mod closure_lifting;
 pub mod cont_lifting;
 pub mod cps;
-pub mod match_lower;
 pub mod name_res;
 pub mod partial;

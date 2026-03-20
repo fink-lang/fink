@@ -160,7 +160,7 @@ test 'self recursion', fn:
     f = fn a:
       f a
   | equals fink":
-    (ref 4, f) == (recursive (bind 10, f)) in scope 15
+    (ref 4, f) == (recursive (bind 10, f)) in scope 14
     (ref 5, a) == (local (bind 2, a)) in scope 1
 
 test 'mutual recursion', fn:
@@ -341,9 +341,9 @@ test 'match arm binding used in arm body', fn:
       b: b + a
   | equals fink":
     (ref 5, x) == (local (bind 4, x)) in scope 1
-    (ref 13, a) == (local (bind 11, a)) in scope 18
-    (ref 25, b) == (local (bind 23, b)) in scope 32
-    (ref 26, a) == unresolved
+    (ref 13, a) == (local (bind 11, a)) in scope 1
+    (ref 24, b) == (local (bind 22, b)) in scope 1
+    (ref 25, a) == unresolved
 
 test 'binding inside match arm body', fn:
   expect cps_resolve fink":
@@ -354,7 +354,7 @@ test 'binding inside match arm body', fn:
         y
   | equals fink":
     (ref 5, x) == (local (bind 4, x)) in scope 1
-    (ref 13, a) == (local (bind 11, a)) in scope 20
+    (ref 13, a) == (local (bind 11, a)) in scope 1
 
 test 'fn in match arm captures outer', fn:
   expect cps_resolve fink":
@@ -363,7 +363,7 @@ test 'fn in match arm captures outer', fn:
       a: fn b: a
   | equals fink":
     (ref 5, x) == (local (bind 4, x)) in scope 1
-    (ref 16, a) == (captured 1, (bind 11, a)) in scope 23
+    (ref 16, a) == (captured 1, (bind 11, a)) in scope 1
 
 test 'spread param resolves locally', fn:
   expect cps_resolve fink":

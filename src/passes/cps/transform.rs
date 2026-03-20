@@ -837,7 +837,7 @@ fn lower_match<'src>(
     .collect();
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::MatchBlock { params, arm_params, arms: cps_arms, result,  origin });
+  pending.push(Pending::MatchBlock { params, arms: cps_arms, result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -893,8 +893,13 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
       // Matcher cont: [scrutinee_params..., fail_bind, succ_bind]
       // Pattern chain uses fail_bind.id for failure, succ_bind.id for success.
       let matcher_body = if arm_pending.is_empty() {
-        // Wildcard / no checks — matcher immediately calls succ (body cont).
-        g.expr(ExprKind::FailRef(succ_id), origin)
+        // Wildcard / no checks — matcher immediately jumps to succ.
+        // Empty App to succ cont — renders as `·apply ·ƒ_succ`.
+        let succ_val = g.val(ValKind::ContRef(succ_id), origin);
+        g.expr(ExprKind::App {
+          func: Callable::Val(succ_val),
+          args: vec![],
+        }, origin)
       } else {
         wrap_with_fail(g, arm_pending, Cont::Ref(succ_id), Some(fail_bind.id))
       };
@@ -903,7 +908,10 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
       matcher_args.push(succ_bind);
       let matcher = Cont::Expr { args: matcher_args, body: Box::new(matcher_body) };
 
-      g.expr(ExprKind::MatchArm { matcher, body: arm_body }, origin)
+      g.expr(ExprKind::App {
+        func: Callable::BuiltIn(BuiltIn::MatchArm),
+        args: vec![Arg::Cont(matcher), Arg::Cont(arm_body)],
+      }, origin)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
   }
@@ -948,7 +956,7 @@ enum Pending<'src> {
   Val { name: BindNode, val: Val<'src>, origin: Option<AstId> },
   Fn { name: BindNode, params: Vec<Param>, cont: BindNode, fn_body: Expr<'src>, origin: Option<AstId> },
   App { func: Callable<'src>, args: Vec<Arg<'src>>, result: BindNode, origin: Option<AstId> },
-  MatchBlock { params: Vec<Val<'src>>, arm_params: Vec<BindNode>, arms: Vec<Expr<'src>>, result: BindNode, origin: Option<AstId> },
+  MatchBlock { params: Vec<Val<'src>>, arms: Vec<Expr<'src>>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
   MatchBind { name: BindNode, val: Val<'src>, origin: Option<AstId> },
   /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
@@ -1030,10 +1038,10 @@ fn wrap_with_fail<'src>(
     Tail(Cont<'s>),
     Expr(Expr<'s>),
   }
-  let make_fail = |g: &mut Gen, origin: Option<AstId>| -> Expr<'src> {
+  let make_fail_val = |g: &mut Gen, origin: Option<AstId>| -> Val<'src> {
     match fail_id {
-      None     => g.expr(ExprKind::Panic, origin),
-      Some(id) => g.expr(ExprKind::FailRef(id), origin),
+      None     => g.val(ValKind::Panic, origin),
+      Some(id) => g.val(ValKind::ContRef(id), origin),
     }
   };
   let acc = bindings.into_iter().rev().fold(Acc::Tail(tail), |acc, pending| {
@@ -1063,78 +1071,126 @@ fn wrap_with_fail<'src>(
         ExprKind::App { func, args: { let mut a = args; a.push(Arg::Cont(cont_with_result(body_cont, result))); a } },
         origin,
       ),
-      Pending::MatchBlock { params, arm_params, arms, result, origin } => {
+      Pending::MatchBlock { params, arms, result, origin } => {
+        let mut mb_args: Vec<Arg<'src>> = params.into_iter().map(Arg::Val).collect();
+        for arm in arms {
+          mb_args.push(Arg::Expr(Box::new(arm)));
+        }
+        mb_args.push(Arg::Cont(cont_with_result(body_cont, result)));
         g.expr(
-          ExprKind::MatchBlock { params, arm_params, arms, cont: cont_with_result(body_cont, result) },
+          ExprKind::App { func: Callable::BuiltIn(BuiltIn::MatchBlock), args: mb_args },
           origin,
         )
       },
       Pending::MatchBind { name, val, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        // MatchLetVal → plain LetVal (fail is always Panic for irrefutable binds)
         g.expr(
-          ExprKind::MatchLetVal { name, val: Box::new(val), fail, body: body_cont },
+          ExprKind::LetVal { name, val: Box::new(val), body: body_cont },
           origin,
         )
       },
       Pending::MatchGuard { func, args, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
+        let func_val = match func {
+          Callable::Val(v) => v,
+          Callable::BuiltIn(op) => g.val(ValKind::BuiltIn(op), origin),
+        };
+        let mut new_args: Vec<Arg<'src>> = vec![Arg::Val(func_val)];
+        new_args.extend(args.into_iter().map(Arg::Val));
+        new_args.push(Arg::Val(fail_val));
+        new_args.push(Arg::Cont(body_cont));
         g.expr(
-          ExprKind::MatchIf { func, args, fail, body: body_cont },
+          ExprKind::App { func: Callable::BuiltIn(BuiltIn::MatchIf), args: new_args },
           origin,
         )
       },
       Pending::MatchValue { val, lit, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
+        let lit_val = g.val(ValKind::Lit(lit), origin);
         g.expr(
-          ExprKind::MatchValue { val: Box::new(val), lit, fail, body: body_cont },
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchValue),
+            args: vec![Arg::Val(val), Arg::Val(lit_val), Arg::Val(fail_val), Arg::Cont(body_cont)],
+          },
           origin,
         )
       },
       Pending::MatchSeq { val, cursor, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
         let body = match body_cont {
           Cont::Ref(_) => body_cont,
           Cont::Expr { body, .. } => Cont::Expr { args: vec![cursor], body },
         };
-        g.expr(ExprKind::MatchSeq { val: Box::new(val), fail, body }, origin)
+        g.expr(
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchSeq),
+            args: vec![Arg::Val(val), Arg::Val(fail_val), Arg::Cont(body)],
+          },
+          origin,
+        )
       },
       Pending::MatchNext { val, elem, next_cursor, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
         g.expr(
-          ExprKind::MatchNext { val: Box::new(val), fail, cont: cont_with_two_results(body_cont, elem, next_cursor) },
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchNext),
+            args: vec![Arg::Val(val), Arg::Val(fail_val), Arg::Cont(cont_with_two_results(body_cont, elem, next_cursor))],
+          },
           origin,
         )
       },
       Pending::MatchDone { val, result, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
         g.expr(
-          ExprKind::MatchDone { val: Box::new(val), fail, cont: cont_with_result(body_cont, result) },
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchDone),
+            args: vec![Arg::Val(val), Arg::Val(fail_val), Arg::Cont(cont_with_result(body_cont, result))],
+          },
           origin,
         )
       },
       Pending::MatchNotDone { val, origin } => {
-        let fail = Box::new(make_fail(g, origin));
-        g.expr(ExprKind::MatchNotDone { val: Box::new(val), fail, body: body_cont }, origin)
+        let fail_val = make_fail_val(g, origin);
+        g.expr(
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchNotDone),
+            args: vec![Arg::Val(val), Arg::Val(fail_val), Arg::Cont(body_cont)],
+          },
+          origin,
+        )
       },
       Pending::MatchRest { val, result, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
         g.expr(
-          ExprKind::MatchRest { val: Box::new(val), fail, cont: cont_with_result(body_cont, result) },
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchRest),
+            args: vec![Arg::Val(val), Arg::Val(fail_val), Arg::Cont(cont_with_result(body_cont, result))],
+          },
           origin,
         )
       },
       Pending::MatchRec { val, cursor, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
         let body = match body_cont {
           Cont::Ref(_) => body_cont,
           Cont::Expr { body, .. } => Cont::Expr { args: vec![cursor], body },
         };
-        g.expr(ExprKind::MatchRec { val: Box::new(val), fail, body }, origin)
+        g.expr(
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchRec),
+            args: vec![Arg::Val(val), Arg::Val(fail_val), Arg::Cont(body)],
+          },
+          origin,
+        )
       },
       Pending::MatchField { val, field, elem, next_cursor, origin } => {
-        let fail = Box::new(make_fail(g, origin));
+        let fail_val = make_fail_val(g, origin);
+        let field_val = g.val(ValKind::Lit(Lit::Str(field)), origin);
         g.expr(
-          ExprKind::MatchField { val: Box::new(val), field, fail, cont: cont_with_two_results(body_cont, elem, next_cursor) },
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchField),
+            args: vec![Arg::Val(val), Arg::Val(field_val), Arg::Val(fail_val), Arg::Cont(cont_with_two_results(body_cont, elem, next_cursor))],
+          },
           origin,
         )
       },

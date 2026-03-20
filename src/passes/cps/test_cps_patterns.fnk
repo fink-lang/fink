@@ -390,12 +390,12 @@ test 'match block bind', fn:
           ·let 2, fn ·v_10:
             ·ƒ_8 ·v_10
       ·match_arm
-        fn ·v_17, ·ƒ_15, ·ƒ_16:
-          ·let ·v_17, fn x:
-            ·ƒ_16 x
-        fn x, ·ƒ_20:
-          ·let x, fn ·v_22:
-            ·ƒ_20 ·v_22
+        fn ·v_18, ·ƒ_16, ·ƒ_17:
+          ·let ·v_18, fn x:
+            ·ƒ_17 x
+        fn x, ·ƒ_21:
+          ·let x, fn ·v_23:
+            ·ƒ_21 ·v_23
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -448,16 +448,16 @@ test 'match literal arms', fn:
           ·let 'one', fn ·v_10:
             ·ƒ_8 ·v_10
       ·match_arm
-        fn ·v_17, ·ƒ_15, ·ƒ_16:
-          ·match_value ·v_17, 2, ·ƒ_15, fn: ·ƒ_16 _
-        fn ·ƒ_20:
-          ·let 'two', fn ·v_22:
-            ·ƒ_20 ·v_22
+        fn ·v_18, ·ƒ_16, ·ƒ_17:
+          ·match_value ·v_18, 2, ·ƒ_16, fn: ·ƒ_17 _
+        fn ·ƒ_21:
+          ·let 'two', fn ·v_23:
+            ·ƒ_21 ·v_23
       ·match_arm
-        fn ·v_29, ·ƒ_27, ·ƒ_28: ·ƒ_28 _
-        fn ·ƒ_31:
-          ·let 'other', fn ·v_33:
-            ·ƒ_31 ·v_33
+        fn ·v_31, ·ƒ_29, ·ƒ_30: ·ƒ_30 _
+        fn ·ƒ_33:
+          ·let 'other', fn ·v_35:
+            ·ƒ_33 ·v_35
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -475,11 +475,11 @@ test 'match — expression in arm', fn:
           ·apply ·op_plus, y, 1, fn ·v_8:
             ·ƒ_8 ·v_8
       ·match_arm
-        fn ·v_19, ·ƒ_17, ·ƒ_18:
-          ·match_value ·v_19, false, ·ƒ_17, fn: ·ƒ_18 _
-        fn ·ƒ_22:
-          ·let y, fn ·v_24:
-            ·ƒ_22 ·v_24
+        fn ·v_20, ·ƒ_18, ·ƒ_19:
+          ·match_value ·v_20, false, ·ƒ_18, fn: ·ƒ_19 _
+        fn ·ƒ_23:
+          ·let y, fn ·v_25:
+            ·ƒ_23 ·v_25
       fn ·v_0: ·ƒ_0 ·v_0
 
 
@@ -561,17 +561,17 @@ test 'multi-arm match', fn:
           ·let a, fn ·v_17:
             ·ƒ_15 ·v_17
       ·match_arm
-        fn ·v_33, ·ƒ_31, ·ƒ_32:
-          ·match_seq ·v_33, ·ƒ_31, fn ·v_35:
-            ·match_next ·v_35, ·ƒ_31, fn ·v_36, ·v_37:
-              ·let ·v_36, fn a:
-                ·match_next ·v_37, ·ƒ_31, fn ·v_41, ·v_42:
-                  ·let ·v_41, fn b:
-                    ·match_done ·v_42, ·ƒ_31, fn ·v_32:
-                      ·ƒ_32 ·v_32
-        fn a, b, ·ƒ_48:
-          ·let a, fn ·v_50:
-            ·ƒ_48 ·v_50
+        fn ·v_32, ·ƒ_30, ·ƒ_31:
+          ·match_seq ·v_32, ·ƒ_30, fn ·v_34:
+            ·match_next ·v_34, ·ƒ_30, fn ·v_35, ·v_36:
+              ·let ·v_35, fn a:
+                ·match_next ·v_36, ·ƒ_30, fn ·v_40, ·v_41:
+                  ·let ·v_40, fn b:
+                    ·match_done ·v_41, ·ƒ_30, fn ·v_31:
+                      ·ƒ_31 ·v_31
+        fn a, b, ·ƒ_47:
+          ·let a, fn ·v_49:
+            ·ƒ_47 ·v_49
       fn ·v_0: ·ƒ_0 ·v_0
 
 

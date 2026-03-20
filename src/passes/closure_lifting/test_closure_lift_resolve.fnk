@@ -42,9 +42,9 @@ test 'captured var resolves as local after lift', fn:
         a + b
 
   | equals fink":
-    (ref 7, a) == (local (bind 21, a)) in scope 23
-    (ref 8, b) == (local (bind 5, b)) in scope 23
-    (ref 22, a) == (local (bind 2, a)) in scope 1
+    (ref 7, a) == (local (bind 20, a)) in scope 22
+    (ref 8, b) == (local (bind 5, b)) in scope 22
+    (ref 21, a) == (local (bind 2, a)) in scope 1
 
 
 ---
@@ -64,9 +64,9 @@ test 'depth-2: all captured vars resolve as local after lift', fn:
           a + b + c
 
   | equals fink":
-    (ref 33, a) == (local (bind 43, a)) in scope 45
-    (ref 34, b) == (local (bind 5, b)) in scope 45
-    (ref 10, a) == (local (bind 31, a)) in scope 35
-    (ref 11, b) == (local (bind 32, b)) in scope 35
-    (ref 14, c) == (local (bind 8, c)) in scope 35
-    (ref 44, a) == (local (bind 2, a)) in scope 1
+    (ref 32, a) == (local (bind 42, a)) in scope 44
+    (ref 33, b) == (local (bind 5, b)) in scope 44
+    (ref 10, a) == (local (bind 30, a)) in scope 34
+    (ref 11, b) == (local (bind 31, b)) in scope 34
+    (ref 14, c) == (local (bind 8, c)) in scope 34
+    (ref 43, a) == (local (bind 2, a)) in scope 1

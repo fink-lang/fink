@@ -106,10 +106,6 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       Expr { id: expr.id, kind: LetFn { name, params, cont, fn_body: Box::new(fn_body), body } }
     }
 
-    LetRec { bindings, body } => {
-      let body = recurse_cont(body, alloc);
-      Expr { id: expr.id, kind: LetRec { bindings, body } }
-    }
 
     If { cond, then, else_ } => {
       let then  = lift_expr(*then, alloc);
@@ -117,56 +113,10 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       Expr { id: expr.id, kind: If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
 
-    Panic | FailCont | FailRef(_) => expr,
-
-    MatchLetVal { name, val, fail, body } => {
-      let body = recurse_cont(body, alloc);
-      Expr { id: expr.id, kind: MatchLetVal { name, val, fail, body } }
-    }
-
-    MatchApp { func, args, fail, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchApp { func, args, fail, cont }),
-
-    MatchIf { func, args, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchIf { func, args, fail, body }),
-
-    MatchValue { val, lit, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchValue { val, lit, fail, body }),
-
-    MatchSeq { val, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchSeq { val, fail, body }),
-
-    MatchNext { val, fail, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchNext { val, fail, cont }),
-
-    MatchDone { val, fail, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchDone { val, fail, cont }),
-
-    MatchNotDone { val, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchNotDone { val, fail, body }),
-
-    MatchRest { val, fail, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchRest { val, fail, cont }),
-
-    MatchRec { val, fail, body } =>
-      hoist_cont(expr.id, body, alloc, |body| MatchRec { val, fail, body }),
-
-    MatchField { val, field, fail, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| MatchField { val, field, fail, cont }),
-
-    MatchArm { matcher, body } => {
-      let matcher = recurse_cont(matcher, alloc);
-      hoist_cont(expr.id, body, alloc, |body| MatchArm { matcher, body })
-    }
-
-    MatchBlock { params, arm_params, arms, cont } => {
-      let arms = arms.into_iter().map(|arm| lift_expr(arm, alloc)).collect();
-      hoist_cont(expr.id, cont, alloc, |cont| MatchBlock { params, arm_params, arms, cont })
-    }
   }
 }
 
-/// Recurse into a `Cont` without hoisting — for `body:` fields on `LetVal`/`LetFn`/`LetRec`
+/// Recurse into a `Cont` without hoisting — for `body:` fields on `LetVal`/`LetFn`
 /// where the continuation is lexical sequencing, not a call result closure.
 fn recurse_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'src> {
   match cont {
