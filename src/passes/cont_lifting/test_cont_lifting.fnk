@@ -257,7 +257,7 @@ test 'MatchBlock — cont body hoisted to LetFn', fn:
     ·fn
       fn x, ·ƒ_3:
         ·fn
-          fn ·v_18, ·ƒ_65:
+          fn ·v_18, ·ƒ_73:
             ·fn
               fn ·v_32, ·ƒ_61:
                 ·fn
@@ -269,21 +269,33 @@ test 'MatchBlock — cont body hoisted to LetFn', fn:
                     ·match_block x, ·v_18, ·v_32, fn ·v_56:
                       ·ƒ_56 ·v_56
               fn ·ƒ_60:
-                ·match_arm
-                  fn ·v_22, ·ƒ_20, ·ƒ_21:
-                    ·match_value ·v_22, 2, ·ƒ_20, fn: ·ƒ_21 _
-                  fn ·ƒ_25:
+                ·fn
+                  fn ·ƒ_25, ·ƒ_64:
                     ·let 20, fn ·v_27:
                       ·ƒ_25 ·v_27
-                  fn ·v_60: ·ƒ_60 ·v_60
-          fn ·ƒ_64:
-            ·match_arm
-              fn ·v_8, ·ƒ_6, ·ƒ_7:
-                ·match_value ·v_8, 1, ·ƒ_6, fn: ·ƒ_7 _
-              fn ·ƒ_11:
+                  fn ·ƒ_63:
+                    ·fn
+                      fn ·v_22, ·ƒ_20, ·ƒ_21, ·ƒ_67:
+                        ·match_value ·v_22, 2, ·ƒ_20, fn: ·ƒ_21 _
+                      fn ·ƒ_66:
+                        ·match_arm
+                          fn ·v_66: ·ƒ_66 ·v_66
+                          fn ·v_63: ·ƒ_63 ·v_63
+                          fn ·v_60: ·ƒ_60 ·v_60
+          fn ·ƒ_72:
+            ·fn
+              fn ·ƒ_11, ·ƒ_76:
                 ·let 10, fn ·v_13:
                   ·ƒ_11 ·v_13
-              fn ·v_64: ·ƒ_64 ·v_64
+              fn ·ƒ_75:
+                ·fn
+                  fn ·v_8, ·ƒ_6, ·ƒ_7, ·ƒ_79:
+                    ·match_value ·v_8, 1, ·ƒ_6, fn: ·ƒ_7 _
+                  fn ·ƒ_78:
+                    ·match_arm
+                      fn ·v_78: ·ƒ_78 ·v_78
+                      fn ·v_75: ·ƒ_75 ·v_75
+                      fn ·v_72: ·ƒ_72 ·v_72
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -314,14 +326,24 @@ test 'MatchBlock — chained App inside arm body hoisted to LetFn', fn:
                 ·match_block n, ·v_27, fn ·v_44:
                   ·ƒ_44 ·v_44
           fn ·ƒ_48:
-            ·match_arm
-              fn ·v_8, ·ƒ_6, ·ƒ_7: ·ƒ_7 _
-              fn ·ƒ_10:
-                ·op_plus 1, 2, fn ·v_13:
-                  ·let ·v_13, fn x:
-                    ·op_plus x, 3, fn ·v_10:
-                      ·ƒ_10 ·v_10
-              fn ·v_48: ·ƒ_48 ·v_48
+            ·fn
+              fn ·ƒ_10, ·ƒ_56:
+                ·fn
+                  fn ·v_13, ·ƒ_52:
+                    ·let ·v_13, fn x:
+                      ·op_plus x, 3, fn ·v_10:
+                        ·ƒ_10 ·v_10
+                  fn ·ƒ_51:
+                    ·op_plus 1, 2, fn ·v_51:
+                      ·ƒ_51 ·v_51
+              fn ·ƒ_55:
+                ·fn
+                  fn ·v_8, ·ƒ_6, ·ƒ_7, ·ƒ_59: ·ƒ_7 _
+                  fn ·ƒ_58:
+                    ·match_arm
+                      fn ·v_58: ·ƒ_58 ·v_58
+                      fn ·v_55: ·ƒ_55 ·v_55
+                      fn ·v_48: ·ƒ_48 ·v_48
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main

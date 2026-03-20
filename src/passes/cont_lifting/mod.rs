@@ -85,7 +85,7 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       // contains the App with remaining args — lift_expr is called on it
       // inside hoist_cont, which recursively hoists the next Arg::Cont.
       // Arg::Expr entries are recursed into via lift_expr on the inner App.
-      match args.iter().rposition(|a| matches!(a, Arg::Cont(_))) {
+      match args.iter().rposition(|a| matches!(a, Arg::Cont(Cont::Expr { .. }))) {
         Some(idx) => {
           let cont = match args.remove(idx) {
             Arg::Cont(c) => c,
