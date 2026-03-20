@@ -87,9 +87,15 @@ fn main() {
         process::exit(1);
       }
     }
+    "dap" => {
+      if let Err(e) = fink::dap::run(std::io::stdin(), std::io::stdout(), path) {
+        eprintln!("error: {e}");
+        process::exit(1);
+      }
+    }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|cps|run> [--dbg[=brk]] [--inspect-port=N] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|cps|dap|run> [--dbg[=brk]] [--inspect-port=N] <file>");
       process::exit(1);
     }
   }
