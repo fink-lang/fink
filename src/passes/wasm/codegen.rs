@@ -690,6 +690,9 @@ fn build_fink_fn<'a, 'b, 'src>(
     }
     locals.push((func_info.cont_id, cont_local));
   }
+  // Walk LetVal alias chains: `LetVal { name: x, val: Ref(Synth(param_id)) }`
+  // means `x` is an alias for the param. Map x's CpsId to the same local.
+  discover_aliases(body, &mut locals);
 
   let mut fc = FnCtx { local_count: arity, cont_local, locals, code_idx, ctx, rel };
   emit_expr(body, &mut f, &mut fc);
@@ -1031,6 +1034,31 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
       collect_funcs(cont_body, ctx);
     }
     _ => {}
+  }
+}
+
+/// Walk a function body's LetVal chain to discover aliases.
+/// After cont_lifting, param values are often rebound: `·let ·v_N, fn x: ...`
+/// where `·v_N` is Ref(Synth(param_id)). This means `x` (name.id) is an alias
+/// for the param at local index of param_id.
+fn discover_aliases(expr: &Expr<'_>, locals: &mut Vec<(CpsId, u32)>) {
+  let mut current = expr;
+  loop {
+    match &current.kind {
+      ExprKind::LetVal { name, val, body: Cont::Expr { body: cont_body, .. } } => {
+        // Check if val is a Ref to an existing local
+        if let ValKind::Ref(crate::passes::cps::ir::Ref::Synth(ref_id)) = &val.kind {
+          if let Some(local_idx) = locals.iter().find(|(id, _)| id == ref_id).map(|(_, idx)| *idx) {
+            locals.push((name.id, local_idx));
+          }
+        }
+        current = cont_body;
+      }
+      ExprKind::LetFn { body: Cont::Expr { body: cont_body, .. }, .. } => {
+        current = cont_body;
+      }
+      _ => break,
+    }
   }
 }
 
