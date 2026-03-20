@@ -499,6 +499,7 @@ pub fn attach(
 
   // Block until the debugger connects.
   let ws = wait_for_ws(port)?;
+  eprintln!("[fink] debugger connected");
   ws.get_ref().set_read_timeout(Some(std::time::Duration::from_millis(5))).ok();
   *WS.lock().unwrap() = Some(ws);
 
@@ -508,6 +509,7 @@ pub fn attach(
 
   // Create the CDP session.
   let channel = Channel::new(Box::new(WsChannel));
+  eprintln!("[fink] creating CDP session");
   let session = Box::new(inspector.connect(
     1,
     channel,
@@ -522,7 +524,9 @@ pub fn attach(
 
   // Pump handshake messages synchronously on the main thread until VSCode
   // sends Runtime.runIfWaitingForDebugger. Safe: no JS executes, no interrupts.
+  eprintln!("[fink] pumping handshake...");
   pump_until_ready();
+  eprintln!("[fink] handshake complete, debugger ready");
 
   // Store main thread handle for park/unpark from reader thread and quit callback.
   *MAIN_THREAD.lock().unwrap() = Some(std::thread::current());
@@ -609,6 +613,7 @@ fn pump_until_ready() {
         // NodeWorker and other unknown domains get synthetic methodNotFound.
         // Everything else goes directly to V8 (safe during handshake).
         let method = extract_json_str(&text, "method").unwrap_or("");
+        eprintln!("[fink] handshake ← {method}");
         let domain = method.split('.').next().unwrap_or("");
         let v8_domains = ["Debugger", "Runtime", "Profiler", "HeapProfiler"];
         if !domain.is_empty() && !v8_domains.contains(&domain) {
@@ -645,8 +650,9 @@ fn wait_for_ws(port: u16) -> Result<WebSocket<TcpStream>, String> {
   let listener =
     TcpListener::bind(("127.0.0.1", port)).map_err(|e| e.to_string())?;
 
-  eprintln!("Waiting for debugger on ws://localhost:{port}");
-  eprintln!("VSCode launch.json: {{\"type\":\"node\",\"request\":\"attach\",\"websocketAddress\":\"ws://localhost:{port}\"}}");
+  // Node.js-compatible format — VSCode's Node debugger parses stderr for
+  // exactly "Debugger listening on ws://..." before it attempts to attach.
+  eprintln!("Debugger listening on ws://127.0.0.1:{port}/fink");
 
   loop {
     let (stream, _addr) = listener.accept().map_err(|e| e.to_string())?;

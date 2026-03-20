@@ -42,11 +42,12 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
     opts.source_label = path.to_string();
   }
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-  if path.ends_with(".wat") {
+  // WASM binaries start with magic bytes \0asm; everything else is WAT text.
+  if bytes.starts_with(b"\0asm") {
+    run(opts, &bytes)
+  } else {
     let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
     run_wat(opts, path, src)
-  } else {
-    run(opts, &bytes)
   }
 }
 
