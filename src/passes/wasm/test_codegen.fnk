@@ -8,3 +8,38 @@ test 'literal int', fn:
       42
   | equals fink":
     42
+
+test 'let binding', fn:
+  expect run fink":
+    main = fn:
+      x = 42
+      x
+  | equals fink":
+    42
+
+test 'add two literals', fn:
+  expect run fink":
+    main = fn:
+      2 + 3
+  | equals fink":
+    5
+
+# TODO: chained arithmetic needs origin map preservation through cont_lifting.
+# After lifting, refs resolve to bind-site CpsIds that don't match the lifted
+# param CpsIds. Fix: cont_lifting should copy origin entries to new params.
+# test 'chained arithmetic', fn:
+#   expect run fink":
+#     main = fn:
+#       x = 2 * 3
+#       x + 4
+#   | equals fink":
+#     10
+
+test 'chained let', fn:
+  expect run fink":
+    main = fn:
+      x = 2
+      y = 3
+      y
+  | equals fink":
+    3

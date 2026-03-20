@@ -49,10 +49,10 @@ pub struct CodegenResult {
 /// Compile fully-lifted CPS IR to WASM binary with source mappings.
 pub fn codegen(
   cps: &CpsResult,
-  _resolve: &ResolveResult,
+  resolve: &ResolveResult,
   ast_index: &PropGraph<AstId, Option<&AstNode<'_>>>,
 ) -> CodegenResult {
-  let mut ctx = Ctx::new(&cps.origin, ast_index);
+  let mut ctx = Ctx::new(&cps.origin, ast_index, resolve);
 
   // Collect all top-level functions from the CPS tree.
   collect_funcs(&cps.root, &mut ctx);
@@ -101,7 +101,11 @@ struct CollectedFn<'a, 'src> {
   name_id: CpsId,
   bind: Bind,
   fn_body: &'a Expr<'src>,
-  /// Number of parameters (value params + cont). Derived from LetFn's params vec.
+  /// CpsIds of the params (value params), in order.
+  param_ids: Vec<CpsId>,
+  /// CpsId of the cont param.
+  cont_id: CpsId,
+  /// Total arity (value params + cont).
   arity: u32,
 }
 
@@ -127,6 +131,7 @@ struct Ctx<'a, 'src> {
   relative_mappings: Vec<RelativeMapping>,
   origin: &'a PropGraph<CpsId, Option<AstId>>,
   ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
+  resolve: &'a ResolveResult,
   /// Collected top-level functions (LetFn nodes), in order.
   funcs: Vec<CollectedFn<'a, 'src>>,
   /// Map from arity (number of params including cont) to type index.
@@ -138,8 +143,9 @@ impl<'a, 'src> Ctx<'a, 'src> {
   fn new(
     origin: &'a PropGraph<CpsId, Option<AstId>>,
     ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
+    resolve: &'a ResolveResult,
   ) -> Self {
-    Self { mappings: Vec::new(), relative_mappings: Vec::new(), origin, ast_index, funcs: Vec::new(), arity_types: Vec::new() }
+    Self { mappings: Vec::new(), relative_mappings: Vec::new(), origin, ast_index, resolve, funcs: Vec::new(), arity_types: Vec::new() }
   }
 
   /// Get the type index for a function with the given arity (total params including cont).
@@ -668,12 +674,24 @@ fn build_fink_fn<'a, 'b, 'src>(
   ctx: &'a Ctx<'b, 'src>,
   rel: &mut Vec<RelativeMapping>,
 ) -> Function {
-  // Function params are all anyref: N value params + (possibly) 1 cont param.
+  // Function params are all anyref: N value params + 1 cont param.
   // The last param (index arity-1) is the cont.
-  // No additional locals needed for now (no array unpacking).
   let mut f = Function::new([]);
   let cont_local = if arity > 0 { arity - 1 } else { 0 };
-  let mut fc = FnCtx { local_count: arity, cont_local, code_idx, ctx, rel };
+
+  // Build CpsId → local index mapping from collected function params.
+  let mut locals = Vec::new();
+  if let Some(func_info) = ctx.funcs.iter().find(|cf| {
+    // Match by fn_body pointer — the collected fn whose body we're building
+    std::ptr::eq(cf.fn_body as *const _, body as *const _)
+  }) {
+    for (i, &param_id) in func_info.param_ids.iter().enumerate() {
+      locals.push((param_id, i as u32));
+    }
+    locals.push((func_info.cont_id, cont_local));
+  }
+
+  let mut fc = FnCtx { local_count: arity, cont_local, locals, code_idx, ctx, rel };
   emit_expr(body, &mut f, &mut fc);
   f.instruction(&Instruction::End);
   f
@@ -683,11 +701,37 @@ struct FnCtx<'a, 'b, 'src> {
   local_count: u32,
   /// Local index of the continuation parameter (last param).
   cont_local: u32,
+  /// Map from CpsId to WASM local index (for params and locals).
+  locals: Vec<(CpsId, u32)>,
   /// Index of this function in the code section (0-based, matching code_idx in RelativeMapping).
   code_idx: u32,
   ctx: &'a Ctx<'b, 'src>,
   /// Mutable reference to the relative mappings vec (owned by emit_code_section).
   rel: &'a mut Vec<RelativeMapping>,
+}
+
+impl FnCtx<'_, '_, '_> {
+  /// Look up the WASM local index for a CpsId.
+  fn local_for(&self, id: CpsId) -> Option<u32> {
+    self.locals.iter().find(|(cps_id, _)| *cps_id == id).map(|(_, idx)| *idx)
+  }
+
+  /// Look up a WASM local by matching AST origin of the target bind_id
+  /// against the AST origins of the function's params.
+  /// Used as fallback when CpsIds don't match after lifting passes.
+  fn local_for_by_origin(&self, bind_id: CpsId) -> Option<u32> {
+    // Get the AST origin of the target binding.
+    let target_ast_id = self.ctx.origin.try_get(bind_id)?.as_ref()?;
+    // Search locals for a param with the same AST origin.
+    for &(local_cps_id, local_idx) in &self.locals {
+      if let Some(Some(local_ast_id)) = self.ctx.origin.try_get(local_cps_id) {
+        if local_ast_id == target_ast_id {
+          return Some(local_idx);
+        }
+      }
+    }
+    None
+  }
 }
 
 impl FnCtx<'_, '_, '_> {
@@ -739,15 +783,119 @@ fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
       }
     }
 
-    ExprKind::App { .. } => {
-      // TODO: App codegen
-      f.instruction(&Instruction::Unreachable);
+    ExprKind::App { func, args } => {
+      emit_app(func, args, expr.id, f, fc);
     }
 
     _ => {
       f.instruction(&Instruction::Unreachable);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// App emission
+// ---------------------------------------------------------------------------
+
+fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], _expr_id: CpsId, f: &mut Function, fc: &mut FnCtx) {
+  use crate::passes::cps::ir::BuiltIn::*;
+
+  match func {
+    Callable::BuiltIn(op) => {
+      // Separate value args from the trailing cont.
+      let (val_args, cont) = split_app_args(args);
+
+      match op {
+        // Binary i31ref arithmetic: unwrap, compute, rewrap, pass to cont
+        Add | Sub | Mul => {
+          emit_arg_val(&val_args[0], f, fc);
+          f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+          f.instruction(&Instruction::I31GetS);
+          emit_arg_val(&val_args[1], f, fc);
+          f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+          f.instruction(&Instruction::I31GetS);
+          match op {
+            Add => f.instruction(&Instruction::I32Add),
+            Sub => f.instruction(&Instruction::I32Sub),
+            Mul => f.instruction(&Instruction::I32Mul),
+            _ => unreachable!(),
+          };
+          f.instruction(&Instruction::RefI31);
+          // Result is on stack as anyref — pass to cont
+          emit_cont_call_with_anyref(cont, f, fc);
+        }
+
+        _ => {
+          f.instruction(&Instruction::Unreachable);
+        }
+      }
+    }
+
+    _ => {
+      f.instruction(&Instruction::Unreachable);
+    }
+  }
+}
+
+/// Split App args into (value_args, cont_id).
+/// The last Arg::Cont is the result continuation.
+fn split_app_args<'a, 'src>(args: &'a [Arg<'src>]) -> (Vec<&'a Arg<'src>>, CpsId) {
+  let mut val_args = Vec::new();
+  let mut cont_id = None;
+  for arg in args.iter().rev() {
+    match arg {
+      Arg::Cont(Cont::Ref(id)) if cont_id.is_none() => cont_id = Some(*id),
+      Arg::Cont(Cont::Expr { .. }) if cont_id.is_none() => {
+        // Inline cont — shouldn't happen after cont_lifting
+        panic!("unexpected inline cont in App after cont_lifting");
+      }
+      _ => val_args.push(arg),
+    }
+  }
+  val_args.reverse();
+  (val_args, cont_id.expect("App must have a result cont"))
+}
+
+/// Emit an Arg as a value onto the WASM stack.
+fn emit_arg_val(arg: &Arg<'_>, f: &mut Function, fc: &FnCtx) {
+  match arg {
+    Arg::Val(val) => emit_val(val, f, fc),
+    _ => {
+      f.instruction(&Instruction::Unreachable);
+    }
+  }
+}
+
+/// Tail-call a cont with the anyref value already on the stack.
+fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &FnCtx) {
+  // Check if cont_id refers to a known compiled function.
+  if let Some(fn_idx) = fc.ctx.func_index(cont_id) {
+    // The target function may need additional params beyond the result value.
+    // Cont-lifted functions take (value_params..., cont). We need to forward
+    // our own cont so the callee can eventually return to it.
+    let target_idx = fc.ctx.funcs.iter().position(|cf| cf.name_id == cont_id);
+    if let Some(idx) = target_idx {
+      let target_arity = fc.ctx.funcs[idx].arity;
+      if target_arity > 1 {
+        // Target takes (result, cont) — forward our cont.
+        f.instruction(&Instruction::LocalGet(fc.cont_local));
+        f.instruction(&Instruction::ReturnCall(fn_idx));
+        return;
+      }
+    }
+    // Arity 1 (just result) — no cont needed.
+    f.instruction(&Instruction::ReturnCall(fn_idx));
+    return;
+  }
+
+  // Unknown cont — the $cont param. Unpack FnClosure and tail-call.
+  // Stack has: [anyref(result)]
+  // Need: [anyref(result), (ref $Cont)]
+  f.instruction(&Instruction::LocalGet(fc.cont_local));
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_FN_CLOSURE)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_FN_CLOSURE, field_index: 0 });
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_CONT)));
+  f.instruction(&Instruction::ReturnCallRef(TY_CONT));
 }
 
 // ---------------------------------------------------------------------------
@@ -762,7 +910,7 @@ fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: 
   // Check if cont_id refers to a known compiled function.
   if let Some(fn_idx) = fc.ctx.func_index(cont_id) {
     // Direct call: push value, return_call
-    emit_val(val, f);
+    emit_val(val, f, fc);
     f.instruction(&Instruction::ReturnCall(fn_idx));
     return;
   }
@@ -770,7 +918,7 @@ fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: 
   // Unknown cont — it's the $cont param. Conts are anyref (FnClosure at runtime).
   // Unpack FnClosure → funcref, then call with the value.
   // Cont type is TY_CONT = (func (param anyref)).
-  emit_val(val, f);              // push the result value
+  emit_val(val, f, fc);              // push the result value
   f.instruction(&Instruction::LocalGet(fc.cont_local));  // push cont (anyref)
   f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_FN_CLOSURE)));
   f.instruction(&Instruction::StructGet { struct_type_index: TY_FN_CLOSURE, field_index: 0 });
@@ -783,10 +931,9 @@ fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: 
 // Value emission
 // ---------------------------------------------------------------------------
 
-fn emit_val(val: &Val<'_>, f: &mut Function) {
+fn emit_val(val: &Val<'_>, f: &mut Function, fc: &FnCtx) {
   match &val.kind {
     ValKind::Lit(Lit::Int(n)) => {
-      // Small ints → i31ref
       f.instruction(&Instruction::I32Const(*n as i32));
       f.instruction(&Instruction::RefI31);
     }
@@ -794,8 +941,35 @@ fn emit_val(val: &Val<'_>, f: &mut Function) {
       f.instruction(&Instruction::I32Const(if *b { 1 } else { 0 }));
       f.instruction(&Instruction::RefI31);
     }
+    ValKind::Ref(r) => {
+      // Reference to a bound value — resolve to bind-site CpsId, then look up WASM local.
+      let bind_id = match r {
+        crate::passes::cps::ir::Ref::Synth(id) => *id,
+        crate::passes::cps::ir::Ref::Name => {
+          // Use name resolution to find the bind-site CpsId.
+          use crate::passes::name_res::Resolution;
+          match fc.ctx.resolve.resolution.try_get(val.id) {
+            Some(Some(Resolution::Local(bind_id))) => *bind_id,
+            Some(Some(Resolution::Captured { bind, .. })) => *bind,
+            _ => val.id,  // fallback
+          }
+        }
+      };
+      if let Some(local_idx) = fc.local_for(bind_id) {
+        f.instruction(&Instruction::LocalGet(local_idx));
+      } else {
+        // Fallback: match by AST origin.
+        // After lifting, CpsIds change but AST origins are preserved.
+        if let Some(local_idx) = fc.local_for_by_origin(bind_id) {
+          f.instruction(&Instruction::LocalGet(local_idx));
+        } else {
+          // TODO: cont_lifting creates params with no origin map entries.
+          // Fix: copy origin entries to new params during lifting.
+          f.instruction(&Instruction::Unreachable);
+        }
+      }
+    }
     _ => {
-      // Placeholder for other value kinds
       f.instruction(&Instruction::I32Const(0));
       f.instruction(&Instruction::RefI31);
     }
@@ -834,12 +1008,18 @@ fn build_fink_main(_root: &Expr<'_>, ctx: &Ctx) -> Function {
 
 fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
   match &expr.kind {
-    ExprKind::LetFn { name, params, fn_body, body, .. } => {
+    ExprKind::LetFn { name, params, cont, fn_body, body } => {
+      let param_ids: Vec<CpsId> = params.iter().map(|p| match p {
+        crate::passes::cps::ir::Param::Name(b) => b.id,
+        crate::passes::cps::ir::Param::Spread(b) => b.id,
+      }).collect();
       ctx.funcs.push(CollectedFn {
         name_id: name.id,
         bind: name.kind,
         fn_body,
         arity: params.len() as u32 + 1,  // +1 for the cont param
+        param_ids,
+        cont_id: cont.id,
       });
       // Recurse into fn_body for nested LetFns
       collect_funcs(fn_body, ctx);
@@ -881,8 +1061,10 @@ mod tests {
     let ast_index = build_index(&r);
     let cps = lower_expr(&r.root);
     let cps = lift(cps);
-    let (lifted, resolved) = lift_all(cps, &ast_index);
+    let (lifted, _) = lift_all(cps, &ast_index);
     let lifted = lift(lifted);
+    // Re-resolve after all lifting passes so refs map to final params.
+    let resolved = crate::passes::name_res::resolve(&lifted.root, &lifted.origin, &ast_index, lifted.origin.len());
     codegen(&lifted, &resolved, &ast_index).wasm
   }
 
