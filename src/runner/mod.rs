@@ -37,7 +37,7 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
 }
 
 /// Compile Fink source → WAT text through the full pipeline.
-fn compile_fnk(src: &str) -> Result<String, String> {
+pub fn compile_fnk(src: &str) -> Result<String, String> {
   use crate::ast::build_index;
   use crate::parser::parse;
   use crate::passes::closure_lifting::lift_all;

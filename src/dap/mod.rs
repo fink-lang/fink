@@ -139,22 +139,31 @@ pub fn run<R: Read, W: Write>(
   eprintln!("[fink dap] starting for: {program}");
   let mut server = Server::new(BufReader::new(input), BufWriter::new(output));
 
-  // Load the WAT/WASM file.
-  let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
-  let wasm = if bytes.starts_with(b"\0asm") {
-    bytes
+  // Load or compile the program.
+  let (wasm, source_file) = if program.ends_with(".fnk") {
+    // Fink source: compile through the full pipeline.
+    let src = std::fs::read_to_string(program).map_err(|e| e.to_string())?;
+    let wat = crate::runner::compile_fnk(&src)?;
+    let wasm = compile::wat_to_wasm(&wat, &CompileOptions::default())?;
+    (wasm, program.to_string())
   } else {
-    let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
-    compile::wat_to_wasm(src, &CompileOptions::default())?
+    let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
+    let wasm = if bytes.starts_with(b"\0asm") {
+      bytes
+    } else {
+      let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
+      compile::wat_to_wasm(src, &CompileOptions::default())?
+    };
+    let fnk_path = find_fnk_source(program);
+    let source_file = fnk_path.as_deref().unwrap_or(program).to_string();
+    (wasm, source_file)
   };
-
-  // Find sibling .fnk source file (test scaffolding).
-  let fnk_path = find_fnk_source(program);
-  let source_file = fnk_path.as_deref().unwrap_or(program).to_string();
 
   // Set up Wasmtime with debug support.
   let mut config = wasmtime::Config::new();
   config.wasm_gc(true);
+  config.wasm_tail_call(true);
+  config.wasm_function_references(true);
   config.guest_debug(true);
   config.cranelift_opt_level(wasmtime::OptLevel::None);
 
