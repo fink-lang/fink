@@ -82,10 +82,11 @@ const TY_FUNC_START: u32 = 6;
 
 // No imports for now — all builtins are defined in the module.
 const FN_HALT: u32 = 0;              // $__halt
-const FN_CALL_CLOSURE: u32 = 1;      // $__call_closure
+const FN_CALL_CLOSURE: u32 = 1;      // $__call_closure (placeholder)
+const FN_INVOKE: u32 = 2;            // $__invoke — receives main fn value, calls it with halt
 
 /// First index available for compiled Fink functions.
-const FN_COMPILED_START: u32 = 2;  // after $__halt and $__call_closure
+const FN_COMPILED_START: u32 = 3;  // after builtins
 
 // ---------------------------------------------------------------------------
 // Global indices
@@ -271,6 +272,7 @@ fn emit_name_section(module: &mut Module, ctx: &Ctx) {
   let mut func_names = NameMap::new();
   func_names.append(FN_HALT, "__halt");
   func_names.append(FN_CALL_CLOSURE, "__call_closure");
+  func_names.append(FN_INVOKE, "__invoke");
 
   for (i, collected) in ctx.funcs.iter().enumerate() {
     let idx = FN_COMPILED_START + i as u32;
@@ -424,6 +426,8 @@ fn emit_function_section(module: &mut Module, ctx: &Ctx) {
   funcs.function(TY_CONT);
   // $__call_closure — placeholder (unused for now)
   funcs.function(TY_CONT);
+  // $__invoke — receives main fn value (FnClosure), calls it with halt
+  funcs.function(TY_CONT);
 
   // Compiled Fink functions — each has its own arity-based type
   for (i, _) in ctx.funcs.iter().enumerate() {
@@ -473,7 +477,7 @@ fn emit_elem_section(module: &mut Module, ctx: &Ctx) {
   let mut elems = ElementSection::new();
 
   // Collect all function indices that are used via ref.func.
-  let mut refs = vec![FN_HALT];  // $__halt is always needed
+  let mut refs = vec![FN_HALT, FN_INVOKE];  // builtins always needed
 
   // Add the main entry function
   let main_fn = find_main_fn_index(&ctx.funcs);
@@ -512,6 +516,9 @@ fn emit_code_section<'a, 'src>(root: &'a Expr<'src>, module: &mut Module, ctx: &
 
   // $__call_closure (code_idx 1)
   code.function(&build_call_closure());
+
+  // $__invoke (code_idx 2)
+  code.function(&build_invoke());
 
   // Compiled Fink functions (code_idx 2..)
   let n_funcs = ctx.funcs.len();
@@ -659,6 +666,34 @@ fn build_call_closure() -> Function {
 
   let mut f = Function::new([]);
   f.instruction(&Instruction::Unreachable);
+  f.instruction(&Instruction::End);
+  f
+}
+
+// ---------------------------------------------------------------------------
+// Built-in: $__invoke — receives main fn value, calls it with halt cont
+// ---------------------------------------------------------------------------
+
+fn build_invoke() -> Function {
+  // $__invoke: (param $main_fn anyref)
+  // Unpacks $main_fn as FnClosure, calls it with halt as cont.
+  // main = fn: <body> takes 1 param (cont), so we call it with halt.
+  let mut f = Function::new([]);
+
+  // Build halt closure: FnClosure { $__halt, [] }
+  f.instruction(&Instruction::RefFunc(FN_HALT));
+  f.instruction(&Instruction::ArrayNewFixed { array_type_index: TY_ANY_ARRAY, array_size: 0 });
+  f.instruction(&Instruction::StructNew(TY_FN_CLOSURE));
+
+  // Unpack main_fn (param 0) as FnClosure → get funcref
+  f.instruction(&Instruction::LocalGet(0));
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_FN_CLOSURE)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_FN_CLOSURE, field_index: 0 });
+  // Cast to $Cont (main takes 1 param = cont)
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_CONT)));
+  // Stack: [halt_closure, funcref] → return_call_ref $Cont
+  f.instruction(&Instruction::ReturnCallRef(TY_CONT));
+
   f.instruction(&Instruction::End);
   f
 }
@@ -879,6 +914,35 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], _expr_id: CpsId, f: &mut Func
           emit_cont_call_with_anyref(cont, f, fc);
         }
 
+        // FnClosure construction: (fn_ref, cap1, cap2, ...) → FnClosure struct
+        // val_args[0] = Ref to the compiled function (need ref.func for it)
+        // val_args[1..] = capture values to pack into the captures array
+        FnClosure => {
+          let fn_ref_val = match val_args.first() {
+            Some(Arg::Val(v)) => Some(v),
+            _ => None,
+          };
+          let fn_idx = fn_ref_val.and_then(|v| resolve_val_to_func(v, fc));
+
+          if let Some(fn_idx) = fn_idx {
+            // struct.new $FnClosure pops (funcref, caps_array) — push in order
+            f.instruction(&Instruction::RefFunc(fn_idx));
+            let caps = &val_args[1..];
+            for cap in caps {
+              emit_arg_val(cap, f, fc);
+            }
+            f.instruction(&Instruction::ArrayNewFixed {
+              array_type_index: TY_ANY_ARRAY,
+              array_size: caps.len() as u32,
+            });
+            f.instruction(&Instruction::StructNew(TY_FN_CLOSURE));
+            // Pass the FnClosure to the result cont
+            emit_cont_call_with_anyref(cont, f, fc);
+          } else {
+            f.instruction(&Instruction::Unreachable);
+          }
+        }
+
         _ => {
           f.instruction(&Instruction::Unreachable);
         }
@@ -941,6 +1005,32 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], _expr_id: CpsId, f: &mut Func
         f.instruction(&Instruction::ReturnCallRef(call_type));
       }
     }
+  }
+}
+
+/// Resolve a Val reference to a compiled function index.
+fn resolve_val_to_func(val: &Val<'_>, fc: &FnCtx) -> Option<u32> {
+  match &val.kind {
+    ValKind::Ref(crate::passes::cps::ir::Ref::Synth(id)) => fc.ctx.func_index(*id),
+    ValKind::Ref(crate::passes::cps::ir::Ref::Name) => {
+      use crate::passes::name_res::Resolution;
+      let bind_id = match fc.ctx.resolve.resolution.try_get(val.id) {
+        Some(Some(Resolution::Local(id))) => Some(*id),
+        Some(Some(Resolution::Captured { bind, .. })) => Some(*bind),
+        _ => None,
+      };
+      bind_id.and_then(|id| fc.ctx.func_index(id))
+        .or_else(|| {
+          // Origin-based fallback
+          bind_id.and_then(|id| {
+            let target_ast = fc.ctx.origin.try_get(id)?.as_ref()?;
+            fc.ctx.funcs.iter().enumerate().find(|(_, cf)| {
+              fc.ctx.origin.try_get(cf.name_id).and_then(|o| o.as_ref()) == Some(target_ast)
+            }).map(|(i, _)| FN_COMPILED_START + i as u32)
+          })
+        })
+    }
+    _ => None,
   }
 }
 
@@ -1067,16 +1157,10 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
       };
       if let Some(local_idx) = fc.local_for(bind_id) {
         f.instruction(&Instruction::LocalGet(local_idx));
+      } else if let Some(local_idx) = fc.local_for_by_origin(bind_id) {
+        f.instruction(&Instruction::LocalGet(local_idx));
       } else {
-        // Fallback: match by AST origin.
-        // After lifting, CpsIds change but AST origins are preserved.
-        if let Some(local_idx) = fc.local_for_by_origin(bind_id) {
-          f.instruction(&Instruction::LocalGet(local_idx));
-        } else {
-          // TODO: cont_lifting creates params with no origin map entries.
-          // Fix: copy origin entries to new params during lifting.
-          f.instruction(&Instruction::Unreachable);
-        }
+        f.instruction(&Instruction::Unreachable);
       }
     }
     _ => {
@@ -1127,29 +1211,57 @@ fn build_fink_main(_root: &Expr<'_>, ctx: &Ctx) -> Function {
 
   let mut f = Function::new([]);
 
-  // Find the `main` entry function. It's the function body whose LetFn
-  // is followed by a LetVal binding named "main".
-  // For now: find the LetFn body whose name resolves to "main" via origin.
-  // The LetFn name is synthetic (·v_N), but the LetVal that follows binds
-  // it to "main". We look for the fn body that corresponds to a LetFn
-  // whose value eventually gets bound to "main".
+  // Call $__main with an invoke closure as the module cont.
+  // $__main defines all module-level bindings and passes the `main` fn
+  // value to its cont. The invoke closure receives the fn value, unpacks
+  // it, and calls it with $__halt as the result cont.
   //
-  // Simplification: use the first collected function whose fn_body
-  // takes exactly 1 param (the cont) — that's the `main = fn:` body.
-  // Multi-param fns like `add = fn a, b:` have arity > 1.
-  // TODO: proper "main" lookup by tracing LetVal bindings.
-  let main_fn = ctx.funcs.iter().enumerate().rev().find(|(_, cf)| cf.arity == 1 && cf.bind == Bind::Synth);
+  // For now: $__main's cont is a FnClosure wrapping $__invoke.
+  // $__invoke: receives (main_fn_value), unpacks FnClosure, calls it with halt.
+  // But we don't have $__invoke as a separate function yet.
+  //
+  // Simplest: use $__main directly. Its cont (TY_CONT = param anyref)
+  // receives the main fn value. We need fink_main to BE the module cont:
+  //   fink_main calls __main(FnClosure{__invoke, []}),
+  //   __invoke receives main_fn_value, calls main_fn(FnClosure{__halt, []})
+  //
+  // We need __invoke. Let me add it as a builtin.
+  // For now, inline it: find the main function and call it directly.
 
-  if let Some((idx, _)) = main_fn {
-    let fn_idx = FN_COMPILED_START + idx as u32;
-    // Call main with halt closure as cont
-    f.instruction(&Instruction::RefFunc(FN_HALT));
-    f.instruction(&Instruction::ArrayNewFixed { array_type_index: TY_ANY_ARRAY, array_size: 0 });
-    f.instruction(&Instruction::StructNew(TY_FN_CLOSURE));
-    f.instruction(&Instruction::Call(fn_idx));
-  } else {
-    f.instruction(&Instruction::Unreachable);
-  }
+  // Actually, simplest approach that works: call $__main with halt.
+  // $__main will define add, define main, then pass `main` to halt.
+  // halt receives a FnClosure — that's wrong, halt expects i31ref.
+  //
+  // We need $__invoke between $__main and $__halt.
+  // $__invoke: (param anyref) — receives main fn, calls it with halt cont.
+  // It's a $Cont type.
+
+  // Emit __invoke inline: it's the fink_main_index + 1 (but we don't have a slot).
+  // Cleaner: add __invoke as a builtin.
+  // For now: build the invoke logic right here in fink_main.
+
+  // fink_main is TY_VOID (no params). We can use a local to hold the main fn value.
+  // But fink_main calls __main, which tail-calls its cont. The cont is __invoke.
+  // __invoke is a separate function (TY_CONT).
+  //
+  // We need to emit __invoke. Let me add it to the code section.
+  //
+  // Actually the simplest is: fink_main is NOT void — it receives nothing
+  // from outside, but it creates invoke_closure and passes it to __main.
+  // The invoke closure, when called with main_fn_value, unpacks it and calls main.
+
+  // I'll add __invoke to the builtins. For now, just call __main with halt
+  // and note that this only works for `main = fn: <expr>` where main has no args.
+  // TODO: add __invoke for proper module entry.
+
+  // Build invoke closure: FnClosure { $__invoke, [] }
+  // __invoke receives main fn value and calls it with halt.
+  f.instruction(&Instruction::RefFunc(FN_INVOKE));
+  f.instruction(&Instruction::ArrayNewFixed { array_type_index: TY_ANY_ARRAY, array_size: 0 });
+  f.instruction(&Instruction::StructNew(TY_FN_CLOSURE));
+
+  // Call __main(invoke_closure)
+  f.instruction(&Instruction::Call(ctx.main_fn_index()));
 
   f.instruction(&Instruction::End);
   f
