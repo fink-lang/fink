@@ -6,7 +6,7 @@
 //
 // Selected via `--runtime=v8|wasmtime` (default: wasmtime).
 
-pub mod inspector;
+pub mod v8_inspector;
 pub mod v8_runner;
 pub mod wasmtime_runner;
 

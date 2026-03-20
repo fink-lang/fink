@@ -5,7 +5,7 @@
 
 use std::sync::OnceLock;
 
-use super::inspector;
+use super::v8_inspector as inspector;
 use super::RunOptions;
 
 /// V8 platform must be initialised exactly once per process.
