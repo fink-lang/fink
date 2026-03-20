@@ -360,3 +360,62 @@ fn wat_name(id: CpsId, bind: Bind) -> String {
     Bind::Cont => format!("$__cont_{}", id.0),
   }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+  use wasmtime::{Config, Engine, Linker, Module, Store};
+
+  use crate::ast::build_index;
+  use crate::parser::parse;
+  use crate::passes::closure_lifting::lift_all;
+  use crate::passes::cont_lifting::lift;
+  use crate::passes::cps::transform::lower_expr;
+  use super::codegen;
+
+  fn compile_wat(src: &str) -> String {
+    let r = parse(src).expect("parse failed");
+    let ast_index = build_index(&r);
+    let cps = lower_expr(&r.root);
+    let cps = lift(cps);
+    let (lifted, resolved) = lift_all(cps, &ast_index);
+    let lifted = lift(lifted);
+    codegen(&lifted, &resolved, &ast_index).wat
+  }
+
+  fn run(src: &str) -> i32 {
+    let wat = compile_wat(src);
+    exec_wat(&wat)
+  }
+
+  fn exec_wat(wat: &str) -> i32 {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config).expect("engine");
+    let module = Module::new(&engine, wat).expect("module");
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.func_wrap("env", "print", |v: i32| { println!("{v}"); })
+      .expect("define print");
+
+    let instance = linker.instantiate(&mut store, &module).expect("instance");
+    let main = instance.get_func(&mut store, "fink_main").expect("fink_main");
+    main.call(&mut store, &[], &mut []).expect("call fink_main");
+    let result = instance.get_global(&mut store, "result").expect("result");
+    match result.get(&mut store) {
+      wasmtime::Val::I32(v) => v,
+      v => panic!("expected i32 result, got {:?}", v),
+    }
+  }
+
+  #[test]
+  fn literal_int() {
+    assert_eq!(run("main = fn: 42"), 42);
+  }
+}
