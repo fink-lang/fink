@@ -133,6 +133,9 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ValKind::Lit(lit) => lit_to_node(lit),
     ValKind::Ref(Ref::Name) => ident(&render_ref_name_ctx(v.id, ctx)),
     ValKind::Ref(Ref::Synth(bind_id)) => ident(&format!("·v_{}", bind_id.0)),
+    ValKind::Panic => ident("·panic"),
+    ValKind::ContRef(id) => ident(&format!("·ƒ_{}", id.0)),
+    ValKind::BuiltIn(op) => ident(&render_builtin(op)),
   }
 }
 
@@ -246,6 +249,19 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
     BuiltIn::FnClosure => "·fn_closure".into(),
+    // Pattern matching primitives
+    BuiltIn::MatchValue   => "·match_value".into(),
+    BuiltIn::MatchSeq     => "·match_seq".into(),
+    BuiltIn::MatchNext    => "·match_next".into(),
+    BuiltIn::MatchDone    => "·match_done".into(),
+    BuiltIn::MatchNotDone => "·match_not_done".into(),
+    BuiltIn::MatchRest    => "·match_rest".into(),
+    BuiltIn::MatchRec     => "·match_rec".into(),
+    BuiltIn::MatchField   => "·match_field".into(),
+    BuiltIn::MatchIf      => "·match_if".into(),
+    BuiltIn::MatchApp     => "·match_app".into(),
+    BuiltIn::MatchBlock   => "·match_block".into(),
+    BuiltIn::MatchArm     => "·match_arm".into(),
   }
 }
 
@@ -261,7 +277,8 @@ fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let params: Vec<Node<'static>> = args.iter()
         .map(|b| ident(&render_bind_ctx(b, ctx)))
         .collect();
-      fn_node(patterns(params), vec![to_node(body, ctx)])
+      let body_node = to_node(body, ctx);
+      fn_node(patterns(params), vec![body_node])
     }
     Cont::Ref(cont_id) => {
       // Cosmetic: synthesise `fn ·v_N: ·ƒ_N ·v_N`.
@@ -289,23 +306,6 @@ fn render_cont_body(cont: &Cont<'_>, bound_name: &str, ctx: &Ctx<'_, '_>) -> Nod
   }
 }
 
-/// Render a `body: Cont` field that introduces a cursor binding — used for
-/// MatchSeq and MatchRec, where the cont's single arg is the outgoing cursor.
-fn render_cont_with_cursor(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
-  match cont {
-    Cont::Expr { args, body } => {
-      let cursor_name = render_bind_ctx(&args[0], ctx);
-      fn_node(patterns(vec![ident(&cursor_name)]), vec![to_node(body, ctx)])
-    }
-    Cont::Ref(cont_id) => {
-      let result_name = format!("·v_{}", cont_id.0);
-      let cont_name = format!("·ƒ_{}", cont_id.0);
-      let body = apply(ident(&cont_name), vec![ident(&result_name)]);
-      result_cont(&result_name, body)
-    }
-  }
-}
-
 /// Render a `body: Cont` field as a plain expression for use in a no-arg `fn:` lambda
 /// (e.g. MatchIf, MatchValue, MatchSeq, MatchNotDone, MatchRec).
 /// - `Cont::Expr { body, .. }` → render `body`.
@@ -315,9 +315,11 @@ fn render_cont_as_expr(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { body, .. } => to_node(body, ctx),
     Cont::Ref(cont_id) => {
-      // Should not normally occur for body-only conts, but handle gracefully.
-      let cont_name = format!("·ƒ_{}", cont_id.0);
-      ident(&cont_name)
+      // A bare cont ref in a no-arg body position means "call this cont".
+      // Render as `·ƒ_N _` — an application with a wildcard arg, since
+      // a bare `·ƒ_N` is just a reference in Fink syntax, not a call.
+      // Use a single ident token (with space) so the pretty-printer keeps it inline.
+      ident(&format!("·ƒ_{} _", cont_id.0))
     }
   }
 }
@@ -327,28 +329,6 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::Yield { value, cont } => {
       let cont_node = render_cont(cont, ctx);
       apply(ident("·yield"), vec![val_to_node(value, ctx), cont_node])
-    }
-
-    ExprKind::Panic => ident("·panic"),
-    ExprKind::FailCont => ident("·ƒ_fail"),
-
-    ExprKind::MatchBlock { params, arm_params, fail, arms, cont } => {
-      let result_fn = render_cont(cont, ctx);
-      let fail_node = to_node(fail, ctx);
-      let arm_nodes: Vec<Node<'static>> = arms.iter().map(|arm| {
-        let mut fn_params: Vec<Node<'static>> = arm_params.iter()
-          .map(|p| ident(&render_bind_ctx(p, ctx)))
-          .collect();
-        fn_params.extend([ident("·ƒ_cont"), ident("·ƒ_fail")]);
-        fn_node(patterns(fn_params), vec![to_node(arm, ctx)])
-      }).collect();
-      let mut args: Vec<Node<'static>> = params.iter().map(|v| val_to_node(v, ctx)).collect();
-      args.push(fail_node);
-      args.extend(arm_nodes.iter().map(|n| {
-        apply(ident("·match_branch"), vec![n.clone()])
-      }));
-      args.push(result_fn);
-      apply(ident("·match_block"), args)
     }
 
     ExprKind::LetVal { name, val, body } => {
@@ -393,20 +373,52 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       ])
     }
 
-    ExprKind::App { func, args, cont } => {
-      let result_fn = render_cont(cont, ctx);
-      let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
-        Arg::Val(v) => val_to_node(v, ctx),
-        Arg::Spread(v) => spread_node(val_to_node(v, ctx)),
-      }).collect();
+    ExprKind::App { func, args } => {
+      // No-arg call to a cont — render as `·ƒ_N _` (tail jump, no value).
+      if args.is_empty() {
+        let func_node = match func {
+          Callable::Val(func_val) => val_to_node(func_val, ctx),
+          Callable::BuiltIn(op) => ident(&render_builtin(op)),
+        };
+        return apply(func_node, vec![ident("_")]);
+      }
       let func_node = match func {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
         Callable::BuiltIn(op) => ident(&render_builtin(op)),
       };
-      let mut apply_args: Vec<Node<'static>> = vec![func_node];
-      apply_args.extend(arg_nodes);
-      apply_args.push(result_fn);
-      apply(ident("·apply"), apply_args)
+      // Match builtins with no-arg body use render_cont_as_expr (renders as `fn: body`).
+      let is_noarg_match = matches!(func, Callable::BuiltIn(
+        BuiltIn::MatchValue | BuiltIn::MatchNotDone | BuiltIn::MatchIf
+      ));
+      // Match builtins render as `·match_* args, cont` (no ·apply prefix).
+      let is_match_builtin = is_noarg_match || matches!(func, Callable::BuiltIn(
+        BuiltIn::MatchSeq | BuiltIn::MatchNext |
+        BuiltIn::MatchDone | BuiltIn::MatchRest |
+        BuiltIn::MatchRec | BuiltIn::MatchField |
+        BuiltIn::MatchApp | BuiltIn::MatchBlock | BuiltIn::MatchArm
+      ));
+      if is_match_builtin {
+        // Match builtins: render all args inline (Arg::Cont renders as lambdas).
+        // For no-arg match builtins, the last Arg::Cont uses render_cont_as_expr.
+        let arg_nodes: Vec<Node<'static>> = args.iter().enumerate().map(|(i, a)| match a {
+          Arg::Val(v) => val_to_node(v, ctx),
+          Arg::Spread(v) => spread_node(val_to_node(v, ctx)),
+          Arg::Cont(c) if is_noarg_match && i == args.len() - 1 =>
+            state_fn(render_cont_as_expr(c, ctx)),
+          Arg::Cont(c) => render_cont(c, ctx),
+          Arg::Expr(e) => to_node(e, ctx),
+        }).collect();
+        apply(func_node, arg_nodes)
+      } else {
+        // Regular App: all args render normally (last Arg::Cont is the result cont).
+        let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
+          Arg::Val(v) => val_to_node(v, ctx),
+          Arg::Spread(v) => spread_node(val_to_node(v, ctx)),
+          Arg::Cont(c) => render_cont(c, ctx),
+          Arg::Expr(e) => to_node(e, ctx),
+        }).collect();
+        apply(func_node, arg_nodes)
+      }
     }
 
     ExprKind::If { cond, then, else_ } => {
@@ -417,96 +429,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       ])
     }
 
-    ExprKind::LetRec { .. } => unreachable!("LetRec should not reach the formatter before SCC analysis"),
 
-    ExprKind::MatchLetVal { name, val, body, .. } => {
-      let plain = render_bind_ctx(name, ctx);
-      let body_node = render_cont_body(body, &plain, ctx);
-      apply(ident("·let"), vec![
-        val_to_node(val, ctx),
-        fn_node(patterns(vec![ident(&plain)]), vec![body_node]),
-      ])
-    }
-
-    ExprKind::MatchApp { func, args, fail, cont } => {
-      let cont_node = render_cont(cont, ctx);
-      let fail_node = to_node(fail, ctx);
-      let func_node = match func {
-        Callable::Val(func_val) => val_to_node(func_val, ctx),
-        Callable::BuiltIn(op) => ident(&render_builtin(op)),
-      };
-      let mut apply_args = vec![func_node];
-      apply_args.extend(args.iter().map(|v| val_to_node(v, ctx)));
-      apply_args.push(fail_node);
-      apply_args.push(cont_node);
-      apply(ident("·match_apply"), apply_args)
-    }
-
-    ExprKind::MatchIf { func, args, fail, body } => {
-      let body_inner = render_cont_as_expr(body, ctx);
-      let cont = fn_node(patterns(vec![]), vec![body_inner]);
-      let fail_node = to_node(fail, ctx);
-      let func_node = match func {
-        Callable::Val(func_val) => val_to_node(func_val, ctx),
-        Callable::BuiltIn(op) => ident(&render_builtin(op)),
-      };
-      let mut apply_args = vec![func_node];
-      apply_args.extend(args.iter().map(|v| val_to_node(v, ctx)));
-      apply_args.push(fail_node);
-      apply_args.push(cont);
-      apply(ident("·match_if"), apply_args)
-    }
-
-    ExprKind::MatchValue { val, lit, fail, body } => {
-      let body_inner = render_cont_as_expr(body, ctx);
-      let cont = fn_node(patterns(vec![]), vec![body_inner]);
-      let fail_node = to_node(fail, ctx);
-      apply(ident("·match_value"), vec![val_to_node(val, ctx), lit_to_node(lit), fail_node, cont])
-    }
-
-    ExprKind::MatchSeq { val, fail, body } => {
-      let cont = render_cont_with_cursor(body, ctx);
-      let fail_node = to_node(fail, ctx);
-      apply(ident("·match_seq"), vec![val_to_node(val, ctx), fail_node, cont])
-    }
-
-    ExprKind::MatchNext { val, fail, cont } => {
-      let fail_node = to_node(fail, ctx);
-      let cont_node = render_cont(cont, ctx);
-      apply(ident("·match_next"), vec![val_to_node(val, ctx), fail_node, cont_node])
-    }
-
-    ExprKind::MatchDone { val, fail, cont } => {
-      let cont_node = render_cont(cont, ctx);
-      let fail_node = to_node(fail, ctx);
-      apply(ident("·match_done"), vec![val_to_node(val, ctx), fail_node, cont_node])
-    }
-
-    ExprKind::MatchNotDone { val, fail, body } => {
-      let body_inner = render_cont_as_expr(body, ctx);
-      let cont = fn_node(patterns(vec![]), vec![body_inner]);
-      let fail_node = to_node(fail, ctx);
-      apply(ident("·match_not_done"), vec![val_to_node(val, ctx), fail_node, cont])
-    }
-
-    ExprKind::MatchRest { val, fail, cont } => {
-      let cont_node = render_cont(cont, ctx);
-      let fail_node = to_node(fail, ctx);
-      apply(ident("·match_rest"), vec![val_to_node(val, ctx), fail_node, cont_node])
-    }
-
-    ExprKind::MatchRec { val, fail, body } => {
-      let cont = render_cont_with_cursor(body, ctx);
-      let fail_node = to_node(fail, ctx);
-      apply(ident("·match_rec"), vec![val_to_node(val, ctx), fail_node, cont])
-    }
-
-    ExprKind::MatchField { val, field, fail, cont } => {
-      let fail_node = to_node(fail, ctx);
-      let cont_node = render_cont(cont, ctx);
-      let field_lit = node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: field.to_string() });
-      apply(ident("·match_field"), vec![val_to_node(val, ctx), field_lit, fail_node, cont_node])
-    }
   }
 }
 

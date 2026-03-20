@@ -106,6 +106,8 @@ pub enum Param {
 pub enum Arg<'src> {
   Val(Val<'src>),
   Spread(Val<'src>),
+  Cont(Cont<'src>),
+  Expr(Box<Expr<'src>>),
 }
 
 /// Whether a range pattern is exclusive (`..`) or inclusive (`...`).
@@ -121,7 +123,7 @@ pub enum RangeKind {
 
 /// A compiler-known operation — resolved statically, not by scope lookup.
 /// Covers source operators, data construction, and string formatting.
-/// No runtime value — only valid in the func position of App/MatchApp/MatchIf.
+/// No runtime value — only valid in the func position of App.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuiltIn {
   // Arithmetic
@@ -143,6 +145,11 @@ pub enum BuiltIn {
   // Closure construction — partially applies a lifted fn with its captures.
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
+  // Pattern matching primitives — emitted directly by the CPS transform.
+  // Each takes val + fail as args; cont receives match results.
+  MatchValue, MatchSeq, MatchNext, MatchDone, MatchNotDone,
+  MatchRest, MatchRec, MatchField, MatchIf, MatchApp,
+  MatchBlock, MatchArm,
 }
 
 impl BuiltIn {
@@ -233,6 +240,9 @@ pub type BindNode = Node<Bind>;
 pub enum ValKind<'src> {
   Ref(Ref),           // a reference to a binding (user name or compiler temp)
   Lit(Lit<'src>),     // a literal value
+  Panic,              // fail sentinel — irrefutable pattern failure (unreachable)
+  ContRef(CpsId),     // reference to a continuation as a value (for fail args)
+  BuiltIn(BuiltIn),   // a compiler-known op used as a value (for MatchIf func arg)
 }
 
 #[derive(Debug, Clone)]
@@ -313,19 +323,10 @@ pub enum ExprKind<'src> {
     body: Cont<'src>,
   },
 
-  /// Mutually recursive group — all names visible in all fn_bodies.
-  /// Each binding: (name, params, fn_body).
-  /// Cross-refs not behind a fn boundary → Unresolved or Captured with depth=0 (name error).
-  LetRec {
-    bindings: Vec<Binding<'src>>,
-    body: Cont<'src>,
-  },
-
-  /// Call func with args; continuation receives the result.
+  /// Call func with args; the last `Arg::Cont` is the result continuation.
   App {
     func: Callable<'src>,
     args: Vec<Arg<'src>>,
-    cont: Cont<'src>,
   },
 
   /// Branch on cond.
@@ -337,120 +338,10 @@ pub enum ExprKind<'src> {
   },
 
   // ---------------------------------------------------------------------------
-  // Pattern lowering primitives — produced by the pattern lowering pass.
-  // All primitives carry an explicit `fail` continuation (·panic or a ·ƒ_fail ref).
+  // Pattern matching — Match* primitives are emitted as App { BuiltIn::Match*, args }.
+  // MatchArm and MatchBlock use Arg::Cont and Arg::Expr to embed arm structure.
+  // Fail conts are encoded as ValKind::Panic or ValKind::ContRef in args.
   // ---------------------------------------------------------------------------
-
-  /// Bind an extracted val to a name; always succeeds.
-  /// Parallel to LetVal but with an explicit fail cont (for structural uniformity).
-  /// Emitted for bare-ident pattern positions: `x = foo` → MatchLetVal(foo, name=x, body).
-  MatchLetVal {
-    name: BindNode,
-    val: Box<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    body: Cont<'src>,
-  },
-
-  /// Apply `func` to `args`; continuation receives the result; `fail` if tag is wrong.
-  /// Used for constructor/extractor patterns: `Ok b`, `Some x`.
-  /// Parallel to App but with an explicit fail cont.
-  MatchApp {
-    func: Callable<'src>,
-    args: Vec<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    cont: Cont<'src>,
-  },
-
-  /// Apply `func` to `args`; call `fail` if result is falsy; no result binding.
-  /// Used for guard predicates: `is_even x`, `a > 0`.
-  /// Fuses apply + boolean test into one node; no intermediate temp exposed.
-  MatchIf {
-    func: Callable<'src>,
-    args: Vec<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    body: Cont<'src>,
-  },
-
-  /// Assert val equals a literal; `fail` if not.
-  /// Used for literal element patterns: `[a, 1]`, `['hello']`.
-  MatchValue {
-    val: Box<Val<'src>>,
-    lit: Lit<'src>,
-    fail: Box<Expr<'src>>,
-    body: Cont<'src>,
-  },
-
-  /// Assert `val` is a sequence; `fail` if not.
-  /// `body` receives the sequence cursor as its single arg.
-  MatchSeq {
-    val: Box<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    body: Cont<'src>,
-  },
-
-  /// Pop the head element from the cursor; bind to elem and next_cursor via cont.
-  /// `fail` if empty.
-  /// `cont.args` = [elem_bind, next_cursor_bind].
-  MatchNext {
-    val: Box<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    cont: Cont<'src>,
-  },
-
-  /// Assert the cursor is exhausted; `fail` if elements remain.
-  /// `cont` receives the matched value as its single arg.
-  MatchDone {
-    val: Box<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    cont: Cont<'src>,
-  },
-
-  /// Assert the cursor is non-empty; `fail` if exhausted.
-  /// `body` receives no new bindings (no args).
-  MatchNotDone {
-    val: Box<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    body: Cont<'src>,
-  },
-
-  /// Bind remaining elements of the cursor as a value; zero-or-more.
-  /// `cont` receives the rest value as its single arg.
-  MatchRest {
-    val: Box<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    cont: Cont<'src>,
-  },
-
-  /// Assert `val` is a record; `fail` if not.
-  /// `body` receives the record cursor as its single arg.
-  MatchRec {
-    val: Box<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    body: Cont<'src>,
-  },
-
-  /// Extract named `field` from the cursor; advance cursor.
-  /// `cont.args` = [field_val_bind, next_cursor_bind].
-  MatchField {
-    val: Box<Val<'src>>,
-    field: &'src str,
-    fail: Box<Expr<'src>>,
-    cont: Cont<'src>,
-  },
-
-  /// Pattern match block — tries arms in order; first match wins.
-  /// `params` are the values passed into each arm (one per subject).
-  /// `arm_params` are the names each arm receives them as (parallel vec).
-  /// `fail` is the exhaustion continuation (·panic, or outer ·ƒ_fail in nested matches).
-  /// Each arm expr is a lowered Match* primitive chain ending in ·ƒ_cont.
-  /// `cont` receives the value from whichever arm succeeds.
-  MatchBlock {
-    params: Vec<Val<'src>>,
-    fail: Box<Expr<'src>>,
-    arm_params: Vec<BindNode>,
-    arms: Vec<Expr<'src>>,
-    cont: Cont<'src>,
-  },
 
   // ---------------------------------------------------------------------------
   // Suspension
@@ -465,23 +356,5 @@ pub enum ExprKind<'src> {
     cont: Cont<'src>,
   },
 
-  /// Unconditional failure — pattern match with no recovery.
-  /// Used as the `fail` expr for irrefutable patterns (·panic equivalent).
-  /// Lets the compiler statically identify always-failing paths.
-  Panic,
-
-  /// Reference to the enclosing `·ƒ_fail` continuation.
-  /// Used as the `fail` expr inside match arm bodies — failure delegates to next arm.
-  /// Only valid inside a MatchBlock arm.
-  FailCont,
-}
-
-/// A single named function binding in a `LetRec` group.
-#[derive(Debug, Clone)]
-pub struct Binding<'src> {
-  pub name: BindNode,
-  pub params: Vec<Param>,
-  pub cont: BindNode,
-  pub fn_body: Box<Expr<'src>>,
 }
 

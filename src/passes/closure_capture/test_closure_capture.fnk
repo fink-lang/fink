@@ -28,6 +28,7 @@ closure capture tests
 #     | equals fink":
 #       <expected cps with capture annotations>
 
+{test, equals, expect, fink, closure_capture} = import 'fake!'
 
 ---
 pure functions
@@ -59,7 +60,7 @@ test 'self-recursive fn is pure', fn:
   | equals fink":
     ·fn
       fn a, ·ƒ_3:
-        ·apply f, a, fn ·v_3:
+        f a, fn ·v_3:
           ·ƒ_3 ·v_3
       fn ·v_1:
         ·let ·v_1, fn f:
@@ -77,13 +78,13 @@ test 'mutual recursion — each fn captures the other', fn:
       fn ·ƒ_2:
         ·fn
           fn {cap: [g]}, a, ·ƒ_5:
-            ·apply g, a, fn ·v_5:
+            g a, fn ·v_5:
               ·ƒ_5 ·v_5
           fn ·v_3:
             ·let ·v_3, fn f:
               ·fn
                 fn {cap: [f]}, b, ·ƒ_15:
-                  ·apply f, b, fn ·v_15:
+                  f b, fn ·v_15:
                     ·ƒ_15 ·v_15
                 fn ·v_13:
                   ·let ·v_13, fn g:
@@ -130,7 +131,7 @@ test 'multiple captures', fn:
           ·let 2, fn y:
             ·fn
               fn {cap: [x, y]}, a, ·ƒ_9:
-                ·apply ·op_plus, x, y, fn ·v_9:
+                ·op_plus x, y, fn ·v_9:
                   ·ƒ_9 ·v_9
               fn ·v_7: ·ƒ_2 ·v_7
       fn ·v_1: ·ƒ_0 ·v_1
@@ -151,7 +152,7 @@ test 'fn captures one outer binding', fn:
       fn a, ·ƒ_3:
         ·fn
           fn {cap: [a]}, b, ·ƒ_6:
-            ·apply ·op_plus, a, b, fn ·v_6:
+            ·op_plus a, b, fn ·v_6:
               ·ƒ_6 ·v_6
           fn ·v_4: ·ƒ_3 ·v_4
       fn ·v_1:
