@@ -55,7 +55,19 @@ fn main() {
         Ok(r) => {
           let cfg = fink::fmt::FmtConfig::default();
           let laid_out = fink::fmt::layout::layout(&r.root, &cfg);
-          println!("{}", fink::fmt::print::print(&laid_out));
+          if sourcemap {
+            let (output, srcmap) = if embed_source {
+              fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
+            } else {
+              fink::fmt::print::print_mapped(&laid_out, path)
+            };
+            let json = srcmap.to_json();
+            let b64 = fink::sourcemap::base64_encode(json.as_bytes());
+            println!("{output}");
+            println!("//# sourceMappingURL=data:application/json;base64,{b64}");
+          } else {
+            println!("{}", fink::fmt::print::print(&laid_out));
+          }
         }
         Err(e) => parse_error(&src, e),
       }

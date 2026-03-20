@@ -20,14 +20,31 @@
 //   - Gap bytes between tokens are either spaces or newline+indent sequences.
 
 use crate::passes::ast::{Node, NodeKind, CmpPart, Exprs};
-use crate::lexer::{Pos, Token};
+use crate::lexer::{Loc, Pos, Token};
+use crate::sourcemap::SourceMap;
 
 /// Render a formatted AST to a String.
 /// The input must have been produced by `layout::layout` — locs are used as-is.
 pub fn print(root: &Node) -> String {
-    let mut w = Writer::new();
+    let mut w = Writer::new(false);
     w.node(root);
-    w.finish()
+    w.finish_string()
+}
+
+/// Render a formatted AST to a String and a Source Map.
+/// Each emitted token is mapped back to its original source location (preserved
+/// by `layout::layout` on the token's `loc` field).
+pub fn print_mapped(root: &Node, source_name: &str) -> (String, SourceMap) {
+    let mut w = Writer::new(true);
+    w.node(root);
+    w.finish_mapped(source_name, None)
+}
+
+/// Like `print_mapped` but embeds the original source content in the map.
+pub fn print_mapped_with_content(root: &Node, source_name: &str, content: &str) -> (String, SourceMap) {
+    let mut w = Writer::new(true);
+    w.node(root);
+    w.finish_mapped(source_name, Some(content))
 }
 
 // ---------------------------------------------------------------------------
@@ -37,18 +54,63 @@ pub fn print(root: &Node) -> String {
 struct Writer {
     buf: String,
     pos: Pos,
+    // When Some, collects (out_line, out_col, src_line, src_col) per token.
+    // out_line/col are 0-indexed; src_line/col match Pos (1-indexed line, 0-indexed col).
+    mappings: Option<Vec<(u32, u32, u32, u32)>>,
+    // Current output line/col (0-indexed), tracked only when mappings is Some.
+    out_line: u32,
+    out_col: u32,
 }
 
 impl Writer {
-    fn new() -> Self {
+    fn new(mapped: bool) -> Self {
         Self {
             buf: String::new(),
             pos: Pos { idx: 0, line: 1, col: 0 },
+            mappings: if mapped { Some(Vec::new()) } else { None },
+            out_line: 0,
+            out_col: 0,
         }
     }
 
-    fn finish(self) -> String {
+    fn finish_string(self) -> String {
         self.buf
+    }
+
+    fn finish_mapped(self, source_name: &str, content: Option<&str>) -> (String, SourceMap) {
+        let mappings = self.mappings.unwrap_or_default();
+        let srcmap = if let Some(c) = content {
+            SourceMap::from_raw_with_content(source_name, c, mappings.into_iter())
+        } else {
+            SourceMap::from_raw(source_name, mappings.into_iter())
+        };
+        (self.buf, srcmap)
+    }
+
+    /// Record a mapping from the current output position to a source location.
+    /// `src_loc` is the original token loc (before layout rewrote positions).
+    /// Called immediately before writing the token text.
+    fn mark(&mut self, src_loc: Loc) {
+        if let Some(ref mut m) = self.mappings {
+            // SourceMap uses 0-indexed lines; Pos uses 1-indexed.
+            let src_line = src_loc.start.line.saturating_sub(1);
+            let src_col = src_loc.start.col;
+            m.push((self.out_line, self.out_col, src_line, src_col));
+        }
+    }
+
+    /// Update the output line/col tracker after emitting `text`.
+    fn track_output(&mut self, text: &str) {
+        if self.mappings.is_some() {
+            for ch in text.chars() {
+                if ch == '\n' {
+                    self.out_line += 1;
+                    self.out_col = 0;
+                } else {
+                    self.out_col += 1;
+                }
+            }
+        }
     }
 
     /// Write a string slice, updating the position cursor.
@@ -57,6 +119,7 @@ impl Writer {
     fn write(&mut self, target: Pos, src: &str) {
         self.gap(target);
         self.buf.push_str(src);
+        self.track_output(src);
         self.pos = Pos {
             idx: target.idx + src.len() as u32,
             line: target.line,
@@ -80,21 +143,25 @@ impl Writer {
             let newlines = target.line - self.pos.line;
             for _ in 0..newlines {
                 self.buf.push('\n');
+                self.track_output("\n");
             }
             for _ in 0..target.col {
                 self.buf.push(' ');
+                self.track_output(" ");
             }
         } else {
             // Same line — emit spaces.
             let spaces = target.idx - self.pos.idx;
             for _ in 0..spaces {
                 self.buf.push(' ');
+                self.track_output(" ");
             }
         }
         self.pos = target;
     }
 
     fn tok(&mut self, tok: &Token) {
+        self.mark(tok.loc);
         self.write(tok.loc.start, tok.src);
     }
 
@@ -131,8 +198,11 @@ impl Writer {
             started = true;
             // Each non-empty-prefix part starts a new line.
             self.buf.push('\n');
+            self.track_output("\n");
             self.buf.push_str(&indent);
+            self.track_output(&indent);
             self.buf.push_str(line);
+            self.track_output(line);
             self.pos = Pos {
                 idx: self.pos.idx + 1 + indent_col + line.len() as u32,
                 line: self.pos.line + 1,
@@ -145,16 +215,18 @@ impl Writer {
         match &node.kind {
             // --- leaves ---
             NodeKind::LitBool(v) => {
+                self.mark(node.loc);
                 self.write(node.loc.start, if *v { "true" } else { "false" });
             }
             NodeKind::LitInt(s)
             | NodeKind::LitFloat(s)
             | NodeKind::LitDecimal(s)
             | NodeKind::Ident(s) => {
+                self.mark(node.loc);
                 self.write(node.loc.start, s);
             }
-            NodeKind::Partial => self.write(node.loc.start, "?"),
-            NodeKind::Wildcard => self.write(node.loc.start, "_"),
+            NodeKind::Partial => { self.mark(node.loc); self.write(node.loc.start, "?"); }
+            NodeKind::Wildcard => { self.mark(node.loc); self.write(node.loc.start, "_"); }
 
             // --- string literal ---
             NodeKind::LitStr { open, close, content, indent } => {
