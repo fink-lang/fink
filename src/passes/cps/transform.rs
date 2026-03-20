@@ -1258,10 +1258,10 @@ pub fn lower_expr<'src>(node: &'src Node<'src>) -> CpsResult<'src> {
 /// `val` is the scrutinee already lowered from the rhs.
 /// Returns the Bind of the primary binding (used by the caller to construct Ret).
 ///
-/// Implemented: Ident, Wildcard, BindRight, InfixOp (guard + range), Apply (→ MatchGuard predicate),
+/// Implemented: Ident, Wildcard, BindRight, InfixOp (guard + range), Apply (→ MatchGuard/MatchIf),
 ///              LitInt/Float/Bool/Str (→ MatchValue), LitSeq (plain elems + Spread tail),
 ///              LitRec (fields + spread variants), Range (→ lower_range + MatchGuard w/ ·op_in).
-/// TODO: Apply → MatchApp (after name resolution).
+/// TODO: Apply → MatchApp (after name resolution distinguishes predicate from constructor).
 /// TODO(future): StrTempl pattern matching — e.g. `'hello ${name}'` in pattern position;
 ///               deferred, needs a string-matching primitive (·match_str_prefix or similar).
 fn lower_pat_lhs<'src>(

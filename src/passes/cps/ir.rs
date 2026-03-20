@@ -123,7 +123,7 @@ pub enum RangeKind {
 
 /// A compiler-known operation — resolved statically, not by scope lookup.
 /// Covers source operators, data construction, and string formatting.
-/// No runtime value — only valid in the func position of App/MatchApp/MatchIf.
+/// No runtime value — only valid in the func position of App.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuiltIn {
   // Arithmetic
@@ -145,7 +145,7 @@ pub enum BuiltIn {
   // Closure construction — partially applies a lifted fn with its captures.
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
-  // Pattern matching primitives — produced by match_lower from Match* ExprKind nodes.
+  // Pattern matching primitives — emitted directly by the CPS transform.
   // Each takes val + fail as args; cont receives match results.
   MatchValue, MatchSeq, MatchNext, MatchDone, MatchNotDone,
   MatchRest, MatchRec, MatchField, MatchIf, MatchApp,

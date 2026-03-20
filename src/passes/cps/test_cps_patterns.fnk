@@ -1,39 +1,35 @@
 ---
-CPS pattern lowering — design scratch pad (WIP)
+CPS pattern lowering tests
 ---
 
-# WIP: design document for pattern lowering pass. Not yet wired to test runner.
 # Expected CPS expansion for every pattern form.
+# Match primitives are emitted as App { BuiltIn::Match* } directly by the CPS transform.
 #
 # Failure continuation convention:
 #   ·panic   — default; pattern mismatch is a compile/runtime error
 #   ·ƒ_fail  — inside a ·match_block arm; failure tries the next arm
 #
 # Every ·match_* primitive shape:
-#   ·match_* scrutinee, …args…, ·ƒ_fail, fn <bindings>: body
+#   ·match_* scrutinee, …args…, ·fail, fn <bindings>: body
 #
-# Cursor-based traversal primitives:
+# Primitives:
 #   ·match_seq      — initialize seq cursor from scrutinee
 #   ·match_next     — pop head from cursor, advance; fn ·v, ·cursor, …
-#   ·match_done     — assert cursor exhausted; ·ƒ_fail if not
-#   ·match_not_done — assert cursor not exhausted; ·ƒ_fail if empty
+#   ·match_done     — assert cursor exhausted; ·fail if not
+#   ·match_not_done — assert cursor not exhausted; ·fail if empty
 #   ·match_rest     — bind remaining cursor as value (zero or more)
 #   ·match_rec      — initialize rec cursor from scrutinee
 #   ·match_field    — extract named field from rec cursor; fn ·v, ·cursor, …
-#   ·match_bind     — bind extracted temp to name; always succeeds
-#   ·match_value    — assert extracted temp equals literal; ·ƒ_fail if not
-#   ·match_if       — apply fn to args, ·ƒ_fail if falsy; no result binding (guard)
-#   ·match_apply    — apply fn to args, bind result; ·ƒ_fail if wrong tag (constructor/extractor)
+#   ·match_value    — assert extracted temp equals literal; ·fail if not
+#   ·match_if       — apply fn to args, ·fail if falsy; no result binding (guard)
+#   ·match_apply    — apply fn to args, bind result; ·fail if wrong tag (constructor/extractor)
 #                     deferred: name resolution distinguishes predicate (→ ·match_if)
 #                     from constructor/extractor (→ ·match_apply) based on callee
+#   ·match_block    — try arms in order; first match wins
+#   ·match_arm      — single arm: matcher cont + body cont
 #
-# Binding rules:
-#   bare ident in pattern position — always a binding (·match_bind), never a lookup
-#   wildcard (_) — discard; no ·match_bind, temp passed directly to next primitive
-#   to match a constructor value without payload: use a predicate (e.g. is_none _)
-#
-# Optimization hint (not in IR yet):
-#   ·match_size  — early length check when collection is realized
+# Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
+# Wildcard (_): discard; no binding, temp passed directly to next primitive
 
 {test, equals, expect, fink, cps_expr} = import 'fake!'
 
