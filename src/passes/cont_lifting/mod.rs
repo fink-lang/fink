@@ -29,7 +29,7 @@
 
 use crate::ast::AstId;
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Param,
+  Arg, Bind, BindNode, Cont, CpsId, CpsResult, Expr, ExprKind, Param,
 };
 use crate::propgraph::PropGraph;
 
@@ -81,35 +81,29 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
     App { func, mut args } => {
-      // MatchArm has only structural conts (matcher + body) — no result cont to hoist.
-      // All other App nodes have a trailing result cont that should be hoisted.
-      let has_result_cont = !matches!(func, Callable::BuiltIn(BuiltIn::MatchArm));
-
-      // Split off the result continuation before recursing.
-      let result_cont = if has_result_cont {
-        match args.pop() {
-          Some(Arg::Cont(c)) => Some(c),
-          other => { if let Some(a) = other { args.push(a); } None }
+      // Pop the last Arg::Cont and hoist it. The hoisted LetFn's body
+      // contains the App with remaining args — lift_expr is called on it
+      // inside hoist_cont, which recursively hoists the next Arg::Cont.
+      // Arg::Expr entries are recursed into via lift_expr on the inner App.
+      match args.iter().rposition(|a| matches!(a, Arg::Cont(_))) {
+        Some(idx) => {
+          let cont = match args.remove(idx) {
+            Arg::Cont(c) => c,
+            _ => unreachable!(),
+          };
+          hoist_cont(expr.id, cont, alloc, |cont| {
+            args.insert(idx, Arg::Cont(cont));
+            App { func, args }
+          })
         }
-      } else {
-        None
-      };
-
-      // Recurse into all remaining Arg::Cont bodies and Arg::Expr entries.
-      let args: Vec<Arg<'src>> = args.into_iter().map(|a| match a {
-        Arg::Cont(c) => Arg::Cont(recurse_cont(c, alloc)),
-        Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, alloc))),
-        other => other,
-      }).collect();
-
-      // Hoist the result continuation (if present).
-      match result_cont {
-        Some(cont) => hoist_cont(expr.id, cont, alloc, |cont| {
-          let mut a = args;
-          a.push(Arg::Cont(cont));
-          App { func, args: a }
-        }),
-        None => Expr { id: expr.id, kind: App { func, args } },
+        None => {
+          // No conts — just recurse into Arg::Expr entries.
+          let args = args.into_iter().map(|a| match a {
+            Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, alloc))),
+            other => other,
+          }).collect();
+          Expr { id: expr.id, kind: App { func, args } }
+        }
       }
     }
 
@@ -172,7 +166,8 @@ where
       let body = lift_expr(*body, alloc);
       let cont_name        = alloc.bind(Bind::Cont, None);
       let inner_cont_param = alloc.bind(Bind::Cont, None);
-      let inner = alloc.expr(make_kind(Cont::Ref(cont_name.id)), None);
+      let inner_kind = make_kind(Cont::Ref(cont_name.id));
+      let inner = lift_expr(alloc.expr(inner_kind, None), alloc);
       let params = args.into_iter().map(Param::Name).collect();
       Expr {
         id: node_id,
