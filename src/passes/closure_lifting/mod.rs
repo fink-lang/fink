@@ -191,12 +191,16 @@ fn collect_bind_ids(
     LetFn { body, .. } => {
       if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
     }
-    App { func, args, cont } => {
+    App { func, args } => {
       if let Callable::Val(v) = func { scan_val(v, resolve, out); }
       for arg in args {
-        match arg { Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out) }
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out),
+          Arg::Cont(Cont::Expr { body, .. }) => collect_bind_ids(body, resolve, out),
+          Arg::Cont(_) => {}
+          Arg::Expr(e) => collect_bind_ids(e, resolve, out),
+        }
       }
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
     If { cond, then, else_ } => {
       scan_val(cond, resolve, out);
@@ -207,69 +211,6 @@ fn collect_bind_ids(
       scan_val(value, resolve, out);
       if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
     }
-    MatchLetVal { val, fail, body, .. } => {
-      scan_val(val, resolve, out);
-      collect_bind_ids(fail, resolve, out);
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    MatchApp { func, args, fail, cont } => {
-      if let Callable::Val(v) = func { scan_val(v, resolve, out); }
-      for v in args { scan_val(v, resolve, out); }
-      collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
-    }
-    MatchIf { func, args, fail, body, .. } => {
-      if let Callable::Val(v) = func { scan_val(v, resolve, out); }
-      for v in args { scan_val(v, resolve, out); }
-      collect_bind_ids(fail, resolve, out);
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    MatchValue { val, fail, body, .. } => {
-      scan_val(val, resolve, out);
-      collect_bind_ids(fail, resolve, out);
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    MatchSeq { val, fail, body, .. } => {
-      scan_val(val, resolve, out);
-      collect_bind_ids(fail, resolve, out);
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    MatchNext { fail, cont, .. } => {
-      collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
-    }
-    MatchDone { fail, cont, .. } => {
-      collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
-    }
-    MatchNotDone { fail, body, .. } => {
-      collect_bind_ids(fail, resolve, out);
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    MatchRest { fail, cont, .. } => {
-      collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
-    }
-    MatchRec { val, fail, body, .. } => {
-      scan_val(val, resolve, out);
-      collect_bind_ids(fail, resolve, out);
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    MatchField { fail, cont, .. } => {
-      collect_bind_ids(fail, resolve, out);
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
-    }
-    MatchBlock { params, fail, arms, cont, .. } => {
-      for v in params { scan_val(v, resolve, out); }
-      collect_bind_ids(fail, resolve, out);
-      for arm in arms { collect_bind_ids(arm, resolve, out); }
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
-    }
-    LetRec { bindings, body } => {
-      for b in bindings { collect_bind_ids(&b.fn_body, resolve, out); }
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    Panic | FailCont => {}
   }
 }
 
@@ -425,11 +366,11 @@ fn lift_expr<'src>(
 
         let mut fn_closure_args: Vec<Arg<'src>> = vec![Arg::Val(lifted_ref)];
         fn_closure_args.extend(cap_ref_vals.into_iter().map(Arg::Val));
+        fn_closure_args.push(Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(subst_body) }));
 
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
           args: fn_closure_args,
-          cont: Cont::Expr { args: vec![result_bind], body: Box::new(subst_body) },
         }, None)
       }
     }
@@ -444,14 +385,13 @@ fn lift_expr<'src>(
       },
     },
 
-    App { func, args, cont } => Expr {
-      id: expr.id,
-      kind: App {
-        func,
-        args,
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
+    App { func, args } => {
+      let args = args.into_iter().map(|a| match a {
+        Arg::Cont(c) => Arg::Cont(lift_cont(c, captures, resolve, ast_index, alloc, hoisted)),
+        other => other,
+      }).collect();
+      Expr { id: expr.id, kind: App { func, args } }
+    }
 
     If { cond, then, else_ } => Expr {
       id: expr.id,
@@ -470,138 +410,6 @@ fn lift_expr<'src>(
       },
     },
 
-    LetRec { bindings, body } => {
-      let new_bindings = bindings.into_iter().map(|b| {
-        crate::passes::cps::ir::Binding {
-          fn_body: Box::new(lift_expr(*b.fn_body, captures, resolve, ast_index, alloc, hoisted)),
-          ..b
-        }
-      }).collect();
-      Expr {
-        id: expr.id,
-        kind: LetRec {
-          bindings: new_bindings,
-          body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
-        },
-      }
-    }
-
-    MatchLetVal { name, val, fail, body } => Expr {
-      id: expr.id,
-      kind: MatchLetVal {
-        name, val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchApp { func, args, fail, cont } => Expr {
-      id: expr.id,
-      kind: MatchApp {
-        func, args,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchIf { func, args, fail, body } => Expr {
-      id: expr.id,
-      kind: MatchIf {
-        func, args,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchValue { val, lit, fail, body } => Expr {
-      id: expr.id,
-      kind: MatchValue {
-        val, lit,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchSeq { val, fail, body } => Expr {
-      id: expr.id,
-      kind: MatchSeq {
-        val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchNext { val, fail, cont } => Expr {
-      id: expr.id,
-      kind: MatchNext {
-        val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchDone { val, fail, cont } => Expr {
-      id: expr.id,
-      kind: MatchDone {
-        val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchNotDone { val, fail, body } => Expr {
-      id: expr.id,
-      kind: MatchNotDone {
-        val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchRest { val, fail, cont } => Expr {
-      id: expr.id,
-      kind: MatchRest {
-        val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchRec { val, fail, body } => Expr {
-      id: expr.id,
-      kind: MatchRec {
-        val,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchField { val, field, fail, cont } => Expr {
-      id: expr.id,
-      kind: MatchField {
-        val, field,
-        fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-      },
-    },
-
-    MatchBlock { params, fail, arm_params, arms, cont } => {
-      let new_arms = arms.into_iter()
-        .map(|a| lift_expr(a, captures, resolve, ast_index, alloc, hoisted))
-        .collect();
-      Expr {
-        id: expr.id,
-        kind: MatchBlock {
-          params,
-          arm_params,
-          fail: Box::new(lift_expr(*fail, captures, resolve, ast_index, alloc, hoisted)),
-          arms: new_arms,
-          cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
-        },
-      }
-    }
-
-    Panic | FailCont => expr,
   }
 }
 
@@ -747,16 +555,15 @@ mod tests {
         collect_lines(fn_body, result, origin, ast_index, out);
         if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
       }
-      LetRec { bindings, body } => {
-        for b in bindings { collect_lines(&b.fn_body, result, origin, ast_index, out); }
-        if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
-      }
-      App { func, args, cont } => {
+      App { func, args } => {
         emit_callable(func, result, origin, ast_index, out);
         for arg in args {
-          match arg { Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out) }
+          match arg {
+            Arg::Val(v) | Arg::Spread(v) => emit_val(v, result, origin, ast_index, out),
+            Arg::Cont(Cont::Expr { body, .. }) => collect_lines(body, result, origin, ast_index, out),
+            Arg::Cont(_) | Arg::Expr(_) => {}
+          }
         }
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
       If { cond, then, else_ } => {
         emit_val(cond, result, origin, ast_index, out);
@@ -767,65 +574,6 @@ mod tests {
         emit_val(value, result, origin, ast_index, out);
         if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
-      MatchLetVal { val, fail, body, .. } => {
-        emit_val(val, result, origin, ast_index, out);
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
-      }
-      MatchApp { func, args, fail, cont } => {
-        emit_callable(func, result, origin, ast_index, out);
-        for v in args { emit_val(v, result, origin, ast_index, out); }
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
-      }
-      MatchIf { func, args, fail, body } => {
-        emit_callable(func, result, origin, ast_index, out);
-        for v in args { emit_val(v, result, origin, ast_index, out); }
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
-      }
-      MatchValue { val, fail, body, .. } => {
-        emit_val(val, result, origin, ast_index, out);
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
-      }
-      MatchSeq { val, fail, body, .. } => {
-        emit_val(val, result, origin, ast_index, out);
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
-      }
-      MatchNext { fail, cont, .. } => {
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
-      }
-      MatchDone { fail, cont, .. } => {
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
-      }
-      MatchNotDone { fail, body, .. } => {
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
-      }
-      MatchRest { fail, cont, .. } => {
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
-      }
-      MatchRec { val, fail, body, .. } => {
-        emit_val(val, result, origin, ast_index, out);
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
-      }
-      MatchField { fail, cont, .. } => {
-        collect_lines(fail, result, origin, ast_index, out);
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
-      }
-      MatchBlock { params, fail, arms, cont, .. } => {
-        for v in params { emit_val(v, result, origin, ast_index, out); }
-        collect_lines(fail, result, origin, ast_index, out);
-        for arm in arms { collect_lines(arm, result, origin, ast_index, out); }
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
-      }
-      Panic | FailCont => {}
     }
   }
 
