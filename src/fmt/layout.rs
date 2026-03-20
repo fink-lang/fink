@@ -148,25 +148,25 @@ impl<'cfg> Ctx<'cfg> {
         // We clone and rebuild only the child fields.
         match &node.kind {
             NodeKind::UnaryOp { op, operand } => {
-                Node::new(NodeKind::UnaryOp { op: op.clone(), operand: Box::new(self.fix(operand)) }, node.loc)
+                Node::new(NodeKind::UnaryOp { op: *op, operand: Box::new(self.fix(operand)) }, node.loc)
             }
             NodeKind::InfixOp { op, lhs, rhs } => {
-                Node::new(NodeKind::InfixOp { op: op.clone(), lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
+                Node::new(NodeKind::InfixOp { op: *op, lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
             }
             NodeKind::Bind { op, lhs, rhs } => {
-                Node::new(NodeKind::Bind { op: op.clone(), lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
+                Node::new(NodeKind::Bind { op: *op, lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
             }
             NodeKind::BindRight { op, lhs, rhs } => {
-                Node::new(NodeKind::BindRight { op: op.clone(), lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
+                Node::new(NodeKind::BindRight { op: *op, lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
             }
             NodeKind::Group { open, close, inner } => {
-                Node::new(NodeKind::Group { open: open.clone(), close: close.clone(), inner: Box::new(self.fix(inner)) }, node.loc)
+                Node::new(NodeKind::Group { open: *open, close: *close, inner: Box::new(self.fix(inner)) }, node.loc)
             }
             NodeKind::Member { op, lhs, rhs } => {
-                Node::new(NodeKind::Member { op: op.clone(), lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
+                Node::new(NodeKind::Member { op: *op, lhs: Box::new(self.fix(lhs)), rhs: Box::new(self.fix(rhs)) }, node.loc)
             }
             NodeKind::Spread { op, inner } => {
-                Node::new(NodeKind::Spread { op: op.clone(), inner: inner.as_ref().map(|n| Box::new(self.fix(n))) }, node.loc)
+                Node::new(NodeKind::Spread { op: *op, inner: inner.as_ref().map(|n| Box::new(self.fix(n))) }, node.loc)
             }
             NodeKind::Try(inner) => {
                 Node::new(NodeKind::Try(Box::new(self.fix(inner))), node.loc)
@@ -177,7 +177,7 @@ impl<'cfg> Ctx<'cfg> {
             NodeKind::ChainedCmp(parts) => {
                 let new_parts = parts.iter().map(|p| match p {
                     crate::passes::ast::CmpPart::Operand(n) => crate::passes::ast::CmpPart::Operand(self.fix(n)),
-                    crate::passes::ast::CmpPart::Op(op) => crate::passes::ast::CmpPart::Op(op.clone()),
+                    crate::passes::ast::CmpPart::Op(op) => crate::passes::ast::CmpPart::Op(*op),
                 }).collect();
                 Node::new(NodeKind::ChainedCmp(new_parts), node.loc)
             }
@@ -190,22 +190,22 @@ impl<'cfg> Ctx<'cfg> {
                 Node::new(NodeKind::Patterns(new_exprs), node.loc)
             }
             NodeKind::LitSeq { open, close, items } => {
-                Node::new(NodeKind::LitSeq { open: open.clone(), close: close.clone(), items: self.fix_exprs(items) }, node.loc)
+                Node::new(NodeKind::LitSeq { open: *open, close: *close, items: self.fix_exprs(items) }, node.loc)
             }
             NodeKind::LitRec { open, close, items } => {
-                Node::new(NodeKind::LitRec { open: open.clone(), close: close.clone(), items: self.fix_exprs(items) }, node.loc)
+                Node::new(NodeKind::LitRec { open: *open, close: *close, items: self.fix_exprs(items) }, node.loc)
             }
             NodeKind::StrTempl { open, close, children } => {
-                Node::new(NodeKind::StrTempl { open: open.clone(), close: close.clone(), children: children.iter().map(|c| self.fix(c)).collect() }, node.loc)
+                Node::new(NodeKind::StrTempl { open: *open, close: *close, children: children.iter().map(|c| self.fix(c)).collect() }, node.loc)
             }
             NodeKind::StrRawTempl { open, close, children } => {
-                Node::new(NodeKind::StrRawTempl { open: open.clone(), close: close.clone(), children: children.iter().map(|c| self.fix(c)).collect() }, node.loc)
+                Node::new(NodeKind::StrRawTempl { open: *open, close: *close, children: children.iter().map(|c| self.fix(c)).collect() }, node.loc)
             }
             NodeKind::Block { name, params, sep, body } => {
                 Node::new(NodeKind::Block {
                     name: Box::new(self.fix(name)),
                     params: Box::new(self.fix(params)),
-                    sep: sep.clone(),
+                    sep: *sep,
                     body: self.fix_exprs(body),
                 }, node.loc)
             }
@@ -247,7 +247,7 @@ impl<'cfg> Ctx<'cfg> {
                     seps: body.seps.clone(),
                 }
             });
-            Node::new(NodeKind::Fn { params: Box::new(new_params), sep: sep.clone(), body: new_body }, node.loc)
+            Node::new(NodeKind::Fn { params: Box::new(new_params), sep: *sep, body: new_body }, node.loc)
         }
     }
 
@@ -270,7 +270,7 @@ impl<'cfg> Ctx<'cfg> {
                     seps: arms.seps.clone(),
                 }
             });
-            Node::new(NodeKind::Match { subjects: Box::new(new_subjects), sep: sep.clone(), arms: new_arms }, node.loc)
+            Node::new(NodeKind::Match { subjects: Box::new(new_subjects), sep: *sep, arms: new_arms }, node.loc)
         }
     }
 
@@ -296,7 +296,7 @@ impl<'cfg> Ctx<'cfg> {
                     seps: body.seps.clone(),
                 }
             });
-            Node::new(NodeKind::Arm { lhs: new_lhs, sep: sep.clone(), body: new_body }, node.loc)
+            Node::new(NodeKind::Arm { lhs: new_lhs, sep: *sep, body: new_body }, node.loc)
         }
     }
 
@@ -528,11 +528,7 @@ impl<'cfg> Ctx<'cfg> {
     ) -> Node<'src> {
         // Try inline first.
         let inline = self.try_inline_collection(open, close, items, at);
-        if !force_expand {
-            if let Some(n) = inline {
-                return n;
-            }
-        }
+        if !force_expand && let Some(n) = inline { return n; }
         // Expanded: one item per line at at.col + indent.
         self.expanded_collection(open, close, items, at)
     }
@@ -1275,9 +1271,7 @@ fn should_expand_apply(args: &Exprs) -> bool {
     // Single arg that is itself a multi-arg bare apply → expand (ambiguous).
     if args.items.len() == 1 {
         if let NodeKind::Apply { args: inner_args, .. } = &args.items[0].kind {
-            if inner_args.items.len() >= 2 {
-                return true;
-            }
+            return inner_args.items.len() >= 2;
         }
         return false;
     }
