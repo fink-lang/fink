@@ -46,6 +46,6 @@ test 'yield apply result', fn:
     yield foo bar
 
   | equals fink":
-    ·apply foo, bar, fn ·v_3:
+    foo bar, fn ·v_3:
       ·yield ·v_3, fn ·v_0:
         ·ƒ_0 ·v_0

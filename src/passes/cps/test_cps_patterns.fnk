@@ -62,8 +62,8 @@ test 'nested guard', fn:
     a > 0 or a < 9 = foo
   | equals fink":
     ·let foo, fn a:
-      ·apply ·op_gt, a, 0, fn ·v_5:
-        ·apply ·op_lt, a, 9, fn ·v_9:
+      ·op_gt a, 0, fn ·v_5:
+        ·op_lt a, 9, fn ·v_9:
           ·match_if ·op_or, ·v_5, ·v_9, ·panic, fn: ·ƒ_0 _
 
 
@@ -472,7 +472,7 @@ test 'match — expression in arm', fn:
         fn ·v_5, ·ƒ_3, ·ƒ_4:
           ·match_value ·v_5, true, ·ƒ_3, fn: ·ƒ_4 _
         fn ·ƒ_8:
-          ·apply ·op_plus, y, 1, fn ·v_8:
+          ·op_plus y, 1, fn ·v_8:
             ·ƒ_8 ·v_8
       ·match_arm
         fn ·v_20, ·ƒ_18, ·ƒ_19:
@@ -713,7 +713,7 @@ test 'range — exclusive in match arm', fn:
     ·match_block x,
       ·match_arm
         fn ·v_5, ·ƒ_3, ·ƒ_4:
-          ·apply ·op_rngex, 0, 10, fn ·v_9:
+          ·op_rngex 0, 10, fn ·v_9:
             ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn: ·ƒ_4 _
         fn ·ƒ_11:
           ·let 'low', fn ·v_13:
@@ -729,7 +729,7 @@ test 'range — inclusive in match arm', fn:
     ·match_block x,
       ·match_arm
         fn ·v_5, ·ƒ_3, ·ƒ_4:
-          ·apply ·op_rngin, 0, 10, fn ·v_9:
+          ·op_rngin 0, 10, fn ·v_9:
             ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn: ·ƒ_4 _
         fn ·ƒ_11:
           ·let 'low', fn ·v_13:
@@ -741,7 +741,7 @@ test 'range — bind-lhs check', fn:
   expect cps_expr fink":
     0..10 = foo
   | equals fink":
-    ·apply ·op_rngex, 0, 10, fn ·v_4:
+    ·op_rngex 0, 10, fn ·v_4:
       ·match_if ·op_in, foo, ·v_4, ·panic, fn: ·ƒ_0 _
 
 

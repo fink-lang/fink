@@ -77,7 +77,7 @@ test '·apply ident to literal', fn:
   expect cps_expr fink":
     foo 42
   | equals fink":
-    ·apply foo, 42, fn ·v_0:
+    foo 42, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -85,7 +85,7 @@ test '·apply ident to ident', fn:
   expect cps_expr fink":
     foo bar
   | equals fink":
-    ·apply foo, bar, fn ·v_0:
+    foo bar, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -125,7 +125,7 @@ test 'block bind then ·apply', fn:
     ·fn
       fn ·ƒ_2:
         ·let 42, fn x:
-          ·apply foo, x, fn ·v_2:
+          foo x, fn ·v_2:
             ·ƒ_2 ·v_2
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -138,7 +138,7 @@ test 'fn body with bind', fn:
   | equals fink":
     ·fn
       fn a, ·ƒ_3:
-        ·apply ·op_plus, a, 1, fn ·v_6:
+        ·op_plus a, 1, fn ·v_6:
           ·let ·v_6, fn x:
             ·ƒ_3 x
       fn ·v_1: ·ƒ_0 ·v_1
@@ -152,7 +152,7 @@ test 'pipe two stages', fn:
   expect cps_expr fink":
     a | foo
   | equals fink":
-    ·apply foo, a, fn ·v_0:
+    foo a, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -160,8 +160,8 @@ test 'pipe three stages', fn:
   expect cps_expr fink":
     a | foo | bar
   | equals fink":
-    ·apply foo, a, fn ·v_3:
-      ·apply bar, ·v_3, fn ·v_0:
+    foo a, fn ·v_3:
+      bar ·v_3, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -173,7 +173,7 @@ test 'infix add', fn:
   expect cps_expr fink":
     a + b
   | equals fink":
-    ·apply ·op_plus, a, b, fn ·v_0:
+    ·op_plus a, b, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -181,7 +181,7 @@ test 'infix literal', fn:
   expect cps_expr fink":
     a + 1
   | equals fink":
-    ·apply ·op_plus, a, 1, fn ·v_0:
+    ·op_plus a, 1, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -232,7 +232,7 @@ test 'unary not', fn:
   expect cps_expr fink":
     not x
   | equals fink":
-    ·apply ·op_not, x, fn ·v_0:
+    ·op_not x, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -240,7 +240,7 @@ test 'unary minus', fn:
   expect cps_expr fink":
     -x
   | equals fink":
-    ·apply ·op_minus, x, fn ·v_0:
+    ·op_minus x, fn ·v_0:
       ·ƒ_0 ·v_0
 
 ---
@@ -251,9 +251,9 @@ test 'chained cmp', fn:
   expect cps_expr fink":
     a < b < c
   | equals fink":
-    ·apply ·op_lt, a, b, fn ·v_4:
-      ·apply ·op_lt, b, c, fn ·v_6:
-        ·apply ·op_and, ·v_4, ·v_6, fn ·v_0:
+    ·op_lt a, b, fn ·v_4:
+      ·op_lt b, c, fn ·v_6:
+        ·op_and ·v_4, ·v_6, fn ·v_0:
           ·ƒ_0 ·v_0
 
 ---
@@ -264,7 +264,7 @@ test 'range excl', fn:
   expect cps_expr fink":
     0..10
   | equals fink":
-    ·apply ·op_rngex, 0, 10, fn ·v_0:
+    ·op_rngex 0, 10, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -272,7 +272,7 @@ test 'range incl', fn:
   expect cps_expr fink":
     0...10
   | equals fink":
-    ·apply ·op_rngin, 0, 10, fn ·v_0:
+    ·op_rngin 0, 10, fn ·v_0:
       ·ƒ_0 ·v_0
 
 ---
@@ -283,7 +283,7 @@ test 'str templ', fn:
   expect cps_expr fink":
     'hello \${name}'
   | equals fink":
-    ·apply ·str_fmt, 'hello ', name, fn ·v_0:
+    ·str_fmt 'hello ', name, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -291,7 +291,7 @@ test 'str templ two exprs', fn:
   expect cps_expr fink":
     '\${a} and \${b}'
   | equals fink":
-    ·apply ·str_fmt, a, ' and ', b, fn ·v_0:
+    ·str_fmt a, ' and ', b, fn ·v_0:
       ·ƒ_0 ·v_0
 
 ---
@@ -302,9 +302,9 @@ test 'seq literal', fn:
   expect cps_expr fink":
     [1, 2, 3]
   | equals fink":
-    ·apply ·seq_append, [], 1, fn ·v_3:
-      ·apply ·seq_append, ·v_3, 2, fn ·v_6:
-        ·apply ·seq_append, ·v_6, 3, fn ·v_0:
+    ·seq_append [], 1, fn ·v_3:
+      ·seq_append ·v_3, 2, fn ·v_6:
+        ·seq_append ·v_6, 3, fn ·v_0:
           ·ƒ_0 ·v_0
 
 
@@ -320,8 +320,8 @@ test 'rec literal', fn:
   expect cps_expr fink":
     {x: 1, y: 2}
   | equals fink":
-    ·apply ·rec_put, {}, 'x', 1, fn ·v_4:
-      ·apply ·rec_put, ·v_4, 'y', 2, fn ·v_0:
+    ·rec_put {}, 'x', 1, fn ·v_4:
+      ·rec_put ·v_4, 'y', 2, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -337,8 +337,8 @@ test 'rec shorthand', fn:
   expect cps_expr fink":
     {x, y}
   | equals fink":
-    ·apply ·rec_put, {}, 'x', x, fn ·v_4:
-      ·apply ·rec_put, ·v_4, 'y', y, fn ·v_0:
+    ·rec_put {}, 'x', x, fn ·v_4:
+      ·rec_put ·v_4, 'y', y, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -350,7 +350,7 @@ test 'member static', fn:
   expect cps_expr fink":
     foo.bar
   | equals fink":
-    ·apply ·op_dot, foo, bar, fn ·v_0:
+    ·op_dot foo, bar, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -358,7 +358,7 @@ test 'member dynamic', fn:
   expect cps_expr fink":
     foo.(key)
   | equals fink":
-    ·apply ·op_dot, foo, key, fn ·v_0:
+    ·op_dot foo, key, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -370,8 +370,8 @@ test 'seq spread', fn:
   expect cps_expr fink":
     [..xs, 1]
   | equals fink":
-    ·apply ·seq_concat, [], xs, fn ·v_3:
-      ·apply ·seq_append, ·v_3, 1, fn ·v_0:
+    ·seq_concat [], xs, fn ·v_3:
+      ·seq_append ·v_3, 1, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -379,8 +379,8 @@ test 'rec spread', fn:
   expect cps_expr fink":
     {..base, x: 1}
   | equals fink":
-    ·apply ·rec_merge, {}, base, fn ·v_3:
-      ·apply ·rec_put, ·v_3, 'x', 1, fn ·v_0:
+    ·rec_merge {}, base, fn ·v_3:
+      ·rec_put ·v_3, 'x', 1, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -404,7 +404,7 @@ test 'tagged literal', fn:
   expect cps_expr fink":
     10sec
   | equals fink":
-    ·apply sec, 10, fn ·v_0:
+    sec 10, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -420,7 +420,7 @@ test 'sequential bindings', fn:
     ·fn
       fn ·ƒ_2:
         ·let 1, fn foo:
-          ·apply ·op_plus, foo, 1, fn ·v_7:
+          ·op_plus foo, 1, fn ·v_7:
             ·let ·v_7, fn bar:
               ·ƒ_2 bar
       fn ·v_1: ·ƒ_0 ·v_1
@@ -430,7 +430,7 @@ test 'binding rhs is a call', fn:
   expect cps_expr fink":
     foo = add 1, 2
   | equals fink":
-    ·apply add, 1, 2, fn ·v_4:
+    add 1, 2, fn ·v_4:
       ·let ·v_4, fn foo:
         ·ƒ_0 foo
 
@@ -442,7 +442,7 @@ test 'expression result discarded', fn:
   | equals fink":
     ·fn
       fn ·ƒ_2:
-        ·apply foo, 1, fn ·v_5:
+        foo 1, fn ·v_5:
           ·let ·v_5, fn ·v_7:
             ·ƒ_2 ·v_7
       fn ·v_1: ·ƒ_0 ·v_1
@@ -452,8 +452,8 @@ test 'chained member access', fn:
   expect cps_expr fink":
     foo.bar.baz
   | equals fink":
-    ·apply ·op_dot, foo, bar, fn ·v_3:
-      ·apply ·op_dot, ·v_3, baz, fn ·v_0:
+    ·op_dot foo, bar, fn ·v_3:
+      ·op_dot ·v_3, baz, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -465,7 +465,7 @@ test 'simple call', fn:
   expect cps_expr fink":
     add 1, 2
   | equals fink":
-    ·apply add, 1, 2, fn ·v_0:
+    add 1, 2, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -473,8 +473,8 @@ test 'nested call', fn:
   expect cps_expr fink":
     add (mul 2, 3), 1
   | equals fink":
-    ·apply mul, 2, 3, fn ·v_5:
-      ·apply add, ·v_5, 1, fn ·v_0:
+    mul 2, 3, fn ·v_5:
+      add ·v_5, 1, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -482,8 +482,8 @@ test 'postfix tag', fn:
   expect cps_expr fink":
     (foo bar)tag
   | equals fink":
-    ·apply foo, bar, fn ·v_4:
-      ·apply tag, ·v_4, fn ·v_0:
+    foo bar, fn ·v_4:
+      tag ·v_4, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -491,7 +491,7 @@ test 'call with spread', fn:
   expect cps_expr fink":
     foo a, ..rest
   | equals fink":
-    ·apply foo, a, ..rest, fn ·v_0:
+    foo a, ..rest, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -499,7 +499,7 @@ test 'simple pipe', fn:
   expect cps_expr fink":
     x | f
   | equals fink":
-    ·apply f, x, fn ·v_0:
+    f x, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -507,8 +507,8 @@ test 'pipe chain', fn:
   expect cps_expr fink":
     x | f | g
   | equals fink":
-    ·apply f, x, fn ·v_3:
-      ·apply g, ·v_3, fn ·v_0:
+    f x, fn ·v_3:
+      g ·v_3, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -522,7 +522,7 @@ test 'function binding', fn:
   | equals fink":
     ·fn
       fn x, ·ƒ_3:
-        ·apply ·op_plus, x, 1, fn ·v_3:
+        ·op_plus x, 1, fn ·v_3:
           ·ƒ_3 ·v_3
       fn ·v_1:
         ·let ·v_1, fn inc:
@@ -540,7 +540,7 @@ test '·closure over outer variable', fn:
       fn a, ·ƒ_3:
         ·fn
           fn b, ·ƒ_6:
-            ·apply ·op_plus, a, b, fn ·v_6:
+            ·op_plus a, b, fn ·v_6:
               ·ƒ_6 ·v_6
           fn ·v_4:
             ·let ·v_4, fn ni:
@@ -560,7 +560,7 @@ test 'three sequential bindings', fn:
       fn ·ƒ_2:
         ·let 1, fn a:
           ·let 2, fn b:
-            ·apply ·op_plus, a, b, fn ·v_9:
+            ·op_plus a, b, fn ·v_9:
               ·let ·v_9, fn c:
                 ·ƒ_2 c
       fn ·v_1: ·ƒ_0 ·v_1
@@ -579,12 +579,12 @@ test 'forward ref', fn:
       fn ·ƒ_2:
         ·fn
           fn a, ·ƒ_5:
-            ·apply ·op_plus, a, 1, fn ·v_9:
-              ·apply foo, ·v_9, fn ·v_5:
+            ·op_plus a, 1, fn ·v_9:
+              foo ·v_9, fn ·v_5:
                 ·ƒ_5 ·v_5
           fn ·v_3:
             ·let ·v_3, fn foo:
-              ·apply foo, 1, fn ·v_2:
+              foo 1, fn ·v_2:
                 ·ƒ_2 ·v_2
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -598,13 +598,13 @@ test 'mutual recursion', fn:
       fn ·ƒ_2:
         ·fn
           fn x, ·ƒ_5:
-            ·apply pong, x, fn ·v_5:
+            pong x, fn ·v_5:
               ·ƒ_5 ·v_5
           fn ·v_3:
             ·let ·v_3, fn ping:
               ·fn
                 fn x, ·ƒ_15:
-                  ·apply ping, x, fn ·v_15:
+                  ping x, fn ·v_15:
                     ·ƒ_15 ·v_15
                 fn ·v_13:
                   ·let ·v_13, fn pong:
@@ -634,7 +634,7 @@ test 'multi-param function', fn:
   | equals fink":
     ·fn
       fn x, y, ·ƒ_4:
-        ·apply ·op_plus, x, y, fn ·v_4:
+        ·op_plus x, y, fn ·v_4:
           ·ƒ_4 ·v_4
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -663,11 +663,11 @@ test 'calling a local — still goes through ·load', fn:
       fn ·ƒ_2:
         ·fn
           fn x, ·ƒ_5:
-            ·apply ·op_plus, x, 1, fn ·v_5:
+            ·op_plus x, 1, fn ·v_5:
               ·ƒ_5 ·v_5
           fn ·v_3:
             ·let ·v_3, fn inc:
-              ·apply inc, 5, fn ·v_2:
+              inc 5, fn ·v_2:
                 ·ƒ_2 ·v_2
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -692,11 +692,11 @@ test 'group with binding — immediately-invoked ·closure', fn:
   | equals fink":
     ·fn
       fn ·ƒ_2:
-        ·apply ham, 1, fn ·v_5:
+        ham 1, fn ·v_5:
           ·let ·v_5, fn ni:
             ·ƒ_2 ni
       fn ·v_1:
-        ·apply ·v_1, fn ·v_12:
+        ·v_1 fn ·v_12:
           ·let ·v_12, fn spam:
             ·ƒ_0 spam
 
@@ -720,7 +720,7 @@ test 'function with operator in body', fn:
   | equals fink":
     ·fn
       fn x, ·ƒ_3:
-        ·apply ·op_plus, x, 1, fn ·v_3:
+        ·op_plus x, 1, fn ·v_3:
           ·ƒ_3 ·v_3
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -731,9 +731,9 @@ test 'try — result bound, code continues', fn:
   | equals fink":
     ·fn
       fn ·ƒ_2:
-        ·apply foo, bar, fn ·v_5:
+        foo bar, fn ·v_5:
           ·let ·v_5, fn ni:
-            ·apply ·op_plus, ni, 1, fn ·v_2:
+            ·op_plus ni, 1, fn ·v_2:
               ·ƒ_2 ·v_2
       fn ·v_1: ·ƒ_0 ·v_1
 
@@ -748,33 +748,33 @@ test 'seq literal with spread', fn:
   expect cps_expr fink":
     [1, ..a, 2]
   | equals fink":
-    ·apply ·seq_append, [], 1, fn ·v_3:
-      ·apply ·seq_concat, ·v_3, a, fn ·v_6:
-        ·apply ·seq_append, ·v_6, 2, fn ·v_0:
+    ·seq_append [], 1, fn ·v_3:
+      ·seq_concat ·v_3, a, fn ·v_6:
+        ·seq_append ·v_6, 2, fn ·v_0:
           ·ƒ_0 ·v_0
 
 test 'seq literal leading spread', fn:
   expect cps_expr fink":
     [..a, ..b]
   | equals fink":
-    ·apply ·seq_concat, [], a, fn ·v_3:
-      ·apply ·seq_concat, ·v_3, b, fn ·v_0:
+    ·seq_concat [], a, fn ·v_3:
+      ·seq_concat ·v_3, b, fn ·v_0:
         ·ƒ_0 ·v_0
 
 test 'rec literal with spread', fn:
   expect cps_expr fink":
     {foo: a, ..b}
   | equals fink":
-    ·apply ·rec_put, {}, 'foo', a, fn ·v_4:
-      ·apply ·rec_merge, ·v_4, b, fn ·v_0:
+    ·rec_put {}, 'foo', a, fn ·v_4:
+      ·rec_merge ·v_4, b, fn ·v_0:
         ·ƒ_0 ·v_0
 
 test 'rec literal leading spread', fn:
   expect cps_expr fink":
     {..a, ..b}
   | equals fink":
-    ·apply ·rec_merge, {}, a, fn ·v_3:
-      ·apply ·rec_merge, ·v_3, b, fn ·v_0:
+    ·rec_merge {}, a, fn ·v_3:
+      ·rec_merge ·v_3, b, fn ·v_0:
         ·ƒ_0 ·v_0
 
 
@@ -789,7 +789,7 @@ test 'varargs — call site spreads iterable', fn:
   expect cps_expr fink":
     foo 1, ..items
   | equals fink":
-    ·apply foo, 1, ..items, fn ·v_0:
+    foo 1, ..items, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -797,7 +797,7 @@ test 'call with spread — trailing iterable', fn:
   expect cps_expr fink":
     foo a, ..rest
   | equals fink":
-    ·apply foo, a, ..rest, fn ·v_0:
+    foo a, ..rest, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -805,7 +805,7 @@ test 'call with spread — spread only', fn:
   expect cps_expr fink":
     foo ..items
   | equals fink":
-    ·apply foo, ..items, fn ·v_0:
+    foo ..items, fn ·v_0:
       ·ƒ_0 ·v_0
 
 
@@ -815,7 +815,7 @@ test 'call with spread — passes through from varargs fn', fn:
   | equals fink":
     ·fn
       fn ..args, ·ƒ_3:
-        ·apply foo, ..args, fn ·v_3:
+        foo ..args, fn ·v_3:
           ·ƒ_3 ·v_3
       fn ·v_1: ·ƒ_0 ·v_1
 

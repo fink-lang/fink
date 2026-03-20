@@ -417,9 +417,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
           Arg::Cont(c) => render_cont(c, ctx),
           Arg::Expr(e) => to_node(e, ctx),
         }).collect();
-        let mut apply_args: Vec<Node<'static>> = vec![func_node];
-        apply_args.extend(arg_nodes);
-        apply(ident("·apply"), apply_args)
+        apply(func_node, arg_nodes)
       }
     }
 
