@@ -832,16 +832,19 @@ fn lower_match<'src>(
     v
   }).collect();
   let arm_params: Vec<BindNode> = params.iter().map(|_| g.fresh_result(origin)).collect();
-  let cps_arms: Vec<Expr<'src>> = arms.iter()
-    .map(|arm| lower_match_arm(g, arm, &arm_params, origin))
-    .collect();
+  let mut arm_vals: Vec<Val<'src>> = vec![];
+  for arm in arms {
+    let (arm_val, arm_pending) = lower_match_arm(g, arm, &arm_params, origin);
+    pending.extend(arm_pending);
+    arm_vals.push(arm_val);
+  }
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::MatchBlock { params, arms: cps_arms, result,  origin });
+  pending.push(Pending::MatchBlock { params, arm_vals, result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
-fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindNode], _origin: Option<AstId>) -> Expr<'src> {
+fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindNode], _origin: Option<AstId>) -> Lower<'src> {
   match &arm.kind {
     NodeKind::Arm { lhs, body, .. } => {
       let origin = Some(arm.id);
@@ -908,10 +911,10 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
       matcher_args.push(succ_bind);
       let matcher = Cont::Expr { args: matcher_args, body: Box::new(matcher_body) };
 
-      g.expr(ExprKind::App {
-        func: Callable::BuiltIn(BuiltIn::MatchArm),
-        args: vec![Arg::Cont(matcher), Arg::Cont(arm_body)],
-      }, origin)
+      let result = g.fresh_result(origin);
+      let (result_kind, result_id) = (result.kind, result.id);
+      let pending = vec![Pending::MatchArm { matcher, body: arm_body, result, origin }];
+      (ref_val(g, result_kind, result_id, origin), pending)
     }
     _ => panic!("lower_match_arm: expected Arm node"),
   }
@@ -956,7 +959,8 @@ enum Pending<'src> {
   Val { name: BindNode, val: Val<'src>, origin: Option<AstId> },
   Fn { name: BindNode, params: Vec<Param>, cont: BindNode, fn_body: Expr<'src>, origin: Option<AstId> },
   App { func: Callable<'src>, args: Vec<Arg<'src>>, result: BindNode, origin: Option<AstId> },
-  MatchBlock { params: Vec<Val<'src>>, arms: Vec<Expr<'src>>, result: BindNode, origin: Option<AstId> },
+  MatchBlock { params: Vec<Val<'src>>, arm_vals: Vec<Val<'src>>, result: BindNode, origin: Option<AstId> },
+  MatchArm { matcher: Cont<'src>, body: Cont<'src>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
   MatchBind { name: BindNode, val: Val<'src>, origin: Option<AstId> },
   /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
@@ -989,7 +993,7 @@ impl<'src> Pending<'src> {
   fn origin(&self) -> Option<AstId> {
     match self {
       Pending::Val { origin, .. } | Pending::Fn { origin, .. } | Pending::App { origin, .. }
-      | Pending::MatchBlock { origin, .. } | Pending::MatchBind { origin, .. }
+      | Pending::MatchBlock { origin, .. } | Pending::MatchArm { origin, .. } | Pending::MatchBind { origin, .. }
       | Pending::MatchGuard { origin, .. } | Pending::MatchValue { origin, .. }
       | Pending::MatchSeq { origin, .. } | Pending::MatchNext { origin, .. }
       | Pending::MatchDone { origin, .. } | Pending::MatchNotDone { origin, .. }
@@ -1071,11 +1075,18 @@ fn wrap_with_fail<'src>(
         ExprKind::App { func, args: { let mut a = args; a.push(Arg::Cont(cont_with_result(body_cont, result))); a } },
         origin,
       ),
-      Pending::MatchBlock { params, arms, result, origin } => {
+      Pending::MatchArm { matcher, body, result, origin } => {
+        g.expr(
+          ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::MatchArm),
+            args: vec![Arg::Cont(matcher), Arg::Cont(body), Arg::Cont(cont_with_result(body_cont, result))],
+          },
+          origin,
+        )
+      },
+      Pending::MatchBlock { params, arm_vals, result, origin } => {
         let mut mb_args: Vec<Arg<'src>> = params.into_iter().map(Arg::Val).collect();
-        for arm in arms {
-          mb_args.push(Arg::Expr(Box::new(arm)));
-        }
+        mb_args.extend(arm_vals.into_iter().map(Arg::Val));
         mb_args.push(Arg::Cont(cont_with_result(body_cont, result)));
         g.expr(
           ExprKind::App { func: Callable::BuiltIn(BuiltIn::MatchBlock), args: mb_args },

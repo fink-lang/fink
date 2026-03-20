@@ -29,7 +29,7 @@
 
 use crate::ast::AstId;
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, Cont, CpsId, CpsResult, Expr, ExprKind, Param,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Param,
 };
 use crate::propgraph::PropGraph;
 
@@ -80,29 +80,35 @@ pub fn lift<'src>(result: CpsResult<'src>) -> CpsResult<'src> {
 fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
-    App { func, args } => {
-      // Recurse into all Arg::Cont bodies and Arg::Expr entries, then hoist
-      // the last Arg::Cont (result continuation) if present.
+    App { func, mut args } => {
+      // MatchArm has only structural conts (matcher + body) — no result cont to hoist.
+      // All other App nodes have a trailing result cont that should be hoisted.
+      let has_result_cont = !matches!(func, Callable::BuiltIn(BuiltIn::MatchArm));
+
+      // Split off the result continuation before recursing.
+      let result_cont = if has_result_cont {
+        match args.pop() {
+          Some(Arg::Cont(c)) => Some(c),
+          other => { if let Some(a) = other { args.push(a); } None }
+        }
+      } else {
+        None
+      };
+
+      // Recurse into all remaining Arg::Cont bodies and Arg::Expr entries.
       let args: Vec<Arg<'src>> = args.into_iter().map(|a| match a {
         Arg::Cont(c) => Arg::Cont(recurse_cont(c, alloc)),
         Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, alloc))),
         other => other,
       }).collect();
 
-      // Find the last Arg::Cont and hoist it (result continuation).
-      let last_cont_idx = args.iter().rposition(|a| matches!(a, Arg::Cont(_)));
-      match last_cont_idx {
-        Some(idx) => {
-          let mut args = args;
-          let cont = match args.remove(idx) {
-            Arg::Cont(c) => c,
-            _ => unreachable!(),
-          };
-          hoist_cont(expr.id, cont, alloc, |cont| {
-            args.insert(idx, Arg::Cont(cont));
-            App { func, args }
-          })
-        }
+      // Hoist the result continuation (if present).
+      match result_cont {
+        Some(cont) => hoist_cont(expr.id, cont, alloc, |cont| {
+          let mut a = args;
+          a.push(Arg::Cont(cont));
+          App { func, args: a }
+        }),
         None => Expr { id: expr.id, kind: App { func, args } },
       }
     }
