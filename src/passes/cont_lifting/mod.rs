@@ -80,16 +80,31 @@ pub fn lift<'src>(result: CpsResult<'src>) -> CpsResult<'src> {
 fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
-    App { func, mut args } => {
-      // The last Arg::Cont is the result continuation — split it off for hoisting.
-      let cont = match args.pop() {
-        Some(Arg::Cont(c)) => c,
-        _ => unreachable!("App must have trailing Arg::Cont"),
-      };
-      hoist_cont(expr.id, cont, alloc, |cont| {
-        args.push(Arg::Cont(cont));
-        App { func, args }
-      })
+    App { func, args } => {
+      // Recurse into all Arg::Cont bodies and Arg::Expr entries, then hoist
+      // the last Arg::Cont (result continuation) if present.
+      let args: Vec<Arg<'src>> = args.into_iter().map(|a| match a {
+        Arg::Cont(c) => Arg::Cont(recurse_cont(c, alloc)),
+        Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, alloc))),
+        other => other,
+      }).collect();
+
+      // Find the last Arg::Cont and hoist it (result continuation).
+      let last_cont_idx = args.iter().rposition(|a| matches!(a, Arg::Cont(_)));
+      match last_cont_idx {
+        Some(idx) => {
+          let mut args = args;
+          let cont = match args.remove(idx) {
+            Arg::Cont(c) => c,
+            _ => unreachable!(),
+          };
+          hoist_cont(expr.id, cont, alloc, |cont| {
+            args.insert(idx, Arg::Cont(cont));
+            App { func, args }
+          })
+        }
+        None => Expr { id: expr.id, kind: App { func, args } },
+      }
     }
 
     Yield { value, cont } =>
