@@ -719,6 +719,7 @@ fn build_fink_fn<'a, 'b, 'src>(
 }
 
 struct FnCtx<'a, 'b, 'src> {
+  #[allow(dead_code)] // infrastructure for future local allocation
   local_count: u32,
   /// Local index of the continuation parameter (last param).
   cont_local: u32,
@@ -745,10 +746,10 @@ impl FnCtx<'_, '_, '_> {
     let target_ast_id = self.ctx.origin.try_get(bind_id)?.as_ref()?;
     // Search locals for a param with the same AST origin.
     for &(local_cps_id, local_idx) in &self.locals {
-      if let Some(Some(local_ast_id)) = self.ctx.origin.try_get(local_cps_id) {
-        if local_ast_id == target_ast_id {
-          return Some(local_idx);
-        }
+      if let Some(Some(local_ast_id)) = self.ctx.origin.try_get(local_cps_id)
+        && local_ast_id == target_ast_id
+      {
+        return Some(local_idx);
       }
     }
     None
@@ -861,10 +862,10 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], _expr_id: CpsId, f: &mut Func
       match op {
         // Binary i31ref arithmetic: unwrap, compute, rewrap, pass to cont
         Add | Sub | Mul => {
-          emit_arg_val(&val_args[0], f, fc);
+          emit_arg_val(val_args[0], f, fc);
           f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
           f.instruction(&Instruction::I31GetS);
-          emit_arg_val(&val_args[1], f, fc);
+          emit_arg_val(val_args[1], f, fc);
           f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
           f.instruction(&Instruction::I31GetS);
           match op {
@@ -885,7 +886,7 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], _expr_id: CpsId, f: &mut Func
     }
 
     Callable::Val(val) => {
-      let (val_args, cont_id) = split_app_args(args);
+      let (val_args, _cont_id) = split_app_args(args);
 
       // Resolve the function reference to a known compiled function.
       let target_fn_idx = match &val.kind {
@@ -1222,17 +1223,16 @@ fn discover_aliases(expr: &Expr<'_>, locals: &mut Vec<(CpsId, u32)>) {
     match &current.kind {
       ExprKind::LetVal { name, val, body: Cont::Expr { args, body: cont_body } } => {
         // Check if val is a Ref to an existing local — alias the name to it.
-        if let ValKind::Ref(crate::passes::cps::ir::Ref::Synth(ref_id)) = &val.kind {
-          if let Some(local_idx) = locals.iter().find(|(id, _)| id == ref_id).map(|(_, idx)| *idx) {
-            locals.push((name.id, local_idx));
-          }
+        if let ValKind::Ref(crate::passes::cps::ir::Ref::Synth(ref_id)) = &val.kind
+          && let Some(local_idx) = locals.iter().find(|(id, _)| id == ref_id).map(|(_, idx)| *idx)
+        {
+          locals.push((name.id, local_idx));
         }
         // The LetVal name and the Cont::Expr arg refer to the same binding.
-        // Map name.id → same local as args[0].id so refs resolving to name.id find the local.
-        if let Some(arg) = args.first() {
-          if let Some(local_idx) = locals.iter().find(|(id, _)| *id == arg.id).map(|(_, idx)| *idx) {
-            locals.push((name.id, local_idx));
-          }
+        if let Some(arg) = args.first()
+          && let Some(local_idx) = locals.iter().find(|(id, _)| *id == arg.id).map(|(_, idx)| *idx)
+        {
+          locals.push((name.id, local_idx));
         }
         current = cont_body;
       }
@@ -1241,12 +1241,11 @@ fn discover_aliases(expr: &Expr<'_>, locals: &mut Vec<(CpsId, u32)>) {
         // The Cont::Expr arg receives the function value.
         // The LetVal that follows binds it to a name.
         // Walk into cont_body to find and alias the LetVal name.
-        if let ExprKind::LetVal { name, .. } = &cont_body.kind {
-          if let Some(arg) = args.first() {
-            if let Some(local_idx) = locals.iter().find(|(id, _)| *id == arg.id).map(|(_, idx)| *idx) {
-              locals.push((name.id, local_idx));
-            }
-          }
+        if let ExprKind::LetVal { name, .. } = &cont_body.kind
+          && let Some(arg) = args.first()
+          && let Some(local_idx) = locals.iter().find(|(id, _)| *id == arg.id).map(|(_, idx)| *idx)
+        {
+          locals.push((name.id, local_idx));
         }
         current = cont_body;
       }
