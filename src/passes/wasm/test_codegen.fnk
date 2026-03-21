@@ -41,15 +41,12 @@ test 'multiple let bindings used', fn:
   | equals fink":
     5
 
-# TODO: user fn call — $__main's collect_letval_locals only finds 1 local
-# for the multi-LetFn root chain. The remaining LetFn→LetVal entries
-# don't get locals allocated, so refs to module-level bindings fail.
-# test 'user fn call', fn:
-#   expect run fink":
-#     add = fn a, b: a + b
-#     main = fn: add 3, 4
-#   | equals fink":
-#     7
+test 'user fn call', fn:
+  expect run fink":
+    add = fn a, b: a + b
+    main = fn: add 3, 4
+  | equals fink":
+    7
 
 test 'chained let', fn:
   expect run fink":
