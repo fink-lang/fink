@@ -95,6 +95,12 @@ impl<'src> std::fmt::Display for Token<'src> {
   }
 }
 
+/// Count UTF-16 code units in a UTF-8 string slice.
+/// BMP chars (U+0000–U+FFFF) are 1 unit; supplementary chars (U+10000+) are 2.
+fn utf16_len(s: &str) -> u32 {
+  s.chars().map(|c| c.len_utf16() as u32).sum()
+}
+
 enum LexMode {
   Block,
   Bracket(u8, usize), // opening byte + ind.len() snapshot at open time
@@ -142,14 +148,17 @@ impl<'src> Lexer<'src> {
     &self.src.as_bytes()[self.pos.idx as usize..]
   }
 
-  // TODO: col tracks byte offset, not character/grapheme offset.
-  // Multi-byte UTF-8 (e.g. `·` = 2 bytes, CJK, emoji) causes col to diverge
-  // from the visual column. This breaks VSCode extension, Monaco editor, source
-  // maps (v3 spec), and DAP positioning. Fix: count grapheme clusters or at
-  // minimum Unicode scalar values instead of bytes.
+  // Advance by ASCII bytes only — col increments match byte count.
+  // For multi-byte chars use advance_char(); for full token slices use consume().
   fn advance(&mut self, num_bytes: u32) {
     self.pos.idx += num_bytes;
     self.pos.col += num_bytes;
+  }
+
+  // Advance past a single Unicode char (already peeked). Updates col correctly for UTF-16.
+  fn advance_char(&mut self, ch: char) {
+    self.pos.idx += ch.len_utf8() as u32;
+    self.pos.col += ch.len_utf16() as u32;
   }
 
   fn advance_line(&mut self) {
@@ -172,7 +181,9 @@ impl<'src> Lexer<'src> {
 
   fn consume(&mut self, num_bytes: u32, kind: TokenKind) -> Token<'src> {
     let start = self.pos;
-    self.advance(num_bytes);
+    let slice = &self.src[self.pos.idx as usize..(self.pos.idx + num_bytes) as usize];
+    self.pos.idx += num_bytes;
+    self.pos.col += utf16_len(slice);
     self.make_token(kind, start)
   }
 
@@ -240,7 +251,12 @@ impl<'src> Lexer<'src> {
     let start = self.pos;
     loop {
       match self.peek_bytes() {
-        [b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | 0x80..=0xFF, ..] => self.advance(1),
+        [b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9', ..] => self.advance(1),
+        [0x80..=0xFF, ..] => {
+          // Multi-byte UTF-8 char — advance by the full char to track col16 correctly.
+          let ch = self.src[self.pos.idx as usize..].chars().next().unwrap();
+          self.advance_char(ch);
+        }
         // `-` only if immediately followed by an ident-start byte (no spaces, no structural chars)
         [b'-', b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | 0x80..=0xFF, ..] => self.advance(1),
         // `-` not followed by an ident-start byte: unterminated identifier error
@@ -394,7 +410,7 @@ impl<'src> Lexer<'src> {
 
       loop {
         if i >= bytes.len() {
-          let ep = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+          let ep = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
           eof_err = Some(Token { kind: TokenKind::Err, loc: Loc { start: ep, end: ep }, src: "unterminated string" });
           raw.push(RawLine { start: seg_start, end: ep, only_spaces, is_closing_only: false, indent: leading_spaces });
           p = ep;
@@ -408,13 +424,13 @@ impl<'src> Lexer<'src> {
             break;
           }
           b'\'' => {
-            let end = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+            let end = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
             raw.push(RawLine { start: seg_start, end, only_spaces, is_closing_only: only_spaces, indent: leading_spaces });
             p = end;
             break 'outer;
           }
           b'$' if i + 1 < bytes.len() && bytes[i + 1] == b'{' => {
-            let end = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+            let end = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
             raw.push(RawLine { start: seg_start, end, only_spaces, is_closing_only: false, indent: leading_spaces });
             p = end;
             break 'outer;
@@ -558,7 +574,7 @@ impl<'src> Lexer<'src> {
 
       loop {
         if i >= bytes.len() {
-          let ep = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+          let ep = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
           raw.push(RawLine { start: seg_start, end: ep, only_spaces, indent: leading_spaces });
           p = ep;
           done = true;
@@ -572,7 +588,7 @@ impl<'src> Lexer<'src> {
             break;
           }
           b'$' if i + 1 < bytes.len() && bytes[i + 1] == b'{' => {
-            let end = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+            let end = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
             raw.push(RawLine { start: seg_start, end, only_spaces, indent: leading_spaces });
             p = end;
             interp = true;
@@ -626,6 +642,10 @@ impl<'src> Lexer<'src> {
     loop {
       match self.peek_bytes() {
         [] | [b'\n', ..] => return self.make_token(TokenKind::Comment, start),
+        [0x80..=0xFF, ..] => {
+          let ch = self.src[self.pos.idx as usize..].chars().next().unwrap();
+          self.advance_char(ch);
+        }
         _ => self.advance(1),
       }
     }
@@ -665,7 +685,7 @@ impl<'src> Lexer<'src> {
 
       loop {
         if i >= bytes.len() {
-          let ep = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+          let ep = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
           eof_err = Some(Token { kind: TokenKind::Err, loc: Loc { start: ep, end: ep }, src: "unterminated block comment" });
           raw.push(RawLine { start: seg_start, end: ep, only_spaces, is_closing_only: false, indent: leading_spaces });
           p = ep;
@@ -680,7 +700,7 @@ impl<'src> Lexer<'src> {
           }
           b'-' if i + 2 < bytes.len() && bytes[i + 1] == b'-' && bytes[i + 2] == b'-' => {
             // Closing ---
-            let end = Pos { idx: i as u32, line: p.line, col: p.col + (i as u32 - p.idx) };
+            let end = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
             raw.push(RawLine { start: seg_start, end, only_spaces, is_closing_only: only_spaces, indent: leading_spaces });
             p = end;
             break 'outer;
