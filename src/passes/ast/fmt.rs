@@ -74,7 +74,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::LitInt(s) => out.push_str(s),
     NodeKind::LitFloat(s) => out.push_str(s),
     NodeKind::LitDecimal(s) => out.push_str(s),
-    NodeKind::LitStr { open, close, content: s } => {
+    NodeKind::LitStr { open, close, content: s, .. } => {
       if open.src == "\":" {
         // Block string: emit ": followed by indented content lines
         // Map each line back to its source line (content starts one line after ":")

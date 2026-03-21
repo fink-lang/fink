@@ -1,4 +1,5 @@
 pub mod errors;
+pub mod fmt;
 #[cfg(feature = "runner")]
 pub mod dap;
 #[cfg(feature = "runner")]
