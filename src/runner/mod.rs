@@ -49,17 +49,13 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
   use crate::ast::build_index;
   use crate::parser::parse;
   use crate::passes::closure_lifting::lift_all;
-  use crate::passes::cont_lifting::lift;
   use crate::passes::cps::transform::lower_expr;
   use crate::passes::wasm::codegen::codegen;
 
   let r = parse(src).map_err(|e| e.message)?;
   let ast_index = build_index(&r);
   let cps = lower_expr(&r.root);
-  let cps = lift(cps);
-  let (lifted, _) = lift_all(cps, &ast_index);
-  let lifted = lift(lifted);
-  let resolved = crate::passes::name_res::resolve(&lifted.root, &lifted.origin, &ast_index, lifted.origin.len());
+  let (lifted, resolved) = lift_all(cps, &ast_index);
   let result = codegen(&lifted, &resolved, &ast_index);
   Ok(CompileResult { wasm: result.wasm, mappings: result.mappings })
 }

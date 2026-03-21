@@ -1052,6 +1052,15 @@ fn wrap_with_fail<'src>(
     let body_cont: Cont<'src> = match acc {
       Acc::Tail(cont) => cont,
       Acc::Expr(inner) => {
+        // TODO: when Pending::Fn is followed by Pending::MatchBind (plain ident
+        // bind like `add = fn a, b: ...`), the fresh_result Synth bind here is
+        // redundant — the MatchBind's Name bind could go directly into the
+        // LetFn body Cont::Expr args, avoiding the extra LetVal indirection.
+        // Currently produces: LetFn { body: Cont::Expr [Synth] → LetVal [Name] }
+        // Could produce:      LetFn { body: Cont::Expr [Name] → rest }
+        // Codegen currently compensates with a val_alias map (wasm/codegen.rs)
+        // that follows these LetVal rebinding chains — remove that once this
+        // is fixed here.
         let arg = g.fresh_result(pending.origin());
         Cont::Expr { args: vec![arg], body: Box::new(inner) }
       }
