@@ -56,6 +56,7 @@ pub fn codegen(
 ) -> CodegenResult {
   let mut ctx = Ctx::new(&cps.origin, ast_index, resolve);
   collect_funcs(&cps.root, &mut ctx);
+  collect_match_arms(&cps.root, &mut ctx);
   let wasm = emit_module(&cps.root, &mut ctx);
   CodegenResult { wasm, mappings: ctx.mappings }
 }
@@ -100,6 +101,8 @@ struct CollectedFn<'a, 'src> {
   fn_body: &'a Expr<'src>,
   /// CpsIds of the value params, in order.
   param_ids: Vec<CpsId>,
+  /// Bind kinds of the value params — Cont-typed params get (ref $Cont) in WASM.
+  param_kinds: Vec<Bind>,
   /// CpsId of the cont param.
   cont_id: CpsId,
   /// Total arity (value params + 1 cont).
@@ -124,13 +127,18 @@ struct Ctx<'a, 'src> {
   ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
   resolve: &'a ResolveResult,
   funcs: Vec<CollectedFn<'a, 'src>>,
-  /// (arity, type_index) for arity >= 2.
-  arity_types: Vec<(u32, u32)>,
+  /// (signature, type_index) for compiled fn types.
+  /// Signature: Vec<bool> where true = (ref $Cont), false = anyref, for value params.
+  /// The trailing cont param is always (ref $Cont) and not included in the signature.
+  fn_types: Vec<(Vec<bool>, u32)>,
   /// Maps CpsId → CpsId for LetVal rebindings: `LetVal { name: X, val: Ref(Synth(Y)) }`
   /// records X → Y. Allows `func_index` to follow alias chains.
   /// WORKAROUND: compensates for redundant Synth→Name indirection in CPS
   /// transform fold (see TODO in cps/transform.rs). Remove when fixed there.
   val_alias: std::collections::HashMap<CpsId, CpsId>,
+  /// Compile-time match arm info: maps arm result bind CpsId → (matcher_fn_idx, body_fn_idx).
+  /// Populated by collect_match_arms after collect_funcs.
+  match_arms: std::collections::HashMap<CpsId, (u32, u32)>,
   /// Maps cap param CpsId → fn_idx for module-level FnClosure constructions.
   /// Module-level cap args are always Synth refs to hoisted fns; this map lets
   /// resolve_val_to_func handle cap params without AST traversal.
@@ -150,22 +158,32 @@ impl<'a, 'src> Ctx<'a, 'src> {
       ast_index,
       resolve,
       funcs: Vec::new(),
-      arity_types: Vec::new(),
+      fn_types: Vec::new(),
+      match_arms: std::collections::HashMap::new(),
       val_alias: std::collections::HashMap::new(),
       cap_param_fn: std::collections::HashMap::new(),
     }
   }
 
-  fn type_for_arity(&self, arity: u32) -> u32 {
-    if arity == 1 { return TY_FN1; }
-    self.arity_types.iter()
-      .find(|(a, _)| *a == arity)
+  /// Get the WASM type index for a function signature.
+  /// Signature: Vec<bool> where true = (ref $Cont) param, false = anyref param.
+  fn type_for_sig(&self, sig: &[bool]) -> u32 {
+    if sig.is_empty() { return TY_FN1; }
+    self.fn_types.iter()
+      .find(|(s, _)| s == sig)
       .map(|(_, ty)| *ty)
       .unwrap_or(TY_FN1)
   }
 
   fn func_type(&self, func_idx: usize) -> u32 {
-    self.type_for_arity(self.funcs[func_idx].arity)
+    let sig = self.fn_sig(func_idx);
+    self.type_for_sig(&sig)
+  }
+
+  /// Compute the signature for a collected function.
+  /// Each value param is `true` if Bind::Cont (passed as (ref $Cont)), else `false` (anyref).
+  fn fn_sig(&self, func_idx: usize) -> Vec<bool> {
+    self.funcs[func_idx].param_kinds.iter().map(|k| *k == Bind::Cont).collect()
   }
 
   fn func_index(&self, id: CpsId) -> Option<u32> {
@@ -199,7 +217,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
 
 fn emit_module<'a, 'src>(root: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) -> Vec<u8> {
   let mut module = Module::new();
-  compute_arity_types(ctx);
+  compute_fn_types(ctx);
   emit_types(&mut module, ctx);
   emit_function_section(&mut module, ctx);
   emit_globals(&mut module);
@@ -212,16 +230,17 @@ fn emit_module<'a, 'src>(root: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) -> Vec<u
   wasm
 }
 
-fn compute_arity_types(ctx: &mut Ctx) {
-  let mut arities: Vec<u32> = Vec::new();
-  for f in &ctx.funcs {
-    if f.arity >= 2 && !arities.contains(&f.arity) {
-      arities.push(f.arity);
+fn compute_fn_types(ctx: &mut Ctx) {
+  let mut sigs: Vec<Vec<bool>> = Vec::new();
+  for i in 0..ctx.funcs.len() {
+    let sig = ctx.fn_sig(i);
+    if !sig.is_empty() && !sigs.contains(&sig) {
+      sigs.push(sig);
     }
   }
-  arities.sort();
-  ctx.arity_types = arities.iter().enumerate()
-    .map(|(i, &arity)| (arity, TY_FUNC_START + i as u32))
+  sigs.sort();
+  ctx.fn_types = sigs.into_iter().enumerate()
+    .map(|(i, sig)| (sig, TY_FUNC_START + i as u32))
     .collect();
 }
 
@@ -270,8 +289,11 @@ fn emit_name_section(module: &mut Module, ctx: &Ctx) {
   type_names.append(TY_CONT, "Cont");
   type_names.append(TY_VOID, "void");
   type_names.append(TY_FN1, "Fn1");
-  for &(arity, ty_idx) in &ctx.arity_types {
-    type_names.append(ty_idx, &format!("Fn{}", arity));
+  for (sig, ty_idx) in &ctx.fn_types {
+    let arity = sig.len() + 1;
+    let has_cont = sig.iter().any(|c| *c);
+    let suffix = if has_cont { "c" } else { "" };
+    type_names.append(*ty_idx, &format!("Fn{}{}", arity, suffix));
   }
   names.types(&type_names);
 
@@ -353,9 +375,14 @@ fn emit_types(module: &mut Module, ctx: &Ctx) {
     ))),
   });
 
-  // Per-arity types (arity >= 2): (func (param anyref)*(N-1) (param (ref $Cont)))
-  for &(arity, _) in &ctx.arity_types {
-    let mut params: Vec<ValType> = (0..arity - 1).map(|_| ValType::Ref(RefType::ANYREF)).collect();
+  // Per-signature types: each value param is anyref or (ref null $Cont) based on param_kinds.
+  // Value Cont params are nullable — module-level cap params pass null placeholders.
+  // The fn's own cont (last param) stays non-nullable.
+  let cont_ref_nullable = ValType::Ref(RefType { nullable: true, heap_type: wasm_encoder::HeapType::Concrete(TY_CONT) });
+  for (sig, _) in &ctx.fn_types {
+    let mut params: Vec<ValType> = sig.iter().map(|is_cont| {
+      if *is_cont { cont_ref_nullable } else { ValType::Ref(RefType::ANYREF) }
+    }).collect();
     params.push(cont_ref);
     types.ty().subtype(&SubType {
       is_final: true,
@@ -548,12 +575,21 @@ fn build_fink_main(root: &Expr<'_>, ctx: &Ctx) -> Function {
 
   if let Some((main_fn_idx, num_caps)) = find_main_closure_call(root, ctx) {
     // Closure case: module-level caps are always resolved statically by the callee via
-    // func_index — pass ref.null any placeholders (funcref can't be cast to anyref in WasmGC).
-    for _ in 0..num_caps {
-      f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
-        shared: false,
-        ty: wasm_encoder::AbstractHeapType::Any,
-      }));
+    // func_index — pass null placeholders. Type depends on param kind:
+    // Cont-typed params get ref.null for the $Cont func type, others get ref.null any.
+    let fn_pos = (main_fn_idx - FN_COMPILED_START) as usize;
+    for i in 0..num_caps as usize {
+      let is_cont = fn_pos < ctx.funcs.len()
+        && i < ctx.funcs[fn_pos].param_kinds.len()
+        && ctx.funcs[fn_pos].param_kinds[i] == Bind::Cont;
+      if is_cont {
+        f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Concrete(TY_CONT)));
+      } else {
+        f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+          shared: false,
+          ty: wasm_encoder::AbstractHeapType::Any,
+        }));
+      }
     }
     f.instruction(&Instruction::RefFunc(FN_HALT));
     f.instruction(&Instruction::RefCastNonNull(cont_ref_type));
@@ -751,28 +787,41 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
   use crate::passes::cps::ir::BuiltIn::*;
 
   match func {
-    Callable::BuiltIn(op) => {
-      let (val_args, cont) = split_app_args(args);
+    Callable::BuiltIn(op) => match op {
+      Add | Sub | Mul => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+        f.instruction(&Instruction::I31GetS);
+        emit_arg_val(val_args[1], f, fc);
+        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+        f.instruction(&Instruction::I31GetS);
+        match op {
+          Add => f.instruction(&Instruction::I32Add),
+          Sub => f.instruction(&Instruction::I32Sub),
+          Mul => f.instruction(&Instruction::I32Mul),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::RefI31);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
 
-      match op {
-        Add | Sub | Mul => {
-          emit_arg_val(val_args[0], f, fc);
-          f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-          f.instruction(&Instruction::I31GetS);
-          emit_arg_val(val_args[1], f, fc);
-          f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-          f.instruction(&Instruction::I31GetS);
-          match op {
-            Add => f.instruction(&Instruction::I32Add),
-            Sub => f.instruction(&Instruction::I32Sub),
-            Mul => f.instruction(&Instruction::I32Mul),
-            _ => unreachable!(),
-          };
-          f.instruction(&Instruction::RefI31);
-          emit_cont_call_with_anyref(cont, f, fc);
-        }
+      MatchBlock => emit_match_block(args, f, fc),
+      MatchArm => emit_match_arm(args, f, fc),
+      MatchValue => emit_match_value(args, f, fc),
 
-        _ => {
+      _ => {
+        f.instruction(&Instruction::Unreachable);
+      }
+    },
+
+    Callable::Val(val) if matches!(&val.kind, ValKind::ContRef(_)) => {
+      // Direct cont call: App func=Val(ContRef(id)) — tail-call the cont fn.
+      if let ValKind::ContRef(cont_id) = &val.kind {
+        if let Some(fn_idx) = fc.ctx.func_index(*cont_id) {
+          f.instruction(&Instruction::LocalGet(fc.cont_local));
+          f.instruction(&Instruction::ReturnCall(fn_idx));
+        } else {
           f.instruction(&Instruction::Unreachable);
         }
       }
@@ -800,6 +849,173 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
   }
 }
 
+// ---------------------------------------------------------------------------
+// Match emission
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Match emission — all inlined, no runtime fn values
+// ---------------------------------------------------------------------------
+
+/// MatchBlock(scrutinee, arm1_ref, arm2_ref, ..., result_cont)
+///
+/// The arm refs are vals pointing to MatchArm fn "values" — but these are
+/// never used at runtime. Instead, we walk each arm's MatchArm App (found
+/// via the collected fn chain) and inline the comparison + body calls.
+fn emit_match_block(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
+  let scrutinee_val = match args.first() {
+    Some(Arg::Val(v)) => v,
+    _ => { f.instruction(&Instruction::Unreachable); return; }
+  };
+
+  // Arm vals: args[1..n-1].
+  let arm_vals: Vec<&Val<'_>> = args[1..args.len() - 1].iter().filter_map(|a| match a {
+    Arg::Val(v) => Some(v),
+    _ => None,
+  }).collect();
+
+  let mut if_depth: u32 = 0;
+  for arm_val in &arm_vals {
+    // Resolve arm val CpsId → look up in match_arms map (keyed by param id).
+    let arm_id = match &arm_val.kind {
+      ValKind::Ref(Ref::Synth(id)) => Some(*id),
+      _ => None,
+    };
+    let arm_info = arm_id.and_then(|id| fc.ctx.match_arms.get(&id));
+
+    if let Some(&(matcher_fn, body_fn)) = arm_info {
+      // Look at the matcher fn's body to determine literal vs wildcard.
+      let fn_pos = (matcher_fn - FN_COMPILED_START) as usize;
+      if fn_pos < fc.ctx.funcs.len() {
+        let matcher_body = fc.ctx.funcs[fn_pos].fn_body;
+        match &matcher_body.kind {
+          // Literal: MatchValue(scrutinee_ref, expected, ContRef(success), Cont::Ref(fail))
+          ExprKind::App { func: Callable::BuiltIn(crate::passes::cps::ir::BuiltIn::MatchValue), args: mv_args } => {
+            let mv_vals: Vec<&Val<'_>> = mv_args.iter().filter_map(|a| match a {
+              Arg::Val(v) => Some(v),
+              _ => None,
+            }).collect();
+            if mv_vals.len() >= 2 {
+              let expected = mv_vals[1];
+              // Compare scrutinee == expected.
+              emit_val(scrutinee_val, f, fc);
+              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+              f.instruction(&Instruction::I31GetS);
+              emit_val(expected, f, fc);
+              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+              f.instruction(&Instruction::I31GetS);
+              f.instruction(&Instruction::I32Eq);
+
+              f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+              if_depth += 1;
+              // Match → call body fn. Body fn may have Cont-typed params
+              // (the result cont) plus its own cont param. Push cont for each.
+              emit_call_with_cont_args(body_fn, fc, f);
+              f.instruction(&Instruction::Else);
+              continue; // next arm fills the else block
+            }
+          }
+          // Wildcard: always matches → call body directly.
+          _ => {
+            emit_call_with_cont_args(body_fn, fc, f);
+            continue;
+          }
+        }
+      }
+    }
+    f.instruction(&Instruction::Unreachable);
+  }
+
+  // Close if/else blocks — last else is match exhaustion.
+  if if_depth > 0 {
+    f.instruction(&Instruction::Unreachable);
+  }
+  for _ in 0..if_depth {
+    f.instruction(&Instruction::End);
+  }
+}
+
+/// MatchArm(Cont::Ref(matcher), Cont::Ref(body), Cont::Ref(result))
+///
+/// Compile-time construct: wraps a matcher + body into an arm value.
+/// At runtime, emits null (the arm value is never used — MatchBlock inlines).
+/// Passes null to the result cont so the LetVal bind gets a placeholder.
+fn emit_match_arm(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
+  // The last Cont::Ref is the result cont.
+  let result_cont = match args.iter().rev().find_map(|a| match a {
+    Arg::Cont(Cont::Ref(id)) => Some(*id),
+    _ => None,
+  }) {
+    Some(id) => id,
+    None => { f.instruction(&Instruction::Unreachable); return; }
+  };
+
+  // Emit null as the "arm value" placeholder.
+  f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+    shared: false,
+    ty: wasm_encoder::AbstractHeapType::Any,
+  }));
+  emit_cont_call_with_anyref(result_cont, f, fc);
+}
+
+/// MatchValue(scrutinee_ref, expected, ContRef(success), Cont::Ref(fail))
+///
+/// Compare scrutinee == expected. On match → call success. On fail → call fail.
+fn emit_match_value(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
+  let val_args: Vec<&Val<'_>> = args.iter().filter_map(|a| match a {
+    Arg::Val(v) => Some(v),
+    _ => None,
+  }).collect();
+  let fail_cont = match args.last() {
+    Some(Arg::Cont(Cont::Ref(id))) => *id,
+    _ => { f.instruction(&Instruction::Unreachable); return; }
+  };
+  if val_args.len() >= 3 {
+    let scrutinee = val_args[0];
+    let expected = val_args[1];
+    let success_val = val_args[2];
+
+    emit_val(scrutinee, f, fc);
+    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+    f.instruction(&Instruction::I31GetS);
+    emit_val(expected, f, fc);
+    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
+    f.instruction(&Instruction::I31GetS);
+    f.instruction(&Instruction::I32Eq);
+
+    f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+    if let ValKind::ContRef(success_id) = &success_val.kind {
+      if let Some(fn_idx) = fc.ctx.func_index(*success_id) {
+        f.instruction(&Instruction::LocalGet(fc.cont_local));
+        f.instruction(&Instruction::ReturnCall(fn_idx));
+      } else { f.instruction(&Instruction::Unreachable); }
+    } else { f.instruction(&Instruction::Unreachable); }
+    f.instruction(&Instruction::Else);
+    if let Some(fn_idx) = fc.ctx.func_index(fail_cont) {
+      f.instruction(&Instruction::ReturnCall(fn_idx));
+    } else { f.instruction(&Instruction::Unreachable); }
+    f.instruction(&Instruction::End);
+  } else {
+    f.instruction(&Instruction::Unreachable);
+  }
+}
+
+/// Call a fn that has only Cont-typed params (+ its own cont).
+/// Pushes fc.cont_local for each param and the fn's own cont, then return_call.
+fn emit_call_with_cont_args(fn_idx: u32, fc: &FnCtx, f: &mut Function) {
+  let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
+  if fn_pos < fc.ctx.funcs.len() {
+    let arity = fc.ctx.funcs[fn_pos].arity;
+    // All params (including the fn's own cont) get fc.cont_local.
+    for _ in 0..arity {
+      f.instruction(&Instruction::LocalGet(fc.cont_local));
+    }
+    f.instruction(&Instruction::ReturnCall(fn_idx));
+  } else {
+    f.instruction(&Instruction::Unreachable);
+  }
+}
+
 fn resolve_val_to_func(val: &Val<'_>, fc: &FnCtx) -> Option<u32> {
   match &val.kind {
     ValKind::Ref(Ref::Synth(id)) => fc.ctx.func_index(*id),
@@ -808,6 +1024,7 @@ fn resolve_val_to_func(val: &Val<'_>, fc: &FnCtx) -> Option<u32> {
       let bind_id = match fc.ctx.resolve.resolution.try_get(val.id) {
         Some(Some(Resolution::Local(id))) => Some(*id),
         Some(Some(Resolution::Captured { bind, .. })) => Some(*bind),
+        Some(Some(Resolution::Recursive(id))) => Some(*id),
         _ => None,
       };
       // func_index checks both name_id (Bind::Synth, origin=Fn) and letval_bind_id
@@ -939,6 +1156,10 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
       } else {
         None
       };
+      let param_kinds: Vec<Bind> = params.iter().map(|p| match p {
+        crate::passes::cps::ir::Param::Name(b) => b.kind,
+        crate::passes::cps::ir::Param::Spread(b) => b.kind,
+      }).collect();
       ctx.funcs.push(CollectedFn {
         name_id: name.id,
         letval_bind_id,
@@ -946,6 +1167,7 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         fn_body,
         arity: params.len() as u32 + 1,
         param_ids,
+        param_kinds,
         cont_id: cont.id,
       });
       collect_funcs(fn_body, ctx);
@@ -1017,6 +1239,63 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
       collect_funcs(else_, ctx);
     }
     ExprKind::Yield { cont: Cont::Expr { body, .. }, .. } => collect_funcs(body, ctx),
+    _ => {}
+  }
+}
+
+/// Walk the CPS tree to find MatchArm Apps and record their matcher/body fn info.
+/// Keys the map by the result cont's target fn's param — the CpsId that receives
+/// the arm "value" and eventually flows to MatchBlock as an arm ref.
+fn collect_match_arms<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
+  use crate::passes::cps::ir::BuiltIn;
+  match &expr.kind {
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::MatchArm), args } => {
+      let cont_refs: Vec<CpsId> = args.iter().filter_map(|a| match a {
+        Arg::Cont(Cont::Ref(id)) => Some(*id),
+        _ => None,
+      }).collect();
+      if cont_refs.len() >= 3 {
+        let matcher_id = cont_refs[0];
+        let body_id = cont_refs[1];
+        let result_cont_id = cont_refs[2];
+        if let (Some(matcher_fn), Some(body_fn)) = (ctx.func_index(matcher_id), ctx.func_index(body_id)) {
+          // The result cont fn receives the arm value as its first param.
+          // Find that fn and record its first param CpsId.
+          if let Some(fn_idx) = ctx.func_index(result_cont_id) {
+            let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
+            if fn_pos < ctx.funcs.len() {
+              if let Some(&param_id) = ctx.funcs[fn_pos].param_ids.first() {
+                ctx.match_arms.insert(param_id, (matcher_fn, body_fn));
+              }
+            }
+          }
+        }
+      }
+    }
+    ExprKind::LetFn { fn_body, body, .. } => {
+      collect_match_arms(fn_body, ctx);
+      match body {
+        Cont::Expr { body: cont_body, .. } => collect_match_arms(cont_body, ctx),
+        Cont::Ref(_) => {}
+      }
+    }
+    ExprKind::LetVal { body, .. } => {
+      if let Cont::Expr { body: cont_body, .. } = body {
+        collect_match_arms(cont_body, ctx);
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_match_arms(body, ctx),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_match_arms(then, ctx);
+      collect_match_arms(else_, ctx);
+    }
     _ => {}
   }
 }
