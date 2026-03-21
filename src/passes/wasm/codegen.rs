@@ -348,7 +348,7 @@ fn emit_types(module: &mut Module, ctx: &Ctx) {
     is_final: true,
     supertype_idx: None,
     composite_type: ct(CompositeInnerType::Func(FuncType::new(
-      [cont_ref.clone()],
+      [cont_ref],
       [],
     ))),
   });
@@ -356,7 +356,7 @@ fn emit_types(module: &mut Module, ctx: &Ctx) {
   // Per-arity types (arity >= 2): (func (param anyref)*(N-1) (param (ref $Cont)))
   for &(arity, _) in &ctx.arity_types {
     let mut params: Vec<ValType> = (0..arity - 1).map(|_| ValType::Ref(RefType::ANYREF)).collect();
-    params.push(cont_ref.clone());
+    params.push(cont_ref);
     types.ty().subtype(&SubType {
       is_final: true,
       supertype_idx: None,
@@ -515,10 +515,8 @@ fn find_in_expr<'a, 'src, T>(
         return find_in_expr(cont_body, ctx, pred);
       }
     }
-    ExprKind::LetVal { body, .. } => {
-      if let Cont::Expr { body: cont_body, .. } = body {
-        return find_in_expr(cont_body, ctx, pred);
-      }
+    ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+      return find_in_expr(cont_body, ctx, pred);
     }
     ExprKind::App { args, .. } => {
       for arg in args {
