@@ -1,0 +1,143 @@
+{test, expect, equals, fink, fmt} = import '!fake'
+
+
+---
+application — multi-arg expansion
+---
+
+test 'apply multi-arg bare — canonical form stays unchanged', fn:
+  expect fmt fink":
+    foo
+      bar spam, ham
+      ni
+  | equals 'NO-DIFF'
+
+test 'apply single arg that is multi-arg bare — ambiguous, expand', fn:
+  expect fmt fink":
+    foo bar 1, 2
+  | equals fink":
+    foo
+      bar 1, 2
+
+test 'apply grouped args stay inline when fits', fn:
+  expect fmt fink":
+    foo (bar 1, 2), (spam 3, 4)
+  | equals 'NO-DIFF'
+
+test 'apply scalar args followed by fn-body args — stays unchanged', fn:
+  expect fmt fink":
+    foo 1, 2, 3, a, b,
+      fn bar:
+        spam
+      fn ham:
+        ni
+  | equals 'NO-DIFF'
+
+
+---
+indentation normalisation
+---
+
+test 'over-indented body normalised to indent width', fn:
+  expect fmt fink":
+    foo = fn a, b:
+        a0 = bar a
+        b0 = ni b
+        a0 + b0
+  | equals fink":
+    foo = fn a, b:
+      a0 = bar a
+      b0 = ni b
+      a0 + b0
+
+
+---
+line width — expansion when exceeds max_width
+---
+
+test 'apply exceeds width — args break to new lines', fn:
+  expect fmt fink":
+    foo = some_very_long_function_name some_long_argument_name, another_long_argument_name
+  | equals fink":
+    foo = some_very_long_function_name
+      some_long_argument_name, another_long_argument_name
+
+
+---
+infix ops — wrapping when exceeds max_width
+---
+
+test 'infix chain exceeds width — operator-first continuation', fn:
+  expect fmt fink":
+    result = some_really_very_extremely_long_var + another_really_very_extremely_long_var + final-var
+  | equals fink":
+    result = some_really_very_extremely_long_var
+      + another_really_very_extremely_long_var
+      + final-var
+
+
+---
+records with fn-body values — expand to one field per line
+---
+
+test 'record with fn value — already expanded stays unchanged', fn:
+  expect fmt fink":
+    {
+      foo: fn a: a + 1
+      bar: fn b: b + 2
+    }
+  | equals 'NO-DIFF'
+
+
+---
+strings
+---
+
+test 'simple quoted string stays unchanged', fn:
+  expect fmt fink":
+    greeting = 'hello world'
+  | equals 'NO-DIFF'
+
+test 'string interpolation stays unchanged', fn:
+  expect fmt fink":
+    msg = 'hello \${1 + 2}, count: \${42}'
+  | equals 'NO-DIFF'
+
+test 'tagged template stays unchanged', fn:
+  expect fmt fink":
+    msg = fmt'result: \${1 + 2}'
+  | equals 'NO-DIFF'
+
+test 'block string at correct indentation stays unchanged', fn:
+  expect fmt fink":
+    greeting = ":
+      hello world
+      how are you
+  | equals 'NO-DIFF'
+
+test 'block string with relative indentation preserved', fn:
+  expect fmt fink":
+    text = ":
+      first line
+        indented line
+      back to base
+  | equals 'NO-DIFF'
+
+test 'block string in over-indented body — content reindented', fn:
+  expect fmt fink":
+    foo = fn a:
+        msg = ":
+          hello world
+        msg
+  | equals fink":
+    foo = fn a:
+      msg = ":
+        hello world
+      msg
+
+test 'block string with interpolation stays unchanged', fn:
+  expect fmt fink":
+    msg = ":
+      hello \${1 + 2}
+      count: \${42}
+  | equals 'NO-DIFF'

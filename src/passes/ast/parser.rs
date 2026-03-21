@@ -344,6 +344,7 @@ impl<'src> Parser<'src> {
     let func_loc = func.loc;
     // Collect params (args for potential block or args for application)
     let mut params: Vec<Node<'src>> = vec![];
+    let mut seps: Vec<Token<'src>> = vec![];
     let mut last_end = func_loc.end.idx;
 
     // Use the same logic as collect_apply_args but we collect into `params`
@@ -369,7 +370,7 @@ impl<'src> Parser<'src> {
       last_end = arg.loc.end.idx;
       params.push(arg);
       if self.at(TokenKind::Comma) {
-        self.bump();
+        seps.push(self.bump());
         // Handle trailing comma that continues onto an indented next line
         if self.at(TokenKind::BlockStart) {
           has_block_tok = true;
@@ -381,7 +382,7 @@ impl<'src> Parser<'src> {
       }
       if self.at(TokenKind::Semicolon) {
         if inside_nested { break; }
-        self.bump();
+        seps.push(self.bump());
         if self.is_arg_start() { params.push(self.parse_apply_no_block()?); }
         break;
       }
@@ -444,7 +445,7 @@ impl<'src> Parser<'src> {
       // Func is the block name, params are its patterns
       let params_end = params.last().map(|n: &Node| n.loc.end).unwrap_or(func_loc.end);
       let params_loc = Loc { start: func_loc.end, end: params_end };
-      let params_node = self.node(NodeKind::Patterns(Exprs { items: params, seps: vec![] }), params_loc);
+      let params_node = self.node(NodeKind::Patterns(Exprs { items: params, seps }), params_loc);
       let (sep, body) = self.parse_colon_body_or_arms()?;
       let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
       return Ok(self.node(
@@ -459,7 +460,7 @@ impl<'src> Parser<'src> {
     }
     let end = params.last().unwrap().loc.end;
     let loc = Loc { start: func_loc.start, end };
-    Ok(self.node(NodeKind::Apply { func: Box::new(func), args: Exprs { items: params, seps: vec![] } }, loc))
+    Ok(self.node(NodeKind::Apply { func: Box::new(func), args: Exprs { items: params, seps } }, loc))
   }
 
   // Collect args for a function application.
@@ -1019,6 +1020,11 @@ impl<'src> Parser<'src> {
     // Track the open token for the next LitStr segment.
     // First segment opens with StrStart; after interpolation, opens with StrExprEnd.
     let mut next_open = start_tok;
+    // For block strings (":" syntax), track the strip_level (indent floor) which is
+    // the col of the first StrText token. All segments of the same block string share
+    // the same strip_level; it's 0 for quoted strings.
+    let mut block_indent: u32 = 0;
+    let is_block_str = start_tok.src == "\":" ;
 
     loop {
       match self.peek().kind {
@@ -1028,7 +1034,7 @@ impl<'src> Parser<'src> {
           self.close_lit_str(&mut parts, end_tok);
           let loc = Loc { start: start_loc.start, end: end_tok.loc.end };
           if !raw && parts.is_empty() {
-            return Ok(self.node(NodeKind::LitStr { open: start_tok, close: end_tok, content: String::new() }, loc));
+            return Ok(self.node(NodeKind::LitStr { open: start_tok, close: end_tok, content: String::new(), indent: 0 }, loc));
           }
           if !raw && parts.len() == 1
             && let NodeKind::LitStr { .. } = &parts[0].kind {
@@ -1051,7 +1057,15 @@ impl<'src> Parser<'src> {
             content.push_str(&text);
             prev_loc.end = t.loc.end;
           } else {
-            parts.push(self.node(NodeKind::LitStr { open: next_open, close: next_open, content: text }, t.loc));
+            // For block strings, strip_level == the first StrText token's col.
+            // Capture it once from the first segment; subsequent segments reuse it.
+            let indent = if is_block_str {
+              if block_indent == 0 && next_open.src == "\":" {
+                block_indent = t.loc.start.col;
+              }
+              block_indent
+            } else { 0 };
+            parts.push(self.node(NodeKind::LitStr { open: next_open, close: next_open, content: text, indent }, t.loc));
           }
         }
         TokenKind::StrExprStart => {
@@ -1634,6 +1648,38 @@ mod tests {
 
   fn ast(src: &str) -> String {
     parse_debug(src)
+  }
+
+  #[test]
+  fn str_templ_trailing_interp_last_child_is_expression() {
+    // 'hello ${expr}' — when interpolation is the last child, the AST ends with
+    // the expression node. The `}` delimiter is implied (inferred by the print stage
+    // from close.loc). The StrTempl.close token holds the closing `'`.
+    use crate::ast::NodeKind;
+    let r = super::parse("'hello ${1}'").unwrap();
+    let NodeKind::StrTempl { children, close, .. } = &r.root.kind else {
+      panic!("expected StrTempl, got {:?}", r.root.kind);
+    };
+    assert_eq!(close.src, "'");
+    let last = children.last().expect("expected children");
+    assert!(matches!(last.kind, NodeKind::LitInt(_)), "last child should be expression, got {:?}", last.kind);
+  }
+
+  #[test]
+  // TODO: port to a .fnk test file (test_parser.fnk or test_functions.fnk) once
+  // the test macro supports asserting on seps, not just node shape.
+  // The real coverage for this fix lives in src/fmt/test_print.fnk (t_multi_arg_application etc).
+  fn apply_args_preserve_comma_seps() {
+    // collect_apply_or_block was dropping comma tokens from args.seps.
+    // Commas between Apply args must be stored so the formatter can reproduce them.
+    use crate::ast::NodeKind;
+    let r = super::parse("add 1, 2").unwrap();
+    let NodeKind::Apply { args, .. } = &r.root.kind else {
+      panic!("expected Apply, got {:?}", r.root.kind);
+    };
+    assert_eq!(args.items.len(), 2, "expected 2 args");
+    assert_eq!(args.seps.len(), 1, "expected 1 comma sep");
+    assert_eq!(args.seps[0].src, ",");
   }
 
   test_macros::include_fink_tests!("src/passes/ast/test_yield.fnk");

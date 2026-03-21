@@ -10,7 +10,7 @@ fn main() {
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|cps|wat|run|dap> [--sourcemap] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [--sourcemap] <file>");
       process::exit(1);
     }
   };
@@ -45,6 +45,28 @@ fn main() {
             println!("//# sourceMappingURL=data:application/json;base64,{b64}");
           } else {
             println!("{}", fink::ast::fmt::fmt(&r.root));
+          }
+        }
+        Err(e) => parse_error(&src, e),
+      }
+    }
+    "fmt2" => {
+      match fink::parser::parse(&src) {
+        Ok(r) => {
+          let cfg = fink::fmt::FmtConfig::default();
+          let laid_out = fink::fmt::layout::layout(&r.root, &cfg);
+          if sourcemap {
+            let (output, srcmap) = if embed_source {
+              fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
+            } else {
+              fink::fmt::print::print_mapped(&laid_out, path)
+            };
+            let json = srcmap.to_json();
+            let b64 = fink::sourcemap::base64_encode(json.as_bytes());
+            println!("{output}");
+            println!("//# sourceMappingURL=data:application/json;base64,{b64}");
+          } else {
+            println!("{}", fink::fmt::print::print(&laid_out));
           }
         }
         Err(e) => parse_error(&src, e),

@@ -85,7 +85,9 @@ pub enum NodeKind<'src> {
   // LitStr — string literal or string segment inside a template
   // open/close are delimiter tokens: ' .. ', ' .. ${, } .. ', } .. ${, ": .. dedent
   // content is owned since escape sequences are processed at parse time
-  LitStr { open: Token<'src>, close: Token<'src>, content: String },
+  // indent: for block strings (":" syntax), the number of leading spaces stripped from
+  // each content line (strip_level from the lexer). 0 for quoted strings.
+  LitStr { open: Token<'src>, close: Token<'src>, content: String, indent: u32 },
 
   // LitSeq — sequence literal; items are elements separated by , ; or block tokens
   LitSeq { open: Token<'src>, close: Token<'src>, items: Exprs<'src> },
