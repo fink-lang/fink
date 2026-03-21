@@ -62,7 +62,7 @@ impl MappedWriter {
         self.line += 1;
         self.col = 0;
       } else {
-        self.col += 1;
+        self.col += ch.len_utf16() as u32;
       }
     }
     self.out.push_str(s);
@@ -74,7 +74,7 @@ impl MappedWriter {
       self.line += 1;
       self.col = 0;
     } else {
-      self.col += 1;
+      self.col += ch.len_utf16() as u32;
     }
     self.out.push(ch);
   }
