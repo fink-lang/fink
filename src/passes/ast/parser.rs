@@ -1386,6 +1386,9 @@ impl<'src> Parser<'src> {
           items.push(self.node(NodeKind::Wildcard, sep.loc));
           seps.push(self.bump());
         }
+      } else if self.at(TokenKind::BlockCont) || self.at(TokenKind::Semicolon) {
+        seps.push(self.bump());
+        self.skip_block_tokens();
       } else {
         self.skip_block_tokens();
         break;
