@@ -181,6 +181,9 @@ impl<'cfg> Ctx<'cfg> {
                 }).collect();
                 Node::new(NodeKind::ChainedCmp(new_parts), node.loc)
             }
+            NodeKind::Module(exprs) => {
+                Node::new(NodeKind::Module(self.fix_exprs(exprs)), node.loc)
+            }
             NodeKind::Pipe(exprs) => {
                 let new_exprs = self.fix_exprs(exprs);
                 Node::new(NodeKind::Pipe(new_exprs), node.loc)
@@ -421,6 +424,18 @@ impl<'cfg> Ctx<'cfg> {
             }
             NodeKind::Pipe(exprs) => {
                 self.pipe(exprs, at)
+            }
+            NodeKind::Module(exprs) => {
+                let child_col = self.block_col;
+                let mut pos = at;
+                let mut new_items = Vec::new();
+                for stmt in &exprs.items {
+                    let placed = self.node(stmt, pos);
+                    pos = Pos { idx: 0, line: placed.loc.end.line + 1, col: child_col };
+                    new_items.push(placed);
+                }
+                let end = new_items.last().map(|n| n.loc.end).unwrap_or(at);
+                Node::new(NodeKind::Module(Exprs { items: new_items, seps: exprs.seps.clone() }), Loc { start: at, end })
             }
             NodeKind::Fn { params, sep, body } => {
                 self.fn_node(params, sep, body, at)

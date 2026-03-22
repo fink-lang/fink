@@ -344,6 +344,9 @@ impl Writer {
 
             // --- functions ---
             // `fn` keyword is at node.loc.start; params follow, then sep `:`, then body.
+            NodeKind::Module(exprs) => {
+                self.exprs(exprs);
+            }
             NodeKind::Fn { params, sep, body } => {
                 self.keyword(node.loc.start, "fn");
                 self.node(params);

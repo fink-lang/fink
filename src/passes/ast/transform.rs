@@ -54,6 +54,7 @@ pub trait Transform<'src> {
       NodeKind::BindRight { op, lhs, rhs } => self.transform_bind_right(op, *lhs, *rhs, loc),
       NodeKind::Apply { func, args } => self.transform_apply(*func, args, loc),
       NodeKind::Pipe(children) => self.transform_pipe(children, loc),
+      NodeKind::Module(exprs) => self.transform_module(exprs, loc),
       NodeKind::Fn { params, sep, body } => self.transform_fn(*params, sep, body, loc),
       NodeKind::Patterns(children) => self.transform_patterns(children, loc),
       NodeKind::Match { subjects, sep, arms } => self.transform_match(subjects, sep, arms, loc),
@@ -226,6 +227,15 @@ pub trait Transform<'src> {
   fn transform_pipe(&mut self, exprs: Exprs<'src>, loc: Loc) -> TransformResult<'src> {
     let exprs = self.transform_exprs(exprs)?;
     Ok(Node::new(NodeKind::Pipe(exprs), loc))
+  }
+
+  fn transform_module(
+    &mut self,
+    exprs: Exprs<'src>,
+    loc: Loc,
+  ) -> TransformResult<'src> {
+    let exprs = self.transform_exprs(exprs)?;
+    Ok(Node::new(NodeKind::Module(exprs), loc))
   }
 
   fn transform_fn(

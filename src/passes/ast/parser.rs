@@ -1574,24 +1574,11 @@ pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
   // Consume the implicit root BlockStart emitted by the lexer
   p.expect(TokenKind::BlockStart)?;
   let exprs = p.parse_block_exprs()?;
-  let root = match exprs.items.len() {
-    0 => return Err(ParseError {
-      message: "empty input".into(),
-      loc: p.peek().loc,
-    }),
-    1 => exprs.items.into_iter().next().unwrap(),
-    _ => {
-      let start = exprs.items.first().unwrap().loc.start;
-      let end = exprs.items.last().unwrap().loc.end;
-      let loc = Loc { start, end };
-      let params = p.node(NodeKind::Patterns(Exprs::empty()), loc);
-      let sep = Token { kind: TokenKind::Colon, loc, src: ":" };
-      p.node(
-        NodeKind::Fn { params: Box::new(params), sep, body: exprs },
-        loc,
-      )
-    }
+  let loc = match (exprs.items.first(), exprs.items.last()) {
+    (Some(first), Some(last)) => Loc { start: first.loc.start, end: last.loc.end },
+    _ => p.peek().loc,
   };
+  let root = p.node(NodeKind::Module(exprs), loc);
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
@@ -1602,49 +1589,47 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<cr
   }
   p.expect(TokenKind::BlockStart)?;
   let exprs = p.parse_block_exprs()?;
-  let root = match exprs.items.len() {
-    0 => return Err(ParseError {
-      message: "empty input".into(),
-      loc: p.peek().loc,
-    }),
-    1 => exprs.items.into_iter().next().unwrap(),
-    _ => {
-      let start = exprs.items.first().unwrap().loc.start;
-      let end = exprs.items.last().unwrap().loc.end;
-      let loc = Loc { start, end };
-      let params = p.node(NodeKind::Patterns(Exprs::empty()), loc);
-      let sep = Token { kind: TokenKind::Colon, loc, src: ":" };
-      p.node(
-        NodeKind::Fn { params: Box::new(params), sep, body: exprs },
-        loc,
-      )
-    }
+  let loc = match (exprs.items.first(), exprs.items.last()) {
+    (Some(first), Some(last)) => Loc { start: first.loc.start, end: last.loc.end },
+    _ => p.peek().loc,
   };
+  let root = p.node(NodeKind::Module(exprs), loc);
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
 
 #[cfg(test)]
 mod tests {
+  use crate::ast::NodeKind;
+
+  /// Extract the single expression from a Module root, panicking if not exactly one.
+  fn unwrap_single<'a, 'src>(r: &'a crate::ast::ParseResult<'src>) -> &'a crate::ast::Node<'src> {
+    let NodeKind::Module(exprs) = &r.root.kind else {
+      panic!("expected Module, got {:?}", r.root.kind);
+    };
+    assert_eq!(exprs.items.len(), 1, "expected single expression in Module");
+    &exprs.items[0]
+  }
+
   #[test]
   fn test_str_escape_stored_verbatim() {
     // LitStr must store raw source bytes — no rendering at parse time.
-    use crate::ast::NodeKind;
     let r = super::parse_with_blocks(r"'\n\t\\'", &["test_block"]).unwrap();
-    let NodeKind::LitStr { content: s, .. } = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
+    let node = unwrap_single(&r);
+    let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, r"\n\t\\");
   }
 
   #[test]
   fn test_multiline_str_escape_stored_verbatim() {
     // Multi-StrText assembly must also preserve raw source bytes.
-    use crate::ast::NodeKind;
     let src = r#"'
   \n
   \t
 '"#;
     let r = super::parse_with_blocks(src, &["test_block"]).unwrap();
-    let NodeKind::LitStr { content: s, .. } = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
+    let node = unwrap_single(&r);
+    let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, "\n\\n\n\\t\n");
   }
 
@@ -1655,7 +1640,25 @@ mod tests {
     }
   }
 
+  // TODO: ast() should always show the Module wrapper; update all .fnk test
+  // expectations to include it, then remove the single-expression unwrap.
+  /// For single-expression tests: unwrap Module to print just the expression.
   fn ast(src: &str) -> String {
+    match super::parse_with_blocks(src, &["test_block"]) {
+      Ok(r) => {
+        if let NodeKind::Module(exprs) = &r.root.kind {
+          if exprs.items.len() == 1 {
+            return exprs.items[0].print();
+          }
+        }
+        r.root.print()
+      }
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  /// For module-level tests: print the full Module node.
+  fn module(src: &str) -> String {
     parse_debug(src)
   }
 
@@ -1664,10 +1667,10 @@ mod tests {
     // 'hello ${expr}' — when interpolation is the last child, the AST ends with
     // the expression node. The `}` delimiter is implied (inferred by the print stage
     // from close.loc). The StrTempl.close token holds the closing `'`.
-    use crate::ast::NodeKind;
     let r = super::parse("'hello ${1}'").unwrap();
-    let NodeKind::StrTempl { children, close, .. } = &r.root.kind else {
-      panic!("expected StrTempl, got {:?}", r.root.kind);
+    let node = unwrap_single(&r);
+    let NodeKind::StrTempl { children, close, .. } = &node.kind else {
+      panic!("expected StrTempl, got {:?}", node.kind);
     };
     assert_eq!(close.src, "'");
     let last = children.last().expect("expected children");
@@ -1681,10 +1684,10 @@ mod tests {
   fn apply_args_preserve_comma_seps() {
     // collect_apply_or_block was dropping comma tokens from args.seps.
     // Commas between Apply args must be stored so the formatter can reproduce them.
-    use crate::ast::NodeKind;
     let r = super::parse("add 1, 2").unwrap();
-    let NodeKind::Apply { args, .. } = &r.root.kind else {
-      panic!("expected Apply, got {:?}", r.root.kind);
+    let node = unwrap_single(&r);
+    let NodeKind::Apply { args, .. } = &node.kind else {
+      panic!("expected Apply, got {:?}", node.kind);
     };
     assert_eq!(args.items.len(), 2, "expected 2 args");
     assert_eq!(args.seps.len(), 1, "expected 1 comma sep");
@@ -1701,4 +1704,5 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_functions.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_blocks.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
 }
