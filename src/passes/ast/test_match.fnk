@@ -9,13 +9,16 @@ test 'match on literal values', fn:
     Match ':',
       Ident 'foo'
       Arm ':',
-        LitInt '1'
+        Patterns
+          LitInt '1'
         LitStr 'one'
       Arm ':',
-        LitInt '2'
+        Patterns
+          LitInt '2'
         LitStr 'two'
       Arm ':',
-        Wildcard
+        Patterns
+          Wildcard
         LitStr 'other'
 
 test 'match with binding', fn:
@@ -27,13 +30,15 @@ test 'match with binding', fn:
     Match ':',
       Ident 'foo'
       Arm ':',
-        LitSeq '[..]',
-          Ident 'head'
-          Spread '..',
-            Ident 'tail'
+        Patterns
+          LitSeq '[..]',
+            Ident 'head'
+            Spread '..',
+              Ident 'tail'
         Ident 'head'
       Arm ':',
-        LitSeq '[..]'
+        Patterns
+          LitSeq '[..]'
         LitStr 'empty'
 
 test 'match with inline guard', fn:
@@ -46,21 +51,24 @@ test 'match with inline guard', fn:
     Match ':',
       Ident 'foo'
       Arm ':',
-        InfixOp 'and',
+        Patterns
+          InfixOp 'and',
+            InfixOp '>',
+              Ident 'n'
+              LitInt '0'
+            InfixOp '<',
+              Ident 'n'
+              LitInt '10'
+        LitStr 'small positive'
+      Arm ':',
+        Patterns
           InfixOp '>',
             Ident 'n'
             LitInt '0'
-          InfixOp '<',
-            Ident 'n'
-            LitInt '10'
-        LitStr 'small positive'
-      Arm ':',
-        InfixOp '>',
-          Ident 'n'
-          LitInt '0'
         LitStr 'large positive'
       Arm ':',
-        Wildcard
+        Patterns
+          Wildcard
         LitStr 'other'
 
 test 'match on type', fn:
@@ -72,14 +80,16 @@ test 'match on type', fn:
     Match ':',
       Ident 'foo'
       Arm ':',
-        Apply
-          Ident 'str'
-          Ident 's'
+        Patterns
+          Apply
+            Ident 'str'
+            Ident 's'
         LitStr 'its a string'
       Arm ':',
-        Apply
-          Ident 'u8'
-          Ident 'n'
+        Patterns
+          Apply
+            Ident 'u8'
+            Ident 'n'
         LitStr 'its a u8'
 
 test 'match string pattern', fn:
@@ -91,15 +101,17 @@ test 'match string pattern', fn:
     Match ':',
       Ident 's'
       Arm ':',
-        StrTempl
-          LitStr 'hello '
-          Spread '..',
-            Ident 'rest'
+        Patterns
+          StrTempl
+            LitStr 'hello '
+            Spread '..',
+              Ident 'rest'
         Ident 'rest'
       Arm ':',
-        InfixOp '...',
-          LitStr 'a'
-          LitStr 'z'
+        Patterns
+          InfixOp '...',
+            LitStr 'a'
+            LitStr 'z'
         LitStr 'lowercase letter'
 
 test 'match sequence patterns', fn:
@@ -113,21 +125,25 @@ test 'match sequence patterns', fn:
     Match ':',
       Ident 'items'
       Arm ':',
-        LitSeq '[..]'
+        Patterns
+          LitSeq '[..]'
         LitStr 'empty'
       Arm ':',
-        LitSeq '[..]',
-          Ident 'x'
+        Patterns
+          LitSeq '[..]',
+            Ident 'x'
         LitStr 'one element'
       Arm ':',
-        LitSeq '[..]',
-          Ident 'x'
-          Ident 'y'
+        Patterns
+          LitSeq '[..]',
+            Ident 'x'
+            Ident 'y'
         LitStr 'two elements'
       Arm ':',
-        LitSeq '[..]',
-          Ident 'x'
-          Spread '..'
+        Patterns
+          LitSeq '[..]',
+            Ident 'x'
+            Spread '..'
         LitStr 'one or more'
 
 test 'match sequence bare spread pattern', fn:
@@ -139,11 +155,13 @@ test 'match sequence bare spread pattern', fn:
     Match ':',
       Ident 'items'
       Arm ':',
-        LitSeq '[..]',
-          Spread '..'
+        Patterns
+          LitSeq '[..]',
+            Spread '..'
         LitStr 'non-empty'
       Arm ':',
-        LitSeq '[..]'
+        Patterns
+          LitSeq '[..]'
         LitStr 'empty'
 
 test 'match record bare spread pattern', fn:
@@ -155,11 +173,13 @@ test 'match record bare spread pattern', fn:
     Match ':',
       Ident 'foobar'
       Arm ':',
-        LitRec '{..}',
-          Spread '..'
+        Patterns
+          LitRec '{..}',
+            Spread '..'
         LitStr 'non-empty'
       Arm ':',
-        LitRec '{..}'
+        Patterns
+          LitRec '{..}'
         LitStr 'empty'
 
 test 'match record patterns', fn:
@@ -172,20 +192,23 @@ test 'match record patterns', fn:
     Match ':',
       Ident 'foobar'
       Arm ':',
-        LitRec '{..}'
+        Patterns
+          LitRec '{..}'
         LitStr 'empty'
       Arm ':',
-        LitRec '{..}',
-          Arm ':',
-            Ident 'foo'
-            LitInt '1'
+        Patterns
+          LitRec '{..}',
+            Arm ':',
+              Ident 'foo'
+              LitInt '1'
         LitStr 'foo is 1'
       Arm ':',
-        LitRec '{..}',
-          Arm ':',
-            Ident 'foo'
-            LitInt '1'
-          Spread '..'
+        Patterns
+          LitRec '{..}',
+            Arm ':',
+              Ident 'foo'
+              LitInt '1'
+            Spread '..'
         LitStr 'foo is 1 and more'
 
 test 'match record exact - empty rest', fn:
@@ -196,12 +219,13 @@ test 'match record exact - empty rest', fn:
     Match ':',
       Ident 'foobar'
       Arm ':',
-        LitRec '{..}',
-          Arm ':',
-            Ident 'foo'
-            LitInt '1'
-          Spread '..',
-            LitRec '{..}'
+        Patterns
+          LitRec '{..}',
+            Arm ':',
+              Ident 'foo'
+              LitInt '1'
+            Spread '..',
+              LitRec '{..}'
         LitStr 'foo is 1 and nothing else'
 
 test 'match record with bound rest', fn:
@@ -212,12 +236,13 @@ test 'match record with bound rest', fn:
     Match ':',
       Ident 'foobar'
       Arm ':',
-        LitRec '{..}',
-          Arm ':',
-            Ident 'foo'
-            LitInt '1'
-          Spread '..',
-            Ident 'rest'
+        Patterns
+          LitRec '{..}',
+            Arm ':',
+              Ident 'foo'
+              LitInt '1'
+            Spread '..',
+              Ident 'rest'
         Ident 'rest'
 
 test 'match seq exact - empty rest', fn:
@@ -228,10 +253,11 @@ test 'match seq exact - empty rest', fn:
     Match ':',
       Ident 'items'
       Arm ':',
-        LitSeq '[..]',
-          Ident 'a'
-          Spread '..',
-            LitSeq '[..]'
+        Patterns
+          LitSeq '[..]',
+            Ident 'a'
+            Spread '..',
+              LitSeq '[..]'
         LitStr 'only a'
 
 test 'match nested record pattern', fn:
@@ -242,14 +268,15 @@ test 'match nested record pattern', fn:
     Match ':',
       Ident 'foo'
       Arm ':',
-        LitRec '{..}',
-          Arm ':',
-            Ident 'x'
-            LitInt '1'
-          Arm ':',
-            Ident 'y'
-            LitRec '{..}',
-              Ident 'z'
+        Patterns
+          LitRec '{..}',
+            Arm ':',
+              Ident 'x'
+              LitInt '1'
+            Arm ':',
+              Ident 'y'
+              LitRec '{..}',
+                Ident 'z'
         Ident 'z'
 
 test 'inline match in application', fn:
@@ -261,9 +288,10 @@ test 'inline match in application', fn:
       Match ':',
         Ident 'a'
         Arm ':',
-          InfixOp '>',
-            Ident 'x'
-            LitInt '0'
+          Patterns
+            InfixOp '>',
+              Ident 'x'
+              LitInt '0'
           Ident 'x'
 
 test 'multi-subject match', fn:
@@ -301,15 +329,17 @@ test 'guard combined with spread in match arm', fn:
     Match ':',
       Ident 'items'
       Arm ':',
-        LitSeq '[..]',
-          InfixOp '>',
-            Ident 'x'
-            LitInt '0'
-          Spread '..',
-            Ident 'rest'
+        Patterns
+          LitSeq '[..]',
+            InfixOp '>',
+              Ident 'x'
+              LitInt '0'
+            Spread '..',
+              Ident 'rest'
         Ident 'rest'
       Arm ':',
-        Wildcard
+        Patterns
+          Wildcard
         LitSeq '[..]'
 
 test 'nested pattern with guard in binding', fn:
@@ -337,9 +367,10 @@ test 'multiline arm body', fn:
     Match ':',
       Ident 'n'
       Arm ':',
-        InfixOp '>',
-          Ident 'n'
-          LitInt '0'
+        Patterns
+          InfixOp '>',
+            Ident 'n'
+            LitInt '0'
         Bind '=',
           Ident 'x'
           InfixOp '*',
@@ -349,7 +380,8 @@ test 'multiline arm body', fn:
           Ident 'x'
           LitInt '1'
       Arm ':',
-        Wildcard
+        Patterns
+          Wildcard
         LitInt '0'
 
 test 'wildcard arm body as application', fn:
@@ -361,10 +393,12 @@ test 'wildcard arm body as application', fn:
     Match ':',
       Ident 'n'
       Arm ':',
-        LitInt '0'
+        Patterns
+          LitInt '0'
         LitBool true
       Arm ':',
-        Wildcard
+        Patterns
+          Wildcard
         Apply
           Ident 'is_odd'
           InfixOp '-',
@@ -382,16 +416,18 @@ test 'Ok and Err patterns in match', fn:
         Ident 'bar'
         Ident 'result'
       Arm ':',
-        Apply
-          Ident 'Ok'
-          Ident 'x'
+        Patterns
+          Apply
+            Ident 'Ok'
+            Ident 'x'
         InfixOp '+',
           Ident 'x'
           LitInt '1'
       Arm ':',
-        Apply
-          Ident 'Err'
-          Ident 'err'
+        Patterns
+          Apply
+            Ident 'Err'
+            Ident 'err'
         Apply
           Ident 'log'
           Ident 'err'
@@ -413,11 +449,12 @@ test 'match arm with nested right-hand binding', fn:
     Match ':',
       Ident 'foobar'
       Arm ':',
-        LitRec '{..}',
-          Arm ':',
-            Ident 'foo'
-            BindRight '|=',
-              Ident 'f'
-              LitRec '{..}',
-                Ident 'bar'
+        Patterns
+          LitRec '{..}',
+            Arm ':',
+              Ident 'foo'
+              BindRight '|=',
+                Ident 'f'
+                LitRec '{..}',
+                  Ident 'bar'
         Ident 'bar'

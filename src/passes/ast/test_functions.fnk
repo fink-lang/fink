@@ -165,17 +165,20 @@ test 'fn match single arg', fn:
         Match ':',
           Ident 'n'
           Arm ':',
-            InfixOp '>',
-              Ident 'n'
-              LitInt '0'
+            Patterns
+              InfixOp '>',
+                Ident 'n'
+                LitInt '0'
             LitStr 'positive'
           Arm ':',
-            InfixOp '<',
-              Ident 'n'
-              LitInt '0'
+            Patterns
+              InfixOp '<',
+                Ident 'n'
+                LitInt '0'
             LitStr 'negative'
           Arm ':',
-            Wildcard
+            Patterns
+              Wildcard
             LitStr 'zero'
 
 test 'fn match multi arg', fn:
@@ -231,13 +234,15 @@ test 'returning a function', fn:
           Match ':',
             Ident 'items'
             Arm ':',
-              LitSeq '[..]'
+              Patterns
+                LitSeq '[..]'
               LitSeq '[..]'
             Arm ':',
-              LitSeq '[..]',
-                Ident 'item'
-                Spread '..',
-                  Ident 'rest'
+              Patterns
+                LitSeq '[..]',
+                  Ident 'item'
+                  Spread '..',
+                    Ident 'rest'
               LitSeq '[..]',
                 Group '(..)',
                   Apply
