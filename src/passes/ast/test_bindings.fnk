@@ -317,7 +317,8 @@ test 'spread guard with right-hand binding', fn:
       LitSeq '[..]',
         Spread '..',
           BindRight '|=',
-            Ident 'str'
+            Group '(..)',
+              Ident 'str'
             Ident 'strings'
         Spread '..',
           Ident 'other'

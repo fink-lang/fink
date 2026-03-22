@@ -70,10 +70,10 @@ fn has_partial(node: &Node) -> bool {
     }
     NodeKind::Patterns(children) => children.items.iter().any(has_partial),
     NodeKind::Match { subjects, arms, .. } => {
-      has_partial(subjects) || arms.items.iter().any(has_partial)
+      subjects.items.iter().any(has_partial) || arms.items.iter().any(has_partial)
     }
     NodeKind::Arm { lhs, body, .. } => {
-      lhs.items.iter().any(has_partial) || body.items.iter().any(has_partial)
+      has_partial(lhs) || body.items.iter().any(has_partial)
     }
     NodeKind::Block { name, params, body, .. } => {
       has_partial(name) || has_partial(params) || body.items.iter().any(has_partial)
