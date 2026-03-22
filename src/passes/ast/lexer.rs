@@ -603,6 +603,29 @@ impl<'src> Lexer<'src> {
       if done { break; }
     }
 
+    // Trim trailing \n from last RawLine on dedent/EOF — the final newline
+    // is not string content, it's the line break before the dedent.
+    // Internal newlines (between content lines) are preserved.
+    if !interp {
+      if let Some(last) = raw.last_mut() {
+        let end_idx = last.end.idx as usize;
+        if end_idx > 0 && self.src.as_bytes().get(end_idx - 1) == Some(&b'\n') {
+          let new_end_idx = end_idx - 1;
+          if new_end_idx <= last.start.idx as usize {
+            // Line was only \n — drop it entirely
+            raw.pop();
+          } else {
+            let line_start = last.start.idx as usize;
+            last.end = Pos {
+              idx: new_end_idx as u32,
+              line: last.end.line - 1,
+              col: last.start.col + utf16_len(&self.src[line_start..new_end_idx]),
+            };
+          }
+        }
+      }
+    }
+
     // Compute strip level from all non-blank content lines
     let mut strip_level: usize = 0;
     let mut strip_set = false;
@@ -622,12 +645,15 @@ impl<'src> Lexer<'src> {
       self.pending.push(Token { kind: TokenKind::StrText, loc: Loc { start, end: line.end }, src });
     }
 
-    self.pos = p;
+    // After trimming, position at the trimmed end (before \n) so the regular
+    // consume_newline logic fires and emits BlockCont — same as any other block.
+    let str_end_pos = raw.last().map_or(p, |l| l.end);
+    self.pos = if !interp { str_end_pos } else { p };
 
     // Emit StrEnd '' on dedent/EOF (not on interp — mode stays active)
     if !interp {
       self.mode.pop();
-      self.pending.push(Token { kind: TokenKind::StrEnd, loc: Loc { start: p, end: p }, src: "" });
+      self.pending.push(Token { kind: TokenKind::StrEnd, loc: Loc { start: str_end_pos, end: str_end_pos }, src: "" });
     }
 
     if self.pending.is_empty() {
