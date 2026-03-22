@@ -1442,8 +1442,8 @@ impl<'src> Parser<'src> {
         continue;
       }
       items.push(f(self)?);
-      // Comma separates block expressions, equivalent to newline (BlockCont)
-      if self.at(TokenKind::Comma) {
+      // Comma and semicolon separate block expressions, equivalent to newline (BlockCont)
+      if self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
         seps.push(self.bump());
       }
     }
