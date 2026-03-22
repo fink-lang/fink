@@ -131,9 +131,9 @@ fn has_name_captures(expr: &Expr<'_>, resolve: &ResolveResult) -> bool {
       false
     }
     App { func, args } => {
-      if let Callable::Val(v) = func {
-        if is_name_captured(v, resolve) { return true; }
-      }
+      if let Callable::Val(v) = func
+        && is_name_captured(v, resolve)
+      { return true; }
       for arg in args {
         match arg {
           Arg::Val(v) | Arg::Spread(v) => { if is_name_captured(v, resolve) { return true; } }
@@ -179,12 +179,9 @@ pub fn lift_all<'src>(
   // Iterate cont_lifting + closure_lifting until no captures remain.
   // cont_lift before closure_lifting — hoists inline conts so closure_lifting
   // can see all named functions. Then iterate closure_lifting until no captures.
-  // Final cont_lift after the loop handles any inline conts created by
-  // FnClosure construction during closure_lifting.
-  // cont_lift first: hoist all inline conts into named LetFn nodes.
-  // Then iterate closure_lifting until no captures remain.
   // FnClosure Cont::Expr bindings from closure_lift stay inline — they're
-  // value binding conts, not computation boundaries. No final cont_lift needed.
+  // value-binding conts, not computation boundaries. Codegen handles them
+  // directly (via closure_fn / cap_param_fn maps).
   const MAX_ROUNDS: usize = 20;
   let mut current = cont_lift(cps);
   for round in 0..MAX_ROUNDS {

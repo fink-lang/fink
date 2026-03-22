@@ -152,6 +152,10 @@ struct Ctx<'a, 'src> {
   /// Built by process_closures to trace params back through FnClosure cap indirection.
   /// Used by emit_match_block to resolve arm val params to their match_arms entries.
   param_source: std::collections::HashMap<CpsId, CpsId>,
+  /// Maps closure_fn param CpsId → non-stripped cap arg CpsIds for the FnClosure.
+  /// When a cont call goes through closure_fn, these cap values must be pushed
+  /// before the call result value and the cont.
+  closure_caps: std::collections::HashMap<CpsId, Vec<CpsId>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -173,6 +177,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
       cap_param_fn: std::collections::HashMap::new(),
       closure_fn: std::collections::HashMap::new(),
       param_source: std::collections::HashMap::new(),
+      closure_caps: std::collections::HashMap::new(),
     }
   }
 
@@ -221,6 +226,8 @@ impl<'a, 'src> Ctx<'a, 'src> {
   /// Use this only for compile-time resolution (e.g. collect_match_arms), not for runtime calls.
   fn func_index_through_closure(&self, id: CpsId) -> Option<u32> {
     if let Some(idx) = self.func_index(id) { return Some(idx); }
+    // Direct closure_fn lookup (handles FnClosure Cont::Expr params).
+    if let Some(&fn_idx) = self.closure_fn.get(&id) { return Some(fn_idx); }
     // Follow val_alias chain and check closure_fn.
     let mut cur = id;
     for _ in 0..8 {
@@ -654,11 +661,9 @@ fn build_fink_fn<'a, 'b, 'src>(
 
   discover_aliases(body, &mut locals);
 
-  let wasm_locals = if extra_count > 0 {
-    vec![(extra_count, ValType::Ref(RefType::ANYREF))]
-  } else {
-    vec![]
-  };
+  // +1 extra local for temp storage in emit_cont_call_with_anyref via closure_fn.
+  let total_extra = extra_count + 1;
+  let wasm_locals = vec![(total_extra, ValType::Ref(RefType::ANYREF))];
 
   let mut f = Function::new(wasm_locals);
   let mut fc = FnCtx { local_count: local_idx, cont_local, locals, code_idx, ctx, rel };
@@ -887,9 +892,9 @@ fn emit_match_block(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
         if let Some(&source) = fc.ctx.param_source.get(&cur) {
           if let Some(info) = fc.ctx.match_arms.get(&source) { return Some(info); }
           // Also follow val_alias from source.
-          if let Some(&alias) = fc.ctx.val_alias.get(&source) {
-            if let Some(info) = fc.ctx.match_arms.get(&alias) { return Some(info); }
-          }
+          if let Some(&alias) = fc.ctx.val_alias.get(&source)
+            && let Some(info) = fc.ctx.match_arms.get(&alias)
+          { return Some(info); }
           cur = source;
         } else {
           break;
@@ -1021,6 +1026,15 @@ fn emit_match_value(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
 /// static caps that were stripped). Push null for remaining non-cap params
 /// (e.g. match arm values that are never used at runtime). Push cont. Call.
 fn emit_fn_closure(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
+  // Check if the last arg is Cont::Expr (inline value-binding cont).
+  // FnClosure Cont::Expr is a compile-time construct: the closure value is never
+  // materialized at runtime. All calls are statically resolved. Just emit the body.
+  if let Some(Arg::Cont(Cont::Expr { body, .. })) = args.last() {
+    emit_expr(body, f, fc);
+    return;
+  }
+
+  // Cont::Ref case: call the hoisted fn directly with cap args and forwarded cont.
   let hoisted_fn_id = match args.first() {
     Some(Arg::Val(v)) => match &v.kind {
       ValKind::Ref(Ref::Synth(id)) => Some(*id),
@@ -1164,6 +1178,34 @@ fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) 
     f.instruction(&Instruction::ReturnCall(fn_idx));
     return;
   }
+  // Check closure_fn: cont_id might be a FnClosure result binding that maps
+  // to a hoisted fn. Push non-stripped cap values, then the result value, then cont.
+  if let Some(&fn_idx) = fc.ctx.closure_fn.get(&cont_id) {
+    let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
+    if fn_pos < fc.ctx.funcs.len() {
+      let caps = fc.ctx.closure_caps.get(&cont_id).cloned().unwrap_or_default();
+      if !caps.is_empty() {
+        // Non-stripped cap values need to go BEFORE the result value on the stack.
+        // Save the result value to a temp local, push caps, push result back.
+        let result_local = fc.local_count;
+        fc.local_count += 1;
+        f.instruction(&Instruction::LocalSet(result_local));
+        for &cap_id in &caps {
+          if let Some(local_idx) = fc.local_for(cap_id) {
+            f.instruction(&Instruction::LocalGet(local_idx));
+          } else {
+            f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+              shared: false, ty: wasm_encoder::AbstractHeapType::Any,
+            }));
+          }
+        }
+        f.instruction(&Instruction::LocalGet(result_local));
+      }
+      f.instruction(&Instruction::LocalGet(fc.cont_local));
+      f.instruction(&Instruction::ReturnCall(fn_idx));
+      return;
+    }
+  }
   // Unknown cont — it's the cont param, already typed (ref $Cont).
   f.instruction(&Instruction::LocalGet(fc.cont_local));
   f.instruction(&Instruction::ReturnCallRef(TY_CONT));
@@ -1304,6 +1346,95 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
 /// - Strips static cap params (module-level fn refs) from hoisted fn signatures.
 /// - Builds closure_fn: maps result cont params to hoisted fn indices.
 fn process_closures<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
+  // Two-phase approach: first collect all resolvable static fn caps (AST origin → fn_idx),
+  // then process each FnClosure using the collected set. This handles the case where a cap
+  // arg (e.g. `recurse`) is resolvable at one FnClosure site but Unresolved at another —
+  // the fn_idx discovered at the resolvable site applies to all matching params.
+  let mut known_static_caps: std::collections::HashMap<AstId, u32> = std::collections::HashMap::new();
+  collect_static_fn_caps(expr, ctx, &mut known_static_caps);
+  process_closures_inner(expr, ctx, &known_static_caps);
+}
+
+/// Pre-pass: walk FnClosure Apps, find cap args that resolve to known fn indices.
+/// Records (AST origin of cap param → fn_idx) for use by process_closures_inner.
+fn collect_static_fn_caps<'a, 'src>(
+  expr: &'a Expr<'src>,
+  ctx: &Ctx<'a, 'src>,
+  out: &mut std::collections::HashMap<AstId, u32>,
+) {
+  match &expr.kind {
+    ExprKind::App { func: Callable::BuiltIn(crate::passes::cps::ir::BuiltIn::FnClosure), args } => {
+      if let Some(Arg::Val(fn_val)) = args.first()
+        && let ValKind::Ref(Ref::Synth(hoisted_fn_id)) = &fn_val.kind
+        && let Some(fn_pos) = ctx.funcs.iter().position(|f| f.name_id == *hoisted_fn_id)
+      {
+        let cap_args = &args[1..args.len().saturating_sub(1)];
+        let fn_params = &ctx.funcs[fn_pos].param_ids;
+        for (cap_arg, param_id) in cap_args.iter().zip(fn_params.iter()) {
+          if let Arg::Val(cap_val) = cap_arg {
+            let bind_id = resolve_cap_arg_bind(cap_val, ctx);
+            if let Some(bid) = bind_id
+              && let Some(cap_fn_idx) = ctx.func_index(bid)
+              && let Some(Some(ast_id)) = ctx.origin.try_get(*param_id)
+            {
+              out.insert(*ast_id, cap_fn_idx);
+            }
+          }
+        }
+      }
+      for arg in args {
+        match arg {
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_static_fn_caps(body, ctx, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::LetFn { fn_body, body, .. } => {
+      collect_static_fn_caps(fn_body, ctx, out);
+      if let Cont::Expr { body: cont_body, .. } = body {
+        collect_static_fn_caps(cont_body, ctx, out);
+      }
+    }
+    ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+      collect_static_fn_caps(cont_body, ctx, out);
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_static_fn_caps(body, ctx, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_static_fn_caps(then, ctx, out);
+      collect_static_fn_caps(else_, ctx, out);
+    }
+    _ => {}
+  }
+}
+
+/// Resolve a cap arg val to its bind CpsId (for func_index lookup).
+fn resolve_cap_arg_bind(cap_val: &Val<'_>, ctx: &Ctx<'_, '_>) -> Option<CpsId> {
+  use crate::passes::name_res::Resolution;
+  match &cap_val.kind {
+    ValKind::Ref(Ref::Synth(id)) => Some(*id),
+    ValKind::Ref(Ref::Name) => match ctx.resolve.resolution.try_get(cap_val.id) {
+      Some(Some(Resolution::Local(id))) => Some(*id),
+      Some(Some(Resolution::Captured { bind, .. })) => Some(*bind),
+      Some(Some(Resolution::Recursive(id))) => Some(*id),
+      _ => None,
+    },
+    _ => None,
+  }
+}
+
+/// Main pass: process FnClosure Apps — strip static caps, build closure_fn/param_source.
+fn process_closures_inner<'a, 'src>(
+  expr: &'a Expr<'src>,
+  ctx: &mut Ctx<'a, 'src>,
+  known_static_caps: &std::collections::HashMap<AstId, u32>,
+) {
   match &expr.kind {
     ExprKind::App { func: Callable::BuiltIn(crate::passes::cps::ir::BuiltIn::FnClosure), args } => {
       if let Some(Arg::Val(fn_val)) = args.first()
@@ -1317,24 +1448,21 @@ fn process_closures<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         let mut static_cap_indices = Vec::new();
         for (i, (cap_arg, param_id)) in cap_args.iter().zip(fn_params.iter()).enumerate() {
           if let Arg::Val(cap_val) = cap_arg {
-            use crate::passes::name_res::Resolution;
-            let bind_id = match &cap_val.kind {
-              ValKind::Ref(Ref::Synth(id)) => Some(*id),
-              ValKind::Ref(Ref::Name) => match ctx.resolve.resolution.try_get(cap_val.id) {
-                Some(Some(Resolution::Local(id))) => Some(*id),
-                Some(Some(Resolution::Captured { bind, .. })) => Some(*bind),
-                _ => None,
-              },
-              _ => None,
-            };
+            let bind_id = resolve_cap_arg_bind(cap_val, ctx);
             // Record param_source: hoisted fn cap param → cap arg source bind.
             if let Some(bid) = bind_id {
               ctx.param_source.insert(*param_id, bid);
             }
-            if let Some(bid) = bind_id
-              && let Some(cap_fn_idx) = ctx.func_index(bid)
-            {
-              ctx.cap_param_fn.insert(*param_id, cap_fn_idx);
+            // Check direct resolution first.
+            let cap_fn_idx = bind_id.and_then(|bid| ctx.func_index(bid));
+            // Fallback: check known_static_caps by AST origin (handles Unresolved sites
+            // where the same cap was resolvable at a different FnClosure site).
+            let cap_fn_idx = cap_fn_idx.or_else(|| {
+              let ast_id = ctx.origin.try_get(*param_id)?.as_ref()?;
+              known_static_caps.get(ast_id).copied()
+            });
+            if let Some(fn_idx) = cap_fn_idx {
+              ctx.cap_param_fn.insert(*param_id, fn_idx);
               static_cap_indices.push(i);
             }
           }
@@ -1352,45 +1480,65 @@ fn process_closures<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
 
         // Record closure_fn: result cont param → hoisted fn index.
         let hoisted_fn_idx = FN_COMPILED_START + fn_pos as u32;
-        if let Some(result_cont_id) = args.iter().rev().find_map(|a| match a {
-          Arg::Cont(Cont::Ref(id)) => Some(*id),
+        // Handle both Cont::Ref and Cont::Expr for the result cont.
+        let result_cont_param = args.last().and_then(|a| match a {
+          Arg::Cont(Cont::Ref(id)) => {
+            // Hoisted cont fn: first param binds the closure value.
+            ctx.funcs.iter().position(|f| f.name_id == *id)
+              .and_then(|pos| ctx.funcs[pos].param_ids.first().copied())
+          }
+          Arg::Cont(Cont::Expr { args: cont_args, .. }) => {
+            // Inline cont: first arg binds the closure value.
+            cont_args.first().map(|b| b.id)
+          }
           _ => None,
-        }) {
-          if let Some(rc_pos) = ctx.funcs.iter().position(|f| f.name_id == result_cont_id)
-            && let Some(&param_id) = ctx.funcs[rc_pos].param_ids.first()
-          {
-            ctx.closure_fn.insert(param_id, hoisted_fn_idx);
+        });
+        if let Some(param_id) = result_cont_param {
+          ctx.closure_fn.insert(param_id, hoisted_fn_idx);
+          // Record non-stripped cap arg bind CpsIds for emit_cont_call to push at call time.
+          // Use the resolved bind CpsId (not the val CpsId) so local_for can find the local.
+          let non_stripped_caps: Vec<CpsId> = cap_args.iter().enumerate()
+            .filter(|(i, _)| !static_cap_indices.contains(i))
+            .filter_map(|(_, arg)| match arg {
+              Arg::Val(v) => {
+                resolve_cap_arg_bind(v, ctx).or(Some(v.id))
+              }
+              _ => None,
+            })
+            .collect();
+          if !non_stripped_caps.is_empty() {
+            ctx.closure_caps.insert(param_id, non_stripped_caps);
           }
         }
       }
       // Recurse into result cont body.
       for arg in args {
         match arg {
-          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => process_closures(body, ctx),
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => process_closures_inner(body, ctx, known_static_caps),
           _ => {}
         }
       }
     }
     ExprKind::LetFn { fn_body, body, .. } => {
-      process_closures(fn_body, ctx);
+      process_closures_inner(fn_body, ctx, known_static_caps);
       if let Cont::Expr { body: cont_body, .. } = body {
-        process_closures(cont_body, ctx);
+        process_closures_inner(cont_body, ctx, known_static_caps);
       }
     }
     ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
-      process_closures(cont_body, ctx);
+      process_closures_inner(cont_body, ctx, known_static_caps);
     }
     ExprKind::App { args, .. } => {
       for arg in args {
         match arg {
-          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => process_closures(body, ctx),
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => process_closures_inner(body, ctx, known_static_caps),
           _ => {}
         }
       }
     }
     ExprKind::If { then, else_, .. } => {
-      process_closures(then, ctx);
-      process_closures(else_, ctx);
+      process_closures_inner(then, ctx, known_static_caps);
+      process_closures_inner(else_, ctx, known_static_caps);
     }
     _ => {}
   }
@@ -1444,11 +1592,10 @@ fn collect_match_arms<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         Cont::Ref(_) => {}
       }
     }
-    ExprKind::LetVal { body, .. } => {
-      if let Cont::Expr { body: cont_body, .. } = body {
-        collect_match_arms(cont_body, ctx);
-      }
+    ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+      collect_match_arms(cont_body, ctx);
     }
+    ExprKind::LetVal { .. } => {}
     ExprKind::App { args, .. } => {
       for arg in args {
         match arg {

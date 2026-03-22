@@ -74,15 +74,11 @@ fn collect_val<'src>(
   if let ValKind::Ref(Ref::Name) = &val.kind
     && let Some(Resolution::Captured { depth, bind }) =
       resolve.resolution.try_get(val.id).and_then(|r| r.as_ref())
+    && *depth >= 1
+    && let Some(name) = source_name(*bind, origin, ast_index)
+    && !captures.contains(&name)
   {
-    // Any Captured ref seen in the fn body (with nested fn bodies skipped by
-    // collect_captured_in_body) is directly captured by this fn.
-    if *depth >= 1
-      && let Some(name) = source_name(*bind, origin, ast_index)
-      && !captures.contains(&name)
-    {
-      captures.push(name);
-    }
+    captures.push(name);
   }
 }
 
