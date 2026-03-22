@@ -1442,9 +1442,18 @@ impl<'src> Parser<'src> {
         continue;
       }
       items.push(f(self)?);
-      // Comma and semicolon separate block expressions, equivalent to newline (BlockCont)
+      // Comma and semicolon separate block expressions on the same line
       if self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
-        seps.push(self.bump());
+        let sep = self.bump();
+        if self.at(TokenKind::BlockCont) {
+          return Err(ParseError {
+            message: format!("trailing '{}' without indented continuation", sep.src),
+            loc: sep.loc,
+          });
+        }
+        // BlockStart after separator = line continuation (indented next line)
+        if self.at(TokenKind::BlockStart) { self.bump(); }
+        seps.push(sep);
       }
     }
     if self.at(TokenKind::BlockEnd) { self.bump(); }
