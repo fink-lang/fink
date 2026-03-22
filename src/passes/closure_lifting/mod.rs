@@ -410,25 +410,33 @@ fn lift_expr<'src>(
           fn_body: rewritten_fn_body,
         });
 
-        // 5. At the original site: emit ·fn_closure call, bind result as original name.
-        let lifted_ref  = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
-        let result_bind = alloc.synth_bind();
-        let result_ref  = alloc.val(ValKind::Ref(Ref::Synth(result_bind.id)), None);
+        // 5. At the original site: emit ·fn_closure call, bind result directly
+        //    as the original closure name (no intermediate LetVal).
+        let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
 
-        // Bind the closure val under the original closure name, then run body.
-        let closure_bind = name;
-        let subst_body = Expr {
-          id: expr.id, // carry forward original LetFn's CpsId
-          kind: LetVal {
-            name: closure_bind,
-            val: Box::new(result_ref),
-            body: rewritten_body,
-          },
+        // The rewritten_body is a Cont (from the original LetFn body).
+        // Prepend the closure name bind to its args so FnClosure binds the
+        // closure value directly under the original name.
+        let closure_cont = match rewritten_body {
+          Cont::Expr { args: mut cont_args, body } => {
+            cont_args.insert(0, name);
+            Cont::Expr { args: cont_args, body }
+          }
+          Cont::Ref(id) => {
+            // Body is just a Cont::Ref — wrap in Expr that forwards the closure value.
+            let fwd_ref = alloc.val(ValKind::Ref(Ref::Synth(name.id)), None);
+            let cont_val = alloc.val(ValKind::ContRef(id), None);
+            let fwd_app = alloc.expr(ExprKind::App {
+              func: Callable::Val(cont_val),
+              args: vec![Arg::Val(fwd_ref)],
+            }, None);
+            Cont::Expr { args: vec![name], body: Box::new(fwd_app) }
+          }
         };
 
         let mut fn_closure_args: Vec<Arg<'src>> = vec![Arg::Val(lifted_ref)];
         fn_closure_args.extend(cap_ref_vals.into_iter().map(Arg::Val));
-        fn_closure_args.push(Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(subst_body) }));
+        fn_closure_args.push(Arg::Cont(closure_cont));
 
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
