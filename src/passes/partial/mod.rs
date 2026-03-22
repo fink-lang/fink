@@ -38,7 +38,8 @@ fn has_partial(node: &Node) -> bool {
     // Group is a boundary — don't look inside
     NodeKind::Group { .. } => false,
 
-    NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
+    NodeKind::Module(items)
+    | NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
       items.items.iter().any(has_partial)
     }
     NodeKind::StrTempl { children, .. } | NodeKind::StrRawTempl { children, .. } => {
@@ -70,10 +71,10 @@ fn has_partial(node: &Node) -> bool {
     }
     NodeKind::Patterns(children) => children.items.iter().any(has_partial),
     NodeKind::Match { subjects, arms, .. } => {
-      has_partial(subjects) || arms.items.iter().any(has_partial)
+      subjects.items.iter().any(has_partial) || arms.items.iter().any(has_partial)
     }
     NodeKind::Arm { lhs, body, .. } => {
-      lhs.items.iter().any(has_partial) || body.items.iter().any(has_partial)
+      has_partial(lhs) || body.items.iter().any(has_partial)
     }
     NodeKind::Block { name, params, body, .. } => {
       has_partial(name) || has_partial(params) || body.items.iter().any(has_partial)
@@ -238,6 +239,12 @@ impl<'src> PartialPass {
         Ok(Node::new(NodeKind::Pipe(Exprs { items: new_items, seps: exprs.seps }), loc))
       }
 
+      // Module: recurse into each expression as independent scope
+      NodeKind::Module(exprs) => {
+        let body = self.transform_body(exprs)?;
+        Ok(Node::new(NodeKind::Module(body), loc))
+      }
+
       // Everything else: recurse into children (processing inner Group/Pipe boundaries),
       // then wrap in Fn if any Partial remains
       other => {
@@ -288,10 +295,18 @@ impl<'src> Transform<'src> for PartialPass {
 #[cfg(test)]
 mod tests {
   fn partial(src: &str) -> String {
+    use crate::ast::NodeKind;
     match crate::parser::parse(src) {
       Err(e) => format!("PARSE ERROR: {}", e.message),
       Ok(result) => match super::apply(result.root) {
-        Ok(node) => node.print(),
+        Ok(node) => {
+          if let NodeKind::Module(exprs) = &node.kind {
+            if exprs.items.len() == 1 {
+              return exprs.items[0].print();
+            }
+          }
+          node.print()
+        }
         Err(e) => format!("ERROR: {}", e.message),
       },
     }

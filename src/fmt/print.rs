@@ -344,6 +344,9 @@ impl Writer {
 
             // --- functions ---
             // `fn` keyword is at node.loc.start; params follow, then sep `:`, then body.
+            NodeKind::Module(exprs) => {
+                self.exprs(exprs);
+            }
             NodeKind::Fn { params, sep, body } => {
                 self.keyword(node.loc.start, "fn");
                 self.node(params);
@@ -358,12 +361,12 @@ impl Writer {
             // `match` keyword is at node.loc.start.
             NodeKind::Match { subjects, sep, arms } => {
                 self.keyword(node.loc.start, "match");
-                self.node(subjects);
+                self.exprs(subjects);
                 self.tok(sep);
                 self.exprs(arms);
             }
             NodeKind::Arm { lhs, sep, body } => {
-                self.exprs(lhs);
+                self.node(lhs);
                 self.tok(sep);
                 self.exprs(body);
             }
@@ -445,7 +448,7 @@ mod tests {
     /// the expected result for any well-formed source the print stage should
     /// reproduce verbatim.
     fn print(src: &str) -> String {
-        let result = parser::parse(src)
+        let result = parser::parse_with_blocks(src, &["test_block"])
             .unwrap_or_else(|e| panic!("parse error: {}", e.message));
         let output = super::print(&result.root);
         if output == src { "NO-DIFF".to_string() } else { output }

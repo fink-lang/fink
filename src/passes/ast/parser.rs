@@ -393,14 +393,15 @@ impl<'src> Parser<'src> {
       if self.at(TokenKind::BlockEnd) { self.bump(); }
     }
 
-    // Check for block syntax.
+    // Check for block syntax — only for registered block names.
     // Rules:
-    //   func: body             → Block(func, [], body)
-    //   func a, b: body        → Block(func, [a, b], body)   [func is the outer ident]
-    //   outer inner: body      → Apply(outer, Block(inner, [], body))   [last arg is block name]
-    //   outer inner a, b: body → Apply(outer, Block(inner, [a, b], body))  [last arg is block with params]
+    //   func: body             → Block(func, [], body)           [func is registered]
+    //   func a, b: body        → Block(func, [a, b], body)      [func is registered]
+    //   outer inner: body      → Apply(outer, Block(inner, [], body))   [inner is registered]
+    let func_is_block = matches!(&func.kind, NodeKind::Ident(name) if self.block_names.contains(name));
+
     if self.at(TokenKind::Colon) {
-      if params.is_empty() {
+      if params.is_empty() && func_is_block {
         // "func: body" — func is the block name, no params
         let params_node = self.node(NodeKind::Patterns(Exprs::empty()), func_loc);
         let (sep, body) = self.parse_colon_body_or_arms()?;
@@ -411,21 +412,10 @@ impl<'src> Parser<'src> {
         ));
       }
 
-      // Has params. Check if last param is ident or apply — it could be a nested block
-      // OR all params belong to func as a block.
-      // Heuristic: if there are params and they all contain non-ident things, or there are
-      // multiple comma-separated items, func is the block name.
-      // Key test: "test_block a, b: body" vs "log test_block: body"
-      // In "log test_block: body": only ONE param (test_block), which is a bare ident. → test_block is block.
-      // In "test_block a, b: body": TWO params (a, b). → test_block is the block.
-      // In "log test_block a, b: body": THREE params (test_block, a, b), last two are a, b.
-      //   Wait, this doesn't appear in tests. Let's not over-engineer.
-      //
-      // Decision: if there's exactly ONE param and it's a bare ident, treat THAT ident as the block.
-      // Otherwise, func is the block name.
+      // Single ident param that is a registered block name: nested block in application
       if params.len() == 1
-        && let NodeKind::Ident(_) = &params[0].kind {
-          // One bare ident param followed by ":": the ident is the block name
+        && let NodeKind::Ident(name) = &params[0].kind
+        && self.block_names.contains(name) {
           let block_name = params.remove(0);
           let block_start = block_name.loc.start;
           let params_node = self.node(NodeKind::Patterns(Exprs::empty()), block_name.loc);
@@ -435,23 +425,24 @@ impl<'src> Parser<'src> {
             NodeKind::Block { name: Box::new(block_name), params: Box::new(params_node), sep, body },
             Loc { start: block_start, end },
           );
-          // Wrap in Apply(func, [block_node])
           return Ok(self.node(
             NodeKind::Apply { func: Box::new(func), args: Exprs { items: vec![block_node], seps: vec![] } },
             Loc { start: func_loc.start, end },
           ));
       }
 
-      // Func is the block name, params are its patterns
-      let params_end = params.last().map(|n: &Node| n.loc.end).unwrap_or(func_loc.end);
-      let params_loc = Loc { start: func_loc.end, end: params_end };
-      let params_node = self.node(NodeKind::Patterns(Exprs { items: params, seps }), params_loc);
-      let (sep, body) = self.parse_colon_body_or_arms()?;
-      let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
-      return Ok(self.node(
-        NodeKind::Block { name: Box::new(func), params: Box::new(params_node), sep, body },
-        Loc { start: func_loc.start, end },
-      ));
+      // Func is a registered block name with params
+      if func_is_block {
+        let params_end = params.last().map(|n: &Node| n.loc.end).unwrap_or(func_loc.end);
+        let params_loc = Loc { start: func_loc.end, end: params_end };
+        let params_node = self.node(NodeKind::Patterns(Exprs { items: params, seps }), params_loc);
+        let (sep, body) = self.parse_colon_body_or_arms()?;
+        let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
+        return Ok(self.node(
+          NodeKind::Block { name: Box::new(func), params: Box::new(params_node), sep, body },
+          Loc { start: func_loc.start, end },
+        ));
+      }
     }
 
     // Not a block: it's a regular application
@@ -1176,7 +1167,7 @@ impl<'src> Parser<'src> {
           self.skip_block_tokens();
           let val = self.parse_expr()?;
           let loc = Loc { start: first.loc.start, end: val.loc.end };
-          items.push(self.node(NodeKind::Arm { lhs: Exprs { items: vec![first], seps: vec![] }, sep, body: Exprs { items: vec![val], seps: vec![] } }, loc));
+          items.push(self.node(NodeKind::Arm { lhs: Box::new(first), sep, body: Exprs { items: vec![val], seps: vec![] } }, loc));
         } else {
           items.push(first);
         }
@@ -1195,14 +1186,13 @@ impl<'src> Parser<'src> {
     let start = op_tok.loc.start;
 
     let maybe_inner: Option<Node<'src>> = if self.at(TokenKind::BracketOpen) && self.peek().src == "(" {
-      // ..(expr) — parse group and strip the Group wrapper
+      // ..(expr) — parse group, preserve Group node for faithful AST
       let group = self.parse_group()?;
-      let inner = if let NodeKind::Group { inner, .. } = group.kind { *inner } else { group };
       // ..(expr)..(expr) — `)` directly followed by `..`/`...` is a range, not a second spread
       if Self::is_range_op(self.peek()) {
-        Some(self.parse_infix_from(inner, 0)?)
+        Some(self.parse_infix_from(group, 0)?)
       } else {
-        Some(inner)
+        Some(group)
       }
     } else if (self.is_arg_start() && !self.at_sep()) || self.at(TokenKind::Partial) {
       Some(self.parse_infix(0)?)
@@ -1303,10 +1293,9 @@ impl<'src> Parser<'src> {
         // Postfix tag: (expr)tag where tag is immediately adjacent
         if self.at(TokenKind::Ident) && self.peek().loc.start.idx == group_end.idx {
           let tag = self.bump();
-          let inner = if let NodeKind::Group { inner, .. } = group.kind { *inner } else { group };
           let func = self.node(NodeKind::Ident(tag.src), tag.loc);
-          let loc = Loc { start: inner.loc.start, end: tag.loc.end };
-          return Ok(self.node(NodeKind::Apply { func: Box::new(func), args: Exprs { items: vec![inner], seps: vec![] } }, loc));
+          let loc = Loc { start: group.loc.start, end: tag.loc.end };
+          return Ok(self.node(NodeKind::Apply { func: Box::new(func), args: Exprs { items: vec![group], seps: vec![] } }, loc));
         }
         // Preserve Group — it's explicit syntax and semantically significant (e.g. partial scope boundary)
         Ok(group)
@@ -1333,11 +1322,15 @@ impl<'src> Parser<'src> {
     if is_fn_match {
       // fn match: parse arms as the body
       let (sep, arms) = self.parse_colon_arms()?;
-      let subjects = params.clone();
-      let match_end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(subjects.loc.end);
+      // Extract subject expressions from Patterns wrapper
+      let subjects = match params.kind.clone() {
+        NodeKind::Patterns(exprs) => exprs,
+        _ => Exprs { items: vec![params.clone()], seps: vec![] },
+      };
+      let match_end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(params.loc.end);
       fn_end_loc = Loc { start: fn_loc.start, end: match_end };
       let match_node = self.node(
-        NodeKind::Match { subjects: Box::new(subjects), sep, arms },
+        NodeKind::Match { subjects, sep, arms },
         fn_end_loc,
       );
       Ok(self.node(
@@ -1365,6 +1358,7 @@ impl<'src> Parser<'src> {
       seps.push(sep);
     }
 
+    self.skip_block_tokens();
     while !self.at(TokenKind::Colon) && !self.at(TokenKind::EOF) {
       if self.at(TokenKind::Sep) && self.peek().src == ".." {
         items.push(self.parse_spread()?);
@@ -1392,7 +1386,11 @@ impl<'src> Parser<'src> {
           items.push(self.node(NodeKind::Wildcard, sep.loc));
           seps.push(self.bump());
         }
+      } else if self.at(TokenKind::BlockCont) || self.at(TokenKind::Semicolon) {
+        seps.push(self.bump());
+        self.skip_block_tokens();
       } else {
+        self.skip_block_tokens();
         break;
       }
     }
@@ -1438,6 +1436,19 @@ impl<'src> Parser<'src> {
         continue;
       }
       items.push(f(self)?);
+      // Comma and semicolon separate block expressions on the same line
+      if self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
+        let sep = self.bump();
+        if self.at(TokenKind::BlockCont) {
+          return Err(ParseError {
+            message: format!("trailing '{}' without indented continuation", sep.src),
+            loc: sep.loc,
+          });
+        }
+        // BlockStart after separator = line continuation (indented next line)
+        if self.at(TokenKind::BlockStart) { self.bump(); }
+        seps.push(sep);
+      }
     }
     if self.at(TokenKind::BlockEnd) { self.bump(); }
     Ok(Exprs { items, seps })
@@ -1460,11 +1471,16 @@ impl<'src> Parser<'src> {
   // --- match ---
 
   fn parse_match_expr(&mut self, match_loc: Loc) -> ParseResult<'src> {
-    let (subjects, _) = self.parse_params()?;
+    let (params_node, params_loc) = self.parse_params()?;
+    // Extract subject expressions from Patterns wrapper — subjects are expressions, not patterns
+    let subjects = match params_node.kind {
+      NodeKind::Patterns(exprs) => exprs,
+      _ => Exprs { items: vec![params_node], seps: vec![] },
+    };
     let (sep, arms) = self.parse_colon_arms()?;
-    let end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(subjects.loc.end);
+    let end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
     Ok(self.node(
-      NodeKind::Match { subjects: Box::new(subjects), sep, arms },
+      NodeKind::Match { subjects, sep, arms },
       Loc { start: match_loc.start, end },
     ))
   }
@@ -1507,15 +1523,11 @@ impl<'src> Parser<'src> {
     let body = self.parse_block_body()?;
     let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(start);
 
-    // For multi-pattern arms (fn match multi-arg): wrap in Patterns
-    let lhs_node = if patterns.len() == 1 {
-      patterns.remove(0)
-    } else {
-      let pats_end = patterns.last().map(|n: &Node| n.loc.end).unwrap_or(start);
-      self.node(NodeKind::Patterns(Exprs { items: patterns, seps: pat_seps }), Loc { start, end: pats_end })
-    };
+    // Always wrap arm LHS in Patterns, consistent with fn params
+    let pats_end = patterns.last().map(|n: &Node| n.loc.end).unwrap_or(start);
+    let lhs_node = self.node(NodeKind::Patterns(Exprs { items: patterns, seps: pat_seps }), Loc { start, end: pats_end });
 
-    Ok(self.node(NodeKind::Arm { lhs: Exprs { items: vec![lhs_node], seps: vec![] }, sep, body }, Loc { start, end }))
+    Ok(self.node(NodeKind::Arm { lhs: Box::new(lhs_node), sep, body }, Loc { start, end }))
   }
 
   // --- custom block ---
@@ -1553,7 +1565,7 @@ impl<'src> Parser<'src> {
       while self.at(TokenKind::BlockCont) { self.bump(); }
       let body = self.parse_block_body()?;
       let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(start);
-      Ok(self.node(NodeKind::Arm { lhs: Exprs { items: vec![expr], seps: vec![] }, sep, body }, Loc { start, end }))
+      Ok(self.node(NodeKind::Arm { lhs: Box::new(expr), sep, body }, Loc { start, end }))
     } else {
       Ok(expr)
     }
@@ -1565,24 +1577,11 @@ pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
   // Consume the implicit root BlockStart emitted by the lexer
   p.expect(TokenKind::BlockStart)?;
   let exprs = p.parse_block_exprs()?;
-  let root = match exprs.items.len() {
-    0 => return Err(ParseError {
-      message: "empty input".into(),
-      loc: p.peek().loc,
-    }),
-    1 => exprs.items.into_iter().next().unwrap(),
-    _ => {
-      let start = exprs.items.first().unwrap().loc.start;
-      let end = exprs.items.last().unwrap().loc.end;
-      let loc = Loc { start, end };
-      let params = p.node(NodeKind::Patterns(Exprs::empty()), loc);
-      let sep = Token { kind: TokenKind::Colon, loc, src: ":" };
-      p.node(
-        NodeKind::Fn { params: Box::new(params), sep, body: exprs },
-        loc,
-      )
-    }
+  let loc = match (exprs.items.first(), exprs.items.last()) {
+    (Some(first), Some(last)) => Loc { start: first.loc.start, end: last.loc.end },
+    _ => p.peek().loc,
   };
+  let root = p.node(NodeKind::Module(exprs), loc);
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
@@ -1593,49 +1592,47 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<cr
   }
   p.expect(TokenKind::BlockStart)?;
   let exprs = p.parse_block_exprs()?;
-  let root = match exprs.items.len() {
-    0 => return Err(ParseError {
-      message: "empty input".into(),
-      loc: p.peek().loc,
-    }),
-    1 => exprs.items.into_iter().next().unwrap(),
-    _ => {
-      let start = exprs.items.first().unwrap().loc.start;
-      let end = exprs.items.last().unwrap().loc.end;
-      let loc = Loc { start, end };
-      let params = p.node(NodeKind::Patterns(Exprs::empty()), loc);
-      let sep = Token { kind: TokenKind::Colon, loc, src: ":" };
-      p.node(
-        NodeKind::Fn { params: Box::new(params), sep, body: exprs },
-        loc,
-      )
-    }
+  let loc = match (exprs.items.first(), exprs.items.last()) {
+    (Some(first), Some(last)) => Loc { start: first.loc.start, end: last.loc.end },
+    _ => p.peek().loc,
   };
+  let root = p.node(NodeKind::Module(exprs), loc);
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
 
 #[cfg(test)]
 mod tests {
+  use crate::ast::NodeKind;
+
+  /// Extract the single expression from a Module root, panicking if not exactly one.
+  fn unwrap_single<'a, 'src>(r: &'a crate::ast::ParseResult<'src>) -> &'a crate::ast::Node<'src> {
+    let NodeKind::Module(exprs) = &r.root.kind else {
+      panic!("expected Module, got {:?}", r.root.kind);
+    };
+    assert_eq!(exprs.items.len(), 1, "expected single expression in Module");
+    &exprs.items[0]
+  }
+
   #[test]
   fn test_str_escape_stored_verbatim() {
     // LitStr must store raw source bytes — no rendering at parse time.
-    use crate::ast::NodeKind;
     let r = super::parse_with_blocks(r"'\n\t\\'", &["test_block"]).unwrap();
-    let NodeKind::LitStr { content: s, .. } = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
+    let node = unwrap_single(&r);
+    let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, r"\n\t\\");
   }
 
   #[test]
   fn test_multiline_str_escape_stored_verbatim() {
     // Multi-StrText assembly must also preserve raw source bytes.
-    use crate::ast::NodeKind;
     let src = r#"'
   \n
   \t
 '"#;
     let r = super::parse_with_blocks(src, &["test_block"]).unwrap();
-    let NodeKind::LitStr { content: s, .. } = &r.root.kind else { panic!("expected LitStr, got {:?}", r.root.kind) };
+    let node = unwrap_single(&r);
+    let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, "\n\\n\n\\t\n");
   }
 
@@ -1646,7 +1643,25 @@ mod tests {
     }
   }
 
+  // TODO: ast() should always show the Module wrapper; update all .fnk test
+  // expectations to include it, then remove the single-expression unwrap.
+  /// For single-expression tests: unwrap Module to print just the expression.
   fn ast(src: &str) -> String {
+    match super::parse_with_blocks(src, &["test_block"]) {
+      Ok(r) => {
+        if let NodeKind::Module(exprs) = &r.root.kind {
+          if exprs.items.len() == 1 {
+            return exprs.items[0].print();
+          }
+        }
+        r.root.print()
+      }
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  /// For module-level tests: print the full Module node.
+  fn module(src: &str) -> String {
     parse_debug(src)
   }
 
@@ -1655,10 +1670,10 @@ mod tests {
     // 'hello ${expr}' — when interpolation is the last child, the AST ends with
     // the expression node. The `}` delimiter is implied (inferred by the print stage
     // from close.loc). The StrTempl.close token holds the closing `'`.
-    use crate::ast::NodeKind;
     let r = super::parse("'hello ${1}'").unwrap();
-    let NodeKind::StrTempl { children, close, .. } = &r.root.kind else {
-      panic!("expected StrTempl, got {:?}", r.root.kind);
+    let node = unwrap_single(&r);
+    let NodeKind::StrTempl { children, close, .. } = &node.kind else {
+      panic!("expected StrTempl, got {:?}", node.kind);
     };
     assert_eq!(close.src, "'");
     let last = children.last().expect("expected children");
@@ -1672,10 +1687,10 @@ mod tests {
   fn apply_args_preserve_comma_seps() {
     // collect_apply_or_block was dropping comma tokens from args.seps.
     // Commas between Apply args must be stored so the formatter can reproduce them.
-    use crate::ast::NodeKind;
     let r = super::parse("add 1, 2").unwrap();
-    let NodeKind::Apply { args, .. } = &r.root.kind else {
-      panic!("expected Apply, got {:?}", r.root.kind);
+    let node = unwrap_single(&r);
+    let NodeKind::Apply { args, .. } = &node.kind else {
+      panic!("expected Apply, got {:?}", node.kind);
     };
     assert_eq!(args.items.len(), 2, "expected 2 args");
     assert_eq!(args.seps.len(), 1, "expected 1 comma sep");
@@ -1692,4 +1707,5 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_functions.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_blocks.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
 }

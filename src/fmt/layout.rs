@@ -181,6 +181,9 @@ impl<'cfg> Ctx<'cfg> {
                 }).collect();
                 Node::new(NodeKind::ChainedCmp(new_parts), node.loc)
             }
+            NodeKind::Module(exprs) => {
+                Node::new(NodeKind::Module(self.fix_exprs(exprs)), node.loc)
+            }
             NodeKind::Pipe(exprs) => {
                 let new_exprs = self.fix_exprs(exprs);
                 Node::new(NodeKind::Pipe(new_exprs), node.loc)
@@ -254,7 +257,7 @@ impl<'cfg> Ctx<'cfg> {
     fn fix_match<'src>(
         &mut self,
         node: &Node<'src>,
-        subjects: &Node<'src>,
+        subjects: &Exprs<'src>,
         sep: &Token<'src>,
         arms: &Exprs<'src>,
     ) -> Node<'src> {
@@ -263,21 +266,24 @@ impl<'cfg> Ctx<'cfg> {
         if wrong_indent {
             self.node(node, node.loc.start)
         } else {
-            let new_subjects = self.fix(subjects);
+            let new_subjects = Exprs {
+                items: subjects.items.iter().map(|s| self.fix(s)).collect(),
+                seps: subjects.seps.clone(),
+            };
             let new_arms = self.with_block_col(expected_col, |ctx| {
                 Exprs {
                     items: arms.items.iter().map(|a| ctx.fix(a)).collect(),
                     seps: arms.seps.clone(),
                 }
             });
-            Node::new(NodeKind::Match { subjects: Box::new(new_subjects), sep: *sep, arms: new_arms }, node.loc)
+            Node::new(NodeKind::Match { subjects: new_subjects, sep: *sep, arms: new_arms }, node.loc)
         }
     }
 
     fn fix_arm<'src>(
         &mut self,
         node: &Node<'src>,
-        lhs: &Exprs<'src>,
+        lhs: &Node<'src>,
         sep: &Token<'src>,
         body: &Exprs<'src>,
     ) -> Node<'src> {
@@ -289,14 +295,14 @@ impl<'cfg> Ctx<'cfg> {
         if wrong_indent {
             self.node(node, node.loc.start)
         } else {
-            let new_lhs = self.fix_exprs(lhs);
+            let new_lhs = self.fix(lhs);
             let new_body = self.with_block_col(expected_col, |ctx| {
                 Exprs {
                     items: body.items.iter().map(|s| ctx.fix(s)).collect(),
                     seps: body.seps.clone(),
                 }
             });
-            Node::new(NodeKind::Arm { lhs: new_lhs, sep: *sep, body: new_body }, node.loc)
+            Node::new(NodeKind::Arm { lhs: Box::new(new_lhs), sep: *sep, body: new_body }, node.loc)
         }
     }
 
@@ -418,6 +424,18 @@ impl<'cfg> Ctx<'cfg> {
             }
             NodeKind::Pipe(exprs) => {
                 self.pipe(exprs, at)
+            }
+            NodeKind::Module(exprs) => {
+                let child_col = self.block_col;
+                let mut pos = at;
+                let mut new_items = Vec::new();
+                for stmt in &exprs.items {
+                    let placed = self.node(stmt, pos);
+                    pos = Pos { idx: 0, line: placed.loc.end.line + 1, col: child_col };
+                    new_items.push(placed);
+                }
+                let end = new_items.last().map(|n| n.loc.end).unwrap_or(at);
+                Node::new(NodeKind::Module(Exprs { items: new_items, seps: exprs.seps.clone() }), Loc { start: at, end })
             }
             NodeKind::Fn { params, sep, body } => {
                 self.fn_node(params, sep, body, at)
@@ -1110,15 +1128,24 @@ impl<'cfg> Ctx<'cfg> {
 
     fn match_node<'src>(
         &mut self,
-        subjects: &Node<'src>,
+        subjects: &Exprs<'src>,
         sep: &Token<'src>,
         arms: &Exprs<'src>,
         at: Pos,
     ) -> Node<'src> {
         let kw_end = advance_pos(at, "match");
-        let subj_at = space_after(kw_end);
-        let new_subjects = self.node(subjects, subj_at);
-        let sep_at = new_subjects.loc.end;
+        let mut prev_pos = space_after(kw_end);
+        let mut new_subj_items = Vec::new();
+        for (i, subj) in subjects.items.iter().enumerate() {
+            if i > 0 {
+                prev_pos = advance_pos(prev_pos, ", ");
+            }
+            let new_subj = self.node(subj, prev_pos);
+            prev_pos = new_subj.loc.end;
+            new_subj_items.push(new_subj);
+        }
+        let new_subjects = Exprs { items: new_subj_items, seps: subjects.seps.clone() };
+        let sep_at = prev_pos;
         let new_sep = place_tok(sep, sep_at);
         let sep_end = advance_pos(sep_at, sep.src);
         let child_col = self.block_col + self.indent_width();
@@ -1133,7 +1160,7 @@ impl<'cfg> Ctx<'cfg> {
         let end = new_arms.last().map(|n| n.loc.end).unwrap_or(sep_at);
         Node::new(
             NodeKind::Match {
-                subjects: Box::new(new_subjects),
+                subjects: new_subjects,
                 sep: new_sep,
                 arms: Exprs { items: new_arms, seps: vec![] },
             },
@@ -1143,26 +1170,13 @@ impl<'cfg> Ctx<'cfg> {
 
     fn arm<'src>(
         &mut self,
-        lhs: &Exprs<'src>,
+        lhs: &Node<'src>,
         sep: &Token<'src>,
         body: &Exprs<'src>,
         at: Pos,
     ) -> Node<'src> {
-        // Place lhs patterns inline.
-        let mut pos = at;
-        let mut new_lhs_items = Vec::new();
-        let mut new_lhs_seps = Vec::new();
-        for (i, pat) in lhs.items.iter().enumerate() {
-            let new_pat = self.node(pat, pos);
-            pos = new_pat.loc.end;
-            new_lhs_items.push(new_pat);
-            if let Some(s) = lhs.seps.get(i) {
-                let new_s = place_tok(s, pos);
-                pos = space_after(advance_pos(pos, s.src));
-                new_lhs_seps.push(new_s);
-            }
-        }
-        let sep_at = pos;
+        let new_lhs = self.node(lhs, at);
+        let sep_at = new_lhs.loc.end;
         let new_sep = place_tok(sep, sep_at);
 
         // Body: inline if single expression, else indented block.
@@ -1173,7 +1187,7 @@ impl<'cfg> Ctx<'cfg> {
             let end = new_body_item.loc.end;
             Node::new(
                 NodeKind::Arm {
-                    lhs: Exprs { items: new_lhs_items, seps: new_lhs_seps },
+                    lhs: Box::new(new_lhs),
                     sep: new_sep,
                     body: Exprs { items: vec![new_body_item], seps: vec![] },
                 },
@@ -1193,7 +1207,7 @@ impl<'cfg> Ctx<'cfg> {
             let end = new_body_items.last().map(|n| n.loc.end).unwrap_or(sep_end);
             Node::new(
                 NodeKind::Arm {
-                    lhs: Exprs { items: new_lhs_items, seps: new_lhs_seps },
+                    lhs: Box::new(new_lhs),
                     sep: new_sep,
                     body: Exprs { items: new_body_items, seps: vec![] },
                 },

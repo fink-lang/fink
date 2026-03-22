@@ -152,6 +152,11 @@ pub enum NodeKind<'src> {
   // Pipe — left-to-right chain: [a, b, c] means c(b(a)); separated by |
   Pipe(Exprs<'src>),
 
+  // --- module ---
+
+  // Module — top-level container for a source file's expressions
+  Module(Exprs<'src>),
+
   // --- functions ---
 
   // Fn — params (Patterns node) + sep (:) + body
@@ -163,12 +168,11 @@ pub enum NodeKind<'src> {
 
   // --- match ---
 
-  // Match — subjects (Patterns node) + sep (:) + arms
-  Match { subjects: Box<Node<'src>>, sep: Token<'src>, arms: Exprs<'src> },
+  // Match — subject expressions + sep (:) + arms
+  Match { subjects: Exprs<'src>, sep: Token<'src>, arms: Exprs<'src> },
 
-  // Arm — lhs patterns + sep (:) + body
-  // lhs is Exprs to handle multi-pattern arms (match a, b: ...)
-  Arm { lhs: Exprs<'src>, sep: Token<'src>, body: Exprs<'src> },
+  // Arm — lhs (Patterns node) + sep (:) + body
+  Arm { lhs: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
 
   // --- error handling ---
 
@@ -209,7 +213,8 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::Partial
     | NodeKind::Wildcard => {}
 
-    NodeKind::LitSeq { items, .. }
+    NodeKind::Module(items)
+    | NodeKind::LitSeq { items, .. }
     | NodeKind::LitRec { items, .. }
     | NodeKind::Pipe(items)
     | NodeKind::Patterns(items) => {
@@ -252,11 +257,11 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
       for stmt in &body.items { walk(stmt, f); }
     }
     NodeKind::Match { subjects, arms, .. } => {
-      walk(subjects, f);
+      for subj in &subjects.items { walk(subj, f); }
       for arm in &arms.items { walk(arm, f); }
     }
     NodeKind::Arm { lhs, body, .. } => {
-      for pat in &lhs.items { walk(pat, f); }
+      walk(lhs, f);
       for stmt in &body.items { walk(stmt, f); }
     }
     NodeKind::Block { name, params, body, .. } => {
@@ -416,6 +421,10 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Pipe");
       print_children(&exprs.items, out, depth);
     }
+    NodeKind::Module(exprs) => {
+      out.push_str("Module");
+      print_exprs(exprs, out, depth);
+    }
     NodeKind::Fn { params, sep, body } => {
       out.push_str("Fn '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
@@ -431,8 +440,10 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Match { subjects, sep, arms } => {
       out.push_str("Match '"); out.push_str(sep.src); out.push_str("',");
-      out.push('\n');
-      print_node(subjects, out, depth + 1);
+      for subj in &subjects.items {
+        out.push('\n');
+        print_node(subj, out, depth + 1);
+      }
       for arm in &arms.items {
         out.push('\n');
         print_node(arm, out, depth + 1);
@@ -440,10 +451,8 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Arm { lhs, sep, body } => {
       out.push_str("Arm '"); out.push_str(sep.src); out.push_str("',");
-      for pat in &lhs.items {
-        out.push('\n');
-        print_node(pat, out, depth + 1);
-      }
+      out.push('\n');
+      print_node(lhs, out, depth + 1);
       for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);
@@ -534,10 +543,11 @@ mod tests {
   #[test]
   fn build_index_returns_nodes_by_id() {
     let r = crate::parser::parse("foo = 1").unwrap();
-    assert_eq!(r.node_count, 3);
+    // Module + Bind + Ident + LitInt = 4 nodes
+    assert_eq!(r.node_count, 4);
     let index = super::build_index(&r);
     // Verify each slot is populated and id matches position
-    for i in 0..3 {
+    for i in 0..4 {
       let node = index.get(AstId(i)).unwrap();
       assert_eq!(node.id, AstId(i));
     }
@@ -550,8 +560,8 @@ mod tests {
     super::walk(&r.root, &mut |n| {
       kinds.push(std::mem::discriminant(&n.kind));
     });
-    // Bind, Ident("foo"), LitSeq, LitInt("1"), LitInt("2") = 5 nodes
-    assert_eq!(kinds.len(), 5);
+    // Module, Bind, Ident("foo"), LitSeq, LitInt("1"), LitInt("2") = 6 nodes
+    assert_eq!(kinds.len(), 6);
   }
 
   #[test]

@@ -517,13 +517,14 @@ impl<'src> Lexer<'src> {
     let content_floor = ind_floor + 1;
     let bytes = self.src.as_bytes();
 
-    struct RawLine { start: Pos, end: Pos, only_spaces: bool, indent: usize }
+    struct RawLine { start: Pos, end: Pos, only_spaces: bool, indent: usize, same_line: bool }
 
     let mut raw: Vec<RawLine> = vec![];
     let mut p = self.pos;
     let mut done = false;       // true when block ended (dedent or EOF)
     let mut interp = false;     // true when stopped at ${}
     let mut first = true;       // first segment may be mid-line (after ${})
+    let is_same_line = p.col > 0; // true when content starts on same line as ":
 
     // Error: first content line dedents immediately — empty ":" block is not valid.
     // pos is already past the opening newline (advance_line was called by the caller).
@@ -570,12 +571,13 @@ impl<'src> Lexer<'src> {
           break;
         }
       }
+      let is_first = first;
       first = false;
 
       loop {
         if i >= bytes.len() {
           let ep = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
-          raw.push(RawLine { start: seg_start, end: ep, only_spaces, indent: leading_spaces });
+          raw.push(RawLine { start: seg_start, end: ep, only_spaces, indent: leading_spaces, same_line: is_first && is_same_line });
           p = ep;
           done = true;
           break;
@@ -583,13 +585,13 @@ impl<'src> Lexer<'src> {
         match bytes[i] {
           b'\n' => {
             let end = Pos { idx: i as u32 + 1, line: p.line + 1, col: 0 };
-            raw.push(RawLine { start: seg_start, end, only_spaces, indent: leading_spaces });
+            raw.push(RawLine { start: seg_start, end, only_spaces, indent: leading_spaces, same_line: is_first && is_same_line });
             p = end;
             break;
           }
           b'$' if i + 1 < bytes.len() && bytes[i + 1] == b'{' => {
             let end = Pos { idx: i as u32, line: p.line, col: p.col + utf16_len(&self.src[p.idx as usize..i]) };
-            raw.push(RawLine { start: seg_start, end, only_spaces, indent: leading_spaces });
+            raw.push(RawLine { start: seg_start, end, only_spaces, indent: leading_spaces, same_line: is_first && is_same_line });
             p = end;
             interp = true;
             done = true; // stop scanning; will resume after ${}
@@ -603,18 +605,41 @@ impl<'src> Lexer<'src> {
       if done { break; }
     }
 
-    // Compute strip level from all non-blank content lines
+    // Trim trailing \n from last RawLine on dedent/EOF — the final newline
+    // is not string content, it's the line break before the dedent.
+    // Internal newlines (between content lines) are preserved.
+    if !interp && let Some(last) = raw.last_mut() {
+      let end_idx = last.end.idx as usize;
+      if end_idx > 0 && self.src.as_bytes().get(end_idx - 1) == Some(&b'\n') {
+        let new_end_idx = end_idx - 1;
+        if new_end_idx <= last.start.idx as usize {
+          // Line was only \n — drop it entirely
+          raw.pop();
+        } else {
+          let line_start = last.start.idx as usize;
+          last.end = Pos {
+            idx: new_end_idx as u32,
+            line: last.end.line - 1,
+            col: last.start.col + utf16_len(&self.src[line_start..new_end_idx]),
+          };
+        }
+      }
+    }
+
+    // Compute strip level from all non-blank, non-same-line content lines
     let mut strip_level: usize = 0;
     let mut strip_set = false;
     for line in raw.iter() {
-      if line.only_spaces { continue; }
+      if line.only_spaces || line.same_line { continue; }
       strip_level = if strip_set { strip_level.min(line.indent) } else { line.indent };
       strip_set = true;
     }
 
     // Emit StrText tokens
     for line in raw.iter() {
-      let skip = if line.only_spaces { 0usize } else { strip_level.min(line.indent) };
+      // Same-line content: strip all leading spaces (they're after ": ")
+      // Regular lines: strip by computed strip_level
+      let skip = if line.only_spaces { 0usize } else if line.same_line { line.indent } else { strip_level.min(line.indent) };
       let content_idx = line.start.idx + skip as u32;
       let start = Pos { idx: content_idx, line: line.start.line, col: line.start.col + skip as u32 };
       let src = &self.src[content_idx as usize..line.end.idx as usize];
@@ -622,12 +647,15 @@ impl<'src> Lexer<'src> {
       self.pending.push(Token { kind: TokenKind::StrText, loc: Loc { start, end: line.end }, src });
     }
 
-    self.pos = p;
+    // After trimming, position at the trimmed end (before \n) so the regular
+    // consume_newline logic fires and emits BlockCont — same as any other block.
+    let str_end_pos = raw.last().map_or(p, |l| l.end);
+    self.pos = if !interp { str_end_pos } else { p };
 
     // Emit StrEnd '' on dedent/EOF (not on interp — mode stays active)
     if !interp {
       self.mode.pop();
-      self.pending.push(Token { kind: TokenKind::StrEnd, loc: Loc { start: p, end: p }, src: "" });
+      self.pending.push(Token { kind: TokenKind::StrEnd, loc: Loc { start: str_end_pos, end: str_end_pos }, src: "" });
     }
 
     if self.pending.is_empty() {

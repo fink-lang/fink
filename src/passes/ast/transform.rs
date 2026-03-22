@@ -54,10 +54,11 @@ pub trait Transform<'src> {
       NodeKind::BindRight { op, lhs, rhs } => self.transform_bind_right(op, *lhs, *rhs, loc),
       NodeKind::Apply { func, args } => self.transform_apply(*func, args, loc),
       NodeKind::Pipe(children) => self.transform_pipe(children, loc),
+      NodeKind::Module(exprs) => self.transform_module(exprs, loc),
       NodeKind::Fn { params, sep, body } => self.transform_fn(*params, sep, body, loc),
       NodeKind::Patterns(children) => self.transform_patterns(children, loc),
-      NodeKind::Match { subjects, sep, arms } => self.transform_match(*subjects, sep, arms, loc),
-      NodeKind::Arm { lhs, sep, body } => self.transform_arm(lhs, sep, body, loc),
+      NodeKind::Match { subjects, sep, arms } => self.transform_match(subjects, sep, arms, loc),
+      NodeKind::Arm { lhs, sep, body } => self.transform_arm(*lhs, sep, body, loc),
       NodeKind::Block { name, params, sep, body } => self.transform_block(*name, *params, sep, body, loc),
     }
   }
@@ -228,6 +229,15 @@ pub trait Transform<'src> {
     Ok(Node::new(NodeKind::Pipe(exprs), loc))
   }
 
+  fn transform_module(
+    &mut self,
+    exprs: Exprs<'src>,
+    loc: Loc,
+  ) -> TransformResult<'src> {
+    let exprs = self.transform_exprs(exprs)?;
+    Ok(Node::new(NodeKind::Module(exprs), loc))
+  }
+
   fn transform_fn(
     &mut self,
     params: Node<'src>,
@@ -251,26 +261,26 @@ pub trait Transform<'src> {
 
   fn transform_match(
     &mut self,
-    subjects: Node<'src>,
+    subjects: Exprs<'src>,
     sep: Token<'src>,
     arms: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
-    let subjects = self.transform(subjects)?;
+    let subjects = self.transform_exprs(subjects)?;
     let arms = self.transform_exprs(arms)?;
-    Ok(Node::new(NodeKind::Match { subjects: Box::new(subjects), sep, arms }, loc))
+    Ok(Node::new(NodeKind::Match { subjects, sep, arms }, loc))
   }
 
   fn transform_arm(
     &mut self,
-    lhs: Exprs<'src>,
+    lhs: Node<'src>,
     sep: Token<'src>,
     body: Exprs<'src>,
     loc: Loc,
   ) -> TransformResult<'src> {
-    let lhs = self.transform_exprs(lhs)?;
+    let lhs = self.transform(lhs)?;
     let body = self.transform_exprs(body)?;
-    Ok(Node::new(NodeKind::Arm { lhs, sep, body }, loc))
+    Ok(Node::new(NodeKind::Arm { lhs: Box::new(lhs), sep, body }, loc))
   }
 
   fn transform_block(

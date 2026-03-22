@@ -12,6 +12,21 @@ test 'multiline function', fn:
         Ident 'a'
         Ident 'b'
 
+test 'fn with params and colon on separate lines', fn:
+  expect ast fink":
+    fn
+      foo, bar
+      spam
+    :
+      spam
+  | equals fink":
+    Fn ':',
+      Patterns
+        Ident 'foo'
+        Ident 'bar'
+        Ident 'spam'
+      Ident 'spam'
+
 test 'single line function', fn:
   expect ast fink":
     fn a, b: a + b
@@ -72,6 +87,58 @@ test 'inline body comma equivalent to multiline block', fn:
         Ident 'b'
       Ident 'a'
       Ident 'b'
+
+test 'block body comma separated expressions', fn:
+  expect ast fink":
+    fn:
+      1, foo, ni
+  | equals fink":
+    Fn ':',
+      Patterns
+      LitInt '1'
+      Ident 'foo'
+      Ident 'ni'
+
+# TODO: semicolon in inline fn body inside application should return to outer
+# arg list (strong separator), but parse_inline_exprs greedily consumes it.
+# Needs context-aware ; parsing.
+# test 'semicolon in application with fn arg returns to outer', fn:
+#   expect ast fink":
+#     foo a, fn a: bar; spam
+#   | equals fink":
+#     Apply
+#       Ident 'foo'
+#       Ident 'a'
+#       Fn ':',
+#         Patterns
+#           Ident 'a'
+#         Ident 'bar'
+#       Ident 'spam'
+
+test 'block body semicolon separated expressions', fn:
+  expect ast fink":
+    fn:
+      1; foo; ni
+  | equals fink":
+    Fn ':',
+      Patterns
+      LitInt '1'
+      Ident 'foo'
+      Ident 'ni'
+
+test 'block body semicolon after non-application', fn:
+  expect ast fink":
+    fn:
+      1; 2; 3
+  | equals fink":
+    Fn ':',
+      Patterns
+      LitInt '1'
+      LitInt '2'
+      LitInt '3'
+
+# TODO: trailing comma or semi at same indent (fn: foo 1, 2,\n bar 3) should be
+# an error — the dev likely forgot to indent bar 3 as an arg to foo.
 
 test 'function with default arg', fn:
   expect ast fink":
@@ -163,20 +230,22 @@ test 'fn match single arg', fn:
         Patterns
           Ident 'n'
         Match ':',
-          Patterns
-            Ident 'n'
+          Ident 'n'
           Arm ':',
-            InfixOp '>',
-              Ident 'n'
-              LitInt '0'
+            Patterns
+              InfixOp '>',
+                Ident 'n'
+                LitInt '0'
             LitStr 'positive'
           Arm ':',
-            InfixOp '<',
-              Ident 'n'
-              LitInt '0'
+            Patterns
+              InfixOp '<',
+                Ident 'n'
+                LitInt '0'
             LitStr 'negative'
           Arm ':',
-            Wildcard
+            Patterns
+              Wildcard
             LitStr 'zero'
 
 test 'fn match multi arg', fn:
@@ -193,10 +262,9 @@ test 'fn match multi arg', fn:
           Spread '..',
             Ident 'b'
         Match ':',
-          Patterns
-            Ident 'a'
-            Spread '..',
-              Ident 'b'
+          Ident 'a'
+          Spread '..',
+            Ident 'b'
           Arm ':',
             Patterns
               LitInt '1'
@@ -231,27 +299,29 @@ test 'returning a function', fn:
           Patterns
             Ident 'items'
           Match ':',
-            Patterns
-              Ident 'items'
+            Ident 'items'
             Arm ':',
-              LitSeq '[..]'
+              Patterns
+                LitSeq '[..]'
               LitSeq '[..]'
             Arm ':',
-              LitSeq '[..]',
-                Ident 'item'
-                Spread '..',
-                  Ident 'rest'
+              Patterns
+                LitSeq '[..]',
+                  Ident 'item'
+                  Spread '..',
+                    Ident 'rest'
               LitSeq '[..]',
                 Group '(..)',
                   Apply
                     Ident 'map_fn'
                     Ident 'item'
                 Spread '..',
-                  Apply
-                    Ident 'map'
+                  Group '(..)',
                     Apply
-                      Ident 'map_fn'
-                      Ident 'rest'
+                      Ident 'map'
+                      Apply
+                        Ident 'map_fn'
+                        Ident 'rest'
 
 
 ---

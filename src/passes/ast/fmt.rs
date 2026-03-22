@@ -68,7 +68,7 @@ fn is_atom(node: &Node) -> bool {
 }
 
 fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
-  out.mark(node.loc);
+  if !matches!(node.kind, NodeKind::Module(_)) { out.mark(node.loc); }
   match &node.kind {
     NodeKind::LitBool(v) => out.push_str(if *v { "true" } else { "false" }),
     NodeKind::LitInt(s) => out.push_str(s),
@@ -205,6 +205,12 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
+    NodeKind::Module(exprs) => {
+      for (i, child) in exprs.items.iter().enumerate() {
+        if i > 0 { out.push('\n'); ind(out, depth); }
+        fmt_node(child, out, depth);
+      }
+    }
     NodeKind::Fn { params, sep, body } => fmt_fn(params, sep, &body.items, out, depth),
     NodeKind::Patterns(exprs) => {
       for (i, child) in exprs.items.iter().enumerate() {
@@ -277,7 +283,10 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     }
     NodeKind::Match { subjects, sep, arms } => {
       out.push_str("match ");
-      fmt_node(subjects, out, depth);
+      for (i, subj) in subjects.items.iter().enumerate() {
+        if i > 0 { out.push_str(", "); }
+        fmt_node(subj, out, depth);
+      }
       out.mark(sep.loc);
       out.push(':');
       for arm in &arms.items {
@@ -287,10 +296,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::Arm { lhs, sep, body } => {
-      for (i, pat) in lhs.items.iter().enumerate() {
-        if i > 0 { out.push_str(", "); }
-        fmt_node(pat, out, depth);
-      }
+      fmt_node(lhs, out, depth);
       out.mark(sep.loc);
       out.push(':');
       fmt_body(&body.items, out, depth, true);
