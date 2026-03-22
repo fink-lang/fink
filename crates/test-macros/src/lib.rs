@@ -29,6 +29,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
   use fink::ast::NodeKind;
 
   let stmts = match &node.kind {
+    NodeKind::Module(exprs) => exprs,
     NodeKind::Fn { body, .. } => body,
     _ => return vec![],
   };
