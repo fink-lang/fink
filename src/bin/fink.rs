@@ -27,7 +27,7 @@ fn main() {
     "ast" => {
       match fink::parser::parse(&src) {
         Ok(r) => println!("{}", r.root.print()),
-        Err(e) => parse_error(&src, e),
+        Err(e) => parse_error(&src, e, path),
       }
     }
     "fmt" => {
@@ -47,7 +47,7 @@ fn main() {
             println!("{}", fink::ast::fmt::fmt(&r.root));
           }
         }
-        Err(e) => parse_error(&src, e),
+        Err(e) => parse_error(&src, e, path),
       }
     }
     "fmt2" => {
@@ -69,7 +69,7 @@ fn main() {
             println!("{}", fink::fmt::print::print(&laid_out));
           }
         }
-        Err(e) => parse_error(&src, e),
+        Err(e) => parse_error(&src, e, path),
       }
     }
     "cps" => {
@@ -96,7 +96,7 @@ fn main() {
             println!("{}", fink::passes::cps::fmt::fmt_with(&cps.root, &ctx));
           }
         }
-        Err(e) => parse_error(&src, e),
+        Err(e) => parse_error(&src, e, path),
       }
     }
     "wat" => {
@@ -130,9 +130,9 @@ fn main() {
   }
 }
 
-fn parse_error(src: &str, e: fink::parser::ParseError) -> ! {
+fn parse_error(src: &str, e: fink::parser::ParseError, path: &str) -> ! {
   let diag = fink::errors::Diagnostic { message: e.message, loc: e.loc, hint: None };
-  let opts = fink::errors::FormatOptions::default();
+  let opts = fink::errors::FormatOptions { path: Some(path), ..Default::default() };
   eprintln!("{}", fink::errors::format_diagnostic(src, &diag, &opts));
   process::exit(1);
 }
