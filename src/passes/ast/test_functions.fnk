@@ -12,6 +12,18 @@ test 'multiline function', fn:
         Ident 'a'
         Ident 'b'
 
+test 'fn with params and colon on separate lines', fn:
+  expect ast fink":
+    fn
+      foo
+    :
+      spam
+  | equals fink":
+    Fn ':',
+      Patterns
+        Ident 'foo'
+      Ident 'spam'
+
 test 'single line function', fn:
   expect ast fink":
     fn a, b: a + b
