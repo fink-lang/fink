@@ -1367,6 +1367,7 @@ impl<'src> Parser<'src> {
       seps.push(sep);
     }
 
+    self.skip_block_tokens();
     while !self.at(TokenKind::Colon) && !self.at(TokenKind::EOF) {
       if self.at(TokenKind::Sep) && self.peek().src == ".." {
         items.push(self.parse_spread()?);
@@ -1395,6 +1396,7 @@ impl<'src> Parser<'src> {
           seps.push(self.bump());
         }
       } else {
+        self.skip_block_tokens();
         break;
       }
     }
