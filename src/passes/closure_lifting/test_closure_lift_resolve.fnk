@@ -67,9 +67,9 @@ test 'depth-2: all captured vars resolve as local after lift', fn:
     (ref 44, a) == (local (bind 56, a)) in scope 58
     (ref 45, b) == (local (bind 5, b)) in scope 58
     (ref 14, c) == (local (bind 34, c)) in scope 36
-    (ref 10, a) == (captured 1, (bind 42, a)) in scope 46
-    (ref 11, b) == (captured 1, (bind 43, b)) in scope 46
     (ref 35, c) == (local (bind 8, c)) in scope 46
+    (ref 10, a) == (local (bind 42, a)) in scope 46
+    (ref 11, b) == (local (bind 43, b)) in scope 46
     (ref 57, a) == (local (bind 2, a)) in scope 1
 
 
@@ -90,8 +90,8 @@ test 'match with binding: no captured refs after lift', fn:
         _: x + 1
 
   | equals fink":
-    (ref 75, x) == (captured 1, (bind 94, x)) in scope 96
     (ref 83, x) == (local (bind 94, x)) in scope 96
+    (ref 75, x) == (local (bind 94, x)) in scope 96
     (ref 26, x) == (local (bind 74, x)) in scope 76
     (ref 5, x) == (local (bind 82, x)) in scope 84
     (ref 95, x) == (local (bind 4, x)) in scope 1
@@ -116,12 +116,12 @@ test 'recursive fn in match: no captured or unresolved refs after lift', fn:
       recurse 5
 
   | equals fink":
-    (ref 106, n) == (captured 1, (bind 137, n)) in scope 139
     (ref 114, n) == (local (bind 137, n)) in scope 139
+    (ref 106, n) == (local (bind 137, n)) in scope 139
     (ref 52, recurse) == (local (bind 121, recurse)) in scope 123
     (ref 27, recurse) == (local (bind 97, recurse)) in scope 99
-    (ref 28, n) == (captured 1, (bind 105, n)) in scope 107
     (ref 98, recurse) == unresolved
+    (ref 28, n) == (local (bind 105, n)) in scope 107
     (ref 6, n) == (local (bind 113, n)) in scope 115
     (ref 138, n) == (local (bind 4, n)) in scope 3
     (ref 122, recurse) == (local (bind 49, recurse)) in scope 1
