@@ -1,0 +1,31 @@
+{test, expect, equals, module, fink} = import '!fake'
+
+
+test 'empty module', fn:
+  expect module fink''
+  | equals fink":
+    Module
+
+
+test 'single expression', fn:
+  expect module fink":
+    foo bar
+  | equals fink":
+    Module
+      Apply
+        Ident 'foo'
+        Ident 'bar'
+
+
+test 'multiple expressions', fn:
+  expect module fink":
+    foo = 1
+    bar = 2
+  | equals fink":
+    Module
+      Bind '=',
+        Ident 'foo'
+        LitInt '1'
+      Bind '=',
+        Ident 'bar'
+        LitInt '2'

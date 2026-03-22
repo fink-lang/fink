@@ -232,6 +232,10 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     // ---- block: `name params: body` ----
     NodeKind::Block { name, params, body, .. } => lower_block(g, name, params, &body.items, o),
 
+    // ---- module: single expression unwrapped; multiple as zero-param function ----
+    NodeKind::Module(exprs) if exprs.items.len() == 1 => lower(g, &exprs.items[0]),
+    NodeKind::Module(exprs) => lower_module_as_fn(g, &exprs.items, o),
+
     // ---- should not appear post-partial-pass ----
     NodeKind::Partial => panic!("Partial should be eliminated before CPS transform"),
 
@@ -381,6 +385,21 @@ fn lower_fn<'src>(
     };
   g.pop_cont(prev_cont);
   let pending = vec![Pending::Fn { name: fn_name, params: param_names, cont, fn_body, origin }];
+  (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
+}
+
+/// Lower a Module node — zero-param function body, same as the old synthetic Fn wrapper.
+fn lower_module_as_fn<'src>(
+  g: &mut Gen,
+  body: &'src [Node<'src>],
+  origin: Option<AstId>,
+) -> Lower<'src> {
+  let fn_name = g.fresh_fn(origin);
+  let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
+  let (cont, prev_cont) = g.push_cont(origin);
+  let fn_body = lower_seq(g, body);
+  g.pop_cont(prev_cont);
+  let pending = vec![Pending::Fn { name: fn_name, params: vec![], cont, fn_body, origin }];
   (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
 }
 
@@ -1257,7 +1276,7 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>]) -> CpsResult<'src> {
   CpsResult { root, origin: g.origin }
 }
 
-/// Lower a single expression node.
+/// Lower a single expression node (or a Module root) to CPS IR.
 pub fn lower_expr<'src>(node: &'src Node<'src>) -> CpsResult<'src> {
   let mut g = Gen::new();
   let (val, pending) = lower(&mut g, node);
@@ -1581,7 +1600,11 @@ mod tests {
   use crate::passes::cps::ir::ExprKind;
 
   fn parse_single(src: &str) -> Node<'_> {
-    parse(src).expect("parse failed").root
+    let r = parse(src).expect("parse failed");
+    let NodeKind::Module(exprs) = r.root.kind else {
+      panic!("expected Module root");
+    };
+    exprs.items.into_iter().next().expect("expected single expression")
   }
 
   #[test]

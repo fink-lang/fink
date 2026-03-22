@@ -68,7 +68,7 @@ fn is_atom(node: &Node) -> bool {
 }
 
 fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
-  out.mark(node.loc);
+  if !matches!(node.kind, NodeKind::Module(_)) { out.mark(node.loc); }
   match &node.kind {
     NodeKind::LitBool(v) => out.push_str(if *v { "true" } else { "false" }),
     NodeKind::LitInt(s) => out.push_str(s),
@@ -205,6 +205,12 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
+    NodeKind::Module(exprs) => {
+      for (i, child) in exprs.items.iter().enumerate() {
+        if i > 0 { out.push('\n'); ind(out, depth); }
+        fmt_node(child, out, depth);
+      }
+    }
     NodeKind::Fn { params, sep, body } => fmt_fn(params, sep, &body.items, out, depth),
     NodeKind::Patterns(exprs) => {
       for (i, child) in exprs.items.iter().enumerate() {
