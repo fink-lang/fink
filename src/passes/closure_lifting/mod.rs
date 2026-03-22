@@ -604,4 +604,5 @@ mod tests {
 
   include_fink_tests!("src/passes/closure_lifting/test_closure_lifting.fnk");
   include_fink_tests!("src/passes/closure_lifting/test_closure_lift_resolve.fnk");
+
 }

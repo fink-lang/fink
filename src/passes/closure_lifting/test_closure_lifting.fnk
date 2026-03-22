@@ -187,3 +187,25 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
 
 # NOTE: depth-1 closure (g captures a) — lift_all terminates in 1 pass since
 # the ·fn_closure call site's args (a) resolve as local after lifting.
+
+
+---
+match — forward ref bug
+---
+
+# BUG: after lift_all, the match_block fn references ·ƒ_3 (foo's cont param)
+# as a forward reference — ·ƒ_3 is defined later in the tree, not as a param
+# of the match_block fn. Closure lifting should have captured it.
+#
+# The first hoisted fn should have ·ƒ_3 threaded as a leading cap param.
+# Current (buggy) output has: fn n, ·v_18, ·ƒ_46: ·match_block n, ·v_18, ·ƒ_3
+# where ·ƒ_3 is NOT a param — it's a dangling forward ref.
+
+test 'match — no forward refs after lift', fn:
+  expect closure_lift fink":
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals fink":
+    BUG: match_block fn has forward ref to ·ƒ_3

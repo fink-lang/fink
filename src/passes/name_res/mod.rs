@@ -114,7 +114,7 @@ pub fn resolve<'src>(
     bind_scope: PropGraph::with_size(node_count, None),
     parent_scope: PropGraph::with_size(node_count, None),
   };
-  let scope = ScopeMap::new();
+  let scope = Scope::new();
   // The root expr is a LetFn wrapping the module body; its CpsId is the root scope.
   let root_scope = expr.id;
   resolve_expr(expr, &scope, root_scope, None, 0, &ctx, &mut graphs);
@@ -141,6 +141,8 @@ struct Graphs {
 
 /// Each entry: name → (bind_id, fn_depth at bind site).
 type ScopeMap<'src> = HashMap<&'src str, ScopeEntry>;
+/// Synth/Cont bindings keyed by CpsId (no source name).
+type SynthScopeMap = HashMap<CpsId, ScopeEntry>;
 
 #[derive(Clone, Copy)]
 struct ScopeEntry {
@@ -148,20 +150,43 @@ struct ScopeEntry {
   fn_depth: u32,
 }
 
-/// Insert a BindNode into the scope (if it has a source name).
+/// Combined scope: name-keyed for Ref::Name, CpsId-keyed for Ref::Synth.
+#[derive(Clone)]
+struct Scope<'src> {
+  names: ScopeMap<'src>,
+  synths: SynthScopeMap,
+}
+
+impl<'src> Scope<'src> {
+  fn new() -> Self {
+    Self { names: ScopeMap::new(), synths: SynthScopeMap::new() }
+  }
+}
+
+/// Insert a BindNode into the scope.
+/// Name binds go into `names` (keyed by source name).
+/// Synth/Cont binds go into `synths` (keyed by CpsId).
 fn bind_to_scope<'src>(
-  scope: &mut ScopeMap<'src>,
+  scope: &mut Scope<'src>,
   bind: &BindNode,
   scope_id: CpsId,
   fn_depth: u32,
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  if let Bind::Name = bind.kind
-    && let Some(name) = ctx.source_name(bind.id)
-    && name != "_" {
-      scope.insert(name, ScopeEntry { bind_id: bind.id, fn_depth });
+  let entry = ScopeEntry { bind_id: bind.id, fn_depth };
+  match bind.kind {
+    Bind::Name => {
+      if let Some(name) = ctx.source_name(bind.id)
+        && name != "_" {
+          scope.names.insert(name, entry);
+          graphs.bind_scope.set(bind.id, Some(scope_id));
+      }
+    }
+    Bind::Synth | Bind::Cont => {
+      scope.synths.insert(bind.id, entry);
       graphs.bind_scope.set(bind.id, Some(scope_id));
+    }
   }
 }
 
@@ -189,7 +214,7 @@ fn classify(
 
 fn resolve_val<'src>(
   val: &Val<'src>,
-  scope: &ScopeMap<'src>,
+  scope: &Scope<'src>,
   self_bind: Option<CpsId>,
   fn_depth: u32,
   ctx: &Ctx<'_, 'src>,
@@ -199,7 +224,7 @@ fn resolve_val<'src>(
     match ref_ {
       Ref::Name => {
         if let Some(name) = ctx.source_name(val.id) {
-          if let Some(entry) = scope.get(name) {
+          if let Some(entry) = scope.names.get(name) {
             let resolution = classify(entry, fn_depth, self_bind);
             graphs.resolution.set(val.id, Some(resolution));
           } else {
@@ -207,8 +232,11 @@ fn resolve_val<'src>(
           }
         }
       }
-      Ref::Synth(_) => {
-        // Structural — already resolved by construction, skip.
+      Ref::Synth(bind_id) => {
+        if let Some(entry) = scope.synths.get(bind_id) {
+          let resolution = classify(entry, fn_depth, self_bind);
+          graphs.resolution.set(val.id, Some(resolution));
+        }
       }
     }
   }
@@ -216,7 +244,7 @@ fn resolve_val<'src>(
 
 fn resolve_callable<'src>(
   callable: &Callable<'src>,
-  scope: &ScopeMap<'src>,
+  scope: &Scope<'src>,
   self_bind: Option<CpsId>,
   fn_depth: u32,
   ctx: &Ctx<'_, 'src>,
@@ -235,7 +263,7 @@ fn resolve_callable<'src>(
 /// These are the names that fn bodies at this scope level can see.
 fn collect_scope_names<'src>(
   expr: &Expr<'src>,
-  scope: &mut ScopeMap<'src>,
+  scope: &mut Scope<'src>,
   scope_id: CpsId,
   fn_depth: u32,
   ctx: &Ctx<'_, 'src>,
@@ -278,7 +306,7 @@ fn collect_scope_names<'src>(
 /// Resolve names inside a continuation — bind its args into scope, then recurse into its body.
 fn resolve_cont<'src>(
   cont: &Cont<'src>,
-  scope: &ScopeMap<'src>,
+  scope: &Scope<'src>,
   current_scope: CpsId,
   self_bind: Option<CpsId>,
   fn_depth: u32,
@@ -296,7 +324,7 @@ fn resolve_cont<'src>(
 
 fn resolve_expr<'src>(
   expr: &Expr<'src>,
-  scope: &ScopeMap<'src>,
+  scope: &Scope<'src>,
   current_scope: CpsId,
   self_bind: Option<CpsId>,
   fn_depth: u32,
@@ -340,7 +368,7 @@ fn resolve_expr<'src>(
       };
       let fn_self_bind = cont_bind_id
         .and_then(|id| ctx.source_name(id))
-        .and_then(|n| hoisted.get(n))
+        .and_then(|n| hoisted.names.get(n))
         .map(|entry| entry.bind_id);
 
       let mut fn_scope = hoisted.clone();
@@ -537,5 +565,115 @@ mod tests {
     }
   }
 
+  /// Run parse → CPS → cont_lift → name_res. Emit BOTH Ref::Name and Ref::Synth
+  /// resolution. Synth refs that don't have a resolution are reported as `unresolved`.
+  fn cps_resolve_synth(src: &str) -> String {
+    use crate::passes::cont_lifting::lift as cont_lift;
+    match parse(src) {
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let cps = lower_expr(&r.root);
+        let lifted = cont_lift(cps);
+        let node_count = lifted.origin.len();
+        let result = resolve(&lifted.root, &lifted.origin, &ast_index, node_count);
+        let ctx = Ctx { origin: &lifted.origin, ast_index: &ast_index };
+        fmt_classified_with_synth(&lifted.root, &result, &ctx)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  fn emit_synth_val(
+    val: &Val<'_>,
+    result: &ResolveResult,
+    out: &mut Vec<String>,
+  ) {
+    if let ValKind::Ref(Ref::Synth(bind_id)) = &val.kind {
+      match result.resolution.try_get(val.id) {
+        Some(Some(Resolution::Local(resolved_id))) => {
+          out.push(format!(
+            "(synth {}, ·v_{}) == (local (bind {}))",
+            val.id.0, bind_id.0, resolved_id.0
+          ));
+        }
+        Some(Some(Resolution::Captured { bind, depth })) => {
+          out.push(format!(
+            "(synth {}, ·v_{}) == (captured {}, (bind {}))",
+            val.id.0, bind_id.0, depth, bind.0
+          ));
+        }
+        _ => {
+          out.push(format!(
+            "(synth {}, ·v_{}) == unresolved",
+            val.id.0, bind_id.0
+          ));
+        }
+      }
+    }
+  }
+
+  fn collect_classified_with_synth<'src>(
+    expr: &Expr<'src>,
+    result: &ResolveResult,
+    ctx: &Ctx<'_, 'src>,
+    out: &mut Vec<String>,
+  ) {
+    use ExprKind::*;
+    match &expr.kind {
+      LetVal { val, body, .. } => {
+        emit_classified_val(val, result, ctx, out);
+        emit_synth_val(val, result, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_with_synth(body_expr, result, ctx, out);
+        }
+      }
+      LetFn { fn_body, body, .. } => {
+        collect_classified_with_synth(fn_body, result, ctx, out);
+        if let Cont::Expr { body: body_expr, .. } = body {
+          collect_classified_with_synth(body_expr, result, ctx, out);
+        }
+      }
+      App { func, args } => {
+        if let Callable::Val(val) = func {
+          emit_classified_val(val, result, ctx, out);
+          emit_synth_val(val, result, out);
+        }
+        for arg in args {
+          match arg {
+            Arg::Val(v) | Arg::Spread(v) => {
+              emit_classified_val(v, result, ctx, out);
+              emit_synth_val(v, result, out);
+            }
+            Arg::Cont(Cont::Expr { body, .. }) => collect_classified_with_synth(body, result, ctx, out),
+            Arg::Cont(_) => {}
+            Arg::Expr(e) => collect_classified_with_synth(e, result, ctx, out),
+          }
+        }
+      }
+      If { cond, then, else_ } => {
+        emit_classified_val(cond, result, ctx, out);
+        emit_synth_val(cond, result, out);
+        collect_classified_with_synth(then, result, ctx, out);
+        collect_classified_with_synth(else_, result, ctx, out);
+      }
+      Yield { value, cont } => {
+        emit_classified_val(value, result, ctx, out);
+        emit_synth_val(value, result, out);
+        if let Cont::Expr { body, .. } = cont { collect_classified_with_synth(body, result, ctx, out); }
+      }
+    }
+  }
+
+  fn fmt_classified_with_synth<'src>(
+    expr: &Expr<'src>,
+    result: &ResolveResult,
+    ctx: &Ctx<'_, 'src>,
+  ) -> String {
+    let mut lines = Vec::new();
+    collect_classified_with_synth(expr, result, ctx, &mut lines);
+    lines.join("\n")
+  }
+
   test_macros::include_fink_tests!("src/passes/name_res/test_name_res.fnk");
+  test_macros::include_fink_tests!("src/passes/name_res/test_name_res_synth.fnk");
 }
