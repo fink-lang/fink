@@ -1442,6 +1442,10 @@ impl<'src> Parser<'src> {
         continue;
       }
       items.push(f(self)?);
+      // Comma separates block expressions, equivalent to newline (BlockCont)
+      if self.at(TokenKind::Comma) {
+        seps.push(self.bump());
+      }
     }
     if self.at(TokenKind::BlockEnd) { self.bump(); }
     Ok(Exprs { items, seps })
