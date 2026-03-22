@@ -393,14 +393,15 @@ impl<'src> Parser<'src> {
       if self.at(TokenKind::BlockEnd) { self.bump(); }
     }
 
-    // Check for block syntax.
+    // Check for block syntax — only for registered block names.
     // Rules:
-    //   func: body             → Block(func, [], body)
-    //   func a, b: body        → Block(func, [a, b], body)   [func is the outer ident]
-    //   outer inner: body      → Apply(outer, Block(inner, [], body))   [last arg is block name]
-    //   outer inner a, b: body → Apply(outer, Block(inner, [a, b], body))  [last arg is block with params]
+    //   func: body             → Block(func, [], body)           [func is registered]
+    //   func a, b: body        → Block(func, [a, b], body)      [func is registered]
+    //   outer inner: body      → Apply(outer, Block(inner, [], body))   [inner is registered]
+    let func_is_block = matches!(&func.kind, NodeKind::Ident(name) if self.block_names.contains(name));
+
     if self.at(TokenKind::Colon) {
-      if params.is_empty() {
+      if params.is_empty() && func_is_block {
         // "func: body" — func is the block name, no params
         let params_node = self.node(NodeKind::Patterns(Exprs::empty()), func_loc);
         let (sep, body) = self.parse_colon_body_or_arms()?;
@@ -411,21 +412,10 @@ impl<'src> Parser<'src> {
         ));
       }
 
-      // Has params. Check if last param is ident or apply — it could be a nested block
-      // OR all params belong to func as a block.
-      // Heuristic: if there are params and they all contain non-ident things, or there are
-      // multiple comma-separated items, func is the block name.
-      // Key test: "test_block a, b: body" vs "log test_block: body"
-      // In "log test_block: body": only ONE param (test_block), which is a bare ident. → test_block is block.
-      // In "test_block a, b: body": TWO params (a, b). → test_block is the block.
-      // In "log test_block a, b: body": THREE params (test_block, a, b), last two are a, b.
-      //   Wait, this doesn't appear in tests. Let's not over-engineer.
-      //
-      // Decision: if there's exactly ONE param and it's a bare ident, treat THAT ident as the block.
-      // Otherwise, func is the block name.
+      // Single ident param that is a registered block name: nested block in application
       if params.len() == 1
-        && let NodeKind::Ident(_) = &params[0].kind {
-          // One bare ident param followed by ":": the ident is the block name
+        && let NodeKind::Ident(name) = &params[0].kind
+        && self.block_names.contains(name) {
           let block_name = params.remove(0);
           let block_start = block_name.loc.start;
           let params_node = self.node(NodeKind::Patterns(Exprs::empty()), block_name.loc);
@@ -435,23 +425,24 @@ impl<'src> Parser<'src> {
             NodeKind::Block { name: Box::new(block_name), params: Box::new(params_node), sep, body },
             Loc { start: block_start, end },
           );
-          // Wrap in Apply(func, [block_node])
           return Ok(self.node(
             NodeKind::Apply { func: Box::new(func), args: Exprs { items: vec![block_node], seps: vec![] } },
             Loc { start: func_loc.start, end },
           ));
       }
 
-      // Func is the block name, params are its patterns
-      let params_end = params.last().map(|n: &Node| n.loc.end).unwrap_or(func_loc.end);
-      let params_loc = Loc { start: func_loc.end, end: params_end };
-      let params_node = self.node(NodeKind::Patterns(Exprs { items: params, seps }), params_loc);
-      let (sep, body) = self.parse_colon_body_or_arms()?;
-      let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
-      return Ok(self.node(
-        NodeKind::Block { name: Box::new(func), params: Box::new(params_node), sep, body },
-        Loc { start: func_loc.start, end },
-      ));
+      // Func is a registered block name with params
+      if func_is_block {
+        let params_end = params.last().map(|n: &Node| n.loc.end).unwrap_or(func_loc.end);
+        let params_loc = Loc { start: func_loc.end, end: params_end };
+        let params_node = self.node(NodeKind::Patterns(Exprs { items: params, seps }), params_loc);
+        let (sep, body) = self.parse_colon_body_or_arms()?;
+        let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
+        return Ok(self.node(
+          NodeKind::Block { name: Box::new(func), params: Box::new(params_node), sep, body },
+          Loc { start: func_loc.start, end },
+        ));
+      }
     }
 
     // Not a block: it's a regular application

@@ -445,7 +445,7 @@ mod tests {
     /// the expected result for any well-formed source the print stage should
     /// reproduce verbatim.
     fn print(src: &str) -> String {
-        let result = parser::parse(src)
+        let result = parser::parse_with_blocks(src, &["test_block"])
             .unwrap_or_else(|e| panic!("parse error: {}", e.message));
         let output = super::print(&result.root);
         if output == src { "NO-DIFF".to_string() } else { output }
