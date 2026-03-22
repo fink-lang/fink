@@ -163,8 +163,7 @@ test 'fn match single arg', fn:
         Patterns
           Ident 'n'
         Match ':',
-          Patterns
-            Ident 'n'
+          Ident 'n'
           Arm ':',
             InfixOp '>',
               Ident 'n'
@@ -193,10 +192,9 @@ test 'fn match multi arg', fn:
           Spread '..',
             Ident 'b'
         Match ':',
-          Patterns
-            Ident 'a'
-            Spread '..',
-              Ident 'b'
+          Ident 'a'
+          Spread '..',
+            Ident 'b'
           Arm ':',
             Patterns
               LitInt '1'
@@ -231,8 +229,7 @@ test 'returning a function', fn:
           Patterns
             Ident 'items'
           Match ':',
-            Patterns
-              Ident 'items'
+            Ident 'items'
             Arm ':',
               LitSeq '[..]'
               LitSeq '[..]'
