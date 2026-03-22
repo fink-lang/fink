@@ -259,6 +259,21 @@ test 'str_block_interpolation', fn:
     StrEnd '', loc [18, 2, 15], [18, 2, 15]
     BlockEnd loc [18, 2, 15], [18, 2, 15]
 
+test 'str_block_same_line_content', fn:
+  expect tokenize fink":
+    ": foo
+      bar
+    baz
+  | equals fink":
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart '":', loc [0, 1, 0], [2, 1, 2]
+    StrText 'foo\n', loc [3, 1, 3], [7, 2, 0]
+    StrText 'bar', loc [9, 2, 2], [12, 2, 5]
+    StrEnd '', loc [12, 2, 5], [12, 2, 5]
+    BlockCont loc [12, 2, 5], [13, 3, 0]
+    Ident 'baz', loc [13, 3, 0], [16, 3, 3]
+    BlockEnd loc [16, 3, 3], [16, 3, 3]
+
 test 'str_block_dedent_is_end', fn:
   expect tokenize fink":
     ":
