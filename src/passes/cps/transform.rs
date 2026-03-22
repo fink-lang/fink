@@ -227,7 +227,7 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     NodeKind::StrRawTempl { children: parts, .. } => lower_str_raw_templ(g, parts, o),
 
     // ---- match ----
-    NodeKind::Match { subjects, arms, .. } => lower_match(g, subjects, &arms.items, o),
+    NodeKind::Match { subjects, arms, .. } => lower_match(g, &subjects.items, &arms.items, o),
 
     // ---- block: `name params: body` ----
     NodeKind::Block { name, params, body, .. } => lower_block(g, name, params, &body.items, o),
@@ -727,9 +727,9 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
           acc = ref_val(g, rk, ri, origin);
         }
       }
-      // `{foo: val}` parsed as Arm { lhs: [Ident("foo")], body: [val] }
-      NodeKind::Arm { lhs, body, .. } if !lhs.items.is_empty() => {
-        let key_node = &lhs.items[0];
+      // `{foo: val}` parsed as Arm { lhs: Ident("foo"), body: [val] }
+      NodeKind::Arm { lhs, body, .. } => {
+        let key_node = &**lhs;
         let val_node = body.items.last().expect("arm body empty");
         if let NodeKind::Ident(key) = &key_node.kind {
           let key_lit = lit_val(g, Lit::Str(key), Some(field.id));
@@ -816,17 +816,13 @@ fn lower_str_raw_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Opt
 
 fn lower_match<'src>(
   g: &mut Gen,
-  subjects: &'src Node<'src>,
+  subjects: &'src [Node<'src>],
   arms: &'src [Node<'src>],
   origin: Option<AstId>,
 ) -> Lower<'src> {
-  let subject_nodes: &[Node<'src>] = match &subjects.kind {
-    NodeKind::Patterns(ps) => ps.items.as_slice(),
-    _ => std::slice::from_ref(subjects),
-  };
   let mut pending: Vec<Pending<'src>> = vec![];
 
-  let params: Vec<Val<'src>> = subject_nodes.iter().map(|s| {
+  let params: Vec<Val<'src>> = subjects.iter().map(|s| {
     let (v, sp) = lower(g, s);
     pending.extend(sp);
     v
@@ -848,9 +844,9 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
   match &arm.kind {
     NodeKind::Arm { lhs, body, .. } => {
       let origin = Some(arm.id);
-      let lhs_nodes: &[Node<'src>] = match lhs.items.first().map(|n| &n.kind) {
-        Some(NodeKind::Patterns(ps)) => ps.items.as_slice(),
-        _ => lhs.items.as_slice(),
+      let lhs_nodes: &[Node<'src>] = match &lhs.kind {
+        NodeKind::Patterns(ps) => ps.items.as_slice(),
+        _ => std::slice::from_ref(lhs),
       };
 
       // Allocate explicit Bind::Cont params for the matcher:
@@ -1513,8 +1509,8 @@ fn lower_pat_lhs<'src>(
               lower_pat_lhs(g, pat_node, elem_val, Some(pat_node.id), pending);
             }
           }
-          NodeKind::Arm { lhs: arm_lhs, body: arm_body, .. } if !arm_lhs.items.is_empty() => {
-            if let NodeKind::Ident(key) = &arm_lhs.items[0].kind
+          NodeKind::Arm { lhs: arm_lhs, body: arm_body, .. } => {
+            if let NodeKind::Ident(key) = &arm_lhs.kind
               && let Some(pat_node) = arm_body.items.last() {
                 let elem = g.fresh_result(origin);
                 let (elem_kind, elem_id) = (elem.kind, elem.id);

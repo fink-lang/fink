@@ -277,7 +277,10 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     }
     NodeKind::Match { subjects, sep, arms } => {
       out.push_str("match ");
-      fmt_node(subjects, out, depth);
+      for (i, subj) in subjects.items.iter().enumerate() {
+        if i > 0 { out.push_str(", "); }
+        fmt_node(subj, out, depth);
+      }
       out.mark(sep.loc);
       out.push(':');
       for arm in &arms.items {
@@ -287,10 +290,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::Arm { lhs, sep, body } => {
-      for (i, pat) in lhs.items.iter().enumerate() {
-        if i > 0 { out.push_str(", "); }
-        fmt_node(pat, out, depth);
-      }
+      fmt_node(lhs, out, depth);
       out.mark(sep.loc);
       out.push(':');
       fmt_body(&body.items, out, depth, true);

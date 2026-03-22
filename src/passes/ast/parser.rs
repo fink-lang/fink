@@ -1176,7 +1176,7 @@ impl<'src> Parser<'src> {
           self.skip_block_tokens();
           let val = self.parse_expr()?;
           let loc = Loc { start: first.loc.start, end: val.loc.end };
-          items.push(self.node(NodeKind::Arm { lhs: Exprs { items: vec![first], seps: vec![] }, sep, body: Exprs { items: vec![val], seps: vec![] } }, loc));
+          items.push(self.node(NodeKind::Arm { lhs: Box::new(first), sep, body: Exprs { items: vec![val], seps: vec![] } }, loc));
         } else {
           items.push(first);
         }
@@ -1331,11 +1331,15 @@ impl<'src> Parser<'src> {
     if is_fn_match {
       // fn match: parse arms as the body
       let (sep, arms) = self.parse_colon_arms()?;
-      let subjects = params.clone();
-      let match_end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(subjects.loc.end);
+      // Extract subject expressions from Patterns wrapper
+      let subjects = match params.kind.clone() {
+        NodeKind::Patterns(exprs) => exprs,
+        _ => Exprs { items: vec![params.clone()], seps: vec![] },
+      };
+      let match_end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(params.loc.end);
       fn_end_loc = Loc { start: fn_loc.start, end: match_end };
       let match_node = self.node(
-        NodeKind::Match { subjects: Box::new(subjects), sep, arms },
+        NodeKind::Match { subjects, sep, arms },
         fn_end_loc,
       );
       Ok(self.node(
@@ -1458,11 +1462,16 @@ impl<'src> Parser<'src> {
   // --- match ---
 
   fn parse_match_expr(&mut self, match_loc: Loc) -> ParseResult<'src> {
-    let (subjects, _) = self.parse_params()?;
+    let (params_node, params_loc) = self.parse_params()?;
+    // Extract subject expressions from Patterns wrapper — subjects are expressions, not patterns
+    let subjects = match params_node.kind {
+      NodeKind::Patterns(exprs) => exprs,
+      _ => Exprs { items: vec![params_node], seps: vec![] },
+    };
     let (sep, arms) = self.parse_colon_arms()?;
-    let end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(subjects.loc.end);
+    let end = arms.items.last().map(|n: &Node| n.loc.end).unwrap_or(params_loc.end);
     Ok(self.node(
-      NodeKind::Match { subjects: Box::new(subjects), sep, arms },
+      NodeKind::Match { subjects, sep, arms },
       Loc { start: match_loc.start, end },
     ))
   }
@@ -1505,15 +1514,11 @@ impl<'src> Parser<'src> {
     let body = self.parse_block_body()?;
     let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(start);
 
-    // For multi-pattern arms (fn match multi-arg): wrap in Patterns
-    let lhs_node = if patterns.len() == 1 {
-      patterns.remove(0)
-    } else {
-      let pats_end = patterns.last().map(|n: &Node| n.loc.end).unwrap_or(start);
-      self.node(NodeKind::Patterns(Exprs { items: patterns, seps: pat_seps }), Loc { start, end: pats_end })
-    };
+    // Always wrap arm LHS in Patterns, consistent with fn params
+    let pats_end = patterns.last().map(|n: &Node| n.loc.end).unwrap_or(start);
+    let lhs_node = self.node(NodeKind::Patterns(Exprs { items: patterns, seps: pat_seps }), Loc { start, end: pats_end });
 
-    Ok(self.node(NodeKind::Arm { lhs: Exprs { items: vec![lhs_node], seps: vec![] }, sep, body }, Loc { start, end }))
+    Ok(self.node(NodeKind::Arm { lhs: Box::new(lhs_node), sep, body }, Loc { start, end }))
   }
 
   // --- custom block ---
@@ -1551,7 +1556,7 @@ impl<'src> Parser<'src> {
       while self.at(TokenKind::BlockCont) { self.bump(); }
       let body = self.parse_block_body()?;
       let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(start);
-      Ok(self.node(NodeKind::Arm { lhs: Exprs { items: vec![expr], seps: vec![] }, sep, body }, Loc { start, end }))
+      Ok(self.node(NodeKind::Arm { lhs: Box::new(expr), sep, body }, Loc { start, end }))
     } else {
       Ok(expr)
     }

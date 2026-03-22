@@ -163,12 +163,11 @@ pub enum NodeKind<'src> {
 
   // --- match ---
 
-  // Match — subjects (Patterns node) + sep (:) + arms
-  Match { subjects: Box<Node<'src>>, sep: Token<'src>, arms: Exprs<'src> },
+  // Match — subject expressions + sep (:) + arms
+  Match { subjects: Exprs<'src>, sep: Token<'src>, arms: Exprs<'src> },
 
-  // Arm — lhs patterns + sep (:) + body
-  // lhs is Exprs to handle multi-pattern arms (match a, b: ...)
-  Arm { lhs: Exprs<'src>, sep: Token<'src>, body: Exprs<'src> },
+  // Arm — lhs (Patterns node) + sep (:) + body
+  Arm { lhs: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
 
   // --- error handling ---
 
@@ -252,11 +251,11 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
       for stmt in &body.items { walk(stmt, f); }
     }
     NodeKind::Match { subjects, arms, .. } => {
-      walk(subjects, f);
+      for subj in &subjects.items { walk(subj, f); }
       for arm in &arms.items { walk(arm, f); }
     }
     NodeKind::Arm { lhs, body, .. } => {
-      for pat in &lhs.items { walk(pat, f); }
+      walk(lhs, f);
       for stmt in &body.items { walk(stmt, f); }
     }
     NodeKind::Block { name, params, body, .. } => {
@@ -431,8 +430,10 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Match { subjects, sep, arms } => {
       out.push_str("Match '"); out.push_str(sep.src); out.push_str("',");
-      out.push('\n');
-      print_node(subjects, out, depth + 1);
+      for subj in &subjects.items {
+        out.push('\n');
+        print_node(subj, out, depth + 1);
+      }
       for arm in &arms.items {
         out.push('\n');
         print_node(arm, out, depth + 1);
@@ -440,10 +441,8 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Arm { lhs, sep, body } => {
       out.push_str("Arm '"); out.push_str(sep.src); out.push_str("',");
-      for pat in &lhs.items {
-        out.push('\n');
-        print_node(pat, out, depth + 1);
-      }
+      out.push('\n');
+      print_node(lhs, out, depth + 1);
       for node in &body.items {
         out.push('\n');
         print_node(node, out, depth + 1);

@@ -358,12 +358,12 @@ impl Writer {
             // `match` keyword is at node.loc.start.
             NodeKind::Match { subjects, sep, arms } => {
                 self.keyword(node.loc.start, "match");
-                self.node(subjects);
+                self.exprs(subjects);
                 self.tok(sep);
                 self.exprs(arms);
             }
             NodeKind::Arm { lhs, sep, body } => {
-                self.exprs(lhs);
+                self.node(lhs);
                 self.tok(sep);
                 self.exprs(body);
             }
