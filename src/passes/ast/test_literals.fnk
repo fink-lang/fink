@@ -439,7 +439,19 @@ test 'grouped tagged literal', fn:
   | equals fink":
     Apply
       Ident 'min'
+      Group '(..)',
+        Ident 'foo'
+
+test 'grouped expression tagged literal', fn:
+  expect ast fink":
+    (1 + 2)foo
+  | equals fink":
+    Apply
       Ident 'foo'
+      Group '(..)',
+        InfixOp '+',
+          LitInt '1'
+          LitInt '2'
 
 test 'sequence tagged literal', fn:
   expect ast fink":

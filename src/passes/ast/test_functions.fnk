@@ -247,11 +247,12 @@ test 'returning a function', fn:
                     Ident 'map_fn'
                     Ident 'item'
                 Spread '..',
-                  Apply
-                    Ident 'map'
+                  Group '(..)',
                     Apply
-                      Ident 'map_fn'
-                      Ident 'rest'
+                      Ident 'map'
+                      Apply
+                        Ident 'map_fn'
+                        Ident 'rest'
 
 
 ---

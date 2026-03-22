@@ -63,9 +63,10 @@ test 'spread with range guard', fn:
     LitSeq '[..]',
       Ident 'head'
       Spread '..',
-        InfixOp '..',
-          LitInt '0'
-          LitInt '2'
+        Group '(..)',
+          InfixOp '..',
+            LitInt '0'
+            LitInt '2'
       Spread '..',
         Ident 'rest'
 
@@ -75,7 +76,8 @@ test 'spread with function guard', fn:
   | equals fink":
     LitSeq '[..]',
       Spread '..',
-        Ident 'is_odd'
+        Group '(..)',
+          Ident 'is_odd'
       Spread '..',
         Ident 'evens'
 
@@ -86,9 +88,10 @@ test 'spread with range expression guard', fn:
     LitSeq '[..]',
       Spread '..',
         InfixOp '..',
-          InfixOp '+',
-            LitInt '1'
-            LitInt '2'
+          Group '(..)',
+            InfixOp '+',
+              LitInt '1'
+              LitInt '2'
           Group '(..)',
             InfixOp '+',
               LitInt '3'

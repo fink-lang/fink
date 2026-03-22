@@ -1195,14 +1195,13 @@ impl<'src> Parser<'src> {
     let start = op_tok.loc.start;
 
     let maybe_inner: Option<Node<'src>> = if self.at(TokenKind::BracketOpen) && self.peek().src == "(" {
-      // ..(expr) — parse group and strip the Group wrapper
+      // ..(expr) — parse group, preserve Group node for faithful AST
       let group = self.parse_group()?;
-      let inner = if let NodeKind::Group { inner, .. } = group.kind { *inner } else { group };
       // ..(expr)..(expr) — `)` directly followed by `..`/`...` is a range, not a second spread
       if Self::is_range_op(self.peek()) {
-        Some(self.parse_infix_from(inner, 0)?)
+        Some(self.parse_infix_from(group, 0)?)
       } else {
-        Some(inner)
+        Some(group)
       }
     } else if (self.is_arg_start() && !self.at_sep()) || self.at(TokenKind::Partial) {
       Some(self.parse_infix(0)?)
@@ -1303,10 +1302,9 @@ impl<'src> Parser<'src> {
         // Postfix tag: (expr)tag where tag is immediately adjacent
         if self.at(TokenKind::Ident) && self.peek().loc.start.idx == group_end.idx {
           let tag = self.bump();
-          let inner = if let NodeKind::Group { inner, .. } = group.kind { *inner } else { group };
           let func = self.node(NodeKind::Ident(tag.src), tag.loc);
-          let loc = Loc { start: inner.loc.start, end: tag.loc.end };
-          return Ok(self.node(NodeKind::Apply { func: Box::new(func), args: Exprs { items: vec![inner], seps: vec![] } }, loc));
+          let loc = Loc { start: group.loc.start, end: tag.loc.end };
+          return Ok(self.node(NodeKind::Apply { func: Box::new(func), args: Exprs { items: vec![group], seps: vec![] } }, loc));
         }
         // Preserve Group — it's explicit syntax and semantically significant (e.g. partial scope boundary)
         Ok(group)
