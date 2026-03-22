@@ -85,6 +85,17 @@ test 'inline body comma equivalent to multiline block', fn:
       Ident 'a'
       Ident 'b'
 
+test 'block body comma separated expressions', fn:
+  expect ast fink":
+    fn:
+      1, foo, ni
+  | equals fink":
+    Fn ':',
+      Patterns
+      LitInt '1'
+      Ident 'foo'
+      Ident 'ni'
+
 test 'function with default arg', fn:
   expect ast fink":
     greet = fn name='world':
