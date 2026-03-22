@@ -608,22 +608,20 @@ impl<'src> Lexer<'src> {
     // Trim trailing \n from last RawLine on dedent/EOF — the final newline
     // is not string content, it's the line break before the dedent.
     // Internal newlines (between content lines) are preserved.
-    if !interp {
-      if let Some(last) = raw.last_mut() {
-        let end_idx = last.end.idx as usize;
-        if end_idx > 0 && self.src.as_bytes().get(end_idx - 1) == Some(&b'\n') {
-          let new_end_idx = end_idx - 1;
-          if new_end_idx <= last.start.idx as usize {
-            // Line was only \n — drop it entirely
-            raw.pop();
-          } else {
-            let line_start = last.start.idx as usize;
-            last.end = Pos {
-              idx: new_end_idx as u32,
-              line: last.end.line - 1,
-              col: last.start.col + utf16_len(&self.src[line_start..new_end_idx]),
-            };
-          }
+    if !interp && let Some(last) = raw.last_mut() {
+      let end_idx = last.end.idx as usize;
+      if end_idx > 0 && self.src.as_bytes().get(end_idx - 1) == Some(&b'\n') {
+        let new_end_idx = end_idx - 1;
+        if new_end_idx <= last.start.idx as usize {
+          // Line was only \n — drop it entirely
+          raw.pop();
+        } else {
+          let line_start = last.start.idx as usize;
+          last.end = Pos {
+            idx: new_end_idx as u32,
+            line: last.end.line - 1,
+            col: last.start.col + utf16_len(&self.src[line_start..new_end_idx]),
+          };
         }
       }
     }
