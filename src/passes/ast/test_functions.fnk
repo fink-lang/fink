@@ -96,6 +96,35 @@ test 'block body comma separated expressions', fn:
       Ident 'foo'
       Ident 'ni'
 
+test 'block body semicolon separated expressions', fn:
+  expect ast fink":
+    fn:
+      1; foo; ni
+  | equals fink":
+    Fn ':',
+      Patterns
+      LitInt '1'
+      Ident 'foo'
+      Ident 'ni'
+
+test 'block body mixed comma and semicolon', fn:
+  expect ast fink":
+    fn:
+      foo 1, 2; bar 3
+  | equals fink":
+    Fn ':',
+      Patterns
+      Apply
+        Ident 'foo'
+        LitInt '1'
+        LitInt '2'
+      Apply
+        Ident 'bar'
+        LitInt '3'
+
+# TODO: trailing comma or semi at same indent (fn: foo 1, 2,\n bar 3) should be
+# an error — the dev likely forgot to indent bar 3 as an arg to foo.
+
 test 'function with default arg', fn:
   expect ast fink":
     greet = fn name='world':
