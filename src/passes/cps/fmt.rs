@@ -126,10 +126,6 @@ fn state_fn(body: Node<'static>) -> Node<'static> {
   fn_node(patterns(vec![]), vec![body], dummy_loc())
 }
 
-/// `fn name: body` — result continuation (used in ·apply and ·match_block). Synthetic; no source loc.
-fn result_cont(name: &str, body: Node<'static>) -> Node<'static> {
-  fn_node(patterns(vec![ident(name, dummy_loc())]), vec![body], dummy_loc())
-}
 
 // ---------------------------------------------------------------------------
 // Val → Node
@@ -296,11 +292,7 @@ fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       fn_node(patterns(params), vec![body_node], dummy_loc())
     }
     Cont::Ref(cont_id) => {
-      // Cosmetic: synthesise `fn ·v_N: ·ƒ_N ·v_N`. Fully synthetic; dummy locs.
-      let result_name = format!("·v_{}", cont_id.0);
-      let cont_name = format!("·ƒ_{}", cont_id.0);
-      let body = apply(ident(&cont_name, dummy_loc()), vec![ident(&result_name, dummy_loc())], dummy_loc());
-      result_cont(&result_name, body)
+      ident(&format!("·ƒ_{}", cont_id.0), dummy_loc())
     }
   }
 }

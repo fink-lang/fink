@@ -71,3 +71,57 @@ test 'depth-2: all captured vars resolve as local after lift', fn:
     (ref 11, b) == (captured 1, (bind 43, b)) in scope 46
     (ref 35, c) == (local (bind 8, c)) in scope 46
     (ref 57, a) == (local (bind 2, a)) in scope 1
+
+
+---
+match with binding — captured var after final cont_lift
+---
+
+# After lift_all, the final cont_lift may hoist continuations into new fn scopes,
+# re-introducing captured refs that closure_lifting already resolved.
+# All refs should be `local` after lift_all — no `captured` should remain.
+
+test 'match with binding: no captured refs after lift', fn:
+  expect closure_lift_resolve fink":
+    main = fn:
+      x = 5
+      match x:
+        0: 0
+        _: x + 1
+
+  | equals fink":
+    (ref 75, x) == (captured 1, (bind 94, x)) in scope 96
+    (ref 83, x) == (local (bind 94, x)) in scope 96
+    (ref 26, x) == (local (bind 74, x)) in scope 76
+    (ref 5, x) == (local (bind 82, x)) in scope 84
+    (ref 95, x) == (local (bind 4, x)) in scope 1
+
+
+---
+recursive fn in match — captured and unresolved refs after final cont_lift
+---
+
+# A recursive fn with a match body produces:
+#   - captured refs to `n` (the fn param) in hoisted arm bodies
+#   - unresolved ref to `recurse` (the self-ref) in the recursive call arm
+# All should be `local` (or `recursive`) after lift_all.
+
+test 'recursive fn in match: no captured or unresolved refs after lift', fn:
+  expect closure_lift_resolve fink":
+    recurse = fn n:
+      match n:
+        0: 42
+        _: recurse n - 1
+    main = fn:
+      recurse 5
+
+  | equals fink":
+    (ref 106, n) == (captured 1, (bind 137, n)) in scope 139
+    (ref 114, n) == (local (bind 137, n)) in scope 139
+    (ref 52, recurse) == (local (bind 121, recurse)) in scope 123
+    (ref 27, recurse) == (local (bind 97, recurse)) in scope 99
+    (ref 28, n) == (captured 1, (bind 105, n)) in scope 107
+    (ref 98, recurse) == unresolved
+    (ref 6, n) == (local (bind 113, n)) in scope 115
+    (ref 138, n) == (local (bind 4, n)) in scope 3
+    (ref 122, recurse) == (local (bind 49, recurse)) in scope 1

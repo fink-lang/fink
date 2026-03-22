@@ -5,12 +5,13 @@ fn main() {
 
   let sourcemap = args.iter().any(|a| a == "--sourcemap");
   let embed_source = args.iter().any(|a| a == "--embed-source");
+  let pass: Option<u32> = args.iter().find_map(|a| a.strip_prefix("--pass=").and_then(|v| v.parse().ok()));
   let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("--")).map(|s| s.as_str()).collect();
 
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [--sourcemap] [--embed-source] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [--sourcemap] [--embed-source] [--pass=N] <file>");
       process::exit(1);
     }
   };
@@ -77,23 +78,34 @@ fn main() {
         Ok(r) => {
           let ast_index = fink::ast::build_index(&r);
           let cps = fink::passes::cps::transform::lower_expr(&r.root);
+
+          // --pass=N selects pipeline stage:
+          //   0 (default): raw CPS after lower_expr
+          //   1: after cont_lifting
+          //   2: after lift_all (fully lifted)
+          let result = match pass.unwrap_or(0) {
+            1 => fink::passes::cont_lifting::lift(cps),
+            2 => fink::passes::closure_lifting::lift_all(cps, &ast_index).0,
+            _ => cps,
+          };
+
           let ctx = fink::passes::cps::fmt::Ctx {
-            origin: &cps.origin,
+            origin: &result.origin,
             ast_index: &ast_index,
             captures: None,
           };
           if sourcemap {
             let (output, srcmap) = if embed_source {
-              fink::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, path, &src)
+              fink::passes::cps::fmt::fmt_with_mapped_content(&result.root, &ctx, path, &src)
             } else {
-              fink::passes::cps::fmt::fmt_with_mapped(&cps.root, &ctx, path)
+              fink::passes::cps::fmt::fmt_with_mapped(&result.root, &ctx, path)
             };
             let json = srcmap.to_json();
             let b64 = fink::sourcemap::base64_encode(json.as_bytes());
             println!("{output}");
             println!("//# sourceMappingURL=data:application/json;base64,{b64}");
           } else {
-            println!("{}", fink::passes::cps::fmt::fmt_with(&cps.root, &ctx));
+            println!("{}", fink::passes::cps::fmt::fmt_with(&result.root, &ctx));
           }
         }
         Err(e) => parse_error(&src, e),
