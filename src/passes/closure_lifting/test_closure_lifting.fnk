@@ -90,26 +90,25 @@ test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
 
   | equals fink":
     ·fn
-      fn ·v_55, a, b, ·ƒ_60:
+      fn a, b, ·ƒ_58:
         ·fn_closure ·v_44, a, b, fn ·v_7:
           ·ƒ_6 ·v_7
-      fn ·v_59:
+      fn ·v_57:
         ·fn
-          fn ·v_66, a, b, c, ·ƒ_69:
-            ·fn_closure ·v_36, c, fn ·ƒ_30, ·v_33:
-              ·op_plus a, b, ·ƒ_30
-          fn ·v_68:
+          fn c, ·v_12, ·ƒ_37: ·op_plus ·v_12, c, ·ƒ_9
+          fn ·v_36:
             ·fn
-              fn c, ·v_12, ·ƒ_37: ·op_plus ·v_12, c, ·ƒ_9
-              fn ·v_36:
-                ·fn_closure ·v_68, ·v_36, fn ·v_44, ·v_52:
-                  ·fn
-                    fn a, ·ƒ_3:
-                      ·fn_closure ·v_59, ·v_44, a, fn ·v_4:
-                        ·ƒ_3 ·v_4
-                    fn ·v_1:
-                      ·let ·v_1, fn foo:
-                        ·ƒ_0 foo
+              fn a, b, c, ·ƒ_45:
+                ·fn_closure ·v_36, c, fn ·ƒ_30, ·v_33:
+                  ·op_plus a, b, ·ƒ_30
+              fn ·v_44:
+                ·fn
+                  fn a, ·ƒ_3:
+                    ·fn_closure ·v_57, a, fn ·v_4:
+                      ·ƒ_3 ·v_4
+                  fn ·v_1:
+                    ·let ·v_1, fn foo:
+                      ·ƒ_0 foo
 
 
 test 'multiple captures — all captured vars become leading params', fn:
@@ -121,16 +120,16 @@ test 'multiple captures — all captured vars become leading params', fn:
 
   | equals fink":
     ·fn
-      fn ·v_38, a, b, ·ƒ_43:
+      fn a, b, ·ƒ_41:
         ·fn_closure ·v_29, a, b, fn ·v_7:
           ·ƒ_6 ·v_7
-      fn ·v_42:
+      fn ·v_40:
         ·fn
           fn a, b, c, ·ƒ_30: ·op_plus a, b, ·ƒ_9
           fn ·v_29:
             ·fn
               fn a, ·ƒ_3:
-                ·fn_closure ·v_42, ·v_29, a, fn ·v_4:
+                ·fn_closure ·v_40, a, fn ·v_4:
                   ·ƒ_3 ·v_4
               fn ·v_1:
                 ·let ·v_1, fn foo:

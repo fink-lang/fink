@@ -261,6 +261,18 @@ fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<(CpsId, Bin
     && let Some(Some(Resolution::Captured { bind, bind_kind, .. })) = graphs.resolution.try_get(val.id)
     && !out.iter().any(|(id, _)| id == bind)
   {
+    // For Synth/Cont captures, only include data-carrying refs (fn params).
+    // Structural synth refs (LetFn names in the continuation scope) are always
+    // accessible via collect_scope_names — don't need capture threading.
+    // Fn params have bind_scope in a fn scope (has parent_scope entry).
+    // Continuation binds have bind_scope in a continuation scope (no parent_scope).
+    if *bind_kind != Bind::Name {
+      let in_fn_scope = graphs.bind_scope.try_get(*bind)
+        .and_then(|s| *s)
+        .and_then(|scope| graphs.parent_scope.try_get(scope).and_then(|p| *p))
+        .is_some();
+      if !in_fn_scope { return; }
+    }
     out.push((*bind, *bind_kind));
   }
 }

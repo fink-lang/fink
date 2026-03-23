@@ -34,7 +34,7 @@
 //   3. The output CpsResult.origin must be dense.
 //   4. Produce a fresh tree — never mutate the input in place.
 
-use crate::passes::name_res::{Resolution, ResolveResult};
+use crate::passes::name_res::ResolveResult;
 use crate::passes::closure_capture::CaptureGraph;
 use crate::passes::cps::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
@@ -111,59 +111,6 @@ fn lift_once<'src>(
   CpsResult { root: new_root, origin: alloc.origin, synth_alias }
 }
 
-/// Returns true if any Ref::Name in the IR resolves as `Captured`.
-/// Only checks Name refs — Synth captures are structural (from cont_lift
-/// hoisting) and handled by codegen, not by closure lifting.
-fn has_captures(root: &Expr<'_>, resolve: &ResolveResult) -> bool {
-  has_name_captures(root, resolve)
-}
-
-fn has_name_captures(expr: &Expr<'_>, resolve: &ResolveResult) -> bool {
-  use ExprKind::*;
-  match &expr.kind {
-    LetVal { val, body, .. } => {
-      if is_name_captured(val, resolve) { return true; }
-      if let Cont::Expr { body: b, .. } = body { return has_name_captures(b, resolve); }
-      false
-    }
-    LetFn { fn_body, body, .. } => {
-      if has_name_captures(fn_body, resolve) { return true; }
-      if let Cont::Expr { body: b, .. } = body { return has_name_captures(b, resolve); }
-      false
-    }
-    App { func, args } => {
-      if let Callable::Val(v) = func
-        && is_name_captured(v, resolve)
-      { return true; }
-      for arg in args {
-        match arg {
-          Arg::Val(v) | Arg::Spread(v) => { if is_name_captured(v, resolve) { return true; } }
-          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => {
-            if has_name_captures(body, resolve) { return true; }
-          }
-          _ => {}
-        }
-      }
-      false
-    }
-    If { cond, then, else_ } => {
-      is_name_captured(cond, resolve) || has_name_captures(then, resolve) || has_name_captures(else_, resolve)
-    }
-    Yield { value, cont } => {
-      if is_name_captured(value, resolve) { return true; }
-      if let Cont::Expr { body, .. } = cont { return has_name_captures(body, resolve); }
-      false
-    }
-  }
-}
-
-fn is_name_captured(val: &Val<'_>, resolve: &ResolveResult) -> bool {
-  matches!(
-    (&val.kind, resolve.resolution.try_get(val.id)),
-    (ValKind::Ref(Ref::Name), Some(Some(Resolution::Captured { .. })))
-  )
-}
-
 /// Run lifting until no `Captured` refs remain, then return the lifted IR
 /// together with the final name resolution result.
 ///
@@ -188,13 +135,16 @@ pub fn lift_all<'src>(
   for round in 0..MAX_ROUNDS {
     let node_count = current.origin.len();
     let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count, &current.synth_alias);
-    if !has_captures(&current.root, &resolve_result) {
+    let cap_graph = analyse(&current, &resolve_result);
+    let has_actionable_captures = (0..cap_graph.len()).any(|i| {
+      cap_graph.try_get(CpsId(i as u32)).is_some_and(|caps| !caps.is_empty())
+    });
+    if !has_actionable_captures {
       return (current, resolve_result);
     }
     if round == MAX_ROUNDS - 1 {
       panic!("lift_all: did not converge after {MAX_ROUNDS} rounds");
     }
-    let cap_graph = analyse(&current, &resolve_result);
     current = lift_once(current, &resolve_result, &cap_graph, ast_index);
   }
   unreachable!()
@@ -415,11 +365,12 @@ mod tests {
   use crate::parser::parse;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
   use crate::passes::cps::ir::{Arg, Callable, Cont, Expr, ExprKind, Val, ValKind, Ref};
-  use crate::passes::name_res::{Resolution, ResolveResult};
+  use crate::passes::name_res::ResolveResult;
   use crate::passes::cps::transform::lower_expr;
   use crate::propgraph::PropGraph;
   use crate::ast::{AstId, Node as AstNode};
   use crate::passes::cps::ir::CpsId;
+  use crate::passes::name_res::Resolution;
   use super::lift_all;
 
   /// Run the full pipeline (parse → CPS → lift_all) on `src` and return the

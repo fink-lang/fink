@@ -64,13 +64,13 @@ test 'depth-2: all captured vars resolve as local after lift', fn:
           a + b + c
 
   | equals fink":
-    (ref 42, a) == (local (bind 56, a)) in scope 59
-    (ref 43, b) == (local (bind 5, b)) in scope 59
-    (ref 35, c) == (local (bind 8, c)) in scope 68
-    (ref 10, a) == (local (bind 40, a)) in scope 68
-    (ref 11, b) == (local (bind 41, b)) in scope 68
+    (ref 42, a) == (local (bind 55, a)) in scope 57
+    (ref 43, b) == (local (bind 5, b)) in scope 57
     (ref 14, c) == (local (bind 34, c)) in scope 36
-    (ref 58, a) == (local (bind 2, a)) in scope 1
+    (ref 35, c) == (local (bind 8, c)) in scope 44
+    (ref 10, a) == (local (bind 40, a)) in scope 44
+    (ref 11, b) == (local (bind 41, b)) in scope 44
+    (ref 56, a) == (local (bind 2, a)) in scope 1
 
 
 ---
@@ -90,11 +90,11 @@ test 'match with binding: no captured refs after lift', fn:
         _: x + 1
 
   | equals fink":
-    (ref 82, x) == (local (bind 93, x)) in scope 98
-    (ref 75, x) == (local (bind 93, x)) in scope 98
+    (ref 82, x) == (local (bind 92, x)) in scope 94
+    (ref 75, x) == (local (bind 92, x)) in scope 94
     (ref 26, x) == (local (bind 74, x)) in scope 76
     (ref 5, x) == (local (bind 80, x)) in scope 84
-    (ref 96, x) == (local (bind 4, x)) in scope 1
+    (ref 93, x) == (local (bind 4, x)) in scope 1
 
 
 ---
@@ -116,14 +116,14 @@ test 'recursive fn in match: no captured or unresolved refs after lift', fn:
       recurse 5
 
   | equals fink":
-    (ref 115, n) == (local (bind 136, n)) in scope 143
-    (ref 107, recurse) == (local (bind 138, recurse)) in scope 143
-    (ref 108, n) == (local (bind 136, n)) in scope 143
-    (ref 140, n) == (local (bind 4, n)) in scope 3
-    (ref 142, recurse) == (recursive (bind 49, recurse)) in scope 153
-    (ref 122, recurse) == (local (bind 49, recurse)) in scope 153
-    (ref 99, recurse) == (local (bind 105, recurse)) in scope 162
-    (ref 28, n) == (local (bind 106, n)) in scope 162
+    (ref 115, n) == (local (bind 135, n)) in scope 139
+    (ref 107, recurse) == (local (bind 136, recurse)) in scope 139
+    (ref 108, n) == (local (bind 135, n)) in scope 139
     (ref 52, recurse) == (local (bind 121, recurse)) in scope 123
     (ref 27, recurse) == (local (bind 97, recurse)) in scope 101
+    (ref 99, recurse) == (local (bind 105, recurse)) in scope 109
+    (ref 28, n) == (local (bind 106, n)) in scope 109
     (ref 6, n) == (local (bind 113, n)) in scope 117
+    (ref 137, n) == (local (bind 4, n)) in scope 3
+    (ref 138, recurse) == (recursive (bind 49, recurse)) in scope 1
+    (ref 122, recurse) == (local (bind 49, recurse)) in scope 1
