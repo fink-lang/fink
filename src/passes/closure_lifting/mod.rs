@@ -247,7 +247,10 @@ fn collect_bind_ids(
       scan_val(val, resolve, out);
       if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
     }
-    LetFn { body, .. } => {
+    LetFn { fn_body, body, .. } => {
+      // Also scan fn_body — needed to find bind CpsIds for transitive captures
+      // (captures propagated from inner fns via name_res captures prop graph).
+      collect_bind_ids(fn_body, resolve, out);
       if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
     }
     App { func, args } => {
@@ -288,6 +291,10 @@ fn scan_val(
 
 /// Look up the bind CpsId for a captured name by scanning the fn body.
 /// Returns the bind CpsId whose source name (via origin map + AST) matches `name`.
+///
+/// First tries Captured refs (from resolution). Falls back to scanning ALL
+/// Name ref vals by AST origin — needed for transitive captures where the ref
+/// was created by a prior lift_expr call in the same round (no resolution entry).
 fn find_bind_for_capture<'src>(
   fn_body: &Expr<'src>,
   cap_name: &str,
@@ -295,7 +302,7 @@ fn find_bind_for_capture<'src>(
   origin: &PropGraph<CpsId, Option<crate::ast::AstId>>,
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
 ) -> Option<CpsId> {
-  let mut found: Option<CpsId> = None;
+  // Try Captured refs first (from resolution graph).
   let mut map = std::collections::HashMap::new();
   collect_bind_ids(fn_body, resolve, &mut map);
   for &bind_id in map.keys() {
@@ -304,11 +311,62 @@ fn find_bind_for_capture<'src>(
       && let crate::ast::NodeKind::Ident(s) = &node.kind
       && *s == cap_name
     {
-      found = Some(bind_id);
-      break;
+      return Some(bind_id);
     }
   }
-  found
+  // Fallback: scan all Name ref vals by AST origin name match.
+  // Handles transitive captures where the ref was freshly created by
+  // lift_expr (no resolution entry — it's a FnClosure cap arg val).
+  let mut name_refs = Vec::new();
+  collect_name_ref_vals(fn_body, &mut name_refs);
+  for val_id in name_refs {
+    if let Some(Some(ast_id)) = origin.try_get(val_id)
+      && let Some(Some(node)) = ast_index.try_get(*ast_id)
+      && let crate::ast::NodeKind::Ident(s) = &node.kind
+      && *s == cap_name
+    {
+      return Some(val_id);
+    }
+  }
+  None
+}
+
+/// Collect CpsIds of all Ref::Name vals in an expression (including nested fn bodies).
+fn collect_name_ref_vals(expr: &Expr<'_>, out: &mut Vec<CpsId>) {
+  use ExprKind::*;
+  match &expr.kind {
+    LetVal { val, body, .. } => {
+      if let ValKind::Ref(Ref::Name) = &val.kind { out.push(val.id); }
+      if let Cont::Expr { body: b, .. } = body { collect_name_ref_vals(b, out); }
+    }
+    LetFn { fn_body, body, .. } => {
+      collect_name_ref_vals(fn_body, out);
+      if let Cont::Expr { body: b, .. } = body { collect_name_ref_vals(b, out); }
+    }
+    App { func, args } => {
+      if let Callable::Val(v) = func
+        && let ValKind::Ref(Ref::Name) = &v.kind
+      { out.push(v.id); }
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => {
+            if let ValKind::Ref(Ref::Name) = &v.kind { out.push(v.id); }
+          }
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_name_ref_vals(body, out),
+          _ => {}
+        }
+      }
+    }
+    If { cond, then, else_ } => {
+      if let ValKind::Ref(Ref::Name) = &cond.kind { out.push(cond.id); }
+      collect_name_ref_vals(then, out);
+      collect_name_ref_vals(else_, out);
+    }
+    Yield { value, cont } => {
+      if let ValKind::Ref(Ref::Name) = &value.kind { out.push(value.id); }
+      if let Cont::Expr { body, .. } = cont { collect_name_ref_vals(body, out); }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

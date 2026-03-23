@@ -32,6 +32,8 @@ pub type CaptureGraph<'src> = PropGraph<CpsId, Vec<&'src str>>;
 // ---------------------------------------------------------------------------
 
 /// Build the capture graph for all LetFn nodes in `result`.
+/// Merges direct captures (from the tree walk) with transitive captures
+/// from the name_res captures prop graph (bind CpsIds → source names).
 pub fn analyse<'src>(
   result: &CpsResult<'src>,
   resolve: &ResolveResult,
@@ -40,6 +42,29 @@ pub fn analyse<'src>(
   let node_count = result.origin.len();
   let mut graph: CaptureGraph<'src> = PropGraph::with_size(node_count, Vec::new());
   collect_expr(&result.root, resolve, &result.origin, ast_index, 0, &mut graph);
+
+  // Merge transitive captures from name_res for fns that HAVE direct captures.
+  // Only fns with direct captures will be hoisted this round — they need
+  // transitive captures to avoid losing access to inner fn values after hoisting.
+  // Fns with no direct captures stay nested — the multi-round approach handles them.
+  for i in 0..resolve.captures.len() {
+    let scope_id = CpsId(i as u32);
+    if let Some(bind_ids) = resolve.captures.try_get(scope_id) {
+      if bind_ids.is_empty() { continue; }
+      let existing = graph.try_get(scope_id).cloned().unwrap_or_default();
+      if existing.is_empty() { continue; } // no direct captures → skip
+      let mut merged = existing;
+      for bind_id in bind_ids {
+        if let Some(name) = source_name(*bind_id, &result.origin, ast_index)
+          && !merged.contains(&name)
+        {
+          merged.push(name);
+        }
+      }
+      graph.set(scope_id, merged);
+    }
+  }
+
   graph
 }
 

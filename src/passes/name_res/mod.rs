@@ -145,9 +145,10 @@ fn walk_captures(
         walk_captures(b, graphs, captures);
       }
     }
-    LetVal { body, .. } => {
-      if let Cont::Expr { body: b, .. } = body { walk_captures(b, graphs, captures); }
+    LetVal { body: Cont::Expr { body: b, .. }, .. } => {
+      walk_captures(b, graphs, captures);
     }
+    LetVal { .. } => {}
     App { args, .. } => {
       for arg in args {
         match arg {
