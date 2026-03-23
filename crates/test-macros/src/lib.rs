@@ -181,17 +181,14 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   let arg = args.items.first()?;
   match &arg.kind {
     // No interpolation: raw": collapses to Apply(raw, LitStr) — verbatim, no unescape.
-    // TODO: trailing \n comes from consume_str_block_text including \n in each line's end pos.
-    // The lexer should strip the trailing newline from the last line of a block string instead
-    // of having the macro paper over it here. Fix in lexer, then remove this trim.
-    NodeKind::LitStr { content: s, .. } => Some(s.trim_end_matches('\n').to_string()),
+    NodeKind::LitStr { content: s, .. } => Some(s.to_string()),
     // With interpolation: Apply(raw, StrRawTempl([LitStr, ...])).
     // A single plain-text child is fine (e.g. fink": with no ${}).
     // Multiple children means the fink": block contains an unescaped ${...} — use \${ instead.
     NodeKind::StrRawTempl { children, .. } => {
       if let [child] = children.as_slice() {
         if let NodeKind::LitStr { content: s, .. } = &child.kind {
-          return Some(s.trim_end_matches('\n').to_string());
+          return Some(s.to_string());
         }
       }
       panic!(
@@ -270,6 +267,11 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
   let tests = extract_tests(&src, &result.root);
 
   let mut output = proc_macro2::TokenStream::new();
+
+  // Emit include_str! so cargo tracks the .fnk file and recompiles when it changes.
+  output.extend(quote! {
+    const _: &str = include_str!(#abs_path_str);
+  });
 
   for test in tests {
     let test_name = {
