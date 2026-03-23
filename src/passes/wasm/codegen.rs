@@ -1830,21 +1830,6 @@ fn augment_match_block_caps(ctx: &mut Ctx<'_, '_>) {
       }
     }
 
-    // Propagate: any closure_fn target that doesn't already have the
-    // extra cap values needs them too. This is broad but safe — unused
-    // extra params don't cause type errors.
-    for (_, &other_target) in ctx.closure_fn.clone().iter() {
-      if other_target == fn_idx { continue; }
-      let other_pos = (other_target - FN_COMPILED_START) as usize;
-      if other_pos >= ctx.funcs.len() { continue; }
-      if done.contains(&other_target) { continue; }
-      let has_all = extra_caps.iter().all(|cap_id| {
-        ctx.funcs[other_pos].param_ids.contains(cap_id)
-      });
-      if !has_all {
-        to_augment.push((other_target, extra_caps.clone()));
-      }
-    }
   }
 }
 
