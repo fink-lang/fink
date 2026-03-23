@@ -1643,24 +1643,12 @@ mod tests {
     }
   }
 
-  // TODO: ast() should always show the Module wrapper; update all .fnk test
-  // expectations to include it, then remove the single-expression unwrap.
-  /// For single-expression tests: unwrap Module to print just the expression.
+  /// Parse source and print the full AST including Module root.
   fn ast(src: &str) -> String {
-    match super::parse_with_blocks(src, &["test_block"]) {
-      Ok(r) => {
-        if let NodeKind::Module(exprs) = &r.root.kind {
-          if exprs.items.len() == 1 {
-            return exprs.items[0].print();
-          }
-        }
-        r.root.print()
-      }
-      Err(e) => format!("ERROR: {}", e.message),
-    }
+    parse_debug(src)
   }
 
-  /// For module-level tests: print the full Module node.
+  /// Alias for ast — used in module-level tests for clarity.
   fn module(src: &str) -> String {
     parse_debug(src)
   }

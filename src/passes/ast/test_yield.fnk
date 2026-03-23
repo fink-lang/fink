@@ -7,25 +7,28 @@ test 'yield bare', fn:
     yield foo
 
   | equals fink":
-    Yield
-      Ident 'foo'
+    Module
+      Yield
+        Ident 'foo'
 
 test 'yield with application', fn:
   expect ast fink":
     yield foo bar
 
   | equals fink":
-    Yield
-      Apply
-        Ident 'foo'
-        Ident 'bar'
+    Module
+      Yield
+        Apply
+          Ident 'foo'
+          Ident 'bar'
 
 test 'yield bound to name', fn:
   expect ast fink":
     result = yield value
 
   | equals fink":
-    Bind '=',
-      Ident 'result'
-      Yield
-        Ident 'value'
+    Module
+      Bind '=',
+        Ident 'result'
+        Yield
+          Ident 'value'

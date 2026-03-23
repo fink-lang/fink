@@ -6,191 +6,206 @@ test 'simple binding', fn:
   expect ast fink":
     foo = 1
   | equals fink":
-    Bind '=',
-      Ident 'foo'
-      LitInt '1'
+    Module
+      Bind '=',
+        Ident 'foo'
+        LitInt '1'
 
 test 'sequence destructure', fn:
   expect ast fink":
     [a, b] = [1, 2]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Ident 'a'
-        Ident 'b'
-      LitSeq '[..]',
-        LitInt '1'
-        LitInt '2'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Ident 'a'
+          Ident 'b'
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
 
 test 'record destructure', fn:
   expect ast fink":
     {x, y} = point
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Ident 'x'
-        Ident 'y'
-      Ident 'point'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'x'
+          Ident 'y'
+        Ident 'point'
 
 test 'record destructure with rename', fn:
   expect ast fink":
     {x, y: z} = point
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Ident 'x'
-        Arm ':',
-          Ident 'y'
-          Ident 'z'
-      Ident 'point'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'x'
+          Arm ':',
+            Ident 'y'
+            Ident 'z'
+        Ident 'point'
 
 test 'nested record destructure', fn:
   expect ast fink":
     {a, b: {c, d}} = foo
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Ident 'a'
-        Arm ':',
-          Ident 'b'
-          LitRec '{..}',
-            Ident 'c'
-            Ident 'd'
-      Ident 'foo'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'a'
+          Arm ':',
+            Ident 'b'
+            LitRec '{..}',
+              Ident 'c'
+              Ident 'd'
+        Ident 'foo'
 
 test 'nested destructure', fn:
   expect ast fink":
     [a, [b, c]] = [1, [2, 3]]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Ident 'a'
+    Module
+      Bind '=',
         LitSeq '[..]',
-          Ident 'b'
-          Ident 'c'
-      LitSeq '[..]',
-        LitInt '1'
+          Ident 'a'
+          LitSeq '[..]',
+            Ident 'b'
+            Ident 'c'
         LitSeq '[..]',
-          LitInt '2'
-          LitInt '3'
+          LitInt '1'
+          LitSeq '[..]',
+            LitInt '2'
+            LitInt '3'
 
 test 'spread head and tail', fn:
   expect ast fink":
     [head, ..tail] = [1, 2, 3, 4]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Ident 'head'
-        Spread '..',
-          Ident 'tail'
-      LitSeq '[..]',
-        LitInt '1'
-        LitInt '2'
-        LitInt '3'
-        LitInt '4'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Ident 'head'
+          Spread '..',
+            Ident 'tail'
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
+          LitInt '3'
+          LitInt '4'
 
 test 'spread head middle and end', fn:
   expect ast fink":
     [head, ..middle, end] = [1, 2, 3, 4]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Ident 'head'
-        Spread '..',
-          Ident 'middle'
-        Ident 'end'
-      LitSeq '[..]',
-        LitInt '1'
-        LitInt '2'
-        LitInt '3'
-        LitInt '4'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Ident 'head'
+          Spread '..',
+            Ident 'middle'
+          Ident 'end'
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
+          LitInt '3'
+          LitInt '4'
 
 test 'spread with guard', fn:
   expect ast fink":
     [head > 3, ..tail] = [4, 5, 6]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        InfixOp '>',
-          Ident 'head'
-          LitInt '3'
-        Spread '..',
-          Ident 'tail'
-      LitSeq '[..]',
-        LitInt '4'
-        LitInt '5'
-        LitInt '6'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          InfixOp '>',
+            Ident 'head'
+            LitInt '3'
+          Spread '..',
+            Ident 'tail'
+        LitSeq '[..]',
+          LitInt '4'
+          LitInt '5'
+          LitInt '6'
 
 test 'guard with function call in pattern', fn:
   expect ast fink":
     [(is_odd head), ..tail] = [3, 4, 5]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Group '(..)',
-          Apply
-            Ident 'is_odd'
-            Ident 'head'
-        Spread '..',
-          Ident 'tail'
-      LitSeq '[..]',
-        LitInt '3'
-        LitInt '4'
-        LitInt '5'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Group '(..)',
+            Apply
+              Ident 'is_odd'
+              Ident 'head'
+          Spread '..',
+            Ident 'tail'
+        LitSeq '[..]',
+          LitInt '3'
+          LitInt '4'
+          LitInt '5'
 
 test 'record destructure with spread rest', fn:
   expect ast fink":
     {x, ..rest} = point
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Ident 'x'
-        Spread '..',
-          Ident 'rest'
-      Ident 'point'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'x'
+          Spread '..',
+            Ident 'rest'
+        Ident 'point'
 
 test 'record destructure with non-empty rest assertion', fn:
   expect ast fink":
     {x, ..} = point
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Ident 'x'
-        Spread '..'
-      Ident 'point'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'x'
+          Spread '..'
+        Ident 'point'
 
 test 'record destructure exact - empty rest', fn:
   expect ast fink":
     {x, ..{}} = point
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Ident 'x'
-        Spread '..',
-          LitRec '{..}'
-      Ident 'point'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'x'
+          Spread '..',
+            LitRec '{..}'
+        Ident 'point'
 
 test 'seq destructure exact - empty rest', fn:
   expect ast fink":
     [a, ..[]] = foo
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Ident 'a'
-        Spread '..',
-          LitSeq '[..]'
-      Ident 'foo'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Ident 'a'
+          Spread '..',
+            LitSeq '[..]'
+        Ident 'foo'
 
 test 'string pattern binding', fn:
   expect ast fink":
     'start \${middle} end' = 'foo bar spam'
   | equals fink":
-    Bind '=',
-      StrTempl
-        LitStr 'start '
-        Ident 'middle'
-        LitStr ' end'
-      LitStr 'foo bar spam'
+    Module
+      Bind '=',
+        StrTempl
+          LitStr 'start '
+          Ident 'middle'
+          LitStr ' end'
+        LitStr 'foo bar spam'
 
 
 ---
@@ -201,9 +216,10 @@ test 'simple right-hand binding', fn:
   expect ast fink":
     123 |= b
   | equals fink":
-    BindRight '|=',
-      LitInt '123'
-      Ident 'b'
+    Module
+      BindRight '|=',
+        LitInt '123'
+        Ident 'b'
 
 test 'multiline right-hand binding', fn:
   expect ast fink":
@@ -212,133 +228,141 @@ test 'multiline right-hand binding', fn:
       arg2
     |= result
   | equals fink":
-    BindRight '|=',
-      Apply
-        Ident 'foo'
-        Ident 'arg1'
-        Ident 'arg2'
-      Ident 'result'
+    Module
+      BindRight '|=',
+        Apply
+          Ident 'foo'
+          Ident 'arg1'
+          Ident 'arg2'
+        Ident 'result'
 
 test 'nested right-hand binding', fn:
   expect ast fink":
     [a |= [b, 2], [3, 4]] = [[1, 2], [3, 4]]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        BindRight '|=',
-          Ident 'a'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          BindRight '|=',
+            Ident 'a'
+            LitSeq '[..]',
+              Ident 'b'
+              LitInt '2'
           LitSeq '[..]',
-            Ident 'b'
+            LitInt '3'
+            LitInt '4'
+        LitSeq '[..]',
+          LitSeq '[..]',
+            LitInt '1'
             LitInt '2'
-        LitSeq '[..]',
-          LitInt '3'
-          LitInt '4'
-      LitSeq '[..]',
-        LitSeq '[..]',
-          LitInt '1'
-          LitInt '2'
-        LitSeq '[..]',
-          LitInt '3'
-          LitInt '4'
+          LitSeq '[..]',
+            LitInt '3'
+            LitInt '4'
 
 test 'right-hand binding with sequence destructure', fn:
   expect ast fink":
     get_pair foo |= [a, b]
   | equals fink":
-    BindRight '|=',
-      Apply
-        Ident 'get_pair'
-        Ident 'foo'
-      LitSeq '[..]',
-        Ident 'a'
-        Ident 'b'
+    Module
+      BindRight '|=',
+        Apply
+          Ident 'get_pair'
+          Ident 'foo'
+        LitSeq '[..]',
+          Ident 'a'
+          Ident 'b'
 
 test 'right-hand binding with record destructure', fn:
   expect ast fink":
     get_point foo |= {x, y}
   | equals fink":
-    BindRight '|=',
-      Apply
-        Ident 'get_point'
-        Ident 'foo'
-      LitRec '{..}',
-        Ident 'x'
-        Ident 'y'
+    Module
+      BindRight '|=',
+        Apply
+          Ident 'get_point'
+          Ident 'foo'
+        LitRec '{..}',
+          Ident 'x'
+          Ident 'y'
 
 test 'right-hand binding with nested destructure', fn:
   expect ast fink":
     compute foo |= {x, y: [a, b]}
   | equals fink":
-    BindRight '|=',
-      Apply
-        Ident 'compute'
-        Ident 'foo'
-      LitRec '{..}',
-        Ident 'x'
-        Arm ':',
-          Ident 'y'
-          LitSeq '[..]',
-            Ident 'a'
-            Ident 'b'
+    Module
+      BindRight '|=',
+        Apply
+          Ident 'compute'
+          Ident 'foo'
+        LitRec '{..}',
+          Ident 'x'
+          Arm ':',
+            Ident 'y'
+            LitSeq '[..]',
+              Ident 'a'
+              Ident 'b'
 
 test 'nested right-hand binding in record pattern', fn:
   expect ast fink":
     {foo: f |= {bar, spam: num ni}} = {foo: {bar: 1, spam: 2}}
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Arm ':',
-          Ident 'foo'
-          BindRight '|=',
-            Ident 'f'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Arm ':',
+            Ident 'foo'
+            BindRight '|=',
+              Ident 'f'
+              LitRec '{..}',
+                Ident 'bar'
+                Arm ':',
+                  Ident 'spam'
+                  Apply
+                    Ident 'num'
+                    Ident 'ni'
+        LitRec '{..}',
+          Arm ':',
+            Ident 'foo'
             LitRec '{..}',
-              Ident 'bar'
+              Arm ':',
+                Ident 'bar'
+                LitInt '1'
               Arm ':',
                 Ident 'spam'
-                Apply
-                  Ident 'num'
-                  Ident 'ni'
-      LitRec '{..}',
-        Arm ':',
-          Ident 'foo'
-          LitRec '{..}',
-            Arm ':',
-              Ident 'bar'
-              LitInt '1'
-            Arm ':',
-              Ident 'spam'
-              LitInt '2'
+                LitInt '2'
 
 test 'spread guard with right-hand binding', fn:
   expect ast fink":
     [..(str) |= strings, ..other] = [1, '2', 3, '4']
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Spread '..',
-          BindRight '|=',
-            Group '(..)',
-              Ident 'str'
-            Ident 'strings'
-        Spread '..',
-          Ident 'other'
-      LitSeq '[..]',
-        LitInt '1'
-        LitStr '2'
-        LitInt '3'
-        LitStr '4'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Spread '..',
+            BindRight '|=',
+              Group '(..)',
+                Ident 'str'
+              Ident 'strings'
+          Spread '..',
+            Ident 'other'
+        LitSeq '[..]',
+          LitInt '1'
+          LitStr '2'
+          LitInt '3'
+          LitStr '4'
 
 test 'import', fn:
   expect ast fink":
     {foo, bar} = import './foobar.fnk'
   | equals fink":
-    Bind '=',
-      LitRec '{..}',
-        Ident 'foo'
-        Ident 'bar'
-      Apply
-        Ident 'import'
-        LitStr './foobar.fnk'
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'foo'
+          Ident 'bar'
+        Apply
+          Ident 'import'
+          LitStr './foobar.fnk'
 
 
 ---
@@ -349,70 +373,78 @@ test 'bare wildcard', fn:
   expect ast fink":
     _
   | equals fink":
-    Wildcard
+    Module
+      Wildcard
 
 test 'wildcard in sequence destructure', fn:
   expect ast fink":
     [_, x] = [1, 2]
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
-        Wildcard
-        Ident 'x'
-      LitSeq '[..]',
-        LitInt '1'
-        LitInt '2'
+    Module
+      Bind '=',
+        LitSeq '[..]',
+          Wildcard
+          Ident 'x'
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
 
 test 'wildcard in fn params', fn:
   expect ast fink":
     fn _, b: b
   | equals fink":
-    Fn ':',
-      Patterns
-        Wildcard
+    Module
+      Fn ':',
+        Patterns
+          Wildcard
+          Ident 'b'
         Ident 'b'
-      Ident 'b'
 
 test 'wildcard does not match _foo', fn:
   expect ast fink":
     _foo
   | equals fink":
-    Ident '_foo'
+    Module
+      Ident '_foo'
 
 test 'implicit wildcard - middle slots', fn:
   expect ast fink":
     [_, _, n]
   | equals fink":
-    LitSeq '[..]',
-      Wildcard
-      Wildcard
-      Ident 'n'
+    Module
+      LitSeq '[..]',
+        Wildcard
+        Wildcard
+        Ident 'n'
 
 test 'implicit wildcard - leading comma', fn:
   expect ast fink":
     [, , n]
   | equals fink":
-    LitSeq '[..]',
-      Wildcard
-      Wildcard
-      Ident 'n'
+    Module
+      LitSeq '[..]',
+        Wildcard
+        Wildcard
+        Ident 'n'
 
 test 'implicit wildcard - mixed explicit and implicit', fn:
   expect ast fink":
     [_, , n]
   | equals fink":
-    LitSeq '[..]',
-      Wildcard
-      Wildcard
-      Ident 'n'
+    Module
+      LitSeq '[..]',
+        Wildcard
+        Wildcard
+        Ident 'n'
 
 test 'implicit wildcard in fn params', fn:
   expect ast fink":
     fn , , c: c
   | equals fink":
-    Fn ':',
-      Patterns
-        Wildcard
-        Wildcard
+    Module
+      Fn ':',
+        Patterns
+          Wildcard
+          Wildcard
+          Ident 'c'
         Ident 'c'
-      Ident 'c'
