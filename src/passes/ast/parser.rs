@@ -370,19 +370,32 @@ impl<'src> Parser<'src> {
       last_end = arg.loc.end.idx;
       params.push(arg);
       if self.at(TokenKind::Comma) {
-        seps.push(self.bump());
+        let comma = self.bump();
+        seps.push(comma);
         // Handle trailing comma that continues onto an indented next line
         if self.at(TokenKind::BlockStart) {
           has_block_tok = true;
           self.bump();
         } else if self.at(TokenKind::BlockCont) && has_block_tok {
           self.bump();
+        } else if self.at(TokenKind::BlockEnd) && has_block_tok {
+          return Err(ParseError {
+            message: "unexpected , followed by dedent".into(),
+            loc: comma.loc,
+          });
         }
         continue;
       }
       if self.at(TokenKind::Semicolon) {
         if inside_nested { break; }
-        seps.push(self.bump());
+        let semi = self.bump();
+        if self.at(TokenKind::BlockEnd) && has_block_tok {
+          return Err(ParseError {
+            message: "unexpected ; followed by dedent".into(),
+            loc: semi.loc,
+          });
+        }
+        seps.push(semi);
         if self.is_arg_start() { params.push(self.parse_apply_no_block()?); }
         break;
       }
@@ -520,13 +533,19 @@ impl<'src> Parser<'src> {
 
       // Check separators between args
       if self.at(TokenKind::Comma) {
-        seps.push(self.bump());
+        let comma = self.bump();
+        seps.push(comma);
         // Trailing comma: allow continuation on next line
         if self.at(TokenKind::BlockStart) {
           has_block = true;
           self.bump();
         } else if self.at(TokenKind::BlockCont) && has_block {
           self.bump(); // consume BlockCont after trailing comma
+        } else if self.at(TokenKind::BlockEnd) && has_block {
+          return Err(ParseError {
+            message: "unexpected , followed by dedent".into(),
+            loc: comma.loc,
+          });
         }
         // Continue to next arg
         continue;
@@ -537,9 +556,16 @@ impl<'src> Parser<'src> {
           // Leave the semicolon for the outer function to handle
           break;
         }
+        let semi = self.bump();
+        if self.at(TokenKind::BlockEnd) && has_block {
+          return Err(ParseError {
+            message: "unexpected ; followed by dedent".into(),
+            loc: semi.loc,
+          });
+        }
         // Outer function: semicolon is a strong boundary.
         // Collect ONE more grouped arg from after the semicolon.
-        seps.push(self.bump());
+        seps.push(semi);
         if self.is_arg_start() {
           let grouped = if no_block { self.parse_single_arg_no_block()? } else { self.parse_single_arg()? };
           args.push(grouped);
@@ -1648,7 +1674,7 @@ mod tests {
   fn parse_debug(src: &str) -> String {
     match super::parse_with_blocks(src, &["test_block"]) {
       Ok(r) => r.root.print(),
-      Err(e) => format!("ERROR: {}", e.message),
+      Err(e) => format!("ERROR [{}:{}]: {}", e.loc.start.line, e.loc.start.col, e.message),
     }
   }
 
