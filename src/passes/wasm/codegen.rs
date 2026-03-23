@@ -1142,9 +1142,47 @@ fn emit_match_body_call(fn_idx: u32, scrutinee_val: &Val<'_>, fc: &mut FnCtx, f:
         {
           f.instruction(&Instruction::LocalGet(local_idx));
         } else {
-          f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
-            shared: false, ty: wasm_encoder::AbstractHeapType::Any,
-          }));
+          // Source not found as local — trace through param_source chain.
+          // The value might be accessible via an intermediate param that
+          // aliases the source through the capture chain.
+          let mut found = false;
+          let mut cur = source_id;
+          for _ in 0..8 {
+            if let Some(&next) = fc.ctx.param_source.get(&cur) {
+              if let Some(local_idx) = fc.local_for(next)
+                .or_else(|| fc.local_for_by_origin(next))
+                .or_else(|| fc.local_for_synth_alias(next))
+              {
+                f.instruction(&Instruction::LocalGet(local_idx));
+                found = true;
+                break;
+              }
+              cur = next;
+            } else {
+              break;
+            }
+          }
+          if !found {
+            // Last resort: check closure_caps values for matching origin.
+            let source_origin = fc.ctx.origin.try_get(source_id).and_then(|o| *o);
+            let mut origin_found = false;
+            if let Some(origin) = source_origin {
+              for &(local_id, local_idx) in &fc.locals {
+                if let Some(Some(local_origin)) = fc.ctx.origin.try_get(local_id)
+                  && *local_origin == origin
+                {
+                  f.instruction(&Instruction::LocalGet(local_idx));
+                  origin_found = true;
+                  break;
+                }
+              }
+            }
+            if !origin_found {
+              f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+                shared: false, ty: wasm_encoder::AbstractHeapType::Any,
+              }));
+            }
+          }
         }
       } else {
         // Not a cap param — push scrutinee.
@@ -1221,8 +1259,21 @@ fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) 
     return;
   }
   // Check closure_fn: cont_id might be a FnClosure result binding that maps
-  // to a hoisted fn. Push non-stripped cap values, then the result value, then cont.
+  // to a hoisted fn.
   if let Some(&fn_idx) = fc.ctx.closure_fn.get(&cont_id) {
+    // If the target is a match_block fn, inline it instead of calling.
+    // This keeps cap values from the enclosing scope available for
+    // emit_match_body_call (match body fn caps need the enclosing scope).
+    let fn_pos_check = (fn_idx - FN_COMPILED_START) as usize;
+    if fn_pos_check < fc.ctx.funcs.len()
+      && let ExprKind::App { func: Callable::BuiltIn(crate::passes::cps::ir::BuiltIn::MatchBlock), args } = &fc.ctx.funcs[fn_pos_check].fn_body.kind
+    {
+      // Drop the result value (arm value placeholder — not used, match_block reads arm refs by CpsId).
+      f.instruction(&Instruction::Drop);
+      // Inline the match_block emission.
+      emit_match_block(args, f, fc);
+      return;
+    }
     let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
     if fn_pos < fc.ctx.funcs.len() {
       let caps = fc.ctx.closure_caps.get(&cont_id).cloned().unwrap_or_default();
@@ -1749,10 +1800,19 @@ fn augment_match_block_caps(ctx: &mut Ctx<'_, '_>) {
     }
   }
 
-  // Apply augments to match_block fns only.
-  for (fn_idx, extra_caps) in augments {
+  // Apply augments: add extra params to match_block fns and propagate
+  // through the closure_fn chain. Each fn that calls the match_block fn
+  // (directly or through intermediate fns) also needs the cap values.
+  let mut to_augment: Vec<(u32, Vec<CpsId>)> = augments;
+  let mut done: std::collections::HashSet<u32> = std::collections::HashSet::new();
+
+  while let Some((fn_idx, extra_caps)) = to_augment.pop() {
+    if done.contains(&fn_idx) { continue; }
+    done.insert(fn_idx);
 
     let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
+    if fn_pos >= ctx.funcs.len() { continue; }
+
     for &cap_id in &extra_caps {
       if !ctx.funcs[fn_pos].param_ids.contains(&cap_id) {
         ctx.funcs[fn_pos].param_ids.push(cap_id);
@@ -1761,16 +1821,28 @@ fn augment_match_block_caps(ctx: &mut Ctx<'_, '_>) {
     }
     ctx.funcs[fn_pos].arity = ctx.funcs[fn_pos].param_ids.len() as u32 + 1;
 
-    // Add extra caps to closure_fn entries pointing to this fn.
-    // Also propagate: the CALLER fn needs these caps too.
+    // For each closure_fn entry pointing to this fn, add extra caps.
     for (&closure_param, &target_fn) in ctx.closure_fn.clone().iter() {
-      if target_fn == fn_idx {
-        let extras = ctx.closure_extra_caps.entry(closure_param).or_default();
-        for &cap_id in &extra_caps {
-          if !extras.contains(&cap_id) {
-            extras.push(cap_id);
-          }
-        }
+      if target_fn != fn_idx { continue; }
+      let extras = ctx.closure_extra_caps.entry(closure_param).or_default();
+      for &cap_id in &extra_caps {
+        if !extras.contains(&cap_id) { extras.push(cap_id); }
+      }
+    }
+
+    // Propagate: any closure_fn target that doesn't already have the
+    // extra cap values needs them too. This is broad but safe — unused
+    // extra params don't cause type errors.
+    for (_, &other_target) in ctx.closure_fn.clone().iter() {
+      if other_target == fn_idx { continue; }
+      let other_pos = (other_target - FN_COMPILED_START) as usize;
+      if other_pos >= ctx.funcs.len() { continue; }
+      if done.contains(&other_target) { continue; }
+      let has_all = extra_caps.iter().all(|cap_id| {
+        ctx.funcs[other_pos].param_ids.contains(cap_id)
+      });
+      if !has_all {
+        to_augment.push((other_target, extra_caps.clone()));
       }
     }
   }
