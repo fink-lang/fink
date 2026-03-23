@@ -6,20 +6,21 @@ test 'match on literal values', fn:
       2: 'two'
       _: 'other'
   | equals fink":
-    Match ':',
-      Ident 'foo'
-      Arm ':',
-        Patterns
-          LitInt '1'
-        LitStr 'one'
-      Arm ':',
-        Patterns
-          LitInt '2'
-        LitStr 'two'
-      Arm ':',
-        Patterns
-          Wildcard
-        LitStr 'other'
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            LitInt '1'
+          LitStr 'one'
+        Arm ':',
+          Patterns
+            LitInt '2'
+          LitStr 'two'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitStr 'other'
 
 test 'match with binding', fn:
   expect ast fink":
@@ -27,19 +28,20 @@ test 'match with binding', fn:
       [head, ..tail]: head
       []: 'empty'
   | equals fink":
-    Match ':',
-      Ident 'foo'
-      Arm ':',
-        Patterns
-          LitSeq '[..]',
-            Ident 'head'
-            Spread '..',
-              Ident 'tail'
-        Ident 'head'
-      Arm ':',
-        Patterns
-          LitSeq '[..]'
-        LitStr 'empty'
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'head'
+              Spread '..',
+                Ident 'tail'
+          Ident 'head'
+        Arm ':',
+          Patterns
+            LitSeq '[..]'
+          LitStr 'empty'
 
 test 'match with inline guard', fn:
   expect ast fink":
@@ -48,28 +50,29 @@ test 'match with inline guard', fn:
       n > 0: 'large positive'
       _: 'other'
   | equals fink":
-    Match ':',
-      Ident 'foo'
-      Arm ':',
-        Patterns
-          InfixOp 'and',
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            InfixOp 'and',
+              InfixOp '>',
+                Ident 'n'
+                LitInt '0'
+              InfixOp '<',
+                Ident 'n'
+                LitInt '10'
+          LitStr 'small positive'
+        Arm ':',
+          Patterns
             InfixOp '>',
               Ident 'n'
               LitInt '0'
-            InfixOp '<',
-              Ident 'n'
-              LitInt '10'
-        LitStr 'small positive'
-      Arm ':',
-        Patterns
-          InfixOp '>',
-            Ident 'n'
-            LitInt '0'
-        LitStr 'large positive'
-      Arm ':',
-        Patterns
-          Wildcard
-        LitStr 'other'
+          LitStr 'large positive'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitStr 'other'
 
 test 'match on type', fn:
   expect ast fink":
@@ -77,20 +80,21 @@ test 'match on type', fn:
       str s: 'its a string'
       u8 n: 'its a u8'
   | equals fink":
-    Match ':',
-      Ident 'foo'
-      Arm ':',
-        Patterns
-          Apply
-            Ident 'str'
-            Ident 's'
-        LitStr 'its a string'
-      Arm ':',
-        Patterns
-          Apply
-            Ident 'u8'
-            Ident 'n'
-        LitStr 'its a u8'
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'str'
+              Ident 's'
+          LitStr 'its a string'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'u8'
+              Ident 'n'
+          LitStr 'its a u8'
 
 test 'match string pattern', fn:
   expect ast fink":
@@ -98,21 +102,22 @@ test 'match string pattern', fn:
       'hello \${..rest}': rest
       'a'...'z': 'lowercase letter'
   | equals fink":
-    Match ':',
-      Ident 's'
-      Arm ':',
-        Patterns
-          StrTempl
-            LitStr 'hello '
-            Spread '..',
-              Ident 'rest'
-        Ident 'rest'
-      Arm ':',
-        Patterns
-          InfixOp '...',
-            LitStr 'a'
-            LitStr 'z'
-        LitStr 'lowercase letter'
+    Module
+      Match ':',
+        Ident 's'
+        Arm ':',
+          Patterns
+            StrTempl
+              LitStr 'hello '
+              Spread '..',
+                Ident 'rest'
+          Ident 'rest'
+        Arm ':',
+          Patterns
+            InfixOp '...',
+              LitStr 'a'
+              LitStr 'z'
+          LitStr 'lowercase letter'
 
 test 'match sequence patterns', fn:
   expect ast fink":
@@ -122,29 +127,30 @@ test 'match sequence patterns', fn:
       [x, y]: 'two elements'
       [x, ..]: 'one or more'
   | equals fink":
-    Match ':',
-      Ident 'items'
-      Arm ':',
-        Patterns
-          LitSeq '[..]'
-        LitStr 'empty'
-      Arm ':',
-        Patterns
-          LitSeq '[..]',
-            Ident 'x'
-        LitStr 'one element'
-      Arm ':',
-        Patterns
-          LitSeq '[..]',
-            Ident 'x'
-            Ident 'y'
-        LitStr 'two elements'
-      Arm ':',
-        Patterns
-          LitSeq '[..]',
-            Ident 'x'
-            Spread '..'
-        LitStr 'one or more'
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]'
+          LitStr 'empty'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'x'
+          LitStr 'one element'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'x'
+              Ident 'y'
+          LitStr 'two elements'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'x'
+              Spread '..'
+          LitStr 'one or more'
 
 test 'match sequence bare spread pattern', fn:
   expect ast fink":
@@ -152,17 +158,18 @@ test 'match sequence bare spread pattern', fn:
       [..]: 'non-empty'
       []: 'empty'
   | equals fink":
-    Match ':',
-      Ident 'items'
-      Arm ':',
-        Patterns
-          LitSeq '[..]',
-            Spread '..'
-        LitStr 'non-empty'
-      Arm ':',
-        Patterns
-          LitSeq '[..]'
-        LitStr 'empty'
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Spread '..'
+          LitStr 'non-empty'
+        Arm ':',
+          Patterns
+            LitSeq '[..]'
+          LitStr 'empty'
 
 test 'match record bare spread pattern', fn:
   expect ast fink":
@@ -170,17 +177,18 @@ test 'match record bare spread pattern', fn:
       {..}: 'non-empty'
       {}: 'empty'
   | equals fink":
-    Match ':',
-      Ident 'foobar'
-      Arm ':',
-        Patterns
-          LitRec '{..}',
-            Spread '..'
-        LitStr 'non-empty'
-      Arm ':',
-        Patterns
-          LitRec '{..}'
-        LitStr 'empty'
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Spread '..'
+          LitStr 'non-empty'
+        Arm ':',
+          Patterns
+            LitRec '{..}'
+          LitStr 'empty'
 
 test 'match record patterns', fn:
   expect ast fink":
@@ -189,110 +197,116 @@ test 'match record patterns', fn:
       {foo: 1}: 'foo is 1'
       {foo: 1, ..}: 'foo is 1 and more'
   | equals fink":
-    Match ':',
-      Ident 'foobar'
-      Arm ':',
-        Patterns
-          LitRec '{..}'
-        LitStr 'empty'
-      Arm ':',
-        Patterns
-          LitRec '{..}',
-            Arm ':',
-              Ident 'foo'
-              LitInt '1'
-        LitStr 'foo is 1'
-      Arm ':',
-        Patterns
-          LitRec '{..}',
-            Arm ':',
-              Ident 'foo'
-              LitInt '1'
-            Spread '..'
-        LitStr 'foo is 1 and more'
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}'
+          LitStr 'empty'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+          LitStr 'foo is 1'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+              Spread '..'
+          LitStr 'foo is 1 and more'
 
 test 'match record exact - empty rest', fn:
   expect ast fink":
     match foobar:
       {foo: 1, ..{}}: 'foo is 1 and nothing else'
   | equals fink":
-    Match ':',
-      Ident 'foobar'
-      Arm ':',
-        Patterns
-          LitRec '{..}',
-            Arm ':',
-              Ident 'foo'
-              LitInt '1'
-            Spread '..',
-              LitRec '{..}'
-        LitStr 'foo is 1 and nothing else'
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+              Spread '..',
+                LitRec '{..}'
+          LitStr 'foo is 1 and nothing else'
 
 test 'match record with bound rest', fn:
   expect ast fink":
     match foobar:
       {foo: 1, ..rest}: rest
   | equals fink":
-    Match ':',
-      Ident 'foobar'
-      Arm ':',
-        Patterns
-          LitRec '{..}',
-            Arm ':',
-              Ident 'foo'
-              LitInt '1'
-            Spread '..',
-              Ident 'rest'
-        Ident 'rest'
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                LitInt '1'
+              Spread '..',
+                Ident 'rest'
+          Ident 'rest'
 
 test 'match seq exact - empty rest', fn:
   expect ast fink":
     match items:
       [a, ..[]]:'only a'
   | equals fink":
-    Match ':',
-      Ident 'items'
-      Arm ':',
-        Patterns
-          LitSeq '[..]',
-            Ident 'a'
-            Spread '..',
-              LitSeq '[..]'
-        LitStr 'only a'
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'a'
+              Spread '..',
+                LitSeq '[..]'
+          LitStr 'only a'
 
 test 'match nested record pattern', fn:
   expect ast fink":
     match foo:
       {x: 1, y: {z}}: z
   | equals fink":
-    Match ':',
-      Ident 'foo'
-      Arm ':',
-        Patterns
-          LitRec '{..}',
-            Arm ':',
-              Ident 'x'
-              LitInt '1'
-            Arm ':',
-              Ident 'y'
-              LitRec '{..}',
-                Ident 'z'
-        Ident 'z'
+    Module
+      Match ':',
+        Ident 'foo'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'x'
+                LitInt '1'
+              Arm ':',
+                Ident 'y'
+                LitRec '{..}',
+                  Ident 'z'
+          Ident 'z'
 
 test 'inline match in application', fn:
   expect ast fink":
     log match a: x > 0: x
   | equals fink":
-    Apply
-      Ident 'log'
-      Match ':',
-        Ident 'a'
-        Arm ':',
-          Patterns
-            InfixOp '>',
-              Ident 'x'
-              LitInt '0'
-          Ident 'x'
+    Module
+      Apply
+        Ident 'log'
+        Match ':',
+          Ident 'a'
+          Arm ':',
+            Patterns
+              InfixOp '>',
+                Ident 'x'
+                LitInt '0'
+            Ident 'x'
 
 test 'multi-subject match', fn:
   expect ast fink":
@@ -301,24 +315,25 @@ test 'multi-subject match', fn:
       1, x: 'one other'
       _, _: 'other'
   | equals fink":
-    Match ':',
-      Ident 'a'
-      Ident 'b'
-      Arm ':',
-        Patterns
-          LitInt '1'
-          LitInt '2'
-        LitStr 'one two'
-      Arm ':',
-        Patterns
-          LitInt '1'
-          Ident 'x'
-        LitStr 'one other'
-      Arm ':',
-        Patterns
-          Wildcard
-          Wildcard
-        LitStr 'other'
+    Module
+      Match ':',
+        Ident 'a'
+        Ident 'b'
+        Arm ':',
+          Patterns
+            LitInt '1'
+            LitInt '2'
+          LitStr 'one two'
+        Arm ':',
+          Patterns
+            LitInt '1'
+            Ident 'x'
+          LitStr 'one other'
+        Arm ':',
+          Patterns
+            Wildcard
+            Wildcard
+          LitStr 'other'
 
 test 'guard combined with spread in match arm', fn:
   expect ast fink":
@@ -326,35 +341,37 @@ test 'guard combined with spread in match arm', fn:
       [x > 0, ..rest]: rest
       _: []
   | equals fink":
-    Match ':',
-      Ident 'items'
-      Arm ':',
-        Patterns
-          LitSeq '[..]',
-            InfixOp '>',
-              Ident 'x'
-              LitInt '0'
-            Spread '..',
-              Ident 'rest'
-        Ident 'rest'
-      Arm ':',
-        Patterns
-          Wildcard
-        LitSeq '[..]'
+    Module
+      Match ':',
+        Ident 'items'
+        Arm ':',
+          Patterns
+            LitSeq '[..]',
+              InfixOp '>',
+                Ident 'x'
+                LitInt '0'
+              Spread '..',
+                Ident 'rest'
+          Ident 'rest'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitSeq '[..]'
 
 test 'nested pattern with guard in binding', fn:
   expect ast fink":
     [[x, y], z > 0] = foo
   | equals fink":
-    Bind '=',
-      LitSeq '[..]',
+    Module
+      Bind '=',
         LitSeq '[..]',
-          Ident 'x'
-          Ident 'y'
-        InfixOp '>',
-          Ident 'z'
-          LitInt '0'
-      Ident 'foo'
+          LitSeq '[..]',
+            Ident 'x'
+            Ident 'y'
+          InfixOp '>',
+            Ident 'z'
+            LitInt '0'
+        Ident 'foo'
 
 test 'multiline arm body', fn:
   expect ast fink":
@@ -364,25 +381,26 @@ test 'multiline arm body', fn:
         x + 1
       _: 0
   | equals fink":
-    Match ':',
-      Ident 'n'
-      Arm ':',
-        Patterns
-          InfixOp '>',
-            Ident 'n'
-            LitInt '0'
-        Bind '=',
-          Ident 'x'
-          InfixOp '*',
-            Ident 'n'
-            LitInt '2'
-        InfixOp '+',
-          Ident 'x'
-          LitInt '1'
-      Arm ':',
-        Patterns
-          Wildcard
-        LitInt '0'
+    Module
+      Match ':',
+        Ident 'n'
+        Arm ':',
+          Patterns
+            InfixOp '>',
+              Ident 'n'
+              LitInt '0'
+          Bind '=',
+            Ident 'x'
+            InfixOp '*',
+              Ident 'n'
+              LitInt '2'
+          InfixOp '+',
+            Ident 'x'
+            LitInt '1'
+        Arm ':',
+          Patterns
+            Wildcard
+          LitInt '0'
 
 test 'wildcard arm body as application', fn:
   expect ast fink":
@@ -390,20 +408,21 @@ test 'wildcard arm body as application', fn:
       0: true
       _: is_odd n - 1
   | equals fink":
-    Match ':',
-      Ident 'n'
-      Arm ':',
-        Patterns
-          LitInt '0'
-        LitBool true
-      Arm ':',
-        Patterns
-          Wildcard
-        Apply
-          Ident 'is_odd'
-          InfixOp '-',
-            Ident 'n'
-            LitInt '1'
+    Module
+      Match ':',
+        Ident 'n'
+        Arm ':',
+          Patterns
+            LitInt '0'
+          LitBool true
+        Arm ':',
+          Patterns
+            Wildcard
+          Apply
+            Ident 'is_odd'
+            InfixOp '-',
+              Ident 'n'
+              LitInt '1'
 
 test 'Ok and Err patterns in match', fn:
   expect ast fink":
@@ -411,50 +430,53 @@ test 'Ok and Err patterns in match', fn:
       Ok x: x + 1
       Err err: log err
   | equals fink":
-    Match ':',
-      Apply
-        Ident 'bar'
-        Ident 'result'
-      Arm ':',
-        Patterns
-          Apply
-            Ident 'Ok'
-            Ident 'x'
-        InfixOp '+',
-          Ident 'x'
-          LitInt '1'
-      Arm ':',
-        Patterns
-          Apply
-            Ident 'Err'
-            Ident 'err'
+    Module
+      Match ':',
         Apply
-          Ident 'log'
-          Ident 'err'
+          Ident 'bar'
+          Ident 'result'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'Ok'
+              Ident 'x'
+          InfixOp '+',
+            Ident 'x'
+            LitInt '1'
+        Arm ':',
+          Patterns
+            Apply
+              Ident 'Err'
+              Ident 'err'
+          Apply
+            Ident 'log'
+            Ident 'err'
 
 test 'error chaining', fn:
   expect ast fink":
     Err e, 'foo failed'
   | equals fink":
-    Apply
-      Ident 'Err'
-      Ident 'e'
-      LitStr 'foo failed'
+    Module
+      Apply
+        Ident 'Err'
+        Ident 'e'
+        LitStr 'foo failed'
 
 test 'match arm with nested right-hand binding', fn:
   expect ast fink":
     match foobar:
       {foo: f |= {bar}}: bar
   | equals fink":
-    Match ':',
-      Ident 'foobar'
-      Arm ':',
-        Patterns
-          LitRec '{..}',
-            Arm ':',
-              Ident 'foo'
-              BindRight '|=',
-                Ident 'f'
-                LitRec '{..}',
-                  Ident 'bar'
-        Ident 'bar'
+    Module
+      Match ':',
+        Ident 'foobar'
+        Arm ':',
+          Patterns
+            LitRec '{..}',
+              Arm ':',
+                Ident 'foo'
+                BindRight '|=',
+                  Ident 'f'
+                  LitRec '{..}',
+                    Ident 'bar'
+          Ident 'bar'

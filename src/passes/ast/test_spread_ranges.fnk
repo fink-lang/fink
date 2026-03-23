@@ -6,130 +6,142 @@ test 'spread into sequence', fn:
   expect ast fink":
     [head, ..tail]
   | equals fink":
-    LitSeq '[..]',
-      Ident 'head'
-      Spread '..',
-        Ident 'tail'
+    Module
+      LitSeq '[..]',
+        Ident 'head'
+        Spread '..',
+          Ident 'tail'
 
 test 'spread concat sequences', fn:
   expect ast fink":
     [..seq1, ..seq2]
   | equals fink":
-    LitSeq '[..]',
-      Spread '..',
-        Ident 'seq1'
-      Spread '..',
-        Ident 'seq2'
+    Module
+      LitSeq '[..]',
+        Spread '..',
+          Ident 'seq1'
+        Spread '..',
+          Ident 'seq2'
 
 test 'spread into record', fn:
   expect ast fink":
     {foo: bar, ..rest}
   | equals fink":
-    LitRec '{..}',
-      Arm ':',
-        Ident 'foo'
-        Ident 'bar'
-      Spread '..',
-        Ident 'rest'
+    Module
+      LitRec '{..}',
+        Arm ':',
+          Ident 'foo'
+          Ident 'bar'
+        Spread '..',
+          Ident 'rest'
 
 test 'spread merge records', fn:
   expect ast fink":
     {..rec1, ..rec2}
   | equals fink":
-    LitRec '{..}',
-      Spread '..',
-        Ident 'rec1'
-      Spread '..',
-        Ident 'rec2'
+    Module
+      LitRec '{..}',
+        Spread '..',
+          Ident 'rec1'
+        Spread '..',
+          Ident 'rec2'
 
 test 'bare spread in sequence pattern', fn:
   expect ast fink":
     [..]
   | equals fink":
-    LitSeq '[..]',
-      Spread '..'
+    Module
+      LitSeq '[..]',
+        Spread '..'
 
 test 'bare spread in record pattern', fn:
   expect ast fink":
     {..}
   | equals fink":
-    LitRec '{..}',
-      Spread '..'
+    Module
+      LitRec '{..}',
+        Spread '..'
 
 test 'spread with range guard', fn:
   expect ast fink":
     [head, ..(0..2), ..rest]
   | equals fink":
-    LitSeq '[..]',
-      Ident 'head'
-      Spread '..',
-        Group '(..)',
-          InfixOp '..',
-            LitInt '0'
-            LitInt '2'
-      Spread '..',
-        Ident 'rest'
+    Module
+      LitSeq '[..]',
+        Ident 'head'
+        Spread '..',
+          Group '(..)',
+            InfixOp '..',
+              LitInt '0'
+              LitInt '2'
+        Spread '..',
+          Ident 'rest'
 
 test 'spread with function guard', fn:
   expect ast fink":
     [..(is_odd), ..evens]
   | equals fink":
-    LitSeq '[..]',
-      Spread '..',
-        Group '(..)',
-          Ident 'is_odd'
-      Spread '..',
-        Ident 'evens'
+    Module
+      LitSeq '[..]',
+        Spread '..',
+          Group '(..)',
+            Ident 'is_odd'
+        Spread '..',
+          Ident 'evens'
 
 test 'spread with range expression guard', fn:
   expect ast fink":
     [..(1 + 2)..(3 + 4)]
   | equals fink":
-    LitSeq '[..]',
-      Spread '..',
-        InfixOp '..',
-          Group '(..)',
-            InfixOp '+',
-              LitInt '1'
-              LitInt '2'
-          Group '(..)',
-            InfixOp '+',
-              LitInt '3'
-              LitInt '4'
+    Module
+      LitSeq '[..]',
+        Spread '..',
+          InfixOp '..',
+            Group '(..)',
+              InfixOp '+',
+                LitInt '1'
+                LitInt '2'
+            Group '(..)',
+              InfixOp '+',
+                LitInt '3'
+                LitInt '4'
 
 test 'spread with ident range guard', fn:
   expect ast fink":
     [..foo...bar]
   | equals fink":
-    LitSeq '[..]',
-      Spread '..',
-        InfixOp '...',
-          Ident 'foo'
-          Ident 'bar'
+    Module
+      LitSeq '[..]',
+        Spread '..',
+          InfixOp '...',
+            Ident 'foo'
+            Ident 'bar'
 
 test 'spread with bare range guard', fn:
   expect ast fink":
     [head, ..0..2, ..rest]
   | equals fink":
-    LitSeq '[..]',
-      Ident 'head'
-      Spread '..',
-        InfixOp '..',
-          LitInt '0'
-          LitInt '2'
-      Spread '..',
-        Ident 'rest'
+    Module
+      LitSeq '[..]',
+        Ident 'head'
+        Spread '..',
+          InfixOp '..',
+            LitInt '0'
+            LitInt '2'
+        Spread '..',
+          Ident 'rest'
 
 test 'spread with range to grouped expression', fn:
   expect ast fink":
     [..0..(l)]
   | equals fink":
-    LitSeq '[..]',
-      Spread '..',
-        InfixOp '..',
-          LitInt '0'
-          Group '(..)',
-            Ident 'l'
+    Module
+      LitSeq '[..]',
+        Spread '..',
+          InfixOp '..',
+            LitInt '0'
+            Group '(..)',
+              Ident 'l'
 
 
 ---
@@ -140,50 +152,55 @@ test 'exclusive range', fn:
   expect ast fink":
     0..10
   | equals fink":
-    InfixOp '..',
-      LitInt '0'
-      LitInt '10'
+    Module
+      InfixOp '..',
+        LitInt '0'
+        LitInt '10'
 
 test 'inclusive range', fn:
   expect ast fink":
     0...10
   | equals fink":
-    InfixOp '...',
-      LitInt '0'
-      LitInt '10'
+    Module
+      InfixOp '...',
+        LitInt '0'
+        LitInt '10'
 
 test 'char range', fn:
   expect ast fink":
     'a'...'z'
   | equals fink":
-    InfixOp '...',
-      LitStr 'a'
-      LitStr 'z'
+    Module
+      InfixOp '...',
+        LitStr 'a'
+        LitStr 'z'
 
 test 'expression range exclusive', fn:
   expect ast fink":
     (1 + 2)..(3 + 4)
   | equals fink":
-    InfixOp '..',
-      Group '(..)',
-        InfixOp '+',
-          LitInt '1'
-          LitInt '2'
-      Group '(..)',
-        InfixOp '+',
-          LitInt '3'
-          LitInt '4'
+    Module
+      InfixOp '..',
+        Group '(..)',
+          InfixOp '+',
+            LitInt '1'
+            LitInt '2'
+        Group '(..)',
+          InfixOp '+',
+            LitInt '3'
+            LitInt '4'
 
 test 'expression range inclusive', fn:
   expect ast fink":
     (1 + 2)...(3 + 4)
   | equals fink":
-    InfixOp '...',
-      Group '(..)',
-        InfixOp '+',
-          LitInt '1'
-          LitInt '2'
-      Group '(..)',
-        InfixOp '+',
-          LitInt '3'
-          LitInt '4'
+    Module
+      InfixOp '...',
+        Group '(..)',
+          InfixOp '+',
+            LitInt '1'
+            LitInt '2'
+        Group '(..)',
+          InfixOp '+',
+            LitInt '3'
+            LitInt '4'

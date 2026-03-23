@@ -3,13 +3,15 @@ test 'true', fn:
   expect ast fink":
     true
   | equals fink":
-    LitBool true
+    Module
+      LitBool true
 
 test 'false', fn:
   expect ast fink":
     false
   | equals fink":
-    LitBool false
+    Module
+      LitBool false
 
 
 ---
@@ -20,85 +22,99 @@ test 'integer', fn:
   expect ast fink":
     1_234_567
   | equals fink":
-    LitInt '1_234_567'
+    Module
+      LitInt '1_234_567'
 
 test 'positive signed', fn:
   expect ast fink":
     +1
   | equals fink":
-    LitInt '+1'
+    Module
+      LitInt '+1'
 
 test 'negative signed', fn:
   expect ast fink":
     -1
   | equals fink":
-    LitInt '-1'
+    Module
+      LitInt '-1'
 
 test 'hex', fn:
   expect ast fink":
     0xFFFF_FFFF
   | equals fink":
-    LitInt '0xFFFF_FFFF'
+    Module
+      LitInt '0xFFFF_FFFF'
 
 test 'positive signed hex', fn:
   expect ast fink":
     +0xFFFF_FFFF
   | equals fink":
-    LitInt '+0xFFFF_FFFF'
+    Module
+      LitInt '+0xFFFF_FFFF'
 
 test 'negative signed hex', fn:
   expect ast fink":
     -0xFFFF_FFFF
   | equals fink":
-    LitInt '-0xFFFF_FFFF'
+    Module
+      LitInt '-0xFFFF_FFFF'
 
 test 'octal', fn:
   expect ast fink":
     0o_1234_5670
   | equals fink":
-    LitInt '0o_1234_5670'
+    Module
+      LitInt '0o_1234_5670'
 
 test 'positive signed octal', fn:
   expect ast fink":
     +0o_1234_5670
   | equals fink":
-    LitInt '+0o_1234_5670'
+    Module
+      LitInt '+0o_1234_5670'
 
 test 'negative signed octal', fn:
   expect ast fink":
     -0o_1234_5670
   | equals fink":
-    LitInt '-0o_1234_5670'
+    Module
+      LitInt '-0o_1234_5670'
 
 test 'binary', fn:
   expect ast fink":
     0b_0101_1111
   | equals fink":
-    LitInt '0b_0101_1111'
+    Module
+      LitInt '0b_0101_1111'
 
 test 'positive signed binary', fn:
   expect ast fink":
     +0b_0101_1111
   | equals fink":
-    LitInt '+0b_0101_1111'
+    Module
+      LitInt '+0b_0101_1111'
 
 test 'negative signed binary', fn:
   expect ast fink":
     -0b_0101_1111
   | equals fink":
-    LitInt '-0b_0101_1111'
+    Module
+      LitInt '-0b_0101_1111'
 
 test 'positive signed with underscores', fn:
   expect ast fink":
     +1_234_567
   | equals fink":
-    LitInt '+1_234_567'
+    Module
+      LitInt '+1_234_567'
 
 test 'negative signed with underscores', fn:
   expect ast fink":
     -1_234_567
   | equals fink":
-    LitInt '-1_234_567'
+    Module
+      LitInt '-1_234_567'
 
 
 ---
@@ -109,13 +125,15 @@ test 'simple float', fn:
   expect ast fink":
     1.0
   | equals fink":
-    LitFloat '1.0'
+    Module
+      LitFloat '1.0'
 
 test 'float with exponent', fn:
   expect ast fink":
     1.0e100_000
   | equals fink":
-    LitFloat '1.0e100_000'
+    Module
+      LitFloat '1.0e100_000'
 
 
 ---
@@ -126,13 +144,15 @@ test 'simple decimal', fn:
   expect ast fink":
     1.0d
   | equals fink":
-    LitDecimal '1.0d'
+    Module
+      LitDecimal '1.0d'
 
 test 'decimal with negative exponent', fn:
   expect ast fink":
     1.0d-100
   | equals fink":
-    LitDecimal '1.0d-100'
+    Module
+      LitDecimal '1.0d-100'
 
 
 ---
@@ -143,31 +163,36 @@ test 'simple string', fn:
   expect ast fink":
     'hello world'
   | equals fink":
-    LitStr 'hello world'
+    Module
+      LitStr 'hello world'
 
 test 'string escape sequences', fn:
   expect ast fink":
     '\n\t\r\\\''
   | equals fink":
-    LitStr '\\n\\t\\r\\\\\\\''
+    Module
+      LitStr '\\n\\t\\r\\\\\\\''
 
 test 'string vertical tab backspace formfeed', fn:
   expect ast fink":
     '\v\b\f'
   | equals fink":
-    LitStr '\\v\\b\\f'
+    Module
+      LitStr '\\v\\b\\f'
 
 test 'string hex escape', fn:
   expect ast fink":
     '\x41\x42'
   | equals fink":
-    LitStr '\\x41\\x42'
+    Module
+      LitStr '\\x41\\x42'
 
 test 'string unicode escape', fn:
   expect ast fink":
     '\u0041\u0042'
   | equals fink":
-    LitStr '\\u0041\\u0042'
+    Module
+      LitStr '\\u0041\\u0042'
 
 test 'multiline string', fn:
   expect ast fink":
@@ -176,64 +201,70 @@ test 'multiline string', fn:
       world
     '
   | equals fink":
-    LitStr '\nhello\nworld\n'
+    Module
+      LitStr '\nhello\nworld\n'
 
 test 'string interpolation', fn:
   expect ast fink":
     'hello \${1 + 2}'
   | equals fink":
-    StrTempl
-      LitStr 'hello '
-      InfixOp '+',
-        LitInt '1'
-        LitInt '2'
-
-test 'string interpolation leading expression', fn:
-  expect ast fink":
-    '\${1 + 2} world'
-  | equals fink":
-    StrTempl
-      InfixOp '+',
-        LitInt '1'
-        LitInt '2'
-      LitStr ' world'
-
-test 'tagged template string', fn:
-  expect ast fink":
-    fmt'hello \${1 + 2}'
-  | equals fink":
-    Apply
-      Ident 'fmt'
-      StrRawTempl
-        LitStr 'hello '
-        InfixOp '+',
-          LitInt '1'
-          LitInt '2'
-
-test 'tagged template string in argument position', fn:
-  expect ast fink":
-    store env, id'foo', v
-  | equals fink":
-    Apply
-      Ident 'store'
-      Ident 'env'
-      Apply
-        Ident 'id'
-        StrRawTempl
-          LitStr 'foo'
-      Ident 'v'
-
-test 'rendered template string', fn:
-  expect ast fink":
-    fmt 'hello \${1 + 2}'
-  | equals fink":
-    Apply
-      Ident 'fmt'
+    Module
       StrTempl
         LitStr 'hello '
         InfixOp '+',
           LitInt '1'
           LitInt '2'
+
+test 'string interpolation leading expression', fn:
+  expect ast fink":
+    '\${1 + 2} world'
+  | equals fink":
+    Module
+      StrTempl
+        InfixOp '+',
+          LitInt '1'
+          LitInt '2'
+        LitStr ' world'
+
+test 'tagged template string', fn:
+  expect ast fink":
+    fmt'hello \${1 + 2}'
+  | equals fink":
+    Module
+      Apply
+        Ident 'fmt'
+        StrRawTempl
+          LitStr 'hello '
+          InfixOp '+',
+            LitInt '1'
+            LitInt '2'
+
+test 'tagged template string in argument position', fn:
+  expect ast fink":
+    store env, id'foo', v
+  | equals fink":
+    Module
+      Apply
+        Ident 'store'
+        Ident 'env'
+        Apply
+          Ident 'id'
+          StrRawTempl
+            LitStr 'foo'
+        Ident 'v'
+
+test 'rendered template string', fn:
+  expect ast fink":
+    fmt 'hello \${1 + 2}'
+  | equals fink":
+    Module
+      Apply
+        Ident 'fmt'
+        StrTempl
+          LitStr 'hello '
+          InfixOp '+',
+            LitInt '1'
+            LitInt '2'
 
 
 test 'block string basic', fn:
@@ -241,7 +272,8 @@ test 'block string basic', fn:
     ":
       hello world
   | equals fink":
-    LitStr 'hello world'
+    Module
+      LitStr 'hello world'
 
 test 'block string multiline', fn:
   expect ast fink":
@@ -249,7 +281,8 @@ test 'block string multiline', fn:
       hello
       world
   | equals fink":
-    LitStr 'hello\nworld'
+    Module
+      LitStr 'hello\nworld'
 
 test 'block string blank line', fn:
   expect ast fink":
@@ -258,7 +291,8 @@ test 'block string blank line', fn:
 
       bar
   | equals fink":
-    LitStr 'foo\n\nbar'
+    Module
+      LitStr 'foo\n\nbar'
 
 test 'block string indentation preserved', fn:
   expect ast fink":
@@ -267,16 +301,18 @@ test 'block string indentation preserved', fn:
 
         bar
   | equals fink":
-    LitStr 'foo\n\n  bar'
+    Module
+      LitStr 'foo\n\n  bar'
 
 test 'block string interpolation', fn:
   expect ast fink":
     ":
       hello \${name}
   | equals fink":
-    StrTempl
-      LitStr 'hello '
-      Ident 'name'
+    Module
+      StrTempl
+        LitStr 'hello '
+        Ident 'name'
 
 
 ---
@@ -287,26 +323,29 @@ test 'empty sequence', fn:
   expect ast fink":
     []
   | equals fink":
-    LitSeq '[..]'
+    Module
+      LitSeq '[..]'
 
 test 'sequence literal', fn:
   expect ast fink":
     [1, 2, 3]
   | equals fink":
-    LitSeq '[..]',
-      LitInt '1'
-      LitInt '2'
-      LitInt '3'
+    Module
+      LitSeq '[..]',
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
 
 test 'sequence constructor', fn:
   expect ast fink":
     seq 1, 2, 3
   | equals fink":
-    Apply
-      Ident 'seq'
-      LitInt '1'
-      LitInt '2'
-      LitInt '3'
+    Module
+      Apply
+        Ident 'seq'
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
 
 test 'multiline sequence constructor', fn:
   expect ast fink":
@@ -315,14 +354,15 @@ test 'multiline sequence constructor', fn:
       2
       seq 3, 4
   | equals fink":
-    Apply
-      Ident 'seq'
-      LitInt '1'
-      LitInt '2'
+    Module
       Apply
         Ident 'seq'
-        LitInt '3'
-        LitInt '4'
+        LitInt '1'
+        LitInt '2'
+        Apply
+          Ident 'seq'
+          LitInt '3'
+          LitInt '4'
 
 
 ---
@@ -333,31 +373,34 @@ test 'empty record', fn:
   expect ast fink":
     {}
   | equals fink":
-    LitRec '{..}'
+    Module
+      LitRec '{..}'
 
 test 'record literal', fn:
   expect ast fink":
     {foo: 1, bar: 2}
   | equals fink":
-    LitRec '{..}',
-      Arm ':',
-        Ident 'foo'
-        LitInt '1'
-      Arm ':',
-        Ident 'bar'
-        LitInt '2'
+    Module
+      LitRec '{..}',
+        Arm ':',
+          Ident 'foo'
+          LitInt '1'
+        Arm ':',
+          Ident 'bar'
+          LitInt '2'
 
 test 'record with computed key', fn:
   expect ast fink":
     {(a + b): 3}
   | equals fink":
-    LitRec '{..}',
-      Arm ':',
-        Group '(..)',
-          InfixOp '+',
-            Ident 'a'
-            Ident 'b'
-        LitInt '3'
+    Module
+      LitRec '{..}',
+        Arm ':',
+          Group '(..)',
+            InfixOp '+',
+              Ident 'a'
+              Ident 'b'
+          LitInt '3'
 
 test 'multiline record', fn:
   expect ast fink":
@@ -368,24 +411,26 @@ test 'multiline record', fn:
       }
     }
   | equals fink":
-    LitRec '{..}',
-      Arm ':',
-        Ident 'foo'
-        LitInt '1'
-      Arm ':',
-        Ident 'bar'
-        LitRec '{..}',
-          Arm ':',
-            Ident 'spam'
-            LitInt '3'
+    Module
+      LitRec '{..}',
+        Arm ':',
+          Ident 'foo'
+          LitInt '1'
+        Arm ':',
+          Ident 'bar'
+          LitRec '{..}',
+            Arm ':',
+              Ident 'spam'
+              LitInt '3'
 
 test 'record shorthand fields', fn:
   expect ast fink":
     {foo, bar}
   | equals fink":
-    LitRec '{..}',
-      Ident 'foo'
-      Ident 'bar'
+    Module
+      LitRec '{..}',
+        Ident 'foo'
+        Ident 'bar'
 
 
 ---
@@ -396,19 +441,20 @@ test 'dict literal', fn:
   expect ast fink":
     dict {foo: 1, 'bar': 2, (key): 3}
   | equals fink":
-    Apply
-      Ident 'dict'
-      LitRec '{..}',
-        Arm ':',
-          Ident 'foo'
-          LitInt '1'
-        Arm ':',
-          LitStr 'bar'
-          LitInt '2'
-        Arm ':',
-          Group '(..)',
-            Ident 'key'
-          LitInt '3'
+    Module
+      Apply
+        Ident 'dict'
+        LitRec '{..}',
+          Arm ':',
+            Ident 'foo'
+            LitInt '1'
+          Arm ':',
+            LitStr 'bar'
+            LitInt '2'
+          Arm ':',
+            Group '(..)',
+              Ident 'key'
+            LitInt '3'
 
 
 ---
@@ -419,17 +465,19 @@ test 'integer tagged literal', fn:
   expect ast fink":
     10sec
   | equals fink":
-    Apply
-      Ident 'sec'
-      LitInt '10'
+    Module
+      Apply
+        Ident 'sec'
+        LitInt '10'
 
 test 'float tagged literal', fn:
   expect ast fink":
     10.5min
   | equals fink":
-    Apply
-      Ident 'min'
-      LitFloat '10.5'
+    Module
+      Apply
+        Ident 'min'
+        LitFloat '10.5'
 
 # TODO: bug — Group node is stripped by parse_atom postfix tag path (line ~1279 in parser.rs)
 # should be: Apply, Ident 'min', Group '(..)', Ident 'foo'
@@ -437,42 +485,46 @@ test 'grouped tagged literal', fn:
   expect ast fink":
     (foo)min
   | equals fink":
-    Apply
-      Ident 'min'
-      Group '(..)',
-        Ident 'foo'
+    Module
+      Apply
+        Ident 'min'
+        Group '(..)',
+          Ident 'foo'
 
 test 'grouped expression tagged literal', fn:
   expect ast fink":
     (1 + 2)foo
   | equals fink":
-    Apply
-      Ident 'foo'
-      Group '(..)',
-        InfixOp '+',
-          LitInt '1'
-          LitInt '2'
+    Module
+      Apply
+        Ident 'foo'
+        Group '(..)',
+          InfixOp '+',
+            LitInt '1'
+            LitInt '2'
 
 test 'sequence tagged literal', fn:
   expect ast fink":
     [1, 2, 3]foo
   | equals fink":
-    Apply
-      Ident 'foo'
-      LitSeq '[..]',
-        LitInt '1'
-        LitInt '2'
-        LitInt '3'
+    Module
+      Apply
+        Ident 'foo'
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
+          LitInt '3'
 
 test 'record tagged literal', fn:
   expect ast fink":
     {foo: bar}spam
   | equals fink":
-    Apply
-      Ident 'spam'
-      LitRec '{..}',
-        Arm ':',
-          Ident 'foo'
-          Ident 'bar'
+    Module
+      Apply
+        Ident 'spam'
+        LitRec '{..}',
+          Arm ':',
+            Ident 'foo'
+            Ident 'bar'
 
 
