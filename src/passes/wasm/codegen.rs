@@ -54,7 +54,7 @@ pub fn codegen(
   resolve: &ResolveResult,
   ast_index: &PropGraph<AstId, Option<&AstNode<'_>>>,
 ) -> CodegenResult {
-  let mut ctx = Ctx::new(&cps.origin, ast_index, resolve);
+  let mut ctx = Ctx::new(&cps.origin, ast_index, resolve, &cps.synth_alias);
   collect_funcs(&cps.root, &mut ctx);
   process_closures(&cps.root, &mut ctx);
   collect_match_arms(&cps.root, &mut ctx);
@@ -127,6 +127,7 @@ struct Ctx<'a, 'src> {
   origin: &'a PropGraph<CpsId, Option<AstId>>,
   ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
   resolve: &'a ResolveResult,
+  synth_alias: &'a PropGraph<CpsId, Option<CpsId>>,
   funcs: Vec<CollectedFn<'a, 'src>>,
   /// (signature, type_index) for compiled fn types.
   /// Signature: Vec<bool> where true = (ref $Cont), false = anyref, for value params.
@@ -163,6 +164,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
     origin: &'a PropGraph<CpsId, Option<AstId>>,
     ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
     resolve: &'a ResolveResult,
+    synth_alias: &'a PropGraph<CpsId, Option<CpsId>>,
   ) -> Self {
     Self {
       mappings: Vec::new(),
@@ -170,6 +172,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
       origin,
       ast_index,
       resolve,
+      synth_alias,
       funcs: Vec::new(),
       fn_types: Vec::new(),
       match_arms: std::collections::HashMap::new(),
@@ -699,6 +702,21 @@ impl FnCtx<'_, '_, '_> {
     None
   }
 
+  /// Find a local by synth_alias: if any local's CpsId has a synth_alias
+  /// that matches `bind_id`, return that local. Handles the case where a
+  /// synth cap param (fresh CpsId) carries a value previously bound at
+  /// `bind_id` (original CpsId from before lifting).
+  fn local_for_synth_alias(&self, bind_id: CpsId) -> Option<u32> {
+    for &(local_cps_id, local_idx) in &self.locals {
+      if let Some(Some(alias_target)) = self.ctx.synth_alias.try_get(local_cps_id)
+        && *alias_target == bind_id
+      {
+        return Some(local_idx);
+      }
+    }
+    None
+  }
+
   fn mark(&mut self, f: &Function, cps_id: CpsId) {
     if let Some(Some(ast_id)) = self.ctx.origin.try_get(cps_id)
       && let Some(Some(ast_node)) = self.ctx.ast_index.try_get(*ast_id)
@@ -1211,7 +1229,10 @@ fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) 
         fc.local_count += 1;
         f.instruction(&Instruction::LocalSet(result_local));
         for &cap_id in &caps {
-          if let Some(local_idx) = fc.local_for(cap_id) {
+          if let Some(local_idx) = fc.local_for(cap_id)
+            .or_else(|| fc.local_for_by_origin(cap_id))
+            .or_else(|| fc.local_for_synth_alias(cap_id))
+          {
             f.instruction(&Instruction::LocalGet(local_idx));
           } else {
             f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
@@ -1272,9 +1293,10 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
           }
         }
       };
-      if let Some(local_idx) = fc.local_for(bind_id) {
-        f.instruction(&Instruction::LocalGet(local_idx));
-      } else if let Some(local_idx) = fc.local_for_by_origin(bind_id) {
+      if let Some(local_idx) = fc.local_for(bind_id)
+        .or_else(|| fc.local_for_by_origin(bind_id))
+        .or_else(|| fc.local_for_synth_alias(bind_id))
+      {
         f.instruction(&Instruction::LocalGet(local_idx));
       } else {
         f.instruction(&Instruction::Unreachable);

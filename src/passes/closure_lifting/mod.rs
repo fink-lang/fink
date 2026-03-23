@@ -213,7 +213,21 @@ fn lift_expr<'src>(
     LetFn { name, params, cont, fn_body, body } => {
       let cap_entries: Vec<(CpsId, Bind)> = captures.try_get(name.id)
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .into_iter()
+        // Filter out captures that are already params (from a previous lifting round).
+        // Check both direct CpsId match and synth_alias match (new param → old bind).
+        .filter(|(bind_id, _)| {
+          let already_param = params.iter().any(|p| {
+            let param_id = match p { Param::Name(b) | Param::Spread(b) => b.id };
+            param_id == *bind_id
+              || synth_alias.try_get(param_id).and_then(|a| *a) == Some(*bind_id)
+          });
+          let already_cont = cont.id == *bind_id
+            || synth_alias.try_get(cont.id).and_then(|a| *a) == Some(*bind_id);
+          !already_param && !already_cont
+        })
+        .collect();
       let cap_bind_ids: Vec<CpsId> = cap_entries.iter().map(|(id, _)| *id).collect();
 
       // Recurse into fn_body and body; collect their hoisted fns.
