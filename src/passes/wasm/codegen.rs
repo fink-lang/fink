@@ -1749,14 +1749,20 @@ fn augment_match_block_caps(ctx: &mut Ctx<'_, '_>) {
     }
   }
 
+  // Apply augments to match_block fns only.
   for (fn_idx, extra_caps) in augments {
+
     let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
     for &cap_id in &extra_caps {
-      ctx.funcs[fn_pos].param_ids.push(cap_id);
-      ctx.funcs[fn_pos].param_kinds.push(Bind::Name);
+      if !ctx.funcs[fn_pos].param_ids.contains(&cap_id) {
+        ctx.funcs[fn_pos].param_ids.push(cap_id);
+        ctx.funcs[fn_pos].param_kinds.push(Bind::Name);
+      }
     }
     ctx.funcs[fn_pos].arity = ctx.funcs[fn_pos].param_ids.len() as u32 + 1;
 
+    // Add extra caps to closure_fn entries pointing to this fn.
+    // Also propagate: the CALLER fn needs these caps too.
     for (&closure_param, &target_fn) in ctx.closure_fn.clone().iter() {
       if target_fn == fn_idx {
         let extras = ctx.closure_extra_caps.entry(closure_param).or_default();
