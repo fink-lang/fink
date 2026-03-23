@@ -565,9 +565,9 @@ impl<'src> Lexer<'src> {
       if !first && is_blank {
         let mut j = if i < bytes.len() { i + 1 } else { i };
         while j < bytes.len() && bytes[j] == b'\n' { j += 1; }
+        if j >= bytes.len() { break; } // EOF — no more content
         let next_indent = bytes[j..].iter().take_while(|&&b| b == b' ').count();
-        let next_is_blank_or_eof = j >= bytes.len() || matches!(bytes.get(j), Some(b'\n'));
-        if !next_is_blank_or_eof && next_indent < content_floor {
+        if next_indent < content_floor {
           break;
         }
       }

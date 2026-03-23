@@ -142,6 +142,19 @@ test 'str_block_basic', fn:
     BlockEnd loc [14, 3, 5], [14, 3, 5]
 
 
+test 'str_block_trailing_newline_at_eof', fn:
+  expect tokenize '":\n  foo\n  bar\n'
+
+  | equals fink":
+    BlockStart loc [0, 1, 0], [0, 1, 0]
+    StrStart '":', loc [0, 1, 0], [2, 1, 2]
+    StrText 'foo\n', loc [5, 2, 2], [9, 3, 0]
+    StrText 'bar', loc [11, 3, 2], [14, 3, 5]
+    StrEnd '', loc [14, 3, 5], [14, 3, 5]
+    BlockCont loc [14, 3, 5], [15, 4, 0]
+    BlockEnd loc [15, 4, 0], [15, 4, 0]
+
+
 test 'str_block_blank_lines', fn:
   expect tokenize fink":
     ":
