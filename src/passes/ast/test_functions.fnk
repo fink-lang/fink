@@ -4,13 +4,14 @@ test 'multiline function', fn:
     fn a, b:
       a + b
   | equals fink":
-    Fn ':',
-      Patterns
-        Ident 'a'
-        Ident 'b'
-      InfixOp '+',
-        Ident 'a'
-        Ident 'b'
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
 
 test 'fn with params and colon on separate lines', fn:
   expect ast fink":
@@ -20,24 +21,26 @@ test 'fn with params and colon on separate lines', fn:
     :
       spam
   | equals fink":
-    Fn ':',
-      Patterns
-        Ident 'foo'
-        Ident 'bar'
+    Module
+      Fn ':',
+        Patterns
+          Ident 'foo'
+          Ident 'bar'
+          Ident 'spam'
         Ident 'spam'
-      Ident 'spam'
 
 test 'single line function', fn:
   expect ast fink":
     fn a, b: a + b
   | equals fink":
-    Fn ':',
-      Patterns
-        Ident 'a'
-        Ident 'b'
-      InfixOp '+',
-        Ident 'a'
-        Ident 'b'
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
 
 test 'named function binding', fn:
   expect ast fink":
@@ -45,59 +48,64 @@ test 'named function binding', fn:
       result = a + b
       result
   | equals fink":
-    Bind '=',
-      Ident 'add'
-      Fn ':',
-        Patterns
-          Ident 'a'
-          Ident 'b'
-        Bind '=',
-          Ident 'result'
-          InfixOp '+',
+    Module
+      Bind '=',
+        Ident 'add'
+        Fn ':',
+          Patterns
             Ident 'a'
             Ident 'b'
-        Ident 'result'
+          Bind '=',
+            Ident 'result'
+            InfixOp '+',
+              Ident 'a'
+              Ident 'b'
+          Ident 'result'
 
 test 'no-arg function', fn:
   expect ast fink":
     greet = fn: 'hello'
   | equals fink":
-    Bind '=',
-      Ident 'greet'
-      Fn ':',
-        Patterns
-        LitStr 'hello'
+    Module
+      Bind '=',
+        Ident 'greet'
+        Fn ':',
+          Patterns
+          LitStr 'hello'
 
 test 'inline body comma separates expressions', fn:
   expect ast fink":
     fn: 1, 2
   | equals fink":
-    Fn ':',
-      Patterns
-      LitInt '1'
-      LitInt '2'
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        LitInt '2'
 
 test 'inline body comma equivalent to multiline block', fn:
   expect ast fink":
     fn a, b: a, b
   | equals fink":
-    Fn ':',
-      Patterns
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
         Ident 'a'
         Ident 'b'
-      Ident 'a'
-      Ident 'b'
 
 test 'block body comma separated expressions', fn:
   expect ast fink":
     fn:
       1, foo, ni
   | equals fink":
-    Fn ':',
-      Patterns
-      LitInt '1'
-      Ident 'foo'
-      Ident 'ni'
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        Ident 'foo'
+        Ident 'ni'
 
 # TODO: semicolon in inline fn body inside application should return to outer
 # arg list (strong separator), but parse_inline_exprs greedily consumes it.
@@ -120,22 +128,24 @@ test 'block body semicolon separated expressions', fn:
     fn:
       1; foo; ni
   | equals fink":
-    Fn ':',
-      Patterns
-      LitInt '1'
-      Ident 'foo'
-      Ident 'ni'
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        Ident 'foo'
+        Ident 'ni'
 
 test 'block body semicolon after non-application', fn:
   expect ast fink":
     fn:
       1; 2; 3
   | equals fink":
-    Fn ':',
-      Patterns
-      LitInt '1'
-      LitInt '2'
-      LitInt '3'
+    Module
+      Fn ':',
+        Patterns
+        LitInt '1'
+        LitInt '2'
+        LitInt '3'
 
 # TODO: trailing comma or semi at same indent (fn: foo 1, 2,\n bar 3) should be
 # an error — the dev likely forgot to indent bar 3 as an arg to foo.
@@ -145,72 +155,77 @@ test 'function with default arg', fn:
     greet = fn name='world':
       'hello \${name}'
   | equals fink":
-    Bind '=',
-      Ident 'greet'
-      Fn ':',
-        Patterns
-          Bind '=',
+    Module
+      Bind '=',
+        Ident 'greet'
+        Fn ':',
+          Patterns
+            Bind '=',
+              Ident 'name'
+              LitStr 'world'
+          StrTempl
+            LitStr 'hello '
             Ident 'name'
-            LitStr 'world'
-        StrTempl
-          LitStr 'hello '
-          Ident 'name'
 
 test 'function with record pattern arg', fn:
   expect ast fink":
     foo = fn {x, y}: x + y
   | equals fink":
-    Bind '=',
-      Ident 'foo'
-      Fn ':',
-        Patterns
-          LitRec '{..}',
+    Module
+      Bind '=',
+        Ident 'foo'
+        Fn ':',
+          Patterns
+            LitRec '{..}',
+              Ident 'x'
+              Ident 'y'
+          InfixOp '+',
             Ident 'x'
             Ident 'y'
-        InfixOp '+',
-          Ident 'x'
-          Ident 'y'
 
 test 'function with sequence pattern arg', fn:
   expect ast fink":
     bar = fn [head, ..tail]: head
   | equals fink":
-    Bind '=',
-      Ident 'bar'
-      Fn ':',
-        Patterns
-          LitSeq '[..]',
-            Ident 'head'
-            Spread '..',
-              Ident 'tail'
-        Ident 'head'
+    Module
+      Bind '=',
+        Ident 'bar'
+        Fn ':',
+          Patterns
+            LitSeq '[..]',
+              Ident 'head'
+              Spread '..',
+                Ident 'tail'
+          Ident 'head'
 
 test 'function with rest args', fn:
   expect ast fink":
     baz = fn arg, ..rest: arg
   | equals fink":
-    Bind '=',
-      Ident 'baz'
-      Fn ':',
-        Patterns
+    Module
+      Bind '=',
+        Ident 'baz'
+        Fn ':',
+          Patterns
+            Ident 'arg'
+            Spread '..',
+              Ident 'rest'
           Ident 'arg'
-          Spread '..',
-            Ident 'rest'
-        Ident 'arg'
 
 test 'spread in middle of params', fn:
   expect ast fink":
     baz = fn x, ..ys, z: x
   | equals fink":
-    Bind '=',
-      Ident 'baz'
-      Fn ':',
-        Patterns
+    Module
+      Bind '=',
+        Ident 'baz'
+        Fn ':',
+          Patterns
+            Ident 'x'
+            Spread '..',
+              Ident 'ys'
+            Ident 'z'
           Ident 'x'
-          Spread '..',
-            Ident 'ys'
-          Ident 'z'
-        Ident 'x'
 
 
 ---
@@ -224,29 +239,30 @@ test 'fn match single arg', fn:
       n < 0: 'negative'
       _: 'zero'
   | equals fink":
-    Bind '=',
-      Ident 'classify'
-      Fn ':',
-        Patterns
-          Ident 'n'
-        Match ':',
-          Ident 'n'
-          Arm ':',
-            Patterns
-              InfixOp '>',
-                Ident 'n'
-                LitInt '0'
-            LitStr 'positive'
-          Arm ':',
-            Patterns
-              InfixOp '<',
-                Ident 'n'
-                LitInt '0'
-            LitStr 'negative'
-          Arm ':',
-            Patterns
-              Wildcard
-            LitStr 'zero'
+    Module
+      Bind '=',
+        Ident 'classify'
+        Fn ':',
+          Patterns
+            Ident 'n'
+          Match ':',
+            Ident 'n'
+            Arm ':',
+              Patterns
+                InfixOp '>',
+                  Ident 'n'
+                  LitInt '0'
+              LitStr 'positive'
+            Arm ':',
+              Patterns
+                InfixOp '<',
+                  Ident 'n'
+                  LitInt '0'
+              LitStr 'negative'
+            Arm ':',
+              Patterns
+                Wildcard
+              LitStr 'zero'
 
 test 'fn match multi arg', fn:
   expect ast fink":
@@ -254,29 +270,30 @@ test 'fn match multi arg', fn:
       1, ..: 1
       2, x, ..y: 2
   | equals fink":
-    Bind '=',
-      Ident 'foo'
-      Fn ':',
-        Patterns
-          Ident 'a'
-          Spread '..',
-            Ident 'b'
-        Match ':',
-          Ident 'a'
-          Spread '..',
-            Ident 'b'
-          Arm ':',
-            Patterns
+    Module
+      Bind '=',
+        Ident 'foo'
+        Fn ':',
+          Patterns
+            Ident 'a'
+            Spread '..',
+              Ident 'b'
+          Match ':',
+            Ident 'a'
+            Spread '..',
+              Ident 'b'
+            Arm ':',
+              Patterns
+                LitInt '1'
+                Spread '..'
               LitInt '1'
-              Spread '..'
-            LitInt '1'
-          Arm ':',
-            Patterns
+            Arm ':',
+              Patterns
+                LitInt '2'
+                Ident 'x'
+                Spread '..',
+                  Ident 'y'
               LitInt '2'
-              Ident 'x'
-              Spread '..',
-                Ident 'y'
-            LitInt '2'
 
 
 ---
@@ -290,38 +307,39 @@ test 'returning a function', fn:
       [item, ..rest]:
         [(map_fn item), ..(map map_fn rest)]
   | equals fink":
-    Bind '=',
-      Ident 'map'
-      Fn ':',
-        Patterns
-          Ident 'map_fn'
+    Module
+      Bind '=',
+        Ident 'map'
         Fn ':',
           Patterns
-            Ident 'items'
-          Match ':',
-            Ident 'items'
-            Arm ':',
-              Patterns
+            Ident 'map_fn'
+          Fn ':',
+            Patterns
+              Ident 'items'
+            Match ':',
+              Ident 'items'
+              Arm ':',
+                Patterns
+                  LitSeq '[..]'
                 LitSeq '[..]'
-              LitSeq '[..]'
-            Arm ':',
-              Patterns
-                LitSeq '[..]',
-                  Ident 'item'
-                  Spread '..',
-                    Ident 'rest'
-              LitSeq '[..]',
-                Group '(..)',
-                  Apply
-                    Ident 'map_fn'
+              Arm ':',
+                Patterns
+                  LitSeq '[..]',
                     Ident 'item'
-                Spread '..',
+                    Spread '..',
+                      Ident 'rest'
+                LitSeq '[..]',
                   Group '(..)',
                     Apply
-                      Ident 'map'
+                      Ident 'map_fn'
+                      Ident 'item'
+                  Spread '..',
+                    Group '(..)',
                       Apply
-                        Ident 'map_fn'
-                        Ident 'rest'
+                        Ident 'map'
+                        Apply
+                          Ident 'map_fn'
+                          Ident 'rest'
 
 
 ---
@@ -332,18 +350,20 @@ test 'simple application', fn:
   expect ast fink":
     log 'hello'
   | equals fink":
-    Apply
-      Ident 'log'
-      LitStr 'hello'
+    Module
+      Apply
+        Ident 'log'
+        LitStr 'hello'
 
 test 'multi-arg application', fn:
   expect ast fink":
     add 1, 2
   | equals fink":
-    Apply
-      Ident 'add'
-      LitInt '1'
-      LitInt '2'
+    Module
+      Apply
+        Ident 'add'
+        LitInt '1'
+        LitInt '2'
 
 test 'multiline args', fn:
   expect ast fink":
@@ -351,75 +371,81 @@ test 'multiline args', fn:
       mul 2, 3
       mul 3, 4
   | equals fink":
-    Apply
-      Ident 'add'
+    Module
       Apply
-        Ident 'mul'
-        LitInt '2'
-        LitInt '3'
-      Apply
-        Ident 'mul'
-        LitInt '3'
-        LitInt '4'
+        Ident 'add'
+        Apply
+          Ident 'mul'
+          LitInt '2'
+          LitInt '3'
+        Apply
+          Ident 'mul'
+          LitInt '3'
+          LitInt '4'
 
 test 'semicolon grouped args', fn:
   expect ast fink":
     add mul 2, 3; mul 3, 4
   | equals fink":
-    Apply
-      Ident 'add'
+    Module
       Apply
-        Ident 'mul'
-        LitInt '2'
-        LitInt '3'
-      Apply
-        Ident 'mul'
-        LitInt '3'
-        LitInt '4'
+        Ident 'add'
+        Apply
+          Ident 'mul'
+          LitInt '2'
+          LitInt '3'
+        Apply
+          Ident 'mul'
+          LitInt '3'
+          LitInt '4'
 
 test 'nested right-to-left application', fn:
   expect ast fink":
     foo bar spam ham
   | equals fink":
-    Apply
-      Ident 'foo'
+    Module
       Apply
-        Ident 'bar'
+        Ident 'foo'
         Apply
-          Ident 'spam'
-          Ident 'ham'
+          Ident 'bar'
+          Apply
+            Ident 'spam'
+            Ident 'ham'
 
 test 'postfix tagged application', fn:
   expect ast fink":
     [1, 2, 3]foo
   | equals fink":
-    Apply
-      Ident 'foo'
-      LitSeq '[..]',
-        LitInt '1'
-        LitInt '2'
-        LitInt '3'
+    Module
+      Apply
+        Ident 'foo'
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
+          LitInt '3'
 
 test 'partial application placeholder', fn:
   expect ast fink":
     add5 = add 5, ?
   | equals fink":
-    Bind '=',
-      Ident 'add5'
-      Apply
-        Ident 'add'
-        LitInt '5'
-        Partial
+    Module
+      Bind '=',
+        Ident 'add5'
+        Apply
+          Ident 'add'
+          LitInt '5'
+          Partial
 
 test 'partial operator', fn:
   expect ast fink":
     add5 = ? + 5
   | equals fink":
-    Bind '=',
-      Ident 'add5'
-      InfixOp '+',
-        Partial
-        LitInt '5'
+    Module
+      Bind '=',
+        Ident 'add5'
+        InfixOp '+',
+          Partial
+          LitInt '5'
 
 
 ---
@@ -430,10 +456,11 @@ test 'simple pipe', fn:
   expect ast fink":
     foo | bar | spam
   | equals fink":
-    Pipe
-      Ident 'foo'
-      Ident 'bar'
-      Ident 'spam'
+    Module
+      Pipe
+        Ident 'foo'
+        Ident 'bar'
+        Ident 'spam'
 
 test 'multiline pipe', fn:
   expect ast fink":
@@ -441,74 +468,80 @@ test 'multiline pipe', fn:
     | capitalize
     | log
   | equals fink":
-    Pipe
-      LitStr 'hello'
-      Ident 'capitalize'
-      Ident 'log'
+    Module
+      Pipe
+        LitStr 'hello'
+        Ident 'capitalize'
+        Ident 'log'
 
 test 'pipe with spread partial', fn:
   expect ast fink":
     [1, 2] | add ..?
   | equals fink":
-    Pipe
-      LitSeq '[..]',
-        LitInt '1'
-        LitInt '2'
-      Apply
-        Ident 'add'
-        Spread '..',
-          Partial
+    Module
+      Pipe
+        LitSeq '[..]',
+          LitInt '1'
+          LitInt '2'
+        Apply
+          Ident 'add'
+          Spread '..',
+            Partial
 
 # TODO: Jan, think about | precedence, should it be (foo (bar | (spam ham))?
 test 'pipe with apply in each stage', fn:
   expect ast fink":
     foo bar | spam ham
   | equals fink":
-    Pipe
-      Apply
-        Ident 'foo'
-        Ident 'bar'
-      Apply
-        Ident 'spam'
-        Ident 'ham'
+    Module
+      Pipe
+        Apply
+          Ident 'foo'
+          Ident 'bar'
+        Apply
+          Ident 'spam'
+          Ident 'ham'
 
 test 'fn literal as grouped arg', fn:
   expect ast fink":
     map (fn x: x + 1), items
   | equals fink":
-    Apply
-      Ident 'map'
-      Group '(..)',
-        Fn ':',
-          Patterns
-            Ident 'x'
-          InfixOp '+',
-            Ident 'x'
-            LitInt '1'
-      Ident 'items'
+    Module
+      Apply
+        Ident 'map'
+        Group '(..)',
+          Fn ':',
+            Patterns
+              Ident 'x'
+            InfixOp '+',
+              Ident 'x'
+              LitInt '1'
+        Ident 'items'
 
 
 test 'inline body comma is arg separator inside application', fn:
   expect ast fink":
     fn: foo a, b
   | equals fink":
-    Fn ':',
-      Patterns
-      Apply
-        Ident 'foo'
-        Ident 'a'
-        Ident 'b'
+    Module
+      Fn ':',
+        Patterns
+        Apply
+          Ident 'foo'
+          Ident 'a'
+          Ident 'b'
 
 test 'inline body comma after binding starts new expression', fn:
   expect ast fink":
     fn: a = 1, b
   | equals fink":
-    Fn ':',
-      Patterns
-      Bind '=',
-        Ident 'a'
-        LitInt '1'
-      Ident 'b'
+    Module
+      Fn ':',
+        Patterns
+        Bind '=',
+          Ident 'a'
+          LitInt '1'
+        Ident 'b'
 
 
 test 'fn params multiline continuation', fn:
@@ -516,13 +549,14 @@ test 'fn params multiline continuation', fn:
     fn a,
       b: a + b
   | equals fink":
-    Fn ':',
-      Patterns
-        Ident 'a'
-        Ident 'b'
-      InfixOp '+',
-        Ident 'a'
-        Ident 'b'
+    Module
+      Fn ':',
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
 
 
 test 'multiline application', fn:
@@ -530,8 +564,30 @@ test 'multiline application', fn:
     ni = foo
       bar
   | equals fink":
-    Bind '=',
-      Ident 'ni'
-      Apply
-        Ident 'foo'
-        Ident 'bar'
+    Module
+      Bind '=',
+        Ident 'ni'
+        Apply
+          Ident 'foo'
+          Ident 'bar'
+
+
+---
+fn as infix operand
+---
+
+test 'fn as rhs of ==', fn:
+  expect ast fink":
+    [1, ?] == fn $: [1, $]
+  | equals fink":
+    Module
+      InfixOp '==',
+        LitSeq '[..]',
+          LitInt '1'
+          Partial
+        Fn ':',
+          Patterns
+            Ident '$'
+          LitSeq '[..]',
+            LitInt '1'
+            Ident '$'

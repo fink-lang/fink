@@ -3,23 +3,25 @@ test 'block with no args and expression body', fn:
   expect ast fink":
     test_block: 'hello'
   | equals fink":
-    Block ':',
-      Ident 'test_block'
-      Patterns
-      LitStr 'hello'
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+        LitStr 'hello'
 
 test 'block with patterns and expression body', fn:
   expect ast fink":
     test_block a, b: a + b
   | equals fink":
-    Block ':',
-      Ident 'test_block'
-      Patterns
-        Ident 'a'
-        Ident 'b'
-      InfixOp '+',
-        Ident 'a'
-        Ident 'b'
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        InfixOp '+',
+          Ident 'a'
+          Ident 'b'
 
 test 'block with patterns and multiline body', fn:
   expect ast fink":
@@ -27,19 +29,20 @@ test 'block with patterns and multiline body', fn:
       x = a + b
       x * 2
   | equals fink":
-    Block ':',
-      Ident 'test_block'
-      Patterns
-        Ident 'a'
-        Ident 'b'
-      Bind '=',
-        Ident 'x'
-        InfixOp '+',
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
           Ident 'a'
           Ident 'b'
-      InfixOp '*',
-        Ident 'x'
-        LitInt '2'
+        Bind '=',
+          Ident 'x'
+          InfixOp '+',
+            Ident 'a'
+            Ident 'b'
+        InfixOp '*',
+          Ident 'x'
+          LitInt '2'
 
 test 'block with arms', fn:
   expect ast fink":
@@ -47,68 +50,73 @@ test 'block with arms', fn:
       1: 'one'
       2: 'two'
   | equals fink":
-    Block ':',
-      Ident 'test_block'
-      Patterns
-        Ident 'a'
-      Arm ':',
-        LitInt '1'
-        LitStr 'one'
-      Arm ':',
-        LitInt '2'
-        LitStr 'two'
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          Ident 'a'
+        Arm ':',
+          LitInt '1'
+          LitStr 'one'
+        Arm ':',
+          LitInt '2'
+          LitStr 'two'
 
 test 'block bound to name', fn:
   expect ast fink":
     result = test_block a, b:
       a + b
   | equals fink":
-    Bind '=',
-      Ident 'result'
-      Block ':',
-        Ident 'test_block'
-        Patterns
-          Ident 'a'
-          Ident 'b'
-        InfixOp '+',
-          Ident 'a'
-          Ident 'b'
+    Module
+      Bind '=',
+        Ident 'result'
+        Block ':',
+          Ident 'test_block'
+          Patterns
+            Ident 'a'
+            Ident 'b'
+          InfixOp '+',
+            Ident 'a'
+            Ident 'b'
 
 test 'inline block in application', fn:
   expect ast fink":
     log test_block: 'hello'
   | equals fink":
-    Apply
-      Ident 'log'
-      Block ':',
-        Ident 'test_block'
-        Patterns
-        LitStr 'hello'
+    Module
+      Apply
+        Ident 'log'
+        Block ':',
+          Ident 'test_block'
+          Patterns
+          LitStr 'hello'
 
 test 'block with sequence destructure param', fn:
   expect ast fink":
     test_block [a, b]: a + b
   | equals fink":
-    Block ':',
-      Ident 'test_block'
-      Patterns
-        LitSeq '[..]',
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          LitSeq '[..]',
+            Ident 'a'
+            Ident 'b'
+        InfixOp '+',
           Ident 'a'
           Ident 'b'
-      InfixOp '+',
-        Ident 'a'
-        Ident 'b'
 
 test 'block with record destructure param', fn:
   expect ast fink":
     test_block {x, y}: x + y
   | equals fink":
-    Block ':',
-      Ident 'test_block'
-      Patterns
-        LitRec '{..}',
+    Module
+      Block ':',
+        Ident 'test_block'
+        Patterns
+          LitRec '{..}',
+            Ident 'x'
+            Ident 'y'
+        InfixOp '+',
           Ident 'x'
           Ident 'y'
-      InfixOp '+',
-        Ident 'x'
-        Ident 'y'

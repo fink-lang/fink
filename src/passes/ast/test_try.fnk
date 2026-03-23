@@ -3,34 +3,38 @@ test 'try bare', fn:
   expect ast fink":
     try foo
   | equals fink":
-    Try
-      Ident 'foo'
+    Module
+      Try
+        Ident 'foo'
 
 test 'try with application', fn:
   expect ast fink":
     try foo bar
   | equals fink":
-    Try
-      Apply
-        Ident 'foo'
-        Ident 'bar'
+    Module
+      Try
+        Apply
+          Ident 'foo'
+          Ident 'bar'
 
 test 'try bound to name', fn:
   expect ast fink":
     a = try open 'file.txt'
   | equals fink":
-    Bind '=',
-      Ident 'a'
-      Try
-        Apply
-          Ident 'open'
-          LitStr 'file.txt'
+    Module
+      Bind '=',
+        Ident 'a'
+        Try
+          Apply
+            Ident 'open'
+            LitStr 'file.txt'
 
 test 'try in pipe', fn:
   expect ast fink":
     try foo | bar
   | equals fink":
-    Pipe
-      Try
-        Ident 'foo'
-      Ident 'bar'
+    Module
+      Pipe
+        Try
+          Ident 'foo'
+        Ident 'bar'
