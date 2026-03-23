@@ -60,6 +60,14 @@ pub struct ResolveResult {
   /// Maps each scope-introducing node's CpsId → CpsId of its parent scope.
   /// `None` for the root scope.
   pub parent_scope: PropGraph<CpsId, Option<CpsId>>,
+  /// All captures per fn scope: direct (depth >= 1 refs in the fn body) and
+  /// transitive (inner fn captures that cross this fn's boundary). Maps each
+  /// LetFn scope CpsId → bind CpsIds of all names the fn needs from outside.
+  /// Recover source names via the origin map + AST index.
+  ///
+  /// Downstream passes that transform the tree must recompute this by re-running
+  /// name_res (lift_all already does this each iteration).
+  pub captures: PropGraph<CpsId, Vec<CpsId>>,
 }
 
 impl ResolveResult {
@@ -72,6 +80,212 @@ impl ResolveResult {
         Some(Some(Resolution::Captured { .. }))
       )
     })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transitive capture computation
+// ---------------------------------------------------------------------------
+
+/// Compute all captures (direct + transitive) for each LetFn scope.
+///
+/// Direct: Captured { depth >= 1 } refs in the fn's immediate body.
+/// Transitive: inner fn captures that cross this fn's boundary — the fn
+/// doesn't directly reference the name but needs it threaded through.
+///
+/// Algorithm: bottom-up. Process each LetFn by first recursing into its
+/// fn_body (so inner fn data is ready). Then collect direct captures and
+/// propagate transitive captures from inner fns.
+fn compute_captures<'src>(
+  expr: &Expr<'src>,
+  graphs: &Graphs,
+  _ctx: &Ctx<'_, 'src>,
+) -> PropGraph<CpsId, Vec<CpsId>> {
+  let mut captures: PropGraph<CpsId, Vec<CpsId>> = PropGraph::new();
+  walk_captures(expr, graphs, &mut captures);
+  captures
+}
+
+/// Bottom-up walk: recurse into children first, then collect captures for this LetFn.
+fn walk_captures(
+  expr: &Expr<'_>,
+  graphs: &Graphs,
+  captures: &mut PropGraph<CpsId, Vec<CpsId>>,
+) {
+  use ExprKind::*;
+  match &expr.kind {
+    LetFn { name, fn_body, body, .. } => {
+      // Recurse into fn_body first (bottom-up — inner fn captures ready first).
+      walk_captures(fn_body, graphs, captures);
+
+      let fn_scope = name.id;
+
+      // Direct captures: Captured { depth >= 1 } refs in the immediate fn body
+      // (conts only, not nested fn_bodies — same traversal as closure_capture).
+      let mut direct: Vec<CpsId> = Vec::new();
+      collect_direct_captured_binds(fn_body, graphs, &mut direct);
+      for bind_id in &direct {
+        add_capture(captures, fn_scope, *bind_id);
+      }
+
+      // Transitive captures: inner fn captures that cross this fn's boundary.
+      let parent = graphs.parent_scope.try_get(fn_scope).and_then(|p| *p);
+      if let Some(parent_scope) = parent {
+        let mut deep_binds: Vec<CpsId> = Vec::new();
+        collect_deep_captured_binds(fn_body, graphs, &mut deep_binds);
+        for bind_id in deep_binds {
+          if is_bind_outside_scope(bind_id, parent_scope, graphs) {
+            add_capture(captures, parent_scope, bind_id);
+          }
+        }
+      }
+
+      // Recurse into continuation.
+      if let Cont::Expr { body: b, .. } = body {
+        walk_captures(b, graphs, captures);
+      }
+    }
+    LetVal { body, .. } => {
+      if let Cont::Expr { body: b, .. } = body { walk_captures(b, graphs, captures); }
+    }
+    App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => walk_captures(body, graphs, captures),
+          _ => {}
+        }
+      }
+    }
+    If { then, else_, .. } => {
+      walk_captures(then, graphs, captures);
+      walk_captures(else_, graphs, captures);
+    }
+    Yield { cont: Cont::Expr { body, .. }, .. } => walk_captures(body, graphs, captures),
+    _ => {}
+  }
+}
+
+/// Collect direct Captured bind CpsIds from a fn body — walks conts only,
+/// NOT nested fn_bodies (same scope semantics as closure_capture).
+fn collect_direct_captured_binds(
+  expr: &Expr<'_>,
+  graphs: &Graphs,
+  out: &mut Vec<CpsId>,
+) {
+  use ExprKind::*;
+  match &expr.kind {
+    LetVal { val, body, .. } => {
+      check_captured_bind(val, graphs, out);
+      if let Cont::Expr { body: b, .. } = body { collect_direct_captured_binds(b, graphs, out); }
+    }
+    LetFn { body, .. } => {
+      // Don't descend into fn_body — those captures belong to the inner fn.
+      if let Cont::Expr { body: b, .. } = body { collect_direct_captured_binds(b, graphs, out); }
+    }
+    App { func, args } => {
+      if let Callable::Val(v) = func { check_captured_bind(v, graphs, out); }
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => check_captured_bind(v, graphs, out),
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_direct_captured_binds(body, graphs, out),
+          _ => {}
+        }
+      }
+    }
+    If { cond, then, else_ } => {
+      check_captured_bind(cond, graphs, out);
+      collect_direct_captured_binds(then, graphs, out);
+      collect_direct_captured_binds(else_, graphs, out);
+    }
+    Yield { value, cont } => {
+      check_captured_bind(value, graphs, out);
+      if let Cont::Expr { body, .. } = cont { collect_direct_captured_binds(body, graphs, out); }
+    }
+  }
+}
+
+/// Collect all Captured bind CpsIds from an expression, recursing into
+/// everything including nested LetFn fn_bodies.
+fn collect_deep_captured_binds(
+  expr: &Expr<'_>,
+  graphs: &Graphs,
+  out: &mut Vec<CpsId>,
+) {
+  use ExprKind::*;
+  match &expr.kind {
+    LetVal { val, body, .. } => {
+      check_captured_bind(val, graphs, out);
+      if let Cont::Expr { body: b, .. } = body { collect_deep_captured_binds(b, graphs, out); }
+    }
+    LetFn { fn_body, body, .. } => {
+      collect_deep_captured_binds(fn_body, graphs, out);
+      if let Cont::Expr { body: b, .. } = body { collect_deep_captured_binds(b, graphs, out); }
+    }
+    App { func, args } => {
+      if let Callable::Val(v) = func { check_captured_bind(v, graphs, out); }
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => check_captured_bind(v, graphs, out),
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_deep_captured_binds(body, graphs, out),
+          _ => {}
+        }
+      }
+    }
+    If { cond, then, else_ } => {
+      check_captured_bind(cond, graphs, out);
+      collect_deep_captured_binds(then, graphs, out);
+      collect_deep_captured_binds(else_, graphs, out);
+    }
+    Yield { value, cont } => {
+      check_captured_bind(value, graphs, out);
+      if let Cont::Expr { body, .. } = cont { collect_deep_captured_binds(body, graphs, out); }
+    }
+  }
+}
+
+fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<CpsId>) {
+  if let ValKind::Ref(Ref::Name) = &val.kind
+    && let Some(Some(Resolution::Captured { bind, .. })) = graphs.resolution.try_get(val.id)
+    && !out.contains(bind)
+  {
+    out.push(*bind);
+  }
+}
+
+/// Check if a bind is defined outside a given scope. Walk up from the bind's
+/// own scope — if we reach scope_id, the bind is at or below scope_id (inside
+/// it, not outside). If we reach the root without finding scope_id, the bind
+/// is defined in a different branch of the scope tree (outside).
+fn is_bind_outside_scope(bind_id: CpsId, scope_id: CpsId, graphs: &Graphs) -> bool {
+  let bind_scope = match graphs.bind_scope.try_get(bind_id) {
+    Some(Some(s)) => *s,
+    _ => return true,
+  };
+  let mut current = bind_scope;
+  for _ in 0..64 {
+    if current == scope_id { return false; }
+    match graphs.parent_scope.try_get(current) {
+      Some(Some(parent)) => current = *parent,
+      _ => return true,
+    }
+  }
+  true
+}
+
+/// Add a bind CpsId to a scope's transitive capture list (if not already present).
+fn add_capture(
+  transitive: &mut PropGraph<CpsId, Vec<CpsId>>,
+  scope_id: CpsId,
+  bind_id: CpsId,
+) {
+  let idx: usize = scope_id.into();
+  while transitive.len() <= idx {
+    transitive.push(Vec::new());
+  }
+  let mut caps = transitive.try_get(scope_id).cloned().unwrap_or_default();
+  if !caps.contains(&bind_id) {
+    caps.push(bind_id);
+    transitive.set(scope_id, caps);
   }
 }
 
@@ -118,10 +332,13 @@ pub fn resolve<'src>(
   // The root expr is a LetFn wrapping the module body; its CpsId is the root scope.
   let root_scope = expr.id;
   resolve_expr(expr, &scope, root_scope, None, 0, &ctx, &mut graphs);
+  // Compute all captures (direct + transitive) from the resolution graph.
+  let captures = compute_captures(expr, &graphs, &ctx);
   ResolveResult {
     resolution: graphs.resolution,
     bind_scope: graphs.bind_scope,
     parent_scope: graphs.parent_scope,
+    captures,
   }
 }
 
@@ -674,6 +891,41 @@ mod tests {
     lines.join("\n")
   }
 
+  /// Run parse → CPS → name_res. Format transitive captures per fn scope.
+  fn cps_resolve_transitive(src: &str) -> String {
+    match parse(src) {
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let cps = lower_expr(&r.root);
+        let node_count = cps.origin.len();
+        let result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        fmt_transitive(&result, &ctx)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  fn fmt_transitive(result: &ResolveResult, ctx: &Ctx<'_, '_>) -> String {
+    let mut lines = Vec::new();
+    for i in 0..result.captures.len() {
+      let scope_id = CpsId(i as u32);
+      if let Some(caps) = result.captures.try_get(scope_id) {
+        if !caps.is_empty() {
+          let binds: Vec<String> = caps.iter()
+            .filter_map(|bind_id| {
+              let name = ctx.source_name(*bind_id)?;
+              Some(format!("(bind {}, {})", bind_id.0, name))
+            })
+            .collect();
+          lines.push(format!("cap ·ƒ_{}, {}", scope_id.0, binds.join(", ")));
+        }
+      }
+    }
+    lines.join("\n")
+  }
+
   test_macros::include_fink_tests!("src/passes/name_res/test_name_res.fnk");
   test_macros::include_fink_tests!("src/passes/name_res/test_name_res_synth.fnk");
+  test_macros::include_fink_tests!("src/passes/name_res/test_name_res_transitive.fnk");
 }
