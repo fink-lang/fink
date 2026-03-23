@@ -311,6 +311,7 @@ fn add_capture(
 struct Ctx<'a, 'src> {
   origin: &'a PropGraph<CpsId, Option<AstId>>,
   ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
+  synth_alias: &'a PropGraph<CpsId, Option<CpsId>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -335,8 +336,9 @@ pub fn resolve<'src>(
   origin: &PropGraph<CpsId, Option<AstId>>,
   ast_index: &PropGraph<AstId, Option<&'src AstNode<'src>>>,
   node_count: usize,
+  synth_alias: &PropGraph<CpsId, Option<CpsId>>,
 ) -> ResolveResult {
-  let ctx = Ctx { origin, ast_index };
+  let ctx = Ctx { origin, ast_index, synth_alias };
   let mut graphs = Graphs {
     resolution: PropGraph::with_size(node_count, None),
     bind_scope: PropGraph::with_size(node_count, None),
@@ -418,6 +420,11 @@ fn bind_to_scope<'src>(
     Bind::Synth | Bind::Cont => {
       scope.synths.insert(bind.id, entry);
       graphs.bind_scope.set(bind.id, Some(scope_id));
+      // If this param has a synth alias (from closure_lifting), also register
+      // the old CpsId so Ref::Synth(old_id) in the hoisted fn body resolves.
+      if let Some(Some(old_id)) = ctx.synth_alias.try_get(bind.id) {
+        scope.synths.insert(*old_id, entry);
+      }
     }
   }
 }
@@ -799,8 +806,8 @@ mod tests {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
         let node_count = cps.origin.len();
-        let result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, synth_alias: &empty_alias };
         fmt_classified(&cps.root, &result, &ctx)
       }
       Err(e) => format!("ERROR: {}", e.message),
@@ -817,8 +824,8 @@ mod tests {
         let cps = lower_expr(&r.root);
         let lifted = cont_lift(cps);
         let node_count = lifted.origin.len();
-        let result = resolve(&lifted.root, &lifted.origin, &ast_index, node_count);
-        let ctx = Ctx { origin: &lifted.origin, ast_index: &ast_index };
+        let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &empty_alias);
+        let ctx = Ctx { origin: &lifted.origin, ast_index: &ast_index, synth_alias: &empty_alias };
         fmt_classified_with_synth(&lifted.root, &result, &ctx)
       }
       Err(e) => format!("ERROR: {}", e.message),
@@ -923,8 +930,8 @@ mod tests {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
         let node_count = cps.origin.len();
-        let result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index };
+        let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, synth_alias: &empty_alias };
         fmt_transitive(&result, &ctx)
       }
       Err(e) => format!("ERROR: {}", e.message),

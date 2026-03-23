@@ -104,10 +104,11 @@ fn lift_once<'src>(
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
 ) -> CpsResult<'src> {
   let mut alloc = Alloc::new(result.origin);
+  let mut synth_alias = result.synth_alias;
   let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
-  let new_root = lift_expr(result.root, captures, resolve, ast_index, &mut alloc, &mut hoisted);
+  let new_root = lift_expr(result.root, captures, resolve, ast_index, &mut alloc, &mut hoisted, &mut synth_alias);
   let new_root = wrap_hoisted(new_root, hoisted, &mut alloc);
-  CpsResult { root: new_root, origin: alloc.origin }
+  CpsResult { root: new_root, origin: alloc.origin, synth_alias }
 }
 
 /// Returns true if any Ref::Name in the IR resolves as `Captured`.
@@ -186,7 +187,7 @@ pub fn lift_all<'src>(
   let mut current = cont_lift(cps);
   for round in 0..MAX_ROUNDS {
     let node_count = current.origin.len();
-    let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count);
+    let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count, &current.synth_alias);
     if !has_captures(&current.root, &resolve_result) {
       return (current, resolve_result);
     }
@@ -240,10 +241,11 @@ fn lift_cont<'src>(
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn<'src>>,
+  synth_alias: &mut PropGraph<CpsId, Option<CpsId>>,
 ) -> Cont<'src> {
   match cont {
     Cont::Ref(val) => Cont::Ref(val),
-    Cont::Expr { args, body } => Cont::Expr { args, body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)) },
+    Cont::Expr { args, body } => Cont::Expr { args, body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted, synth_alias)) },
   }
 }
 
@@ -254,6 +256,7 @@ fn lift_expr<'src>(
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn<'src>>,
+  synth_alias: &mut PropGraph<CpsId, Option<CpsId>>,
 ) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
@@ -265,8 +268,8 @@ fn lift_expr<'src>(
 
       // Recurse into fn_body and body; collect their hoisted fns.
       let mut inner_hoisted: Vec<HoistedFn<'src>> = Vec::new();
-      let rewritten_fn_body = lift_expr(*fn_body, captures, resolve, ast_index, alloc, &mut inner_hoisted);
-      let rewritten_body    = lift_cont(body, captures, resolve, ast_index, alloc, hoisted);
+      let rewritten_fn_body = lift_expr(*fn_body, captures, resolve, ast_index, alloc, &mut inner_hoisted, synth_alias);
+      let rewritten_body    = lift_cont(body, captures, resolve, ast_index, alloc, hoisted, synth_alias);
 
       if cap_bind_ids.is_empty() {
         // Pure function — bubble hoisted fns from fn_body upward to the outer scope.
@@ -288,7 +291,15 @@ fn lift_expr<'src>(
         //    This ensures the WASM type matches (Cont → ref $Cont, others → anyref).
         let cap_params: Vec<Param> = cap_entries.iter().map(|(bind_id, bind_kind)| {
           let ast_origin = alloc.origin.try_get(*bind_id).and_then(|o| *o);
-          Param::Name(alloc.bind(*bind_kind, ast_origin))
+          let param = alloc.bind(*bind_kind, ast_origin);
+          // For Synth/Cont captures, record the alias so name_res can resolve
+          // Ref::Synth(old_bind_id) to this new param in the hoisted fn body.
+          if *bind_kind != Bind::Name {
+            let idx: usize = param.id.into();
+            while synth_alias.len() <= idx { synth_alias.push(None); }
+            synth_alias.set(param.id, Some(*bind_id));
+          }
+          Param::Name(param)
         }).collect();
 
         // 2. Build Val refs for the capture args at the call site (outer scope).
@@ -360,13 +371,13 @@ fn lift_expr<'src>(
       kind: LetVal {
         name,
         val,
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
+        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted, synth_alias),
       },
     },
 
     App { func, args } => {
       let args = args.into_iter().map(|a| match a {
-        Arg::Cont(c) => Arg::Cont(lift_cont(c, captures, resolve, ast_index, alloc, hoisted)),
+        Arg::Cont(c) => Arg::Cont(lift_cont(c, captures, resolve, ast_index, alloc, hoisted, synth_alias)),
         other => other,
       }).collect();
       Expr { id: expr.id, kind: App { func, args } }
@@ -376,8 +387,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: If {
         cond,
-        then: Box::new(lift_expr(*then, captures, resolve, ast_index, alloc, hoisted)),
-        else_: Box::new(lift_expr(*else_, captures, resolve, ast_index, alloc, hoisted)),
+        then: Box::new(lift_expr(*then, captures, resolve, ast_index, alloc, hoisted, synth_alias)),
+        else_: Box::new(lift_expr(*else_, captures, resolve, ast_index, alloc, hoisted, synth_alias)),
       },
     },
 
@@ -385,7 +396,7 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: Yield {
         value,
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted, synth_alias),
       },
     },
 

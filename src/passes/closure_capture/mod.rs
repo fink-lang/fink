@@ -149,7 +149,7 @@ mod tests {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
         let node_count = cps.origin.len();
-        let resolve_result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
+        let empty_alias = crate::propgraph::PropGraph::new(); let resolve_result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
         let cap_graph = analyse(&cps, &resolve_result);
         let ctx = Ctx {
           origin: &cps.origin,
