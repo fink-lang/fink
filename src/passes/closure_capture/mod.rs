@@ -113,7 +113,7 @@ fn has_direct_captures(expr: &Expr<'_>, resolve: &ResolveResult) -> bool {
       args.iter().any(|a| match a {
         Arg::Val(v) | Arg::Spread(v) => is_captured_val(v, resolve),
         Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => has_direct_captures(body, resolve),
-        _ => false,
+        Arg::Cont(Cont::Ref(id)) => matches!(resolve.resolution.try_get(*id), Some(Some(Resolution::Captured { .. }))),
       })
     }
     If { cond, then, else_ } => {

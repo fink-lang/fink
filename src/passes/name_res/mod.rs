@@ -189,7 +189,11 @@ fn collect_direct_captured_binds(
         match arg {
           Arg::Val(v) | Arg::Spread(v) => check_captured_bind(v, graphs, out),
           Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_direct_captured_binds(body, graphs, out),
-          _ => {}
+          Arg::Cont(Cont::Ref(cont_id)) => {
+            if let Some(Some(Resolution::Captured { bind, .. })) = graphs.resolution.try_get(*cont_id)
+              && !out.contains(bind)
+            { out.push(*bind); }
+          }
         }
       }
     }
@@ -228,7 +232,11 @@ fn collect_deep_captured_binds(
         match arg {
           Arg::Val(v) | Arg::Spread(v) => check_captured_bind(v, graphs, out),
           Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_deep_captured_binds(body, graphs, out),
-          _ => {}
+          Arg::Cont(Cont::Ref(cont_id)) => {
+            if let Some(Some(Resolution::Captured { bind, .. })) = graphs.resolution.try_get(*cont_id)
+              && !out.contains(bind)
+            { out.push(*bind); }
+          }
         }
       }
     }
@@ -245,7 +253,8 @@ fn collect_deep_captured_binds(
 }
 
 fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<CpsId>) {
-  if let ValKind::Ref(Ref::Name) = &val.kind
+  let is_ref = matches!(&val.kind, ValKind::Ref(Ref::Name) | ValKind::Ref(Ref::Synth(_)));
+  if is_ref
     && let Some(Some(Resolution::Captured { bind, .. })) = graphs.resolution.try_get(val.id)
     && !out.contains(bind)
   {
@@ -531,12 +540,22 @@ fn resolve_cont<'src>(
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  if let Cont::Expr { args, body } = cont {
-    let mut inner = scope.clone();
-    for a in args {
-      bind_to_scope(&mut inner, a, current_scope, fn_depth, ctx, graphs);
+  match cont {
+    Cont::Ref(cont_id) => {
+      // Resolve Cont::Ref as a synth ref so capture analysis detects
+      // when a cont ref crosses fn boundaries.
+      if let Some(entry) = scope.synths.get(cont_id) {
+        let resolution = classify(entry, fn_depth, self_bind);
+        graphs.resolution.set(*cont_id, Some(resolution));
+      }
     }
-    resolve_expr(body, &inner, current_scope, self_bind, fn_depth, ctx, graphs);
+    Cont::Expr { args, body } => {
+      let mut inner = scope.clone();
+      for a in args {
+        bind_to_scope(&mut inner, a, current_scope, fn_depth, ctx, graphs);
+      }
+      resolve_expr(body, &inner, current_scope, self_bind, fn_depth, ctx, graphs);
+    }
   }
 }
 

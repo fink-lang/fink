@@ -232,6 +232,21 @@ fn wrap_hoisted<'src>(
   expr
 }
 
+/// Check if a CpsId's origin points to an AST Ident node (has a source name).
+fn has_ident_origin(
+  id: CpsId,
+  origin: &PropGraph<CpsId, Option<crate::ast::AstId>>,
+  ast_index: &PropGraph<crate::ast::AstId, Option<&crate::ast::Node<'_>>>,
+) -> bool {
+  if let Some(Some(ast_id)) = origin.try_get(id)
+    && let Some(Some(node)) = ast_index.try_get(*ast_id)
+  {
+    matches!(&node.kind, crate::ast::NodeKind::Ident(_))
+  } else {
+    false
+  }
+}
+
 fn lift_cont<'src>(
   cont: Cont<'src>,
   captures: &CaptureGraph,
@@ -282,18 +297,26 @@ fn lift_expr<'src>(
       } else {
         // Closure — hoist this fn to the outer scope.
         //
-        // 1. Build bind nodes for capture params — carry forward the
-        //    original binding's AST origin so the formatter renders the source name.
+        // 1. Build bind nodes for capture params. Name captures (with AST Ident
+        //    origin) use Bind::Name; Synth/Cont captures use Bind::Synth.
         let cap_params: Vec<Param> = cap_bind_ids.iter().map(|bind_id| {
+          let has_name = has_ident_origin(*bind_id, &alloc.origin, ast_index);
           let ast_origin = alloc.origin.try_get(*bind_id).and_then(|o| *o);
-          Param::Name(alloc.bind(Bind::Name, ast_origin))
+          let kind = if has_name { Bind::Name } else { Bind::Synth };
+          Param::Name(alloc.bind(kind, ast_origin))
         }).collect();
 
         // 2. Build Val refs for the capture args at the call site (outer scope).
-        //    Same AST origin as the binding — the formatter renders the source name.
+        //    Name captures use Ref::Name (resolved by name_res via source name).
+        //    Synth captures use Ref::Synth(bind_id) (resolved via synths scope).
         let cap_ref_vals: Vec<Val<'src>> = cap_bind_ids.iter().map(|bind_id| {
+          let has_name = has_ident_origin(*bind_id, &alloc.origin, ast_index);
           let ast_origin = alloc.origin.try_get(*bind_id).and_then(|o| *o);
-          alloc.val(ValKind::Ref(Ref::Name), ast_origin)
+          if has_name {
+            alloc.val(ValKind::Ref(Ref::Name), ast_origin)
+          } else {
+            alloc.val(ValKind::Ref(Ref::Synth(*bind_id)), None)
+          }
         }).collect();
 
         // 4. Push the hoisted lifted fn; also bubble any fns hoisted from fn_body.
