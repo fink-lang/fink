@@ -1094,7 +1094,8 @@ fn emit_null_for_param(i: usize, param_kinds: &[Bind], f: &mut Function) {
 }
 
 /// Call a match arm body fn from MatchBlock. Pushes appropriate values for each param:
-/// - Value (non-Cont) params: push scrutinee value from the given local
+/// - Cap params (in param_source): push the cap value from the enclosing fn's locals
+/// - Value params (not in param_source): push scrutinee value
 /// - Cont params: push the forwarded cont
 /// - The fn's own cont (last): push the forwarded cont
 fn emit_match_body_call(fn_idx: u32, scrutinee_val: &Val<'_>, fc: &mut FnCtx, f: &mut Function) {
@@ -1104,10 +1105,29 @@ fn emit_match_body_call(fn_idx: u32, scrutinee_val: &Val<'_>, fc: &mut FnCtx, f:
     return;
   }
 
+  let param_ids = fc.ctx.funcs[fn_pos].param_ids.clone();
   let param_kinds = fc.ctx.funcs[fn_pos].param_kinds.clone();
-  for kind in &param_kinds {
+  for (i, kind) in param_kinds.iter().enumerate() {
     if *kind == Bind::Cont {
       f.instruction(&Instruction::LocalGet(fc.cont_local));
+    } else if let Some(&param_id) = param_ids.get(i) {
+      // Check if this param is a cap value (from param_source/closure_caps).
+      // If so, resolve its source bind and push from a local.
+      if let Some(&source_id) = fc.ctx.param_source.get(&param_id) {
+        if let Some(local_idx) = fc.local_for(source_id)
+          .or_else(|| fc.local_for_by_origin(source_id))
+        {
+          f.instruction(&Instruction::LocalGet(local_idx));
+        } else {
+          // Source not available as local — push null placeholder.
+          f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+            shared: false, ty: wasm_encoder::AbstractHeapType::Any,
+          }));
+        }
+      } else {
+        // Not a cap param — push scrutinee.
+        emit_val(scrutinee_val, f, fc);
+      }
     } else {
       emit_val(scrutinee_val, f, fc);
     }
