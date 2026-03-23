@@ -570,3 +570,24 @@ test 'multiline application', fn:
         Apply
           Ident 'foo'
           Ident 'bar'
+
+
+---
+fn as infix operand
+---
+
+test 'fn as rhs of ==', fn:
+  expect ast fink":
+    [1, ?] == fn $: [1, $]
+  | equals fink":
+    Module
+      InfixOp '==',
+        LitSeq '[..]',
+          LitInt '1'
+          Partial
+        Fn ':',
+          Patterns
+            Ident '$'
+          LitSeq '[..]',
+            LitInt '1'
+            Ident '$'

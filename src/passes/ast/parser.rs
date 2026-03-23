@@ -853,6 +853,15 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_unary_or_atom(&mut self) -> ParseResult<'src> {
+    // "fn" / "match" — allow as infix operands (e.g. `x == fn $: [1, $]`)
+    if self.at(TokenKind::Ident) && self.peek().src == "fn" {
+      let tok = self.bump();
+      return self.parse_fn(tok.loc);
+    }
+    if self.at(TokenKind::Ident) && self.peek().src == "match" {
+      let tok = self.bump();
+      return self.parse_match_expr(tok.loc);
+    }
     // "try" — unwrap Ok or propagate Err; parsed like application
     if self.at(TokenKind::Ident) && self.peek().src == "try" {
       let try_tok = self.bump();
