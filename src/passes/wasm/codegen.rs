@@ -58,6 +58,7 @@ pub fn codegen(
   collect_funcs(&cps.root, &mut ctx);
   process_closures(&cps.root, &mut ctx);
   collect_match_arms(&cps.root, &mut ctx);
+  augment_match_block_caps(&mut ctx);
   let wasm = emit_module(&cps.root, &mut ctx);
   CodegenResult { wasm, mappings: ctx.mappings }
 }
@@ -157,6 +158,8 @@ struct Ctx<'a, 'src> {
   /// When a cont call goes through closure_fn, these cap values must be pushed
   /// before the call result value and the cont.
   closure_caps: std::collections::HashMap<CpsId, Vec<CpsId>>,
+  /// Extra caps from augment_match_block_caps — pushed AFTER the result value.
+  closure_extra_caps: std::collections::HashMap<CpsId, Vec<CpsId>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -181,6 +184,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
       closure_fn: std::collections::HashMap::new(),
       param_source: std::collections::HashMap::new(),
       closure_caps: std::collections::HashMap::new(),
+      closure_extra_caps: std::collections::HashMap::new(),
     }
   }
 
@@ -1134,10 +1138,10 @@ fn emit_match_body_call(fn_idx: u32, scrutinee_val: &Val<'_>, fc: &mut FnCtx, f:
       if let Some(&source_id) = fc.ctx.param_source.get(&param_id) {
         if let Some(local_idx) = fc.local_for(source_id)
           .or_else(|| fc.local_for_by_origin(source_id))
+          .or_else(|| fc.local_for_synth_alias(source_id))
         {
           f.instruction(&Instruction::LocalGet(local_idx));
         } else {
-          // Source not available as local — push null placeholder.
           f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
             shared: false, ty: wasm_encoder::AbstractHeapType::Any,
           }));
@@ -1241,6 +1245,20 @@ fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) 
           }
         }
         f.instruction(&Instruction::LocalGet(result_local));
+      }
+      // Push extra caps (from augment_match_block_caps) AFTER the result.
+      let extra = fc.ctx.closure_extra_caps.get(&cont_id).cloned().unwrap_or_default();
+      for &cap_id in &extra {
+        if let Some(local_idx) = fc.local_for(cap_id)
+          .or_else(|| fc.local_for_by_origin(cap_id))
+          .or_else(|| fc.local_for_synth_alias(cap_id))
+        {
+          f.instruction(&Instruction::LocalGet(local_idx));
+        } else {
+          f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+            shared: false, ty: wasm_encoder::AbstractHeapType::Any,
+          }));
+        }
       }
       f.instruction(&Instruction::LocalGet(fc.cont_local));
       f.instruction(&Instruction::ReturnCall(fn_idx));
@@ -1655,6 +1673,103 @@ fn collect_match_arms<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
 }
 
 /// Pre-scan a function body for LetVal bindings that need WASM locals.
+/// Augment match_block fns with body fn cap values.
+///
+/// When a match arm body fn has cap params (from captures), the match_block fn
+/// that calls it (via emit_match_body_call) needs those cap values as locals.
+/// This pass adds them as extra params to the match_block fn and records them
+/// in closure_extra_caps so the calling FnClosure pushes them.
+#[allow(clippy::collapsible_if)]
+fn augment_match_block_caps(ctx: &mut Ctx<'_, '_>) {
+  use crate::passes::cps::ir::BuiltIn;
+
+  let mut augments: Vec<(u32, Vec<CpsId>)> = Vec::new();
+
+  for (i, cf) in ctx.funcs.iter().enumerate() {
+    if let ExprKind::App { func: Callable::BuiltIn(BuiltIn::MatchBlock), args } = &cf.fn_body.kind {
+      let fn_idx = FN_COMPILED_START + i as u32;
+      let existing_params: Vec<CpsId> = cf.param_ids.clone();
+
+      // Extract arm value CpsIds from MatchBlock args.
+      let arm_val_ids: Vec<CpsId> = args[1..args.len().saturating_sub(1)].iter()
+        .filter_map(|a| match a {
+          Arg::Val(v) => match &v.kind {
+            ValKind::Ref(Ref::Synth(id)) => Some(*id),
+            _ => None,
+          },
+          _ => None,
+        }).collect();
+
+      let mut extra_caps: Vec<CpsId> = Vec::new();
+      for &arm_id in &arm_val_ids {
+        let arm_info = ctx.match_arms.get(&arm_id)
+          .or_else(|| {
+            let mut cur = arm_id;
+            for _ in 0..8 {
+              if let Some(&source) = ctx.param_source.get(&cur) {
+                if let Some(info) = ctx.match_arms.get(&source) { return Some(info); }
+                if let Some(&alias) = ctx.val_alias.get(&source)
+                  && let Some(info) = ctx.match_arms.get(&alias)
+                { return Some(info); }
+                cur = source;
+              } else { break; }
+            }
+            None
+          });
+        let Some(&(_matcher_fn, body_fn)) = arm_info else { continue };
+        let body_pos = (body_fn - FN_COMPILED_START) as usize;
+        if body_pos >= ctx.funcs.len() { continue; }
+        for &param_id in &ctx.funcs[body_pos].param_ids {
+          if let Some(&source_id) = ctx.param_source.get(&param_id) {
+            if ctx.cap_param_fn.contains_key(&param_id) { continue; }
+            let body_param_idx = ctx.funcs[body_pos].param_ids.iter().position(|&p| p == param_id);
+            if let Some(idx) = body_param_idx {
+              if idx < ctx.funcs[body_pos].param_kinds.len()
+                && ctx.funcs[body_pos].param_kinds[idx] == Bind::Cont
+              { continue; }
+            }
+            if existing_params.contains(&source_id) || extra_caps.contains(&source_id) { continue; }
+            // Check by origin and synth_alias match.
+            let already = existing_params.iter().chain(extra_caps.iter()).any(|&e| {
+              let e_origin = ctx.origin.try_get(e).and_then(|o| *o);
+              let s_origin = ctx.origin.try_get(source_id).and_then(|o| *o);
+              (e_origin.is_some() && e_origin == s_origin)
+                || ctx.synth_alias.try_get(e).and_then(|a| *a) == Some(source_id)
+            });
+            if !already {
+              extra_caps.push(source_id);
+            }
+          }
+        }
+      }
+
+      if !extra_caps.is_empty() {
+        augments.push((fn_idx, extra_caps));
+      }
+    }
+  }
+
+  for (fn_idx, extra_caps) in augments {
+    let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
+    for &cap_id in &extra_caps {
+      ctx.funcs[fn_pos].param_ids.push(cap_id);
+      ctx.funcs[fn_pos].param_kinds.push(Bind::Name);
+    }
+    ctx.funcs[fn_pos].arity = ctx.funcs[fn_pos].param_ids.len() as u32 + 1;
+
+    for (&closure_param, &target_fn) in ctx.closure_fn.clone().iter() {
+      if target_fn == fn_idx {
+        let extras = ctx.closure_extra_caps.entry(closure_param).or_default();
+        for &cap_id in &extra_caps {
+          if !extras.contains(&cap_id) {
+            extras.push(cap_id);
+          }
+        }
+      }
+    }
+  }
+}
+
 fn collect_letval_locals(expr: &Expr<'_>, out: &mut Vec<CpsId>) {
   match &expr.kind {
     ExprKind::LetVal { body: Cont::Expr { args, body }, .. } => {
