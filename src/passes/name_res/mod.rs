@@ -40,7 +40,9 @@ pub enum Resolution {
   Local(CpsId),
   /// Bind is across one or more fn boundaries. `depth` counts LetFn
   /// boundaries crossed (other scope boundaries don't count).
-  Captured { bind: CpsId, depth: u32 },
+  /// `bind_kind` carries the original bind's kind (Name/Synth/Cont) so
+  /// closure_lifting can create cap params with the correct WASM type.
+  Captured { bind: CpsId, depth: u32, bind_kind: Bind },
   /// Ref inside a fn body resolves to the fn's own name (self-recursion).
   Recursive(CpsId),
   /// No binding found — free name (error in a closed scope).
@@ -62,12 +64,13 @@ pub struct ResolveResult {
   pub parent_scope: PropGraph<CpsId, Option<CpsId>>,
   /// All captures per fn scope: direct (depth >= 1 refs in the fn body) and
   /// transitive (inner fn captures that cross this fn's boundary). Maps each
-  /// LetFn scope CpsId → bind CpsIds of all names the fn needs from outside.
-  /// Recover source names via the origin map + AST index.
+  /// LetFn scope CpsId → (bind CpsId, bind kind) pairs of all values the fn
+  /// needs from outside. The bind kind is needed so closure_lifting creates
+  /// cap params with the correct WASM type (Cont → ref $Cont, others → anyref).
   ///
   /// Downstream passes that transform the tree must recompute this by re-running
   /// name_res (lift_all already does this each iteration).
-  pub captures: PropGraph<CpsId, Vec<CpsId>>,
+  pub captures: PropGraph<CpsId, Vec<(CpsId, Bind)>>,
 }
 
 impl ResolveResult {
@@ -100,8 +103,8 @@ fn compute_captures<'src>(
   expr: &Expr<'src>,
   graphs: &Graphs,
   _ctx: &Ctx<'_, 'src>,
-) -> PropGraph<CpsId, Vec<CpsId>> {
-  let mut captures: PropGraph<CpsId, Vec<CpsId>> = PropGraph::new();
+) -> PropGraph<CpsId, Vec<(CpsId, Bind)>> {
+  let mut captures: PropGraph<CpsId, Vec<(CpsId, Bind)>> = PropGraph::new();
   walk_captures(expr, graphs, &mut captures);
   captures
 }
@@ -110,7 +113,7 @@ fn compute_captures<'src>(
 fn walk_captures(
   expr: &Expr<'_>,
   graphs: &Graphs,
-  captures: &mut PropGraph<CpsId, Vec<CpsId>>,
+  captures: &mut PropGraph<CpsId, Vec<(CpsId, Bind)>>,
 ) {
   use ExprKind::*;
   match &expr.kind {
@@ -122,20 +125,20 @@ fn walk_captures(
 
       // Direct captures: Captured { depth >= 1 } refs in the immediate fn body
       // (conts only, not nested fn_bodies — same traversal as closure_capture).
-      let mut direct: Vec<CpsId> = Vec::new();
+      let mut direct: Vec<(CpsId, Bind)> = Vec::new();
       collect_direct_captured_binds(fn_body, graphs, &mut direct);
-      for bind_id in &direct {
-        add_capture(captures, fn_scope, *bind_id);
+      for &(bind_id, bind_kind) in &direct {
+        add_capture(captures, fn_scope, bind_id, bind_kind);
       }
 
       // Transitive captures: inner fn captures that cross this fn's boundary.
       let parent = graphs.parent_scope.try_get(fn_scope).and_then(|p| *p);
       if let Some(parent_scope) = parent {
-        let mut deep_binds: Vec<CpsId> = Vec::new();
+        let mut deep_binds: Vec<(CpsId, Bind)> = Vec::new();
         collect_deep_captured_binds(fn_body, graphs, &mut deep_binds);
-        for bind_id in deep_binds {
+        for (bind_id, bind_kind) in deep_binds {
           if is_bind_outside_scope(bind_id, parent_scope, graphs) {
-            add_capture(captures, parent_scope, bind_id);
+            add_capture(captures, parent_scope, bind_id, bind_kind);
           }
         }
       }
@@ -171,7 +174,7 @@ fn walk_captures(
 fn collect_direct_captured_binds(
   expr: &Expr<'_>,
   graphs: &Graphs,
-  out: &mut Vec<CpsId>,
+  out: &mut Vec<(CpsId, Bind)>,
 ) {
   use ExprKind::*;
   match &expr.kind {
@@ -190,9 +193,9 @@ fn collect_direct_captured_binds(
           Arg::Val(v) | Arg::Spread(v) => check_captured_bind(v, graphs, out),
           Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_direct_captured_binds(body, graphs, out),
           Arg::Cont(Cont::Ref(cont_id)) => {
-            if let Some(Some(Resolution::Captured { bind, .. })) = graphs.resolution.try_get(*cont_id)
-              && !out.contains(bind)
-            { out.push(*bind); }
+            if let Some(Some(Resolution::Captured { bind, bind_kind, .. })) = graphs.resolution.try_get(*cont_id)
+              && !out.iter().any(|(id, _)| id == bind)
+            { out.push((*bind, *bind_kind)); }
           }
         }
       }
@@ -214,7 +217,7 @@ fn collect_direct_captured_binds(
 fn collect_deep_captured_binds(
   expr: &Expr<'_>,
   graphs: &Graphs,
-  out: &mut Vec<CpsId>,
+  out: &mut Vec<(CpsId, Bind)>,
 ) {
   use ExprKind::*;
   match &expr.kind {
@@ -233,9 +236,9 @@ fn collect_deep_captured_binds(
           Arg::Val(v) | Arg::Spread(v) => check_captured_bind(v, graphs, out),
           Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_deep_captured_binds(body, graphs, out),
           Arg::Cont(Cont::Ref(cont_id)) => {
-            if let Some(Some(Resolution::Captured { bind, .. })) = graphs.resolution.try_get(*cont_id)
-              && !out.contains(bind)
-            { out.push(*bind); }
+            if let Some(Some(Resolution::Captured { bind, bind_kind, .. })) = graphs.resolution.try_get(*cont_id)
+              && !out.iter().any(|(id, _)| id == bind)
+            { out.push((*bind, *bind_kind)); }
           }
         }
       }
@@ -252,13 +255,13 @@ fn collect_deep_captured_binds(
   }
 }
 
-fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<CpsId>) {
+fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<(CpsId, Bind)>) {
   let is_ref = matches!(&val.kind, ValKind::Ref(Ref::Name) | ValKind::Ref(Ref::Synth(_)));
   if is_ref
-    && let Some(Some(Resolution::Captured { bind, .. })) = graphs.resolution.try_get(val.id)
-    && !out.contains(bind)
+    && let Some(Some(Resolution::Captured { bind, bind_kind, .. })) = graphs.resolution.try_get(val.id)
+    && !out.iter().any(|(id, _)| id == bind)
   {
-    out.push(*bind);
+    out.push((*bind, *bind_kind));
   }
 }
 
@@ -284,17 +287,18 @@ fn is_bind_outside_scope(bind_id: CpsId, scope_id: CpsId, graphs: &Graphs) -> bo
 
 /// Add a bind CpsId to a scope's transitive capture list (if not already present).
 fn add_capture(
-  transitive: &mut PropGraph<CpsId, Vec<CpsId>>,
+  transitive: &mut PropGraph<CpsId, Vec<(CpsId, Bind)>>,
   scope_id: CpsId,
   bind_id: CpsId,
+  bind_kind: Bind,
 ) {
   let idx: usize = scope_id.into();
   while transitive.len() <= idx {
     transitive.push(Vec::new());
   }
   let mut caps = transitive.try_get(scope_id).cloned().unwrap_or_default();
-  if !caps.contains(&bind_id) {
-    caps.push(bind_id);
+  if !caps.iter().any(|(id, _)| *id == bind_id) {
+    caps.push((bind_id, bind_kind));
     transitive.set(scope_id, caps);
   }
 }
@@ -375,6 +379,7 @@ type SynthScopeMap = HashMap<CpsId, ScopeEntry>;
 struct ScopeEntry {
   bind_id: CpsId,
   fn_depth: u32,
+  bind_kind: Bind,
 }
 
 /// Combined scope: name-keyed for Ref::Name, CpsId-keyed for Ref::Synth.
@@ -401,7 +406,7 @@ fn bind_to_scope<'src>(
   ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  let entry = ScopeEntry { bind_id: bind.id, fn_depth };
+  let entry = ScopeEntry { bind_id: bind.id, fn_depth, bind_kind: bind.kind };
   match bind.kind {
     Bind::Name => {
       if let Some(name) = ctx.source_name(bind.id)
@@ -435,7 +440,7 @@ fn classify(
   } else if self_bind == Some(entry.bind_id) {
     Resolution::Recursive(entry.bind_id)
   } else {
-    Resolution::Captured { bind: entry.bind_id, depth }
+    Resolution::Captured { bind: entry.bind_id, depth, bind_kind: entry.bind_kind }
   }
 }
 
@@ -697,7 +702,7 @@ mod tests {
             val.id.0, ref_name, bind_id.0, bind_name, scope
           ));
         }
-        Some(Some(Resolution::Captured { bind, depth })) => {
+        Some(Some(Resolution::Captured { bind, depth, .. })) => {
           let bind_name = ctx.source_name(*bind).unwrap_or("?");
           let scope = result.bind_scope.try_get(*bind)
             .and_then(|s| *s)
@@ -833,7 +838,7 @@ mod tests {
             val.id.0, bind_id.0, resolved_id.0
           ));
         }
-        Some(Some(Resolution::Captured { bind, depth })) => {
+        Some(Some(Resolution::Captured { bind, depth, .. })) => {
           out.push(format!(
             "(synth {}, ·v_{}) == (captured {}, (bind {}))",
             val.id.0, bind_id.0, depth, bind.0
@@ -933,7 +938,7 @@ mod tests {
       if let Some(caps) = result.captures.try_get(scope_id) {
         if !caps.is_empty() {
           let binds: Vec<String> = caps.iter()
-            .filter_map(|bind_id| {
+            .filter_map(|(bind_id, _)| {
               let name = ctx.source_name(*bind_id)?;
               Some(format!("(bind {}, {})", bind_id.0, name))
             })

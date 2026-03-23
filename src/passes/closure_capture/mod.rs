@@ -16,16 +16,17 @@
 
 use crate::propgraph::PropGraph;
 use crate::passes::name_res::{Resolution, ResolveResult};
-use crate::passes::cps::ir::{Arg, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Val};
+use crate::passes::cps::ir::{Arg, Bind, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Val};
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
 /// Capture graph — maps each LetFn's name-bind CpsId to its ordered capture list.
-/// Each entry is a bind CpsId of a captured value. Source names can be recovered
-/// via the origin map + AST index. Pure functions map to an empty Vec.
-pub type CaptureGraph = PropGraph<CpsId, Vec<CpsId>>;
+/// Each entry is (bind CpsId, bind kind) of a captured value. The bind kind
+/// determines the WASM type (Cont → ref $Cont, others → anyref).
+/// Source names can be recovered via the origin map + AST index.
+pub type CaptureGraph = PropGraph<CpsId, Vec<(CpsId, Bind)>>;
 
 // ---------------------------------------------------------------------------
 // Public entry point

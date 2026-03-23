@@ -232,20 +232,6 @@ fn wrap_hoisted<'src>(
   expr
 }
 
-/// Check if a CpsId's origin points to an AST Ident node (has a source name).
-fn has_ident_origin(
-  id: CpsId,
-  origin: &PropGraph<CpsId, Option<crate::ast::AstId>>,
-  ast_index: &PropGraph<crate::ast::AstId, Option<&crate::ast::Node<'_>>>,
-) -> bool {
-  if let Some(Some(ast_id)) = origin.try_get(id)
-    && let Some(Some(node)) = ast_index.try_get(*ast_id)
-  {
-    matches!(&node.kind, crate::ast::NodeKind::Ident(_))
-  } else {
-    false
-  }
-}
 
 fn lift_cont<'src>(
   cont: Cont<'src>,
@@ -272,9 +258,10 @@ fn lift_expr<'src>(
   use ExprKind::*;
   match expr.kind {
     LetFn { name, params, cont, fn_body, body } => {
-      let cap_bind_ids: Vec<CpsId> = captures.try_get(name.id)
+      let cap_entries: Vec<(CpsId, Bind)> = captures.try_get(name.id)
         .cloned()
         .unwrap_or_default();
+      let cap_bind_ids: Vec<CpsId> = cap_entries.iter().map(|(id, _)| *id).collect();
 
       // Recurse into fn_body and body; collect their hoisted fns.
       let mut inner_hoisted: Vec<HoistedFn<'src>> = Vec::new();
@@ -297,22 +284,19 @@ fn lift_expr<'src>(
       } else {
         // Closure — hoist this fn to the outer scope.
         //
-        // 1. Build bind nodes for capture params. Name captures (with AST Ident
-        //    origin) use Bind::Name; Synth/Cont captures use Bind::Synth.
-        let cap_params: Vec<Param> = cap_bind_ids.iter().map(|bind_id| {
-          let has_name = has_ident_origin(*bind_id, &alloc.origin, ast_index);
+        // 1. Build bind nodes for capture params using the original bind kind.
+        //    This ensures the WASM type matches (Cont → ref $Cont, others → anyref).
+        let cap_params: Vec<Param> = cap_entries.iter().map(|(bind_id, bind_kind)| {
           let ast_origin = alloc.origin.try_get(*bind_id).and_then(|o| *o);
-          let kind = if has_name { Bind::Name } else { Bind::Synth };
-          Param::Name(alloc.bind(kind, ast_origin))
+          Param::Name(alloc.bind(*bind_kind, ast_origin))
         }).collect();
 
         // 2. Build Val refs for the capture args at the call site (outer scope).
         //    Name captures use Ref::Name (resolved by name_res via source name).
-        //    Synth captures use Ref::Synth(bind_id) (resolved via synths scope).
-        let cap_ref_vals: Vec<Val<'src>> = cap_bind_ids.iter().map(|bind_id| {
-          let has_name = has_ident_origin(*bind_id, &alloc.origin, ast_index);
+        //    Synth/Cont captures use Ref::Synth(bind_id) (resolved via synths scope).
+        let cap_ref_vals: Vec<Val<'src>> = cap_entries.iter().map(|(bind_id, bind_kind)| {
           let ast_origin = alloc.origin.try_get(*bind_id).and_then(|o| *o);
-          if has_name {
+          if *bind_kind == Bind::Name {
             alloc.val(ValKind::Ref(Ref::Name), ast_origin)
           } else {
             alloc.val(ValKind::Ref(Ref::Synth(*bind_id)), None)
@@ -496,7 +480,7 @@ mod tests {
             val.id.0, ref_name, bind_id.0, bind_name, scope
           ));
         }
-        Some(Some(Resolution::Captured { bind, depth })) => {
+        Some(Some(Resolution::Captured { bind, depth, .. })) => {
           let bind_name = source_name(*bind, origin, ast_index).unwrap_or("?");
           let scope = result.bind_scope.try_get(*bind)
             .and_then(|s| *s).map(|s| s.0).unwrap_or(0);

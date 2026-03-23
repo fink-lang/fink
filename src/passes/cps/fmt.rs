@@ -23,7 +23,7 @@ pub struct Ctx<'a, 'src> {
   pub ast_index: &'a PropGraph<AstId, Option<&'src Node<'src>>>,
   /// Optional capture graph — when present, LetFn nodes that are closures
   /// render with a leading `{cap: [x, y]}` param.
-  pub captures: Option<&'a PropGraph<CpsId, Vec<CpsId>>>,
+  pub captures: Option<&'a PropGraph<CpsId, Vec<(CpsId, crate::passes::cps::ir::Bind)>>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -369,7 +369,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         && let Some(caps) = cap_graph.try_get(name.id)
         && !caps.is_empty()
       {
-        let names: Vec<String> = caps.iter().map(|bind_id| {
+        let names: Vec<String> = caps.iter().map(|(bind_id, _)| {
           ctx.source_name(*bind_id)
             .map(|(s, _)| s.to_string())
             .unwrap_or_else(|| format!("·v_{}", bind_id.0))
