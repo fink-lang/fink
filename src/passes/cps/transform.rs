@@ -1270,10 +1270,10 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>]) -> CpsResult<'src> {
     let origin: Option<AstId> = None;
     let empty_seq = lit_val(&mut g, Lit::Seq, origin);
     let root = wrap_val(&mut g, empty_seq, origin);
-    return CpsResult { root, origin: g.origin };
+    return CpsResult { root, origin: g.origin, synth_alias: crate::propgraph::PropGraph::new() };
   }
   let root = lower_seq(&mut g, exprs);
-  CpsResult { root, origin: g.origin }
+  CpsResult { root, origin: g.origin, synth_alias: crate::propgraph::PropGraph::new() }
 }
 
 /// Lower a single expression node (or a Module root) to CPS IR.
@@ -1286,7 +1286,7 @@ pub fn lower_expr<'src>(node: &'src Node<'src>) -> CpsResult<'src> {
   } else {
     wrap(&mut g, pending, Cont::Ref(cont))
   };
-  CpsResult { root, origin: g.origin }
+  CpsResult { root, origin: g.origin, synth_alias: crate::propgraph::PropGraph::new() }
 }
 
 /// Recursively lower a pattern lhs node, appending Match* pending entries.

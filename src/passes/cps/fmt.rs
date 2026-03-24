@@ -23,7 +23,7 @@ pub struct Ctx<'a, 'src> {
   pub ast_index: &'a PropGraph<AstId, Option<&'src Node<'src>>>,
   /// Optional capture graph — when present, LetFn nodes that are closures
   /// render with a leading `{cap: [x, y]}` param.
-  pub captures: Option<&'a PropGraph<CpsId, Vec<&'src str>>>,
+  pub captures: Option<&'a PropGraph<CpsId, Vec<(CpsId, crate::passes::cps::ir::Bind)>>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -126,10 +126,6 @@ fn state_fn(body: Node<'static>) -> Node<'static> {
   fn_node(patterns(vec![]), vec![body], dummy_loc())
 }
 
-/// `fn name: body` — result continuation (used in ·apply and ·match_block). Synthetic; no source loc.
-fn result_cont(name: &str, body: Node<'static>) -> Node<'static> {
-  fn_node(patterns(vec![ident(name, dummy_loc())]), vec![body], dummy_loc())
-}
 
 // ---------------------------------------------------------------------------
 // Val → Node
@@ -296,11 +292,7 @@ fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       fn_node(patterns(params), vec![body_node], dummy_loc())
     }
     Cont::Ref(cont_id) => {
-      // Cosmetic: synthesise `fn ·v_N: ·ƒ_N ·v_N`. Fully synthetic; dummy locs.
-      let result_name = format!("·v_{}", cont_id.0);
-      let cont_name = format!("·ƒ_{}", cont_id.0);
-      let body = apply(ident(&cont_name, dummy_loc()), vec![ident(&result_name, dummy_loc())], dummy_loc());
-      result_cont(&result_name, body)
+      ident(&format!("·ƒ_{}", cont_id.0), dummy_loc())
     }
   }
 }
@@ -377,8 +369,12 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         && let Some(caps) = cap_graph.try_get(name.id)
         && !caps.is_empty()
       {
-        let inner = caps.join(", ");
-        let label = format!("{{cap: [{}]}}", inner);
+        let names: Vec<String> = caps.iter().map(|(bind_id, _)| {
+          ctx.source_name(*bind_id)
+            .map(|(s, _)| s.to_string())
+            .unwrap_or_else(|| format!("·v_{}", bind_id.0))
+        }).collect();
+        let label = format!("{{cap: [{}]}}", names.join(", "));
         fn_params.insert(0, ident(&label, dummy_loc()));
       }
 

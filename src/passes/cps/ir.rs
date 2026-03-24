@@ -46,6 +46,12 @@ pub struct CpsResult<'src> {
   /// Compiler-generated nodes with no direct AST origin have `None`.
   /// Node count is `origin.len()`.
   pub origin: crate::propgraph::PropGraph<CpsId, Option<crate::ast::AstId>>,
+  /// Synth capture aliases: maps new cap param CpsId → original captured bind CpsId.
+  /// Populated by closure_lifting when creating synth cap params (fresh CpsId for
+  /// a param that carries a value previously bound under a different CpsId).
+  /// Consumed by name_res: registers the old CpsId as an alias in the synths scope
+  /// so that Ref::Synth(old_id) in the hoisted fn body resolves to the new param.
+  pub synth_alias: crate::propgraph::PropGraph<CpsId, Option<CpsId>>,
 }
 
 // ---------------------------------------------------------------------------

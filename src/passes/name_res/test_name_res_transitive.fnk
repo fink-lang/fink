@@ -1,0 +1,110 @@
+---
+capture analysis tests (direct + transitive)
+---
+
+# Captures per fn scope — direct and transitive.
+#
+# Direct: Captured refs in the fn's immediate body (depth >= 1).
+# Transitive: inner fn captures that cross this fn's boundary — the fn
+# doesn't directly reference the name but needs it threaded through.
+#
+# Output format: one line per fn with captures, sorted by scope CpsId.
+#   cap ·ƒ_N, (bind ID, name), ...
+#
+# Fns with no captures are omitted.
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_resolve_transitive fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected captures>
+
+{test, equals, expect, fink, cps_resolve_transitive} = import 'fake!'
+
+
+---
+captures
+---
+
+# fn b directly captures `a` (depth 1). No transitive captures.
+test 'depth-1 — direct capture only', fn:
+  expect cps_resolve_transitive fink":
+    foo = fn a:
+      fn b: a + b
+  | equals fink":
+    cap ·ƒ_4, (bind 2, a)
+
+# fn c captures `a` at depth 2 (direct). fn b needs `a` transitively.
+test 'depth-2 — inner fn captures from grandparent', fn:
+  expect cps_resolve_transitive fink":
+    foo = fn a:
+      fn b:
+        fn c: a
+  | equals fink":
+    cap ·ƒ_4, (bind 2, a)
+    cap ·ƒ_7, (bind 2, a)
+
+# fn c captures `a` (depth 2) and `b` (depth 1).
+# fn b: transitive [a] from fn c.
+test 'depth-2 — outer fn also uses same name', fn:
+  expect cps_resolve_transitive fink":
+    foo = fn a:
+      fn b:
+        fn c: a + b
+  | equals fink":
+    cap ·ƒ_4, (bind 2, a)
+    cap ·ƒ_7, (bind 2, a), (bind 5, b)
+
+# fn d captures `a` and `b` at depth 2. fn c needs both transitively.
+test 'depth-2 — two names from grandparent', fn:
+  expect cps_resolve_transitive fink":
+    foo = fn a, b:
+      fn c:
+        fn d: a + b
+  | equals fink":
+    cap ·ƒ_5, (bind 2, a), (bind 3, b)
+    cap ·ƒ_8, (bind 2, a), (bind 3, b)
+
+# fn g captures `n` at depth 2. fn f needs `n` transitively.
+test 'chained ops — second op captures from outer scope', fn:
+  expect cps_resolve_transitive fink":
+    foo = fn a, n:
+      fn f:
+        fn g: n
+  | equals fink":
+    cap ·ƒ_5, (bind 3, n)
+    cap ·ƒ_8, (bind 3, n)
+
+
+---
+recursion
+---
+
+# Self-recursive fn with a captured outer binding.
+# fn f captures x (direct) and f (recursive/hoisted). fn g captures x, n, f
+# at depth 2 — fn f needs all of them transitively.
+test 'self recursion with capture', fn:
+  expect cps_resolve_transitive fink":
+    foo = fn x:
+      f = fn n:
+        fn g: f (x + n)
+  | equals fink":
+    cap ·ƒ_4, (bind 2, x), (bind 23, f)
+    cap ·ƒ_7, (bind 2, x), (bind 5, n), (bind 23, f)
+
+# Mutual recursion: fn a and fn b call each other, inner fn captures
+# from the outer scope. fn a captures x and b. fn g (inside fn a)
+# captures x, n, b at depth 2 — fn a needs them transitively.
+# fn b captures a (for mutual call).
+test 'mutual recursion with capture', fn:
+  expect cps_resolve_transitive fink":
+    foo = fn x:
+      a = fn n:
+        fn g: b (x + n)
+      b = fn m: a m
+  | equals fink":
+    cap ·ƒ_4, (bind 2, x), (bind 33, b)
+    cap ·ƒ_7, (bind 2, x), (bind 5, n), (bind 33, b)
+    cap ·ƒ_24, (bind 23, a)

@@ -262,7 +262,20 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
     .unwrap_or_else(|_| panic!("include_fink_tests: cannot read {abs_path_str}"));
 
   let result = fink::parser::parse(&src)
-    .unwrap_or_else(|e| panic!("include_fink_tests: parse error in {abs_path_str}: {}", e.message));
+    .unwrap_or_else(|e| {
+      let diag = fink::errors::Diagnostic {
+        message: e.message.clone(),
+        loc: e.loc,
+        hint: None,
+      };
+      let opts = fink::errors::FormatOptions {
+        lines_before: 1,
+        lines_after: 0,
+        path: Some(&rel_path),
+      };
+      let pretty = fink::errors::format_diagnostic(&src, &diag, &opts);
+      panic!("include_fink_tests: parse error\n\n{pretty}\n");
+    });
 
   let tests = extract_tests(&src, &result.root);
 

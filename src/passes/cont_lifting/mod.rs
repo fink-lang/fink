@@ -70,7 +70,7 @@ impl Alloc {
 pub fn lift<'src>(result: CpsResult<'src>) -> CpsResult<'src> {
   let mut alloc = Alloc::new(result.origin);
   let new_root = lift_expr(result.root, &mut alloc);
-  CpsResult { root: new_root, origin: alloc.origin }
+  CpsResult { root: new_root, origin: alloc.origin, synth_alias: crate::propgraph::PropGraph::new() }
 }
 
 // ---------------------------------------------------------------------------
