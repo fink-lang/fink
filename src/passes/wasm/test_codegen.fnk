@@ -119,6 +119,75 @@ test 'mutual recursion', fn:
   | equals fink":
     1
 
+# --- arithmetic ---
+
+test 'division', fn:
+  expect run fink":
+    main = fn:
+      10 / 4
+  | equals fink":
+    2
+
+test 'integer division', fn:
+  expect run fink":
+    main = fn:
+      10 // 3
+  | equals fink":
+    3
+
+test 'modulo', fn:
+  expect run fink":
+    main = fn:
+      10 %% 3
+  | equals fink":
+    1
+
+# --- comparison ---
+
+test 'equals true', fn:
+  expect run fink":
+    main = fn:
+      5 == 5
+  | equals fink":
+    1
+
+test 'equals false', fn:
+  expect run fink":
+    main = fn:
+      5 == 3
+  | equals fink":
+    0
+
+test 'less than', fn:
+  expect run fink":
+    main = fn:
+      3 < 5
+  | equals fink":
+    1
+
+test 'greater than or equal', fn:
+  expect run fink":
+    main = fn:
+      5 >= 5
+  | equals fink":
+    1
+
+# --- float ---
+
+test 'float arithmetic', fn:
+  expect run fink":
+    main = fn:
+      1.5 + 2.5
+  | equals fink":
+    4
+
+test 'float division', fn:
+  expect run fink":
+    main = fn:
+      7.0 / 2.0
+  | equals fink":
+    3
+
 # --- existing ---
 
 test 'chained let', fn:

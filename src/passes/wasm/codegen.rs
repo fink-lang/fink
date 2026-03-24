@@ -826,7 +826,7 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
         emit_cont_call_with_anyref(cont, f, fc);
       }
 
-      IntDiv | Mod => {
+      IntDiv | Mod | IntMod => {
         let (val_args, cont) = split_app_args(args);
         emit_arg_val(val_args[0], f, fc);
         emit_unwrap_num(f);
@@ -836,7 +836,7 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
         f.instruction(&Instruction::I64TruncF64S);
         match op {
           IntDiv => f.instruction(&Instruction::I64DivS),
-          Mod    => f.instruction(&Instruction::I64RemS),
+          Mod | IntMod => f.instruction(&Instruction::I64RemS),
           _ => unreachable!(),
         };
         f.instruction(&Instruction::F64ConvertI64S);
