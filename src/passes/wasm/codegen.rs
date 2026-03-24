@@ -865,6 +865,59 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
         emit_cont_call_with_anyref(cont, f, fc);
       }
 
+      And | Or | Xor => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          And => f.instruction(&Instruction::I64And),
+          Or  => f.instruction(&Instruction::I64Or),
+          Xor => f.instruction(&Instruction::I64Xor),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      Not => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        // not x = if x == 0.0 then 1.0 else 0.0
+        f.instruction(&Instruction::F64Const(0.0_f64.into()));
+        f.instruction(&Instruction::F64Eq);
+        f.instruction(&Instruction::F64ConvertI32S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      BitAnd | BitXor | Shl | Shr | RotL | RotR => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          BitAnd => f.instruction(&Instruction::I64And),
+          BitXor => f.instruction(&Instruction::I64Xor),
+          Shl    => f.instruction(&Instruction::I64Shl),
+          Shr    => f.instruction(&Instruction::I64ShrS),
+          RotL   => f.instruction(&Instruction::I64Rotl),
+          RotR   => f.instruction(&Instruction::I64Rotr),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
       MatchBlock => emit_match_block(args, f, fc),
       MatchArm => emit_match_arm(args, f, fc),
       MatchValue => emit_match_value(args, f, fc),

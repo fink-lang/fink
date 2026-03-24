@@ -188,6 +188,52 @@ test 'float division', fn:
   | equals fink":
     3
 
+# --- logical ---
+
+test 'logical and', fn:
+  expect run fink":
+    main = fn:
+      1 and 1
+  | equals fink":
+    1
+
+test 'logical or', fn:
+  expect run fink":
+    main = fn:
+      0 or 1
+  | equals fink":
+    1
+
+test 'logical not', fn:
+  expect run fink":
+    main = fn:
+      not 0
+  | equals fink":
+    1
+
+test 'logical not truthy', fn:
+  expect run fink":
+    main = fn:
+      not 5
+  | equals fink":
+    0
+
+# --- bitwise ---
+
+test 'bitwise and', fn:
+  expect run fink":
+    main = fn:
+      12 & 10
+  | equals fink":
+    8
+
+test 'shift left', fn:
+  expect run fink":
+    main = fn:
+      1 << 4
+  | equals fink":
+    16
+
 # --- existing ---
 
 test 'chained let', fn:
