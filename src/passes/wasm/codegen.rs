@@ -67,7 +67,7 @@ pub fn codegen(
 // ---------------------------------------------------------------------------
 
 const TY_ANY: u32 = 0;      // (sub (struct))
-const TY_INT: u32 = 1;      // (sub $Any (struct (field i64)))
+const TY_NUM: u32 = 1;      // (sub $Any (struct (field f64))) — universal number
 const TY_CONT: u32 = 2;     // (func (param anyref)) — $__halt type: receives result value
 const TY_VOID: u32 = 3;     // (func) — entry point type
 const TY_FN1: u32 = 4;      // (func (param (ref $Cont))) — arity-1 compiled fn: receives cont
@@ -325,7 +325,7 @@ fn emit_name_section(module: &mut Module, ctx: &Ctx) {
 
   let mut type_names = NameMap::new();
   type_names.append(TY_ANY, "Any");
-  type_names.append(TY_INT, "Int");
+  type_names.append(TY_NUM, "Num");
   type_names.append(TY_CONT, "Cont");
   type_names.append(TY_VOID, "void");
   type_names.append(TY_FN1, "Fn1");
@@ -374,13 +374,13 @@ fn emit_types(module: &mut Module, ctx: &Ctx) {
     })),
   });
 
-  // TY_INT = 1: (sub $Any (struct (field i64)))
+  // TY_NUM = 1: (sub $Any (struct (field f64))) — universal number type
   types.ty().subtype(&SubType {
     is_final: false,
     supertype_idx: Some(TY_ANY),
     composite_type: ct(CompositeInnerType::Struct(wasm_encoder::StructType {
       fields: Box::new([FieldType {
-        element_type: StorageType::Val(ValType::I64),
+        element_type: StorageType::Val(ValType::F64),
         mutable: false,
       }]),
     })),
@@ -523,8 +523,10 @@ fn emit_code_section<'a, 'src>(root: &'a Expr<'src>, module: &mut Module, ctx: &
 fn build_halt() -> Function {
   let mut f = Function::new([]);
   f.instruction(&Instruction::LocalGet(0));
-  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-  f.instruction(&Instruction::I31GetS);
+  // Unwrap $Num(f64) → f64 → trunc to i32 for result global.
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_NUM)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_NUM, field_index: 0 });
+  f.instruction(&Instruction::I32TruncF64S);
   f.instruction(&Instruction::GlobalSet(GLOBAL_RESULT));
   f.instruction(&Instruction::End);
   f
@@ -804,21 +806,62 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
 
   match func {
     Callable::BuiltIn(op) => match op {
-      Add | Sub | Mul => {
+      Add | Sub | Mul | Div | Pow => {
         let (val_args, cont) = split_app_args(args);
         emit_arg_val(val_args[0], f, fc);
-        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-        f.instruction(&Instruction::I31GetS);
+        emit_unwrap_num(f);
         emit_arg_val(val_args[1], f, fc);
-        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-        f.instruction(&Instruction::I31GetS);
+        emit_unwrap_num(f);
         match op {
-          Add => f.instruction(&Instruction::I32Add),
-          Sub => f.instruction(&Instruction::I32Sub),
-          Mul => f.instruction(&Instruction::I32Mul),
+          Add => f.instruction(&Instruction::F64Add),
+          Sub => f.instruction(&Instruction::F64Sub),
+          Mul => f.instruction(&Instruction::F64Mul),
+          Div => f.instruction(&Instruction::F64Div),
+          // f64 has no built-in pow — use the pattern: exp(ln(a) * b)
+          // but WASM doesn't have exp/ln either. For now, unreachable for Pow.
+          Pow => f.instruction(&Instruction::Unreachable),
           _ => unreachable!(),
         };
-        f.instruction(&Instruction::RefI31);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      IntDiv | Mod => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          IntDiv => f.instruction(&Instruction::I64DivS),
+          Mod    => f.instruction(&Instruction::I64RemS),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      Eq | Neq | Lt | Lte | Gt | Gte => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        match op {
+          Eq  => f.instruction(&Instruction::F64Eq),
+          Neq => f.instruction(&Instruction::F64Ne),
+          Lt  => f.instruction(&Instruction::F64Lt),
+          Lte => f.instruction(&Instruction::F64Le),
+          Gt  => f.instruction(&Instruction::F64Gt),
+          Gte => f.instruction(&Instruction::F64Ge),
+          _ => unreachable!(),
+        };
+        // Boolean result: 0.0 or 1.0
+        f.instruction(&Instruction::F64ConvertI32S);
+        emit_wrap_num(f);
         emit_cont_call_with_anyref(cont, f, fc);
       }
 
@@ -935,14 +978,12 @@ fn emit_match_block(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
             }).collect();
             if mv_vals.len() >= 2 {
               let expected = mv_vals[1];
-              // Compare scrutinee == expected.
+              // Compare scrutinee == expected (f64).
               emit_val(scrutinee_val, f, fc);
-              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-              f.instruction(&Instruction::I31GetS);
+              emit_unwrap_num(f);
               emit_val(expected, f, fc);
-              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-              f.instruction(&Instruction::I31GetS);
-              f.instruction(&Instruction::I32Eq);
+              emit_unwrap_num(f);
+              f.instruction(&Instruction::F64Eq);
 
               f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
               if_depth += 1;
@@ -1014,12 +1055,10 @@ fn emit_match_value(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
     let success_val = val_args[2];
 
     emit_val(scrutinee, f, fc);
-    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-    f.instruction(&Instruction::I31GetS);
+    emit_unwrap_num(f);
     emit_val(expected, f, fc);
-    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-    f.instruction(&Instruction::I31GetS);
-    f.instruction(&Instruction::I32Eq);
+    emit_unwrap_num(f);
+    f.instruction(&Instruction::F64Eq);
 
     f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
     if let ValKind::ContRef(success_id) = &success_val.kind {
@@ -1320,17 +1359,32 @@ fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: 
 // Value emission
 // ---------------------------------------------------------------------------
 
+/// Unwrap a $Num struct to f64 on the stack.
+fn emit_unwrap_num(f: &mut Function) {
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_NUM)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_NUM, field_index: 0 });
+}
+
+/// Wrap an f64 on the stack into a $Num struct.
+fn emit_wrap_num(f: &mut Function) {
+  f.instruction(&Instruction::StructNew(TY_NUM));
+}
+
 fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
   fc.mark(f, val.id);
 
   match &val.kind {
     ValKind::Lit(Lit::Int(n)) => {
-      f.instruction(&Instruction::I32Const(*n as i32));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const((*n as f64).into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
+    }
+    ValKind::Lit(Lit::Float(n)) | ValKind::Lit(Lit::Decimal(n)) => {
+      f.instruction(&Instruction::F64Const((*n).into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
     ValKind::Lit(Lit::Bool(b)) => {
-      f.instruction(&Instruction::I32Const(if *b { 1 } else { 0 }));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const(if *b { 1.0_f64 } else { 0.0_f64 }.into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
     ValKind::Ref(r) => {
       let bind_id = match r {
@@ -1354,8 +1408,8 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
       }
     }
     _ => {
-      f.instruction(&Instruction::I32Const(0));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const(0.0_f64.into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
   }
 }
