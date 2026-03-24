@@ -67,7 +67,7 @@ pub fn codegen(
 // ---------------------------------------------------------------------------
 
 const TY_ANY: u32 = 0;      // (sub (struct))
-const TY_INT: u32 = 1;      // (sub $Any (struct (field i64)))
+const TY_NUM: u32 = 1;      // (sub $Any (struct (field f64))) — universal number
 const TY_CONT: u32 = 2;     // (func (param anyref)) — $__halt type: receives result value
 const TY_VOID: u32 = 3;     // (func) — entry point type
 const TY_FN1: u32 = 4;      // (func (param (ref $Cont))) — arity-1 compiled fn: receives cont
@@ -87,6 +87,7 @@ const FN_COMPILED_START: u32 = 1;  // compiled fns start after $__halt
 // ---------------------------------------------------------------------------
 
 const GLOBAL_RESULT: u32 = 0;
+const GLOBAL_CONT_ENV: u32 = 1;
 
 // ---------------------------------------------------------------------------
 // Collected function
@@ -133,6 +134,9 @@ struct Ctx<'a, 'src> {
   /// Signature: Vec<bool> where true = (ref $Cont), false = anyref, for value params.
   /// The trailing cont param is always (ref $Cont) and not included in the signature.
   fn_types: Vec<(Vec<bool>, u32)>,
+  /// (arity, type_index) for cont_env fn types — no trailing cont param.
+  /// Only for cont_env fns with arity >= 2 (arity 1 uses TY_CONT).
+  cont_env_types: Vec<(u32, u32)>,
   /// Maps CpsId → CpsId for LetVal rebindings: `LetVal { name: X, val: Ref(Synth(Y)) }`
   /// records X → Y. Allows `func_index` to follow alias chains.
   /// WORKAROUND: compensates for redundant Synth→Name indirection in CPS
@@ -157,6 +161,10 @@ struct Ctx<'a, 'src> {
   /// When a cont call goes through closure_fn, these cap values must be pushed
   /// before the call result value and the cont.
   closure_caps: std::collections::HashMap<CpsId, Vec<CpsId>>,
+  /// Maps cont fn name_id → stripped Bind::Cont capture CpsIds.
+  /// These captures are passed via $cont_env global instead of as params,
+  /// keeping cont fns callable as $Cont type (single anyref param).
+  cont_env_caps: std::collections::HashMap<CpsId, Vec<CpsId>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -175,12 +183,14 @@ impl<'a, 'src> Ctx<'a, 'src> {
       synth_alias,
       funcs: Vec::new(),
       fn_types: Vec::new(),
+      cont_env_types: Vec::new(),
       match_arms: std::collections::HashMap::new(),
       val_alias: std::collections::HashMap::new(),
       cap_param_fn: std::collections::HashMap::new(),
       closure_fn: std::collections::HashMap::new(),
       param_source: std::collections::HashMap::new(),
       closure_caps: std::collections::HashMap::new(),
+      cont_env_caps: std::collections::HashMap::new(),
     }
   }
 
@@ -195,6 +205,18 @@ impl<'a, 'src> Ctx<'a, 'src> {
   }
 
   fn func_type(&self, func_idx: usize) -> u32 {
+    let cf = &self.funcs[func_idx];
+    // Cont fns with $cont_env: arity == param_ids.len() (no own cont param).
+    if cf.arity == cf.param_ids.len() as u32 {
+      if cf.arity <= 1 {
+        return TY_CONT;
+      }
+      // Look up the cont_env type by arity.
+      return self.cont_env_types.iter()
+        .find(|(a, _)| *a == cf.arity)
+        .map(|(_, ty)| *ty)
+        .unwrap_or(TY_CONT);
+    }
     let sig = self.fn_sig(func_idx);
     self.type_for_sig(&sig)
   }
@@ -246,6 +268,26 @@ impl<'a, 'src> Ctx<'a, 'src> {
     None
   }
 
+  /// Check if a CpsId should be resolved via $cont_env global.
+  /// Returns true if any cont_env_caps entry's source matches the given id
+  /// (directly or via synth_alias).
+  fn is_cont_env(&self, id: CpsId) -> bool {
+    for sources in self.cont_env_caps.values() {
+      for &source_id in sources {
+        if source_id == id { return true; }
+        // Check synth_alias: any fn's synth_alias might map to the cont_id.
+        if let Some(Some(alias)) = self.synth_alias.try_get(id)
+          && *alias == source_id
+        { return true; }
+        // Reverse: source's synth_alias might equal the query id.
+        if let Some(Some(alias)) = self.synth_alias.try_get(source_id)
+          && *alias == id
+        { return true; }
+      }
+    }
+    false
+  }
+
   fn fink_main_index(&self) -> u32 {
     FN_COMPILED_START + self.funcs.len() as u32
   }
@@ -272,15 +314,29 @@ fn emit_module<'a, 'src>(root: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) -> Vec<u
 
 fn compute_fn_types(ctx: &mut Ctx) {
   let mut sigs: Vec<Vec<bool>> = Vec::new();
+  let mut cont_env_arities: Vec<u32> = Vec::new();
   for i in 0..ctx.funcs.len() {
-    let sig = ctx.fn_sig(i);
-    if !sig.is_empty() && !sigs.contains(&sig) {
-      sigs.push(sig);
+    let cf = &ctx.funcs[i];
+    if cf.arity == cf.param_ids.len() as u32 {
+      // Cont_env fn: no trailing cont param.
+      if cf.arity >= 2 && !cont_env_arities.contains(&cf.arity) {
+        cont_env_arities.push(cf.arity);
+      }
+    } else {
+      let sig = ctx.fn_sig(i);
+      if !sig.is_empty() && !sigs.contains(&sig) {
+        sigs.push(sig);
+      }
     }
   }
   sigs.sort();
+  cont_env_arities.sort();
   ctx.fn_types = sigs.into_iter().enumerate()
     .map(|(i, sig)| (sig, TY_FUNC_START + i as u32))
+    .collect();
+  let ce_start = TY_FUNC_START + ctx.fn_types.len() as u32;
+  ctx.cont_env_types = cont_env_arities.into_iter().enumerate()
+    .map(|(i, arity)| (arity, ce_start + i as u32))
     .collect();
 }
 
@@ -325,7 +381,7 @@ fn emit_name_section(module: &mut Module, ctx: &Ctx) {
 
   let mut type_names = NameMap::new();
   type_names.append(TY_ANY, "Any");
-  type_names.append(TY_INT, "Int");
+  type_names.append(TY_NUM, "Num");
   type_names.append(TY_CONT, "Cont");
   type_names.append(TY_VOID, "void");
   type_names.append(TY_FN1, "Fn1");
@@ -334,6 +390,9 @@ fn emit_name_section(module: &mut Module, ctx: &Ctx) {
     let has_cont = sig.iter().any(|c| *c);
     let suffix = if has_cont { "c" } else { "" };
     type_names.append(*ty_idx, &format!("Fn{}{}", arity, suffix));
+  }
+  for &(arity, ty_idx) in &ctx.cont_env_types {
+    type_names.append(ty_idx, &format!("CE{}", arity));
   }
   names.types(&type_names);
 
@@ -374,13 +433,13 @@ fn emit_types(module: &mut Module, ctx: &Ctx) {
     })),
   });
 
-  // TY_INT = 1: (sub $Any (struct (field i64)))
+  // TY_NUM = 1: (sub $Any (struct (field f64))) — universal number type
   types.ty().subtype(&SubType {
     is_final: false,
     supertype_idx: Some(TY_ANY),
     composite_type: ct(CompositeInnerType::Struct(wasm_encoder::StructType {
       fields: Box::new([FieldType {
-        element_type: StorageType::Val(ValType::I64),
+        element_type: StorageType::Val(ValType::F64),
         mutable: false,
       }]),
     })),
@@ -430,6 +489,16 @@ fn emit_types(module: &mut Module, ctx: &Ctx) {
     });
   }
 
+  // Cont_env fn types: (func (param anyref * N)) — no trailing (ref $Cont).
+  for &(arity, _) in &ctx.cont_env_types {
+    let params: Vec<ValType> = (0..arity).map(|_| ValType::Ref(RefType::ANYREF)).collect();
+    types.ty().subtype(&SubType {
+      is_final: true,
+      supertype_idx: None,
+      composite_type: ct(CompositeInnerType::Func(FuncType::new(params, []))),
+    });
+  }
+
   module.section(&types);
 }
 
@@ -453,9 +522,21 @@ fn emit_function_section(module: &mut Module, ctx: &Ctx) {
 
 fn emit_globals(module: &mut Module) {
   let mut globals = GlobalSection::new();
+  // GLOBAL_RESULT: i32 — stores the final result value.
   globals.global(
     GlobalType { val_type: ValType::I32, mutable: true, shared: false },
     &wasm_encoder::ConstExpr::i32_const(0),
+  );
+  // GLOBAL_CONT_ENV: (ref null $Cont) — stores captured cont values for hoisted cont fns.
+  // Cont fns must remain $Cont-compatible (single anyref param), so Bind::Cont captures
+  // are stripped from their params and passed via this global instead.
+  globals.global(
+    GlobalType {
+      val_type: ValType::Ref(RefType { nullable: true, heap_type: wasm_encoder::HeapType::Concrete(TY_CONT) }),
+      mutable: true,
+      shared: false,
+    },
+    &wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::Concrete(TY_CONT)),
   );
   module.section(&globals);
 }
@@ -523,8 +604,10 @@ fn emit_code_section<'a, 'src>(root: &'a Expr<'src>, module: &mut Module, ctx: &
 fn build_halt() -> Function {
   let mut f = Function::new([]);
   f.instruction(&Instruction::LocalGet(0));
-  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-  f.instruction(&Instruction::I31GetS);
+  // Unwrap $Num(f64) → f64 → trunc to i32 for result global.
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_NUM)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_NUM, field_index: 0 });
+  f.instruction(&Instruction::I32TruncF64S);
   f.instruction(&Instruction::GlobalSet(GLOBAL_RESULT));
   f.instruction(&Instruction::End);
   f
@@ -615,7 +698,9 @@ fn find_arity1_entry(root: &Expr<'_>, ctx: &Ctx) -> Option<u32> {
     if let ExprKind::LetFn { name, body, .. } = &expr.kind {
       if let Some(fn_idx) = ctx.func_index(name.id) {
         let fn_pos = ctx.funcs.iter().position(|f| f.name_id == name.id)?;
-        if ctx.funcs[fn_pos].arity == 1 {
+        let cf = &ctx.funcs[fn_pos];
+        // Skip cont fns (arity == param_ids.len(), uses $cont_env) — not entry points.
+        if cf.arity == 1 && cf.arity != cf.param_ids.len() as u32 {
           return Some(fn_idx);
         }
       }
@@ -640,7 +725,18 @@ fn build_fink_fn<'a, 'b, 'src>(
   ctx: &'a Ctx<'b, 'src>,
   rel: &mut Vec<RelativeMapping>,
 ) -> Function {
-  let cont_local = if arity > 0 { arity - 1 } else { 0 };
+  // Detect cont fns: arity == param_ids.len() (no own cont param, uses $cont_env).
+  let is_cont_env_fn = ctx.funcs.iter()
+    .find(|cf| std::ptr::eq(cf.fn_body as *const _, body as *const _))
+    .is_some_and(|cf| cf.arity == cf.param_ids.len() as u32);
+
+  let cont_local = if is_cont_env_fn {
+    u32::MAX // sentinel: cont fns read their cont from $cont_env, not a local
+  } else if arity > 0 {
+    arity - 1
+  } else {
+    0
+  };
 
   let mut locals = Vec::new();
   if let Some(func_info) = ctx.funcs.iter().find(|cf| {
@@ -649,7 +745,9 @@ fn build_fink_fn<'a, 'b, 'src>(
     for (i, &param_id) in func_info.param_ids.iter().enumerate() {
       locals.push((param_id, i as u32));
     }
-    locals.push((func_info.cont_id, cont_local));
+    if !is_cont_env_fn {
+      locals.push((func_info.cont_id, cont_local));
+    }
   }
 
   let mut extra_locals: Vec<CpsId> = Vec::new();
@@ -776,7 +874,7 @@ fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
           // treat this as calling the fn directly with the forwarded cont.
           // This handles the module-init pattern: last LetFn passes itself to module cont.
           if let Some(fn_idx) = fc.ctx.func_index(name.id) {
-            f.instruction(&Instruction::LocalGet(fc.cont_local));
+            emit_own_cont(f, fc);
             f.instruction(&Instruction::ReturnCall(fn_idx));
           } else {
             emit_cont_call_with_anyref(*cont_id, f, fc);
@@ -804,21 +902,115 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
 
   match func {
     Callable::BuiltIn(op) => match op {
-      Add | Sub | Mul => {
+      Add | Sub | Mul | Div | Pow => {
         let (val_args, cont) = split_app_args(args);
         emit_arg_val(val_args[0], f, fc);
-        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-        f.instruction(&Instruction::I31GetS);
+        emit_unwrap_num(f);
         emit_arg_val(val_args[1], f, fc);
-        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-        f.instruction(&Instruction::I31GetS);
+        emit_unwrap_num(f);
         match op {
-          Add => f.instruction(&Instruction::I32Add),
-          Sub => f.instruction(&Instruction::I32Sub),
-          Mul => f.instruction(&Instruction::I32Mul),
+          Add => f.instruction(&Instruction::F64Add),
+          Sub => f.instruction(&Instruction::F64Sub),
+          Mul => f.instruction(&Instruction::F64Mul),
+          Div => f.instruction(&Instruction::F64Div),
+          // f64 has no built-in pow — use the pattern: exp(ln(a) * b)
+          // but WASM doesn't have exp/ln either. For now, unreachable for Pow.
+          Pow => f.instruction(&Instruction::Unreachable),
           _ => unreachable!(),
         };
-        f.instruction(&Instruction::RefI31);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      IntDiv | Mod | IntMod => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          IntDiv => f.instruction(&Instruction::I64DivS),
+          Mod | IntMod => f.instruction(&Instruction::I64RemS),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      Eq | Neq | Lt | Lte | Gt | Gte => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        match op {
+          Eq  => f.instruction(&Instruction::F64Eq),
+          Neq => f.instruction(&Instruction::F64Ne),
+          Lt  => f.instruction(&Instruction::F64Lt),
+          Lte => f.instruction(&Instruction::F64Le),
+          Gt  => f.instruction(&Instruction::F64Gt),
+          Gte => f.instruction(&Instruction::F64Ge),
+          _ => unreachable!(),
+        };
+        // Boolean result: 0.0 or 1.0
+        f.instruction(&Instruction::F64ConvertI32S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      And | Or | Xor => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          And => f.instruction(&Instruction::I64And),
+          Or  => f.instruction(&Instruction::I64Or),
+          Xor => f.instruction(&Instruction::I64Xor),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      Not => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        // not x = if x == 0.0 then 1.0 else 0.0
+        f.instruction(&Instruction::F64Const(0.0_f64.into()));
+        f.instruction(&Instruction::F64Eq);
+        f.instruction(&Instruction::F64ConvertI32S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      BitAnd | BitXor | Shl | Shr | RotL | RotR => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          BitAnd => f.instruction(&Instruction::I64And),
+          BitXor => f.instruction(&Instruction::I64Xor),
+          Shl    => f.instruction(&Instruction::I64Shl),
+          Shr    => f.instruction(&Instruction::I64ShrS),
+          RotL   => f.instruction(&Instruction::I64Rotl),
+          RotR   => f.instruction(&Instruction::I64Rotr),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
         emit_cont_call_with_anyref(cont, f, fc);
       }
 
@@ -837,7 +1029,7 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
       // Direct cont call: App func=Val(ContRef(id)) — tail-call the cont fn.
       if let ValKind::ContRef(cont_id) = &val.kind {
         if let Some(fn_idx) = fc.ctx.func_index(*cont_id) {
-          f.instruction(&Instruction::LocalGet(fc.cont_local));
+          emit_own_cont(f, fc);
           f.instruction(&Instruction::ReturnCall(fn_idx));
         } else {
           f.instruction(&Instruction::Unreachable);
@@ -852,11 +1044,11 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
       let target_fn_idx = resolve_val_to_func(val, fc);
 
       if let Some(fn_idx) = target_fn_idx {
-        // Direct call: push value args, push our cont, return_call.
+        // Direct call: push value args, push the cont, return_call.
         for arg in &val_args {
           emit_arg_val(arg, f, fc);
         }
-        f.instruction(&Instruction::LocalGet(fc.cont_local));
+        emit_cont_ref(cont_id, f, fc);
         f.instruction(&Instruction::ReturnCall(fn_idx));
       } else {
         // Callee is a runtime value — not supported yet (no closures).
@@ -935,14 +1127,12 @@ fn emit_match_block(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
             }).collect();
             if mv_vals.len() >= 2 {
               let expected = mv_vals[1];
-              // Compare scrutinee == expected.
+              // Compare scrutinee == expected (f64).
               emit_val(scrutinee_val, f, fc);
-              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-              f.instruction(&Instruction::I31GetS);
+              emit_unwrap_num(f);
               emit_val(expected, f, fc);
-              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-              f.instruction(&Instruction::I31GetS);
-              f.instruction(&Instruction::I32Eq);
+              emit_unwrap_num(f);
+              f.instruction(&Instruction::F64Eq);
 
               f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
               if_depth += 1;
@@ -1014,17 +1204,15 @@ fn emit_match_value(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
     let success_val = val_args[2];
 
     emit_val(scrutinee, f, fc);
-    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-    f.instruction(&Instruction::I31GetS);
+    emit_unwrap_num(f);
     emit_val(expected, f, fc);
-    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-    f.instruction(&Instruction::I31GetS);
-    f.instruction(&Instruction::I32Eq);
+    emit_unwrap_num(f);
+    f.instruction(&Instruction::F64Eq);
 
     f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
     if let ValKind::ContRef(success_id) = &success_val.kind {
       if let Some(fn_idx) = fc.ctx.func_index(*success_id) {
-        f.instruction(&Instruction::LocalGet(fc.cont_local));
+        emit_own_cont(f, fc);
         f.instruction(&Instruction::ReturnCall(fn_idx));
       } else { f.instruction(&Instruction::Unreachable); }
     } else { f.instruction(&Instruction::Unreachable); }
@@ -1093,8 +1281,13 @@ fn emit_fn_closure(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
     }
   }
 
-  // Push cont.
-  f.instruction(&Instruction::LocalGet(fc.cont_local));
+  // Push cont (or set $cont_env for cont_env fns).
+  if is_cont_env_fn(fn_idx, fc.ctx) {
+    emit_own_cont(f, fc);
+    f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+  } else {
+    emit_own_cont(f, fc);
+  }
   f.instruction(&Instruction::ReturnCall(fn_idx));
 }
 
@@ -1127,7 +1320,7 @@ fn emit_match_body_call(fn_idx: u32, scrutinee_val: &Val<'_>, fc: &mut FnCtx, f:
   let param_kinds = fc.ctx.funcs[fn_pos].param_kinds.clone();
   for (i, kind) in param_kinds.iter().enumerate() {
     if *kind == Bind::Cont {
-      f.instruction(&Instruction::LocalGet(fc.cont_local));
+      emit_own_cont(f, fc);
     } else if let Some(&param_id) = param_ids.get(i) {
       // Check if this param is a cap value (from param_source/closure_caps).
       // If so, resolve its source bind and push from a local.
@@ -1188,8 +1381,13 @@ fn emit_match_body_call(fn_idx: u32, scrutinee_val: &Val<'_>, fc: &mut FnCtx, f:
       emit_val(scrutinee_val, f, fc);
     }
   }
-  // The fn's own cont param.
-  f.instruction(&Instruction::LocalGet(fc.cont_local));
+  // The fn's own cont param (or set $cont_env for cont_env fns).
+  if is_cont_env_fn(fn_idx, fc.ctx) {
+    emit_own_cont(f, fc);
+    f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+  } else {
+    emit_own_cont(f, fc);
+  }
   f.instruction(&Instruction::ReturnCall(fn_idx));
 }
 
@@ -1239,18 +1437,110 @@ fn emit_arg_val(arg: &Arg<'_>, f: &mut Function, fc: &mut FnCtx) {
   }
 }
 
+/// Push the current function's continuation reference onto the stack.
+/// For normal fns: local.get cont_local.
+/// For cont_env fns (cont_local == u32::MAX): global.get $cont_env.
+/// Check if a function index corresponds to a cont_env fn (reads cont from global).
+fn is_cont_env_fn(fn_idx: u32, ctx: &Ctx) -> bool {
+  let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
+  fn_pos < ctx.funcs.len() && {
+    let cf = &ctx.funcs[fn_pos];
+    cf.arity == cf.param_ids.len() as u32
+  }
+}
+
+/// If the target fn is a cont_env fn, set $cont_env global to our cont before calling.
+fn maybe_set_cont_env(fn_idx: u32, f: &mut Function, fc: &FnCtx) {
+  if is_cont_env_fn(fn_idx, fc.ctx) {
+    emit_own_cont(f, fc);
+    f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+  }
+}
+
+/// Push a cont reference onto the stack for a specific cont_id.
+/// If cont_id is a known fn (direct or via closure_fn), push ref.func.
+/// If cont_id is the fn's own cont, push local.get or global.get.
+/// If cont_id is in cont_env, push global.get $cont_env.
+fn emit_cont_ref(cont_id: CpsId, f: &mut Function, fc: &FnCtx) {
+  // Check if cont_id is a known compiled fn — push ref.func + cast.
+  if let Some(fn_idx) = fc.ctx.func_index(cont_id) {
+    let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
+    if fn_pos < fc.ctx.funcs.len() {
+      let is_cef = is_cont_env_fn(fn_idx, fc.ctx);
+      if is_cef {
+        // Cont_env fn: set $cont_env so it can read our cont, then push ref.func.
+        emit_own_cont(f, fc);
+        f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+      }
+      f.instruction(&Instruction::RefFunc(fn_idx));
+      f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_CONT)));
+      return;
+    }
+  }
+  // Check closure_fn.
+  if let Some(&fn_idx) = fc.ctx.closure_fn.get(&cont_id) {
+    let is_cef = is_cont_env_fn(fn_idx, fc.ctx);
+    if is_cef {
+      emit_own_cont(f, fc);
+      f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+    }
+    f.instruction(&Instruction::RefFunc(fn_idx));
+    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_CONT)));
+    return;
+  }
+  // Check if it's in cont_env.
+  if fc.ctx.is_cont_env(cont_id) {
+    f.instruction(&Instruction::GlobalGet(GLOBAL_CONT_ENV));
+    f.instruction(&Instruction::RefAsNonNull);
+    return;
+  }
+  // Check if we can find it as a local (captured cont param).
+  if let Some(local_idx) = fc.local_for(cont_id)
+    .or_else(|| fc.local_for_synth_alias(cont_id))
+  {
+    f.instruction(&Instruction::LocalGet(local_idx));
+    return;
+  }
+  // Fallback: push our own cont.
+  emit_own_cont(f, fc);
+}
+
+fn emit_own_cont(f: &mut Function, fc: &FnCtx) {
+  if fc.cont_local == u32::MAX {
+    f.instruction(&Instruction::GlobalGet(GLOBAL_CONT_ENV));
+    // Global is (ref null $Cont) — refine to (ref $Cont) for call_ref.
+    f.instruction(&Instruction::RefAsNonNull);
+  } else {
+    f.instruction(&Instruction::LocalGet(fc.cont_local));
+  }
+}
+
 /// Tail-call a cont with an anyref value already on the stack.
 fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) {
   if let Some(fn_idx) = fc.ctx.func_index(cont_id) {
     let target_idx = fc.ctx.funcs.iter().position(|cf| cf.name_id == cont_id);
     if let Some(idx) = target_idx {
-      let target_arity = fc.ctx.funcs[idx].arity;
+      let cf = &fc.ctx.funcs[idx];
+      let target_arity = cf.arity;
+      let is_cef = cf.arity == cf.param_ids.len() as u32;
+      if is_cef {
+        // Cont_env fn: set $cont_env before calling.
+        // Result value is already on stack — save to temp, set cont_env, restore.
+        let result_local = fc.local_count;
+        f.instruction(&Instruction::LocalSet(result_local));
+        emit_own_cont(f, fc);
+        f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+        f.instruction(&Instruction::LocalGet(result_local));
+        f.instruction(&Instruction::ReturnCall(fn_idx));
+        return;
+      }
       if target_arity > 1 {
-        f.instruction(&Instruction::LocalGet(fc.cont_local));
+        emit_own_cont(f, fc);
         f.instruction(&Instruction::ReturnCall(fn_idx));
         return;
       }
     }
+    maybe_set_cont_env(fn_idx, f, fc);
     f.instruction(&Instruction::ReturnCall(fn_idx));
     return;
   }
@@ -1272,13 +1562,18 @@ fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) 
     }
     let fn_pos = (fn_idx - FN_COMPILED_START) as usize;
     if fn_pos < fc.ctx.funcs.len() {
+      let is_cef = is_cont_env_fn(fn_idx, fc.ctx);
       let caps = fc.ctx.closure_caps.get(&cont_id).cloned().unwrap_or_default();
-      if !caps.is_empty() {
-        // Non-stripped cap values need to go BEFORE the result value on the stack.
-        // Save the result value to a temp local, push caps, push result back.
+      if !caps.is_empty() || is_cef {
+        // Save result value to temp, push caps, push result back.
         let result_local = fc.local_count;
         fc.local_count += 1;
         f.instruction(&Instruction::LocalSet(result_local));
+        if is_cef {
+          // Set $cont_env before calling — cont_env fn reads cont from global.
+          emit_own_cont(f, fc);
+          f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+        }
         for &cap_id in &caps {
           if let Some(local_idx) = fc.local_for(cap_id)
             .or_else(|| fc.local_for_by_origin(cap_id))
@@ -1293,26 +1588,44 @@ fn emit_cont_call_with_anyref(cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) 
         }
         f.instruction(&Instruction::LocalGet(result_local));
       }
-      f.instruction(&Instruction::LocalGet(fc.cont_local));
+      if !is_cef {
+        emit_own_cont(f, fc);
+      }
       f.instruction(&Instruction::ReturnCall(fn_idx));
       return;
     }
   }
+  // Unknown cont — check if it's in cont_env.
+  if fc.ctx.is_cont_env(cont_id) {
+    f.instruction(&Instruction::GlobalGet(GLOBAL_CONT_ENV));
+    f.instruction(&Instruction::RefAsNonNull);
+    f.instruction(&Instruction::ReturnCallRef(TY_CONT));
+    return;
+  }
   // Unknown cont — it's the cont param, already typed (ref $Cont).
-  f.instruction(&Instruction::LocalGet(fc.cont_local));
+  emit_own_cont(f, fc);
   f.instruction(&Instruction::ReturnCallRef(TY_CONT));
 }
 
 /// Emit a value and tail-call a cont with it.
 fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: &mut FnCtx) {
   if let Some(fn_idx) = fc.ctx.func_index(cont_id) {
+    maybe_set_cont_env(fn_idx, f, fc);
     emit_val(val, f, fc);
     f.instruction(&Instruction::ReturnCall(fn_idx));
     return;
   }
+  // Check if cont_id is in cont_env.
+  if fc.ctx.is_cont_env(cont_id) {
+    emit_val(val, f, fc);
+    f.instruction(&Instruction::GlobalGet(GLOBAL_CONT_ENV));
+    f.instruction(&Instruction::RefAsNonNull);
+    f.instruction(&Instruction::ReturnCallRef(TY_CONT));
+    return;
+  }
   // Unknown cont — it's the cont param, already typed (ref $Cont).
   emit_val(val, f, fc);
-  f.instruction(&Instruction::LocalGet(fc.cont_local));
+  emit_own_cont(f, fc);
   f.instruction(&Instruction::ReturnCallRef(TY_CONT));
 }
 
@@ -1320,17 +1633,32 @@ fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: 
 // Value emission
 // ---------------------------------------------------------------------------
 
+/// Unwrap a $Num struct to f64 on the stack.
+fn emit_unwrap_num(f: &mut Function) {
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_NUM)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_NUM, field_index: 0 });
+}
+
+/// Wrap an f64 on the stack into a $Num struct.
+fn emit_wrap_num(f: &mut Function) {
+  f.instruction(&Instruction::StructNew(TY_NUM));
+}
+
 fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
   fc.mark(f, val.id);
 
   match &val.kind {
     ValKind::Lit(Lit::Int(n)) => {
-      f.instruction(&Instruction::I32Const(*n as i32));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const((*n as f64).into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
+    }
+    ValKind::Lit(Lit::Float(n)) | ValKind::Lit(Lit::Decimal(n)) => {
+      f.instruction(&Instruction::F64Const((*n).into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
     ValKind::Lit(Lit::Bool(b)) => {
-      f.instruction(&Instruction::I32Const(if *b { 1 } else { 0 }));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const(if *b { 1.0_f64 } else { 0.0_f64 }.into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
     ValKind::Ref(r) => {
       let bind_id = match r {
@@ -1354,8 +1682,8 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
       }
     }
     _ => {
-      f.instruction(&Instruction::I32Const(0));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const(0.0_f64.into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
   }
 }
@@ -1397,11 +1725,16 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         collect_funcs(cont_body, ctx);
       }
     }
-    ExprKind::LetVal { name, val, body: Cont::Expr { body: cont_body, .. } } => {
+    ExprKind::LetVal { name, val, body: Cont::Expr { args, body: cont_body } } => {
       // Record val_alias for LetVal rebindings: name → synth target.
       // This lets func_index follow chains like `add = <fn_ref>`.
+      // Also alias the Cont::Expr args (the scope binds name_res resolves to)
+      // so func_index_through_closure works for references resolved via name_res.
       if let ValKind::Ref(Ref::Synth(target)) = &val.kind {
         ctx.val_alias.insert(name.id, *target);
+        for arg in args {
+          ctx.val_alias.insert(arg.id, *target);
+        }
       }
       collect_funcs(cont_body, ctx);
     }
@@ -1439,22 +1772,26 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
 /// - Strips static cap params (module-level fn refs) from hoisted fn signatures.
 /// - Builds closure_fn: maps result cont params to hoisted fn indices.
 fn process_closures<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
-  // Three-phase approach:
   // Phase 1: Populate closure_fn for ALL FnClosure nodes. This must happen first so that
   //   func_index_through_closure can resolve cap args that alias through FnClosure result
   //   binds (e.g. recursive fn closures where the fn ref goes through closure_fn).
   collect_closure_fns(expr, ctx);
-  // Phase 2: Collect all resolvable static fn caps (AST origin → fn_idx).
-  //   Uses func_index_through_closure so caps routed through closure_fn are found.
+  // Phase 2+3: Iterate static cap collection + processing until convergence.
+  //   Mutual recursion creates forward references (is-odd bound after is-even's FnClosure).
+  //   First pass resolves the backward ref (is-even), populating known_static_caps.
+  //   Second pass resolves the forward ref (is-odd) via known_static_caps.
   let mut known_static_caps: std::collections::HashMap<AstId, u32> = std::collections::HashMap::new();
-  collect_static_fn_caps(expr, ctx, &mut known_static_caps);
-  // Phase 3: Process each FnClosure — strip static caps, build param_source/closure_caps.
+  for _ in 0..8 {
+    let prev_count = known_static_caps.len();
+    collect_static_fn_caps(expr, ctx, &mut known_static_caps);
+    if known_static_caps.len() == prev_count { break; }
+  }
   process_closures_inner(expr, ctx, &known_static_caps);
 }
 
-/// Phase 1 pre-pass: walk FnClosure Apps and populate closure_fn entries
-/// (result cont param CpsId → hoisted fn index) for ALL FnClosure nodes.
-/// This must run before cap resolution so func_index_through_closure works.
+/// Phase 1 pre-pass: walk FnClosure Apps and populate closure_fn and param_source
+/// entries for ALL FnClosure nodes. This must run before cap resolution so
+/// func_index_through_closure and param_source chains work in later phases.
 fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
   use crate::passes::cps::ir::BuiltIn;
   match &expr.kind {
@@ -1464,6 +1801,17 @@ fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) 
         && let Some(fn_pos) = ctx.funcs.iter().position(|f| f.name_id == *hoisted_fn_id)
       {
         let hoisted_fn_idx = FN_COMPILED_START + fn_pos as u32;
+        // Populate param_source: cap param → cap arg source bind.
+        let cap_args = &args[1..args.len().saturating_sub(1)];
+        let fn_params = ctx.funcs[fn_pos].param_ids.clone();
+        for (cap_arg, param_id) in cap_args.iter().zip(fn_params.iter()) {
+          if let Arg::Val(cap_val) = cap_arg
+            && let Some(bid) = resolve_cap_arg_bind(cap_val, ctx)
+          {
+            ctx.param_source.insert(*param_id, bid);
+          }
+        }
+        // Populate closure_fn: result cont param → hoisted fn index.
         let result_cont_param = args.last().and_then(|a| match a {
           Arg::Cont(Cont::Ref(id)) => {
             ctx.funcs.iter().position(|f| f.name_id == *id)
@@ -1528,8 +1876,45 @@ fn collect_static_fn_caps<'a, 'src>(
         for (cap_arg, param_id) in cap_args.iter().zip(fn_params.iter()) {
           if let Arg::Val(cap_val) = cap_arg {
             let bind_id = resolve_cap_arg_bind(cap_val, ctx);
-            if let Some(bid) = bind_id
-              && let Some(cap_fn_idx) = ctx.func_index_through_closure(bid)
+            let cap_fn_idx = bind_id.and_then(|bid| {
+              ctx.func_index_through_closure(bid).or_else(|| {
+                // Follow param_source chain: cap param → original bind → fn index.
+                // Handles caps that reference other fns via Local(cap_param).
+                let mut cur = bid;
+                for _ in 0..8 {
+                  if let Some(&source) = ctx.param_source.get(&cur) {
+                    if let Some(idx) = ctx.func_index_through_closure(source) {
+                      return Some(idx);
+                    }
+                    cur = source;
+                  } else { break; }
+                }
+                None
+              })
+            });
+            // Fallback 1: check already-discovered static caps by param AST origin.
+            let cap_fn_idx = cap_fn_idx.or_else(|| {
+              let ast_id = ctx.origin.try_get(*param_id)?.as_ref()?;
+              out.get(ast_id).copied()
+            });
+            // Fallback 2: for Unresolved forward refs (mutual recursion), find a
+            // val_alias entry whose key shares the same AST origin as the cap val.
+            // The LetVal that binds the forward-referenced fn creates a val_alias
+            // entry; matching by AST origin connects the unresolved cap to it.
+            let cap_fn_idx = cap_fn_idx.or_else(|| {
+              if bind_id.is_some() { return None; } // only for Unresolved
+              let cap_ast = ctx.origin.try_get(cap_val.id)?.as_ref()?;
+              for (&alias_key, &alias_target) in &ctx.val_alias {
+                if let Some(Some(key_ast)) = ctx.origin.try_get(alias_key)
+                  && key_ast == cap_ast
+                  && let Some(idx) = ctx.func_index_through_closure(alias_target)
+                {
+                  return Some(idx);
+                }
+              }
+              None
+            });
+            if let Some(cap_fn_idx) = cap_fn_idx
               && let Some(Some(ast_id)) = ctx.origin.try_get(*param_id)
             {
               out.insert(*ast_id, cap_fn_idx);
@@ -1631,6 +2016,51 @@ fn process_closures_inner<'a, 'src>(
             cf.param_kinds.remove(i);
           }
           cf.arity = cf.param_ids.len() as u32 + 1;
+        }
+
+        // Strip Bind::Cont captures from cont fns → pass via $cont_env global.
+        // After static cap stripping, any remaining Bind::Cont params are cont captures
+        // that must go through $cont_env to keep the fn $Cont-compatible.
+        {
+          let cf = &ctx.funcs[fn_pos];
+          let cont_cap_indices: Vec<usize> = cf.param_kinds.iter().enumerate()
+            .filter(|(_, k)| **k == Bind::Cont)
+            .map(|(i, _)| i)
+            .collect();
+          if !cont_cap_indices.is_empty() {
+            // Record the cap arg source CpsIds for the stripped cont caps.
+            let cont_cap_sources: Vec<CpsId> = cont_cap_indices.iter()
+              .filter_map(|&i| {
+                let param_id = ctx.funcs[fn_pos].param_ids[i];
+                ctx.param_source.get(&param_id).copied()
+              })
+              .collect();
+            let fn_name_id = ctx.funcs[fn_pos].name_id;
+            if !cont_cap_sources.is_empty() {
+              ctx.cont_env_caps.insert(fn_name_id, cont_cap_sources);
+            }
+            // Map post-strip cont_cap_indices back to original cap_args indices.
+            // After static cap removal, post-strip index i maps to the (i+skip)-th
+            // original index, where skip accounts for removed static caps before it.
+            let remaining_original_indices: Vec<usize> = (0..fn_params.len())
+              .filter(|i| !static_cap_indices.contains(i))
+              .collect();
+            for &post_strip_idx in &cont_cap_indices {
+              if let Some(&orig_idx) = remaining_original_indices.get(post_strip_idx)
+                && !static_cap_indices.contains(&orig_idx)
+              {
+                static_cap_indices.push(orig_idx);
+              }
+            }
+            let cf = &mut ctx.funcs[fn_pos];
+            for &i in cont_cap_indices.iter().rev() {
+              cf.param_ids.remove(i);
+              cf.param_kinds.remove(i);
+            }
+            // Arity = param_ids.len() (no +1 for own dead cont).
+            // Cont fns read their cont from $cont_env, so their own cont param is unused.
+            cf.arity = cf.param_ids.len() as u32;
+          }
         }
 
         // Record closure_fn: result cont param → hoisted fn index.

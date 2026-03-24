@@ -604,7 +604,7 @@ fn resolve_expr<'src>(
       }
     }
 
-    LetFn { name, params, fn_body, body, .. } => {
+    LetFn { name, params, cont, fn_body, body } => {
       // Fn bodies see all names at this scope level (hoisted), enabling
       // self- and mutual recursion. Collect all User bind names from the
       // entire continuation chain starting here.
@@ -639,6 +639,7 @@ fn resolve_expr<'src>(
             bind_to_scope(&mut fn_scope, b, fn_scope_id, fn_depth + 1, ctx, graphs),
         }
       }
+      bind_to_scope(&mut fn_scope, cont, fn_scope_id, fn_depth + 1, ctx, graphs);
       resolve_expr(fn_body, &fn_scope, fn_scope_id, fn_self_bind, fn_depth + 1, ctx, graphs);
 
       // continuation scope: sequential (only names defined so far)
