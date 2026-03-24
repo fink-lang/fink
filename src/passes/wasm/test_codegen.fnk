@@ -48,6 +48,25 @@ test 'user fn call', fn:
   | equals fink":
     7
 
+test 'chained fn calls', fn:
+  expect run fink":
+    double = fn x: x * 2
+    inc = fn x: x + 1
+    main = fn:
+      x = double 5
+      inc x
+  | equals fink":
+    11
+
+test 'pipe unary', fn:
+  expect run fink":
+    double = fn x: x * 2
+    inc = fn x: x + 1
+    main = fn:
+      5 | double | inc
+  | equals fink":
+    11
+
 # --- match ---
 
 test 'match literal first arm', fn:

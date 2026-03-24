@@ -90,21 +90,21 @@ test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_58:
-        ·fn_closure ·v_44, a, b, fn ·v_7:
+      fn a, b, ·ƒ_60:
+        ·fn_closure ·v_46, a, b, fn ·v_7:
           ·ƒ_6 ·v_7
-      fn ·v_57:
+      fn ·v_59:
         ·fn
-          fn c, ·v_12, ·ƒ_37: ·op_plus ·v_12, c, ·ƒ_9
-          fn ·v_36:
+          fn c, ·ƒ_35, ·v_12, ·ƒ_39: ·op_plus ·v_12, c, ·ƒ_9
+          fn ·v_38:
             ·fn
-              fn a, b, c, ·ƒ_45:
-                ·fn_closure ·v_36, c, fn ·ƒ_30, ·v_33:
+              fn a, b, c, ·ƒ_47:
+                ·fn_closure ·v_38, c, ·v_9, fn ·ƒ_30, ·v_33:
                   ·op_plus a, b, ·ƒ_30
-              fn ·v_44:
+              fn ·v_46:
                 ·fn
                   fn a, ·ƒ_3:
-                    ·fn_closure ·v_57, a, fn ·v_4:
+                    ·fn_closure ·v_59, a, fn ·v_4:
                       ·ƒ_3 ·v_4
                   fn ·v_1:
                     ·let ·v_1, fn foo:
@@ -188,11 +188,11 @@ test 'match — no forward refs after lift', fn:
 
   | equals fink":
     ·fn
-      fn n, ·v_18, ·ƒ_46: ·match_block n, ·v_18, ·ƒ_3
-      fn ·v_45:
+      fn n, ·ƒ_44, ·v_18, ·ƒ_48: ·match_block n, ·v_18, ·ƒ_3
+      fn ·v_47:
         ·fn
           fn n, ·ƒ_3:
-            ·fn_closure ·v_45, n, fn ·ƒ_31, ·v_42:
+            ·fn_closure ·v_47, n, ·v_3, fn ·ƒ_31, ·v_42:
               ·fn
                 fn ·ƒ_11, ·ƒ_35:
                   ·let 42, fn ·v_13:
