@@ -38,6 +38,7 @@ jobs:
           BUMP="none"
           if echo "$COMMITS" | grep -qE "^BREAKING CHANGE:|^[a-z]+(\(.+\))?!:"; then
             if [ "$MAJOR" -eq 0 ]; then
+              # Pre-1.0: breaking changes bump minor
               MINOR=$((MINOR + 1))
               PATCH=0
             else
@@ -47,12 +48,9 @@ jobs:
             fi
             BUMP="major"
           elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
-            if [ "$MAJOR" -eq 0 ]; then
-              PATCH=$((PATCH + 1))
-            else
-              MINOR=$((MINOR + 1))
-              PATCH=0
-            fi
+            # feat always bumps minor
+            MINOR=$((MINOR + 1))
+            PATCH=0
             BUMP="minor"
           elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
             PATCH=$((PATCH + 1))
