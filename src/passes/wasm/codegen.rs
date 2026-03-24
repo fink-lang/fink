@@ -67,7 +67,7 @@ pub fn codegen(
 // ---------------------------------------------------------------------------
 
 const TY_ANY: u32 = 0;      // (sub (struct))
-const TY_INT: u32 = 1;      // (sub $Any (struct (field i64)))
+const TY_NUM: u32 = 1;      // (sub $Any (struct (field f64))) — universal number
 const TY_CONT: u32 = 2;     // (func (param anyref)) — $__halt type: receives result value
 const TY_VOID: u32 = 3;     // (func) — entry point type
 const TY_FN1: u32 = 4;      // (func (param (ref $Cont))) — arity-1 compiled fn: receives cont
@@ -325,7 +325,7 @@ fn emit_name_section(module: &mut Module, ctx: &Ctx) {
 
   let mut type_names = NameMap::new();
   type_names.append(TY_ANY, "Any");
-  type_names.append(TY_INT, "Int");
+  type_names.append(TY_NUM, "Num");
   type_names.append(TY_CONT, "Cont");
   type_names.append(TY_VOID, "void");
   type_names.append(TY_FN1, "Fn1");
@@ -374,13 +374,13 @@ fn emit_types(module: &mut Module, ctx: &Ctx) {
     })),
   });
 
-  // TY_INT = 1: (sub $Any (struct (field i64)))
+  // TY_NUM = 1: (sub $Any (struct (field f64))) — universal number type
   types.ty().subtype(&SubType {
     is_final: false,
     supertype_idx: Some(TY_ANY),
     composite_type: ct(CompositeInnerType::Struct(wasm_encoder::StructType {
       fields: Box::new([FieldType {
-        element_type: StorageType::Val(ValType::I64),
+        element_type: StorageType::Val(ValType::F64),
         mutable: false,
       }]),
     })),
@@ -523,8 +523,10 @@ fn emit_code_section<'a, 'src>(root: &'a Expr<'src>, module: &mut Module, ctx: &
 fn build_halt() -> Function {
   let mut f = Function::new([]);
   f.instruction(&Instruction::LocalGet(0));
-  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-  f.instruction(&Instruction::I31GetS);
+  // Unwrap $Num(f64) → f64 → trunc to i32 for result global.
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_NUM)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_NUM, field_index: 0 });
+  f.instruction(&Instruction::I32TruncF64S);
   f.instruction(&Instruction::GlobalSet(GLOBAL_RESULT));
   f.instruction(&Instruction::End);
   f
@@ -804,21 +806,115 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
 
   match func {
     Callable::BuiltIn(op) => match op {
-      Add | Sub | Mul => {
+      Add | Sub | Mul | Div | Pow => {
         let (val_args, cont) = split_app_args(args);
         emit_arg_val(val_args[0], f, fc);
-        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-        f.instruction(&Instruction::I31GetS);
+        emit_unwrap_num(f);
         emit_arg_val(val_args[1], f, fc);
-        f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-        f.instruction(&Instruction::I31GetS);
+        emit_unwrap_num(f);
         match op {
-          Add => f.instruction(&Instruction::I32Add),
-          Sub => f.instruction(&Instruction::I32Sub),
-          Mul => f.instruction(&Instruction::I32Mul),
+          Add => f.instruction(&Instruction::F64Add),
+          Sub => f.instruction(&Instruction::F64Sub),
+          Mul => f.instruction(&Instruction::F64Mul),
+          Div => f.instruction(&Instruction::F64Div),
+          // f64 has no built-in pow — use the pattern: exp(ln(a) * b)
+          // but WASM doesn't have exp/ln either. For now, unreachable for Pow.
+          Pow => f.instruction(&Instruction::Unreachable),
           _ => unreachable!(),
         };
-        f.instruction(&Instruction::RefI31);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      IntDiv | Mod | IntMod => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          IntDiv => f.instruction(&Instruction::I64DivS),
+          Mod | IntMod => f.instruction(&Instruction::I64RemS),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      Eq | Neq | Lt | Lte | Gt | Gte => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        match op {
+          Eq  => f.instruction(&Instruction::F64Eq),
+          Neq => f.instruction(&Instruction::F64Ne),
+          Lt  => f.instruction(&Instruction::F64Lt),
+          Lte => f.instruction(&Instruction::F64Le),
+          Gt  => f.instruction(&Instruction::F64Gt),
+          Gte => f.instruction(&Instruction::F64Ge),
+          _ => unreachable!(),
+        };
+        // Boolean result: 0.0 or 1.0
+        f.instruction(&Instruction::F64ConvertI32S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      And | Or | Xor => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          And => f.instruction(&Instruction::I64And),
+          Or  => f.instruction(&Instruction::I64Or),
+          Xor => f.instruction(&Instruction::I64Xor),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      Not => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        // not x = if x == 0.0 then 1.0 else 0.0
+        f.instruction(&Instruction::F64Const(0.0_f64.into()));
+        f.instruction(&Instruction::F64Eq);
+        f.instruction(&Instruction::F64ConvertI32S);
+        emit_wrap_num(f);
+        emit_cont_call_with_anyref(cont, f, fc);
+      }
+
+      BitAnd | BitXor | Shl | Shr | RotL | RotR => {
+        let (val_args, cont) = split_app_args(args);
+        emit_arg_val(val_args[0], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        emit_arg_val(val_args[1], f, fc);
+        emit_unwrap_num(f);
+        f.instruction(&Instruction::I64TruncF64S);
+        match op {
+          BitAnd => f.instruction(&Instruction::I64And),
+          BitXor => f.instruction(&Instruction::I64Xor),
+          Shl    => f.instruction(&Instruction::I64Shl),
+          Shr    => f.instruction(&Instruction::I64ShrS),
+          RotL   => f.instruction(&Instruction::I64Rotl),
+          RotR   => f.instruction(&Instruction::I64Rotr),
+          _ => unreachable!(),
+        };
+        f.instruction(&Instruction::F64ConvertI64S);
+        emit_wrap_num(f);
         emit_cont_call_with_anyref(cont, f, fc);
       }
 
@@ -935,14 +1031,12 @@ fn emit_match_block(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
             }).collect();
             if mv_vals.len() >= 2 {
               let expected = mv_vals[1];
-              // Compare scrutinee == expected.
+              // Compare scrutinee == expected (f64).
               emit_val(scrutinee_val, f, fc);
-              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-              f.instruction(&Instruction::I31GetS);
+              emit_unwrap_num(f);
               emit_val(expected, f, fc);
-              f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-              f.instruction(&Instruction::I31GetS);
-              f.instruction(&Instruction::I32Eq);
+              emit_unwrap_num(f);
+              f.instruction(&Instruction::F64Eq);
 
               f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
               if_depth += 1;
@@ -1014,12 +1108,10 @@ fn emit_match_value(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
     let success_val = val_args[2];
 
     emit_val(scrutinee, f, fc);
-    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-    f.instruction(&Instruction::I31GetS);
+    emit_unwrap_num(f);
     emit_val(expected, f, fc);
-    f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::I31));
-    f.instruction(&Instruction::I31GetS);
-    f.instruction(&Instruction::I32Eq);
+    emit_unwrap_num(f);
+    f.instruction(&Instruction::F64Eq);
 
     f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
     if let ValKind::ContRef(success_id) = &success_val.kind {
@@ -1320,17 +1412,32 @@ fn emit_cont_call_with_val(val: &Val<'_>, cont_id: CpsId, f: &mut Function, fc: 
 // Value emission
 // ---------------------------------------------------------------------------
 
+/// Unwrap a $Num struct to f64 on the stack.
+fn emit_unwrap_num(f: &mut Function) {
+  f.instruction(&Instruction::RefCastNonNull(wasm_encoder::HeapType::Concrete(TY_NUM)));
+  f.instruction(&Instruction::StructGet { struct_type_index: TY_NUM, field_index: 0 });
+}
+
+/// Wrap an f64 on the stack into a $Num struct.
+fn emit_wrap_num(f: &mut Function) {
+  f.instruction(&Instruction::StructNew(TY_NUM));
+}
+
 fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
   fc.mark(f, val.id);
 
   match &val.kind {
     ValKind::Lit(Lit::Int(n)) => {
-      f.instruction(&Instruction::I32Const(*n as i32));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const((*n as f64).into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
+    }
+    ValKind::Lit(Lit::Float(n)) | ValKind::Lit(Lit::Decimal(n)) => {
+      f.instruction(&Instruction::F64Const((*n).into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
     ValKind::Lit(Lit::Bool(b)) => {
-      f.instruction(&Instruction::I32Const(if *b { 1 } else { 0 }));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const(if *b { 1.0_f64 } else { 0.0_f64 }.into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
     ValKind::Ref(r) => {
       let bind_id = match r {
@@ -1354,8 +1461,8 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
       }
     }
     _ => {
-      f.instruction(&Instruction::I32Const(0));
-      f.instruction(&Instruction::RefI31);
+      f.instruction(&Instruction::F64Const(0.0_f64.into()));
+      f.instruction(&Instruction::StructNew(TY_NUM));
     }
   }
 }
@@ -1397,11 +1504,16 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         collect_funcs(cont_body, ctx);
       }
     }
-    ExprKind::LetVal { name, val, body: Cont::Expr { body: cont_body, .. } } => {
+    ExprKind::LetVal { name, val, body: Cont::Expr { args, body: cont_body } } => {
       // Record val_alias for LetVal rebindings: name → synth target.
       // This lets func_index follow chains like `add = <fn_ref>`.
+      // Also alias the Cont::Expr args (the scope binds name_res resolves to)
+      // so func_index_through_closure works for references resolved via name_res.
       if let ValKind::Ref(Ref::Synth(target)) = &val.kind {
         ctx.val_alias.insert(name.id, *target);
+        for arg in args {
+          ctx.val_alias.insert(arg.id, *target);
+        }
       }
       collect_funcs(cont_body, ctx);
     }
@@ -1439,22 +1551,26 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
 /// - Strips static cap params (module-level fn refs) from hoisted fn signatures.
 /// - Builds closure_fn: maps result cont params to hoisted fn indices.
 fn process_closures<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
-  // Three-phase approach:
   // Phase 1: Populate closure_fn for ALL FnClosure nodes. This must happen first so that
   //   func_index_through_closure can resolve cap args that alias through FnClosure result
   //   binds (e.g. recursive fn closures where the fn ref goes through closure_fn).
   collect_closure_fns(expr, ctx);
-  // Phase 2: Collect all resolvable static fn caps (AST origin → fn_idx).
-  //   Uses func_index_through_closure so caps routed through closure_fn are found.
+  // Phase 2+3: Iterate static cap collection + processing until convergence.
+  //   Mutual recursion creates forward references (is-odd bound after is-even's FnClosure).
+  //   First pass resolves the backward ref (is-even), populating known_static_caps.
+  //   Second pass resolves the forward ref (is-odd) via known_static_caps.
   let mut known_static_caps: std::collections::HashMap<AstId, u32> = std::collections::HashMap::new();
-  collect_static_fn_caps(expr, ctx, &mut known_static_caps);
-  // Phase 3: Process each FnClosure — strip static caps, build param_source/closure_caps.
+  for _ in 0..8 {
+    let prev_count = known_static_caps.len();
+    collect_static_fn_caps(expr, ctx, &mut known_static_caps);
+    if known_static_caps.len() == prev_count { break; }
+  }
   process_closures_inner(expr, ctx, &known_static_caps);
 }
 
-/// Phase 1 pre-pass: walk FnClosure Apps and populate closure_fn entries
-/// (result cont param CpsId → hoisted fn index) for ALL FnClosure nodes.
-/// This must run before cap resolution so func_index_through_closure works.
+/// Phase 1 pre-pass: walk FnClosure Apps and populate closure_fn and param_source
+/// entries for ALL FnClosure nodes. This must run before cap resolution so
+/// func_index_through_closure and param_source chains work in later phases.
 fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
   use crate::passes::cps::ir::BuiltIn;
   match &expr.kind {
@@ -1464,6 +1580,17 @@ fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) 
         && let Some(fn_pos) = ctx.funcs.iter().position(|f| f.name_id == *hoisted_fn_id)
       {
         let hoisted_fn_idx = FN_COMPILED_START + fn_pos as u32;
+        // Populate param_source: cap param → cap arg source bind.
+        let cap_args = &args[1..args.len().saturating_sub(1)];
+        let fn_params = ctx.funcs[fn_pos].param_ids.clone();
+        for (cap_arg, param_id) in cap_args.iter().zip(fn_params.iter()) {
+          if let Arg::Val(cap_val) = cap_arg
+            && let Some(bid) = resolve_cap_arg_bind(cap_val, ctx)
+          {
+            ctx.param_source.insert(*param_id, bid);
+          }
+        }
+        // Populate closure_fn: result cont param → hoisted fn index.
         let result_cont_param = args.last().and_then(|a| match a {
           Arg::Cont(Cont::Ref(id)) => {
             ctx.funcs.iter().position(|f| f.name_id == *id)
@@ -1528,8 +1655,45 @@ fn collect_static_fn_caps<'a, 'src>(
         for (cap_arg, param_id) in cap_args.iter().zip(fn_params.iter()) {
           if let Arg::Val(cap_val) = cap_arg {
             let bind_id = resolve_cap_arg_bind(cap_val, ctx);
-            if let Some(bid) = bind_id
-              && let Some(cap_fn_idx) = ctx.func_index_through_closure(bid)
+            let cap_fn_idx = bind_id.and_then(|bid| {
+              ctx.func_index_through_closure(bid).or_else(|| {
+                // Follow param_source chain: cap param → original bind → fn index.
+                // Handles caps that reference other fns via Local(cap_param).
+                let mut cur = bid;
+                for _ in 0..8 {
+                  if let Some(&source) = ctx.param_source.get(&cur) {
+                    if let Some(idx) = ctx.func_index_through_closure(source) {
+                      return Some(idx);
+                    }
+                    cur = source;
+                  } else { break; }
+                }
+                None
+              })
+            });
+            // Fallback 1: check already-discovered static caps by param AST origin.
+            let cap_fn_idx = cap_fn_idx.or_else(|| {
+              let ast_id = ctx.origin.try_get(*param_id)?.as_ref()?;
+              out.get(ast_id).copied()
+            });
+            // Fallback 2: for Unresolved forward refs (mutual recursion), find a
+            // val_alias entry whose key shares the same AST origin as the cap val.
+            // The LetVal that binds the forward-referenced fn creates a val_alias
+            // entry; matching by AST origin connects the unresolved cap to it.
+            let cap_fn_idx = cap_fn_idx.or_else(|| {
+              if bind_id.is_some() { return None; } // only for Unresolved
+              let cap_ast = ctx.origin.try_get(cap_val.id)?.as_ref()?;
+              for (&alias_key, &alias_target) in &ctx.val_alias {
+                if let Some(Some(key_ast)) = ctx.origin.try_get(alias_key)
+                  && key_ast == cap_ast
+                  && let Some(idx) = ctx.func_index_through_closure(alias_target)
+                {
+                  return Some(idx);
+                }
+              }
+              None
+            });
+            if let Some(cap_fn_idx) = cap_fn_idx
               && let Some(Some(ast_id)) = ctx.origin.try_get(*param_id)
             {
               out.insert(*ast_id, cap_fn_idx);
