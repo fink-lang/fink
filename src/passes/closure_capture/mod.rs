@@ -16,200 +16,118 @@
 
 use crate::propgraph::PropGraph;
 use crate::passes::name_res::{Resolution, ResolveResult};
-use crate::passes::cps::ir::{Arg, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Ref, Val, ValKind};
-use crate::ast::{AstId, NodeKind};
+use crate::passes::cps::ir::{Arg, Bind, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Val};
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
 /// Capture graph — maps each LetFn's name-bind CpsId to its ordered capture list.
-/// Pure functions map to an empty Vec.
-pub type CaptureGraph<'src> = PropGraph<CpsId, Vec<&'src str>>;
+/// Each entry is (bind CpsId, bind kind) of a captured value. The bind kind
+/// determines the WASM type (Cont → ref $Cont, others → anyref).
+/// Source names can be recovered via the origin map + AST index.
+pub type CaptureGraph = PropGraph<CpsId, Vec<(CpsId, Bind)>>;
 
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
 /// Build the capture graph for all LetFn nodes in `result`.
-pub fn analyse<'src>(
-  result: &CpsResult<'src>,
+/// Uses the name_res captures prop graph, gated: fns with only transitive
+/// captures (no direct captures) have their captures cleared for this round —
+/// the multi-round lifting approach handles them.
+pub fn analyse(
+  result: &CpsResult<'_>,
   resolve: &ResolveResult,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-) -> CaptureGraph<'src> {
-  let node_count = result.origin.len();
-  let mut graph: CaptureGraph<'src> = PropGraph::with_size(node_count, Vec::new());
-  collect_expr(&result.root, resolve, &result.origin, ast_index, 0, &mut graph);
+) -> CaptureGraph {
+  // Determine which fns have direct captures (Captured refs in immediate body).
+  let mut direct_fns: std::collections::HashSet<CpsId> = std::collections::HashSet::new();
+  collect_direct_capture_scopes(&result.root, resolve, &mut direct_fns);
+
+  // Clone name_res captures, clearing transitive-only fns.
+  let mut graph = CaptureGraph::new();
+  for i in 0..resolve.captures.len() {
+    let id = CpsId(i as u32);
+    if let Some(caps) = resolve.captures.try_get(id) {
+      if direct_fns.contains(&id) || caps.is_empty() {
+        graph.push(caps.clone());
+      } else {
+        graph.push(Vec::new());
+      }
+    }
+  }
   graph
 }
 
-// ---------------------------------------------------------------------------
-// Name recovery
-// ---------------------------------------------------------------------------
-
-fn source_name<'src>(
-  cps_id: CpsId,
-  origin: &PropGraph<CpsId, Option<AstId>>,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-) -> Option<&'src str> {
-  let ast_id = (*origin.try_get(cps_id)?)?;
-  let node = (*ast_index.try_get(ast_id)?)?;
-  match &node.kind {
-    NodeKind::Ident(s) => Some(s),
-    _ => None,
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Walk — collect captures per LetFn
-// ---------------------------------------------------------------------------
-
-fn collect_val<'src>(
-  val: &Val<'src>,
+/// Walk the tree to find LetFn scopes that have direct captures.
+fn collect_direct_capture_scopes(
+  expr: &Expr<'_>,
   resolve: &ResolveResult,
-  origin: &PropGraph<CpsId, Option<AstId>>,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-  captures: &mut Vec<&'src str>,
-) {
-  if let ValKind::Ref(Ref::Name) = &val.kind
-    && let Some(Resolution::Captured { depth, bind }) =
-      resolve.resolution.try_get(val.id).and_then(|r| r.as_ref())
-  {
-    // Any Captured ref seen in the fn body (with nested fn bodies skipped by
-    // collect_captured_in_body) is directly captured by this fn.
-    if *depth >= 1
-      && let Some(name) = source_name(*bind, origin, ast_index)
-      && !captures.contains(&name)
-    {
-      captures.push(name);
-    }
-  }
-}
-
-fn collect_callable<'src>(
-  callable: &Callable<'src>,
-  resolve: &ResolveResult,
-  origin: &PropGraph<CpsId, Option<AstId>>,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-  captures: &mut Vec<&'src str>,
-) {
-  if let Callable::Val(v) = callable {
-    collect_val(v, resolve, origin, ast_index, captures);
-  }
-}
-
-/// Walk a Cont: if Ref, collect the val; if Expr, recurse into the body.
-fn collect_cont<'src>(
-  cont: &Cont<'src>,
-  resolve: &ResolveResult,
-  origin: &PropGraph<CpsId, Option<AstId>>,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-  captures: &mut Vec<&'src str>,
-) {
-  match cont {
-    Cont::Ref(_cont_id) => {} // cont param ref — resolved by construction, no capture
-    Cont::Expr { body, .. } => collect_captured_in_body(body, resolve, origin, ast_index, captures),
-  }
-}
-
-/// Collect all refs directly captured by the enclosing fn (Captured { depth: 1 }).
-/// Does not descend into nested LetFn bodies — those are handled by collect_expr.
-fn collect_captured_in_body<'src>(
-  expr: &Expr<'src>,
-  resolve: &ResolveResult,
-  origin: &PropGraph<CpsId, Option<AstId>>,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-  captures: &mut Vec<&'src str>,
+  out: &mut std::collections::HashSet<CpsId>,
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, body, .. } => {
-      collect_val(val, resolve, origin, ast_index, captures);
-      collect_cont(body, resolve, origin, ast_index, captures);
-    }
-
-    LetFn { body, .. } => {
-      // Don't descend into fn_body — captures inside nested fns belong to those
-      // fns and are registered separately by collect_expr. Only walk the
-      // continuation (same scope level as the outer fn).
-      collect_cont(body, resolve, origin, ast_index, captures);
-    }
-
-    App { func, args } => {
-      collect_callable(func, resolve, origin, ast_index, captures);
-      for arg in args {
-        match arg {
-          Arg::Val(v) | Arg::Spread(v) => collect_val(v, resolve, origin, ast_index, captures),
-          Arg::Cont(c) => collect_cont(c, resolve, origin, ast_index, captures),
-          Arg::Expr(e) => collect_captured_in_body(e, resolve, origin, ast_index, captures),
-        }
+    LetFn { name, fn_body, body, .. } => {
+      if has_direct_captures(fn_body, resolve) {
+        out.insert(name.id);
+      }
+      collect_direct_capture_scopes(fn_body, resolve, out);
+      if let Cont::Expr { body: b, .. } = body {
+        collect_direct_capture_scopes(b, resolve, out);
       }
     }
-
-    If { cond, then, else_ } => {
-      collect_val(cond, resolve, origin, ast_index, captures);
-      collect_captured_in_body(then, resolve, origin, ast_index, captures);
-      collect_captured_in_body(else_, resolve, origin, ast_index, captures);
+    LetVal { body: Cont::Expr { body: b, .. }, .. } => {
+      collect_direct_capture_scopes(b, resolve, out);
     }
-
-    Yield { value, cont } => {
-      collect_val(value, resolve, origin, ast_index, captures);
-      collect_cont(cont, resolve, origin, ast_index, captures);
-    }
-
-  }
-}
-
-/// Walk the full IR, registering captures for every LetFn.
-/// `fn_depth` is the absolute fn nesting depth at this point (0 = module root).
-#[allow(clippy::only_used_in_recursion)]
-fn collect_expr<'src>(
-  expr: &Expr<'src>,
-  resolve: &ResolveResult,
-  origin: &PropGraph<CpsId, Option<AstId>>,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-  fn_depth: u32,
-  graph: &mut CaptureGraph<'src>,
-) {
-  use ExprKind::*;
-  match &expr.kind {
-    LetFn { name, params, fn_body, body, .. } => {
-      // Collect all depth-1 captures from this fn's immediate body.
-      let mut caps: Vec<&'src str> = Vec::new();
-      collect_captured_in_body(fn_body, resolve, origin, ast_index, &mut caps);
-      graph.set(name.id, caps);
-
-      // Recurse into fn_body (deeper) and continuation (same depth).
-      collect_expr(fn_body, resolve, origin, ast_index, fn_depth + 1, graph);
-      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
-
-      let _ = params;
-    }
-
-    LetVal { body, .. } => {
-      if let Some(body_expr) = body.body() { collect_expr(body_expr, resolve, origin, ast_index, fn_depth, graph); }
-    }
-
+    LetVal { .. } => {}
     App { args, .. } => {
       for arg in args {
         match arg {
-          Arg::Cont(c) => { if let Some(body) = c.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); } }
-          Arg::Expr(e) => collect_expr(e, resolve, origin, ast_index, fn_depth, graph),
+          Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => collect_direct_capture_scopes(body, resolve, out),
           _ => {}
         }
       }
     }
-
     If { then, else_, .. } => {
-      collect_expr(then, resolve, origin, ast_index, fn_depth, graph);
-      collect_expr(else_, resolve, origin, ast_index, fn_depth, graph);
+      collect_direct_capture_scopes(then, resolve, out);
+      collect_direct_capture_scopes(else_, resolve, out);
     }
-
-    Yield { cont, .. } => {
-      if let Some(body) = cont.body() { collect_expr(body, resolve, origin, ast_index, fn_depth, graph); }
-    }
-
+    Yield { cont: Cont::Expr { body, .. }, .. } => collect_direct_capture_scopes(body, resolve, out),
+    _ => {}
   }
+}
+
+/// Check if a fn body has any direct Captured refs (conts only, not nested fn_bodies).
+fn has_direct_captures(expr: &Expr<'_>, resolve: &ResolveResult) -> bool {
+  use ExprKind::*;
+  match &expr.kind {
+    LetVal { val, body, .. } => {
+      is_captured_val(val, resolve) || matches!(body, Cont::Expr { body: b, .. } if has_direct_captures(b, resolve))
+    }
+    LetFn { body, .. } => {
+      matches!(body, Cont::Expr { body: b, .. } if has_direct_captures(b, resolve))
+    }
+    App { func, args } => {
+      if let Callable::Val(v) = func
+        && is_captured_val(v, resolve)
+      { return true; }
+      args.iter().any(|a| match a {
+        Arg::Val(v) | Arg::Spread(v) => is_captured_val(v, resolve),
+        Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => has_direct_captures(body, resolve),
+        Arg::Cont(Cont::Ref(id)) => matches!(resolve.resolution.try_get(*id), Some(Some(Resolution::Captured { .. }))),
+      })
+    }
+    If { cond, then, else_ } => {
+      is_captured_val(cond, resolve) || has_direct_captures(then, resolve) || has_direct_captures(else_, resolve)
+    }
+    Yield { value, cont } => {
+      is_captured_val(value, resolve) || matches!(cont, Cont::Expr { body, .. } if has_direct_captures(body, resolve))
+    }
+  }
+}
+
+fn is_captured_val(val: &Val<'_>, resolve: &ResolveResult) -> bool {
+  matches!(resolve.resolution.try_get(val.id), Some(Some(Resolution::Captured { .. })))
 }
 
 // ---------------------------------------------------------------------------
@@ -231,8 +149,8 @@ mod tests {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
         let node_count = cps.origin.len();
-        let resolve_result = resolve(&cps.root, &cps.origin, &ast_index, node_count);
-        let cap_graph = analyse(&cps, &resolve_result, &ast_index);
+        let empty_alias = crate::propgraph::PropGraph::new(); let resolve_result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
+        let cap_graph = analyse(&cps, &resolve_result);
         let ctx = Ctx {
           origin: &cps.origin,
           ast_index: &ast_index,

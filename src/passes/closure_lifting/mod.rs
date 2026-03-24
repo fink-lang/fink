@@ -34,7 +34,7 @@
 //   3. The output CpsResult.origin must be dense.
 //   4. Produce a fresh tree — never mutate the input in place.
 
-use crate::passes::name_res::{Resolution, ResolveResult};
+use crate::passes::name_res::ResolveResult;
 use crate::passes::closure_capture::CaptureGraph;
 use crate::passes::cps::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
@@ -100,20 +100,15 @@ struct HoistedFn<'src> {
 fn lift_once<'src>(
   result: CpsResult<'src>,
   resolve: &ResolveResult,
-  captures: &CaptureGraph<'src>,
+  captures: &CaptureGraph,
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
 ) -> CpsResult<'src> {
   let mut alloc = Alloc::new(result.origin);
+  let mut synth_alias = result.synth_alias;
   let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
-  let new_root = lift_expr(result.root, captures, resolve, ast_index, &mut alloc, &mut hoisted);
+  let new_root = lift_expr(result.root, captures, resolve, ast_index, &mut alloc, &mut hoisted, &mut synth_alias);
   let new_root = wrap_hoisted(new_root, hoisted, &mut alloc);
-  CpsResult { root: new_root, origin: alloc.origin }
-}
-
-/// Returns true if any ref in the IR still resolves as `Captured`.
-/// Scans the resolution prop graph directly — O(n) in node count, no tree walk.
-fn has_captures(resolve: &ResolveResult) -> bool {
-  resolve.any_captured()
+  CpsResult { root: new_root, origin: alloc.origin, synth_alias }
 }
 
 /// Run lifting until no `Captured` refs remain, then return the lifted IR
@@ -130,28 +125,29 @@ pub fn lift_all<'src>(
   use crate::passes::name_res::resolve;
 
   // Iterate cont_lifting + closure_lifting until no captures remain.
-  // cont_lifting may create new closures (hoisted conts that reference outer
-  // bindings), and closure_lifting may introduce new inline conts (FnClosure
-  // construction). The loop converges because each round reduces closures.
   // cont_lift before closure_lifting — hoists inline conts so closure_lifting
   // can see all named functions. Then iterate closure_lifting until no captures.
-  // Final cont_lift after the loop handles any inline conts created by
-  // FnClosure construction during closure_lifting.
+  // FnClosure Cont::Expr bindings from closure_lift stay inline — they're
+  // value-binding conts, not computation boundaries. Codegen handles them
+  // directly (via closure_fn / cap_param_fn maps).
+  const MAX_ROUNDS: usize = 20;
   let mut current = cont_lift(cps);
-  loop {
+  for round in 0..MAX_ROUNDS {
     let node_count = current.origin.len();
-    let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count);
-    if !has_captures(&resolve_result) {
-      // Final cont_lift: FnClosure App nodes from closure_lifting may have
-      // inline conts that need hoisting.
-      current = cont_lift(current);
-      let node_count = current.origin.len();
-      let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count);
+    let resolve_result = resolve(&current.root, &current.origin, ast_index, node_count, &current.synth_alias);
+    let cap_graph = analyse(&current, &resolve_result);
+    let has_actionable_captures = (0..cap_graph.len()).any(|i| {
+      cap_graph.try_get(CpsId(i as u32)).is_some_and(|caps| !caps.is_empty())
+    });
+    if !has_actionable_captures {
       return (current, resolve_result);
     }
-    let cap_graph = analyse(&current, &resolve_result, ast_index);
+    if round == MAX_ROUNDS - 1 {
+      panic!("lift_all: did not converge after {MAX_ROUNDS} rounds");
+    }
     current = lift_once(current, &resolve_result, &cap_graph, ast_index);
   }
+  unreachable!()
 }
 
 // ---------------------------------------------------------------------------
@@ -187,126 +183,60 @@ fn wrap_hoisted<'src>(
   expr
 }
 
-// ---------------------------------------------------------------------------
-// Scan inner fn body for captured bind CpsIds
-// ---------------------------------------------------------------------------
-
-fn collect_bind_ids(
-  expr: &Expr<'_>,
-  resolve: &ResolveResult,
-  out: &mut std::collections::HashMap<CpsId, CpsId>,
-) {
-  use ExprKind::*;
-  match &expr.kind {
-    LetVal { val, body, .. } => {
-      scan_val(val, resolve, out);
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    LetFn { body, .. } => {
-      if let Some(body_expr) = body.body() { collect_bind_ids(body_expr, resolve, out); }
-    }
-    App { func, args } => {
-      if let Callable::Val(v) = func { scan_val(v, resolve, out); }
-      for arg in args {
-        match arg {
-          Arg::Val(v) | Arg::Spread(v) => scan_val(v, resolve, out),
-          Arg::Cont(Cont::Expr { body, .. }) => collect_bind_ids(body, resolve, out),
-          Arg::Cont(_) => {}
-          Arg::Expr(e) => collect_bind_ids(e, resolve, out),
-        }
-      }
-    }
-    If { cond, then, else_ } => {
-      scan_val(cond, resolve, out);
-      collect_bind_ids(then, resolve, out);
-      collect_bind_ids(else_, resolve, out);
-    }
-    Yield { value, cont } => {
-      scan_val(value, resolve, out);
-      if let Cont::Expr { body, .. } = cont { collect_bind_ids(body, resolve, out); }
-    }
-  }
-}
-
-fn scan_val(
-  val: &Val<'_>,
-  resolve: &ResolveResult,
-  out: &mut std::collections::HashMap<CpsId, CpsId>,
-) {
-  if let ValKind::Ref(Ref::Name) = &val.kind
-    && let Some(Some(Resolution::Captured { bind, .. })) = resolve.resolution.try_get(val.id)
-  {
-    // bind → bind: we just want the set of captured bind CpsIds
-    out.entry(*bind).or_insert(*bind);
-  }
-}
-
-/// Look up the bind CpsId for a captured name by scanning the fn body.
-/// Returns the bind CpsId whose source name (via origin map + AST) matches `name`.
-fn find_bind_for_capture<'src>(
-  fn_body: &Expr<'src>,
-  cap_name: &str,
-  resolve: &ResolveResult,
-  origin: &PropGraph<CpsId, Option<crate::ast::AstId>>,
-  ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
-) -> Option<CpsId> {
-  let mut found: Option<CpsId> = None;
-  let mut map = std::collections::HashMap::new();
-  collect_bind_ids(fn_body, resolve, &mut map);
-  for &bind_id in map.keys() {
-    if let Some(Some(ast_id)) = origin.try_get(bind_id)
-      && let Some(Some(node)) = ast_index.try_get(*ast_id)
-      && let crate::ast::NodeKind::Ident(s) = &node.kind
-      && *s == cap_name
-    {
-      found = Some(bind_id);
-      break;
-    }
-  }
-  found
-}
-
-// ---------------------------------------------------------------------------
-// Transform — walk and rewrite, bubble hoisted fns upward
-// ---------------------------------------------------------------------------
 
 fn lift_cont<'src>(
   cont: Cont<'src>,
-  captures: &CaptureGraph<'src>,
+  captures: &CaptureGraph,
   resolve: &ResolveResult,
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn<'src>>,
+  synth_alias: &mut PropGraph<CpsId, Option<CpsId>>,
 ) -> Cont<'src> {
   match cont {
     Cont::Ref(val) => Cont::Ref(val),
-    Cont::Expr { args, body } => Cont::Expr { args, body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted)) },
+    Cont::Expr { args, body } => Cont::Expr { args, body: Box::new(lift_expr(*body, captures, resolve, ast_index, alloc, hoisted, synth_alias)) },
   }
 }
 
 fn lift_expr<'src>(
   expr: Expr<'src>,
-  captures: &CaptureGraph<'src>,
+  captures: &CaptureGraph,
   resolve: &ResolveResult,
   ast_index: &PropGraph<crate::ast::AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn<'src>>,
+  synth_alias: &mut PropGraph<CpsId, Option<CpsId>>,
 ) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
     LetFn { name, params, cont, fn_body, body } => {
-      let caps: Vec<&'src str> = captures.try_get(name.id)
+      let cap_entries: Vec<(CpsId, Bind)> = captures.try_get(name.id)
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .into_iter()
+        // Filter out captures that are already params (from a previous lifting round).
+        // Check both direct CpsId match and synth_alias match (new param → old bind).
+        .filter(|(bind_id, _)| {
+          let already_param = params.iter().any(|p| {
+            let param_id = match p { Param::Name(b) | Param::Spread(b) => b.id };
+            param_id == *bind_id
+              || synth_alias.try_get(param_id).and_then(|a| *a) == Some(*bind_id)
+          });
+          let already_cont = cont.id == *bind_id
+            || synth_alias.try_get(cont.id).and_then(|a| *a) == Some(*bind_id);
+          !already_param && !already_cont
+        })
+        .collect();
+      let cap_bind_ids: Vec<CpsId> = cap_entries.iter().map(|(id, _)| *id).collect();
 
       // Recurse into fn_body and body; collect their hoisted fns.
       let mut inner_hoisted: Vec<HoistedFn<'src>> = Vec::new();
-      let rewritten_fn_body = lift_expr(*fn_body, captures, resolve, ast_index, alloc, &mut inner_hoisted);
-      let rewritten_body    = lift_cont(body, captures, resolve, ast_index, alloc, hoisted);
+      let rewritten_fn_body = lift_expr(*fn_body, captures, resolve, ast_index, alloc, &mut inner_hoisted, synth_alias);
+      let rewritten_body    = lift_cont(body, captures, resolve, ast_index, alloc, hoisted, synth_alias);
 
-      if caps.is_empty() {
+      if cap_bind_ids.is_empty() {
         // Pure function — bubble hoisted fns from fn_body upward to the outer scope.
-        // They will be injected at the outermost LetFn (module root) by lift().
         hoisted.extend(inner_hoisted);
         Expr {
           id: expr.id,
@@ -321,29 +251,31 @@ fn lift_expr<'src>(
       } else {
         // Closure — hoist this fn to the outer scope.
         //
-        // 1. For each capture name (in order), find its bind CpsId so we can
-        //    copy the AST origin. This keeps cap params and cap args in the
-        //    same order as caps and gives them correct source names.
-        let cap_bind_ids: Vec<Option<CpsId>> = caps.iter().map(|cap_name| {
-          find_bind_for_capture(&rewritten_fn_body, cap_name, resolve, &alloc.origin, ast_index)
+        // 1. Build bind nodes for capture params using the original bind kind.
+        //    This ensures the WASM type matches (Cont → ref $Cont, others → anyref).
+        let cap_params: Vec<Param> = cap_entries.iter().map(|(bind_id, bind_kind)| {
+          let ast_origin = alloc.origin.try_get(*bind_id).and_then(|o| *o);
+          let param = alloc.bind(*bind_kind, ast_origin);
+          // For Synth/Cont captures, record the alias so name_res can resolve
+          // Ref::Synth(old_bind_id) to this new param in the hoisted fn body.
+          if *bind_kind != Bind::Name {
+            let idx: usize = param.id.into();
+            while synth_alias.len() <= idx { synth_alias.push(None); }
+            synth_alias.set(param.id, Some(*bind_id));
+          }
+          Param::Name(param)
         }).collect();
 
-        // 2. Build Name bind nodes for capture params — carry forward the
-        //    original binding's AST origin so the formatter renders the source name.
-        let cap_params: Vec<Param> = cap_bind_ids.iter().map(|bind_id| {
-          let ast_origin = bind_id
-            .and_then(|id| alloc.origin.try_get(id))
-            .and_then(|o| *o);
-          Param::Name(alloc.bind(Bind::Name, ast_origin))
-        }).collect();
-
-        // 3. Build Val refs for the capture args at the call site (outer scope).
-        //    Same AST origin as the binding — the formatter renders the source name.
-        let cap_ref_vals: Vec<Val<'src>> = cap_bind_ids.iter().map(|bind_id| {
-          let ast_origin = bind_id
-            .and_then(|id| alloc.origin.try_get(id))
-            .and_then(|o| *o);
-          alloc.val(ValKind::Ref(Ref::Name), ast_origin)
+        // 2. Build Val refs for the capture args at the call site (outer scope).
+        //    Name captures use Ref::Name (resolved by name_res via source name).
+        //    Synth/Cont captures use Ref::Synth(bind_id) (resolved via synths scope).
+        let cap_ref_vals: Vec<Val<'src>> = cap_entries.iter().map(|(bind_id, bind_kind)| {
+          let ast_origin = alloc.origin.try_get(*bind_id).and_then(|o| *o);
+          if *bind_kind == Bind::Name {
+            alloc.val(ValKind::Ref(Ref::Name), ast_origin)
+          } else {
+            alloc.val(ValKind::Ref(Ref::Synth(*bind_id)), None)
+          }
         }).collect();
 
         // 4. Push the hoisted lifted fn; also bubble any fns hoisted from fn_body.
@@ -362,25 +294,33 @@ fn lift_expr<'src>(
           fn_body: rewritten_fn_body,
         });
 
-        // 5. At the original site: emit ·fn_closure call, bind result as original name.
-        let lifted_ref  = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
-        let result_bind = alloc.synth_bind();
-        let result_ref  = alloc.val(ValKind::Ref(Ref::Synth(result_bind.id)), None);
+        // 5. At the original site: emit ·fn_closure call, bind result directly
+        //    as the original closure name (no intermediate LetVal).
+        let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
 
-        // Bind the closure val under the original closure name, then run body.
-        let closure_bind = name;
-        let subst_body = Expr {
-          id: expr.id, // carry forward original LetFn's CpsId
-          kind: LetVal {
-            name: closure_bind,
-            val: Box::new(result_ref),
-            body: rewritten_body,
-          },
+        // The rewritten_body is a Cont (from the original LetFn body).
+        // Prepend the closure name bind to its args so FnClosure binds the
+        // closure value directly under the original name.
+        let closure_cont = match rewritten_body {
+          Cont::Expr { args: mut cont_args, body } => {
+            cont_args.insert(0, name);
+            Cont::Expr { args: cont_args, body }
+          }
+          Cont::Ref(id) => {
+            // Body is just a Cont::Ref — wrap in Expr that forwards the closure value.
+            let fwd_ref = alloc.val(ValKind::Ref(Ref::Synth(name.id)), None);
+            let cont_val = alloc.val(ValKind::ContRef(id), None);
+            let fwd_app = alloc.expr(ExprKind::App {
+              func: Callable::Val(cont_val),
+              args: vec![Arg::Val(fwd_ref)],
+            }, None);
+            Cont::Expr { args: vec![name], body: Box::new(fwd_app) }
+          }
         };
 
         let mut fn_closure_args: Vec<Arg<'src>> = vec![Arg::Val(lifted_ref)];
         fn_closure_args.extend(cap_ref_vals.into_iter().map(Arg::Val));
-        fn_closure_args.push(Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(subst_body) }));
+        fn_closure_args.push(Arg::Cont(closure_cont));
 
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
@@ -395,13 +335,13 @@ fn lift_expr<'src>(
       kind: LetVal {
         name,
         val,
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted),
+        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted, synth_alias),
       },
     },
 
     App { func, args } => {
       let args = args.into_iter().map(|a| match a {
-        Arg::Cont(c) => Arg::Cont(lift_cont(c, captures, resolve, ast_index, alloc, hoisted)),
+        Arg::Cont(c) => Arg::Cont(lift_cont(c, captures, resolve, ast_index, alloc, hoisted, synth_alias)),
         other => other,
       }).collect();
       Expr { id: expr.id, kind: App { func, args } }
@@ -411,8 +351,8 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: If {
         cond,
-        then: Box::new(lift_expr(*then, captures, resolve, ast_index, alloc, hoisted)),
-        else_: Box::new(lift_expr(*else_, captures, resolve, ast_index, alloc, hoisted)),
+        then: Box::new(lift_expr(*then, captures, resolve, ast_index, alloc, hoisted, synth_alias)),
+        else_: Box::new(lift_expr(*else_, captures, resolve, ast_index, alloc, hoisted, synth_alias)),
       },
     },
 
@@ -420,7 +360,7 @@ fn lift_expr<'src>(
       id: expr.id,
       kind: Yield {
         value,
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted),
+        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted, synth_alias),
       },
     },
 
@@ -439,11 +379,12 @@ mod tests {
   use crate::parser::parse;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
   use crate::passes::cps::ir::{Arg, Callable, Cont, Expr, ExprKind, Val, ValKind, Ref};
-  use crate::passes::name_res::{Resolution, ResolveResult};
+  use crate::passes::name_res::ResolveResult;
   use crate::passes::cps::transform::lower_expr;
   use crate::propgraph::PropGraph;
   use crate::ast::{AstId, Node as AstNode};
   use crate::passes::cps::ir::CpsId;
+  use crate::passes::name_res::Resolution;
   use super::lift_all;
 
   /// Run the full pipeline (parse → CPS → lift_all) on `src` and return the
@@ -515,7 +456,7 @@ mod tests {
             val.id.0, ref_name, bind_id.0, bind_name, scope
           ));
         }
-        Some(Some(Resolution::Captured { bind, depth })) => {
+        Some(Some(Resolution::Captured { bind, depth, .. })) => {
           let bind_name = source_name(*bind, origin, ast_index).unwrap_or("?");
           let scope = result.bind_scope.try_get(*bind)
             .and_then(|s| *s).map(|s| s.0).unwrap_or(0);
@@ -604,4 +545,5 @@ mod tests {
 
   include_fink_tests!("src/passes/closure_lifting/test_closure_lifting.fnk");
   include_fink_tests!("src/passes/closure_lifting/test_closure_lift_resolve.fnk");
+
 }

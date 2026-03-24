@@ -48,6 +48,62 @@ test 'user fn call', fn:
   | equals fink":
     7
 
+# --- match ---
+
+test 'match literal first arm', fn:
+  expect run fink":
+    main = fn:
+      match 0:
+        0: 42
+        _: 99
+  | equals fink":
+    42
+
+test 'match literal fallthrough', fn:
+  expect run fink":
+    main = fn:
+      match 1:
+        0: 42
+        _: 99
+  | equals fink":
+    99
+
+test 'match with binding', fn:
+  expect run fink":
+    main = fn:
+      x = 5
+      match x:
+        0: 0
+        _: x + 1
+  | equals fink":
+    6
+
+# --- recursion ---
+
+test 'simple recursion', fn:
+  expect run fink":
+    recurse = fn n:
+      match n:
+        0: 42
+        _: recurse n - 1
+    main = fn:
+      recurse 5
+  | equals fink":
+    42
+
+test 'recursive countdown', fn:
+  expect run fink":
+    count = fn a, n:
+      match n:
+        0: a
+        _: count a + 1, n - 1
+    main = fn:
+      count 0, 10
+  | equals fink":
+    10
+
+# --- existing ---
+
 test 'chained let', fn:
   expect run fink":
     main = fn:
