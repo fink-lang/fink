@@ -147,8 +147,6 @@ test 'block body semicolon after non-application', fn:
         LitInt '2'
         LitInt '3'
 
-# TODO: trailing comma or semi at same indent (fn: foo 1, 2,\n bar 3) should be
-# an error — the dev likely forgot to indent bar 3 as an arg to foo.
 
 test 'function with default arg', fn:
   expect ast fink":
@@ -398,6 +396,25 @@ test 'semicolon grouped args', fn:
           Ident 'mul'
           LitInt '3'
           LitInt '4'
+
+
+test 'trailing comma dedent error', fn:
+  expect ast fink":
+    foo
+      bar,
+    spam
+  | equals ":
+    ERROR [2:5]: unexpected , followed by dedent
+
+
+test 'trailing semicolon dedent error', fn:
+  expect ast fink":
+    foo
+      bar;
+    spam
+  | equals ":
+    ERROR [2:5]: unexpected ; followed by dedent
+
 
 test 'nested right-to-left application', fn:
   expect ast fink":
