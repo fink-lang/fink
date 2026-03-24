@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "fink"
-version = "0.1.0"
+version = "0.0.0" # derived from git tags at publish time
 edition = "2024"
 
 
