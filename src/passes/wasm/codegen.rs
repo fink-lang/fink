@@ -1397,11 +1397,16 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         collect_funcs(cont_body, ctx);
       }
     }
-    ExprKind::LetVal { name, val, body: Cont::Expr { body: cont_body, .. } } => {
+    ExprKind::LetVal { name, val, body: Cont::Expr { args, body: cont_body } } => {
       // Record val_alias for LetVal rebindings: name → synth target.
       // This lets func_index follow chains like `add = <fn_ref>`.
+      // Also alias the Cont::Expr args (the scope binds name_res resolves to)
+      // so func_index_through_closure works for references resolved via name_res.
       if let ValKind::Ref(Ref::Synth(target)) = &val.kind {
         ctx.val_alias.insert(name.id, *target);
+        for arg in args {
+          ctx.val_alias.insert(arg.id, *target);
+        }
       }
       collect_funcs(cont_body, ctx);
     }
@@ -1439,22 +1444,26 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
 /// - Strips static cap params (module-level fn refs) from hoisted fn signatures.
 /// - Builds closure_fn: maps result cont params to hoisted fn indices.
 fn process_closures<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
-  // Three-phase approach:
   // Phase 1: Populate closure_fn for ALL FnClosure nodes. This must happen first so that
   //   func_index_through_closure can resolve cap args that alias through FnClosure result
   //   binds (e.g. recursive fn closures where the fn ref goes through closure_fn).
   collect_closure_fns(expr, ctx);
-  // Phase 2: Collect all resolvable static fn caps (AST origin → fn_idx).
-  //   Uses func_index_through_closure so caps routed through closure_fn are found.
+  // Phase 2+3: Iterate static cap collection + processing until convergence.
+  //   Mutual recursion creates forward references (is-odd bound after is-even's FnClosure).
+  //   First pass resolves the backward ref (is-even), populating known_static_caps.
+  //   Second pass resolves the forward ref (is-odd) via known_static_caps.
   let mut known_static_caps: std::collections::HashMap<AstId, u32> = std::collections::HashMap::new();
-  collect_static_fn_caps(expr, ctx, &mut known_static_caps);
-  // Phase 3: Process each FnClosure — strip static caps, build param_source/closure_caps.
+  for _ in 0..8 {
+    let prev_count = known_static_caps.len();
+    collect_static_fn_caps(expr, ctx, &mut known_static_caps);
+    if known_static_caps.len() == prev_count { break; }
+  }
   process_closures_inner(expr, ctx, &known_static_caps);
 }
 
-/// Phase 1 pre-pass: walk FnClosure Apps and populate closure_fn entries
-/// (result cont param CpsId → hoisted fn index) for ALL FnClosure nodes.
-/// This must run before cap resolution so func_index_through_closure works.
+/// Phase 1 pre-pass: walk FnClosure Apps and populate closure_fn and param_source
+/// entries for ALL FnClosure nodes. This must run before cap resolution so
+/// func_index_through_closure and param_source chains work in later phases.
 fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
   use crate::passes::cps::ir::BuiltIn;
   match &expr.kind {
@@ -1464,6 +1473,17 @@ fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) 
         && let Some(fn_pos) = ctx.funcs.iter().position(|f| f.name_id == *hoisted_fn_id)
       {
         let hoisted_fn_idx = FN_COMPILED_START + fn_pos as u32;
+        // Populate param_source: cap param → cap arg source bind.
+        let cap_args = &args[1..args.len().saturating_sub(1)];
+        let fn_params = ctx.funcs[fn_pos].param_ids.clone();
+        for (cap_arg, param_id) in cap_args.iter().zip(fn_params.iter()) {
+          if let Arg::Val(cap_val) = cap_arg
+            && let Some(bid) = resolve_cap_arg_bind(cap_val, ctx)
+          {
+            ctx.param_source.insert(*param_id, bid);
+          }
+        }
+        // Populate closure_fn: result cont param → hoisted fn index.
         let result_cont_param = args.last().and_then(|a| match a {
           Arg::Cont(Cont::Ref(id)) => {
             ctx.funcs.iter().position(|f| f.name_id == *id)
@@ -1528,8 +1548,45 @@ fn collect_static_fn_caps<'a, 'src>(
         for (cap_arg, param_id) in cap_args.iter().zip(fn_params.iter()) {
           if let Arg::Val(cap_val) = cap_arg {
             let bind_id = resolve_cap_arg_bind(cap_val, ctx);
-            if let Some(bid) = bind_id
-              && let Some(cap_fn_idx) = ctx.func_index_through_closure(bid)
+            let cap_fn_idx = bind_id.and_then(|bid| {
+              ctx.func_index_through_closure(bid).or_else(|| {
+                // Follow param_source chain: cap param → original bind → fn index.
+                // Handles caps that reference other fns via Local(cap_param).
+                let mut cur = bid;
+                for _ in 0..8 {
+                  if let Some(&source) = ctx.param_source.get(&cur) {
+                    if let Some(idx) = ctx.func_index_through_closure(source) {
+                      return Some(idx);
+                    }
+                    cur = source;
+                  } else { break; }
+                }
+                None
+              })
+            });
+            // Fallback 1: check already-discovered static caps by param AST origin.
+            let cap_fn_idx = cap_fn_idx.or_else(|| {
+              let ast_id = ctx.origin.try_get(*param_id)?.as_ref()?;
+              out.get(ast_id).copied()
+            });
+            // Fallback 2: for Unresolved forward refs (mutual recursion), find a
+            // val_alias entry whose key shares the same AST origin as the cap val.
+            // The LetVal that binds the forward-referenced fn creates a val_alias
+            // entry; matching by AST origin connects the unresolved cap to it.
+            let cap_fn_idx = cap_fn_idx.or_else(|| {
+              if bind_id.is_some() { return None; } // only for Unresolved
+              let cap_ast = ctx.origin.try_get(cap_val.id)?.as_ref()?;
+              for (&alias_key, &alias_target) in &ctx.val_alias {
+                if let Some(Some(key_ast)) = ctx.origin.try_get(alias_key)
+                  && key_ast == cap_ast
+                  && let Some(idx) = ctx.func_index_through_closure(alias_target)
+                {
+                  return Some(idx);
+                }
+              }
+              None
+            });
+            if let Some(cap_fn_idx) = cap_fn_idx
               && let Some(Some(ast_id)) = ctx.origin.try_get(*param_id)
             {
               out.insert(*ast_id, cap_fn_idx);

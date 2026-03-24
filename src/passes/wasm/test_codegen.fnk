@@ -102,6 +102,23 @@ test 'recursive countdown', fn:
   | equals fink":
     10
 
+test 'mutual recursion', fn:
+  expect run fink":
+    is-even = fn n:
+      match n:
+        0: 1
+        _: is-odd n - 1
+
+    is-odd = fn n:
+      match n:
+        0: 0
+        _: is-even n - 1
+
+    main = fn:
+      is-even 10
+  | equals fink":
+    1
+
 # --- existing ---
 
 test 'chained let', fn:
