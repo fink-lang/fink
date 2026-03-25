@@ -132,25 +132,33 @@ pub fn lift<'src>(
 
 fn needs_lifting(expr: &Expr<'_>) -> bool {
   match &expr.kind {
-    ExprKind::LetFn { fn_body, cont, .. } => {
+    ExprKind::LetFn { fn_body, cont, name, .. } => {
       contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
     }
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
     ExprKind::App { args, .. } => {
       args.iter().any(|a| match a {
-        Arg::Cont(c) => cont_needs_lifting(c),
+        Arg::Cont(c) => app_cont_needs_lifting(c),
         Arg::Expr(e) => needs_lifting(e),
         _ => false,
       })
     }
     ExprKind::If { then, else_, .. } => needs_lifting(then) || needs_lifting(else_),
-    ExprKind::Yield { cont, .. } => cont_needs_lifting(cont),
+    ExprKind::Yield { cont, .. } => app_cont_needs_lifting(cont),
   }
 }
 
 fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
+    Cont::Expr { body, .. } => needs_lifting(body),
+  }
+}
+
+fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
+  match cont {
+    Cont::Ref(_) => false,
+    Cont::Expr { body, .. } if is_simple_forward(body) => false,
     Cont::Expr { body, .. } => needs_lifting(body),
   }
 }
@@ -165,13 +173,28 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
     },
     ExprKind::App { args, .. } => {
       args.iter().any(|a| match a {
-        Arg::Cont(Cont::Expr { .. }) => true, // inline cont needs naming
+        Arg::Cont(Cont::Expr { body, .. }) => !is_simple_forward(body),
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
     }
     ExprKind::If { then, else_, .. } => contains_letfn_or_inline_cont(then) || contains_letfn_or_inline_cont(else_),
-    ExprKind::Yield { cont, .. } => matches!(cont, Cont::Expr { .. }),
+    ExprKind::Yield { cont, .. } => matches!(cont, Cont::Expr { body, .. } if !is_simple_forward(body)),
+  }
+}
+
+/// A "simple forward" is a single App with no nested LetFn or Cont::Expr.
+/// These are trivial continuations like `fn v, k: k v` that don't need hoisting.
+fn is_simple_forward(expr: &Expr<'_>) -> bool {
+  match &expr.kind {
+    ExprKind::App { args, .. } => {
+      args.iter().all(|a| match a {
+        Arg::Val(_) | Arg::Spread(_) => true,
+        Arg::Cont(Cont::Ref(_)) => true,
+        _ => false,
+      })
+    }
+    _ => false,
   }
 }
 
@@ -319,8 +342,8 @@ fn lift_expr<'src>(
       // Recurse into the cont first.
       let cont = lift_cont(cont, captures, resolve, ast_index, alloc);
 
-      // If fn_body contains nested LetFn, extract them.
-      if contains_letfn(&fn_body) {
+      // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
+      if contains_letfn_or_inline_cont(&fn_body) {
         let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
         let new_fn_body = extract_from_body(*fn_body, &params, captures, resolve, ast_index, alloc, &mut hoisted);
 
@@ -540,9 +563,8 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::App { func, mut args } => {
-      // Check for inline Cont::Expr args that need hoisting.
-      // Find the last Arg::Cont(Cont::Expr { .. }).
-      let cont_idx = args.iter().rposition(|a| matches!(a, Arg::Cont(Cont::Expr { .. })));
+      // Check for inline Cont::Expr args that need hoisting (skip simple forwards).
+      let cont_idx = args.iter().rposition(|a| matches!(a, Arg::Cont(Cont::Expr { body, .. }) if !is_simple_forward(body)));
       if let Some(idx) = cont_idx {
         let cont = match args.remove(idx) {
           Arg::Cont(c) => c,
