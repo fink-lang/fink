@@ -2,7 +2,7 @@
 
 pub mod wasmtime_runner;
 
-use crate::passes::wasm::sourcemap::WasmMapping;
+pub use crate::compiler::{CompileResult, compile_fnk};
 
 pub struct RunOptions {
   pub debug: bool,
@@ -14,12 +14,6 @@ impl Default for RunOptions {
   fn default() -> Self {
     Self { debug: false, source_label: "fink".into() }
   }
-}
-
-/// Codegen result from the full pipeline: WASM binary + source mappings.
-pub struct CompileResult {
-  pub wasm: Vec<u8>,
-  pub mappings: Vec<WasmMapping>,
 }
 
 pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
@@ -42,20 +36,4 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
     let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
     wasmtime_runner::run_wat(&opts, Some(path), src)
   }
-}
-
-/// Compile Fink source → WASM binary through the full pipeline.
-pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
-  use crate::ast::build_index;
-  use crate::parser::parse;
-  use crate::passes::closure_lifting::lift_all;
-  use crate::passes::cps::transform::lower_expr;
-  use crate::passes::wasm::codegen::codegen;
-
-  let r = parse(src).map_err(|e| e.message)?;
-  let ast_index = build_index(&r);
-  let cps = lower_expr(&r.root);
-  let (lifted, resolved) = lift_all(cps, &ast_index);
-  let result = codegen(&lifted, &resolved, &ast_index);
-  Ok(CompileResult { wasm: result.wasm, mappings: result.mappings })
 }

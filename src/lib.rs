@@ -2,6 +2,8 @@ pub mod errors;
 pub mod fmt;
 #[cfg(feature = "runner")]
 pub mod dap;
+#[cfg(feature = "compiler")]
+pub mod compiler;
 #[cfg(feature = "runner")]
 pub mod runner;
 pub mod passes;

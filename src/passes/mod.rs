@@ -10,5 +10,5 @@ pub mod cont_lifting;
 pub mod cps;
 pub mod name_res;
 pub mod partial;
-#[cfg(feature = "runner")]
+#[cfg(feature = "compiler")]
 pub mod wasm;

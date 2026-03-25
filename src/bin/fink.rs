@@ -112,23 +112,34 @@ fn main() {
       }
     }
     "wat" => {
-      let result = fink::runner::compile_fnk(&src).unwrap_or_else(|e| {
-        eprintln!("error: {e}");
-        process::exit(1);
-      });
-      let wat = wasmprinter::print_bytes(&result.wasm).unwrap_or_else(|e| {
-        eprintln!("error: {e}");
-        process::exit(1);
-      });
-      println!("{wat}");
+      #[cfg(not(feature = "wat"))]
+      { eprintln!("error: 'wat' command requires the 'wat' feature"); process::exit(1); }
+      #[cfg(feature = "wat")]
+      {
+        let result = fink::compiler::compile_fnk(&src).unwrap_or_else(|e| {
+          eprintln!("error: {e}");
+          process::exit(1);
+        });
+        let wat = wasmprinter::print_bytes(&result.wasm).unwrap_or_else(|e| {
+          eprintln!("error: {e}");
+          process::exit(1);
+        });
+        println!("{wat}");
+      }
     }
     "run" => {
+      #[cfg(not(feature = "runner"))]
+      { eprintln!("error: 'run' command requires the 'runner' feature"); process::exit(1); }
+      #[cfg(feature = "runner")]
       if let Err(e) = fink::runner::run_file(Default::default(), path) {
         eprintln!("error: {e}");
         process::exit(1);
       }
     }
     "dap" => {
+      #[cfg(not(feature = "runner"))]
+      { eprintln!("error: 'dap' command requires the 'runner' feature"); process::exit(1); }
+      #[cfg(feature = "runner")]
       if let Err(e) = fink::dap::run(std::io::stdin(), std::io::stdout(), path) {
         eprintln!("error: {e}");
         process::exit(1);
