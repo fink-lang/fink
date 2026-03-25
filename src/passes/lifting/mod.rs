@@ -1,4 +1,5 @@
 pub mod fmt;
+mod capture;
 
 // Unified closure/continuation lifting pass.
 //
@@ -33,7 +34,7 @@ use crate::passes::cps::ir::{
 };
 use crate::propgraph::PropGraph;
 use crate::passes::name_res::{self, ResolveResult, Resolution};
-use crate::passes::closure_capture::{self, CaptureGraph};
+use crate::passes::lifting::capture::CaptureGraph;
 
 // ---------------------------------------------------------------------------
 // Id allocator
@@ -104,7 +105,7 @@ pub fn lift<'src>(
     let resolve_result = name_res::resolve(
       &current.root, &current.origin, ast_index, node_count, &current.synth_alias,
     );
-    let cap_graph = closure_capture::analyse(&current, &resolve_result);
+    let cap_graph = capture::analyse(&current, &resolve_result);
 
     if !needs_lifting(&current.root) {
       return current;

@@ -4,7 +4,6 @@
 // contract. See docs/cps-transform-contract.md.
 
 pub mod ast;
-pub mod closure_capture;
 pub mod cps;
 pub mod lifting;
 pub mod name_res;
