@@ -629,12 +629,17 @@ fn extract_from_body<'src>(
           // Leave them inline — they're the consumption site for the closure value.
           let is_closure_app = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
           if is_closure_app && !cap_entries.is_empty() {
-            // Put the cont back inline.
+            // Don't hoist the cont itself (infinite chain), but DO recurse into
+            // its body to extract nested structure (·match_arm args etc.).
             let cont_args_back: Vec<BindNode> = cont_params.into_iter().map(|p| match p {
               Param::Name(b) | Param::Spread(b) => b,
             }).collect();
+            // The cont's args are in scope for its body.
+            let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
+            for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
+            let body = extract_from_body(body, parent_params, &inner_scope, captures, resolve, ast_index, alloc, hoisted);
             args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
-            // Still recurse into other args.
+            // Recurse into other args too.
             let args = args.into_iter().map(|a| match a {
               Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted))),
               other => other,

@@ -265,7 +265,26 @@ test 'match with binding', fn:
       r
 
   | equals fink":
-    TODO
+    ·v_57 = fn ·v_58, ·v_22:
+      r = ·v_22
+      ·v_58 r
+
+    ·v_37 = fn n, ·v_40, ·v_20:
+      ·v_62 = ·closure ·v_57, ·v_40
+      ·match_block n, ·v_20, ·v_62
+
+    ·v_48 = fn n, ·v_11:
+      ·op_plus n, 1, ·v_11
+
+    ·v_66 = fn ·v_8, ·v_6, ·v_7:
+      ·match_value ·v_8, 0, ·v_6, ·v_7
+
+    foo = ·v_1 = fn n, ·v_3:
+      ·v_44 = ·closure ·v_37, n, ·v_3
+      ·v_53 = ·closure ·v_48, n
+      ·match_arm ·v_66, ·v_53, ·v_44
+
+    ·v_0 foo
 
 
 test 'recursive fn in match', fn:
@@ -277,4 +296,38 @@ test 'recursive fn in match', fn:
       r
 
   | equals fink":
-    TODO
+    ·v_95 = fn ·v_96, ·v_39:
+      r = ·v_39
+      ·v_96 r
+
+    ·v_70 = fn n, ·v_73, ·v_75, ·v_37:
+      ·v_100 = ·closure ·v_95, ·v_75
+      ·match_block n, ·v_73, ·v_37, ·v_100
+
+    ·v_107 = fn ·v_108, ·v_28:
+      fib ·v_28, ·v_108
+
+    ·v_86 = fn n, ·v_24:
+      ·v_112 = ·closure ·v_107, ·v_24
+      ·op_plus n, 1, ·v_112
+
+    ·v_56 = fn n, ·v_59, ·v_18:
+      ·v_79 = ·closure ·v_70, n, ·v_18, ·v_59
+      ·v_91 = ·closure ·v_86, n
+      ·match_arm fn ·v_22, ·v_20, ·v_21:
+        ·v_21 _, ·v_91, ·v_79
+
+    ·v_83 = fn ·v_11:
+      ·v_13 = 1
+      ·v_11 ·v_13
+
+    ·v_104 = fn ·v_8, ·v_6, ·v_7:
+      ·match_value ·v_8, 0, ·v_6, ·v_7
+
+    ·v_67 = fn ·v_63:
+      ·match_arm ·v_104, ·v_83, ·v_63
+
+    fib = ·v_1 = fn n, ·v_3:
+      ·closure ·v_56, n, ·v_3, ·v_67
+
+    ·v_0 fib
