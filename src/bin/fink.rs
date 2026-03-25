@@ -81,11 +81,9 @@ fn main() {
 
           // --pass=N selects pipeline stage:
           //   0 (default): raw CPS after lower_expr
-          //   1: after cont_lifting
-          //   2: after lift_all (fully lifted)
+          //   1: after lifting (fully lifted)
           let result = match pass.unwrap_or(0) {
-            1 => fink::passes::cont_lifting::lift(cps),
-            2 => fink::passes::closure_lifting::lift_all(cps, &ast_index).0,
+            1 => fink::passes::lifting::lift(cps, &ast_index),
             _ => cps,
           };
 

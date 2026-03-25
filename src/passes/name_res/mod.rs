@@ -807,12 +807,12 @@ mod tests {
   /// Run parse → CPS → cont_lift → name_res. Emit BOTH Ref::Name and Ref::Synth
   /// resolution. Synth refs that don't have a resolution are reported as `unresolved`.
   fn cps_resolve_synth(src: &str) -> String {
-    use crate::passes::cont_lifting::lift as cont_lift;
+    use crate::passes::lifting::lift;
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
         let cps = lower_expr(&r.root);
-        let lifted = cont_lift(cps);
+        let lifted = lift(cps, &ast_index);
         let node_count = lifted.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &empty_alias);
         let ctx = Ctx { origin: &lifted.origin, ast_index: &ast_index, synth_alias: &empty_alias };

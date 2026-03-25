@@ -2266,15 +2266,18 @@ mod tests {
 
   use crate::ast::build_index;
   use crate::parser::parse;
-  use crate::passes::closure_lifting::lift_all;
   use crate::passes::cps::transform::lower_expr;
+  use crate::passes::lifting::lift;
+  use crate::passes::name_res;
   use super::codegen;
 
   fn compile_wasm(src: &str) -> Vec<u8> {
     let r = parse(src).expect("parse failed");
     let ast_index = build_index(&r);
     let cps = lower_expr(&r.root);
-    let (lifted, resolved) = lift_all(cps, &ast_index);
+    let lifted = lift(cps, &ast_index);
+    let node_count = lifted.origin.len();
+    let resolved = name_res::resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &lifted.synth_alias);
     codegen(&lifted, &resolved, &ast_index).wasm
   }
 
@@ -2305,7 +2308,9 @@ mod tests {
     let r = parse("main = fn: 42").expect("parse failed");
     let ast_index = build_index(&r);
     let cps = lower_expr(&r.root);
-    let (lifted, resolved) = lift_all(cps, &ast_index);
+    let lifted = lift(cps, &ast_index);
+    let node_count = lifted.origin.len();
+    let resolved = name_res::resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &lifted.synth_alias);
     let result = codegen(&lifted, &resolved, &ast_index);
     assert!(!result.mappings.is_empty(), "should produce source mappings");
     let has_literal = result.mappings.iter().any(|m| m.src_line == 1 && m.src_col == 11);

@@ -5,8 +5,6 @@
 
 pub mod ast;
 pub mod closure_capture;
-pub mod closure_lifting;
-pub mod cont_lifting;
 pub mod cps;
 pub mod lifting;
 pub mod name_res;

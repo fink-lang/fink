@@ -1,12 +1,11 @@
 ---
-synth ref resolution after cont_lift
+synth ref resolution after lifting
 ---
 
-# After cont_lifting, Ref::Synth refs must still resolve to in-scope bindings.
-# Currently name_res skips Ref::Synth — they are "unresolved" in the output.
-# The fix: name_res should resolve synth refs like any other ref, so that
-# capture analysis can detect when cont_lift moves a fn to a scope where
-# its synth refs are no longer valid.
+# After lifting, Ref::Synth refs must resolve to in-scope bindings.
+# name_res resolves synth refs like any other ref, so that capture analysis
+# can detect when lifting moves a fn to a scope where its synth refs are
+# no longer valid.
 #
 # Test format:
 #   test 'name', fn:
@@ -19,21 +18,24 @@ synth ref resolution after cont_lift
 {test, equals, expect, fink, cps_resolve_synth} = import 'fake!'
 
 ---
-simple match — synth refs should resolve as local
+simple match — synth refs should resolve as local or captured
 ---
 
-# After cont_lift, the match_block fn references synth bindings from its
-# enclosing scope. These should resolve as `local` (in scope) not `unresolved`.
+# After lifting, the match_block fn's captured bindings resolve as `captured`
+# and the remaining synth refs (in-scope conts) resolve as `local`.
 
-test 'match — synth refs resolve as local after cont_lift', fn:
+test 'match — synth refs resolve after lifting', fn:
   expect cps_resolve_synth fink":
     foo = fn n:
       match n:
         0: 42
 
   | equals fink":
-    (ref 4, n) == (captured 1, (bind 2, n)) in scope 1
+    (ref 4, n) == (local (bind 32, n)) in scope 31
     (synth 19, ·v_18) == (local (bind 18))
     (synth 9, ·v_8) == (local (bind 8))
+    (synth 37, ·v_31) == (captured 1, (bind 31))
+    (ref 33, n) == (local (bind 2, n)) in scope 1
+    (synth 35, ·v_3) == (local (bind 3))
     (synth 25, ·v_1) == (local (bind 1))
 
