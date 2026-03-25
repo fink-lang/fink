@@ -136,9 +136,9 @@ fn needs_lifting(expr: &Expr<'_>) -> bool {
       contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
     }
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
-    ExprKind::App { args, .. } => {
+    ExprKind::App { func, args } => {
       args.iter().any(|a| match a {
-        Arg::Cont(c) => app_cont_needs_lifting(c),
+        Arg::Cont(c) => app_cont_needs_lifting(func, c),
         Arg::Expr(e) => needs_lifting(e),
         _ => false,
       })
@@ -163,10 +163,13 @@ fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
 }
 
 
-fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
+fn app_cont_needs_lifting(func: &Callable<'_>, cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
     c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
+    // ·closure result conts stay inline — hoisting creates infinite chains.
+    // Their bodies are processed by recursing into them separately.
+    Cont::Expr { .. } if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure)) => false,
     Cont::Expr { .. } => true,
   }
 }
@@ -180,9 +183,10 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
       Cont::Ref(_) => false,
       Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body),
     },
-    ExprKind::App { args, .. } => {
+    ExprKind::App { func, args } => {
+      let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
@@ -582,9 +586,11 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::App { func, mut args } => {
-      // Check for inline Cont::Expr args that need hoisting (skip simple forwards).
+      // Check for inline Cont::Expr args that need hoisting.
+      // Skip simple forwards and ·closure result conts.
+      let is_closure = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
       let cont_idx = args.iter().rposition(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
         _ => false,
       });
       if let Some(idx) = cont_idx {
@@ -593,7 +599,9 @@ fn extract_from_body<'src>(
           _ => unreachable!(),
         };
         if let Cont::Expr { args: cont_args, body } = cont {
-          let body = extract_from_body(*body, parent_params, captures, resolve, ast_index, alloc, hoisted);
+          // Don't recurse into the cont body — extract one level at a time.
+          // The next iteration handles inner conts.
+          let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
           let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, resolve, alloc);
 
