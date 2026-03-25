@@ -137,8 +137,15 @@ fn needs_lifting(expr: &Expr<'_>) -> bool {
     }
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
     ExprKind::App { func, args } => {
+      let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
-        Arg::Cont(c) => app_cont_needs_lifting(func, c),
+        // For ·closure Apps: only flag result cont if its body has nested structure.
+        // Pure ·closure result conts converge fine; captured ones with no inner structure
+        // are terminal (hoisting them creates infinite chains).
+        Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
+          !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body)
+        }
+        Arg::Cont(c) => app_cont_needs_lifting(c),
         Arg::Expr(e) => needs_lifting(e),
         _ => false,
       })
@@ -163,13 +170,10 @@ fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
 }
 
 
-fn app_cont_needs_lifting(func: &Callable<'_>, cont: &Cont<'_>) -> bool {
+fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
     c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
-    // ·closure result conts stay inline — hoisting creates infinite chains.
-    // Their bodies are processed by recursing into them separately.
-    Cont::Expr { .. } if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure)) => false,
     Cont::Expr { .. } => true,
   }
 }
@@ -186,7 +190,11 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
     ExprKind::App { func, args } => {
       let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
+        // For ·closure: only flag if the cont body has nested structure to extract.
+        Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
+          !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body)
+        }
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
@@ -601,9 +609,9 @@ fn extract_from_body<'src>(
     ExprKind::App { func, mut args } => {
       // Check for inline Cont::Expr args that need hoisting.
       // Skip simple forwards and ·closure result conts.
-      let is_closure = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
+      
       let cont_idx = args.iter().rposition(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         _ => false,
       });
       if let Some(idx) = cont_idx {
@@ -613,10 +621,26 @@ fn extract_from_body<'src>(
         };
         if let Cont::Expr { args: cont_args, body } = cont {
           // Don't recurse into the cont body — extract one level at a time.
-          // The next iteration handles inner conts.
           let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
           let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, resolve, alloc);
+
+          // ·closure result conts with captures would create infinite chains.
+          // Leave them inline — they're the consumption site for the closure value.
+          let is_closure_app = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
+          if is_closure_app && !cap_entries.is_empty() {
+            // Put the cont back inline.
+            let cont_args_back: Vec<BindNode> = cont_params.into_iter().map(|p| match p {
+              Param::Name(b) | Param::Spread(b) => b,
+            }).collect();
+            args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
+            // Still recurse into other args.
+            let args = args.into_iter().map(|a| match a {
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted))),
+              other => other,
+            }).collect();
+            return Expr { id: expr.id, kind: ExprKind::App { func, args } };
+          }
 
           if cap_entries.is_empty() {
             // Pure — hoist directly, replace with Cont::Ref.
