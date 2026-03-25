@@ -22,10 +22,33 @@ closure lifting tests
 
 {test, equals, expect, fink, closure_lift} = import 'fake!'
 
+
+
+test 'TODO ƒ_2 is out of scope', fn:
+  #
+  expect closure_lift fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+
+  | equals fink":
+    ·fn
+      fn ·ƒ_26, ·v_5:
+        ·let ·v_5, fn x:
+          ·op_plus x, 4, ·ƒ_2
+      fn ·v_28:
+        ·fn
+          fn ·ƒ_2:
+            ·fn_closure ·v_28, ·v_2, fn ·ƒ_23, ·v_25:
+              ·op_mul 2, 3, ·ƒ_23
+          fn ·v_1:
+            ·let ·v_1, fn main:
+              ·ƒ_0 main
+
+
 ---
 pure functions — unchanged
 ---
-
 test 'pure fn is unchanged', fn:
   expect closure_lift fink":
     f = fn x: x
@@ -70,7 +93,7 @@ test 'captured binding becomes leading param', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_23: ·op_plus a, b, ·ƒ_6
+      fn a, b, ·ƒ_6: ·op_plus a, b, ·ƒ_6
       fn ·v_22:
         ·fn
           fn a, ·ƒ_3:
@@ -90,21 +113,21 @@ test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_60:
-        ·fn_closure ·v_46, a, b, fn ·v_7:
+      fn a, b, ·ƒ_6:
+        ·fn_closure ·v_44, a, b, fn ·v_7:
           ·ƒ_6 ·v_7
-      fn ·v_59:
+      fn ·v_56:
         ·fn
-          fn c, ·ƒ_35, ·v_12, ·ƒ_39: ·op_plus ·v_12, c, ·ƒ_9
-          fn ·v_38:
+          fn c, ·ƒ_34, ·v_12: ·op_plus ·v_12, c, ·ƒ_9
+          fn ·v_37:
             ·fn
-              fn a, b, c, ·ƒ_47:
-                ·fn_closure ·v_38, c, ·v_9, fn ·ƒ_30, ·v_33:
+              fn a, b, c, ·ƒ_9:
+                ·fn_closure ·v_37, c, ·v_9, fn ·ƒ_30, ·v_32:
                   ·op_plus a, b, ·ƒ_30
-              fn ·v_46:
+              fn ·v_44:
                 ·fn
                   fn a, ·ƒ_3:
-                    ·fn_closure ·v_59, a, fn ·v_4:
+                    ·fn_closure ·v_56, a, fn ·v_4:
                       ·ƒ_3 ·v_4
                   fn ·v_1:
                     ·let ·v_1, fn foo:
@@ -120,16 +143,16 @@ test 'multiple captures — all captured vars become leading params', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_41:
+      fn a, b, ·ƒ_6:
         ·fn_closure ·v_29, a, b, fn ·v_7:
           ·ƒ_6 ·v_7
-      fn ·v_40:
+      fn ·v_39:
         ·fn
-          fn a, b, c, ·ƒ_30: ·op_plus a, b, ·ƒ_9
+          fn a, b, c, ·ƒ_9: ·op_plus a, b, ·ƒ_9
           fn ·v_29:
             ·fn
               fn a, ·ƒ_3:
-                ·fn_closure ·v_40, a, fn ·v_4:
+                ·fn_closure ·v_39, a, fn ·v_4:
                   ·ƒ_3 ·v_4
               fn ·v_1:
                 ·let ·v_1, fn foo:
@@ -145,7 +168,7 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
 
   | equals fink":
     ·fn
-      fn a, b, ·ƒ_39: ·op_plus a, b, ·ƒ_16
+      fn a, b, ·ƒ_16: ·op_plus a, b, ·ƒ_16
       fn ·v_38:
         ·fn
           fn ·ƒ_2:
@@ -188,20 +211,20 @@ test 'match — no forward refs after lift', fn:
 
   | equals fink":
     ·fn
-      fn n, ·ƒ_44, ·v_18, ·ƒ_48: ·match_block n, ·v_18, ·ƒ_3
-      fn ·v_47:
+      fn n, ·ƒ_41, ·v_18: ·match_block n, ·v_18, ·ƒ_3
+      fn ·v_44:
         ·fn
           fn n, ·ƒ_3:
-            ·fn_closure ·v_47, n, ·v_3, fn ·ƒ_31, ·v_42:
+            ·fn_closure ·v_44, n, ·v_3, fn ·ƒ_31, ·v_39:
               ·fn
-                fn ·ƒ_11, ·ƒ_35:
+                fn ·ƒ_11:
                   ·let 42, fn ·v_13:
                     ·ƒ_11 ·v_13
-                fn ·ƒ_34:
+                fn ·ƒ_33:
                   ·fn
-                    fn ·v_8, ·ƒ_6, ·ƒ_7, ·ƒ_38:
+                    fn ·v_8, ·ƒ_6, ·ƒ_7:
                       ·match_value ·v_8, 0, ·ƒ_6, fn: ·ƒ_7 _
-                    fn ·ƒ_37: ·match_arm ·ƒ_37, ·ƒ_34, ·ƒ_31
+                    fn ·ƒ_35: ·match_arm ·ƒ_35, ·ƒ_33, ·ƒ_31
           fn ·v_1:
             ·let ·v_1, fn foo:
               ·ƒ_0 foo

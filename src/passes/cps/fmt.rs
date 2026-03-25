@@ -210,6 +210,10 @@ fn render_ref_name_ctx(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
 
 /// Render a `BuiltIn` variant to a display name for the formatter.
 /// Operators render as `·op_name`, prims as `·prim_name`.
+pub fn render_builtin_name(op: &BuiltIn) -> String {
+  render_builtin(op)
+}
+
 fn render_builtin(op: &BuiltIn) -> String {
   match op {
     // Arithmetic
@@ -340,17 +344,17 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       apply(ident("·yield", expr_loc), vec![val_to_node(value, ctx), cont_node], expr_loc)
     }
 
-    ExprKind::LetVal { name, val, body } => {
+    ExprKind::LetVal { name, val, cont } => {
       let plain = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);
-      let body_node = render_cont_body(body, &plain, ctx);
+      let body_node = render_cont_body(cont, &plain, ctx);
       apply(ident("·let", expr_loc), vec![
         val_to_node(val, ctx),
         fn_node(patterns(vec![ident(&plain, name_loc)]), vec![body_node], dummy_loc()),
       ], expr_loc)
     }
 
-    ExprKind::LetFn { name, params, cont, fn_body, body } => {
+    ExprKind::LetFn { name, params, fn_body, cont } => {
       let plain_name = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);
       let mut fn_params: Vec<Node<'static>> = params.iter()
@@ -359,9 +363,6 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
           Param::Spread(n) => spread_node(ident(&render_bind_ctx(n, ctx), ctx_loc(n.id, ctx)), ctx_loc(n.id, ctx)),
         })
         .collect();
-
-      // Append the explicit cont param (·ƒ_cont) — always last.
-      fn_params.push(ident(&render_bind_ctx(cont, ctx), dummy_loc()));
 
       // If a capture graph is provided and this LetFn has captures, prepend
       // a `{cap: [x, y]}` annotation ident to the param list.
@@ -378,7 +379,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         fn_params.insert(0, ident(&label, dummy_loc()));
       }
 
-      let body_node = render_cont_body(body, &plain_name, ctx);
+      let body_node = render_cont_body(cont, &plain_name, ctx);
       apply(ident("·fn", expr_loc), vec![
         fn_node(patterns(fn_params), vec![to_node(fn_body, ctx)], expr_loc),
         fn_node(

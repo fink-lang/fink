@@ -110,15 +110,15 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
     Yield { value, cont } =>
       hoist_cont(expr.id, cont, alloc, |cont| Yield { value, cont }),
 
-    LetVal { name, val, body } => {
-      let body = recurse_cont(body, alloc);
-      Expr { id: expr.id, kind: LetVal { name, val, body } }
+    LetVal { name, val, cont } => {
+      let body = recurse_cont(cont, alloc);
+      Expr { id: expr.id, kind: LetVal { name, val, cont: body } }
     }
 
-    LetFn { name, params, cont, fn_body, body } => {
+    LetFn { name, params, fn_body, cont } => {
       let fn_body = lift_expr(*fn_body, alloc);
-      let body    = recurse_cont(body, alloc);
-      Expr { id: expr.id, kind: LetFn { name, params, cont, fn_body: Box::new(fn_body), body } }
+      let body    = recurse_cont(cont, alloc);
+      Expr { id: expr.id, kind: LetFn { name, params, fn_body: Box::new(fn_body), cont: body } }
     }
 
 
@@ -164,8 +164,7 @@ where
     Cont::Ref(_) => Expr { id: node_id, kind: make_kind(cont) },
     Cont::Expr { args, body } => {
       let body = lift_expr(*body, alloc);
-      let cont_name        = alloc.bind(Bind::Cont, None);
-      let inner_cont_param = alloc.bind(Bind::Cont, None);
+      let cont_name  = alloc.bind(Bind::Cont, None);
       let inner_kind = make_kind(Cont::Ref(cont_name.id));
       let inner = lift_expr(alloc.expr(inner_kind, None), alloc);
       let params = args.into_iter().map(Param::Name).collect();
@@ -174,9 +173,8 @@ where
         kind: ExprKind::LetFn {
           name:    cont_name,
           params,
-          cont:    inner_cont_param,
           fn_body: Box::new(body),
-          body:    Cont::Expr { args: vec![alloc.bind(Bind::Synth, None)], body: Box::new(inner) },
+          cont:    Cont::Expr { args: vec![alloc.bind(Bind::Synth, None)], body: Box::new(inner) },
         },
       }
     }

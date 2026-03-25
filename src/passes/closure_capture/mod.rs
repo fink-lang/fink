@@ -67,16 +67,16 @@ fn collect_direct_capture_scopes(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetFn { name, fn_body, body, .. } => {
+    LetFn { name, fn_body, cont: cont, .. } => {
       if has_direct_captures(fn_body, resolve) {
         out.insert(name.id);
       }
       collect_direct_capture_scopes(fn_body, resolve, out);
-      if let Cont::Expr { body: b, .. } = body {
+      if let Cont::Expr { body: b, .. } = cont {
         collect_direct_capture_scopes(b, resolve, out);
       }
     }
-    LetVal { body: Cont::Expr { body: b, .. }, .. } => {
+    LetVal { cont: Cont::Expr { body: b, .. }, .. } => {
       collect_direct_capture_scopes(b, resolve, out);
     }
     LetVal { .. } => {}
@@ -101,10 +101,10 @@ fn collect_direct_capture_scopes(
 fn has_direct_captures(expr: &Expr<'_>, resolve: &ResolveResult) -> bool {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, body, .. } => {
-      is_captured_val(val, resolve) || matches!(body, Cont::Expr { body: b, .. } if has_direct_captures(b, resolve))
+    LetVal { val, cont: cont, .. } => {
+      is_captured_val(val, resolve) || matches!(cont, Cont::Expr { body: b, .. } if has_direct_captures(b, resolve))
     }
-    LetFn { body, .. } => {
+    LetFn { cont: body, .. } => {
       matches!(body, Cont::Expr { body: b, .. } if has_direct_captures(b, resolve))
     }
     App { func, args } => {

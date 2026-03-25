@@ -27,14 +27,14 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
     use fink::passes::cps::ir::ExprKind::*;
     let i = indent(depth);
     match &e.kind {
-        LetVal { name, val, body } => {
+        LetVal { name, val, cont: body } => {
             println!("{i}Expr(#{}) LetVal {:?}", e.id.0, name);
             dump_val(val, depth+1);
             if let fink::passes::cps::ir::Cont::Expr { body: inner, .. } = body {
                 dump_expr(inner, depth+1);
             }
         }
-        LetFn { name, params, fn_body, body, .. } => {
+        LetFn { name, params, fn_body, cont: body, .. } => {
             let p: Vec<_> = params.iter().map(|p| format!("{:?}", p)).collect();
             println!("{i}Expr(#{}) LetFn {:?} [{}]", e.id.0, name, p.join(", "));
             println!("{i}  fn_body:");

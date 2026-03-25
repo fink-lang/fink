@@ -315,18 +315,19 @@ pub enum ExprKind<'src> {
   LetVal {
     name: BindNode,
     val: Box<Val<'src>>,
-    body: Cont<'src>,
+    cont: Cont<'src>,
   },
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
-  /// `cont` is the explicit continuation parameter — always last in the calling convention.
+  /// For user fns the last param is `Param::Name(Bind::Cont)` — the return
+  /// continuation. Lifted continuations may have no cont param at all.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
-    cont: BindNode,
+    // TODO: rename to body
     fn_body: Box<Expr<'src>>,
-    body: Cont<'src>,
+    cont: Cont<'src>,
   },
 
   /// Call func with args; the last `Arg::Cont` is the result continuation.

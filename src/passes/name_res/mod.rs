@@ -117,7 +117,7 @@ fn walk_captures(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetFn { name, fn_body, body, .. } => {
+    LetFn { name, fn_body, cont: cont, .. } => {
       // Recurse into fn_body first (bottom-up — inner fn captures ready first).
       walk_captures(fn_body, graphs, captures);
 
@@ -144,11 +144,11 @@ fn walk_captures(
       }
 
       // Recurse into continuation.
-      if let Cont::Expr { body: b, .. } = body {
+      if let Cont::Expr { body: b, .. } = cont {
         walk_captures(b, graphs, captures);
       }
     }
-    LetVal { body: Cont::Expr { body: b, .. }, .. } => {
+    LetVal { cont: Cont::Expr { body: b, .. }, .. } => {
       walk_captures(b, graphs, captures);
     }
     LetVal { .. } => {}
@@ -178,11 +178,11 @@ fn collect_direct_captured_binds(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, body, .. } => {
+    LetVal { val, cont: cont, .. } => {
       check_captured_bind(val, graphs, out);
-      if let Cont::Expr { body: b, .. } = body { collect_direct_captured_binds(b, graphs, out); }
+      if let Cont::Expr { body: b, .. } = cont { collect_direct_captured_binds(b, graphs, out); }
     }
-    LetFn { body, .. } => {
+    LetFn { cont: body, .. } => {
       // Don't descend into fn_body — those captures belong to the inner fn.
       if let Cont::Expr { body: b, .. } = body { collect_direct_captured_binds(b, graphs, out); }
     }
@@ -221,11 +221,11 @@ fn collect_deep_captured_binds(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, body, .. } => {
+    LetVal { val, cont: cont, .. } => {
       check_captured_bind(val, graphs, out);
-      if let Cont::Expr { body: b, .. } = body { collect_deep_captured_binds(b, graphs, out); }
+      if let Cont::Expr { body: b, .. } = cont { collect_deep_captured_binds(b, graphs, out); }
     }
-    LetFn { fn_body, body, .. } => {
+    LetFn { fn_body, cont: body, .. } => {
       collect_deep_captured_binds(fn_body, graphs, out);
       if let Cont::Expr { body: b, .. } = body { collect_deep_captured_binds(b, graphs, out); }
     }
@@ -522,13 +522,13 @@ fn collect_scope_names<'src>(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetFn { name, body, .. } => {
+    LetFn { name, cont: cont, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      if let Cont::Expr { body: body_expr, .. } = body {
+      if let Cont::Expr { body: body_expr, .. } = cont {
         collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
       }
     }
-    LetVal { name, body, .. } => {
+    LetVal { name, cont: body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
       if let Cont::Expr { body: body_expr, .. } = body {
         collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
@@ -595,16 +595,16 @@ fn resolve_expr<'src>(
   use ExprKind::*;
   let sb = self_bind;
   match &expr.kind {
-    LetVal { name, val, body } => {
+    LetVal { name, val, cont: cont } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      if let Cont::Expr { body: body_expr, .. } = body {
+      if let Cont::Expr { body: body_expr, .. } = cont {
         resolve_expr(body_expr, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
 
-    LetFn { name, params, cont, fn_body, body } => {
+    LetFn { name, params, fn_body, cont: body } => {
       // Fn bodies see all names at this scope level (hoisted), enabling
       // self- and mutual recursion. Collect all User bind names from the
       // entire continuation chain starting here.
@@ -639,7 +639,6 @@ fn resolve_expr<'src>(
             bind_to_scope(&mut fn_scope, b, fn_scope_id, fn_depth + 1, ctx, graphs),
         }
       }
-      bind_to_scope(&mut fn_scope, cont, fn_scope_id, fn_depth + 1, ctx, graphs);
       resolve_expr(fn_body, &fn_scope, fn_scope_id, fn_self_bind, fn_depth + 1, ctx, graphs);
 
       // continuation scope: sequential (only names defined so far)
@@ -773,16 +772,16 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      LetVal { val, body, .. } => {
+      LetVal { val, cont: cont, .. } => {
         emit_classified_val(val, result, ctx, out);
-        if let Cont::Expr { body: body_expr, .. } = body {
+        if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_lines(body_expr, result, ctx, out);
         }
       }
 
-      LetFn { fn_body, body, .. } => {
+      LetFn { fn_body, cont: cont, .. } => {
         collect_classified_lines(fn_body, result, ctx, out);
-        if let Cont::Expr { body: body_expr, .. } = body {
+        if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_lines(body_expr, result, ctx, out);
         }
       }
@@ -882,14 +881,14 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      LetVal { val, body, .. } => {
+      LetVal { val, cont: cont, .. } => {
         emit_classified_val(val, result, ctx, out);
         emit_synth_val(val, result, out);
-        if let Cont::Expr { body: body_expr, .. } = body {
+        if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_with_synth(body_expr, result, ctx, out);
         }
       }
-      LetFn { fn_body, body, .. } => {
+      LetFn { fn_body, cont: body, .. } => {
         collect_classified_with_synth(fn_body, result, ctx, out);
         if let Cont::Expr { body: body_expr, .. } = body {
           collect_classified_with_synth(body_expr, result, ctx, out);

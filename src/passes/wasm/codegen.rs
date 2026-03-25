@@ -640,10 +640,10 @@ fn find_main_closure_call(root: &Expr<'_>, ctx: &Ctx) -> Option<(u32, u32)> {
         let num_caps = ctx.funcs[fn_pos].arity - 1;
         return Some((fn_idx, num_caps));
       }
-      ExprKind::LetFn { body: Cont::Expr { body: cont_body, .. }, .. } => {
+      ExprKind::LetFn { cont: Cont::Expr { body: cont_body, .. }, .. } => {
         expr = cont_body;
       }
-      ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+      ExprKind::LetVal { cont: Cont::Expr { body: cont_body, .. }, .. } => {
         expr = cont_body;
       }
       _ => return None,
@@ -695,7 +695,7 @@ fn build_fink_main(root: &Expr<'_>, ctx: &Ctx) -> Function {
 fn find_arity1_entry(root: &Expr<'_>, ctx: &Ctx) -> Option<u32> {
   let mut expr = root;
   loop {
-    if let ExprKind::LetFn { name, body, .. } = &expr.kind {
+    if let ExprKind::LetFn { name, cont: cont, .. } = &expr.kind {
       if let Some(fn_idx) = ctx.func_index(name.id) {
         let fn_pos = ctx.funcs.iter().position(|f| f.name_id == name.id)?;
         let cf = &ctx.funcs[fn_pos];
@@ -704,7 +704,7 @@ fn find_arity1_entry(root: &Expr<'_>, ctx: &Ctx) -> Option<u32> {
           return Some(fn_idx);
         }
       }
-      match body {
+      match cont {
         Cont::Expr { body: cont_body, .. } => expr = cont_body,
         Cont::Ref(_) => return None,
       }
@@ -837,8 +837,8 @@ fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
   fc.mark(f, expr.id);
 
   match &expr.kind {
-    ExprKind::LetVal { val, body, .. } => {
-      match body {
+    ExprKind::LetVal { val, cont: cont, .. } => {
+      match cont {
         Cont::Ref(cont_id) => {
           emit_cont_call_with_val(val, *cont_id, f, fc);
         }
@@ -858,11 +858,11 @@ fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
       }
     }
 
-    ExprKind::LetFn { name, body, .. } => {
+    ExprKind::LetFn { name, cont: cont, .. } => {
       // The fn body is emitted as a separate WASM function.
       // For now, LetFn bindings are not first-class values (no FnClosure).
       // Just continue into the body cont.
-      match body {
+      match cont {
         Cont::Expr { body: cont_body, .. } => {
           // The cont arg would hold the fn value — skip it, emit body directly.
           // TODO: when fn values are needed, construct a closure here.
@@ -1694,14 +1694,14 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
 
 fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
   match &expr.kind {
-    ExprKind::LetFn { name, params, cont, fn_body, body } => {
+    ExprKind::LetFn { name, params, fn_body, cont: cont } => {
       let param_ids: Vec<CpsId> = params.iter().map(|p| match p {
         crate::passes::cps::ir::Param::Name(b) => b.id,
         crate::passes::cps::ir::Param::Spread(b) => b.id,
       }).collect();
       // Record the LetVal continuation bind (Bind::Name) if present.
       // name_res resolves user references to this fn via this bind_id, not name_id.
-      let letval_bind_id = if let Cont::Expr { args, .. } = body {
+      let letval_bind_id = if let Cont::Expr { args, .. } = cont {
         args.first().map(|b| b.id)
       } else {
         None
@@ -1710,22 +1710,25 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         crate::passes::cps::ir::Param::Name(b) => b.kind,
         crate::passes::cps::ir::Param::Spread(b) => b.kind,
       }).collect();
+      let cont_id = params.last()
+        .map(|p| match p { crate::passes::cps::ir::Param::Name(b) | crate::passes::cps::ir::Param::Spread(b) => b.id })
+        .expect("LetFn must have at least one param (cont)");
       ctx.funcs.push(CollectedFn {
         name_id: name.id,
         letval_bind_id,
         bind: name.kind,
         fn_body,
-        arity: params.len() as u32 + 1,
+        arity: params.len() as u32,
         param_ids,
         param_kinds,
-        cont_id: cont.id,
+        cont_id,
       });
       collect_funcs(fn_body, ctx);
-      if let Cont::Expr { body: cont_body, .. } = body {
+      if let Cont::Expr { body: cont_body, .. } = cont {
         collect_funcs(cont_body, ctx);
       }
     }
-    ExprKind::LetVal { name, val, body: Cont::Expr { args, body: cont_body } } => {
+    ExprKind::LetVal { name, val, cont: Cont::Expr { args, body: cont_body } } => {
       // Record val_alias for LetVal rebindings: name → synth target.
       // This lets func_index follow chains like `add = <fn_ref>`.
       // Also alias the Cont::Expr args (the scope binds name_res resolves to)
@@ -1833,13 +1836,13 @@ fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) 
         }
       }
     }
-    ExprKind::LetFn { fn_body, body, .. } => {
+    ExprKind::LetFn { fn_body, cont: cont, .. } => {
       collect_closure_fns(fn_body, ctx);
-      if let Cont::Expr { body: cont_body, .. } = body {
+      if let Cont::Expr { body: cont_body, .. } = cont {
         collect_closure_fns(cont_body, ctx);
       }
     }
-    ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+    ExprKind::LetVal { cont: Cont::Expr { body: cont_body, .. }, .. } => {
       collect_closure_fns(cont_body, ctx);
     }
     ExprKind::App { args, .. } => {
@@ -1929,13 +1932,13 @@ fn collect_static_fn_caps<'a, 'src>(
         }
       }
     }
-    ExprKind::LetFn { fn_body, body, .. } => {
+    ExprKind::LetFn { fn_body, cont: cont, .. } => {
       collect_static_fn_caps(fn_body, ctx, out);
-      if let Cont::Expr { body: cont_body, .. } = body {
+      if let Cont::Expr { body: cont_body, .. } = cont {
         collect_static_fn_caps(cont_body, ctx, out);
       }
     }
-    ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+    ExprKind::LetVal { cont: Cont::Expr { body: cont_body, .. }, .. } => {
       collect_static_fn_caps(cont_body, ctx, out);
     }
     ExprKind::App { args, .. } => {
@@ -2015,7 +2018,7 @@ fn process_closures_inner<'a, 'src>(
             cf.param_ids.remove(i);
             cf.param_kinds.remove(i);
           }
-          cf.arity = cf.param_ids.len() as u32 + 1;
+          cf.arity = cf.param_ids.len() as u32;
         }
 
         // Strip Bind::Cont captures from cont fns → pass via $cont_env global.
@@ -2104,13 +2107,13 @@ fn process_closures_inner<'a, 'src>(
         }
       }
     }
-    ExprKind::LetFn { fn_body, body, .. } => {
+    ExprKind::LetFn { fn_body, cont: cont, .. } => {
       process_closures_inner(fn_body, ctx, known_static_caps);
-      if let Cont::Expr { body: cont_body, .. } = body {
+      if let Cont::Expr { body: cont_body, .. } = cont {
         process_closures_inner(cont_body, ctx, known_static_caps);
       }
     }
-    ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+    ExprKind::LetVal { cont: Cont::Expr { body: cont_body, .. }, .. } => {
       process_closures_inner(cont_body, ctx, known_static_caps);
     }
     ExprKind::App { args, .. } => {
@@ -2170,14 +2173,14 @@ fn collect_match_arms<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         }
       }
     }
-    ExprKind::LetFn { fn_body, body, .. } => {
+    ExprKind::LetFn { fn_body, cont: cont, .. } => {
       collect_match_arms(fn_body, ctx);
-      match body {
+      match cont {
         Cont::Expr { body: cont_body, .. } => collect_match_arms(cont_body, ctx),
         Cont::Ref(_) => {}
       }
     }
-    ExprKind::LetVal { body: Cont::Expr { body: cont_body, .. }, .. } => {
+    ExprKind::LetVal { cont: Cont::Expr { body: cont_body, .. }, .. } => {
       collect_match_arms(cont_body, ctx);
     }
     ExprKind::LetVal { .. } => {}
@@ -2200,13 +2203,13 @@ fn collect_match_arms<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
 
 fn collect_letval_locals(expr: &Expr<'_>, out: &mut Vec<CpsId>) {
   match &expr.kind {
-    ExprKind::LetVal { body: Cont::Expr { args, body }, .. } => {
+    ExprKind::LetVal { cont: Cont::Expr { args, body }, .. } => {
       for arg in args { out.push(arg.id); }
       collect_letval_locals(body, out);
     }
-    ExprKind::LetVal { body: Cont::Ref(_), .. } => {}
-    ExprKind::LetFn { body, .. } => {
-      if let Cont::Expr { args, body: cont_body } = body {
+    ExprKind::LetVal { cont: Cont::Ref(_), .. } => {}
+    ExprKind::LetFn { cont: cont, .. } => {
+      if let Cont::Expr { args, body: cont_body } = cont {
         for arg in args { out.push(arg.id); }
         collect_letval_locals(cont_body, out);
       }
@@ -2227,7 +2230,7 @@ fn discover_aliases(expr: &Expr<'_>, locals: &mut Vec<(CpsId, u32)>) {
   let mut current = expr;
   loop {
     match &current.kind {
-      ExprKind::LetVal { name, val, body: Cont::Expr { args, body: cont_body } } => {
+      ExprKind::LetVal { name, val, cont: Cont::Expr { args, body: cont_body } } => {
         if let ValKind::Ref(crate::passes::cps::ir::Ref::Synth(ref_id)) = &val.kind
           && let Some(local_idx) = locals.iter().find(|(id, _)| id == ref_id).map(|(_, idx)| *idx)
         {
@@ -2240,7 +2243,7 @@ fn discover_aliases(expr: &Expr<'_>, locals: &mut Vec<(CpsId, u32)>) {
         }
         current = cont_body;
       }
-      ExprKind::LetFn { body: Cont::Expr { args, body: cont_body }, .. } => {
+      ExprKind::LetFn { cont: Cont::Expr { args, body: cont_body }, .. } => {
         if let ExprKind::LetVal { name, .. } = &cont_body.kind
           && let Some(arg) = args.first()
           && let Some(local_idx) = locals.iter().find(|(id, _)| *id == arg.id).map(|(_, idx)| *idx)

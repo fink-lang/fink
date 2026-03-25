@@ -87,7 +87,6 @@ impl Alloc {
 struct HoistedFn<'src> {
   name:    BindNode,
   params:  Vec<Param>,
-  cont:    BindNode,
   fn_body: Expr<'src>,
 }
 
@@ -174,9 +173,8 @@ fn wrap_hoisted<'src>(
       kind: ExprKind::LetFn {
         name: h.name,
         params: h.params,
-        cont: h.cont,
         fn_body: Box::new(h.fn_body),
-        body: Cont::Expr { args: vec![result_bind], body: Box::new(expr) },
+        cont: Cont::Expr { args: vec![result_bind], body: Box::new(expr) },
       },
     };
   }
@@ -210,7 +208,7 @@ fn lift_expr<'src>(
 ) -> Expr<'src> {
   use ExprKind::*;
   match expr.kind {
-    LetFn { name, params, cont, fn_body, body } => {
+    LetFn { name, params, fn_body, cont: cont } => {
       let cap_entries: Vec<(CpsId, Bind)> = captures.try_get(name.id)
         .cloned()
         .unwrap_or_default()
@@ -223,9 +221,7 @@ fn lift_expr<'src>(
             param_id == *bind_id
               || synth_alias.try_get(param_id).and_then(|a| *a) == Some(*bind_id)
           });
-          let already_cont = cont.id == *bind_id
-            || synth_alias.try_get(cont.id).and_then(|a| *a) == Some(*bind_id);
-          !already_param && !already_cont
+          !already_param
         })
         .collect();
       let cap_bind_ids: Vec<CpsId> = cap_entries.iter().map(|(id, _)| *id).collect();
@@ -233,7 +229,7 @@ fn lift_expr<'src>(
       // Recurse into fn_body and body; collect their hoisted fns.
       let mut inner_hoisted: Vec<HoistedFn<'src>> = Vec::new();
       let rewritten_fn_body = lift_expr(*fn_body, captures, resolve, ast_index, alloc, &mut inner_hoisted, synth_alias);
-      let rewritten_body    = lift_cont(body, captures, resolve, ast_index, alloc, hoisted, synth_alias);
+      let rewritten_body    = lift_cont(cont, captures, resolve, ast_index, alloc, hoisted, synth_alias);
 
       if cap_bind_ids.is_empty() {
         // Pure function — bubble hoisted fns from fn_body upward to the outer scope.
@@ -243,9 +239,8 @@ fn lift_expr<'src>(
           kind: LetFn {
             name,
             params,
-            cont,
             fn_body: Box::new(rewritten_fn_body),
-            body: rewritten_body,
+            cont: rewritten_body,
           },
         }
       } else {
@@ -286,11 +281,9 @@ fn lift_expr<'src>(
         let lifted_fn_bind = alloc.synth_bind();
         let lifted_fn_id = lifted_fn_bind.id;
 
-        let lifted_cont = alloc.bind(Bind::Cont, None);
         hoisted.push(HoistedFn {
           name:    lifted_fn_bind,
           params:  lifted_params,
-          cont:    lifted_cont,
           fn_body: rewritten_fn_body,
         });
 
@@ -330,12 +323,12 @@ fn lift_expr<'src>(
     }
 
     // Structural recursion for all other node kinds.
-    LetVal { name, val, body } => Expr {
+    LetVal { name, val, cont: body } => Expr {
       id: expr.id,
       kind: LetVal {
         name,
         val,
-        body: lift_cont(body, captures, resolve, ast_index, alloc, hoisted, synth_alias),
+        cont: lift_cont(body, captures, resolve, ast_index, alloc, hoisted, synth_alias),
       },
     },
 
@@ -502,11 +495,11 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      LetVal { val, body, .. } => {
+      LetVal { val, cont: body, .. } => {
         emit_val(val, result, origin, ast_index, out);
         if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
       }
-      LetFn { fn_body, body, .. } => {
+      LetFn { fn_body, cont: body, .. } => {
         collect_lines(fn_body, result, origin, ast_index, out);
         if let Cont::Expr { body: body_expr, .. } = body { collect_lines(body_expr, result, origin, ast_index, out); }
       }

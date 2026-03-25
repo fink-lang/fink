@@ -7,6 +7,7 @@ pub mod ast;
 pub mod closure_capture;
 pub mod closure_lifting;
 pub mod cont_lifting;
+pub mod cps_flat;
 pub mod cps;
 pub mod name_res;
 pub mod partial;
