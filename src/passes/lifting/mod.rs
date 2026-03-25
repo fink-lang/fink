@@ -136,15 +136,22 @@ fn needs_lifting(expr: &Expr<'_>) -> bool {
       contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
     }
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
-    ExprKind::App { args, .. } => {
+    ExprKind::App { func, args } => {
       args.iter().any(|a| match a {
-        Arg::Cont(c) => app_cont_needs_lifting(c),
+        Arg::Cont(c) => app_cont_needs_lifting(func, c),
         Arg::Expr(e) => needs_lifting(e),
         _ => false,
       })
     }
     ExprKind::If { then, else_, .. } => needs_lifting(then) || needs_lifting(else_),
-    ExprKind::Yield { cont, .. } => app_cont_needs_lifting(cont),
+    ExprKind::Yield { value, cont } => {
+      // Yield's cont is like an App cont — check for non-forward.
+      match cont {
+        Cont::Ref(_) => false,
+        c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
+        Cont::Expr { .. } => true,
+      }
+    }
   }
 }
 
@@ -155,30 +162,14 @@ fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
   }
 }
 
-/// A cont body is terminal if it's a single App with no inline conts — truly the end of a chain.
-/// LetVal chains and other structure inside a cont body means it should be hoisted.
-fn app_cont_is_terminal(body: &Expr<'_>) -> bool {
-  match &body.kind {
-    ExprKind::App { args, .. } => {
-      args.iter().all(|a| match a {
-        Arg::Val(_) | Arg::Spread(_) => true,
-        Arg::Cont(Cont::Ref(_)) => true,
-        Arg::Cont(Cont::Expr { .. }) => false,
-        Arg::Expr(_) => false,
-      })
-    }
-    _ => false,
-  }
-}
 
-fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
+fn app_cont_needs_lifting(func: &Callable<'_>, cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
     c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
-    // If the cont body has nothing to hoist (no nested LetFn, no inline Cont::Expr),
-    // it's terminal — don't flag it for lifting even if it does computation.
-    Cont::Expr { body, .. } if !contains_letfn_or_inline_cont(body) => false,
-    Cont::Expr { body, .. } => needs_lifting(body),
+    // ·closure result conts are structural — don't hoist them.
+    Cont::Expr { .. } if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure)) => false,
+    Cont::Expr { .. } => true,
   }
 }
 
@@ -191,11 +182,11 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
       Cont::Ref(_) => false,
       Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body),
     },
-    ExprKind::App { args, .. } => {
+    ExprKind::App { func, args } => {
+      // Skip ·closure result conts — they're structural.
+      let skip_closure_cont = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
-        Arg::Cont(c @ Cont::Expr { body, .. }) => {
-          !is_simple_forward_cont(c) && !app_cont_is_terminal(body)
-        }
+        Arg::Cont(c @ Cont::Expr { .. }) => !skip_closure_cont && !is_simple_forward_cont(c),
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
@@ -596,9 +587,10 @@ fn extract_from_body<'src>(
 
     ExprKind::App { func, mut args } => {
       // Check for inline Cont::Expr args that need hoisting.
-      // Skip simple forwards and terminal conts (body has nothing to hoist).
+      // Skip simple forwards and ·closure result conts.
+      let skip_closure = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
       let cont_idx = args.iter().rposition(|a| match a {
-        Arg::Cont(c @ Cont::Expr { body, .. }) => !is_simple_forward_cont(c) && !app_cont_is_terminal(body),
+        Arg::Cont(c @ Cont::Expr { .. }) => !skip_closure && !is_simple_forward_cont(c),
         _ => false,
       });
       if let Some(idx) = cont_idx {

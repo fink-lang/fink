@@ -132,9 +132,12 @@ test 'depth-2 closure', fn:
           a + b + c
 
   | equals fink":
+    ·v_46 = fn c, ·v_49, ·v_12:
+      ·op_plus ·v_12, c, ·v_49
+
     ·v_37 = fn a, b, c, ·v_9:
-      ·op_plus a, b, fn ·v_12:
-        ·op_plus ·v_12, c, ·v_9
+      ·v_53 = ·closure ·v_46, c, ·v_9
+      ·op_plus a, b, ·v_53
 
     ·v_30 = fn a, b, ·v_6:
       ·closure ·v_37, a, b, ·v_6
@@ -190,14 +193,15 @@ test 'match — no forward refs after lift', fn:
         0: 42
 
   | equals fink":
-    ·v_31 = fn ·v_11:
-      ·v_13 = 42
-      ·v_11 ·v_13
+    ·v_31 = fn n, ·v_34, ·v_18:
+      ·match_block n, ·v_18, ·v_34
 
     foo = ·v_1 = fn n, ·v_3:
+      ·v_38 = ·closure ·v_31, n, ·v_3
       ·match_arm fn ·v_8, ·v_6, ·v_7:
-        ·match_value ·v_8, 0, ·v_6, ·v_7, ·v_31, fn ·v_18:
-        ·match_block n, ·v_18, ·v_3
+        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
+        ·v_13 = 42
+        ·v_11 ·v_13, ·v_38
 
     ·v_0 foo
 
@@ -209,17 +213,19 @@ test 'seq destructure', fn:
       a + 1
 
   | equals fink":
-    ·v_35 = fn ·v_36, ·v_6, ·v_7:
-      a = ·v_6
-      ·match_done ·v_7, panic, fn ·v_11:
-        ·op_plus a, 1, ·v_36
+    ·v_35 = fn ·v_36, ·v_11:
+      ·op_plus a, 1, ·v_36
 
-    ·v_43 = fn ·v_5:
+    ·v_43 = fn ·v_6, ·v_7:
+      a = ·v_6
       ·v_40 = ·closure ·v_35, ·v_3
-      ·match_next ·v_5, panic, ·v_40
+      ·match_done ·v_7, panic, ·v_40
+
+    ·v_45 = fn ·v_5:
+      ·match_next ·v_5, panic, ·v_43
 
     main = ·v_1 = fn foo, ·v_3:
-      ·match_seq foo, panic, ·v_43
+      ·match_seq foo, panic, ·v_45
 
     ·v_0 main
 
@@ -261,14 +267,11 @@ test 'match with binding', fn:
       ·v_42 = ·closure ·v_37, ·v_3
       ·match_block n, ·v_20, ·v_42
 
-    ·v_55 = fn n, ·v_50:
+    foo = ·v_1 = fn n, ·v_3:
+      ·v_50 = ·closure ·v_45, n
       ·match_arm fn ·v_8, ·v_6, ·v_7:
         ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
         ·op_plus n, 1, ·v_11, ·v_50
-
-    foo = ·v_1 = fn n, ·v_3:
-      ·v_60 = ·closure ·v_55, n
-      ·closure ·v_45, n, ·v_60
 
     ·v_0 foo
 
@@ -290,30 +293,18 @@ test 'recursive fn in match', fn:
       ·v_61 = ·closure ·v_56, ·v_3
       ·match_block n, ·v_18, ·v_37, ·v_61
 
-    ·v_89 = fn n, ·v_24:
-      ·op_plus n, 1, fn ·v_28:
-        fib ·v_28, ·v_24
-
-    ·v_101 = fn ·v_102, ·v_94:
-      ·match_arm fn ·v_22, ·v_20, ·v_21:
-        ·v_21 _, ·v_94, ·v_102
-
-    ·v_97 = fn ·v_69:
-      ·v_106 = ·closure ·v_101, ·v_69
-      ·closure ·v_89, n, ·v_106
-
     ·v_72 = fn n, ·v_18:
-      ·closure ·v_64, n, ·v_97
-
-    ·v_83 = fn ·v_11:
-      ·v_13 = 1
-      ·v_11 ·v_13
-
-    ·v_85 = fn ·v_77:
-      ·match_arm fn ·v_8, ·v_6, ·v_7:
-        ·match_value ·v_8, 0, ·v_6, ·v_7, ·v_83, ·v_77
+      ·v_69 = ·closure ·v_64, n
+      ·match_arm fn ·v_22, ·v_20, ·v_21:
+        ·v_21 _, fn ·v_24:
+        ·op_plus n, 1, fn ·v_28:
+          fib ·v_28, ·v_24, ·v_69
 
     fib = ·v_1 = fn n, ·v_3:
-      ·closure ·v_72, n, ·v_85
+      ·v_77 = ·closure ·v_72, n
+      ·match_arm fn ·v_8, ·v_6, ·v_7:
+        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
+        ·v_13 = 1
+        ·v_11 ·v_13, ·v_77
 
     ·v_0 fib
