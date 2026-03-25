@@ -4,31 +4,34 @@ scope analysis tests
 
 # AST-level scope analysis — resolves identifiers to bindings.
 #
-# Output format: one section per scope, then resolved references.
+# Output: nested scope tree with bindings and references in source order.
+# Scopes nest to show parent-child relationships. Bindings and references
+# appear in the scope where they are defined/used, in source order.
 #
-# Scopes
-#   scope 'S0', 'module',
+# Scope kinds:
+#   module  — all bindings mutually recursive (forward refs allowed)
+#   fn      — sequential (binding visible to subsequent siblings)
+#   match   — per-arm, pattern bindings visible in arm body
+#
+# Reference kinds:
+#   ref 'name', 'B0'             — normal ref to binding B0
+#   ref 'name', 'B0', depth 1    — captured from parent scope (1 level up)
+#   fwd_ref 'name', 'B0'         — forward ref in module scope (mutual recursion)
+#   self_ref 'name', 'B0'        — recursive self-reference
+#
+# Example output:
+#   scope 'S0', 'module':
 #     bind 'add', 'B0'
 #     bind 'main', 'B1'
 #
-#   scope 'S1', 'add',
-#     bind 'a', 'B2'
-#     bind 'b', 'B3'
+#     scope 'S1', 'fn add':
+#       bind 'a', 'B2'
+#       bind 'b', 'B3'
+#       ref 'a', 'B2'
+#       ref 'b', 'B3'
 #
-# References
-#   ref 'add', 'R0', 'B0'
-#   ref 'a', 'R1', B2
-#
-# For now, just show resolved references in walk order:
-#   add -> add@S0
-#   a -> a@S1
-#
-# Test format:
-#   test 'name', fn:
-#     expect scope fink":
-#       <fink source>
-#     | equals fink":
-#       <expected scope output>
+#     scope 'S2', 'fn main':
+#       ref 'add', 'B0', depth 1
 
 
 {test, expect, equals, fink, scope} = import '!fake'
