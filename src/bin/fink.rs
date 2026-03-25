@@ -81,9 +81,10 @@ fn main() {
 
           // --pass=N selects pipeline stage:
           //   0 (default): raw CPS after lower_expr
-          //   1: after lifting (fully lifted)
+          //   1: after lifting (fully lifted, nested formatter)
+          //   2: after lifting (flat formatter — reads like source)
           let result = match pass.unwrap_or(0) {
-            1 => fink::passes::lifting::lift(cps, &ast_index),
+            1 | 2 => fink::passes::lifting::lift(cps, &ast_index),
             _ => cps,
           };
 
@@ -92,7 +93,9 @@ fn main() {
             ast_index: &ast_index,
             captures: None,
           };
-          if sourcemap {
+          if pass == Some(2) {
+            println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
+          } else if sourcemap {
             let (output, srcmap) = if embed_source {
               fink::passes::cps::fmt::fmt_with_mapped_content(&result.root, &ctx, path, &src)
             } else {

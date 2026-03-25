@@ -779,3 +779,61 @@ test 'two bindings at module level', fn:
           ·let 2, fn bar:
             ·ƒ_2 bar
       fn ·v_1: ·ƒ_0 ·v_1
+
+
+test 'two fns at module level — main calls add', fn:
+  expect cps_expr fink":
+    add = fn a, b:
+      a + b
+    main = fn:
+      add 3, 4
+  | equals fink":
+    ·fn
+      fn ·ƒ_2:
+        ·fn
+          fn a, b, ·ƒ_6: ·op_plus a, b, ·ƒ_6
+          fn ·v_3:
+            ·let ·v_3, fn add:
+              ·fn
+                fn ·ƒ_15: ·v_3 3, 4, ·ƒ_15
+                fn ·v_14:
+                  ·let ·v_14, fn main:
+                    ·ƒ_2 main
+      fn ·v_1: ·ƒ_0 ·v_1
+
+
+test 'shadowed binding — inner add does not affect outer', fn:
+  expect cps_expr fink":
+    add = fn a, b:
+      a + b
+    sub = fn a, b:
+      add = fn foo: foo
+      a - add b
+    main = fn:
+      add 3, 4
+  | equals fink":
+    ·fn
+      fn ·ƒ_2:
+        ·fn
+          fn a, b, ·ƒ_6: ·op_plus a, b, ·ƒ_6
+          fn ·v_3:
+            ·let ·v_3, fn add:
+              ·fn
+                fn a, b, ·ƒ_17:
+                  ·fn
+                    fn foo, ·ƒ_20:
+                      ·let foo, fn ·v_22:
+                        ·ƒ_20 ·v_22
+                    fn ·v_18:
+                      ·let ·v_18, fn add:
+                        ·op_minus a, ·v_18, fn ·v_28:
+                          ·let ·v_28, fn ·v_30:
+                            ·ƒ_17 ·v_30
+                fn ·v_14:
+                  ·let ·v_14, fn sub:
+                    ·fn
+                      fn ·ƒ_42: ·v_3 3, 4, ·ƒ_42
+                      fn ·v_41:
+                        ·let ·v_41, fn main:
+                          ·ƒ_2 main
+      fn ·v_1: ·ƒ_0 ·v_1
