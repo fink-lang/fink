@@ -654,6 +654,78 @@ fn extract_from_body<'src>(
       }
     }
 
+    ExprKind::Yield { value, cont } => {
+      if let Cont::Expr { args: cont_args, body } = cont {
+        let body = extract_from_body(*body, parent_params, captures, resolve, ast_index, alloc, hoisted);
+        let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
+        let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, resolve, alloc);
+        if cap_entries.is_empty() {
+          let cont_name = alloc.bind(Bind::Cont, None);
+          let cont_name_id = cont_name.id;
+          hoisted.push(HoistedFn {
+            name: cont_name,
+            params: cont_params,
+            fn_body: body,
+            cont_args: vec![alloc.synth_bind()],
+          });
+          Expr { id: expr.id, kind: ExprKind::Yield { value, cont: Cont::Ref(cont_name_id) } }
+        } else {
+          // Captures — hoist with captures, wrap yield in ·fn_closure.
+          let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
+          let lifted_fn_bind = alloc.synth_bind();
+          let lifted_fn_id = lifted_fn_bind.id;
+          let mut lifted_params: Vec<Param> = Vec::new();
+          let mut closure_args: Vec<Arg<'src>> = Vec::new();
+          for (cap_id, cap_kind) in &cap_entries {
+            let ast_origin = alloc.origin.try_get(*cap_id).and_then(|o| *o);
+            let param_bind = alloc.bind(*cap_kind, ast_origin);
+            rewrite_map.insert(*cap_id, param_bind.id);
+            if *cap_kind != Bind::Name {
+              let idx: usize = param_bind.id.into();
+              while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
+              alloc.synth_alias.set(param_bind.id, Some(*cap_id));
+            }
+            lifted_params.push(Param::Name(param_bind));
+            let arg_val = if *cap_kind == Bind::Name {
+              alloc.val(ValKind::Ref(Ref::Name), ast_origin)
+            } else {
+              alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), None)
+            };
+            closure_args.push(Arg::Val(arg_val));
+          }
+          let body = rewrite_refs(body, &rewrite_map);
+          lifted_params.extend(cont_params);
+          hoisted.push(HoistedFn {
+            name: lifted_fn_bind,
+            params: lifted_params,
+            fn_body: body,
+            cont_args: vec![alloc.synth_bind()],
+          });
+          let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
+          closure_args.insert(0, Arg::Val(lifted_ref));
+          let closure_result = alloc.bind(Bind::Synth, None);
+          let closure_result_id = closure_result.id;
+          let inner_yield = alloc.expr(ExprKind::Yield { value, cont: Cont::Ref(closure_result_id) }, None);
+          closure_args.push(Arg::Cont(Cont::Expr {
+            args: vec![closure_result],
+            body: Box::new(inner_yield),
+          }));
+          alloc.expr(ExprKind::App {
+            func: Callable::BuiltIn(BuiltIn::FnClosure),
+            args: closure_args,
+          }, None)
+        }
+      } else {
+        Expr { id: expr.id, kind: ExprKind::Yield { value, cont } }
+      }
+    }
+
+    ExprKind::If { cond, then, else_ } => {
+      let then = extract_from_body(*then, parent_params, captures, resolve, ast_index, alloc, hoisted);
+      let else_ = extract_from_body(*else_, parent_params, captures, resolve, ast_index, alloc, hoisted);
+      Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
+    }
+
     other => Expr { id: expr.id, kind: other },
   }
 }
