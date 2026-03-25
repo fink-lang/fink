@@ -158,5 +158,5 @@ mod tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/passes/lifting/capture/test_closure_capture.fnk");
+  test_macros::include_fink_tests!("src/passes/lifting/test_capture.fnk");
 }
