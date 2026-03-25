@@ -277,7 +277,7 @@ test 'recursive fn in match', fn:
     fib = fn n:
       r = match n:
         0: 1
-        _: fib (n + 1)
+        _: fib n + 1
       r
 
   | equals fink":
