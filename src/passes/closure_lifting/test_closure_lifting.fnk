@@ -10,7 +10,7 @@ closure lifting tests
 #   Before:  fn {cap: [x]}, b: <body>
 #   After:   fn x, b: <body>    — x promoted to leading param; fn hoisted to top
 #
-# Call sites use ·fn_closure to partially apply the hoisted fn with its captures.
+# Call sites use ·closure to partially apply the hoisted fn with its captures.
 #
 # Test format:
 #   test 'name', fn:
@@ -39,7 +39,7 @@ test 'TODO ƒ_2 is out of scope', fn:
       fn ·v_28:
         ·fn
           fn ·ƒ_2:
-            ·fn_closure ·v_28, ·v_2, fn ·ƒ_23, ·v_25:
+            ·closure ·v_28, ·v_2, fn ·ƒ_23, ·v_25:
               ·op_mul 2, 3, ·ƒ_23
           fn ·v_1:
             ·let ·v_1, fn main:
@@ -97,7 +97,7 @@ test 'captured binding becomes leading param', fn:
       fn ·v_22:
         ·fn
           fn a, ·ƒ_3:
-            ·fn_closure ·v_22, a, fn ·v_4:
+            ·closure ·v_22, a, fn ·v_4:
               ·ƒ_3 ·v_4
           fn ·v_1:
             ·let ·v_1, fn foo:
@@ -114,7 +114,7 @@ test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
   | equals fink":
     ·fn
       fn a, b, ·ƒ_6:
-        ·fn_closure ·v_44, a, b, fn ·v_7:
+        ·closure ·v_44, a, b, fn ·v_7:
           ·ƒ_6 ·v_7
       fn ·v_56:
         ·fn
@@ -122,12 +122,12 @@ test 'depth-2 — innermost closure hoisted, intermediate fn stays nested', fn:
           fn ·v_37:
             ·fn
               fn a, b, c, ·ƒ_9:
-                ·fn_closure ·v_37, c, ·v_9, fn ·ƒ_30, ·v_32:
+                ·closure ·v_37, c, ·v_9, fn ·ƒ_30, ·v_32:
                   ·op_plus a, b, ·ƒ_30
               fn ·v_44:
                 ·fn
                   fn a, ·ƒ_3:
-                    ·fn_closure ·v_56, a, fn ·v_4:
+                    ·closure ·v_56, a, fn ·v_4:
                       ·ƒ_3 ·v_4
                   fn ·v_1:
                     ·let ·v_1, fn foo:
@@ -144,7 +144,7 @@ test 'multiple captures — all captured vars become leading params', fn:
   | equals fink":
     ·fn
       fn a, b, ·ƒ_6:
-        ·fn_closure ·v_29, a, b, fn ·v_7:
+        ·closure ·v_29, a, b, fn ·v_7:
           ·ƒ_6 ·v_7
       fn ·v_39:
         ·fn
@@ -152,7 +152,7 @@ test 'multiple captures — all captured vars become leading params', fn:
           fn ·v_29:
             ·fn
               fn a, ·ƒ_3:
-                ·fn_closure ·v_39, a, fn ·v_4:
+                ·closure ·v_39, a, fn ·v_4:
                   ·ƒ_3 ·v_4
               fn ·v_1:
                 ·let ·v_1, fn foo:
@@ -180,7 +180,7 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
                 ·let ·v_3, fn f:
                   ·fn
                     fn a, ·ƒ_13:
-                      ·fn_closure ·v_38, a, fn ·v_14:
+                      ·closure ·v_38, a, fn ·v_14:
                         ·ƒ_13 ·v_14
                     fn ·v_11:
                       ·let ·v_11, fn g:
@@ -188,7 +188,7 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
           fn ·v_1: ·ƒ_0 ·v_1
 
 # NOTE: depth-1 closure (g captures a) — lift_all terminates in 1 pass since
-# the ·fn_closure call site's args (a) resolve as local after lifting.
+# the ·closure call site's args (a) resolve as local after lifting.
 
 
 ---
@@ -215,7 +215,7 @@ test 'match — no forward refs after lift', fn:
       fn ·v_44:
         ·fn
           fn n, ·ƒ_3:
-            ·fn_closure ·v_44, n, ·v_3, fn ·ƒ_31, ·v_39:
+            ·closure ·v_44, n, ·v_3, fn ·ƒ_31, ·v_39:
               ·fn
                 fn ·ƒ_11:
                   ·let 42, fn ·v_13:

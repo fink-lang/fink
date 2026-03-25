@@ -262,7 +262,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     // String interpolation
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
-    BuiltIn::FnClosure => "·fn_closure".into(),
+    BuiltIn::FnClosure => "·closure".into(),
     // Pattern matching primitives
     BuiltIn::MatchValue   => "·match_value".into(),
     BuiltIn::MatchSeq     => "·match_seq".into(),

@@ -3,7 +3,7 @@ unified lifting tests
 ---
 
 # Unified closure/continuation lifting — lifts nested fns one level at a time,
-# threading captured bindings as explicit params via ·fn_closure.
+# threading captured bindings as explicit params via ·closure.
 #
 # After lifting, no fn should reference bindings from outer scopes — all values
 # are passed explicitly as params. No forward references to sibling-scope binds.
@@ -67,7 +67,7 @@ test 'chained arithmetic — cont body lifted', fn:
       ·op_plus x, 4, ·v_24
 
     main = ·v_1 = fn ·v_2:
-      ·v_28 = ·fn_closure ·v_23, ·v_2
+      ·v_28 = ·closure ·v_23, ·v_2
       ·op_mul 2, 3, ·v_28
 
     ·v_0 main
@@ -88,7 +88,7 @@ test 'captured binding becomes leading param', fn:
       ·op_plus a, b, ·v_6
 
     foo = ·v_1 = fn a, ·v_3:
-      ·fn_closure ·v_20, a, ·v_3
+      ·closure ·v_20, a, ·v_3
 
     ·v_0 foo
 
@@ -110,7 +110,7 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
       ·op_plus a, b, ·v_16
 
     ·v_11 = fn a, ·v_13:
-      ·fn_closure ·v_36, a, ·v_13
+      ·closure ·v_36, a, ·v_13
 
     ·v_1 = fn ·v_2:
       f = ·v_3
@@ -139,7 +139,7 @@ test 'depth-2 closure', fn:
         ·op_plus ·v_12, c, ·v_9
 
     ·v_4 = fn b, ·v_6:
-      ·fn_closure ·v_30, b, ·v_6
+      ·closure ·v_30, b, ·v_6
 
     foo = ·v_1 = fn a, ·v_3:
       ·v_3 ·v_4
@@ -160,7 +160,7 @@ test 'multiple captures at depth-2', fn:
       ·op_plus a, b, ·v_9
 
     ·v_4 = fn b, ·v_6:
-      ·fn_closure ·v_25, b, ·v_6
+      ·closure ·v_25, b, ·v_6
 
     foo = ·v_1 = fn a, ·v_3:
       ·v_3 ·v_4
@@ -214,7 +214,7 @@ test 'seq destructure', fn:
         ·op_plus a, 1, ·v_36
 
     ·v_43 = fn ·v_5:
-      ·v_40 = ·fn_closure ·v_35, ·v_3
+      ·v_40 = ·closure ·v_35, ·v_3
       ·match_next ·v_5, panic, ·v_40
 
     main = ·v_1 = fn foo, ·v_3:
@@ -235,7 +235,7 @@ test 'record destructure', fn:
       ·op_plus x, 1, ·v_33
 
     ·v_40 = fn ·v_5:
-      ·v_37 = ·fn_closure ·v_32, ·v_3
+      ·v_37 = ·closure ·v_32, ·v_3
       ·match_field ·v_5, 'x', panic, ·v_37
 
     main = ·v_1 = fn foo, ·v_3:
@@ -257,7 +257,7 @@ test 'match with binding', fn:
       ·v_38 r
 
     ·v_45 = fn n, ·v_20:
-      ·v_42 = ·fn_closure ·v_37, ·v_3
+      ·v_42 = ·closure ·v_37, ·v_3
       ·match_block n, ·v_20, ·v_42
 
     ·v_55 = fn n, ·v_50:
@@ -266,8 +266,8 @@ test 'match with binding', fn:
         ·op_plus n, 1, ·v_11, ·v_50
 
     foo = ·v_1 = fn n, ·v_3:
-      ·v_60 = ·fn_closure ·v_55, n
-      ·fn_closure ·v_45, n, ·v_60
+      ·v_60 = ·closure ·v_55, n
+      ·closure ·v_45, n, ·v_60
 
     ·v_0 foo
 
@@ -286,7 +286,7 @@ test 'recursive fn in match', fn:
       ·v_57 r
 
     ·v_64 = fn n, ·v_37:
-      ·v_61 = ·fn_closure ·v_56, ·v_3
+      ·v_61 = ·closure ·v_56, ·v_3
       ·match_block n, ·v_18, ·v_37, ·v_61
 
     ·v_89 = fn n, ·v_24:
@@ -298,11 +298,11 @@ test 'recursive fn in match', fn:
         ·v_21 _, ·v_94, ·v_102
 
     ·v_97 = fn ·v_69:
-      ·v_106 = ·fn_closure ·v_101, ·v_69
-      ·fn_closure ·v_89, n, ·v_106
+      ·v_106 = ·closure ·v_101, ·v_69
+      ·closure ·v_89, n, ·v_106
 
     ·v_72 = fn n, ·v_18:
-      ·fn_closure ·v_64, n, ·v_97
+      ·closure ·v_64, n, ·v_97
 
     ·v_83 = fn ·v_11:
       ·v_13 = 1
@@ -313,6 +313,6 @@ test 'recursive fn in match', fn:
         ·match_value ·v_8, 0, ·v_6, ·v_7, ·v_83, ·v_77
 
     fib = ·v_1 = fn n, ·v_3:
-      ·fn_closure ·v_72, n, ·v_85
+      ·closure ·v_72, n, ·v_85
 
     ·v_0 fib
