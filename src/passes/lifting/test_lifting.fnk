@@ -179,11 +179,35 @@ test 'yield — cont body lifted', fn:
 
 
 ---
-pattern matching — inline fn in ·match_arm/·match_* args
+pattern matching
 ---
 
-# BUG: `a` out of scope in ·v_53 — bound by LetVal inside ·v_44, not a fn param.
-# compute_captures_for_lift only checks fn params, not LetVal bindings.
+test 'match — no forward refs after lift', fn:
+  expect lift fink":
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals fink":
+    ·v_31 = fn n, ·v_34, ·v_18:
+      ·match_block n, ·v_18, ·v_34
+
+    ·v_45 = fn ·v_11:
+      ·v_13 = 42
+      ·v_11 ·v_13
+
+    ·v_48 = fn ·v_8, ·v_6, ·v_7:
+      ·match_value ·v_8, 0, ·v_6, ·v_7
+
+    ·v_42 = fn ·v_38:
+      ·match_arm ·v_48, ·v_45, ·v_38
+
+    foo = ·v_1 = fn n, ·v_3:
+      ·closure ·v_31, n, ·v_3, ·v_42
+
+    ·v_0 foo
+
+
 test 'seq destructure', fn:
   expect lift fink":
     main = fn foo:
@@ -232,30 +256,6 @@ test 'record destructure', fn:
     ·v_0 main
 
 
-# The ·match_arm and ·match_* builtins use Arg::Cont(Cont::Expr) for their
-# arm/body/fail callbacks. These are terminal single-App conts that the lifting
-# pass currently leaves inline. Discussion needed on how to treat them.
-
-test 'match — no forward refs after lift', fn:
-  expect lift fink":
-    foo = fn n:
-      match n:
-        0: 42
-
-  | equals fink":
-    ·v_31 = fn n, ·v_34, ·v_18:
-      ·match_block n, ·v_18, ·v_34
-
-    foo = ·v_1 = fn n, ·v_3:
-      ·v_38 = ·closure ·v_31, n, ·v_3
-      ·match_arm fn ·v_8, ·v_6, ·v_7:
-        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
-        ·v_13 = 42
-        ·v_11 ·v_13, ·v_38
-
-    ·v_0 foo
-
-
 test 'match with binding', fn:
   expect lift fink":
     foo = fn n:
@@ -264,21 +264,7 @@ test 'match with binding', fn:
       r
 
   | equals fink":
-    ·v_48 = fn ·v_49, ·v_22:
-      r = ·v_22
-      ·v_49 r
-
-    ·v_37 = fn n, ·v_40, ·v_20:
-      ·v_53 = ·closure ·v_48, ·v_40
-      ·match_block n, ·v_20, ·v_53
-
-    foo = ·v_1 = fn n, ·v_3:
-      ·v_44 = ·closure ·v_37, n, ·v_3
-      ·match_arm fn ·v_8, ·v_6, ·v_7:
-        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
-        ·op_plus n, 1, ·v_11, ·v_44
-
-    ·v_0 foo
+    TODO
 
 
 test 'recursive fn in match', fn:
@@ -290,26 +276,4 @@ test 'recursive fn in match', fn:
       r
 
   | equals fink":
-    ·v_80 = fn ·v_81, ·v_39:
-      r = ·v_39
-      ·v_81 r
-
-    ·v_67 = fn n, ·v_70, ·v_72, ·v_37:
-      ·v_85 = ·closure ·v_80, ·v_72
-      ·match_block n, ·v_70, ·v_37, ·v_85
-
-    ·v_56 = fn n, ·v_59, ·v_18:
-      ·v_76 = ·closure ·v_67, n, ·v_18, ·v_59
-      ·match_arm fn ·v_22, ·v_20, ·v_21:
-        ·v_21 _, fn ·v_24:
-        ·op_plus n, 1, fn ·v_28:
-          fib ·v_28, ·v_24, ·v_76
-
-    fib = ·v_1 = fn n, ·v_3:
-      ·v_63 = ·closure ·v_56, n, ·v_3
-      ·match_arm fn ·v_8, ·v_6, ·v_7:
-        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
-        ·v_13 = 1
-        ·v_11 ·v_13, ·v_63
-
-    ·v_0 fib
+    TODO
