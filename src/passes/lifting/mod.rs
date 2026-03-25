@@ -167,7 +167,7 @@ fn app_cont_needs_lifting(func: &Callable<'_>, cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
     c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
-    // ·closure result conts are structural — don't hoist them.
+    // ·closure result conts stay inline — hoisting them creates infinite ·closure chains.
     Cont::Expr { .. } if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure)) => false,
     Cont::Expr { .. } => true,
   }
@@ -183,10 +183,9 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
       Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body),
     },
     ExprKind::App { func, args } => {
-      // Skip ·closure result conts — they're structural.
-      let skip_closure_cont = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
+      let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !skip_closure_cont && !is_simple_forward_cont(c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
@@ -587,10 +586,10 @@ fn extract_from_body<'src>(
 
     ExprKind::App { func, mut args } => {
       // Check for inline Cont::Expr args that need hoisting.
-      // Skip simple forwards and ·closure result conts.
-      let skip_closure = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
+      // Skip simple forwards and ·closure result conts (to avoid infinite chains).
+      let is_closure = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
       let cont_idx = args.iter().rposition(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !skip_closure && !is_simple_forward_cont(c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
         _ => false,
       });
       if let Some(idx) = cont_idx {
