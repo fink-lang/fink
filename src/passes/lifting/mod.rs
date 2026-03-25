@@ -485,6 +485,7 @@ fn extract_from_body<'src>(
         // Closure — add captures as leading params, emit ·fn_closure at call site.
         let mut lifted_params: Vec<Param> = Vec::new();
         let mut closure_args: Vec<Arg<'src>> = Vec::new();
+        let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
 
         // Build the lifted fn ref.
         let lifted_fn_bind = alloc.synth_bind();
@@ -494,6 +495,7 @@ fn extract_from_body<'src>(
         for (cap_id, cap_kind) in &cap_entries {
           let ast_origin = alloc.origin.try_get(*cap_id).and_then(|o| *o);
           let param_bind = alloc.bind(*cap_kind, ast_origin);
+          rewrite_map.insert(*cap_id, param_bind.id);
           // Record alias so name_res can resolve refs to the old id via the new param.
           if *cap_kind != Bind::Name {
             let idx: usize = param_bind.id.into();
@@ -510,6 +512,9 @@ fn extract_from_body<'src>(
           };
           closure_args.push(Arg::Val(arg_val));
         }
+
+        // Rewrite refs in the fn_body to use new capture param ids.
+        let inner_fn_body = rewrite_refs(inner_fn_body, &rewrite_map);
 
         // Lifted fn has captures as leading params, then original params.
         lifted_params.extend(params);
@@ -567,6 +572,85 @@ fn extract_from_body<'src>(
     }
 
     other => Expr { id: expr.id, kind: other },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rewrite refs in an expression tree using a CpsId → CpsId map
+// ---------------------------------------------------------------------------
+
+fn rewrite_refs<'src>(expr: Expr<'src>, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr<'src> {
+  match expr.kind {
+    ExprKind::LetFn { name, params, fn_body, cont } => {
+      let fn_body = rewrite_refs(*fn_body, map);
+      let cont = rewrite_refs_cont(cont, map);
+      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_body: Box::new(fn_body), cont } }
+    }
+    ExprKind::LetVal { name, val, cont } => {
+      let val = rewrite_refs_val(*val, map);
+      let cont = rewrite_refs_cont(cont, map);
+      Expr { id: expr.id, kind: ExprKind::LetVal { name, val: Box::new(val), cont } }
+    }
+    ExprKind::App { func, args } => {
+      let func = match func {
+        Callable::Val(v) => Callable::Val(rewrite_refs_val(v, map)),
+        other => other,
+      };
+      let args = args.into_iter().map(|a| match a {
+        Arg::Val(v) => Arg::Val(rewrite_refs_val(v, map)),
+        Arg::Spread(v) => Arg::Spread(rewrite_refs_val(v, map)),
+        Arg::Cont(c) => Arg::Cont(rewrite_refs_cont(c, map)),
+        Arg::Expr(e) => Arg::Expr(Box::new(rewrite_refs(*e, map))),
+      }).collect();
+      Expr { id: expr.id, kind: ExprKind::App { func, args } }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let cond = rewrite_refs_val(*cond, map);
+      let then = rewrite_refs(*then, map);
+      let else_ = rewrite_refs(*else_, map);
+      Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
+    }
+    ExprKind::Yield { value, cont } => {
+      let value = rewrite_refs_val(*value, map);
+      let cont = rewrite_refs_cont(cont, map);
+      Expr { id: expr.id, kind: ExprKind::Yield { value: Box::new(value), cont } }
+    }
+  }
+}
+
+fn rewrite_refs_val<'src>(val: Val<'src>, map: &std::collections::HashMap<CpsId, CpsId>) -> Val<'src> {
+  match &val.kind {
+    ValKind::Ref(Ref::Synth(id)) => {
+      if let Some(&new_id) = map.get(id) {
+        Val { id: val.id, kind: ValKind::Ref(Ref::Synth(new_id)) }
+      } else {
+        val
+      }
+    }
+    ValKind::ContRef(id) => {
+      if let Some(&new_id) = map.get(id) {
+        Val { id: val.id, kind: ValKind::ContRef(new_id) }
+      } else {
+        val
+      }
+    }
+    _ => val,
+  }
+}
+
+fn rewrite_refs_cont<'src>(cont: Cont<'src>, map: &std::collections::HashMap<CpsId, CpsId>) -> Cont<'src> {
+  match cont {
+    Cont::Ref(id) => {
+      if let Some(&new_id) = map.get(&id) {
+        Cont::Ref(new_id)
+      } else {
+        Cont::Ref(id)
+      }
+    }
+    Cont::Expr { args, body } => {
+      let body = rewrite_refs(*body, map);
+      Cont::Expr { args, body: Box::new(body) }
+    }
   }
 }
 
