@@ -112,26 +112,9 @@ pub fn lift<'src>(
       panic!("lifting::lift: did not converge after {MAX_ROUNDS} rounds");
     }
 
-    // Phase 1: name inline Cont::Expr bodies → convert to LetFn.
+    // Extract LetFn from fn_bodies and hoist inline Cont::Expr (one level).
     let mut alloc = Alloc::new(current.origin, current.synth_alias);
-    let named = name_inline_conts(current.root, &mut alloc);
-
-    // Re-run resolve + capture after naming (new LetFn nodes need analysis).
-    let named_result = CpsResult {
-      root: named,
-      origin: alloc.origin,
-      synth_alias: alloc.synth_alias,
-    };
-    let node_count2 = named_result.origin.len();
-    let resolve2 = name_res::resolve(
-      &named_result.root, &named_result.origin, ast_index, node_count2, &named_result.synth_alias,
-    );
-    let cap_graph2 = closure_capture::analyse(&named_result, &resolve2);
-
-    // Phase 2: extract LetFn from fn_bodies (hoist one level).
-    let mut alloc2 = Alloc::new(named_result.origin, named_result.synth_alias);
-    let new_root = lift_expr(named_result.root, &cap_graph2, &resolve2, ast_index, &mut alloc2);
-    let alloc = alloc2;
+    let new_root = lift_expr(current.root, &cap_graph, &resolve_result, ast_index, &mut alloc);
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
@@ -556,19 +539,97 @@ fn extract_from_body<'src>(
       Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
     }
 
-    ExprKind::App { func, args } => {
-      let args = args.into_iter().map(|a| match a {
-        Arg::Cont(Cont::Expr { args: cargs, body }) => {
+    ExprKind::App { func, mut args } => {
+      // Check for inline Cont::Expr args that need hoisting.
+      // Find the last Arg::Cont(Cont::Expr { .. }).
+      let cont_idx = args.iter().rposition(|a| matches!(a, Arg::Cont(Cont::Expr { .. })));
+      if let Some(idx) = cont_idx {
+        let cont = match args.remove(idx) {
+          Arg::Cont(c) => c,
+          _ => unreachable!(),
+        };
+        if let Cont::Expr { args: cont_args, body } = cont {
           let body = extract_from_body(*body, parent_params, captures, resolve, ast_index, alloc, hoisted);
-          Arg::Cont(Cont::Expr { args: cargs, body: Box::new(body) })
+          let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
+          let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, resolve, alloc);
+
+          if cap_entries.is_empty() {
+            // Pure — hoist directly, replace with Cont::Ref.
+            let cont_name = alloc.bind(Bind::Cont, None);
+            let cont_name_id = cont_name.id;
+            hoisted.push(HoistedFn {
+              name: cont_name,
+              params: cont_params,
+              fn_body: body,
+              cont_args: vec![alloc.synth_bind()],
+            });
+            args.insert(idx, Arg::Cont(Cont::Ref(cont_name_id)));
+            // Recurse on remaining args.
+            let args = args.into_iter().map(|a| match a {
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, captures, resolve, ast_index, alloc, hoisted))),
+              other => other,
+            }).collect();
+            Expr { id: expr.id, kind: ExprKind::App { func, args } }
+          } else {
+            // Has captures — hoist the cont, wrap the App in ·fn_closure.
+            let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
+            let lifted_fn_bind = alloc.synth_bind();
+            let lifted_fn_id = lifted_fn_bind.id;
+            let mut lifted_params: Vec<Param> = Vec::new();
+            let mut closure_args: Vec<Arg<'src>> = Vec::new();
+            for (cap_id, cap_kind) in &cap_entries {
+              let ast_origin = alloc.origin.try_get(*cap_id).and_then(|o| *o);
+              let param_bind = alloc.bind(*cap_kind, ast_origin);
+              rewrite_map.insert(*cap_id, param_bind.id);
+              if *cap_kind != Bind::Name {
+                let idx: usize = param_bind.id.into();
+                while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
+                alloc.synth_alias.set(param_bind.id, Some(*cap_id));
+              }
+              lifted_params.push(Param::Name(param_bind));
+              let arg_val = if *cap_kind == Bind::Name {
+                alloc.val(ValKind::Ref(Ref::Name), ast_origin)
+              } else {
+                alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), None)
+              };
+              closure_args.push(Arg::Val(arg_val));
+            }
+            let body = rewrite_refs(body, &rewrite_map);
+            lifted_params.extend(cont_params);
+            hoisted.push(HoistedFn {
+              name: lifted_fn_bind,
+              params: lifted_params,
+              fn_body: body,
+              cont_args: vec![alloc.synth_bind()],
+            });
+            // Wrap: ·fn_closure(lifted_fn, caps..., fn closure_val: original_app(..., closure_val))
+            let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
+            closure_args.insert(0, Arg::Val(lifted_ref));
+            let closure_result = alloc.bind(Bind::Synth, None);
+            let closure_result_id = closure_result.id;
+            // Rebuild the original App with Cont::Ref(closure_result_id) as the cont.
+            args.insert(idx, Arg::Cont(Cont::Ref(closure_result_id)));
+            let inner_app = alloc.expr(ExprKind::App { func, args }, None);
+            closure_args.push(Arg::Cont(Cont::Expr {
+              args: vec![closure_result],
+              body: Box::new(inner_app),
+            }));
+            alloc.expr(ExprKind::App {
+              func: Callable::BuiltIn(BuiltIn::FnClosure),
+              args: closure_args,
+            }, None)
+          }
+        } else {
+          unreachable!()
         }
-        Arg::Expr(e) => {
-          let e = extract_from_body(*e, parent_params, captures, resolve, ast_index, alloc, hoisted);
-          Arg::Expr(Box::new(e))
-        }
-        other => other,
-      }).collect();
-      Expr { id: expr.id, kind: ExprKind::App { func, args } }
+      } else {
+        // No inline conts — just recurse into Arg::Expr.
+        let args = args.into_iter().map(|a| match a {
+          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, captures, resolve, ast_index, alloc, hoisted))),
+          other => other,
+        }).collect();
+        Expr { id: expr.id, kind: ExprKind::App { func, args } }
+      }
     }
 
     other => Expr { id: expr.id, kind: other },
