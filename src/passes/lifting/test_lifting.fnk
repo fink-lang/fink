@@ -182,30 +182,6 @@ test 'yield — cont body lifted', fn:
 pattern matching — inline fn in ·match_arm/·match_* args
 ---
 
-# The ·match_arm and ·match_* builtins use Arg::Cont(Cont::Expr) for their
-# arm/body/fail callbacks. These are terminal single-App conts that the lifting
-# pass currently leaves inline. Discussion needed on how to treat them.
-
-test 'match — no forward refs after lift', fn:
-  expect lift fink":
-    foo = fn n:
-      match n:
-        0: 42
-
-  | equals fink":
-    ·v_31 = fn n, ·v_34, ·v_18:
-      ·match_block n, ·v_18, ·v_34
-
-    foo = ·v_1 = fn n, ·v_3:
-      ·v_38 = ·closure ·v_31, n, ·v_3
-      ·match_arm fn ·v_8, ·v_6, ·v_7:
-        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
-        ·v_13 = 42
-        ·v_11 ·v_13, ·v_38
-
-    ·v_0 foo
-
-
 test 'seq destructure', fn:
   expect lift fink":
     main = fn foo:
@@ -249,6 +225,30 @@ test 'record destructure', fn:
       ·match_rec foo, panic, ·v_40
 
     ·v_0 main
+
+
+# The ·match_arm and ·match_* builtins use Arg::Cont(Cont::Expr) for their
+# arm/body/fail callbacks. These are terminal single-App conts that the lifting
+# pass currently leaves inline. Discussion needed on how to treat them.
+
+test 'match — no forward refs after lift', fn:
+  expect lift fink":
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals fink":
+    ·v_31 = fn n, ·v_34, ·v_18:
+      ·match_block n, ·v_18, ·v_34
+
+    foo = ·v_1 = fn n, ·v_3:
+      ·v_38 = ·closure ·v_31, n, ·v_3
+      ·match_arm fn ·v_8, ·v_6, ·v_7:
+        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
+        ·v_13 = 42
+        ·v_11 ·v_13, ·v_38
+
+    ·v_0 foo
 
 
 test 'match with binding', fn:

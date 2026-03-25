@@ -136,9 +136,9 @@ fn needs_lifting(expr: &Expr<'_>) -> bool {
       contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
     }
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
-    ExprKind::App { func, args } => {
+    ExprKind::App { args, .. } => {
       args.iter().any(|a| match a {
-        Arg::Cont(c) => app_cont_needs_lifting(func, c),
+        Arg::Cont(c) => app_cont_needs_lifting(c),
         Arg::Expr(e) => needs_lifting(e),
         _ => false,
       })
@@ -163,12 +163,10 @@ fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
 }
 
 
-fn app_cont_needs_lifting(func: &Callable<'_>, cont: &Cont<'_>) -> bool {
+fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
     c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
-    // ·closure result conts stay inline — hoisting them creates infinite ·closure chains.
-    Cont::Expr { .. } if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure)) => false,
     Cont::Expr { .. } => true,
   }
 }
@@ -182,10 +180,9 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
       Cont::Ref(_) => false,
       Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body),
     },
-    ExprKind::App { func, args } => {
-      let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
+    ExprKind::App { args, .. } => {
       args.iter().any(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
@@ -585,11 +582,9 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::App { func, mut args } => {
-      // Check for inline Cont::Expr args that need hoisting.
-      // Skip simple forwards and ·closure result conts (to avoid infinite chains).
-      let is_closure = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
+      // Check for inline Cont::Expr args that need hoisting (skip simple forwards).
       let cont_idx = args.iter().rposition(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_closure && !is_simple_forward_cont(c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         _ => false,
       });
       if let Some(idx) = cont_idx {
