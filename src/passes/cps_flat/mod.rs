@@ -160,8 +160,7 @@ fn strip_sigil(s: &str) -> &str {
 
 fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
   match bind.kind {
-    Bind::Synth => format!("·v_{}", bind.id.0),
-    Bind::Cont  => format!("·f_{}", bind.id.0),
+    Bind::Synth | Bind::Cont => format!("·v_{}", bind.id.0),
     Bind::Name  => {
       match fc.ctx.origin.try_get(bind.id).and_then(|opt| *opt)
         .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
@@ -193,12 +192,9 @@ fn render_val(val: &Val<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
         .unwrap_or_else(|| format!("·v_{}", val.id.0));
       ident(&name)
     }
-    ValKind::Ref(Ref::Synth(bind_id)) => match fc.bind_kinds.try_get(*bind_id).and_then(|o| *o) {
-      Some(Bind::Cont) => ident(&format!("·f_{}", bind_id.0)),
-      _                => ident(&format!("·v_{}", bind_id.0)),
-    },
+    ValKind::Ref(Ref::Synth(bind_id)) => ident(&format!("·v_{}", bind_id.0)),
     ValKind::Panic           => ident("panic"),
-    ValKind::ContRef(id)     => ident(&format!("·f_{}", id.0)),
+    ValKind::ContRef(id)     => ident(&format!("·v_{}", id.0)),
     ValKind::BuiltIn(op)     => ident(&render_builtin_flat(op)),
   }
 }
@@ -237,7 +233,7 @@ fn render_builtin_flat(op: &BuiltIn) -> String {
 
 fn render_cont_arg(cont: &Cont<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match cont {
-    Cont::Ref(id)           => ident(&format!("·f_{}", id.0)),
+    Cont::Ref(id)           => ident(&format!("·v_{}", id.0)),
     Cont::Expr { args, body } => {
       let params: Vec<Node<'static>> = args.iter()
         .map(|b| ident(&render_bind(b, fc)))
@@ -379,7 +375,7 @@ fn collect_cont_into<'src>(cont: &'src Cont<'src>, bound: &str, fc: &FmtCtx<'_, 
   match cont {
     Cont::Expr { body, .. } => collect_into(body, fc, out),
     Cont::Ref(id) => {
-      out.push(apply_node(ident(&format!("·f_{}", id.0)), vec![ident(bound)]));
+      out.push(apply_node(ident(&format!("·v_{}", id.0)), vec![ident(bound)]));
     }
   }
 }

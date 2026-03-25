@@ -28,11 +28,11 @@ test 'pure fn is unchanged', fn:
     f = fn x: x
 
   | equals fink":
-    f = ·v_1 = fn x, ·f_3:
+    f = ·v_1 = fn x, ·v_3:
       ·v_5 = x
-      ·f_3 ·v_5
+      ·v_3 ·v_5
 
-    ·f_0 f
+    ·v_0 f
 
 
 test 'pure nested fn — no captures, hoisted to module scope', fn:
@@ -41,14 +41,14 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
       fn b: b
 
   | equals fink":
-    ·v_4 = fn b, ·f_6:
+    ·v_4 = fn b, ·v_6:
       ·v_8 = b
-      ·f_6 ·v_8
+      ·v_6 ·v_8
 
-    foo = ·v_1 = fn a, ·f_3:
-      ·f_3 ·v_4
+    foo = ·v_1 = fn a, ·v_3:
+      ·v_3 ·v_4
 
-    ·f_0 foo
+    ·v_0 foo
 
 
 ---
@@ -62,15 +62,15 @@ test 'chained arithmetic — cont body lifted', fn:
       x + 4
 
   | equals fink":
-    ·v_23 = fn ·f_24, ·v_5:
+    ·v_23 = fn ·v_24, ·v_5:
       x = ·v_5
-      ·op_plus x, 4, ·f_24
+      ·op_plus x, 4, ·v_24
 
-    main = ·v_1 = fn ·f_2:
-      ·v_28 = ·fn_closure ·v_23, ·f_2
-      ·op_mul 2, 3, ·f_28
+    main = ·v_1 = fn ·v_2:
+      ·v_28 = ·fn_closure ·v_23, ·v_2
+      ·op_mul 2, 3, ·v_28
 
-    ·f_0 main
+    ·v_0 main
 
 
 ---
@@ -84,13 +84,13 @@ test 'captured binding becomes leading param', fn:
         a + b
 
   | equals fink":
-    ·v_20 = fn a, b, ·f_6:
-      ·op_plus a, b, ·f_6
+    ·v_20 = fn a, b, ·v_6:
+      ·op_plus a, b, ·v_6
 
-    foo = ·v_1 = fn a, ·f_3:
-      ·fn_closure ·v_20, a, ·f_3
+    foo = ·v_1 = fn a, ·v_3:
+      ·fn_closure ·v_20, a, ·v_3
 
-    ·f_0 foo
+    ·v_0 foo
 
 
 test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
@@ -102,22 +102,22 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
         a + b
 
   | equals fink":
-    ·v_3 = fn x, ·f_5:
+    ·v_3 = fn x, ·v_5:
       ·v_7 = x
-      ·f_5 ·v_7
+      ·v_5 ·v_7
 
-    ·v_36 = fn a, b, ·f_16:
-      ·op_plus a, b, ·f_16
+    ·v_36 = fn a, b, ·v_16:
+      ·op_plus a, b, ·v_16
 
-    ·v_11 = fn a, ·f_13:
-      ·fn_closure ·v_36, a, ·f_13
+    ·v_11 = fn a, ·v_13:
+      ·fn_closure ·v_36, a, ·v_13
 
-    ·v_1 = fn ·f_2:
+    ·v_1 = fn ·v_2:
       f = ·v_3
       g = ·v_11
-      ·f_2 g
+      ·v_2 g
 
-    ·f_0 ·v_1
+    ·v_0 ·v_1
 
 
 ---
@@ -134,17 +134,17 @@ test 'depth-2 closure', fn:
           a + b + c
 
   | equals fink":
-    ·v_30 = fn b, c, ·f_9:
+    ·v_30 = fn b, c, ·v_9:
       ·op_plus a, b, fn ·v_12:
-        ·op_plus ·v_12, c, ·f_9
+        ·op_plus ·v_12, c, ·v_9
 
-    ·v_4 = fn b, ·f_6:
-      ·fn_closure ·v_30, b, ·f_6
+    ·v_4 = fn b, ·v_6:
+      ·fn_closure ·v_30, b, ·v_6
 
-    foo = ·v_1 = fn a, ·f_3:
-      ·f_3 ·v_4
+    foo = ·v_1 = fn a, ·v_3:
+      ·v_3 ·v_4
 
-    ·f_0 foo
+    ·v_0 foo
 
 
 # BUG: same — `a` out of scope in ·v_25.
@@ -156,16 +156,16 @@ test 'multiple captures at depth-2', fn:
           a + b
 
   | equals fink":
-    ·v_25 = fn b, c, ·f_9:
-      ·op_plus a, b, ·f_9
+    ·v_25 = fn b, c, ·v_9:
+      ·op_plus a, b, ·v_9
 
-    ·v_4 = fn b, ·f_6:
-      ·fn_closure ·v_25, b, ·f_6
+    ·v_4 = fn b, ·v_6:
+      ·fn_closure ·v_25, b, ·v_6
 
-    foo = ·v_1 = fn a, ·f_3:
-      ·f_3 ·v_4
+    foo = ·v_1 = fn a, ·v_3:
+      ·v_3 ·v_4
 
-    ·f_0 foo
+    ·v_0 foo
 
 
 test 'yield — cont body lifted', fn:
@@ -189,16 +189,16 @@ test 'match — no forward refs after lift', fn:
         0: 42
 
   | equals fink":
-    ·f_31 = fn ·f_11:
+    ·v_31 = fn ·v_11:
       ·v_13 = 42
-      ·f_11 ·v_13
+      ·v_11 ·v_13
 
-    foo = ·v_1 = fn n, ·f_3:
-      ·match_arm fn ·v_8, ·f_6, ·f_7:
-        ·match_value ·v_8, 0, ·f_6, ·f_7, ·f_31, fn ·v_18:
-        ·match_block n, ·v_18, ·f_3
+    foo = ·v_1 = fn n, ·v_3:
+      ·match_arm fn ·v_8, ·v_6, ·v_7:
+        ·match_value ·v_8, 0, ·v_6, ·v_7, ·v_31, fn ·v_18:
+        ·match_block n, ·v_18, ·v_3
 
-    ·f_0 foo
+    ·v_0 foo
 
 
 test 'seq destructure', fn:
@@ -208,19 +208,19 @@ test 'seq destructure', fn:
       a + 1
 
   | equals fink":
-    ·v_35 = fn ·f_36, ·v_6, ·v_7:
+    ·v_35 = fn ·v_36, ·v_6, ·v_7:
       a = ·v_6
       ·match_done ·v_7, panic, fn ·v_11:
-        ·op_plus a, 1, ·f_36
+        ·op_plus a, 1, ·v_36
 
-    ·f_43 = fn ·v_5:
-      ·v_40 = ·fn_closure ·v_35, ·f_3
-      ·match_next ·v_5, panic, ·f_40
+    ·v_43 = fn ·v_5:
+      ·v_40 = ·fn_closure ·v_35, ·v_3
+      ·match_next ·v_5, panic, ·v_40
 
-    main = ·v_1 = fn foo, ·f_3:
-      ·match_seq foo, panic, ·f_43
+    main = ·v_1 = fn foo, ·v_3:
+      ·match_seq foo, panic, ·v_43
 
-    ·f_0 main
+    ·v_0 main
 
 
 test 'record destructure', fn:
@@ -230,18 +230,18 @@ test 'record destructure', fn:
       x + 1
 
   | equals fink":
-    ·v_32 = fn ·f_33, ·v_6, ·v_7:
+    ·v_32 = fn ·v_33, ·v_6, ·v_7:
       x = ·v_6
-      ·op_plus x, 1, ·f_33
+      ·op_plus x, 1, ·v_33
 
-    ·f_40 = fn ·v_5:
-      ·v_37 = ·fn_closure ·v_32, ·f_3
-      ·match_field ·v_5, 'x', panic, ·f_37
+    ·v_40 = fn ·v_5:
+      ·v_37 = ·fn_closure ·v_32, ·v_3
+      ·match_field ·v_5, 'x', panic, ·v_37
 
-    main = ·v_1 = fn foo, ·f_3:
-      ·match_rec foo, panic, ·f_40
+    main = ·v_1 = fn foo, ·v_3:
+      ·match_rec foo, panic, ·v_40
 
-    ·f_0 main
+    ·v_0 main
 
 
 test 'match with binding', fn:
@@ -252,24 +252,24 @@ test 'match with binding', fn:
       r
 
   | equals fink":
-    ·v_37 = fn ·f_38, ·v_22:
+    ·v_37 = fn ·v_38, ·v_22:
       r = ·v_22
-      ·f_38 r
+      ·v_38 r
 
     ·v_45 = fn n, ·v_20:
-      ·v_42 = ·fn_closure ·v_37, ·f_3
-      ·match_block n, ·v_20, ·f_42
+      ·v_42 = ·fn_closure ·v_37, ·v_3
+      ·match_block n, ·v_20, ·v_42
 
     ·v_55 = fn n, ·v_50:
-      ·match_arm fn ·v_8, ·f_6, ·f_7:
-        ·match_value ·v_8, 0, ·f_6, ·f_7, fn ·f_11:
-        ·op_plus n, 1, ·f_11, ·f_50
+      ·match_arm fn ·v_8, ·v_6, ·v_7:
+        ·match_value ·v_8, 0, ·v_6, ·v_7, fn ·v_11:
+        ·op_plus n, 1, ·v_11, ·v_50
 
-    foo = ·v_1 = fn n, ·f_3:
+    foo = ·v_1 = fn n, ·v_3:
       ·v_60 = ·fn_closure ·v_55, n
-      ·fn_closure ·v_45, n, ·f_60
+      ·fn_closure ·v_45, n, ·v_60
 
-    ·f_0 foo
+    ·v_0 foo
 
 
 test 'recursive fn in match', fn:
@@ -281,38 +281,38 @@ test 'recursive fn in match', fn:
       r
 
   | equals fink":
-    ·v_56 = fn ·f_57, ·v_39:
+    ·v_56 = fn ·v_57, ·v_39:
       r = ·v_39
-      ·f_57 r
+      ·v_57 r
 
     ·v_64 = fn n, ·v_37:
-      ·v_61 = ·fn_closure ·v_56, ·f_3
-      ·match_block n, ·v_18, ·v_37, ·f_61
+      ·v_61 = ·fn_closure ·v_56, ·v_3
+      ·match_block n, ·v_18, ·v_37, ·v_61
 
-    ·v_89 = fn n, ·f_24:
+    ·v_89 = fn n, ·v_24:
       ·op_plus n, 1, fn ·v_28:
-        fib ·v_28, ·f_24
+        fib ·v_28, ·v_24
 
-    ·v_101 = fn ·f_102, ·v_94:
-      ·match_arm fn ·v_22, ·f_20, ·f_21:
-        ·f_21 _, ·f_94, ·f_102
+    ·v_101 = fn ·v_102, ·v_94:
+      ·match_arm fn ·v_22, ·v_20, ·v_21:
+        ·v_21 _, ·v_94, ·v_102
 
-    ·f_97 = fn ·v_69:
+    ·v_97 = fn ·v_69:
       ·v_106 = ·fn_closure ·v_101, ·v_69
-      ·fn_closure ·v_89, n, ·f_106
+      ·fn_closure ·v_89, n, ·v_106
 
     ·v_72 = fn n, ·v_18:
-      ·fn_closure ·v_64, n, ·f_97
+      ·fn_closure ·v_64, n, ·v_97
 
-    ·f_83 = fn ·f_11:
+    ·v_83 = fn ·v_11:
       ·v_13 = 1
-      ·f_11 ·v_13
+      ·v_11 ·v_13
 
-    ·f_85 = fn ·v_77:
-      ·match_arm fn ·v_8, ·f_6, ·f_7:
-        ·match_value ·v_8, 0, ·f_6, ·f_7, ·f_83, ·f_77
+    ·v_85 = fn ·v_77:
+      ·match_arm fn ·v_8, ·v_6, ·v_7:
+        ·match_value ·v_8, 0, ·v_6, ·v_7, ·v_83, ·v_77
 
-    fib = ·v_1 = fn n, ·f_3:
-      ·fn_closure ·v_72, n, ·f_85
+    fib = ·v_1 = fn n, ·v_3:
+      ·fn_closure ·v_72, n, ·v_85
 
-    ·f_0 fib
+    ·v_0 fib
