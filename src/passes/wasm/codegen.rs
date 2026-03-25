@@ -109,6 +109,9 @@ struct CollectedFn<'a, 'src> {
   cont_id: CpsId,
   /// Total arity (value params + 1 cont).
   arity: u32,
+  /// User-facing name (from LetVal alias in the LetFn cont), if any.
+  /// Named fns are exported from the WASM module.
+  user_name: Option<&'src str>,
 }
 
 // ---------------------------------------------------------------------------
@@ -547,6 +550,13 @@ fn emit_globals(module: &mut Module) {
 
 fn emit_exports(module: &mut Module, ctx: &Ctx) {
   let mut exports = ExportSection::new();
+  // Export each named fn by its user name (CPS functions).
+  for (i, cf) in ctx.funcs.iter().enumerate() {
+    if let Some(name) = cf.user_name {
+      exports.export(name, ExportKind::Func, FN_COMPILED_START + i as u32);
+    }
+  }
+  // Test convenience: fink_main calls the fn named "main" with $__halt.
   exports.export("fink_main", ExportKind::Func, ctx.fink_main_index());
   exports.export("result", ExportKind::Global, GLOBAL_RESULT);
   module.section(&exports);
@@ -614,104 +624,25 @@ fn build_halt() -> Function {
 }
 
 // ---------------------------------------------------------------------------
-// fink_main — entry point
+// fink_main — test convenience wrapper
 // ---------------------------------------------------------------------------
 
-/// Walk the root continuation chain to find a module-level FnClosure construction.
-/// Returns (hoisted_fn_idx, num_caps) if found.
-///
-/// Only follows the root LetFn/LetVal continuation bodies — does NOT recurse into
-/// fn_body or App args, since those contain inner closures, not the main entry.
-/// Static cap params (module-level fn refs) are stripped by collect_funcs, so
-/// num_caps reflects only remaining runtime captures (currently always 0).
-fn find_main_closure_call(root: &Expr<'_>, ctx: &Ctx) -> Option<(u32, u32)> {
-  use crate::passes::cps::ir::BuiltIn;
-  let mut expr = root;
-  loop {
-    match &expr.kind {
-      ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
-        let fn_val = match args.first()? {
-          Arg::Val(v) => v,
-          _ => return None,
-        };
-        let ValKind::Ref(crate::passes::cps::ir::Ref::Synth(synth_id)) = &fn_val.kind else { return None; };
-        let fn_idx = ctx.func_index(*synth_id)?;
-        let fn_pos = ctx.funcs.iter().position(|f| f.name_id == *synth_id)?;
-        let num_caps = ctx.funcs[fn_pos].arity - 1;
-        return Some((fn_idx, num_caps));
-      }
-      ExprKind::LetFn { cont: Cont::Expr { body: cont_body, .. }, .. } => {
-        expr = cont_body;
-      }
-      ExprKind::LetVal { cont: Cont::Expr { body: cont_body, .. }, .. } => {
-        expr = cont_body;
-      }
-      _ => return None,
-    }
-  }
-}
-
-fn build_fink_main(root: &Expr<'_>, ctx: &Ctx) -> Function {
-  // fink_main: no params, no results.
-  // Two cases:
-  // 1. main is a plain arity-1 fn (no captures): call it directly with $__halt.
-  // 2. main is a closure (FnClosure): find the hoisted impl + cap fn indices,
-  //    push cap funcrefs as anyref + $__halt, return_call the hoisted impl.
+/// Build fink_main: finds the fn named "main" and calls it with $__halt.
+fn build_fink_main(_root: &Expr<'_>, ctx: &Ctx) -> Function {
   let mut f = Function::new([]);
   let cont_ref_type = wasm_encoder::HeapType::Concrete(TY_CONT);
 
-  if let Some((main_fn_idx, num_caps)) = find_main_closure_call(root, ctx) {
-    // Closure case: static cap params (module-level fn refs) are stripped by
-    // collect_funcs. Remaining caps (runtime values) get null placeholders.
-    let fn_pos = (main_fn_idx - FN_COMPILED_START) as usize;
-    for i in 0..num_caps as usize {
-      let is_cont = fn_pos < ctx.funcs.len()
-        && i < ctx.funcs[fn_pos].param_kinds.len()
-        && ctx.funcs[fn_pos].param_kinds[i] == Bind::Cont;
-      if is_cont {
-        f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Concrete(TY_CONT)));
-      } else {
-        f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
-          shared: false,
-          ty: wasm_encoder::AbstractHeapType::Any,
-        }));
-      }
-    }
-    f.instruction(&Instruction::RefFunc(FN_HALT));
-    f.instruction(&Instruction::RefCastNonNull(cont_ref_type));
-    f.instruction(&Instruction::ReturnCall(main_fn_idx));
-  } else {
-    // Simple case: find first arity-1 fn and call it with $__halt.
-    let entry_idx = find_arity1_entry(root, ctx).unwrap_or(FN_COMPILED_START);
-    f.instruction(&Instruction::RefFunc(FN_HALT));
-    f.instruction(&Instruction::RefCastNonNull(cont_ref_type));
-    f.instruction(&Instruction::ReturnCall(entry_idx));
-  }
+  // Find the fn with user_name == "main".
+  let main_fn_idx = ctx.funcs.iter().enumerate()
+    .find(|(_, cf)| cf.user_name == Some("main"))
+    .map(|(i, _)| FN_COMPILED_START + i as u32)
+    .unwrap_or(FN_COMPILED_START);
+
+  f.instruction(&Instruction::RefFunc(FN_HALT));
+  f.instruction(&Instruction::RefCastNonNull(cont_ref_type));
+  f.instruction(&Instruction::ReturnCall(main_fn_idx));
   f.instruction(&Instruction::End);
   f
-}
-
-/// Walk the root LetFn chain to find the first arity-1 fn (simple module init fn).
-fn find_arity1_entry(root: &Expr<'_>, ctx: &Ctx) -> Option<u32> {
-  let mut expr = root;
-  loop {
-    if let ExprKind::LetFn { name, cont: cont, .. } = &expr.kind {
-      if let Some(fn_idx) = ctx.func_index(name.id) {
-        let fn_pos = ctx.funcs.iter().position(|f| f.name_id == name.id)?;
-        let cf = &ctx.funcs[fn_pos];
-        // Skip cont fns (arity == param_ids.len(), uses $cont_env) — not entry points.
-        if cf.arity == 1 && cf.arity != cf.param_ids.len() as u32 {
-          return Some(fn_idx);
-        }
-      }
-      match cont {
-        Cont::Expr { body: cont_body, .. } => expr = cont_body,
-        Cont::Ref(_) => return None,
-      }
-    } else {
-      return None;
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1027,13 +958,12 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
 
     Callable::Val(val) if matches!(&val.kind, ValKind::ContRef(_)) => {
       // Direct cont call: App func=Val(ContRef(id)) — tail-call the cont fn.
+      // Args are value args only (no trailing cont — the cont IS the callee).
       if let ValKind::ContRef(cont_id) = &val.kind {
-        if let Some(fn_idx) = fc.ctx.func_index(*cont_id) {
-          emit_own_cont(f, fc);
-          f.instruction(&Instruction::ReturnCall(fn_idx));
-        } else {
-          f.instruction(&Instruction::Unreachable);
+        for arg in args {
+          emit_arg_val(arg, f, fc);
         }
+        emit_cont_call_with_anyref(*cont_id, f, fc);
       }
     }
 
@@ -1692,10 +1622,39 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
 // Function collection
 // ---------------------------------------------------------------------------
 
+/// Detect the `name = ·v_N = fn ...` pattern: LetFn cont is a LetVal that
+/// aliases this fn's name_id back to a user-facing Bind::Name.
+/// Returns the user name string if the pattern matches.
+fn extract_user_name<'src>(
+  fn_name_id: CpsId,
+  cont: &Cont<'src>,
+  ctx: &Ctx<'_, 'src>,
+) -> Option<&'src str> {
+  use crate::ast::NodeKind;
+  let Cont::Expr { args, body } = cont else { return None; };
+  if args.len() != 1 { return None; }
+  let ExprKind::LetVal { name, val, .. } = &body.kind else { return None; };
+  // val must be Ref::Synth pointing back to the LetFn name.
+  let ValKind::Ref(Ref::Synth(target)) = &val.kind else { return None; };
+  if *target != fn_name_id { return None; }
+  // name must be Bind::Name with an AST Ident origin.
+  if name.kind != Bind::Name { return None; }
+  let ast_id = ctx.origin.try_get(name.id)?.as_ref()?;
+  let ast_node = ctx.ast_index.try_get(*ast_id)?.as_ref()?;
+  match &ast_node.kind {
+    NodeKind::Ident(s) => Some(s),
+    _ => None,
+  }
+}
+
 fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
   match &expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont: cont } => {
-      let param_ids: Vec<CpsId> = params.iter().map(|p| match p {
+      // Last param is always the cont (Bind::Cont) — exclude it from
+      // param_ids/param_kinds so the cont-env detection invariant holds:
+      // cont fns have arity == param_ids.len(), regular fns have arity > param_ids.len().
+      let value_params = &params[..params.len() - 1];
+      let param_ids: Vec<CpsId> = value_params.iter().map(|p| match p {
         crate::passes::cps::ir::Param::Name(b) => b.id,
         crate::passes::cps::ir::Param::Spread(b) => b.id,
       }).collect();
@@ -1706,13 +1665,16 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
       } else {
         None
       };
-      let param_kinds: Vec<Bind> = params.iter().map(|p| match p {
+      let param_kinds: Vec<Bind> = value_params.iter().map(|p| match p {
         crate::passes::cps::ir::Param::Name(b) => b.kind,
         crate::passes::cps::ir::Param::Spread(b) => b.kind,
       }).collect();
       let cont_id = params.last()
         .map(|p| match p { crate::passes::cps::ir::Param::Name(b) | crate::passes::cps::ir::Param::Spread(b) => b.id })
         .expect("LetFn must have at least one param (cont)");
+      // Detect user name: LetFn cont body is LetVal aliasing this fn's name.
+      // Pattern: Cont::Expr { body: LetVal { name: <user>, val: Ref::Synth(name.id), .. } }
+      let user_name = extract_user_name(name.id, cont, ctx);
       ctx.funcs.push(CollectedFn {
         name_id: name.id,
         letval_bind_id,
@@ -1722,6 +1684,7 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
         param_ids,
         param_kinds,
         cont_id,
+        user_name,
       });
       collect_funcs(fn_body, ctx);
       if let Cont::Expr { body: cont_body, .. } = cont {
