@@ -30,6 +30,7 @@ scope analysis tests
 #     | equals fink":
 #       <expected scope output>
 
+
 {test, expect, equals, fink, scope} = import '!fake'
 
 
