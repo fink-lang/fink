@@ -325,10 +325,13 @@ fn extract_from_body<'src>(
               fn_body: inner_fn_body,
               cont_args: vec![alloc.synth_bind()],
             });
-            let ref_val = alloc.val(ValKind::Ref(Ref::Synth(name_id)), None);
+            // The original cont was Cont::Ref — a tail pass of the fn value to the cont.
+            // Synthesize: cont_id fn_value  (pass the fn value to the continuation)
+            let cont_val = alloc.val(ValKind::ContRef(cont_id), None);
+            let fn_val = alloc.val(ValKind::Ref(Ref::Synth(name_id)), None);
             alloc.expr(ExprKind::App {
-              func: Callable::Val(ref_val),
-              args: vec![Arg::Cont(Cont::Ref(cont_id))],
+              func: Callable::Val(cont_val),
+              args: vec![Arg::Val(fn_val)],
             }, None)
           },
         }
