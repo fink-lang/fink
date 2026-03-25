@@ -106,11 +106,11 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
       ·v_7 = x
       ·v_5 ·v_7
 
-    ·v_36 = fn a, b, ·v_16:
+    ·v_38 = fn a, b, ·v_16:
       ·op_plus a, b, ·v_16
 
     ·v_11 = fn a, ·v_13:
-      ·closure ·v_36, a, ·v_13
+      ·closure ·v_38, a, ·v_13
 
     ·v_1 = fn ·v_2:
       f = ·v_3
@@ -124,8 +124,6 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
 depth-2 closures — multiple nesting levels
 ---
 
-# BUG: `a` is out of scope in ·v_30 — not captured from foo's params.
-# The iterative loop should capture `a` on the next round.
 test 'depth-2 closure', fn:
   expect lift fink":
     foo = fn a:
@@ -134,20 +132,19 @@ test 'depth-2 closure', fn:
           a + b + c
 
   | equals fink":
-    ·v_30 = fn b, c, ·v_9:
+    ·v_37 = fn a, b, c, ·v_9:
       ·op_plus a, b, fn ·v_12:
         ·op_plus ·v_12, c, ·v_9
 
-    ·v_4 = fn b, ·v_6:
-      ·closure ·v_30, b, ·v_6
+    ·v_30 = fn a, b, ·v_6:
+      ·closure ·v_37, a, b, ·v_6
 
     foo = ·v_1 = fn a, ·v_3:
-      ·v_3 ·v_4
+      ·closure ·v_30, a, ·v_3
 
     ·v_0 foo
 
 
-# BUG: same — `a` out of scope in ·v_25.
 test 'multiple captures at depth-2', fn:
   expect lift fink":
     foo = fn a:
@@ -156,14 +153,14 @@ test 'multiple captures at depth-2', fn:
           a + b
 
   | equals fink":
-    ·v_25 = fn b, c, ·v_9:
+    ·v_32 = fn a, b, c, ·v_9:
       ·op_plus a, b, ·v_9
 
-    ·v_4 = fn b, ·v_6:
-      ·closure ·v_25, b, ·v_6
+    ·v_25 = fn a, b, ·v_6:
+      ·closure ·v_32, a, b, ·v_6
 
     foo = ·v_1 = fn a, ·v_3:
-      ·v_3 ·v_4
+      ·closure ·v_25, a, ·v_3
 
     ·v_0 foo
 

@@ -445,13 +445,10 @@ fn extract_from_body<'src>(
 ) -> Expr<'src> {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
-      // This LetFn is inside a fn_body — extract it.
-      // First, recursively extract from its own fn_body.
-      let inner_fn_body = if contains_letfn(&fn_body) {
-        extract_from_body(*fn_body, &params, captures, resolve, ast_index, alloc, hoisted)
-      } else {
-        *fn_body
-      };
+      // This LetFn is inside a fn_body — extract it one level.
+      // Don't recurse into the extracted fn's own fn_body — the next
+      // iteration handles deeper nesting (one level at a time).
+      let inner_fn_body = *fn_body;
 
       // Determine captures: refs in inner_fn_body that resolve to parent's params.
       let cap_entries = compute_captures_for_lift(&inner_fn_body, &params, parent_params, resolve, alloc);
