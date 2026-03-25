@@ -470,7 +470,11 @@ fn extract_from_body<'src>(
       let inner_fn_body = *fn_body;
 
       // Determine captures: refs in inner_fn_body that resolve to parent's params.
-      let cap_entries = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, resolve, alloc);
+      // Exclude refs to already-hoisted fns — they'll be siblings at the parent scope.
+      let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, resolve, alloc)
+        .into_iter()
+        .filter(|(cap_id, _)| !is_hoisted_fn_ref(*cap_id, hoisted, alloc))
+        .collect();
 
       if cap_entries.is_empty() {
         // Pure fn — hoist directly, no ·fn_closure needed.
@@ -572,14 +576,18 @@ fn extract_from_body<'src>(
 
     // For non-LetFn nodes inside fn_body, just recurse.
     // LetVal introduces a binding — add it to scope_binds for the cont body.
+    // Exception: if the val aliases a hoisted fn, don't add to scope_binds —
+    // the fn will be a sibling at the parent scope, not a capture.
     ExprKind::LetVal { name, val, cont } => {
+      let val_is_hoisted = matches!(&val.kind, ValKind::Ref(Ref::Synth(id)) if hoisted.iter().any(|h| h.name.id == *id));
       let cont = match cont {
         Cont::Ref(_) => cont,
         Cont::Expr { args, body } => {
-          // name + cont args are in scope for the body
           let mut extended_binds: Vec<(CpsId, Bind)> = scope_binds.to_vec();
-          extended_binds.push((name.id, name.kind));
-          for a in &args { extended_binds.push((a.id, a.kind)); }
+          if !val_is_hoisted {
+            extended_binds.push((name.id, name.kind));
+            for a in &args { extended_binds.push((a.id, a.kind)); }
+          }
           let body = extract_from_body(*body, parent_params, &extended_binds, captures, resolve, ast_index, alloc, hoisted);
           Cont::Expr { args, body: Box::new(body) }
         }
@@ -798,6 +806,25 @@ fn rewrite_refs_cont<'src>(cont: Cont<'src>, map: &std::collections::HashMap<Cps
 /// For a fn being lifted out of a parent fn_body, determine which of its
 /// free variables are bound by the parent's params or in-scope LetVal bindings
 /// (and thus would become out of scope after lifting).
+/// Check if a captured CpsId refers to a fn that's already been hoisted in this round.
+/// The capture might be the LetVal bind (scope_bind) that aliases a hoisted fn.
+fn is_hoisted_fn_ref(cap_id: CpsId, hoisted: &[HoistedFn<'_>], alloc: &Alloc) -> bool {
+  // Check if cap_id matches any hoisted fn's name or cont_args (the binds in scope).
+  for h in hoisted {
+    if h.name.id == cap_id { return true; }
+    for ca in &h.cont_args {
+      if ca.id == cap_id { return true; }
+    }
+  }
+  // Check synth_alias: cap_id might alias a hoisted fn's name.
+  if let Some(Some(alias)) = alloc.synth_alias.try_get(cap_id) {
+    for h in hoisted {
+      if h.name.id == *alias { return true; }
+    }
+  }
+  false
+}
+
 fn compute_captures_for_lift(
   fn_body: &Expr<'_>,
   _fn_params: &[Param],

@@ -186,6 +186,22 @@ test 'yield — cont body lifted', fn:
     ·v_0 main
 
 
+test 'multi-fn module — add and main', fn:
+  expect lift fink":
+    add = fn a, b:
+      a + b
+    main = fn:
+      add 3, 4
+
+  | equals fink":
+    add = ·v_3 = fn a, b, ·v_6:
+      ·op_plus a, b, ·v_6
+
+    main = ·v_14 = fn ·v_15:
+      add 3, 4, ·v_15
+
+    ·v_0 main
+
 ---
 pattern matching
 ---
