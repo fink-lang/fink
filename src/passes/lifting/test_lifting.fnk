@@ -171,11 +171,19 @@ test 'multiple captures at depth-2', fn:
 test 'yield — cont body lifted', fn:
   expect lift fink":
     main = fn:
-      yield 42
-      1 + 2
+      q = yield 42
+      1 + q
 
   | equals fink":
-    TODO
+    ·v_22 = fn ·v_23, ·v_4:
+      q = ·v_4
+      ·op_plus 1, q, ·v_23
+
+    main = ·v_1 = fn ·v_2:
+      ·v_27 = ·closure ·v_22, ·v_2
+      ·yield 42, ·v_27
+
+    ·v_0 main
 
 
 ---

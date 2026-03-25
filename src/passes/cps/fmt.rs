@@ -276,6 +276,8 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::MatchApp     => "·match_app".into(),
     BuiltIn::MatchBlock   => "·match_block".into(),
     BuiltIn::MatchArm     => "·match_arm".into(),
+    // Async/concurrency
+    BuiltIn::Yield        => "·yield".into(),
   }
 }
 
@@ -339,11 +341,6 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   let expr_loc = ctx_loc(expr.id, ctx);
 
   match &expr.kind {
-    ExprKind::Yield { value, cont } => {
-      let cont_node = render_cont(cont, ctx);
-      apply(ident("·yield", expr_loc), vec![val_to_node(value, ctx), cont_node], expr_loc)
-    }
-
     ExprKind::LetVal { name, val, cont } => {
       let plain = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);

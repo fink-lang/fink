@@ -84,7 +84,6 @@ fn collect_binds(expr: &Expr<'_>, out: &mut PropGraph<CpsId, Option<Bind>>) {
       collect_binds(then, out);
       collect_binds(else_, out);
     }
-    ExprKind::Yield { cont, .. } => collect_binds_cont(cont, out),
   }
 }
 
@@ -359,12 +358,6 @@ fn collect_into<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node
         fn_node(vec![], then_stmts),
         fn_node(vec![], else_stmts),
       ]));
-    }
-
-    ExprKind::Yield { value, cont } => {
-      let val_node  = render_val(value, fc);
-      let cont_node = render_cont_arg(cont, fc);
-      out.push(apply_node(ident("·yield"), vec![val_node, cont_node]));
     }
   }
 }

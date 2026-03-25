@@ -70,13 +70,5 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
             dump_expr(then, depth+1);
             dump_expr(else_, depth+1);
         }
-        Yield { value, cont } => {
-            println!("{i}Expr(#{}) Yield", e.id.0);
-            dump_val(value, depth+1);
-            if let fink::passes::cps::ir::Cont::Expr { args, body } = cont {
-                println!("{i}  cont args={:?}:", args);
-                dump_expr(body, depth+1);
-            }
-        }
     }
 }

@@ -107,9 +107,6 @@ fn lift_expr<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
       }
     }
 
-    Yield { value, cont } =>
-      hoist_cont(expr.id, cont, alloc, |cont| Yield { value, cont }),
-
     LetVal { name, val, cont } => {
       let body = recurse_cont(cont, alloc);
       Expr { id: expr.id, kind: LetVal { name, val, cont: body } }

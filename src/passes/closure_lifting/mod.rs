@@ -349,14 +349,6 @@ fn lift_expr<'src>(
       },
     },
 
-    Yield { value, cont } => Expr {
-      id: expr.id,
-      kind: Yield {
-        value,
-        cont: lift_cont(cont, captures, resolve, ast_index, alloc, hoisted, synth_alias),
-      },
-    },
-
   }
 }
 
@@ -517,10 +509,6 @@ mod tests {
         emit_val(cond, result, origin, ast_index, out);
         collect_lines(then, result, origin, ast_index, out);
         collect_lines(else_, result, origin, ast_index, out);
-      }
-      Yield { value, cont } => {
-        emit_val(value, result, origin, ast_index, out);
-        if let Cont::Expr { body, .. } = cont { collect_lines(body, result, origin, ast_index, out); }
       }
     }
   }

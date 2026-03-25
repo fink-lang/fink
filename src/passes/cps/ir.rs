@@ -156,6 +156,9 @@ pub enum BuiltIn {
   MatchValue, MatchSeq, MatchNext, MatchDone, MatchNotDone,
   MatchRest, MatchRec, MatchField, MatchIf, MatchApp,
   MatchBlock, MatchArm,
+  // Yield — suspend execution, passing a value to the scheduler.
+  // Args: value; cont receives the resumed value.
+  Yield,
 }
 
 impl BuiltIn {
@@ -349,19 +352,6 @@ pub enum ExprKind<'src> {
   // MatchArm and MatchBlock use Arg::Cont and Arg::Expr to embed arm structure.
   // Fail conts are encoded as ValKind::Panic or ValKind::ContRef in args.
   // ---------------------------------------------------------------------------
-
-  // ---------------------------------------------------------------------------
-  // Suspension
-  // ---------------------------------------------------------------------------
-
-  /// Yield — suspend execution, passing `value` to the scheduler.
-  /// The continuation receives the resumed value.
-  /// Later passes use Yield nodes to color the continuation graph:
-  /// every continuation reachable from a Yield is "suspendable."
-  Yield {
-    value: Box<Val<'src>>,
-    cont: Cont<'src>,
-  },
 
 }
 

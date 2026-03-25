@@ -92,7 +92,6 @@ fn collect_direct_capture_scopes(
       collect_direct_capture_scopes(then, resolve, out);
       collect_direct_capture_scopes(else_, resolve, out);
     }
-    Yield { cont: Cont::Expr { body, .. }, .. } => collect_direct_capture_scopes(body, resolve, out),
     _ => {}
   }
 }
@@ -119,9 +118,6 @@ fn has_direct_captures(expr: &Expr<'_>, resolve: &ResolveResult) -> bool {
     }
     If { cond, then, else_ } => {
       is_captured_val(cond, resolve) || has_direct_captures(then, resolve) || has_direct_captures(else_, resolve)
-    }
-    Yield { value, cont } => {
-      is_captured_val(value, resolve) || matches!(cont, Cont::Expr { body, .. } if has_direct_captures(body, resolve))
     }
   }
 }

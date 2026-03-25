@@ -1765,7 +1765,6 @@ fn collect_funcs<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
       collect_funcs(then, ctx);
       collect_funcs(else_, ctx);
     }
-    ExprKind::Yield { cont: Cont::Expr { body, .. }, .. } => collect_funcs(body, ctx),
     _ => {}
   }
 }
@@ -2222,7 +2221,7 @@ fn collect_letval_locals(expr: &Expr<'_>, out: &mut Vec<CpsId>) {
         }
       }
     }
-    ExprKind::If { .. } | ExprKind::Yield { .. } => {}
+    ExprKind::If { .. } => {}
   }
 }
 

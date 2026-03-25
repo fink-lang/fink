@@ -164,7 +164,6 @@ fn walk_captures(
       walk_captures(then, graphs, captures);
       walk_captures(else_, graphs, captures);
     }
-    Yield { cont: Cont::Expr { body, .. }, .. } => walk_captures(body, graphs, captures),
     _ => {}
   }
 }
@@ -205,10 +204,6 @@ fn collect_direct_captured_binds(
       collect_direct_captured_binds(then, graphs, out);
       collect_direct_captured_binds(else_, graphs, out);
     }
-    Yield { value, cont } => {
-      check_captured_bind(value, graphs, out);
-      if let Cont::Expr { body, .. } = cont { collect_direct_captured_binds(body, graphs, out); }
-    }
   }
 }
 
@@ -247,10 +242,6 @@ fn collect_deep_captured_binds(
       check_captured_bind(cond, graphs, out);
       collect_deep_captured_binds(then, graphs, out);
       collect_deep_captured_binds(else_, graphs, out);
-    }
-    Yield { value, cont } => {
-      check_captured_bind(value, graphs, out);
-      if let Cont::Expr { body, .. } = cont { collect_deep_captured_binds(body, graphs, out); }
     }
   }
 }
@@ -544,11 +535,6 @@ fn collect_scope_names<'src>(
         }
       }
     }
-    Yield { cont: Cont::Expr { args, body }, .. } => {
-      bind_to_scope(scope, &args[0], scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
-    }
-    Yield { .. } => {}
     // Terminal or branching — stop collecting
     _ => {}
   }
@@ -668,10 +654,6 @@ fn resolve_expr<'src>(
       resolve_expr(else_, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
-    Yield { value, cont } => {
-      resolve_val(value, scope, sb, fn_depth, ctx, graphs);
-      resolve_cont(cont, scope, current_scope, sb, fn_depth, ctx, graphs);
-    }
   }
 }
 
@@ -805,10 +787,6 @@ mod tests {
         collect_classified_lines(else_, result, ctx, out);
       }
 
-      Yield { value, cont } => {
-        emit_classified_val(value, result, ctx, out);
-        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
-      }
     }
   }
 
@@ -916,11 +894,6 @@ mod tests {
         emit_synth_val(cond, result, out);
         collect_classified_with_synth(then, result, ctx, out);
         collect_classified_with_synth(else_, result, ctx, out);
-      }
-      Yield { value, cont } => {
-        emit_classified_val(value, result, ctx, out);
-        emit_synth_val(value, result, out);
-        if let Cont::Expr { body, .. } = cont { collect_classified_with_synth(body, result, ctx, out); }
       }
     }
   }

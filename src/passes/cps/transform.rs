@@ -1232,7 +1232,10 @@ fn wrap_with_fail<'src>(
         )
       },
       Pending::Yield { value, result, origin } => g.expr(
-        ExprKind::Yield { value: Box::new(value), cont: cont_with_result(cont, result) },
+        ExprKind::App {
+          func: Callable::BuiltIn(BuiltIn::Yield),
+          args: vec![Arg::Val(value), Arg::Cont(cont_with_result(cont, result))],
+        },
         origin,
       ),
     })
