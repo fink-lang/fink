@@ -371,7 +371,7 @@ fn lift_expr<'src>(
       // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
       if contains_letfn_or_inline_cont(&fn_body) {
         let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
-        let new_fn_body = extract_from_body(*fn_body, &params, captures, resolve, ast_index, alloc, &mut hoisted);
+        let new_fn_body = extract_from_body(*fn_body, &params, &[], captures, resolve, ast_index, alloc, &mut hoisted);
 
         // Build the LetFn with the cleaned fn_body.
         let mut result = Expr {
@@ -460,9 +460,13 @@ fn lift_cont<'src>(
 /// Walk a fn_body expression. When we encounter a LetFn, extract it as a
 /// hoisted fn and replace it with its cont body (so the original site just
 /// uses the result value).
+///
+/// `scope_binds` accumulates LetVal/LetFn bindings seen so far in the fn body —
+/// these are in scope at the extraction point but would go out of scope after hoisting.
 fn extract_from_body<'src>(
   expr: Expr<'src>,
   parent_params: &[Param],
+  scope_binds: &[(CpsId, Bind)],
   captures: &CaptureGraph,
   resolve: &ResolveResult,
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
@@ -477,20 +481,24 @@ fn extract_from_body<'src>(
       let inner_fn_body = *fn_body;
 
       // Determine captures: refs in inner_fn_body that resolve to parent's params.
-      let cap_entries = compute_captures_for_lift(&inner_fn_body, &params, parent_params, resolve, alloc);
+      let cap_entries = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, resolve, alloc);
 
       if cap_entries.is_empty() {
         // Pure fn — hoist directly, no ·fn_closure needed.
         match cont {
           Cont::Expr { args: cont_args, body } => {
+            let name_id = name.id;
+            let name_kind = name.kind;
             hoisted.push(HoistedFn {
               name,
               params,
               fn_body: inner_fn_body,
               cont_args,
             });
-            // Continue with the cont body (·v_N is bound by wrap_hoisted's cont).
-            extract_from_body(*body, parent_params, captures, resolve, ast_index, alloc, hoisted)
+            // The cont args bind the fn value — add to scope for the rest.
+            // (name is consumed by hoisted, but the wrap_hoisted cont binds a result)
+            // Continue with the cont body.
+            extract_from_body(*body, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted)
           }
           Cont::Ref(cont_id) => {
             let name_id = name.id;
@@ -574,11 +582,16 @@ fn extract_from_body<'src>(
     }
 
     // For non-LetFn nodes inside fn_body, just recurse.
+    // LetVal introduces a binding — add it to scope_binds for the cont body.
     ExprKind::LetVal { name, val, cont } => {
       let cont = match cont {
         Cont::Ref(_) => cont,
         Cont::Expr { args, body } => {
-          let body = extract_from_body(*body, parent_params, captures, resolve, ast_index, alloc, hoisted);
+          // name + cont args are in scope for the body
+          let mut extended_binds: Vec<(CpsId, Bind)> = scope_binds.to_vec();
+          extended_binds.push((name.id, name.kind));
+          for a in &args { extended_binds.push((a.id, a.kind)); }
+          let body = extract_from_body(*body, parent_params, &extended_binds, captures, resolve, ast_index, alloc, hoisted);
           Cont::Expr { args, body: Box::new(body) }
         }
       };
@@ -603,7 +616,7 @@ fn extract_from_body<'src>(
           // The next iteration handles inner conts.
           let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
-          let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, resolve, alloc);
+          let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, resolve, alloc);
 
           if cap_entries.is_empty() {
             // Pure — hoist directly, replace with Cont::Ref.
@@ -618,7 +631,7 @@ fn extract_from_body<'src>(
             args.insert(idx, Arg::Cont(Cont::Ref(cont_name_id)));
             // Recurse on remaining args.
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, captures, resolve, ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted))),
               other => other,
             }).collect();
             Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -677,7 +690,7 @@ fn extract_from_body<'src>(
       } else {
         // No inline conts — just recurse into Arg::Expr.
         let args = args.into_iter().map(|a| match a {
-          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, captures, resolve, ast_index, alloc, hoisted))),
+          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted))),
           other => other,
         }).collect();
         Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -686,9 +699,9 @@ fn extract_from_body<'src>(
 
     ExprKind::Yield { value, cont } => {
       if let Cont::Expr { args: cont_args, body } = cont {
-        let body = extract_from_body(*body, parent_params, captures, resolve, ast_index, alloc, hoisted);
+        let body = extract_from_body(*body, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted);
         let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
-        let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, resolve, alloc);
+        let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, resolve, alloc);
         if cap_entries.is_empty() {
           let cont_name = alloc.bind(Bind::Cont, None);
           let cont_name_id = cont_name.id;
@@ -751,8 +764,8 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = extract_from_body(*then, parent_params, captures, resolve, ast_index, alloc, hoisted);
-      let else_ = extract_from_body(*else_, parent_params, captures, resolve, ast_index, alloc, hoisted);
+      let then = extract_from_body(*then, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted);
+      let else_ = extract_from_body(*else_, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
 
@@ -844,18 +857,23 @@ fn rewrite_refs_cont<'src>(cont: Cont<'src>, map: &std::collections::HashMap<Cps
 // ---------------------------------------------------------------------------
 
 /// For a fn being lifted out of a parent fn_body, determine which of its
-/// free variables are bound by the parent's params (and thus would become
-/// out of scope after lifting).
+/// free variables are bound by the parent's params or in-scope LetVal bindings
+/// (and thus would become out of scope after lifting).
 fn compute_captures_for_lift(
   fn_body: &Expr<'_>,
   _fn_params: &[Param],
   parent_params: &[Param],
+  scope_binds: &[(CpsId, Bind)],
   resolve: &ResolveResult,
   _alloc: &mut Alloc,
 ) -> Vec<(CpsId, Bind)> {
-  let parent_param_map: std::collections::HashMap<CpsId, Bind> = parent_params.iter()
+  let mut parent_param_map: std::collections::HashMap<CpsId, Bind> = parent_params.iter()
     .map(|p| match p { Param::Name(b) | Param::Spread(b) => (b.id, b.kind) })
     .collect();
+  // Include LetVal/LetFn bindings from the surrounding scope.
+  for (id, kind) in scope_binds {
+    parent_param_map.insert(*id, *kind);
+  }
 
   let mut caps: Vec<(CpsId, Bind)> = Vec::new();
   let mut seen: std::collections::HashSet<CpsId> = std::collections::HashSet::new();

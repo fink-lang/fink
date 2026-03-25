@@ -191,13 +191,13 @@ test 'seq destructure', fn:
       a + 1
 
   | equals fink":
-    ·v_53 = fn ·v_54, ·v_11:
-      ·op_plus a, 1, ·v_54
+    ·v_53 = fn a, ·v_56, ·v_11:
+      ·op_plus a, 1, ·v_56
 
     ·v_44 = fn ·v_45, ·v_6, ·v_7:
       a = ·v_6
-      ·v_58 = ·closure ·v_53, ·v_45
-      ·match_done ·v_7, panic, ·v_58
+      ·v_60 = ·closure ·v_53, a, ·v_45
+      ·match_done ·v_7, panic, ·v_60
 
     ·v_35 = fn ·v_36, ·v_5:
       ·v_49 = ·closure ·v_44, ·v_36
