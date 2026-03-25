@@ -1,3 +1,5 @@
+pub mod fmt;
+
 // Unified closure/continuation lifting pass.
 //
 // Replaces the separate cont_lifting and closure_lifting passes with a single
@@ -913,7 +915,7 @@ mod tests {
   use crate::parser::parse;
   use crate::passes::cps::fmt::Ctx;
   use crate::passes::cps::transform::lower_expr;
-  use crate::passes::cps_flat::fmt_flat;
+  use super::fmt::fmt_flat;
 
   #[allow(unused)]
   fn lift(src: &str) -> String {

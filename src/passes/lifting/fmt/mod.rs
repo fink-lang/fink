@@ -1,4 +1,4 @@
-// cps_flat — flat pretty-printer for lifted CPS IR.
+// Flat pretty-printer for lifted CPS IR.
 //
 // Renders the CPS IR as a sequence of assignments rather than deeply nested
 // ·fn/·let applications. Every LetFn and LetVal becomes a flat `name = rhs`
@@ -25,7 +25,7 @@
 // Output is built as an AST (Module of Bind/Apply nodes) so the existing
 // pretty-printer handles indentation and line-breaking.
 
-mod fmt;
+mod fmt_ast;
 
 use crate::ast::{Node, NodeKind, Exprs};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
@@ -52,7 +52,7 @@ pub fn fmt_flat(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> String {
   let fc = FmtCtx { ctx, bind_kinds };
   let stmts = collect_stmts(expr, &fc);
   let module = Node::new(NodeKind::Module(Exprs { items: stmts, seps: vec![] }), dummy_loc());
-  fmt::fmt(&module)
+  fmt_ast::fmt(&module)
 }
 
 /// Walk the CPS tree and record the Bind kind for every BindNode definition.
@@ -428,36 +428,4 @@ fn split_trailing_cont<'a, 'src>(
     Some(Arg::Cont(c)) => Some((&args[..args.len() - 1], c)),
     _ => None,
   }
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-  use test_macros::include_fink_tests;
-
-  use crate::ast::build_index;
-  use crate::parser::parse;
-  use crate::passes::cps::fmt::Ctx;
-  use crate::passes::cps::transform::lower_expr;
-  use crate::passes::closure_lifting::lift_all;
-  use super::fmt_flat;
-
-  fn cps_flat(src: &str) -> String {
-    match parse(src) {
-      Ok(r) => {
-        let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
-        let (lifted, _) = lift_all(cps, &ast_index);
-        let ctx = Ctx { origin: &lifted.origin, ast_index: &ast_index, captures: None };
-        fmt_flat(&lifted.root, &ctx)
-      }
-      Err(e) => format!("ERROR: {}", e.message),
-    }
-  }
-
-  include_fink_tests!("src/passes/cps_flat/test_cps_flat.fnk");
-
 }
