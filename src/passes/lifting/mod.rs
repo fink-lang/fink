@@ -221,10 +221,16 @@ fn is_simple_forward_cont(cont: &Cont<'_>) -> bool {
         ValKind::ContRef(id) => param_ids.contains(id),
         _ => false,
       };
-      // All args must be vals or cont refs (no inline conts or exprs).
+      // All args must also reference the fn's own params — pure relay.
       callee_is_param && app_args.iter().all(|a| match a {
-        Arg::Val(_) | Arg::Spread(_) => true,
-        Arg::Cont(Cont::Ref(_)) => true,
+        Arg::Val(v) => match &v.kind {
+          ValKind::Ref(Ref::Synth(id)) => param_ids.contains(id),
+          ValKind::ContRef(id) => param_ids.contains(id),
+          ValKind::Ref(Ref::Name) => false, // name refs may be out of scope
+          ValKind::Panic => true, // panic is a global sentinel
+          _ => false,
+        },
+        Arg::Cont(Cont::Ref(id)) => param_ids.contains(id),
         _ => false,
       })
     }
