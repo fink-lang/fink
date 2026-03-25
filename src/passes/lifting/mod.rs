@@ -104,7 +104,7 @@ pub fn lift<'src>(
     );
     let cap_graph = closure_capture::analyse(&current, &resolve_result);
 
-    if !has_nested_letfn(&current.root) {
+    if !needs_lifting(&current.root) {
       return current;
     }
 
@@ -112,8 +112,26 @@ pub fn lift<'src>(
       panic!("lifting::lift: did not converge after {MAX_ROUNDS} rounds");
     }
 
+    // Phase 1: name inline Cont::Expr bodies → convert to LetFn.
     let mut alloc = Alloc::new(current.origin, current.synth_alias);
-    let new_root = lift_expr(current.root, &cap_graph, &resolve_result, ast_index, &mut alloc);
+    let named = name_inline_conts(current.root, &mut alloc);
+
+    // Re-run resolve + capture after naming (new LetFn nodes need analysis).
+    let named_result = CpsResult {
+      root: named,
+      origin: alloc.origin,
+      synth_alias: alloc.synth_alias,
+    };
+    let node_count2 = named_result.origin.len();
+    let resolve2 = name_res::resolve(
+      &named_result.root, &named_result.origin, ast_index, node_count2, &named_result.synth_alias,
+    );
+    let cap_graph2 = closure_capture::analyse(&named_result, &resolve2);
+
+    // Phase 2: extract LetFn from fn_bodies (hoist one level).
+    let mut alloc2 = Alloc::new(named_result.origin, named_result.synth_alias);
+    let new_root = lift_expr(named_result.root, &cap_graph2, &resolve2, ast_index, &mut alloc2);
+    let alloc = alloc2;
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
@@ -124,31 +142,53 @@ pub fn lift<'src>(
 }
 
 // ---------------------------------------------------------------------------
-// Check: does any fn_body contain a nested LetFn?
+// Check: does the tree need more lifting?
+// True if any fn_body contains a nested LetFn, or any App/Yield has an
+// inline Cont::Expr with non-trivial body.
 // ---------------------------------------------------------------------------
 
-fn has_nested_letfn(expr: &Expr<'_>) -> bool {
+fn needs_lifting(expr: &Expr<'_>) -> bool {
   match &expr.kind {
     ExprKind::LetFn { fn_body, cont, .. } => {
-      contains_letfn(fn_body) || cont_has_nested_letfn(cont)
+      contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
     }
-    ExprKind::LetVal { cont, .. } => cont_has_nested_letfn(cont),
+    ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
     ExprKind::App { args, .. } => {
       args.iter().any(|a| match a {
-        Arg::Cont(c) => cont_has_nested_letfn(c),
-        Arg::Expr(e) => has_nested_letfn(e),
+        Arg::Cont(c) => cont_needs_lifting(c),
+        Arg::Expr(e) => needs_lifting(e),
         _ => false,
       })
     }
-    ExprKind::If { then, else_, .. } => has_nested_letfn(then) || has_nested_letfn(else_),
-    ExprKind::Yield { cont, .. } => cont_has_nested_letfn(cont),
+    ExprKind::If { then, else_, .. } => needs_lifting(then) || needs_lifting(else_),
+    ExprKind::Yield { cont, .. } => cont_needs_lifting(cont),
   }
 }
 
-fn cont_has_nested_letfn(cont: &Cont<'_>) -> bool {
+fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
-    Cont::Expr { body, .. } => has_nested_letfn(body),
+    Cont::Expr { body, .. } => needs_lifting(body),
+  }
+}
+
+/// Does this expression contain a LetFn or an inline Cont::Expr in an App?
+fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
+  match &expr.kind {
+    ExprKind::LetFn { .. } => true,
+    ExprKind::LetVal { cont, .. } => match cont {
+      Cont::Ref(_) => false,
+      Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body),
+    },
+    ExprKind::App { args, .. } => {
+      args.iter().any(|a| match a {
+        Arg::Cont(Cont::Expr { .. }) => true, // inline cont needs naming
+        Arg::Expr(body) => contains_letfn_or_inline_cont(body),
+        _ => false,
+      })
+    }
+    ExprKind::If { then, else_, .. } => contains_letfn_or_inline_cont(then) || contains_letfn_or_inline_cont(else_),
+    ExprKind::Yield { cont, .. } => matches!(cont, Cont::Expr { .. }),
   }
 }
 
@@ -175,7 +215,113 @@ fn contains_letfn(expr: &Expr<'_>) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Lift one level: extract LetFn from fn_bodies
+// Phase 1: Name inline Cont::Expr bodies → convert to LetFn
+//
+// For each App { func, args } where an arg is Arg::Cont(Cont::Expr { args, body }),
+// convert to: LetFn { name: fresh, params: args, fn_body: body,
+//             cont: Cont::Expr { [synth], App { func, args with Cont::Ref(fresh) } } }
+// ---------------------------------------------------------------------------
+
+fn name_inline_conts<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
+  match expr.kind {
+    ExprKind::App { func, args } => {
+      // Find the last Arg::Cont(Cont::Expr { .. }) — that's the inline cont to name.
+      match args.iter().rposition(|a| matches!(a, Arg::Cont(Cont::Expr { .. }))) {
+        Some(idx) => {
+          let mut args = args;
+          let cont = match args.remove(idx) {
+            Arg::Cont(c) => c,
+            _ => unreachable!(),
+          };
+          if let Cont::Expr { args: cont_args, body } = cont {
+            let body = name_inline_conts(*body, alloc);
+            let cont_name = alloc.bind(Bind::Cont, None);
+            // Rebuild the App with Cont::Ref instead of Cont::Expr.
+            args.insert(idx, Arg::Cont(Cont::Ref(cont_name.id)));
+            let inner_app = name_inline_conts(alloc.expr(ExprKind::App { func, args }, None), alloc);
+            Expr {
+              id: expr.id,
+              kind: ExprKind::LetFn {
+                name: cont_name,
+                params: cont_args.into_iter().map(Param::Name).collect(),
+                fn_body: Box::new(body),
+                cont: Cont::Expr {
+                  args: vec![alloc.synth_bind()],
+                  body: Box::new(inner_app),
+                },
+              },
+            }
+          } else {
+            unreachable!()
+          }
+        }
+        None => {
+          // No inline conts — recurse into Arg::Expr.
+          let args = args.into_iter().map(|a| match a {
+            Arg::Expr(e) => Arg::Expr(Box::new(name_inline_conts(*e, alloc))),
+            other => other,
+          }).collect();
+          Expr { id: expr.id, kind: ExprKind::App { func, args } }
+        }
+      }
+    }
+
+    ExprKind::Yield { value, cont } => {
+      if let Cont::Expr { args: cont_args, body } = cont {
+        let body = name_inline_conts(*body, alloc);
+        let cont_name = alloc.bind(Bind::Cont, None);
+        let inner_yield = alloc.expr(ExprKind::Yield {
+          value,
+          cont: Cont::Ref(cont_name.id),
+        }, None);
+        Expr {
+          id: expr.id,
+          kind: ExprKind::LetFn {
+            name: cont_name,
+            params: cont_args.into_iter().map(Param::Name).collect(),
+            fn_body: Box::new(body),
+            cont: Cont::Expr {
+              args: vec![alloc.synth_bind()],
+              body: Box::new(inner_yield),
+            },
+          },
+        }
+      } else {
+        Expr { id: expr.id, kind: ExprKind::Yield { value, cont } }
+      }
+    }
+
+    ExprKind::LetFn { name, params, fn_body, cont } => {
+      let fn_body = name_inline_conts(*fn_body, alloc);
+      let cont = name_inline_conts_cont(cont, alloc);
+      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_body: Box::new(fn_body), cont } }
+    }
+
+    ExprKind::LetVal { name, val, cont } => {
+      let cont = name_inline_conts_cont(cont, alloc);
+      Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
+    }
+
+    ExprKind::If { cond, then, else_ } => {
+      let then = name_inline_conts(*then, alloc);
+      let else_ = name_inline_conts(*else_, alloc);
+      Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
+    }
+  }
+}
+
+fn name_inline_conts_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'src> {
+  match cont {
+    Cont::Ref(_) => cont,
+    Cont::Expr { args, body } => {
+      let body = name_inline_conts(*body, alloc);
+      Cont::Expr { args, body: Box::new(body) }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Lift one level — extract LetFn from fn_bodies
 // ---------------------------------------------------------------------------
 
 fn lift_expr<'src>(

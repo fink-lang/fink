@@ -52,6 +52,31 @@ test 'pure nested fn — no captures, stays nested', fn:
 
 
 ---
+continuation lifting — inline Cont::Expr bodies become named fns
+---
+
+test 'chained arithmetic — cont body lifted', fn:
+  expect lift fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+
+  | equals fink":
+    ·f_TODO1 = fn ·f_TODO0, ·v_5:
+      x = ·v_5
+      ·op_plus x, 4, ·f_TODO0
+
+    ·f_TODO2 = fn ·f_TODO3:
+      ·v_TODO4 = ·closure ·f_TODO3, ·f_TODO1
+      ·op_mul 2, 3, ·v_TODO4
+
+    main = ·v_1 = fn ·f_2:
+      ·f_TODO2 ·f_2
+
+    ·f_0 main
+
+
+---
 depth-1 closures — single level of capture
 ---
 
@@ -98,20 +123,6 @@ test 'multiple captures at depth-2', fn:
       fn b:
         fn c:
           a + b
-
-  | equals fink":
-    TODO
-
-
----
-continuation lifting — inline Cont::Expr bodies become named fns
----
-
-test 'chained arithmetic — cont body lifted', fn:
-  expect lift fink":
-    main = fn:
-      x = 2 * 3
-      x + 4
 
   | equals fink":
     TODO
