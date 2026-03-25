@@ -9,6 +9,7 @@ pub mod closure_lifting;
 pub mod cont_lifting;
 pub mod cps_flat;
 pub mod cps;
+pub mod lifting;
 pub mod name_res;
 pub mod partial;
 #[cfg(feature = "runner")]

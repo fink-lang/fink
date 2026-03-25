@@ -1,0 +1,184 @@
+---
+unified lifting tests
+---
+
+# Unified closure/continuation lifting — lifts nested fns one level at a time,
+# threading captured bindings as explicit params via ·fn_closure.
+#
+# After lifting, no fn should reference bindings from outer scopes — all values
+# are passed explicitly as params. No forward references to sibling-scope binds.
+#
+# Test format:
+#   test 'name', fn:
+#     expect lift fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected lifted CPS>
+
+{test, equals, expect, fink, lift} = import 'fake!'
+
+
+---
+pure functions — no captures, unchanged
+---
+
+test 'pure fn is unchanged', fn:
+  expect lift fink":
+    f = fn x: x
+
+  | equals fink":
+    f = ·v_1 = fn x, ·f_3:
+      ·v_5 = x
+      ·f_3 ·v_5
+
+    ·f_0 f
+
+
+test 'pure nested fn — no captures, stays nested', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b: b
+
+  | equals fink":
+    ·v_4 = fn b, ·f_6:
+      ·v_8 = b
+      ·f_6 ·v_8
+
+    foo = ·v_1 = fn a, ·f_3:
+      ·f_3 ·v_4
+
+    ·f_0 foo
+
+
+---
+depth-1 closures — single level of capture
+---
+
+test 'captured binding becomes leading param', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    TODO
+
+
+test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
+  expect lift fink":
+    f = fn x:
+      x
+    g = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    TODO
+
+
+---
+depth-2 closures — multiple nesting levels
+---
+
+test 'depth-2 closure', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b + c
+
+  | equals fink":
+    TODO
+
+
+test 'multiple captures at depth-2', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b
+
+  | equals fink":
+    TODO
+
+
+---
+continuation lifting — inline Cont::Expr bodies become named fns
+---
+
+test 'chained arithmetic — cont body lifted', fn:
+  expect lift fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+
+  | equals fink":
+    TODO
+
+
+test 'yield — cont body lifted', fn:
+  expect lift fink":
+    main = fn:
+      yield 42
+      1 + 2
+
+  | equals fink":
+    TODO
+
+
+---
+pattern matching — the main bug surface for forward refs
+---
+
+test 'match — no forward refs after lift', fn:
+  expect lift fink":
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals fink":
+    TODO
+
+
+test 'seq destructure', fn:
+  expect lift fink":
+    main = fn foo:
+      [a] = foo
+      a + 1
+
+  | equals fink":
+    TODO
+
+
+test 'record destructure', fn:
+  expect lift fink":
+    main = fn foo:
+      {x} = foo
+      x + 1
+
+  | equals fink":
+    TODO
+
+
+test 'match with binding', fn:
+  expect lift fink":
+    foo = fn n:
+      r = match n:
+        0: n + 1
+      r
+
+  | equals fink":
+    TODO
+
+
+test 'recursive fn in match', fn:
+  expect lift fink":
+    fib = fn n:
+      r = match n:
+        0: 1
+        _: fib (n + 1)
+      r
+
+  | equals fink":
+    TODO
