@@ -8,5 +8,6 @@ pub mod cps;
 pub mod lifting;
 pub mod name_res;
 pub mod partial;
+pub mod scopes;
 #[cfg(feature = "runner")]
 pub mod wasm;

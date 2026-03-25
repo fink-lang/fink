@@ -1,0 +1,105 @@
+---
+scope analysis tests
+---
+
+# AST-level scope analysis — resolves identifiers to bindings.
+#
+# Output format: one section per scope, then resolved references.
+#
+# Scopes
+#   scope 'S0', 'module',
+#     bind 'add', 'B0'
+#     bind 'main', 'B1'
+#
+#   scope 'S1', 'add',
+#     bind 'a', 'B2'
+#     bind 'b', 'B3'
+#
+# References
+#   ref 'add', 'R0', 'B0'
+#   ref 'a', 'R1', B2
+#
+# For now, just show resolved references in walk order:
+#   add -> add@S0
+#   a -> a@S1
+#
+# Test format:
+#   test 'name', fn:
+#     expect scope fink":
+#       <fink source>
+#     | equals fink":
+#       <expected scope output>
+
+{test, expect, equals, fink, scope} = import '!fake'
+
+
+---
+basic bindings
+---
+
+test 'single binding', fn:
+  expect scope fink":
+    x = 1
+  | equals fink":
+    TODO
+
+
+test 'fn params in scope', fn:
+  expect scope fink":
+    f = fn a, b:
+      a + b
+  | equals fink":
+    TODO
+
+
+---
+module level — mutual recursion
+---
+
+test 'two fns — main refs add', fn:
+  expect scope fink":
+    add = fn a, b:
+      a + b
+
+    main = fn:
+      add 3, 4
+
+  | equals fink":
+    TODO
+
+
+test 'mutual recursion — is-even refs is-odd', fn:
+  expect scope fink":
+    is-even = fn n:
+      match n:
+        0: true
+        _: is-odd n - 1
+
+    is-odd = fn n:
+      match n:
+        0: false
+        _: is-even n - 1
+
+  | equals fink":
+    TODO
+
+
+---
+shadowing
+---
+
+test 'inner binding shadows outer', fn:
+  expect scope fink":
+    add = fn a, b:
+      a + b
+
+    sub = fn a, b:
+      add = fn foo:
+        foo
+      a - add b
+
+    main = fn: add 3, 4
+
+  | equals fink":
+    TODO
+

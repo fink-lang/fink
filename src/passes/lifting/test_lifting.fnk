@@ -190,6 +190,7 @@ test 'multi-fn module — add and main', fn:
   expect lift fink":
     add = fn a, b:
       a + b
+
     main = fn:
       add 3, 4
 
