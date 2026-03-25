@@ -182,32 +182,6 @@ test 'yield — cont body lifted', fn:
 pattern matching
 ---
 
-test 'match — no forward refs after lift', fn:
-  expect lift fink":
-    foo = fn n:
-      match n:
-        0: 42
-
-  | equals fink":
-    ·v_31 = fn n, ·v_34, ·v_18:
-      ·match_block n, ·v_18, ·v_34
-
-    ·v_45 = fn ·v_11:
-      ·v_13 = 42
-      ·v_11 ·v_13
-
-    ·v_48 = fn ·v_8, ·v_6, ·v_7:
-      ·match_value ·v_8, 0, ·v_6, ·v_7
-
-    ·v_42 = fn ·v_38:
-      ·match_arm ·v_48, ·v_45, ·v_38
-
-    foo = ·v_1 = fn n, ·v_3:
-      ·closure ·v_31, n, ·v_3, ·v_42
-
-    ·v_0 foo
-
-
 test 'seq destructure', fn:
   expect lift fink":
     main = fn foo:
@@ -254,6 +228,33 @@ test 'record destructure', fn:
       ·match_rec foo, panic, ·v_37
 
     ·v_0 main
+
+
+test 'match — no forward refs after lift', fn:
+  expect lift fink":
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals fink":
+    ·v_31 = fn n, ·v_34, ·v_18:
+      ·match_block n, ·v_18, ·v_34
+
+    ·v_45 = fn ·v_11:
+      ·v_13 = 42
+      ·v_11 ·v_13
+
+    ·v_48 = fn ·v_8, ·v_6, ·v_7:
+      ·match_value ·v_8, 0, ·v_6, ·v_7
+
+    ·v_42 = fn ·v_38:
+      ·match_arm ·v_48, ·v_45, ·v_38
+
+    foo = ·v_1 = fn n, ·v_3:
+      ·closure ·v_31, n, ·v_3, ·v_42
+
+    ·v_0 foo
+
 
 
 test 'match with binding', fn:
