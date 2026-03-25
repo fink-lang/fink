@@ -55,7 +55,7 @@ test 'yield — cont body hoisted to LetFn', fn:
     ·fn
       fn ·ƒ_2:
         ·fn
-          fn ·v_4, ·ƒ_23:
+          fn ·v_4:
             ·let ·v_4, fn ·v_6:
               ·op_plus 1, 2, ·ƒ_2
           fn ·ƒ_22: ·yield 42, ·ƒ_22
@@ -78,15 +78,15 @@ test 'seq destructure — MatchDone cont body hoisted', fn:
     ·fn
       fn foo, ·ƒ_3:
         ·fn
-          fn ·v_5, ·ƒ_44:
+          fn ·v_5:
             ·fn
-              fn ·v_6, ·v_7, ·ƒ_40:
+              fn ·v_6, ·v_7:
                 ·let ·v_6, fn a:
                   ·fn
-                    fn ·v_11, ·ƒ_36: ·op_plus a, 1, ·ƒ_3
+                    fn ·v_11: ·op_plus a, 1, ·ƒ_3
                     fn ·ƒ_35: ·match_done ·v_7, ·panic, ·ƒ_35
-              fn ·ƒ_39: ·match_next ·v_5, ·panic, ·ƒ_39
-          fn ·ƒ_43: ·match_seq foo, ·panic, ·ƒ_43
+              fn ·ƒ_38: ·match_next ·v_5, ·panic, ·ƒ_38
+          fn ·ƒ_41: ·match_seq foo, ·panic, ·ƒ_41
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -125,7 +125,7 @@ test 'MatchValue — body hoisted to LetFn', fn:
     ·fn
       fn foo, ·ƒ_3:
         ·fn
-          fn ·v_11, ·ƒ_22: ·op_plus foo, 2, ·ƒ_3
+          fn ·v_11: ·op_plus foo, 2, ·ƒ_3
           fn ·ƒ_21:
             ·match_value foo, 1, ·panic, fn: ·ƒ_21 _
       fn ·v_1:
@@ -146,13 +146,13 @@ test 'MatchRec/MatchField — body hoisted to LetFn', fn:
     ·fn
       fn foo, ·ƒ_3:
         ·fn
-          fn ·v_5, ·ƒ_37:
+          fn ·v_5:
             ·fn
-              fn ·v_6, ·v_7, ·ƒ_33:
+              fn ·v_6, ·v_7:
                 ·let ·v_6, fn x:
                   ·op_plus x, 1, ·ƒ_3
               fn ·ƒ_32: ·match_field ·v_5, 'x', ·panic, ·ƒ_32
-          fn ·ƒ_36: ·match_rec foo, ·panic, ·ƒ_36
+          fn ·ƒ_35: ·match_rec foo, ·panic, ·ƒ_35
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -171,13 +171,13 @@ test 'MatchRest — body hoisted to LetFn', fn:
     ·fn
       fn foo, ·ƒ_3:
         ·fn
-          fn ·v_5, ·ƒ_30:
+          fn ·v_5:
             ·fn
-              fn ·v_7, ·ƒ_26:
+              fn ·v_7:
                 ·let ·v_7, fn rest:
                   ·ƒ_3 rest
               fn ·ƒ_25: ·match_rest ·v_5, ·panic, ·ƒ_25
-          fn ·ƒ_29: ·match_seq foo, ·panic, ·ƒ_29
+          fn ·ƒ_28: ·match_seq foo, ·panic, ·ƒ_28
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -196,16 +196,16 @@ test 'MatchNotDone — body hoisted to LetFn', fn:
     ·fn
       fn foo, ·ƒ_3:
         ·fn
-          fn ·v_5, ·ƒ_44:
+          fn ·v_5:
             ·fn
-              fn ·v_6, ·v_7, ·ƒ_40:
+              fn ·v_6, ·v_7:
                 ·let ·v_6, fn a:
                   ·fn
-                    fn ·v_18, ·ƒ_36: ·op_plus a, 1, ·ƒ_3
+                    fn ·v_18: ·op_plus a, 1, ·ƒ_3
                     fn ·ƒ_35:
                       ·match_not_done ·v_7, ·panic, fn: ·ƒ_35 _
-              fn ·ƒ_39: ·match_next ·v_5, ·panic, ·ƒ_39
-          fn ·ƒ_43: ·match_seq foo, ·panic, ·ƒ_43
+              fn ·ƒ_38: ·match_next ·v_5, ·panic, ·ƒ_38
+          fn ·ƒ_41: ·match_seq foo, ·panic, ·ƒ_41
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -226,34 +226,34 @@ test 'MatchBlock — cont body hoisted to LetFn', fn:
     ·fn
       fn x, ·ƒ_3:
         ·fn
-          fn ·v_18, ·ƒ_73:
+          fn ·v_18:
             ·fn
-              fn ·v_32, ·ƒ_61:
+              fn ·v_32:
                 ·fn
-                  fn ·v_34, ·ƒ_57:
+                  fn ·v_34:
                     ·let ·v_34, fn r:
                       ·op_plus r, 1, ·ƒ_3
                   fn ·ƒ_56: ·match_block x, ·v_18, ·v_32, ·ƒ_56
-              fn ·ƒ_60:
+              fn ·ƒ_59:
                 ·fn
-                  fn ·ƒ_25, ·ƒ_64:
+                  fn ·ƒ_25:
                     ·let 20, fn ·v_27:
                       ·ƒ_25 ·v_27
-                  fn ·ƒ_63:
+                  fn ·ƒ_61:
                     ·fn
-                      fn ·v_22, ·ƒ_20, ·ƒ_21, ·ƒ_67:
+                      fn ·v_22, ·ƒ_20, ·ƒ_21:
                         ·match_value ·v_22, 2, ·ƒ_20, fn: ·ƒ_21 _
-                      fn ·ƒ_66: ·match_arm ·ƒ_66, ·ƒ_63, ·ƒ_60
-          fn ·ƒ_72:
+                      fn ·ƒ_63: ·match_arm ·ƒ_63, ·ƒ_61, ·ƒ_59
+          fn ·ƒ_68:
             ·fn
-              fn ·ƒ_11, ·ƒ_76:
+              fn ·ƒ_11:
                 ·let 10, fn ·v_13:
                   ·ƒ_11 ·v_13
-              fn ·ƒ_75:
+              fn ·ƒ_70:
                 ·fn
-                  fn ·v_8, ·ƒ_6, ·ƒ_7, ·ƒ_79:
+                  fn ·v_8, ·ƒ_6, ·ƒ_7:
                     ·match_value ·v_8, 1, ·ƒ_6, fn: ·ƒ_7 _
-                  fn ·ƒ_78: ·match_arm ·ƒ_78, ·ƒ_75, ·ƒ_72
+                  fn ·ƒ_72: ·match_arm ·ƒ_72, ·ƒ_70, ·ƒ_68
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -275,24 +275,24 @@ test 'MatchBlock — chained App inside arm body hoisted to LetFn', fn:
     ·fn
       fn n, ·ƒ_3:
         ·fn
-          fn ·v_27, ·ƒ_49:
+          fn ·v_27:
             ·fn
-              fn ·v_29, ·ƒ_45:
+              fn ·v_29:
                 ·let ·v_29, fn r:
                   ·ƒ_3 r
               fn ·ƒ_44: ·match_block n, ·v_27, ·ƒ_44
-          fn ·ƒ_48:
+          fn ·ƒ_47:
             ·fn
-              fn ·ƒ_10, ·ƒ_56:
+              fn ·ƒ_10:
                 ·fn
-                  fn ·v_13, ·ƒ_52:
+                  fn ·v_13:
                     ·let ·v_13, fn x:
                       ·op_plus x, 3, ·ƒ_10
-                  fn ·ƒ_51: ·op_plus 1, 2, ·ƒ_51
-              fn ·ƒ_55:
+                  fn ·ƒ_49: ·op_plus 1, 2, ·ƒ_49
+              fn ·ƒ_52:
                 ·fn
-                  fn ·v_8, ·ƒ_6, ·ƒ_7, ·ƒ_59: ·ƒ_7 _
-                  fn ·ƒ_58: ·match_arm ·ƒ_58, ·ƒ_55, ·ƒ_48
+                  fn ·v_8, ·ƒ_6, ·ƒ_7: ·ƒ_7 _
+                  fn ·ƒ_54: ·match_arm ·ƒ_54, ·ƒ_52, ·ƒ_47
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -312,12 +312,12 @@ test 'MatchIf — body hoisted to LetFn', fn:
       fn foo, ·ƒ_3:
         ·let foo, fn a:
           ·fn
-            fn ·v_18, ·ƒ_35:
+            fn ·v_18:
               ·fn
-                fn ·v_10, ·ƒ_31: ·op_plus ·v_10, 1, ·ƒ_3
+                fn ·v_10: ·op_plus ·v_10, 1, ·ƒ_3
                 fn ·ƒ_30: ·op_mul a, 2, ·ƒ_30
-            fn ·ƒ_34:
-              ·match_if ·op_gt, a, 0, ·panic, fn: ·ƒ_34 _
+            fn ·ƒ_33:
+              ·match_if ·op_gt, a, 0, ·panic, fn: ·ƒ_33 _
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
@@ -336,13 +336,12 @@ test 'chained arithmetic — App body hoisted to LetFn', fn:
     ·fn
       fn ·ƒ_2:
         ·fn
-          fn ·v_5, ·ƒ_24:
+          fn ·v_5:
             ·let ·v_5, fn x:
               ·op_plus x, 4, ·ƒ_2
           fn ·ƒ_23: ·op_mul 2, 3, ·ƒ_23
       fn ·v_1:
         ·let ·v_1, fn main:
           ·ƒ_0 main
-
 
 
