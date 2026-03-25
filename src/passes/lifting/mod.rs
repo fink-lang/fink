@@ -155,13 +155,33 @@ fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
   }
 }
 
+/// A cont body is terminal if it's a single App with no inline conts — truly the end of a chain.
+/// LetVal chains and other structure inside a cont body means it should be hoisted.
+fn app_cont_is_terminal(body: &Expr<'_>) -> bool {
+  match &body.kind {
+    ExprKind::App { args, .. } => {
+      args.iter().all(|a| match a {
+        Arg::Val(_) | Arg::Spread(_) => true,
+        Arg::Cont(Cont::Ref(_)) => true,
+        Arg::Cont(Cont::Expr { .. }) => false,
+        Arg::Expr(_) => false,
+      })
+    }
+    _ => false,
+  }
+}
+
 fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
   match cont {
     Cont::Ref(_) => false,
-    Cont::Expr { body, .. } if is_simple_forward(body) => false,
+    c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
+    // If the cont body has nothing to hoist (no nested LetFn, no inline Cont::Expr),
+    // it's terminal — don't flag it for lifting even if it does computation.
+    Cont::Expr { body, .. } if !contains_letfn_or_inline_cont(body) => false,
     Cont::Expr { body, .. } => needs_lifting(body),
   }
 }
+
 
 /// Does this expression contain a LetFn or an inline Cont::Expr in an App?
 fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
@@ -173,22 +193,37 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
     },
     ExprKind::App { args, .. } => {
       args.iter().any(|a| match a {
-        Arg::Cont(Cont::Expr { body, .. }) => !is_simple_forward(body),
+        Arg::Cont(c @ Cont::Expr { body, .. }) => {
+          !is_simple_forward_cont(c) && !app_cont_is_terminal(body)
+        }
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
     }
     ExprKind::If { then, else_, .. } => contains_letfn_or_inline_cont(then) || contains_letfn_or_inline_cont(else_),
-    ExprKind::Yield { cont, .. } => matches!(cont, Cont::Expr { body, .. } if !is_simple_forward(body)),
+    ExprKind::Yield { cont, .. } => matches!(cont, c @ Cont::Expr { .. } if !is_simple_forward_cont(c)),
   }
 }
 
-/// A "simple forward" is a single App with no nested LetFn or Cont::Expr.
-/// These are trivial continuations like `fn v, k: k v` that don't need hoisting.
-fn is_simple_forward(expr: &Expr<'_>) -> bool {
-  match &expr.kind {
-    ExprKind::App { args, .. } => {
-      args.iter().all(|a| match a {
+/// A "simple forward" is `fn v_0, ..., v_N: callee v_0, ..., v_N` where
+/// `callee` is one of the fn's own params. These just relay values and
+/// don't need hoisting. The cont's params (args) must be provided to check.
+fn is_simple_forward_cont(cont: &Cont<'_>) -> bool {
+  let (args, body) = match cont {
+    Cont::Ref(_) => return false,
+    Cont::Expr { args, body } => (args, body.as_ref()),
+  };
+  let param_ids: std::collections::HashSet<CpsId> = args.iter().map(|b| b.id).collect();
+  match &body.kind {
+    ExprKind::App { func: Callable::Val(v), args: app_args } => {
+      // Callee must be one of the cont's own params.
+      let callee_is_param = match &v.kind {
+        ValKind::Ref(Ref::Synth(id)) => param_ids.contains(id),
+        ValKind::ContRef(id) => param_ids.contains(id),
+        _ => false,
+      };
+      // All args must be vals or cont refs (no inline conts or exprs).
+      callee_is_param && app_args.iter().all(|a| match a {
         Arg::Val(_) | Arg::Spread(_) => true,
         Arg::Cont(Cont::Ref(_)) => true,
         _ => false,
@@ -560,8 +595,12 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::App { func, mut args } => {
-      // Check for inline Cont::Expr args that need hoisting (skip simple forwards).
-      let cont_idx = args.iter().rposition(|a| matches!(a, Arg::Cont(Cont::Expr { body, .. }) if !is_simple_forward(body)));
+      // Check for inline Cont::Expr args that need hoisting.
+      // Skip simple forwards and terminal conts (body has nothing to hoist).
+      let cont_idx = args.iter().rposition(|a| match a {
+        Arg::Cont(c @ Cont::Expr { body, .. }) => !is_simple_forward_cont(c) && !app_cont_is_terminal(body),
+        _ => false,
+      });
       if let Some(idx) = cont_idx {
         let cont = match args.remove(idx) {
           Arg::Cont(c) => c,

@@ -176,8 +176,12 @@ test 'yield — cont body lifted', fn:
 
 
 ---
-pattern matching — the main bug surface for forward refs
+pattern matching — inline fn in ·match_arm/·match_* args
 ---
+
+# The ·match_arm and ·match_* builtins use Arg::Cont(Cont::Expr) for their
+# arm/body/fail callbacks. These are terminal single-App conts that the lifting
+# pass currently leaves inline. Discussion needed on how to treat them.
 
 test 'match — no forward refs after lift', fn:
   expect lift fink":
