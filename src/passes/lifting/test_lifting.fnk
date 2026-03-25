@@ -304,18 +304,20 @@ test 'recursive fn in match', fn:
       ·v_100 = ·closure ·v_95, ·v_75
       ·match_block n, ·v_73, ·v_37, ·v_100
 
-    ·v_107 = fn ·v_108, ·v_28:
-      fib ·v_28, ·v_108
+    ·v_110 = fn ·v_111, ·v_28:
+      fib ·v_28, ·v_111
 
     ·v_86 = fn n, ·v_24:
-      ·v_112 = ·closure ·v_107, ·v_24
-      ·op_plus n, 1, ·v_112
+      ·v_115 = ·closure ·v_110, ·v_24
+      ·op_plus n, 1, ·v_115
+
+    ·v_107 = fn ·v_22, ·v_20, ·v_21:
+      ·v_21 _
 
     ·v_56 = fn n, ·v_59, ·v_18:
       ·v_79 = ·closure ·v_70, n, ·v_18, ·v_59
       ·v_91 = ·closure ·v_86, n
-      ·match_arm fn ·v_22, ·v_20, ·v_21:
-        ·v_21 _, ·v_91, ·v_79
+      ·match_arm ·v_107, ·v_91, ·v_79
 
     ·v_83 = fn ·v_11:
       ·v_13 = 1

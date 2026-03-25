@@ -204,35 +204,50 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
   }
 }
 
-/// A "simple forward" is `fn v_0, ..., v_N: callee v_0, ..., v_N` where
-/// `callee` is one of the fn's own params. These just relay values and
-/// don't need hoisting. The cont's params (args) must be provided to check.
+/// A "simple forward" is `fn p0, p1, ..., pN: pK p0, ..., p(K-1), p(K+1), ..., pN`
+/// where the callee is one of the fn's own params and the remaining params are
+/// forwarded in order. These just relay all values and don't need hoisting.
+///
+/// NOT simple forwards:
+///   `fn a, b, c: c`       — discards params
+///   `fn a, b, c: c b, a`  — reorders params
 fn is_simple_forward_cont(cont: &Cont<'_>) -> bool {
-  let (args, body) = match cont {
+  let (params, body) = match cont {
     Cont::Ref(_) => return false,
     Cont::Expr { args, body } => (args, body.as_ref()),
   };
-  let param_ids: std::collections::HashSet<CpsId> = args.iter().map(|b| b.id).collect();
   match &body.kind {
     ExprKind::App { func: Callable::Val(v), args: app_args } => {
       // Callee must be one of the cont's own params.
-      let callee_is_param = match &v.kind {
-        ValKind::Ref(Ref::Synth(id)) => param_ids.contains(id),
-        ValKind::ContRef(id) => param_ids.contains(id),
-        _ => false,
+      let callee_id = match &v.kind {
+        ValKind::Ref(Ref::Synth(id)) => Some(*id),
+        ValKind::ContRef(id) => Some(*id),
+        _ => return false,
       };
-      // All args must also reference the fn's own params — pure relay.
-      callee_is_param && app_args.iter().all(|a| match a {
-        Arg::Val(v) => match &v.kind {
-          ValKind::Ref(Ref::Synth(id)) => param_ids.contains(id),
-          ValKind::ContRef(id) => param_ids.contains(id),
-          ValKind::Ref(Ref::Name) => false, // name refs may be out of scope
-          ValKind::Panic => true, // panic is a global sentinel
+      if !params.iter().any(|p| Some(p.id) == callee_id) { return false; }
+      // Every param must be used: callee (1) + args.
+      if 1 + app_args.len() != params.len() { return false; }
+      // Remaining params (excluding callee) must be forwarded in order.
+      let mut arg_iter = app_args.iter();
+      for p in params {
+        if Some(p.id) == callee_id { continue; }
+        let arg = match arg_iter.next() {
+          Some(a) => a,
+          None => return false,
+        };
+        let matches = match arg {
+          Arg::Val(v) => match &v.kind {
+            ValKind::Ref(Ref::Synth(id)) => *id == p.id,
+            ValKind::ContRef(id) => *id == p.id,
+            ValKind::Panic => true, // panic is a global sentinel
+            _ => false,
+          },
+          Arg::Cont(Cont::Ref(id)) => *id == p.id,
           _ => false,
-        },
-        Arg::Cont(Cont::Ref(id)) => param_ids.contains(id),
-        _ => false,
-      })
+        };
+        if !matches { return false; }
+      }
+      true
     }
     _ => false,
   }
@@ -615,7 +630,7 @@ fn extract_from_body<'src>(
     ExprKind::App { func, mut args } => {
       // Check for inline Cont::Expr args that need hoisting.
       // Skip simple forwards and ·closure result conts.
-      
+
       let cont_idx = args.iter().rposition(|a| match a {
         Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         _ => false,
