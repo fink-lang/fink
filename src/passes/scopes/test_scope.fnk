@@ -45,7 +45,8 @@ test 'single binding', fn:
   expect scope fink":
     x = 1
   | equals fink":
-    TODO
+    scope 'S0', 'module':
+      bind 'x', 'B0'
 
 
 test 'fn params in scope', fn:
@@ -53,7 +54,14 @@ test 'fn params in scope', fn:
     f = fn a, b:
       a + b
   | equals fink":
-    TODO
+    scope 'S0', 'module':
+      bind 'f', 'B0'
+
+      scope 'S1', 'fn':
+        bind 'a', 'B1'
+        bind 'b', 'B2'
+        ref 'a', 'B1'
+        ref 'b', 'B2'
 
 
 ---
@@ -69,7 +77,18 @@ test 'two fns — main refs add', fn:
       add 3, 4
 
   | equals fink":
-    TODO
+    scope 'S0', 'module':
+      bind 'add', 'B0'
+      bind 'main', 'B1'
+
+      scope 'S1', 'fn':
+        bind 'a', 'B2'
+        bind 'b', 'B3'
+        ref 'a', 'B2'
+        ref 'b', 'B3'
+
+      scope 'S2', 'fn':
+        ref 'add', 'B0', depth 1
 
 
 test 'mutual recursion — is-even refs is-odd', fn:
@@ -85,7 +104,29 @@ test 'mutual recursion — is-even refs is-odd', fn:
         _: is-even n - 1
 
   | equals fink":
-    TODO
+    scope 'S0', 'module':
+      bind 'is-even', 'B0'
+      bind 'is-odd', 'B1'
+
+      scope 'S1', 'fn':
+        bind 'n', 'B2'
+
+        scope 'S2', 'arm':
+
+        scope 'S3', 'arm':
+          fwd_ref 'is-odd', 'B1', depth 2
+          ref 'n', 'B2', depth 1
+        ref 'n', 'B2'
+
+      scope 'S4', 'fn':
+        bind 'n', 'B3'
+
+        scope 'S5', 'arm':
+
+        scope 'S6', 'arm':
+          ref 'is-even', 'B0', depth 2
+          ref 'n', 'B3', depth 1
+        ref 'n', 'B3'
 
 
 ---
@@ -105,5 +146,29 @@ test 'inner binding shadows outer', fn:
     main = fn: add 3, 4
 
   | equals fink":
-    TODO
+    scope 'S0', 'module':
+      bind 'add', 'B0'
+      bind 'sub', 'B1'
+      bind 'main', 'B2'
+
+      scope 'S1', 'fn':
+        bind 'a', 'B3'
+        bind 'b', 'B4'
+        ref 'a', 'B3'
+        ref 'b', 'B4'
+
+      scope 'S2', 'fn':
+        bind 'a', 'B5'
+        bind 'b', 'B6'
+        bind 'add', 'B8'
+
+        scope 'S3', 'fn':
+          bind 'foo', 'B7'
+          ref 'foo', 'B7'
+        ref 'a', 'B5'
+        ref 'add', 'B8'
+        ref 'b', 'B6'
+
+      scope 'S4', 'fn':
+        ref 'add', 'B0', depth 1
 

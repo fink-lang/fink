@@ -54,6 +54,12 @@ impl<Id, T> PropGraph<Id, T> {
         id
     }
 
+    pub fn get_mut(&mut self, id: Id) -> &mut T
+    where Id: Into<usize> + Copy + std::fmt::Debug {
+        let idx: usize = id.into();
+        &mut self.data[idx]
+    }
+
     pub fn set(&mut self, id: Id, val: T)
     where Id: Into<usize> + Copy, T: Default {
         let idx: usize = id.into();
