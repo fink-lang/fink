@@ -32,12 +32,12 @@ pub struct SourceMapInfo<'a> {
 pub fn wat_to_wasm(wat: &str, opts: &CompileOptions) -> Result<Vec<u8>, String> {
   let mut wasm = if opts.debug {
     let path = opts.source_path.map(Path::new);
-    wat::Parser::new()
-      .generate_dwarf(wat::GenerateDwarf::Full)
+    wat_crate::Parser::new()
+      .generate_dwarf(wat_crate::GenerateDwarf::Full)
       .parse_str(path, wat)
       .map_err(|e| e.to_string())?
   } else {
-    wat::parse_str(wat).map_err(|e| e.to_string())?
+    wat_crate::parse_str(wat).map_err(|e| e.to_string())?
   };
 
   // Append inline source map if mappings are provided.

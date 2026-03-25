@@ -6,5 +6,6 @@
 // debuggable intermediate form. This module handles everything after that.
 
 pub mod codegen;
+#[cfg(feature = "runner")]
 pub mod compile;
 pub mod sourcemap;
