@@ -83,6 +83,8 @@ pub enum RefKind {
   FwdRef,
   /// Self-reference — fn references its own binding.
   SelfRef,
+  /// Unresolved — no binding found in any scope.
+  Unresolved,
 }
 
 #[derive(Clone, Debug)]
@@ -205,7 +207,14 @@ impl<'src> Ctx<'src> {
         return;
       }
     }
-    // Unresolved — leave as None in resolution.
+    // Unresolved — record in scope_refs with a sentinel BindId.
+    self.scope_refs.get_mut(current_scope).push(RefInfo {
+      kind: RefKind::Unresolved,
+      name: name.to_string(),
+      bind_id: BindId(u32::MAX),
+      depth: 0,
+      ast_id: ref_ast_id,
+    });
   }
 
   /// Count how many scope levels from `from` up to `to`.
@@ -481,11 +490,16 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
   let refs = result.scope_refs.get(scope_id);
   for r in refs {
     write_indent(out, indent + 1);
+    if r.kind == RefKind::Unresolved {
+      out.push_str(&format!("unresolved '{}'\n", r.name));
+      continue;
+    }
     let bind_ast_id = result.binds.get(r.bind_id).ast_id;
     let kind_prefix = match r.kind {
       RefKind::Ref => "ref",
       RefKind::FwdRef => "fwd_ref",
       RefKind::SelfRef => "self_ref",
+      RefKind::Unresolved => unreachable!(),
     };
     if r.depth > 0 {
       out.push_str(&format!("{} '{}', {}, depth {}\n", kind_prefix, r.name, bind_ast_id.0, r.depth));

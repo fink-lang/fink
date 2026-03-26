@@ -172,3 +172,18 @@ test 'inner binding shadows outer', fn:
       scope 36, 'fn':
         ref 'add', 0, depth 1
 
+
+---
+unresolved
+---
+
+test 'unresolved ref', fn:
+  expect scope fink":
+    main = fn: foo 1
+  | equals fink":
+    scope 7, 'module':
+      bind 0, 'main'
+
+      scope 5, 'fn':
+        unresolved 'foo'
+
