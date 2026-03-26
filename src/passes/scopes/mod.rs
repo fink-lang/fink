@@ -64,8 +64,8 @@ pub enum ScopeKind {
 pub struct ScopeInfo {
   pub kind: ScopeKind,
   pub parent: Option<ScopeId>,
-  /// Human-readable name for the scope (e.g. fn name).
-  pub name: Option<String>,
+  /// AstId of the node that created this scope (Fn node, Module node, Arm node).
+  pub ast_id: AstId,
 }
 
 #[derive(Clone, Debug)]
@@ -149,8 +149,8 @@ impl<'src> Ctx<'src> {
     }
   }
 
-  fn push_scope(&mut self, kind: ScopeKind, parent: Option<ScopeId>, name: Option<String>) -> ScopeId {
-    let id = self.scopes.push(ScopeInfo { kind, parent, name });
+  fn push_scope(&mut self, kind: ScopeKind, parent: Option<ScopeId>, ast_id: AstId) -> ScopeId {
+    let id = self.scopes.push(ScopeInfo { kind, parent, ast_id });
     self.scope_binds.push(Vec::new());
     self.scope_children.push(Vec::new());
     self.scope_refs.push(Vec::new());
@@ -244,7 +244,7 @@ impl<'src> Ctx<'src> {
 
 pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize) -> ScopeResult {
   let mut ctx = Ctx::new(node_count);
-  let module_scope = ctx.push_scope(ScopeKind::Module, None, Some("module".to_string()));
+  let module_scope = ctx.push_scope(ScopeKind::Module, None, root.id);
 
   // Phase 1: pre-register all module-level bindings (for mutual recursion).
   if let NodeKind::Module(items) = &root.kind {
@@ -338,7 +338,7 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
     NodeKind::Fn { params, body, .. } => {
       // Create a new fn scope.
       // Try to get fn name from context (the LHS of a Bind).
-      let fn_scope = ctx.push_scope(ScopeKind::Fn, Some(scope), None);
+      let fn_scope = ctx.push_scope(ScopeKind::Fn, Some(scope), node.id);
 
       // Register params as bindings in the fn scope.
       if let NodeKind::Patterns(pat_items) = &params.kind {
@@ -384,7 +384,7 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
     }
 
     NodeKind::Arm { lhs, body, .. } => {
-      let arm_scope = ctx.push_scope(ScopeKind::Arm, Some(scope), None);
+      let arm_scope = ctx.push_scope(ScopeKind::Arm, Some(scope), node.id);
       // Register pattern bindings from the arm LHS.
       register_pattern_binds(lhs, arm_scope, ctx);
       // Walk body in arm scope.
@@ -453,49 +453,45 @@ pub fn format_result(result: &ScopeResult) -> String {
 
 fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, indent: usize) {
   let info = result.scopes.get(scope_id);
-  let _scope_name = info.name.as_deref().unwrap_or("?");
   let kind_str = match info.kind {
-    ScopeKind::Module => "module",
-    ScopeKind::Fn => "fn",
-    ScopeKind::Arm => "arm",
+    ScopeKind::Module => "module".to_string(),
+    ScopeKind::Fn => format!("fn_{}", info.ast_id.0),
+    ScopeKind::Arm => format!("arm_{}", info.ast_id.0),
   };
 
-  // scope 'S0', 'module':
+  // scope 0, 'module':
   write_indent(out, indent);
-  out.push_str(&format!("scope 'S{}', '{}':\n", scope_id.0, kind_str));
+  out.push_str(&format!("scope {}, '{}':\n", scope_id.0, kind_str));
 
-  // Bindings.
+  // Bindings: bind <ast_id>, '<name>'
   let binds = result.scope_binds.get(scope_id);
   for bind_id in binds {
     let bind = result.binds.get(*bind_id);
     write_indent(out, indent + 1);
-    out.push_str(&format!("bind '{}', 'B{}'\n", bind.name, bind_id.0));
+    out.push_str(&format!("bind {}, '{}'\n", bind.ast_id.0, bind.name));
   }
 
-  // Interleave child scopes and references in source order.
-  // For simplicity, emit child scopes first, then references.
+  // Child scopes.
   let children = result.scope_children.get(scope_id);
   for child_id in children {
     out.push('\n');
     format_scope(*child_id, result, out, indent + 1);
   }
 
-  // References.
+  // References: ref '<name>', <bind_ast_id>[, depth N]
   let refs = result.scope_refs.get(scope_id);
-  if !refs.is_empty() && !children.is_empty() {
-    // Already have a blank line from last child scope.
-  }
   for r in refs {
     write_indent(out, indent + 1);
+    let bind_ast_id = result.binds.get(r.bind_id).ast_id;
     let kind_prefix = match r.kind {
       RefKind::Ref => "ref",
       RefKind::FwdRef => "fwd_ref",
       RefKind::SelfRef => "self_ref",
     };
     if r.depth > 0 {
-      out.push_str(&format!("{} '{}', 'B{}', depth {}\n", kind_prefix, r.name, r.bind_id.0, r.depth));
+      out.push_str(&format!("{} '{}', {}, depth {}\n", kind_prefix, r.name, bind_ast_id.0, r.depth));
     } else {
-      out.push_str(&format!("{} '{}', 'B{}'\n", kind_prefix, r.name, r.bind_id.0));
+      out.push_str(&format!("{} '{}', {}\n", kind_prefix, r.name, bind_ast_id.0));
     }
   }
 }

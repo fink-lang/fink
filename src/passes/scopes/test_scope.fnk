@@ -45,8 +45,8 @@ test 'single binding', fn:
   expect scope fink":
     x = 1
   | equals fink":
-    scope 'S0', 'module':
-      bind 'x', 'B0'
+    scope 0, 'module':
+      bind 0, 'x'
 
 
 test 'fn params in scope', fn:
@@ -54,14 +54,14 @@ test 'fn params in scope', fn:
     f = fn a, b:
       a + b
   | equals fink":
-    scope 'S0', 'module':
-      bind 'f', 'B0'
+    scope 0, 'module':
+      bind 0, 'f'
 
-      scope 'S1', 'fn':
-        bind 'a', 'B1'
-        bind 'b', 'B2'
-        ref 'a', 'B1'
-        ref 'b', 'B2'
+      scope 1, 'fn_9':
+        bind 2, 'a'
+        bind 4, 'b'
+        ref 'a', 2
+        ref 'b', 4
 
 
 ---
@@ -77,18 +77,18 @@ test 'two fns — main refs add', fn:
       add 3, 4
 
   | equals fink":
-    scope 'S0', 'module':
-      bind 'add', 'B0'
-      bind 'main', 'B1'
+    scope 0, 'module':
+      bind 0, 'add'
+      bind 11, 'main'
 
-      scope 'S1', 'fn':
-        bind 'a', 'B2'
-        bind 'b', 'B3'
-        ref 'a', 'B2'
-        ref 'b', 'B3'
+      scope 1, 'fn_9':
+        bind 2, 'a'
+        bind 4, 'b'
+        ref 'a', 2
+        ref 'b', 4
 
-      scope 'S2', 'fn':
-        ref 'add', 'B0', depth 1
+      scope 2, 'fn_17':
+        ref 'add', 0, depth 1
 
 
 test 'mutual recursion — is-even refs is-odd', fn:
@@ -104,29 +104,29 @@ test 'mutual recursion — is-even refs is-odd', fn:
         _: is-even n - 1
 
   | equals fink":
-    scope 'S0', 'module':
-      bind 'is-even', 'B0'
-      bind 'is-odd', 'B1'
+    scope 0, 'module':
+      bind 0, 'is-even'
+      bind 22, 'is-odd'
 
-      scope 'S1', 'fn':
-        bind 'n', 'B2'
+      scope 1, 'fn_20':
+        bind 2, 'n'
 
-        scope 'S2', 'arm':
+        scope 2, 'arm_10':
 
-        scope 'S3', 'arm':
-          fwd_ref 'is-odd', 'B1', depth 2
-          ref 'n', 'B2', depth 1
-        ref 'n', 'B2'
+        scope 3, 'arm_18':
+          fwd_ref 'is-odd', 22, depth 2
+          ref 'n', 2, depth 1
+        ref 'n', 2
 
-      scope 'S4', 'fn':
-        bind 'n', 'B3'
+      scope 4, 'fn_42':
+        bind 24, 'n'
 
-        scope 'S5', 'arm':
+        scope 5, 'arm_32':
 
-        scope 'S6', 'arm':
-          ref 'is-even', 'B0', depth 2
-          ref 'n', 'B3', depth 1
-        ref 'n', 'B3'
+        scope 6, 'arm_40':
+          ref 'is-even', 0, depth 2
+          ref 'n', 24, depth 1
+        ref 'n', 24
 
 
 ---
@@ -146,29 +146,29 @@ test 'inner binding shadows outer', fn:
     main = fn: add 3, 4
 
   | equals fink":
-    scope 'S0', 'module':
-      bind 'add', 'B0'
-      bind 'sub', 'B1'
-      bind 'main', 'B2'
+    scope 0, 'module':
+      bind 0, 'add'
+      bind 11, 'sub'
+      bind 30, 'main'
 
-      scope 'S1', 'fn':
-        bind 'a', 'B3'
-        bind 'b', 'B4'
-        ref 'a', 'B3'
-        ref 'b', 'B4'
+      scope 1, 'fn_9':
+        bind 2, 'a'
+        bind 4, 'b'
+        ref 'a', 2
+        ref 'b', 4
 
-      scope 'S2', 'fn':
-        bind 'a', 'B5'
-        bind 'b', 'B6'
-        bind 'add', 'B8'
+      scope 2, 'fn_28':
+        bind 13, 'a'
+        bind 15, 'b'
+        bind 17, 'add'
 
-        scope 'S3', 'fn':
-          bind 'foo', 'B7'
-          ref 'foo', 'B7'
-        ref 'a', 'B5'
-        ref 'add', 'B8'
-        ref 'b', 'B6'
+        scope 3, 'fn_22':
+          bind 19, 'foo'
+          ref 'foo', 19
+        ref 'a', 13
+        ref 'add', 17
+        ref 'b', 15
 
-      scope 'S4', 'fn':
-        ref 'add', 'B0', depth 1
+      scope 4, 'fn_36':
+        ref 'add', 0, depth 1
 
