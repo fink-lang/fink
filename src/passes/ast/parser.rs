@@ -1202,6 +1202,9 @@ impl<'src> Parser<'src> {
           self.skip_block_tokens();
           let val = self.parse_expr()?;
           let loc = Loc { start: first.loc.start, end: val.loc.end };
+          // TODO: record fields reuse Arm nodes, but they're semantically different
+          // from match arms (no scope introduction, key is a literal not a pattern).
+          // Consider a dedicated RecField variant to avoid downstream confusion.
           items.push(self.node(NodeKind::Arm { lhs: Box::new(first), sep, body: Exprs { items: vec![val], seps: vec![] } }, loc));
         } else {
           items.push(first);
