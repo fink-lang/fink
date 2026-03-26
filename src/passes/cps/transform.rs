@@ -293,6 +293,10 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
 /// Lower a sequence of expressions and return an Expr for the whole sequence.
 /// The last expression's value is returned to the current continuation.
 fn lower_seq<'src>(g: &mut Gen, exprs: &'src [Node<'src>]) -> Expr<'src> {
+  lower_seq_with_tail(g, exprs, Cont::Ref(g.cont))
+}
+
+fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont<'src>) -> Expr<'src> {
   assert!(!exprs.is_empty(), "empty expression sequence");
   let mut all_pending: Vec<Pending<'src>> = vec![];
   let n = exprs.len();
@@ -303,12 +307,11 @@ fn lower_seq<'src>(g: &mut Gen, exprs: &'src [Node<'src>]) -> Expr<'src> {
       let (val, pending) = lower(g, expr);
       all_pending.extend(pending);
       if all_pending.is_empty() {
-        // Bare atom — wrap directly.
-        return wrap_val(g, val, o);
+        // Bare atom at tail — wrap directly using the provided tail cont.
+        let name = g.fresh_result(o);
+        return g.expr(ExprKind::LetVal { name, val: Box::new(val), cont: tail }, o);
       }
-      // The innermost pending item will get Cont::Ref(g.cont) as its body.
-      // The val flows via the last bound name, so we don't need an extra wrapper.
-      return wrap(g, all_pending, Cont::Ref(g.cont));
+      return wrap(g, all_pending, tail);
     } else {
       match &expr.kind {
         // Bind introduces a name available in subsequent expressions.
@@ -1301,15 +1304,49 @@ fn parse_decimal(s: &str) -> f64 {
 // ---------------------------------------------------------------------------
 
 /// Lower a top-level block of statements (module body).
+/// Collect the CpsIds of simple module-level exports: `name = <non-import expr>` where
+/// lhs is a plain Ident. Pattern destructures and imports are excluded.
+fn collect_module_exports(exprs: &[Node<'_>], bind_site_to_cps: &std::collections::HashMap<u32, CpsId>) -> Vec<CpsId> {
+  exprs.iter().filter_map(|expr| {
+    let NodeKind::Bind { lhs, rhs, .. } = &expr.kind else { return None; };
+    let NodeKind::Ident(_) = &lhs.kind else { return None; };
+    // Exclude imports: `{foo} = import './bar'` — rhs is Apply { func: Ident("import"), .. }
+    if let NodeKind::Apply { func, .. } = &rhs.kind
+      && let NodeKind::Ident(name) = &func.kind
+      && *name == "import" { return None; }
+    bind_site_to_cps.get(&lhs.id.0).copied()
+  }).collect()
+}
+
 pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> CpsResult<'src> {
   let mut g = Gen::new(scope);
   if exprs.is_empty() {
-    let origin: Option<AstId> = None;
-    let empty_seq = lit_val(&mut g, Lit::Seq, origin);
-    let root = wrap_val(&mut g, empty_seq, origin);
+    // Empty module: call exit cont with no args.
+    let cont_id = g.cont;
+    let cont_val = g.val(ValKind::ContRef(cont_id), None);
+    let root = g.expr(ExprKind::App { func: Callable::Val(cont_val), args: vec![] }, None);
     return CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() };
   }
-  let root = lower_seq(&mut g, exprs);
+
+  // Collect simple top-level exports before lowering (bind_site_to_cps is populated at Gen::new).
+  let export_ids: Vec<CpsId> = collect_module_exports(exprs, &g.bind_site_to_cps);
+
+  // Build the terminal App: ·ƒ_0 ·export_0, ·export_1, ...
+  // Collect all vals first to avoid multiple mutable borrows of g.
+  let cont_id = g.cont;
+  let export_vals: Vec<Val<'src>> = export_ids.iter().map(|&cps_id| {
+    g.val(ValKind::Ref(Ref::Synth(cps_id)), None)
+  }).collect();
+  let cont_val = g.val(ValKind::ContRef(cont_id), None);
+  let export_args: Vec<Arg<'src>> = export_vals.into_iter().map(Arg::Val).collect();
+  let terminal = g.expr(ExprKind::App {
+    func: Callable::Val(cont_val),
+    args: export_args,
+  }, None);
+
+  // Lower the module body, using the exports terminal as the tail.
+  let tail = Cont::Expr { args: vec![], body: Box::new(terminal) };
+  let root = lower_seq_with_tail(&mut g, exprs, tail);
   CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() }
 }
 
@@ -1714,4 +1751,32 @@ mod pat_tests {
   }
 
   test_macros::include_fink_tests!("src/passes/cps/test_cps_patterns.fnk");
+}
+
+#[cfg(test)]
+mod module_tests {
+  use crate::parser::parse;
+  use crate::ast::{build_index, NodeKind};
+  use crate::passes::cps::fmt::{fmt_with, Ctx};
+  use crate::passes::scopes;
+  use super::lower_module;
+
+  fn cps_module(src: &str) -> String {
+    match parse(src) {
+      Ok(r) => {
+        let ast_index = build_index(&r);
+        let exprs = match &r.root.kind {
+          NodeKind::Module(exprs) => exprs.items.as_slice(),
+          _ => std::slice::from_ref(&r.root),
+        };
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_module(exprs, &scope);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
+        fmt_with(&cps.root, &ctx)
+      }
+      Err(e) => format!("ERROR: {}", e.message),
+    }
+  }
+
+  test_macros::include_fink_tests!("src/passes/cps/test_cps_module.fnk");
 }

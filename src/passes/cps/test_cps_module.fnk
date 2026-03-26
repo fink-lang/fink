@@ -1,0 +1,110 @@
+---
+module-level CPS — lower_module produces flat chain + export terminal
+---
+
+# Module CPS: flat LetFn/LetVal chain ending with ·ƒ_0 ·export_0, ·export_1, ...
+# No outer ·fn wrapper. Only simple name = expr bindings are exported.
+# Pattern destructures and imports are excluded from exports.
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_module fink":
+#       <fink source>
+#     | equals fink":
+#       <expected cps output>
+
+{test, expect, equals, fink, cps_module} = import '!fake'
+
+
+---
+single binding
+---
+
+test 'single binding export', fn:
+  expect cps_module fink":
+    foo = 1
+  | equals fink":
+    ·let 1, fn ·foo_0:
+      ·ƒ_1 ·foo_0
+
+
+---
+multiple bindings
+---
+
+test 'two bindings export', fn:
+  expect cps_module fink":
+    foo = 1
+    bar = 2
+  | equals fink":
+    ·let 1, fn ·foo_0:
+      ·let 2, fn ·bar_1:
+        ·ƒ_2 ·foo_0, ·bar_1
+
+
+test 'two fns export', fn:
+  expect cps_module fink":
+    add = fn a, b:
+      a + b
+
+    main = fn:
+      add 3, 4
+  | equals fink":
+    ·fn
+      fn ·a_2, ·b_3, ·ƒ_10:
+        ·op_plus ·a_2, ·b_3, ·ƒ_10
+      fn ·v_9:
+        ·let ·v_9, fn ·add_0:
+          ·fn
+            fn ·ƒ_18:
+              ·add_0 3, 4, ·ƒ_18
+            fn ·v_17:
+              ·let ·v_17, fn ·main_1:
+                ·ƒ_4 ·add_0, ·main_1
+
+
+---
+imports excluded from exports
+---
+
+test 'import not in exports', fn:
+  expect cps_module fink":
+    {foo} = import './bar.fnk'
+    main = fn: foo 1
+  | equals fink":
+    ·∅import './bar.fnk', fn ·v_8:
+      ·match_rec ·v_8, ·panic, fn ·v_10:
+        ·match_field ·v_10, 'foo', ·panic, fn ·v_11, ·v_12:
+          ·let ·v_11, fn ·foo_0:
+            ·fn
+              fn ·ƒ_17:
+                ·foo_0 1, ·ƒ_17
+              fn ·v_16:
+                ·let ·v_16, fn ·main_1:
+                  ·ƒ_2 ·main_1
+
+
+---
+pattern bindings excluded from exports
+---
+
+test 'destructure not in exports', fn:
+  expect cps_module fink":
+    [a, b] = [1, 2]
+    foo = fn: a
+  | equals fink":
+    ·seq_append [], 1, fn ·v_9:
+      ·seq_append ·v_9, 2, fn ·v_12:
+        ·match_seq ·v_12, ·panic, fn ·v_14:
+          ·match_next ·v_14, ·panic, fn ·v_15, ·v_16:
+            ·let ·v_15, fn ·a_0:
+              ·match_next ·v_16, ·panic, fn ·v_19, ·v_20:
+                ·let ·v_19, fn ·b_1:
+                  ·match_done ·v_20, ·panic, fn ·v_23:
+                    ·fn
+                      fn ·ƒ_26:
+                        ·let ·a_0, fn ·v_28:
+                          ·ƒ_26 ·v_28
+                      fn ·v_25:
+                        ·let ·v_25, fn ·foo_2:
+                          ·ƒ_3 ·foo_2
