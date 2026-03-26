@@ -75,6 +75,42 @@ test 'partial application', fn:
       bind 0, 'foo'
 
 
+test 'wildcard _ does not bind', fn:
+  expect scope fink":
+    f = fn _: 42
+  | equals fink":
+    scope 6, 'module':
+
+      scope 4, 'fn':
+      bind 0, 'f'
+
+
+test 'wildcard in destructure', fn:
+  expect scope fink":
+    [_, b] = [1, 2]
+    b
+  | equals fink":
+    scope 8, 'module':
+      bind 1, 'b'
+      ref 'b', 1
+
+
+test 'wildcard in match arm', fn:
+  expect scope fink":
+    f = fn x:
+      match x:
+        _: 42
+  | equals fink":
+    scope 14, 'module':
+
+      scope 12, 'fn':
+        bind 2, 'x'
+        ref 'x', 2
+
+        scope 10, 'arm':
+      bind 0, 'f'
+
+
 test 'sequential bindings in fn body', fn:
   expect scope fink":
     f = fn:
