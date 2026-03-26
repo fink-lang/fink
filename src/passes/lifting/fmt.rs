@@ -476,6 +476,7 @@ fn is_atom(node: &Node) -> bool {
         | NodeKind::LitFloat(_)
         | NodeKind::LitDecimal(_)
         | NodeKind::Ident(_)
+        | NodeKind::SynthIdent(_)
     ),
   }
 }
@@ -531,6 +532,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("<templ>");
     }
     NodeKind::Ident(s) => out.push_str(s),
+    NodeKind::SynthIdent(n) => out.push_str(&format!("·$_{n}")),
     NodeKind::Spread { inner, .. } => {
       out.push_str("..");
       if let Some(n) = inner { fmt_node(n, out, depth); }

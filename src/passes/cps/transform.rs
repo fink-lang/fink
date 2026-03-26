@@ -163,7 +163,7 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(s), o), vec![]),
 
     // ---- identifier reference — scope lookup ----
-    NodeKind::Ident(_) => (name_ref_val(g, o), vec![]),
+    NodeKind::Ident(_) | NodeKind::SynthIdent(_) => (name_ref_val(g, o), vec![]),
 
     // ---- wildcard ----
     NodeKind::Wildcard => (name_ref_val(g, o), vec![]),

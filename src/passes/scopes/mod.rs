@@ -434,6 +434,12 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
       ctx.resolve(name, node.id, scope);
     }
 
+    NodeKind::SynthIdent(n) => {
+      // Synthetic identifier reference — resolve by its synthetic name.
+      let name = format!("·$_{n}");
+      ctx.resolve(&name, node.id, scope);
+    }
+
     NodeKind::Fn { params, body, .. } => {
       // Create a new fn scope.
       // Try to get fn name from context (the LHS of a Bind).

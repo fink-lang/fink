@@ -35,6 +35,7 @@ pub trait Transform<'src> {
       | NodeKind::LitDecimal(_)
       | NodeKind::LitStr { .. }
       | NodeKind::Ident(_)
+      | NodeKind::SynthIdent(_)
       | NodeKind::Partial
       | NodeKind::Wildcard => self.transform_leaf(node),
 

@@ -63,6 +63,7 @@ fn is_atom(node: &Node) -> bool {
         | NodeKind::LitFloat(_)
         | NodeKind::LitDecimal(_)
         | NodeKind::Ident(_)
+        | NodeKind::SynthIdent(_)
     ),
   }
 }
@@ -190,6 +191,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::Ident(s) => out.push_str(s),
+    NodeKind::SynthIdent(n) => out.push_str(&format!("·$_{n}")),
     NodeKind::Spread { op, inner } => {
       out.mark(op.loc);
       out.push_str("..");

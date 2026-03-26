@@ -362,6 +362,7 @@ impl<'cfg> Ctx<'cfg> {
             | NodeKind::LitFloat(_)
             | NodeKind::LitDecimal(_)
             | NodeKind::Ident(_)
+            | NodeKind::SynthIdent(_)
             | NodeKind::Partial
             | NodeKind::Wildcard => {
                 let src_len = src_len_of(node);

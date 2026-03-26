@@ -225,6 +225,10 @@ impl Writer {
                 self.mark(node.loc);
                 self.write(node.loc.start, s);
             }
+            NodeKind::SynthIdent(n) => {
+                self.mark(node.loc);
+                self.write(node.loc.start, &format!("·$_{n}"));
+            }
             NodeKind::Partial => { self.mark(node.loc); self.write(node.loc.start, "?"); }
             NodeKind::Wildcard => { self.mark(node.loc); self.write(node.loc.start, "_"); }
 

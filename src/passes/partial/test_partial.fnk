@@ -1,5 +1,14 @@
 
 
+---
+no change in AST
+---
+test 'AST remains the same', fn:
+  expect partial fink":
+    5 + 5
+  | equals ":
+    No Change
+
 
 
 ---
@@ -12,9 +21,9 @@ test 'partial in infix rhs', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       InfixOp '+',
-        Ident '$'
+        SynthIdent '·$_0'
         LitInt '5'
 
 
@@ -24,10 +33,10 @@ test 'partial in infix lhs', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       InfixOp '+',
         LitInt '1'
-        Ident '$'
+        SynthIdent '·$_0'
 
 
 test 'partial used twice - single param', fn:
@@ -36,10 +45,10 @@ test 'partial used twice - single param', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       InfixOp '+',
-        Ident '$'
-        Ident '$'
+        SynthIdent '·$_0'
+        SynthIdent '·$_0'
 
 
 test 'partial in apply arg', fn:
@@ -48,11 +57,11 @@ test 'partial in apply arg', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       Apply
         Ident 'add'
         LitInt '5'
-        Ident '$'
+        SynthIdent '·$_0'
 
 
 test 'partial in unary', fn:
@@ -61,9 +70,9 @@ test 'partial in unary', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       UnaryOp '-',
-        Ident '$'
+        SynthIdent '·$_0'
 
 
 test 'partial in member access', fn:
@@ -72,9 +81,9 @@ test 'partial in member access', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       Member '.',
-        Ident '$'
+        SynthIdent '·$_0'
         Ident 'foo'
 
 
@@ -84,9 +93,9 @@ test 'partial in computed member access', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       Member '.',
-        Ident '$'
+        SynthIdent '·$_0'
         Group '(..)',
           LitInt '0'
 
@@ -97,10 +106,10 @@ test 'partial in range', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       InfixOp '..',
         LitInt '1'
-        Ident '$'
+        SynthIdent '·$_0'
 
 
 test 'partial in spread', fn:
@@ -109,10 +118,10 @@ test 'partial in spread', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       LitSeq '[..]',
         Spread '..',
-          Ident '$'
+          SynthIdent '·$_0'
 
 
 test 'bare partial - identity function', fn:
@@ -121,8 +130,8 @@ test 'bare partial - identity function', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
-      Ident '$'
+        SynthIdent '·$_0'
+      SynthIdent '·$_0'
 
 
 test 'partial in binding rhs', fn:
@@ -133,11 +142,11 @@ test 'partial in binding rhs', fn:
       Ident 'add5'
       Fn ':',
         Patterns
-          Ident '$'
+          SynthIdent '·$_0'
         Apply
           Ident 'add'
           LitInt '5'
-          Ident '$'
+          SynthIdent '·$_0'
 
 
 ---
@@ -150,11 +159,11 @@ test 'group narrows scope - member expr key preserves group', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       Member '.',
         Ident 'foo'
         Group '(..)',
-          Ident '$'
+          SynthIdent '·$_0'
 
 
 test 'group with multiple partial refs - same param', fn:
@@ -163,15 +172,15 @@ test 'group with multiple partial refs - same param', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       Apply
         Ident 'foo'
         Member '.',
-          Ident '$'
+          SynthIdent '·$_0'
           Group '(..)',
             LitInt '1'
         Member '.',
-          Ident '$'
+          SynthIdent '·$_0'
           Group '(..)',
             LitInt '2'
 
@@ -182,16 +191,16 @@ test 'nested groups - each is its own scope', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_1'
       Apply
         Ident 'foo'
         Fn ':',
           Patterns
-            Ident '$'
+            SynthIdent '·$_0'
           Apply
             Ident 'bar'
-            Ident '$'
-        Ident '$'
+            SynthIdent '·$_0'
+        SynthIdent '·$_1'
 
 
 ---
@@ -204,10 +213,10 @@ test 'partial in seq literal - seq is transparent', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       LitSeq '[..]',
-        Ident '$'
-        Ident '$'
+        SynthIdent '·$_0'
+        SynthIdent '·$_0'
 
 
 test 'partial with member projection in seq', fn:
@@ -216,14 +225,14 @@ test 'partial with member projection in seq', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       LitSeq '[..]',
         Member '.',
-          Ident '$'
+          SynthIdent '·$_0'
           Group '(..)',
             LitInt '0'
         Member '.',
-          Ident '$'
+          SynthIdent '·$_0'
           Group '(..)',
             LitInt '1'
 
@@ -234,14 +243,14 @@ test 'partial in rec literal - rec is transparent', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       LitRec '{..}',
         Arm ':',
           Ident 'foo'
-          Ident '$'
+          SynthIdent '·$_0'
         Arm ':',
           Ident 'bar'
-          Ident '$'
+          SynthIdent '·$_0'
 
 
 test 'partial in nested seq - all same param', fn:
@@ -250,12 +259,12 @@ test 'partial in nested seq - all same param', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       LitSeq '[..]',
-        Ident '$'
+        SynthIdent '·$_0'
         LitSeq '[..]',
-          Ident '$'
-          Ident '$'
+          SynthIdent '·$_0'
+          SynthIdent '·$_0'
 
 
 test 'partial in spread apply', fn:
@@ -264,11 +273,11 @@ test 'partial in spread apply', fn:
   | equals fink":
     Fn ':',
       Patterns
-        Ident '$'
+        SynthIdent '·$_0'
       Apply
         Ident 'foo'
         Spread '..',
-          Ident '$'
+          SynthIdent '·$_0'
 
 
 ---
@@ -284,12 +293,12 @@ test 'partial in pipe segment', fn:
       Ident 'items'
       Fn ':',
         Patterns
-          Ident '$'
+          SynthIdent '·$_0'
         Apply
           Ident 'filter'
           InfixOp '==',
             InfixOp '%',
-              Ident '$'
+              SynthIdent '·$_0'
               LitInt '2'
             LitInt '0'
 
@@ -304,17 +313,17 @@ test 'partial in multiple pipe segments', fn:
       Ident 'items'
       Fn ':',
         Patterns
-          Ident '$'
+          SynthIdent '·$_0'
         Apply
           Ident 'filter'
           Apply
             Ident 'is_even'
-            Ident '$'
+            SynthIdent '·$_0'
       Fn ':',
         Patterns
-          Ident '$'
+          SynthIdent '·$_1'
         Apply
           Ident 'map'
           InfixOp '*',
-            Ident '$'
+            SynthIdent '·$_1'
             LitInt '2'
