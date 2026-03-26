@@ -68,11 +68,20 @@ pub struct ScopeInfo {
   pub ast_id: AstId,
 }
 
+/// Origin of a binding — either from the source AST or injected (prelude/import).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BindOrigin {
+  /// Binding comes from a source AST node.
+  Ast(AstId),
+  /// Binding was injected (prelude, import, etc.). Index into the prelude list.
+  Injected(u32),
+}
+
 #[derive(Clone, Debug)]
 pub struct BindInfo {
   pub scope: ScopeId,
   pub name: String,
-  pub ast_id: AstId,
+  pub origin: BindOrigin,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -157,11 +166,11 @@ impl<'src> Ctx<'src> {
     id
   }
 
-  fn push_bind(&mut self, scope: ScopeId, name: &str, ast_id: AstId) -> BindId {
+  fn push_bind(&mut self, scope: ScopeId, name: &str, origin: BindOrigin) -> BindId {
     let id = self.binds.push(BindInfo {
       scope,
       name: name.to_string(),
-      ast_id,
+      origin,
     });
     self.scope_events.get_mut(scope).push(ScopeEvent::Bind(id));
     self.name_stack.push((name.to_string(), id, scope));
@@ -171,11 +180,11 @@ impl<'src> Ctx<'src> {
   /// Pre-register a binding for mutual recursion (module scope).
   /// Adds to name_stack for resolution but does NOT emit a bind event —
   /// the event is emitted later when the binding is encountered during walk.
-  fn pre_register_bind(&mut self, scope: ScopeId, name: &str, ast_id: AstId) -> BindId {
+  fn pre_register_bind(&mut self, scope: ScopeId, name: &str, origin: BindOrigin) -> BindId {
     let id = self.binds.push(BindInfo {
       scope,
       name: name.to_string(),
-      ast_id,
+      origin,
     });
     self.name_stack.push((name.to_string(), id, scope));
     id
@@ -184,9 +193,10 @@ impl<'src> Ctx<'src> {
   /// Emit a bind event for a pre-registered binding (found by AstId).
   fn emit_bind_event(&mut self, scope: ScopeId, ast_id: AstId) {
     // Find the BindId for this AstId.
+    let origin = BindOrigin::Ast(ast_id);
     for i in 0..self.binds.len() {
       let bid = BindId(i as u32);
-      if self.binds.get(bid).ast_id == ast_id {
+      if self.binds.get(bid).origin == origin {
         self.scope_events.get_mut(scope).push(ScopeEvent::Bind(bid));
         return;
       }
@@ -213,7 +223,8 @@ impl<'src> Ctx<'src> {
           // Forward ref at module level (depth 0) — value not yet available.
           // Only fn bodies (depth > 0) can forward-ref module bindings.
           break; // fall through to unresolved
-        } else if self.current_bind_ast_id == Some(self.binds.get(bind_id).ast_id) {
+        } else if self.current_bind_ast_id.is_some()
+          && self.binds.get(bind_id).origin == BindOrigin::Ast(self.current_bind_ast_id.unwrap()) {
           RefKind::SelfRef
         } else if is_module_fwd {
           RefKind::FwdRef
@@ -260,9 +271,10 @@ impl<'src> Ctx<'src> {
   /// Check if a reference is a forward reference (ref appears before bind in source).
   /// For module scopes, we pre-register all bindings, so we check source position.
   fn is_forward_ref(&self, bind_id: BindId, ref_ast_id: AstId, _scope: ScopeId) -> bool {
-    let bind_ast_id = self.binds.get(bind_id).ast_id;
-    // Forward ref: the reference's AstId is before the binding's AstId.
-    ref_ast_id.0 < bind_ast_id.0
+    match self.binds.get(bind_id).origin {
+      BindOrigin::Ast(bind_ast_id) => ref_ast_id.0 < bind_ast_id.0,
+      BindOrigin::Injected(_) => false, // injected bindings are always available
+    }
   }
 
   /// Remove bindings from name_stack that belong to the given scope.
@@ -276,9 +288,14 @@ impl<'src> Ctx<'src> {
 // Public entry point
 // ---------------------------------------------------------------------------
 
-pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize) -> ScopeResult {
+pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize, prelude: &[&str]) -> ScopeResult {
   let mut ctx = Ctx::new(node_count);
   let module_scope = ctx.push_scope(ScopeKind::Module, None, root.id);
+
+  // Register prelude bindings (builtins, imports, etc.).
+  for (i, name) in prelude.iter().enumerate() {
+    ctx.push_bind(module_scope, name, BindOrigin::Injected(i as u32));
+  }
 
   // Phase 1: pre-register all module-level bindings (for mutual recursion).
   if let NodeKind::Module(items) = &root.kind {
@@ -322,10 +339,11 @@ fn pre_register_pattern_binds(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>
 fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>, pre_register: bool) {
   match &node.kind {
     NodeKind::Ident(name) => {
+      let origin = BindOrigin::Ast(node.id);
       if pre_register {
-        ctx.pre_register_bind(scope, name, node.id);
+        ctx.pre_register_bind(scope, name, origin);
       } else {
-        ctx.push_bind(scope, name, node.id);
+        ctx.push_bind(scope, name, origin);
       }
     }
     // Destructuring patterns: [a, b] = ..., {x, y} = ...
@@ -537,7 +555,10 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
       ScopeEvent::Bind(bind_id) => {
         let bind = result.binds.get(*bind_id);
         write_indent(out, indent + 1);
-        out.push_str(&format!("bind {}, '{}'\n", bind.ast_id.0, bind.name));
+        match bind.origin {
+          BindOrigin::Ast(ast_id) => out.push_str(&format!("bind {}, '{}'\n", ast_id.0, bind.name)),
+          BindOrigin::Injected(_) => out.push_str(&format!("prelude '{}'\n", bind.name)),
+        }
       }
       ScopeEvent::Ref(r) => {
         write_indent(out, indent + 1);
@@ -545,17 +566,21 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
           out.push_str(&format!("unresolved '{}'\n", r.name));
           continue;
         }
-        let bind_ast_id = result.binds.get(r.bind_id).ast_id;
+        let bind_origin = result.binds.get(r.bind_id).origin;
         let kind_prefix = match r.kind {
           RefKind::Ref => "ref",
           RefKind::FwdRef => "fwd_ref",
           RefKind::SelfRef => "self_ref",
           RefKind::Unresolved => unreachable!(),
         };
+        let origin_str = match bind_origin {
+          BindOrigin::Ast(ast_id) => format!("{}", ast_id.0),
+          BindOrigin::Injected(idx) => format!("prelude:{}", idx),
+        };
         if r.depth > 0 {
-          out.push_str(&format!("{} '{}', {}, depth {}\n", kind_prefix, r.name, bind_ast_id.0, r.depth));
+          out.push_str(&format!("{} '{}', {}, depth {}\n", kind_prefix, r.name, origin_str, r.depth));
         } else {
-          out.push_str(&format!("{} '{}', {}\n", kind_prefix, r.name, bind_ast_id.0));
+          out.push_str(&format!("{} '{}', {}\n", kind_prefix, r.name, origin_str));
         }
       }
       ScopeEvent::ChildScope(child_id) => {
@@ -583,7 +608,7 @@ mod tests {
   fn scope(src: &str) -> String {
     match crate::parser::parse(src) {
       Ok(r) => {
-        let result = analyse(&r.root, r.node_count as usize);
+        let result = analyse(&r.root, r.node_count as usize, &[]);
         format_result(&result)
       }
       Err(e) => format!("ERROR: {}", e.message),
