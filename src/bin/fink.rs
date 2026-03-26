@@ -5,13 +5,24 @@ fn main() {
 
   let sourcemap = args.iter().any(|a| a == "--sourcemap");
   let embed_source = args.iter().any(|a| a == "--embed-source");
-  let pass: Option<u32> = args.iter().find_map(|a| a.strip_prefix("--pass=").and_then(|v| v.parse().ok()));
+  let desugar = args.iter().any(|a| a == "--desugar");
+  let lifted = args.iter().find_map(|a| {
+    if a == "--lifted" {
+      Some(None)
+    } else {
+      a.strip_prefix("--lifted=").map(|v| Some(v.to_string()))
+    }
+  });
   let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("--")).map(|s| s.as_str()).collect();
 
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [--sourcemap] [--embed-source] [--pass=N] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [options] <file>");
+      eprintln!("  ast [--desugar]              parse (optionally desugar)");
+      eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
+      eprintln!("  fmt/cps [--sourcemap]        emit source map");
+      eprintln!("  fmt/cps [--embed-source]     embed source in source map");
       process::exit(1);
     }
   };
@@ -27,7 +38,17 @@ fn main() {
     }
     "ast" => {
       match fink::parser::parse(&src) {
-        Ok(r) => println!("{}", r.root.print()),
+        Ok(r) => {
+          if desugar {
+            let (desugared, _) = fink::passes::partial::apply(r.root, r.node_count).unwrap_or_else(|e| {
+              eprintln!("error: {e:?}");
+              process::exit(1);
+            });
+            println!("{}", desugared.print());
+          } else {
+            println!("{}", r.root.print());
+          }
+        }
         Err(e) => parse_error(&src, e, path),
       }
     }
@@ -78,15 +99,17 @@ fn main() {
         Ok(r) => {
           let ast_index = fink::ast::build_index(&r);
           let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-          let cps = fink::passes::cps::transform::lower_expr(&r.root, &scope);
+          let cps = match &r.root.kind {
+            fink::ast::NodeKind::Module(exprs) => {
+              fink::passes::cps::transform::lower_module(&exprs.items, &scope)
+            }
+            _ => fink::passes::cps::transform::lower_expr(&r.root, &scope),
+          };
 
-          // --pass=N selects pipeline stage:
-          //   0 (default): raw CPS after lower_expr
-          //   1: after lifting (fully lifted, nested formatter)
-          //   2: after lifting (flat formatter — reads like source)
-          let result = match pass.unwrap_or(0) {
-            1 | 2 => fink::passes::lifting::lift(cps, &ast_index),
-            _ => cps,
+          let result = if lifted.is_some() {
+            fink::passes::lifting::lift(cps, &ast_index)
+          } else {
+            cps
           };
 
           let ctx = fink::passes::cps::fmt::Ctx {
@@ -94,7 +117,8 @@ fn main() {
             ast_index: &ast_index,
             captures: None,
           };
-          if pass == Some(2) {
+          if lifted.as_ref().is_some_and(|v| v.is_none()) {
+            // --lifted (no value): pretty flat formatter
             println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
           } else if sourcemap {
             let (output, srcmap) = if embed_source {
@@ -107,6 +131,7 @@ fn main() {
             println!("{output}");
             println!("//# sourceMappingURL=data:application/json;base64,{b64}");
           } else {
+            // raw CPS or --lifted=plain: nested formatter
             println!("{}", fink::passes::cps::fmt::fmt_with(&result.root, &ctx));
           }
         }
@@ -138,7 +163,7 @@ fn main() {
     }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|cps|wat|run|dap> <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [options] <file>");
       process::exit(1);
     }
   }
