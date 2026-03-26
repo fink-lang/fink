@@ -56,13 +56,34 @@ pub fn codegen(
 ) -> CodegenResult {
   let mut ctx = Ctx::new(&cps.origin, ast_index, resolve, &cps.synth_alias);
   collect_funcs(&cps.root, &mut ctx);
+  // DEBUG: before process_closures
+  for (i, cf) in ctx.funcs.iter().enumerate() {
+    eprintln!("  BEFORE fn[{}] arity={} name_id={:?} param_ids={:?} cont_id={:?}", i, cf.arity, cf.name_id, cf.param_ids, cf.cont_id);
+  }
   process_closures(&cps.root, &mut ctx);
   resolve_user_names(&cps.root, &mut ctx);
-  // DEBUG
+  // DEBUG: after process_closures
   for (i, cf) in ctx.funcs.iter().enumerate() {
-    eprintln!("  fn[{}] user={:?} arity={} name_id={:?}", i, cf.user_name, cf.arity, cf.name_id);
+    eprintln!("  AFTER fn[{}] arity={} name_id={:?} param_ids={:?} cont_id={:?}", i, cf.arity, cf.name_id, cf.param_ids, cf.cont_id);
   }
   eprintln!("  closure_fn={:?}", ctx.closure_fn);
+  // DEBUG: print fn body kinds + FnClosure first arg
+  for (i, cf) in ctx.funcs.iter().enumerate() {
+    let body_desc = match &cf.fn_body.kind {
+      ExprKind::App { func: Callable::BuiltIn(b), args } => {
+        let first_val = args.first().and_then(|a| if let Arg::Val(v) = a { Some(v) } else { None });
+        let last_cont = args.last().and_then(|a| match a { Arg::Cont(Cont::Ref(id)) => Some(*id), _ => None });
+        format!("BuiltIn({:?}) first_val={:?} last_cont={:?}", b,
+          first_val.map(|v| match &v.kind { ValKind::Ref(Ref::Synth(id)) => format!("Synth({:?})", id), _ => "other".to_string() }),
+          last_cont)
+      },
+      ExprKind::App { func: Callable::Val(_), .. } => "App(Val)".to_string(),
+      ExprKind::LetVal { name, cont, .. } => format!("LetVal(name={:?}, cont={:?})", name.id, match cont { Cont::Ref(id) => format!("Ref({:?})", id), Cont::Expr { .. } => "Expr".to_string() }),
+      ExprKind::LetFn { name, .. } => format!("LetFn(name={:?})", name.id),
+      ExprKind::If { .. } => "If".to_string(),
+    };
+    eprintln!("  fn[{}] body: {}", i, body_desc);
+  }
   collect_match_arms(&cps.root, &mut ctx);
   let wasm = emit_module(&cps.root, &mut ctx);
   CodegenResult { wasm, mappings: ctx.mappings }
@@ -1014,6 +1035,15 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
 /// never used at runtime. Instead, we walk each arm's MatchArm App (found
 /// via the collected fn chain) and inline the comparison + body calls.
 fn emit_match_block(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
+  eprintln!("  emit_match_block: {} args", args.len());
+  for (i, arg) in args.iter().enumerate() {
+    eprintln!("    arg[{}]: {:?}", i, match arg {
+      Arg::Val(v) => format!("Val({:?})", v.kind),
+      Arg::Cont(Cont::Ref(id)) => format!("Cont::Ref({:?})", id),
+      Arg::Cont(Cont::Expr { .. }) => "Cont::Expr".to_string(),
+      _ => "other".to_string(),
+    });
+  }
   let scrutinee_val = match args.first() {
     Some(Arg::Val(v)) => v,
     _ => { f.instruction(&Instruction::Unreachable); return; }
@@ -1034,6 +1064,11 @@ fn emit_match_block(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
       ValKind::Ref(Ref::Synth(id)) => Some(*id),
       _ => None,
     };
+    eprintln!("  emit_match_block: arm_id={:?} (param_src={:?}, val_alias={:?})",
+      arm_id,
+      arm_id.and_then(|id| fc.ctx.param_source.get(&id).copied()),
+      arm_id.and_then(|id| fc.ctx.val_alias.get(&id).copied()),
+    );
     let arm_info = arm_id.and_then(|id| {
       // Direct lookup.
       if let Some(info) = fc.ctx.match_arms.get(&id) { return Some(info); }
@@ -1988,7 +2023,10 @@ fn collect_closure_fns<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) 
         let result_cont_param = args.last().and_then(|a| match a {
           Arg::Cont(Cont::Ref(id)) => {
             ctx.funcs.iter().position(|f| f.name_id == *id)
-              .and_then(|pos| ctx.funcs[pos].param_ids.first().copied())
+              .and_then(|pos| {
+                ctx.funcs[pos].param_ids.first().copied()
+                  .or_else(|| if ctx.funcs[pos].arity >= 1 { Some(ctx.funcs[pos].cont_id) } else { None })
+              })
           }
           Arg::Cont(Cont::Expr { args: cont_args, .. }) => {
             cont_args.first().map(|b| b.id)
@@ -2235,9 +2273,15 @@ fn process_closures_inner<'a, 'src>(
         // Handle both Cont::Ref and Cont::Expr for the result cont.
         let result_cont_param = args.last().and_then(|a| match a {
           Arg::Cont(Cont::Ref(id)) => {
-            // Hoisted cont fn: first param binds the closure value.
+            // Hoisted cont fn: first value param binds the closure value.
+            // If the fn has no value params (param_ids=[]), fall back to cont_id:
+            // for arity-1 fns with no value params, the cont IS the single param
+            // and receives the closure value.
             ctx.funcs.iter().position(|f| f.name_id == *id)
-              .and_then(|pos| ctx.funcs[pos].param_ids.first().copied())
+              .and_then(|pos| {
+                ctx.funcs[pos].param_ids.first().copied()
+                  .or_else(|| if ctx.funcs[pos].arity >= 1 { Some(ctx.funcs[pos].cont_id) } else { None })
+              })
           }
           Arg::Cont(Cont::Expr { args: cont_args, .. }) => {
             // Inline cont: first arg binds the closure value.
@@ -2315,11 +2359,16 @@ fn collect_match_arms<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
           ctx.func_index_through_closure(matcher_id),
           ctx.func_index_through_closure(body_id),
         ) {
-          // The result cont fn receives the arm value as its first (non-cap) param.
-          // After closure lifting, cap params may be prepended. Find the arm value
-          // param by: (1) try direct func_index to find the original cont fn,
-          // (2) if that fails (closure-wrapped), use func_index_through_closure
-          //     and skip cap params (those in param_source) to find the arm value.
+          // Resolve result_cont_id → the arm_val key used in MatchBlock.
+          //
+          // After lifting, the result cont fn is a hoisted fn. Its first value param
+          // binds the arm's null placeholder — this CpsId is the arm_val key.
+          //
+          // When the result cont fn has no value params (cont_env fn with arity=0),
+          // follow the fn's body: it's typically a FnClosure that creates the MatchBlock
+          // fn. In that case the MatchBlock fn's cont_id is the arm_val key (since
+          // the MatchBlock fn is a cont_env fn whose cont_id is mapped to local 0,
+          // the same slot used for arm_val references in the MatchBlock body).
           let fn_idx = ctx.func_index(result_cont_id)
             .or_else(|| ctx.func_index_through_closure(result_cont_id));
           if let Some(fn_idx) = fn_idx {
@@ -2331,6 +2380,23 @@ fn collect_match_arms<'a, 'src>(expr: &'a Expr<'src>, ctx: &mut Ctx<'a, 'src>) {
                 .or_else(|| ctx.funcs[fn_pos].param_ids.first());
               if let Some(&pid) = param_id {
                 ctx.match_arms.insert(pid, (matcher_fn, body_fn));
+              } else if ctx.funcs[fn_pos].arity == 0 {
+                // No value params: cont_env fn receives arm value as anyref.
+                // Its cont_id is mapped to local 0 for emit purposes.
+                // Key by cont_id so emit_match_block can find it via direct lookup.
+                let cont_id = ctx.funcs[fn_pos].cont_id;
+                ctx.match_arms.insert(cont_id, (matcher_fn, body_fn));
+                // Also: if the fn's body is FnClosure creating another fn (fn_Y),
+                // fn_Y.cont_id is the arm_val key used in MatchBlock (because fn_Y
+                // is a cont_env fn called as a continuation from the fn above).
+                if let ExprKind::App { func: Callable::BuiltIn(crate::passes::cps::ir::BuiltIn::FnClosure), args: fc_args } = &ctx.funcs[fn_pos].fn_body.kind
+                  && let Some(Arg::Val(fn_ref_val)) = fc_args.first()
+                  && let ValKind::Ref(Ref::Synth(inner_fn_id)) = &fn_ref_val.kind
+                  && let Some(inner_pos) = ctx.funcs.iter().position(|f| f.name_id == *inner_fn_id)
+                {
+                  let inner_cont_id = ctx.funcs[inner_pos].cont_id;
+                  ctx.match_arms.insert(inner_cont_id, (matcher_fn, body_fn));
+                }
               }
             }
           }
