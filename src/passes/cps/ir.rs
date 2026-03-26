@@ -51,16 +51,15 @@
 // params by the original CpsId, which `synth_alias` maps to the new param).
 
 // ---------------------------------------------------------------------------
-// TODO: Module root representation
+// Module root representation
 //
-// Currently `lower_module` wraps the entire module body in a synthetic `·fn`
-// node (outer cont wrapper). This should be replaced:
-//
-//   - The module root is the raw `LetFn`/`LetVal` chain with no outer wrapper.
-//   - The chain terminates with `App { func: ContRef(ƒ_0), args: [all module-level binds] }`.
-//     e.g. `·ƒ_0 ·foo_0, ·bar_1, ·baz_2` — all top-level exported bindings as a flat arg list.
-//   - `ƒ_0` is the implicit module-exit continuation (provided by the runtime/linker).
-//   - Name resolution / import matching of those args is a separate pass.
+// `lower_module` produces a flat `LetFn`/`LetVal` chain with no outer wrapper.
+// The chain terminates with `App { func: ContRef(ƒ_0), args: [exports] }`:
+//   e.g. `·ƒ_0 ·foo_0, ·bar_1, ·baz_2`
+// Only simple top-level `name = <non-import expr>` bindings are exported.
+// Pattern destructures and imports are excluded.
+// `ƒ_0` is the implicit module-exit continuation (provided by the runtime/linker).
+// Name resolution / import matching of those args is a separate pass.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
