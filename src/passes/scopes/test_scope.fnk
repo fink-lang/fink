@@ -257,3 +257,17 @@ test 'fn with destructured params', fn:
         ref 'b', 2
       bind 0, 'f'
 
+
+test 'bind-right destructure in seq pattern', fn:
+  expect scope fink":
+    [foo |= [bar, spam]] = [[1, 2]]
+    foo + bar + spam
+  | equals fink":
+    scope 16, 'module':
+      bind 0, 'foo'
+      bind 1, 'bar'
+      bind 2, 'spam'
+      ref 'foo', 0
+      ref 'bar', 1
+      ref 'spam', 2
+

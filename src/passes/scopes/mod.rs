@@ -341,7 +341,12 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
     NodeKind::Bind { lhs, .. } => {
       // Nested bind in pattern: `{x: y}` — lhs is the key, rhs is the bind target.
       // The lhs ident is the binding in rec destructure.
-      register_pattern_binds(lhs, scope, ctx);
+      register_pattern_binds_inner(lhs, scope, ctx, pre_register);
+    }
+    NodeKind::BindRight { lhs, rhs, .. } => {
+      // `foo |= [bar, spam]` — lhs binds the whole value, rhs destructures it.
+      register_pattern_binds_inner(lhs, scope, ctx, pre_register);
+      register_pattern_binds_inner(rhs, scope, ctx, pre_register);
     }
     _ => {}
   }
