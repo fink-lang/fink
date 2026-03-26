@@ -101,17 +101,21 @@ pub struct RefInfo {
 // Result of scope analysis
 // ---------------------------------------------------------------------------
 
+/// An event in a scope — binding, reference, or child scope, in source order.
+#[derive(Clone, Debug)]
+pub enum ScopeEvent {
+  Bind(BindId),
+  Ref(RefInfo),
+  ChildScope(ScopeId),
+}
+
 pub struct ScopeResult {
   pub scopes: PropGraph<ScopeId, ScopeInfo>,
   pub binds: PropGraph<BindId, BindInfo>,
   /// For each AST node that is a reference, which BindId does it resolve to.
   pub resolution: PropGraph<AstId, Option<BindId>>,
-  /// Ordered list of bindings per scope (for output formatting).
-  pub scope_binds: PropGraph<ScopeId, Vec<BindId>>,
-  /// Ordered list of child scopes per scope (for nested output).
-  pub scope_children: PropGraph<ScopeId, Vec<ScopeId>>,
-  /// Ordered list of references per scope (for output formatting).
-  pub scope_refs: PropGraph<ScopeId, Vec<RefInfo>>,
+  /// Events per scope in source order — bindings, refs, and child scopes interleaved.
+  pub scope_events: PropGraph<ScopeId, Vec<ScopeEvent>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -122,16 +126,12 @@ struct Ctx<'src> {
   scopes: PropGraph<ScopeId, ScopeInfo>,
   binds: PropGraph<BindId, BindInfo>,
   resolution: PropGraph<AstId, Option<BindId>>,
-  scope_binds: PropGraph<ScopeId, Vec<BindId>>,
-  scope_children: PropGraph<ScopeId, Vec<ScopeId>>,
-  scope_refs: PropGraph<ScopeId, Vec<RefInfo>>,
+  scope_events: PropGraph<ScopeId, Vec<ScopeEvent>>,
   /// Name → BindId lookup stack. Each scope pushes its bindings; pop on exit.
   /// For module scopes, all bindings are pre-registered before walking bodies.
   name_stack: Vec<(String, BindId, ScopeId)>,
   /// Track which AstId is being defined (for self_ref detection).
   current_bind_ast_id: Option<AstId>,
-  /// Node count for sizing the resolution graph.
-  _node_count: usize,
   _src: std::marker::PhantomData<&'src ()>,
 }
 
@@ -141,23 +141,18 @@ impl<'src> Ctx<'src> {
       scopes: PropGraph::new(),
       binds: PropGraph::new(),
       resolution: PropGraph::with_size(node_count, None),
-      scope_binds: PropGraph::new(),
-      scope_children: PropGraph::new(),
-      scope_refs: PropGraph::new(),
+      scope_events: PropGraph::new(),
       name_stack: Vec::new(),
       current_bind_ast_id: None,
-      _node_count: node_count,
       _src: std::marker::PhantomData,
     }
   }
 
   fn push_scope(&mut self, kind: ScopeKind, parent: Option<ScopeId>, ast_id: AstId) -> ScopeId {
     let id = self.scopes.push(ScopeInfo { kind, parent, ast_id });
-    self.scope_binds.push(Vec::new());
-    self.scope_children.push(Vec::new());
-    self.scope_refs.push(Vec::new());
+    self.scope_events.push(Vec::new());
     if let Some(pid) = parent {
-      self.scope_children.get_mut(pid).push(id);
+      self.scope_events.get_mut(pid).push(ScopeEvent::ChildScope(id));
     }
     id
   }
@@ -168,9 +163,34 @@ impl<'src> Ctx<'src> {
       name: name.to_string(),
       ast_id,
     });
-    self.scope_binds.get_mut(scope).push(id);
+    self.scope_events.get_mut(scope).push(ScopeEvent::Bind(id));
     self.name_stack.push((name.to_string(), id, scope));
     id
+  }
+
+  /// Pre-register a binding for mutual recursion (module scope).
+  /// Adds to name_stack for resolution but does NOT emit a bind event —
+  /// the event is emitted later when the binding is encountered during walk.
+  fn pre_register_bind(&mut self, scope: ScopeId, name: &str, ast_id: AstId) -> BindId {
+    let id = self.binds.push(BindInfo {
+      scope,
+      name: name.to_string(),
+      ast_id,
+    });
+    self.name_stack.push((name.to_string(), id, scope));
+    id
+  }
+
+  /// Emit a bind event for a pre-registered binding (found by AstId).
+  fn emit_bind_event(&mut self, scope: ScopeId, ast_id: AstId) {
+    // Find the BindId for this AstId.
+    for i in 0..self.binds.len() {
+      let bid = BindId(i as u32);
+      if self.binds.get(bid).ast_id == ast_id {
+        self.scope_events.get_mut(scope).push(ScopeEvent::Bind(bid));
+        return;
+      }
+    }
   }
 
   /// Resolve a name reference. Walk the name stack from top (innermost) to bottom.
@@ -186,35 +206,40 @@ impl<'src> Ctx<'src> {
         let depth = self.scope_depth(current_scope, bind_scope);
 
         // Determine ref kind.
-        let kind = if self.current_bind_ast_id == Some(self.binds.get(bind_id).ast_id) {
+        let is_module_fwd = self.scopes.get(bind_scope).kind == ScopeKind::Module
+          && self.is_forward_ref(bind_id, ref_ast_id, bind_scope);
+
+        let kind = if is_module_fwd && depth == 0 {
+          // Forward ref at module level (depth 0) — value not yet available.
+          // Only fn bodies (depth > 0) can forward-ref module bindings.
+          break; // fall through to unresolved
+        } else if self.current_bind_ast_id == Some(self.binds.get(bind_id).ast_id) {
           RefKind::SelfRef
-        } else if self.scopes.get(bind_scope).kind == ScopeKind::Module
-          && self.is_forward_ref(bind_id, ref_ast_id, bind_scope)
-        {
+        } else if is_module_fwd {
           RefKind::FwdRef
         } else {
           RefKind::Ref
         };
 
         self.resolution.set(ref_ast_id, Some(bind_id));
-        self.scope_refs.get_mut(current_scope).push(RefInfo {
+        self.scope_events.get_mut(current_scope).push(ScopeEvent::Ref(RefInfo {
           kind,
           name: name.to_string(),
           bind_id,
           depth,
           ast_id: ref_ast_id,
-        });
+        }));
         return;
       }
     }
-    // Unresolved — record in scope_refs with a sentinel BindId.
-    self.scope_refs.get_mut(current_scope).push(RefInfo {
+    // Unresolved.
+    self.scope_events.get_mut(current_scope).push(ScopeEvent::Ref(RefInfo {
       kind: RefKind::Unresolved,
       name: name.to_string(),
       bind_id: BindId(u32::MAX),
       depth: 0,
       ast_id: ref_ast_id,
-    });
+    }));
   }
 
   /// Count how many scope levels from `from` up to `to`.
@@ -269,9 +294,7 @@ pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize) -> ScopeResult {
     scopes: ctx.scopes,
     binds: ctx.binds,
     resolution: ctx.resolution,
-    scope_binds: ctx.scope_binds,
-    scope_children: ctx.scope_children,
-    scope_refs: ctx.scope_refs,
+    scope_events: ctx.scope_events,
   }
 }
 
@@ -282,16 +305,28 @@ pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize) -> ScopeResult {
 fn pre_register_binds(stmts: &[Node<'_>], scope: ScopeId, ctx: &mut Ctx<'_>) {
   for stmt in stmts {
     if let NodeKind::Bind { lhs, .. } = &stmt.kind {
-      register_pattern_binds(lhs, scope, ctx);
+      pre_register_pattern_binds(lhs, scope, ctx);
     }
   }
 }
 
 /// Register bindings from the LHS of a bind pattern.
 fn register_pattern_binds(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
+  register_pattern_binds_inner(node, scope, ctx, false);
+}
+
+fn pre_register_pattern_binds(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
+  register_pattern_binds_inner(node, scope, ctx, true);
+}
+
+fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>, pre_register: bool) {
   match &node.kind {
     NodeKind::Ident(name) => {
-      ctx.push_bind(scope, name, node.id);
+      if pre_register {
+        ctx.pre_register_bind(scope, name, node.id);
+      } else {
+        ctx.push_bind(scope, name, node.id);
+      }
     }
     // Destructuring patterns: [a, b] = ..., {x, y} = ...
     NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. }
@@ -330,11 +365,16 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
       if let NodeKind::Ident(_) = &lhs.kind {
         ctx.current_bind_ast_id = Some(lhs.id);
       }
-      // Walk RHS first (the value expression).
+      // Walk RHS first (evaluate the value expression).
       walk_node(rhs, scope, ctx);
       ctx.current_bind_ast_id = prev_bind;
-      // For non-module scopes, register the binding now (sequential).
-      if ctx.scopes.get(scope).kind != ScopeKind::Module {
+      if ctx.scopes.get(scope).kind == ScopeKind::Module {
+        // Module scope: binding was pre-registered. Emit the event now (after RHS).
+        if let NodeKind::Ident(_) = &lhs.kind {
+          ctx.emit_bind_event(scope, lhs.id);
+        }
+      } else {
+        // Non-module scopes: register the binding now (sequential).
         register_pattern_binds(lhs, scope, ctx);
       }
     }
@@ -471,40 +511,38 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
   write_indent(out, indent);
   out.push_str(&format!("scope {}, '{}':\n", info.ast_id.0, kind_str));
 
-  // Bindings: bind <ast_id>, '<name>'
-  let binds = result.scope_binds.get(scope_id);
-  for bind_id in binds {
-    let bind = result.binds.get(*bind_id);
-    write_indent(out, indent + 1);
-    out.push_str(&format!("bind {}, '{}'\n", bind.ast_id.0, bind.name));
-  }
-
-  // Child scopes.
-  let children = result.scope_children.get(scope_id);
-  for child_id in children {
-    out.push('\n');
-    format_scope(*child_id, result, out, indent + 1);
-  }
-
-  // References: ref '<name>', <bind_ast_id>[, depth N]
-  let refs = result.scope_refs.get(scope_id);
-  for r in refs {
-    write_indent(out, indent + 1);
-    if r.kind == RefKind::Unresolved {
-      out.push_str(&format!("unresolved '{}'\n", r.name));
-      continue;
-    }
-    let bind_ast_id = result.binds.get(r.bind_id).ast_id;
-    let kind_prefix = match r.kind {
-      RefKind::Ref => "ref",
-      RefKind::FwdRef => "fwd_ref",
-      RefKind::SelfRef => "self_ref",
-      RefKind::Unresolved => unreachable!(),
-    };
-    if r.depth > 0 {
-      out.push_str(&format!("{} '{}', {}, depth {}\n", kind_prefix, r.name, bind_ast_id.0, r.depth));
-    } else {
-      out.push_str(&format!("{} '{}', {}\n", kind_prefix, r.name, bind_ast_id.0));
+  // Events in source order — bindings, refs, and child scopes interleaved.
+  let events = result.scope_events.get(scope_id);
+  for event in events {
+    match event {
+      ScopeEvent::Bind(bind_id) => {
+        let bind = result.binds.get(*bind_id);
+        write_indent(out, indent + 1);
+        out.push_str(&format!("bind {}, '{}'\n", bind.ast_id.0, bind.name));
+      }
+      ScopeEvent::Ref(r) => {
+        write_indent(out, indent + 1);
+        if r.kind == RefKind::Unresolved {
+          out.push_str(&format!("unresolved '{}'\n", r.name));
+          continue;
+        }
+        let bind_ast_id = result.binds.get(r.bind_id).ast_id;
+        let kind_prefix = match r.kind {
+          RefKind::Ref => "ref",
+          RefKind::FwdRef => "fwd_ref",
+          RefKind::SelfRef => "self_ref",
+          RefKind::Unresolved => unreachable!(),
+        };
+        if r.depth > 0 {
+          out.push_str(&format!("{} '{}', {}, depth {}\n", kind_prefix, r.name, bind_ast_id.0, r.depth));
+        } else {
+          out.push_str(&format!("{} '{}', {}\n", kind_prefix, r.name, bind_ast_id.0));
+        }
+      }
+      ScopeEvent::ChildScope(child_id) => {
+        out.push('\n');
+        format_scope(*child_id, result, out, indent + 1);
+      }
     }
   }
 }
