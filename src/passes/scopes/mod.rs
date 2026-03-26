@@ -373,6 +373,15 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
         ctx.push_bind(scope, name, origin);
       }
     }
+    NodeKind::SynthIdent(n) => {
+      let name = format!("·$_{n}");
+      let origin = BindOrigin::Ast(node.id);
+      if pre_register {
+        ctx.pre_register_bind(scope, &name, origin);
+      } else {
+        ctx.push_bind(scope, &name, origin);
+      }
+    }
     // Destructuring patterns: [a, b] = ..., {x, y} = ...
     NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. }
     | NodeKind::Patterns(items) => {
@@ -641,10 +650,9 @@ mod tests {
   fn scope(src: &str) -> String {
     match crate::parser::parse(src) {
       Ok(r) => {
-        // TODO: run partial pass (desugars `?` to `fn $: ...`) before scope analysis.
-        // Currently skipped because the partial pass creates nodes with AstId(0)
-        // instead of allocating fresh IDs.
-        let result = analyse(&r.root, r.node_count as usize, &["import"]);
+        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
+          .expect("partial pass failed");
+        let result = analyse(&root, node_count as usize, &["import"]);
         format_result(&result)
       }
       Err(e) => format!("ERROR: {}", e.message),

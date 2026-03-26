@@ -64,14 +64,28 @@ test 'fn params in scope', fn:
       bind 0, 'f'
 
 
-# TODO: partial pass desugars `2 + ?` into `fn $: 2 + $` which would
-# create a fn scope. Currently partial pass not run because it doesn't
-# preserve AstIds. Expected output will change once that's fixed.
 test 'partial application', fn:
   expect scope fink":
     foo = 2 + ?
   | equals fink":
     scope 5, 'module':
+
+      scope 8, 'fn':
+        bind 6, '·$_0'
+        ref '·$_0', 6
+      bind 0, 'foo'
+
+
+test 'multiple partials — same param', fn:
+  expect scope fink":
+    foo = ? + ?
+  | equals fink":
+    scope 5, 'module':
+
+      scope 8, 'fn':
+        bind 6, '·$_0'
+        ref '·$_0', 6
+        ref '·$_0', 6
       bind 0, 'foo'
 
 
