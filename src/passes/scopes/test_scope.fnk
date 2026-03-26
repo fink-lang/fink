@@ -271,3 +271,16 @@ test 'bind-right destructure in seq pattern', fn:
       ref 'bar', 1
       ref 'spam', 2
 
+
+---
+prelude
+---
+
+test 'import resolves to prelude', fn:
+  expect scope fink":
+    {foo} = import './bar.fnk'
+  | equals fink":
+    scope 6, 'module':
+      bind 0, 'foo'
+      ref 'import', builtin 0
+
