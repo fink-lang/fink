@@ -45,7 +45,7 @@ test 'single binding', fn:
   expect scope fink":
     x = 1
   | equals fink":
-    scope 0, 'module':
+    scope 3, 'module':
       bind 0, 'x'
 
 
@@ -54,10 +54,10 @@ test 'fn params in scope', fn:
     f = fn a, b:
       a + b
   | equals fink":
-    scope 0, 'module':
+    scope 11, 'module':
       bind 0, 'f'
 
-      scope 1, 'fn_9':
+      scope 9, 'fn':
         bind 2, 'a'
         bind 4, 'b'
         ref 'a', 2
@@ -77,17 +77,17 @@ test 'two fns — main refs add', fn:
       add 3, 4
 
   | equals fink":
-    scope 0, 'module':
+    scope 19, 'module':
       bind 0, 'add'
       bind 11, 'main'
 
-      scope 1, 'fn_9':
+      scope 9, 'fn':
         bind 2, 'a'
         bind 4, 'b'
         ref 'a', 2
         ref 'b', 4
 
-      scope 2, 'fn_17':
+      scope 17, 'fn':
         ref 'add', 0, depth 1
 
 
@@ -104,26 +104,26 @@ test 'mutual recursion — is-even refs is-odd', fn:
         _: is-even n - 1
 
   | equals fink":
-    scope 0, 'module':
+    scope 44, 'module':
       bind 0, 'is-even'
       bind 22, 'is-odd'
 
-      scope 1, 'fn_20':
+      scope 20, 'fn':
         bind 2, 'n'
 
-        scope 2, 'arm_10':
+        scope 10, 'arm':
 
-        scope 3, 'arm_18':
+        scope 18, 'arm':
           fwd_ref 'is-odd', 22, depth 2
           ref 'n', 2, depth 1
         ref 'n', 2
 
-      scope 4, 'fn_42':
+      scope 42, 'fn':
         bind 24, 'n'
 
-        scope 5, 'arm_32':
+        scope 32, 'arm':
 
-        scope 6, 'arm_40':
+        scope 40, 'arm':
           ref 'is-even', 0, depth 2
           ref 'n', 24, depth 1
         ref 'n', 24
@@ -146,29 +146,29 @@ test 'inner binding shadows outer', fn:
     main = fn: add 3, 4
 
   | equals fink":
-    scope 0, 'module':
+    scope 38, 'module':
       bind 0, 'add'
       bind 11, 'sub'
       bind 30, 'main'
 
-      scope 1, 'fn_9':
+      scope 9, 'fn':
         bind 2, 'a'
         bind 4, 'b'
         ref 'a', 2
         ref 'b', 4
 
-      scope 2, 'fn_28':
+      scope 28, 'fn':
         bind 13, 'a'
         bind 15, 'b'
         bind 17, 'add'
 
-        scope 3, 'fn_22':
+        scope 22, 'fn':
           bind 19, 'foo'
           ref 'foo', 19
         ref 'a', 13
         ref 'add', 17
         ref 'b', 15
 
-      scope 4, 'fn_36':
+      scope 36, 'fn':
         ref 'add', 0, depth 1
 

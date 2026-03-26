@@ -455,13 +455,12 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
   let info = result.scopes.get(scope_id);
   let kind_str = match info.kind {
     ScopeKind::Module => "module".to_string(),
-    ScopeKind::Fn => format!("fn_{}", info.ast_id.0),
-    ScopeKind::Arm => format!("arm_{}", info.ast_id.0),
+    ScopeKind::Fn => "fn".to_string(),
+    ScopeKind::Arm => "arm".to_string(),
   };
 
-  // scope 0, 'module':
   write_indent(out, indent);
-  out.push_str(&format!("scope {}, '{}':\n", scope_id.0, kind_str));
+  out.push_str(&format!("scope {}, '{}':\n", info.ast_id.0, kind_str));
 
   // Bindings: bind <ast_id>, '<name>'
   let binds = result.scope_binds.get(scope_id);
