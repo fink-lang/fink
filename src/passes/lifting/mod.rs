@@ -33,8 +33,6 @@ use crate::passes::cps::ir::{
   Param, Ref, Val, ValKind,
 };
 use crate::propgraph::PropGraph;
-use crate::passes::name_res::{self, ResolveResult, Resolution};
-use crate::passes::lifting::capture::CaptureGraph;
 
 // ---------------------------------------------------------------------------
 // Id allocator
@@ -101,12 +99,6 @@ pub fn lift<'src>(
   let mut current = result;
 
   for round in 0..MAX_ROUNDS {
-    let node_count = current.origin.len();
-    let resolve_result = name_res::resolve(
-      &current.root, &current.origin, ast_index, node_count, &current.synth_alias,
-    );
-    let cap_graph = capture::analyse(&current, &resolve_result);
-
     if !needs_lifting(&current.root) {
       return current;
     }
@@ -117,7 +109,7 @@ pub fn lift<'src>(
 
     // Extract LetFn from fn_bodies and hoist inline Cont::Expr (one level).
     let mut alloc = Alloc::new(current.origin, current.synth_alias);
-    let new_root = lift_expr(current.root, &cap_graph, &resolve_result, ast_index, &mut alloc);
+    let new_root = lift_expr(current.root, ast_index, &mut alloc);
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
@@ -353,20 +345,18 @@ fn name_inline_conts_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'sr
 
 fn lift_expr<'src>(
   expr: Expr<'src>,
-  captures: &CaptureGraph,
-  resolve: &ResolveResult,
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
 ) -> Expr<'src> {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       // Recurse into the cont first.
-      let cont = lift_cont(cont, captures, resolve, ast_index, alloc);
+      let cont = lift_cont(cont, ast_index, alloc);
 
       // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
       if contains_letfn_or_inline_cont(&fn_body) {
         let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
-        let new_fn_body = extract_from_body(*fn_body, &params, &[], captures, resolve, ast_index, alloc, &mut hoisted);
+        let new_fn_body = extract_from_body(*fn_body, &params, &[], ast_index, alloc, &mut hoisted);
 
         // Build the LetFn with the cleaned fn_body.
         let mut result = Expr {
@@ -396,7 +386,7 @@ fn lift_expr<'src>(
         result
       } else {
         // No nested LetFn — just recurse into fn_body.
-        let fn_body = lift_expr(*fn_body, captures, resolve, ast_index, alloc);
+        let fn_body = lift_expr(*fn_body, ast_index, alloc);
         Expr {
           id: expr.id,
           kind: ExprKind::LetFn { name, params, fn_body: Box::new(fn_body), cont },
@@ -405,23 +395,23 @@ fn lift_expr<'src>(
     }
 
     ExprKind::LetVal { name, val, cont } => {
-      let cont = lift_cont(cont, captures, resolve, ast_index, alloc);
+      let cont = lift_cont(cont, ast_index, alloc);
       Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
     }
 
     ExprKind::App { func, args } => {
       // Recurse into Arg::Cont and Arg::Expr.
       let args = args.into_iter().map(|a| match a {
-        Arg::Cont(c) => Arg::Cont(lift_cont(c, captures, resolve, ast_index, alloc)),
-        Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, captures, resolve, ast_index, alloc))),
+        Arg::Cont(c) => Arg::Cont(lift_cont(c, ast_index, alloc)),
+        Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast_index, alloc))),
         other => other,
       }).collect();
       Expr { id: expr.id, kind: ExprKind::App { func, args } }
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = lift_expr(*then, captures, resolve, ast_index, alloc);
-      let else_ = lift_expr(*else_, captures, resolve, ast_index, alloc);
+      let then = lift_expr(*then, ast_index, alloc);
+      let else_ = lift_expr(*else_, ast_index, alloc);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
   }
@@ -429,15 +419,13 @@ fn lift_expr<'src>(
 
 fn lift_cont<'src>(
   cont: Cont<'src>,
-  captures: &CaptureGraph,
-  resolve: &ResolveResult,
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
 ) -> Cont<'src> {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { args, body } => {
-      let body = lift_expr(*body, captures, resolve, ast_index, alloc);
+      let body = lift_expr(*body, ast_index, alloc);
       Cont::Expr { args, body: Box::new(body) }
     }
   }
@@ -457,8 +445,6 @@ fn extract_from_body<'src>(
   expr: Expr<'src>,
   parent_params: &[Param],
   scope_binds: &[(CpsId, Bind)],
-  captures: &CaptureGraph,
-  resolve: &ResolveResult,
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn<'src>>,
@@ -472,7 +458,7 @@ fn extract_from_body<'src>(
 
       // Determine captures: refs in inner_fn_body that resolve to parent's params.
       // Exclude refs to already-hoisted fns — they'll be siblings at the parent scope.
-      let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, resolve, alloc)
+      let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, alloc)
         .into_iter()
         .filter(|(cap_id, _)| !is_hoisted_fn_ref(*cap_id, hoisted, alloc))
         .collect();
@@ -492,7 +478,7 @@ fn extract_from_body<'src>(
             // The cont args bind the fn value — add to scope for the rest.
             // (name is consumed by hoisted, but the wrap_hoisted cont binds a result)
             // Continue with the cont body.
-            extract_from_body(*body, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted)
+            extract_from_body(*body, parent_params, scope_binds, ast_index, alloc, hoisted)
           }
           Cont::Ref(cont_id) => {
             let name_id = name.id;
@@ -583,7 +569,7 @@ fn extract_from_body<'src>(
             extended_binds.push((name.id, name.kind));
             for a in &args { extended_binds.push((a.id, a.kind)); }
           }
-          let body = extract_from_body(*body, parent_params, &extended_binds, captures, resolve, ast_index, alloc, hoisted);
+          let body = extract_from_body(*body, parent_params, &extended_binds, ast_index, alloc, hoisted);
           Cont::Expr { args, body: Box::new(body) }
         }
       };
@@ -607,7 +593,7 @@ fn extract_from_body<'src>(
           // Don't recurse into the cont body — extract one level at a time.
           let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
-          let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, resolve, alloc);
+          let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, alloc);
 
           // ·closure result conts with captures would create infinite chains.
           // Leave them inline — they're the consumption site for the closure value.
@@ -621,11 +607,11 @@ fn extract_from_body<'src>(
             // The cont's args are in scope for its body.
             let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
             for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
-            let body = extract_from_body(body, parent_params, &inner_scope, captures, resolve, ast_index, alloc, hoisted);
+            let body = extract_from_body(body, parent_params, &inner_scope, ast_index, alloc, hoisted);
             args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
             // Recurse into other args too.
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, ast_index, alloc, hoisted))),
               other => other,
             }).collect();
             return Expr { id: expr.id, kind: ExprKind::App { func, args } };
@@ -644,7 +630,7 @@ fn extract_from_body<'src>(
             args.insert(idx, Arg::Cont(Cont::Ref(cont_name_id)));
             // Recurse on remaining args.
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, ast_index, alloc, hoisted))),
               other => other,
             }).collect();
             Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -697,7 +683,7 @@ fn extract_from_body<'src>(
       } else {
         // No inline conts — just recurse into Arg::Expr.
         let args = args.into_iter().map(|a| match a {
-          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted))),
+          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, ast_index, alloc, hoisted))),
           other => other,
         }).collect();
         Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -705,8 +691,8 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = extract_from_body(*then, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted);
-      let else_ = extract_from_body(*else_, parent_params, scope_binds, captures, resolve, ast_index, alloc, hoisted);
+      let then = extract_from_body(*then, parent_params, scope_binds, ast_index, alloc, hoisted);
+      let else_ = extract_from_body(*else_, parent_params, scope_binds, ast_index, alloc, hoisted);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
 
@@ -820,7 +806,6 @@ fn compute_captures_for_lift(
   _fn_params: &[Param],
   parent_params: &[Param],
   scope_binds: &[(CpsId, Bind)],
-  resolve: &ResolveResult,
   _alloc: &mut Alloc,
 ) -> Vec<(CpsId, Bind)> {
   let mut parent_param_map: std::collections::HashMap<CpsId, Bind> = parent_params.iter()
@@ -833,43 +818,42 @@ fn compute_captures_for_lift(
 
   let mut caps: Vec<(CpsId, Bind)> = Vec::new();
   let mut seen: std::collections::HashSet<CpsId> = std::collections::HashSet::new();
-  collect_captured_refs(fn_body, &parent_param_map, resolve, &mut caps, &mut seen);
+  collect_captured_refs(fn_body, &parent_param_map, &mut caps, &mut seen);
   caps
 }
 
-/// Walk an expression and collect refs that resolve to one of the parent's param ids.
+/// Walk an expression and collect refs that point to one of the parent's param ids.
 fn collect_captured_refs(
   expr: &Expr<'_>,
   parent_ids: &std::collections::HashMap<CpsId, Bind>,
-  resolve: &ResolveResult,
   out: &mut Vec<(CpsId, Bind)>,
   seen: &mut std::collections::HashSet<CpsId>,
 ) {
   match &expr.kind {
     ExprKind::LetFn { fn_body, cont, .. } => {
-      collect_captured_refs(fn_body, parent_ids, resolve, out, seen);
-      collect_captured_refs_cont(cont, parent_ids, resolve, out, seen);
+      collect_captured_refs(fn_body, parent_ids, out, seen);
+      collect_captured_refs_cont(cont, parent_ids, out, seen);
     }
     ExprKind::LetVal { val, cont, .. } => {
-      collect_captured_refs_val(val, parent_ids, resolve, out, seen);
-      collect_captured_refs_cont(cont, parent_ids, resolve, out, seen);
+      collect_captured_refs_val(val, parent_ids, out, seen);
+      collect_captured_refs_cont(cont, parent_ids, out, seen);
     }
     ExprKind::App { func, args } => {
       if let Callable::Val(v) = func {
-        collect_captured_refs_val(v, parent_ids, resolve, out, seen);
+        collect_captured_refs_val(v, parent_ids, out, seen);
       }
       for arg in args {
         match arg {
-          Arg::Val(v) | Arg::Spread(v) => collect_captured_refs_val(v, parent_ids, resolve, out, seen),
-          Arg::Cont(c) => collect_captured_refs_cont(c, parent_ids, resolve, out, seen),
-          Arg::Expr(e) => collect_captured_refs(e, parent_ids, resolve, out, seen),
+          Arg::Val(v) | Arg::Spread(v) => collect_captured_refs_val(v, parent_ids, out, seen),
+          Arg::Cont(c) => collect_captured_refs_cont(c, parent_ids, out, seen),
+          Arg::Expr(e) => collect_captured_refs(e, parent_ids, out, seen),
         }
       }
     }
     ExprKind::If { cond, then, else_ } => {
-      collect_captured_refs_val(cond, parent_ids, resolve, out, seen);
-      collect_captured_refs(then, parent_ids, resolve, out, seen);
-      collect_captured_refs(else_, parent_ids, resolve, out, seen);
+      collect_captured_refs_val(cond, parent_ids, out, seen);
+      collect_captured_refs(then, parent_ids, out, seen);
+      collect_captured_refs(else_, parent_ids, out, seen);
     }
   }
 }
@@ -877,7 +861,6 @@ fn collect_captured_refs(
 fn collect_captured_refs_cont(
   cont: &Cont<'_>,
   parent_ids: &std::collections::HashMap<CpsId, Bind>,
-  resolve: &ResolveResult,
   out: &mut Vec<(CpsId, Bind)>,
   seen: &mut std::collections::HashSet<CpsId>,
 ) {
@@ -887,29 +870,21 @@ fn collect_captured_refs_cont(
         out.push((*id, Bind::Cont));
       }
     }
-    Cont::Expr { body, .. } => collect_captured_refs(body, parent_ids, resolve, out, seen),
+    Cont::Expr { body, .. } => collect_captured_refs(body, parent_ids, out, seen),
   }
 }
 
 fn collect_captured_refs_val(
   val: &Val<'_>,
   parent_ids: &std::collections::HashMap<CpsId, Bind>,
-  resolve: &ResolveResult,
   out: &mut Vec<(CpsId, Bind)>,
   seen: &mut std::collections::HashSet<CpsId>,
 ) {
-  // Check if this val resolves to a parent param.
-  if let Some(Some(resolution)) = resolve.resolution.try_get(val.id) {
-    let bind_id = match resolution {
-      Resolution::Local(bind) | Resolution::Captured { bind, .. } => Some(*bind),
-      Resolution::Recursive(bind) => Some(*bind),
-      Resolution::Unresolved => None,
-    };
-    if let Some(bid) = bind_id {
-      if let Some(&kind) = parent_ids.get(&bid) {
-        if seen.insert(bid) {
-          out.push((bid, kind));
-        }
+  // Ref::Synth(bid) directly identifies the bind — check if it's a parent param.
+  if let ValKind::Ref(Ref::Synth(bid)) = &val.kind {
+    if let Some(&kind) = parent_ids.get(bid) {
+      if seen.insert(*bid) {
+        out.push((*bid, kind));
       }
     }
   }
