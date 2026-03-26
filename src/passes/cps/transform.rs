@@ -148,11 +148,17 @@ fn ref_val<'src>(g: &mut Gen, _bind: Bind, bind_id: CpsId, origin: Option<AstId>
 /// Create a Ref::Synth val for a source-level name reference (Ident or SynthIdent).
 /// Looks up the ref's AstId in scope resolution to find the bind's pre-allocated CpsId.
 fn scope_ref_val<'src>(g: &mut Gen, ref_ast_id: AstId) -> Val<'src> {
-  let cps_id = g.resolution.try_get(ref_ast_id)
-    .and_then(|opt| *opt)
-    .map(|bind_id| *g.bind_to_cps.get(bind_id))
-    .unwrap_or_else(|| CpsId(ref_ast_id.0)); // fallback: use ast_id directly (unresolved)
-  g.val(ValKind::Ref(Ref::Synth(cps_id)), Some(ref_ast_id))
+  match g.resolution.try_get(ref_ast_id).and_then(|opt| *opt) {
+    Some(bind_id) => {
+      let cps_id = *g.bind_to_cps.get(bind_id);
+      g.val(ValKind::Ref(Ref::Synth(cps_id)), Some(ref_ast_id))
+    }
+    None => {
+      // No binding found in scope — emit an unresolved ref carrying the AstId for display.
+      let cps_id = CpsId(ref_ast_id.0);
+      g.val(ValKind::Ref(Ref::Unresolved(cps_id)), Some(ref_ast_id))
+    }
+  }
 }
 
 fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src> {

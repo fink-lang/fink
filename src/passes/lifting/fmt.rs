@@ -147,13 +147,8 @@ fn fn_node(params: Vec<Node<'static>>, body_stmts: Vec<Node<'static>>) -> Node<'
 }
 
 // ---------------------------------------------------------------------------
-// Name rendering — strips · sigils for readability
+// Name rendering
 // ---------------------------------------------------------------------------
-
-fn strip_sigil(s: &str) -> &str {
-  // Strip leading · (multi-byte UTF-8 char, 2 bytes)
-  s.trim_start_matches('·')
-}
 
 fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
   match fc.ctx.origin.try_get(cps_id).and_then(|opt| *opt)
@@ -163,10 +158,23 @@ fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
       NodeKind::SynthIdent(n) => format!("·$_{}_{}", n, cps_id.0),
-      NodeKind::InfixOp { op, .. } => format!("·{}_{}", strip_sigil(op.src), cps_id.0),
       _ => format!("·v_{}", cps_id.0),
     },
     None => format!("·v_{}", cps_id.0),
+  }
+}
+
+fn render_unresolved_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
+  match fc.ctx.origin.try_get(cps_id).and_then(|opt| *opt)
+    .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
+    .and_then(|opt| *opt)
+  {
+    Some(node) => match &node.kind {
+      NodeKind::Ident(s) => format!("·∅{}", s),
+      NodeKind::SynthIdent(n) => format!("·∅$_{}", n),
+      _ => format!("·∅_{}", cps_id.0),
+    },
+    None => format!("·∅_{}", cps_id.0),
   }
 }
 
@@ -180,7 +188,8 @@ fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
 fn render_val(val: &Val<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match &val.kind {
     ValKind::Lit(lit) => lit_node(lit),
-    ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, fc)),
+    ValKind::Ref(Ref::Synth(bind_id))      => ident(&render_synth_name(*bind_id, fc)),
+    ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(val.id, fc)),
     ValKind::Panic           => ident("panic"),
     ValKind::ContRef(id)     => ident(&format!("·v_{}", id.0)),
     ValKind::BuiltIn(op)     => ident(&render_builtin_flat(op)),

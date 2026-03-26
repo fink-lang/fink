@@ -51,6 +51,19 @@
 // params by the original CpsId, which `synth_alias` maps to the new param).
 
 // ---------------------------------------------------------------------------
+// TODO: Module root representation
+//
+// Currently `lower_module` wraps the entire module body in a synthetic `·fn`
+// node (outer cont wrapper). This should be replaced:
+//
+//   - The module root is the raw `LetFn`/`LetVal` chain with no outer wrapper.
+//   - The chain terminates with `App { func: ContRef(ƒ_0), args: [all module-level binds] }`.
+//     e.g. `·ƒ_0 ·foo_0, ·bar_1, ·baz_2` — all top-level exported bindings as a flat arg list.
+//   - `ƒ_0` is the implicit module-exit continuation (provided by the runtime/linker).
+//   - Name resolution / import matching of those args is a separate pass.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // Node identity
 // ---------------------------------------------------------------------------
 
@@ -125,9 +138,12 @@ pub enum Bind {
 /// All references are `Ref::Synth(bind_cps_id)` — there is no string-based
 /// `Ref::Name`. Source refs use the pre-allocated CpsId from `bind_to_cps`;
 /// compiler-generated refs use the CpsId allocated on-the-fly.
+/// `Ref::Unresolved(ast_id)` is used when scope resolution found no binding
+/// for a name; the CpsId carries the origin AstId for display purposes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
-  Synth(CpsId),  // refers to the BindNode at the given CpsId
+  Synth(CpsId),       // refers to the BindNode at the given CpsId
+  Unresolved(CpsId),  // no binding found; CpsId derived from ref AstId for display
 }
 
 impl Ref {

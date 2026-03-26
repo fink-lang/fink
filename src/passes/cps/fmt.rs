@@ -44,10 +44,11 @@ impl<'a, 'src> Ctx<'a, 'src> {
 // ---------------------------------------------------------------------------
 
 pub fn fmt_with(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> String {
-  ast::fmt::fmt(&to_node(expr, ctx))
+  ast::fmt::fmt_block(&to_node(expr, ctx))
 }
 
 pub fn fmt_with_mapped(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, source_name: &str) -> (String, crate::sourcemap::SourceMap) {
+  // Note: fmt_block flag not applied to mapped variants (used for codegen source maps, not debug output)
   ast::fmt::fmt_mapped(&to_node(expr, ctx), source_name)
 }
 
@@ -58,7 +59,7 @@ pub fn fmt_with_mapped_content(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, source_name: 
 /// Format without origin map — falls back to string-based category detection.
 /// Used by tests that don't yet thread the prop graphs.
 pub fn fmt(expr: &Expr<'_>) -> String {
-  ast::fmt::fmt(&to_node_no_ctx(expr))
+  ast::fmt::fmt_block(&to_node_no_ctx(expr))
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +131,7 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match &v.kind {
     ValKind::Lit(lit) => lit_to_node(lit, loc),
     ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, ctx), loc),
+    ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(v.id, ctx), loc),
     ValKind::Panic => ident("·panic", dummy_loc()),
     ValKind::ContRef(id) => ident(&format!("·ƒ_{}", id.0), dummy_loc()),
     ValKind::BuiltIn(op) => ident(&render_builtin(op), dummy_loc()),
@@ -186,6 +188,18 @@ fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
       _ => format!("·v_{}", cps_id.0),
     },
     None => format!("·v_{}", cps_id.0),
+  }
+}
+
+/// Render an unresolved ref as `·∅name` (source name) or `·∅_N` (no origin).
+fn render_unresolved_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
+  match ctx.ast_node(cps_id) {
+    Some(node) => match &node.kind {
+      NodeKind::Ident(s) => format!("·∅{}", s),
+      NodeKind::SynthIdent(n) => format!("·∅$_{}", n),
+      _ => format!("·∅_{}", cps_id.0),
+    },
+    None => format!("·∅_{}", cps_id.0),
   }
 }
 

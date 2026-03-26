@@ -63,7 +63,7 @@ test 'chained arithmetic — cont body lifted', fn:
 
   | equals fink":
     ·v_23 = fn ·v_24, ·v_7:
-      ·x_1 = ·*_7
+      ·x_1 = ·v_7
       ·op_plus ·x_1, 4, ·v_24
 
     ·main_0 = ·v_3 = fn ·v_4:
@@ -133,7 +133,7 @@ test 'depth-2 closure', fn:
 
   | equals fink":
     ·v_46 = fn ·c_47, ·v_49, ·v_13:
-      ·op_plus ·+_13, ·c_47, ·v_49
+      ·op_plus ·v_13, ·c_47, ·v_49
 
     ·v_37 = fn ·a_38, ·b_40, ·c_3, ·v_10:
       ·v_53 = ·closure ·v_46, ·c_3, ·v_10
@@ -335,7 +335,7 @@ test 'recursive fn in match', fn:
       ·match_block ·n_71, ·v_73, ·v_39, ·v_100
 
     ·v_110 = fn ·v_111, ·v_30:
-      ·fib_0 ·+_30, ·v_111
+      ·fib_0 ·v_30, ·v_111
 
     ·v_86 = fn ·n_87, ·v_26:
       ·v_115 = ·closure ·v_110, ·v_26

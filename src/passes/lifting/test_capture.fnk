@@ -59,7 +59,8 @@ test 'self-recursive fn is pure', fn:
 
   | equals fink":
     ·fn
-      fn {cap: [·f_0]}, ·a_1, ·ƒ_4: ·f_0 ·a_1, ·ƒ_4
+      fn {cap: [·f_0]}, ·a_1, ·ƒ_4:
+        ·f_0 ·a_1, ·ƒ_4
       fn ·v_3:
         ·let ·v_3, fn ·f_0:
           ·ƒ_2 ·f_0
@@ -75,15 +76,18 @@ test 'mutual recursion — each fn captures the other', fn:
     ·fn
       fn ·ƒ_6:
         ·fn
-          fn {cap: [·g_1]}, ·a_2, ·ƒ_8: ·g_1 ·a_2, ·ƒ_8
+          fn {cap: [·g_1]}, ·a_2, ·ƒ_8:
+            ·g_1 ·a_2, ·ƒ_8
           fn ·v_7:
             ·let ·v_7, fn ·f_0:
               ·fn
-                fn {cap: [·f_0]}, ·b_3, ·ƒ_16: ·f_0 ·b_3, ·ƒ_16
+                fn {cap: [·f_0]}, ·b_3, ·ƒ_16:
+                  ·f_0 ·b_3, ·ƒ_16
                 fn ·v_15:
                   ·let ·v_15, fn ·g_1:
                     ·ƒ_6 ·g_1
-      fn ·v_5: ·ƒ_4 ·v_5
+      fn ·v_5:
+        ·ƒ_4 ·v_5
 
 
 ---
@@ -107,9 +111,12 @@ test 'depth-2 capture — fn b directly uses x, fn a does not', fn:
                 fn {cap: [·x_0]}, ·b_2, ·ƒ_10:
                   ·let ·x_0, fn ·v_12:
                     ·ƒ_10 ·v_12
-                fn ·v_9: ·ƒ_8 ·v_9
-            fn ·v_7: ·ƒ_5 ·v_7
-      fn ·v_4: ·ƒ_3 ·v_4
+                fn ·v_9:
+                  ·ƒ_8 ·v_9
+            fn ·v_7:
+              ·ƒ_5 ·v_7
+      fn ·v_4:
+        ·ƒ_3 ·v_4
 
 test 'multiple captures', fn:
   expect closure_capture fink":
@@ -124,9 +131,12 @@ test 'multiple captures', fn:
         ·let 1, fn ·x_0:
           ·let 2, fn ·y_1:
             ·fn
-              fn {cap: [·x_0, ·y_1]}, ·a_2, ·ƒ_9: ·op_plus ·x_0, ·y_1, ·ƒ_9
-              fn ·v_8: ·ƒ_5 ·v_8
-      fn ·v_4: ·ƒ_3 ·v_4
+              fn {cap: [·x_0, ·y_1]}, ·a_2, ·ƒ_9:
+                ·op_plus ·x_0, ·y_1, ·ƒ_9
+              fn ·v_8:
+                ·ƒ_5 ·v_8
+      fn ·v_4:
+        ·ƒ_3 ·v_4
 
 
 ---
@@ -143,8 +153,10 @@ test 'fn captures one outer binding', fn:
     ·fn
       fn ·a_1, ·ƒ_5:
         ·fn
-          fn {cap: [·a_1]}, ·b_2, ·ƒ_7: ·op_plus ·a_1, ·b_2, ·ƒ_7
-          fn ·v_6: ·ƒ_5 ·v_6
+          fn {cap: [·a_1]}, ·b_2, ·ƒ_7:
+            ·op_plus ·a_1, ·b_2, ·ƒ_7
+          fn ·v_6:
+            ·ƒ_5 ·v_6
       fn ·v_4:
         ·let ·v_4, fn ·foo_0:
           ·ƒ_3 ·foo_0

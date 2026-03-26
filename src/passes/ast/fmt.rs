@@ -4,15 +4,33 @@
 // associated with its source location.  The public API offers both
 // `fmt` (string only) and `fmt_mapped` (string + source map).
 
+use std::cell::Cell;
+
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token};
 use crate::sourcemap::{MappedWriter, SourceMap};
+
+thread_local! {
+  /// When true, fn bodies are never inlined — always rendered as indented blocks.
+  /// Used by CPS/lifting formatters where all fn bodies should be block-style.
+  static FORCE_BLOCK_FN_BODIES: Cell<bool> = const { Cell::new(false) };
+}
 
 /// Format an AST back to Fink source, discarding source-map info.
 pub fn fmt(node: &Node) -> String {
   let mut out = MappedWriter::new();
   fmt_node(node, &mut out, 0);
   out.finish_string()
+}
+
+/// Format an AST back to Fink source with fn bodies always on new lines (for CPS output).
+pub fn fmt_block(node: &Node) -> String {
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(true));
+  let mut out = MappedWriter::new();
+  fmt_node(node, &mut out, 0);
+  let result = out.finish_string();
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(false));
+  result
 }
 
 /// Format an AST back to Fink source, returning source + source map.
@@ -463,6 +481,7 @@ fn fmt_fn_with_inline(params: &Node, sep: &Token, body: &[Node], out: &mut Mappe
 
 /// Inline after `fn params: ` in general (standalone fn, stacked fn args)
 fn is_inline_expr(node: &Node) -> bool {
+  if FORCE_BLOCK_FN_BODIES.with(|f| f.get()) { return false; }
   if is_multiline(node) { return false; }
   match &node.kind {
     // apply with no trailing fn args and no multiline args → inline
@@ -473,6 +492,7 @@ fn is_inline_expr(node: &Node) -> bool {
 
 /// Inline after `fn params: ` when it's the single trailing fn in an apply call
 fn is_inline_single_trailing(node: &Node) -> bool {
+  if FORCE_BLOCK_FN_BODIES.with(|f| f.get()) { return false; }
   is_atom(node)
 }
 

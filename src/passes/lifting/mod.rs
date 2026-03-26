@@ -761,6 +761,7 @@ fn rewrite_refs_val<'src>(val: Val<'src>, map: &std::collections::HashMap<CpsId,
         val
       }
     }
+    ValKind::Ref(Ref::Unresolved(_)) => val,
     ValKind::ContRef(id) => {
       if let Some(&new_id) = map.get(id) {
         Val { id: val.id, kind: ValKind::ContRef(new_id) }

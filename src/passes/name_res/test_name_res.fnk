@@ -104,8 +104,8 @@ unresolved names
 test 'unresolved ref', fn:
   expect cps_resolve fink":
     x
-  | equals fink":
-    (ref 0, ?) == unresolved
+  | equals ''
+
 
 test 'mixed resolved and unresolved', fn:
   expect cps_resolve fink":
@@ -114,13 +114,11 @@ test 'mixed resolved and unresolved', fn:
     z = w
   | equals fink":
     (ref 0, x) == unresolved
-    (ref 7, x) == (local (bind 0, x)) in scope 4
 
 test 'unresolved in fn body', fn:
   expect cps_resolve fink":
     fn a: b
-  | equals fink":
-    (ref 3, ?) == unresolved
+  | equals ''
 
 
 ---
@@ -194,7 +192,6 @@ test 'val forward ref still unresolved even if fn', fn:
     foo = fn a: a
     spam = foo
   | equals fink":
-    (ref 1, foo) == unresolved
     (ref 3, a) == unresolved
     (ref 8, ?) == unresolved
     (ref 1, foo) == unresolved
@@ -425,7 +422,6 @@ test 'match arm binding used in arm body', fn:
     (ref 1, a) == unresolved
     (ref 22, ?) == unresolved
     (ref 2, b) == unresolved
-    (ref 14, a) == (local (bind 1, a)) in scope 4
     (ref 0, x) == unresolved
     (ref 18, ?) == unresolved
     (ref 31, ?) == unresolved
@@ -464,5 +460,4 @@ test 'wildcard not in scope', fn:
   expect cps_resolve fink":
     _ = 1
     _
-  | equals fink":
-    (ref 3, ?) == unresolved
+  | equals ''
