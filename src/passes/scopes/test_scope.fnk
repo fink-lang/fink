@@ -64,6 +64,31 @@ test 'fn params in scope', fn:
         ref 'b', 4
 
 
+
+---
+unresolved
+---
+
+test 'unresolved ref', fn:
+  expect scope fink":
+    ni = spam
+    spam = ni
+
+    main = fn:
+      foo 1
+
+  | equals fink":
+    scope 13, 'module':
+      bind 0, 'ni'
+      bind 3, 'spam'
+      bind 6, 'main'
+
+      scope 11, 'fn':
+        unresolved 'foo'
+      fwd_ref 'spam', 3
+      ref 'ni', 0
+
+
 ---
 module level — mutual recursion
 ---
@@ -171,19 +196,4 @@ test 'inner binding shadows outer', fn:
 
       scope 36, 'fn':
         ref 'add', 0, depth 1
-
-
----
-unresolved
----
-
-test 'unresolved ref', fn:
-  expect scope fink":
-    main = fn: foo 1
-  | equals fink":
-    scope 7, 'module':
-      bind 0, 'main'
-
-      scope 5, 'fn':
-        unresolved 'foo'
 
