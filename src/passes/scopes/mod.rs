@@ -458,9 +458,23 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
       }
     }
 
-    NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
+    NodeKind::LitSeq { items, .. } => {
       for item in &items.items {
         walk_node(item, scope, ctx);
+      }
+    }
+
+    NodeKind::LitRec { items, .. } => {
+      // Record literals use Arm nodes for fields ({x: 1} → Arm(Ident("x"), LitInt("1"))).
+      // Don't create arm scopes — these are value expressions, not pattern matches.
+      for item in &items.items {
+        match &item.kind {
+          NodeKind::Arm { lhs: _, body, .. } => {
+            // Walk the field value only (not the key — it's a literal key, not a binding).
+            for stmt in &body.items { walk_node(stmt, scope, ctx); }
+          }
+          _ => walk_node(item, scope, ctx),
+        }
       }
     }
 

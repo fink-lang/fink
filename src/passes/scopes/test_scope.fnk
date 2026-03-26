@@ -201,3 +201,59 @@ test 'inner binding shadows outer', fn:
         ref 'add', 0, depth 1
       bind 30, 'main'
 
+
+---
+destructuring
+---
+
+test 'seq destructure', fn:
+  expect scope fink":
+    [a, b] = [1, 2]
+    a + b
+  | equals fink":
+    scope 10, 'module':
+      bind 0, 'a'
+      bind 1, 'b'
+      ref 'a', 0
+      ref 'b', 1
+
+
+test 'nested seq destructure', fn:
+  expect scope fink":
+    [a, [b, c]] = [1, [2, 3]]
+    a + b + c
+  | equals fink":
+    scope 16, 'module':
+      bind 0, 'a'
+      bind 1, 'b'
+      bind 2, 'c'
+      ref 'a', 0
+      ref 'b', 1
+      ref 'c', 2
+
+
+test 'record destructure', fn:
+  expect scope fink":
+    {x, y} = {x: 1, y: 2}
+    x + y
+  | equals fink":
+    scope 14, 'module':
+      bind 0, 'x'
+      bind 1, 'y'
+      ref 'x', 0
+      ref 'y', 1
+
+
+test 'fn with destructured params', fn:
+  expect scope fink":
+    f = fn [a, b]: a + b
+  | equals fink":
+    scope 10, 'module':
+
+      scope 8, 'fn':
+        bind 1, 'a'
+        bind 2, 'b'
+        ref 'a', 1
+        ref 'b', 2
+      bind 0, 'f'
+
