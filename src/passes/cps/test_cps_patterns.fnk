@@ -489,8 +489,8 @@ test 'match child ·scope — binding in arm body', fn:
       fn ·a_0, ·ƒ_11:
         ·let ·a_0, fn ·ni_1:
           ·ƒ_11 ·ni_1
-      fn ·v_20:
-        ·match_block ·∅n, ·v_20, ·ƒ_2
+      fn ·v_22:
+        ·match_block ·∅n, ·v_22, ·ƒ_2
 
 
 ---

@@ -290,24 +290,24 @@ test 'match with binding', fn:
       r
 
   | equals fink":
-    ·v_57 = fn ·v_58, ·v_24:
+    ·v_59 = fn ·v_60, ·v_24:
       ·r_2 = ·v_24
-      ·v_58 ·r_2
+      ·v_60 ·r_2
 
-    ·v_37 = fn ·n_38, ·v_40, ·v_22:
-      ·v_62 = ·closure ·v_57, ·v_40
-      ·match_block ·n_38, ·v_22, ·v_62
+    ·v_39 = fn ·n_40, ·v_42, ·v_22:
+      ·v_64 = ·closure ·v_59, ·v_42
+      ·match_block ·n_40, ·v_22, ·v_64
 
-    ·v_48 = fn ·n_49, ·v_13:
-      ·op_plus ·n_49, 1, ·v_13
+    ·v_50 = fn ·n_51, ·v_13:
+      ·op_plus ·n_51, 1, ·v_13
 
-    ·v_66 = fn ·v_10, ·v_8, ·v_9:
+    ·v_68 = fn ·v_10, ·v_8, ·v_9:
       ·match_value ·v_10, 0, ·v_8, ·v_9
 
     ·foo_0 = ·v_4 = fn ·n_1, ·v_5:
-      ·v_44 = ·closure ·v_37, ·n_1, ·v_5
-      ·v_53 = ·closure ·v_48, ·n_1
-      ·match_arm ·v_66, ·v_53, ·v_44
+      ·v_46 = ·closure ·v_39, ·n_1, ·v_5
+      ·v_55 = ·closure ·v_50, ·n_1
+      ·match_arm ·v_68, ·v_55, ·v_46
 
     ·v_3 ·foo_0
 
@@ -321,39 +321,39 @@ test 'recursive fn in match', fn:
       r
 
   | equals fink":
-    ·v_95 = fn ·v_96, ·v_41:
+    ·v_97 = fn ·v_98, ·v_41:
       ·r_2 = ·v_41
-      ·v_96 ·r_2
+      ·v_98 ·r_2
 
-    ·v_70 = fn ·n_71, ·v_73, ·v_75, ·v_39:
-      ·v_100 = ·closure ·v_95, ·v_75
-      ·match_block ·n_71, ·v_73, ·v_39, ·v_100
+    ·v_72 = fn ·n_73, ·v_75, ·v_77, ·v_39:
+      ·v_102 = ·closure ·v_97, ·v_77
+      ·match_block ·n_73, ·v_75, ·v_39, ·v_102
 
-    ·v_110 = fn ·v_111, ·v_30:
-      ·fib_0 ·v_30, ·v_111
+    ·v_112 = fn ·v_113, ·v_30:
+      ·fib_0 ·v_30, ·v_113
 
-    ·v_86 = fn ·n_87, ·v_26:
-      ·v_115 = ·closure ·v_110, ·v_26
-      ·op_plus ·n_87, 1, ·v_115
+    ·v_88 = fn ·n_89, ·v_26:
+      ·v_117 = ·closure ·v_112, ·v_26
+      ·op_plus ·n_89, 1, ·v_117
 
-    ·v_107 = fn ·v_24, ·v_22, ·v_23:
+    ·v_109 = fn ·v_24, ·v_22, ·v_23:
       ·v_23 _
 
-    ·v_56 = fn ·n_57, ·v_59, ·v_20:
-      ·v_79 = ·closure ·v_70, ·n_57, ·v_20, ·v_59
-      ·v_91 = ·closure ·v_86, ·n_57
-      ·match_arm ·v_107, ·v_91, ·v_79
+    ·v_58 = fn ·n_59, ·v_61, ·v_20:
+      ·v_81 = ·closure ·v_72, ·n_59, ·v_20, ·v_61
+      ·v_93 = ·closure ·v_88, ·n_59
+      ·match_arm ·v_109, ·v_93, ·v_81
 
-    ·v_83 = fn ·v_13:
+    ·v_85 = fn ·v_13:
       ·v_13 1
 
-    ·v_104 = fn ·v_10, ·v_8, ·v_9:
+    ·v_106 = fn ·v_10, ·v_8, ·v_9:
       ·match_value ·v_10, 0, ·v_8, ·v_9
 
-    ·v_67 = fn ·v_63:
-      ·match_arm ·v_104, ·v_83, ·v_63
+    ·v_69 = fn ·v_65:
+      ·match_arm ·v_106, ·v_85, ·v_65
 
     ·fib_0 = ·v_4 = fn ·n_1, ·v_5:
-      ·closure ·v_56, ·n_1, ·v_5, ·v_67
+      ·closure ·v_58, ·n_1, ·v_5, ·v_69
 
     ·v_3 ·fib_0

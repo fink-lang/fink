@@ -418,7 +418,7 @@ test 'expression result discarded', fn:
       fn ·ƒ_2:
         ·∅foo 1, fn ·v_5:
           ·let ·v_5, fn ·v_7:
-            ·ƒ_2 ·v_7
+            ·ƒ_2 ·∅bar
       fn ·v_1:
         ·ƒ_0 ·v_1
 
@@ -660,8 +660,8 @@ test 'group with binding — immediately-invoked ·closure', fn:
           ·let ·v_7, fn ·ni_1:
             ·ƒ_4 ·ni_1
       fn ·v_3:
-        ·v_3 fn ·v_13:
-          ·let ·v_13, fn ·spam_0:
+        ·v_3 fn ·v_15:
+          ·let ·v_15, fn ·spam_0:
             ·ƒ_2 ·spam_0
 
 ---
@@ -845,14 +845,14 @@ test 'shadowed binding — inner add does not affect outer', fn:
                       ·let ·v_22, fn ·add_8:
                         ·op_minus ·a_5, ·add_8, fn ·v_30:
                           ·let ·v_30, fn ·v_32:
-                            ·ƒ_21 ·v_32
+                            ·ƒ_21 ·b_6
                 fn ·v_20:
                   ·let ·v_20, fn ·sub_1:
                     ·fn
-                      fn ·ƒ_43:
-                        ·add_0 3, 4, ·ƒ_43
-                      fn ·v_42:
-                        ·let ·v_42, fn ·main_2:
+                      fn ·ƒ_45:
+                        ·add_0 3, 4, ·ƒ_45
+                      fn ·v_44:
+                        ·let ·v_44, fn ·main_2:
                           ·ƒ_11 ·main_2
       fn ·v_10:
         ·ƒ_9 ·v_10

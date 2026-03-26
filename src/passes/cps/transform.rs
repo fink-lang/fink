@@ -313,6 +313,7 @@ fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont<
     let o = Some(expr.id);
     if is_last {
       let (val, pending) = lower(g, expr);
+      let last_has_pendings = !pending.is_empty();
       all_pending.extend(pending);
       if all_pending.is_empty() {
         // Bare atom at tail — pass val directly to cont.
@@ -324,7 +325,22 @@ fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont<
           }
         };
       }
-      return wrap(g, all_pending, tail);
+      // When the last expression is a standalone ref (no pendings of its own),
+      // build an explicit App so the ref Val's CpsId origin is preserved.
+      // When the last expression produced pendings (e.g. a call), the val is a
+      // result ref — its origin flows through the pending chain naturally.
+      let explicit_tail = if !last_has_pendings {
+        match tail {
+          Cont::Ref(cont_id) => {
+            let app = tail_app(g, cont_id, val, o);
+            Cont::Expr { args: vec![], body: Box::new(app) }
+          }
+          tail => tail,
+        }
+      } else {
+        tail
+      };
+      return wrap(g, all_pending, explicit_tail);
     } else {
       match &expr.kind {
         // Bind introduces a name available in subsequent expressions.
