@@ -247,7 +247,7 @@ fn collect_deep_captured_binds(
 }
 
 fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<(CpsId, Bind)>) {
-  let is_ref = matches!(&val.kind, ValKind::Ref(Ref::Name) | ValKind::Ref(Ref::Synth(_)));
+  let is_ref = matches!(&val.kind, ValKind::Ref(Ref::Synth(_)));
   if is_ref
     && let Some(Some(Resolution::Captured { bind, bind_kind, .. })) = graphs.resolution.try_get(val.id)
     && !out.iter().any(|(id, _)| id == bind)
@@ -257,7 +257,7 @@ fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<(CpsId, Bin
     // accessible via collect_scope_names — don't need capture threading.
     // Fn params have bind_scope in a fn scope (has parent_scope entry).
     // Continuation binds have bind_scope in a continuation scope (no parent_scope).
-    if *bind_kind != Bind::Name {
+    if !bind_kind.is_synth_name() {
       let in_fn_scope = graphs.bind_scope.try_get(*bind)
         .and_then(|s| *s)
         .and_then(|scope| graphs.parent_scope.try_get(scope).and_then(|p| *p))
@@ -412,23 +412,14 @@ fn bind_to_scope<'src>(
   graphs: &mut Graphs,
 ) {
   let entry = ScopeEntry { bind_id: bind.id, fn_depth, bind_kind: bind.kind };
-  match bind.kind {
-    Bind::Name => {
-      if let Some(name) = ctx.source_name(bind.id)
-        && name != "_" {
-          scope.names.insert(name, entry);
-          graphs.bind_scope.set(bind.id, Some(scope_id));
-      }
-    }
-    Bind::Synth | Bind::Cont => {
-      scope.synths.insert(bind.id, entry);
-      graphs.bind_scope.set(bind.id, Some(scope_id));
-      // If this param has a synth alias (from closure_lifting), also register
-      // the old CpsId so Ref::Synth(old_id) in the hoisted fn body resolves.
-      if let Some(Some(old_id)) = ctx.synth_alias.try_get(bind.id) {
-        scope.synths.insert(*old_id, entry);
-      }
-    }
+  // All binds (SynthName, Synth, Cont) register by CpsId in synths.
+  // Ref::Synth(cps_id) lookup goes through synths, not names.
+  scope.synths.insert(bind.id, entry);
+  graphs.bind_scope.set(bind.id, Some(scope_id));
+  // If this param has a synth alias (from closure_lifting), also register
+  // the old CpsId so Ref::Synth(old_id) in the hoisted fn body resolves.
+  if let Some(Some(old_id)) = ctx.synth_alias.try_get(bind.id) {
+    scope.synths.insert(*old_id, entry);
   }
 }
 
@@ -459,27 +450,15 @@ fn resolve_val<'src>(
   scope: &Scope<'src>,
   self_bind: Option<CpsId>,
   fn_depth: u32,
-  ctx: &Ctx<'_, 'src>,
+  _ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  if let ValKind::Ref(ref_) = &val.kind {
-    match ref_ {
-      Ref::Name => {
-        if let Some(name) = ctx.source_name(val.id) {
-          if let Some(entry) = scope.names.get(name) {
-            let resolution = classify(entry, fn_depth, self_bind);
-            graphs.resolution.set(val.id, Some(resolution));
-          } else {
-            graphs.resolution.set(val.id, Some(Resolution::Unresolved));
-          }
-        }
-      }
-      Ref::Synth(bind_id) => {
-        if let Some(entry) = scope.synths.get(bind_id) {
-          let resolution = classify(entry, fn_depth, self_bind);
-          graphs.resolution.set(val.id, Some(resolution));
-        }
-      }
+  if let ValKind::Ref(Ref::Synth(bind_id)) = &val.kind {
+    if let Some(entry) = scope.synths.get(bind_id) {
+      let resolution = classify(entry, fn_depth, self_bind);
+      graphs.resolution.set(val.id, Some(resolution));
+    } else {
+      graphs.resolution.set(val.id, Some(Resolution::Unresolved));
     }
   }
 }
@@ -689,9 +668,9 @@ mod tests {
     ctx: &Ctx<'_, 'src>,
     out: &mut Vec<String>,
   ) {
-    if let ValKind::Ref(Ref::Name) = &val.kind {
-      let ref_name = ctx.source_name(val.id).unwrap_or("?");
-      match result.resolution.try_get(val.id) {
+    if let ValKind::Ref(Ref::Synth(ref_id)) = &val.kind {
+      let ref_name = ctx.source_name(*ref_id).unwrap_or("?");
+      match result.resolution.try_get(*ref_id) {
         Some(Some(Resolution::Local(bind_id))) => {
           let bind_name = ctx.source_name(*bind_id).unwrap_or("?");
           let scope = result.bind_scope.try_get(*bind_id)
@@ -700,7 +679,7 @@ mod tests {
             .unwrap_or(0);
           out.push(format!(
             "(ref {}, {}) == (local (bind {}, {})) in scope {}",
-            val.id.0, ref_name, bind_id.0, bind_name, scope
+            ref_id.0, ref_name, bind_id.0, bind_name, scope
           ));
         }
         Some(Some(Resolution::Captured { bind, depth, .. })) => {
@@ -711,7 +690,7 @@ mod tests {
             .unwrap_or(0);
           out.push(format!(
             "(ref {}, {}) == (captured {}, (bind {}, {})) in scope {}",
-            val.id.0, ref_name, depth, bind.0, bind_name, scope
+            ref_id.0, ref_name, depth, bind.0, bind_name, scope
           ));
         }
         Some(Some(Resolution::Recursive(bind_id))) => {
@@ -722,13 +701,13 @@ mod tests {
             .unwrap_or(0);
           out.push(format!(
             "(ref {}, {}) == (recursive (bind {}, {})) in scope {}",
-            val.id.0, ref_name, bind_id.0, bind_name, scope
+            ref_id.0, ref_name, bind_id.0, bind_name, scope
           ));
         }
         Some(Some(Resolution::Unresolved)) | Some(None) | None => {
           out.push(format!(
             "(ref {}, {}) == unresolved",
-            val.id.0, ref_name
+            ref_id.0, ref_name
           ));
         }
       }
@@ -794,7 +773,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let node_count = cps.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, synth_alias: &empty_alias };
@@ -804,14 +784,15 @@ mod tests {
     }
   }
 
-  /// Run parse → CPS → cont_lift → name_res. Emit BOTH Ref::Name and Ref::Synth
-  /// resolution. Synth refs that don't have a resolution are reported as `unresolved`.
+  /// Run parse → CPS → cont_lift → name_res. Emit Ref::Synth resolution.
+  /// Synth refs that don't have a resolution are reported as `unresolved`.
   fn cps_resolve_synth(src: &str) -> String {
     use crate::passes::lifting::lift;
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let lifted = lift(cps, &ast_index);
         let node_count = lifted.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &empty_alias);
@@ -913,7 +894,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let node_count = cps.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, synth_alias: &empty_alias };

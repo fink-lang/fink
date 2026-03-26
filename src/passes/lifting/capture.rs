@@ -143,7 +143,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let node_count = cps.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let resolve_result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
         let cap_graph = analyse(&cps, &resolve_result);

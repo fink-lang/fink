@@ -155,41 +155,32 @@ fn strip_sigil(s: &str) -> &str {
   s.trim_start_matches('·')
 }
 
+fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
+  match fc.ctx.origin.try_get(cps_id).and_then(|opt| *opt)
+    .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
+    .and_then(|opt| *opt)
+  {
+    Some(node) => match &node.kind {
+      NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
+      NodeKind::SynthIdent(n) => format!("·$_{}_{}", n, cps_id.0),
+      NodeKind::InfixOp { op, .. } => format!("·{}_{}", strip_sigil(op.src), cps_id.0),
+      _ => format!("·v_{}", cps_id.0),
+    },
+    None => format!("·v_{}", cps_id.0),
+  }
+}
+
 fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
   match bind.kind {
+    Bind::SynthName => render_synth_name(bind.id, fc),
     Bind::Synth | Bind::Cont => format!("·v_{}", bind.id.0),
-    Bind::Name  => {
-      match fc.ctx.origin.try_get(bind.id).and_then(|opt| *opt)
-        .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
-        .and_then(|opt| *opt)
-      {
-        Some(node) => match &node.kind {
-          NodeKind::Ident(s) => s.to_string(),
-          NodeKind::InfixOp { op, .. } => strip_sigil(op.src).to_string(),
-          _ => format!("·v_{}", bind.id.0),
-        },
-        None => format!("·v_{}", bind.id.0),
-      }
-    }
   }
 }
 
 fn render_val(val: &Val<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match &val.kind {
     ValKind::Lit(lit) => lit_node(lit),
-    ValKind::Ref(Ref::Name) => {
-      let name = fc.ctx.origin.try_get(val.id).and_then(|opt| *opt)
-        .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
-        .and_then(|opt| *opt)
-        .and_then(|node| match &node.kind {
-          NodeKind::Ident(s) => Some(s.to_string()),
-          NodeKind::InfixOp { op, .. } => Some(strip_sigil(op.src).to_string()),
-          _ => None,
-        })
-        .unwrap_or_else(|| format!("·v_{}", val.id.0));
-      ident(&name)
-    }
-    ValKind::Ref(Ref::Synth(bind_id)) => ident(&format!("·v_{}", bind_id.0)),
+    ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, fc)),
     ValKind::Panic           => ident("panic"),
     ValKind::ContRef(id)     => ident(&format!("·v_{}", id.0)),
     ValKind::BuiltIn(op)     => ident(&render_builtin_flat(op)),

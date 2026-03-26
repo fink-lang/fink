@@ -77,7 +77,8 @@ fn main() {
       match fink::parser::parse(&src) {
         Ok(r) => {
           let ast_index = fink::ast::build_index(&r);
-          let cps = fink::passes::cps::transform::lower_expr(&r.root);
+          let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+          let cps = fink::passes::cps::transform::lower_expr(&r.root, &scope);
 
           // --pass=N selects pipeline stage:
           //   0 (default): raw CPS after lower_expr

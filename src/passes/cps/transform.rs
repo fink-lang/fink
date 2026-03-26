@@ -21,6 +21,7 @@
 
 use crate::ast::{AstId, CmpPart, Node, NodeKind};
 use crate::propgraph::PropGraph;
+use crate::passes::scopes::{BindId, BindOrigin, ScopeResult};
 use super::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Ref, Lit,
   Param, Val, ValKind,
@@ -30,26 +31,47 @@ use super::ir::{
 // Node allocator
 // ---------------------------------------------------------------------------
 
-pub struct Gen {
+pub struct Gen<'scope> {
   /// Maps each CPS node to its originating AST node (if any).
+  /// Pre-filled for scope binds (CpsId 0..binds.len()); on-the-fly for compiler temps.
   origin: PropGraph<CpsId, Option<AstId>>,
+  /// Maps each scope BindId to its pre-allocated CpsId (CpsId(bind_id.0)).
+  bind_to_cps: PropGraph<BindId, CpsId>,
+  /// Reverse map: bind-site AstId → pre-allocated CpsId.
+  /// Populated from scope.binds during Gen::new.
+  bind_site_to_cps: std::collections::HashMap<u32, CpsId>,
+  /// Scope resolution: ref AstId → BindId. Used to emit Ref::Synth at ref sites.
+  resolution: &'scope PropGraph<AstId, Option<BindId>>,
   /// The current continuation — the `·ƒ_cont` in scope for the current function body.
   /// Set to the module-level cont at transform start; swapped per LetFn scope.
   cont: CpsId,
 }
 
-impl Default for Gen {
-  fn default() -> Self {
-    Self::new()
-  }
-}
+impl<'scope> Gen<'scope> {
+  pub fn new(scope: &'scope ScopeResult) -> Self {
+    let n = scope.binds.len();
+    let mut origin: PropGraph<CpsId, Option<AstId>> = PropGraph::with_size(n, None);
+    let mut bind_to_cps: PropGraph<BindId, CpsId> = PropGraph::new();
+    let mut bind_site_to_cps: std::collections::HashMap<u32, CpsId> = std::collections::HashMap::new();
 
-impl Gen {
-  pub fn new() -> Self {
-    let mut origin = PropGraph::new();
-    // Allocate the module-level cont (·ƒ_halt) — id 0.
+    // Pre-allocate CpsIds for all scope binds: CpsId(i) ↔ BindId(i).
+    for i in 0..n {
+      let bind_id = BindId(i as u32);
+      let cps_id = CpsId(i as u32);
+      let ast_id = match scope.binds.get(bind_id).origin {
+        BindOrigin::Ast(ast_id) => {
+          bind_site_to_cps.insert(ast_id.0, cps_id);
+          Some(ast_id)
+        }
+        BindOrigin::Builtin(_) => None,
+      };
+      origin.set(cps_id, ast_id);
+      bind_to_cps.push(cps_id);
+    }
+
+    // Allocate the module-level cont (·ƒ_halt) — first id after the pre-allocated range.
     let cont_id: CpsId = origin.push(None);
-    Gen { origin, cont: cont_id }
+    Gen { origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, cont: cont_id }
   }
 
   /// Allocate a fresh cont BindNode, set it as the current cont, and return
@@ -97,6 +119,14 @@ impl Gen {
     BindNode { id, kind }
   }
 
+  /// Build a SynthName BindNode using the pre-allocated CpsId for the given AstId.
+  /// The AstId must correspond to a binding site registered in the scope analysis.
+  fn bind_name(&mut self, ast_id: AstId) -> BindNode {
+    let cps_id = self.bind_site_to_cps.get(&ast_id.0).copied()
+      .unwrap_or_else(|| panic!("bind_name: no CpsId for bind-site AstId {:?}", ast_id));
+    BindNode { id: cps_id, kind: Bind::SynthName }
+  }
+
   fn next_cps_id(&mut self, origin: Option<AstId>) -> CpsId {
     self.origin.push(origin)
   }
@@ -110,19 +140,19 @@ impl Gen {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Create a Ref val from a Bind kind and the bind node's CpsId.
-/// `Bind::Name` → `Ref::Name`, `Bind::Synth`/`Bind::Cont` → `Ref::Synth(bind_id)`.
-fn ref_val<'src>(g: &mut Gen, bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val<'src> {
-  let kind = match bind {
-    Bind::Name => Ref::Name,
-    Bind::Synth | Bind::Cont => Ref::Synth(bind_id),
-  };
-  g.val(ValKind::Ref(kind), origin)
+/// Create a Ref::Synth val pointing at the given bind's CpsId.
+fn ref_val<'src>(g: &mut Gen, _bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val<'src> {
+  g.val(ValKind::Ref(Ref::Synth(bind_id)), origin)
 }
 
-/// Create a Ref::Name val for a user name reference.
-fn name_ref_val<'src>(g: &mut Gen, origin: Option<AstId>) -> Val<'src> {
-  g.val(ValKind::Ref(Ref::Name), origin)
+/// Create a Ref::Synth val for a source-level name reference (Ident or SynthIdent).
+/// Looks up the ref's AstId in scope resolution to find the bind's pre-allocated CpsId.
+fn scope_ref_val<'src>(g: &mut Gen, ref_ast_id: AstId) -> Val<'src> {
+  let cps_id = g.resolution.try_get(ref_ast_id)
+    .and_then(|opt| *opt)
+    .map(|bind_id| *g.bind_to_cps.get(bind_id))
+    .unwrap_or_else(|| CpsId(ref_ast_id.0)); // fallback: use ast_id directly (unresolved)
+  g.val(ValKind::Ref(Ref::Synth(cps_id)), Some(ref_ast_id))
 }
 
 fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src> {
@@ -162,11 +192,11 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     NodeKind::LitDecimal(s) => (lit_val(g, Lit::Decimal(parse_decimal(s)), o), vec![]),
     NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(s), o), vec![]),
 
-    // ---- identifier reference — scope lookup ----
-    NodeKind::Ident(_) | NodeKind::SynthIdent(_) => (name_ref_val(g, o), vec![]),
+    // ---- identifier reference — resolved via scope analysis ----
+    NodeKind::Ident(_) | NodeKind::SynthIdent(_) => (scope_ref_val(g, node.id), vec![]),
 
     // ---- wildcard ----
-    NodeKind::Wildcard => (name_ref_val(g, o), vec![]),
+    NodeKind::Wildcard => (scope_ref_val(g, node.id), vec![]),
 
     // ---- group ----
     // A plain group `(expr)` is transparent.
@@ -357,7 +387,7 @@ fn lower_bind<'src>(
       let result_origin = match &lhs.kind {
         NodeKind::Ident(_) => Some(lhs.id),
         NodeKind::InfixOp { op, .. } if matches!(op.src, ".." | "...") => Some(rhs.id),
-        NodeKind::InfixOp { .. } => Some(extract_bind(lhs).1),
+        NodeKind::InfixOp { .. } => Some(extract_bind_ast_id(lhs)),
         _ => origin,
       };
       (ref_val(g, bound_kind, bound_id, result_origin), pending)
@@ -449,23 +479,19 @@ fn extract_params_with_gen<'src>(
   };
   for p in nodes {
     match &p.kind {
-      NodeKind::Ident(_) => param_list.push(Param::Name(g.bind(Bind::Name, Some(p.id)))),
-      NodeKind::Wildcard => param_list.push(Param::Name(g.bind(Bind::Name, Some(p.id)))),
+      NodeKind::Ident(_) => param_list.push(Param::Name(g.bind_name(p.id))),
+      NodeKind::Wildcard => param_list.push(Param::Name(g.bind(Bind::Synth, Some(p.id)))),
       NodeKind::Patterns(ps) => {
         for inner in &ps.items {
-          let bind_kind = match &inner.kind {
-            NodeKind::Ident(_) => Bind::Name,
-            _ => Bind::Name,
-          };
-          param_list.push(Param::Name(g.bind(bind_kind, Some(inner.id))));
+          param_list.push(Param::Name(g.bind_name(inner.id)));
         }
       }
       NodeKind::Spread { inner, .. } => {
-        let (bind_kind, bind_origin) = match inner.as_deref() {
-          Some(node @ Node { kind: NodeKind::Ident(_), .. }) => (Bind::Name, Some(node.id)),
-          _ => (Bind::Name, Some(p.id)),
+        let bind = match inner.as_deref() {
+          Some(node @ Node { kind: NodeKind::Ident(_), .. }) => g.bind_name(node.id),
+          _ => g.bind(Bind::Synth, Some(p.id)),
         };
-        param_list.push(Param::Spread(g.bind(bind_kind, bind_origin)));
+        param_list.push(Param::Spread(bind));
       }
       // Complex destructuring param — desugar to a fresh plain param + Match* lowering in body.
       // The param receives a single value (not varargs); destructuring happens inside the fn.
@@ -498,16 +524,16 @@ fn extract_params<'src>(g: &mut Gen, params: &'src Node<'src>) -> Vec<Param> {
 fn extract_param<'src>(g: &mut Gen, param: &'src Node<'src>) -> Vec<Param> {
   let origin = Some(param.id);
   match &param.kind {
-    NodeKind::Ident(_) => vec![Param::Name(g.bind(Bind::Name, origin))],
-    NodeKind::Wildcard => vec![Param::Name(g.bind(Bind::Name, origin))],
+    NodeKind::Ident(_) => vec![Param::Name(g.bind_name(param.id))],
+    NodeKind::Wildcard => vec![Param::Name(g.bind(Bind::Synth, origin))],
     NodeKind::Patterns(ps) => ps.items.iter().flat_map(|p| extract_param(g, p)).collect(),
     // `..rest` varargs param — trailing spread.
     NodeKind::Spread { inner, .. } => {
-      let (bind_kind, bind_origin) = match inner.as_deref() {
-        Some(node @ Node { kind: NodeKind::Ident(_), .. }) => (Bind::Name, Some(node.id)),
-        _ => (Bind::Name, origin),
+      let bind = match inner.as_deref() {
+        Some(node @ Node { kind: NodeKind::Ident(_), .. }) => g.bind_name(node.id),
+        _ => g.bind(Bind::Synth, origin),
       };
-      vec![Param::Spread(g.bind(bind_kind, bind_origin))]
+      vec![Param::Spread(bind)]
     }
     // Complex destructuring params (e.g. `fn [a, b]: …`) — not yet implemented.
     _ => vec![],
@@ -774,7 +800,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
       NodeKind::Ident(name) => {
         // Shorthand `{foo}` == `{foo: foo}`
         let key_lit = lit_val(g, Lit::Str(name), Some(field.id));
-        let id_val = name_ref_val(g, Some(field.id));
+        let id_val = scope_ref_val(g, field.id);
         let result = g.fresh_result(origin);
         let (rk, ri) = (result.kind, result.id);
         pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, key_lit, id_val]), result,  origin });
@@ -1269,21 +1295,21 @@ fn parse_decimal(s: &str) -> f64 {
 // ---------------------------------------------------------------------------
 
 /// Lower a top-level block of statements (module body).
-pub fn lower_module<'src>(exprs: &'src [Node<'src>]) -> CpsResult<'src> {
-  let mut g = Gen::new();
+pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> CpsResult<'src> {
+  let mut g = Gen::new(scope);
   if exprs.is_empty() {
     let origin: Option<AstId> = None;
     let empty_seq = lit_val(&mut g, Lit::Seq, origin);
     let root = wrap_val(&mut g, empty_seq, origin);
-    return CpsResult { root, origin: g.origin, synth_alias: crate::propgraph::PropGraph::new() };
+    return CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() };
   }
   let root = lower_seq(&mut g, exprs);
-  CpsResult { root, origin: g.origin, synth_alias: crate::propgraph::PropGraph::new() }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() }
 }
 
 /// Lower a single expression node (or a Module root) to CPS IR.
-pub fn lower_expr<'src>(node: &'src Node<'src>) -> CpsResult<'src> {
-  let mut g = Gen::new();
+pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResult<'src> {
+  let mut g = Gen::new(scope);
   let (val, pending) = lower(&mut g, node);
   let cont = g.cont;
   let root = if pending.is_empty() {
@@ -1291,7 +1317,7 @@ pub fn lower_expr<'src>(node: &'src Node<'src>) -> CpsResult<'src> {
   } else {
     wrap(&mut g, pending, Cont::Ref(cont))
   };
-  CpsResult { root, origin: g.origin, synth_alias: crate::propgraph::PropGraph::new() }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() }
 }
 
 /// Recursively lower a pattern lhs node, appending Match* pending entries.
@@ -1314,7 +1340,7 @@ fn lower_pat_lhs<'src>(
   match &lhs.kind {
     // Plain bind: `x = foo`
     NodeKind::Ident(_) => {
-      let bind = g.bind(Bind::Name, Some(lhs.id));
+      let bind = g.bind_name(lhs.id);
       let r = (bind.kind, bind.id);
       pending.push(Pending::MatchBind { name: bind, val,  origin });
       r
@@ -1324,7 +1350,6 @@ fn lower_pat_lhs<'src>(
     // Val must be a Ref (always true when called from Apply arg lowering).
     NodeKind::Wildcard => {
       match &val.kind {
-        ValKind::Ref(Ref::Name) => (Bind::Name, val.id),
         ValKind::Ref(Ref::Synth(cps_id)) => (Bind::Synth, *cps_id),
         _ => panic!("lower_pat_lhs: Wildcard with non-Ref val"),
       }
@@ -1338,7 +1363,6 @@ fn lower_pat_lhs<'src>(
       pending.extend(rp);
       pending.push(Pending::MatchGuard { func: Callable::BuiltIn(BuiltIn::In), args: vec![val.clone(), range_val],  origin });
       match &val.kind {
-        ValKind::Ref(Ref::Name) => (Bind::Name, val.id),
         ValKind::Ref(Ref::Synth(cps_id)) => (Bind::Synth, *cps_id),
         _ => { let r = g.fresh_result(origin); (r.kind, r.id) }
       }
@@ -1347,8 +1371,8 @@ fn lower_pat_lhs<'src>(
     // Guarded bind: `a > 0 = foo` or `a > 0 or a < 9 = foo`
     // The innermost ident is the binding; the infix is the guard.
     NodeKind::InfixOp { op, lhs: guard_lhs, rhs: guard_rhs } => {
-      let (bind_kind, bind_ast_id) = extract_bind(guard_lhs);
-      let bind = g.bind(bind_kind, Some(bind_ast_id));
+      let bind_ast_id = extract_bind_ast_id(guard_lhs);
+      let bind = g.bind_name(bind_ast_id);
       let r = (bind.kind, bind.id);
       pending.push(Pending::MatchBind { name: bind, val,  origin });
       let (lv, lp) = lower(g, guard_lhs);
@@ -1431,7 +1455,7 @@ fn lower_pat_lhs<'src>(
                 pending.push(Pending::MatchRest { val: cur_val, result, origin });
                 // Bind the rest value to the name
                 if let NodeKind::Ident(_) = &name_node.kind {
-                  let bind = g.bind(Bind::Name, Some(name_node.id));
+                  let bind = g.bind_name(name_node.id);
                   let rest_val = ref_val(g, result_kind, result_id, origin);
                   pending.push(Pending::MatchBind { name: bind, val: rest_val, origin });
                 }
@@ -1490,7 +1514,7 @@ fn lower_pat_lhs<'src>(
                   let result = g.fresh_result(origin);
                   let (result_kind, result_id) = (result.kind, result.id);
                   pending.push(Pending::MatchRest { val: cur_val, result, origin });
-                  let bind = g.bind(Bind::Name, Some(inner_node.id));
+                  let bind = g.bind_name(inner_node.id);
                   let rest_val = ref_val(g, result_kind, result_id, origin);
                   pending.push(Pending::MatchBind { name: bind, val: rest_val, origin });
                 }
@@ -1515,7 +1539,7 @@ fn lower_pat_lhs<'src>(
             let cur_val = ref_val(g, cur.kind, cur.id, origin);
             pending.push(Pending::MatchField { val: cur_val, field: name, elem, next_cursor: next.clone(), origin });
             cur = next;
-            let bind = g.bind(Bind::Name, Some(field_node.id));
+            let bind = g.bind_name(field_node.id);
             let elem_val = ref_val(g, elem_kind, elem_id, origin);
             pending.push(Pending::MatchBind { name: bind, val: elem_val, origin });
           }
@@ -1566,11 +1590,10 @@ fn lower_pat_lhs<'src>(
     // Bind-right: `pat |= name` — bind val to `name`, then also destructure as `pat`.
     // e.g. `[b, c] |= d` binds the element as `d` and destructures it as `[b, c]`.
     NodeKind::BindRight { lhs: pat, rhs: name_node, .. } => {
-      let bind_kind = match &name_node.kind {
-        NodeKind::Ident(_) => Bind::Name,
-        _ => panic!("lower_pat_lhs: BindRight rhs must be an Ident"),
-      };
-      let bind = g.bind(bind_kind, Some(name_node.id));
+      if !matches!(name_node.kind, NodeKind::Ident(_)) {
+        panic!("lower_pat_lhs: BindRight rhs must be an Ident");
+      }
+      let bind = g.bind_name(name_node.id);
       pending.push(Pending::MatchBind { name: bind, val: val.clone(),  origin });
       lower_pat_lhs(g, pat, val, origin, pending)
     }
@@ -1584,13 +1607,13 @@ fn lower_pat_lhs<'src>(
 }
 
 
-/// Extract the binding name and its AST id from a pattern LHS.
+/// Extract the binding AstId from a pattern LHS.
 /// Recurses through nested InfixOps to find the innermost ident.
-fn extract_bind<'src>(node: &'src Node<'src>) -> (Bind, AstId) {
+fn extract_bind_ast_id<'src>(node: &'src Node<'src>) -> AstId {
   match &node.kind {
-    NodeKind::Ident(_) => (Bind::Name, node.id),
-    NodeKind::InfixOp { lhs, .. } => extract_bind(lhs),
-    _ => panic!("extract_bind: expected ident in pattern lhs, got {:?}", node.kind),
+    NodeKind::Ident(_) => node.id,
+    NodeKind::InfixOp { lhs, .. } => extract_bind_ast_id(lhs),
+    _ => panic!("extract_bind_ast_id: expected ident in pattern lhs, got {:?}", node.kind),
   }
 }
 
@@ -1603,21 +1626,19 @@ mod tests {
   use super::*;
   use crate::parser::parse;
   use crate::passes::cps::ir::ExprKind;
+  use crate::passes::scopes;
 
-  fn parse_single(src: &str) -> Node<'_> {
-    let r = parse(src).expect("parse failed");
-    let NodeKind::Module(exprs) = r.root.kind else {
-      panic!("expected Module root");
-    };
-    exprs.items.into_iter().next().expect("expected single expression")
+  fn lower_src(src: &str) -> CpsResult<'static> {
+    let src: &'static str = Box::leak(src.to_string().into_boxed_str());
+    let r: &'static crate::ast::ParseResult<'static> =
+      Box::leak(Box::new(parse(src).expect("parse failed")));
+    let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+    lower_expr(&r.root, &scope)
   }
 
   #[test]
   fn lower_lit_int() {
-    let src = Box::leak("42".to_string().into_boxed_str());
-    let node = parse_single(src);
-    let result = lower_expr(&node);
-    // After the Ret removal, a bare value lowers to LetVal { val, body: Cont::Ref }
+    let result = lower_src("42");
     assert!(matches!(result.root.kind, ExprKind::LetVal { .. }));
     if let ExprKind::LetVal { val, cont: Cont::Ref(_), .. } = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Lit(Lit::Int(42))));
@@ -1626,10 +1647,7 @@ mod tests {
 
   #[test]
   fn lower_ident() {
-    let src = Box::leak("foo".to_string().into_boxed_str());
-    let node = parse_single(src);
-    let result = lower_expr(&node);
-    // After the Ret removal, a bare ref lowers to LetVal { val: Ref, body: Cont::Ref }
+    let result = lower_src("foo");
     assert!(matches!(result.root.kind, ExprKind::LetVal { .. }));
     if let ExprKind::LetVal { val, cont: Cont::Ref(_), .. } = &result.root.kind {
       assert!(matches!(val.kind, ValKind::Ref(_)));
@@ -1638,10 +1656,7 @@ mod tests {
 
   #[test]
   fn lower_apply_simple() {
-    let src = Box::leak("foo bar".to_string().into_boxed_str());
-    let node = parse_single(src);
-    let result = lower_expr(&node);
-    // foo is a Ref, bar is a Ref, result is App with Ret inside.
+    let result = lower_src("foo bar");
     assert!(matches!(result.root.kind, ExprKind::App { .. }));
   }
 }
@@ -1651,13 +1666,15 @@ mod cps_tests {
   use crate::parser::parse;
   use crate::ast::build_index;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
+  use crate::passes::scopes;
   use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
       }
@@ -1674,13 +1691,15 @@ mod pat_tests {
   use crate::parser::parse;
   use crate::ast::build_index;
   use crate::passes::cps::fmt::{fmt_with, Ctx};
+  use crate::passes::scopes;
   use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
       }

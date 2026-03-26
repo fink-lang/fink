@@ -121,6 +121,7 @@ pub fn lift<'src>(
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
+      bind_to_cps: current.bind_to_cps,
       synth_alias: alloc.synth_alias,
     };
   }
@@ -527,19 +528,13 @@ fn extract_from_body<'src>(
           let param_bind = alloc.bind(*cap_kind, ast_origin);
           rewrite_map.insert(*cap_id, param_bind.id);
           // Record alias so name_res can resolve refs to the old id via the new param.
-          if *cap_kind != Bind::Name {
-            let idx: usize = param_bind.id.into();
-            while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
-            alloc.synth_alias.set(param_bind.id, Some(*cap_id));
-          }
+          let idx: usize = param_bind.id.into();
+          while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
+          alloc.synth_alias.set(param_bind.id, Some(*cap_id));
           lifted_params.push(Param::Name(param_bind));
 
-          // At call site, pass the captured value.
-          let arg_val = if *cap_kind == Bind::Name {
-            alloc.val(ValKind::Ref(Ref::Name), ast_origin)
-          } else {
-            alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), None)
-          };
+          // At call site, pass the captured value as a direct ref to its CpsId.
+          let arg_val = alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), ast_origin);
           closure_args.push(Arg::Val(arg_val));
         }
 
@@ -664,17 +659,11 @@ fn extract_from_body<'src>(
               let ast_origin = alloc.origin.try_get(*cap_id).and_then(|o| *o);
               let param_bind = alloc.bind(*cap_kind, ast_origin);
               rewrite_map.insert(*cap_id, param_bind.id);
-              if *cap_kind != Bind::Name {
-                let idx: usize = param_bind.id.into();
-                while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
-                alloc.synth_alias.set(param_bind.id, Some(*cap_id));
-              }
+              let idx: usize = param_bind.id.into();
+              while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
+              alloc.synth_alias.set(param_bind.id, Some(*cap_id));
               lifted_params.push(Param::Name(param_bind));
-              let arg_val = if *cap_kind == Bind::Name {
-                alloc.val(ValKind::Ref(Ref::Name), ast_origin)
-              } else {
-                alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), None)
-              };
+              let arg_val = alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), ast_origin);
               closure_args.push(Arg::Val(arg_val));
             }
             let body = rewrite_refs(body, &rewrite_map);
@@ -950,7 +939,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let lifted = super::lift(cps, &ast_index);
         let ctx = Ctx {
           origin: &lifted.origin,

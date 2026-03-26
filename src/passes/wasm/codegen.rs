@@ -411,7 +411,7 @@ fn emit_name_section(module: &mut Module, ctx: &Ctx) {
 fn func_name(collected: &CollectedFn, ctx: &Ctx) -> String {
   use crate::ast::NodeKind;
   match collected.bind {
-    Bind::Name => {
+    Bind::SynthName => {
       if let Some(Some(ast_id)) = ctx.origin.try_get(collected.name_id)
         && let Some(Some(ast_node)) = ctx.ast_index.try_get(*ast_id)
         && let NodeKind::Ident(name) = &ast_node.kind
@@ -1334,26 +1334,21 @@ fn emit_match_body_call(fn_idx: u32, scrutinee_val: &Val<'_>, fc: &mut FnCtx, f:
 }
 
 fn resolve_val_to_func(val: &Val<'_>, fc: &FnCtx) -> Option<u32> {
-  match &val.kind {
-    ValKind::Ref(Ref::Synth(id)) => fc.ctx.func_index(*id),
-    ValKind::Ref(Ref::Name) => {
-      use crate::passes::name_res::Resolution;
-      let bind_id = match fc.ctx.resolve.resolution.try_get(val.id) {
-        Some(Some(Resolution::Local(id))) => Some(*id),
-        Some(Some(Resolution::Captured { bind, .. })) => Some(*bind),
-        Some(Some(Resolution::Recursive(id))) => Some(*id),
-        _ => None,
-      };
-      // func_index checks both name_id (Bind::Synth, origin=Fn) and letval_bind_id
-      // (Bind::Name, origin=Ident) — handles direct refs to module-level fns.
-      let by_id = bind_id.and_then(|id| fc.ctx.func_index(id));
-      if by_id.is_some() { return by_id; }
-      // cap_param_fn handles refs to cap params in hoisted fn bodies — the cap param
-      // CpsId is mapped to the fn index of the captured function at FnClosure build time.
-      bind_id.and_then(|id| fc.ctx.cap_param_fn.get(&id).copied())
-    }
+  let ValKind::Ref(Ref::Synth(id)) = &val.kind else { return None; };
+  // Fast path: direct CpsId → func index.
+  if let Some(idx) = fc.ctx.func_index(*id) { return Some(idx); }
+  // Slow path: follow resolution to get the bind CpsId, then look up.
+  use crate::passes::name_res::Resolution;
+  let bind_id = match fc.ctx.resolve.resolution.try_get(val.id) {
+    Some(Some(Resolution::Local(id))) => Some(*id),
+    Some(Some(Resolution::Captured { bind, .. })) => Some(*bind),
+    Some(Some(Resolution::Recursive(id))) => Some(*id),
     _ => None,
-  }
+  };
+  let by_id = bind_id.and_then(|id| fc.ctx.func_index(id));
+  if by_id.is_some() { return by_id; }
+  // cap_param_fn handles refs to cap params in hoisted fn bodies.
+  bind_id.and_then(|id| fc.ctx.cap_param_fn.get(&id).copied())
 }
 
 fn split_app_args<'a, 'src>(args: &'a [Arg<'src>]) -> (Vec<&'a Arg<'src>>, CpsId) {
@@ -1602,18 +1597,8 @@ fn emit_val(val: &Val<'_>, f: &mut Function, fc: &mut FnCtx) {
       f.instruction(&Instruction::F64Const(if *b { 1.0_f64 } else { 0.0_f64 }.into()));
       f.instruction(&Instruction::StructNew(TY_NUM));
     }
-    ValKind::Ref(r) => {
-      let bind_id = match r {
-        crate::passes::cps::ir::Ref::Synth(id) => *id,
-        crate::passes::cps::ir::Ref::Name => {
-          use crate::passes::name_res::Resolution;
-          match fc.ctx.resolve.resolution.try_get(val.id) {
-            Some(Some(Resolution::Local(bind_id))) => *bind_id,
-            Some(Some(Resolution::Captured { bind, .. })) => *bind,
-            _ => val.id,
-          }
-        }
-      };
+    ValKind::Ref(crate::passes::cps::ir::Ref::Synth(id)) => {
+      let bind_id = *id;
       if let Some(local_idx) = fc.local_for(bind_id)
         .or_else(|| fc.local_for_by_origin(bind_id))
         .or_else(|| fc.local_for_synth_alias(bind_id))
@@ -1649,8 +1634,8 @@ fn extract_user_name<'src>(
   // val must be Ref::Synth pointing back to the LetFn name.
   let ValKind::Ref(Ref::Synth(target)) = &val.kind else { return None; };
   if *target != fn_name_id { return None; }
-  // name must be Bind::Name with an AST Ident origin.
-  if name.kind != Bind::Name { return None; }
+  // name must be Bind::SynthName with an AST Ident origin.
+  if name.kind != Bind::SynthName { return None; }
   let ast_id = ctx.origin.try_get(name.id)?.as_ref()?;
   let ast_node = ctx.ast_index.try_get(*ast_id)?.as_ref()?;
   match &ast_node.kind {
@@ -1736,7 +1721,7 @@ fn collect_closure_result_names<'a, 'src>(
     ExprKind::LetVal { name, val, cont } => {
       eprintln!("      LetVal name={:?}({:?}), val_kind={}, cont_is_expr={}",
         name.id, name.kind,
-        match &val.kind { ValKind::Ref(Ref::Synth(id)) => format!("Synth({:?})", id), ValKind::Ref(Ref::Name) => "Name".to_string(), _ => "other".to_string() },
+        match &val.kind { ValKind::Ref(Ref::Synth(id)) => format!("Synth({:?})", id), _ => "other".to_string() },
         matches!(cont, Cont::Expr { .. }));
       // Check if val references the closure bind (directly or through a chain).
       let val_target = match &val.kind {
@@ -1747,7 +1732,7 @@ fn collect_closure_result_names<'a, 'src>(
       if let Cont::Expr { args, body: cont_body } = cont {
         eprintln!("      LetVal cont_args: {:?}", args.iter().map(|a| (a.id, a.kind)).collect::<Vec<_>>());
         for arg in args {
-          if arg.kind == Bind::Name {
+          if arg.kind == Bind::SynthName {
             if let Some(user_name) = ctx.origin.try_get(arg.id)
               .and_then(|o| o.as_ref())
               .and_then(|ast_id| ctx.ast_index.try_get(*ast_id))
@@ -1777,7 +1762,7 @@ fn collect_name_bindings<'a, 'src>(
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
       // Check if this LetVal assigns a user name to a synth target.
-      if name.kind == Bind::Name {
+      if name.kind == Bind::SynthName {
         if let Some(user_name) = ctx.origin.try_get(name.id)
           .and_then(|o| o.as_ref())
           .and_then(|ast_id| ctx.ast_index.try_get(*ast_id))
@@ -1793,7 +1778,7 @@ fn collect_name_bindings<'a, 'src>(
       // The cont arg receives the LetVal's value, so map the cont arg CpsId as well.
       if let Cont::Expr { args, body } = cont {
         for arg in args {
-          if arg.kind == Bind::Name {
+          if arg.kind == Bind::SynthName {
             if let Some(user_name) = ctx.origin.try_get(arg.id)
               .and_then(|o| o.as_ref())
               .and_then(|ast_id| ctx.ast_index.try_get(*ast_id))
@@ -2126,16 +2111,9 @@ fn collect_static_fn_caps<'a, 'src>(
 }
 
 /// Resolve a cap arg val to its bind CpsId (for func_index lookup).
-fn resolve_cap_arg_bind(cap_val: &Val<'_>, ctx: &Ctx<'_, '_>) -> Option<CpsId> {
-  use crate::passes::name_res::Resolution;
+fn resolve_cap_arg_bind(cap_val: &Val<'_>, _ctx: &Ctx<'_, '_>) -> Option<CpsId> {
   match &cap_val.kind {
     ValKind::Ref(Ref::Synth(id)) => Some(*id),
-    ValKind::Ref(Ref::Name) => match ctx.resolve.resolution.try_get(cap_val.id) {
-      Some(Some(Resolution::Local(id))) => Some(*id),
-      Some(Some(Resolution::Captured { bind, .. })) => Some(*bind),
-      Some(Some(Resolution::Recursive(id))) => Some(*id),
-      _ => None,
-    },
     _ => None,
   }
 }
@@ -2444,7 +2422,8 @@ mod tests {
   fn compile_wasm(src: &str) -> Vec<u8> {
     let r = parse(src).expect("parse failed");
     let ast_index = build_index(&r);
-    let cps = lower_expr(&r.root);
+    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+    let cps = lower_expr(&r.root, &scope);
     let lifted = lift(cps, &ast_index);
     let node_count = lifted.origin.len();
     let resolved = name_res::resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &lifted.synth_alias);
@@ -2477,7 +2456,8 @@ mod tests {
   fn source_mappings_produced() {
     let r = parse("main = fn: 42").expect("parse failed");
     let ast_index = build_index(&r);
-    let cps = lower_expr(&r.root);
+    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+    let cps = lower_expr(&r.root, &scope);
     let lifted = lift(cps, &ast_index);
     let node_count = lifted.origin.len();
     let resolved = name_res::resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &lifted.synth_alias);

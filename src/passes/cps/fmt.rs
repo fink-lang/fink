@@ -37,19 +37,6 @@ impl<'a, 'src> Ctx<'a, 'src> {
       .and_then(|opt| *opt)
   }
 
-  /// Recover the source name for a CPS node from its AST origin.
-  /// Returns the name string and whether it's an operator.
-  /// Returns None for compiler-generated nodes with no AST origin.
-  fn source_name(&self, cps_id: CpsId) -> Option<(&'src str, bool)> {
-    let node = self.ast_node(cps_id)?;
-    match &node.kind {
-      NodeKind::Ident(s) => Some((s, false)),
-      NodeKind::InfixOp { op, .. } => Some((op.src, true)),
-      NodeKind::UnaryOp { op, .. } => Some((op.src, true)),
-      NodeKind::ChainedCmp(_) => None,  // chained cmp has multiple ops, handled by transform
-      _ => None,
-    }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -142,8 +129,7 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   let loc = ctx_loc(v.id, ctx);
   match &v.kind {
     ValKind::Lit(lit) => lit_to_node(lit, loc),
-    ValKind::Ref(Ref::Name) => ident(&render_ref_name_ctx(v.id, ctx), loc),
-    ValKind::Ref(Ref::Synth(bind_id)) => ident(&format!("·v_{}", bind_id.0), loc),
+    ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, ctx), loc),
     ValKind::Panic => ident("·panic", dummy_loc()),
     ValKind::ContRef(id) => ident(&format!("·ƒ_{}", id.0), dummy_loc()),
     ValKind::BuiltIn(op) => ident(&render_builtin(op), dummy_loc()),
@@ -181,30 +167,34 @@ fn lit_to_node(lit: &Lit<'_>, loc: Loc) -> Node<'static> {
 //   Ret(val)                    → ·ƒ_cont val, ·state
 //
 // Output name conventions:
-//   user names          → plain:  foo, bar
-//   compiler temps      → ·v_{cps_id}
-//   builtins            → ·op_plus, ·seq_append, …
+//   source ident "foo"   → ·foo_<cps_id>
+//   synth ident n        → ·$_<n>_<cps_id>
+//   compiler temp        → ·v_<cps_id>   (no AST origin)
+//   cont param           → ·ƒ_<cps_id>
+//   builtins             → ·op_plus, ·seq_append, …
 // ---------------------------------------------------------------------------
 
-/// Render a Bind node's name using origin map.
-/// For Name bindings: recovers the source name from the AST.
-/// For Synth temps: always renders as `·v_N`.
-fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
-  match bind.kind {
-    Bind::Synth => format!("·v_{}", bind.id.0),
-    Bind::Cont => format!("·ƒ_{}", bind.id.0),
-    Bind::Name => ctx.source_name(bind.id)
-      .expect("render_bind_ctx: Name bind must have origin")
-      .0.to_string(),
+/// Render a CpsId's name: look up origin → AST node kind → pick rendering.
+///   Ident("foo")   → ·foo_<id>
+///   SynthIdent(n)  → ·$_<n>_<id>
+///   no origin      → ·v_<id>
+fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
+  match ctx.ast_node(cps_id) {
+    Some(node) => match &node.kind {
+      NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
+      NodeKind::SynthIdent(n) => format!("·$_{}_{}", n, cps_id.0),
+      _ => format!("·v_{}", cps_id.0),
+    },
+    None => format!("·v_{}", cps_id.0),
   }
 }
 
-/// Render a Ref::Name for display.
-/// Recovers the name from the AST via origin map.
-fn render_ref_name_ctx(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
-  match ctx.source_name(cps_id) {
-    Some((s, _)) => s.to_string(),
-    None => unreachable!("render_ref_name_ctx: Ref::Name must have origin"),
+/// Render a Bind node's name using origin map.
+fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
+  match bind.kind {
+    Bind::SynthName => render_synth_name(bind.id, ctx),
+    Bind::Synth     => format!("·v_{}", bind.id.0),
+    Bind::Cont      => format!("·ƒ_{}", bind.id.0),
   }
 }
 
@@ -367,11 +357,9 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         && let Some(caps) = cap_graph.try_get(name.id)
         && !caps.is_empty()
       {
-        let names: Vec<String> = caps.iter().map(|(bind_id, _)| {
-          ctx.source_name(*bind_id)
-            .map(|(s, _)| s.to_string())
-            .unwrap_or_else(|| format!("·v_{}", bind_id.0))
-        }).collect();
+        let names: Vec<String> = caps.iter()
+          .map(|(bind_id, _)| render_synth_name(*bind_id, ctx))
+          .collect();
         let label = format!("{{cap: [{}]}}", names.join(", "));
         fn_params.insert(0, ident(&label, dummy_loc()));
       }

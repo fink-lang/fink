@@ -192,14 +192,16 @@ impl<'src> Ctx<'src> {
   }
 
   /// Emit a bind event for a pre-registered binding (found by AstId).
-  fn emit_bind_event(&mut self, scope: ScopeId, ast_id: AstId) {
+  /// Returns true if the binding was found (pre-registered), false otherwise.
+  fn emit_bind_event(&mut self, scope: ScopeId, ast_id: AstId) -> bool {
     for i in 0..self.binds.len() {
       let bid = BindId(i as u32);
       if self.binds.get(bid).origin == BindOrigin::Ast(ast_id) {
         self.scope_events.get_mut(scope).push(ScopeEvent::Bind(bid));
-        return;
+        return true;
       }
     }
+    false
   }
 
   /// Resolve a name reference. Walk the name stack from top (innermost) to bottom.
@@ -354,6 +356,18 @@ fn pre_register_binds(stmts: &[Node<'_>], scope: ScopeId, ctx: &mut Ctx<'_>) {
   }
 }
 
+/// Find the binding Ident node from a simple bind LHS.
+/// For `Ident` → returns the node itself.
+/// For `InfixOp { lhs, .. }` (guard pattern like `a > 0`) → recurses into lhs.
+/// For complex patterns (LitSeq, LitRec, etc.) → returns None (handled separately).
+fn binding_ident<'a>(node: &'a Node<'a>) -> Option<&'a Node<'a>> {
+  match &node.kind {
+    NodeKind::Ident(_) => Some(node),
+    NodeKind::InfixOp { lhs, .. } => binding_ident(lhs),
+    _ => None,
+  }
+}
+
 /// Register bindings from the LHS of a bind pattern.
 fn register_pattern_binds(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
   register_pattern_binds_inner(node, scope, ctx, false);
@@ -402,6 +416,24 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
       register_pattern_binds_inner(lhs, scope, ctx, pre_register);
       register_pattern_binds_inner(rhs, scope, ctx, pre_register);
     }
+    NodeKind::InfixOp { lhs, .. } => {
+      // Guard pattern: `a > 0` — lhs holds the binding Ident; rhs is the guard value.
+      // Only the lhs side introduces a binding.
+      register_pattern_binds_inner(lhs, scope, ctx, pre_register);
+    }
+    NodeKind::Apply { args, .. } => {
+      // Predicate/constructor pattern: `is_even y`, `Ok b` — func is a reference, args are bindings.
+      for arg in &args.items {
+        register_pattern_binds_inner(arg, scope, ctx, pre_register);
+      }
+    }
+    NodeKind::Arm { body, .. } => {
+      // Record field rename pattern in a LitRec: `y: z` — lhs is the field key (a ref),
+      // body items are the binding targets.
+      for item in &body.items {
+        register_pattern_binds_inner(item, scope, ctx, pre_register);
+      }
+    }
     _ => {}
   }
 }
@@ -429,8 +461,15 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
       ctx.current_bind_ast_id = prev_bind;
       if ctx.scopes.get(scope).kind == ScopeKind::Module {
         // Module scope: binding was pre-registered. Emit the event now (after RHS).
-        if let NodeKind::Ident(_) = &lhs.kind {
-          ctx.emit_bind_event(scope, lhs.id);
+        // For Ident LHS: if not pre-registered (e.g. a nested Bind inside a RHS expression),
+        // fall back to sequential registration.
+        // For InfixOp LHS (guard pattern): emit event for the Ident inside.
+        let needs_register = match binding_ident(lhs) {
+          Some(ident) => !ctx.emit_bind_event(scope, ident.id),
+          None => false,
+        };
+        if needs_register {
+          register_pattern_binds(lhs, scope, ctx);
         }
       } else {
         // Non-module scopes: register the binding now (sequential).

@@ -49,6 +49,24 @@ test 'single binding', fn:
       bind 0, 'x'
 
 
+test 'nested bind in rhs is sequential', fn:
+  expect scope fink":
+    foo = spam = 1
+  | equals fink":
+    scope 5, 'module':
+      bind 1, 'spam'
+      bind 0, 'foo'
+
+
+test 'guard pattern bind', fn:
+  expect scope fink":
+    a > 0 = foo
+  | equals fink":
+    scope 5, 'module':
+      unresolved 'foo'
+      bind 0, 'a'
+
+
 test 'fn params in scope', fn:
   expect scope fink":
     f = fn a, b:
@@ -436,6 +454,26 @@ test 'bind-right destructure in seq pattern', fn:
       ref 'foo', 0
       ref 'bar', 1
       ref 'spam', 2
+
+
+test 'record destructure with field rename', fn:
+  expect scope fink":
+    {x, y: z} = point
+  | equals fink":
+    scope 7, 'module':
+      bind 0, 'x'
+      bind 2, 'z'
+      unresolved 'point'
+
+
+test 'predicate guard in seq pattern', fn:
+  expect scope fink":
+    [a, is_even b] = foo
+  | equals fink":
+    scope 8, 'module':
+      bind 0, 'a'
+      bind 3, 'b'
+      unresolved 'foo'
 
 
 ---
