@@ -41,8 +41,7 @@ test 'fn with no captures', fn:
   | equals fink":
     ·fn
       fn ·x_1, ·ƒ_4:
-        ·let ·x_1, fn ·v_6:
-          ·ƒ_4 ·v_6
+        ·ƒ_4 ·x_1
       fn ·v_3:
         ·let ·v_3, fn ·f_0:
           ·ƒ_2 ·f_0
@@ -109,8 +108,7 @@ test 'depth-2 capture — fn b directly uses x, fn a does not', fn:
             fn ·a_1, ·ƒ_8:
               ·fn
                 fn {cap: [·x_0]}, ·b_2, ·ƒ_10:
-                  ·let ·x_0, fn ·v_12:
-                    ·ƒ_10 ·v_12
+                  ·ƒ_10 ·x_0
                 fn ·v_9:
                   ·ƒ_8 ·v_9
             fn ·v_7:

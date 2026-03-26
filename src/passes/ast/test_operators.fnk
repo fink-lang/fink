@@ -525,3 +525,18 @@ test 'infix rhs multiline block application', fn:
             Ident 'add'
             LitInt '3'
             LitInt '4'
+
+---
+BUG: operator vs application precedence
+TODO: `a - add b` should parse as `a - (add b)`, not `(a - add) b`
+---
+
+test 'subtract with call rhs', fn:
+  expect ast fink":
+    a - add b
+  | equals fink":
+    InfixOp '-',
+      Ident 'a'
+      Apply
+        Ident 'add'
+        Ident 'b'

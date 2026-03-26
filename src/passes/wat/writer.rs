@@ -6,14 +6,15 @@
 //
 // ## Calling convention
 //
-// Every Fink function: (param anyref * N) where the last param is the cont.
-// The cont is always anyref; callers cast to the appropriate func type at the
-// call site. All tail calls use return_call_ref with the matching $FnN type.
+// Every Fink function: (param (ref $Any) * N) where the last param is the cont.
+// All tail calls use return_call_ref with the matching $FnN type, inline form:
+//   (return_call_ref $FnN (local.get $callee) (local.get $arg) ...)
 //
 // ## Type layout
 //
-// $Num   — (struct (field f64))        — boxed number (i32/f64 unified as f64)
-// $FnN   — (func (param anyref * N))   — function type of arity N (N >= 1)
+// $Any   — (sub (struct))                     — GC root, tagged union base
+// $Num   — (sub $Any (struct (field f64)))    — boxed number (f64 unified)
+// $FnN   — (func (param (ref $Any) * N))      — function type of arity N (N >= 1)
 //
 // Per-arity func types are collected from the IR and emitted in the type
 // section. $Fn1 doubles as the continuation type.
@@ -127,6 +128,56 @@ impl<'a, 'src> Ctx<'a, 'src> {
 }
 
 // ---------------------------------------------------------------------------
+// WatExpr — source-mapped inline WAT s-expression tree
+//
+// Represents a WAT s-expression with optional source location marks.
+// `write_expr` traverses the tree, calling `w.mark` before each marked node
+// and `w.push_str` for the text — preserving inline style while tracking
+// output positions for source maps.
+//
+// Usage:
+//   WatExpr::list("struct.new $Num", vec![WatExpr::atom("(f64.const 42)")])
+//   WatExpr::marked(loc, inner)  — mark this position in the source map
+// ---------------------------------------------------------------------------
+
+use crate::lexer::Loc;
+
+enum WatExpr {
+  /// A pre-formatted atom — emitted verbatim (no parens added).
+  Atom(String),
+  /// A compound s-expression: (head arg0 arg1 ...).
+  List(String, Vec<WatExpr>),
+  /// Attach a source location mark before emitting the inner expression.
+  Marked(Loc, Box<WatExpr>),
+}
+
+impl WatExpr {
+  fn atom(s: impl Into<String>) -> Self { WatExpr::Atom(s.into()) }
+  fn list(head: impl Into<String>, args: Vec<WatExpr>) -> Self { WatExpr::List(head.into(), args) }
+  fn marked(loc: Loc, inner: WatExpr) -> Self { WatExpr::Marked(loc, Box::new(inner)) }
+}
+
+/// Write a `WatExpr` to `w` inline (no trailing newline).
+fn write_expr(expr: &WatExpr, w: &mut MappedWriter) {
+  match expr {
+    WatExpr::Atom(s) => w.push_str(s),
+    WatExpr::List(head, args) => {
+      w.push_str("(");
+      w.push_str(head);
+      for arg in args {
+        w.push_str(" ");
+        write_expr(arg, w);
+      }
+      w.push_str(")");
+    }
+    WatExpr::Marked(loc, inner) => {
+      w.mark(*loc);
+      write_expr(inner, w);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Collect pass
 // ---------------------------------------------------------------------------
 
@@ -134,12 +185,16 @@ impl<'a, 'src> Ctx<'a, 'src> {
 struct CollectedFn<'a, 'src> {
   /// WASM function label (e.g. "main_1", "add_0").
   label: String,
+  /// CpsId of the LetFn name — used to source-map the (func ...) header.
+  fn_id: CpsId,
   /// Parameter labels in order (all anyref). Last is the cont.
   params: Vec<String>,
   /// The fn body expression.
   body: &'a Expr<'src>,
   /// Whether this fn is exported under a user name.
   export_as: Option<String>,
+  /// CpsId of the LetVal alias that names this export — used to source-map (export ...).
+  export_bind_id: Option<CpsId>,
 }
 
 /// Module-level collected data.
@@ -234,7 +289,7 @@ fn collect_chain<'a, 'src>(
         .find(|(id, _)| *id == name.id)
         .map(|(_, n)| n.clone());
 
-      funcs.push(CollectedFn { label, params: param_labels, body: fn_body, export_as });
+      funcs.push(CollectedFn { label, fn_id: name.id, params: param_labels, body: fn_body, export_as, export_bind_id: None });
 
       // Continue down the cont chain.
       match cont {
@@ -251,6 +306,7 @@ fn collect_chain<'a, 'src>(
         if let Some((_, export_name)) = exports.iter().find(|(id, _)| *id == name.id) {
           if let Some(cf) = funcs.iter_mut().find(|cf| cf.label == ctx.label(fn_id)) {
             cf.export_as = Some(export_name.clone());
+            cf.export_bind_id = Some(name.id);
           }
         }
       }
@@ -271,18 +327,20 @@ fn collect_chain<'a, 'src>(
 fn emit_module(module: &Module<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter) {
   w.push_str("(module\n");
   emit_types(module, w);
+  w.push_str("\n");
   for func in &module.funcs {
     emit_func(func, ctx, w);
   }
-  emit_exports(module, w);
+  emit_exports(module, ctx, w);
   w.push_str(")\n");
 }
 
-/// Emit the type section: $Num struct, then $FnN for each arity.
+/// Emit the type section: $Any root, $Num struct, then $FnN for each arity.
 fn emit_types(module: &Module<'_, '_>, w: &mut MappedWriter) {
-  w.push_str("  (type $Num (struct (field f64)))\n");
+  w.push_str("  (type $Any (sub (struct)))\n");
+  w.push_str("  (type $Num (sub $Any (struct (field f64))))\n");
   for arity in &module.arities {
-    let params: String = (0..*arity).map(|_| "anyref").collect::<Vec<_>>().join(" ");
+    let params: String = (0..*arity).map(|_| "(ref $Any)").collect::<Vec<_>>().join(" ");
     if params.is_empty() {
       w.push_str(&format!("  (type $Fn{} (func))\n", arity));
     } else {
@@ -291,21 +349,25 @@ fn emit_types(module: &Module<'_, '_>, w: &mut MappedWriter) {
   }
 }
 
-fn emit_exports(module: &Module<'_, '_>, w: &mut MappedWriter) {
+fn emit_exports(module: &Module<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter) {
   for func in &module.funcs {
     if let Some(name) = &func.export_as {
+      if let Some(bind_id) = func.export_bind_id {
+        ctx.mark(bind_id, w);
+      }
       w.push_str(&format!("  (export {:?} (func ${}))\n", name, func.label));
     }
   }
 }
 
 fn emit_func(func: &CollectedFn<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter) {
-  // Function signature.
+  let arity = func.params.len();
   let params: String = func.params.iter()
-    .map(|p| format!("(param ${} anyref)", p))
+    .map(|p| format!("(param ${} (ref $Any))", p))
     .collect::<Vec<_>>()
     .join(" ");
-  w.push_str(&format!("  (func ${}", func.label));
+  ctx.mark(func.fn_id, w);
+  w.push_str(&format!("  (func ${} (type $Fn{})", func.label, arity));
   if !params.is_empty() {
     w.push_str(" ");
     w.push_str(&params);
@@ -313,9 +375,9 @@ fn emit_func(func: &CollectedFn<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter
   w.push_str("\n");
 
   // Pre-scan locals (LetVal bindings inside the body).
-  let locals = collect_locals(func.body);
+  let locals = collect_locals(func.body, ctx);
   for local in &locals {
-    w.push_str(&format!("    (local ${} anyref)\n", local));
+    w.push_str(&format!("    (local ${} (ref $Any))\n", local));
   }
 
   // Body.
@@ -328,31 +390,30 @@ fn emit_func(func: &CollectedFn<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter
 // Local collection — pre-scan fn body for LetVal names
 // ---------------------------------------------------------------------------
 
-fn collect_locals(expr: &Expr<'_>) -> Vec<String> {
+fn collect_locals<'src>(expr: &Expr<'_>, ctx: &Ctx<'_, 'src>) -> Vec<String> {
   let mut locals = Vec::new();
-  collect_locals_expr(expr, &mut locals);
+  collect_locals_expr(expr, ctx, &mut locals);
   locals
 }
 
-fn collect_locals_expr(expr: &Expr<'_>, out: &mut Vec<String>) {
+fn collect_locals_expr<'src>(expr: &Expr<'_>, ctx: &Ctx<'_, 'src>, out: &mut Vec<String>) {
   match &expr.kind {
     ExprKind::LetVal { name, cont, .. } => {
-      out.push(format!("v_{}", name.id.0));
+      out.push(ctx.label(name.id));
       match cont {
-        Cont::Expr { body, .. } => collect_locals_expr(body, out),
+        Cont::Expr { body, .. } => collect_locals_expr(body, ctx, out),
         Cont::Ref(_) => {}
       }
     }
     ExprKind::LetFn { cont, .. } => {
-      // LetFn inside a fn body shouldn't appear after lifting, but handle gracefully.
       match cont {
-        Cont::Expr { body, .. } => collect_locals_expr(body, out),
+        Cont::Expr { body, .. } => collect_locals_expr(body, ctx, out),
         Cont::Ref(_) => {}
       }
     }
     ExprKind::If { then, else_, .. } => {
-      collect_locals_expr(then, out);
-      collect_locals_expr(else_, out);
+      collect_locals_expr(then, ctx, out);
+      collect_locals_expr(else_, ctx, out);
     }
     ExprKind::App { .. } => {}
   }
@@ -363,30 +424,72 @@ fn collect_locals_expr(expr: &Expr<'_>, out: &mut Vec<String>) {
 // ---------------------------------------------------------------------------
 
 fn emit_body(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: usize) {
-  ctx.mark(expr.id, w);
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
-      // Evaluate val onto the stack, store in local, then continue.
-      emit_val(val, ctx, w, indent);
-      w.push_str(&format!("{}(local.set $v_{})\n", ind(indent), name.id.0));
+      let local = ctx.label(name.id);
+      // Mark the local.set at the LetVal source location.
+      ctx.mark(expr.id, w);
+      let set_expr = WatExpr::list(format!("local.set ${}", local), vec![val_expr(val, ctx)]);
+      w.push_str(&ind(indent));
+      write_expr(&set_expr, w);
+      w.push_str("\n");
       match cont {
         Cont::Expr { body, .. } => emit_body(body, ctx, w, indent),
         Cont::Ref(id) => {
-          // Tail: pass the local to the cont ref.
-          w.push_str(&format!("{}(local.get $v_{})\n", ind(indent), name.id.0));
-          emit_cont_ref_call(*id, 1, ctx, w, indent);
+          ctx.mark(val.id, w);
+          let call_expr = WatExpr::list(
+            "return_call_ref $Fn1",
+            vec![
+              WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+              WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", local))]),
+            ],
+          );
+          w.push_str(&ind(indent));
+          write_expr(&call_expr, w);
+          w.push_str("\n");
         }
       }
     }
     ExprKind::App { func, args } => {
+      // For a continuation call, the meaningful source location is the value
+      // being passed (the "return expression"). Detect cont calls by checking
+      // if the callee's origin has no user-visible source name (Bind::Cont /
+      // synthetic callee). For user fn calls, the App expr id maps to the site.
+      let is_cont_call = match func {
+        Callable::Val(v) => match &v.kind {
+          ValKind::ContRef(_) => true,
+          // A Ref::Synth targeting a Bind::Cont has no user-visible source name —
+          // its origin maps to the `fn:` node (NodeKind::Fn), not an Ident.
+          // That is the signal that this is a CPS-inserted cont param call.
+          ValKind::Ref(Ref::Synth(id)) => matches!(
+            ctx.ast_node(*id).map(|n| &n.kind),
+            None | Some(NodeKind::Fn { .. })
+          ),
+          _ => false,
+        },
+        _ => false,
+      };
+      let mark_id = if is_cont_call {
+        args.iter().find_map(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
+          .unwrap_or(expr.id)
+      } else {
+        expr.id
+      };
+      ctx.mark(mark_id, w);
       emit_app(func, args, ctx, w, indent);
     }
     ExprKind::If { cond, then, else_ } => {
-      emit_val(cond, ctx, w, indent);
-      // Condition is anyref (a boxed number). Unbox to f64, convert to i32 for if.
-      w.push_str(&format!("{}(struct.get $Num 0 (ref.cast (ref $Num)))\n", ind(indent)));
-      w.push_str(&format!("{}(f64.ne (f64.const 0))\n", ind(indent)));
-      w.push_str(&format!("{}(if\n", ind(indent)));
+      ctx.mark(expr.id, w);
+      // Unbox cond to f64, compare != 0 for truthiness.
+      let cond_wat = WatExpr::list("f64.ne", vec![
+        WatExpr::atom("(f64.const 0)"),
+        WatExpr::list("struct.get $Num 0", vec![
+          WatExpr::list("ref.cast (ref $Num)", vec![val_expr(cond, ctx)]),
+        ]),
+      ]);
+      w.push_str(&format!("{}(if ", ind(indent)));
+      write_expr(&cond_wat, w);
+      w.push_str("\n");
       w.push_str(&format!("{}(then\n", ind(indent + 1)));
       emit_body(then, ctx, w, indent + 2);
       w.push_str(&format!("{})\n", ind(indent + 1)));
@@ -425,38 +528,27 @@ fn emit_call(
   w: &mut MappedWriter,
   indent: usize,
 ) {
-  // Separate value args from the trailing cont arg.
   let (val_args, cont_arg) = split_args(args);
   let total_arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
 
-  match &func_val.kind {
-    ValKind::ContRef(id) => {
-      // Direct tail call to a cont param — terminal App at module level.
-      // Push all args then call via return_call_ref.
-      for arg in val_args {
-        emit_arg(arg, ctx, w, indent);
-      }
-      if let Some(cont) = cont_arg {
-        emit_cont_as_arg(cont, ctx, w, indent);
-      }
-      emit_cont_ref_call(*id, total_arity, ctx, w, indent);
-    }
-    ValKind::Ref(Ref::Synth(id)) => {
-      // Call through a local/param — push callee ref, push args, return_call_ref.
-      w.push_str(&format!("{}(local.get ${})\n", ind(indent), ctx.label(*id)));
-      for arg in val_args {
-        emit_arg(arg, ctx, w, indent);
-      }
-      if let Some(cont) = cont_arg {
-        emit_cont_as_arg(cont, ctx, w, indent);
-      }
-      w.push_str(&format!("{}(return_call_ref $Fn{})\n", ind(indent), total_arity));
-    }
-    _ => {
-      // Fallback — emit as a comment with the raw debug repr.
-      w.push_str(&format!("{}(;; unhandled call: {:?} ;)\n", ind(indent), func_val.kind));
-    }
+  let callee = match &func_val.kind {
+    ValKind::ContRef(id) | ValKind::Ref(Ref::Synth(id)) =>
+      WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+    _ => WatExpr::atom(format!("(;; unhandled callee: {:?} ;)", func_val.kind)),
+  };
+
+  let mut call_args: Vec<WatExpr> = val_args.iter().map(|a| val_arg_expr(a, ctx)).collect();
+  if let Some(cont) = cont_arg {
+    call_args.push(cont_expr(cont, ctx));
   }
+
+  let expr = WatExpr::list(
+    format!("return_call_ref $Fn{}", total_arity),
+    std::iter::once(callee).chain(call_args).collect(),
+  );
+  w.push_str(&ind(indent));
+  write_expr(&expr, w);
+  w.push_str("\n");
 }
 
 /// Emit a builtin operation call.
@@ -469,64 +561,99 @@ fn emit_builtin(
 ) {
   let (val_args, cont_arg) = split_args(args);
   let fn_name = builtin_name(op);
-  // Push value args, call builtin, tail-call cont with result.
-  for arg in val_args {
-    emit_arg(arg, ctx, w, indent);
-  }
-  w.push_str(&format!("{}(call ${})\n", ind(indent), fn_name));
-  // The builtin returns one anyref result. Pass it to the cont.
-  if let Some(cont) = cont_arg {
-    emit_cont_call_with_result(cont, ctx, w, indent);
+  let builtin_args: Vec<WatExpr> = val_args.iter().map(|a| val_arg_expr(a, ctx)).collect();
+  let builtin_call = WatExpr::list(format!("call ${}", fn_name), builtin_args);
+
+  match cont_arg {
+    Some(Cont::Ref(id)) => {
+      let expr = WatExpr::list(
+        "return_call_ref $Fn1",
+        vec![
+          WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+          builtin_call,
+        ],
+      );
+      w.push_str(&ind(indent));
+      write_expr(&expr, w);
+      w.push_str("\n");
+    }
+    Some(Cont::Expr { args: bind_args, body }) => {
+      for bind in bind_args {
+        let expr = WatExpr::list(
+          format!("local.set ${}", ctx.label(bind.id)),
+          vec![builtin_call],  // NOTE: moves builtin_call — only first bind gets it
+        );
+        w.push_str(&ind(indent));
+        write_expr(&expr, w);
+        w.push_str("\n");
+        break; // single-result builtins only
+      }
+      emit_body(body, ctx, w, indent);
+    }
+    None => {
+      w.push_str(&ind(indent));
+      write_expr(&builtin_call, w);
+      w.push_str("\n");
+    }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Value emission
+// Value emission — statement form and WatExpr inline form
 // ---------------------------------------------------------------------------
 
 fn emit_val(val: &Val<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: usize) {
-  ctx.mark(val.id, w);
-  match &val.kind {
-    ValKind::Lit(lit) => emit_lit(lit, w, indent),
-    ValKind::Ref(Ref::Synth(id)) => {
-      w.push_str(&format!("{}(local.get ${})\n", ind(indent), ctx.label(*id)));
-    }
-    ValKind::Ref(Ref::Unresolved(id)) => {
-      w.push_str(&format!("{}(;; unresolved ref: v_{} ;)\n", ind(indent), id.0));
-      w.push_str(&format!("{}(ref.null none)\n", ind(indent)));
-    }
-    ValKind::ContRef(id) => {
-      // A cont used as a value — load from the cont param local.
-      w.push_str(&format!("{}(local.get ${})\n", ind(indent), ctx.label(*id)));
-    }
-    ValKind::Panic => {
-      w.push_str(&format!("{}(unreachable)\n", ind(indent)));
-    }
-    ValKind::BuiltIn(_) => {
-      // BuiltIn used as a value (e.g. MatchIf func arg) — not representable as anyref yet.
-      w.push_str(&format!("{}(;; builtin-as-val not supported yet ;)\n", ind(indent)));
-      w.push_str(&format!("{}(ref.null none)\n", ind(indent)));
-    }
+  w.push_str(&ind(indent));
+  write_expr(&val_expr(val, ctx), w);
+  w.push_str("\n");
+}
+
+/// Build a source-mapped WatExpr for a value.
+fn val_expr(val: &Val<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {
+  let inner = match &val.kind {
+    ValKind::Lit(lit) => lit_expr(lit),
+    ValKind::Ref(Ref::Synth(id)) => WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+    ValKind::Ref(Ref::Unresolved(id)) => WatExpr::atom(format!("(;; unresolved: v_{} ;)", id.0)),
+    ValKind::ContRef(id) => WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+    ValKind::Panic => WatExpr::atom("unreachable"),
+    ValKind::BuiltIn(_) => WatExpr::atom("(;; builtin-as-val not supported ;)"),
+  };
+  match ctx.ast_node(val.id) {
+    Some(node) => WatExpr::marked(node.loc, inner),
+    None => inner,
   }
 }
 
-fn emit_lit(lit: &Lit<'_>, w: &mut MappedWriter, indent: usize) {
+fn lit_expr(lit: &Lit<'_>) -> WatExpr {
   match lit {
-    Lit::Int(n) => {
-      // Box as $Num(f64).
-      w.push_str(&format!("{}(struct.new $Num (f64.const {}))\n", ind(indent), *n as f64));
-    }
-    Lit::Float(f) | Lit::Decimal(f) => {
-      w.push_str(&format!("{}(struct.new $Num (f64.const {}))\n", ind(indent), f));
-    }
-    Lit::Bool(b) => {
-      let v = if *b { 1.0_f64 } else { 0.0_f64 };
-      w.push_str(&format!("{}(struct.new $Num (f64.const {}))\n", ind(indent), v));
-    }
-    Lit::Str(_) | Lit::Seq | Lit::Rec => {
-      // Not yet implemented — emit null placeholder.
-      w.push_str(&format!("{}(ref.null none) ;; TODO: {:?}\n", ind(indent), lit));
-    }
+    Lit::Int(n) => WatExpr::list("struct.new $Num", vec![
+      WatExpr::atom(format!("(f64.const {})", *n as f64)),
+    ]),
+    Lit::Float(f) | Lit::Decimal(f) => WatExpr::list("struct.new $Num", vec![
+      WatExpr::atom(format!("(f64.const {})", f)),
+    ]),
+    Lit::Bool(b) => WatExpr::list("struct.new $Num", vec![
+      WatExpr::atom(format!("(f64.const {})", if *b { 1.0_f64 } else { 0.0_f64 })),
+    ]),
+    Lit::Str(_) | Lit::Seq | Lit::Rec => WatExpr::atom("(ref.null $Any) ;; TODO"),
+  }
+}
+
+/// Build a WatExpr for a call argument.
+fn val_arg_expr(arg: &Arg<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {
+  match arg {
+    Arg::Val(v) => val_expr(v, ctx),
+    Arg::Spread(v) => val_expr(v, ctx),
+    Arg::Cont(_) => WatExpr::atom("(;; cont-as-arg ;)"),
+    Arg::Expr(_) => WatExpr::atom("(;; expr-as-arg ;)"),
+  }
+}
+
+/// Build a WatExpr for a continuation reference argument.
+fn cont_expr(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {
+  match cont {
+    Cont::Ref(id) => WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+    Cont::Expr { .. } => WatExpr::atom("(;; inline-cont-as-arg ;)"),
   }
 }
 
@@ -540,60 +667,6 @@ fn split_args<'a>(args: &'a [Arg<'a>]) -> (&'a [Arg<'a>], Option<&'a Cont<'a>>) 
     Some(Arg::Cont(c)) => (&args[..args.len() - 1], Some(c)),
     _ => (args, None),
   }
-}
-
-fn emit_arg(arg: &Arg<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: usize) {
-  match arg {
-    Arg::Val(v) => emit_val(v, ctx, w, indent),
-    Arg::Spread(v) => {
-      // Spread not yet representable — emit the value.
-      emit_val(v, ctx, w, indent);
-    }
-    Arg::Cont(_) => {} // handled separately as trailing cont
-    Arg::Expr(e) => emit_body(e, ctx, w, indent),
-  }
-}
-
-/// Emit a continuation as a value argument (push the local onto the stack).
-fn emit_cont_as_arg(cont: &Cont<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: usize) {
-  match cont {
-    Cont::Ref(id) => {
-      w.push_str(&format!("{}(local.get ${})\n", ind(indent), ctx.label(*id)));
-    }
-    Cont::Expr { .. } => {
-      // Inline conts can't be passed as a first-class value — shouldn't appear here.
-      w.push_str(&format!("{}(;; inline cont as arg — not supported ;)\n", ind(indent)));
-      w.push_str(&format!("{}(ref.null none)\n", ind(indent)));
-    }
-  }
-}
-
-/// Emit a tail call to a cont ref, assuming the result value is already on the stack.
-fn emit_cont_call_with_result(
-  cont: &Cont<'_>,
-  ctx: &Ctx<'_, '_>,
-  w: &mut MappedWriter,
-  indent: usize,
-) {
-  match cont {
-    Cont::Ref(id) => {
-      w.push_str(&format!("{}(local.get ${})\n", ind(indent), ctx.label(*id)));
-      w.push_str(&format!("{}(return_call_ref $Fn1)\n", ind(indent)));
-    }
-    Cont::Expr { args, body } => {
-      // Bind result to the cont arg local(s), then fall through to body.
-      for bind in args {
-        w.push_str(&format!("{}(local.set $v_{})\n", ind(indent), bind.id.0));
-      }
-      emit_body(body, ctx, w, indent);
-    }
-  }
-}
-
-/// Emit a tail call to a ContRef — callee is loaded from its param label.
-fn emit_cont_ref_call(id: CpsId, arity: usize, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: usize) {
-  w.push_str(&format!("{}(local.get ${})\n", ind(indent), ctx.label(id)));
-  w.push_str(&format!("{}(return_call_ref $Fn{})\n", ind(indent), arity));
 }
 
 // ---------------------------------------------------------------------------

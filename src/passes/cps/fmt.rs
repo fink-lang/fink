@@ -102,16 +102,18 @@ fn apply(func: Node<'static>, args: Vec<Node<'static>>, loc: Loc) -> Node<'stati
 }
 
 fn patterns(params: Vec<Node<'static>>) -> Node<'static> {
-  node(NodeKind::Patterns(exprs(params)), dummy_loc())
+  let loc = params.first().map(|p| p.loc).unwrap_or_else(dummy_loc);
+  node(NodeKind::Patterns(exprs(params)), loc)
 }
 
 fn fn_node(params: Node<'static>, body: Vec<Node<'static>>, loc: Loc) -> Node<'static> {
   node(NodeKind::Fn { params: Box::new(params), sep: dummy_tok(), body: exprs(body) }, loc)
 }
 
-/// `fn: body` — state-only continuation (used in ·if branches). Synthetic; no source loc.
+/// `fn: body` — state-only continuation (used in ·if branches).
 fn state_fn(body: Node<'static>) -> Node<'static> {
-  fn_node(patterns(vec![]), vec![body], dummy_loc())
+  let loc = body.loc;
+  fn_node(patterns(vec![]), vec![body], loc)
 }
 
 
@@ -132,9 +134,9 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ValKind::Lit(lit) => lit_to_node(lit, loc),
     ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, ctx), loc),
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(v.id, ctx), loc),
-    ValKind::Panic => ident("·panic", dummy_loc()),
-    ValKind::ContRef(id) => ident(&format!("·ƒ_{}", id.0), dummy_loc()),
-    ValKind::BuiltIn(op) => ident(&render_builtin(op), dummy_loc()),
+    ValKind::Panic => ident("·panic", loc),
+    ValKind::ContRef(id) => ident(&format!("·ƒ_{}", id.0), ctx_loc(*id, ctx)),
+    ValKind::BuiltIn(op) => ident(&render_builtin(op), loc),
   }
 }
 
@@ -299,25 +301,28 @@ fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         .map(|b| ident(&render_bind_ctx(b, ctx), ctx_loc(b.id, ctx)))
         .collect();
       let body_node = to_node(body, ctx);
-      fn_node(patterns(params), vec![body_node], dummy_loc())
+      // Use the first param's loc for the fn wrapper — the cont lambda originates
+      // from the same source position as its parameter.
+      let fn_loc = args.first().map(|b| ctx_loc(b.id, ctx)).unwrap_or_else(dummy_loc);
+      fn_node(patterns(params), vec![body_node], fn_loc)
     }
     Cont::Ref(cont_id) => {
-      ident(&format!("·ƒ_{}", cont_id.0), dummy_loc())
+      ident(&format!("·ƒ_{}", cont_id.0), ctx_loc(*cont_id, ctx))
     }
   }
 }
 
 /// Render a `body: Cont` field as the body expression of a `fn name:` lambda.
-/// - `Cont::Expr { arg, body }` → render `body` as a normal expression (arg is unused here,
-///   it's the continuation result binding handled by the parent's lambda param).
-/// - `Cont::Ref(cont_id)` → render as `·ƒ_{cont_id} {name}` — a tail call to the cont,
-///   passing the locally-bound `name` as the argument.
-fn render_cont_body(cont: &Cont<'_>, bound_name: &str, ctx: &Ctx<'_, '_>) -> Node<'static> {
+/// - `Cont::Expr { body, .. }` → render `body`.
+/// - `Cont::Ref(cont_id)` → render as `·ƒ_{cont_id} {name}` — a tail call to the cont.
+fn render_cont_body(cont: &Cont<'_>, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { body, .. } => to_node(body, ctx),
     Cont::Ref(cont_id) => {
+      let cont_loc = ctx_loc(*cont_id, ctx);
+      let name_loc = ctx_loc(bound_id, ctx);
       let cont_name = format!("·ƒ_{}", cont_id.0);
-      apply(ident(&cont_name, dummy_loc()), vec![ident(bound_name, dummy_loc())], dummy_loc())
+      apply(ident(&cont_name, cont_loc), vec![ident(bound_name, name_loc)], cont_loc)
     }
   }
 }
@@ -331,11 +336,8 @@ fn render_cont_as_expr(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { body, .. } => to_node(body, ctx),
     Cont::Ref(cont_id) => {
-      // A bare cont ref in a no-arg body position means "call this cont".
-      // Render as `·ƒ_N _` — an application with a wildcard arg, since
-      // a bare `·ƒ_N` is just a reference in Fink syntax, not a call.
-      // Use a single ident token (with space) so the pretty-printer keeps it inline.
-      ident(&format!("·ƒ_{} _", cont_id.0), dummy_loc())
+      let cont_loc = ctx_loc(*cont_id, ctx);
+      ident(&format!("·ƒ_{} _", cont_id.0), cont_loc)
     }
   }
 }
@@ -348,11 +350,18 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ExprKind::LetVal { name, val, cont } => {
       let plain = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);
-      let body_node = render_cont_body(cont, &plain, ctx);
-      apply(ident("·let", expr_loc), vec![
+      let body_node = render_cont_body(cont, &plain, name.id, ctx);
+      // Map ·let to the = or |= token inside the Bind AST node.
+      let let_loc = ctx.ast_node(expr.id)
+        .and_then(|n| match &n.kind {
+          NodeKind::Bind { op, .. } | NodeKind::BindRight { op, .. } => Some(op.loc),
+          _ => None,
+        })
+        .unwrap_or(expr_loc);
+      apply(ident("·let", let_loc), vec![
         val_to_node(val, ctx),
-        fn_node(patterns(vec![ident(&plain, name_loc)]), vec![body_node], dummy_loc()),
-      ], expr_loc)
+        fn_node(patterns(vec![ident(&plain, name_loc)]), vec![body_node], name_loc),
+      ], let_loc)
     }
 
     ExprKind::LetFn { name, params, fn_body, cont } => {
@@ -375,16 +384,16 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
           .map(|(bind_id, _)| render_synth_name(*bind_id, ctx))
           .collect();
         let label = format!("{{cap: [{}]}}", names.join(", "));
-        fn_params.insert(0, ident(&label, dummy_loc()));
+        fn_params.insert(0, ident(&label, name_loc));
       }
 
-      let body_node = render_cont_body(cont, &plain_name, ctx);
+      let body_node = render_cont_body(cont, &plain_name, name.id, ctx);
       apply(ident("·fn", expr_loc), vec![
         fn_node(patterns(fn_params), vec![to_node(fn_body, ctx)], expr_loc),
         fn_node(
           patterns(vec![ident(&plain_name, name_loc)]),
           vec![body_node],
-          dummy_loc(),
+          name_loc,
         ),
       ], expr_loc)
     }
@@ -396,7 +405,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
           Callable::Val(func_val) => val_to_node(func_val, ctx),
           Callable::BuiltIn(op) => ident(&render_builtin(op), expr_loc),
         };
-        return apply(func_node, vec![ident("_", dummy_loc())], expr_loc);
+        return apply(func_node, vec![ident("_", expr_loc)], expr_loc);
       }
       let func_node = match func {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
@@ -418,7 +427,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         // For no-arg match builtins, the last Arg::Cont uses render_cont_as_expr.
         let arg_nodes: Vec<Node<'static>> = args.iter().enumerate().map(|(i, a)| match a {
           Arg::Val(v) => val_to_node(v, ctx),
-          Arg::Spread(v) => spread_node(val_to_node(v, ctx), dummy_loc()),
+          Arg::Spread(v) => { let n = val_to_node(v, ctx); spread_node(n, ctx_loc(v.id, ctx)) },
           Arg::Cont(c) if is_noarg_match && i == args.len() - 1 =>
             state_fn(render_cont_as_expr(c, ctx)),
           Arg::Cont(c) => render_cont(c, ctx),
@@ -429,7 +438,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         // Regular App: all args render normally (last Arg::Cont is the result cont).
         let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
           Arg::Val(v) => val_to_node(v, ctx),
-          Arg::Spread(v) => spread_node(val_to_node(v, ctx), dummy_loc()),
+          Arg::Spread(v) => { let n = val_to_node(v, ctx); spread_node(n, ctx_loc(v.id, ctx)) },
           Arg::Cont(c) => render_cont(c, ctx),
           Arg::Expr(e) => to_node(e, ctx),
         }).collect();

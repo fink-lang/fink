@@ -167,13 +167,21 @@ fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src
 
 
 
-/// Wrap a bare value as the leaf of a function body.
-/// Produces `LetVal { name: fresh, val, body: Cont::Ref(g.cont) }`.
-/// Only used when the last expression has no pending bindings (pure atom).
+/// Build an explicit tail call: `App(ContRef(cont_id), [val])`.
+/// Replaces the implicit `Cont::Ref` shortcut so the val's origin is preserved in the propgraph.
+fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
+  let cont_val = g.val(ValKind::ContRef(cont_id), origin);
+  g.expr(ExprKind::App {
+    func: Callable::Val(cont_val),
+    args: vec![Arg::Val(val)],
+  }, origin)
+}
+
+/// Wrap a bare value as the tail of a function body.
+/// Produces `App(ContRef(cont), [val])` — passes val directly to the cont.
 fn wrap_val<'src>(g: &mut Gen, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
-  let name = g.fresh_result(origin);
-  let cont = g.cont;
-  g.expr(ExprKind::LetVal { name, val: Box::new(val), cont: Cont::Ref(cont) }, origin)
+  let cont_id = g.cont;
+  tail_app(g, cont_id, val, origin)
 }
 
 
@@ -307,9 +315,14 @@ fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont<
       let (val, pending) = lower(g, expr);
       all_pending.extend(pending);
       if all_pending.is_empty() {
-        // Bare atom at tail — wrap directly using the provided tail cont.
-        let name = g.fresh_result(o);
-        return g.expr(ExprKind::LetVal { name, val: Box::new(val), cont: tail }, o);
+        // Bare atom at tail — pass val directly to cont.
+        return match tail {
+          Cont::Ref(cont_id) => tail_app(g, cont_id, val, o),
+          tail => {
+            let name = g.fresh_result(o);
+            g.expr(ExprKind::LetVal { name, val: Box::new(val), cont: tail }, o)
+          }
+        };
       }
       return wrap(g, all_pending, tail);
     } else {
@@ -1682,18 +1695,20 @@ mod tests {
   #[test]
   fn lower_lit_int() {
     let result = lower_src("42");
-    assert!(matches!(result.root.kind, ExprKind::LetVal { .. }));
-    if let ExprKind::LetVal { val, cont: Cont::Ref(_), .. } = &result.root.kind {
-      assert!(matches!(val.kind, ValKind::Lit(Lit::Int(42))));
+    // wrap_val now emits App(ContRef, [Lit]) directly — no LetVal wrapper.
+    assert!(matches!(result.root.kind, ExprKind::App { .. }));
+    if let ExprKind::App { args, .. } = &result.root.kind {
+      assert!(matches!(args[0], Arg::Val(Val { kind: ValKind::Lit(Lit::Int(42)), .. })));
     }
   }
 
   #[test]
   fn lower_ident() {
     let result = lower_src("foo");
-    assert!(matches!(result.root.kind, ExprKind::LetVal { .. }));
-    if let ExprKind::LetVal { val, cont: Cont::Ref(_), .. } = &result.root.kind {
-      assert!(matches!(val.kind, ValKind::Ref(_)));
+    // wrap_val now emits App(ContRef, [Ref]) directly — no LetVal wrapper.
+    assert!(matches!(result.root.kind, ExprKind::App { .. }));
+    if let ExprKind::App { args, .. } = &result.root.kind {
+      assert!(matches!(args[0], Arg::Val(Val { kind: ValKind::Ref(_), .. })));
     }
   }
 

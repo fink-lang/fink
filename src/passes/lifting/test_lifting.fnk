@@ -29,8 +29,7 @@ test 'pure fn is unchanged', fn:
 
   | equals fink":
     ·f_0 = ·v_3 = fn ·x_1, ·v_4:
-      ·v_6 = ·x_1
-      ·v_4 ·v_6
+      ·v_4 ·x_1
 
     ·v_2 ·f_0
 
@@ -42,8 +41,7 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
 
   | equals fink":
     ·v_6 = fn ·b_2, ·v_7:
-      ·v_9 = ·b_2
-      ·v_7 ·v_9
+      ·v_7 ·b_2
 
     ·foo_0 = ·v_4 = fn ·a_1, ·v_5:
       ·v_5 ·v_6
@@ -103,8 +101,7 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
 
   | equals fink":
     ·v_8 = fn ·x_2, ·v_9:
-      ·v_11 = ·x_2
-      ·v_9 ·v_11
+      ·v_9 ·x_2
 
     ·v_38 = fn ·a_39, ·b_4, ·v_17:
       ·op_plus ·a_39, ·b_4, ·v_17
@@ -271,8 +268,7 @@ test 'match — no forward refs after lift', fn:
       ·match_block ·n_32, ·v_19, ·v_34
 
     ·v_45 = fn ·v_12:
-      ·v_14 = 42
-      ·v_12 ·v_14
+      ·v_12 42
 
     ·v_48 = fn ·v_9, ·v_7, ·v_8:
       ·match_value ·v_9, 0, ·v_7, ·v_8
@@ -284,7 +280,6 @@ test 'match — no forward refs after lift', fn:
       ·closure ·v_31, ·n_1, ·v_4, ·v_42
 
     ·v_2 ·foo_0
-
 
 
 test 'match with binding', fn:
@@ -350,8 +345,7 @@ test 'recursive fn in match', fn:
       ·match_arm ·v_107, ·v_91, ·v_79
 
     ·v_83 = fn ·v_13:
-      ·v_15 = 1
-      ·v_13 ·v_15
+      ·v_13 1
 
     ·v_104 = fn ·v_10, ·v_8, ·v_9:
       ·match_value ·v_10, 0, ·v_8, ·v_9
