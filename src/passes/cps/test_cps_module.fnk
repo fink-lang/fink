@@ -103,8 +103,7 @@ test 'destructure not in exports', fn:
                   ·match_done ·v_20, ·panic, fn ·v_23:
                     ·fn
                       fn ·ƒ_26:
-                        ·let ·a_0, fn ·v_28:
-                          ·ƒ_26 ·v_28
+                        ·ƒ_26 ·a_0
                       fn ·v_25:
                         ·let ·v_25, fn ·foo_2:
                           ·ƒ_3 ·foo_2

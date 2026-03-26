@@ -29,24 +29,21 @@ test 'int literal', fn:
   expect cps_expr fink":
     42
   | equals fink":
-    ·let 42, fn ·v_2:
-      ·ƒ_0 ·v_2
+    ·ƒ_0 42
 
 
 test 'bool literal', fn:
   expect cps_expr fink":
     true
   | equals fink":
-    ·let true, fn ·v_2:
-      ·ƒ_0 ·v_2
+    ·ƒ_0 true
 
 
 test 'string literal', fn:
   expect cps_expr fink":
     'hello'
   | equals fink":
-    ·let 'hello', fn ·v_2:
-      ·ƒ_0 ·v_2
+    ·ƒ_0 'hello'
 
 
 ---
@@ -95,8 +92,7 @@ test 'ident ref', fn:
   expect cps_expr fink":
     foo
   | equals fink":
-    ·let ·∅foo, fn ·v_2:
-      ·ƒ_0 ·v_2
+    ·ƒ_0 ·∅foo
 
 
 ---
@@ -191,8 +187,7 @@ test 'fn one param', fn:
   | equals fink":
     ·fn
       fn ·a_0, ·ƒ_3:
-        ·let ·a_0, fn ·v_5:
-          ·ƒ_3 ·v_5
+        ·ƒ_3 ·a_0
       fn ·v_2:
         ·ƒ_1 ·v_2
 
@@ -203,8 +198,7 @@ test 'fn two params', fn:
   | equals fink":
     ·fn
       fn ·a_0, ·b_1, ·ƒ_4:
-        ·let ·a_0, fn ·v_6:
-          ·ƒ_4 ·v_6
+        ·ƒ_4 ·a_0
       fn ·v_3:
         ·ƒ_2 ·v_3
 
@@ -215,8 +209,7 @@ test 'named fn', fn:
   | equals fink":
     ·fn
       fn ·a_1, ·ƒ_4:
-        ·let ·a_1, fn ·v_6:
-          ·ƒ_4 ·v_6
+        ·ƒ_4 ·a_1
       fn ·v_3:
         ·let ·v_3, fn ·double_0:
           ·ƒ_2 ·double_0
@@ -302,8 +295,7 @@ test 'empty seq literal', fn:
   expect cps_expr fink":
     []
   | equals fink":
-    ·let [], fn ·v_2:
-      ·ƒ_0 ·v_2
+    ·ƒ_0 []
 
 
 test 'rec literal', fn:
@@ -318,8 +310,7 @@ test 'empty rec literal', fn:
   expect cps_expr fink":
     {}
   | equals fink":
-    ·let {}, fn ·v_2:
-      ·ƒ_0 ·v_2
+    ·ƒ_0 {}
 
 
 test 'rec shorthand', fn:
@@ -376,8 +367,7 @@ test 'try', fn:
   expect cps_expr fink":
     try foo
   | equals fink":
-    ·let ·∅foo, fn ·v_2:
-      ·ƒ_0 ·v_2
+    ·ƒ_0 ·∅foo
 
 
 ---
@@ -620,8 +610,7 @@ test 'varargs — collect rest', fn:
   | equals fink":
     ·fn
       fn ·a_0, ..·rest_1, ·ƒ_4:
-        ·let ·rest_1, fn ·v_6:
-          ·ƒ_4 ·v_6
+        ·ƒ_4 ·rest_1
       fn ·v_3:
         ·ƒ_2 ·v_3
 
@@ -685,8 +674,7 @@ test 'identity function', fn:
   | equals fink":
     ·fn
       fn ·x_0, ·ƒ_3:
-        ·let ·x_0, fn ·v_5:
-          ·ƒ_3 ·v_5
+        ·ƒ_3 ·x_0
       fn ·v_2:
         ·ƒ_1 ·v_2
 
@@ -830,7 +818,7 @@ test 'two fns at module level — main calls add', fn:
       fn ·v_5:
         ·ƒ_4 ·v_5
 
-
+# TODO bug in AST parsing `a - add b` wrong, need to re-review once fixed
 test 'shadowed binding — inner add does not affect outer', fn:
   expect cps_expr fink":
     add = fn a, b:
@@ -852,8 +840,7 @@ test 'shadowed binding — inner add does not affect outer', fn:
                 fn ·a_5, ·b_6, ·ƒ_21:
                   ·fn
                     fn ·foo_7, ·ƒ_23:
-                      ·let ·foo_7, fn ·v_25:
-                        ·ƒ_23 ·v_25
+                      ·ƒ_23 ·foo_7
                     fn ·v_22:
                       ·let ·v_22, fn ·add_8:
                         ·op_minus ·a_5, ·add_8, fn ·v_30:

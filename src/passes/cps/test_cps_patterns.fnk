@@ -376,16 +376,14 @@ test 'match block bind', fn:
         ·match_value ·v_6, 1, ·ƒ_4, fn:
           ·ƒ_5 _
       fn ·ƒ_9:
-        ·let 2, fn ·v_11:
-          ·ƒ_9 ·v_11
+        ·ƒ_9 2
       fn ·v_16:
         ·match_arm
           fn ·v_20, ·ƒ_18, ·ƒ_19:
             ·let ·v_20, fn ·x_0:
               ·ƒ_19 ·x_0
           fn ·x_0, ·ƒ_22:
-            ·let ·x_0, fn ·v_24:
-              ·ƒ_22 ·v_24
+            ·ƒ_22 ·x_0
           fn ·v_27:
             ·match_block ·∅foo, ·v_16, ·v_27, ·ƒ_1
 
@@ -403,8 +401,7 @@ test 'match wildcard', fn:
       fn ·v_5, ·ƒ_3, ·ƒ_4:
         ·ƒ_4 _
       fn ·ƒ_7:
-        ·let 42, fn ·v_9:
-          ·ƒ_7 ·v_9
+        ·ƒ_7 42
       fn ·v_13:
         ·match_block ·∅foo, ·v_13, ·ƒ_0
 
@@ -419,8 +416,7 @@ test 'match bind', fn:
         ·let ·v_6, fn ·x_0:
           ·ƒ_5 ·x_0
       fn ·x_0, ·ƒ_8:
-        ·let ·x_0, fn ·v_10:
-          ·ƒ_8 ·v_10
+        ·ƒ_8 ·x_0
       fn ·v_13:
         ·match_block ·∅foo, ·v_13, ·ƒ_1
 
@@ -437,23 +433,20 @@ test 'match literal arms', fn:
         ·match_value ·v_5, 1, ·ƒ_3, fn:
           ·ƒ_4 _
       fn ·ƒ_8:
-        ·let 'one', fn ·v_10:
-          ·ƒ_8 ·v_10
+        ·ƒ_8 'one'
       fn ·v_15:
         ·match_arm
           fn ·v_19, ·ƒ_17, ·ƒ_18:
             ·match_value ·v_19, 2, ·ƒ_17, fn:
               ·ƒ_18 _
           fn ·ƒ_22:
-            ·let 'two', fn ·v_24:
-              ·ƒ_22 ·v_24
+            ·ƒ_22 'two'
           fn ·v_29:
             ·match_arm
               fn ·v_33, ·ƒ_31, ·ƒ_32:
                 ·ƒ_32 _
               fn ·ƒ_35:
-                ·let 'other', fn ·v_37:
-                  ·ƒ_35 ·v_37
+                ·ƒ_35 'other'
               fn ·v_41:
                 ·match_block ·∅foo, ·v_15, ·v_29, ·v_41, ·ƒ_0
 
@@ -476,8 +469,7 @@ test 'match — expression in arm', fn:
             ·match_value ·v_21, false, ·ƒ_19, fn:
               ·ƒ_20 _
           fn ·ƒ_24:
-            ·let ·∅y, fn ·v_26:
-              ·ƒ_24 ·v_26
+            ·ƒ_24 ·∅y
           fn ·v_31:
             ·match_block ·∅x, ·v_17, ·v_31, ·ƒ_0
 
@@ -519,8 +511,7 @@ test 'match — seq pattern arm', fn:
                 ·let ·v_14, fn ·b_1:
                   ·match_done ·v_15, ·ƒ_5, ·ƒ_6
       fn ·a_0, ·b_1, ·ƒ_20:
-        ·let ·a_0, fn ·v_22:
-          ·ƒ_20 ·v_22
+        ·ƒ_20 ·a_0
       fn ·v_39:
         ·match_block ·∅foo, ·v_39, ·ƒ_2
 
@@ -536,8 +527,7 @@ test 'match — rec pattern arm', fn:
             ·let ·v_9, fn ·bar_0:
               ·ƒ_5 ·bar_0
       fn ·bar_0, ·ƒ_14:
-        ·let ·bar_0, fn ·v_16:
-          ·ƒ_14 ·v_16
+        ·ƒ_14 ·bar_0
       fn ·v_26:
         ·match_block ·∅foo, ·v_26, ·ƒ_1
 
@@ -555,8 +545,7 @@ test 'multi-arm match', fn:
             ·let ·v_11, fn ·a_0:
               ·match_done ·v_12, ·ƒ_6, ·ƒ_7
       fn ·a_0, ·ƒ_17:
-        ·let ·a_0, fn ·v_19:
-          ·ƒ_17 ·v_19
+        ·ƒ_17 ·a_0
       fn ·v_31:
         ·match_arm
           fn ·v_35, ·ƒ_33, ·ƒ_34:
@@ -567,8 +556,7 @@ test 'multi-arm match', fn:
                     ·let ·v_42, fn ·b_2:
                       ·match_done ·v_43, ·ƒ_33, ·ƒ_34
           fn ·a_1, ·b_2, ·ƒ_48:
-            ·let ·a_1, fn ·v_50:
-              ·ƒ_48 ·v_50
+            ·ƒ_48 ·a_1
           fn ·v_67:
             ·match_block ·∅foo, ·v_31, ·v_67, ·ƒ_3
 
@@ -584,8 +572,7 @@ test 'multi-arg match', fn:
           ·let ·v_10, fn ·y_1:
             ·ƒ_8 ·y_1
       fn ·x_0, ·y_1, ·ƒ_13:
-        ·let ·x_0, fn ·v_15:
-          ·ƒ_13 ·v_15
+        ·ƒ_13 ·x_0
       fn ·v_20:
         ·match_block ·∅a, ·∅b, ·v_20, ·ƒ_2
 
@@ -714,8 +701,7 @@ test 'range — exclusive in match arm', fn:
           ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn:
             ·ƒ_4 _
       fn ·ƒ_11:
-        ·let 'low', fn ·v_13:
-          ·ƒ_11 ·v_13
+        ·ƒ_11 'low'
       fn ·v_20:
         ·match_block ·∅x, ·v_20, ·ƒ_0
 
@@ -731,8 +717,7 @@ test 'range — inclusive in match arm', fn:
           ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn:
             ·ƒ_4 _
       fn ·ƒ_11:
-        ·let 'low', fn ·v_13:
-          ·ƒ_11 ·v_13
+        ·ƒ_11 'low'
       fn ·v_20:
         ·match_block ·∅x, ·v_20, ·ƒ_0
 
@@ -762,8 +747,7 @@ test 'fn — seq destructuring param', fn:
               ·match_next ·v_8, ·panic, fn ·v_11, ·v_12:
                 ·let ·v_11, fn ·b_1:
                   ·match_done ·v_12, ·panic, fn ·v_15:
-                    ·let ·a_0, fn ·v_19:
-                      ·ƒ_17 ·v_19
+                    ·ƒ_17 ·a_0
       fn ·v_3:
         ·ƒ_2 ·v_3
 
@@ -778,8 +762,7 @@ test 'fn — seq destructuring param with rest', fn:
             ·let ·v_7, fn ·a_0:
               ·match_rest ·v_8, ·panic, fn ·v_12:
                 ·let ·v_12, fn ·rest_1:
-                  ·let ·rest_1, fn ·v_17:
-                    ·ƒ_15 ·v_17
+                  ·ƒ_15 ·rest_1
       fn ·v_3:
         ·ƒ_2 ·v_3
 
@@ -795,7 +778,6 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
             ·match_value ·v_7, 1, ·panic, fn:
               ·match_rest ·v_8, ·panic, fn ·v_13:
                 ·let ·v_13, fn ·b_1:
-                  ·let ·b_1, fn ·v_18:
-                    ·ƒ_16 ·v_18
+                  ·ƒ_16 ·b_1
       fn ·v_3:
         ·ƒ_2 ·v_3
