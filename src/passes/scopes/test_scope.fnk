@@ -64,6 +64,65 @@ test 'fn params in scope', fn:
       bind 0, 'f'
 
 
+# TODO: partial pass desugars `2 + ?` into `fn $: 2 + $` which would
+# create a fn scope. Currently partial pass not run because it doesn't
+# preserve AstIds. Expected output will change once that's fixed.
+test 'partial application', fn:
+  expect scope fink":
+    foo = 2 + ?
+  | equals fink":
+    scope 5, 'module':
+      bind 0, 'foo'
+
+
+test 'sequential bindings in fn body', fn:
+  expect scope fink":
+    f = fn:
+      x = 1
+      y = x + 1
+      y
+  | equals fink":
+    scope 13, 'module':
+
+      scope 11, 'fn':
+        bind 2, 'x'
+        ref 'x', 2
+        bind 5, 'y'
+        ref 'y', 5
+      bind 0, 'f'
+
+
+test 'self-recursion', fn:
+  expect scope fink":
+    fib = fn n:
+      fib n - 1
+  | equals fink":
+    scope 11, 'module':
+
+      scope 9, 'fn':
+        bind 2, 'n'
+        self_ref 'fib', 0, depth 1
+        ref 'n', 2
+      bind 0, 'fib'
+
+
+test 'nested fn — closure depth', fn:
+  expect scope fink":
+    f = fn a:
+      fn b:
+        a + b
+  | equals fink":
+    scope 13, 'module':
+
+      scope 11, 'fn':
+        bind 2, 'a'
+
+        scope 10, 'fn':
+          bind 5, 'b'
+          ref 'a', 2, depth 1
+          ref 'b', 5
+      bind 0, 'f'
+
 
 ---
 unresolved
@@ -156,6 +215,51 @@ test 'mutual recursion — is-even refs is-odd', fn:
           ref 'is-even', 0, depth 2
           ref 'n', 24, depth 1
       bind 22, 'is-odd'
+
+
+test 'match with binding in arm', fn:
+  expect scope fink":
+    f = fn x:
+      match x:
+        0: 42
+        n: n + 1
+  | equals fink":
+    scope 21, 'module':
+
+      scope 19, 'fn':
+        bind 2, 'x'
+        ref 'x', 2
+
+        scope 10, 'arm':
+
+        scope 17, 'arm':
+          bind 12, 'n'
+          ref 'n', 12
+      bind 0, 'f'
+
+
+test 'pipe — refs to fns', fn:
+  expect scope fink":
+    double = fn x: x * 2
+    inc = fn x: x + 1
+    main = fn: 5 | double | inc
+  | equals fink":
+    scope 26, 'module':
+
+      scope 7, 'fn':
+        bind 2, 'x'
+        ref 'x', 2
+      bind 0, 'double'
+
+      scope 16, 'fn':
+        bind 11, 'x'
+        ref 'x', 11
+      bind 9, 'inc'
+
+      scope 24, 'fn':
+        ref 'double', 0, depth 1
+        ref 'inc', 9, depth 1
+      bind 18, 'main'
 
 
 ---
@@ -256,6 +360,18 @@ test 'fn with destructured params', fn:
         ref 'a', 1
         ref 'b', 2
       bind 0, 'f'
+
+
+test 'spread in seq destructure', fn:
+  expect scope fink":
+    [a, ..rest] = [1, 2, 3]
+    a + rest
+  | equals fink":
+    scope 12, 'module':
+      bind 0, 'a'
+      bind 1, 'rest'
+      ref 'a', 0
+      ref 'rest', 1
 
 
 test 'bind-right destructure in seq pattern', fn:

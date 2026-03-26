@@ -635,6 +635,9 @@ mod tests {
   fn scope(src: &str) -> String {
     match crate::parser::parse(src) {
       Ok(r) => {
+        // TODO: run partial pass (desugars `?` to `fn $: ...`) before scope analysis.
+        // Currently skipped because the partial pass creates nodes with AstId(0)
+        // instead of allocating fresh IDs.
         let result = analyse(&r.root, r.node_count as usize, &["import"]);
         format_result(&result)
       }
