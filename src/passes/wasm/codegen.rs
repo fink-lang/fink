@@ -817,8 +817,7 @@ fn emit_expr(expr: &Expr<'_>, f: &mut Function, fc: &mut FnCtx) {
           // treat this as calling the fn directly with the forwarded cont.
           // This handles the module-init pattern: last LetFn passes itself to module cont.
           if let Some(fn_idx) = fc.ctx.func_index(name.id) {
-            emit_own_cont(f, fc);
-            f.instruction(&Instruction::ReturnCall(fn_idx));
+            emit_call_with_cont(fn_idx, f, fc);
           } else {
             emit_cont_call_with_anyref(*cont_id, f, fc);
           }
@@ -1154,13 +1153,12 @@ fn emit_match_value(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
     f.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
     if let ValKind::ContRef(success_id) = &success_val.kind {
       if let Some(fn_idx) = fc.ctx.func_index(*success_id) {
-        emit_own_cont(f, fc);
-        f.instruction(&Instruction::ReturnCall(fn_idx));
+        emit_call_with_cont(fn_idx, f, fc);
       } else { f.instruction(&Instruction::Unreachable); }
     } else { f.instruction(&Instruction::Unreachable); }
     f.instruction(&Instruction::Else);
     if let Some(fn_idx) = fc.ctx.func_index(fail_cont) {
-      f.instruction(&Instruction::ReturnCall(fn_idx));
+      emit_call_with_cont(fn_idx, f, fc);
     } else { f.instruction(&Instruction::Unreachable); }
     f.instruction(&Instruction::End);
   } else {
@@ -1202,12 +1200,13 @@ fn emit_fn_closure(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
     return;
   }
 
-  let arity = fc.ctx.funcs[fn_pos].arity;
   let cap_args = &args[1..args.len().saturating_sub(1)];
 
   // Push cap values. After static cap stripping, the remaining params start
   // with non-static caps that need runtime values.
-  let num_value_params = arity as usize - 1; // subtract cont
+  // For cont_env fns (arity == param_ids.len()), num_value_params == param_ids.len().
+  // For regular fns (arity == param_ids.len() + 1), num_value_params == arity - 1.
+  let num_value_params = fc.ctx.funcs[fn_pos].param_ids.len();
   let param_kinds = &fc.ctx.funcs[fn_pos].param_kinds;
   for i in 0..num_value_params {
     if i < cap_args.len() {
@@ -1227,6 +1226,24 @@ fn emit_fn_closure(args: &[Arg<'_>], f: &mut Function, fc: &mut FnCtx) {
   if is_cont_env_fn(fn_idx, fc.ctx) {
     emit_own_cont(f, fc);
     f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+  } else {
+    emit_own_cont(f, fc);
+  }
+  f.instruction(&Instruction::ReturnCall(fn_idx));
+}
+
+/// Call a hoisted fn, passing the current continuation.
+///
+/// For regular fns (arity > 0): push cont as the last arg, return_call.
+/// For cont_env fns (arity == param_ids.len()): set $cont_env to the current
+/// cont, push ref.null any as the result placeholder, return_call.
+fn emit_call_with_cont(fn_idx: u32, f: &mut Function, fc: &FnCtx) {
+  if is_cont_env_fn(fn_idx, fc.ctx) {
+    emit_own_cont(f, fc);
+    f.instruction(&Instruction::GlobalSet(GLOBAL_CONT_ENV));
+    f.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+      shared: false, ty: wasm_encoder::AbstractHeapType::Any,
+    }));
   } else {
     emit_own_cont(f, fc);
   }
