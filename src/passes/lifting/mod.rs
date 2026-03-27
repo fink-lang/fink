@@ -566,8 +566,10 @@ fn extract_from_body<'src>(
             let closure_result = alloc.bind(Bind::Synth, None);
             let closure_result_id = closure_result.id;
             // Rebuild the original App with Cont::Ref(closure_result_id) as the cont.
+            // Preserve the original expr's origin so source maps survive lifting.
+            let original_origin = alloc.origin.try_get(expr.id).and_then(|o| *o);
             args.insert(idx, Arg::Cont(Cont::Ref(closure_result_id)));
-            let inner_app = alloc.expr(ExprKind::App { func, args }, None);
+            let inner_app = alloc.expr(ExprKind::App { func, args }, original_origin);
             closure_args.push(Arg::Cont(Cont::Expr {
               args: vec![closure_result],
               body: Box::new(inner_app),

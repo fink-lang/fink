@@ -76,7 +76,6 @@ test 'chained arithmetic', fn:
         (local.set $x_1 (local.get $v_9))
         (return_call $op_plus (local.get $x_1) (struct.new $Num (f64.const 4)) (local.get $v_26))
       )
-
       (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
         (local $v_30 (ref $Any))
         (local.set $v_30 (call $closure_2 (local.get $v_25) (local.get $v_6)))
@@ -84,7 +83,7 @@ test 'chained arithmetic', fn:
       )
       (export "main" (func $v_5))
     )
-    #sourcemaps:TODO
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiOzs7Ozs7OztJQUNJLFdBQUYsS0FBSTtBQUNGLDBCQUFGLGlCQUFJOztBQUZDOzt3REFBQTtBQUNDLHlCQUFGLGdDQUFJOztBQURWIgp9
 
 
 test 'multiple let bindings used', fn:
