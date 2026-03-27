@@ -25,7 +25,7 @@ test 'single binding export', fn:
     foo = 1
   | equals fink":
     ·let 1, fn ·foo_0:
-      ·ƒ_1 ·foo_0
+      ·export ·foo_0
 
 
 ---
@@ -39,7 +39,7 @@ test 'two bindings export', fn:
   | equals fink":
     ·let 1, fn ·foo_0:
       ·let 2, fn ·bar_1:
-        ·ƒ_2 ·foo_0, ·bar_1
+        ·export ·foo_0, ·bar_1
 
 
 test 'two fns export', fn:
@@ -51,16 +51,16 @@ test 'two fns export', fn:
       add 3, 4
   | equals fink":
     ·fn
-      fn ·a_2, ·b_3, ·ƒ_10:
-        ·op_plus ·a_2, ·b_3, ·ƒ_10
-      fn ·v_9:
-        ·let ·v_9, fn ·add_0:
+      fn ·a_2, ·b_3, ·ƒ_9:
+        ·op_plus ·a_2, ·b_3, ·ƒ_9
+      fn ·v_8:
+        ·let ·v_8, fn ·add_0:
           ·fn
-            fn ·ƒ_18:
-              ·add_0 3, 4, ·ƒ_18
-            fn ·v_17:
-              ·let ·v_17, fn ·main_1:
-                ·ƒ_4 ·add_0, ·main_1
+            fn ·ƒ_17:
+              ·add_0 3, 4, ·ƒ_17
+            fn ·v_16:
+              ·let ·v_16, fn ·main_1:
+                ·export ·add_0, ·main_1
 
 
 ---
@@ -72,16 +72,16 @@ test 'import not in exports', fn:
     {foo} = import './bar.fnk'
     main = fn: foo 1
   | equals fink":
-    ·∅import './bar.fnk', fn ·v_8:
-      ·match_rec ·v_8, ·panic, fn ·v_10:
-        ·match_field ·v_10, 'foo', ·panic, fn ·v_11, ·v_12:
-          ·let ·v_11, fn ·foo_0:
+    ·∅import './bar.fnk', fn ·v_7:
+      ·match_rec ·v_7, ·panic, fn ·v_9:
+        ·match_field ·v_9, 'foo', ·panic, fn ·v_10, ·v_11:
+          ·let ·v_10, fn ·foo_0:
             ·fn
-              fn ·ƒ_17:
-                ·foo_0 1, ·ƒ_17
-              fn ·v_16:
-                ·let ·v_16, fn ·main_1:
-                  ·ƒ_2 ·main_1
+              fn ·ƒ_16:
+                ·foo_0 1, ·ƒ_16
+              fn ·v_15:
+                ·let ·v_15, fn ·main_1:
+                  ·export ·main_1
 
 
 ---
@@ -93,17 +93,17 @@ test 'destructure not in exports', fn:
     [a, b] = [1, 2]
     foo = fn: a
   | equals fink":
-    ·seq_append [], 1, fn ·v_9:
-      ·seq_append ·v_9, 2, fn ·v_12:
-        ·match_seq ·v_12, ·panic, fn ·v_14:
-          ·match_next ·v_14, ·panic, fn ·v_15, ·v_16:
-            ·let ·v_15, fn ·a_0:
-              ·match_next ·v_16, ·panic, fn ·v_19, ·v_20:
-                ·let ·v_19, fn ·b_1:
-                  ·match_done ·v_20, ·panic, fn ·v_23:
+    ·seq_append [], 1, fn ·v_8:
+      ·seq_append ·v_8, 2, fn ·v_11:
+        ·match_seq ·v_11, ·panic, fn ·v_13:
+          ·match_next ·v_13, ·panic, fn ·v_14, ·v_15:
+            ·let ·v_14, fn ·a_0:
+              ·match_next ·v_15, ·panic, fn ·v_18, ·v_19:
+                ·let ·v_18, fn ·b_1:
+                  ·match_done ·v_19, ·panic, fn ·v_22:
                     ·fn
-                      fn ·ƒ_26:
-                        ·ƒ_26 ·a_0
-                      fn ·v_25:
-                        ·let ·v_25, fn ·foo_2:
-                          ·ƒ_3 ·foo_2
+                      fn ·ƒ_25:
+                        ·ƒ_25 ·a_0
+                      fn ·v_24:
+                        ·let ·v_24, fn ·foo_2:
+                          ·export ·foo_2

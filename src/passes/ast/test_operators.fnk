@@ -535,8 +535,8 @@ test 'subtract with call rhs', fn:
   expect ast fink":
     a - add b
   | equals fink":
-    InfixOp '-',
-      Ident 'a'
-      Apply
+    Module
+      InfixOp '-',
+        Ident 'a'
         Ident 'add'
-        Ident 'b'
+      Ident 'b'

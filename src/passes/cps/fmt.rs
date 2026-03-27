@@ -285,6 +285,8 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::MatchArm     => "·match_arm".into(),
     // Async/concurrency
     BuiltIn::Yield        => "·yield".into(),
+    // Module export
+    BuiltIn::Export       => "·export".into(),
   }
 }
 

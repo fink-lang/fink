@@ -233,11 +233,10 @@ fn collect_exports<'src>(root: &Expr<'src>, ctx: &Ctx<'_, 'src>) -> Vec<(CpsId, 
           Cont::Ref(_) => return vec![],
         }
       }
-      ExprKind::App { func: Callable::Val(val), args } => {
-        // Terminal: ·ƒ_0 ·foo_0, ·bar_1
+      ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args } => {
+        // Terminal: ·export ·foo_0, ·bar_1
         // Each arg is a Ref to a named fn. The export name is the source name
         // without the _N suffix (i.e. the Ident string from the origin map).
-        if !matches!(val.kind, ValKind::ContRef(_)) { return vec![]; }
         return args.iter().filter_map(|arg| {
           if let Arg::Val(v) = arg {
             if let ValKind::Ref(Ref::Synth(id)) = v.kind {
@@ -726,6 +725,7 @@ fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::MatchBlock    => "builtin_match_block",
     BuiltIn::MatchArm      => "builtin_match_arm",
     BuiltIn::Yield         => "builtin_yield",
+    BuiltIn::Export        => "export",
   }
 }
 

@@ -199,8 +199,6 @@ pub enum RangeKind {
 /// A compiler-known operation — resolved statically, not by scope lookup.
 /// Covers source operators, data construction, and string formatting.
 /// No runtime value — only valid in the func position of App.
-// TODO: add BuiltIn::Export for the terminal module App (currently uses
-// anonymous ContRef). Would make module export semantics explicit in the IR.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuiltIn {
   // Arithmetic
@@ -230,6 +228,9 @@ pub enum BuiltIn {
   // Yield — suspend execution, passing a value to the scheduler.
   // Args: value; cont receives the resumed value.
   Yield,
+  // Module export — terminal App in a module body. Args are the exported
+  // bindings. Replaces anonymous ContRef at module level.
+  Export,
 }
 
 impl BuiltIn {

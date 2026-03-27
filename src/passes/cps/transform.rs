@@ -1353,28 +1353,22 @@ fn collect_module_exports(exprs: &[Node<'_>], bind_site_to_cps: &std::collection
 pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> CpsResult<'src> {
   let mut g = Gen::new(scope);
   if exprs.is_empty() {
-    // Empty module: call exit cont with no args.
-    let cont_id = g.cont;
-    let cont_val = g.val(ValKind::ContRef(cont_id), None);
-    let root = g.expr(ExprKind::App { func: Callable::Val(cont_val), args: vec![] }, None);
+    // Empty module: export nothing.
+    let root = g.expr(ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args: vec![] }, None);
     return CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() };
   }
 
   // Collect simple top-level exports before lowering (bind_site_to_cps is populated at Gen::new).
   let export_ids: Vec<CpsId> = collect_module_exports(exprs, &g.bind_site_to_cps);
 
-  // Build the terminal App: ·ƒ_0 ·export_0, ·export_1, ...
-  // Collect all vals first to avoid multiple mutable borrows of g.
-  let cont_id = g.cont;
+  // Build the terminal App: ·export ·export_0, ·export_1, ...
   let export_vals: Vec<Val<'src>> = export_ids.iter().map(|&cps_id| {
-    // Use the bind's origin so the export ref maps to the binding's source name.
     let origin = g.origin.try_get(cps_id).and_then(|o| *o);
     g.val(ValKind::Ref(Ref::Synth(cps_id)), origin)
   }).collect();
-  let cont_val = g.val(ValKind::ContRef(cont_id), None);
   let export_args: Vec<Arg<'src>> = export_vals.into_iter().map(Arg::Val).collect();
   let terminal = g.expr(ExprKind::App {
-    func: Callable::Val(cont_val),
+    func: Callable::BuiltIn(BuiltIn::Export),
     args: export_args,
   }, None);
 

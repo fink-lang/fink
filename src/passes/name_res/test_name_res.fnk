@@ -213,6 +213,7 @@ test 'seq destructure', fn:
     (ref 14, ?) == unresolved
     (ref 17, ?) == unresolved
     (ref 18, ?) == unresolved
+    (ref 0, a) == unresolved
 
 test 'seq destructure uses both bindings', fn:
   expect cps_resolve fink":
@@ -236,6 +237,7 @@ test 'rec destructure', fn:
     (ref 7, ?) == unresolved
     (ref 9, ?) == unresolved
     (ref 10, ?) == unresolved
+    (ref 0, a) == unresolved
 
 test 'rec destructure uses binding', fn:
   expect cps_resolve fink":
@@ -269,6 +271,7 @@ test 'nested seq destructure', fn:
     (ref 33, ?) == unresolved
     (ref 34, ?) == unresolved
     (ref 25, ?) == unresolved
+    (ref 1, b) == unresolved
 
 test 'seq destructure with ref rhs', fn:
   expect cps_resolve fink":
@@ -284,6 +287,7 @@ test 'seq destructure with ref rhs', fn:
     (ref 16, ?) == unresolved
     (ref 19, ?) == unresolved
     (ref 20, ?) == unresolved
+    (ref 1, a) == unresolved
 
 test 'rec destructure with ref rhs', fn:
   expect cps_resolve fink":
@@ -295,6 +299,7 @@ test 'rec destructure with ref rhs', fn:
     (ref 0, x) == unresolved
     (ref 11, ?) == unresolved
     (ref 12, ?) == unresolved
+    (ref 1, a) == unresolved
 
 test 'nested seq destructure with ref rhs', fn:
   expect cps_resolve fink":
@@ -317,6 +322,7 @@ test 'nested seq destructure with ref rhs', fn:
     (ref 35, ?) == unresolved
     (ref 36, ?) == unresolved
     (ref 27, ?) == unresolved
+    (ref 2, b) == unresolved
 
 
 ---
@@ -436,8 +442,9 @@ test 'binding inside match arm body', fn:
   | equals fink":
     (ref 11, ?) == unresolved
     (ref 1, a) == unresolved
+    (ref 2, y) == unresolved
     (ref 0, x) == unresolved
-    (ref 18, ?) == unresolved
+    (ref 20, ?) == unresolved
 
 test 'fn in match arm captures outer', fn:
   expect cps_resolve fink":

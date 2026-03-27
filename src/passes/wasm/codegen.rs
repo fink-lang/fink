@@ -983,6 +983,11 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
 
       FnClosure => emit_fn_closure(args, f, fc),
 
+      // Module export — no runtime code. The export list is structural
+      // (handled by emit_exports). The module-level wrapper function
+      // terminates here; codegen emits nothing.
+      Export => {}
+
       _ => {
         f.instruction(&Instruction::Unreachable);
       }
