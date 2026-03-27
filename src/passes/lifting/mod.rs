@@ -181,7 +181,7 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
         Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
           !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body)
         }
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(&c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         Arg::Expr(body) => contains_letfn_or_inline_cont(body),
         _ => false,
       })
@@ -481,7 +481,7 @@ fn extract_from_body<'src>(
       // Skip simple forwards and ·closure result conts.
 
       let cont_idx = args.iter().rposition(|a| match a {
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(&c),
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         _ => false,
       });
       if let Some(idx) = cont_idx {

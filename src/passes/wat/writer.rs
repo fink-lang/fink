@@ -424,9 +424,25 @@ fn emit_body(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: u
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
       let local = ctx.label(name.id);
-      // Mark the local.set at the LetVal source location.
-      ctx.mark(expr.id, w);
-      let set_expr = WatExpr::list(format!("local.set ${}", local), vec![val_expr(val, ctx)]);
+      // Mark local.set with the = operator, $name with the binding ident.
+      let set_loc = ctx.ast_node(expr.id)
+        .and_then(|n| match &n.kind {
+          NodeKind::Bind { op, .. } => Some(op.loc),
+          _ => None,
+        });
+      let name_loc = ctx.ast_node(name.id).map(|n| n.loc);
+      let mut set_args = vec![];
+      if let Some(loc) = name_loc {
+        set_args.push(WatExpr::marked(loc, WatExpr::atom(format!("${local}"))));
+      } else {
+        set_args.push(WatExpr::atom(format!("${local}")));
+      }
+      set_args.push(val_expr(val, ctx));
+      let set_inner = WatExpr::list("local.set", set_args);
+      let set_expr = match set_loc {
+        Some(loc) => WatExpr::marked(loc, set_inner),
+        None => set_inner,
+      };
       w.push_str(&ind(indent));
       write_expr(&set_expr, w);
       w.push_str("\n");

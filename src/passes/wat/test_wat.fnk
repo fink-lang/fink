@@ -17,6 +17,8 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDTCwyQ0FBQTs7QUFERiIKfQ==
+
 
 test 'let binding', fn:
   expect gen_wat fink":
@@ -36,6 +38,8 @@ test 'let binding', fn:
       )
       (export "main" (func $v_5))
     )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87O0FBQ0wsb0JBQUk7QUFDSiwyQ0FBQTs7QUFGRiIKfQ==
+
 
 test 'add two literals', fn:
   expect gen_wat fink":

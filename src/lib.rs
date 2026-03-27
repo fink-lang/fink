@@ -9,6 +9,8 @@ pub mod propgraph;
 pub mod sourcemap;
 pub mod strings;
 
+pub mod test_context;
+
 // Re-exports for convenience — short paths for foundational types.
 pub use passes::ast;
 pub use passes::ast::lexer;

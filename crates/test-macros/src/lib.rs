@@ -304,6 +304,7 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
     output.extend(quote! {
       #[test]
       fn #test_name() {
+        crate::test_context::set(#test_name_str, #abs_path_str);
         let actual = #func(std::str::from_utf8(#src_lit).unwrap());
         let expected = std::str::from_utf8(#exp_lit).unwrap();
         if std::env::var("BLESS").is_ok() && actual != expected {

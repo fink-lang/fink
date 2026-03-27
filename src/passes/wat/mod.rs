@@ -54,7 +54,37 @@ mod tests {
     };
     let cps = lower_module(exprs, &scope);
     let lifted = lift(cps, &ast_index);
-    super::writer::emit(&lifted, &ast_index).trim().to_string()
+
+    // WAT with source map
+    let (wat_output, wat_srcmap) = super::writer::emit_mapped_with_content(&lifted, &ast_index, "test", src);
+    let wat_json = wat_srcmap.to_json();
+    let wat_b64 = crate::sourcemap::base64_encode(wat_json.as_bytes());
+
+    // Dump WAT + lifted CPS files for source map review (DUMP_WAT=1)
+    if std::env::var("DUMP_WAT").is_ok() {
+      let name = crate::test_context::name();
+      let slug: String = name.chars()
+        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .collect();
+      let dir = ".claude.local/scratch/wat";
+      let _ = std::fs::create_dir_all(dir);
+      // WAT file (// prefix for viewer compatibility)
+      let wat_content = format!("{}\n//# sourceMappingURL=data:application/json;base64,{wat_b64}", wat_output.trim());
+      let _ = std::fs::write(format!("{dir}/{slug}.wat.js"), &wat_content);
+      // Lifted CPS file
+      let ctx = crate::passes::cps::fmt::Ctx {
+        origin: &lifted.origin,
+        ast_index: &ast_index,
+        captures: None,
+      };
+      let (cps_output, cps_srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&lifted.root, &ctx, "test", src);
+      let cps_json = cps_srcmap.to_json();
+      let cps_b64 = crate::sourcemap::base64_encode(cps_json.as_bytes());
+      let cps_content = format!("{cps_output}\n//# sourceMappingURL=data:application/json;base64,{cps_b64}");
+      let _ = std::fs::write(format!("{dir}/{slug}.cps.js"), &cps_content);
+    }
+
+    format!("{}\n#sourcemaps:{wat_b64}", wat_output.trim())
   }
 
   test_macros::include_fink_tests!("src/passes/wat/test_wat.fnk");
