@@ -66,9 +66,10 @@ pub fn fmt(expr: &Expr<'_>) -> String {
 // Loc helpers
 // ---------------------------------------------------------------------------
 
-/// Dummy loc for purely synthetic nodes with no source origin.
+/// Sentinel loc for purely synthetic nodes with no source origin.
+/// Line 0 signals MappedWriter::mark to skip the mapping.
 fn dummy_loc() -> Loc {
-  let p = Pos { idx: 0, line: 1, col: 0 };
+  let p = Pos { idx: 0, line: 0, col: 0 };
   Loc { start: p, end: p }
 }
 

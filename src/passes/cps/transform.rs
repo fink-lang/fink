@@ -170,11 +170,14 @@ fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src
 /// Build an explicit tail call: `App(ContRef(cont_id), [val])`.
 /// Replaces the implicit `Cont::Ref` shortcut so the val's origin is preserved in the propgraph.
 fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
-  let cont_val = g.val(ValKind::ContRef(cont_id), origin);
+  // ContRef val gets no origin — it references the cont param, whose origin
+  // is already in the propgraph under cont_id. The App expr gets no origin
+  // either — it's a synthetic tail call, not a user-written expression.
+  let cont_val = g.val(ValKind::ContRef(cont_id), None);
   g.expr(ExprKind::App {
     func: Callable::Val(cont_val),
     args: vec![Arg::Val(val)],
-  }, origin)
+  }, None)
 }
 
 /// Wrap a bare value as the tail of a function body.
@@ -1364,7 +1367,9 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
   // Collect all vals first to avoid multiple mutable borrows of g.
   let cont_id = g.cont;
   let export_vals: Vec<Val<'src>> = export_ids.iter().map(|&cps_id| {
-    g.val(ValKind::Ref(Ref::Synth(cps_id)), None)
+    // Use the bind's origin so the export ref maps to the binding's source name.
+    let origin = g.origin.try_get(cps_id).and_then(|o| *o);
+    g.val(ValKind::Ref(Ref::Synth(cps_id)), origin)
   }).collect();
   let cont_val = g.val(ValKind::ContRef(cont_id), None);
   let export_args: Vec<Arg<'src>> = export_vals.into_iter().map(Arg::Val).collect();

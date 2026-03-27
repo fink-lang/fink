@@ -45,7 +45,9 @@ impl MappedWriter {
   }
 
   /// Record a mapping from the current output position to the given source location.
+  /// Line 0 is a sentinel meaning "no source origin" — the mark is skipped.
   pub fn mark(&mut self, loc: Loc) {
+    if loc.start.line == 0 { return; }
     self.mappings.push(Mapping {
       out_line: self.line,
       out_col: self.col,

@@ -199,6 +199,8 @@ pub enum RangeKind {
 /// A compiler-known operation — resolved statically, not by scope lookup.
 /// Covers source operators, data construction, and string formatting.
 /// No runtime value — only valid in the func position of App.
+// TODO: add BuiltIn::Export for the terminal module App (currently uses
+// anonymous ContRef). Would make module export semantics explicit in the IR.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuiltIn {
   // Arithmetic
