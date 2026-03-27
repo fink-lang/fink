@@ -116,8 +116,15 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
           out.push_str(line);
         }
       } else {
-        out.push('\'');
-        out.mark(Loc { start: open.loc.end, end: open.loc.end });
+        if open.loc.start.line == 0 {
+          // Synthetic string (CPS formatter): unmap the quote, map content to node loc.
+          stop_mark(out);
+          out.push('\'');
+          out.mark(node.loc);
+        } else {
+          out.push('\'');
+          out.mark(Loc { start: open.loc.end, end: open.loc.end });
+        }
         if s.contains('\n') {
           for (i, line) in s.split('\n').enumerate() {
             if i > 0 {
@@ -133,31 +140,37 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         out.push('\'');
       }
     }
-    NodeKind::LitSeq { close, items, .. } if items.items.is_empty() => {
+    NodeKind::LitSeq { open, close, items, .. } if items.items.is_empty() => {
+      out.mark(open.loc);
       out.push('[');
       out.mark(close.loc);
       out.push(']');
     }
-    NodeKind::LitSeq { close, items, .. } => {
+    NodeKind::LitSeq { open, close, items, .. } => {
+      out.mark(open.loc);
       out.push('[');
       for (i, child) in items.items.iter().enumerate() {
-        if i > 0 { out.push_str(", "); }
+        if i > 0 { stop_mark(out); out.push_str(", "); }
         fmt_node(child, out, depth);
       }
+      stop_mark(out);
       out.mark(close.loc);
       out.push(']');
     }
-    NodeKind::LitRec { close, items, .. } if items.items.is_empty() => {
+    NodeKind::LitRec { open, close, items, .. } if items.items.is_empty() => {
+      out.mark(open.loc);
       out.push('{');
       out.mark(close.loc);
       out.push('}');
     }
-    NodeKind::LitRec { close, items, .. } => {
+    NodeKind::LitRec { open, close, items, .. } => {
+      out.mark(open.loc);
       out.push('{');
       for (i, child) in items.items.iter().enumerate() {
-        if i > 0 { out.push_str(", "); }
+        if i > 0 { stop_mark(out); out.push_str(", "); }
         fmt_node(child, out, depth);
       }
+      stop_mark(out);
       out.mark(close.loc);
       out.push('}');
     }

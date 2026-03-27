@@ -137,7 +137,16 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(v.id, ctx), loc),
     ValKind::Panic => ident("·panic", loc),
     ValKind::ContRef(id) => ident(&format!("·ƒ_{}", id.0), ctx_loc(*id, ctx)),
-    ValKind::BuiltIn(op) => ident(&render_builtin(op), loc),
+    ValKind::BuiltIn(op) => {
+      // For builtin ops whose origin is an InfixOp, use op.loc (e.g. `>` not `a > 1`).
+      let op_loc = ctx.ast_node(v.id)
+        .and_then(|n| match &n.kind {
+          NodeKind::InfixOp { op, .. } | NodeKind::UnaryOp { op, .. } => Some(op.loc),
+          _ => None,
+        })
+        .unwrap_or(loc);
+      ident(&render_builtin(op), op_loc)
+    }
   }
 }
 
@@ -411,9 +420,12 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         return apply(func_node, vec![ident("_", expr_loc)], expr_loc);
       }
       // For builtin operators, map to the op token (e.g. `-` in `n - 1`).
+      // For MatchDone, map to the closing bracket of the seq/rec pattern.
       let builtin_loc = ctx.ast_node(expr.id)
-        .and_then(|n| match &n.kind {
-          NodeKind::InfixOp { op, .. } | NodeKind::UnaryOp { op, .. } => Some(op.loc),
+        .and_then(|n| match (&n.kind, func) {
+          (NodeKind::InfixOp { op, .. }, _) | (NodeKind::UnaryOp { op, .. }, _) => Some(op.loc),
+          (NodeKind::LitSeq { close, .. }, Callable::BuiltIn(BuiltIn::MatchDone))
+          | (NodeKind::LitRec { close, .. }, Callable::BuiltIn(BuiltIn::MatchDone)) => Some(close.loc),
           _ => None,
         })
         .unwrap_or(expr_loc);

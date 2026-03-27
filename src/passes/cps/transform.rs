@@ -1607,11 +1607,12 @@ fn lower_pat_lhs<'src>(
           }
           // `{x}` shorthand — extract field named x, bind to x
           NodeKind::Ident(name) => {
+            let field_origin = Some(field_node.id);
             let elem = g.fresh_result(origin);
             let (elem_kind, elem_id) = (elem.kind, elem.id);
             let next = g.fresh_cursor(origin);
             let cur_val = ref_val(g, cur.kind, cur.id, origin);
-            pending.push(Pending::MatchField { val: cur_val, field: name, elem, next_cursor: next.clone(), origin });
+            pending.push(Pending::MatchField { val: cur_val, field: name, elem, next_cursor: next.clone(), origin: field_origin });
             cur = next;
             let bind = g.bind_name(field_node.id);
             let elem_val = ref_val(g, elem_kind, elem_id, origin);
@@ -1621,11 +1622,12 @@ fn lower_pat_lhs<'src>(
           // Parsed as Bind { lhs: Ident(key), rhs: pat } or Arm { lhs: [Ident(key)], body: [pat] }
           NodeKind::Bind { lhs, rhs: pat_node, .. } => {
             if let NodeKind::Ident(key) = &lhs.kind {
+              let field_origin = Some(lhs.id);
               let elem = g.fresh_result(origin);
               let (elem_kind, elem_id) = (elem.kind, elem.id);
               let next = g.fresh_cursor(origin);
               let cur_val = ref_val(g, cur.kind, cur.id, origin);
-              pending.push(Pending::MatchField { val: cur_val, field: key, elem, next_cursor: next.clone(), origin });
+              pending.push(Pending::MatchField { val: cur_val, field: key, elem, next_cursor: next.clone(), origin: field_origin });
               cur = next;
               let elem_val = ref_val(g, elem_kind, elem_id, origin);
               lower_pat_lhs(g, pat_node, elem_val, Some(pat_node.id), pending);
@@ -1634,11 +1636,12 @@ fn lower_pat_lhs<'src>(
           NodeKind::Arm { lhs: arm_lhs, body: arm_body, .. } => {
             if let NodeKind::Ident(key) = &arm_lhs.kind
               && let Some(pat_node) = arm_body.items.last() {
+                let field_origin = Some(arm_lhs.id);
                 let elem = g.fresh_result(origin);
                 let (elem_kind, elem_id) = (elem.kind, elem.id);
                 let next = g.fresh_cursor(origin);
                 let cur_val = ref_val(g, cur.kind, cur.id, origin);
-                pending.push(Pending::MatchField { val: cur_val, field: key, elem, next_cursor: next.clone(), origin });
+                pending.push(Pending::MatchField { val: cur_val, field: key, elem, next_cursor: next.clone(), origin: field_origin });
                 cur = next;
                 let elem_val = ref_val(g, elem_kind, elem_id, origin);
                 lower_pat_lhs(g, pat_node, elem_val, Some(pat_node.id), pending);
