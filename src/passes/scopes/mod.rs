@@ -461,7 +461,8 @@ fn walk_pattern_refs(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
         walk_pattern_refs(arg, scope, ctx);
       }
     }
-    NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
+    NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. }
+    | NodeKind::Patterns(items) => {
       for item in &items.items {
         walk_pattern_refs(item, scope, ctx);
       }

@@ -484,7 +484,7 @@ test 'match child ·scope — binding in arm body', fn:
     ·match_arm
       fn ·v_7, ·ƒ_5, ·ƒ_6:
         ·let ·v_7, fn ·a_0:
-          ·match_if ·op_gt, ·∅a, 1, ·ƒ_5, fn:
+          ·match_if ·op_gt, ·a_0, 1, ·ƒ_5, fn:
             ·ƒ_6 _
       fn ·a_0, ·ƒ_11:
         ·let ·a_0, fn ·ni_1:
