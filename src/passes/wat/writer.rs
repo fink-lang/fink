@@ -417,6 +417,17 @@ fn collect_locals_expr<'src>(expr: &Expr<'_>, ctx: &Ctx<'_, 'src>, out: &mut Vec
       collect_locals_expr(then, ctx, out);
       collect_locals_expr(else_, ctx, out);
     }
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
+      // FnClosure's Cont::Expr bind produces a local variable.
+      for arg in args {
+        if let Arg::Cont(Cont::Expr { args: bind_args, body }) = arg {
+          for bind in bind_args {
+            out.push(ctx.label(bind.id));
+          }
+          collect_locals_expr(body, ctx, out);
+        }
+      }
+    }
     ExprKind::App { .. } => {}
   }
 }
@@ -585,9 +596,12 @@ fn emit_call(
 
 /// Emit a builtin operation call.
 ///
-/// All builtins are CPS: the continuation is always the last argument. They are
-/// imported functions called directly by name via `return_call`. All args
-/// (values + cont) are emitted flat in order.
+/// Most builtins are CPS: emit `return_call $name` with all args (values + cont) flat.
+///
+/// `FnClosure` is a value-returning constructor: emit `call $closure_N` where N is the
+/// number of captured values (args excluding cont). The cont is handled inline:
+/// - `Cont::Expr { bind, body }` → `local.set $bind (call $closure_N ...)` + inline body
+/// - `Cont::Ref(id)` → `return_call_ref $Fn1 (local.get $id) (call $closure_N ...)`
 fn emit_builtin(
   op: BuiltIn,
   args: &[Arg<'_>],
@@ -595,6 +609,45 @@ fn emit_builtin(
   w: &mut MappedWriter,
   indent: usize,
 ) {
+  if op == BuiltIn::FnClosure {
+    let (val_args, cont) = split_args(args);
+    let n = val_args.len();
+    let val_exprs: Vec<WatExpr> = val_args.iter().map(|a| val_arg_expr(a, ctx)).collect();
+    let call_expr = WatExpr::list(format!("call $closure_{}", n), val_exprs);
+    match cont {
+      Some(Cont::Expr { args: bind_args, body }) => {
+        if let Some(bind) = bind_args.first() {
+          let set_expr = WatExpr::list(
+            format!("local.set ${}", ctx.label(bind.id)),
+            vec![call_expr],
+          );
+          w.push_str(&ind(indent));
+          write_expr(&set_expr, w);
+          w.push_str("\n");
+        }
+        emit_body(body, ctx, w, indent);
+      }
+      Some(Cont::Ref(id)) => {
+        let expr = WatExpr::list(
+          "return_call_ref $Fn1",
+          vec![
+            WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+            call_expr,
+          ],
+        );
+        w.push_str(&ind(indent));
+        write_expr(&expr, w);
+        w.push_str("\n");
+      }
+      None => {
+        w.push_str(&ind(indent));
+        write_expr(&call_expr, w);
+        w.push_str("\n");
+      }
+    }
+    return;
+  }
+
   let fn_name = builtin_name(op);
   let all_args: Vec<WatExpr> = args.iter().map(|a| match a {
     Arg::Val(v) => val_expr(v, ctx),
