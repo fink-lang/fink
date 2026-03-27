@@ -324,8 +324,8 @@ pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize, builtins: &[&str
   let mut ctx = Ctx::new(node_count);
   let module_scope = ctx.push_scope(ScopeKind::Module, None, root.id);
 
-  // Store builtin names — checked as fallback during resolution.
-  ctx.builtins = builtins.iter().map(|s| s.to_string()).collect();
+  // Language builtins (always in scope) + caller-provided extras.
+  ctx.builtins = ["import"].iter().chain(builtins.iter()).map(|s| s.to_string()).collect();
 
   // Phase 1: pre-register all module-level bindings (for mutual recursion).
   if let NodeKind::Module(items) = &root.kind {
@@ -742,7 +742,7 @@ mod tests {
       Ok(r) => {
         let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
           .expect("partial pass failed");
-        let result = analyse(&root, node_count as usize, &["import"]);
+        let result = analyse(&root, node_count as usize, &[]);
         format_result(&result)
       }
       Err(e) => format!("ERROR: {}", e.message),

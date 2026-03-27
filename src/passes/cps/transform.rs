@@ -1812,7 +1812,7 @@ mod module_tests {
           NodeKind::Module(exprs) => exprs.items.as_slice(),
           _ => std::slice::from_ref(&r.root),
         };
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_module(exprs, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
