@@ -47,7 +47,7 @@ mod tests {
       .unwrap_or_else(|e| panic!("partial error: {:?}", e));
     let r = crate::ast::ParseResult { root, node_count };
     let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
     let exprs = match &r.root.kind {
       crate::ast::NodeKind::Module(exprs) => &exprs.items,
       _ => panic!("expected module"),
