@@ -438,6 +438,51 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
   }
 }
 
+/// Walk guard expressions inside patterns for reference resolution.
+/// Called after `register_pattern_binds` so that bindings are visible to guards.
+///
+/// Pattern nodes contain both binding sites (Ident) and guard expressions
+/// (InfixOp rhs, Apply func). This function walks only the guard/expression
+/// parts, skipping binding idents which are already registered.
+fn walk_pattern_refs(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
+  match &node.kind {
+    NodeKind::InfixOp { lhs, rhs, .. } => {
+      // Guard pattern: `a > 0` or `a > 0 or a < 9`.
+      // Both sides are expressions — walk them for ref resolution.
+      // The binding ident (lhs leaf) resolves to itself (already registered).
+      walk_node(lhs, scope, ctx);
+      walk_node(rhs, scope, ctx);
+    }
+    NodeKind::Apply { func, args, .. } => {
+      // Predicate guard: `is_even y` — func is a reference.
+      walk_node(func, scope, ctx);
+      // args contain bindings — recurse for nested guards.
+      for arg in &args.items {
+        walk_pattern_refs(arg, scope, ctx);
+      }
+    }
+    NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
+      for item in &items.items {
+        walk_pattern_refs(item, scope, ctx);
+      }
+    }
+    NodeKind::Bind { lhs, .. } => {
+      walk_pattern_refs(lhs, scope, ctx);
+    }
+    NodeKind::Arm { lhs, body, .. } => {
+      walk_pattern_refs(lhs, scope, ctx);
+      for item in &body.items {
+        walk_pattern_refs(item, scope, ctx);
+      }
+    }
+    NodeKind::Spread { inner: Some(inner), .. } => {
+      walk_pattern_refs(inner, scope, ctx);
+    }
+    // Ident, Wildcard, literals — these are binding sites or values, not guard refs.
+    _ => {}
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Phase 2: walk and resolve
 // ---------------------------------------------------------------------------
@@ -475,6 +520,8 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
         // Non-module scopes: register the binding now (sequential).
         register_pattern_binds(lhs, scope, ctx);
       }
+      // Walk guard expressions in patterns for reference resolution.
+      walk_pattern_refs(lhs, scope, ctx);
     }
 
     NodeKind::Ident(name) => {
@@ -540,6 +587,8 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
       let arm_scope = ctx.push_scope(ScopeKind::Arm, Some(scope), node.id);
       // Register pattern bindings from the arm LHS.
       register_pattern_binds(lhs, arm_scope, ctx);
+      // Walk guard expressions in patterns for reference resolution.
+      walk_pattern_refs(lhs, arm_scope, ctx);
       // Walk body in arm scope.
       walk_stmts(&body.items, arm_scope, ctx);
       ctx.pop_scope_binds(arm_scope);

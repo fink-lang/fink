@@ -50,7 +50,7 @@ test 'simple guard', fn:
     a > 0 = foo
   | equals fink":
     ·let ·∅foo, fn ·a_0:
-      ·match_if ·op_gt, ·∅a, 0, ·panic, fn:
+      ·match_if ·op_gt, ·a_0, 0, ·panic, fn:
         ·ƒ_1 _
 
 
@@ -59,8 +59,8 @@ test 'nested guard', fn:
     a > 0 or a < 9 = foo
   | equals fink":
     ·let ·∅foo, fn ·a_0:
-      ·op_gt ·∅a, 0, fn ·v_5:
-        ·op_lt ·∅a, 9, fn ·v_9:
+      ·op_gt ·a_0, 0, fn ·v_5:
+        ·op_lt ·a_0, 9, fn ·v_9:
           ·match_if ·op_or, ·v_5, ·v_9, ·panic, fn:
             ·ƒ_1 _
 
@@ -177,7 +177,7 @@ test 'seq — infix guard', fn:
         ·let ·v_5, fn ·x_0:
           ·match_next ·v_6, ·panic, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·y_1:
-              ·match_if ·op_gte, ·∅y, 2, ·panic, fn:
+              ·match_if ·op_gte, ·y_1, 2, ·panic, fn:
                 ·match_done ·v_10, ·panic, ·ƒ_2
 
 
@@ -586,7 +586,7 @@ test 'irrefutable binding with guard', fn:
     x > 2 = foo
   | equals fink":
     ·let ·∅foo, fn ·x_0:
-      ·match_if ·op_gt, ·∅x, 2, ·panic, fn:
+      ·match_if ·op_gt, ·x_0, 2, ·panic, fn:
         ·ƒ_1 _
 
 

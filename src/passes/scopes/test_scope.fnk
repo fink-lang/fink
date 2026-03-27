@@ -65,6 +65,7 @@ test 'guard pattern bind', fn:
     scope 5, 'module':
       unresolved 'foo'
       bind 0, 'a'
+      ref 'a', 0
 
 
 test 'fn params in scope', fn:
@@ -474,6 +475,7 @@ test 'predicate guard in seq pattern', fn:
       bind 0, 'a'
       bind 3, 'b'
       unresolved 'foo'
+      unresolved 'is_even'
 
 
 ---
