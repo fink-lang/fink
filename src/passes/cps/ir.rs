@@ -231,6 +231,9 @@ pub enum BuiltIn {
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
   Export,
+  // TODO: Import — `import './foo.fnk'` should be a builtin, not an unresolved
+  // ident (·∅import). Always in scope at module level. Also needs to be added
+  // to scopes::analyse builtins list (currently passed as &[]).
 }
 
 impl BuiltIn {

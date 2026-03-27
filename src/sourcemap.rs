@@ -11,13 +11,13 @@
 
 use crate::lexer::Loc;
 
-/// A single mapping entry: output position → source position.
+/// A single mapping entry: output position → optional source position.
+/// `src` is None for unmapped segments (synthetic text with no source origin).
 #[derive(Debug, Clone, PartialEq)]
 struct Mapping {
   out_line: u32,
   out_col: u32,
-  src_line: u32,
-  src_col: u32,
+  src: Option<(u32, u32)>, // (src_line, src_col) or None for unmapped
 }
 
 /// Tracks output position and collects source mappings as text is written.
@@ -45,15 +45,18 @@ impl MappedWriter {
   }
 
   /// Record a mapping from the current output position to the given source location.
-  /// Line 0 is a sentinel meaning "no source origin" — the mark is skipped.
+  /// Line 0 is a sentinel meaning "no source origin" — emits an unmapped segment
+  /// that stops the previous mapping from bleeding into structural text.
   pub fn mark(&mut self, loc: Loc) {
-    if loc.start.line == 0 { return; }
+    if loc.start.line == 0 {
+      self.mappings.push(Mapping { out_line: self.line, out_col: self.col, src: None });
+      return;
+    }
     self.mappings.push(Mapping {
       out_line: self.line,
       out_col: self.col,
       // Loc uses 1-indexed lines, sourcemaps use 0-indexed.
-      src_line: loc.start.line.saturating_sub(1),
-      src_col: loc.start.col,
+      src: Some((loc.start.line.saturating_sub(1), loc.start.col)),
     });
   }
 
@@ -127,7 +130,7 @@ impl SourceMap {
       source: source.to_string(),
       sources_content: None,
       mappings: mappings
-        .map(|(out_line, out_col, src_line, src_col)| Mapping { out_line, out_col, src_line, src_col })
+        .map(|(out_line, out_col, src_line, src_col)| Mapping { out_line, out_col, src: Some((src_line, src_col)) })
         .collect(),
     }
   }
@@ -142,7 +145,7 @@ impl SourceMap {
       source: source.to_string(),
       sources_content: Some(content.to_string()),
       mappings: mappings
-        .map(|(out_line, out_col, src_line, src_col)| Mapping { out_line, out_col, src_line, src_col })
+        .map(|(out_line, out_col, src_line, src_col)| Mapping { out_line, out_col, src: Some((src_line, src_col)) })
         .collect(),
     }
   }
@@ -157,10 +160,13 @@ impl SourceMap {
     self.mappings.is_empty()
   }
 
-  /// Iterator over mappings as (out_line, out_col, src_line, src_col) tuples.
-  /// All values are 0-indexed.
+  /// Iterator over mapped entries as (out_line, out_col, src_line, src_col) tuples.
+  /// Skips unmapped segments. All values are 0-indexed.
   pub fn iter(&self) -> impl Iterator<Item = (u32, u32, u32, u32)> + '_ {
-    self.mappings.iter().map(|m| (m.out_line, m.out_col, m.src_line, m.src_col))
+    self.mappings.iter().filter_map(|m| {
+      let (src_line, src_col) = m.src?;
+      Some((m.out_line, m.out_col, src_line, src_col))
+    })
   }
 
   /// Encode as a Source Map v3 JSON string.
@@ -213,21 +219,24 @@ fn encode_mappings(mappings: &[Mapping]) -> String {
     first_on_line = false;
 
     let out_col = m.out_col as i64;
-    let src_line = m.src_line as i64;
-    let src_col = m.src_col as i64;
 
     // Field 0: output column delta
     vlq_encode(&mut out, out_col - prev_out_col);
-    // Field 1: source index delta (always 0 — single source)
-    vlq_encode(&mut out, 0);
-    // Field 2: source line delta
-    vlq_encode(&mut out, src_line - prev_src_line);
-    // Field 3: source column delta
-    vlq_encode(&mut out, src_col - prev_src_col);
-
     prev_out_col = out_col;
-    prev_src_line = src_line;
-    prev_src_col = src_col;
+
+    if let Some((src_line, src_col)) = m.src {
+      let src_line = src_line as i64;
+      let src_col = src_col as i64;
+      // Field 1: source index delta (always 0 — single source)
+      vlq_encode(&mut out, 0);
+      // Field 2: source line delta
+      vlq_encode(&mut out, src_line - prev_src_line);
+      // Field 3: source column delta
+      vlq_encode(&mut out, src_col - prev_src_col);
+      prev_src_line = src_line;
+      prev_src_col = src_col;
+    }
+    // else: unmapped segment — only field 0 (1-field VLQ)
   }
 
   out
@@ -352,8 +361,7 @@ mod tests {
     let mappings = vec![Mapping {
       out_line: 0,
       out_col: 0,
-      src_line: 0,
-      src_col: 0,
+      src: Some((0, 0)),
     }];
     assert_eq!(encode_mappings(&mappings), "AAAA");
   }
@@ -361,8 +369,8 @@ mod tests {
   #[test]
   fn two_lines_encode() {
     let mappings = vec![
-      Mapping { out_line: 0, out_col: 0, src_line: 0, src_col: 0 },
-      Mapping { out_line: 1, out_col: 2, src_line: 1, src_col: 2 },
+      Mapping { out_line: 0, out_col: 0, src: Some((0, 0)) },
+      Mapping { out_line: 1, out_col: 2, src: Some((1, 2)) },
     ];
     // Line 0: AAAA; Line 1: EACE (col +2, src 0, srcline +1, srccol +2)
     assert_eq!(encode_mappings(&mappings), "AAAA;EACE");
@@ -376,8 +384,7 @@ mod tests {
       mappings: vec![Mapping {
         out_line: 0,
         out_col: 0,
-        src_line: 0,
-        src_col: 0,
+        src: Some((0, 0)),
       }],
     };
     let json = srcmap.to_json();

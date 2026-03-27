@@ -941,17 +941,20 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
       //   [scrutinee_0, ..., fail_bind, succ_bind]
       // fail_bind: called on pattern mismatch (tries next arm)
       // succ_bind: called on success — this is the body cont ref
-      let fail_bind = g.bind(Bind::Cont, origin);
-      let succ_bind = g.bind(Bind::Cont, origin);
+      // fail/succ conts are synthetic CPS machinery — no source origin.
+      let fail_bind = g.bind(Bind::Cont, None);
+      let succ_bind = g.bind(Bind::Cont, None);
       let succ_id   = succ_bind.id;
 
       // Lower patterns using the matcher's own scrutinee params (fresh per arm).
+      // Scrutinee params are synthetic — no source origin.
       let matcher_scrutinee_params: Vec<BindNode> =
-        arm_params.iter().map(|_| g.fresh_result(origin)).collect();
+        arm_params.iter().map(|_| g.fresh_result(None)).collect();
       let mut arm_pending: Vec<Pending<'src>> = vec![];
       for (pat_node, param) in lhs_nodes.iter().zip(matcher_scrutinee_params.iter()) {
-        let scrutinee_val = ref_val(g, param.kind, param.id, origin);
-        lower_pat_lhs(g, pat_node, scrutinee_val, origin, &mut arm_pending);
+        let pat_origin = Some(pat_node.id);
+        let scrutinee_val = ref_val(g, param.kind, param.id, pat_origin);
+        lower_pat_lhs(g, pat_node, scrutinee_val, pat_origin, &mut arm_pending);
       }
 
       // Collect pattern-bound names — become explicit args of the body cont so
@@ -962,7 +965,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
       }).collect();
 
       // Allocate block_cont_bind — last arg of body cont, called by arm body with result.
-      let block_cont_bind = g.bind(Bind::Cont, origin);
+      let block_cont_bind = g.bind(Bind::Cont, None);
       let block_cont_id   = block_cont_bind.id;
 
       // Lower arm body with block_cont as the current cont so lower_seq terminates

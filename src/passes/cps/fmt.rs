@@ -410,9 +410,16 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         };
         return apply(func_node, vec![ident("_", expr_loc)], expr_loc);
       }
+      // For builtin operators, map to the op token (e.g. `-` in `n - 1`).
+      let builtin_loc = ctx.ast_node(expr.id)
+        .and_then(|n| match &n.kind {
+          NodeKind::InfixOp { op, .. } | NodeKind::UnaryOp { op, .. } => Some(op.loc),
+          _ => None,
+        })
+        .unwrap_or(expr_loc);
       let func_node = match func {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
-        Callable::BuiltIn(op) => ident(&render_builtin(op), expr_loc),
+        Callable::BuiltIn(op) => ident(&render_builtin(op), builtin_loc),
       };
       // Match builtins with no-arg body use render_cont_as_expr (renders as `fn: body`).
       let is_noarg_match = matches!(func, Callable::BuiltIn(

@@ -48,6 +48,13 @@ pub fn fmt_mapped_with_content(node: &Node, source_name: &str, content: &str) ->
   out.finish_with_content(source_name, content)
 }
 
+/// Emit a sentinel mark (line 0) to stop the previous mapping from bleeding
+/// into structural text (separators, keywords) that has no source origin.
+fn stop_mark(out: &mut MappedWriter) {
+  let p = Pos { idx: 0, line: 0, col: 0 };
+  out.mark(Loc { start: p, end: p });
+}
+
 fn ind(out: &mut MappedWriter, depth: usize) {
   for _ in 0..depth {
     out.push_str("  ");
@@ -430,7 +437,7 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
 
   // First plain arg: space separator; rest: ", "
   for (i, arg) in plain.iter().enumerate() {
-    if i == 0 { out.push(' '); } else { out.push_str(", "); }
+    if i == 0 { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
     fmt_node(arg, out, depth);
   }
 
@@ -441,13 +448,13 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   // Single trailing fn (no complex args) → keep `fn params:` on same line
   if trailing.len() == 1 && is_fn(&trailing[0])
     && let NodeKind::Fn { params, sep, body } = &trailing[0].kind {
-      if plain.is_empty() { out.push(' '); } else { out.push_str(", "); }
+      if plain.is_empty() { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
       fmt_fn_with_inline(params, sep, &body.items, out, depth, false);
       return;
   }
 
   // Multiple trailing fns/complex args → each on its own indented line
-  if !plain.is_empty() { out.push(','); }
+  if !plain.is_empty() { stop_mark(out); out.push(','); }
   for arg in trailing {
     out.push('\n');
     ind(out, depth + 1);
