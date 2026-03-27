@@ -32,11 +32,9 @@ use crate::passes::cps::ir::{
   Param, Ref, Val, ValKind, Lit,
 };
 use crate::passes::cps::fmt::Ctx;
-use crate::propgraph::PropGraph;
 
 struct FmtCtx<'a, 'src> {
   ctx: &'a Ctx<'a, 'src>,
-  bind_kinds: PropGraph<CpsId, Option<Bind>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -44,52 +42,10 @@ struct FmtCtx<'a, 'src> {
 // ---------------------------------------------------------------------------
 
 pub fn fmt_flat(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> String {
-  let mut bind_kinds: PropGraph<CpsId, Option<Bind>> =
-    PropGraph::with_size(ctx.origin.len(), None);
-  collect_binds(expr, &mut bind_kinds);
-  let fc = FmtCtx { ctx, bind_kinds };
+  let fc = FmtCtx { ctx };
   let stmts = collect_stmts(expr, &fc);
   let module = Node::new(NodeKind::Module(Exprs { items: stmts, seps: vec![] }), dummy_loc());
   fmt_ast(&module)
-}
-
-/// Walk the CPS tree and record the Bind kind for every BindNode definition.
-fn collect_binds(expr: &Expr<'_>, out: &mut PropGraph<CpsId, Option<Bind>>) {
-  match &expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont: cont } => {
-      out.set(name.id, Some(name.kind));
-      for p in params {
-        let b = match p { Param::Name(b) | Param::Spread(b) => b };
-        out.set(b.id, Some(b.kind));
-      }
-      collect_binds(fn_body, out);
-      collect_binds_cont(cont, out);
-    }
-    ExprKind::LetVal { name, cont: cont, .. } => {
-      out.set(name.id, Some(name.kind));
-      collect_binds_cont(cont, out);
-    }
-    ExprKind::App { args, .. } => {
-      for arg in args {
-        match arg {
-          Arg::Cont(c) => collect_binds_cont(c, out),
-          Arg::Expr(e) => collect_binds(e, out),
-          _ => {}
-        }
-      }
-    }
-    ExprKind::If { then, else_, .. } => {
-      collect_binds(then, out);
-      collect_binds(else_, out);
-    }
-  }
-}
-
-fn collect_binds_cont(cont: &Cont<'_>, out: &mut PropGraph<CpsId, Option<Bind>>) {
-  if let Cont::Expr { args, body } = cont {
-    for b in args { out.set(b.id, Some(b.kind)); }
-    collect_binds(body, out);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +238,7 @@ fn collect_stmts<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>) -> Vec<Node<'stat
 /// tail expression. Consecutive LetFn → LetVal aliases are chained as `b = a = fn ...`.
 fn collect_into<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
   match &expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont: cont } => {
+    ExprKind::LetFn { name, params, fn_body, cont } => {
       let name_str = render_bind(name, fc);
 
       let fn_params: Vec<Node<'static>> = params.iter().map(|p| match p {
@@ -302,7 +258,7 @@ fn collect_into<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node
       collect_cont_into(tail, &bound, fc, out);
     }
 
-    ExprKind::LetVal { name, val, cont: cont } => {
+    ExprKind::LetVal { name, val, cont } => {
       let name_str = render_bind(name, fc);
       let val_node = render_val(val, fc);
       let (lhs_node, tail) = chain_lhs(&name_str, cont, fc);
@@ -314,8 +270,8 @@ fn collect_into<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node
     ExprKind::App { func, args } => {
       // ·fn_closure is a constructor binding: render as `[a, b] = ·fn_closure caps...`
       // (single param: `a = ...`) and recurse into the cont body flat.
-      if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure)) {
-        if let Some((value_args, Cont::Expr { args: cont_params, body })) = split_trailing_cont(args) {
+      if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure))
+        && let Some((value_args, Cont::Expr { args: cont_params, body })) = split_trailing_cont(args) {
           let func_node = ident(&render_builtin_flat(&BuiltIn::FnClosure));
           let arg_nodes: Vec<Node<'static>> = value_args.iter().map(|a| match a {
             Arg::Val(v)    => render_val(v, fc),
@@ -343,7 +299,6 @@ fn collect_into<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node
           collect_into(body.as_ref(), fc, out);
           return;
         }
-      }
       out.push(render_app(func, args, fc));
     }
 

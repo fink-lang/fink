@@ -117,7 +117,7 @@ fn walk_captures(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetFn { name, fn_body, cont: cont, .. } => {
+    LetFn { name, fn_body, cont, .. } => {
       // Recurse into fn_body first (bottom-up — inner fn captures ready first).
       walk_captures(fn_body, graphs, captures);
 
@@ -164,7 +164,6 @@ fn walk_captures(
       walk_captures(then, graphs, captures);
       walk_captures(else_, graphs, captures);
     }
-    _ => {}
   }
 }
 
@@ -177,7 +176,7 @@ fn collect_direct_captured_binds(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, cont: cont, .. } => {
+    LetVal { val, cont, .. } => {
       check_captured_bind(val, graphs, out);
       if let Cont::Expr { body: b, .. } = cont { collect_direct_captured_binds(b, graphs, out); }
     }
@@ -216,7 +215,7 @@ fn collect_deep_captured_binds(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, cont: cont, .. } => {
+    LetVal { val, cont, .. } => {
       check_captured_bind(val, graphs, out);
       if let Cont::Expr { body: b, .. } = cont { collect_deep_captured_binds(b, graphs, out); }
     }
@@ -492,7 +491,7 @@ fn collect_scope_names<'src>(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetFn { name, cont: cont, .. } => {
+    LetFn { name, cont, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
       if let Cont::Expr { body: body_expr, .. } = cont {
         collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
@@ -560,7 +559,7 @@ fn resolve_expr<'src>(
   use ExprKind::*;
   let sb = self_bind;
   match &expr.kind {
-    LetVal { name, val, cont: cont } => {
+    LetVal { name, val, cont } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);

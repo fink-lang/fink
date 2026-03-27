@@ -660,7 +660,7 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
 
 pub fn format_result(result: &ScopeResult) -> String {
   let mut out = String::new();
-  if result.scopes.len() > 0 {
+  if !result.scopes.is_empty() {
     format_scope(ScopeId(0), result, &mut out, 0);
   }
   // Trim trailing newline.

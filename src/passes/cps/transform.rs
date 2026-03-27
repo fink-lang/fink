@@ -169,7 +169,7 @@ fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src
 
 /// Build an explicit tail call: `App(ContRef(cont_id), [val])`.
 /// Replaces the implicit `Cont::Ref` shortcut so the val's origin is preserved in the propgraph.
-fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
+fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val<'src>, _origin: Option<AstId>) -> Expr<'src> {
   // ContRef val gets no origin — it references the cont param, whose origin
   // is already in the propgraph under cont_id. The App expr gets no origin
   // either — it's a synthetic tail call, not a user-written expression.
@@ -1155,7 +1155,7 @@ fn wrap_with_fail<'src>(
     };
     Acc::Expr(match pending {
       Pending::Val { name, val, origin } => g.expr(
-        ExprKind::LetVal { name, val: Box::new(val), cont: cont },
+        ExprKind::LetVal { name, val: Box::new(val), cont },
         origin,
       ),
       Pending::Fn { name, params, fn_body, origin } => g.expr(
@@ -1163,7 +1163,7 @@ fn wrap_with_fail<'src>(
           name,
           params,
           fn_body: Box::new(fn_body),
-          cont: cont,
+          cont,
         },
         origin,
       ),
@@ -1192,7 +1192,7 @@ fn wrap_with_fail<'src>(
       Pending::MatchBind { name, val, origin } => {
         // MatchLetVal → plain LetVal (fail is always Panic for irrefutable binds)
         g.expr(
-          ExprKind::LetVal { name, val: Box::new(val), cont: cont },
+          ExprKind::LetVal { name, val: Box::new(val), cont },
           origin,
         )
       },

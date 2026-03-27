@@ -238,12 +238,11 @@ fn collect_exports<'src>(root: &Expr<'src>, ctx: &Ctx<'_, 'src>) -> Vec<(CpsId, 
         // Each arg is a Ref to a named fn. The export name is the source name
         // without the _N suffix (i.e. the Ident string from the origin map).
         return args.iter().filter_map(|arg| {
-          if let Arg::Val(v) = arg {
-            if let ValKind::Ref(Ref::Synth(id)) = v.kind {
+          if let Arg::Val(v) = arg
+            && let ValKind::Ref(Ref::Synth(id)) = v.kind {
               let name = export_name(ctx, id);
               return Some((id, name));
             }
-          }
           None
         }).collect();
       }
@@ -302,12 +301,11 @@ fn collect_chain<'a, 'src>(
       // We use this to associate the export name with the right function.
       if let ValKind::Ref(Ref::Synth(fn_id)) = val.kind {
         // If name.id is in exports, annotate the fn whose name_id == fn_id.
-        if let Some((_, export_name)) = exports.iter().find(|(id, _)| *id == name.id) {
-          if let Some(cf) = funcs.iter_mut().find(|cf| cf.label == ctx.label(fn_id)) {
+        if let Some((_, export_name)) = exports.iter().find(|(id, _)| *id == name.id)
+          && let Some(cf) = funcs.iter_mut().find(|cf| cf.label == ctx.label(fn_id)) {
             cf.export_as = Some(export_name.clone());
             cf.export_bind_id = Some(name.id);
           }
-        }
       }
       match cont {
         Cont::Expr { body, .. } => collect_chain(body, ctx, exports, funcs, arities),
@@ -600,12 +598,6 @@ fn emit_builtin(
 // ---------------------------------------------------------------------------
 // Value emission — statement form and WatExpr inline form
 // ---------------------------------------------------------------------------
-
-fn emit_val(val: &Val<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: usize) {
-  w.push_str(&ind(indent));
-  write_expr(&val_expr(val, ctx), w);
-  w.push_str("\n");
-}
 
 /// Build a source-mapped WatExpr for a value.
 fn val_expr(val: &Val<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {

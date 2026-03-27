@@ -1,5 +1,4 @@
 pub mod fmt;
-mod capture;
 
 // Unified closure/continuation lifting pass.
 //
@@ -128,7 +127,7 @@ pub fn lift<'src>(
 
 fn needs_lifting(expr: &Expr<'_>) -> bool {
   match &expr.kind {
-    ExprKind::LetFn { fn_body, cont, name, .. } => {
+    ExprKind::LetFn { fn_body, cont, name: _, .. } => {
       contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
     }
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
@@ -240,105 +239,6 @@ fn is_simple_forward_cont(cont: &Cont<'_>) -> bool {
   }
 }
 
-/// Does this expression (or its nested structure) contain a LetFn?
-fn contains_letfn(expr: &Expr<'_>) -> bool {
-  match &expr.kind {
-    ExprKind::LetFn { .. } => true,
-    ExprKind::LetVal { cont, .. } => match cont {
-      Cont::Ref(_) => false,
-      Cont::Expr { body, .. } => contains_letfn(body),
-    },
-    ExprKind::App { args, .. } => {
-      args.iter().any(|a| match a {
-        Arg::Cont(Cont::Expr { body, .. }) | Arg::Expr(body) => contains_letfn(body),
-        _ => false,
-      })
-    }
-    ExprKind::If { then, else_, .. } => contains_letfn(then) || contains_letfn(else_),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Phase 1: Name inline Cont::Expr bodies → convert to LetFn
-//
-// For each App { func, args } where an arg is Arg::Cont(Cont::Expr { args, body }),
-// convert to: LetFn { name: fresh, params: args, fn_body: body,
-//             cont: Cont::Expr { [synth], App { func, args with Cont::Ref(fresh) } } }
-// ---------------------------------------------------------------------------
-
-fn name_inline_conts<'src>(expr: Expr<'src>, alloc: &mut Alloc) -> Expr<'src> {
-  match expr.kind {
-    ExprKind::App { func, args } => {
-      // Find the last Arg::Cont(Cont::Expr { .. }) — that's the inline cont to name.
-      match args.iter().rposition(|a| matches!(a, Arg::Cont(Cont::Expr { .. }))) {
-        Some(idx) => {
-          let mut args = args;
-          let cont = match args.remove(idx) {
-            Arg::Cont(c) => c,
-            _ => unreachable!(),
-          };
-          if let Cont::Expr { args: cont_args, body } = cont {
-            let body = name_inline_conts(*body, alloc);
-            let cont_name = alloc.bind(Bind::Cont, None);
-            // Rebuild the App with Cont::Ref instead of Cont::Expr.
-            args.insert(idx, Arg::Cont(Cont::Ref(cont_name.id)));
-            let inner_app = name_inline_conts(alloc.expr(ExprKind::App { func, args }, None), alloc);
-            Expr {
-              id: expr.id,
-              kind: ExprKind::LetFn {
-                name: cont_name,
-                params: cont_args.into_iter().map(Param::Name).collect(),
-                fn_body: Box::new(body),
-                cont: Cont::Expr {
-                  args: vec![alloc.synth_bind()],
-                  body: Box::new(inner_app),
-                },
-              },
-            }
-          } else {
-            unreachable!()
-          }
-        }
-        None => {
-          // No inline conts — recurse into Arg::Expr.
-          let args = args.into_iter().map(|a| match a {
-            Arg::Expr(e) => Arg::Expr(Box::new(name_inline_conts(*e, alloc))),
-            other => other,
-          }).collect();
-          Expr { id: expr.id, kind: ExprKind::App { func, args } }
-        }
-      }
-    }
-
-    ExprKind::LetFn { name, params, fn_body, cont } => {
-      let fn_body = name_inline_conts(*fn_body, alloc);
-      let cont = name_inline_conts_cont(cont, alloc);
-      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_body: Box::new(fn_body), cont } }
-    }
-
-    ExprKind::LetVal { name, val, cont } => {
-      let cont = name_inline_conts_cont(cont, alloc);
-      Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
-    }
-
-    ExprKind::If { cond, then, else_ } => {
-      let then = name_inline_conts(*then, alloc);
-      let else_ = name_inline_conts(*else_, alloc);
-      Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
-    }
-  }
-}
-
-fn name_inline_conts_cont<'src>(cont: Cont<'src>, alloc: &mut Alloc) -> Cont<'src> {
-  match cont {
-    Cont::Ref(_) => cont,
-    Cont::Expr { args, body } => {
-      let body = name_inline_conts(*body, alloc);
-      Cont::Expr { args, body: Box::new(body) }
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Phase 2: Lift one level — extract LetFn from fn_bodies
 // ---------------------------------------------------------------------------
@@ -445,7 +345,7 @@ fn extract_from_body<'src>(
   expr: Expr<'src>,
   parent_params: &[Param],
   scope_binds: &[(CpsId, Bind)],
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
+  _ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn<'src>>,
 ) -> Expr<'src> {
@@ -467,8 +367,8 @@ fn extract_from_body<'src>(
         // Pure fn — hoist directly, no ·fn_closure needed.
         match cont {
           Cont::Expr { args: cont_args, body } => {
-            let name_id = name.id;
-            let name_kind = name.kind;
+            let _name_id = name.id;
+            let _name_kind = name.kind;
             hoisted.push(HoistedFn {
               name,
               params,
@@ -478,7 +378,7 @@ fn extract_from_body<'src>(
             // The cont args bind the fn value — add to scope for the rest.
             // (name is consumed by hoisted, but the wrap_hoisted cont binds a result)
             // Continue with the cont body.
-            extract_from_body(*body, parent_params, scope_binds, ast_index, alloc, hoisted)
+            extract_from_body(*body, parent_params, scope_binds, _ast_index, alloc, hoisted)
           }
           Cont::Ref(cont_id) => {
             let name_id = name.id;
@@ -569,7 +469,7 @@ fn extract_from_body<'src>(
             extended_binds.push((name.id, name.kind));
             for a in &args { extended_binds.push((a.id, a.kind)); }
           }
-          let body = extract_from_body(*body, parent_params, &extended_binds, ast_index, alloc, hoisted);
+          let body = extract_from_body(*body, parent_params, &extended_binds, _ast_index, alloc, hoisted);
           Cont::Expr { args, body: Box::new(body) }
         }
       };
@@ -607,11 +507,11 @@ fn extract_from_body<'src>(
             // The cont's args are in scope for its body.
             let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
             for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
-            let body = extract_from_body(body, parent_params, &inner_scope, ast_index, alloc, hoisted);
+            let body = extract_from_body(body, parent_params, &inner_scope, _ast_index, alloc, hoisted);
             args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
             // Recurse into other args too.
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
               other => other,
             }).collect();
             return Expr { id: expr.id, kind: ExprKind::App { func, args } };
@@ -630,7 +530,7 @@ fn extract_from_body<'src>(
             args.insert(idx, Arg::Cont(Cont::Ref(cont_name_id)));
             // Recurse on remaining args.
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
               other => other,
             }).collect();
             Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -683,7 +583,7 @@ fn extract_from_body<'src>(
       } else {
         // No inline conts — just recurse into Arg::Expr.
         let args = args.into_iter().map(|a| match a {
-          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, ast_index, alloc, hoisted))),
+          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
           other => other,
         }).collect();
         Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -691,12 +591,10 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = extract_from_body(*then, parent_params, scope_binds, ast_index, alloc, hoisted);
-      let else_ = extract_from_body(*else_, parent_params, scope_binds, ast_index, alloc, hoisted);
+      let then = extract_from_body(*then, parent_params, scope_binds, _ast_index, alloc, hoisted);
+      let else_ = extract_from_body(*else_, parent_params, scope_binds, _ast_index, alloc, hoisted);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
-
-    other => Expr { id: expr.id, kind: other },
   }
 }
 
@@ -881,19 +779,16 @@ fn collect_captured_refs_val(
   seen: &mut std::collections::HashSet<CpsId>,
 ) {
   // Ref::Synth(bid) directly identifies the bind — check if it's a parent param.
-  if let ValKind::Ref(Ref::Synth(bid)) = &val.kind {
-    if let Some(&kind) = parent_ids.get(bid) {
-      if seen.insert(*bid) {
+  if let ValKind::Ref(Ref::Synth(bid)) = &val.kind
+    && let Some(&kind) = parent_ids.get(bid)
+      && seen.insert(*bid) {
         out.push((*bid, kind));
       }
-    }
-  }
   // Also check ContRef.
-  if let ValKind::ContRef(id) = &val.kind {
-    if parent_ids.contains_key(id) && seen.insert(*id) {
+  if let ValKind::ContRef(id) = &val.kind
+    && parent_ids.contains_key(id) && seen.insert(*id) {
       out.push((*id, Bind::Cont));
     }
-  }
 }
 
 // ---------------------------------------------------------------------------
