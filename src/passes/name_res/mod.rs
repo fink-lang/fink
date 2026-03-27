@@ -772,7 +772,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        // TODO: verify &["import"] is still needed here once name_res handles builtins natively
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
         let cps = lower_expr(&r.root, &scope);
         let node_count = cps.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
@@ -790,7 +791,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        // TODO: verify &["import"] is still needed here once name_res handles builtins natively
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
         let cps = lower_expr(&r.root, &scope);
         let lifted = lift(cps, &ast_index);
         let node_count = lifted.origin.len();
@@ -893,7 +895,7 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
         let cps = lower_expr(&r.root, &scope);
         let node_count = cps.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);

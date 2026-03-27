@@ -986,7 +986,7 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], f: &mut Function, fc: &mut Fn
       // Module export — no runtime code. The export list is structural
       // (handled by emit_exports). The module-level wrapper function
       // terminates here; codegen emits nothing.
-      Export => {}
+      Export | Import => {}
 
       _ => {
         f.instruction(&Instruction::Unreachable);
@@ -2500,7 +2500,7 @@ mod tests {
   fn compile_wasm(src: &str) -> Vec<u8> {
     let r = parse(src).expect("parse failed");
     let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
     let cps = lower_expr(&r.root, &scope);
     let lifted = lift(cps, &ast_index);
     let node_count = lifted.origin.len();
@@ -2534,7 +2534,7 @@ mod tests {
   fn source_mappings_produced() {
     let r = parse("main = fn: 42").expect("parse failed");
     let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
     let cps = lower_expr(&r.root, &scope);
     let lifted = lift(cps, &ast_index);
     let node_count = lifted.origin.len();

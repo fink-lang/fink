@@ -55,7 +55,7 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
 
   let r = parse(src).map_err(|e| e.message)?;
   let ast_index = build_index(&r);
-  let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+  let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
   let cps = lower_expr(&r.root, &scope);
   let lifted = lift(cps, &ast_index);
   let node_count = lifted.origin.len();

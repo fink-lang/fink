@@ -718,6 +718,7 @@ fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::MatchArm      => "builtin_match_arm",
     BuiltIn::Yield         => "builtin_yield",
     BuiltIn::Export        => "export",
+    BuiltIn::Import        => "import",
   }
 }
 

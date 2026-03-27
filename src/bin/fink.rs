@@ -98,7 +98,7 @@ fn main() {
       match fink::parser::parse(&src) {
         Ok(r) => {
           let ast_index = fink::ast::build_index(&r);
-          let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+          let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
           let cps = match &r.root.kind {
             fink::ast::NodeKind::Module(exprs) => {
               fink::passes::cps::transform::lower_module(&exprs.items, &scope)
@@ -156,7 +156,7 @@ fn main() {
             .unwrap_or_else(|e| { eprintln!("error: {e:?}"); process::exit(1); });
           let r = fink::ast::ParseResult { root, node_count };
           let ast_index = fink::ast::build_index(&r);
-          let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+          let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
           let exprs = match &r.root.kind {
             fink::ast::NodeKind::Module(exprs) => &exprs.items,
             _ => { eprintln!("error: expected module"); process::exit(1); }

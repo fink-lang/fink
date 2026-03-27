@@ -247,6 +247,7 @@ impl<'src> Ctx<'src> {
     if self.builtins.iter().any(|n| n == name) {
       // Find or create the BindId for this builtin.
       let bind_id = self.find_or_create_builtin_bind(name, current_scope);
+      self.resolution.set(ref_ast_id, Some(bind_id));
       self.scope_events.get_mut(current_scope).push(ScopeEvent::Ref(RefInfo {
         kind: RefKind::Ref,
         name: name.to_string(),

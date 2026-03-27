@@ -21,7 +21,7 @@
 
 use crate::ast::{AstId, CmpPart, Node, NodeKind};
 use crate::propgraph::PropGraph;
-use crate::passes::scopes::{BindId, BindOrigin, ScopeResult};
+use crate::passes::scopes::{BindId, BindInfo, BindOrigin, ScopeResult};
 use super::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Ref, Lit,
   Param, Val, ValKind,
@@ -42,6 +42,8 @@ pub struct Gen<'scope> {
   bind_site_to_cps: std::collections::HashMap<u32, CpsId>,
   /// Scope resolution: ref AstId → BindId. Used to emit Ref::Synth at ref sites.
   resolution: &'scope PropGraph<AstId, Option<BindId>>,
+  /// Scope binds: BindId → BindInfo. Used to detect builtins.
+  binds: &'scope PropGraph<BindId, BindInfo>,
   /// The current continuation — the `·ƒ_cont` in scope for the current function body.
   /// Set to the module-level cont at transform start; swapped per LetFn scope.
   cont: CpsId,
@@ -71,7 +73,7 @@ impl<'scope> Gen<'scope> {
 
     // Allocate the module-level cont (·ƒ_halt) — first id after the pre-allocated range.
     let cont_id: CpsId = origin.push(None);
-    Gen { origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, cont: cont_id }
+    Gen { origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, binds: &scope.binds, cont: cont_id }
   }
 
   /// Allocate a fresh cont BindNode, set it as the current cont, and return
@@ -150,6 +152,11 @@ fn ref_val<'src>(g: &mut Gen, _bind: Bind, bind_id: CpsId, origin: Option<AstId>
 fn scope_ref_val<'src>(g: &mut Gen, ref_ast_id: AstId) -> Val<'src> {
   match g.resolution.try_get(ref_ast_id).and_then(|opt| *opt) {
     Some(bind_id) => {
+      // Builtins (e.g. `import`) → emit ValKind::BuiltIn.
+      if let BindOrigin::Builtin(_) = g.binds.get(bind_id).origin {
+        let op = BuiltIn::from_builtin_str(&g.binds.get(bind_id).name);
+        return g.val(ValKind::BuiltIn(op), Some(ref_ast_id));
+      }
       let cps_id = *g.bind_to_cps.get(bind_id);
       g.val(ValKind::Ref(Ref::Synth(cps_id)), Some(ref_ast_id))
     }
@@ -651,7 +658,7 @@ fn lower_infix<'src>(
   pending.extend(rp);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![lv, rv]), result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_builtin_str(op)), args: args_val(vec![lv, rv]), result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -664,7 +671,7 @@ fn lower_unary<'src>(
   let (val, mut pending) = lower(g, operand);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![val]), result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_builtin_str(op)), args: args_val(vec![val]), result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -698,7 +705,7 @@ fn lower_chained_cmp<'src>(
     let rv = operands[i + 1].clone();
     let cmp_result = g.fresh_result(origin);
     let (cmp_result_kind, cmp_result_id) = (cmp_result.kind, cmp_result.id);
-    pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![lv, rv]), result: cmp_result,  origin });
+    pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_builtin_str(op)), args: args_val(vec![lv, rv]), result: cmp_result,  origin });
     cmp_vals.push(ref_val(g, cmp_result_kind, cmp_result_id, origin));
   }
 
@@ -729,7 +736,7 @@ fn lower_range<'src>(
   pending.extend(ep);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_op_str(op)), args: args_val(vec![sv, ev]), result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_builtin_str(op)), args: args_val(vec![sv, ev]), result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -1453,7 +1460,7 @@ fn lower_pat_lhs<'src>(
       let (rv, rp) = lower(g, guard_rhs);
       pending.extend(lp);
       pending.extend(rp);
-      pending.push(Pending::MatchGuard { func: Callable::BuiltIn(BuiltIn::from_op_str(op.src)), args: vec![lv, rv],  origin });
+      pending.push(Pending::MatchGuard { func: Callable::BuiltIn(BuiltIn::from_builtin_str(op.src)), args: vec![lv, rv],  origin });
       r
     }
 
@@ -1709,7 +1716,7 @@ mod tests {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
     let r: &'static crate::ast::ParseResult<'static> =
       Box::leak(Box::new(parse(src).expect("parse failed")));
-    let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+    let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
     lower_expr(&r.root, &scope)
   }
 
@@ -1752,7 +1759,7 @@ mod cps_tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
         let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
@@ -1777,7 +1784,7 @@ mod pat_tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
         let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
@@ -1805,7 +1812,7 @@ mod module_tests {
           NodeKind::Module(exprs) => exprs.items.as_slice(),
           _ => std::slice::from_ref(&r.root),
         };
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
         let cps = lower_module(exprs, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)

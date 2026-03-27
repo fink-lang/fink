@@ -72,15 +72,15 @@ test 'import not in exports', fn:
     {foo} = import './bar.fnk'
     main = fn: foo 1
   | equals fink":
-    ·∅import './bar.fnk', fn ·v_7:
-      ·match_rec ·v_7, ·panic, fn ·v_9:
-        ·match_field ·v_9, 'foo', ·panic, fn ·v_10, ·v_11:
-          ·let ·v_10, fn ·foo_0:
+    ·import './bar.fnk', fn ·v_8:
+      ·match_rec ·v_8, ·panic, fn ·v_10:
+        ·match_field ·v_10, 'foo', ·panic, fn ·v_11, ·v_12:
+          ·let ·v_11, fn ·foo_0:
             ·fn
-              fn ·ƒ_16:
-                ·foo_0 1, ·ƒ_16
-              fn ·v_15:
-                ·let ·v_15, fn ·main_1:
+              fn ·ƒ_17:
+                ·foo_0 1, ·ƒ_17
+              fn ·v_16:
+                ·let ·v_16, fn ·main_1:
                   ·export ·main_1
 
 

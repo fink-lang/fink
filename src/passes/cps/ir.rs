@@ -231,16 +231,16 @@ pub enum BuiltIn {
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
   Export,
-  // TODO: Import — `import './foo.fnk'` should be a builtin, not an unresolved
-  // ident (·∅import). Always in scope at module level. Also needs to be added
-  // to scopes::analyse builtins list (currently passed as &[]).
+  // Module import — `import './foo.fnk'` is a builtin function at module level.
+  Import,
 }
 
 impl BuiltIn {
-  /// Map a source operator string to its `BuiltIn` variant.
-  /// Panics on unknown operators — every operator the parser emits must be
-  /// covered here. Error recovery can be added later if needed.
-  pub fn from_op_str(s: &str) -> BuiltIn {
+  /// Map a source name to its `BuiltIn` variant.
+  /// Covers operators, keywords, and builtin functions like `import`.
+  /// Panics on unknown names — every builtin the pipeline emits must be
+  /// covered here.
+  pub fn from_builtin_str(s: &str) -> BuiltIn {
     match s {
       // Arithmetic
       "+"   => BuiltIn::Add,
@@ -280,7 +280,9 @@ impl BuiltIn {
       "not in" => BuiltIn::NotIn,
       // Member access
       "."   => BuiltIn::Get,
-      _     => panic!("BuiltIn::from_op_str: unknown operator {:?}", s),
+      // Module
+      "import" => BuiltIn::Import,
+      _     => panic!("BuiltIn::from_builtin_str: unknown name {:?}", s),
     }
   }
 }
