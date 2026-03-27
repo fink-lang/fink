@@ -810,7 +810,7 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_expr(&r.root, &scope);
         let lifted = super::lift(cps, &ast_index);
         let ctx = Ctx {
