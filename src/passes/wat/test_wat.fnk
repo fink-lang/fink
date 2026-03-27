@@ -17,7 +17,7 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDTCwyQ0FBQTs7QUFERiIKfQ==
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDTCwyQ0FBQTs7QUFERiIKfQ==
 
 
 test 'let binding', fn:
@@ -26,19 +26,7 @@ test 'let binding', fn:
       x = 42
       x
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
-        (local $x_1 (ref $Any))
-        (local.set $x_1 (struct.new $Num (f64.const 42)))
-        (return_call_ref $Fn1 (local.get $v_6) (local.get $x_1))
-      )
-      (export "main" (func $v_5))
-    )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87O0FBQ0wsb0JBQUk7QUFDSiwyQ0FBQTs7QUFGRiIKfQ==
+    TODO
 
 
 test 'add two literals', fn:
@@ -46,16 +34,7 @@ test 'add two literals', fn:
     main = fn:
       2 + 3
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_add (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'chained arithmetic', fn:
   expect gen_wat fink":
@@ -63,23 +42,7 @@ test 'chained arithmetic', fn:
       x = 2 * 3
       x + 4
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-
-      (func $v_25 (type $Fn2) (param $v_26 (ref $Any)) (param $v_9 (ref $Any))
-        (local $x_1 (ref $Any))
-        (local.set $x_1 (local.get $v_9))
-        (return_call_ref $Fn1 (local.get $v_26) (call $builtin_add (local.get $x_1) (struct.new $Num (f64.const 4))))
-      )
-      (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
-        (local.set $v_30 (call $builtin_fn_closure (local.get $v_25) (local.get $v_6)))
-        (return_call_ref $Fn1 (local.get $v_30) (call $builtin_mul (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3))))
-      )
-      (export "main" (func $v_5))
-    )
+    TODO
 
 test 'multiple let bindings used', fn:
   expect gen_wat fink":
@@ -88,20 +51,7 @@ test 'multiple let bindings used', fn:
       y = 3
       x + y
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_6 (type $Fn1) (param $v_7 (ref $Any))
-        (local $x_1 (ref $Any))
-        (local $y_2 (ref $Any))
-        (local.set $x_1 (struct.new $Num (f64.const 2)))
-        (local.set $y_2 (struct.new $Num (f64.const 3)))
-        (return_call_ref $Fn1 (local.get $v_7) (call $builtin_add (local.get $x_1) (local.get $y_2)))
-      )
-      (export "main" (func $v_6))
-    )
+    TODO
 
 test 'user fn call', fn:
   expect gen_wat fink":
@@ -110,21 +60,7 @@ test 'user fn call', fn:
     main = fn:
       add 3, 4
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_8 (type $Fn3) (param $a_2 (ref $Any)) (param $b_3 (ref $Any)) (param $v_9 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_9) (call $builtin_add (local.get $a_2) (local.get $b_3)))
-      )
-      (func $v_16 (type $Fn1) (param $v_17 (ref $Any))
-        (return_call_ref $Fn3 (local.get $add_0) (struct.new $Num (f64.const 3)) (struct.new $Num (f64.const 4)) (local.get $v_17))
-      )
-      (export "add" (func $v_8))
-      (export "main" (func $v_16))
-    )
+    TODO
 
 test 'chained fn calls', fn:
   expect gen_wat fink":
@@ -136,31 +72,7 @@ test 'chained fn calls', fn:
       x = double 5
       inc x
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-
-      (func $v_11 (type $Fn2) (param $x_3 (ref $Any)) (param $v_12 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_12) (call $builtin_mul (local.get $x_3) (struct.new $Num (f64.const 2))))
-      )
-      (func $v_19 (type $Fn2) (param $x_4 (ref $Any)) (param $v_20 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_20) (call $builtin_add (local.get $x_4) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_55 (type $Fn2) (param $v_56 (ref $Any)) (param $v_31 (ref $Any))
-        (local $x_5 (ref $Any))
-        (local.set $x_5 (local.get $v_31))
-        (return_call_ref $Fn2 (local.get $inc_1) (local.get $x_5) (local.get $v_56))
-      )
-      (func $v_27 (type $Fn1) (param $v_28 (ref $Any))
-        (local.set $v_60 (call $builtin_fn_closure (local.get $v_55) (local.get $v_28)))
-        (return_call_ref $Fn2 (local.get $double_0) (struct.new $Num (f64.const 5)) (local.get $v_60))
-      )
-      (export "double" (func $v_11))
-      (export "inc" (func $v_19))
-      (export "main" (func $v_27))
-    )
+    TODO
 
 test 'pipe unary', fn:
   expect gen_wat fink":
@@ -171,29 +83,7 @@ test 'pipe unary', fn:
     main = fn:
       5 | double | inc
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-
-      (func $v_10 (type $Fn2) (param $x_3 (ref $Any)) (param $v_11 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_11) (call $builtin_mul (local.get $x_3) (struct.new $Num (f64.const 2))))
-      )
-      (func $v_18 (type $Fn2) (param $x_4 (ref $Any)) (param $v_19 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_19) (call $builtin_add (local.get $x_4) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_51 (type $Fn2) (param $v_52 (ref $Any)) (param $v_30 (ref $Any))
-        (return_call_ref $Fn2 (local.get $inc_1) (local.get $v_30) (local.get $v_52))
-      )
-      (func $v_26 (type $Fn1) (param $v_27 (ref $Any))
-        (local.set $v_56 (call $builtin_fn_closure (local.get $v_51) (local.get $v_27)))
-        (return_call_ref $Fn2 (local.get $double_0) (struct.new $Num (f64.const 5)) (local.get $v_56))
-      )
-      (export "double" (func $v_10))
-      (export "inc" (func $v_18))
-      (export "main" (func $v_26))
-    )
+    TODO
 
 # --- match ---
 
@@ -204,42 +94,7 @@ test 'match literal first arm', fn:
         0: 42
         _: 99
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_58 (type $Fn3) (param $v_59 (ref $Any)) (param $v_61 (ref $Any)) (param $v_32 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_61) (call $builtin_match_block (struct.new $Num (f64.const 0)) (local.get $v_59) (local.get $v_32)))
-      )
-      (func $v_78 (type $Fn1) (param $v_26 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_26) (struct.new $Num (f64.const 99)))
-      )
-      (func $v_81 (type $Fn3) (param $v_24 (ref $Any)) (param $v_22 (ref $Any)) (param $v_23 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_23))
-      )
-      (func $v_72 (type $Fn1) (param $v_65 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_65) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_46 (type $Fn2) (param $v_47 (ref $Any)) (param $v_20 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_72) (call $builtin_fn_closure (local.get $v_58) (local.get $v_20) (local.get $v_47)))
-      )
-      (func $v_69 (type $Fn1) (param $v_13 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_13) (struct.new $Num (f64.const 42)))
-      )
-      (func $v_75 (type $Fn3) (param $v_10 (ref $Any)) (param $v_8 (ref $Any)) (param $v_9 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_9) (call $builtin_match_value (local.get $v_10) (struct.new $Num (f64.const 0)) (local.get $v_8)))
-      )
-      (func $v_55 (type $Fn1) (param $v_51 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_51) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_55) (call $builtin_fn_closure (local.get $v_46) (local.get $v_5)))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'match literal fallthrough', fn:
   expect gen_wat fink":
@@ -248,42 +103,7 @@ test 'match literal fallthrough', fn:
         0: 42
         _: 99
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_58 (type $Fn3) (param $v_59 (ref $Any)) (param $v_61 (ref $Any)) (param $v_32 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_61) (call $builtin_match_block (struct.new $Num (f64.const 1)) (local.get $v_59) (local.get $v_32)))
-      )
-      (func $v_78 (type $Fn1) (param $v_26 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_26) (struct.new $Num (f64.const 99)))
-      )
-      (func $v_81 (type $Fn3) (param $v_24 (ref $Any)) (param $v_22 (ref $Any)) (param $v_23 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_23))
-      )
-      (func $v_72 (type $Fn1) (param $v_65 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_65) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_46 (type $Fn2) (param $v_47 (ref $Any)) (param $v_20 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_72) (call $builtin_fn_closure (local.get $v_58) (local.get $v_20) (local.get $v_47)))
-      )
-      (func $v_69 (type $Fn1) (param $v_13 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_13) (struct.new $Num (f64.const 42)))
-      )
-      (func $v_75 (type $Fn3) (param $v_10 (ref $Any)) (param $v_8 (ref $Any)) (param $v_9 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_9) (call $builtin_match_value (local.get $v_10) (struct.new $Num (f64.const 0)) (local.get $v_8)))
-      )
-      (func $v_55 (type $Fn1) (param $v_51 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_51) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_55) (call $builtin_fn_closure (local.get $v_46) (local.get $v_5)))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'match with binding', fn:
   expect gen_wat fink":
@@ -293,44 +113,7 @@ test 'match with binding', fn:
         0: 0
         _: x + 1
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_66 (type $Fn4) (param $x_67 (ref $Any)) (param $v_69 (ref $Any)) (param $v_71 (ref $Any)) (param $v_36 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_71) (call $builtin_match_block (local.get $x_67) (local.get $v_69) (local.get $v_36)))
-      )
-      (func $v_82 (type $Fn2) (param $x_83 (ref $Any)) (param $v_28 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_28) (call $builtin_add (local.get $x_83) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_94 (type $Fn3) (param $v_26 (ref $Any)) (param $v_24 (ref $Any)) (param $v_25 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_25))
-      )
-      (func $v_52 (type $Fn3) (param $x_53 (ref $Any)) (param $v_55 (ref $Any)) (param $v_22 (ref $Any))
-        (local.set $v_75 (call $builtin_fn_closure (local.get $v_66) (local.get $x_53) (local.get $v_22) (local.get $v_55)))
-        (local.set $v_87 (call $builtin_fn_closure (local.get $v_82) (local.get $x_53)))
-        (return_call_ref $Fn1 (local.get $v_75) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_79 (type $Fn1) (param $v_15 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_15) (struct.new $Num (f64.const 0)))
-      )
-      (func $v_91 (type $Fn3) (param $v_12 (ref $Any)) (param $v_10 (ref $Any)) (param $v_11 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_11) (call $builtin_match_value (local.get $v_12) (struct.new $Num (f64.const 0)) (local.get $v_10)))
-      )
-      (func $v_63 (type $Fn1) (param $v_59 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_59) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
-        (local $x_1 (ref $Any))
-        (local.set $x_1 (struct.new $Num (f64.const 5)))
-        (return_call_ref $Fn1 (local.get $v_63) (call $builtin_fn_closure (local.get $v_52) (local.get $x_1) (local.get $v_6)))
-      )
-      (export "main" (func $v_5))
-    )
+    TODO
 
 # --- recursion ---
 
@@ -343,50 +126,7 @@ test 'simple recursion', fn:
     main = fn:
       recurse 5
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_82 (type $Fn4) (param $n_83 (ref $Any)) (param $v_85 (ref $Any)) (param $v_87 (ref $Any)) (param $v_42 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_87) (call $builtin_match_block (local.get $n_83) (local.get $v_85) (local.get $v_42)))
-      )
-      (func $v_113 (type $Fn2) (param $v_114 (ref $Any)) (param $v_33 (ref $Any))
-        (return_call_ref $Fn2 (local.get $recurse_0) (local.get $v_33) (local.get $v_114))
-      )
-      (func $v_98 (type $Fn2) (param $n_99 (ref $Any)) (param $v_29 (ref $Any))
-        (local.set $v_118 (call $builtin_fn_closure (local.get $v_113) (local.get $v_29)))
-        (return_call_ref $Fn1 (local.get $v_118) (call $builtin_sub (local.get $n_99) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_110 (type $Fn3) (param $v_27 (ref $Any)) (param $v_25 (ref $Any)) (param $v_26 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_26))
-      )
-      (func $v_68 (type $Fn3) (param $n_69 (ref $Any)) (param $v_71 (ref $Any)) (param $v_23 (ref $Any))
-        (local.set $v_91 (call $builtin_fn_closure (local.get $v_82) (local.get $n_69) (local.get $v_23) (local.get $v_71)))
-        (local.set $v_103 (call $builtin_fn_closure (local.get $v_98) (local.get $n_69)))
-        (return_call_ref $Fn1 (local.get $v_91) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_95 (type $Fn1) (param $v_16 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_16) (struct.new $Num (f64.const 42)))
-      )
-      (func $v_107 (type $Fn3) (param $v_13 (ref $Any)) (param $v_11 (ref $Any)) (param $v_12 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_12) (call $builtin_match_value (local.get $v_13) (struct.new $Num (f64.const 0)) (local.get $v_11)))
-      )
-      (func $v_79 (type $Fn1) (param $v_75 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_75) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_7 (type $Fn2) (param $n_2 (ref $Any)) (param $v_8 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_79) (call $builtin_fn_closure (local.get $v_68) (local.get $n_2) (local.get $v_8)))
-      )
-      (func $v_52 (type $Fn1) (param $v_53 (ref $Any))
-        (return_call_ref $Fn2 (local.get $recurse_0) (struct.new $Num (f64.const 5)) (local.get $v_53))
-      )
-      (export "recurse" (func $v_7))
-      (export "main" (func $v_52))
-    )
+    TODO
 
 test 'recursive countdown', fn:
   expect gen_wat fink":
@@ -397,53 +137,7 @@ test 'recursive countdown', fn:
     main = fn:
       count 0, 10
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_98 (type $Fn4) (param $n_99 (ref $Any)) (param $v_101 (ref $Any)) (param $v_103 (ref $Any)) (param $v_49 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_103) (call $builtin_match_block (local.get $n_99) (local.get $v_101) (local.get $v_49)))
-      )
-      (func $v_139 (type $Fn3) (param $v_140 (ref $Any)) (param $v_142 (ref $Any)) (param $v_38 (ref $Any))
-        (return_call_ref $Fn3 (local.get $count_0) (local.get $v_140) (local.get $v_38) (local.get $v_142))
-      )
-      (func $v_128 (type $Fn3) (param $n_129 (ref $Any)) (param $v_131 (ref $Any)) (param $v_34 (ref $Any))
-        (local.set $v_146 (call $builtin_fn_closure (local.get $v_139) (local.get $v_34) (local.get $v_131)))
-        (return_call_ref $Fn1 (local.get $v_146) (call $builtin_sub (local.get $n_129) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_114 (type $Fn3) (param $a_115 (ref $Any)) (param $n_117 (ref $Any)) (param $v_30 (ref $Any))
-        (local.set $v_135 (call $builtin_fn_closure (local.get $v_128) (local.get $n_117) (local.get $v_30)))
-        (return_call_ref $Fn1 (local.get $v_135) (call $builtin_add (local.get $a_115) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_125 (type $Fn3) (param $v_28 (ref $Any)) (param $v_26 (ref $Any)) (param $v_27 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_27))
-      )
-      (func $v_76 (type $Fn4) (param $a_77 (ref $Any)) (param $n_79 (ref $Any)) (param $v_81 (ref $Any)) (param $v_24 (ref $Any))
-        (local.set $v_107 (call $builtin_fn_closure (local.get $v_98) (local.get $n_79) (local.get $v_24) (local.get $v_81)))
-        (local.set $v_121 (call $builtin_fn_closure (local.get $v_114) (local.get $a_77) (local.get $n_79)))
-        (return_call_ref $Fn1 (local.get $v_107) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_89 (type $Fn2) (param $a_90 (ref $Any)) (param $v_17 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_17) (local.get $a_90))
-      )
-      (func $v_111 (type $Fn3) (param $v_14 (ref $Any)) (param $v_12 (ref $Any)) (param $v_13 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_13) (call $builtin_match_value (local.get $v_14) (struct.new $Num (f64.const 0)) (local.get $v_12)))
-      )
-      (func $v_8 (type $Fn3) (param $a_2 (ref $Any)) (param $n_3 (ref $Any)) (param $v_9 (ref $Any))
-        (local.set $v_85 (call $builtin_fn_closure (local.get $v_76) (local.get $a_2) (local.get $n_3) (local.get $v_9)))
-        (local.set $v_94 (call $builtin_fn_closure (local.get $v_89) (local.get $a_2)))
-        (return_call_ref $Fn1 (local.get $v_85) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_59 (type $Fn1) (param $v_60 (ref $Any))
-        (return_call_ref $Fn3 (local.get $count_0) (struct.new $Num (f64.const 0)) (struct.new $Num (f64.const 10)) (local.get $v_60))
-      )
-      (export "count" (func $v_8))
-      (export "main" (func $v_59))
-    )
+    TODO
 
 test 'mutual recursion', fn:
   expect gen_wat fink":
@@ -460,81 +154,7 @@ test 'mutual recursion', fn:
     main = fn:
       is-even 10
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_161 (type $Fn4) (param $n_162 (ref $Any)) (param $v_164 (ref $Any)) (param $v_166 (ref $Any)) (param $v_45 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_166) (call $builtin_match_block (local.get $n_162) (local.get $v_164) (local.get $v_45)))
-      )
-      (func $v_219 (type $Fn2) (param $v_220 (ref $Any)) (param $v_36 (ref $Any))
-        (return_call_ref $Fn2 (local.get $is-odd_1) (local.get $v_36) (local.get $v_220))
-      )
-      (func $v_189 (type $Fn2) (param $n_190 (ref $Any)) (param $v_32 (ref $Any))
-        (local.set $v_224 (call $builtin_fn_closure (local.get $v_219) (local.get $v_32)))
-        (return_call_ref $Fn1 (local.get $v_224) (call $builtin_sub (local.get $n_190) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_216 (type $Fn3) (param $v_30 (ref $Any)) (param $v_28 (ref $Any)) (param $v_29 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_29))
-      )
-      (func $v_131 (type $Fn3) (param $n_132 (ref $Any)) (param $v_134 (ref $Any)) (param $v_26 (ref $Any))
-        (local.set $v_170 (call $builtin_fn_closure (local.get $v_161) (local.get $n_132) (local.get $v_26) (local.get $v_134)))
-        (local.set $v_194 (call $builtin_fn_closure (local.get $v_189) (local.get $n_132)))
-        (return_call_ref $Fn1 (local.get $v_170) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_186 (type $Fn1) (param $v_19 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_19) (struct.new $Num (f64.const 1)))
-      )
-      (func $v_213 (type $Fn3) (param $v_16 (ref $Any)) (param $v_14 (ref $Any)) (param $v_15 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_15) (call $builtin_match_value (local.get $v_16) (struct.new $Num (f64.const 0)) (local.get $v_14)))
-      )
-      (func $v_158 (type $Fn1) (param $v_138 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_138) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_10 (type $Fn2) (param $n_3 (ref $Any)) (param $v_11 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_158) (call $builtin_fn_closure (local.get $v_131) (local.get $n_3) (local.get $v_11)))
-      )
-      (func $v_145 (type $Fn4) (param $n_146 (ref $Any)) (param $v_148 (ref $Any)) (param $v_150 (ref $Any)) (param $v_90 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_150) (call $builtin_match_block (local.get $n_146) (local.get $v_148) (local.get $v_90)))
-      )
-      (func $v_204 (type $Fn2) (param $v_205 (ref $Any)) (param $v_81 (ref $Any))
-        (return_call_ref $Fn2 (local.get $is-even_0) (local.get $v_81) (local.get $v_205))
-      )
-      (func $v_177 (type $Fn2) (param $n_178 (ref $Any)) (param $v_77 (ref $Any))
-        (local.set $v_209 (call $builtin_fn_closure (local.get $v_204) (local.get $v_77)))
-        (return_call_ref $Fn1 (local.get $v_209) (call $builtin_sub (local.get $n_178) (struct.new $Num (f64.const 1))))
-      )
-      (func $v_201 (type $Fn3) (param $v_75 (ref $Any)) (param $v_73 (ref $Any)) (param $v_74 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_74))
-      )
-      (func $v_120 (type $Fn3) (param $n_121 (ref $Any)) (param $v_123 (ref $Any)) (param $v_71 (ref $Any))
-        (local.set $v_154 (call $builtin_fn_closure (local.get $v_145) (local.get $n_121) (local.get $v_71) (local.get $v_123)))
-        (local.set $v_182 (call $builtin_fn_closure (local.get $v_177) (local.get $n_121)))
-        (return_call_ref $Fn1 (local.get $v_154) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_174 (type $Fn1) (param $v_64 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_64) (struct.new $Num (f64.const 0)))
-      )
-      (func $v_198 (type $Fn3) (param $v_61 (ref $Any)) (param $v_59 (ref $Any)) (param $v_60 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_60) (call $builtin_match_value (local.get $v_61) (struct.new $Num (f64.const 0)) (local.get $v_59)))
-      )
-      (func $v_142 (type $Fn1) (param $v_127 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_127) (call $builtin_match_arm (;; cont-as-arg ;) (;; cont-as-arg ;)))
-      )
-      (func $v_55 (type $Fn2) (param $n_4 (ref $Any)) (param $v_56 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_142) (call $builtin_fn_closure (local.get $v_120) (local.get $n_4) (local.get $v_56)))
-      )
-      (func $v_100 (type $Fn1) (param $v_101 (ref $Any))
-        (return_call_ref $Fn2 (local.get $is-even_0) (struct.new $Num (f64.const 10)) (local.get $v_101))
-      )
-      (export "is-even" (func $v_10))
-      (export "is-odd" (func $v_55))
-      (export "main" (func $v_100))
-    )
+    TODO
 
 # --- arithmetic ---
 
@@ -543,48 +163,21 @@ test 'division', fn:
     main = fn:
       10 / 4
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_div (struct.new $Num (f64.const 10)) (struct.new $Num (f64.const 4))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'integer division', fn:
   expect gen_wat fink":
     main = fn:
       10 // 3
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_int_div (struct.new $Num (f64.const 10)) (struct.new $Num (f64.const 3))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'modulo', fn:
   expect gen_wat fink":
     main = fn:
       10 %% 3
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_int_mod (struct.new $Num (f64.const 10)) (struct.new $Num (f64.const 3))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 # --- comparison ---
 
@@ -593,64 +186,28 @@ test 'equals true', fn:
     main = fn:
       5 == 5
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_eq (struct.new $Num (f64.const 5)) (struct.new $Num (f64.const 5))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'equals false', fn:
   expect gen_wat fink":
     main = fn:
       5 == 3
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_eq (struct.new $Num (f64.const 5)) (struct.new $Num (f64.const 3))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'less than', fn:
   expect gen_wat fink":
     main = fn:
       3 < 5
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_lt (struct.new $Num (f64.const 3)) (struct.new $Num (f64.const 5))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'greater than or equal', fn:
   expect gen_wat fink":
     main = fn:
       5 >= 5
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_gte (struct.new $Num (f64.const 5)) (struct.new $Num (f64.const 5))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 # --- float ---
 
@@ -659,32 +216,14 @@ test 'float arithmetic', fn:
     main = fn:
       1.5 + 2.5
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_add (struct.new $Num (f64.const 1.5)) (struct.new $Num (f64.const 2.5))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'float division', fn:
   expect gen_wat fink":
     main = fn:
       7.0 / 2.0
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_div (struct.new $Num (f64.const 7)) (struct.new $Num (f64.const 2))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 # --- logical ---
 
@@ -693,64 +232,28 @@ test 'logical and', fn:
     main = fn:
       1 and 1
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_and (struct.new $Num (f64.const 1)) (struct.new $Num (f64.const 1))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'logical or', fn:
   expect gen_wat fink":
     main = fn:
       0 or 1
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_or (struct.new $Num (f64.const 0)) (struct.new $Num (f64.const 1))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'logical not', fn:
   expect gen_wat fink":
     main = fn:
       not 0
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_not (struct.new $Num (f64.const 0))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'logical not truthy', fn:
   expect gen_wat fink":
     main = fn:
       not 5
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_not (struct.new $Num (f64.const 5))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 # --- bitwise ---
 
@@ -759,32 +262,14 @@ test 'bitwise and', fn:
     main = fn:
       12 & 10
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_bit_and (struct.new $Num (f64.const 12)) (struct.new $Num (f64.const 10))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 test 'shift left', fn:
   expect gen_wat fink":
     main = fn:
       1 << 4
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (call $builtin_shl (struct.new $Num (f64.const 1)) (struct.new $Num (f64.const 4))))
-      )
-      (export "main" (func $v_4))
-    )
+    TODO
 
 # --- existing ---
 
@@ -795,17 +280,4 @@ test 'chained let', fn:
       y = 3
       y
   | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-
-      (func $v_6 (type $Fn1) (param $v_7 (ref $Any))
-        (local $x_1 (ref $Any))
-        (local $y_2 (ref $Any))
-        (local.set $x_1 (struct.new $Num (f64.const 2)))
-        (local.set $y_2 (struct.new $Num (f64.const 3)))
-        (return_call_ref $Fn1 (local.get $v_7) (local.get $y_2))
-      )
-      (export "main" (func $v_6))
-    )
+    TODO

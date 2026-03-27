@@ -6,6 +6,11 @@
 //
 // ## Calling convention
 //
+// Every Fink function — including builtins — is CPS: the last parameter is
+// always the continuation. Builtins never return values directly; they call
+// their continuation with the result. There are no direct `call` instructions
+// that return values — all calls are CPS tail calls via return_call_ref.
+//
 // Every Fink function: (param (ref $Any) * N) where the last param is the cont.
 // All tail calls use return_call_ref with the matching $FnN type, inline form:
 //   (return_call_ref $FnN (local.get $callee) (local.get $arg) ...)
