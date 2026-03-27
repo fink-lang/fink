@@ -487,13 +487,27 @@ fn emit_body(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: u
         },
         _ => false,
       };
-      let mark_id = if is_cont_call {
-        args.iter().find_map(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
-          .unwrap_or(expr.id)
-      } else {
-        expr.id
-      };
-      ctx.mark(mark_id, w);
+      // For builtin ops, mark at the operator token (op.loc inside InfixOp/UnaryOp),
+      // not the whole expression node. For cont calls, mark at the value being passed.
+      // For user fn calls, mark at the call-site expression.
+      match func {
+        Callable::BuiltIn(_) => {
+          if let Some(node) = ctx.ast_node(expr.id) {
+            let loc = match &node.kind {
+              NodeKind::InfixOp { op, .. } | NodeKind::UnaryOp { op, .. } => op.loc,
+              _ => node.loc,
+            };
+            w.mark(loc);
+          }
+        }
+        Callable::Val(_) if is_cont_call => {
+          let mark_id = args.iter()
+            .find_map(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
+            .unwrap_or(expr.id);
+          ctx.mark(mark_id, w);
+        }
+        Callable::Val(_) => ctx.mark(expr.id, w),
+      }
       emit_app(func, args, ctx, w, indent);
     }
     ExprKind::If { cond, then, else_ } => {
@@ -570,6 +584,10 @@ fn emit_call(
 }
 
 /// Emit a builtin operation call.
+///
+/// All builtins are CPS: the continuation is always the last argument. They are
+/// imported functions called directly by name via `return_call`. All args
+/// (values + cont) are emitted flat in order.
 fn emit_builtin(
   op: BuiltIn,
   args: &[Arg<'_>],
@@ -577,42 +595,19 @@ fn emit_builtin(
   w: &mut MappedWriter,
   indent: usize,
 ) {
-  let (val_args, cont_arg) = split_args(args);
   let fn_name = builtin_name(op);
-  let builtin_args: Vec<WatExpr> = val_args.iter().map(|a| val_arg_expr(a, ctx)).collect();
-  let builtin_call = WatExpr::list(format!("call ${}", fn_name), builtin_args);
-
-  match cont_arg {
-    Some(Cont::Ref(id)) => {
-      let expr = WatExpr::list(
-        "return_call_ref $Fn1",
-        vec![
-          WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
-          builtin_call,
-        ],
-      );
-      w.push_str(&ind(indent));
-      write_expr(&expr, w);
-      w.push_str("\n");
-    }
-    Some(Cont::Expr { args: bind_args, body }) => {
-      if let Some(bind) = bind_args.first() {
-        let expr = WatExpr::list(
-          format!("local.set ${}", ctx.label(bind.id)),
-          vec![builtin_call],
-        );
-        w.push_str(&ind(indent));
-        write_expr(&expr, w);
-        w.push_str("\n");
-      }
-      emit_body(body, ctx, w, indent);
-    }
-    None => {
-      w.push_str(&ind(indent));
-      write_expr(&builtin_call, w);
-      w.push_str("\n");
-    }
-  }
+  let all_args: Vec<WatExpr> = args.iter().map(|a| match a {
+    Arg::Val(v) => val_expr(v, ctx),
+    Arg::Spread(v) => val_expr(v, ctx),
+    Arg::Cont(Cont::Ref(id)) =>
+      WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+    Arg::Cont(Cont::Expr { .. }) => WatExpr::atom("(;; inline-cont ;)"),
+    Arg::Expr(_) => WatExpr::atom("(;; expr-as-arg ;)"),
+  }).collect();
+  let expr = WatExpr::list(format!("return_call ${}", fn_name), all_args);
+  w.push_str(&ind(indent));
+  write_expr(&expr, w);
+  w.push_str("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -686,57 +681,57 @@ fn split_args<'a>(args: &'a [Arg<'a>]) -> (&'a [Arg<'a>], Option<&'a Cont<'a>>) 
 
 fn builtin_name(op: BuiltIn) -> &'static str {
   match op {
-    BuiltIn::Add      => "builtin_add",
-    BuiltIn::Sub      => "builtin_sub",
-    BuiltIn::Mul      => "builtin_mul",
-    BuiltIn::Div      => "builtin_div",
-    BuiltIn::IntDiv   => "builtin_int_div",
-    BuiltIn::Mod      => "builtin_mod",
-    BuiltIn::IntMod   => "builtin_int_mod",
-    BuiltIn::DivMod   => "builtin_div_mod",
-    BuiltIn::Pow      => "builtin_pow",
-    BuiltIn::Eq       => "builtin_eq",
-    BuiltIn::Neq      => "builtin_neq",
-    BuiltIn::Lt       => "builtin_lt",
-    BuiltIn::Lte      => "builtin_lte",
-    BuiltIn::Gt       => "builtin_gt",
-    BuiltIn::Gte      => "builtin_gte",
-    BuiltIn::Cmp      => "builtin_cmp",
-    BuiltIn::And      => "builtin_and",
-    BuiltIn::Or       => "builtin_or",
-    BuiltIn::Xor      => "builtin_xor",
-    BuiltIn::Not      => "builtin_not",
-    BuiltIn::BitAnd   => "builtin_bit_and",
-    BuiltIn::BitXor   => "builtin_bit_xor",
-    BuiltIn::Shl      => "builtin_shl",
-    BuiltIn::Shr      => "builtin_shr",
-    BuiltIn::RotL     => "builtin_rot_l",
-    BuiltIn::RotR     => "builtin_rot_r",
-    BuiltIn::BitNot   => "builtin_bit_not",
-    BuiltIn::Range    => "builtin_range",
-    BuiltIn::RangeIncl => "builtin_range_incl",
-    BuiltIn::In       => "builtin_in",
-    BuiltIn::NotIn    => "builtin_not_in",
-    BuiltIn::Get      => "builtin_get",
-    BuiltIn::SeqAppend  => "builtin_seq_append",
-    BuiltIn::SeqConcat  => "builtin_seq_concat",
-    BuiltIn::RecPut     => "builtin_rec_put",
-    BuiltIn::RecMerge   => "builtin_rec_merge",
-    BuiltIn::StrFmt     => "builtin_str_fmt",
-    BuiltIn::FnClosure  => "builtin_fn_closure",
-    BuiltIn::MatchValue    => "builtin_match_value",
-    BuiltIn::MatchSeq      => "builtin_match_seq",
-    BuiltIn::MatchNext     => "builtin_match_next",
-    BuiltIn::MatchDone     => "builtin_match_done",
-    BuiltIn::MatchNotDone  => "builtin_match_not_done",
-    BuiltIn::MatchRest     => "builtin_match_rest",
-    BuiltIn::MatchRec      => "builtin_match_rec",
-    BuiltIn::MatchField    => "builtin_match_field",
-    BuiltIn::MatchIf       => "builtin_match_if",
-    BuiltIn::MatchApp      => "builtin_match_app",
-    BuiltIn::MatchBlock    => "builtin_match_block",
-    BuiltIn::MatchArm      => "builtin_match_arm",
-    BuiltIn::Yield         => "builtin_yield",
+    BuiltIn::Add      => "op_plus",
+    BuiltIn::Sub      => "op_minus",
+    BuiltIn::Mul      => "op_mul",
+    BuiltIn::Div      => "op_div",
+    BuiltIn::IntDiv   => "op_intdiv",
+    BuiltIn::Mod      => "op_rem",
+    BuiltIn::IntMod   => "op_intmod",
+    BuiltIn::DivMod   => "op_divmod",
+    BuiltIn::Pow      => "op_pow",
+    BuiltIn::Eq       => "op_eq",
+    BuiltIn::Neq      => "op_neq",
+    BuiltIn::Lt       => "op_lt",
+    BuiltIn::Lte      => "op_lte",
+    BuiltIn::Gt       => "op_gt",
+    BuiltIn::Gte      => "op_gte",
+    BuiltIn::Cmp      => "op_cmp",
+    BuiltIn::And      => "op_and",
+    BuiltIn::Or       => "op_or",
+    BuiltIn::Xor      => "op_xor",
+    BuiltIn::Not      => "op_not",
+    BuiltIn::BitAnd   => "op_bitand",
+    BuiltIn::BitXor   => "op_bitxor",
+    BuiltIn::Shl      => "op_shl",
+    BuiltIn::Shr      => "op_shr",
+    BuiltIn::RotL     => "op_rotl",
+    BuiltIn::RotR     => "op_rotr",
+    BuiltIn::BitNot   => "op_bitnot",
+    BuiltIn::Range    => "op_rngex",
+    BuiltIn::RangeIncl => "op_rngin",
+    BuiltIn::In       => "op_in",
+    BuiltIn::NotIn    => "op_notin",
+    BuiltIn::Get      => "op_dot",
+    BuiltIn::SeqAppend  => "seq_append",
+    BuiltIn::SeqConcat  => "seq_concat",
+    BuiltIn::RecPut     => "rec_put",
+    BuiltIn::RecMerge   => "rec_merge",
+    BuiltIn::StrFmt     => "str_fmt",
+    BuiltIn::FnClosure  => "closure",
+    BuiltIn::MatchValue    => "match_value",
+    BuiltIn::MatchSeq      => "match_seq",
+    BuiltIn::MatchNext     => "match_next",
+    BuiltIn::MatchDone     => "match_done",
+    BuiltIn::MatchNotDone  => "match_not_done",
+    BuiltIn::MatchRest     => "match_rest",
+    BuiltIn::MatchRec      => "match_rec",
+    BuiltIn::MatchField    => "match_field",
+    BuiltIn::MatchIf       => "match_if",
+    BuiltIn::MatchApp      => "match_app",
+    BuiltIn::MatchBlock    => "match_block",
+    BuiltIn::MatchArm      => "match_arm",
+    BuiltIn::Yield         => "yield",
     BuiltIn::Export        => "export",
     BuiltIn::Import        => "import",
   }

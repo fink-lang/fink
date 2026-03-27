@@ -38,7 +38,7 @@ test 'let binding', fn:
       )
       (export "main" (func $v_5))
     )
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87O0FBQ0wsb0JBQUk7QUFDSiwyQ0FBQTs7QUFGRiIKfQ==
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87O0lBQ0gsV0FBRixLQUFJO0FBQ0osMkNBQUE7O0FBRkYiCn0=
 
 
 test 'add two literals', fn:
@@ -46,7 +46,18 @@ test 'add two literals', fn:
     main = fn:
       2 + 3
   | equals wat":
-    TODO
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+
+      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
+        (return_call $op_plus (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDSCwwQkFBRixnQ0FBSTs7QUFETiIKfQ==
+
 
 test 'chained arithmetic', fn:
   expect gen_wat fink":
