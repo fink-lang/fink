@@ -2500,7 +2500,7 @@ mod tests {
   fn compile_wasm(src: &str) -> Vec<u8> {
     let r = parse(src).expect("parse failed");
     let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
     let cps = lower_expr(&r.root, &scope);
     let lifted = lift(cps, &ast_index);
     let node_count = lifted.origin.len();
@@ -2534,7 +2534,7 @@ mod tests {
   fn source_mappings_produced() {
     let r = parse("main = fn: 42").expect("parse failed");
     let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
     let cps = lower_expr(&r.root, &scope);
     let lifted = lift(cps, &ast_index);
     let node_count = lifted.origin.len();

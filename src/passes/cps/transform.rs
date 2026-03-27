@@ -1716,7 +1716,7 @@ mod tests {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
     let r: &'static crate::ast::ParseResult<'static> =
       Box::leak(Box::new(parse(src).expect("parse failed")));
-    let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+    let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
     lower_expr(&r.root, &scope)
   }
 
@@ -1759,7 +1759,7 @@ mod cps_tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
@@ -1784,7 +1784,7 @@ mod pat_tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &["import"]);
+        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
         fmt_with(&cps.root, &ctx)
