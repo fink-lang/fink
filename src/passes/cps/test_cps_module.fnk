@@ -26,6 +26,7 @@ test 'single binding export', fn:
   | equals fink":
     ·let 1, fn ·foo_0:
       ·export ·foo_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtFLEEsUUFBQSIKfQ==
 
 
 ---
@@ -40,6 +41,7 @@ test 'two bindings export', fn:
     ·let 1, fn ·foo_0:
       ·let 2, fn ·bar_1:
         ·export ·foo_0, ·bar_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gMiJdLAogICJtYXBwaW5ncyI6ICJBQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtFQUNJLEFBQUEsS0FBRSxDLEtBQU4sTTtJLEEsUUFEQSxNLEVBQ0EiCn0=
 
 
 test 'two fns export', fn:
@@ -51,16 +53,15 @@ test 'two fns export', fn:
       add 3, 4
   | equals fink":
     ·fn
-      fn ·a_2, ·b_3, ·ƒ_9:
-        ·op_plus ·a_2, ·b_3, ·ƒ_9
+      fn ·a_2, ·b_3, ·ƒ_9: ·op_plus ·a_2, ·b_3, ·ƒ_9
       fn ·v_8:
         ·let ·v_8, fn ·add_0:
           ·fn
-            fn ·ƒ_17:
-              ·add_0 3, 4, ·ƒ_17
+            fn ·ƒ_17: ·add_0 3, 4, ·ƒ_17
             fn ·v_16:
               ·let ·v_16, fn ·main_1:
                 ·export ·add_0, ·main_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUE7S0FBRyxNQUFHLE1BQU4sSSxFQUNKLEFBQUUsU0FBRixJLEVBQUksSSxFQURBO0tBQUEsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNQUdPLEFBQUE7V0FBQSxLLEVBQ0wsQUFBQSxPQUFJLEMsRUFBRyxDLEVBREY7V0FBQSxLO1VBQUYsQUFBQSxLQUFFLEssS0FBUCxPO1ksQSxRQUhBLE0sRUFHQSIKfQ==
 
 
 ---
@@ -77,11 +78,11 @@ test 'import not in exports', fn:
         ·match_field ·v_10, 'foo', ·panic, fn ·v_11, ·v_12:
           ·let ·v_11, fn ·foo_0:
             ·fn
-              fn ·ƒ_17:
-                ·foo_0 1, ·ƒ_17
+              fn ·ƒ_17: ·foo_0 1, ·ƒ_17
               fn ·v_16:
                 ·let ·v_16, fn ·main_1:
                   ·export ·main_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQU8sQSxDQUFBLFMsQyxLQUFQLEk7RUFBUixBQUFBLFdBQVEsSSxFQUFSLE0sS0FBQSxLO0lBQUMsQUFBQSxhQUFELEssRUFBQyxBLENBQUEsRyxDLEVBQUEsTSxLQUFELE9BQUEsSztNQUFNLEFBQUEsS0FBTixLLEtBQUMsTTtRQUNNLEFBQUE7YUFBQSxLLEVBQUksQUFBQSxPQUFJLEMsRUFBUjthQUFBLEs7WUFBRixBQUFBLEtBQUUsSyxLQUFQLE87YyxBLFFBQUEiCn0=
 
 
 ---
@@ -102,8 +103,8 @@ test 'destructure not in exports', fn:
                 ·let ·v_18, fn ·b_1:
                   ·match_done ·v_19, ·panic, fn ·v_22:
                     ·fn
-                      fn ·ƒ_25:
-                        ·ƒ_25 ·a_0
+                      fn ·ƒ_25: ·ƒ_25 ·a_0
                       fn ·v_24:
                         ·let ·v_24, fn ·foo_2:
                           ·export ·foo_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsWUFBQSxBLEMsQyxFQUFDLEMsS0FBRCxJO0VBQUEsQUFBQSxZQUFBLEksRUFBSSxDLEtBQUosSztJQUFULEFBQUEsV0FBUyxLLEVBQVQsTSxLQUFBLEs7TUFBQSxBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxPQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VUFBRCxBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxPQUFBLEs7WUFBSSxBQUFBLEtBQUosSyxLQUFJLEk7Y0FBSixBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxLO2dCQUNNLEFBQUE7cUJBQUEsSyxFLEFBQUEsTUFBSTtxQkFBSixLO29CQUFGLEFBQUEsS0FBRSxLLEtBQU4sTTtzQixBLFFBQUEiCn0=

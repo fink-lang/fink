@@ -1762,7 +1762,10 @@ mod cps_tests {
         let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
-        fmt_with(&cps.root, &ctx)
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
+        let json = srcmap.to_json();
+        let b64 = crate::sourcemap::base64_encode(json.as_bytes());
+        format!("{output}\n#sourcemaps:{b64}")
       }
       Err(e) => format!("ERROR: {}", e.message),
     }
@@ -1776,7 +1779,7 @@ mod cps_tests {
 mod pat_tests {
   use crate::parser::parse;
   use crate::ast::build_index;
-  use crate::passes::cps::fmt::{fmt_with, Ctx};
+  use crate::passes::cps::fmt::Ctx;
   use crate::passes::scopes;
   use super::lower_expr;
 
@@ -1787,7 +1790,10 @@ mod pat_tests {
         let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_expr(&r.root, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
-        fmt_with(&cps.root, &ctx)
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
+        let json = srcmap.to_json();
+        let b64 = crate::sourcemap::base64_encode(json.as_bytes());
+        format!("{output}\n#sourcemaps:{b64}")
       }
       Err(e) => format!("ERROR: {}", e.message),
     }
@@ -1800,7 +1806,7 @@ mod pat_tests {
 mod module_tests {
   use crate::parser::parse;
   use crate::ast::{build_index, NodeKind};
-  use crate::passes::cps::fmt::{fmt_with, Ctx};
+  use crate::passes::cps::fmt::Ctx;
   use crate::passes::scopes;
   use super::lower_module;
 
@@ -1815,7 +1821,10 @@ mod module_tests {
         let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_module(exprs, &scope);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
-        fmt_with(&cps.root, &ctx)
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
+        let json = srcmap.to_json();
+        let b64 = crate::sourcemap::base64_encode(json.as_bytes());
+        format!("{output}\n#sourcemaps:{b64}")
       }
       Err(e) => format!("ERROR: {}", e.message),
     }

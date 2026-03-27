@@ -44,14 +44,15 @@ test 'plain bind', fn:
   | equals fink":
     ·let ·∅foo, fn ·x_0:
       ·ƒ_1 ·x_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtFLEEsS0FBQSIKfQ==
 
 test 'simple guard', fn:
   expect cps_expr fink":
     a > 0 = foo
   | equals fink":
     ·let ·∅foo, fn ·a_0:
-      ·match_if ·op_gt, ·a_0, 0, ·panic, fn:
-        ·ƒ_1 _
+      ·match_if ·op_gt, ·a_0, 0, ·panic, fn: ·ƒ_1 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBLEtBQUUsSyxLQUFSLEk7RUFBQSxBQUFBLFVBQUEsTSxFQUFBLEksRUFBSSxDLEVBQUosTSxJLEUiCn0=
 
 
 test 'nested guard', fn:
@@ -61,8 +62,8 @@ test 'nested guard', fn:
     ·let ·∅foo, fn ·a_0:
       ·op_gt ·a_0, 0, fn ·v_5:
         ·op_lt ·a_0, 9, fn ·v_9:
-          ·match_if ·op_or, ·v_5, ·v_9, ·panic, fn:
-            ·ƒ_1 _
+          ·match_if ·op_or, ·v_5, ·v_9, ·panic, fn: ·ƒ_1 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgb3IgYSA8IDkgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBZSxBQUFBLEtBQUUsSyxLQUFqQixJO0VBQUEsQUFBRSxPQUFGLEksRUFBSSxDLEtBQUosSTtJQUFTLEFBQUUsT0FBRixJLEVBQUksQyxLQUFKLEk7TUFBVCxBQUFBLFVBQUEsTSxFQUFBLEksRUFBUyxJLEVBQVQsTSxJLEUiCn0=
 
 
 ---
@@ -75,6 +76,7 @@ test 'seq — empty', fn:
   | equals fink":
     ·match_seq ·∅foo, ·panic, fn ·v_2:
       ·match_done ·v_2, ·panic, ·ƒ_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW10gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQUssSyxFQUFMLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEUiCn0=
 
 
 test 'seq — nested empty', fn:
@@ -88,6 +90,7 @@ test 'seq — nested empty', fn:
             ·match_seq ·v_8, ·panic, fn ·v_12:
               ·match_done ·v_12, ·panic, fn ·v_13:
                 ·match_done ·v_9, ·panic, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIFtdXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBVSxLLEVBQVYsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7UUFBSSxBQUFBLFdBQUosSSxFQUFJLE0sS0FBQSxLO1VBQUEsQUFBQyxZQUFELEssRUFBQSxNLEtBQUEsSztZQUFKLEFBQUEsWUFBQSxJLEVBQUEsTSxFIgp9
 
 
 test 'seq — exact two elements', fn:
@@ -100,6 +103,7 @@ test 'seq — exact two elements', fn:
           ·match_next ·v_6, ·panic, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·b_1:
               ·match_done ·v_10, ·panic, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFTLEssRUFBVCxNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSztRQUFJLEFBQUEsS0FBSixJLEtBQUksSTtVQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFIgp9
 
 
 
@@ -108,8 +112,8 @@ test 'seq — lone spread non-empty discard', fn:
     [..] = foo
   | equals fink":
     ·match_seq ·∅foo, ·panic, fn ·v_2:
-      ·match_not_done ·v_2, ·panic, fn:
-        ·ƒ_0 _
+      ·match_not_done ·v_2, ·panic, fn: ·ƒ_0 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4uXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBTyxLLEVBQVAsTSxLQUFBLEk7RUFBQSxBQUFBLGdCQUFBLEksRUFBQSxNLEksRSIKfQ==
 
 
 test 'seq — spread non-empty bound', fn:
@@ -120,6 +124,7 @@ test 'seq — spread non-empty bound', fn:
       ·match_rest ·v_3, ·panic, fn ·v_5:
         ·let ·v_5, fn ·rest_0:
           ·ƒ_1 ·rest_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4ucmVzdF0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQVcsSyxFQUFYLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsSTtJQUFTLEFBQUEsS0FBVCxJLEtBQUcsTztNLEEsS0FBQSIKfQ==
 
 
 test 'seq — head then spread discard', fn:
@@ -129,8 +134,8 @@ test 'seq — head then spread discard', fn:
     ·match_seq ·∅foo, ·panic, fn ·v_3:
       ·match_next ·v_3, ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·head_0:
-          ·match_not_done ·v_5, ·panic, fn:
-            ·ƒ_1 _
+          ·match_not_done ·v_5, ·panic, fn: ·ƒ_1 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2hlYWQsIC4uXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBYSxLLEVBQWIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLE87TUFBRCxBQUFBLGdCQUFBLEksRUFBQSxNLEksRSIKfQ==
 
 
 test 'seq — head then spread bound', fn:
@@ -143,6 +148,7 @@ test 'seq — head then spread bound', fn:
           ·match_rest ·v_6, ·panic, fn ·v_10:
             ·let ·v_10, fn ·tail_1:
               ·ƒ_2 ·tail_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2hlYWQsIC4udGFpbF0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWlCLEssRUFBakIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLE87TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxLO1FBQWUsQUFBQSxLQUFmLEssS0FBUyxPO1UsQSxLQUFBIgp9
 
 
 --- test 'seq — rest in middle' deferred: needs ·match_reverse ---
@@ -166,6 +172,7 @@ test 'seq — literal element', fn:
           ·match_next ·v_5, ·panic, fn ·v_8, ·v_9:
             ·match_value ·v_8, 1, ·panic, fn:
               ·match_done ·v_9, ·panic, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFTLEssRUFBVCxNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtRQUFJLEFBQUEsYUFBSixJLEVBQUksQyxFQUFBLE0sSTtVQUFKLEFBQUEsWUFBQSxJLEVBQUEsTSxFIgp9
 
 
 test 'seq — infix guard', fn:
@@ -179,6 +186,7 @@ test 'seq — infix guard', fn:
             ·let ·v_9, fn ·y_1:
               ·match_if ·op_gte, ·y_1, 2, ·panic, fn:
                 ·match_done ·v_10, ·panic, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIHkgPj0gMl0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWMsSyxFQUFkLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxLO1FBQUksQUFBQSxLQUFKLEksS0FBSSxJO1VBQUEsQUFBRSxVQUFBLE8sRUFBRixJLEVBQUssQyxFQUFMLE0sSTtZQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFIgp9
 
 
 test 'seq — predicate guard', fn:
@@ -192,6 +200,7 @@ test 'seq — predicate guard', fn:
             ·let ·v_9, fn ·y_1:
               ·match_if ·∅is_even, ·y_1, ·panic, fn:
                 ·match_done ·v_10, ·panic, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX2V2ZW4geV0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWlCLEssRUFBakIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEs7UUFBWSxBQUFBLEtBQVosSSxLQUFZLEk7VUFBUixBQUFBLFVBQUEsUyxFQUFRLEksRUFBUixNLEk7WUFBSixBQUFBLFlBQUEsSyxFQUFBLE0sRSIKfQ==
 
 
 test 'seq — constructor guard with payload', fn:
@@ -205,6 +214,7 @@ test 'seq — constructor guard with payload', fn:
             ·let ·v_9, fn ·b_1:
               ·match_if ·∅Ok, ·b_1, ·panic, fn:
                 ·match_done ·v_10, ·panic, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIE9rIGJdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFZLEssRUFBWixNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSztRQUFPLEFBQUEsS0FBUCxJLEtBQU8sSTtVQUFILEFBQUEsVUFBQSxJLEVBQUcsSSxFQUFILE0sSTtZQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFIgp9
 
 
 test 'seq — constructor predicate with wildcard', fn:
@@ -217,6 +227,7 @@ test 'seq — constructor predicate with wildcard', fn:
           ·match_next ·v_5, ·panic, fn ·v_8, ·v_9:
             ·match_if ·∅is_none, ·v_8, ·panic, fn:
               ·match_done ·v_9, ·panic, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX25vbmUgX10gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWlCLEssRUFBakIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7UUFBSSxBQUFBLFVBQUEsUyxFQUFRLEksRUFBUixNLEk7VUFBSixBQUFBLFlBQUEsSSxFQUFBLE0sRSIKfQ==
 
 
 test 'seq — multi-arg guard with bound element', fn:
@@ -232,6 +243,7 @@ test 'seq — multi-arg guard with bound element', fn:
                 ·match_next ·v_10, ·panic, fn ·v_18, ·v_19:
                   ·match_value ·v_18, 4, ·panic, fn:
                     ·match_done ·v_19, ·panic, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIGZvbyAyLCBhLCAzOyA0XSA9IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBc0IsSyxFQUF0QixNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsYUFBRCxJLEVBQUMsQyxFQUFBLE0sSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSztRQUFXLEFBQUEsS0FBWCxJLEtBQVcsSTtVQUFQLEFBQUEsVUFBQSxLLEVBQUksQyxFQUFHLEksRUFBRyxDLEVBQVYsTSxJO1lBQUosQUFBQSxZQUFBLEssRUFBQSxNLEtBQUEsT0FBQSxLO2NBQWlCLEFBQUEsYUFBakIsSyxFQUFpQixDLEVBQUEsTSxJO2dCQUFqQixBQUFBLFlBQUEsSyxFQUFBLE0sRSIKfQ==
 
 
 
@@ -250,6 +262,7 @@ test 'seq — nested', fn:
                     ·let ·v_19, fn ·c_2:
                       ·match_done ·v_20, ·panic, fn ·v_23:
                         ·match_done ·v_11, ·panic, ·ƒ_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIFtiLCBjXV0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWMsSyxFQUFkLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsT0FBQSxLO1FBQUksQUFBQSxXQUFKLEssRUFBSSxNLEtBQUEsSztVQUFBLEFBQUEsWUFBQSxLLEVBQUEsTSxLQUFBLE9BQUEsSztZQUFDLEFBQUEsS0FBRCxLLEtBQUMsSTtjQUFELEFBQUEsWUFBQSxLLEVBQUEsTSxLQUFBLE9BQUEsSztnQkFBSSxBQUFBLEtBQUosSyxLQUFJLEk7a0JBQUosQUFBSyxZQUFMLEssRUFBQSxNLEtBQUEsSztvQkFBSixBQUFBLFlBQUEsSyxFQUFBLE0sRSIKfQ==
 
 test 'seq — nested with bind-right', fn:
   expect cps_expr fink":
@@ -267,6 +280,7 @@ test 'seq — nested with bind-right', fn:
                       ·let ·v_20, fn ·c_2:
                         ·match_done ·v_21, ·panic, fn ·v_24:
                           ·match_done ·v_12, ·panic, ·ƒ_4
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIFtiLCBjXSB8PSBkXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBbUIsSyxFQUFuQixNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE9BQUEsSztRQUFXLEFBQUEsS0FBWCxLLEtBQWMsSTtVQUFWLEFBQUEsV0FBSixLLEVBQUksTSxLQUFBLEs7WUFBQSxBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxPQUFBLEs7Y0FBQyxBQUFBLEtBQUQsSyxLQUFDLEk7Z0JBQUQsQUFBQSxZQUFBLEssRUFBQSxNLEtBQUEsT0FBQSxLO2tCQUFJLEFBQUEsS0FBSixLLEtBQUksSTtvQkFBSixBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxLO3NCQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFIgp9
 
 
 ---
@@ -279,6 +293,7 @@ test 'rec — empty', fn:
   | equals fink":
     ·match_rec ·∅foo, ·panic, fn ·v_2:
       ·match_done ·v_2, ·panic, ·ƒ_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie30gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQUssSyxFQUFMLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEUiCn0=
 
 
 test 'rec — non-empty', fn:
@@ -286,8 +301,8 @@ test 'rec — non-empty', fn:
     {..} = foo
   | equals fink":
     ·match_rec ·∅foo, ·panic, fn ·v_2:
-      ·match_not_done ·v_2, ·panic, fn:
-        ·ƒ_0 _
+      ·match_not_done ·v_2, ·panic, fn: ·ƒ_0 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiey4ufSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBTyxLLEVBQVAsTSxLQUFBLEk7RUFBQSxBQUFBLGdCQUFBLEksRUFBQSxNLEksRSIKfQ==
 
 
 test 'rec — partial match', fn:
@@ -300,6 +315,7 @@ test 'rec — partial match', fn:
           ·match_field ·v_6, 'y', ·panic, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·y_1:
               ·ƒ_2 ·y_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3gsIHl9ID0gcG9pbnQiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQVMsTyxFQUFULE0sS0FBQSxJO0VBQUMsQUFBQSxhQUFELEksRUFBQyxBLENBQUEsQyxDLEVBQUEsTSxLQUFELE1BQUEsSTtJQUFPLEFBQUEsS0FBUCxJLEtBQUMsSTtNQUFHLEFBQUEsYUFBSixJLEVBQUksQSxDQUFBLEMsQyxFQUFBLE0sS0FBSixNQUFBLEs7UUFBTyxBQUFBLEtBQVAsSSxLQUFJLEk7VSxBLEtBQUEiCn0=
 
 
 test 'rec — field rename', fn:
@@ -312,6 +328,7 @@ test 'rec — field rename', fn:
           ·match_field ·v_6, 'y', ·panic, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·z_1:
               ·ƒ_2 ·z_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3gsIHk6IHp9ID0gcG9pbnQiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQVksTyxFQUFaLE0sS0FBQSxJO0VBQUMsQUFBQSxhQUFELEksRUFBQyxBLENBQUEsQyxDLEVBQUEsTSxLQUFELE1BQUEsSTtJQUFVLEFBQUEsS0FBVixJLEtBQUMsSTtNQUFHLEFBQUEsYUFBSixJLEVBQUksQSxDQUFBLEMsQyxFQUFBLE0sS0FBSixNQUFBLEs7UUFBTyxBQUFBLEtBQVAsSSxLQUFPLEk7VSxBLEtBQUEiCn0=
 
 
 test 'rec — open rest discarded', fn:
@@ -321,8 +338,8 @@ test 'rec — open rest discarded', fn:
     ·match_rec ·∅foo, ·panic, fn ·v_3:
       ·match_field ·v_3, 'bar', ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·bar_0:
-          ·match_not_done ·v_5, ·panic, fn:
-            ·ƒ_1 _
+          ·match_not_done ·v_5, ·panic, fn: ·ƒ_1 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi59ID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFZLEssRUFBWixNLEtBQUEsSTtFQUFDLEFBQUEsYUFBRCxJLEVBQUMsQSxDQUFBLEcsQyxFQUFBLE0sS0FBRCxNQUFBLEk7SUFBVSxBQUFBLEtBQVYsSSxLQUFDLE07TUFBRCxBQUFBLGdCQUFBLEksRUFBQSxNLEksRSIKfQ==
 
 
 test 'rec — open rest bound', fn:
@@ -335,6 +352,7 @@ test 'rec — open rest bound', fn:
           ·match_rest ·v_6, ·panic, fn ·v_10:
             ·let ·v_10, fn ·rest_1:
               ·ƒ_2 ·rest_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi5yZXN0fSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBZ0IsSyxFQUFoQixNLEtBQUEsSTtFQUFDLEFBQUEsYUFBRCxJLEVBQUMsQSxDQUFBLEcsQyxFQUFBLE0sS0FBRCxNQUFBLEk7SUFBYyxBQUFBLEtBQWQsSSxLQUFDLE07TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxLO1FBQWMsQUFBQSxLQUFkLEssS0FBUSxPO1UsQSxLQUFBIgp9
 
 
 test 'rec — closed exact', fn:
@@ -347,6 +365,7 @@ test 'rec — closed exact', fn:
           ·match_rest ·v_5, ·panic, fn ·v_9:
             ·match_rec ·v_9, ·panic, fn ·v_11:
               ·match_done ·v_11, ·panic, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi57fX0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWMsSyxFQUFkLE0sS0FBQSxJO0VBQUMsQUFBQSxhQUFELEksRUFBQyxBLENBQUEsRyxDLEVBQUEsTSxLQUFELE1BQUEsSTtJQUFZLEFBQUEsS0FBWixJLEtBQUMsTTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLEk7UUFBUSxBQUFBLFdBQVIsSSxFQUFRLE0sS0FBQSxLO1VBQUEsQUFBQyxZQUFELEssRUFBQSxNLEUiCn0=
 
 
 test 'rec — closed with sub-pattern', fn:
@@ -363,6 +382,7 @@ test 'rec — closed with sub-pattern', fn:
                   ·match_field ·v_15, 'spam', ·panic, fn ·v_18, ·v_19:
                     ·let ·v_18, fn ·spam_2:
                       ·ƒ_3 ·spam_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2ZvbywgLi57YmFyLCBzcGFtfX0gPSB4Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUF1QixHLEVBQXZCLE0sS0FBQSxJO0VBQUMsQUFBQSxhQUFELEksRUFBQyxBLENBQUEsRyxDLEVBQUEsTSxLQUFELE1BQUEsSTtJQUFxQixBQUFBLEtBQXJCLEksS0FBQyxNO01BQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsSztRQUFRLEFBQUEsV0FBUixLLEVBQVEsTSxLQUFBLEs7VUFBQyxBQUFBLGFBQUQsSyxFQUFDLEEsQ0FBQSxHLEMsRUFBQSxNLEtBQUQsT0FBQSxLO1lBQUEsQUFBQSxLQUFBLEssS0FBQyxNO2NBQUssQUFBQSxhQUFOLEssRUFBTSxBLENBQUEsSSxDLEVBQUEsTSxLQUFOLE9BQUEsSztnQkFBQSxBQUFBLEtBQUEsSyxLQUFNLE87a0IsQSxLQUFBIgp9
 
 
 test 'match block bind', fn:
@@ -373,19 +393,16 @@ test 'match block bind', fn:
   | equals fink":
     ·match_arm
       fn ·v_6, ·ƒ_4, ·ƒ_5:
-        ·match_value ·v_6, 1, ·ƒ_4, fn:
-          ·ƒ_5 _
-      fn ·ƒ_9:
-        ·ƒ_9 2
+        ·match_value ·v_6, 1, ·ƒ_4, fn: ·ƒ_5 _
+      fn ·ƒ_9: ·ƒ_9 2
       fn ·v_16:
         ·match_arm
           fn ·v_20, ·ƒ_18, ·ƒ_19:
             ·let ·v_20, fn ·x_0:
               ·ƒ_19 ·x_0
-          fn ·x_0, ·ƒ_22:
-            ·ƒ_22 ·x_0
-          fn ·v_27:
-            ·match_block ·∅foo, ·v_16, ·v_27, ·ƒ_1
+          fn ·x_0, ·ƒ_22: ·ƒ_22 ·x_0
+          fn ·v_27: ·match_block ·∅foo, ·v_16, ·v_27, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICAxOiAyXG4gIHg6IHgiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssTSxNLEk7SUFBQSxBQUFBLGFBQUEsSSxFQUFBLEMsRSxJLEksRTtLLEksRSxBLEtBQUc7S0FBSCxLO0lBQ0EsQUFBQTtTLE8sTyxLO1FBQUEsQUFBQSxLQUFBLEssS0FBQSxJO1UsQSxNQUFBO1NBQUEsTSxLLEUsQSxNQUFHO1NBQUgsSyxFQUZGLEFBQUEsYUFBTSxLLEVBQ0osSyxFQUNBLEssRSIKfQ==
 
 
 ---
@@ -398,12 +415,10 @@ test 'match wildcard', fn:
       _: 42
   | equals fink":
     ·match_arm
-      fn ·v_5, ·ƒ_3, ·ƒ_4:
-        ·ƒ_4 _
-      fn ·ƒ_7:
-        ·ƒ_7 42
-      fn ·v_13:
-        ·match_block ·∅foo, ·v_13, ·ƒ_0
+      fn ·v_5, ·ƒ_3, ·ƒ_4: ·ƒ_4 _
+      fn ·ƒ_7: ·ƒ_7 42
+      fn ·v_13: ·match_block ·∅foo, ·v_13, ·ƒ_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICBfOiA0MiJdLAogICJtYXBwaW5ncyI6ICJBQUNFLEFBQUE7SyxNLE0sSSxFQUFBLEEsS0FBQTtLLEksRSxBLEtBQUc7S0FBSCxLLEVBREYsQUFBQSxhQUFNLEssRUFDSixLLEUiCn0=
 
 
 test 'match bind', fn:
@@ -415,10 +430,9 @@ test 'match bind', fn:
       fn ·v_6, ·ƒ_4, ·ƒ_5:
         ·let ·v_6, fn ·x_0:
           ·ƒ_5 ·x_0
-      fn ·x_0, ·ƒ_8:
-        ·ƒ_8 ·x_0
-      fn ·v_13:
-        ·match_block ·∅foo, ·v_13, ·ƒ_1
+      fn ·x_0, ·ƒ_8: ·ƒ_8 ·x_0
+      fn ·v_13: ·match_block ·∅foo, ·v_13, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICB4OiB4Il0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLE0sTSxJO0lBQUEsQUFBQSxLQUFBLEksS0FBQSxJO00sQSxLQUFBO0tBQUEsTSxJLEUsQSxLQUFHO0tBQUgsSyxFQURGLEFBQUEsYUFBTSxLLEVBQ0osSyxFIgp9
 
 
 test 'match literal arms', fn:
@@ -430,25 +444,19 @@ test 'match literal arms', fn:
   | equals fink":
     ·match_arm
       fn ·v_5, ·ƒ_3, ·ƒ_4:
-        ·match_value ·v_5, 1, ·ƒ_3, fn:
-          ·ƒ_4 _
-      fn ·ƒ_8:
-        ·ƒ_8 'one'
+        ·match_value ·v_5, 1, ·ƒ_3, fn: ·ƒ_4 _
+      fn ·ƒ_8: ·ƒ_8 'one'
       fn ·v_15:
         ·match_arm
           fn ·v_19, ·ƒ_17, ·ƒ_18:
-            ·match_value ·v_19, 2, ·ƒ_17, fn:
-              ·ƒ_18 _
-          fn ·ƒ_22:
-            ·ƒ_22 'two'
+            ·match_value ·v_19, 2, ·ƒ_17, fn: ·ƒ_18 _
+          fn ·ƒ_22: ·ƒ_22 'two'
           fn ·v_29:
             ·match_arm
-              fn ·v_33, ·ƒ_31, ·ƒ_32:
-                ·ƒ_32 _
-              fn ·ƒ_35:
-                ·ƒ_35 'other'
-              fn ·v_41:
-                ·match_block ·∅foo, ·v_15, ·v_29, ·v_41, ·ƒ_0
+              fn ·v_33, ·ƒ_31, ·ƒ_32: ·ƒ_32 _
+              fn ·ƒ_35: ·ƒ_35 'other'
+              fn ·v_41: ·match_block ·∅foo, ·v_15, ·v_29, ·v_41, ·ƒ_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICAxOiAnb25lJ1xuICAyOiAndHdvJ1xuICBfOiAnb3RoZXInIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLE0sTSxJO0lBQUEsQUFBQSxhQUFBLEksRUFBQSxDLEUsSSxJLEU7SyxJLEUsQSxLQUFHLEEsQ0FBQSxHO0tBQUgsSztJQUNBLEFBQUE7UyxPLE8sSztRQUFBLEFBQUEsYUFBQSxLLEVBQUEsQyxFLEssSSxFO1MsSyxFLEEsTUFBRyxBLENBQUEsRztTQUFILEs7UUFDQSxBQUFBO2EsTyxPLEssRUFBQSxBLE1BQUE7YSxLLEUsQSxNQUFHLEEsQ0FBQSxLO2FBQUgsSyxFQUhGLEFBQUEsYUFBTSxLLEVBQ0osSyxFQUNBLEssRUFDQSxLLEUiCn0=
 
 
 test 'match — expression in arm', fn:
@@ -459,19 +467,15 @@ test 'match — expression in arm', fn:
   | equals fink":
     ·match_arm
       fn ·v_5, ·ƒ_3, ·ƒ_4:
-        ·match_value ·v_5, true, ·ƒ_3, fn:
-          ·ƒ_4 _
-      fn ·ƒ_8:
-        ·op_plus ·∅y, 1, ·ƒ_8
+        ·match_value ·v_5, true, ·ƒ_3, fn: ·ƒ_4 _
+      fn ·ƒ_8: ·op_plus ·∅y, 1, ·ƒ_8
       fn ·v_17:
         ·match_arm
           fn ·v_21, ·ƒ_19, ·ƒ_20:
-            ·match_value ·v_21, false, ·ƒ_19, fn:
-              ·ƒ_20 _
-          fn ·ƒ_24:
-            ·ƒ_24 ·∅y
-          fn ·v_31:
-            ·match_block ·∅x, ·v_17, ·v_31, ·ƒ_0
+            ·match_value ·v_21, false, ·ƒ_19, fn: ·ƒ_20 _
+          fn ·ƒ_24: ·ƒ_24 ·∅y
+          fn ·v_31: ·match_block ·∅x, ·v_17, ·v_31, ·ƒ_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgdHJ1ZTogeSArIDFcbiAgZmFsc2U6IHkiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssTSxNLEk7SUFBQSxBQUFBLGFBQUEsSSxFQUFBLEksRSxJLEksRTtLLEksRUFBTSxBQUFFLFNBQUYsRyxFQUFJLEMsRTtLQUFWLEs7SUFDQSxBQUFBO1MsTyxPLEs7UUFBQSxBQUFBLGFBQUEsSyxFQUFBLEssRSxLLEksRTtTLEssRSxBLE1BQU87U0FBUCxLLEVBRkYsQUFBQSxhQUFNLEcsRUFDSixLLEVBQ0EsSyxFIgp9
 
 
 test 'match child ·scope — binding in arm body', fn:
@@ -484,13 +488,12 @@ test 'match child ·scope — binding in arm body', fn:
     ·match_arm
       fn ·v_7, ·ƒ_5, ·ƒ_6:
         ·let ·v_7, fn ·a_0:
-          ·match_if ·op_gt, ·a_0, 1, ·ƒ_5, fn:
-            ·ƒ_6 _
+          ·match_if ·op_gt, ·a_0, 1, ·ƒ_5, fn: ·ƒ_6 _
       fn ·a_0, ·ƒ_11:
         ·let ·a_0, fn ·ni_1:
           ·ƒ_11 ·ni_1
-      fn ·v_22:
-        ·match_block ·∅n, ·v_22, ·ƒ_2
+      fn ·v_22: ·match_block ·∅n, ·v_22, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggbjpcbiAgYSA+IDE6XG4gICAgbmkgPSBhXG4gICAgbmkiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssTSxNLEk7SUFBQSxBQUFBLEtBQUEsSSxLQUFBLEk7TUFBQSxBQUFFLFVBQUEsTSxFQUFGLEksRUFBSSxDLEUsSSxJLEU7S0FBSixNLEs7SUFDSyxBQUFBLEtBQUUsSSxLQUFMLEs7TSxBLE1BQ0E7S0FGRixLLEVBREYsQUFBQSxhQUFNLEcsRUFDSixLLEUiCn0=
 
 
 ---
@@ -510,10 +513,9 @@ test 'match — seq pattern arm', fn:
               ·match_next ·v_11, ·ƒ_5, fn ·v_14, ·v_15:
                 ·let ·v_14, fn ·b_1:
                   ·match_done ·v_15, ·ƒ_5, ·ƒ_6
-      fn ·a_0, ·b_1, ·ƒ_20:
-        ·ƒ_20 ·a_0
-      fn ·v_39:
-        ·match_block ·∅foo, ·v_39, ·ƒ_2
+      fn ·a_0, ·b_1, ·ƒ_20: ·ƒ_20 ·a_0
+      fn ·v_39: ·match_block ·∅foo, ·v_39, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICBbYSwgYl06IGEiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssTSxNLEk7SUFBQSxBQUFBLFdBQUEsSSxFLEksS0FBQSxJO01BQUEsQUFBQSxZQUFBLEksRSxJLEtBQUEsT0FBQSxLO1FBQUMsQUFBQSxLQUFELEssS0FBQyxJO1VBQUQsQUFBQSxZQUFBLEssRSxJLEtBQUEsT0FBQSxLO1lBQUksQUFBQSxLQUFKLEssS0FBSSxJO2NBQUosQUFBSyxZQUFMLEssRSxJLEU7S0FBQyxNQUFHLE0sSyxFLEEsTUFBSTtLQUFSLEssRUFERixBQUFBLGFBQU0sSyxFQUNKLEssRSIKfQ==
 
 test 'match — rec pattern arm', fn:
   expect cps_expr fink":
@@ -526,10 +528,9 @@ test 'match — rec pattern arm', fn:
           ·match_field ·v_8, 'bar', ·ƒ_4, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·bar_0:
               ·ƒ_5 ·bar_0
-      fn ·bar_0, ·ƒ_14:
-        ·ƒ_14 ·bar_0
-      fn ·v_26:
-        ·match_block ·∅foo, ·v_26, ·ƒ_1
+      fn ·bar_0, ·ƒ_14: ·ƒ_14 ·bar_0
+      fn ·v_26: ·match_block ·∅foo, ·v_26, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICB7YmFyfTogYmFyIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLE0sTSxJO0lBQUEsQUFBQSxXQUFBLEksRSxJLEtBQUEsSTtNQUFDLEFBQUEsYUFBRCxJLEVBQUMsQSxDQUFBLEcsQyxFLEksS0FBRCxNQUFBLEs7UUFBQSxBQUFBLEtBQUEsSSxLQUFDLE07VSxBLEtBQUE7S0FBQSxRLEssRSxBLE1BQU07S0FBUCxLLEVBREYsQUFBQSxhQUFNLEssRUFDSixLLEUiCn0=
 
 
 test 'multi-arm match', fn:
@@ -544,8 +545,7 @@ test 'multi-arm match', fn:
           ·match_next ·v_10, ·ƒ_6, fn ·v_11, ·v_12:
             ·let ·v_11, fn ·a_0:
               ·match_done ·v_12, ·ƒ_6, ·ƒ_7
-      fn ·a_0, ·ƒ_17:
-        ·ƒ_17 ·a_0
+      fn ·a_0, ·ƒ_17: ·ƒ_17 ·a_0
       fn ·v_31:
         ·match_arm
           fn ·v_35, ·ƒ_33, ·ƒ_34:
@@ -555,10 +555,9 @@ test 'multi-arm match', fn:
                   ·match_next ·v_39, ·ƒ_33, fn ·v_42, ·v_43:
                     ·let ·v_42, fn ·b_2:
                       ·match_done ·v_43, ·ƒ_33, ·ƒ_34
-          fn ·a_1, ·b_2, ·ƒ_48:
-            ·ƒ_48 ·a_1
-          fn ·v_67:
-            ·match_block ·∅foo, ·v_31, ·v_67, ·ƒ_3
+          fn ·a_1, ·b_2, ·ƒ_48: ·ƒ_48 ·a_1
+          fn ·v_67: ·match_block ·∅foo, ·v_31, ·v_67, ·ƒ_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICBbYV06IGFcbiAgW2EsIGJdOiBhIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLE0sTSxJO0lBQUEsQUFBQSxXQUFBLEksRSxJLEtBQUEsSztNQUFBLEFBQUEsWUFBQSxLLEUsSSxLQUFBLE9BQUEsSztRQUFDLEFBQUEsS0FBRCxLLEtBQUMsSTtVQUFELEFBQUUsWUFBRixLLEUsSSxFO0tBQUMsTSxLLEUsQSxNQUFJO0tBQUwsSztJQUNBLEFBQUE7UyxPLE8sSztRQUFBLEFBQUEsV0FBQSxLLEUsSyxLQUFBLEs7VUFBQSxBQUFBLFlBQUEsSyxFLEssS0FBQSxPQUFBLEs7WUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7Y0FBRCxBQUFBLFlBQUEsSyxFLEssS0FBQSxPQUFBLEs7Z0JBQUksQUFBQSxLQUFKLEssS0FBSSxJO2tCQUFKLEFBQUssWUFBTCxLLEUsSyxFO1NBQUMsTUFBRyxNLEssRSxBLE1BQUk7U0FBUixLLEVBRkYsQUFBQSxhQUFNLEssRUFDSixLLEVBQ0EsSyxFIgp9
 
 
 test 'multi-arg match', fn:
@@ -571,10 +570,9 @@ test 'multi-arg match', fn:
         ·let ·v_9, fn ·x_0:
           ·let ·v_10, fn ·y_1:
             ·ƒ_8 ·y_1
-      fn ·x_0, ·y_1, ·ƒ_13:
-        ·ƒ_13 ·x_0
-      fn ·v_20:
-        ·match_block ·∅a, ·∅b, ·v_20, ·ƒ_2
+      fn ·x_0, ·y_1, ·ƒ_13: ·ƒ_13 ·x_0
+      fn ·v_20: ·match_block ·∅a, ·∅b, ·v_20, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggYSwgYjpcbiAgeCwgeTogeCJdLAogICJtYXBwaW5ncyI6ICJBQUNFLEFBQUE7SyxNLE8sTSxJO0lBQUEsQUFBQSxLQUFBLEksS0FBQSxJO01BQUcsQUFBQSxLQUFBLEssS0FBQSxJO1EsQSxLQUFBO0tBQUgsTUFBRyxNLEssRSxBLE1BQUc7S0FBTixLLEVBREYsQUFBQSxhQUFNLEcsRUFBRyxHLEVBQ1AsSyxFIgp9
 
 
 ---
@@ -586,8 +584,8 @@ test 'irrefutable binding with guard', fn:
     x > 2 = foo
   | equals fink":
     ·let ·∅foo, fn ·x_0:
-      ·match_if ·op_gt, ·x_0, 2, ·panic, fn:
-        ·ƒ_1 _
+      ·match_if ·op_gt, ·x_0, 2, ·panic, fn: ·ƒ_1 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA+IDIgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBLEtBQUUsSyxLQUFSLEk7RUFBQSxBQUFBLFVBQUEsTSxFQUFBLEksRUFBSSxDLEVBQUosTSxJLEUiCn0=
 
 
 test 'bind right — seq pattern', fn:
@@ -600,6 +598,7 @@ test 'bind right — seq pattern', fn:
           ·match_next ·v_6, ·panic, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·b_1:
               ·match_done ·v_10, ·panic, ·ƒ_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFTLEssRUFBVCxNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSztRQUFJLEFBQUEsS0FBSixJLEtBQUksSTtVQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFIgp9
 
 
 test 'bind right — rec pattern', fn:
@@ -610,6 +609,7 @@ test 'bind right — rec pattern', fn:
       ·match_field ·v_3, 'bar', ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·bar_0:
           ·ƒ_1 ·bar_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Jhcn0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQVEsSyxFQUFSLE0sS0FBQSxJO0VBQUMsQUFBQSxhQUFELEksRUFBQyxBLENBQUEsRyxDLEVBQUEsTSxLQUFELE1BQUEsSTtJQUFNLEFBQUEsS0FBTixJLEtBQUMsTTtNLEEsS0FBQSIKfQ==
 
 
 test 'seq pattern', fn:
@@ -622,6 +622,7 @@ test 'seq pattern', fn:
           ·match_next ·v_5, ·panic, fn ·v_8, ·v_9:
             ·match_value ·v_8, 1, ·panic, fn:
               ·match_done ·v_9, ·panic, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFTLEssRUFBVCxNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtRQUFJLEFBQUEsYUFBSixJLEVBQUksQyxFQUFBLE0sSTtVQUFKLEFBQUEsWUFBQSxJLEVBQUEsTSxFIgp9
 
 test 'seq pattern with non-empty rest', fn:
   expect cps_expr fink":
@@ -630,8 +631,8 @@ test 'seq pattern with non-empty rest', fn:
     ·match_seq ·∅foo, ·panic, fn ·v_3:
       ·match_next ·v_3, ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·a_0:
-          ·match_not_done ·v_5, ·panic, fn:
-            ·ƒ_1 _
+          ·match_not_done ·v_5, ·panic, fn: ·ƒ_1 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIC4uXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBVSxLLEVBQVYsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLGdCQUFBLEksRUFBQSxNLEksRSIKfQ==
 
 test 'seq pattern with bound rest', fn:
   expect cps_expr fink":
@@ -643,6 +644,7 @@ test 'seq pattern with bound rest', fn:
           ·match_rest ·v_6, ·panic, fn ·v_10:
             ·let ·v_10, fn ·rest_1:
               ·ƒ_2 ·rest_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIC4ucmVzdF0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWMsSyxFQUFkLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsSztRQUFZLEFBQUEsS0FBWixLLEtBQU0sTztVLEEsS0FBQSIKfQ==
 
 test 'rec pattern', fn:
   expect cps_expr fink":
@@ -652,6 +654,7 @@ test 'rec pattern', fn:
       ·match_field ·v_3, 'bar', ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·bar_0:
           ·ƒ_1 ·bar_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Jhcn0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQVEsSyxFQUFSLE0sS0FBQSxJO0VBQUMsQUFBQSxhQUFELEksRUFBQyxBLENBQUEsRyxDLEVBQUEsTSxLQUFELE1BQUEsSTtJQUFNLEFBQUEsS0FBTixJLEtBQUMsTTtNLEEsS0FBQSIKfQ==
 
 test 'rec pattern with non-empty rest', fn:
   expect cps_expr fink":
@@ -660,8 +663,8 @@ test 'rec pattern with non-empty rest', fn:
     ·match_rec ·∅foo, ·panic, fn ·v_3:
       ·match_field ·v_3, 'bar', ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·bar_0:
-          ·match_not_done ·v_5, ·panic, fn:
-            ·ƒ_1 _
+          ·match_not_done ·v_5, ·panic, fn: ·ƒ_1 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi59ID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFZLEssRUFBWixNLEtBQUEsSTtFQUFDLEFBQUEsYUFBRCxJLEVBQUMsQSxDQUFBLEcsQyxFQUFBLE0sS0FBRCxNQUFBLEk7SUFBVSxBQUFBLEtBQVYsSSxLQUFDLE07TUFBRCxBQUFBLGdCQUFBLEksRUFBQSxNLEksRSIKfQ==
 
 test 'rec pattern exact - empty rest', fn:
   expect cps_expr fink":
@@ -673,6 +676,7 @@ test 'rec pattern exact - empty rest', fn:
           ·match_rest ·v_5, ·panic, fn ·v_9:
             ·match_rec ·v_9, ·panic, fn ·v_11:
               ·match_done ·v_11, ·panic, ·ƒ_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi57fX0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWMsSyxFQUFkLE0sS0FBQSxJO0VBQUMsQUFBQSxhQUFELEksRUFBQyxBLENBQUEsRyxDLEVBQUEsTSxLQUFELE1BQUEsSTtJQUFZLEFBQUEsS0FBWixJLEtBQUMsTTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLEk7UUFBUSxBQUFBLFdBQVIsSSxFQUFRLE0sS0FBQSxLO1VBQUEsQUFBQyxZQUFELEssRUFBQSxNLEUiCn0=
 
 test 'rec pattern with bound rest', fn:
   expect cps_expr fink":
@@ -684,6 +688,7 @@ test 'rec pattern with bound rest', fn:
           ·match_rest ·v_6, ·panic, fn ·v_10:
             ·let ·v_10, fn ·rest_1:
               ·ƒ_2 ·rest_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi5yZXN0fSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBZ0IsSyxFQUFoQixNLEtBQUEsSTtFQUFDLEFBQUEsYUFBRCxJLEVBQUMsQSxDQUFBLEcsQyxFQUFBLE0sS0FBRCxNQUFBLEk7SUFBYyxBQUFBLEtBQWQsSSxLQUFDLE07TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxLO1FBQWMsQUFBQSxLQUFkLEssS0FBUSxPO1UsQSxLQUFBIgp9
 
 
 ---
@@ -698,12 +703,10 @@ test 'range — exclusive in match arm', fn:
     ·match_arm
       fn ·v_5, ·ƒ_3, ·ƒ_4:
         ·op_rngex 0, 10, fn ·v_9:
-          ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn:
-            ·ƒ_4 _
-      fn ·ƒ_11:
-        ·ƒ_11 'low'
-      fn ·v_20:
-        ·match_block ·∅x, ·v_20, ·ƒ_0
+          ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn: ·ƒ_4 _
+      fn ·ƒ_11: ·ƒ_11 'low'
+      fn ·v_20: ·match_block ·∅x, ·v_20, ·ƒ_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgMC4uMTA6ICdsb3cnIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLE0sTSxJO0lBQUEsQUFBQyxVQUFELEMsRUFBRyxFLEtBQUgsSTtNQUFBLEFBQUMsVUFBQSxNLEVBQUQsSSxFQUFBLEksRSxJLEksRTtLLEssRSxBLE1BQU8sQSxDQUFBLEc7S0FBUCxLLEVBREYsQUFBQSxhQUFNLEcsRUFDSixLLEUiCn0=
 
 
 test 'range — inclusive in match arm', fn:
@@ -714,12 +717,10 @@ test 'range — inclusive in match arm', fn:
     ·match_arm
       fn ·v_5, ·ƒ_3, ·ƒ_4:
         ·op_rngin 0, 10, fn ·v_9:
-          ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn:
-            ·ƒ_4 _
-      fn ·ƒ_11:
-        ·ƒ_11 'low'
-      fn ·v_20:
-        ·match_block ·∅x, ·v_20, ·ƒ_0
+          ·match_if ·op_in, ·v_5, ·v_9, ·ƒ_3, fn: ·ƒ_4 _
+      fn ·ƒ_11: ·ƒ_11 'low'
+      fn ·v_20: ·match_block ·∅x, ·v_20, ·ƒ_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgMC4uLjEwOiAnbG93JyJdLAogICJtYXBwaW5ncyI6ICJBQUNFLEFBQUE7SyxNLE0sSTtJQUFBLEFBQUMsVUFBRCxDLEVBQUksRSxLQUFKLEk7TUFBQSxBQUFDLFVBQUEsTSxFQUFELEksRUFBQSxJLEUsSSxJLEU7SyxLLEUsQSxNQUFRLEEsQ0FBQSxHO0tBQVIsSyxFQURGLEFBQUEsYUFBTSxHLEVBQ0osSyxFIgp9
 
 
 test 'range — bind-lhs check', fn:
@@ -727,8 +728,8 @@ test 'range — bind-lhs check', fn:
     0..10 = foo
   | equals fink":
     ·op_rngex 0, 10, fn ·v_4:
-      ·match_if ·op_in, ·∅foo, ·v_4, ·panic, fn:
-        ·ƒ_0 _
+      ·match_if ·op_in, ·∅foo, ·v_4, ·panic, fn: ·ƒ_0 _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uMTAgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFVBQUEsQyxFQUFHLEUsS0FBSCxJO0VBQUEsQUFBQSxVQUFBLE0sRUFBUSxLLEVBQVIsSSxFQUFBLE0sSSxFIgp9
 
 
 ---
@@ -748,8 +749,8 @@ test 'fn — seq destructuring param', fn:
                 ·let ·v_11, fn ·b_1:
                   ·match_done ·v_12, ·panic, fn ·v_15:
                     ·ƒ_17 ·a_0
-      fn ·v_3:
-        ·ƒ_2 ·v_3
+      fn ·v_3: ·ƒ_2 ·v_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gW2EsIGJdOiBhIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFHLE1BQUgsSztJQUFHLEFBQUEsV0FBQSxJLEVBQUEsTSxLQUFBLEk7TUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7UUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7VUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxPQUFBLEs7WUFBSSxBQUFBLEtBQUosSyxLQUFJLEk7Y0FBSixBQUFLLFlBQUwsSyxFQUFBLE0sS0FBQSxLO2dCLEFBQUgsTUFBVztLQUFYLEksRSxBLEtBQUEiCn0=
 
 test 'fn — seq destructuring param with rest', fn:
   expect cps_expr fink":
@@ -763,8 +764,8 @@ test 'fn — seq destructuring param with rest', fn:
               ·match_rest ·v_8, ·panic, fn ·v_12:
                 ·let ·v_12, fn ·rest_1:
                   ·ƒ_15 ·rest_1
-      fn ·v_3:
-        ·ƒ_2 ·v_3
+      fn ·v_3: ·ƒ_2 ·v_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gW2EsIC4ucmVzdF06IHJlc3QiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBSCxLO0lBQUcsQUFBQSxXQUFBLEksRUFBQSxNLEtBQUEsSTtNQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtRQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtVQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLEs7WUFBQSxBQUFBLEtBQUEsSyxLQUFNLE87YyxBQUFULE1BQWdCO0tBQWhCLEksRSxBLEtBQUEiCn0=
 
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
@@ -779,5 +780,5 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
               ·match_rest ·v_8, ·panic, fn ·v_13:
                 ·let ·v_13, fn ·b_1:
                   ·ƒ_16 ·b_1
-      fn ·v_3:
-        ·ƒ_2 ·v_3
+      fn ·v_3: ·ƒ_2 ·v_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgWzEsIC4uYl06IGIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBRyxNQUFOLEs7SUFBTSxBQUFBLFdBQUEsSSxFQUFBLE0sS0FBQSxJO01BQUEsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxJO1FBQUMsQUFBQSxhQUFELEksRUFBQyxDLEVBQUEsTSxJO1VBQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsSztZQUFBLEFBQUEsS0FBQSxLLEtBQU0sSTtjLEFBQVosTUFBZ0I7S0FBaEIsSSxFLEEsS0FBQSIKfQ==
