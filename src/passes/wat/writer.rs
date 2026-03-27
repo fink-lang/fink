@@ -575,15 +575,14 @@ fn emit_builtin(
       w.push_str("\n");
     }
     Some(Cont::Expr { args: bind_args, body }) => {
-      for bind in bind_args {
+      if let Some(bind) = bind_args.first() {
         let expr = WatExpr::list(
           format!("local.set ${}", ctx.label(bind.id)),
-          vec![builtin_call],  // NOTE: moves builtin_call — only first bind gets it
+          vec![builtin_call],
         );
         w.push_str(&ind(indent));
         write_expr(&expr, w);
         w.push_str("\n");
-        break; // single-result builtins only
       }
       emit_body(body, ctx, w, indent);
     }
