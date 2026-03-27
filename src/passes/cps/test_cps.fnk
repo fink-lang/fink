@@ -843,16 +843,15 @@ test 'shadowed binding — inner add does not affect outer', fn:
                       ·ƒ_23 ·foo_7
                     fn ·v_22:
                       ·let ·v_22, fn ·add_8:
-                        ·op_minus ·a_5, ·add_8, fn ·v_30:
-                          ·let ·v_30, fn ·v_32:
-                            ·ƒ_21 ·b_6
+                        ·add_8 ·b_6, fn ·v_31:
+                          ·op_minus ·a_5, ·v_31, ·ƒ_21
                 fn ·v_20:
                   ·let ·v_20, fn ·sub_1:
                     ·fn
-                      fn ·ƒ_45:
-                        ·add_0 3, 4, ·ƒ_45
-                      fn ·v_44:
-                        ·let ·v_44, fn ·main_2:
+                      fn ·ƒ_44:
+                        ·add_0 3, 4, ·ƒ_44
+                      fn ·v_43:
+                        ·let ·v_43, fn ·main_2:
                           ·ƒ_11 ·main_2
       fn ·v_10:
         ·ƒ_9 ·v_10

@@ -527,8 +527,8 @@ test 'infix rhs multiline block application', fn:
             LitInt '4'
 
 ---
-BUG: operator vs application precedence
-TODO: `a - add b` should parse as `a - (add b)`, not `(a - add) b`
+operator vs application precedence
+`a - add b` should parse as `a - (add b)`, not `(a - add) b`
 ---
 
 test 'subtract with call rhs', fn:
@@ -538,5 +538,59 @@ test 'subtract with call rhs', fn:
     Module
       InfixOp '-',
         Ident 'a'
-        Ident 'add'
-      Ident 'b'
+        Apply
+          Ident 'add'
+          Ident 'b'
+
+
+test 'add with multi-arg call rhs', fn:
+  expect ast fink":
+    a + foo 1, 2
+  | equals fink":
+    Module
+      InfixOp '+',
+        Ident 'a'
+        Apply
+          Ident 'foo'
+          LitInt '1'
+          LitInt '2'
+
+
+test 'call rhs with trailing infix', fn:
+  expect ast fink":
+    a - foo b + c
+  | equals fink":
+    Module
+      InfixOp '-',
+        Ident 'a'
+        Apply
+          Ident 'foo'
+          InfixOp '+',
+            Ident 'b'
+            Ident 'c'
+
+
+test 'call on both sides of infix', fn:
+  expect ast fink":
+    foo a - bar b
+  | equals fink":
+    Module
+      Apply
+        Ident 'foo'
+        InfixOp '-',
+          Ident 'a'
+          Apply
+            Ident 'bar'
+            Ident 'b'
+
+
+test 'multiply with call rhs', fn:
+  expect ast fink":
+    a * foo b
+  | equals fink":
+    Module
+      InfixOp '*',
+        Ident 'a'
+        Apply
+          Ident 'foo'
+          Ident 'b'

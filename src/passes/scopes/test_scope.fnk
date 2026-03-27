@@ -348,7 +348,7 @@ test 'inner binding shadows outer', fn:
     main = fn: add 3, 4
 
   | equals fink":
-    scope 38, 'module':
+    scope 40, 'module':
 
       scope 9, 'fn':
         bind 2, 'a'
@@ -357,7 +357,7 @@ test 'inner binding shadows outer', fn:
         ref 'b', 4
       bind 0, 'add'
 
-      scope 28, 'fn':
+      scope 30, 'fn':
         bind 13, 'a'
         bind 15, 'b'
 
@@ -370,9 +370,9 @@ test 'inner binding shadows outer', fn:
         ref 'b', 15
       bind 11, 'sub'
 
-      scope 36, 'fn':
+      scope 38, 'fn':
         ref 'add', 0, depth 1
-      bind 30, 'main'
+      bind 32, 'main'
 
 
 ---
