@@ -106,7 +106,7 @@ mod tests {
   #[test]
   fn append_sourcemap_url_section() {
     let wat = "(module)";
-    let mut wasm = wat::parse_str(wat).unwrap();
+    let mut wasm = wat_crate::parse_str(wat).unwrap();
     let orig_len = wasm.len();
     append_sourcemap_url(&mut wasm, "add.fnk.map");
     assert!(wasm.len() > orig_len);
@@ -127,7 +127,7 @@ mod tests {
     assert!(json.contains("\"sources\": [\"add.fnk\"]"));
     assert!(json.contains("\"version\": 3"));
 
-    let mut wasm = wat::parse_str("(module)").unwrap();
+    let mut wasm = wat_crate::parse_str("(module)").unwrap();
     append_inline_sourcemap(&mut wasm, &srcmap);
     let tail = String::from_utf8_lossy(&wasm);
     assert!(tail.contains("sourceMappingURL"));
