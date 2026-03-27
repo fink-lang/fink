@@ -17,7 +17,7 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDTCwyQ0FBQTs7QUFERiIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDTCwyQ0FBQTs7QUFERiIKfQ==
 
 
 test 'let binding', fn:
@@ -38,7 +38,7 @@ test 'let binding', fn:
       )
       (export "main" (func $v_5))
     )
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87O0lBQ0gsV0FBRixLQUFJO0FBQ0osMkNBQUE7O0FBRkYiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87O0lBQ0gsV0FBRixLQUFJO0FBQ0osMkNBQUE7O0FBRkYiCn0=
 
 
 test 'add two literals', fn:
@@ -56,7 +56,7 @@ test 'add two literals', fn:
       )
       (export "main" (func $v_4))
     )
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDSCwwQkFBRixnQ0FBSTs7QUFETiIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87QUFDSCwwQkFBRixnQ0FBSTs7QUFETiIKfQ==
 
 
 test 'chained arithmetic', fn:
@@ -83,7 +83,7 @@ test 'chained arithmetic', fn:
       )
       (export "main" (func $v_5))
     )
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiOzs7Ozs7OztJQUNJLFdBQUYsS0FBSTtBQUNGLDBCQUFGLGlCQUFJOztBQUZDOzt3REFBQTtBQUNDLHlCQUFGLGdDQUFJOztBQURWIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiOzs7Ozs7OztJQUNJLFdBQUYsS0FBSTtBQUNGLDBCQUFGLGlCQUFJOztBQUZDOzt3REFBQTtBQUNDLHlCQUFGLGdDQUFJOztBQURWIgp9
 
 
 test 'multiple let bindings used', fn:

@@ -96,7 +96,7 @@ mod tests {
       let _ = std::fs::write(format!("{dir}/{slug}.lft.js"), &cps_content);
     }
 
-    format!("{}\n#sourcemaps:{wat_b64}", wat_output.trim())
+    format!("{}\n;;sourcemaps:{wat_b64}", wat_output.trim())
   }
 
   test_macros::include_fink_tests!("src/passes/wat/test_wat.fnk");
