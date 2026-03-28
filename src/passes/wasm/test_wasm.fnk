@@ -53,7 +53,6 @@ test 'add two literals', fn:
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
       (type $Fn1 (func (param (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
 
       (global $main_0 (ref $Fn1) (ref.func $v_4))
       (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
@@ -61,9 +60,32 @@ test 'add two literals', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBQUFBO0FBQU8seUJBQUE7QUFDSCwwQkFBRixnQ0FBSSxnQ0FBRjtBO0FBREo7QSIKfQ==
+    ;;sourcemaps:TODO
 
 
-# TODO: chained arithmetic panics with "unknown local: v_25" — emitter needs
-# to handle non-global function references (lifted continuations) as ref.func
-# or globals. Currently only aliased functions get globals.
+test 'chained arithmetic', fn:
+  expect gen_wat fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+  | equals wat":
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+
+      (func $v_25 (type $Fn2) (param $v_26 (ref $Any)) (param $v_9 (ref $Any))
+        (local $x_1 (ref $Any))
+        (local.set $x_1 (local.get $v_9))
+        (return_call $op_plus (local.get $x_1) (struct.new $Num (f64.const 4)) (local.get $v_26))
+      )
+      (global $main_0 (ref $Fn1) (ref.func $v_5))
+      (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
+        (local $v_30 (ref $Any))
+        (local.set $v_30 (call $closure_2 (ref.func $v_25) (local.get $v_6)))
+        (return_call $op_mul (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_30))
+      )
+      (export "main" (func $v_5))
+    )
+    ;;sourcemaps:TODO

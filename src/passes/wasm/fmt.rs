@@ -549,7 +549,42 @@ fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
 }
 
 fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
+  // Collect type indices used by visible items (funcs, globals, return_call_ref).
+  let mut used_types: std::collections::HashSet<u32> = std::collections::HashSet::new();
+  // Struct types ($Any, $Num) are always visible.
   for (idx, ty) in module.types.iter().enumerate() {
+    if matches!(ty.kind, ParsedTypeKind::Struct { .. }) {
+      used_types.insert(idx as u32);
+    }
+  }
+  // Func types used by defined functions.
+  for func in &module.funcs {
+    used_types.insert(func.type_index);
+  }
+  // Func types used by globals (ref type).
+  for global in &module.globals {
+    if let Some(ti) = global.ref_type_index {
+      used_types.insert(ti);
+    }
+  }
+  // Func types used by return_call_ref instructions.
+  for func in &module.funcs {
+    for (_, instr) in &func.instructions {
+      if let ParsedInstr::ReturnCallRef(ti) = instr {
+        used_types.insert(*ti);
+      }
+    }
+  }
+  // Supertype references.
+  for (idx, ty) in module.types.iter().enumerate() {
+    if let ParsedTypeKind::Struct { supertype: Some(si), .. } = &ty.kind
+      && used_types.contains(&(idx as u32)) {
+        used_types.insert(*si);
+      }
+  }
+
+  for (idx, ty) in module.types.iter().enumerate() {
+    if !used_types.contains(&(idx as u32)) { continue; }
     match &ty.kind {
       ParsedTypeKind::Struct { field_count, supertype } => {
         let name = type_name(module, idx as u32);

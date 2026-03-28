@@ -883,11 +883,15 @@ fn emit_cont(cont: &Cont<'_>, fc: &mut FuncContext<'_, '_, '_>) {
   }
 }
 
-/// Emit global.get or local.get depending on whether the label is a global.
+/// Emit global.get, ref.func, or local.get depending on what the label refers to.
 fn emit_get(fc: &mut FuncContext<'_, '_, '_>, label: &str) {
   if fc.emitter_idx.globals.contains_key(label) {
     let idx = fc.emitter_idx.global_idx(label);
     fc.instr(&Instruction::GlobalGet(idx));
+  } else if fc.emitter_idx.funcs.contains_key(label) {
+    // Non-global function reference (e.g. lifted continuation) — use ref.func.
+    let idx = fc.emitter_idx.func_idx(label);
+    fc.instr(&Instruction::RefFunc(idx));
   } else {
     let idx = fc.local_idx(label);
     fc.instr(&Instruction::LocalGet(idx));
