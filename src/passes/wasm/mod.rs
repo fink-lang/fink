@@ -32,6 +32,83 @@
 // fmt.rs        — custom WASM→WAT formatter (wasmparser + gimli::read)
 // sourcemap.rs  — WasmMapping type (used by DAP)
 // compile.rs    — WAT text → WASM binary (wat crate wrapper, legacy)
+//
+// ## Closure representation and calling convention
+//
+// After lifting, every lambda with captures becomes a top-level function
+// with extra leading params for the captured values, plus an `·fn_closure`
+// call at the original site that packages the funcref + captures into a
+// closure value.
+//
+// ### WasmGC types
+//
+// Plain functions use `$FnN` types (one per arity):
+//
+//   (type $Fn2 (func (param (ref $Any) (ref $Any))))
+//
+// Closures use `$ClosureN` struct types (one per capture count N):
+//
+//   (type $Closure1 (sub $Any (struct
+//     (field (ref $Fn2))       ;; funcref to lifted fn (arity = call_arity + N)
+//     (field (ref $Any))       ;; capture 0
+//   )))
+//
+//   (type $Closure2 (sub $Any (struct
+//     (field (ref $Fn3))       ;; funcref to lifted fn
+//     (field (ref $Any))       ;; capture 0
+//     (field (ref $Any))       ;; capture 1
+//   )))
+//
+// `$ClosureN` is a subtype of `$Any`, so closure values flow through the
+// same `(ref $Any)` slots as all other values.
+//
+// ### Construction: `closure_N` helper
+//
+// The `·fn_closure` builtin compiles to a call to `$closure_N` (N = number
+// of captures + 1 for the funcref). This is an emitted helper function:
+//
+//   (func $closure_2 (param (ref $Fn3)) (param (ref $Any))
+//     (struct.new $Closure1 (local.get 0) (local.get 1))
+//   )
+//
+// It takes the funcref + N captures and returns the boxed struct as
+// `(ref $Any)`.
+//
+// ### Dispatch: `call_ref_or_clos_N` helper
+//
+// At every `Callable::Val` call site (indirect call through an `(ref $Any)`
+// value), we don't statically know whether the callee is a plain funcref
+// or a closure struct. Instead of a static type inference pass, we use
+// WasmGC's `br_on_cast` for runtime dispatch.
+//
+// For each call-site arity N, an emitted helper `$call_ref_or_clos_N`
+// tries each `$ClosureK` type that exists in the module:
+//
+//   (func $call_ref_or_clos_2
+//     (param $a0 (ref $Any)) (param $a1 (ref $Any)) (param $callee (ref $Any))
+//     (block $try_clos1
+//       (br_on_cast_fail $try_clos1 (ref $Any) (ref $Closure1) (local.get $callee))
+//       ;; it's $Closure1 — extract funcref + 1 capture, call with arity 3
+//       (struct.get $Closure1 1)   ;; capture 0
+//       (local.get $a0)
+//       (local.get $a1)
+//       (struct.get $Closure1 0)   ;; funcref
+//       (return_call_ref $Fn3)
+//     )
+//     ;; fallthrough: plain funcref — cast and call directly
+//     (return_call_ref $Fn2 (local.get $a0) (local.get $a1)
+//       (ref.cast (ref $Fn2) (local.get $callee)))
+//   )
+//
+// This is correct by construction — no static analysis needed. A future
+// type inference pass can eliminate branches where the type is known.
+//
+// ### Arity tracking
+//
+// The set of `$ClosureN` types to emit is determined by scanning for
+// `·fn_closure` call sites during collection. The set of
+// `$call_ref_or_clos_N` helpers is determined by `Callable::Val` call
+// site arities (already tracked by `scan_call_arities`).
 
 pub mod collect;
 pub mod dwarf;

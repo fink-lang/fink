@@ -71,6 +71,8 @@ test 'chained arithmetic', fn:
       (type $Num (sub $Any (struct (field f64))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
 
       (func $v_25 (type $Fn2) (param $v_26 (ref $Any)) (param $v_9 (ref $Any))
         (local $x_1 (ref $Any))
@@ -83,10 +85,11 @@ test 'chained arithmetic', fn:
         (local.set $v_30 (call $closure_2 (ref.func $v_25) (local.get $v_6)))
         (return_call $op_mul (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_30))
       )
+      (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+      )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7MEJBQU8seUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0YsMkNBQUUsZ0NBQUY7QTtBQUZKO0FBQU8seUJBQUE7QTtBQUFBLHFCQUFBO0FBQ0MseURBQUUsZ0NBQUY7QTtBQURSO0EiCn0=
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOzBCQUFPLHlCQUNEO0E7QUFBSixvQkFBSTtBQUNGLDJDQUFFLGdDQUFGO0E7QUFGSjtBQUFPLHlCQUFBO0E7QUFBQSxxQkFBQTtBQUNDLHlEQUFFLGdDQUFGO0E7O0E7QUFEUjtBIgp9
 test 'multiple let bindings used', fn:
   expect gen_wat fink":
     main = fn:
@@ -152,6 +155,10 @@ test 'chained fn calls', fn:
       (type $Num (sub $Any (struct (field f64))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
 
       (global $double_0 (ref $Fn2) (ref.func $v_11))
       (func $v_11 (type $Fn2) (param $x_3 (ref $Any)) (param $v_12 (ref $Any))
@@ -164,20 +171,29 @@ test 'chained fn calls', fn:
       (func $v_55 (type $Fn2) (param $v_56 (ref $Any)) (param $v_31 (ref $Any))
         (local $x_5 (ref $Any))
         (local.set $x_5 (local.get $v_31))
-        (return_call_ref $Fn2 (global.get $inc_1) (local.get $x_5) (local.get $v_56))
+        (return_call $call_ref_or_clos_2 (local.get $x_5) (local.get $v_56) (global.get $inc_1))
       )
       (global $main_2 (ref $Fn1) (ref.func $v_27))
       (func $v_27 (type $Fn1) (param $v_28 (ref $Any))
         (local $v_60 (ref $Any))
         (local.set $v_60 (call $closure_2 (ref.func $v_55) (local.get $v_28)))
-        (return_call_ref $Fn2 (global.get $double_0) (struct.new $Num (f64.const 5)) (local.get $v_60))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_60) (global.get $double_0))
+      )
+      (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+      )
+      (func $call_ref_or_clos_2 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
+        (local $local_3 (ref $Any))
+        (block
+        (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
+        )
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
       )
       (export "double" (func $v_11))
       (export "inc" (func $v_19))
       (export "main" (func $v_27))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBQUFBO0FBQVMsMEJBQUcsd0JBQUg7QUFDTCwwQ0FBRSxnQ0FBRjtBO0FBQ0o7QUFBTSwwQkFBRyx3QkFBSDtBQUNGLDJDQUFFLGdDQUFGO0E7MEJBQ0cseUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0osOENBQUksaUJBQUo7QTtBQUZGO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QsaURBQU8sZ0NBQVA7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0FBQUE7QUFBUywwQkFBRyx3QkFBSDtBQUNMLDBDQUFFLGdDQUFGO0E7QUFDSjtBQUFNLDBCQUFHLHdCQUFIO0FBQ0YsMkNBQUUsZ0NBQUY7QTswQkFDRyx5QkFDRDtBO0FBQUosb0JBQUk7QUFDSixxQ0FBSSxtQ0FBSjtBO0FBRkY7QUFBTywwQkFBQTtBO0FBQUEscUJBQUE7QUFDRCxxQ0FBTyxrREFBUDtBOztBOztBOzs7Ozs7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
 test 'pipe unary', fn:
   expect gen_wat fink":
     double = fn x:
@@ -192,6 +208,10 @@ test 'pipe unary', fn:
       (type $Num (sub $Any (struct (field f64))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
 
       (global $double_0 (ref $Fn2) (ref.func $v_10))
       (func $v_10 (type $Fn2) (param $x_3 (ref $Any)) (param $v_11 (ref $Any))
@@ -202,20 +222,29 @@ test 'pipe unary', fn:
         (return_call $op_plus (local.get $x_4) (struct.new $Num (f64.const 1)) (local.get $v_19))
       )
       (func $v_51 (type $Fn2) (param $v_52 (ref $Any)) (param $v_30 (ref $Any))
-        (return_call_ref $Fn2 (global.get $inc_1) (local.get $v_30) (local.get $v_52))
+        (return_call $call_ref_or_clos_2 (local.get $v_30) (local.get $v_52) (global.get $inc_1))
       )
       (global $main_2 (ref $Fn1) (ref.func $v_26))
       (func $v_26 (type $Fn1) (param $v_27 (ref $Any))
         (local $v_56 (ref $Any))
         (local.set $v_56 (call $closure_2 (ref.func $v_51) (local.get $v_27)))
-        (return_call_ref $Fn2 (global.get $double_0) (struct.new $Num (f64.const 5)) (local.get $v_56))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_56) (global.get $double_0))
+      )
+      (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+      )
+      (func $call_ref_or_clos_2 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
+        (local $local_3 (ref $Any))
+        (block
+        (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
+        )
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
       )
       (export "double" (func $v_10))
       (export "inc" (func $v_18))
       (export "main" (func $v_26))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFTLDBCQUFHLHdCQUFIO0FBQ0wsMENBQUUsZ0NBQUY7QTtBQUNKO0FBQU0sMEJBQUcsd0JBQUg7QUFDRiwyQ0FBRSxnQ0FBRjtBOzBCQUNHLHlCQUNMO0FBQWEsOENBQWIsa0JBQWE7QTtBQURmO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QsaURBQUosZ0NBQUk7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBQUFBO0FBQVMsMEJBQUcsd0JBQUg7QUFDTCwwQ0FBRSxnQ0FBRjtBO0FBQ0o7QUFBTSwwQkFBRyx3QkFBSDtBQUNGLDJDQUFFLGdDQUFGO0E7MEJBQ0cseUJBQ0w7QUFBYSxxQ0FBYixvQ0FBYTtBO0FBRGY7QUFBTywwQkFBQTtBO0FBQUEscUJBQUE7QUFDRCxxQ0FBSixrREFBSTtBOztBOztBOzs7Ozs7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
 test 'match literal first arm', fn:
   expect gen_wat fink":
     main = fn:
@@ -230,15 +259,21 @@ test 'match literal first arm', fn:
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
 
       (func $v_58 (type $Fn3) (param $v_59 (ref $Any)) (param $v_61 (ref $Any)) (param $v_32 (ref $Any))
         (return_call $match_block (struct.new $Num (f64.const 0)) (local.get $v_59) (local.get $v_32) (local.get $v_61))
       )
       (func $v_78 (type $Fn1) (param $v_26 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_26) (struct.new $Num (f64.const 99)))
+        (return_call $call_ref_or_clos_1 (struct.new $Num (f64.const 99)) (local.get $v_26))
       )
       (func $v_81 (type $Fn3) (param $v_24 (ref $Any)) (param $v_22 (ref $Any)) (param $v_23 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_23))
+        (return_call $call_ref_or_clos_0 (local.get $v_23))
       )
       (func $v_72 (type $Fn1) (param $v_65 (ref $Any))
         (return_call $match_arm (ref.func $v_81) (ref.func $v_78) (local.get $v_65))
@@ -247,7 +282,7 @@ test 'match literal first arm', fn:
         (return_call_ref $Fn1 (ref.func $v_72) (call $closure_3 (ref.func $v_58) (local.get $v_20) (local.get $v_47)))
       )
       (func $v_69 (type $Fn1) (param $v_13 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_13) (struct.new $Num (f64.const 42)))
+        (return_call $call_ref_or_clos_1 (struct.new $Num (f64.const 42)) (local.get $v_13))
       )
       (func $v_75 (type $Fn3) (param $v_10 (ref $Any)) (param $v_8 (ref $Any)) (param $v_9 (ref $Any))
         (return_call $match_value (local.get $v_10) (struct.new $Num (f64.const 0)) (local.get $v_8) (local.get $v_9))
@@ -259,10 +294,37 @@ test 'match literal first arm', fn:
       (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
         (return_call_ref $Fn1 (ref.func $v_55) (call $closure_2 (ref.func $v_46) (local.get $v_5)))
       )
+      (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+      )
+      (func $closure_3 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
+      )
+      (func $call_ref_or_clos_0 (type $Fn1) (param $local_0 (ref $Any))
+        (local $local_1 (ref $Any))
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)))
+        )
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)))
+        )
+        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (local.get $local_0)))
+      )
+      (func $call_ref_or_clos_1 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+        (local $local_2 (ref $Any))
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (local.get $local_0))
+        )
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (local.get $local_0))
+        )
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (local.get $local_1)) (local.get $local_0))
+      )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOERBQ0Usa0JBQ0Esa0JBRkY7QTs7NENBRUs7QTs7QUFBSDtBOztBQUFBLDhEQUFBO0E7MEJBSEcseUJBRUg7MkNBQUE7QTs7NENBQUc7QTs7QUFBSCxnREFBQSxnQ0FBQSxpQkFBQTtBOztBQUFBLDhEQUFBO0E7QUFGSjtBQUFPLHlCQUFBOzJDQUFBO0E7QUFBUDtBIgp9
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBOzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOERBQ0Usa0JBQ0Esa0JBRkY7QTs7QUFFSyxxQ0FBQSxpQ0FBSDtBOztBQUFBLHFDQUFBO0E7O0FBQUEsOERBQUE7QTswQkFIRyx5QkFFSDsyQ0FBQTtBOztBQUFHLHFDQUFBLGlDQUFIO0E7O0FBQUEsZ0RBQUEsZ0NBQUEsaUJBQUE7QTs7QUFBQSw4REFBQTtBO0FBRko7QUFBTyx5QkFBQTsyQ0FBQTtBOztBOztBOztBOzs7Ozs7Ozs7O0E7O0E7Ozs7Ozs7Ozs7QTtBQUFQO0EiCn0=
 test 'match with binding', fn:
   expect gen_wat fink":
     main = fn:
@@ -279,6 +341,14 @@ test 'match with binding', fn:
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
       (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
 
       (func $v_66 (type $Fn4) (param $x_67 (ref $Any)) (param $v_69 (ref $Any)) (param $v_71 (ref $Any)) (param $v_36 (ref $Any))
         (return_call $match_block (local.get $x_67) (local.get $v_69) (local.get $v_36) (local.get $v_71))
@@ -287,7 +357,7 @@ test 'match with binding', fn:
         (return_call $op_plus (local.get $x_83) (struct.new $Num (f64.const 1)) (local.get $v_28))
       )
       (func $v_94 (type $Fn3) (param $v_26 (ref $Any)) (param $v_24 (ref $Any)) (param $v_25 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_25))
+        (return_call $call_ref_or_clos_0 (local.get $v_25))
       )
       (func $v_52 (type $Fn3) (param $x_53 (ref $Any)) (param $v_55 (ref $Any)) (param $v_22 (ref $Any))
         (local $v_75 (ref $Any))
@@ -297,7 +367,7 @@ test 'match with binding', fn:
         (return_call $match_arm (ref.func $v_94) (local.get $v_87) (local.get $v_75))
       )
       (func $v_79 (type $Fn1) (param $v_15 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_15) (struct.new $Num (f64.const 0)))
+        (return_call $call_ref_or_clos_1 (struct.new $Num (f64.const 0)) (local.get $v_15))
       )
       (func $v_91 (type $Fn3) (param $v_12 (ref $Any)) (param $v_10 (ref $Any)) (param $v_11 (ref $Any))
         (return_call $match_value (local.get $v_12) (struct.new $Num (f64.const 0)) (local.get $v_10) (local.get $v_11))
@@ -311,10 +381,47 @@ test 'match with binding', fn:
         (local.set $x_1 (struct.new $Num (f64.const 5)))
         (return_call_ref $Fn1 (ref.func $v_63) (call $closure_3 (ref.func $v_52) (local.get $x_1) (local.get $v_6)))
       )
+      (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+      )
+      (func $closure_3 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
+      )
+      (func $closure_4 (type $Fn4) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any)) (param $local_3 (ref $Any))
+      )
+      (func $call_ref_or_clos_0 (type $Fn1) (param $local_0 (ref $Any))
+        (local $local_1 (ref $Any))
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)))
+        )
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)))
+        )
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)) (struct.get $Num 3 (local.get $local_1)))
+        )
+        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (local.get $local_0)))
+      )
+      (func $call_ref_or_clos_1 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+        (local $local_2 (ref $Any))
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (local.get $local_0))
+        )
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (local.get $local_0))
+        )
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn4 (ref.cast (ref null $Fn4) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (struct.get $Num 3 (local.get $local_2)) (local.get $local_0))
+        )
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (local.get $local_1)) (local.get $local_0))
+      )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTswQkFDRSx5QkFFRSx5QkFIRyx5QkFJSDtBQUZGLGdEQUNFLGtCQUNBLGtCQUZGO0E7MEJBREE7QUFHTyw0Q0FBRSxnQ0FBRjtBOztBQUFMO0E7MEJBSEYseUJBREsseUJBR0g7QTtBO0FBSEcscUJBQ0w7QUFBQSxxQkFBQTtBQUdFLCtEQUFBO0E7OzRDQURHO0E7O0FBQUgsZ0RBQUEsZ0NBQUEsa0JBQUE7QTs7QUFBQSw4REFBQTtBO0FBSEo7QUFBTyx5QkFBQTtBO0FBQ0wsb0JBQUk7MkNBQUo7QTtBQURGO0EiCn0=
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7MEJBQ0UseUJBRUUseUJBSEcseUJBSUg7QUFGRixnREFDRSxrQkFDQSxrQkFGRjtBOzBCQURBO0FBR08sNENBQUUsZ0NBQUY7QTs7QUFBTCxxQ0FBQTtBOzBCQUhGLHlCQURLLHlCQUdIO0E7QTtBQUhHLHFCQUNMO0FBQUEscUJBQUE7QUFHRSwrREFBQTtBOztBQURHLHFDQUFBLGdDQUFIO0E7O0FBQUEsZ0RBQUEsZ0NBQUEsa0JBQUE7QTs7QUFBQSw4REFBQTtBO0FBSEo7QUFBTyx5QkFBQTtBO0FBQ0wsb0JBQUk7MkNBQUo7QTs7QTs7QTs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTtBQURGO0EiCn0=
 test 'simple recursion', fn:
   expect gen_wat fink":
     recurse = fn n:
@@ -332,12 +439,22 @@ test 'simple recursion', fn:
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
       (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn5 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
 
       (func $v_82 (type $Fn4) (param $n_83 (ref $Any)) (param $v_85 (ref $Any)) (param $v_87 (ref $Any)) (param $v_42 (ref $Any))
         (return_call $match_block (local.get $n_83) (local.get $v_85) (local.get $v_42) (local.get $v_87))
       )
       (func $v_113 (type $Fn2) (param $v_114 (ref $Any)) (param $v_33 (ref $Any))
-        (return_call_ref $Fn2 (global.get $recurse_0) (local.get $v_33) (local.get $v_114))
+        (return_call $call_ref_or_clos_2 (local.get $v_33) (local.get $v_114) (global.get $recurse_0))
       )
       (func $v_98 (type $Fn2) (param $n_99 (ref $Any)) (param $v_29 (ref $Any))
         (local $v_118 (ref $Any))
@@ -345,7 +462,7 @@ test 'simple recursion', fn:
         (return_call $op_minus (local.get $n_99) (struct.new $Num (f64.const 1)) (local.get $v_118))
       )
       (func $v_110 (type $Fn3) (param $v_27 (ref $Any)) (param $v_25 (ref $Any)) (param $v_26 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_26))
+        (return_call $call_ref_or_clos_0 (local.get $v_26))
       )
       (func $v_68 (type $Fn3) (param $n_69 (ref $Any)) (param $v_71 (ref $Any)) (param $v_23 (ref $Any))
         (local $v_91 (ref $Any))
@@ -355,7 +472,7 @@ test 'simple recursion', fn:
         (return_call $match_arm (ref.func $v_110) (local.get $v_103) (local.get $v_91))
       )
       (func $v_95 (type $Fn1) (param $v_16 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_16) (struct.new $Num (f64.const 42)))
+        (return_call $call_ref_or_clos_1 (struct.new $Num (f64.const 42)) (local.get $v_16))
       )
       (func $v_107 (type $Fn3) (param $v_13 (ref $Any)) (param $v_11 (ref $Any)) (param $v_12 (ref $Any))
         (return_call $match_value (local.get $v_13) (struct.new $Num (f64.const 0)) (local.get $v_11) (local.get $v_12))
@@ -369,9 +486,116 @@ test 'simple recursion', fn:
       )
       (global $main_1 (ref $Fn1) (ref.func $v_52))
       (func $v_52 (type $Fn1) (param $v_53 (ref $Any))
-        (return_call_ref $Fn2 (global.get $recurse_0) (struct.new $Num (f64.const 5)) (local.get $v_53))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_53) (global.get $recurse_0))
+      )
+      (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+      )
+      (func $closure_3 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
+      )
+      (func $closure_4 (type $Fn4) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any)) (param $local_3 (ref $Any))
+      )
+      (func $call_ref_or_clos_0 (type $Fn1) (param $local_0 (ref $Any))
+        (local $local_1 (ref $Any))
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)))
+        )
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)))
+        )
+        (block
+        (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)) (struct.get $Num 3 (local.get $local_1)))
+        )
+        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (local.get $local_0)))
+      )
+      (func $call_ref_or_clos_1 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+        (local $local_2 (ref $Any))
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (local.get $local_0))
+        )
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (local.get $local_0))
+        )
+        (block
+        (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
+        (return_call_ref $Fn4 (ref.cast (ref null $Fn4) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (struct.get $Num 3 (local.get $local_2)) (local.get $local_0))
+        )
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (local.get $local_1)) (local.get $local_0))
+      )
+      (func $call_ref_or_clos_2 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
+        (local $local_3 (ref $Any))
+        (block
+        (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
+        )
+        (block
+        (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
+        (return_call_ref $Fn4 (ref.cast (ref null $Fn4) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (struct.get $Num 2 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
+        )
+        (block
+        (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
+        (return_call_ref $Fn5 (ref.cast (ref null $Fn5) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (struct.get $Num 2 (local.get $local_3)) (struct.get $Num 3 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
+        )
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
       )
       (export "recurse" (func $v_7))
       (export "main" (func $v_52))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTswQkFBYSx5QkFFVCx5QkFGTSx5QkFHTjtBQUZGLGdEQUNFLGtCQUNBLGtCQUZGO0E7cURBRWE7QUFBUixrREFBUSxrQkFBUjtBOzBCQUhNO0E7O0FBR0ksNkNBQUUsZ0NBQUY7QTs7QUFBYjtBOzBCQUhTLHlCQUFILHlCQUVOO0E7QTtBQUZNLHFCQUFHO0FBQUEsc0JBQUE7QUFHVCxpRUFBQTtBOzs0Q0FERztBOztBQUFILGdEQUFBLGdDQUFBLGtCQUFBO0E7O0FBQUEsK0RBQUE7QTtBQUZKO0FBQVUseUJBQUcsd0JBQUg7MkNBQUc7QTtBQUliO0FBQU8sMEJBQUE7QUFDTCxrREFBUSxnQ0FBUjtBO0FBTEY7QUFJQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBOzBCQUFhLHlCQUVULHlCQUZNLHlCQUdOO0FBRkYsZ0RBQ0Usa0JBQ0Esa0JBRkY7QTtxREFFYTtBQUFSLHFDQUFRLHFDQUFSO0E7MEJBSE07QTs7QUFHSSw2Q0FBRSxnQ0FBRjtBOztBQUFiLHFDQUFBO0E7MEJBSFMseUJBQUgseUJBRU47QTtBO0FBRk0scUJBQUc7QUFBQSxzQkFBQTtBQUdULGlFQUFBO0E7O0FBREcscUNBQUEsaUNBQUg7QTs7QUFBQSxnREFBQSxnQ0FBQSxrQkFBQTtBOztBQUFBLCtEQUFBO0E7QUFGSjtBQUFVLHlCQUFHLHdCQUFIOzJDQUFHO0E7QUFJYjtBQUFPLDBCQUFBO0FBQ0wscUNBQVEsa0RBQVI7QTs7QTs7QTs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTtBQUxGO0FBSUE7QSIKfQ==
+# --- closures ---
+
+test 'closure construction and call', fn:
+  expect gen_wat fink":
+    main = fn:
+      add = fn x:
+        fn y: x + y
+      add1 = add 1
+      add1 2
+
+  | equals wat":
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+
+      (func $v_54 (type $Fn3) (param $x_55 (ref $Any)) (param $y_2 (ref $Any)) (param $v_13 (ref $Any))
+        (return_call $op_plus (local.get $x_55) (local.get $y_2) (local.get $v_13))
+      )
+      (func $v_10 (type $Fn2) (param $x_1 (ref $Any)) (param $v_11 (ref $Any))
+        (return_call_ref $Fn1 (local.get $v_11) (call $closure_2 (ref.func $v_54) (local.get $x_1)))
+      )
+      (func $v_44 (type $Fn2) (param $v_45 (ref $Any)) (param $v_24 (ref $Any))
+        (local $add1_4 (ref $Any))
+        (local.set $add1_4 (local.get $v_24))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 2)) (local.get $v_45) (local.get $add1_4))
+      )
+      (global $main_0 (ref $Fn1) (ref.func $v_8))
+      (func $v_8 (type $Fn1) (param $v_9 (ref $Any))
+        (local $add_3 (ref $Any))
+        (local $v_49 (ref $Any))
+        (local.set $add_3 (ref.func $v_10))
+        (local.set $v_49 (call $closure_2 (ref.func $v_44) (local.get $v_9)))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 1)) (local.get $v_49) (local.get $add_3))
+      )
+      (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
+      )
+      (func $call_ref_or_clos_2 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
+        (local $local_3 (ref $Any))
+        (block
+        (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
+        )
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
+      )
+      (export "main" (func $v_8))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTswQkFDVyx5QkFDSix3QkFBSDtBQUFRLDRDQUFFLGlCQUFGO0E7QUFESiwwQkFBRyx3QkFBSDs0Q0FBRztBOzBCQURKLHlCQUdFO0E7QUFBUCx1QkFBTztBQUNQLHFDQUFLLGtEQUFMO0E7QUFKRjtBQUFPLHlCQUFBO0E7QTtBQUNMLHNCQUFNO0FBREQscUJBQUE7QUFHRSxxQ0FBSSxrREFBSjtBOztBOztBOzs7Ozs7QTtBQUhUO0EiCn0=

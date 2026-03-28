@@ -320,12 +320,12 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
               let after_equals = &file[equals_pos..];
               let line_end = after_equals.find('\n').map(|i| equals_pos + i + 1).unwrap_or(file.len());
               // Find where the body ends: the indented block below `| equals ...:`.
-              // Body lines start with 4 spaces. Stop at the first non-indented line
-              // (blank or otherwise).
+              // Body lines start with 4 spaces. Blank lines within the block are
+              // part of the body — only stop at a non-blank, non-indented line.
               let body_end = {
                 let mut pos = line_end;
                 for line in file[line_end..].lines() {
-                  if !line.starts_with("    ") { break; }
+                  if !line.is_empty() && !line.starts_with("    ") { break; }
                   pos += line.len() + 1; // +1 for newline
                 }
                 pos.min(file.len())

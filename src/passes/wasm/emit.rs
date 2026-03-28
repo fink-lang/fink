@@ -44,8 +44,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use wasm_encoder::{
-  CodeSection, CompositeInnerType, CompositeType, ConstExpr,
-  ExportKind, ExportSection, FieldType, FuncType, Function,
+  AbstractHeapType, BlockType, CodeSection, CompositeInnerType, CompositeType,
+  ConstExpr, ExportKind, ExportSection, FieldType, FuncType, Function,
   FunctionSection, GlobalSection, GlobalType, HeapType,
   ImportSection, IndirectNameMap, Instruction,
   NameMap, NameSection, RefType, StorageType, SubType,
@@ -107,17 +107,26 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Scan builtins and call arities needed for the type section.
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
   let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
+  let mut closure_captures: BTreeSet<usize> = BTreeSet::new();
   for func in &module.funcs {
     scan_builtins(func.body, &mut builtins);
     scan_call_arities(func.body, &mut extra_arities);
+    scan_closure_captures(func.body, &mut closure_captures);
   }
-  e.emit_types(module, &builtins, &extra_arities);
+  // closure_N constructors are now emitted as defined functions, not imports.
+  builtins.retain(|name, _| !name.starts_with("closure_"));
+  // call_ref_or_clos_N dispatch helpers need $FnN types for all call arities.
+  // The closure lifted fn arities (call_arity + captures) are already covered
+  // by the defined function arities in cps_mod.arities.
+  e.closure_captures = closure_captures.clone();
+  e.call_arities = extra_arities.clone();
+  e.emit_types(module, &builtins, &extra_arities, &closure_captures);
   e.emit_imports_from(module, &builtins);
-  e.emit_functions(module);
+  e.emit_functions(module, &closure_captures, &extra_arities);
   e.emit_globals(module);
   e.emit_exports(module);
-  e.emit_code(module);
-  e.emit_names(module);
+  e.emit_code(module, &closure_captures);
+  e.emit_names(module, &closure_captures, &extra_arities);
   let wasm = e.module.finish();
 
   // Fixup: convert func-local offsets to absolute offsets.
@@ -195,6 +204,10 @@ struct Emitter<'a, 'src> {
   raw_mappings: Vec<RawMapping>,
   /// Structural source locations for non-code items.
   structural_locs: Vec<StructuralLoc>,
+  /// Closure capture counts found in this module (for $ClosureN types).
+  closure_captures: BTreeSet<usize>,
+  /// Call-site arities for Callable::Val calls (for $call_ref_or_clos_N).
+  call_arities: BTreeSet<usize>,
 }
 
 struct RawMapping {
@@ -214,6 +227,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
       ctx,
       raw_mappings: Vec::new(),
       structural_locs: Vec::new(),
+      closure_captures: BTreeSet::new(),
+      call_arities: BTreeSet::new(),
     }
   }
 
@@ -221,9 +236,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Type section
   // -------------------------------------------------------------------------
 
-  fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>) {
+  fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>, closure_captures: &BTreeSet<usize>) {
     let mut types = TypeSection::new();
     let mut next_idx = 0u32;
+
+    let any_idx = next_idx;
 
     // $Any = (sub (struct))
     types.ty().subtype(&SubType {
@@ -244,7 +261,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // $Num = (sub $Any (struct (field f64)))
     types.ty().subtype(&SubType {
       is_final: false,
-      supertype_idx: Some(0), // $Any
+      supertype_idx: Some(any_idx), // $Any
       composite_type: CompositeType {
         inner: CompositeInnerType::Struct(StructType {
           fields: Box::new([FieldType {
@@ -263,7 +280,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // $FnN for each arity (from defined functions + builtins).
     let any_ref = ValType::Ref(RefType {
       nullable: true,
-      heap_type: HeapType::Concrete(0), // $Any
+      heap_type: HeapType::Concrete(any_idx), // $Any
     });
     let mut all_arities = cps_mod.arities.clone();
     for &arity in builtins.values() {
@@ -271,6 +288,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
     }
     for &arity in extra_arities {
       all_arities.insert(arity);
+    }
+    // Closure constructors and dispatch helpers also need $FnN types.
+    // $closure_N takes N captures + funcref → result, so its arity = N + 1.
+    // But $closure_N returns (ref $Any), so it's not a $FnN type — it uses
+    // a custom type. However, the lifted fn called from dispatch has
+    // arity = call_arity + N captures, which must also be in $FnN.
+    for &n_cap in closure_captures {
+      for &call_arity in extra_arities.iter().chain(cps_mod.arities.iter()) {
+        all_arities.insert(call_arity + n_cap);
+      }
     }
     for &arity in &all_arities {
       let params: Vec<ValType> = vec![any_ref; arity];
@@ -285,6 +312,88 @@ impl<'a, 'src> Emitter<'a, 'src> {
         },
       });
       self.idx.types.insert(format!("$Fn{}", arity), next_idx);
+      next_idx += 1;
+    }
+
+    // $ClosureN = (sub $Any (struct (field (ref $FnM)) (field (ref $Any))...))
+    // where N = capture count, M = call_arity + N (the lifted fn's arity).
+    // We don't know the call_arity at the type level, so the funcref field
+    // is typed as (ref func) — any function reference. The dispatch helper
+    // casts it to the correct $FnM at call time.
+    let func_ref = ValType::Ref(RefType {
+      nullable: true,
+      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Func },
+    });
+    for &n_cap in closure_captures {
+      let mut fields = Vec::with_capacity(1 + n_cap);
+      // Field 0: funcref to the lifted function.
+      fields.push(FieldType {
+        element_type: StorageType::Val(func_ref),
+        mutable: false,
+      });
+      // Fields 1..N: captured values (all (ref $Any)).
+      for _ in 0..n_cap {
+        fields.push(FieldType {
+          element_type: StorageType::Val(any_ref),
+          mutable: false,
+        });
+      }
+      types.ty().subtype(&SubType {
+        is_final: true,
+        supertype_idx: Some(any_idx), // sub $Any
+        composite_type: CompositeType {
+          inner: CompositeInnerType::Struct(StructType {
+            fields: fields.into_boxed_slice(),
+          }),
+          shared: false,
+          descriptor: None,
+          describes: None,
+        },
+      });
+      self.idx.types.insert(format!("$Closure{}", n_cap), next_idx);
+      next_idx += 1;
+    }
+
+    // $ClosureCtorN = (func (param (ref func) (ref $Any)...) (result (ref $Any)))
+    // Type for $closure_N constructor functions.
+    for &n_cap in closure_captures {
+      let mut params = Vec::with_capacity(1 + n_cap);
+      params.push(func_ref); // funcref
+      for _ in 0..n_cap {
+        params.push(any_ref); // captures
+      }
+      types.ty().subtype(&SubType {
+        is_final: true,
+        supertype_idx: None,
+        composite_type: CompositeType {
+          inner: CompositeInnerType::Func(FuncType::new(params, vec![any_ref])),
+          shared: false,
+          descriptor: None,
+          describes: None,
+        },
+      });
+      self.idx.types.insert(format!("$ClosureCtor{}", n_cap), next_idx);
+      next_idx += 1;
+    }
+
+    // $CallRefOrClosN = (func (param (ref $Any)... (ref $Any)) (result))
+    // Type for $call_ref_or_clos_N dispatch functions.
+    // Only emitted when closures exist — otherwise calls use direct return_call_ref.
+    // Params: N call args + 1 callee (all (ref $Any)), no results (tail call).
+    let dispatch_arities = if closure_captures.is_empty() { BTreeSet::new() } else { extra_arities.clone() };
+    for &call_arity in &dispatch_arities {
+      let params: Vec<ValType> = vec![any_ref; call_arity + 1]; // args + callee
+      types.ty().subtype(&SubType {
+        is_final: true,
+        supertype_idx: None,
+        composite_type: CompositeType {
+          inner: CompositeInnerType::Func(FuncType::new(params, vec![])),
+          shared: false,
+          descriptor: None,
+          describes: None,
+        },
+      });
+      self.idx.types.insert(format!("$CallRefOrClos{}", call_arity), next_idx);
       next_idx += 1;
     }
 
@@ -317,9 +426,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Function section — declares function signatures
   // -------------------------------------------------------------------------
 
-  fn emit_functions(&mut self, cps_mod: &CpsModule<'_, '_>) {
+  fn emit_functions(&mut self, cps_mod: &CpsModule<'_, '_>, closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
     let mut functions = FunctionSection::new();
 
+    // CPS-defined functions.
     for (i, func) in cps_mod.funcs.iter().enumerate() {
       let arity = func.params.len();
       let type_idx = self.idx.fn_type_idx(arity);
@@ -343,6 +453,30 @@ impl<'a, 'src> Emitter<'a, 'src> {
             loc: node.loc,
           });
         }
+      }
+    }
+
+    // Helper functions are appended after CPS-defined functions.
+    let mut next_func_idx = self.idx.import_count + cps_mod.funcs.len() as u32;
+
+    // $closure_N constructor functions.
+    for &n_cap in closure_captures {
+      let type_idx = self.idx.type_idx(&format!("$ClosureCtor{}", n_cap));
+      functions.function(type_idx);
+      // Name matches the old import convention: closure_N where N = total val args (funcref + captures).
+      let name = format!("closure_{}", n_cap + 1);
+      self.idx.funcs.insert(name, next_func_idx);
+      next_func_idx += 1;
+    }
+
+    // $call_ref_or_clos_N dispatch functions — only when closures exist.
+    if !closure_captures.is_empty() {
+      for &call_arity in call_arities {
+        let type_idx = self.idx.type_idx(&format!("$CallRefOrClos{}", call_arity));
+        functions.function(type_idx);
+        let name = format!("call_ref_or_clos_{}", call_arity);
+        self.idx.funcs.insert(name, next_func_idx);
+        next_func_idx += 1;
       }
     }
 
@@ -426,7 +560,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Code section — function bodies with byte offset tracking
   // -------------------------------------------------------------------------
 
-  fn emit_code(&mut self, cps_mod: &CpsModule<'_, '_>) {
+  fn emit_code(&mut self, cps_mod: &CpsModule<'_, '_>, closure_captures: &BTreeSet<usize>) {
     let mut code = CodeSection::new();
 
     for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
@@ -434,7 +568,126 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&wasm_func);
     }
 
+    // $closure_N constructor bodies.
+    for &n_cap in closure_captures {
+      code.function(&self.emit_closure_ctor(n_cap));
+    }
+
+    // $call_ref_or_clos_N dispatch bodies — only when closures exist.
+    if !closure_captures.is_empty() {
+      let call_arities: Vec<usize> = self.call_arities.iter().copied().collect();
+      for call_arity in call_arities {
+        code.function(&self.emit_call_ref_or_clos(call_arity, closure_captures));
+      }
+    }
+
     self.module.section(&code);
+  }
+
+  /// Emit $closure_N constructor: takes funcref + N captures, returns $ClosureN struct.
+  fn emit_closure_ctor(&self, n_cap: usize) -> Function {
+    let mut f = Function::new(vec![]); // no locals beyond params
+    // struct.new $ClosureN (local.get 0) (local.get 1) ... (local.get n_cap)
+    for i in 0..=(n_cap as u32) {
+      f.instruction(&Instruction::LocalGet(i));
+    }
+    let closure_type_idx = self.idx.type_idx(&format!("$Closure{}", n_cap));
+    f.instruction(&Instruction::StructNew(closure_type_idx));
+    f.instruction(&Instruction::End);
+    f
+  }
+
+  /// Emit $call_ref_or_clos_N dispatch: tries each $ClosureK via br_on_cast,
+  /// falls through to plain funcref return_call_ref.
+  ///
+  /// Params: arg_0 .. arg_{N-1}, callee (all (ref $Any)).
+  /// The callee is the last param at index N.
+  fn emit_call_ref_or_clos(&self, call_arity: usize, closure_captures: &BTreeSet<usize>) -> Function {
+    let any_rt = RefType {
+      nullable: true,
+      heap_type: HeapType::Concrete(self.idx.type_idx("$Any")),
+    };
+    let any_ref = ValType::Ref(any_rt);
+    let callee_param = call_arity as u32; // last param index
+
+    // One local to hold the downcast struct ref — reused across branches.
+    let mut f = Function::new(vec![(1, any_ref)]);
+    let cast_local = (call_arity + 1) as u32; // first local after params
+
+    // For each $ClosureK, emit a block that tries the cast.
+    // (block $not_clos
+    //   (br_on_cast_fail $not_clos (ref $Any) (ref $ClosureK) (local.get $callee))
+    //   ;; extract captures, push args, return_call_ref lifted fn
+    // )
+    // ...
+    // ;; fallthrough: plain funcref → ref.cast + return_call_ref
+
+    for &n_cap in closure_captures {
+      let closure_type_idx = self.idx.type_idx(&format!("$Closure{}", n_cap));
+      let lifted_arity = call_arity + n_cap;
+      let fn_type_idx = self.idx.fn_type_idx(lifted_arity);
+
+      let closure_rt = RefType {
+        nullable: true,
+        heap_type: HeapType::Concrete(closure_type_idx),
+      };
+
+      // (block $not_clos
+      f.instruction(&Instruction::Block(BlockType::Empty));
+
+      // (br_on_cast_fail $not_clos (ref $Any) (ref $ClosureN) (local.get $callee))
+      f.instruction(&Instruction::LocalGet(callee_param));
+      f.instruction(&Instruction::BrOnCastFail {
+        relative_depth: 0,
+        from_ref_type: any_rt,
+        to_ref_type: closure_rt,
+      });
+
+      // Cast succeeded — struct ref is on stack. Store it.
+      f.instruction(&Instruction::LocalSet(cast_local));
+
+      // Push captures from struct (fields 1..N).
+      for cap_idx in 0..n_cap {
+        f.instruction(&Instruction::LocalGet(cast_local));
+        f.instruction(&Instruction::StructGet {
+          struct_type_index: closure_type_idx,
+          field_index: (cap_idx + 1) as u32, // field 0 is funcref
+        });
+      }
+
+      // Push the original call args.
+      for i in 0..call_arity as u32 {
+        f.instruction(&Instruction::LocalGet(i));
+      }
+
+      // Push funcref from struct field 0, cast to $FnM, call.
+      f.instruction(&Instruction::LocalGet(cast_local));
+      f.instruction(&Instruction::StructGet {
+        struct_type_index: closure_type_idx,
+        field_index: 0,
+      });
+      f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(fn_type_idx)));
+      f.instruction(&Instruction::ReturnCallRef(fn_type_idx));
+
+      // End block — cast failed, continue to next closure type.
+      f.instruction(&Instruction::End);
+    }
+
+    // Fallthrough: plain funcref. Cast callee to (ref $FnN) and call.
+    let fn_type_idx = self.idx.fn_type_idx(call_arity);
+
+    // Push args.
+    for i in 0..call_arity as u32 {
+      f.instruction(&Instruction::LocalGet(i));
+    }
+
+    // Push callee, cast to (ref $FnN), return_call_ref.
+    f.instruction(&Instruction::LocalGet(callee_param));
+    f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(fn_type_idx)));
+    f.instruction(&Instruction::ReturnCallRef(fn_type_idx));
+
+    f.instruction(&Instruction::End);
+    f
   }
 
   fn emit_func_body(&mut self, func: &CollectedFn<'_, '_>, def_idx: u32) -> Function {
@@ -472,6 +725,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       ctx: self.ctx,
       raw_mappings: &mut self.raw_mappings,
       def_idx,
+      has_closures: !self.closure_captures.is_empty(),
     };
     emit_body(func.body, &mut fc);
 
@@ -485,10 +739,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Name section
   // -------------------------------------------------------------------------
 
-  fn emit_names(&mut self, cps_mod: &CpsModule<'_, '_>) {
+  fn emit_names(&mut self, cps_mod: &CpsModule<'_, '_>, closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
     let mut names = NameSection::new();
 
-    // Function names (imports + defined).
+    // Function names (imports + defined + helpers).
     let mut func_names = NameMap::new();
     for (name, &idx) in &self.idx.imports {
       func_names.append(idx, name);
@@ -496,6 +750,19 @@ impl<'a, 'src> Emitter<'a, 'src> {
     for func in &cps_mod.funcs {
       let idx = self.idx.func_idx(&func.label);
       func_names.append(idx, &func.label);
+    }
+    // Helper function names.
+    for &n_cap in closure_captures {
+      let name = format!("closure_{}", n_cap + 1);
+      let idx = self.idx.func_idx(&name);
+      func_names.append(idx, &name);
+    }
+    if !closure_captures.is_empty() {
+      for &call_arity in call_arities {
+        let name = format!("call_ref_or_clos_{}", call_arity);
+        let idx = self.idx.func_idx(&name);
+        func_names.append(idx, &name);
+      }
     }
     names.functions(&func_names);
 
@@ -538,6 +805,8 @@ struct FuncContext<'a, 'b, 'src> {
   ctx: &'a IrCtx<'b, 'src>,
   raw_mappings: &'a mut Vec<RawMapping>,
   def_idx: u32,
+  /// Whether this module has any closures (controls dispatch path).
+  has_closures: bool,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -660,25 +929,42 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut Func
 }
 
 /// Emit a call to a user function or continuation.
+/// When closures exist in the module, dispatches through $call_ref_or_clos_N
+/// which handles both plain funcrefs and closure structs at runtime.
+/// When no closures exist, uses direct return_call_ref.
 fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>) {
   let (val_args, cont_arg) = split_args(args);
   let total_arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
 
-  // Value args first — return_call_ref expects [args...] [funcref] on stack.
-  for arg in val_args {
-    emit_arg(arg, fc);
+  let has_closures = fc.has_closures;
+
+  if has_closures {
+    // Dispatch through $call_ref_or_clos_N.
+    // Expects (args..., callee) — all (ref $Any).
+    for arg in val_args {
+      emit_arg(arg, fc);
+    }
+    if let Some(cont) = cont_arg {
+      emit_cont(cont, fc);
+    }
+    emit_val_ref(func_val, fc);
+
+    let dispatch_name = format!("call_ref_or_clos_{}", total_arity);
+    let dispatch_idx = fc.emitter_idx.func_idx(&dispatch_name);
+    fc.instr(&Instruction::ReturnCall(dispatch_idx));
+  } else {
+    // No closures — direct return_call_ref (original path).
+    for arg in val_args {
+      emit_arg(arg, fc);
+    }
+    if let Some(cont) = cont_arg {
+      emit_cont(cont, fc);
+    }
+    emit_val_ref(func_val, fc);
+
+    let type_idx = fc.emitter_idx.fn_type_idx(total_arity);
+    fc.instr(&Instruction::ReturnCallRef(type_idx));
   }
-
-  // Continuation arg (part of the function's params, before funcref).
-  if let Some(cont) = cont_arg {
-    emit_cont(cont, fc);
-  }
-
-  // Callee funcref last — return_call_ref expects [args...] [funcref] on stack.
-  emit_val_ref(func_val, fc);
-
-  let type_idx = fc.emitter_idx.fn_type_idx(total_arity);
-  fc.instr(&Instruction::ReturnCallRef(type_idx));
 }
 
 /// Emit a builtin operation call.
@@ -1006,6 +1292,45 @@ fn scan_call_arities(expr: &Expr<'_>, arities: &mut BTreeSet<usize>) {
   }
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
     scan_call_arities(fn_body, arities);
+  }
+}
+
+/// Scan for ·fn_closure call sites and collect the capture count for each.
+/// The capture count is val_args.len() - 1 (first val arg is the funcref).
+/// Returns the set of distinct capture counts, used to emit $ClosureN types.
+fn scan_closure_captures(expr: &Expr<'_>, captures: &mut BTreeSet<usize>) {
+  match &expr.kind {
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
+      let (val_args, _) = split_args(args);
+      // val_args = [funcref, cap_0, cap_1, ...], so captures = len - 1.
+      let n_captures = val_args.len().saturating_sub(1);
+      captures.insert(n_captures);
+      for arg in args {
+        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+          scan_closure_captures(body, captures);
+        }
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+          scan_closure_captures(body, captures);
+        }
+      }
+    }
+    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
+      match cont {
+        Cont::Expr { body, .. } => scan_closure_captures(body, captures),
+        Cont::Ref(_) => {}
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      scan_closure_captures(then, captures);
+      scan_closure_captures(else_, captures);
+    }
+  }
+  if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
+    scan_closure_captures(fn_body, captures);
   }
 }
 

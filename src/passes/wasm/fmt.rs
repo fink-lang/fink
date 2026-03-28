@@ -138,6 +138,11 @@ enum ParsedInstr {
   End,
   Unreachable,
   RefFunc(u32),
+  Block,
+  /// ref.cast (nullable) — type index of the target type.
+  RefCastNullable(u32),
+  /// br_on_cast_fail — relative depth + target type index.
+  BrOnCastFail { depth: u32, to_type_index: u32 },
   /// Any instruction we don't specifically handle.
   Other(String),
 }
@@ -379,6 +384,21 @@ fn parse_operator(op: &Operator<'_>) -> ParsedInstr {
     Operator::End => ParsedInstr::End,
     Operator::Unreachable => ParsedInstr::Unreachable,
     Operator::RefFunc { function_index } => ParsedInstr::RefFunc(*function_index),
+    Operator::Block { .. } => ParsedInstr::Block,
+    Operator::RefCastNullable { hty } => {
+      let idx = match hty {
+        wasmparser::HeapType::Concrete(i) => i.as_module_index().unwrap_or(0),
+        _ => 0,
+      };
+      ParsedInstr::RefCastNullable(idx)
+    }
+    Operator::BrOnCastFail { relative_depth, to_ref_type, .. } => {
+      let idx = match to_ref_type.heap_type() {
+        wasmparser::HeapType::Concrete(i) => i.as_module_index().unwrap_or(0),
+        _ => 0,
+      };
+      ParsedInstr::BrOnCastFail { depth: *relative_depth, to_type_index: idx }
+    }
     other => ParsedInstr::Other(format!("{:?}", other)),
   }
 }
@@ -736,6 +756,28 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         stack.push((format!("(ref.cast (ref {}) {})", name, arg), arg_off));
         i += 1;
       }
+      ParsedInstr::RefCastNullable(type_idx) => {
+        let name = type_name(module, *type_idx);
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(ref.cast (ref null {}) {})", name, arg), arg_off));
+        i += 1;
+      }
+      ParsedInstr::Block => {
+        // Block marker — the End case already handles closing.
+        // For dispatch helpers, blocks wrap br_on_cast_fail branches.
+        // Emit as inline and let End close it.
+        w.push_str(&format!("{}(block\n", ind(indent)));
+        i += 1;
+      }
+      ParsedInstr::BrOnCastFail { depth, to_type_index } => {
+        let name = type_name(module, *to_type_index);
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        // On cast success, the downcasted value is on the stack.
+        // On failure, branches to depth. Push the cast result for success path.
+        if let Some(loc) = find_dwarf_loc(module, arg_off, *offset) { w.mark(loc); }
+        stack.push((format!("(br_on_cast_fail {} (ref null {}) {})", depth, name, arg), arg_off));
+        i += 1;
+      }
       ParsedInstr::RefNull(type_idx) => {
         let name = type_name(module, *type_idx);
         stack.push((format!("(ref.null {})", name), *offset));
@@ -902,6 +944,10 @@ fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -
     ParsedInstr::Call(idx) => format!("(call {})", func_name(module, *idx)),
     ParsedInstr::Unreachable => "unreachable".into(),
     ParsedInstr::RefFunc(idx) => format!("(ref.func {})", func_name(module, *idx)),
+    ParsedInstr::Block => "(block".into(),
+    ParsedInstr::RefCastNullable(idx) => format!("(ref.cast (ref null {}))", type_name(module, *idx)),
+    ParsedInstr::BrOnCastFail { depth, to_type_index } =>
+      format!("(br_on_cast_fail {} (ref null {}))", depth, type_name(module, *to_type_index)),
     ParsedInstr::If => "(if".into(),
     ParsedInstr::Else => ")(else".into(),
     ParsedInstr::End => ")".into(),
