@@ -1751,7 +1751,7 @@ mod tests {
 mod cps_tests {
   use crate::parser::parse;
   use crate::ast::build_index;
-  use crate::passes::cps::fmt::{fmt_with, Ctx};
+  use crate::passes::cps::fmt::Ctx;
   use crate::passes::scopes;
   use super::lower_expr;
 

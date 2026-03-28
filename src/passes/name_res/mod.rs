@@ -732,14 +732,14 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      LetVal { val, cont: cont, .. } => {
+      LetVal { val, cont, .. } => {
         emit_classified_val(val, result, ctx, out);
         if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_lines(body_expr, result, ctx, out);
         }
       }
 
-      LetFn { fn_body, cont: cont, .. } => {
+      LetFn { fn_body, cont, .. } => {
         collect_classified_lines(fn_body, result, ctx, out);
         if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_lines(body_expr, result, ctx, out);
@@ -839,7 +839,7 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      LetVal { val, cont: cont, .. } => {
+      LetVal { val, cont, .. } => {
         emit_classified_val(val, result, ctx, out);
         emit_synth_val(val, result, out);
         if let Cont::Expr { body: body_expr, .. } = cont {
