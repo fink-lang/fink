@@ -999,4 +999,24 @@ mod tests {
     }
     assert!(found_names, "should have a name section");
   }
+
+  #[test]
+  fn t_literal_int_locals() {
+    let result = compile("main = fn:\n  42");
+    // Parse back and count locals per function.
+    use wasmparser::{Parser, Payload};
+    for payload in Parser::new(0).parse_all(&result.wasm) {
+      if let Ok(Payload::CodeSectionEntry(body)) = payload {
+        let mut local_count = 0u32;
+        let locals = body.get_locals_reader().unwrap();
+        for group in locals {
+          let (count, _ty) = group.unwrap();
+          local_count += count;
+          eprintln!("  local group: count={}", count);
+        }
+        eprintln!("total locals: {}", local_count);
+        assert_eq!(local_count, 0, "main = fn: 42 should have 0 locals");
+      }
+    }
+  }
 }

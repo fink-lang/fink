@@ -1,0 +1,22 @@
+{test, expect, equals, fink, gen_wat, wat} = import '!fake'
+
+# Round-trip tests: CPS → emit (WASM binary) → format (WAT text + source map)
+# These validate the full pipeline produces correct, readable WAT.
+
+test 'literal int', fn:
+  expect gen_wat fink":
+    main = fn:
+      42
+  | equals wat":
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
+        (return_call_ref $Fn1 (local.get $v_5) (struct.new $Num (f64.const 42)))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:TODO

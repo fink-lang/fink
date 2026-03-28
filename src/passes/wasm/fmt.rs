@@ -253,8 +253,7 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
         let mut local_count = 0u32;
 
         // Count locals.
-        let mut locals_reader = body.get_locals_reader().unwrap();
-        while let Ok((count, _ty)) = locals_reader.read() {
+        for (count, _ty) in body.get_locals_reader().unwrap().into_iter().flatten() {
           local_count += count;
         }
 
@@ -440,11 +439,8 @@ fn parse_dwarf_section(
     Err(_) => return,
   };
 
-  // Get the line program.
-  // We need the unit's DW_AT_stmt_list to find the line program offset.
+  // Get the line program offset from root DIE's DW_AT_stmt_list.
   let mut cursor = unit_header.entries(&abbrevs);
-
-  // Move to root DIE.
   if cursor.next_dfs().is_err() { return; }
   let root = match cursor.current() {
     Some(entry) => entry,
@@ -466,7 +462,7 @@ fn parse_dwarf_section(
     Err(_) => return,
   };
 
-  let _ = debug_str; // used implicitly by gimli
+  let _ = debug_str;
 
   // Execute the line program to extract rows.
   let mut rows = line_program.rows();
@@ -475,12 +471,6 @@ fn parse_dwarf_section(
       continue;
     }
     let address = row.address() as u32;
-    let file_idx = match row.file_index() {
-      0 => continue, // no file
-      idx => idx,
-    };
-    let _ = file_idx; // we only have one file
-
     let line = row.line().map(|l| l.get() as u32).unwrap_or(0);
     let col = match row.column() {
       gimli::ColumnType::LeftEdge => 0u32,
@@ -493,7 +483,7 @@ fn parse_dwarf_section(
         end: Pos { idx: 0, line, col },
       });
     }
-    let _ = header; // suppress unused warning
+    let _ = header;
   }
 }
 
@@ -603,177 +593,40 @@ fn emit_func(module: &ParsedModule, func: &ParsedFunc, func_idx: u32, w: &mut Ma
 }
 
 fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter) {
-  let mut indent = 2usize;
+  // Use a stack-based approach to reconstruct nested s-expressions.
+  // Walk instructions, building tree nodes on a stack. Statement-level
+  // instructions (local.set, return_call_ref, if, etc.) consume from the
+  // stack and emit complete statements.
+  let indent = 2usize;
   let instrs = &func.instructions;
+  // Stack of (formatted_string, first_offset) — offset tracks where this value started.
+  let mut stack: Vec<(String, u32)> = Vec::new();
   let mut i = 0;
 
   while i < instrs.len() {
     let (offset, instr) = &instrs[i];
 
-    // Place source map mark from DWARF.
-    if let Some(loc) = module.dwarf_locs.get(offset) {
-      w.mark(*loc);
-    }
-
     match instr {
       ParsedInstr::End => {
-        // Skip the final End (function terminator).
-        if i == instrs.len() - 1 {
-          break;
-        }
-        // Block end.
-        indent = indent.saturating_sub(1);
+        if i == instrs.len() - 1 { break; } // final End
         w.push_str(&format!("{})\n", ind(indent)));
         i += 1;
       }
 
-      ParsedInstr::If => {
-        // Gather the condition expression that precedes the if.
-        // For now, emit a simple (if ...) block.
-        w.push_str(&format!("{}(if\n", ind(indent)));
-        indent += 1;
-        w.push_str(&format!("{}(then\n", ind(indent)));
-        indent += 1;
-        i += 1;
-      }
-
-      ParsedInstr::Else => {
-        indent = indent.saturating_sub(1);
-        w.push_str(&format!("{})\n", ind(indent)));
-        w.push_str(&format!("{}(else\n", ind(indent)));
-        indent += 1;
-        i += 1;
-      }
-
-      ParsedInstr::LocalSet(idx) => {
-        let name = local_name_by_idx(module, func, *idx);
-        // Try to collect the value expression inline.
-        let val = collect_value_expr_backwards(module, func, instrs, i);
-        if let Some((val_str, consumed)) = val {
-          let start = i - consumed;
-          // Mark with the first instruction's DWARF loc.
-          if let Some(loc) = module.dwarf_locs.get(&instrs[start].0) {
-            w.mark(*loc);
-          }
-          w.push_str(&format!("{}(local.set {} {})\n", ind(indent), name, val_str));
-          i += 1;
-        } else {
-          w.push_str(&format!("{}(local.set {})\n", ind(indent), name));
-          i += 1;
-        }
-      }
-
-      ParsedInstr::ReturnCallRef(type_idx) => {
-        let type_name_str = type_name(module, *type_idx);
-        w.push_str(&format!("{}(return_call_ref {})\n", ind(indent), type_name_str));
-        i += 1;
-      }
-
-      ParsedInstr::ReturnCall(func_idx_val) => {
-        let name = func_name(module, *func_idx_val);
-        w.push_str(&format!("{}(return_call {})\n", ind(indent), name));
-        i += 1;
-      }
-
-      ParsedInstr::Call(func_idx_val) => {
-        let name = func_name(module, *func_idx_val);
-        w.push_str(&format!("{}(call {})\n", ind(indent), name));
-        i += 1;
-      }
-
-      ParsedInstr::Unreachable => {
-        w.push_str(&format!("{}unreachable\n", ind(indent)));
-        i += 1;
-      }
-
-      // Value instructions that appear as standalone statements (uncommon).
-      _ => {
-        let s = format_instr(module, func, instr);
-        w.push_str(&format!("{}{}\n", ind(indent), s));
-        i += 1;
-      }
-    }
-  }
-}
-
-/// Try to collect a value expression from the instructions preceding a local.set.
-/// Returns (formatted_string, num_instructions_consumed_before_set).
-fn collect_value_expr_backwards(
-  module: &ParsedModule,
-  func: &ParsedFunc,
-  instrs: &[(u32, ParsedInstr)],
-  set_idx: usize,
-) -> Option<(String, usize)> {
-  // Walk backwards from set_idx-1, collecting instructions that form the value.
-  // Simple stack machine: each instruction produces/consumes known amounts.
-  if set_idx == 0 { return None; }
-
-  let mut stack_depth = 1i32; // local.set consumes 1 value
-  let mut idx = set_idx;
-
-  while idx > 0 && stack_depth > 0 {
-    idx -= 1;
-    let (_, instr) = &instrs[idx];
-    let (produces, consumes) = instr_stack_effect(module, instr);
-    stack_depth -= produces as i32;
-    stack_depth += consumes as i32;
-  }
-
-  if stack_depth != 0 { return None; }
-
-  // Format the collected instructions as a nested s-expression.
-  let consumed = set_idx - idx;
-  let value_instrs = &instrs[idx..set_idx];
-  let formatted = format_inline_expr(module, func, value_instrs);
-  Some((formatted, consumed))
-}
-
-fn instr_stack_effect(module: &ParsedModule, instr: &ParsedInstr) -> (usize, usize) {
-  // (produces, consumes)
-  match instr {
-    ParsedInstr::LocalGet(_) | ParsedInstr::GlobalGet(_) => (1, 0),
-    ParsedInstr::F64Const(_) => (1, 0),
-    ParsedInstr::StructNew(type_idx) => {
-      let fields = module.types.get(*type_idx as usize)
-        .map(|t| match &t.kind {
-          ParsedTypeKind::Struct { field_count, .. } => *field_count,
-          _ => 0,
-        })
-        .unwrap_or(0);
-      (1, fields)
-    }
-    ParsedInstr::StructGet { .. } => (1, 1),
-    ParsedInstr::RefCastNonNull(_) => (1, 1),
-    ParsedInstr::RefNull(_) => (1, 0),
-    ParsedInstr::F64Ne => (1, 2),
-    ParsedInstr::Call(_) => (1, 0), // simplified — depends on signature
-    ParsedInstr::RefFunc(_) => (1, 0),
-    ParsedInstr::Unreachable => (0, 0),
-    _ => (0, 0),
-  }
-}
-
-/// Format a sequence of instructions as a nested inline s-expression.
-fn format_inline_expr(
-  module: &ParsedModule,
-  func: &ParsedFunc,
-  instrs: &[(u32, ParsedInstr)],
-) -> String {
-  // Simple recursive descent on the instruction stack.
-  let mut stack: Vec<String> = Vec::new();
-
-  for (_, instr) in instrs {
-    match instr {
+      // Value instructions — push onto stack with their offset.
       ParsedInstr::LocalGet(idx) => {
         let name = local_name_by_idx(module, func, *idx);
-        stack.push(format!("(local.get {})", name));
+        stack.push((format!("(local.get {})", name), *offset));
+        i += 1;
       }
       ParsedInstr::GlobalGet(idx) => {
         let name = global_name(module, *idx);
-        stack.push(format!("(global.get {})", name));
+        stack.push((format!("(global.get {})", name), *offset));
+        i += 1;
       }
       ParsedInstr::F64Const(v) => {
-        stack.push(format!("(f64.const {})", format_f64(*v)));
+        stack.push((format!("(f64.const {})", format_f64(*v)), *offset));
+        i += 1;
       }
       ParsedInstr::StructNew(type_idx) => {
         let name = type_name(module, *type_idx);
@@ -783,47 +636,147 @@ fn format_inline_expr(
             _ => 0,
           })
           .unwrap_or(0);
-        let args: Vec<String> = stack.split_off(stack.len().saturating_sub(fields));
+        let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(fields));
+        let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
+        let args: Vec<&str> = popped.iter().map(|(s, _)| s.as_str()).collect();
         let args_str = if args.is_empty() { String::new() } else { format!(" {}", args.join(" ")) };
-        stack.push(format!("(struct.new {}{})", name, args_str));
+        stack.push((format!("(struct.new {}{})", name, args_str), first_offset));
+        i += 1;
       }
       ParsedInstr::StructGet { struct_type_index, field_index } => {
         let name = type_name(module, *struct_type_index);
-        let arg = stack.pop().unwrap_or_default();
-        stack.push(format!("(struct.get {} {} {})", name, field_index, arg));
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(struct.get {} {} {})", name, field_index, arg), arg_off));
+        i += 1;
       }
       ParsedInstr::RefCastNonNull(type_idx) => {
         let name = type_name(module, *type_idx);
-        let arg = stack.pop().unwrap_or_default();
-        stack.push(format!("(ref.cast (ref {}) {})", name, arg));
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(ref.cast (ref {}) {})", name, arg), arg_off));
+        i += 1;
       }
       ParsedInstr::RefNull(type_idx) => {
         let name = type_name(module, *type_idx);
-        stack.push(format!("(ref.null {})", name));
+        stack.push((format!("(ref.null {})", name), *offset));
+        i += 1;
       }
       ParsedInstr::F64Ne => {
-        let b = stack.pop().unwrap_or_default();
-        let a = stack.pop().unwrap_or_default();
-        stack.push(format!("(f64.ne {} {})", a, b));
-      }
-      ParsedInstr::Call(func_idx) => {
-        let name = func_name(module, *func_idx);
-        // For call, we'd need to know the param count to pop args.
-        // For now, emit flat.
-        stack.push(format!("(call {})", name));
+        let (b, _) = stack.pop().unwrap_or_default();
+        let (a, a_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(f64.ne {} {})", a, b), a_off));
+        i += 1;
       }
       ParsedInstr::RefFunc(func_idx) => {
         let name = func_name(module, *func_idx);
-        stack.push(format!("(ref.func {})", name));
+        stack.push((format!("(ref.func {})", name), *offset));
+        i += 1;
       }
+      ParsedInstr::Call(func_idx) => {
+        let name = func_name(module, *func_idx);
+        let param_count = lookup_func_param_count(module, *func_idx);
+        let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(param_count));
+        let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
+        let args: Vec<&str> = popped.iter().map(|(s, _)| s.as_str()).collect();
+        let args_str = if args.is_empty() { String::new() } else { format!(" {}", args.join(" ")) };
+        stack.push((format!("(call {}{})", name, args_str), first_offset));
+        i += 1;
+      }
+
+      // Statement-level instructions — consume from stack, find DWARF mark, emit.
+      ParsedInstr::LocalSet(idx) => {
+        let name = local_name_by_idx(module, func, *idx);
+        let (val, val_off) = stack.pop().unwrap_or_default();
+        // Find DWARF mark in the range [val_off, offset].
+        if let Some(loc) = find_dwarf_loc(module, val_off, *offset) { w.mark(loc); }
+        w.push_str(&format!("{}(local.set {} {})\n", ind(indent), name, val));
+        i += 1;
+      }
+      ParsedInstr::ReturnCallRef(type_idx) => {
+        let type_name_str = type_name(module, *type_idx);
+        let param_count = module.types.get(*type_idx as usize)
+          .map(|t| match &t.kind {
+            ParsedTypeKind::Func { param_count } => *param_count,
+            _ => 0,
+          })
+          .unwrap_or(0);
+        let total = param_count + 1;
+        let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(total));
+        let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
+        let args: Vec<&str> = popped.iter().map(|(s, _)| s.as_str()).collect();
+        let args_str = if args.is_empty() { String::new() } else { format!(" {}", args.join(" ")) };
+        if let Some(loc) = find_dwarf_loc(module, first_offset, *offset) { w.mark(loc); }
+        w.push_str(&format!("{}(return_call_ref {}{})\n", ind(indent), type_name_str, args_str));
+        i += 1;
+      }
+      ParsedInstr::ReturnCall(func_idx_val) => {
+        let name = func_name(module, *func_idx_val);
+        let param_count = lookup_func_param_count(module, *func_idx_val);
+        let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(param_count));
+        let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
+        let args: Vec<&str> = popped.iter().map(|(s, _)| s.as_str()).collect();
+        let args_str = if args.is_empty() { String::new() } else { format!(" {}", args.join(" ")) };
+        if let Some(loc) = find_dwarf_loc(module, first_offset, *offset) { w.mark(loc); }
+        w.push_str(&format!("{}(return_call {}{})\n", ind(indent), name, args_str));
+        i += 1;
+      }
+
+      ParsedInstr::If => {
+        let (cond, cond_off) = stack.pop().unwrap_or_default();
+        if let Some(loc) = find_dwarf_loc(module, cond_off, *offset) { w.mark(loc); }
+        w.push_str(&format!("{}(if {}\n", ind(indent), cond));
+        w.push_str(&format!("{}(then\n", ind(indent + 1)));
+        i += 1;
+      }
+      ParsedInstr::Else => {
+        w.push_str(&format!("{})\n", ind(indent + 1)));
+        w.push_str(&format!("{}(else\n", ind(indent + 1)));
+        i += 1;
+      }
+
+      ParsedInstr::Unreachable => {
+        w.push_str(&format!("{}unreachable\n", ind(indent)));
+        i += 1;
+      }
+
       _ => {
-        stack.push(format_instr(module, func, instr));
+        let s = format_instr(module, func, instr);
+        w.push_str(&format!("{}{}\n", ind(indent), s));
+        i += 1;
       }
     }
   }
-
-  stack.join(" ")
 }
+
+/// Find the first DWARF source location in the offset range [from..=to].
+fn find_dwarf_loc(module: &ParsedModule, from: u32, to: u32) -> Option<Loc> {
+  module.dwarf_locs.range(from..=to)
+    .next()
+    .map(|(_, loc)| *loc)
+}
+
+/// Look up param count for a function by its index (imports or defined).
+fn lookup_func_param_count(module: &ParsedModule, func_idx: u32) -> usize {
+  // Try imports first.
+  if (func_idx as usize) < module.imports.len() {
+    let (_, _, type_idx) = &module.imports[func_idx as usize];
+    return module.types.get(*type_idx as usize)
+      .map(|t| match &t.kind {
+        ParsedTypeKind::Func { param_count } => *param_count,
+        _ => 0,
+      })
+      .unwrap_or(0);
+  }
+  // Defined function.
+  let def_idx = func_idx as usize - module.imports.len();
+  module.funcs.get(def_idx)
+    .and_then(|f| module.types.get(f.type_index as usize))
+    .map(|t| match &t.kind {
+      ParsedTypeKind::Func { param_count } => *param_count,
+      _ => 0,
+    })
+    .unwrap_or(0)
+}
+
 
 fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -> String {
   match instr {
