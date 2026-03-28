@@ -534,23 +534,10 @@ impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
 fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
-      // Mark with the = operator loc if available.
-      let op_loc = fc.ctx.ast_node(expr.id)
-        .and_then(|n| match &n.kind {
-          crate::ast::NodeKind::Bind { op, .. } => Some(op.loc),
-          _ => None,
-        });
-      if let Some(loc) = op_loc
-        && loc.start.line > 0 {
-          fc.raw_mappings.push(RawMapping {
-            func_def_index: fc.def_idx,
-            func_byte_offset: fc.func.byte_len() as u32,
-            loc,
-          });
-        }
-
-      // Emit value, then local.set.
+      // Emit value with its own source mark (e.g. 42 → "42").
       emit_val(val, fc);
+      // Mark the local.set instruction with the binding loc (e.g. x).
+      fc.mark(name.id);
       let local_label = fc.ctx.label(name.id);
       let idx = fc.local_idx(&local_label);
       fc.instr(&Instruction::LocalSet(idx));
@@ -777,10 +764,11 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>)
 /// Emit a value onto the stack (for inline use in expressions).
 /// Marks the value's source location before emitting its instructions.
 fn emit_val(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
-  // Mark every value with its AST source location (mirrors WAT writer's
-  // WatExpr::marked(node.loc, inner) pattern).
   fc.mark(val.id);
+  emit_val_inner(val, fc);
+}
 
+fn emit_val_inner(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
   match &val.kind {
     ValKind::Lit(lit) => emit_lit(lit, fc),
     ValKind::Ref(Ref::Synth(id)) => {
@@ -943,16 +931,10 @@ fn fixup_offsets(wasm: &[u8], raw: Vec<RawMapping>) -> Vec<OffsetMapping> {
         let _ = (range, count);
       }
       Ok(Payload::CodeSectionEntry(body)) => {
-        // body.range() gives the byte range of this function body in the WASM binary.
-        // The range includes the body size LEB128 prefix.
-        // Instructions start after locals declaration.
-        // We need the offset where the body's instruction bytes begin.
-        // get_locals_reader skips past the locals declarations.
-        // The function body range starts after the size prefix.
-        // We use get_operators_reader to find where instructions start.
-        let ops = body.get_operators_reader().expect("valid function body");
-        let instr_offset = ops.original_position() as u32;
-        func_body_offsets.push(instr_offset);
+        // Function::byte_len() counts from the start of the encoded function
+        // body (including the locals declaration). body.range().start is the
+        // absolute offset of the body's first byte (after the LEB128 size prefix).
+        func_body_offsets.push(body.range().start as u32);
       }
       _ => {}
     }

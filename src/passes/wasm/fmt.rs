@@ -509,8 +509,10 @@ fn parse_dwarf_section(
 // ---------------------------------------------------------------------------
 
 fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
+  stop_mark(w);
   w.push_str("(module\n");
   emit_type_section(module, w);
+  stop_mark(w);
   w.push_str("\n");
 
   // Emit globals and functions.
@@ -521,6 +523,7 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
   }
 
   emit_exports(module, w);
+  stop_mark(w);
   w.push_str(")\n");
 }
 
@@ -542,6 +545,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
     match &ty.kind {
       ParsedTypeKind::Struct { field_count, supertype } => {
         let name = type_name(module, idx as u32);
+        stop_mark(w);
         if *field_count == 0 && supertype.is_none() {
           w.push_str(&format!("  (type {} (sub (struct)))\n", name));
         } else if let Some(super_idx) = supertype {
@@ -551,6 +555,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
         }
       }
       ParsedTypeKind::Func { param_count } => {
+        stop_mark(w);
         let name = type_name(module, idx as u32);
         if *param_count == 0 {
           w.push_str(&format!("  (type {} (func))\n", name));
@@ -612,8 +617,9 @@ fn emit_func(module: &ParsedModule, func: &ParsedFunc, func_idx: u32, w: &mut Ma
   }
   w.push_str("\n");
 
-  // Locals.
+  // Locals — unmapped (compiler-generated).
   for i in 0..func.local_count {
+    stop_mark(w);
     let l_name = local_name(module, func_idx, param_count as u32 + i);
     w.push_str(&format!("    (local {} (ref $Any))\n", l_name));
   }
@@ -621,6 +627,7 @@ fn emit_func(module: &ParsedModule, func: &ParsedFunc, func_idx: u32, w: &mut Ma
   // Body — emit instructions as WAT statements.
   emit_func_body(module, func, w);
 
+  stop_mark(w);
   w.push_str("  )\n");
 }
 
@@ -637,7 +644,6 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
 
   while i < instrs.len() {
     let (offset, instr) = &instrs[i];
-
     match instr {
       ParsedInstr::End => {
         if i == instrs.len() - 1 { break; } // final End
@@ -718,9 +724,13 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
       ParsedInstr::LocalSet(idx) => {
         let name = local_name_by_idx(module, func, *idx);
         let (val, val_off) = stack.pop().unwrap_or_default();
-        // Find DWARF mark in the range [val_off, offset].
-        if let Some(loc) = find_dwarf_loc(module, val_off, *offset) { w.mark(loc); }
-        w.push_str(&format!("{}(local.set {} {})\n", ind(indent), name, val));
+        // Mark with the binding name (at the local.set instruction offset).
+        // The emitter places the name mark just before local.set.
+        if let Some(loc) = find_dwarf_loc_last(module, val_off, *offset) { w.mark(loc); }
+        w.push_str(&format!("{}(local.set {} ", ind(indent), name));
+        // Mark the value expression with its own DWARF entry.
+        if let Some(loc) = find_dwarf_loc(module, val_off, offset.saturating_sub(1)) { w.mark(loc); }
+        w.push_str(&format!("{})\n", val));
         i += 1;
       }
       ParsedInstr::ReturnCallRef(type_idx) => {
@@ -786,6 +796,13 @@ fn find_dwarf_loc(module: &ParsedModule, from: u32, to: u32) -> Option<Loc> {
     .map(|(_, loc)| *loc)
 }
 
+/// Find the last DWARF source location in the offset range [from..=to].
+fn find_dwarf_loc_last(module: &ParsedModule, from: u32, to: u32) -> Option<Loc> {
+  module.dwarf_locs.range(from..=to)
+    .next_back()
+    .map(|(_, loc)| *loc)
+}
+
 /// Look up param count for a function by its index (imports or defined).
 fn lookup_func_param_count(module: &ParsedModule, func_idx: u32) -> usize {
   // Try imports first.
@@ -839,6 +856,14 @@ fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -
     ParsedInstr::End => ")".into(),
     ParsedInstr::Other(s) => format!(";; {}", s),
   }
+}
+
+/// Emit an unmapped segment to stop the previous mapping from bleeding.
+fn stop_mark(w: &mut MappedWriter) {
+  w.mark(Loc {
+    start: Pos { idx: 0, line: 0, col: 0 },
+    end: Pos { idx: 0, line: 0, col: 0 },
+  });
 }
 
 // ---------------------------------------------------------------------------
