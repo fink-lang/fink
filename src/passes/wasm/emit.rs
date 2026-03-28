@@ -41,7 +41,7 @@
 // WAT text source maps by looking up DWARF entries for each instruction
 // and structural locs for non-code items.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use wasm_encoder::{
   CodeSection, CompositeInnerType, CompositeType, ConstExpr,
@@ -104,12 +104,14 @@ pub enum StructuralKind {
 /// Emit a WASM binary from a collected CPS module.
 pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   let mut e = Emitter::new(module, ctx);
-  // Scan builtins first to collect all arities needed for the type section.
+  // Scan builtins and call arities needed for the type section.
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
+  let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
   for func in &module.funcs {
     scan_builtins(func.body, &mut builtins);
+    scan_call_arities(func.body, &mut extra_arities);
   }
-  e.emit_types(module, &builtins);
+  e.emit_types(module, &builtins, &extra_arities);
   e.emit_imports_from(module, &builtins);
   e.emit_functions(module);
   e.emit_globals(module);
@@ -219,7 +221,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Type section
   // -------------------------------------------------------------------------
 
-  fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>) {
+  fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>) {
     let mut types = TypeSection::new();
     let mut next_idx = 0u32;
 
@@ -265,6 +267,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
     });
     let mut all_arities = cps_mod.arities.clone();
     for &arity in builtins.values() {
+      all_arities.insert(arity);
+    }
+    for &arity in extra_arities {
       all_arities.insert(arity);
     }
     for &arity in &all_arities {
@@ -947,6 +952,47 @@ fn scan_builtins(expr: &Expr<'_>, builtins: &mut BTreeMap<String, usize>) {
   // Also scan fn bodies in LetFn.
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
     scan_builtins(fn_body, builtins);
+  }
+}
+
+/// Scan function bodies for all call arities used by return_call_ref.
+/// These may reference $Fn0 (thunks) or other arities not covered by
+/// defined functions or builtin imports.
+fn scan_call_arities(expr: &Expr<'_>, arities: &mut BTreeSet<usize>) {
+  match &expr.kind {
+    ExprKind::App { func: Callable::Val(_), args } => {
+      let (val_args, cont_arg) = split_args(args);
+      let arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
+      // return_call_ref uses arity + 1 (funcref on stack).
+      // But the type index is for the function being called, which has `arity` params.
+      // Actually we just need all arities that appear. The +1 for funcref is implicit.
+      arities.insert(arity);
+      for arg in args {
+        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+          scan_call_arities(body, arities);
+        }
+      }
+    }
+    ExprKind::App { func: Callable::BuiltIn(_), args } => {
+      for arg in args {
+        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+          scan_call_arities(body, arities);
+        }
+      }
+    }
+    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
+      match cont {
+        Cont::Expr { body, .. } => scan_call_arities(body, arities),
+        Cont::Ref(_) => {}
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      scan_call_arities(then, arities);
+      scan_call_arities(else_, arities);
+    }
+  }
+  if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
+    scan_call_arities(fn_body, arities);
   }
 }
 
