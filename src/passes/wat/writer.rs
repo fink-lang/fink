@@ -35,12 +35,14 @@
 // BuiltIn ops are emitted as (call $builtin_<name> ...) — referenced but not
 // defined. The environment (test harness / runtime) is expected to provide them.
 
-use std::collections::{BTreeSet, HashSet};
-
 use crate::ast::{AstId, Node as AstNode, NodeKind};
 use crate::passes::cps::ir::{
   Arg, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
-  Lit, Param, Ref, Val, ValKind,
+  Lit, Ref, Val, ValKind,
+};
+use crate::passes::wasm::collect::{
+  self, CollectedFn, IrCtx, Module,
+  builtin_name, collect_locals, split_args,
 };
 use crate::propgraph::PropGraph;
 use crate::sourcemap::{MappedWriter, SourceMap};
@@ -55,8 +57,9 @@ pub fn emit(
   ast_index: &PropGraph<AstId, Option<&AstNode<'_>>>,
 ) -> String {
   let mut w = MappedWriter::new();
-  let module = collect(&cps.root, &Ctx::new(&cps.origin, ast_index));
-  let ctx = Ctx::new(&cps.origin, ast_index).with_globals(module.globals.clone());
+  let ir_ctx = IrCtx::new(&cps.origin, ast_index);
+  let module = collect::collect(&cps.root, &ir_ctx);
+  let ctx = Ctx::new(ir_ctx.with_globals(module.globals.clone()));
   emit_module(&module, &ctx, &mut w);
   w.finish_string()
 }
@@ -68,8 +71,9 @@ pub fn emit_mapped(
   source_name: &str,
 ) -> (String, SourceMap) {
   let mut w = MappedWriter::new();
-  let module = collect(&cps.root, &Ctx::new(&cps.origin, ast_index));
-  let ctx = Ctx::new(&cps.origin, ast_index).with_globals(module.globals.clone());
+  let ir_ctx = IrCtx::new(&cps.origin, ast_index);
+  let module = collect::collect(&cps.root, &ir_ctx);
+  let ctx = Ctx::new(ir_ctx.with_globals(module.globals.clone()));
   emit_module(&module, &ctx, &mut w);
   w.finish(source_name)
 }
@@ -82,74 +86,42 @@ pub fn emit_mapped_with_content(
   source_content: &str,
 ) -> (String, SourceMap) {
   let mut w = MappedWriter::new();
-  let module = collect(&cps.root, &Ctx::new(&cps.origin, ast_index));
-  let ctx = Ctx::new(&cps.origin, ast_index).with_globals(module.globals.clone());
+  let ir_ctx = IrCtx::new(&cps.origin, ast_index);
+  let module = collect::collect(&cps.root, &ir_ctx);
+  let ctx = Ctx::new(ir_ctx.with_globals(module.globals.clone()));
   emit_module(&module, &ctx, &mut w);
   w.finish_with_content(source_name, source_content)
 }
 
 // ---------------------------------------------------------------------------
-// Context — origin map + AST index for name/loc recovery
+// WAT-specific context — wraps IrCtx with MappedWriter mark support
 // ---------------------------------------------------------------------------
 
 struct Ctx<'a, 'src> {
-  origin: &'a PropGraph<CpsId, Option<AstId>>,
-  ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
-  /// CpsIds that are module-level fn globals — rendered as global.get, not local.get.
-  // TODO: eliminate this hashmap by checking at emit time whether an id is a param
-  // or let-local of the current fn (same approach the flat formatter uses).
-  globals: HashSet<CpsId>,
+  ir: IrCtx<'a, 'src>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
-  fn new(
-    origin: &'a PropGraph<CpsId, Option<AstId>>,
-    ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
-  ) -> Self {
-    Self { origin, ast_index, globals: HashSet::new() }
+  fn new(ir: IrCtx<'a, 'src>) -> Self {
+    Self { ir }
   }
 
-  fn with_globals(mut self, globals: HashSet<CpsId>) -> Self {
-    self.globals = globals;
-    self
-  }
-
-  fn is_global(&self, id: CpsId) -> bool {
-    self.globals.contains(&id)
-  }
-
-  fn ast_node(&self, id: CpsId) -> Option<&'src AstNode<'src>> {
-    self.origin.try_get(id)
-      .and_then(|opt| *opt)
-      .and_then(|ast_id| self.ast_index.try_get(ast_id))
-      .and_then(|opt| *opt)
-  }
+  fn is_global(&self, id: CpsId) -> bool { self.ir.is_global(id) }
+  fn ast_node(&self, id: CpsId) -> Option<&'src AstNode<'src>> { self.ir.ast_node(id) }
+  fn label(&self, id: CpsId) -> String { self.ir.label(id) }
 
   /// Mark the output position with the source location of a CPS node.
   fn mark(&self, id: CpsId, w: &mut MappedWriter) {
-    if let Some(node) = self.ast_node(id) {
+    if let Some(node) = self.ir.ast_node(id) {
       w.mark(node.loc);
     }
   }
 
-  /// Recover the source name for a CPS bind/ref, or fall back to a synthetic label.
-  fn label(&self, id: CpsId) -> String {
-    match self.ast_node(id) {
-      Some(node) => match &node.kind {
-        NodeKind::Ident(s) => format!("{}_{}", s, id.0),
-        NodeKind::SynthIdent(n) => format!("$_{}_{}", n, id.0),
-        _ => format!("v_{}", id.0),
-      },
-      None => format!("v_{}", id.0),
-    }
-  }
-
   /// For a pipe-desugared App, return the `|` separator token loc for this call stage.
-  /// The App's origin points to the Pipe node; the func val's origin identifies which stage.
   fn pipe_sep_loc(&self, expr_id: CpsId, func_val: &Val<'_>) -> Option<Loc> {
-    let node = self.ast_node(expr_id)?;
+    let node = self.ir.ast_node(expr_id)?;
     let NodeKind::Pipe(exprs) = &node.kind else { return None };
-    let func_ast_id = self.origin.try_get(func_val.id).and_then(|o| *o)?;
+    let func_ast_id = self.ir.origin.try_get(func_val.id).and_then(|o| *o)?;
     let stage_idx = exprs.items.iter().position(|item| item.id == func_ast_id)?;
     if stage_idx == 0 { return None; }
     exprs.seps.get(stage_idx - 1).map(|sep| sep.loc)
@@ -206,157 +178,6 @@ fn write_expr(expr: &WatExpr, w: &mut MappedWriter) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Collect pass
-// ---------------------------------------------------------------------------
-
-/// A lifted function, ready to emit.
-struct CollectedFn<'a, 'src> {
-  /// WASM function label (e.g. "v_8").
-  label: String,
-  /// CpsId of the LetFn name — used to source-map the (func ...) header.
-  fn_id: CpsId,
-  /// Parameter (id, label) pairs in order (all anyref). Last is the cont.
-  params: Vec<(CpsId, String)>,
-  /// The fn body expression.
-  body: &'a Expr<'src>,
-  /// Whether this fn is exported under a user name.
-  export_as: Option<String>,
-  /// CpsId of the LetVal alias that names this export — used to source-map (export ...).
-  export_bind_id: Option<CpsId>,
-  /// LetVal alias for this fn (e.g. "add_0"), emitted as a global before (func ...).
-  /// Set for all top-level LetVal aliases, not just exports.
-  alias: Option<(CpsId, String)>,
-}
-
-/// Module-level collected data.
-struct Module<'a, 'src> {
-  funcs: Vec<CollectedFn<'a, 'src>>,
-  /// All function arities encountered (= param count). Used to emit type section.
-  arities: BTreeSet<usize>,
-  /// CpsIds of LetVal aliases for module-level fns — these are globals, not locals.
-  globals: HashSet<CpsId>,
-}
-
-/// Walk the top-level chain and collect all lifted functions + the export list.
-fn collect<'a, 'src>(root: &'a Expr<'src>, ctx: &Ctx<'_, 'src>) -> Module<'a, 'src> {
-  let mut funcs: Vec<CollectedFn<'a, 'src>> = Vec::new();
-  let mut arities: BTreeSet<usize> = BTreeSet::new();
-
-  // The exports map: CpsId of a named fn → export name.
-  // We collect this from the terminal App first (two-sub-pass), but since we
-  // walk top-to-bottom we build it lazily: the terminal App fills a map, then
-  // after the walk we annotate funcs. Simpler: collect exports from the terminal
-  // in a first scan, then do the main collect pass.
-  let exports = collect_exports(root, ctx);
-
-  collect_chain(root, ctx, &exports, &mut funcs, &mut arities);
-
-  // Every module-level fn alias gets a global — consistent with the flat formatter's
-  // `·add_0 = ·v_8 = fn ...` layout, and allows global.get at all call sites.
-  let globals: HashSet<CpsId> = funcs.iter()
-    .filter_map(|cf| cf.alias.as_ref().map(|(id, _)| *id))
-    .collect();
-
-  Module { funcs, arities, globals }
-}
-
-/// Scan the top-level chain for the terminal App and extract export pairs:
-/// (CpsId-of-named-fn, export-name).
-fn collect_exports<'src>(root: &Expr<'src>, ctx: &Ctx<'_, 'src>) -> Vec<(CpsId, String)> {
-  let mut expr = root;
-  loop {
-    match &expr.kind {
-      ExprKind::LetFn { cont, .. } | ExprKind::LetVal { cont, .. } => {
-        match cont {
-          Cont::Expr { body, .. } => { expr = body; }
-          Cont::Ref(_) => return vec![],
-        }
-      }
-      ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args } => {
-        // Terminal: ·export ·foo_0, ·bar_1
-        // Each arg is a Ref to a named fn. The export name is the source name
-        // without the _N suffix (i.e. the Ident string from the origin map).
-        return args.iter().filter_map(|arg| {
-          if let Arg::Val(v) = arg
-            && let ValKind::Ref(Ref::Synth(id)) = v.kind {
-              let name = export_name(ctx, id);
-              return Some((id, name));
-            }
-          None
-        }).collect();
-      }
-      _ => return vec![],
-    }
-  }
-}
-
-/// Extract the bare export name for a CpsId: the source Ident string, or "v_N".
-fn export_name(ctx: &Ctx<'_, '_>, id: CpsId) -> String {
-  match ctx.ast_node(id) {
-    Some(node) => match &node.kind {
-      NodeKind::Ident(s) => s.to_string(),
-      _ => format!("v_{}", id.0),
-    },
-    None => format!("v_{}", id.0),
-  }
-}
-
-/// Recursively walk the top-level chain and populate `funcs`.
-fn collect_chain<'a, 'src>(
-  expr: &'a Expr<'src>,
-  ctx: &Ctx<'_, 'src>,
-  exports: &[(CpsId, String)],
-  funcs: &mut Vec<CollectedFn<'a, 'src>>,
-  arities: &mut BTreeSet<usize>,
-) {
-  match &expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont } => {
-      let label = ctx.label(name.id);
-      let param_labels: Vec<(CpsId, String)> = params.iter().map(|p| match p {
-        Param::Name(b) => (b.id, ctx.label(b.id)),
-        Param::Spread(b) => (b.id, ctx.label(b.id)),
-      }).collect();
-      arities.insert(param_labels.len());
-
-      // Check if this fn is in the exports list.
-      // The terminal App references the LetVal alias CpsId, but the LetFn name
-      // is a different CpsId. We match on the label suffix. Instead, we track
-      // the LetVal alias → LetFn via the cont chain below (see LetVal arm).
-      let export_as = exports.iter()
-        .find(|(id, _)| *id == name.id)
-        .map(|(_, n)| n.clone());
-
-      funcs.push(CollectedFn { label, fn_id: name.id, params: param_labels, body: fn_body, export_as, export_bind_id: None, alias: None });
-
-      // Continue down the cont chain.
-      match cont {
-        Cont::Expr { body, .. } => collect_chain(body, ctx, exports, funcs, arities),
-        Cont::Ref(_) => {}
-      }
-    }
-    ExprKind::LetVal { name, val, cont } => {
-      // A LetVal at the top level is typically a name alias for a preceding LetFn:
-      //   ·add_0 = ·v_8 (Ref::Synth pointing at the LetFn name)
-      // Record the alias on the fn so we can emit a global before (func ...).
-      if let ValKind::Ref(Ref::Synth(fn_id)) = val.kind
-        && let Some(cf) = funcs.iter_mut().find(|cf| cf.label == ctx.label(fn_id))
-      {
-        cf.alias = Some((name.id, ctx.label(name.id)));
-        if let Some((_, export_name)) = exports.iter().find(|(id, _)| *id == name.id) {
-          cf.export_as = Some(export_name.clone());
-          cf.export_bind_id = Some(name.id);
-        }
-      }
-      match cont {
-        Cont::Expr { body, .. } => collect_chain(body, ctx, exports, funcs, arities),
-        Cont::Ref(_) => {}
-      }
-    }
-    // Terminal App — nothing more to collect.
-    ExprKind::App { .. } | ExprKind::If { .. } => {}
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Emit pass
@@ -415,7 +236,7 @@ fn emit_func(func: &CollectedFn<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter
   w.push_str("\n");
 
   // Pre-scan locals (LetVal bindings inside the body).
-  let locals = collect_locals(func.body, ctx);
+  let locals = collect_locals(func.body, &ctx.ir);
   for local in &locals {
     w.push_str(&format!("    (local ${} (ref $Any))\n", local));
   }
@@ -424,50 +245,6 @@ fn emit_func(func: &CollectedFn<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter
   emit_body(func.body, ctx, w, 2);
 
   w.push_str("  )\n");
-}
-
-// ---------------------------------------------------------------------------
-// Local collection — pre-scan fn body for LetVal names
-// ---------------------------------------------------------------------------
-
-fn collect_locals<'src>(expr: &Expr<'_>, ctx: &Ctx<'_, 'src>) -> Vec<String> {
-  let mut locals = Vec::new();
-  collect_locals_expr(expr, ctx, &mut locals);
-  locals
-}
-
-fn collect_locals_expr<'src>(expr: &Expr<'_>, ctx: &Ctx<'_, 'src>, out: &mut Vec<String>) {
-  match &expr.kind {
-    ExprKind::LetVal { name, cont, .. } => {
-      out.push(ctx.label(name.id));
-      match cont {
-        Cont::Expr { body, .. } => collect_locals_expr(body, ctx, out),
-        Cont::Ref(_) => {}
-      }
-    }
-    ExprKind::LetFn { cont, .. } => {
-      match cont {
-        Cont::Expr { body, .. } => collect_locals_expr(body, ctx, out),
-        Cont::Ref(_) => {}
-      }
-    }
-    ExprKind::If { then, else_, .. } => {
-      collect_locals_expr(then, ctx, out);
-      collect_locals_expr(else_, ctx, out);
-    }
-    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
-      // FnClosure's Cont::Expr bind produces a local variable.
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { args: bind_args, body }) = arg {
-          for bind in bind_args {
-            out.push(ctx.label(bind.id));
-          }
-          collect_locals_expr(body, ctx, out);
-        }
-      }
-    }
-    ExprKind::App { .. } => {}
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -759,80 +536,6 @@ fn cont_expr(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {
       WatExpr::list(get, vec![WatExpr::atom(format!("${}", ctx.label(*id)))])
     }
     Cont::Expr { .. } => WatExpr::atom("(;; inline-cont-as-arg ;)"),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Argument helpers
-// ---------------------------------------------------------------------------
-
-/// Split args into (value_args, Option<trailing_cont>).
-fn split_args<'a>(args: &'a [Arg<'a>]) -> (&'a [Arg<'a>], Option<&'a Cont<'a>>) {
-  match args.last() {
-    Some(Arg::Cont(c)) => (&args[..args.len() - 1], Some(c)),
-    _ => (args, None),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// BuiltIn name mapping
-// ---------------------------------------------------------------------------
-
-fn builtin_name(op: BuiltIn) -> &'static str {
-  match op {
-    BuiltIn::Add      => "op_plus",
-    BuiltIn::Sub      => "op_minus",
-    BuiltIn::Mul      => "op_mul",
-    BuiltIn::Div      => "op_div",
-    BuiltIn::IntDiv   => "op_intdiv",
-    BuiltIn::Mod      => "op_rem",
-    BuiltIn::IntMod   => "op_intmod",
-    BuiltIn::DivMod   => "op_divmod",
-    BuiltIn::Pow      => "op_pow",
-    BuiltIn::Eq       => "op_eq",
-    BuiltIn::Neq      => "op_neq",
-    BuiltIn::Lt       => "op_lt",
-    BuiltIn::Lte      => "op_lte",
-    BuiltIn::Gt       => "op_gt",
-    BuiltIn::Gte      => "op_gte",
-    BuiltIn::Cmp      => "op_cmp",
-    BuiltIn::And      => "op_and",
-    BuiltIn::Or       => "op_or",
-    BuiltIn::Xor      => "op_xor",
-    BuiltIn::Not      => "op_not",
-    BuiltIn::BitAnd   => "op_bitand",
-    BuiltIn::BitXor   => "op_bitxor",
-    BuiltIn::Shl      => "op_shl",
-    BuiltIn::Shr      => "op_shr",
-    BuiltIn::RotL     => "op_rotl",
-    BuiltIn::RotR     => "op_rotr",
-    BuiltIn::BitNot   => "op_bitnot",
-    BuiltIn::Range    => "op_rngex",
-    BuiltIn::RangeIncl => "op_rngin",
-    BuiltIn::In       => "op_in",
-    BuiltIn::NotIn    => "op_notin",
-    BuiltIn::Get      => "op_dot",
-    BuiltIn::SeqAppend  => "seq_append",
-    BuiltIn::SeqConcat  => "seq_concat",
-    BuiltIn::RecPut     => "rec_put",
-    BuiltIn::RecMerge   => "rec_merge",
-    BuiltIn::StrFmt     => "str_fmt",
-    BuiltIn::FnClosure  => "closure",
-    BuiltIn::MatchValue    => "match_value",
-    BuiltIn::MatchSeq      => "match_seq",
-    BuiltIn::MatchNext     => "match_next",
-    BuiltIn::MatchDone     => "match_done",
-    BuiltIn::MatchNotDone  => "match_not_done",
-    BuiltIn::MatchRest     => "match_rest",
-    BuiltIn::MatchRec      => "match_rec",
-    BuiltIn::MatchField    => "match_field",
-    BuiltIn::MatchIf       => "match_if",
-    BuiltIn::MatchApp      => "match_app",
-    BuiltIn::MatchBlock    => "match_block",
-    BuiltIn::MatchArm      => "match_arm",
-    BuiltIn::Yield         => "yield",
-    BuiltIn::Export        => "export",
-    BuiltIn::Import        => "import",
   }
 }
 
