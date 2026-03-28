@@ -195,10 +195,12 @@ test 'multi-fn module — add and main', fn:
 
     ·export ·add_0, ·main_1
 
-test 'chained module-fn calls via let — no spurious closure', fn:
-  # TODO: lifting incorrectly wraps cont in ·closure when the cont references a
-  # module-level fn (e.g. inc_1). Module-level refs are global; they should not
-  # be treated as captures. Expected: no ·closure allocation for the let cont.
+test 'chained module-fn calls via let — cont closes over outer cont', fn:
+  # The cont ·v_55 closes over ·v_28 (the outer cont param) via ·closure.
+  # This is correct and necessary: ·double_0 calls its cont with one arg (the
+  # result), so ·v_28 must be baked into the cont beforehand.
+  # The ·closure could be eliminated by threading ·v_28 as an extra param
+  # through ·double_0 — see the "closure elimination" note in lifting/mod.rs.
   expect lift fink":
     double = fn x:
       x * 2

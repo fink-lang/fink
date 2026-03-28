@@ -25,6 +25,30 @@ pub mod fmt;
 //    - If pure, just move it.
 // 3. Also hoist inline Cont::Expr bodies into named LetFn.
 // 4. Repeat until no nested LetFn remain inside any fn_body.
+//
+// ## Closure allocation strategy
+//
+// Cont bodies that close over a local value (e.g. an outer cont param ·v_N)
+// are wrapped in ·closure to bake in that value. This is necessary because
+// the builtin that drives the cont (e.g. ·op_mul, ·double_0) has a fixed
+// calling convention: it calls its cont with exactly one argument (the result).
+// There is no way to thread an extra value through the builtin.
+//
+// Example: `x = double 5; inc x` lowers to a cont ·v_K that captures the
+// outer cont ·v_N. ·closure ·v_K, ·v_N is correct — ·v_N is a param, not a
+// global.
+//
+// ## Future optimisation: closure elimination via param threading
+//
+// An alternative is to eliminate all ·closure allocations by threading every
+// captured value as an extra explicit param through every intermediate
+// function in the call chain. This is the Appel-style first-order CPS approach
+// (no heap-allocated closures; everything is a static function with extra
+// params). The tradeoff:
+//   - Pro: zero allocation for closure environments
+//   - Con: every function in the chain must accept and forward params it does
+//     not use; calling conventions become variadic or must be specialised
+// This is a significant redesign and is deferred for now.
 
 use crate::ast::AstId;
 use crate::passes::cps::ir::{
