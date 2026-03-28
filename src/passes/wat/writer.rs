@@ -192,8 +192,8 @@ struct CollectedFn<'a, 'src> {
   label: String,
   /// CpsId of the LetFn name — used to source-map the (func ...) header.
   fn_id: CpsId,
-  /// Parameter labels in order (all anyref). Last is the cont.
-  params: Vec<String>,
+  /// Parameter (id, label) pairs in order (all anyref). Last is the cont.
+  params: Vec<(CpsId, String)>,
   /// The fn body expression.
   body: &'a Expr<'src>,
   /// Whether this fn is exported under a user name.
@@ -278,9 +278,9 @@ fn collect_chain<'a, 'src>(
   match &expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       let label = ctx.label(name.id);
-      let param_labels: Vec<String> = params.iter().map(|p| match p {
-        Param::Name(b) => ctx.label(b.id),
-        Param::Spread(b) => ctx.label(b.id),
+      let param_labels: Vec<(CpsId, String)> = params.iter().map(|p| match p {
+        Param::Name(b) => (b.id, ctx.label(b.id)),
+        Param::Spread(b) => (b.id, ctx.label(b.id)),
       }).collect();
       arities.insert(param_labels.len());
 
@@ -364,15 +364,12 @@ fn emit_exports(module: &Module<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter
 
 fn emit_func(func: &CollectedFn<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter) {
   let arity = func.params.len();
-  let params: String = func.params.iter()
-    .map(|p| format!("(param ${} (ref $Any))", p))
-    .collect::<Vec<_>>()
-    .join(" ");
   ctx.mark(func.fn_id, w);
   w.push_str(&format!("  (func ${} (type $Fn{})", func.label, arity));
-  if !params.is_empty() {
+  for (id, label) in &func.params {
     w.push_str(" ");
-    w.push_str(&params);
+    ctx.mark(*id, w);
+    w.push_str(&format!("(param ${} (ref $Any))", label));
   }
   w.push_str("\n");
 

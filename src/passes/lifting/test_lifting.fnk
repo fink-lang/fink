@@ -205,6 +205,21 @@ test 'multi-fn module — add and main', fn:
 
     ·v_4 ·v_5
 
+test 'chained module-fn calls via let — no spurious closure', fn:
+  # TODO: lifting incorrectly wraps cont in ·closure when the cont references a
+  # module-level fn (e.g. inc_1). Module-level refs are global; they should not
+  # be treated as captures. Expected: no ·closure allocation for the let cont.
+  expect lift fink":
+    double = fn x:
+      x * 2
+    inc = fn x:
+      x + 1
+    main = fn:
+      x = double 5
+      inc x
+  | equals fink":
+    TODO
+
 ---
 pattern matching
 ---
