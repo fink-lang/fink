@@ -60,7 +60,7 @@ test 'add two literals', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:TODO
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0FBQ0gsMEJBQUYsZ0NBQUksZ0NBQUY7QTtBQURKO0EiCn0=
 
 
 test 'chained arithmetic', fn:
@@ -88,4 +88,4 @@ test 'chained arithmetic', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:TODO
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7MEJBQU8seUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0YsMEJBQUYsaUJBQUksZ0NBQUY7QTtBQUZKO0FBQU8seUJBQUE7QTtBQUFBLHFCQUFBO0FBQ0MseUJBQUYsZ0NBQUksZ0NBQUY7QTtBQURSO0EiCn0=
