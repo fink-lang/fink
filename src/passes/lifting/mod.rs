@@ -804,7 +804,8 @@ mod tests {
   use crate::ast::build_index;
   use crate::parser::parse;
   use crate::passes::cps::fmt::Ctx;
-  use crate::passes::cps::transform::lower_expr;
+  use crate::passes::ast::NodeKind;
+  use crate::passes::cps::transform::lower_module;
   use super::fmt::fmt_flat;
 
   #[allow(unused)]
@@ -813,7 +814,8 @@ mod tests {
       Ok(r) => {
         let ast_index = build_index(&r);
         let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-        let cps = lower_expr(&r.root, &scope);
+        let NodeKind::Module(ref items) = r.root.kind else { panic!("expected Module root") };
+        let cps = lower_module(&items.items, &scope);
         let lifted = super::lift(cps, &ast_index);
         let ctx = Ctx {
           origin: &lifted.origin,
