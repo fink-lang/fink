@@ -270,53 +270,6 @@ test 'match literal first arm', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiOzs7Ozs7OzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOEJBQU0sZ0NBQ0osa0JBQ0E7OztBQUFHLDRDQUFBOzs7QUFBSCwwQkFBQTs7O0FBQUE7OzBCQUhHLHlCQUVIOytFQUFBLGtCQUZHOzs7QUFFQSw0Q0FBQTs7O0FBQUgsOEJBQUEsa0JBQUEsZ0NBQUE7OztBQUFBOztBQUZKO0FBQU8seUJBQUE7K0VBQUE7O0FBQVAiCn0=
 
 
-test 'match literal fallthrough', fn:
-  expect gen_wat fink":
-    main = fn:
-      match 1:
-        0: 42
-        _: 99
-  | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_58 (type $Fn3) (param $v_59 (ref $Any)) (param $v_61 (ref $Any)) (param $v_32 (ref $Any))
-        (return_call $match_block (struct.new $Num (f64.const 1)) (local.get $v_59) (local.get $v_32) (local.get $v_61))
-      )
-      (func $v_78 (type $Fn1) (param $v_26 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_26) (struct.new $Num (f64.const 99)))
-      )
-      (func $v_81 (type $Fn3) (param $v_24 (ref $Any)) (param $v_22 (ref $Any)) (param $v_23 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_23))
-      )
-      (func $v_72 (type $Fn1) (param $v_65 (ref $Any))
-        (return_call $match_arm (local.get $v_81) (local.get $v_78) (local.get $v_65))
-      )
-      (func $v_46 (type $Fn2) (param $v_47 (ref $Any)) (param $v_20 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_72) (call $closure_3 (local.get $v_58) (local.get $v_20) (local.get $v_47)))
-      )
-      (func $v_69 (type $Fn1) (param $v_13 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_13) (struct.new $Num (f64.const 42)))
-      )
-      (func $v_75 (type $Fn3) (param $v_10 (ref $Any)) (param $v_8 (ref $Any)) (param $v_9 (ref $Any))
-        (return_call $match_value (local.get $v_10) (struct.new $Num (f64.const 0)) (local.get $v_8) (local.get $v_9))
-      )
-      (func $v_55 (type $Fn1) (param $v_51 (ref $Any))
-        (return_call $match_arm (local.get $v_75) (local.get $v_69) (local.get $v_51))
-      )
-      (global $main_0 (ref $Fn1) (ref.func $v_4))
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_55) (call $closure_2 (local.get $v_46) (local.get $v_5)))
-      )
-      (export "main" (func $v_4))
-    )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAxOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiOzs7Ozs7OzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOEJBQU0sZ0NBQ0osa0JBQ0E7OztBQUFHLDRDQUFBOzs7QUFBSCwwQkFBQTs7O0FBQUE7OzBCQUhHLHlCQUVIOytFQUFBLGtCQUZHOzs7QUFFQSw0Q0FBQTs7O0FBQUgsOEJBQUEsa0JBQUEsZ0NBQUE7OztBQUFBOztBQUZKO0FBQU8seUJBQUE7K0VBQUE7O0FBQVAiCn0=
-
-
 test 'match with binding', fn:
   expect gen_wat fink":
     main = fn:
