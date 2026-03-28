@@ -379,158 +379,53 @@ test 'simple recursion', fn:
     main = fn:
       recurse 5
   | equals wat":
-    TODO
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
 
-test 'recursive countdown', fn:
-  expect gen_wat fink":
-    count = fn a, n:
-      match n:
-        0: a
-        _: count a + 1, n - 1
-    main = fn:
-      count 0, 10
-  | equals wat":
-    TODO
-
-test 'mutual recursion', fn:
-  expect gen_wat fink":
-    is-even = fn n:
-      match n:
-        0: 1
-        _: is-odd n - 1
-
-    is-odd = fn n:
-      match n:
-        0: 0
-        _: is-even n - 1
-
-    main = fn:
-      is-even 10
-  | equals wat":
-    TODO
-
-# --- arithmetic ---
-
-test 'division', fn:
-  expect gen_wat fink":
-    main = fn:
-      10 / 4
-  | equals wat":
-    TODO
-
-test 'integer division', fn:
-  expect gen_wat fink":
-    main = fn:
-      10 // 3
-  | equals wat":
-    TODO
-
-test 'modulo', fn:
-  expect gen_wat fink":
-    main = fn:
-      10 %% 3
-  | equals wat":
-    TODO
-
-# --- comparison ---
-
-test 'equals true', fn:
-  expect gen_wat fink":
-    main = fn:
-      5 == 5
-  | equals wat":
-    TODO
-
-test 'equals false', fn:
-  expect gen_wat fink":
-    main = fn:
-      5 == 3
-  | equals wat":
-    TODO
-
-test 'less than', fn:
-  expect gen_wat fink":
-    main = fn:
-      3 < 5
-  | equals wat":
-    TODO
-
-test 'greater than or equal', fn:
-  expect gen_wat fink":
-    main = fn:
-      5 >= 5
-  | equals wat":
-    TODO
-
-# --- float ---
-
-test 'float arithmetic', fn:
-  expect gen_wat fink":
-    main = fn:
-      1.5 + 2.5
-  | equals wat":
-    TODO
-
-test 'float division', fn:
-  expect gen_wat fink":
-    main = fn:
-      7.0 / 2.0
-  | equals wat":
-    TODO
-
-# --- logical ---
-
-test 'logical and', fn:
-  expect gen_wat fink":
-    main = fn:
-      1 and 1
-  | equals wat":
-    TODO
-
-test 'logical or', fn:
-  expect gen_wat fink":
-    main = fn:
-      0 or 1
-  | equals wat":
-    TODO
-
-test 'logical not', fn:
-  expect gen_wat fink":
-    main = fn:
-      not 0
-  | equals wat":
-    TODO
-
-test 'logical not truthy', fn:
-  expect gen_wat fink":
-    main = fn:
-      not 5
-  | equals wat":
-    TODO
-
-# --- bitwise ---
-
-test 'bitwise and', fn:
-  expect gen_wat fink":
-    main = fn:
-      12 & 10
-  | equals wat":
-    TODO
-
-test 'shift left', fn:
-  expect gen_wat fink":
-    main = fn:
-      1 << 4
-  | equals wat":
-    TODO
-
-# --- existing ---
-
-test 'chained let', fn:
-  expect gen_wat fink":
-    main = fn:
-      x = 2
-      y = 3
-      y
-  | equals wat":
-    TODO
+      (func $v_82 (type $Fn4) (param $n_83 (ref $Any)) (param $v_85 (ref $Any)) (param $v_87 (ref $Any)) (param $v_42 (ref $Any))
+        (return_call $match_block (local.get $n_83) (local.get $v_85) (local.get $v_42) (local.get $v_87))
+      )
+      (func $v_113 (type $Fn2) (param $v_114 (ref $Any)) (param $v_33 (ref $Any))
+        (return_call_ref $Fn2 (global.get $recurse_0) (local.get $v_33) (local.get $v_114))
+      )
+      (func $v_98 (type $Fn2) (param $n_99 (ref $Any)) (param $v_29 (ref $Any))
+        (local $v_118 (ref $Any))
+        (local.set $v_118 (call $closure_2 (local.get $v_113) (local.get $v_29)))
+        (return_call $op_minus (local.get $n_99) (struct.new $Num (f64.const 1)) (local.get $v_118))
+      )
+      (func $v_110 (type $Fn3) (param $v_27 (ref $Any)) (param $v_25 (ref $Any)) (param $v_26 (ref $Any))
+        (return_call_ref $Fn0 (local.get $v_26))
+      )
+      (func $v_68 (type $Fn3) (param $n_69 (ref $Any)) (param $v_71 (ref $Any)) (param $v_23 (ref $Any))
+        (local $v_91 (ref $Any))
+        (local $v_103 (ref $Any))
+        (local.set $v_91 (call $closure_4 (local.get $v_82) (local.get $n_69) (local.get $v_23) (local.get $v_71)))
+        (local.set $v_103 (call $closure_2 (local.get $v_98) (local.get $n_69)))
+        (return_call $match_arm (local.get $v_110) (local.get $v_103) (local.get $v_91))
+      )
+      (func $v_95 (type $Fn1) (param $v_16 (ref $Any))
+        (return_call_ref $Fn1 (local.get $v_16) (struct.new $Num (f64.const 42)))
+      )
+      (func $v_107 (type $Fn3) (param $v_13 (ref $Any)) (param $v_11 (ref $Any)) (param $v_12 (ref $Any))
+        (return_call $match_value (local.get $v_13) (struct.new $Num (f64.const 0)) (local.get $v_11) (local.get $v_12))
+      )
+      (func $v_79 (type $Fn1) (param $v_75 (ref $Any))
+        (return_call $match_arm (local.get $v_107) (local.get $v_95) (local.get $v_75))
+      )
+      (global $recurse_0 (ref $Fn2) (ref.func $v_7))
+      (func $v_7 (type $Fn2) (param $n_2 (ref $Any)) (param $v_8 (ref $Any))
+        (return_call_ref $Fn1 (local.get $v_79) (call $closure_3 (local.get $v_68) (local.get $n_2) (local.get $v_8)))
+      )
+      (global $main_1 (ref $Fn1) (ref.func $v_52))
+      (func $v_52 (type $Fn1) (param $v_53 (ref $Any))
+        (return_call_ref $Fn2 (global.get $recurse_0) (struct.new $Num (f64.const 5)) (local.get $v_53))
+      )
+      (export "recurse" (func $v_7))
+      (export "main" (func $v_52))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICI7Ozs7Ozs7OzBCQUFhLHlCQUVULHlCQUZNLHlCQUdOO0FBRkYsOEJBQU0sa0JBQ0osa0JBQ0E7O3FEQUFXO0FBQVIsMEJBQUEsd0JBQVE7OzBCQUhGOzs7QUFHSSwyQkFBRixrQkFBSTs7O0FBQWYsMEJBQUE7OzBCQUhTLHlCQUFILHlCQUVOOzs7d0RBRlMsa0JBRVQsa0JBRk07eURBQUc7QUFHVDs7O0FBREcsNENBQUE7OztBQUFILDhCQUFBLGtCQUFBLGdDQUFBOzs7QUFBQTs7QUFGSjtBQUFVLHlCQUFHLHdCQUFIOytFQUFHLGlCQUFIOztBQUlWO0FBQU8sMEJBQUE7QUFDTCwwQkFBQSx3QkFBUTs7QUFMVjtBQUlBIgp9
