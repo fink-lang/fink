@@ -18,7 +18,7 @@ fn main() {
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wat2|run|dap> [options] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [options] <file>");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
       eprintln!("  fmt/cps [--sourcemap]        emit source map");
@@ -154,37 +154,6 @@ fn main() {
         println!("{wat}");
       }
     }
-    "wat2" => {
-      match fink::parser::parse(&src) {
-        Ok(r) => {
-          let (root, node_count) = fink::passes::partial::apply(r.root, r.node_count)
-            .unwrap_or_else(|e| { eprintln!("error: {e:?}"); process::exit(1); });
-          let r = fink::ast::ParseResult { root, node_count };
-          let ast_index = fink::ast::build_index(&r);
-          let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-          let exprs = match &r.root.kind {
-            fink::ast::NodeKind::Module(exprs) => &exprs.items,
-            _ => { eprintln!("error: expected module"); process::exit(1); }
-          };
-          let cps = fink::passes::cps::transform::lower_module(exprs, &scope);
-          let lifted = fink::passes::lifting::lift(cps, &ast_index);
-          if sourcemap {
-            let (wat, srcmap) = if embed_source {
-              fink::passes::wat::writer::emit_mapped_with_content(&lifted, &ast_index, path, &src)
-            } else {
-              fink::passes::wat::writer::emit_mapped(&lifted, &ast_index, path)
-            };
-            let json = srcmap.to_json();
-            let b64 = fink::sourcemap::base64_encode(json.as_bytes());
-            println!("{wat}");
-            println!(";;# sourceMappingURL=data:application/json;base64,{b64}");
-          } else {
-            println!("{}", fink::passes::wat::writer::emit(&lifted, &ast_index));
-          }
-        }
-        Err(e) => parse_error(&src, e, path),
-      }
-    }
     "run" => {
       #[cfg(not(feature = "runner"))]
       { eprintln!("error: 'run' command requires the 'runner' feature"); process::exit(1); }
@@ -205,7 +174,7 @@ fn main() {
     }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wat2|run|dap> [options] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [options] <file>");
       process::exit(1);
     }
   }
