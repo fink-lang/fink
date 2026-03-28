@@ -664,18 +664,18 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, 
   let (val_args, cont_arg) = split_args(args);
   let total_arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
 
-  // Callee.
-  emit_val_ref(func_val, fc);
-
-  // Value args.
+  // Value args first — return_call_ref expects [args...] [funcref] on stack.
   for arg in val_args {
     emit_arg(arg, fc);
   }
 
-  // Continuation arg.
+  // Continuation arg (part of the function's params, before funcref).
   if let Some(cont) = cont_arg {
     emit_cont(cont, fc);
   }
+
+  // Callee funcref last — return_call_ref expects [args...] [funcref] on stack.
+  emit_val_ref(func_val, fc);
 
   let type_idx = fc.emitter_idx.fn_type_idx(total_arity);
   fc.instr(&Instruction::ReturnCallRef(type_idx));
@@ -766,12 +766,25 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
   }
 
   // Regular builtin: return_call $builtin_name args...
-  // Args get individual value marks in DWARF (operator mark is structural).
+  // Skip mark on first val arg (collides with operator mark at same offset).
+  // Mark subsequent args normally — they're at different byte offsets.
   let fn_name = builtin_name(op);
   let (val_args, cont_arg) = split_args(args);
 
+  let mut first_val = true;
   for arg in val_args {
-    emit_arg(arg, fc);
+    match arg {
+      Arg::Val(v) | Arg::Spread(v) => {
+        if first_val {
+          emit_val_inner(v, fc);
+          first_val = false;
+        } else {
+          emit_val(v, fc);
+        }
+      }
+      Arg::Cont(cont) => emit_cont(cont, fc),
+      _ => fc.instr(&Instruction::Unreachable),
+    }
   }
   if let Some(cont) = cont_arg {
     emit_cont(cont, fc);

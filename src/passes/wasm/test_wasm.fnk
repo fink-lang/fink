@@ -19,8 +19,7 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0FBQ0wsMkNBQUE7QTtBQURGO0EiCn0=
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBOzJDQUNMO0E7QUFERjtBIgp9
 
 test 'let binding', fn:
   expect gen_wat fink":
@@ -41,8 +40,7 @@ test 'let binding', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QUFDTCxvQkFBSTtBQUNKLDJDQUFBO0E7QUFGRjtBIgp9
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QUFDTCxvQkFBSTsyQ0FDSjtBO0FBRkY7QSIKfQ==
 
 test 'add two literals', fn:
   expect gen_wat fink":
@@ -60,8 +58,7 @@ test 'add two literals', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0FBQ0gsMEJBQUYsZ0NBQUksZ0NBQUY7QTtBQURKO0EiCn0=
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0FBQ0gsMERBQUUsZ0NBQUY7QTtBQURKO0EiCn0=
 
 test 'chained arithmetic', fn:
   expect gen_wat fink":
@@ -88,8 +85,7 @@ test 'chained arithmetic', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7MEJBQU8seUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0YsMEJBQUYsaUJBQUksZ0NBQUY7QTtBQUZKO0FBQU8seUJBQUE7QTtBQUFBLHFCQUFBO0FBQ0MseUJBQUYsZ0NBQUksZ0NBQUY7QTtBQURSO0EiCn0=
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7MEJBQU8seUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0YsMkNBQUUsZ0NBQUY7QTtBQUZKO0FBQU8seUJBQUE7QTtBQUFBLHFCQUFBO0FBQ0MseURBQUUsZ0NBQUY7QTtBQURSO0EiCn0=
 
 test 'multiple let bindings used', fn:
   expect gen_wat fink":
@@ -113,8 +109,7 @@ test 'multiple let bindings used', fn:
       )
       (export "main" (func $v_6))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QTtBQUNMLG9CQUFJO0FBQ0osb0JBQUk7QUFDRiwwQkFBRixpQkFBSSxpQkFBRjtBO0FBSEo7QSIKfQ==
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QTtBQUNMLG9CQUFJO0FBQ0osb0JBQUk7QUFDRiwyQ0FBRSxpQkFBRjtBO0FBSEo7QSIKfQ==
 
 test 'user fn call', fn:
   expect gen_wat fink":
@@ -140,8 +135,7 @@ test 'user fn call', fn:
       (export "add" (func $v_8))
       (export "main" (func $v_16))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFNLHlCQUFHLHdCQUFHLHdCQUFOO0FBQ0YsMEJBQUYsaUJBQUksaUJBQUY7QTtBQUNKO0FBQU8sMEJBQUE7QUFDTCw4Q0FBSSxnQ0FBRztBO0FBSFQ7QUFFQTtBIgp9
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFNLHlCQUFHLHdCQUFHLHdCQUFOO0FBQ0YsMkNBQUUsaUJBQUY7QTtBQUNKO0FBQU8sMEJBQUE7QUFDTCw4Q0FBSSxnQ0FBRyxnQ0FBUDtBO0FBSEY7QUFFQTtBIgp9
 
 test 'chained fn calls', fn:
   expect gen_wat fink":
@@ -182,8 +176,7 @@ test 'chained fn calls', fn:
       (export "inc" (func $v_19))
       (export "main" (func $v_27))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBQUFBO0FBQVMsMEJBQUcsd0JBQUg7QUFDTCx5QkFBRixpQkFBSSxnQ0FBRjtBO0FBQ0o7QUFBTSwwQkFBRyx3QkFBSDtBQUNGLDBCQUFGLGlCQUFJLGdDQUFGO0E7MEJBQ0cseUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0osOENBQUksaUJBRkM7QTtBQUFQO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QsaURBQU87QTtBQUxiO0FBRUE7QUFFQTtBIgp9
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBQUFBO0FBQVMsMEJBQUcsd0JBQUg7QUFDTCwwQ0FBRSxnQ0FBRjtBO0FBQ0o7QUFBTSwwQkFBRyx3QkFBSDtBQUNGLDJDQUFFLGdDQUFGO0E7MEJBQ0cseUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0osOENBQUksaUJBQUo7QTtBQUZGO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QsaURBQU8sZ0NBQVA7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
 
 test 'pipe unary', fn:
   expect gen_wat fink":
@@ -221,8 +214,7 @@ test 'pipe unary', fn:
       (export "inc" (func $v_18))
       (export "main" (func $v_26))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFTLDBCQUFHLHdCQUFIO0FBQ0wseUJBQUYsaUJBQUksZ0NBQUY7QTtBQUNKO0FBQU0sMEJBQUcsd0JBQUg7QUFDRiwwQkFBRixpQkFBSSxnQ0FBRjtBOzBCQUNHLHlCQUNMO0FBQWEsOENBQWIsa0JBREs7QTtBQUFQO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QsaURBQUo7QTtBQUxGO0FBRUE7QUFFQTtBIgp9
-
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFTLDBCQUFHLHdCQUFIO0FBQ0wsMENBQUUsZ0NBQUY7QTtBQUNKO0FBQU0sMEJBQUcsd0JBQUg7QUFDRiwyQ0FBRSxnQ0FBRjtBOzBCQUNHLHlCQUNMO0FBQWEsOENBQWIsa0JBQWE7QTtBQURmO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QsaURBQUosZ0NBQUk7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
 
 test 'match literal first arm', fn:
   expect gen_wat fink":
@@ -252,7 +244,7 @@ test 'match literal first arm', fn:
         (return_call $match_arm (ref.func $v_81) (ref.func $v_78) (local.get $v_65))
       )
       (func $v_46 (type $Fn2) (param $v_47 (ref $Any)) (param $v_20 (ref $Any))
-        (return_call_ref $Fn1 (call $closure_3 (ref.func $v_58) (local.get $v_20) (local.get $v_47)) (ref.func $v_72))
+        (return_call_ref $Fn1 (ref.func $v_72) (call $closure_3 (ref.func $v_58) (local.get $v_20) (local.get $v_47)))
       )
       (func $v_69 (type $Fn1) (param $v_13 (ref $Any))
         (return_call_ref $Fn1 (local.get $v_13) (struct.new $Num (f64.const 42)))
@@ -265,58 +257,11 @@ test 'match literal first arm', fn:
       )
       (global $main_0 (ref $Fn1) (ref.func $v_4))
       (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (call $closure_2 (ref.func $v_46) (local.get $v_5)) (ref.func $v_55))
+        (return_call_ref $Fn1 (ref.func $v_55) (call $closure_2 (ref.func $v_46) (local.get $v_5)))
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOEJBQU0sZ0NBQ0osa0JBQ0Esa0JBRkY7QTs7QUFFSyw0Q0FBQTtBOztBQUFIO0E7O0FBQUEsOERBQUE7QTswQkFIRyx5QkFFSDtBQUFBLGlHQUFHO0E7O0FBQUEsNENBQUE7QTs7QUFBSCw4QkFBQSxrQkFBQSxnQ0FBQSxpQkFBQTtBOztBQUFBLDhEQUFBO0E7QUFGSjtBQUFPLHlCQUFBO0FBQUE7QTtBQUFQO0EiCn0=
-
-test 'match literal fallthrough', fn:
-  expect gen_wat fink":
-    main = fn:
-      match 1:
-        0: 42
-        _: 99
-  | equals wat":
-    (module
-      (type $Any (sub (struct)))
-      (type $Num (sub $Any (struct (field f64))))
-      (type $Fn0 (func))
-      (type $Fn1 (func (param (ref $Any))))
-      (type $Fn2 (func (param (ref $Any) (ref $Any))))
-      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
-
-      (func $v_58 (type $Fn3) (param $v_59 (ref $Any)) (param $v_61 (ref $Any)) (param $v_32 (ref $Any))
-        (return_call $match_block (struct.new $Num (f64.const 1)) (local.get $v_59) (local.get $v_32) (local.get $v_61))
-      )
-      (func $v_78 (type $Fn1) (param $v_26 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_26) (struct.new $Num (f64.const 99)))
-      )
-      (func $v_81 (type $Fn3) (param $v_24 (ref $Any)) (param $v_22 (ref $Any)) (param $v_23 (ref $Any))
-        (return_call_ref $Fn0 (local.get $v_23))
-      )
-      (func $v_72 (type $Fn1) (param $v_65 (ref $Any))
-        (return_call $match_arm (ref.func $v_81) (ref.func $v_78) (local.get $v_65))
-      )
-      (func $v_46 (type $Fn2) (param $v_47 (ref $Any)) (param $v_20 (ref $Any))
-        (return_call_ref $Fn1 (call $closure_3 (ref.func $v_58) (local.get $v_20) (local.get $v_47)) (ref.func $v_72))
-      )
-      (func $v_69 (type $Fn1) (param $v_13 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_13) (struct.new $Num (f64.const 42)))
-      )
-      (func $v_75 (type $Fn3) (param $v_10 (ref $Any)) (param $v_8 (ref $Any)) (param $v_9 (ref $Any))
-        (return_call $match_value (local.get $v_10) (struct.new $Num (f64.const 0)) (local.get $v_8) (local.get $v_9))
-      )
-      (func $v_55 (type $Fn1) (param $v_51 (ref $Any))
-        (return_call $match_arm (ref.func $v_75) (ref.func $v_69) (local.get $v_51))
-      )
-      (global $main_0 (ref $Fn1) (ref.func $v_4))
-      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (call $closure_2 (ref.func $v_46) (local.get $v_5)) (ref.func $v_55))
-      )
-      (export "main" (func $v_4))
-    )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAxOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOEJBQU0sZ0NBQ0osa0JBQ0Esa0JBRkY7QTs7QUFFSyw0Q0FBQTtBOztBQUFIO0E7O0FBQUEsOERBQUE7QTswQkFIRyx5QkFFSDtBQUFBLGlHQUFHO0E7O0FBQUEsNENBQUE7QTs7QUFBSCw4QkFBQSxrQkFBQSxnQ0FBQSxpQkFBQTtBOztBQUFBLDhEQUFBO0E7QUFGSjtBQUFPLHlCQUFBO0FBQUE7QTtBQUFQO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOERBQ0Usa0JBQ0Esa0JBRkY7QTs7NENBRUs7QTs7QUFBSDtBOztBQUFBLDhEQUFBO0E7MEJBSEcseUJBRUg7MkNBQUE7QTs7NENBQUc7QTs7QUFBSCxnREFBQSxnQ0FBQSxpQkFBQTtBOztBQUFBLDhEQUFBO0E7QUFGSjtBQUFPLHlCQUFBOzJDQUFBO0E7QUFBUDtBIgp9
 
 test 'match with binding', fn:
   expect gen_wat fink":
@@ -364,11 +309,11 @@ test 'match with binding', fn:
       (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
         (local $x_1 (ref $Any))
         (local.set $x_1 (struct.new $Num (f64.const 5)))
-        (return_call_ref $Fn1 (call $closure_3 (ref.func $v_52) (local.get $x_1) (local.get $v_6)) (ref.func $v_63))
+        (return_call_ref $Fn1 (ref.func $v_63) (call $closure_3 (ref.func $v_52) (local.get $x_1) (local.get $v_6)))
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTswQkFDRSx5QkFFRSx5QkFIRyx5QkFJSDtBQUZGLDhCQUFNLGtCQUNKLGtCQUNBLGtCQUZGO0E7MEJBREE7QUFHTywwQkFBRixrQkFBSSxnQ0FBRjtBOztBQUFMO0E7MEJBSEYseUJBREsseUJBR0g7QTtBO0FBSEcscUJBQ0w7QUFBQSxxQkFBQTtBQUdFLCtEQUFBO0E7O0FBREcsNENBQUE7QTs7QUFBSCw4QkFBQSxrQkFBQSxnQ0FBQSxrQkFBQTtBOztBQUFBLDhEQUFBO0E7QUFISjtBQUFPLHlCQUFBO0E7QUFDTCxvQkFBSTtBQUFKO0E7QUFERjtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTswQkFDRSx5QkFFRSx5QkFIRyx5QkFJSDtBQUZGLGdEQUNFLGtCQUNBLGtCQUZGO0E7MEJBREE7QUFHTyw0Q0FBRSxnQ0FBRjtBOztBQUFMO0E7MEJBSEYseUJBREsseUJBR0g7QTtBO0FBSEcscUJBQ0w7QUFBQSxxQkFBQTtBQUdFLCtEQUFBO0E7OzRDQURHO0E7O0FBQUgsZ0RBQUEsZ0NBQUEsa0JBQUE7QTs7QUFBQSw4REFBQTtBO0FBSEo7QUFBTyx5QkFBQTtBO0FBQ0wsb0JBQUk7MkNBQUo7QTtBQURGO0EiCn0=
 
 test 'simple recursion', fn:
   expect gen_wat fink":
@@ -420,7 +365,7 @@ test 'simple recursion', fn:
       )
       (global $recurse_0 (ref $Fn2) (ref.func $v_7))
       (func $v_7 (type $Fn2) (param $n_2 (ref $Any)) (param $v_8 (ref $Any))
-        (return_call_ref $Fn1 (call $closure_3 (ref.func $v_68) (local.get $n_2) (local.get $v_8)) (ref.func $v_79))
+        (return_call_ref $Fn1 (ref.func $v_79) (call $closure_3 (ref.func $v_68) (local.get $n_2) (local.get $v_8)))
       )
       (global $main_1 (ref $Fn1) (ref.func $v_52))
       (func $v_52 (type $Fn1) (param $v_53 (ref $Any))
@@ -429,4 +374,4 @@ test 'simple recursion', fn:
       (export "recurse" (func $v_7))
       (export "main" (func $v_52))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTswQkFBYSx5QkFFVCx5QkFGTSx5QkFHTjtBQUZGLDhCQUFNLGtCQUNKLGtCQUNBLGtCQUZGO0E7cURBRWE7QUFBUixrREFBUSxrQkFBQTtBOzBCQUhGO0E7O0FBR0ksMkJBQUYsa0JBQUksZ0NBQUY7QTs7QUFBYjtBOzBCQUhTLHlCQUFILHlCQUVOO0E7QTtBQUZNLHFCQUFHO0FBQUEsc0JBQUE7QUFHVCxpRUFBQTtBOztBQURHLDRDQUFBO0E7O0FBQUgsOEJBQUEsa0JBQUEsZ0NBQUEsa0JBQUE7QTs7QUFBQSwrREFBQTtBO0FBRko7QUFBVSx5QkFBRyx3QkFBSDtBQUFHLCtGQUtYO0E7QUFERjtBQUFPLDBCQUFBO0FBQ0wsa0RBQVE7QTtBQUxWO0FBSUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTswQkFBYSx5QkFFVCx5QkFGTSx5QkFHTjtBQUZGLGdEQUNFLGtCQUNBLGtCQUZGO0E7cURBRWE7QUFBUixrREFBUSxrQkFBUjtBOzBCQUhNO0E7O0FBR0ksNkNBQUUsZ0NBQUY7QTs7QUFBYjtBOzBCQUhTLHlCQUFILHlCQUVOO0E7QTtBQUZNLHFCQUFHO0FBQUEsc0JBQUE7QUFHVCxpRUFBQTtBOzs0Q0FERztBOztBQUFILGdEQUFBLGdDQUFBLGtCQUFBO0E7O0FBQUEsK0RBQUE7QTtBQUZKO0FBQVUseUJBQUcsd0JBQUg7MkNBQUc7QTtBQUliO0FBQU8sMEJBQUE7QUFDTCxrREFBUSxnQ0FBUjtBO0FBTEY7QUFJQTtBIgp9

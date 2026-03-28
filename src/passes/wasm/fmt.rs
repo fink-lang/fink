@@ -785,7 +785,13 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
           })
           .unwrap_or(0);
         let total = param_count + 1;
-        let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(total));
+        let mut popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(total));
+        // WAT folded form: funcref first, then args. Stack has [args..., funcref].
+        // Rotate the last element (funcref) to the front.
+        if popped.len() > 1 {
+          let funcref = popped.pop().unwrap();
+          popped.insert(0, funcref);
+        }
         let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
         if let Some(loc) = find_dwarf_loc(module, first_offset, *offset) { w.mark(loc); }
         w.push_str(&format!("{}(return_call_ref {}", ind(indent), type_name_str));
