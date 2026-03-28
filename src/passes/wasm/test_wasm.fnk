@@ -140,4 +140,46 @@ test 'user fn call', fn:
       (export "add" (func $v_8))
       (export "main" (func $v_16))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFNLHlCQUFHLHdCQUFHLHdCQUFOO0FBQ0YsMEJBQUYsaUJBQUksaUJBQUY7QTtBQUNKO0FBQU8sMEJBQUE7QUFDTCw4Q0FBSSxnQ0FBRztBO0FBSFQ7QUFFQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFNLHlCQUFHLHdCQUFHLHdCQUFOO0FBQ0YsMEJBQUYsaUJBQUksaUJBQUY7QTtBQUNKO0FBQU8sMEJBQUE7QUFDTCw0Q0FBSSxnQ0FBRztBO0FBSFQ7QUFFQTtBIgp9
+
+
+test 'chained fn calls', fn:
+  expect gen_wat fink":
+    double = fn x:
+      x * 2
+    inc = fn x:
+      x + 1
+    main = fn:
+      x = double 5
+      inc x
+  | equals wat":
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn2 (func (param (ref $Any) (ref $Any))))
+
+      (global $double_0 (ref $Fn2) (ref.func $v_11))
+      (func $v_11 (type $Fn2) (param $x_3 (ref $Any)) (param $v_12 (ref $Any))
+        (return_call $op_mul (local.get $x_3) (struct.new $Num (f64.const 2)) (local.get $v_12))
+      )
+      (global $inc_1 (ref $Fn2) (ref.func $v_19))
+      (func $v_19 (type $Fn2) (param $x_4 (ref $Any)) (param $v_20 (ref $Any))
+        (return_call $op_plus (local.get $x_4) (struct.new $Num (f64.const 1)) (local.get $v_20))
+      )
+      (func $v_55 (type $Fn2) (param $v_56 (ref $Any)) (param $v_31 (ref $Any))
+        (local $x_5 (ref $Any))
+        (local.set $x_5 (local.get $v_31))
+        (return_call_ref $Fn2 (global.get $inc_1) (local.get $x_5) (local.get $v_56))
+      )
+      (global $main_2 (ref $Fn1) (ref.func $v_27))
+      (func $v_27 (type $Fn1) (param $v_28 (ref $Any))
+        (local $v_60 (ref $Any))
+        (local.set $v_60 (call $closure_2 (ref.func $v_55) (local.get $v_28)))
+        (return_call_ref $Fn2 (global.get $double_0) (struct.new $Num (f64.const 5)) (local.get $v_60))
+      )
+      (export "double" (func $v_11))
+      (export "inc" (func $v_19))
+      (export "main" (func $v_27))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBQUFBO0FBQVMsMEJBQUcsd0JBQUg7QUFDTCx5QkFBRixpQkFBSSxnQ0FBRjtBO0FBQ0o7QUFBTSwwQkFBRyx3QkFBSDtBQUNGLDBCQUFGLGlCQUFJLGdDQUFGO0E7MEJBQ0cseUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0osOENBQUksaUJBRkM7QTtBQUFQO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QsaURBQU87QTtBQUxiO0FBRUE7QUFFQTtBIgp9
