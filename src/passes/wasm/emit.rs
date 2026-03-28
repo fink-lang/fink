@@ -867,8 +867,8 @@ fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 fn emit_arg(arg: &Arg<'_>, fc: &mut FuncContext<'_, '_, '_>) {
   match arg {
     Arg::Val(v) | Arg::Spread(v) => emit_val(v, fc),
-    Arg::Cont(_) | Arg::Expr(_) => {
-      // Should not appear at value arg position.
+    Arg::Cont(cont) => emit_cont(cont, fc),
+    Arg::Expr(_) => {
       fc.instr(&Instruction::Unreachable);
     }
   }
