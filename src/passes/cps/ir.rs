@@ -6,9 +6,62 @@
 //
 // Scope is structural (nesting). Env and state are implicit.
 // Every function has an explicit name (user or synthetic).
-// Ref nodes carry `Ref::Name` (user) or `Ref::Synth(CpsId)` (compiler temp,
-// pointing at the Bind::Synth node); resolution is a side-table populated
-// by the resolve pass.
+//
+// ---------------------------------------------------------------------------
+// Identity and name resolution design
+// ---------------------------------------------------------------------------
+//
+// All bindings — whether from source identifiers or compiler-generated — use
+// `Bind::SynthName` or `Bind::Synth`. There is no `Bind::Name` variant; source
+// names are never stored in the IR. All references use `Ref::Synth(CpsId)`,
+// pointing at the `BindNode` by its CpsId.
+//
+// The formatter recovers source names by following: CpsId → origin map →
+// AstId → AST node kind:
+//   - Ident("foo")    → rendered as `·foo_<cps_id>`
+//   - SynthIdent(n)   → rendered as `·$_<n>_<cps_id>`
+//   - no AST origin   → rendered as `·v_<cps_id>`
+//
+// `Bind::SynthName` marks a bind node whose CpsId was pre-allocated before the
+// CPS transform ran, using the scope analysis output. Pre-allocation solves
+// forward references (mutual recursion at any nesting depth): at a ref site,
+// scope resolution gives `ref_ast_id → BindId`, and `CpsResult.bind_to_cps`
+// maps `BindId → CpsId`, so `Ref::Synth(cps_id)` can be emitted before the
+// bind node is constructed.
+//
+// Pre-allocation mechanics: `BindId` is a dense index into `ScopeResult.binds`
+// (0..n). The CPS allocator starts at n, so `CpsId(bind_id.0)` is the
+// pre-allocated id for each scope bind — the mapping is the identity function.
+// `CpsResult.bind_to_cps: PropGraph<BindId, CpsId>` stores this explicitly so
+// downstream passes can query it without knowing the offset convention.
+// The origin map is pre-filled for `CpsId(0)..CpsId(n)` from
+// `ScopeResult.binds[i].origin` before the transform runs.
+//
+// `Bind::Synth` marks a compiler-generated temp with no source origin — e.g.
+// intermediate results from operators, sequence cursors. These are allocated
+// on-the-fly during the transform. Lifting also creates `Bind::Synth` nodes
+// for capture params and hoisted continuations.
+//
+// `Bind::Cont` marks a continuation parameter. Rendered as `·v_<cps_id>`.
+// TODO: collapse Bind::Cont into Bind::Synth — the distinction no longer affects rendering.
+// `ContRef(CpsId)` references a continuation as a value (e.g. fail args).
+//
+// The `name_res` pass is no longer responsible for source-name resolution —
+// that is handled by pre-allocation + `Ref::Synth`. It remains responsible for
+// resolving refs introduced by lifting (hoisted fns reference their capture
+// params by the original CpsId, which `synth_alias` maps to the new param).
+
+// ---------------------------------------------------------------------------
+// Module root representation
+//
+// `lower_module` produces a flat `LetFn`/`LetVal` chain with no outer wrapper.
+// The chain terminates with `App { func: ContRef(v_0), args: [exports] }`:
+//   e.g. `·v_0 ·foo_0, ·bar_1, ·baz_2`
+// Only simple top-level `name = <non-import expr>` bindings are exported.
+// Pattern destructures and imports are excluded.
+// `v_0` is the implicit module-exit continuation (provided by the runtime/linker).
+// Name resolution / import matching of those args is a separate pass.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Node identity
@@ -46,6 +99,11 @@ pub struct CpsResult<'src> {
   /// Compiler-generated nodes with no direct AST origin have `None`.
   /// Node count is `origin.len()`.
   pub origin: crate::propgraph::PropGraph<CpsId, Option<crate::ast::AstId>>,
+  /// Maps each scope BindId to its pre-allocated CpsId.
+  /// Populated before the transform runs. The mapping is CpsId(bind_id.0) by
+  /// construction (the CPS allocator starts at scope_result.binds.len()), but
+  /// stored explicitly so downstream passes don't depend on the offset convention.
+  pub bind_to_cps: crate::propgraph::PropGraph<crate::passes::scopes::BindId, CpsId>,
   /// Synth capture aliases: maps new cap param CpsId → original captured bind CpsId.
   /// Populated by closure_lifting when creating synth cap params (fresh CpsId for
   /// a param that carries a value previously bound under a different CpsId).
@@ -59,41 +117,54 @@ pub struct CpsResult<'src> {
 // ---------------------------------------------------------------------------
 
 /// A definition site — introduces a name into scope.
-/// `Name` marks a source-level binding; the name is recoverable from the
-/// origin map (CpsId → AstId → AST ident). `Synth` marks a compiler-generated
-/// temp; the formatter renders it as `·v_{cps_id}` using the node's own CpsId.
-/// `Cont` marks the continuation parameter of a `LetFn`; the formatter renders
-/// it as `·ƒ_N` using the node's own CpsId.
+///
+/// `SynthName` marks a source-level binding whose CpsId was pre-allocated from
+/// `ScopeResult.binds` before the transform ran. The source name is recoverable
+/// via the origin map: CpsId → AstId → Ident("foo") | SynthIdent(n).
+/// Formatter rendering: Ident → `·foo_<cps_id>`, SynthIdent → `·$_<n>_<cps_id>`.
+///
+/// `Synth` marks a compiler-generated temp with no source origin — intermediate
+/// results, sequence cursors, hoisted cont params, etc. Rendered as `·v_<cps_id>`.
+///
+/// `Cont` marks a continuation parameter. Rendered as `·ƒ_<cps_id>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
-  Name,   // name from source: recoverable via origin map
-  Synth,  // compiler-generated temp: rendered as ·v_{cps_id}
-  Cont,   // continuation parameter: rendered as ·ƒ_{cps_id}
+  SynthName,  // source-level binding: pre-allocated CpsId, name via origin map
+  Synth,      // compiler-generated temp: rendered as ·v_{cps_id}
+  Cont,       // continuation parameter: rendered as ·ƒ_{cps_id}
 }
 
-/// A use site — references a binding. `Name` for user names (identity from
-/// origin map), `Synth(CpsId)` for compiler-generated temps (carries the CpsId
-/// of the `Bind::Synth` node it refers to — the only link, since Synth has no name).
+/// A use site — references a binding by the CpsId of its `BindNode`.
+/// All references are `Ref::Synth(bind_cps_id)` — there is no string-based
+/// `Ref::Name`. Source refs use the pre-allocated CpsId from `bind_to_cps`;
+/// compiler-generated refs use the CpsId allocated on-the-fly.
+/// `Ref::Unresolved(ast_id)` is used when scope resolution found no binding
+/// for a name; the CpsId carries the origin AstId for display purposes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
-  Name,          // source ref: name recoverable from origin map
-  Synth(CpsId),  // compiler-generated temp: refers to Bind::Synth at the given CpsId
+  Synth(CpsId),       // refers to the BindNode at the given CpsId
+  Unresolved(CpsId),  // no binding found; CpsId derived from ref AstId for display
 }
 
 impl Ref {
-  /// Convert a use-site Ref to the corresponding definition-site Bind.
+  /// Convert a use-site Ref to the corresponding definition-site Bind kind.
+  /// Source refs (pre-allocated) → SynthName; compiler temps → Synth.
+  /// Callers that need the actual bind kind should look it up in the IR directly.
   pub fn to_bind(self) -> Bind {
-    match self {
-      Ref::Name => Bind::Name,
-      Ref::Synth(_) => Bind::Synth,
-    }
+    Bind::Synth
   }
 }
 
 impl Bind {
   /// True if this bind introduces a continuation parameter.
+  // TODO: remove once Bind::Cont is collapsed into Bind::Synth.
   pub fn is_cont(self) -> bool {
     matches!(self, Bind::Cont)
+  }
+
+  /// True if this bind is a source-level name (pre-allocated from scope analysis).
+  pub fn is_synth_name(self) -> bool {
+    matches!(self, Bind::SynthName)
   }
 }
 
@@ -156,13 +227,22 @@ pub enum BuiltIn {
   MatchValue, MatchSeq, MatchNext, MatchDone, MatchNotDone,
   MatchRest, MatchRec, MatchField, MatchIf, MatchApp,
   MatchBlock, MatchArm,
+  // Yield — suspend execution, passing a value to the scheduler.
+  // Args: value; cont receives the resumed value.
+  Yield,
+  // Module export — terminal App in a module body. Args are the exported
+  // bindings. Replaces anonymous ContRef at module level.
+  Export,
+  // Module import — `import './foo.fnk'` is a builtin function at module level.
+  Import,
 }
 
 impl BuiltIn {
-  /// Map a source operator string to its `BuiltIn` variant.
-  /// Panics on unknown operators — every operator the parser emits must be
-  /// covered here. Error recovery can be added later if needed.
-  pub fn from_op_str(s: &str) -> BuiltIn {
+  /// Map a source name to its `BuiltIn` variant.
+  /// Covers operators, keywords, and builtin functions like `import`.
+  /// Panics on unknown names — every builtin the pipeline emits must be
+  /// covered here.
+  pub fn from_builtin_str(s: &str) -> BuiltIn {
     match s {
       // Arithmetic
       "+"   => BuiltIn::Add,
@@ -202,7 +282,9 @@ impl BuiltIn {
       "not in" => BuiltIn::NotIn,
       // Member access
       "."   => BuiltIn::Get,
-      _     => panic!("BuiltIn::from_op_str: unknown operator {:?}", s),
+      // Module
+      "import" => BuiltIn::Import,
+      _     => panic!("BuiltIn::from_builtin_str: unknown name {:?}", s),
     }
   }
 }
@@ -315,18 +397,19 @@ pub enum ExprKind<'src> {
   LetVal {
     name: BindNode,
     val: Box<Val<'src>>,
-    body: Cont<'src>,
+    cont: Cont<'src>,
   },
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
-  /// `cont` is the explicit continuation parameter — always last in the calling convention.
+  /// For user fns the last param is `Param::Name(Bind::Cont)` — the return
+  /// continuation. Lifted continuations may have no cont param at all.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
-    cont: BindNode,
+    // TODO: rename to body
     fn_body: Box<Expr<'src>>,
-    body: Cont<'src>,
+    cont: Cont<'src>,
   },
 
   /// Call func with args; the last `Arg::Cont` is the result continuation.
@@ -348,19 +431,6 @@ pub enum ExprKind<'src> {
   // MatchArm and MatchBlock use Arg::Cont and Arg::Expr to embed arm structure.
   // Fail conts are encoded as ValKind::Panic or ValKind::ContRef in args.
   // ---------------------------------------------------------------------------
-
-  // ---------------------------------------------------------------------------
-  // Suspension
-  // ---------------------------------------------------------------------------
-
-  /// Yield — suspend execution, passing `value` to the scheduler.
-  /// The continuation receives the resumed value.
-  /// Later passes use Yield nodes to color the continuation graph:
-  /// every continuation reachable from a Yield is "suspendable."
-  Yield {
-    value: Box<Val<'src>>,
-    cont: Cont<'src>,
-  },
 
 }
 

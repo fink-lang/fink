@@ -1,0 +1,110 @@
+---
+module-level CPS — lower_module produces flat chain + export terminal
+---
+
+# Module CPS: flat LetFn/LetVal chain ending with ·v_0 ·export_0, ·export_1, ...
+# No outer ·fn wrapper. Only simple name = expr bindings are exported.
+# Pattern destructures and imports are excluded from exports.
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_module fink":
+#       <fink source>
+#     | equals fink":
+#       <expected cps output>
+
+{test, expect, equals, fink, cps_module} = import '!fake'
+
+
+---
+single binding
+---
+
+test 'single binding export', fn:
+  expect cps_module fink":
+    foo = 1
+  | equals fink":
+    ·let 1, fn ·foo_0:
+      ·export ·foo_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtFLEEsUUFBQSIKfQ==
+
+
+---
+multiple bindings
+---
+
+test 'two bindings export', fn:
+  expect cps_module fink":
+    foo = 1
+    bar = 2
+  | equals fink":
+    ·let 1, fn ·foo_0:
+      ·let 2, fn ·bar_1:
+        ·export ·foo_0, ·bar_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gMiJdLAogICJtYXBwaW5ncyI6ICJBQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtFQUNJLEFBQUEsS0FBRSxDLEtBQU4sTTtJLEEsUUFEQSxNLEVBQ0EiCn0=
+
+
+test 'two fns export', fn:
+  expect cps_module fink":
+    add = fn a, b:
+      a + b
+
+    main = fn:
+      add 3, 4
+  | equals fink":
+    ·fn
+      fn ·a_2, ·b_3, ·v_9: ·op_plus ·a_2, ·b_3, ·v_9
+      fn ·v_8:
+        ·let ·v_8, fn ·add_0:
+          ·fn
+            fn ·v_17: ·add_0 3, 4, ·v_17
+            fn ·v_16:
+              ·let ·v_16, fn ·main_1:
+                ·export ·add_0, ·main_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUE7S0FBRyxNQUFHLE1BQU4sSSxFQUNGLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO0tBQUEsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNQUdPLEFBQUE7V0FBQSxLLEVBQ0wsQUFBQSxPQUFJLEMsRUFBRyxDLEVBREY7V0FBQSxLO1VBQUYsQUFBQSxLQUFFLEssS0FBUCxPO1ksQSxRQUhBLE0sRUFHQSIKfQ==
+
+
+---
+imports excluded from exports
+---
+
+test 'import not in exports', fn:
+  expect cps_module fink":
+    {foo} = import './bar.fnk'
+    main = fn: foo 1
+  | equals fink":
+    ·import './bar.fnk', fn ·v_8:
+      ·match_rec ·v_8, ·panic, fn ·v_10:
+        ·match_field ·v_10, 'foo', ·panic, fn ·v_11, ·v_12:
+          ·let ·v_11, fn ·foo_0:
+            ·fn
+              fn ·v_17: ·foo_0 1, ·v_17
+              fn ·v_16:
+                ·let ·v_16, fn ·main_1:
+                  ·export ·main_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQU8sQSxDQUFBLFMsQyxLQUFQLEk7RUFBUixBQUFBLFdBQVEsSSxFQUFSLE0sS0FBQSxLO0lBQUMsQUFBQSxhQUFELEssRUFBQyxBLENBQUEsRyxDLEVBQUEsTSxLQUFELE9BQUEsSztNQUFNLEFBQUEsS0FBTixLLEtBQUMsTTtRQUNNLEFBQUE7YUFBQSxLLEVBQUksQUFBQSxPQUFJLEMsRUFBUjthQUFBLEs7WUFBRixBQUFBLEtBQUUsSyxLQUFQLE87YyxBLFFBQUEiCn0=
+
+
+---
+pattern bindings excluded from exports
+---
+
+test 'destructure not in exports', fn:
+  expect cps_module fink":
+    [a, b] = [1, 2]
+    foo = fn: a
+  | equals fink":
+    ·seq_append [], 1, fn ·v_8:
+      ·seq_append ·v_8, 2, fn ·v_11:
+        ·match_seq ·v_11, ·panic, fn ·v_13:
+          ·match_next ·v_13, ·panic, fn ·v_14, ·v_15:
+            ·let ·v_14, fn ·a_0:
+              ·match_next ·v_15, ·panic, fn ·v_18, ·v_19:
+                ·let ·v_18, fn ·b_1:
+                  ·match_done ·v_19, ·panic, fn ·v_22:
+                    ·fn
+                      fn ·v_25: ·v_25 ·a_0
+                      fn ·v_24:
+                        ·let ·v_24, fn ·foo_2:
+                          ·export ·foo_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsWUFBQSxBLEMsQyxFQUFDLEMsS0FBRCxJO0VBQUEsQUFBQSxZQUFBLEksRUFBSSxDLEtBQUosSztJQUFULEFBQUEsV0FBUyxLLEVBQVQsTSxLQUFBLEs7TUFBQSxBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxPQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VUFBRCxBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxPQUFBLEs7WUFBSSxBQUFBLEtBQUosSyxLQUFJLEk7Y0FBSixBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxLO2dCQUNNLEFBQUE7cUJBQUEsSyxFLEFBQUEsTUFBSTtxQkFBSixLO29CQUFGLEFBQUEsS0FBRSxLLEtBQU4sTTtzQixBLFFBQUEiCn0=

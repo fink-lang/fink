@@ -4,15 +4,33 @@
 // associated with its source location.  The public API offers both
 // `fmt` (string only) and `fmt_mapped` (string + source map).
 
+use std::cell::Cell;
+
 use crate::ast::{CmpPart, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token};
 use crate::sourcemap::{MappedWriter, SourceMap};
+
+thread_local! {
+  /// When true, fn bodies are never inlined — always rendered as indented blocks.
+  /// Used by CPS/lifting formatters where all fn bodies should be block-style.
+  static FORCE_BLOCK_FN_BODIES: Cell<bool> = const { Cell::new(false) };
+}
 
 /// Format an AST back to Fink source, discarding source-map info.
 pub fn fmt(node: &Node) -> String {
   let mut out = MappedWriter::new();
   fmt_node(node, &mut out, 0);
   out.finish_string()
+}
+
+/// Format an AST back to Fink source with fn bodies always on new lines (for CPS output).
+pub fn fmt_block(node: &Node) -> String {
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(true));
+  let mut out = MappedWriter::new();
+  fmt_node(node, &mut out, 0);
+  let result = out.finish_string();
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(false));
+  result
 }
 
 /// Format an AST back to Fink source, returning source + source map.
@@ -28,6 +46,13 @@ pub fn fmt_mapped_with_content(node: &Node, source_name: &str, content: &str) ->
   let mut out = MappedWriter::new();
   fmt_node(node, &mut out, 0);
   out.finish_with_content(source_name, content)
+}
+
+/// Emit a sentinel mark (line 0) to stop the previous mapping from bleeding
+/// into structural text (separators, keywords) that has no source origin.
+fn stop_mark(out: &mut MappedWriter) {
+  let p = Pos { idx: 0, line: 0, col: 0 };
+  out.mark(Loc { start: p, end: p });
 }
 
 fn ind(out: &mut MappedWriter, depth: usize) {
@@ -63,6 +88,7 @@ fn is_atom(node: &Node) -> bool {
         | NodeKind::LitFloat(_)
         | NodeKind::LitDecimal(_)
         | NodeKind::Ident(_)
+        | NodeKind::SynthIdent(_)
     ),
   }
 }
@@ -90,8 +116,15 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
           out.push_str(line);
         }
       } else {
-        out.push('\'');
-        out.mark(Loc { start: open.loc.end, end: open.loc.end });
+        if open.loc.start.line == 0 {
+          // Synthetic string (CPS formatter): unmap the quote, map content to node loc.
+          stop_mark(out);
+          out.push('\'');
+          out.mark(node.loc);
+        } else {
+          out.push('\'');
+          out.mark(Loc { start: open.loc.end, end: open.loc.end });
+        }
         if s.contains('\n') {
           for (i, line) in s.split('\n').enumerate() {
             if i > 0 {
@@ -107,31 +140,37 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         out.push('\'');
       }
     }
-    NodeKind::LitSeq { close, items, .. } if items.items.is_empty() => {
+    NodeKind::LitSeq { open, close, items, .. } if items.items.is_empty() => {
+      out.mark(open.loc);
       out.push('[');
       out.mark(close.loc);
       out.push(']');
     }
-    NodeKind::LitSeq { close, items, .. } => {
+    NodeKind::LitSeq { open, close, items, .. } => {
+      out.mark(open.loc);
       out.push('[');
       for (i, child) in items.items.iter().enumerate() {
-        if i > 0 { out.push_str(", "); }
+        if i > 0 { stop_mark(out); out.push_str(", "); }
         fmt_node(child, out, depth);
       }
+      stop_mark(out);
       out.mark(close.loc);
       out.push(']');
     }
-    NodeKind::LitRec { close, items, .. } if items.items.is_empty() => {
+    NodeKind::LitRec { open, close, items, .. } if items.items.is_empty() => {
+      out.mark(open.loc);
       out.push('{');
       out.mark(close.loc);
       out.push('}');
     }
-    NodeKind::LitRec { close, items, .. } => {
+    NodeKind::LitRec { open, close, items, .. } => {
+      out.mark(open.loc);
       out.push('{');
       for (i, child) in items.items.iter().enumerate() {
-        if i > 0 { out.push_str(", "); }
+        if i > 0 { stop_mark(out); out.push_str(", "); }
         fmt_node(child, out, depth);
       }
+      stop_mark(out);
       out.mark(close.loc);
       out.push('}');
     }
@@ -190,6 +229,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::Ident(s) => out.push_str(s),
+    NodeKind::SynthIdent(n) => out.push_str(&format!("·$_{n}")),
     NodeKind::Spread { op, inner } => {
       out.mark(op.loc);
       out.push_str("..");
@@ -410,7 +450,7 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
 
   // First plain arg: space separator; rest: ", "
   for (i, arg) in plain.iter().enumerate() {
-    if i == 0 { out.push(' '); } else { out.push_str(", "); }
+    if i == 0 { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
     fmt_node(arg, out, depth);
   }
 
@@ -421,13 +461,13 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   // Single trailing fn (no complex args) → keep `fn params:` on same line
   if trailing.len() == 1 && is_fn(&trailing[0])
     && let NodeKind::Fn { params, sep, body } = &trailing[0].kind {
-      if plain.is_empty() { out.push(' '); } else { out.push_str(", "); }
+      if plain.is_empty() { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
       fmt_fn_with_inline(params, sep, &body.items, out, depth, false);
       return;
   }
 
   // Multiple trailing fns/complex args → each on its own indented line
-  if !plain.is_empty() { out.push(','); }
+  if !plain.is_empty() { stop_mark(out); out.push(','); }
   for arg in trailing {
     out.push('\n');
     ind(out, depth + 1);
@@ -461,6 +501,7 @@ fn fmt_fn_with_inline(params: &Node, sep: &Token, body: &[Node], out: &mut Mappe
 
 /// Inline after `fn params: ` in general (standalone fn, stacked fn args)
 fn is_inline_expr(node: &Node) -> bool {
+  if FORCE_BLOCK_FN_BODIES.with(|f| f.get()) { return false; }
   if is_multiline(node) { return false; }
   match &node.kind {
     // apply with no trailing fn args and no multiline args → inline
@@ -471,6 +512,7 @@ fn is_inline_expr(node: &Node) -> bool {
 
 /// Inline after `fn params: ` when it's the single trailing fn in an apply call
 fn is_inline_single_trailing(node: &Node) -> bool {
+  if FORCE_BLOCK_FN_BODIES.with(|f| f.get()) { return false; }
   is_atom(node)
 }
 

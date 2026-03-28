@@ -108,6 +108,11 @@ pub enum NodeKind<'src> {
   // Ident 'foo' | 'foo-bar'
   Ident(&'src str),
 
+  // SynthIdent — compiler-generated identifier (e.g. partial desugaring).
+  // Never produced by the parser. The u32 groups nodes with the same logical name
+  // (e.g. param and body refs share the same value). Rendered as ·$_<n>.
+  SynthIdent(u32),
+
   // --- operators ---
 
   // UnaryOp '-' | 'not' | '~'
@@ -210,6 +215,7 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::LitDecimal(_)
     | NodeKind::LitStr { .. }
     | NodeKind::Ident(_)
+    | NodeKind::SynthIdent(_)
     | NodeKind::Partial
     | NodeKind::Wildcard => {}
 
@@ -343,6 +349,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       print_children(children, out, depth);
     }
     NodeKind::Ident(s) => { out.push_str("Ident '"); out.push_str(s); out.push('\''); }
+    NodeKind::SynthIdent(n) => { out.push_str(&format!("SynthIdent '·$_{n}'")); }
     NodeKind::UnaryOp { op, operand } => {
       out.push_str("UnaryOp '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');

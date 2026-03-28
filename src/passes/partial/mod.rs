@@ -8,17 +8,26 @@
 //   - All `?` in the same scope become the same single param `$`
 //   - `?` in pattern position (Arm lhs, Bind lhs) is a compile error
 
-use crate::ast::{CmpPart, Exprs, Node, NodeKind};
+use crate::ast::{AstId, CmpPart, Exprs, Node, NodeKind};
 use crate::lexer::{Loc, Token};
 use crate::ast::transform::{Transform, TransformError, TransformResult};
 
-const PARAM: &str = "$";
 
 // --- public entry point ---
 
-pub fn apply(node: Node<'_>) -> Result<Node<'_>, TransformError> {
-  let mut pass = PartialPass;
-  pass.transform_stmt(node)
+/// Apply partial desugaring. Returns the transformed node and the updated node count.
+pub fn apply(node: Node<'_>, node_count: u32) -> Result<(Node<'_>, u32), TransformError> {
+  let mut pass = PartialPass { next_id: node_count, synth_counter: 0 };
+  let result = pass.transform_stmt(node)?;
+  //TODO should return a Parseresult with node and updated ast index
+  Ok((result, pass.next_id))
+}
+
+/// Allocate a fresh AstId.
+fn fresh_id(next_id: &mut u32) -> AstId {
+  let id = AstId(*next_id);
+  *next_id += 1;
+  id
 }
 
 // --- helpers ---
@@ -33,6 +42,7 @@ fn has_partial(node: &Node) -> bool {
     | NodeKind::LitDecimal(_)
     | NodeKind::LitStr { .. }
     | NodeKind::Ident(_)
+    | NodeKind::SynthIdent(_)
     | NodeKind::Wildcard => false,
 
     // Group is a boundary — don't look inside
@@ -86,10 +96,12 @@ fn has_partial(node: &Node) -> bool {
 
 /// Replace all Partial nodes in the tree with Ident("$").
 /// Does NOT descend into Group boundaries (those are handled by transform_group).
-fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
+fn replace_partial<'src>(node: Node<'src>, param_loc: Loc, synth_id: u32) -> Node<'src> {
+  let id = node.id;
   let loc = node.loc;
   match node.kind {
-    NodeKind::Partial => Node::new(NodeKind::Ident(PARAM), param_loc),
+    // Reuse the ?'s AstId — maps back to the ? position in source.
+    NodeKind::Partial => Node { id, kind: NodeKind::SynthIdent(synth_id), loc: param_loc },
 
     // Leaf — return as-is
     NodeKind::LitBool(_)
@@ -104,126 +116,127 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc) -> Node<'src> {
     NodeKind::Group { .. } => node,
 
     NodeKind::LitSeq { open, close, items } => {
-      Node::new(NodeKind::LitSeq { open, close, items: replace_exprs(items, param_loc) }, loc)
+      Node { id, kind: NodeKind::LitSeq { open, close, items: replace_exprs(items, param_loc, synth_id) }, loc }
     }
     NodeKind::LitRec { open, close, items } => {
-      Node::new(NodeKind::LitRec { open, close, items: replace_exprs(items, param_loc) }, loc)
+      Node { id, kind: NodeKind::LitRec { open, close, items: replace_exprs(items, param_loc, synth_id) }, loc }
     }
     NodeKind::StrTempl { open, close, children } => {
-      Node::new(NodeKind::StrTempl { open, close, children: replace_vec(children, param_loc) }, loc)
+      Node { id, kind: NodeKind::StrTempl { open, close, children: replace_vec(children, param_loc, synth_id) }, loc }
     }
     NodeKind::StrRawTempl { open, close, children } => {
-      Node::new(NodeKind::StrRawTempl { open, close, children: replace_vec(children, param_loc) }, loc)
+      Node { id, kind: NodeKind::StrRawTempl { open, close, children: replace_vec(children, param_loc, synth_id) }, loc }
     }
     NodeKind::UnaryOp { op, operand } => {
-      let operand = replace_partial(*operand, param_loc);
-      Node::new(NodeKind::UnaryOp { op, operand: Box::new(operand) }, loc)
+      let operand = replace_partial(*operand, param_loc, synth_id);
+      Node { id, kind: NodeKind::UnaryOp { op, operand: Box::new(operand) }, loc }
     }
     NodeKind::InfixOp { op, lhs, rhs } => {
-      let lhs = replace_partial(*lhs, param_loc);
-      let rhs = replace_partial(*rhs, param_loc);
-      Node::new(NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc)
+      let lhs = replace_partial(*lhs, param_loc, synth_id);
+      let rhs = replace_partial(*rhs, param_loc, synth_id);
+      Node { id, kind: NodeKind::InfixOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc }
     }
     NodeKind::ChainedCmp(parts) => {
       let parts = parts.into_iter().map(|p| match p {
-        CmpPart::Operand(n) => CmpPart::Operand(replace_partial(n, param_loc)),
+        CmpPart::Operand(n) => CmpPart::Operand(replace_partial(n, param_loc, synth_id)),
         CmpPart::Op(op) => CmpPart::Op(op),
       }).collect();
-      Node::new(NodeKind::ChainedCmp(parts), loc)
+      Node { id, kind: NodeKind::ChainedCmp(parts), loc }
     }
     NodeKind::Spread { op, inner } => {
-      let inner = inner.map(|n| Box::new(replace_partial(*n, param_loc)));
-      Node::new(NodeKind::Spread { op, inner }, loc)
+      let inner = inner.map(|n| Box::new(replace_partial(*n, param_loc, synth_id)));
+      Node { id, kind: NodeKind::Spread { op, inner }, loc }
     }
     NodeKind::Member { op, lhs, rhs } => {
-      let lhs = replace_partial(*lhs, param_loc);
-      // Member rhs Group (computed key) is transparent — replace inside, preserve Group wrapper
+      let lhs = replace_partial(*lhs, param_loc, synth_id);
+      let rhs_id = rhs.id;
       let rhs = match rhs.kind {
         NodeKind::Group { open, close, inner } => {
           let rhs_loc = rhs.loc;
-          let inner = replace_partial(*inner, param_loc);
-          Node::new(NodeKind::Group { open, close, inner: Box::new(inner) }, rhs_loc)
+          let inner = replace_partial(*inner, param_loc, synth_id);
+          Node { id: rhs_id, kind: NodeKind::Group { open, close, inner: Box::new(inner) }, loc: rhs_loc }
         }
-        _ => replace_partial(*rhs, param_loc),
+        _ => replace_partial(*rhs, param_loc, synth_id),
       };
-      Node::new(NodeKind::Member { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc)
+      Node { id, kind: NodeKind::Member { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc }
     }
     NodeKind::Apply { func, args } => {
-      let func = replace_partial(*func, param_loc);
-      let args = replace_exprs(args, param_loc);
-      Node::new(NodeKind::Apply { func: Box::new(func), args }, loc)
+      let func = replace_partial(*func, param_loc, synth_id);
+      let args = replace_exprs(args, param_loc, synth_id);
+      Node { id, kind: NodeKind::Apply { func: Box::new(func), args }, loc }
     }
     NodeKind::Bind { op, lhs, rhs } => {
-      // lhs is pattern — don't replace; rhs is value
-      let rhs = replace_partial(*rhs, param_loc);
-      Node::new(NodeKind::Bind { op, lhs, rhs: Box::new(rhs) }, loc)
+      let rhs = replace_partial(*rhs, param_loc, synth_id);
+      Node { id, kind: NodeKind::Bind { op, lhs, rhs: Box::new(rhs) }, loc }
     }
     NodeKind::BindRight { op, lhs, rhs } => {
-      // rhs is pattern — don't replace; lhs is value
-      let lhs = replace_partial(*lhs, param_loc);
-      Node::new(NodeKind::BindRight { op, lhs: Box::new(lhs), rhs }, loc)
+      let lhs = replace_partial(*lhs, param_loc, synth_id);
+      Node { id, kind: NodeKind::BindRight { op, lhs: Box::new(lhs), rhs }, loc }
     }
     NodeKind::Arm { lhs, sep, body } => {
-      // In LitRec context: lhs is the key (Ident, not replaced), body has the value
-      let body = replace_exprs(body, param_loc);
-      Node::new(NodeKind::Arm { lhs, sep, body }, loc)
+      let body = replace_exprs(body, param_loc, synth_id);
+      Node { id, kind: NodeKind::Arm { lhs, sep, body }, loc }
     }
 
-    // For anything else, return as-is (Pipe, Fn, Match, Block, Try — complex)
-    other => Node::new(other, loc),
+    other => Node { id, kind: other, loc },
   }
 }
 
-fn replace_vec<'src>(nodes: Vec<Node<'src>>, param_loc: Loc) -> Vec<Node<'src>> {
-  nodes.into_iter().map(|n| replace_partial(n, param_loc)).collect()
+fn replace_vec<'src>(nodes: Vec<Node<'src>>, param_loc: Loc, synth_id: u32) -> Vec<Node<'src>> {
+  nodes.into_iter().map(|n| replace_partial(n, param_loc, synth_id)).collect()
 }
 
-fn replace_exprs<'src>(exprs: Exprs<'src>, param_loc: Loc) -> Exprs<'src> {
-  Exprs { items: replace_vec(exprs.items, param_loc), seps: exprs.seps }
+fn replace_exprs<'src>(exprs: Exprs<'src>, param_loc: Loc, synth_id: u32) -> Exprs<'src> {
+  Exprs { items: replace_vec(exprs.items, param_loc, synth_id), seps: exprs.seps }
 }
 
 /// Wrap an expression in `fn $: expr` if it contains Partial nodes.
-fn wrap_if_partial<'src>(node: Node<'src>) -> Node<'src> {
+fn wrap_if_partial<'src>(node: Node<'src>, next_id: &mut u32, synth_counter: &mut u32) -> Node<'src> {
   if !has_partial(&node) {
     return node;
   }
+  let synth_id = *synth_counter;
+  *synth_counter += 1;
   let param_loc = node.loc;
-  let body = replace_partial(node, param_loc);
+  let body = replace_partial(node, param_loc, synth_id);
   let body_loc = body.loc;
-  let param = Node::new(NodeKind::Ident(PARAM), param_loc);
-  let patterns = Node::new(NodeKind::Patterns(Exprs { items: vec![param], seps: vec![] }), param_loc);
+  let param = Node { id: fresh_id(next_id), kind: NodeKind::SynthIdent(synth_id), loc: param_loc };
+  let patterns = Node { id: fresh_id(next_id), kind: NodeKind::Patterns(Exprs { items: vec![param], seps: vec![] }), loc: param_loc };
   let sep = Token { kind: crate::lexer::TokenKind::Colon, loc: param_loc, src: ":" };
-  Node::new(NodeKind::Fn { params: Box::new(patterns), sep, body: Exprs { items: vec![body], seps: vec![] } }, body_loc)
+  Node { id: fresh_id(next_id), kind: NodeKind::Fn { params: Box::new(patterns), sep, body: Exprs { items: vec![body], seps: vec![] } }, loc: body_loc }
 }
 
 // --- transformer ---
 
-struct PartialPass;
+struct PartialPass {
+  next_id: u32,
+  synth_counter: u32,
+}
 
 impl<'src> PartialPass {
   /// Transform a statement — top-level scope boundary.
   /// Wraps in Fn if any Partial remains after processing inner scope boundaries.
   fn transform_stmt(&mut self, node: Node<'src>) -> TransformResult<'src> {
+    let id = node.id;
     let loc = node.loc;
     match node.kind {
       // Bind: only wrap RHS, never the whole Bind
       NodeKind::Bind { op, lhs, rhs } => {
         let rhs = self.transform_stmt(*rhs)?;
-        Ok(Node::new(NodeKind::Bind { op, lhs, rhs: Box::new(rhs) }, loc))
+        Ok(Node { id, kind: NodeKind::Bind { op, lhs, rhs: Box::new(rhs) }, loc })
       }
 
       // BindRight: only wrap LHS value, never the whole BindRight
       NodeKind::BindRight { op, lhs, rhs } => {
         let lhs = self.transform_stmt(*lhs)?;
-        Ok(Node::new(NodeKind::BindRight { op, lhs: Box::new(lhs), rhs }, loc))
+        Ok(Node { id, kind: NodeKind::BindRight { op, lhs: Box::new(lhs), rhs }, loc })
       }
 
       // Arm: body stmts are independent scopes, lhs is pattern (skip)
       NodeKind::Arm { lhs, sep, body } => {
         let body = self.transform_body(body)?;
-        Ok(Node::new(NodeKind::Arm { lhs, sep, body }, loc))
+        Ok(Node { id, kind: NodeKind::Arm { lhs, sep, body }, loc })
       }
-
 
       // Group: explicit scope boundary — process inner as independent stmt
       NodeKind::Group { inner, .. } => {
@@ -236,20 +249,27 @@ impl<'src> PartialPass {
         for child in exprs.items {
           new_items.push(self.transform_stmt(child)?);
         }
-        Ok(Node::new(NodeKind::Pipe(Exprs { items: new_items, seps: exprs.seps }), loc))
+        Ok(Node { id, kind: NodeKind::Pipe(Exprs { items: new_items, seps: exprs.seps }), loc })
       }
 
       // Module: recurse into each expression as independent scope
       NodeKind::Module(exprs) => {
         let body = self.transform_body(exprs)?;
-        Ok(Node::new(NodeKind::Module(body), loc))
+        Ok(Node { id, kind: NodeKind::Module(body), loc })
       }
 
       // Everything else: recurse into children (processing inner Group/Pipe boundaries),
-      // then wrap in Fn if any Partial remains
+      // then wrap in Fn if any Partial remains.
+      // Note: self.transform() may reconstruct with AstId(0) via the default trait,
+      // but wrap_if_partial → replace_partial will reconstruct with the correct ids
+      // from the original tree.
       other => {
-        let node = self.transform(Node::new(other, loc))?;
-        Ok(wrap_if_partial(node))
+        if !has_partial(&Node { id, kind: other.clone(), loc }) {
+          // No partials — return unchanged.
+          return Ok(Node { id, kind: other, loc });
+        }
+        let node = self.transform(Node { id, kind: other, loc })?;
+        Ok(wrap_if_partial(node, &mut self.next_id, &mut self.synth_counter))
       }
     }
   }
@@ -261,9 +281,7 @@ impl<'src> PartialPass {
 }
 
 impl<'src> Transform<'src> for PartialPass {
-  // The default walker recurses into all children.
   // Scope boundaries (Group, Pipe, Bind, BindRight, Arm) are handled in transform_stmt.
-  // When the default walker hits a Group, it calls transform_group below.
   fn transform_group(&mut self, _open: Token<'src>, _close: Token<'src>, inner: Node<'src>, _loc: Loc) -> TransformResult<'src> {
     self.transform_stmt(inner)
   }
@@ -277,15 +295,17 @@ impl<'src> Transform<'src> for PartialPass {
     loc: Loc,
   ) -> TransformResult<'src> {
     let lhs = self.transform(lhs)?;
-    // If rhs is a Group (computed key), transform its inner directly — not as a scope boundary
+    let rhs_id = rhs.id;
     let rhs = match rhs.kind {
       NodeKind::Group { open, close, inner } => {
         let rhs_loc = rhs.loc;
         let inner = self.transform(*inner)?;
-        Node::new(NodeKind::Group { open, close, inner: Box::new(inner) }, rhs_loc)
+        Node { id: rhs_id, kind: NodeKind::Group { open, close, inner: Box::new(inner) }, loc: rhs_loc }
       }
       _ => self.transform(rhs)?,
     };
+    // id for the parent Member node is lost by the trait — use AstId(0).
+    // This only runs for expressions that contain partials (which get wrapped in fn anyway).
     Ok(Node::new(NodeKind::Member { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc))
   }
 }
@@ -298,17 +318,24 @@ mod tests {
     use crate::ast::NodeKind;
     match crate::parser::parse(src) {
       Err(e) => format!("PARSE ERROR: {}", e.message),
-      Ok(result) => match super::apply(result.root) {
-        Ok(node) => {
-          if let NodeKind::Module(exprs) = &node.kind {
-            if exprs.items.len() == 1 {
-              return exprs.items[0].print();
+      Ok(result) => {
+        let before = result.root.print();
+        match super::apply(result.root, result.node_count) {
+          Ok((node, _new_count)) => {
+            let after = node.print();
+            if before == after {
+              return "No Change".to_string();
             }
+            if let NodeKind::Module(exprs) = &node.kind {
+              if exprs.items.len() == 1 {
+                return exprs.items[0].print();
+              }
+            }
+            node.print()
           }
-          node.print()
+          Err(e) => format!("ERROR: {}", e.message),
         }
-        Err(e) => format!("ERROR: {}", e.message),
-      },
+      }
     }
   }
 

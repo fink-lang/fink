@@ -117,7 +117,7 @@ fn walk_captures(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetFn { name, fn_body, body, .. } => {
+    LetFn { name, fn_body, cont, .. } => {
       // Recurse into fn_body first (bottom-up — inner fn captures ready first).
       walk_captures(fn_body, graphs, captures);
 
@@ -144,11 +144,11 @@ fn walk_captures(
       }
 
       // Recurse into continuation.
-      if let Cont::Expr { body: b, .. } = body {
+      if let Cont::Expr { body: b, .. } = cont {
         walk_captures(b, graphs, captures);
       }
     }
-    LetVal { body: Cont::Expr { body: b, .. }, .. } => {
+    LetVal { cont: Cont::Expr { body: b, .. }, .. } => {
       walk_captures(b, graphs, captures);
     }
     LetVal { .. } => {}
@@ -164,8 +164,6 @@ fn walk_captures(
       walk_captures(then, graphs, captures);
       walk_captures(else_, graphs, captures);
     }
-    Yield { cont: Cont::Expr { body, .. }, .. } => walk_captures(body, graphs, captures),
-    _ => {}
   }
 }
 
@@ -178,11 +176,11 @@ fn collect_direct_captured_binds(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, body, .. } => {
+    LetVal { val, cont, .. } => {
       check_captured_bind(val, graphs, out);
-      if let Cont::Expr { body: b, .. } = body { collect_direct_captured_binds(b, graphs, out); }
+      if let Cont::Expr { body: b, .. } = cont { collect_direct_captured_binds(b, graphs, out); }
     }
-    LetFn { body, .. } => {
+    LetFn { cont: body, .. } => {
       // Don't descend into fn_body — those captures belong to the inner fn.
       if let Cont::Expr { body: b, .. } = body { collect_direct_captured_binds(b, graphs, out); }
     }
@@ -205,10 +203,6 @@ fn collect_direct_captured_binds(
       collect_direct_captured_binds(then, graphs, out);
       collect_direct_captured_binds(else_, graphs, out);
     }
-    Yield { value, cont } => {
-      check_captured_bind(value, graphs, out);
-      if let Cont::Expr { body, .. } = cont { collect_direct_captured_binds(body, graphs, out); }
-    }
   }
 }
 
@@ -221,11 +215,11 @@ fn collect_deep_captured_binds(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetVal { val, body, .. } => {
+    LetVal { val, cont, .. } => {
       check_captured_bind(val, graphs, out);
-      if let Cont::Expr { body: b, .. } = body { collect_deep_captured_binds(b, graphs, out); }
+      if let Cont::Expr { body: b, .. } = cont { collect_deep_captured_binds(b, graphs, out); }
     }
-    LetFn { fn_body, body, .. } => {
+    LetFn { fn_body, cont: body, .. } => {
       collect_deep_captured_binds(fn_body, graphs, out);
       if let Cont::Expr { body: b, .. } = body { collect_deep_captured_binds(b, graphs, out); }
     }
@@ -248,15 +242,11 @@ fn collect_deep_captured_binds(
       collect_deep_captured_binds(then, graphs, out);
       collect_deep_captured_binds(else_, graphs, out);
     }
-    Yield { value, cont } => {
-      check_captured_bind(value, graphs, out);
-      if let Cont::Expr { body, .. } = cont { collect_deep_captured_binds(body, graphs, out); }
-    }
   }
 }
 
 fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<(CpsId, Bind)>) {
-  let is_ref = matches!(&val.kind, ValKind::Ref(Ref::Name) | ValKind::Ref(Ref::Synth(_)));
+  let is_ref = matches!(&val.kind, ValKind::Ref(Ref::Synth(_)));
   if is_ref
     && let Some(Some(Resolution::Captured { bind, bind_kind, .. })) = graphs.resolution.try_get(val.id)
     && !out.iter().any(|(id, _)| id == bind)
@@ -266,7 +256,7 @@ fn check_captured_bind(val: &Val<'_>, graphs: &Graphs, out: &mut Vec<(CpsId, Bin
     // accessible via collect_scope_names — don't need capture threading.
     // Fn params have bind_scope in a fn scope (has parent_scope entry).
     // Continuation binds have bind_scope in a continuation scope (no parent_scope).
-    if *bind_kind != Bind::Name {
+    if !bind_kind.is_synth_name() {
       let in_fn_scope = graphs.bind_scope.try_get(*bind)
         .and_then(|s| *s)
         .and_then(|scope| graphs.parent_scope.try_get(scope).and_then(|p| *p))
@@ -421,23 +411,14 @@ fn bind_to_scope<'src>(
   graphs: &mut Graphs,
 ) {
   let entry = ScopeEntry { bind_id: bind.id, fn_depth, bind_kind: bind.kind };
-  match bind.kind {
-    Bind::Name => {
-      if let Some(name) = ctx.source_name(bind.id)
-        && name != "_" {
-          scope.names.insert(name, entry);
-          graphs.bind_scope.set(bind.id, Some(scope_id));
-      }
-    }
-    Bind::Synth | Bind::Cont => {
-      scope.synths.insert(bind.id, entry);
-      graphs.bind_scope.set(bind.id, Some(scope_id));
-      // If this param has a synth alias (from closure_lifting), also register
-      // the old CpsId so Ref::Synth(old_id) in the hoisted fn body resolves.
-      if let Some(Some(old_id)) = ctx.synth_alias.try_get(bind.id) {
-        scope.synths.insert(*old_id, entry);
-      }
-    }
+  // All binds (SynthName, Synth, Cont) register by CpsId in synths.
+  // Ref::Synth(cps_id) lookup goes through synths, not names.
+  scope.synths.insert(bind.id, entry);
+  graphs.bind_scope.set(bind.id, Some(scope_id));
+  // If this param has a synth alias (from closure_lifting), also register
+  // the old CpsId so Ref::Synth(old_id) in the hoisted fn body resolves.
+  if let Some(Some(old_id)) = ctx.synth_alias.try_get(bind.id) {
+    scope.synths.insert(*old_id, entry);
   }
 }
 
@@ -468,27 +449,15 @@ fn resolve_val<'src>(
   scope: &Scope<'src>,
   self_bind: Option<CpsId>,
   fn_depth: u32,
-  ctx: &Ctx<'_, 'src>,
+  _ctx: &Ctx<'_, 'src>,
   graphs: &mut Graphs,
 ) {
-  if let ValKind::Ref(ref_) = &val.kind {
-    match ref_ {
-      Ref::Name => {
-        if let Some(name) = ctx.source_name(val.id) {
-          if let Some(entry) = scope.names.get(name) {
-            let resolution = classify(entry, fn_depth, self_bind);
-            graphs.resolution.set(val.id, Some(resolution));
-          } else {
-            graphs.resolution.set(val.id, Some(Resolution::Unresolved));
-          }
-        }
-      }
-      Ref::Synth(bind_id) => {
-        if let Some(entry) = scope.synths.get(bind_id) {
-          let resolution = classify(entry, fn_depth, self_bind);
-          graphs.resolution.set(val.id, Some(resolution));
-        }
-      }
+  if let ValKind::Ref(Ref::Synth(bind_id)) = &val.kind {
+    if let Some(entry) = scope.synths.get(bind_id) {
+      let resolution = classify(entry, fn_depth, self_bind);
+      graphs.resolution.set(val.id, Some(resolution));
+    } else {
+      graphs.resolution.set(val.id, Some(Resolution::Unresolved));
     }
   }
 }
@@ -522,13 +491,13 @@ fn collect_scope_names<'src>(
 ) {
   use ExprKind::*;
   match &expr.kind {
-    LetFn { name, body, .. } => {
+    LetFn { name, cont, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
-      if let Cont::Expr { body: body_expr, .. } = body {
+      if let Cont::Expr { body: body_expr, .. } = cont {
         collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
       }
     }
-    LetVal { name, body, .. } => {
+    LetVal { name, cont: body, .. } => {
       bind_to_scope(scope, name, scope_id, fn_depth, ctx, graphs);
       if let Cont::Expr { body: body_expr, .. } = body {
         collect_scope_names(body_expr, scope, scope_id, fn_depth, ctx, graphs);
@@ -544,11 +513,6 @@ fn collect_scope_names<'src>(
         }
       }
     }
-    Yield { cont: Cont::Expr { args, body }, .. } => {
-      bind_to_scope(scope, &args[0], scope_id, fn_depth, ctx, graphs);
-      collect_scope_names(body, scope, scope_id, fn_depth, ctx, graphs);
-    }
-    Yield { .. } => {}
     // Terminal or branching — stop collecting
     _ => {}
   }
@@ -595,16 +559,16 @@ fn resolve_expr<'src>(
   use ExprKind::*;
   let sb = self_bind;
   match &expr.kind {
-    LetVal { name, val, body } => {
+    LetVal { name, val, cont } => {
       resolve_val(val, scope, sb, fn_depth, ctx, graphs);
       let mut inner = scope.clone();
       bind_to_scope(&mut inner, name, current_scope, fn_depth, ctx, graphs);
-      if let Cont::Expr { body: body_expr, .. } = body {
+      if let Cont::Expr { body: body_expr, .. } = cont {
         resolve_expr(body_expr, &inner, current_scope, sb, fn_depth, ctx, graphs);
       }
     }
 
-    LetFn { name, params, cont, fn_body, body } => {
+    LetFn { name, params, fn_body, cont: body } => {
       // Fn bodies see all names at this scope level (hoisted), enabling
       // self- and mutual recursion. Collect all User bind names from the
       // entire continuation chain starting here.
@@ -639,7 +603,6 @@ fn resolve_expr<'src>(
             bind_to_scope(&mut fn_scope, b, fn_scope_id, fn_depth + 1, ctx, graphs),
         }
       }
-      bind_to_scope(&mut fn_scope, cont, fn_scope_id, fn_depth + 1, ctx, graphs);
       resolve_expr(fn_body, &fn_scope, fn_scope_id, fn_self_bind, fn_depth + 1, ctx, graphs);
 
       // continuation scope: sequential (only names defined so far)
@@ -669,10 +632,6 @@ fn resolve_expr<'src>(
       resolve_expr(else_, scope, current_scope, sb, fn_depth, ctx, graphs);
     }
 
-    Yield { value, cont } => {
-      resolve_val(value, scope, sb, fn_depth, ctx, graphs);
-      resolve_cont(cont, scope, current_scope, sb, fn_depth, ctx, graphs);
-    }
   }
 }
 
@@ -708,9 +667,9 @@ mod tests {
     ctx: &Ctx<'_, 'src>,
     out: &mut Vec<String>,
   ) {
-    if let ValKind::Ref(Ref::Name) = &val.kind {
-      let ref_name = ctx.source_name(val.id).unwrap_or("?");
-      match result.resolution.try_get(val.id) {
+    if let ValKind::Ref(Ref::Synth(ref_id)) = &val.kind {
+      let ref_name = ctx.source_name(*ref_id).unwrap_or("?");
+      match result.resolution.try_get(*ref_id) {
         Some(Some(Resolution::Local(bind_id))) => {
           let bind_name = ctx.source_name(*bind_id).unwrap_or("?");
           let scope = result.bind_scope.try_get(*bind_id)
@@ -719,7 +678,7 @@ mod tests {
             .unwrap_or(0);
           out.push(format!(
             "(ref {}, {}) == (local (bind {}, {})) in scope {}",
-            val.id.0, ref_name, bind_id.0, bind_name, scope
+            ref_id.0, ref_name, bind_id.0, bind_name, scope
           ));
         }
         Some(Some(Resolution::Captured { bind, depth, .. })) => {
@@ -730,7 +689,7 @@ mod tests {
             .unwrap_or(0);
           out.push(format!(
             "(ref {}, {}) == (captured {}, (bind {}, {})) in scope {}",
-            val.id.0, ref_name, depth, bind.0, bind_name, scope
+            ref_id.0, ref_name, depth, bind.0, bind_name, scope
           ));
         }
         Some(Some(Resolution::Recursive(bind_id))) => {
@@ -741,13 +700,13 @@ mod tests {
             .unwrap_or(0);
           out.push(format!(
             "(ref {}, {}) == (recursive (bind {}, {})) in scope {}",
-            val.id.0, ref_name, bind_id.0, bind_name, scope
+            ref_id.0, ref_name, bind_id.0, bind_name, scope
           ));
         }
         Some(Some(Resolution::Unresolved)) | Some(None) | None => {
           out.push(format!(
             "(ref {}, {}) == unresolved",
-            val.id.0, ref_name
+            ref_id.0, ref_name
           ));
         }
       }
@@ -773,16 +732,16 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      LetVal { val, body, .. } => {
+      LetVal { val, cont, .. } => {
         emit_classified_val(val, result, ctx, out);
-        if let Cont::Expr { body: body_expr, .. } = body {
+        if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_lines(body_expr, result, ctx, out);
         }
       }
 
-      LetFn { fn_body, body, .. } => {
+      LetFn { fn_body, cont, .. } => {
         collect_classified_lines(fn_body, result, ctx, out);
-        if let Cont::Expr { body: body_expr, .. } = body {
+        if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_lines(body_expr, result, ctx, out);
         }
       }
@@ -806,10 +765,6 @@ mod tests {
         collect_classified_lines(else_, result, ctx, out);
       }
 
-      Yield { value, cont } => {
-        emit_classified_val(value, result, ctx, out);
-        if let Cont::Expr { body, .. } = cont { collect_classified_lines(body, result, ctx, out); }
-      }
     }
   }
 
@@ -817,7 +772,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let node_count = cps.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, synth_alias: &empty_alias };
@@ -827,15 +783,16 @@ mod tests {
     }
   }
 
-  /// Run parse → CPS → cont_lift → name_res. Emit BOTH Ref::Name and Ref::Synth
-  /// resolution. Synth refs that don't have a resolution are reported as `unresolved`.
+  /// Run parse → CPS → cont_lift → name_res. Emit Ref::Synth resolution.
+  /// Synth refs that don't have a resolution are reported as `unresolved`.
   fn cps_resolve_synth(src: &str) -> String {
-    use crate::passes::cont_lifting::lift as cont_lift;
+    use crate::passes::lifting::lift;
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
-        let lifted = cont_lift(cps);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
+        let lifted = lift(cps, &ast_index);
         let node_count = lifted.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&lifted.root, &lifted.origin, &ast_index, node_count, &empty_alias);
         let ctx = Ctx { origin: &lifted.origin, ast_index: &ast_index, synth_alias: &empty_alias };
@@ -882,14 +839,14 @@ mod tests {
   ) {
     use ExprKind::*;
     match &expr.kind {
-      LetVal { val, body, .. } => {
+      LetVal { val, cont, .. } => {
         emit_classified_val(val, result, ctx, out);
         emit_synth_val(val, result, out);
-        if let Cont::Expr { body: body_expr, .. } = body {
+        if let Cont::Expr { body: body_expr, .. } = cont {
           collect_classified_with_synth(body_expr, result, ctx, out);
         }
       }
-      LetFn { fn_body, body, .. } => {
+      LetFn { fn_body, cont: body, .. } => {
         collect_classified_with_synth(fn_body, result, ctx, out);
         if let Cont::Expr { body: body_expr, .. } = body {
           collect_classified_with_synth(body_expr, result, ctx, out);
@@ -918,11 +875,6 @@ mod tests {
         collect_classified_with_synth(then, result, ctx, out);
         collect_classified_with_synth(else_, result, ctx, out);
       }
-      Yield { value, cont } => {
-        emit_classified_val(value, result, ctx, out);
-        emit_synth_val(value, result, out);
-        if let Cont::Expr { body, .. } = cont { collect_classified_with_synth(body, result, ctx, out); }
-      }
     }
   }
 
@@ -941,7 +893,8 @@ mod tests {
     match parse(src) {
       Ok(r) => {
         let ast_index = build_index(&r);
-        let cps = lower_expr(&r.root);
+        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+        let cps = lower_expr(&r.root, &scope);
         let node_count = cps.origin.len();
         let empty_alias = crate::propgraph::PropGraph::new(); let result = resolve(&cps.root, &cps.origin, &ast_index, node_count, &empty_alias);
         let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, synth_alias: &empty_alias };
@@ -963,7 +916,7 @@ mod tests {
               Some(format!("(bind {}, {})", bind_id.0, name))
             })
             .collect();
-          lines.push(format!("cap ·ƒ_{}, {}", scope_id.0, binds.join(", ")));
+          lines.push(format!("cap ·v_{}, {}", scope_id.0, binds.join(", ")));
         }
       }
     }

@@ -131,7 +131,8 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
     };
 
     // equals[_fink] [text] fn: <exp>   OR   equals '...'   OR   equals fink": ...
-    let exp_text = match &pipe_nodes.last().unwrap().kind {
+    let equals_node = pipe_nodes.last().unwrap();
+    let exp_text = match &equals_node.kind {
       NodeKind::Apply { func, args }
         if matches!(&func.kind, NodeKind::Ident(s) if s.starts_with("equals")) =>
       {
@@ -139,7 +140,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
           panic!("include_fink_tests: test '{}' at line {} — `equals` has no expected body", name, stmt.loc.start.line);
         };
         // Accept a string literal, raw": tagged template, or a fn/text fn body.
-        match &body_node.kind {
+        let text = match &body_node.kind {
           NodeKind::LitStr { content: s, .. } => s.clone(),
           _ => {
             if let Some(text) = extract_raw_templ(body_node) {
@@ -150,7 +151,8 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
               })
             }
           }
-        }
+        };
+        text
       }
       _ => panic!(
         "include_fink_tests: test '{}' at line {} — last pipe segment is not `equals fink\":`",
@@ -170,14 +172,14 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
   out
 }
 
-/// Extract the verbatim string content from a `fink":\n  ...` tagged template node.
+/// Extract the verbatim string content from a tagged template node (e.g. `fink":`, `wat":`, `wat''`).
 ///
-/// Matches `Apply { func: Ident("fink"), args: [LitStr { content: s } | StrRawTempl { children: [LitStr { content: s }] }] }` and
-/// returns `s` verbatim — no unescaping, no trimming. This is the `fink":` form used in tests.
+/// Matches `Apply { func: Ident(_), args: [LitStr { content: s } | StrRawTempl { children: [LitStr { content: s }] }] }` and
+/// returns `s` verbatim — no unescaping, no trimming. Any tag name is accepted.
 fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   use fink::ast::NodeKind;
   let NodeKind::Apply { func, args } = &node.kind else { return None };
-  if !matches!(func.kind, NodeKind::Ident("fink")) { return None; }
+  if !matches!(func.kind, NodeKind::Ident(_)) { return None; }
   let arg = args.items.first()?;
   match &arg.kind {
     // No interpolation: raw": collapses to Apply(raw, LitStr) — verbatim, no unescape.
@@ -192,7 +194,7 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
         }
       }
       panic!(
-        "include_fink_tests: fink\": block contains interpolation — \
+        "include_fink_tests: tagged template block contains interpolation — \
          use \\${{}} to escape '${{' in test source inputs"
       );
     }
@@ -297,13 +299,51 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
     let src_lit   = proc_macro2::Literal::byte_string(test.src.as_bytes());
     let exp_lit   = proc_macro2::Literal::byte_string(test.exp.as_bytes());
     let path_info = format!("{}:{}", rel_path, test.line);
+    let test_name_str = &test.name;
 
     output.extend(quote! {
       #[test]
       fn #test_name() {
+        crate::test_context::set(#test_name_str, #abs_path_str);
+        let actual = #func(std::str::from_utf8(#src_lit).unwrap());
+        let expected = std::str::from_utf8(#exp_lit).unwrap();
+        if std::env::var("BLESS").is_ok() && actual != expected {
+          // Find the test by name, locate `| equals` line, replace the body below it.
+          let file = std::fs::read_to_string(#abs_path_str).unwrap();
+          let test_marker = format!("test '{}',", #test_name_str);
+          if let Some(test_pos) = file.find(&test_marker) {
+            let after_test = &file[test_pos..];
+            // Find "| equals" line after the test marker.
+            if let Some(equals_offset) = after_test.find("| equals") {
+              let equals_pos = test_pos + equals_offset;
+              // Find the end of the "| equals ..." line.
+              let after_equals = &file[equals_pos..];
+              let line_end = after_equals.find('\n').map(|i| equals_pos + i + 1).unwrap_or(file.len());
+              // Find where the body ends: the indented block below `| equals ...:`.
+              // Body lines start with 4 spaces. Stop at the first non-indented line
+              // (blank or otherwise).
+              let body_end = {
+                let mut pos = line_end;
+                for line in file[line_end..].lines() {
+                  if !line.starts_with("    ") { break; }
+                  pos += line.len() + 1; // +1 for newline
+                }
+                pos.min(file.len())
+              };
+              // Build indented replacement.
+              let indented: String = actual.lines()
+                .map(|l| if l.is_empty() { String::new() } else { format!("    {l}") })
+                .collect::<Vec<_>>()
+                .join("\n");
+              let new_file = format!("{}{}\n{}", &file[..line_end], indented, &file[body_end..]);
+              std::fs::write(#abs_path_str, new_file).unwrap();
+              eprintln!("BLESS: updated {}", #path_info);
+            }
+          }
+        }
         pretty_assertions::assert_eq!(
-          #func(std::str::from_utf8(#src_lit).unwrap()),
-          std::str::from_utf8(#exp_lit).unwrap(),
+          actual,
+          expected,
           "{}",
           #path_info
         );

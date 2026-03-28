@@ -4,7 +4,8 @@
 fn dump_cps_ids() {
     let src = "a = 2\n\nfoo = fn b:\n  b + bar a\n\n\nbar = fn d:\n  d * e\n";
     let r = fink::parser::parse(src).unwrap();
-    let cps = fink::passes::cps::transform::lower_expr(&r.root);
+    let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
+    let cps = fink::passes::cps::transform::lower_expr(&r.root, &scope);
     println!("\nnode_count: {}", cps.origin.len());
     dump_expr(&cps.root, 0);
 }
@@ -27,14 +28,14 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
     use fink::passes::cps::ir::ExprKind::*;
     let i = indent(depth);
     match &e.kind {
-        LetVal { name, val, body } => {
+        LetVal { name, val, cont: body } => {
             println!("{i}Expr(#{}) LetVal {:?}", e.id.0, name);
             dump_val(val, depth+1);
             if let fink::passes::cps::ir::Cont::Expr { body: inner, .. } = body {
                 dump_expr(inner, depth+1);
             }
         }
-        LetFn { name, params, fn_body, body, .. } => {
+        LetFn { name, params, fn_body, cont: body, .. } => {
             let p: Vec<_> = params.iter().map(|p| format!("{:?}", p)).collect();
             println!("{i}Expr(#{}) LetFn {:?} [{}]", e.id.0, name, p.join(", "));
             println!("{i}  fn_body:");
@@ -69,14 +70,6 @@ fn dump_expr(e: &fink::passes::cps::ir::Expr, depth: usize) {
             dump_val(cond, depth+1);
             dump_expr(then, depth+1);
             dump_expr(else_, depth+1);
-        }
-        Yield { value, cont } => {
-            println!("{i}Expr(#{}) Yield", e.id.0);
-            dump_val(value, depth+1);
-            if let fink::passes::cps::ir::Cont::Expr { args, body } = cont {
-                println!("{i}  cont args={:?}:", args);
-                dump_expr(body, depth+1);
-            }
         }
     }
 }

@@ -680,10 +680,15 @@ impl<'src> Parser<'src> {
   fn parse_infix(&mut self, min_bp: u8) -> ParseResult<'src> {
     let mut lhs = self.parse_unary_or_atom()?;
 
-    // If the atom is a bare ident followed by a BlockStart, collect block args.
-    // This handles infix RHS like `a == seq\n  add 1, 2` where `seq` would
-    // otherwise be returned bare, leaving the BlockStart as an unexpected token.
-    if matches!(lhs.kind, NodeKind::Ident(_)) && self.at(TokenKind::BlockStart) {
+    // If the atom is a bare ident followed by args or a BlockStart, collect as
+    // application. This handles infix RHS like `a - add b` where `add b` should
+    // parse as `Apply(add, b)`, not leave `b` as a separate expression.
+    // Only when min_bp > 0 (infix RHS) — at min_bp == 0 the caller handles apply.
+    if min_bp > 0
+      && matches!(lhs.kind, NodeKind::Ident(_))
+      && !Self::is_infix_keyword(match &lhs.kind { NodeKind::Ident(s) => s, _ => "" })
+      && (self.at(TokenKind::BlockStart) || self.is_arg_start())
+    {
       lhs = self.collect_apply_or_block(lhs, false)?;
     }
 
@@ -1202,6 +1207,9 @@ impl<'src> Parser<'src> {
           self.skip_block_tokens();
           let val = self.parse_expr()?;
           let loc = Loc { start: first.loc.start, end: val.loc.end };
+          // TODO: record fields reuse Arm nodes, but they're semantically different
+          // from match arms (no scope introduction, key is a literal not a pattern).
+          // Consider a dedicated RecField variant to avoid downstream confusion.
           items.push(self.node(NodeKind::Arm { lhs: Box::new(first), sep, body: Exprs { items: vec![val], seps: vec![] } }, loc));
         } else {
           items.push(first);
@@ -1617,6 +1625,7 @@ pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
     _ => p.peek().loc,
   };
   let root = p.node(NodeKind::Module(exprs), loc);
+  // TODO: parse result should always include ast index,
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 

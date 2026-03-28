@@ -362,6 +362,7 @@ impl<'cfg> Ctx<'cfg> {
             | NodeKind::LitFloat(_)
             | NodeKind::LitDecimal(_)
             | NodeKind::Ident(_)
+            | NodeKind::SynthIdent(_)
             | NodeKind::Partial
             | NodeKind::Wildcard => {
                 let src_len = src_len_of(node);
@@ -431,7 +432,7 @@ impl<'cfg> Ctx<'cfg> {
                 let mut new_items = Vec::new();
                 for stmt in &exprs.items {
                     let placed = self.node(stmt, pos);
-                    pos = Pos { idx: 0, line: placed.loc.end.line + 1, col: child_col };
+                    pos = newline_pos(placed.loc.end, placed.loc.end.line + 1, child_col);
                     new_items.push(placed);
                 }
                 let end = new_items.last().map(|n| n.loc.end).unwrap_or(at);

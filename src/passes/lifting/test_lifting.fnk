@@ -1,0 +1,382 @@
+---
+unified lifting tests
+---
+
+# Unified closure/continuation lifting — lifts nested fns one level at a time,
+# threading captured bindings as explicit params via ·closure.
+#
+# After lifting, no fn should reference bindings from outer scopes — all values
+# are passed explicitly as params. No forward references to sibling-scope binds.
+#
+# Test format:
+#   test 'name', fn:
+#     expect lift fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected lifted CPS>
+
+{test, equals, expect, fink, lift} = import 'fake!'
+
+
+---
+pure functions — no captures, unchanged
+---
+
+test 'pure fn is unchanged', fn:
+  expect lift fink":
+    f = fn x: x
+
+  | equals fink":
+    ·f_0 = ·v_5 = fn ·x_1, ·v_6:
+      ·v_6 ·x_1
+
+    ·export ·f_0
+
+
+test 'pure nested fn — no captures, hoisted to module scope', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b: b
+
+  | equals fink":
+    ·v_8 = fn ·b_2, ·v_9:
+      ·v_9 ·b_2
+
+    ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
+      ·v_7 ·v_8
+
+    ·export ·foo_0
+
+
+---
+continuation lifting — inline Cont::Expr bodies become named fns
+---
+
+test 'chained arithmetic — cont body lifted', fn:
+  expect lift fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+
+  | equals fink":
+    ·v_25 = fn ·v_26, ·v_9:
+      ·x_1 = ·v_9
+      ·op_plus ·x_1, 4, ·v_26
+
+    ·main_0 = ·v_5 = fn ·v_6:
+      ·v_30 = ·closure ·v_25, ·v_6
+      ·op_mul 2, 3, ·v_30
+
+    ·export ·main_0
+
+
+---
+depth-1 closures — single level of capture
+---
+
+test 'captured binding becomes leading param', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    ·v_22 = fn ·a_23, ·b_2, ·v_9:
+      ·op_plus ·a_23, ·b_2, ·v_9
+
+    ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
+      ·closure ·v_22, ·a_1, ·v_7
+
+    ·export ·foo_0
+
+
+test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
+  expect lift fink":
+    f = fn x:
+      x
+    g = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    ·f_0 = ·v_9 = fn ·x_2, ·v_10:
+      ·v_10 ·x_2
+
+    ·v_35 = fn ·a_36, ·b_4, ·v_18:
+      ·op_plus ·a_36, ·b_4, ·v_18
+
+    ·g_1 = ·v_15 = fn ·a_3, ·v_16:
+      ·closure ·v_35, ·a_3, ·v_16
+
+    ·export ·f_0, ·g_1
+
+
+---
+depth-2 closures — multiple nesting levels
+---
+
+test 'depth-2 closure', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b + c
+
+  | equals fink":
+    ·v_48 = fn ·c_49, ·v_51, ·v_15:
+      ·op_plus ·v_15, ·c_49, ·v_51
+
+    ·v_39 = fn ·a_40, ·b_42, ·c_3, ·v_12:
+      ·v_55 = ·closure ·v_48, ·c_3, ·v_12
+      ·op_plus ·a_40, ·b_42, ·v_55
+
+    ·v_32 = fn ·a_33, ·b_2, ·v_10:
+      ·closure ·v_39, ·a_33, ·b_2, ·v_10
+
+    ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
+      ·closure ·v_32, ·a_1, ·v_8
+
+    ·export ·foo_0
+
+
+test 'multiple captures at depth-2', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b
+
+  | equals fink":
+    ·v_34 = fn ·a_35, ·b_37, ·c_3, ·v_12:
+      ·op_plus ·a_35, ·b_37, ·v_12
+
+    ·v_27 = fn ·a_28, ·b_2, ·v_10:
+      ·closure ·v_34, ·a_28, ·b_2, ·v_10
+
+    ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
+      ·closure ·v_27, ·a_1, ·v_8
+
+    ·export ·foo_0
+
+
+test 'yield — cont body lifted', fn:
+  expect lift fink":
+    main = fn:
+      q = yield 42
+      1 + q
+
+  | equals fink":
+    ·v_24 = fn ·v_25, ·v_8:
+      ·q_1 = ·v_8
+      ·op_plus 1, ·q_1, ·v_25
+
+    ·main_0 = ·v_5 = fn ·v_6:
+      ·v_29 = ·closure ·v_24, ·v_6
+      ·yield 42, ·v_29
+
+    ·export ·main_0
+
+
+test 'multi-fn module — add and main', fn:
+  expect lift fink":
+    add = fn a, b:
+      a + b
+
+    main = fn:
+      add 3, 4
+
+  | equals fink":
+    ·add_0 = ·v_8 = fn ·a_2, ·b_3, ·v_9:
+      ·op_plus ·a_2, ·b_3, ·v_9
+
+    ·main_1 = ·v_16 = fn ·v_17:
+      ·add_0 3, 4, ·v_17
+
+    ·export ·add_0, ·main_1
+
+test 'chained module-fn calls via let — cont closes over outer cont', fn:
+  # The cont ·v_55 closes over ·v_28 (the outer cont param) via ·closure.
+  # This is correct and necessary: ·double_0 calls its cont with one arg (the
+  # result), so ·v_28 must be baked into the cont beforehand.
+  # The ·closure could be eliminated by threading ·v_28 as an extra param
+  # through ·double_0 — see the "closure elimination" note in lifting/mod.rs.
+  expect lift fink":
+    double = fn x:
+      x * 2
+    inc = fn x:
+      x + 1
+
+    main = fn:
+      x = double 5
+      inc x
+
+  | equals fink":
+    ·double_0 = ·v_11 = fn ·x_3, ·v_12:
+      ·op_mul ·x_3, 2, ·v_12
+
+    ·inc_1 = ·v_19 = fn ·x_4, ·v_20:
+      ·op_plus ·x_4, 1, ·v_20
+
+    ·v_55 = fn ·v_56, ·v_31:
+      ·x_5 = ·v_31
+      ·inc_1 ·x_5, ·v_56
+
+    ·main_2 = ·v_27 = fn ·v_28:
+      ·v_60 = ·closure ·v_55, ·v_28
+      ·double_0 5, ·v_60
+
+    ·export ·double_0, ·inc_1, ·main_2
+
+---
+pattern matching
+---
+
+test 'seq destructure', fn:
+  expect lift fink":
+    main = fn foo:
+      [a] = foo
+      a + 1
+
+  | equals fink":
+    ·v_55 = fn ·a_56, ·v_58, ·v_14:
+      ·op_plus ·a_56, 1, ·v_58
+
+    ·v_46 = fn ·v_47, ·v_10, ·v_11:
+      ·a_2 = ·v_10
+      ·v_62 = ·closure ·v_55, ·a_2, ·v_47
+      ·match_done ·v_11, panic, ·v_62
+
+    ·v_37 = fn ·v_38, ·v_9:
+      ·v_51 = ·closure ·v_46, ·v_38
+      ·match_next ·v_9, panic, ·v_51
+
+    ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
+      ·v_42 = ·closure ·v_37, ·v_7
+      ·match_seq ·foo_1, panic, ·v_42
+
+    ·export ·main_0
+
+
+test 'record destructure', fn:
+  expect lift fink":
+    main = fn foo:
+      {x} = foo
+      x + 1
+
+  | equals fink":
+    ·v_43 = fn ·v_44, ·v_10, ·v_11:
+      ·x_2 = ·v_10
+      ·op_plus ·x_2, 1, ·v_44
+
+    ·v_34 = fn ·v_35, ·v_9:
+      ·v_48 = ·closure ·v_43, ·v_35
+      ·match_field ·v_9, 'x', panic, ·v_48
+
+    ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
+      ·v_39 = ·closure ·v_34, ·v_7
+      ·match_rec ·foo_1, panic, ·v_39
+
+    ·export ·main_0
+
+
+test 'match — no forward refs after lift', fn:
+  expect lift fink":
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals fink":
+    ·v_33 = fn ·n_34, ·v_36, ·v_21:
+      ·match_block ·n_34, ·v_21, ·v_36
+
+    ·v_47 = fn ·v_14:
+      ·v_14 42
+
+    ·v_50 = fn ·v_11, ·v_9, ·v_10:
+      ·match_value ·v_11, 0, ·v_9, ·v_10
+
+    ·v_44 = fn ·v_40:
+      ·match_arm ·v_50, ·v_47, ·v_40
+
+    ·foo_0 = ·v_5 = fn ·n_1, ·v_6:
+      ·closure ·v_33, ·n_1, ·v_6, ·v_44
+
+    ·export ·foo_0
+
+
+test 'match with binding', fn:
+  expect lift fink":
+    foo = fn n:
+      r = match n:
+        0: n + 1
+      r
+
+  | equals fink":
+    ·v_61 = fn ·v_62, ·v_26:
+      ·r_2 = ·v_26
+      ·v_62 ·r_2
+
+    ·v_41 = fn ·n_42, ·v_44, ·v_24:
+      ·v_66 = ·closure ·v_61, ·v_44
+      ·match_block ·n_42, ·v_24, ·v_66
+
+    ·v_52 = fn ·n_53, ·v_15:
+      ·op_plus ·n_53, 1, ·v_15
+
+    ·v_70 = fn ·v_12, ·v_10, ·v_11:
+      ·match_value ·v_12, 0, ·v_10, ·v_11
+
+    ·foo_0 = ·v_6 = fn ·n_1, ·v_7:
+      ·v_48 = ·closure ·v_41, ·n_1, ·v_7
+      ·v_57 = ·closure ·v_52, ·n_1
+      ·match_arm ·v_70, ·v_57, ·v_48
+
+    ·export ·foo_0
+
+
+test 'recursive fn in match', fn:
+  expect lift fink":
+    fib = fn n:
+      r = match n:
+        0: 1
+        _: fib n + 1
+      r
+
+  | equals fink":
+    ·v_99 = fn ·v_100, ·v_43:
+      ·r_2 = ·v_43
+      ·v_100 ·r_2
+
+    ·v_74 = fn ·n_75, ·v_77, ·v_79, ·v_41:
+      ·v_104 = ·closure ·v_99, ·v_79
+      ·match_block ·n_75, ·v_77, ·v_41, ·v_104
+
+    ·v_114 = fn ·v_115, ·v_32:
+      ·fib_0 ·v_32, ·v_115
+
+    ·v_90 = fn ·n_91, ·v_28:
+      ·v_119 = ·closure ·v_114, ·v_28
+      ·op_plus ·n_91, 1, ·v_119
+
+    ·v_111 = fn ·v_26, ·v_24, ·v_25:
+      ·v_25 _
+
+    ·v_60 = fn ·n_61, ·v_63, ·v_22:
+      ·v_83 = ·closure ·v_74, ·n_61, ·v_22, ·v_63
+      ·v_95 = ·closure ·v_90, ·n_61
+      ·match_arm ·v_111, ·v_95, ·v_83
+
+    ·v_87 = fn ·v_15:
+      ·v_15 1
+
+    ·v_108 = fn ·v_12, ·v_10, ·v_11:
+      ·match_value ·v_12, 0, ·v_10, ·v_11
+
+    ·v_71 = fn ·v_67:
+      ·match_arm ·v_108, ·v_87, ·v_67
+
+    ·fib_0 = ·v_6 = fn ·n_1, ·v_7:
+      ·closure ·v_60, ·n_1, ·v_7, ·v_71
+
+    ·export ·fib_0
