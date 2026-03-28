@@ -1,5 +1,29 @@
 // WASM passes — collection, binary emission, and post-processing.
 //
+// ## Architecture
+//
+// The pipeline produces a self-contained, debuggable WASM binary from
+// lifted CPS IR. WAT text is a derived view — formatted from the binary.
+//
+//   Lifted CPS IR
+//       ↓
+//   collect.rs  → Module / CollectedFn (shared with wat/writer.rs)
+//       ↓
+//   emit.rs     → WASM binary (wasm-encoder) + byte offset mappings
+//       ↓
+//   dwarf.rs    → DWARF .debug_* sections (gimli::write) appended to binary
+//       ↓
+//   fmt.rs      → WAT text + Source Map v3 (wasmparser + gimli::read)
+//
+// The WASM binary contains: WasmGC types, imported builtins, defined
+// functions, globals, exports, name section, and DWARF debug info.
+// The formatter reads it back to produce human-readable WAT with
+// source maps for the playground and `fink wat` CLI.
+//
+// Structural source locations (func headers, params, globals, exports)
+// are passed alongside the binary via StructuralLoc, since they don't
+// correspond to code section byte offsets and can't be in DWARF.
+//
 // ## Module layout
 //
 // collect.rs    — shared collect phase (lifted CPS → Module/CollectedFn)

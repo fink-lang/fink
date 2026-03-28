@@ -5,8 +5,16 @@
 // to wasm/emit.rs (the write side).
 //
 // The formatter reconstructs nested WAT s-expressions from the flat
-// WASM stack machine instructions. It uses the name section for
-// human-readable identifiers and DWARF .debug_line for source mapping.
+// WASM stack machine instructions using a stack-based approach: value
+// instructions push formatted strings onto a stack, statement-level
+// instructions (local.set, return_call*, if) pop from the stack and
+// emit complete nested statements.
+//
+// It uses the name section for human-readable identifiers, DWARF
+// .debug_line for code-level source mapping, and StructuralLoc entries
+// from the emitter for non-code items (func headers, params, globals,
+// exports). Stop marks (unmapped segments) prevent mapping bleed
+// between structural WAT lines.
 
 use std::collections::{BTreeMap, HashMap};
 
