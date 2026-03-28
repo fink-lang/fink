@@ -35,7 +35,7 @@
 // BuiltIn ops are emitted as (call $builtin_<name> ...) — referenced but not
 // defined. The environment (test harness / runtime) is expected to provide them.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use crate::ast::{AstId, Node as AstNode, NodeKind};
 use crate::passes::cps::ir::{
@@ -55,8 +55,8 @@ pub fn emit(
   ast_index: &PropGraph<AstId, Option<&AstNode<'_>>>,
 ) -> String {
   let mut w = MappedWriter::new();
-  let ctx = Ctx::new(&cps.origin, ast_index);
-  let module = collect(&cps.root, &ctx);
+  let module = collect(&cps.root, &Ctx::new(&cps.origin, ast_index));
+  let ctx = Ctx::new(&cps.origin, ast_index).with_globals(module.globals.clone());
   emit_module(&module, &ctx, &mut w);
   w.finish_string()
 }
@@ -68,8 +68,8 @@ pub fn emit_mapped(
   source_name: &str,
 ) -> (String, SourceMap) {
   let mut w = MappedWriter::new();
-  let ctx = Ctx::new(&cps.origin, ast_index);
-  let module = collect(&cps.root, &ctx);
+  let module = collect(&cps.root, &Ctx::new(&cps.origin, ast_index));
+  let ctx = Ctx::new(&cps.origin, ast_index).with_globals(module.globals.clone());
   emit_module(&module, &ctx, &mut w);
   w.finish(source_name)
 }
@@ -82,8 +82,8 @@ pub fn emit_mapped_with_content(
   source_content: &str,
 ) -> (String, SourceMap) {
   let mut w = MappedWriter::new();
-  let ctx = Ctx::new(&cps.origin, ast_index);
-  let module = collect(&cps.root, &ctx);
+  let module = collect(&cps.root, &Ctx::new(&cps.origin, ast_index));
+  let ctx = Ctx::new(&cps.origin, ast_index).with_globals(module.globals.clone());
   emit_module(&module, &ctx, &mut w);
   w.finish_with_content(source_name, source_content)
 }
@@ -95,6 +95,10 @@ pub fn emit_mapped_with_content(
 struct Ctx<'a, 'src> {
   origin: &'a PropGraph<CpsId, Option<AstId>>,
   ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
+  /// CpsIds that are module-level fn globals — rendered as global.get, not local.get.
+  // TODO: eliminate this hashmap by checking at emit time whether an id is a param
+  // or let-local of the current fn (same approach the flat formatter uses).
+  globals: HashSet<CpsId>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -102,7 +106,16 @@ impl<'a, 'src> Ctx<'a, 'src> {
     origin: &'a PropGraph<CpsId, Option<AstId>>,
     ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
   ) -> Self {
-    Self { origin, ast_index }
+    Self { origin, ast_index, globals: HashSet::new() }
+  }
+
+  fn with_globals(mut self, globals: HashSet<CpsId>) -> Self {
+    self.globals = globals;
+    self
+  }
+
+  fn is_global(&self, id: CpsId) -> bool {
+    self.globals.contains(&id)
   }
 
   fn ast_node(&self, id: CpsId) -> Option<&'src AstNode<'src>> {
@@ -129,6 +142,17 @@ impl<'a, 'src> Ctx<'a, 'src> {
       },
       None => format!("v_{}", id.0),
     }
+  }
+
+  /// For a pipe-desugared App, return the `|` separator token loc for this call stage.
+  /// The App's origin points to the Pipe node; the func val's origin identifies which stage.
+  fn pipe_sep_loc(&self, expr_id: CpsId, func_val: &Val<'_>) -> Option<Loc> {
+    let node = self.ast_node(expr_id)?;
+    let NodeKind::Pipe(exprs) = &node.kind else { return None };
+    let func_ast_id = self.origin.try_get(func_val.id).and_then(|o| *o)?;
+    let stage_idx = exprs.items.iter().position(|item| item.id == func_ast_id)?;
+    if stage_idx == 0 { return None; }
+    exprs.seps.get(stage_idx - 1).map(|sep| sep.loc)
   }
 }
 
@@ -188,7 +212,7 @@ fn write_expr(expr: &WatExpr, w: &mut MappedWriter) {
 
 /// A lifted function, ready to emit.
 struct CollectedFn<'a, 'src> {
-  /// WASM function label (e.g. "main_1", "add_0").
+  /// WASM function label (e.g. "v_8").
   label: String,
   /// CpsId of the LetFn name — used to source-map the (func ...) header.
   fn_id: CpsId,
@@ -200,6 +224,9 @@ struct CollectedFn<'a, 'src> {
   export_as: Option<String>,
   /// CpsId of the LetVal alias that names this export — used to source-map (export ...).
   export_bind_id: Option<CpsId>,
+  /// LetVal alias for this fn (e.g. "add_0"), emitted as a global before (func ...).
+  /// Set for all top-level LetVal aliases, not just exports.
+  alias: Option<(CpsId, String)>,
 }
 
 /// Module-level collected data.
@@ -207,6 +234,8 @@ struct Module<'a, 'src> {
   funcs: Vec<CollectedFn<'a, 'src>>,
   /// All function arities encountered (= param count). Used to emit type section.
   arities: BTreeSet<usize>,
+  /// CpsIds of LetVal aliases for module-level fns — these are globals, not locals.
+  globals: HashSet<CpsId>,
 }
 
 /// Walk the top-level chain and collect all lifted functions + the export list.
@@ -223,7 +252,13 @@ fn collect<'a, 'src>(root: &'a Expr<'src>, ctx: &Ctx<'_, 'src>) -> Module<'a, 's
 
   collect_chain(root, ctx, &exports, &mut funcs, &mut arities);
 
-  Module { funcs, arities }
+  // Every module-level fn alias gets a global — consistent with the flat formatter's
+  // `·add_0 = ·v_8 = fn ...` layout, and allows global.get at all call sites.
+  let globals: HashSet<CpsId> = funcs.iter()
+    .filter_map(|cf| cf.alias.as_ref().map(|(id, _)| *id))
+    .collect();
+
+  Module { funcs, arities, globals }
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs:
@@ -292,7 +327,7 @@ fn collect_chain<'a, 'src>(
         .find(|(id, _)| *id == name.id)
         .map(|(_, n)| n.clone());
 
-      funcs.push(CollectedFn { label, fn_id: name.id, params: param_labels, body: fn_body, export_as, export_bind_id: None });
+      funcs.push(CollectedFn { label, fn_id: name.id, params: param_labels, body: fn_body, export_as, export_bind_id: None, alias: None });
 
       // Continue down the cont chain.
       match cont {
@@ -302,15 +337,16 @@ fn collect_chain<'a, 'src>(
     }
     ExprKind::LetVal { name, val, cont } => {
       // A LetVal at the top level is typically a name alias for a preceding LetFn:
-      //   ·main_1 = ·v_53 (Ref::Synth pointing at the LetFn name)
-      // We use this to associate the export name with the right function.
-      if let ValKind::Ref(Ref::Synth(fn_id)) = val.kind {
-        // If name.id is in exports, annotate the fn whose name_id == fn_id.
-        if let Some((_, export_name)) = exports.iter().find(|(id, _)| *id == name.id)
-          && let Some(cf) = funcs.iter_mut().find(|cf| cf.label == ctx.label(fn_id)) {
-            cf.export_as = Some(export_name.clone());
-            cf.export_bind_id = Some(name.id);
-          }
+      //   ·add_0 = ·v_8 (Ref::Synth pointing at the LetFn name)
+      // Record the alias on the fn so we can emit a global before (func ...).
+      if let ValKind::Ref(Ref::Synth(fn_id)) = val.kind
+        && let Some(cf) = funcs.iter_mut().find(|cf| cf.label == ctx.label(fn_id))
+      {
+        cf.alias = Some((name.id, ctx.label(name.id)));
+        if let Some((_, export_name)) = exports.iter().find(|(id, _)| *id == name.id) {
+          cf.export_as = Some(export_name.clone());
+          cf.export_bind_id = Some(name.id);
+        }
       }
       match cont {
         Cont::Expr { body, .. } => collect_chain(body, ctx, exports, funcs, arities),
@@ -364,6 +400,11 @@ fn emit_exports(module: &Module<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter
 
 fn emit_func(func: &CollectedFn<'_, '_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter) {
   let arity = func.params.len();
+  // Emit the alias global before the function it names.
+  if let Some((alias_id, alias_label)) = &func.alias {
+    ctx.mark(*alias_id, w);
+    w.push_str(&format!("  (global ${} (ref $Fn{}) (ref.func ${}))\n", alias_label, arity, func.label));
+  }
   ctx.mark(func.fn_id, w);
   w.push_str(&format!("  (func ${} (type $Fn{})", func.label, arity));
   for (id, label) in &func.params {
@@ -514,7 +555,13 @@ fn emit_body(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, w: &mut MappedWriter, indent: u
             .unwrap_or(expr.id);
           ctx.mark(mark_id, w);
         }
-        Callable::Val(_) => ctx.mark(expr.id, w),
+        Callable::Val(func_val) => {
+          if let Some(loc) = ctx.pipe_sep_loc(expr.id, func_val) {
+            w.mark(loc);
+          } else {
+            ctx.mark(expr.id, w);
+          }
+        }
       }
       emit_app(func, args, ctx, w, indent);
     }
@@ -571,11 +618,7 @@ fn emit_call(
   let (val_args, cont_arg) = split_args(args);
   let total_arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
 
-  let callee = match &func_val.kind {
-    ValKind::ContRef(id) | ValKind::Ref(Ref::Synth(id)) =>
-      WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
-    _ => WatExpr::atom(format!("(;; unhandled callee: {:?} ;)", func_val.kind)),
-  };
+  let callee = val_expr(func_val, ctx);
 
   let mut call_args: Vec<WatExpr> = val_args.iter().map(|a| val_arg_expr(a, ctx)).collect();
   if let Some(cont) = cont_arg {
@@ -668,7 +711,10 @@ fn emit_builtin(
 fn val_expr(val: &Val<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {
   let inner = match &val.kind {
     ValKind::Lit(lit) => lit_expr(lit),
-    ValKind::Ref(Ref::Synth(id)) => WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+    ValKind::Ref(Ref::Synth(id)) => {
+      let get = if ctx.is_global(*id) { "global.get" } else { "local.get" };
+      WatExpr::list(get, vec![WatExpr::atom(format!("${}", ctx.label(*id)))])
+    }
     ValKind::Ref(Ref::Unresolved(id)) => WatExpr::atom(format!("(;; unresolved: v_{} ;)", id.0)),
     ValKind::ContRef(id) => WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
     ValKind::Panic => WatExpr::atom("unreachable"),
@@ -708,7 +754,10 @@ fn val_arg_expr(arg: &Arg<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {
 /// Build a WatExpr for a continuation reference argument.
 fn cont_expr(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> WatExpr {
   match cont {
-    Cont::Ref(id) => WatExpr::list("local.get", vec![WatExpr::atom(format!("${}", ctx.label(*id)))]),
+    Cont::Ref(id) => {
+      let get = if ctx.is_global(*id) { "global.get" } else { "local.get" };
+      WatExpr::list(get, vec![WatExpr::atom(format!("${}", ctx.label(*id)))])
+    }
     Cont::Expr { .. } => WatExpr::atom("(;; inline-cont-as-arg ;)"),
   }
 }

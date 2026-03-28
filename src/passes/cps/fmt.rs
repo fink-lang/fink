@@ -127,6 +127,17 @@ fn ctx_loc(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> Loc {
   ctx.ast_node(cps_id).map(|n| n.loc).unwrap_or_else(dummy_loc)
 }
 
+/// For a pipe-desugared App, return the `|` separator token loc for this call stage.
+/// The App's origin points to the Pipe node; the func val's origin identifies which stage.
+fn pipe_sep_loc(expr_id: CpsId, func_val: &Val<'_>, ctx: &Ctx<'_, '_>) -> Option<Loc> {
+  let node = ctx.ast_node(expr_id)?;
+  let NodeKind::Pipe(exprs) = &node.kind else { return None };
+  let func_ast_id = ctx.origin.try_get(func_val.id).and_then(|o| *o)?;
+  let stage_idx = exprs.items.iter().position(|item| item.id == func_ast_id)?;
+  if stage_idx == 0 { return None; }
+  exprs.seps.get(stage_idx - 1).map(|sep| sep.loc)
+}
+
 /// Render a Val to an AST node for use in an already-resolved position.
 /// Uses origin map to recover names and source locs from the AST.
 fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
@@ -430,6 +441,12 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
           _ => None,
         })
         .unwrap_or(expr_loc);
+      // For pipe-desugared calls, use the `|` sep token loc for the apply wrapper.
+      let call_loc = if let Callable::Val(func_val) = func {
+        pipe_sep_loc(expr.id, func_val, ctx).unwrap_or(expr_loc)
+      } else {
+        builtin_loc
+      };
       let func_node = match func {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
         Callable::BuiltIn(op) => ident(&render_builtin(op), builtin_loc),
@@ -456,7 +473,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
           Arg::Cont(c) => render_cont(c, ctx),
           Arg::Expr(e) => to_node(e, ctx),
         }).collect();
-        apply(func_node, arg_nodes, expr_loc)
+        apply(func_node, arg_nodes, call_loc)
       } else {
         // Regular App: all args render normally (last Arg::Cont is the result cont).
         let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
@@ -465,7 +482,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
           Arg::Cont(c) => render_cont(c, ctx),
           Arg::Expr(e) => to_node(e, ctx),
         }).collect();
-        apply(func_node, arg_nodes, expr_loc)
+        apply(func_node, arg_nodes, call_loc)
       }
     }
 
