@@ -19,7 +19,7 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:TODO
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0FBQ0wsMkNBQUE7QTtBQURGO0EiCn0=
 
 
 test 'let binding', fn:
@@ -41,7 +41,7 @@ test 'let binding', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:TODO
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QUFDTCxvQkFBSTtBQUNKLDJDQUFBO0E7QUFGRjtBIgp9
 
 
 test 'add two literals', fn:
@@ -61,4 +61,4 @@ test 'add two literals', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:TODO
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBQUFBO0FBQU8seUJBQUE7QUFDSCwwQkFBRixnQ0FBSSxnQ0FBRjtBO0FBREo7QSIKfQ==
