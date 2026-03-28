@@ -43,12 +43,35 @@ use super::collect::{
 pub struct EmitResult {
   pub wasm: Vec<u8>,
   pub offset_mappings: Vec<OffsetMapping>,
+  /// Structural source locations for non-code items (func headers, globals, exports, params).
+  /// The formatter uses these to place source marks on WAT structural lines.
+  pub structural_locs: Vec<StructuralLoc>,
 }
 
 /// A single source-map entry: WASM byte offset → .fnk source location.
 pub struct OffsetMapping {
   pub wasm_offset: u32,
   pub loc: Loc,
+}
+
+/// Source location for a structural (non-code) WASM item.
+#[derive(Debug, Clone)]
+pub struct StructuralLoc {
+  pub kind: StructuralKind,
+  pub loc: Loc,
+}
+
+/// Kind of structural item.
+#[derive(Debug, Clone)]
+pub enum StructuralKind {
+  /// Function header: (func $name ...)
+  FuncHeader { func_idx: u32 },
+  /// Function parameter: (param $name ...)
+  FuncParam { func_idx: u32, param_idx: u32 },
+  /// Global alias: (global $name ...)
+  Global { global_idx: u32 },
+  /// Export: (export "name" ...)
+  Export { name: String },
 }
 
 /// Emit a WASM binary from a collected CPS module.
@@ -66,7 +89,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Fixup: convert func-local offsets to absolute offsets.
   let mappings = fixup_offsets(&wasm, e.raw_mappings);
 
-  EmitResult { wasm, offset_mappings: mappings }
+  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs }
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +159,8 @@ struct Emitter<'a, 'src> {
   /// Raw mappings: (func_index, func_local_byte_offset, loc).
   /// Converted to absolute offsets after module.finish().
   raw_mappings: Vec<RawMapping>,
+  /// Structural source locations for non-code items.
+  structural_locs: Vec<StructuralLoc>,
 }
 
 struct RawMapping {
@@ -154,6 +179,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       idx: Indices::new(),
       ctx,
       raw_mappings: Vec::new(),
+      structural_locs: Vec::new(),
     }
   }
 
@@ -263,7 +289,26 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let arity = func.params.len();
       let type_idx = self.idx.fn_type_idx(arity);
       functions.function(type_idx);
-      self.idx.funcs.insert(func.label.clone(), self.idx.import_count + i as u32);
+      let func_idx = self.idx.import_count + i as u32;
+      self.idx.funcs.insert(func.label.clone(), func_idx);
+
+      // Record structural loc for func header.
+      if let Some(node) = self.ctx.ast_node(func.fn_id) {
+        self.structural_locs.push(StructuralLoc {
+          kind: StructuralKind::FuncHeader { func_idx },
+          loc: node.loc,
+        });
+      }
+
+      // Record structural locs for params.
+      for (p_idx, (p_id, _)) in func.params.iter().enumerate() {
+        if let Some(node) = self.ctx.ast_node(*p_id) {
+          self.structural_locs.push(StructuralLoc {
+            kind: StructuralKind::FuncParam { func_idx, param_idx: p_idx as u32 },
+            loc: node.loc,
+          });
+        }
+      }
     }
 
     self.module.section(&functions);
@@ -278,10 +323,18 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let mut next_global_idx = 0u32;
 
     for func in &cps_mod.funcs {
-      if let Some((_alias_id, alias_label)) = &func.alias {
+      if let Some((alias_id, alias_label)) = &func.alias {
         let arity = func.params.len();
         let fn_type_idx = self.idx.fn_type_idx(arity);
         let func_idx = self.idx.func_idx(&func.label);
+
+        // Record structural loc for global alias.
+        if let Some(node) = self.ctx.ast_node(*alias_id) {
+          self.structural_locs.push(StructuralLoc {
+            kind: StructuralKind::Global { global_idx: next_global_idx },
+            loc: node.loc,
+          });
+        }
 
         globals.global(
           GlobalType {
@@ -317,6 +370,15 @@ impl<'a, 'src> Emitter<'a, 'src> {
         let func_idx = self.idx.func_idx(&func.label);
         exports.export(name, ExportKind::Func, func_idx);
         has_exports = true;
+
+        // Record structural loc for export.
+        if let Some(bind_id) = func.export_bind_id
+          && let Some(node) = self.ctx.ast_node(bind_id) {
+            self.structural_locs.push(StructuralLoc {
+              kind: StructuralKind::Export { name: name.clone() },
+              loc: node.loc,
+            });
+          }
       }
     }
 

@@ -36,7 +36,21 @@ pub fn format_mapped(
   source_name: &str,
   source_content: &str,
 ) -> (String, SourceMap) {
-  let module = parse_module(wasm);
+  format_mapped_with_locs(wasm, &[], source_name, source_content)
+}
+
+/// Format with structural source locations from the emitter.
+pub fn format_mapped_with_locs(
+  wasm: &[u8],
+  structural_locs: &[super::emit::StructuralLoc],
+  source_name: &str,
+  source_content: &str,
+) -> (String, SourceMap) {
+  let mut module = parse_module(wasm);
+  // Inject structural locs into the parsed module.
+  for sl in structural_locs {
+    module.structural_locs.push(sl.clone());
+  }
   let mut w = MappedWriter::new();
   emit_wat(&module, &mut w);
   w.finish_with_content(source_name, source_content)
@@ -67,6 +81,8 @@ struct ParsedModule {
   dwarf_locs: BTreeMap<u32, Loc>,
   /// Number of imported functions (offset for defined func indices).
   import_func_count: u32,
+  /// Structural source locations from the emitter.
+  structural_locs: Vec<super::emit::StructuralLoc>,
 }
 
 struct ParsedType {
@@ -134,6 +150,7 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
     global_names: HashMap::new(),
     dwarf_locs: BTreeMap::new(),
     import_func_count: 0,
+    structural_locs: Vec::new(),
   };
 
   let mut func_type_indices: Vec<u32> = Vec::new();
@@ -508,9 +525,13 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
 }
 
 fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
+  use super::emit::StructuralKind;
   for (name, kind, index) in &module.exports {
     if kind == &ExternalKind::Func {
       let f_name = func_name(module, *index);
+      if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::Export { name: n } if n == name)) {
+        w.mark(loc);
+      }
       w.push_str(&format!("  (export {:?} (func {}))\n", name, f_name));
     }
   }
@@ -544,7 +565,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
 }
 
 fn emit_global_for_func(module: &ParsedModule, func_idx: u32, w: &mut MappedWriter) {
-  // Find global that references this function.
+  use super::emit::StructuralKind;
   for (g_idx, global) in module.globals.iter().enumerate() {
     if global.init_func_index == Some(func_idx) {
       let g_name = global_name(module, g_idx as u32);
@@ -552,8 +573,10 @@ fn emit_global_for_func(module: &ParsedModule, func_idx: u32, w: &mut MappedWrit
         .map(|ti| type_name(module, ti))
         .unwrap_or_else(|| "$Any".into());
       let f_name = func_name(module, func_idx);
-      // Mark with DWARF loc if available (we don't have global-specific locs,
-      // so we skip marking here).
+      // Apply structural source mark for this global.
+      if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::Global { global_idx } if *global_idx == g_idx as u32)) {
+        w.mark(loc);
+      }
       w.push_str(&format!("  (global {} (ref {}) (ref.func {}))\n",
         g_name, type_name_str, f_name));
     }
@@ -570,13 +593,22 @@ fn emit_func(module: &ParsedModule, func: &ParsedFunc, func_idx: u32, w: &mut Ma
     })
     .unwrap_or(0);
 
-  // Function header.
+  use super::emit::StructuralKind;
+
+  // Function header — apply structural mark.
+  if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::FuncHeader { func_idx: fi } if *fi == func_idx)) {
+    w.mark(loc);
+  }
   w.push_str(&format!("  (func {} (type {})", name, type_name_str));
 
-  // Parameters.
+  // Parameters — each gets its own mark.
   for i in 0..param_count {
+    w.push_str(" ");
+    if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::FuncParam { func_idx: fi, param_idx: pi } if *fi == func_idx && *pi == i as u32)) {
+      w.mark(loc);
+    }
     let p_name = local_name(module, func_idx, i as u32);
-    w.push_str(&format!(" (param {} (ref $Any))", p_name));
+    w.push_str(&format!("(param {} (ref $Any))", p_name));
   }
   w.push_str("\n");
 
@@ -777,6 +809,13 @@ fn lookup_func_param_count(module: &ParsedModule, func_idx: u32) -> usize {
     .unwrap_or(0)
 }
 
+
+/// Find a structural source location by kind predicate.
+fn find_structural_loc(module: &ParsedModule, pred: impl Fn(&super::emit::StructuralKind) -> bool) -> Option<Loc> {
+  module.structural_locs.iter()
+    .find(|sl| pred(&sl.kind))
+    .map(|sl| sl.loc)
+}
 
 fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -> String {
   match instr {

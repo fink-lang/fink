@@ -19,4 +19,4 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:TODO
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQUE7QUFBTyx5QkFBQTtBQUNMOztBQURGIgp9
