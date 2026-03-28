@@ -2,7 +2,7 @@
 module-level CPS — lower_module produces flat chain + export terminal
 ---
 
-# Module CPS: flat LetFn/LetVal chain ending with ·ƒ_0 ·export_0, ·export_1, ...
+# Module CPS: flat LetFn/LetVal chain ending with ·v_0 ·export_0, ·export_1, ...
 # No outer ·fn wrapper. Only simple name = expr bindings are exported.
 # Pattern destructures and imports are excluded from exports.
 #
@@ -53,11 +53,11 @@ test 'two fns export', fn:
       add 3, 4
   | equals fink":
     ·fn
-      fn ·a_2, ·b_3, ·ƒ_9: ·op_plus ·a_2, ·b_3, ·ƒ_9
+      fn ·a_2, ·b_3, ·v_9: ·op_plus ·a_2, ·b_3, ·v_9
       fn ·v_8:
         ·let ·v_8, fn ·add_0:
           ·fn
-            fn ·ƒ_17: ·add_0 3, 4, ·ƒ_17
+            fn ·v_17: ·add_0 3, 4, ·v_17
             fn ·v_16:
               ·let ·v_16, fn ·main_1:
                 ·export ·add_0, ·main_1
@@ -78,7 +78,7 @@ test 'import not in exports', fn:
         ·match_field ·v_10, 'foo', ·panic, fn ·v_11, ·v_12:
           ·let ·v_11, fn ·foo_0:
             ·fn
-              fn ·ƒ_17: ·foo_0 1, ·ƒ_17
+              fn ·v_17: ·foo_0 1, ·v_17
               fn ·v_16:
                 ·let ·v_16, fn ·main_1:
                   ·export ·main_1
@@ -103,7 +103,7 @@ test 'destructure not in exports', fn:
                 ·let ·v_18, fn ·b_1:
                   ·match_done ·v_19, ·panic, fn ·v_22:
                     ·fn
-                      fn ·ƒ_25: ·ƒ_25 ·a_0
+                      fn ·v_25: ·v_25 ·a_0
                       fn ·v_24:
                         ·let ·v_24, fn ·foo_2:
                           ·export ·foo_2

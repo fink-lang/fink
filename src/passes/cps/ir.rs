@@ -42,7 +42,8 @@
 // on-the-fly during the transform. Lifting also creates `Bind::Synth` nodes
 // for capture params and hoisted continuations.
 //
-// `Bind::Cont` marks a continuation parameter. Rendered as `·ƒ_<cps_id>`.
+// `Bind::Cont` marks a continuation parameter. Rendered as `·v_<cps_id>`.
+// TODO: collapse Bind::Cont into Bind::Synth — the distinction no longer affects rendering.
 // `ContRef(CpsId)` references a continuation as a value (e.g. fail args).
 //
 // The `name_res` pass is no longer responsible for source-name resolution —
@@ -54,11 +55,11 @@
 // Module root representation
 //
 // `lower_module` produces a flat `LetFn`/`LetVal` chain with no outer wrapper.
-// The chain terminates with `App { func: ContRef(ƒ_0), args: [exports] }`:
-//   e.g. `·ƒ_0 ·foo_0, ·bar_1, ·baz_2`
+// The chain terminates with `App { func: ContRef(v_0), args: [exports] }`:
+//   e.g. `·v_0 ·foo_0, ·bar_1, ·baz_2`
 // Only simple top-level `name = <non-import expr>` bindings are exported.
 // Pattern destructures and imports are excluded.
-// `ƒ_0` is the implicit module-exit continuation (provided by the runtime/linker).
+// `v_0` is the implicit module-exit continuation (provided by the runtime/linker).
 // Name resolution / import matching of those args is a separate pass.
 // ---------------------------------------------------------------------------
 
@@ -156,6 +157,7 @@ impl Ref {
 
 impl Bind {
   /// True if this bind introduces a continuation parameter.
+  // TODO: remove once Bind::Cont is collapsed into Bind::Synth.
   pub fn is_cont(self) -> bool {
     matches!(self, Bind::Cont)
   }

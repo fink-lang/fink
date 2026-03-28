@@ -916,7 +916,7 @@ mod tests {
               Some(format!("(bind {}, {})", bind_id.0, name))
             })
             .collect();
-          lines.push(format!("cap ·ƒ_{}, {}", scope_id.0, binds.join(", ")));
+          lines.push(format!("cap ·v_{}, {}", scope_id.0, binds.join(", ")));
         }
       }
     }

@@ -9,7 +9,7 @@ capture analysis tests (direct + transitive)
 # doesn't directly reference the name but needs it threaded through.
 #
 # Output format: one line per fn with captures, sorted by scope CpsId.
-#   cap ·ƒ_N, (bind ID, name), ...
+#   cap ·v_N, (bind ID, name), ...
 #
 # Fns with no captures are omitted.
 #
@@ -34,7 +34,7 @@ test 'depth-1 — direct capture only', fn:
     foo = fn a:
       fn b: a + b
   | equals fink":
-    cap ·ƒ_6, (bind 1, a)
+    cap ·v_6, (bind 1, a)
 
 # fn c captures `a` at depth 2 (direct). fn b needs `a` transitively.
 test 'depth-2 — inner fn captures from grandparent', fn:
@@ -43,8 +43,8 @@ test 'depth-2 — inner fn captures from grandparent', fn:
       fn b:
         fn c: a
   | equals fink":
-    cap ·ƒ_7, (bind 1, a)
-    cap ·ƒ_9, (bind 1, a)
+    cap ·v_7, (bind 1, a)
+    cap ·v_9, (bind 1, a)
 
 # fn c captures `a` (depth 2) and `b` (depth 1).
 # fn b: transitive [a] from fn c.
@@ -54,8 +54,8 @@ test 'depth-2 — outer fn also uses same name', fn:
       fn b:
         fn c: a + b
   | equals fink":
-    cap ·ƒ_7, (bind 1, a)
-    cap ·ƒ_9, (bind 1, a), (bind 2, b)
+    cap ·v_7, (bind 1, a)
+    cap ·v_9, (bind 1, a), (bind 2, b)
 
 # fn d captures `a` and `b` at depth 2. fn c needs both transitively.
 test 'depth-2 — two names from grandparent', fn:
@@ -64,8 +64,8 @@ test 'depth-2 — two names from grandparent', fn:
       fn c:
         fn d: a + b
   | equals fink":
-    cap ·ƒ_8, (bind 1, a), (bind 2, b)
-    cap ·ƒ_10, (bind 1, a), (bind 2, b)
+    cap ·v_8, (bind 1, a), (bind 2, b)
+    cap ·v_10, (bind 1, a), (bind 2, b)
 
 # fn g captures `n` at depth 2. fn f needs `n` transitively.
 test 'chained ops — second op captures from outer scope', fn:
@@ -74,8 +74,8 @@ test 'chained ops — second op captures from outer scope', fn:
       fn f:
         fn g: n
   | equals fink":
-    cap ·ƒ_8, (bind 2, n)
-    cap ·ƒ_10, (bind 2, n)
+    cap ·v_8, (bind 2, n)
+    cap ·v_10, (bind 2, n)
 
 
 ---
@@ -91,8 +91,8 @@ test 'self recursion with capture', fn:
       f = fn n:
         fn g: f (x + n)
   | equals fink":
-    cap ·ƒ_8, (bind 1, x)
-    cap ·ƒ_10, (bind 1, x), (bind 2, n)
+    cap ·v_8, (bind 1, x)
+    cap ·v_10, (bind 1, x), (bind 2, n)
 
 # Mutual recursion: fn a and fn b call each other, inner fn captures
 # from the outer scope. fn a captures x and b. fn g (inside fn a)
@@ -105,6 +105,6 @@ test 'mutual recursion with capture', fn:
         fn g: b (x + n)
       b = fn m: a m
   | equals fink":
-    cap ·ƒ_10, (bind 1, x)
-    cap ·ƒ_12, (bind 1, x), (bind 2, n)
-    cap ·ƒ_27, (bind 4, a)
+    cap ·v_10, (bind 1, x)
+    cap ·v_12, (bind 1, x), (bind 2, n)
+    cap ·v_27, (bind 4, a)

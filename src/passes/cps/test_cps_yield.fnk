@@ -18,7 +18,7 @@ test 'yield literal', fn:
     yield 42
 
   | equals fink":
-    ·yield 42, ·ƒ_0
+    ·yield 42, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE9BQU0sRSxFIgp9
 
 
@@ -27,7 +27,7 @@ test 'yield ident', fn:
     yield foo
 
   | equals fink":
-    ·yield ·∅foo, ·ƒ_0
+    ·yield ·∅foo, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPQUFNLEssRSIKfQ==
 
 
@@ -38,7 +38,7 @@ test 'yield bound to name', fn:
   | equals fink":
     ·yield 42, fn ·v_3:
       ·let ·v_3, fn ·result_0:
-        ·ƒ_1 ·result_0
+        ·v_1 ·result_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0geWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBUyxBQUFBLE9BQU0sRSxLQUFOLEk7RUFBRixBQUFBLEtBQUUsSSxLQUFULFM7SSxBLEtBQUEiCn0=
 
 
@@ -48,5 +48,5 @@ test 'yield apply result', fn:
 
   | equals fink":
     ·∅foo ·∅bar, fn ·v_3:
-      ·yield ·v_3, ·ƒ_0
+      ·yield ·v_3, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsTUFBSSxLLEtBQUosSTtFQUFOLEFBQUEsT0FBTSxJLEUiCn0=

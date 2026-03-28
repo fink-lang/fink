@@ -93,7 +93,21 @@ test 'multiple let bindings used', fn:
       y = 3
       x + y
   | equals wat":
-    TODO
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+
+      (func $v_6 (type $Fn1) (param $v_7 (ref $Any))
+        (local $x_1 (ref $Any))
+        (local $y_2 (ref $Any))
+        (local.set $x_1 (struct.new $Num (f64.const 2)))
+        (local.set $y_2 (struct.new $Num (f64.const 3)))
+        (return_call $op_plus (local.get $x_1) (local.get $y_2) (local.get $v_7))
+      )
+      (export "main" (func $v_6))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICI7Ozs7O0FBQU87OztJQUNILFdBQUYsS0FBSTtJQUNGLFdBQUYsS0FBSTtBQUNGLDBCQUFGLGlCQUFJOztBQUhOIgp9
 
 test 'user fn call', fn:
   expect gen_wat fink":
@@ -102,7 +116,22 @@ test 'user fn call', fn:
     main = fn:
       add 3, 4
   | equals wat":
-    TODO
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+
+      (func $v_8 (type $Fn3) (param $a_2 (ref $Any)) (param $b_3 (ref $Any)) (param $v_9 (ref $Any))
+        (return_call $op_plus (local.get $a_2) (local.get $b_3) (local.get $v_9))
+      )
+      (func $v_16 (type $Fn1) (param $v_17 (ref $Any))
+        (return_call_ref $Fn3 (local.get $add_0) (struct.new $Num (f64.const 3)) (struct.new $Num (f64.const 4)) (local.get $v_17))
+      )
+      (export "add" (func $v_8))
+      (export "main" (func $v_16))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiOzs7Ozs7QUFBTTtBQUNGLDBCQUFGLGlCQUFJOztBQUNDO0FBQ0wsNkNBQUksZ0NBQUc7O0FBSFQ7QUFFQSIKfQ==
 
 test 'chained fn calls', fn:
   expect gen_wat fink":
