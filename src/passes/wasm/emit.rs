@@ -713,7 +713,12 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>)
 // ---------------------------------------------------------------------------
 
 /// Emit a value onto the stack (for inline use in expressions).
+/// Marks the value's source location before emitting its instructions.
 fn emit_val(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+  // Mark every value with its AST source location (mirrors WAT writer's
+  // WatExpr::marked(node.loc, inner) pattern).
+  fc.mark(val.id);
+
   match &val.kind {
     ValKind::Lit(lit) => emit_lit(lit, fc),
     ValKind::Ref(Ref::Synth(id)) => {
@@ -721,7 +726,6 @@ fn emit_val(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       emit_get(fc, &label);
     }
     ValKind::Ref(Ref::Unresolved(_)) => {
-      // Should not appear in valid IR — emit unreachable.
       fc.instr(&Instruction::Unreachable);
     }
     ValKind::ContRef(id) => {
@@ -733,7 +737,6 @@ fn emit_val(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::Unreachable);
     }
     ValKind::BuiltIn(_) => {
-      // Builtin-as-value not supported — emit unreachable.
       fc.instr(&Instruction::Unreachable);
     }
   }
