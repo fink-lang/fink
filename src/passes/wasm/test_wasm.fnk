@@ -114,3 +114,30 @@ test 'multiple let bindings used', fn:
       (export "main" (func $v_6))
     )
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QTtBQUNMLG9CQUFJO0FBQ0osb0JBQUk7QUFDRiwwQkFBRixpQkFBSSxpQkFBRjtBO0FBSEo7QSIKfQ==
+
+
+test 'user fn call', fn:
+  expect gen_wat fink":
+    add = fn a, b:
+      a + b
+    main = fn:
+      add 3, 4
+  | equals wat":
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+
+      (global $add_0 (ref $Fn3) (ref.func $v_8))
+      (func $v_8 (type $Fn3) (param $a_2 (ref $Any)) (param $b_3 (ref $Any)) (param $v_9 (ref $Any))
+        (return_call $op_plus (local.get $a_2) (local.get $b_3) (local.get $v_9))
+      )
+      (global $main_1 (ref $Fn1) (ref.func $v_16))
+      (func $v_16 (type $Fn1) (param $v_17 (ref $Any))
+        (return_call_ref $Fn3 (global.get $add_0) (struct.new $Num (f64.const 3)) (struct.new $Num (f64.const 4)) (local.get $v_17))
+      )
+      (export "add" (func $v_8))
+      (export "main" (func $v_16))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFNLHlCQUFHLHdCQUFHLHdCQUFOO0FBQ0YsMEJBQUYsaUJBQUksaUJBQUY7QTtBQUNKO0FBQU8sMEJBQUE7QUFDTCw4Q0FBSSxnQ0FBRztBO0FBSFQ7QUFFQTtBIgp9

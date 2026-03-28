@@ -94,30 +94,6 @@ mod tests {
       let wat_content = format!("{}\n//# sourceMappingURL=data:application/json;base64,{wat_b64}", wat_output.trim());
       let _ = std::fs::write(format!("{dir}/{slug}.wat.js"), &wat_content);
 
-      // Pre-lift CPS file
-      let pre_lift_cps = lower_module(exprs, &scope);
-      let pre_lift_ctx = crate::passes::cps::fmt::Ctx {
-        origin: &pre_lift_cps.origin,
-        ast_index: &ast_index,
-        captures: None,
-      };
-      let (pre_cps_output, pre_cps_srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&pre_lift_cps.root, &pre_lift_ctx, "test", src);
-      let pre_cps_json = pre_cps_srcmap.to_json();
-      let pre_cps_b64 = crate::sourcemap::base64_encode(pre_cps_json.as_bytes());
-      let pre_cps_content = format!("{pre_cps_output}\n//# sourceMappingURL=data:application/json;base64,{pre_cps_b64}");
-      let _ = std::fs::write(format!("{dir}/{slug}.cps.js"), &pre_cps_content);
-
-      // Lifted CPS file
-      let lifted_ctx = crate::passes::cps::fmt::Ctx {
-        origin: &lifted.origin,
-        ast_index: &ast_index,
-        captures: None,
-      };
-      let (cps_output, cps_srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&lifted.root, &lifted_ctx, "test", src);
-      let cps_json = cps_srcmap.to_json();
-      let cps_b64 = crate::sourcemap::base64_encode(cps_json.as_bytes());
-      let cps_content = format!("{cps_output}\n//# sourceMappingURL=data:application/json;base64,{cps_b64}");
-      let _ = std::fs::write(format!("{dir}/{slug}.lft.js"), &cps_content);
     }
 
     format!("{}\n;;sourcemaps:{wat_b64}", wat_output.trim())
