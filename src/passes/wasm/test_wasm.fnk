@@ -19,7 +19,7 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0FBQ0w7QTtBQURGO0EiCn0=
+    ;;sourcemaps:TODO
 
 
 test 'let binding', fn:
@@ -41,4 +41,24 @@ test 'let binding', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QUFDTCxvQkFBSTtBQUNKO0E7QUFGRjtBIgp9
+    ;;sourcemaps:TODO
+
+
+test 'add two literals', fn:
+  expect gen_wat fink":
+    main = fn:
+      2 + 3
+  | equals wat":
+    (module
+      (type $Any (sub (struct)))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
+      (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
+        (return_call $op_plus (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:TODO

@@ -744,10 +744,10 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         let total = param_count + 1;
         let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(total));
         let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
-        let args: Vec<&str> = popped.iter().map(|(s, _)| s.as_str()).collect();
-        let args_str = if args.is_empty() { String::new() } else { format!(" {}", args.join(" ")) };
         if let Some(loc) = find_dwarf_loc(module, first_offset, *offset) { w.mark(loc); }
-        w.push_str(&format!("{}(return_call_ref {}{})\n", ind(indent), type_name_str, args_str));
+        w.push_str(&format!("{}(return_call_ref {}", ind(indent), type_name_str));
+        emit_marked_args(&popped, first_offset, module, w);
+        w.push_str(")\n");
         i += 1;
       }
       ParsedInstr::ReturnCall(func_idx_val) => {
@@ -755,10 +755,12 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         let param_count = lookup_func_param_count(module, *func_idx_val);
         let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(param_count));
         let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
-        let args: Vec<&str> = popped.iter().map(|(s, _)| s.as_str()).collect();
-        let args_str = if args.is_empty() { String::new() } else { format!(" {}", args.join(" ")) };
-        if let Some(loc) = find_dwarf_loc(module, first_offset, *offset) { w.mark(loc); }
-        w.push_str(&format!("{}(return_call {}{})\n", ind(indent), name, args_str));
+        // Operator mark is at the return_call instruction offset (after all args).
+        if let Some(loc) = find_dwarf_loc_last(module, first_offset, *offset) { w.mark(loc); }
+        w.push_str(&format!("{}(return_call {}", ind(indent), name));
+        // Args get their own earlier DWARF marks.
+        emit_marked_args(&popped, *offset, module, w);
+        w.push_str(")\n");
         i += 1;
       }
 
@@ -855,6 +857,22 @@ fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -
     ParsedInstr::Else => ")(else".into(),
     ParsedInstr::End => ")".into(),
     ParsedInstr::Other(s) => format!(";; {}", s),
+  }
+}
+
+/// Emit args with individual DWARF marks before each one.
+/// `stmt_off` is the offset of the statement mark (to avoid duplicating it on args).
+fn emit_marked_args(args: &[(String, u32)], stmt_off: u32, module: &ParsedModule, w: &mut MappedWriter) {
+  for (idx, (arg_str, arg_off)) in args.iter().enumerate() {
+    w.push_str(" ");
+    // Skip if arg offset equals the statement mark offset (already marked).
+    if *arg_off != stmt_off {
+      let next_off = args.get(idx + 1).map(|(_, o)| *o).unwrap_or(arg_off + 100);
+      if let Some(loc) = find_dwarf_loc(module, *arg_off, next_off.saturating_sub(1)) {
+        w.mark(loc);
+      }
+    }
+    w.push_str(arg_str);
   }
 }
 

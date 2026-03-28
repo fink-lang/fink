@@ -13,6 +13,33 @@
 // source-mapped instruction can be correlated with the original .fnk
 // source location. These offsets are later used to build DWARF line
 // tables and WasmMapping entries for the DAP debugger.
+//
+// ## Source map marking rules
+//
+// Each WASM instruction gets at most one DWARF line entry (one source
+// location per byte offset). The rules for what maps where:
+//
+// - **call instructions** (`return_call`, `return_call_ref`, `call`)
+//   → point to the callee: operator token for builtins (e.g. `+`),
+//     call site for user function calls.
+//   For builtins, the operator mark is emitted *after* args (at the
+//   return_call instruction offset) to avoid colliding with the first
+//   arg's value mark at the same byte offset.
+//
+// - **local.set** → point to the binding name (e.g. `x` in `x = 42`).
+//   The mark is placed just before the local.set instruction.
+//
+// - **literals** (struct.new wrapping f64.const) → point to the literal
+//   value in source. Each value gets a mark from emit_val.
+//
+// - **structural items** (func headers, params, globals, exports) are
+//   recorded as StructuralLoc entries, not DWARF, since they don't
+//   correspond to code section byte offsets.
+//
+// DWARF line tables have one entry per byte offset. When two marks
+// collide (same offset), the last one wins. The formatter reconstructs
+// WAT text source maps by looking up DWARF entries for each instruction
+// and structural locs for non-code items.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -77,8 +104,13 @@ pub enum StructuralKind {
 /// Emit a WASM binary from a collected CPS module.
 pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   let mut e = Emitter::new(module, ctx);
-  e.emit_types(module);
-  e.emit_imports(module);
+  // Scan builtins first to collect all arities needed for the type section.
+  let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
+  for func in &module.funcs {
+    scan_builtins(func.body, &mut builtins);
+  }
+  e.emit_types(module, &builtins);
+  e.emit_imports_from(module, &builtins);
   e.emit_functions(module);
   e.emit_globals(module);
   e.emit_exports(module);
@@ -187,7 +219,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Type section
   // -------------------------------------------------------------------------
 
-  fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>) {
+  fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>) {
     let mut types = TypeSection::new();
     let mut next_idx = 0u32;
 
@@ -226,12 +258,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.types.insert("$Num".into(), next_idx);
     next_idx += 1;
 
-    // $FnN for each arity
+    // $FnN for each arity (from defined functions + builtins).
     let any_ref = ValType::Ref(RefType {
       nullable: true,
       heap_type: HeapType::Concrete(0), // $Any
     });
-    for &arity in &cps_mod.arities {
+    let mut all_arities = cps_mod.arities.clone();
+    for &arity in builtins.values() {
+      all_arities.insert(arity);
+    }
+    for &arity in &all_arities {
       let params: Vec<ValType> = vec![any_ref; arity];
       types.ty().subtype(&SubType {
         is_final: true,
@@ -254,17 +290,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Import section — builtins as imported functions
   // -------------------------------------------------------------------------
 
-  fn emit_imports(&mut self, cps_mod: &CpsModule<'_, '_>) {
+  fn emit_imports_from(&mut self, _cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>) {
     let mut imports = ImportSection::new();
     let mut next_func_idx = 0u32;
 
-    // Scan all function bodies for builtin references and collect unique names + arities.
-    let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
-    for func in &cps_mod.funcs {
-      scan_builtins(func.body, &mut builtins);
-    }
-
-    for (name, arity) in &builtins {
+    for (name, arity) in builtins {
       let type_idx = self.idx.fn_type_idx(*arity);
       imports.import("env", name, wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert(name.clone(), next_func_idx);
@@ -562,20 +592,8 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       // Source mapping: detect cont calls vs user calls vs builtins.
       match func {
         Callable::BuiltIn(_) => {
-          if let Some(node) = fc.ctx.ast_node(expr.id) {
-            let loc = match &node.kind {
-              crate::ast::NodeKind::InfixOp { op, .. }
-              | crate::ast::NodeKind::UnaryOp { op, .. } => op.loc,
-              _ => node.loc,
-            };
-            if loc.start.line > 0 {
-              fc.raw_mappings.push(RawMapping {
-                func_def_index: fc.def_idx,
-                func_byte_offset: fc.func.byte_len() as u32,
-                loc,
-              });
-            }
-          }
+          // Operator mark is emitted inside emit_builtin, after args,
+          // to avoid DWARF collision with the first arg's value mark.
         }
         Callable::Val(func_val) => {
           let is_cont_call = match &func_val.kind {
@@ -596,7 +614,7 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
           }
         }
       }
-      emit_app(func, args, fc);
+      emit_app(func, args, expr.id, fc);
     }
 
     ExprKind::If { cond, then, else_ } => {
@@ -629,9 +647,9 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 // Application emission
 // ---------------------------------------------------------------------------
 
-fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   match func {
-    Callable::BuiltIn(op) => emit_builtin(*op, args, fc),
+    Callable::BuiltIn(op) => emit_builtin(*op, args, expr_id, fc),
     Callable::Val(val) => emit_call(val, args, fc),
   }
 }
@@ -659,7 +677,7 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, 
 }
 
 /// Emit a builtin operation call.
-fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   if op == BuiltIn::FnClosure {
     let (val_args, cont) = split_args(args);
     let n = val_args.len();
@@ -743,6 +761,7 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>)
   }
 
   // Regular builtin: return_call $builtin_name args...
+  // Args get individual value marks in DWARF (operator mark is structural).
   let fn_name = builtin_name(op);
   let (val_args, cont_arg) = split_args(args);
 
@@ -751,6 +770,23 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>)
   }
   if let Some(cont) = cont_arg {
     emit_cont(cont, fc);
+  }
+
+  // Place operator mark right before return_call — after all args, so it
+  // doesn't collide with the first arg's value mark at the same byte offset.
+  if let Some(node) = fc.ctx.ast_node(expr_id) {
+    let loc = match &node.kind {
+      crate::ast::NodeKind::InfixOp { op, .. }
+      | crate::ast::NodeKind::UnaryOp { op, .. } => op.loc,
+      _ => node.loc,
+    };
+    if loc.start.line > 0 {
+      fc.raw_mappings.push(RawMapping {
+        func_def_index: fc.def_idx,
+        func_byte_offset: fc.func.byte_len() as u32,
+        loc,
+      });
+    }
   }
 
   let func_idx = fc.emitter_idx.func_idx(fn_name);
