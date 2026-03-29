@@ -1,10 +1,27 @@
-// Lambda lifting pass — eliminates closures by threading captured bindings
-// as extra parameters through the call chain.
+// Lambda lifting pass — eliminates closures entirely by threading captured
+// bindings as extra parameters through the call chain.
 //
 // Alternative to the closure-based lifting pass (passes/lifting). Both take
 // CPS transform output and produce flat module-level fns. The difference:
 // this pass threads captured values as extra params instead of emitting
-// ·closure nodes.
+// ·closure nodes. No heap-allocated closure structs are ever created.
+//
+// ## Core insight: closures as calling convention
+//
+// A closure is not a data structure — it's a calling convention. A function
+// that captures values is represented as `(fn_ref, ..captured_values)` on
+// the stack. When calling such a function, the caller passes:
+//
+//   fn_ref(actual_args..., cont, captured_values...)
+//
+// The captured values trail after the cont, preserving the original fn
+// interface: `fn operands..., cont, forwarded...`
+//
+// This means:
+// - No heap allocation for closure environments
+// - All data flows through params — fully transparent to optimisers
+// - Builtins and user fns both forward trailing args to their cont
+// - Export boundaries may need wrapping (codegen concern, not lifting)
 //
 // ## Algorithm
 //
@@ -12,28 +29,28 @@
 // Iteratively lift nested fns one level at a time:
 //
 // 1. Extract nested LetFn from fn_bodies, hoist inline Cont::Expr to named fns.
-// 2. For fns with captures: add captures as extra leading params.
-// 3. At call sites: pass captured values as extra args (no ·closure).
-// 4. When a captured-fn is used as cont to a builtin: extra args go before
-//    the cont — builtin forwards them when calling the cont.
-// 5. When a captured-fn is used as cont to a user fn: create a forwarding
-//    variant of that fn that accepts and threads the extra args.
+// 2. For fns with captures: add captures as trailing params (after original params).
+// 3. At call sites: pass captured values as trailing args after the cont.
+// 4. Builtins forward trailing args to their cont when calling it.
+// 5. User fns forward trailing args the same way — all fns are variadic
+//    in the sense that extra trailing args pass through to the cont.
 // 6. Repeat until no nested fns remain.
 //
-// ## Key assumption
+// ## Key assumptions
 //
-// All lifted fns are siblings in the LetFn chain — they can reference each
-// other by name. No need to thread fn refs as captures.
-//
-// Builtins accept any number of extra args before the cont and forward them
-// all when calling the cont.
+// - All lifted fns are siblings in the LetFn chain — they can reference
+//   each other by name. No need to thread fn refs as captures.
+// - All fns (builtins and user-defined) forward trailing args to their cont.
+// - Export boundary wrapping (boxing for external callers) is a codegen
+//   concern, not handled by this pass.
 //
 // ## Trade-offs vs closure-based lifting
 //
-// - Pro: zero heap allocation for environments
-// - Pro: flat param-passing is easier for backends (binaryen) to optimise
-// - Con: functions in the call chain must accept and forward params they
-//   don't use; calling conventions become arity-specialised
+// - Pro: zero heap allocation — closures are a calling convention, not a struct
+// - Pro: flat param-passing is fully transparent to backend optimisers
+//        (binaryen can inline, constant-propagate, DCE without alias analysis)
+// - Con: calling conventions become variadic / arity-specialised
+// - Con: export boundaries need wrapper fns that box for external callers
 
 use std::collections::{HashMap, HashSet};
 
