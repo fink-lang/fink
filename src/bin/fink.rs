@@ -6,6 +6,27 @@ fn main() {
   let sourcemap = args.iter().any(|a| a == "--sourcemap");
   let embed_source = args.iter().any(|a| a == "--embed-source");
   let desugar = args.iter().any(|a| a == "--desugar");
+  let optimize = args.iter().find_map(|a| {
+    if a == "--optimize" || a == "-O" { return Some("-O") }
+    for flag in ["-O1", "-O2", "-O3", "-O4", "-Os", "-Oz"] {
+      if a == flag { return Some(flag) }
+    }
+    if let Some(v) = a.strip_prefix("--optimize=") {
+      match v {
+        "1" => return Some("-O1"),
+        "2" => return Some("-O2"),
+        "3" => return Some("-O3"),
+        "4" => return Some("-O4"),
+        "s" => return Some("-Os"),
+        "z" => return Some("-Oz"),
+        _ => {
+          eprintln!("error: unknown optimization level: {v} (expected 1, 2, 3, 4, s, z)");
+          process::exit(1);
+        }
+      }
+    }
+    None
+  });
   let lifted = args.iter().find_map(|a| {
     if a == "--lifted" {
       Some(None)
@@ -13,16 +34,18 @@ fn main() {
       a.strip_prefix("--lifted=").map(|v| Some(v.to_string()))
     }
   });
-  let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("--")).map(|s| s.as_str()).collect();
+  let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("-")).map(|s| s.as_str()).collect();
 
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [options] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|run|dap> [options] <file>");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
       eprintln!("  fmt/cps [--sourcemap]        emit source map");
       eprintln!("  fmt/cps [--embed-source]     embed source in source map");
+      eprintln!("  wasm                         emit WASM binary to stdout");
+      eprintln!("  wat/wasm [-O|-O1..4|-Os|-Oz]  run wasm-opt (default -O)");
       process::exit(1);
     }
   };
@@ -147,11 +170,29 @@ fn main() {
           eprintln!("error: {e}");
           process::exit(1);
         });
-        let wat = wasmprinter::print_bytes(&result.wasm).unwrap_or_else(|e| {
+        let wasm = if let Some(level) = optimize { wasm_opt(&result.wasm, level) } else { result.wasm };
+        let wat = wasmprinter::print_bytes(&wasm).unwrap_or_else(|e| {
           eprintln!("error: {e}");
           process::exit(1);
         });
         println!("{wat}");
+      }
+    }
+    "wasm" => {
+      #[cfg(not(feature = "wat"))]
+      { eprintln!("error: 'wasm' command requires the 'wat' feature"); process::exit(1); }
+      #[cfg(feature = "wat")]
+      {
+        use std::io::Write;
+        let result = fink::compiler::compile_fnk(&src).unwrap_or_else(|e| {
+          eprintln!("error: {e}");
+          process::exit(1);
+        });
+        let wasm = if let Some(level) = optimize { wasm_opt(&result.wasm, level) } else { result.wasm };
+        std::io::stdout().write_all(&wasm).unwrap_or_else(|e| {
+          eprintln!("error: {e}");
+          process::exit(1);
+        });
       }
     }
     "run" => {
@@ -174,10 +215,43 @@ fn main() {
     }
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|run|dap> [options] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|run|dap> [options] <file>");
       process::exit(1);
     }
   }
+}
+
+fn wasm_opt(wasm: &[u8], level: &str) -> Vec<u8> {
+  use std::io::Write;
+  use std::process::Command;
+
+  let mut child = Command::new("wasm-opt")
+    .args([level, "--enable-gc", "--enable-reference-types", "--enable-tail-call", "-o", "-", "-"])
+    .stdin(process::Stdio::piped())
+    .stdout(process::Stdio::piped())
+    .stderr(process::Stdio::piped())
+    .spawn()
+    .unwrap_or_else(|e| {
+      eprintln!("error: failed to run wasm-opt: {e}");
+      process::exit(1);
+    });
+
+  child.stdin.take().unwrap().write_all(wasm).unwrap_or_else(|e| {
+    eprintln!("error: wasm-opt stdin: {e}");
+    process::exit(1);
+  });
+
+  let output = child.wait_with_output().unwrap_or_else(|e| {
+    eprintln!("error: wasm-opt: {e}");
+    process::exit(1);
+  });
+
+  if !output.status.success() {
+    eprintln!("error: wasm-opt failed:\n{}", String::from_utf8_lossy(&output.stderr));
+    process::exit(1);
+  }
+
+  output.stdout
 }
 
 fn parse_error(src: &str, e: fink::parser::ParseError, path: &str) -> ! {
