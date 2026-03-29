@@ -27,7 +27,7 @@ pub fn is_implemented(name: &str) -> bool {
     // Comparison
     | "op_eq" | "op_neq" | "op_lt" | "op_lte" | "op_gt" | "op_gte"
     // Logic
-    | "op_not"
+    | "op_not" | "op_and" | "op_or" | "op_xor"
   )
 }
 
@@ -53,8 +53,11 @@ pub fn emit_builtin(name: &str, indices: &TypeIndices) -> Function {
     "op_gt"  => emit_binary_cmp(indices, Instruction::F64Gt),
     "op_gte" => emit_binary_cmp(indices, Instruction::F64Ge),
 
-    // Logic: unbox $Num, treat as bool (0.0 = false), box result.
+    // Logic: $Bool ops.
     "op_not" => emit_unary_not(indices),
+    "op_and" => emit_binary_bool(indices, Instruction::I32And),
+    "op_or"  => emit_binary_bool(indices, Instruction::I32Or),
+    "op_xor" => emit_binary_bool(indices, Instruction::I32Xor),
 
     _ => panic!("builtin '{}' not implemented", name),
   }
@@ -135,6 +138,27 @@ fn emit_binary_cmp(idx: &TypeIndices, op: Instruction<'_>) -> Function {
   f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.num)));
   f.instruction(&Instruction::StructGet { struct_type_index: idx.num, field_index: 0 });
   // Compare → i32 (0 or 1), box as $Bool.
+  f.instruction(&op);
+  f.instruction(&Instruction::StructNew(idx.bool_));
+  emit_cont_call(&mut f, idx);
+  f
+}
+
+// ---------------------------------------------------------------------------
+// Binary bool: (a, b, cont) → cont(box(unbox(a) OP unbox(b)))
+// ---------------------------------------------------------------------------
+
+fn emit_binary_bool(idx: &TypeIndices, op: Instruction<'_>) -> Function {
+  let mut f = Function::new(vec![]);
+  // Unbox a.
+  f.instruction(&Instruction::LocalGet(0));
+  f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.bool_)));
+  f.instruction(&Instruction::StructGet { struct_type_index: idx.bool_, field_index: 0 });
+  // Unbox b.
+  f.instruction(&Instruction::LocalGet(1));
+  f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.bool_)));
+  f.instruction(&Instruction::StructGet { struct_type_index: idx.bool_, field_index: 0 });
+  // Op + box.
   f.instruction(&op);
   f.instruction(&Instruction::StructNew(idx.bool_));
   emit_cont_call(&mut f, idx);
