@@ -1,0 +1,8 @@
+
+
+test 'literal', fn:
+  expect run fink":
+    main = fn:
+      42
+  | equals fink":
+    42

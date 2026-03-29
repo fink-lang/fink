@@ -11,15 +11,21 @@ test 'literal int', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
 
       (global $main_0 (ref $Fn1) (ref.func $v_4))
       (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_5) (struct.new $Num (f64.const 42)))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $v_5)))) (struct.new $Num (f64.const 42)))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "main" (func $v_4))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBOzJDQUNMO0E7QUFERjtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0FBQUE7QUFBTyx5QkFBQTtxSEFDTDtBOztBO0FBREY7O0EiCn0=
+
 
 test 'let binding', fn:
   expect gen_wat fink":
@@ -30,17 +36,23 @@ test 'let binding', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
 
       (global $main_0 (ref $Fn1) (ref.func $v_5))
       (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
         (local $x_1 (ref $Any))
         (local.set $x_1 (struct.new $Num (f64.const 42)))
-        (return_call_ref $Fn1 (local.get $v_6) (local.get $x_1))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $v_6)))) (local.get $x_1))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "main" (func $v_5))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QUFDTCxvQkFBSTsyQ0FDSjtBO0FBRkY7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0FBQUE7QUFBTyx5QkFBQTtBO0FBQ0wsb0JBQUk7cUhBQ0o7QTs7QTtBQUZGOztBIgp9
+
 
 test 'add two literals', fn:
   expect gen_wat fink":
@@ -50,15 +62,21 @@ test 'add two literals', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
 
       (global $main_0 (ref $Fn1) (ref.func $v_4))
       (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
         (return_call $op_plus (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_5))
       )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
+      )
       (export "main" (func $v_4))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0FBQ0gsMERBQUUsZ0NBQUY7QTtBQURKO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0FBQUE7QUFBTyx5QkFBQTtBQUNILDBEQUFFLGdDQUFGO0E7O0E7QUFESjs7QSIKfQ==
+
 
 test 'chained arithmetic', fn:
   expect gen_wat fink":
@@ -69,6 +87,8 @@ test 'chained arithmetic', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Num (sub $Any (struct (field f64))))
@@ -82,14 +102,19 @@ test 'chained arithmetic', fn:
       (global $main_0 (ref $Fn1) (ref.func $v_5))
       (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
         (local $v_30 (ref $Any))
-        (local.set $v_30 (call $closure_2 (ref.func $v_25) (local.get $v_6)))
+        (local.set $v_30 (call $closure_2 (struct.new $Num (ref.func $v_25)) (local.get $v_6)))
         (return_call $op_mul (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_30))
       )
       (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
       )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
+      )
       (export "main" (func $v_5))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOzBCQUFPLHlCQUNEO0E7QUFBSixvQkFBSTtBQUNGLDJDQUFFLGdDQUFGO0E7QUFGSjtBQUFPLHlCQUFBO0E7QUFBQSxxQkFBQTtBQUNDLHlEQUFFLGdDQUFGO0E7O0E7QUFEUjtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTswQkFBTyx5QkFDRDtBO0FBQUosb0JBQUk7QUFDRiwyQ0FBRSxnQ0FBRjtBO0FBRko7QUFBTyx5QkFBQTtBO0FBQUEscUJBQUE7QUFDQyx5REFBRSxnQ0FBRjtBOztBOztBO0FBRFI7O0EiCn0=
+
+
 test 'multiple let bindings used', fn:
   expect gen_wat fink":
     main = fn:
@@ -100,6 +125,8 @@ test 'multiple let bindings used', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
 
       (global $main_0 (ref $Fn1) (ref.func $v_6))
@@ -110,9 +137,13 @@ test 'multiple let bindings used', fn:
         (local.set $y_2 (struct.new $Num (f64.const 3)))
         (return_call $op_plus (local.get $x_1) (local.get $y_2) (local.get $v_7))
       )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
+      )
       (export "main" (func $v_6))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QUFBQTtBQUFPLHlCQUFBO0E7QTtBQUNMLG9CQUFJO0FBQ0osb0JBQUk7QUFDRiwyQ0FBRSxpQkFBRjtBO0FBSEo7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0FBQUE7QUFBTyx5QkFBQTtBO0E7QUFDTCxvQkFBSTtBQUNKLG9CQUFJO0FBQ0YsMkNBQUUsaUJBQUY7QTs7QTtBQUhKOztBIgp9
+
 
 test 'user fn call', fn:
   expect gen_wat fink":
@@ -124,6 +155,8 @@ test 'user fn call', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
 
@@ -133,12 +166,16 @@ test 'user fn call', fn:
       )
       (global $main_1 (ref $Fn1) (ref.func $v_16))
       (func $v_16 (type $Fn1) (param $v_17 (ref $Any))
-        (return_call_ref $Fn3 (global.get $add_0) (struct.new $Num (f64.const 3)) (struct.new $Num (f64.const 4)) (local.get $v_17))
+        (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (ref.cast (ref null $Num) (struct.new $Num (global.get $add_0))))) (struct.new $Num (f64.const 3)) (struct.new $Num (f64.const 4)) (local.get $v_17))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "add" (func $v_8))
       (export "main" (func $v_16))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QUFBQTtBQUFNLHlCQUFHLHdCQUFHLHdCQUFOO0FBQ0YsMkNBQUUsaUJBQUY7QTtBQUNKO0FBQU8sMEJBQUE7QUFDTCw4Q0FBSSxnQ0FBRyxnQ0FBUDtBO0FBSEY7QUFFQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0FBQUE7QUFBTSx5QkFBRyx3QkFBRyx3QkFBTjtBQUNGLDJDQUFFLGlCQUFGO0E7QUFDSjtBQUFPLDBCQUFBO0FBQ0wsMElBQUksZ0NBQUcsZ0NBQVA7QTs7QTtBQUhGO0FBRUE7O0EiCn0=
+
 
 test 'chained fn calls', fn:
   expect gen_wat fink":
@@ -153,6 +190,8 @@ test 'chained fn calls', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
@@ -171,13 +210,13 @@ test 'chained fn calls', fn:
       (func $v_55 (type $Fn2) (param $v_56 (ref $Any)) (param $v_31 (ref $Any))
         (local $x_5 (ref $Any))
         (local.set $x_5 (local.get $v_31))
-        (return_call $call_ref_or_clos_2 (local.get $x_5) (local.get $v_56) (global.get $inc_1))
+        (return_call $call_ref_or_clos_2 (local.get $x_5) (local.get $v_56) (struct.new $Num (global.get $inc_1)))
       )
       (global $main_2 (ref $Fn1) (ref.func $v_27))
       (func $v_27 (type $Fn1) (param $v_28 (ref $Any))
         (local $v_60 (ref $Any))
-        (local.set $v_60 (call $closure_2 (ref.func $v_55) (local.get $v_28)))
-        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_60) (global.get $double_0))
+        (local.set $v_60 (call $closure_2 (struct.new $Num (ref.func $v_55)) (local.get $v_28)))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_60) (struct.new $Num (global.get $double_0)))
       )
       (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
       )
@@ -187,13 +226,18 @@ test 'chained fn calls', fn:
         (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
         (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
         )
-        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_2)))) (local.get $local_0) (local.get $local_1))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "double" (func $v_11))
       (export "inc" (func $v_19))
       (export "main" (func $v_27))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0FBQUE7QUFBUywwQkFBRyx3QkFBSDtBQUNMLDBDQUFFLGdDQUFGO0E7QUFDSjtBQUFNLDBCQUFHLHdCQUFIO0FBQ0YsMkNBQUUsZ0NBQUY7QTswQkFDRyx5QkFDRDtBO0FBQUosb0JBQUk7QUFDSixxQ0FBSSxtQ0FBSjtBO0FBRkY7QUFBTywwQkFBQTtBO0FBQUEscUJBQUE7QUFDRCxxQ0FBTyxrREFBUDtBOztBOztBOzs7Ozs7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBQUFBO0FBQVMsMEJBQUcsd0JBQUg7QUFDTCwwQ0FBRSxnQ0FBRjtBO0FBQ0o7QUFBTSwwQkFBRyx3QkFBSDtBQUNGLDJDQUFFLGdDQUFGO0E7MEJBQ0cseUJBQ0Q7QTtBQUFKLG9CQUFJO0FBQ0oscUNBQUksbUNBQUo7QTtBQUZGO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QscUNBQU8sa0RBQVA7QTs7QTs7QTs7Ozs7O0E7O0E7QUFMTjtBQUVBO0FBRUE7O0EiCn0=
+
+
 test 'pipe unary', fn:
   expect gen_wat fink":
     double = fn x:
@@ -206,6 +250,8 @@ test 'pipe unary', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
@@ -222,13 +268,13 @@ test 'pipe unary', fn:
         (return_call $op_plus (local.get $x_4) (struct.new $Num (f64.const 1)) (local.get $v_19))
       )
       (func $v_51 (type $Fn2) (param $v_52 (ref $Any)) (param $v_30 (ref $Any))
-        (return_call $call_ref_or_clos_2 (local.get $v_30) (local.get $v_52) (global.get $inc_1))
+        (return_call $call_ref_or_clos_2 (local.get $v_30) (local.get $v_52) (struct.new $Num (global.get $inc_1)))
       )
       (global $main_2 (ref $Fn1) (ref.func $v_26))
       (func $v_26 (type $Fn1) (param $v_27 (ref $Any))
         (local $v_56 (ref $Any))
-        (local.set $v_56 (call $closure_2 (ref.func $v_51) (local.get $v_27)))
-        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_56) (global.get $double_0))
+        (local.set $v_56 (call $closure_2 (struct.new $Num (ref.func $v_51)) (local.get $v_27)))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_56) (struct.new $Num (global.get $double_0)))
       )
       (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
       )
@@ -238,13 +284,18 @@ test 'pipe unary', fn:
         (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
         (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
         )
-        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_2)))) (local.get $local_0) (local.get $local_1))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "double" (func $v_10))
       (export "inc" (func $v_18))
       (export "main" (func $v_26))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBQUFBO0FBQVMsMEJBQUcsd0JBQUg7QUFDTCwwQ0FBRSxnQ0FBRjtBO0FBQ0o7QUFBTSwwQkFBRyx3QkFBSDtBQUNGLDJDQUFFLGdDQUFGO0E7MEJBQ0cseUJBQ0w7QUFBYSxxQ0FBYixvQ0FBYTtBO0FBRGY7QUFBTywwQkFBQTtBO0FBQUEscUJBQUE7QUFDRCxxQ0FBSixrREFBSTtBOztBOztBOzs7Ozs7QTtBQUxOO0FBRUE7QUFFQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QUFBQTtBQUFTLDBCQUFHLHdCQUFIO0FBQ0wsMENBQUUsZ0NBQUY7QTtBQUNKO0FBQU0sMEJBQUcsd0JBQUg7QUFDRiwyQ0FBRSxnQ0FBRjtBOzBCQUNHLHlCQUNMO0FBQWEscUNBQWIsb0NBQWE7QTtBQURmO0FBQU8sMEJBQUE7QTtBQUFBLHFCQUFBO0FBQ0QscUNBQUosa0RBQUk7QTs7QTs7QTs7Ozs7O0E7O0E7QUFMTjtBQUVBO0FBRUE7O0EiCn0=
+
+
 test 'match literal first arm', fn:
   expect gen_wat fink":
     main = fn:
@@ -255,6 +306,8 @@ test 'match literal first arm', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn0 (func))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
@@ -276,10 +329,10 @@ test 'match literal first arm', fn:
         (return_call $call_ref_or_clos_0 (local.get $v_23))
       )
       (func $v_72 (type $Fn1) (param $v_65 (ref $Any))
-        (return_call $match_arm (ref.func $v_81) (ref.func $v_78) (local.get $v_65))
+        (return_call $match_arm (struct.new $Num (ref.func $v_81)) (struct.new $Num (ref.func $v_78)) (local.get $v_65))
       )
       (func $v_46 (type $Fn2) (param $v_47 (ref $Any)) (param $v_20 (ref $Any))
-        (return_call_ref $Fn1 (ref.func $v_72) (call $closure_3 (ref.func $v_58) (local.get $v_20) (local.get $v_47)))
+        (return_call_ref $Fn1 (struct.new $Num (ref.func $v_72)) (call $closure_3 (struct.new $Num (ref.func $v_58)) (local.get $v_20) (local.get $v_47)))
       )
       (func $v_69 (type $Fn1) (param $v_13 (ref $Any))
         (return_call $call_ref_or_clos_1 (struct.new $Num (f64.const 42)) (local.get $v_13))
@@ -288,11 +341,11 @@ test 'match literal first arm', fn:
         (return_call $match_value (local.get $v_10) (struct.new $Num (f64.const 0)) (local.get $v_8) (local.get $v_9))
       )
       (func $v_55 (type $Fn1) (param $v_51 (ref $Any))
-        (return_call $match_arm (ref.func $v_75) (ref.func $v_69) (local.get $v_51))
+        (return_call $match_arm (struct.new $Num (ref.func $v_75)) (struct.new $Num (ref.func $v_69)) (local.get $v_51))
       )
       (global $main_0 (ref $Fn1) (ref.func $v_4))
       (func $v_4 (type $Fn1) (param $v_5 (ref $Any))
-        (return_call_ref $Fn1 (ref.func $v_55) (call $closure_2 (ref.func $v_46) (local.get $v_5)))
+        (return_call_ref $Fn1 (struct.new $Num (ref.func $v_55)) (call $closure_2 (struct.new $Num (ref.func $v_46)) (local.get $v_5)))
       )
       (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
       )
@@ -308,7 +361,7 @@ test 'match literal first arm', fn:
         (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
         (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)))
         )
-        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (local.get $local_0)))
+        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_0)))))
       )
       (func $call_ref_or_clos_1 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
         (local $local_2 (ref $Any))
@@ -320,11 +373,16 @@ test 'match literal first arm', fn:
         (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
         (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (local.get $local_0))
         )
-        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (local.get $local_1)) (local.get $local_0))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_1)))) (local.get $local_0))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "main" (func $v_4))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBOzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOERBQ0Usa0JBQ0Esa0JBRkY7QTs7QUFFSyxxQ0FBQSxpQ0FBSDtBOztBQUFBLHFDQUFBO0E7O0FBQUEsOERBQUE7QTswQkFIRyx5QkFFSDsyQ0FBQTtBOztBQUFHLHFDQUFBLGlDQUFIO0E7O0FBQUEsZ0RBQUEsZ0NBQUEsaUJBQUE7QTs7QUFBQSw4REFBQTtBO0FBRko7QUFBTyx5QkFBQTsyQ0FBQTtBOztBOztBOztBOzs7Ozs7Ozs7O0E7O0E7Ozs7Ozs7Ozs7QTtBQUFQO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTswQkFFSSx5QkFGRyx5QkFHSDtBQUZGLDhEQUNFLGtCQUNBLGtCQUZGO0E7O0FBRUsscUNBQUEsaUNBQUg7QTs7QUFBQSxxQ0FBQTtBOztBQUFBLGtHQUFBO0E7MEJBSEcseUJBRUg7NkRBQUE7QTs7QUFBRyxxQ0FBQSxpQ0FBSDtBOztBQUFBLGdEQUFBLGdDQUFBLGlCQUFBO0E7O0FBQUEsa0dBQUE7QTtBQUZKO0FBQU8seUJBQUE7NkRBQUE7QTs7QTs7QTs7QTs7Ozs7Ozs7OztBOztBOzs7Ozs7Ozs7O0E7O0E7QUFBUDs7QSIKfQ==
+
+
 test 'match with binding', fn:
   expect gen_wat fink":
     main = fn:
@@ -336,6 +394,8 @@ test 'match with binding', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn0 (func))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
@@ -362,9 +422,9 @@ test 'match with binding', fn:
       (func $v_52 (type $Fn3) (param $x_53 (ref $Any)) (param $v_55 (ref $Any)) (param $v_22 (ref $Any))
         (local $v_75 (ref $Any))
         (local $v_87 (ref $Any))
-        (local.set $v_75 (call $closure_4 (ref.func $v_66) (local.get $x_53) (local.get $v_22) (local.get $v_55)))
-        (local.set $v_87 (call $closure_2 (ref.func $v_82) (local.get $x_53)))
-        (return_call $match_arm (ref.func $v_94) (local.get $v_87) (local.get $v_75))
+        (local.set $v_75 (call $closure_4 (struct.new $Num (ref.func $v_66)) (local.get $x_53) (local.get $v_22) (local.get $v_55)))
+        (local.set $v_87 (call $closure_2 (struct.new $Num (ref.func $v_82)) (local.get $x_53)))
+        (return_call $match_arm (struct.new $Num (ref.func $v_94)) (local.get $v_87) (local.get $v_75))
       )
       (func $v_79 (type $Fn1) (param $v_15 (ref $Any))
         (return_call $call_ref_or_clos_1 (struct.new $Num (f64.const 0)) (local.get $v_15))
@@ -373,13 +433,13 @@ test 'match with binding', fn:
         (return_call $match_value (local.get $v_12) (struct.new $Num (f64.const 0)) (local.get $v_10) (local.get $v_11))
       )
       (func $v_63 (type $Fn1) (param $v_59 (ref $Any))
-        (return_call $match_arm (ref.func $v_91) (ref.func $v_79) (local.get $v_59))
+        (return_call $match_arm (struct.new $Num (ref.func $v_91)) (struct.new $Num (ref.func $v_79)) (local.get $v_59))
       )
       (global $main_0 (ref $Fn1) (ref.func $v_5))
       (func $v_5 (type $Fn1) (param $v_6 (ref $Any))
         (local $x_1 (ref $Any))
         (local.set $x_1 (struct.new $Num (f64.const 5)))
-        (return_call_ref $Fn1 (ref.func $v_63) (call $closure_3 (ref.func $v_52) (local.get $x_1) (local.get $v_6)))
+        (return_call_ref $Fn1 (struct.new $Num (ref.func $v_63)) (call $closure_3 (struct.new $Num (ref.func $v_52)) (local.get $x_1) (local.get $v_6)))
       )
       (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
       )
@@ -401,7 +461,7 @@ test 'match with binding', fn:
         (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
         (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)) (struct.get $Num 3 (local.get $local_1)))
         )
-        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (local.get $local_0)))
+        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_0)))))
       )
       (func $call_ref_or_clos_1 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
         (local $local_2 (ref $Any))
@@ -417,11 +477,16 @@ test 'match with binding', fn:
         (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
         (return_call_ref $Fn4 (ref.cast (ref null $Fn4) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (struct.get $Num 3 (local.get $local_2)) (local.get $local_0))
         )
-        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (local.get $local_1)) (local.get $local_0))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_1)))) (local.get $local_0))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "main" (func $v_5))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7MEJBQ0UseUJBRUUseUJBSEcseUJBSUg7QUFGRixnREFDRSxrQkFDQSxrQkFGRjtBOzBCQURBO0FBR08sNENBQUUsZ0NBQUY7QTs7QUFBTCxxQ0FBQTtBOzBCQUhGLHlCQURLLHlCQUdIO0E7QTtBQUhHLHFCQUNMO0FBQUEscUJBQUE7QUFHRSwrREFBQTtBOztBQURHLHFDQUFBLGdDQUFIO0E7O0FBQUEsZ0RBQUEsZ0NBQUEsa0JBQUE7QTs7QUFBQSw4REFBQTtBO0FBSEo7QUFBTyx5QkFBQTtBO0FBQ0wsb0JBQUk7MkNBQUo7QTs7QTs7QTs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTtBQURGO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBOzBCQUNFLHlCQUVFLHlCQUhHLHlCQUlIO0FBRkYsZ0RBQ0Usa0JBQ0Esa0JBRkY7QTswQkFEQTtBQUdPLDRDQUFFLGdDQUFGO0E7O0FBQUwscUNBQUE7QTswQkFIRix5QkFESyx5QkFHSDtBO0E7QUFIRyxxQkFDTDtBQUFBLHFCQUFBO0FBR0UsaUZBQUE7QTs7QUFERyxxQ0FBQSxnQ0FBSDtBOztBQUFBLGdEQUFBLGdDQUFBLGtCQUFBO0E7O0FBQUEsa0dBQUE7QTtBQUhKO0FBQU8seUJBQUE7QTtBQUNMLG9CQUFJOzZEQUFKO0E7O0E7O0E7O0E7O0E7Ozs7Ozs7Ozs7Ozs7O0E7O0E7Ozs7Ozs7Ozs7Ozs7O0E7O0E7QUFERjs7QSIKfQ==
+
+
 test 'simple recursion', fn:
   expect gen_wat fink":
     recurse = fn n:
@@ -434,6 +499,8 @@ test 'simple recursion', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn0 (func))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
@@ -454,11 +521,11 @@ test 'simple recursion', fn:
         (return_call $match_block (local.get $n_83) (local.get $v_85) (local.get $v_42) (local.get $v_87))
       )
       (func $v_113 (type $Fn2) (param $v_114 (ref $Any)) (param $v_33 (ref $Any))
-        (return_call $call_ref_or_clos_2 (local.get $v_33) (local.get $v_114) (global.get $recurse_0))
+        (return_call $call_ref_or_clos_2 (local.get $v_33) (local.get $v_114) (struct.new $Num (global.get $recurse_0)))
       )
       (func $v_98 (type $Fn2) (param $n_99 (ref $Any)) (param $v_29 (ref $Any))
         (local $v_118 (ref $Any))
-        (local.set $v_118 (call $closure_2 (ref.func $v_113) (local.get $v_29)))
+        (local.set $v_118 (call $closure_2 (struct.new $Num (ref.func $v_113)) (local.get $v_29)))
         (return_call $op_minus (local.get $n_99) (struct.new $Num (f64.const 1)) (local.get $v_118))
       )
       (func $v_110 (type $Fn3) (param $v_27 (ref $Any)) (param $v_25 (ref $Any)) (param $v_26 (ref $Any))
@@ -467,9 +534,9 @@ test 'simple recursion', fn:
       (func $v_68 (type $Fn3) (param $n_69 (ref $Any)) (param $v_71 (ref $Any)) (param $v_23 (ref $Any))
         (local $v_91 (ref $Any))
         (local $v_103 (ref $Any))
-        (local.set $v_91 (call $closure_4 (ref.func $v_82) (local.get $n_69) (local.get $v_23) (local.get $v_71)))
-        (local.set $v_103 (call $closure_2 (ref.func $v_98) (local.get $n_69)))
-        (return_call $match_arm (ref.func $v_110) (local.get $v_103) (local.get $v_91))
+        (local.set $v_91 (call $closure_4 (struct.new $Num (ref.func $v_82)) (local.get $n_69) (local.get $v_23) (local.get $v_71)))
+        (local.set $v_103 (call $closure_2 (struct.new $Num (ref.func $v_98)) (local.get $n_69)))
+        (return_call $match_arm (struct.new $Num (ref.func $v_110)) (local.get $v_103) (local.get $v_91))
       )
       (func $v_95 (type $Fn1) (param $v_16 (ref $Any))
         (return_call $call_ref_or_clos_1 (struct.new $Num (f64.const 42)) (local.get $v_16))
@@ -478,15 +545,15 @@ test 'simple recursion', fn:
         (return_call $match_value (local.get $v_13) (struct.new $Num (f64.const 0)) (local.get $v_11) (local.get $v_12))
       )
       (func $v_79 (type $Fn1) (param $v_75 (ref $Any))
-        (return_call $match_arm (ref.func $v_107) (ref.func $v_95) (local.get $v_75))
+        (return_call $match_arm (struct.new $Num (ref.func $v_107)) (struct.new $Num (ref.func $v_95)) (local.get $v_75))
       )
       (global $recurse_0 (ref $Fn2) (ref.func $v_7))
       (func $v_7 (type $Fn2) (param $n_2 (ref $Any)) (param $v_8 (ref $Any))
-        (return_call_ref $Fn1 (ref.func $v_79) (call $closure_3 (ref.func $v_68) (local.get $n_2) (local.get $v_8)))
+        (return_call_ref $Fn1 (struct.new $Num (ref.func $v_79)) (call $closure_3 (struct.new $Num (ref.func $v_68)) (local.get $n_2) (local.get $v_8)))
       )
       (global $main_1 (ref $Fn1) (ref.func $v_52))
       (func $v_52 (type $Fn1) (param $v_53 (ref $Any))
-        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_53) (global.get $recurse_0))
+        (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 5)) (local.get $v_53) (struct.new $Num (global.get $recurse_0)))
       )
       (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
       )
@@ -508,7 +575,7 @@ test 'simple recursion', fn:
         (local.set $local_1 (br_on_cast_fail 0 (ref null $Num) (local.get $local_0)))
         (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_1))) (struct.get $Num 1 (local.get $local_1)) (struct.get $Num 2 (local.get $local_1)) (struct.get $Num 3 (local.get $local_1)))
         )
-        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (local.get $local_0)))
+        (return_call_ref $Fn0 (ref.cast (ref null $Fn0) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_0)))))
       )
       (func $call_ref_or_clos_1 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
         (local $local_2 (ref $Any))
@@ -524,7 +591,7 @@ test 'simple recursion', fn:
         (local.set $local_2 (br_on_cast_fail 0 (ref null $Num) (local.get $local_1)))
         (return_call_ref $Fn4 (ref.cast (ref null $Fn4) (struct.get $Num 0 (local.get $local_2))) (struct.get $Num 1 (local.get $local_2)) (struct.get $Num 2 (local.get $local_2)) (struct.get $Num 3 (local.get $local_2)) (local.get $local_0))
         )
-        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (local.get $local_1)) (local.get $local_0))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_1)))) (local.get $local_0))
       )
       (func $call_ref_or_clos_2 (type $Fn3) (param $local_0 (ref $Any)) (param $local_1 (ref $Any)) (param $local_2 (ref $Any))
         (local $local_3 (ref $Any))
@@ -540,13 +607,16 @@ test 'simple recursion', fn:
         (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
         (return_call_ref $Fn5 (ref.cast (ref null $Fn5) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (struct.get $Num 2 (local.get $local_3)) (struct.get $Num 3 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
         )
-        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_2)))) (local.get $local_0) (local.get $local_1))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "recurse" (func $v_7))
       (export "main" (func $v_52))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBOzBCQUFhLHlCQUVULHlCQUZNLHlCQUdOO0FBRkYsZ0RBQ0Usa0JBQ0Esa0JBRkY7QTtxREFFYTtBQUFSLHFDQUFRLHFDQUFSO0E7MEJBSE07QTs7QUFHSSw2Q0FBRSxnQ0FBRjtBOztBQUFiLHFDQUFBO0E7MEJBSFMseUJBQUgseUJBRU47QTtBO0FBRk0scUJBQUc7QUFBQSxzQkFBQTtBQUdULGlFQUFBO0E7O0FBREcscUNBQUEsaUNBQUg7QTs7QUFBQSxnREFBQSxnQ0FBQSxrQkFBQTtBOztBQUFBLCtEQUFBO0E7QUFGSjtBQUFVLHlCQUFHLHdCQUFIOzJDQUFHO0E7QUFJYjtBQUFPLDBCQUFBO0FBQ0wscUNBQVEsa0RBQVI7QTs7QTs7QTs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTs7QTs7Ozs7Ozs7Ozs7Ozs7QTtBQUxGO0FBSUE7QSIKfQ==
-# --- closures ---
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTswQkFBYSx5QkFFVCx5QkFGTSx5QkFHTjtBQUZGLGdEQUNFLGtCQUNBLGtCQUZGO0E7cURBRWE7QUFBUixxQ0FBUSxxQ0FBUjtBOzBCQUhNO0E7O0FBR0ksNkNBQUUsZ0NBQUY7QTs7QUFBYixxQ0FBQTtBOzBCQUhTLHlCQUFILHlCQUVOO0E7QTtBQUZNLHFCQUFHO0FBQUEsc0JBQUE7QUFHVCxtRkFBQTtBOztBQURHLHFDQUFBLGlDQUFIO0E7O0FBQUEsZ0RBQUEsZ0NBQUEsa0JBQUE7QTs7QUFBQSxtR0FBQTtBO0FBRko7QUFBVSx5QkFBRyx3QkFBSDs2REFBRztBO0FBSWI7QUFBTywwQkFBQTtBQUNMLHFDQUFRLGtEQUFSO0E7O0E7O0E7O0E7O0E7Ozs7Ozs7Ozs7Ozs7O0E7O0E7Ozs7Ozs7Ozs7Ozs7O0E7O0E7Ozs7Ozs7Ozs7Ozs7O0E7O0E7QUFMRjtBQUlBOztBIgp9
+
 
 test 'closure construction and call', fn:
   expect gen_wat fink":
@@ -560,6 +630,8 @@ test 'closure construction and call', fn:
     (module
       (type $Any (sub (struct)))
       (type $Num (sub $Any (struct (field f64))))
+      (type $Num (sub $Any (struct (field f64))))
+      (type $Fn1 (func (param (ref $Any))))
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
@@ -571,7 +643,7 @@ test 'closure construction and call', fn:
         (return_call $op_plus (local.get $x_55) (local.get $y_2) (local.get $v_13))
       )
       (func $v_10 (type $Fn2) (param $x_1 (ref $Any)) (param $v_11 (ref $Any))
-        (return_call_ref $Fn1 (local.get $v_11) (call $closure_2 (ref.func $v_54) (local.get $x_1)))
+        (return_call_ref $Fn1 (local.get $v_11) (call $closure_2 (struct.new $Num (ref.func $v_54)) (local.get $x_1)))
       )
       (func $v_44 (type $Fn2) (param $v_45 (ref $Any)) (param $v_24 (ref $Any))
         (local $add1_4 (ref $Any))
@@ -582,8 +654,8 @@ test 'closure construction and call', fn:
       (func $v_8 (type $Fn1) (param $v_9 (ref $Any))
         (local $add_3 (ref $Any))
         (local $v_49 (ref $Any))
-        (local.set $add_3 (ref.func $v_10))
-        (local.set $v_49 (call $closure_2 (ref.func $v_44) (local.get $v_9)))
+        (local.set $add_3 (struct.new $Num (ref.func $v_10)))
+        (local.set $v_49 (call $closure_2 (struct.new $Num (ref.func $v_44)) (local.get $v_9)))
         (return_call $call_ref_or_clos_2 (struct.new $Num (f64.const 1)) (local.get $v_49) (local.get $add_3))
       )
       (func $closure_2 (type $Fn2) (param $local_0 (ref $Any)) (param $local_1 (ref $Any))
@@ -594,8 +666,11 @@ test 'closure construction and call', fn:
         (local.set $local_3 (br_on_cast_fail 0 (ref null $Num) (local.get $local_2)))
         (return_call_ref $Fn3 (ref.cast (ref null $Fn3) (struct.get $Num 0 (local.get $local_3))) (struct.get $Num 1 (local.get $local_3)) (local.get $local_0) (local.get $local_1))
         )
-        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (local.get $local_2)) (local.get $local_0) (local.get $local_1))
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Num 0 (ref.cast (ref null $Num) (local.get $local_2)))) (local.get $local_0) (local.get $local_1))
+      )
+      (func $__box_func (type $Fn1) (param $local_0 (ref $Any))
       )
       (export "main" (func $v_8))
+      (export "__box_func" (func $__box_func))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTswQkFDVyx5QkFDSix3QkFBSDtBQUFRLDRDQUFFLGlCQUFGO0E7QUFESiwwQkFBRyx3QkFBSDs0Q0FBRztBOzBCQURKLHlCQUdFO0E7QUFBUCx1QkFBTztBQUNQLHFDQUFLLGtEQUFMO0E7QUFKRjtBQUFPLHlCQUFBO0E7QTtBQUNMLHNCQUFNO0FBREQscUJBQUE7QUFHRSxxQ0FBSSxrREFBSjtBOztBOztBOzs7Ozs7QTtBQUhUO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7MEJBQ1cseUJBQ0osd0JBQUg7QUFBUSw0Q0FBRSxpQkFBRjtBO0FBREosMEJBQUcsd0JBQUg7NENBQUc7QTswQkFESix5QkFHRTtBO0FBQVAsdUJBQU87QUFDUCxxQ0FBSyxrREFBTDtBO0FBSkY7QUFBTyx5QkFBQTtBO0E7QUFDTCxzQkFBTTtBQURELHFCQUFBO0FBR0UscUNBQUksa0RBQUo7QTs7QTs7QTs7Ozs7O0E7O0E7QUFIVDs7QSIKfQ==

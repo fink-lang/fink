@@ -277,6 +277,52 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.types.insert("$Num".into(), next_idx);
     next_idx += 1;
 
+    // $FuncBox = (sub $Any (struct (field funcref)))
+    // Boxes a funcref so it can flow through (ref null $Any) slots.
+    let func_ref = ValType::Ref(RefType {
+      nullable: true,
+      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Func },
+    });
+    types.ty().subtype(&SubType {
+      is_final: true,
+      supertype_idx: Some(any_idx),
+      composite_type: CompositeType {
+        inner: CompositeInnerType::Struct(StructType {
+          fields: Box::new([FieldType {
+            element_type: StorageType::Val(func_ref),
+            mutable: false,
+          }]),
+        }),
+        shared: false,
+        descriptor: None,
+        describes: None,
+      },
+    });
+    self.idx.types.insert("$FuncBox".into(), next_idx);
+    next_idx += 1;
+
+    // $BoxFuncTy = (func (param funcref) (result (ref null $Any)))
+    // Type for the __box_func helper exported for the host.
+    let any_ref_val = ValType::Ref(RefType {
+      nullable: true,
+      heap_type: HeapType::Concrete(any_idx),
+    });
+    types.ty().subtype(&SubType {
+      is_final: true,
+      supertype_idx: None,
+      composite_type: CompositeType {
+        inner: CompositeInnerType::Func(FuncType::new(
+          vec![func_ref],
+          vec![any_ref_val],
+        )),
+        shared: false,
+        descriptor: None,
+        describes: None,
+      },
+    });
+    self.idx.types.insert("$BoxFuncTy".into(), next_idx);
+    next_idx += 1;
+
     // $FnN for each arity (from defined functions + builtins).
     let any_ref = ValType::Ref(RefType {
       nullable: true,
@@ -480,6 +526,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
+    // __box_func helper: (func (param funcref) (result (ref null $Any)))
+    let box_func_type_idx = self.idx.type_idx("$BoxFuncTy");
+    functions.function(box_func_type_idx);
+    self.idx.funcs.insert("__box_func".into(), next_func_idx);
+
     self.module.section(&functions);
   }
 
@@ -532,13 +583,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
   fn emit_exports(&mut self, cps_mod: &CpsModule<'_, '_>) {
     let mut exports = ExportSection::new();
-    let mut has_exports = false;
 
     for func in &cps_mod.funcs {
       if let Some(name) = &func.export_as {
         let func_idx = self.idx.func_idx(&func.label);
         exports.export(name, ExportKind::Func, func_idx);
-        has_exports = true;
 
         // Record structural loc for export.
         if let Some(bind_id) = func.export_bind_id
@@ -551,9 +600,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    if has_exports {
-      self.module.section(&exports);
-    }
+    // Always export __box_func for the host to create boxed continuations.
+    let box_func_idx = self.idx.func_idx("__box_func");
+    exports.export("__box_func", ExportKind::Func, box_func_idx);
+
+    self.module.section(&exports);
   }
 
   // -------------------------------------------------------------------------
@@ -579,6 +630,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
       for call_arity in call_arities {
         code.function(&self.emit_call_ref_or_clos(call_arity, closure_captures));
       }
+    }
+
+    // __box_func body: (struct.new $FuncBox (local.get 0))
+    {
+      let mut f = Function::new(vec![]);
+      let funcbox_idx = self.idx.type_idx("$FuncBox");
+      f.instruction(&Instruction::LocalGet(0));
+      f.instruction(&Instruction::StructNew(funcbox_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
     }
 
     self.module.section(&code);
@@ -673,16 +734,19 @@ impl<'a, 'src> Emitter<'a, 'src> {
       f.instruction(&Instruction::End);
     }
 
-    // Fallthrough: plain funcref. Cast callee to (ref $FnN) and call.
+    // Fallthrough: plain funcref in $FuncBox. Unbox, cast, call.
     let fn_type_idx = self.idx.fn_type_idx(call_arity);
+    let funcbox_idx = self.idx.type_idx("$FuncBox");
 
     // Push args.
     for i in 0..call_arity as u32 {
       f.instruction(&Instruction::LocalGet(i));
     }
 
-    // Push callee, cast to (ref $FnN), return_call_ref.
+    // Push callee, unbox $FuncBox → funcref, cast to $FnN, call.
     f.instruction(&Instruction::LocalGet(callee_param));
+    f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
+    f.instruction(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
     f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(fn_type_idx)));
     f.instruction(&Instruction::ReturnCallRef(fn_type_idx));
 
@@ -764,6 +828,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
         func_names.append(idx, &name);
       }
     }
+    // __box_func helper.
+    let box_func_idx = self.idx.func_idx("__box_func");
+    func_names.append(box_func_idx, "__box_func");
     names.functions(&func_names);
 
     // Local names per defined function.
@@ -953,7 +1020,7 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, 
     let dispatch_idx = fc.emitter_idx.func_idx(&dispatch_name);
     fc.instr(&Instruction::ReturnCall(dispatch_idx));
   } else {
-    // No closures — direct return_call_ref (original path).
+    // No closures — unbox $FuncBox, cast to $FnN, return_call_ref.
     for arg in val_args {
       emit_arg(arg, fc);
     }
@@ -962,7 +1029,12 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, 
     }
     emit_val_ref(func_val, fc);
 
+    // Callee is (ref null $Any) — unbox from $FuncBox to get funcref.
+    let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
+    fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
+    fc.instr(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
     let type_idx = fc.emitter_idx.fn_type_idx(total_arity);
+    fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(type_idx)));
     fc.instr(&Instruction::ReturnCallRef(type_idx));
   }
 }
@@ -1188,14 +1260,22 @@ fn emit_cont(cont: &Cont<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 }
 
 /// Emit global.get, ref.func, or local.get depending on what the label refers to.
+/// Emit global.get, ref.func, or local.get depending on what the label refers to.
+/// Function references (global.get for fn aliases, ref.func for lifted fns) are
+/// boxed in $FuncBox so they can flow through (ref null $Any) slots.
 fn emit_get(fc: &mut FuncContext<'_, '_, '_>, label: &str) {
+  let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
   if fc.emitter_idx.globals.contains_key(label) {
     let idx = fc.emitter_idx.global_idx(label);
     fc.instr(&Instruction::GlobalGet(idx));
+    // Global is a funcref — box it for $Any compatibility.
+    fc.instr(&Instruction::StructNew(funcbox_idx));
   } else if fc.emitter_idx.funcs.contains_key(label) {
     // Non-global function reference (e.g. lifted continuation) — use ref.func.
     let idx = fc.emitter_idx.func_idx(label);
     fc.instr(&Instruction::RefFunc(idx));
+    // Box the funcref for $Any compatibility.
+    fc.instr(&Instruction::StructNew(funcbox_idx));
   } else {
     let idx = fc.local_idx(label);
     fc.instr(&Instruction::LocalGet(idx));

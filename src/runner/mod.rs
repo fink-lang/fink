@@ -29,11 +29,34 @@ pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-  // WASM binaries start with magic bytes \0asm; everything else is WAT text.
+  // WASM binaries start with magic bytes \0asm.
   if bytes.starts_with(b"\0asm") {
     wasmtime_runner::run(&opts, &bytes)
   } else {
-    let src = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
-    wasmtime_runner::run_wat(&opts, Some(path), src)
+    Err("only .fnk and .wasm files are supported".into())
   }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use wasmtime_runner::FinkResult;
+
+  #[allow(unused)]
+  fn run(src: &str) -> String {
+    let result = compile_fnk(src).expect("compilation failed");
+    match wasmtime_runner::exec(&RunOptions::default(), &result.wasm) {
+      Ok(FinkResult::Num(v)) => {
+        if v == v.floor() && v.abs() < 1e15 {
+          format!("{}", v as i64)
+        } else {
+          format!("{}", v)
+        }
+      }
+      Ok(FinkResult::None) => String::new(),
+      Err(e) => format!("ERROR: {}", e),
+    }
+  }
+
+  test_macros::include_fink_tests!("src/runner/test_runner.fnk");
 }
