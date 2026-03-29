@@ -179,3 +179,41 @@ test 'xor', fn:
   | equals fink":
     false
 
+
+test 'chained arithmetic', fn:
+  expect run fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+  | equals fink":
+    10
+
+
+test 'multiple let bindings', fn:
+  expect run fink":
+    main = fn:
+      x = 2
+      y = 3
+      x + y
+  | equals fink":
+    5
+
+
+test 'nested chains', fn:
+  expect run fink":
+    main = fn:
+      x = 2 + 3
+      y = x * 2
+      y - 1
+  | equals fink":
+    9
+
+
+test 'chain with bool', fn:
+  expect run fink":
+    main = fn:
+      x = 3 > 2
+      x and true
+  | equals fink":
+    true
+

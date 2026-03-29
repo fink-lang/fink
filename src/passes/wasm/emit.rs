@@ -45,8 +45,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use wasm_encoder::{
   AbstractHeapType, BlockType, CodeSection, CompositeInnerType, CompositeType,
-  ConstExpr, ExportKind, ExportSection, FieldType, FuncType, Function,
-  FunctionSection, GlobalSection, GlobalType, HeapType,
+  ConstExpr, ElementSection, Elements, ExportKind, ExportSection, FieldType,
+  FuncType, Function, FunctionSection, GlobalSection, GlobalType, HeapType,
   ImportSection, IndirectNameMap, Instruction,
   NameMap, NameSection, RefType, StorageType, SubType,
   StructType, TypeSection, ValType,
@@ -136,6 +136,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.emit_functions(module, &closure_captures, &extra_arities);
   e.emit_globals(module);
   e.emit_exports(module);
+  e.emit_elements();
   e.emit_code(module, &closure_captures);
   e.emit_names(module, &closure_captures, &extra_arities);
   let wasm = e.module.finish();
@@ -650,6 +651,21 @@ impl<'a, 'src> Emitter<'a, 'src> {
   }
 
   // -------------------------------------------------------------------------
+  // Element section — declarative segment for ref.func validation
+  // -------------------------------------------------------------------------
+
+  /// Emit a declarative element segment listing all defined functions.
+  /// WASM requires functions referenced by ref.func (in code or global
+  /// initialisers) to appear in an element segment.
+  fn emit_elements(&mut self) {
+    let mut func_indices: Vec<u32> = self.idx.funcs.values().copied().collect();
+    func_indices.sort();
+    let mut elements = ElementSection::new();
+    elements.declared(Elements::Functions(func_indices.into()));
+    self.module.section(&elements);
+  }
+
+  // -------------------------------------------------------------------------
   // Code section — function bodies with byte offset tracking
   // -------------------------------------------------------------------------
 
@@ -682,6 +698,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
         bool_: self.idx.type_idx("$Bool"),
         funcbox: self.idx.type_idx("$FuncBox"),
         fn1: self.idx.fn_type_idx(1),
+        croc1: self.idx.funcs.get("_croc_1").copied(),
       };
       let names: Vec<String> = self.impl_builtins.keys().cloned().collect();
       for name in names {
@@ -751,10 +768,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
         heap_type: HeapType::Concrete(closure_type_idx),
       };
 
-      // (block $not_clos
-      f.instruction(&Instruction::Block(BlockType::Empty));
+      // (block (result (ref null $Any))
+      //   (br_on_cast_fail $not_clos (ref $Any) (ref $ClosureN) (local.get $callee))
+      //   ;; success: extract captures, push args, return_call_ref
+      // )
+      // drop ;; discard failed-cast value
+      let block_type = BlockType::Result(ValType::Ref(any_rt));
+      f.instruction(&Instruction::Block(block_type));
 
-      // (br_on_cast_fail $not_clos (ref $Any) (ref $ClosureN) (local.get $callee))
       f.instruction(&Instruction::LocalGet(callee_param));
       f.instruction(&Instruction::BrOnCastFail {
         relative_depth: 0,
@@ -766,8 +787,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
       f.instruction(&Instruction::LocalSet(cast_local));
 
       // Push captures from struct (fields 1..N).
+      // The cast_local is typed (ref null $Any) — re-cast to $ClosureN for struct_get.
       for cap_idx in 0..n_cap {
         f.instruction(&Instruction::LocalGet(cast_local));
+        f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(closure_type_idx)));
         f.instruction(&Instruction::StructGet {
           struct_type_index: closure_type_idx,
           field_index: (cap_idx + 1) as u32, // field 0 is funcref
@@ -781,6 +804,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
       // Push funcref from struct field 0, cast to $FnM, call.
       f.instruction(&Instruction::LocalGet(cast_local));
+      f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(closure_type_idx)));
       f.instruction(&Instruction::StructGet {
         struct_type_index: closure_type_idx,
         field_index: 0,
@@ -788,8 +812,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
       f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(fn_type_idx)));
       f.instruction(&Instruction::ReturnCallRef(fn_type_idx));
 
-      // End block — cast failed, continue to next closure type.
+      // End block — cast failed, original ref on stack as block result.
       f.instruction(&Instruction::End);
+      // Discard the failed-cast value — we'll re-read from the param.
+      f.instruction(&Instruction::Drop);
     }
 
     // Fallthrough: plain funcref in $FuncBox. Unbox, cast, call.
@@ -1115,9 +1141,14 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
     let n = val_args.len();
     let closure_name = format!("_closure_{}", n);
 
-    // Emit closure args.
-    for arg in val_args {
-      emit_arg(arg, fc);
+    // Emit closure args: first arg is the raw funcref (not boxed),
+    // remaining args are captures flowing as (ref null $Any).
+    for (i, arg) in val_args.iter().enumerate() {
+      if i == 0 {
+        emit_arg_raw_funcref(arg, fc);
+      } else {
+        emit_arg(arg, fc);
+      }
     }
 
     let closure_idx = fc.emitter_idx.func_idx(&closure_name);
@@ -1309,6 +1340,39 @@ fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       let any_idx = fc.emitter_idx.type_idx("$Any");
       fc.instr(&Instruction::RefNull(HeapType::Concrete(any_idx)));
     }
+  }
+}
+
+/// Emit a funcref argument without $FuncBox boxing.
+/// Used for closure constructor's first arg which expects a raw funcref.
+fn emit_arg_raw_funcref(arg: &Arg<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+  match arg {
+    Arg::Val(v) | Arg::Spread(v) => {
+      fc.mark(v.id);
+      emit_get_raw_funcref(fc, v);
+    }
+    _ => emit_arg(arg, fc),
+  }
+}
+
+/// Emit a raw funcref (ref.func or global.get) without $FuncBox wrapping.
+fn emit_get_raw_funcref(fc: &mut FuncContext<'_, '_, '_>, val: &Val<'_>) {
+  match &val.kind {
+    ValKind::Ref(Ref::Synth(id)) => {
+      let label = fc.ctx.label(*id);
+      if fc.emitter_idx.globals.contains_key(&label) {
+        let idx = fc.emitter_idx.global_idx(&label);
+        fc.instr(&Instruction::GlobalGet(idx));
+      } else if fc.emitter_idx.funcs.contains_key(&label) {
+        let idx = fc.emitter_idx.func_idx(&label);
+        fc.instr(&Instruction::RefFunc(idx));
+      } else {
+        // Local — should already be a funcref from closure struct extraction.
+        let idx = fc.local_idx(&label);
+        fc.instr(&Instruction::LocalGet(idx));
+      }
+    }
+    _ => emit_val_inner(val, fc),
   }
 }
 
