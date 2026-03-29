@@ -67,6 +67,22 @@ test 'division', fn:
     2.5
 
 
+test 'integer division', fn:
+  expect run fink":
+    main = fn:
+      7 // 2
+  | equals fink":
+    3
+
+
+test 'modulo', fn:
+  expect run fink":
+    main = fn:
+      10 %% 3
+  | equals fink":
+    1
+
+
 test 'bool literal true', fn:
   expect run fink":
     main = fn:
@@ -83,10 +99,50 @@ test 'bool literal false', fn:
     false
 
 
-test 'comparison', fn:
+test 'equal', fn:
   expect run fink":
     main = fn:
       3 == 3
+  | equals fink":
+    true
+
+
+test 'not equal', fn:
+  expect run fink":
+    main = fn:
+      3 != 4
+  | equals fink":
+    true
+
+
+test 'less than', fn:
+  expect run fink":
+    main = fn:
+      3 < 4
+  | equals fink":
+    true
+
+
+test 'less than or equal', fn:
+  expect run fink":
+    main = fn:
+      3 <= 3
+  | equals fink":
+    true
+
+
+test 'greater than', fn:
+  expect run fink":
+    main = fn:
+      4 > 3
+  | equals fink":
+    true
+
+
+test 'greater than or equal', fn:
+  expect run fink":
+    main = fn:
+      3 >= 3
   | equals fink":
     true
 

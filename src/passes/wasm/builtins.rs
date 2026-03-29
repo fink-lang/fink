@@ -23,6 +23,7 @@ pub fn is_implemented(name: &str) -> bool {
   matches!(name,
     // Arithmetic
     "op_plus" | "op_minus" | "op_mul" | "op_div"
+    | "op_intdiv" | "op_rem" | "op_intmod"
     // Comparison
     | "op_eq" | "op_neq" | "op_lt" | "op_lte" | "op_gt" | "op_gte"
     // Logic
@@ -38,6 +39,11 @@ pub fn emit_builtin(name: &str, indices: &TypeIndices) -> Function {
     "op_minus" => emit_binary_arith(indices, Instruction::F64Sub),
     "op_mul"   => emit_binary_arith(indices, Instruction::F64Mul),
     "op_div"   => emit_binary_arith(indices, Instruction::F64Div),
+
+    // Integer arithmetic: cast to i64, op, cast back.
+    "op_intdiv" => emit_binary_int(indices, Instruction::I64DivS),
+    "op_rem"    => emit_binary_int(indices, Instruction::I64RemS),
+    "op_intmod" => emit_binary_int(indices, Instruction::I64RemS), // same as rem for now
 
     // Comparison: unbox two $Num, f64 compare, box 1.0 or 0.0.
     "op_eq"  => emit_binary_cmp(indices, Instruction::F64Eq),
@@ -85,6 +91,30 @@ fn emit_binary_arith(idx: &TypeIndices, op: Instruction<'_>) -> Function {
   f.instruction(&Instruction::StructGet { struct_type_index: idx.num, field_index: 0 });
   // Op + box.
   f.instruction(&op);
+  f.instruction(&Instruction::StructNew(idx.num));
+  emit_cont_call(&mut f, idx);
+  f
+}
+
+// ---------------------------------------------------------------------------
+// Binary integer arithmetic: (a, b, cont) → cont(box(i64_op(trunc(a), trunc(b))))
+// ---------------------------------------------------------------------------
+
+fn emit_binary_int(idx: &TypeIndices, op: Instruction<'_>) -> Function {
+  let mut f = Function::new(vec![]);
+  // Unbox a → f64 → i64.
+  f.instruction(&Instruction::LocalGet(0));
+  f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.num)));
+  f.instruction(&Instruction::StructGet { struct_type_index: idx.num, field_index: 0 });
+  f.instruction(&Instruction::I64TruncF64S);
+  // Unbox b → f64 → i64.
+  f.instruction(&Instruction::LocalGet(1));
+  f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.num)));
+  f.instruction(&Instruction::StructGet { struct_type_index: idx.num, field_index: 0 });
+  f.instruction(&Instruction::I64TruncF64S);
+  // i64 op → f64 → box.
+  f.instruction(&op);
+  f.instruction(&Instruction::F64ConvertI64S);
   f.instruction(&Instruction::StructNew(idx.num));
   emit_cont_call(&mut f, idx);
   f
