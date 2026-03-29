@@ -383,3 +383,85 @@ test 'recursive fn in match — no closures', fn:
       ·match_arm ·v_79, ·v_67, ·v_60, ·n_1, ·v_7
 
     ·export ·fib_0
+
+
+---
+mutual recursion
+---
+
+test 'mutual recursion — ping pong', fn:
+  expect lift fink":
+    ping = fn x: pong x
+    pong = fn x: ping x
+
+  | equals fink":
+    ·ping_0 = ·v_8 = fn ·x_2, ·v_9:
+      ·pong_1 ·x_2, ·v_9
+
+    ·pong_1 = ·v_16 = fn ·x_3, ·v_17:
+      ·ping_0 ·x_3, ·v_17
+
+    ·export ·ping_0, ·pong_1
+
+test 'mutual recursion with shared cont', fn:
+  expect lift fink":
+    is-even = fn n:
+      match n:
+        0: 1
+        _: is-odd n - 1
+
+    is-odd = fn n:
+      match n:
+        0: 0
+        _: is-even n - 1
+
+  | equals fink":
+    ·v_135 = fn ·v_43, ·n_136, ·v_138, ·v_140:
+      ·match_block ·n_136, ·v_138, ·v_43, ·v_140
+
+    ·v_171 = fn ·v_34, ·v_172:
+      ·is-odd_1 ·v_34, ·v_172
+
+    ·v_155 = fn ·v_30, ·n_156:
+      ·op_minus ·n_156, 1, ·v_171, ·v_30
+
+    ·v_168 = fn ·v_28, ·v_26, ·v_27:
+      ·v_27 _
+
+    ·v_113 = fn ·v_24, ·n_114, ·v_116:
+      ·match_arm ·v_168, ·v_135, ·n_114, ·v_24, ·v_116, ·v_155, ·n_114
+
+    ·v_132 = fn ·v_17:
+      ·v_17 1
+
+    ·v_152 = fn ·v_14, ·v_12, ·v_13:
+      ·match_value ·v_14, 0, ·v_12, ·v_13
+
+    ·is-even_0 = ·v_8 = fn ·n_2, ·v_9:
+      ·match_arm ·v_152, ·v_132, ·v_113, ·n_2, ·v_9
+
+    ·v_123 = fn ·v_88, ·n_124, ·v_126, ·v_128:
+      ·match_block ·n_124, ·v_126, ·v_88, ·v_128
+
+    ·v_163 = fn ·v_79, ·v_164:
+      ·is-even_0 ·v_79, ·v_164
+
+    ·v_147 = fn ·v_75, ·n_148:
+      ·op_minus ·n_148, 1, ·v_163, ·v_75
+
+    ·v_160 = fn ·v_73, ·v_71, ·v_72:
+      ·v_72 _
+
+    ·v_106 = fn ·v_69, ·n_107, ·v_109:
+      ·match_arm ·v_160, ·v_123, ·n_107, ·v_69, ·v_109, ·v_147, ·n_107
+
+    ·v_120 = fn ·v_62:
+      ·v_62 0
+
+    ·v_144 = fn ·v_59, ·v_57, ·v_58:
+      ·match_value ·v_59, 0, ·v_57, ·v_58
+
+    ·is-odd_1 = ·v_53 = fn ·n_3, ·v_54:
+      ·match_arm ·v_144, ·v_120, ·v_106, ·n_3, ·v_54
+
+    ·export ·is-even_0, ·is-odd_1
