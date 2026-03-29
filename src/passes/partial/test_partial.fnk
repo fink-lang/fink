@@ -1,3 +1,4 @@
+{test, expect, equals, fink, partial} = import '!fake'
 
 
 ---
@@ -327,3 +328,47 @@ test 'partial in multiple pipe segments', fn:
           InfixOp '*',
             SynthIdent '·$_1'
             LitInt '2'
+
+
+test 'partial in pipe inside fn body', fn:
+  expect partial fink":
+    main = fn:
+      2
+      | add 3, ?
+  | equals fink":
+    Bind '=',
+      Ident 'main'
+      Fn ':',
+        Patterns
+        Pipe
+          LitInt '2'
+          Fn ':',
+            Patterns
+              SynthIdent '·$_0'
+            Apply
+              Ident 'add'
+              LitInt '3'
+              SynthIdent '·$_0'
+
+
+
+test 'partial in pipe with ident', fn:
+  expect partial fink":
+    main = fn:
+      x
+      | add 3, ?
+  | equals fink":
+    Bind '=',
+      Ident 'main'
+      Fn ':',
+        Patterns
+        Pipe
+          Ident 'x'
+          Fn ':',
+            Patterns
+              SynthIdent '·$_0'
+            Apply
+              Ident 'add'
+              LitInt '3'
+              SynthIdent '·$_0'
+

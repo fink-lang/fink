@@ -1,0 +1,271 @@
+{test, expect, equals, fink, run, wat} = import '!fake'
+
+
+test 'literal', fn:
+  expect run fink":
+    main = fn:
+      42
+  | equals fink":
+    42
+
+
+test 'let binding', fn:
+  expect run fink":
+    main = fn:
+      x = 42
+      x
+  | equals fink":
+    42
+
+
+test 'float literal', fn:
+  expect run fink":
+    main = fn:
+      3.14
+  | equals fink":
+    3.14
+
+
+test 'let alias', fn:
+  expect run fink":
+    main = fn:
+      x = 42
+      y = x
+      y
+  | equals fink":
+    42
+
+
+test 'add two literals', fn:
+  expect run fink":
+    main = fn:
+      2 + 3
+  | equals fink":
+    5
+
+
+test 'subtraction', fn:
+  expect run fink":
+    main = fn:
+      10 - 3
+  | equals fink":
+    7
+
+
+test 'multiplication', fn:
+  expect run fink":
+    main = fn:
+      4 * 5
+  | equals fink":
+    20
+
+
+test 'division', fn:
+  expect run fink":
+    main = fn:
+      10 / 4
+  | equals fink":
+    2.5
+
+
+test 'integer division', fn:
+  expect run fink":
+    main = fn:
+      7 // 2
+  | equals fink":
+    3
+
+
+test 'modulo', fn:
+  expect run fink":
+    main = fn:
+      10 %% 3
+  | equals fink":
+    1
+
+
+test 'bool literal true', fn:
+  expect run fink":
+    main = fn:
+      true
+  | equals fink":
+    true
+
+
+test 'bool literal false', fn:
+  expect run fink":
+    main = fn:
+      false
+  | equals fink":
+    false
+
+
+test 'equal', fn:
+  expect run fink":
+    main = fn:
+      3 == 3
+  | equals fink":
+    true
+
+
+test 'not equal', fn:
+  expect run fink":
+    main = fn:
+      3 != 4
+  | equals fink":
+    true
+
+
+test 'less than', fn:
+  expect run fink":
+    main = fn:
+      3 < 4
+  | equals fink":
+    true
+
+
+test 'less than or equal', fn:
+  expect run fink":
+    main = fn:
+      3 <= 3
+  | equals fink":
+    true
+
+
+test 'greater than', fn:
+  expect run fink":
+    main = fn:
+      4 > 3
+  | equals fink":
+    true
+
+
+test 'greater than or equal', fn:
+  expect run fink":
+    main = fn:
+      3 >= 3
+  | equals fink":
+    true
+
+
+test 'not', fn:
+  expect run fink":
+    main = fn:
+      not true
+  | equals fink":
+    false
+
+
+test 'and', fn:
+  expect run fink":
+    main = fn:
+      true and false
+  | equals fink":
+    false
+
+
+test 'or', fn:
+  expect run fink":
+    main = fn:
+      true or false
+  | equals fink":
+    true
+
+
+test 'xor', fn:
+  expect run fink":
+    main = fn:
+      true xor true
+  | equals fink":
+    false
+
+
+test 'chained arithmetic', fn:
+  expect run fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+  | equals fink":
+    10
+
+
+test 'multiple let bindings', fn:
+  expect run fink":
+    main = fn:
+      x = 2
+      y = 3
+      x + y
+  | equals fink":
+    5
+
+
+test 'nested chains', fn:
+  expect run fink":
+    main = fn:
+      x = 2 + 3
+      y = x * 2
+      y - 1
+  | equals fink":
+    9
+
+
+test 'chain with bool', fn:
+  expect run fink":
+    main = fn:
+      x = 3 > 2
+      x and true
+  | equals fink":
+    true
+
+
+test 'pipe with fn call', fn:
+  expect run fink":
+    add = fn a, b: a + b
+    main = fn:
+      2
+      | add 3, ?
+  | equals fink":
+    5
+
+
+test 'match literal first arm', fn:
+  expect run fink":
+    main = fn:
+      match 0:
+        0: 42
+        _: 99
+  | equals fink":
+    42
+
+
+test 'match literal second arm', fn:
+  expect run fink":
+    main = fn:
+      match 1:
+        0: 42
+        _: 99
+  | equals fink":
+    99
+
+
+test 'match wildcard binding', fn:
+  expect run fink":
+    main = fn:
+      match 5:
+        0: 0
+        x: x + 1
+  | equals fink":
+    6
+
+
+test 'factorial', fn:
+  expect run fink":
+    fac = fn n:
+      match n:
+        0: 1
+        n: n * fac n - 1
+    main = fn:
+      fac 5
+  | equals fink":
+    120
+

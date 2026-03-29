@@ -320,14 +320,26 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
               let after_equals = &file[equals_pos..];
               let line_end = after_equals.find('\n').map(|i| equals_pos + i + 1).unwrap_or(file.len());
               // Find where the body ends: the indented block below `| equals ...:`.
-              // Body lines start with 4 spaces. Stop at the first non-indented line
-              // (blank or otherwise).
+              // Body lines start with 4 spaces. Blank lines within the block are
+              // part of the body only if followed by another indented line.
+              // Trailing blank lines between tests are preserved.
               let body_end = {
                 let mut pos = line_end;
+                let mut tentative_blank_run = 0usize;
                 for line in file[line_end..].lines() {
-                  if !line.starts_with("    ") { break; }
-                  pos += line.len() + 1; // +1 for newline
+                  if line.starts_with("    ") {
+                    // Indented line — commit any pending blank lines as body.
+                    pos += tentative_blank_run + line.len() + 1;
+                    tentative_blank_run = 0;
+                  } else if line.is_empty() {
+                    // Blank line — tentatively include (might be trailing).
+                    tentative_blank_run += line.len() + 1;
+                  } else {
+                    // Non-blank, non-indented — end of body.
+                    break;
+                  }
                 }
+                // Don't consume trailing blank lines.
                 pos.min(file.len())
               };
               // Build indented replacement.
