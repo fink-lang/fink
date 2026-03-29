@@ -4,7 +4,7 @@
 // All Fink functions are CPS — the host provides the initial continuation
 // that receives the result.
 //
-// The module exports `__box_func` to box a funcref into $FuncBox (an $Any
+// The module exports `_box_func` to box a funcref into $FuncBox (an $Any
 // subtype), so the host can create boxed continuations without needing
 // direct access to GC struct types.
 
@@ -58,9 +58,9 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   let main_fn = instance.get_func(&mut store, "main")
     .ok_or("no 'main' export")?;
 
-  // Find __box_func: (func (param funcref) (result (ref null $Any))).
-  let box_func = instance.get_func(&mut store, "__box_func")
-    .ok_or("no '__box_func' export — module may be from an older compiler")?;
+  // Find _box_func: (func (param funcref) (result (ref null $Any))).
+  let box_func = instance.get_func(&mut store, "_box_func")
+    .ok_or("no '_box_func' export — module may be from an older compiler")?;
 
   // Create the "done" continuation — receives the result.
   // Store the raw f64 bits directly to avoid GC rooting issues.
@@ -79,10 +79,10 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
     Ok(())
   });
 
-  // Box the done funcref via __box_func → $FuncBox (a subtype of $Any).
+  // Box the done funcref via _box_func → $FuncBox (a subtype of $Any).
   let mut box_result = [Val::AnyRef(None)];
   box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut box_result)
-    .map_err(|e| format!("__box_func failed: {}", e))?;
+    .map_err(|e| format!("_box_func failed: {}", e))?;
 
   // Call main with the boxed continuation.
   main_fn.call(&mut store, &box_result, &mut [])

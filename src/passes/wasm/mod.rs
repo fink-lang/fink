@@ -62,29 +62,29 @@
 // `$ClosureN` is a subtype of `$Any`, so closure values flow through the
 // same `(ref $Any)` slots as all other values.
 //
-// ### Construction: `closure_N` helper
+// ### Construction: `$_closure_N` helper
 //
-// The `·fn_closure` builtin compiles to a call to `$closure_N` (N = number
+// The `·fn_closure` builtin compiles to a call to `$_closure_N` (N = number
 // of captures + 1 for the funcref). This is an emitted helper function:
 //
-//   (func $closure_2 (param (ref $Fn3)) (param (ref $Any))
+//   (func $_closure_2 (param (ref $Fn3)) (param (ref $Any))
 //     (struct.new $Closure1 (local.get 0) (local.get 1))
 //   )
 //
 // It takes the funcref + N captures and returns the boxed struct as
 // `(ref $Any)`.
 //
-// ### Dispatch: `call_ref_or_clos_N` helper
+// ### Dispatch: `$_croc_N` helper (call-ref-or-closure)
 //
 // At every `Callable::Val` call site (indirect call through an `(ref $Any)`
 // value), we don't statically know whether the callee is a plain funcref
 // or a closure struct. Instead of a static type inference pass, we use
 // WasmGC's `br_on_cast` for runtime dispatch.
 //
-// For each call-site arity N, an emitted helper `$call_ref_or_clos_N`
+// For each call-site arity N, an emitted helper `$_croc_N`
 // tries each `$ClosureK` type that exists in the module:
 //
-//   (func $call_ref_or_clos_2
+//   (func $_croc_2
 //     (param $a0 (ref $Any)) (param $a1 (ref $Any)) (param $callee (ref $Any))
 //     (block $try_clos1
 //       (br_on_cast_fail $try_clos1 (ref $Any) (ref $Closure1) (local.get $callee))
@@ -95,19 +95,25 @@
 //       (struct.get $Closure1 0)   ;; funcref
 //       (return_call_ref $Fn3)
 //     )
-//     ;; fallthrough: plain funcref — cast and call directly
+//     ;; fallthrough: plain $FuncBox — unbox and call directly
 //     (return_call_ref $Fn2 (local.get $a0) (local.get $a1)
-//       (ref.cast (ref $Fn2) (local.get $callee)))
+//       (ref.cast (ref $Fn2) (struct.get $FuncBox 0 (local.get $callee))))
 //   )
 //
 // This is correct by construction — no static analysis needed. A future
 // type inference pass can eliminate branches where the type is known.
 //
+// ### Internal naming convention
+//
+// All compiler-generated helper functions use the `$_` prefix to
+// distinguish them from user-defined functions. The formatter hides
+// `$_`-prefixed functions from test output.
+//
 // ### Arity tracking
 //
 // The set of `$ClosureN` types to emit is determined by scanning for
 // `·fn_closure` call sites during collection. The set of
-// `$call_ref_or_clos_N` helpers is determined by `Callable::Val` call
+// `$_croc_N` helpers is determined by `Callable::Val` call
 // site arities (already tracked by `scan_call_arities`).
 
 pub mod collect;

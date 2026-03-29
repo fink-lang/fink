@@ -567,6 +567,7 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
   // Emit globals and functions.
   for (def_idx, func) in module.funcs.iter().enumerate() {
     let func_idx = module.import_func_count + def_idx as u32;
+    if is_internal_func(module, func_idx) { continue; }
     emit_global_for_func(module, func_idx, w);
     emit_func(module, func, func_idx, w);
   }
@@ -580,6 +581,8 @@ fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
   use super::emit::StructuralKind;
   for (name, kind, index) in &module.exports {
     if kind == &ExternalKind::Func {
+      // Hide internal exports (compiler helpers).
+      if name.starts_with('_') { continue; }
       let f_name = func_name(module, *index);
       if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::Export { name: n } if n == name)) {
         w.mark(loc);
@@ -590,17 +593,20 @@ fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
 }
 
 fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
-  // Collect type indices used by visible items (funcs, globals, return_call_ref).
+  // Collect type indices used by visible (non-internal) items.
   let mut used_types: std::collections::HashSet<u32> = std::collections::HashSet::new();
-  // Struct types ($Any, $Num) are always visible.
+  // Non-internal struct types ($Any, $Num) are always visible.
   for (idx, ty) in module.types.iter().enumerate() {
-    if matches!(ty.kind, ParsedTypeKind::Struct { .. }) {
+    if matches!(ty.kind, ParsedTypeKind::Struct { .. }) && !is_internal_type(module, idx as u32) {
       used_types.insert(idx as u32);
     }
   }
-  // Func types used by defined functions.
-  for func in &module.funcs {
-    used_types.insert(func.type_index);
+  // Func types used by visible (non-internal) defined functions.
+  for (def_idx, func) in module.funcs.iter().enumerate() {
+    let func_idx = module.import_func_count + def_idx as u32;
+    if !is_internal_func(module, func_idx) {
+      used_types.insert(func.type_index);
+    }
   }
   // Func types used by globals (ref type).
   for global in &module.globals {
@@ -626,6 +632,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
 
   for (idx, ty) in module.types.iter().enumerate() {
     if !used_types.contains(&(idx as u32)) { continue; }
+    if is_internal_type(module, idx as u32) { continue; }
     match &ty.kind {
       ParsedTypeKind::Struct { fields, supertype } => {
         let name = type_name(module, idx as u32);
@@ -1031,6 +1038,20 @@ fn type_name(module: &ParsedModule, idx: u32) -> String {
     }
   }
   format!("$type_{}", idx)
+}
+
+/// Whether a type is compiler infrastructure (hidden from formatted output).
+fn is_internal_type(module: &ParsedModule, idx: u32) -> bool {
+  let name = type_name(module, idx);
+  name.starts_with("$FuncBox")
+    || name.starts_with("$Closure")
+    || name.starts_with("$type_") // $BoxFuncTy, $ClosureCtorN, $CallRefOrClosN
+}
+
+/// Whether a function is compiler infrastructure (hidden from formatted output).
+fn is_internal_func(module: &ParsedModule, idx: u32) -> bool {
+  module.func_names.get(&idx)
+    .is_some_and(|n| n.starts_with('_'))
 }
 
 fn func_name(module: &ParsedModule, idx: u32) -> String {

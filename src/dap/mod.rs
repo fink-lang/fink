@@ -226,10 +226,10 @@ pub fn run<R: Read, W: Write>(
           return;
         }
       };
-      let box_func = match inst.get_func(&mut store, "__box_func") {
+      let box_func = match inst.get_func(&mut store, "_box_func") {
         Some(f) => f,
         None => {
-          eprintln!("[fink dap] no '__box_func' export");
+          eprintln!("[fink dap] no '_box_func' export");
           let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
           return;
         }
@@ -252,10 +252,10 @@ pub fn run<R: Read, W: Write>(
         Ok(())
       });
 
-      // Box it via __box_func.
+      // Box it via _box_func.
       let mut box_result = [wasmtime::Val::AnyRef(None)];
       if let Err(e) = box_func.call_async(&mut store, &[wasmtime::Val::FuncRef(Some(done))], &mut box_result).await {
-        eprintln!("[fink dap] __box_func error: {e}");
+        eprintln!("[fink dap] _box_func error: {e}");
         let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
         return;
       }

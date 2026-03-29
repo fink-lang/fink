@@ -114,7 +114,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
     scan_closure_captures(func.body, &mut closure_captures);
   }
   // closure_N constructors are now emitted as defined functions, not imports.
-  builtins.retain(|name, _| !name.starts_with("closure_"));
+  builtins.retain(|name, _| !name.starts_with("_closure_"));
   // call_ref_or_clos_N dispatch helpers need $FnN types for all call arities.
   // The closure lifted fn arities (call_arity + captures) are already covered
   // by the defined function arities in cps_mod.arities.
@@ -510,7 +510,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let type_idx = self.idx.type_idx(&format!("$ClosureCtor{}", n_cap));
       functions.function(type_idx);
       // Name matches the old import convention: closure_N where N = total val args (funcref + captures).
-      let name = format!("closure_{}", n_cap + 1);
+      let name = format!("_closure_{}", n_cap + 1);
       self.idx.funcs.insert(name, next_func_idx);
       next_func_idx += 1;
     }
@@ -520,7 +520,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       for &call_arity in call_arities {
         let type_idx = self.idx.type_idx(&format!("$CallRefOrClos{}", call_arity));
         functions.function(type_idx);
-        let name = format!("call_ref_or_clos_{}", call_arity);
+        let name = format!("_croc_{}", call_arity);
         self.idx.funcs.insert(name, next_func_idx);
         next_func_idx += 1;
       }
@@ -529,7 +529,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // __box_func helper: (func (param funcref) (result (ref null $Any)))
     let box_func_type_idx = self.idx.type_idx("$BoxFuncTy");
     functions.function(box_func_type_idx);
-    self.idx.funcs.insert("__box_func".into(), next_func_idx);
+    self.idx.funcs.insert("_box_func".into(), next_func_idx);
 
     self.module.section(&functions);
   }
@@ -601,8 +601,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
     }
 
     // Always export __box_func for the host to create boxed continuations.
-    let box_func_idx = self.idx.func_idx("__box_func");
-    exports.export("__box_func", ExportKind::Func, box_func_idx);
+    let box_func_idx = self.idx.func_idx("_box_func");
+    exports.export("_box_func", ExportKind::Func, box_func_idx);
 
     self.module.section(&exports);
   }
@@ -817,20 +817,20 @@ impl<'a, 'src> Emitter<'a, 'src> {
     }
     // Helper function names.
     for &n_cap in closure_captures {
-      let name = format!("closure_{}", n_cap + 1);
+      let name = format!("_closure_{}", n_cap + 1);
       let idx = self.idx.func_idx(&name);
       func_names.append(idx, &name);
     }
     if !closure_captures.is_empty() {
       for &call_arity in call_arities {
-        let name = format!("call_ref_or_clos_{}", call_arity);
+        let name = format!("_croc_{}", call_arity);
         let idx = self.idx.func_idx(&name);
         func_names.append(idx, &name);
       }
     }
     // __box_func helper.
-    let box_func_idx = self.idx.func_idx("__box_func");
-    func_names.append(box_func_idx, "__box_func");
+    let box_func_idx = self.idx.func_idx("_box_func");
+    func_names.append(box_func_idx, "_box_func");
     names.functions(&func_names);
 
     // Local names per defined function.
@@ -1023,7 +1023,7 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut Func
 
     // Mark the call instruction.
     fc.mark(mark_id);
-    let dispatch_name = format!("call_ref_or_clos_{}", total_arity);
+    let dispatch_name = format!("_croc_{}", total_arity);
     let dispatch_idx = fc.emitter_idx.func_idx(&dispatch_name);
     fc.instr(&Instruction::ReturnCall(dispatch_idx));
   } else {
@@ -1051,7 +1051,7 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
   if op == BuiltIn::FnClosure {
     let (val_args, cont) = split_args(args);
     let n = val_args.len();
-    let closure_name = format!("closure_{}", n);
+    let closure_name = format!("_closure_{}", n);
 
     // Emit closure args.
     for arg in val_args {
@@ -1299,9 +1299,9 @@ fn scan_builtins(expr: &Expr<'_>, builtins: &mut BTreeMap<String, usize>) {
   match &expr.kind {
     ExprKind::App { func: Callable::BuiltIn(op), args } => {
       if *op == BuiltIn::FnClosure {
-        // FnClosure is special: the import is "closure_N" where N = value arg count.
+        // FnClosure is special: _closure_N is a defined helper, not an import.
         let (val_args, _) = split_args(args);
-        let name = format!("closure_{}", val_args.len());
+        let name = format!("_closure_{}", val_args.len());
         let arity = val_args.len();
         builtins.entry(name).or_insert(arity);
         // Scan continuation bodies.
