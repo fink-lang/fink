@@ -527,7 +527,7 @@ fn extract_params_with_gen<'src>(
   };
   for p in nodes {
     match &p.kind {
-      NodeKind::Ident(_) => param_list.push(Param::Name(g.bind_name(p.id))),
+      NodeKind::Ident(_) | NodeKind::SynthIdent(_) => param_list.push(Param::Name(g.bind_name(p.id))),
       NodeKind::Wildcard => param_list.push(Param::Name(g.bind(Bind::Synth, Some(p.id)))),
       NodeKind::Patterns(ps) => {
         for inner in &ps.items {
@@ -572,7 +572,7 @@ fn extract_params<'src>(g: &mut Gen, params: &'src Node<'src>) -> Vec<Param> {
 fn extract_param<'src>(g: &mut Gen, param: &'src Node<'src>) -> Vec<Param> {
   let origin = Some(param.id);
   match &param.kind {
-    NodeKind::Ident(_) => vec![Param::Name(g.bind_name(param.id))],
+    NodeKind::Ident(_) | NodeKind::SynthIdent(_) => vec![Param::Name(g.bind_name(param.id))],
     NodeKind::Wildcard => vec![Param::Name(g.bind(Bind::Synth, origin))],
     NodeKind::Patterns(ps) => ps.items.iter().flat_map(|p| extract_param(g, p)).collect(),
     // `..rest` varargs param — trailing spread.
@@ -1419,8 +1419,8 @@ fn lower_pat_lhs<'src>(
   pending: &mut Vec<Pending<'src>>,
 ) -> (Bind, CpsId) {
   match &lhs.kind {
-    // Plain bind: `x = foo`
-    NodeKind::Ident(_) => {
+    // Plain bind: `x = foo` or synthetic `·$_N` from partial desugaring
+    NodeKind::Ident(_) | NodeKind::SynthIdent(_) => {
       let bind = g.bind_name(lhs.id);
       let r = (bind.kind, bind.id);
       pending.push(Pending::MatchBind { name: bind, val,  origin });
@@ -1758,6 +1758,9 @@ mod cps_tests {
   fn cps_expr(src: &str) -> String {
     match parse(src) {
       Ok(r) => {
+        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
+          .unwrap_or_else(|e| panic!("partial pass failed: {:?}", e));
+        let r = crate::ast::ParseResult { root, node_count };
         let ast_index = build_index(&r);
         let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_expr(&r.root, &scope);
@@ -1786,6 +1789,9 @@ mod pat_tests {
   fn cps_expr(src: &str) -> String {
     match parse(src) {
       Ok(r) => {
+        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
+          .unwrap_or_else(|e| panic!("partial pass failed: {:?}", e));
+        let r = crate::ast::ParseResult { root, node_count };
         let ast_index = build_index(&r);
         let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
         let cps = lower_expr(&r.root, &scope);
@@ -1813,6 +1819,9 @@ mod module_tests {
   fn cps_module(src: &str) -> String {
     match parse(src) {
       Ok(r) => {
+        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
+          .unwrap_or_else(|e| panic!("partial pass failed: {:?}", e));
+        let r = crate::ast::ParseResult { root, node_count };
         let ast_index = build_index(&r);
         let exprs = match &r.root.kind {
           NodeKind::Module(exprs) => exprs.items.as_slice(),

@@ -231,9 +231,6 @@ a > b > c       # chained
 a >= b >= c     # chained
 a >< b          # disjoint - for types, sets, lists
 
-a in b          # containment
-a not in b      # does not contain
-
 
 ---
 bitwise

@@ -27,8 +27,9 @@ pub type TransformResult<'src> = Result<Node<'src>, TransformError>;
 
 pub trait Transform<'src> {
   fn transform(&mut self, node: Node<'src>) -> TransformResult<'src> {
+    let id = node.id;
     let loc = node.loc;
-    match node.kind {
+    let mut result = match node.kind {
       NodeKind::LitBool(_)
       | NodeKind::LitInt(_)
       | NodeKind::LitFloat(_)
@@ -61,7 +62,9 @@ pub trait Transform<'src> {
       NodeKind::Match { subjects, sep, arms } => self.transform_match(subjects, sep, arms, loc),
       NodeKind::Arm { lhs, sep, body } => self.transform_arm(*lhs, sep, body, loc),
       NodeKind::Block { name, params, sep, body } => self.transform_block(*name, *params, sep, body, loc),
-    }
+    }?;
+    result.id = id;
+    Ok(result)
   }
 
   // --- leaf nodes (no children) ---

@@ -217,3 +217,13 @@ test 'chain with bool', fn:
   | equals fink":
     true
 
+
+test 'pipe with fn call', fn:
+  expect run fink":
+    add = fn a, b: a + b
+    main = fn:
+      2
+      | add 3, ?
+  | equals fink":
+    5
+
