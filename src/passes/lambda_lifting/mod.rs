@@ -433,34 +433,72 @@ fn extract_from_body<'src>(
 
         let inner_fn_body = rewrite_refs(inner_fn_body, &rewrite_map);
         // Params: original params first, then captures trailing.
+        let params_clone = params.clone();
         let mut all_params = params;
         all_params.extend(lifted_params);
 
-        let (cont_args_for_hoist, call_site_cont) = match cont {
-          Cont::Expr { args: ca, body } => (ca, Cont::Expr { args: vec![alloc.synth_bind()], body }),
-          Cont::Ref(_) => (vec![alloc.synth_bind()], cont),
-        };
-
+        // Hoist the lifted inner fn (captures as trailing params).
         hoisted.push(HoistedFn {
           name: lifted_fn_bind,
-          params: all_params,
+          params: all_params.clone(),
           fn_body: inner_fn_body,
-          cont_args: cont_args_for_hoist,
+          cont_args: vec![alloc.synth_bind()],
         });
 
-        // Value closure: the fn escapes as a first-class value.
-        // Cont::Ref means the value flows to an unknown consumer (parent fn's
-        // cont param, module boundary) — must box as ·closure.
-        // Cont::Expr means an internal consumer we control — also box for now,
-        // since the receiver binds it as a single callable value.
         let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
-        let mut closure_args = vec![Arg::Val(lifted_ref)];
-        closure_args.extend(extra_args);
-        closure_args.push(Arg::Cont(call_site_cont));
-        alloc.expr(ExprKind::App {
-          func: Callable::BuiltIn(BuiltIn::FnClosure),
-          args: closure_args,
-        }, None)
+
+        match cont {
+          Cont::Ref(_) => {
+            // Cont::Ref — value escapes to unknown consumer. Box as ·closure.
+            let mut closure_args = vec![Arg::Val(lifted_ref)];
+            closure_args.extend(extra_args);
+            closure_args.push(Arg::Cont(cont));
+            alloc.expr(ExprKind::App {
+              func: Callable::BuiltIn(BuiltIn::FnClosure),
+              args: closure_args,
+            }, None)
+          }
+
+          Cont::Expr { args: cont_args, body } => {
+            // Cont::Expr — the value is bound internally. The fn body should
+            // return unpacked (fn_ref, caps...) since internal callers can handle it.
+            // The export wrapper is generated separately at the module level.
+
+            // The fn body returns unpacked to its cont param.
+            let cont_val = alloc.val(ValKind::ContRef(
+              parent_params.last().map(|p| match p {
+                Param::Name(b) | Param::Spread(b) => b.id
+              }).expect("parent fn must have a cont param")
+            ), None);
+            let mut call_args = vec![Arg::Val(lifted_ref)];
+            call_args.extend(extra_args);
+            let unpacked_body = alloc.expr(ExprKind::App {
+              func: Callable::Val(cont_val),
+              args: call_args,
+            }, None);
+
+            // But we also need an export wrapper. For now, just return unpacked
+            // and let the cont (Cont::Expr) receive (fn_ref, caps...) as multiple values.
+            // TODO: the cont_args only has 1 binding — needs expanding to accept multiple.
+
+            // For now, fall back to ·closure for this case since expanding
+            // Cont::Expr bindings is complex.
+            let lifted_ref2 = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
+            let mut extra_args2: Vec<Arg<'src>> = Vec::new();
+            for (cap_id, _) in &cap_entries {
+              let ast_origin = alloc.origin.try_get(*cap_id).and_then(|o| *o);
+              let cap_ref = alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), ast_origin);
+              extra_args2.push(Arg::Val(cap_ref));
+            }
+            let mut closure_args = vec![Arg::Val(lifted_ref2)];
+            closure_args.extend(extra_args2);
+            closure_args.push(Arg::Cont(Cont::Expr { args: cont_args, body }));
+            alloc.expr(ExprKind::App {
+              func: Callable::BuiltIn(BuiltIn::FnClosure),
+              args: closure_args,
+            }, None)
+          }
+        }
       }
     }
 

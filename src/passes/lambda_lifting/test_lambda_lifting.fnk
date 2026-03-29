@@ -120,6 +120,33 @@ test 'escaping fn value — closure needed for bind-then-call', fn:
     ·export ·foo_0, ·main_1
 
 
+test 'closure result called — bind then apply', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+    main = fn:
+      bar = foo 2
+      bar 3
+
+  | equals fink":
+    ·v_50 = fn ·b_3, ·v_12, ·a_51:
+      ·op_plus ·a_51, ·b_3, ·v_12
+
+    ·foo_0 = ·v_9 = fn ·a_2, ·v_10:
+      ·closure ·v_50, ·a_2, ·v_10
+
+    ·v_45 = fn ·v_25, ·v_46:
+      ·bar_4 = ·v_25
+      ·bar_4 3, ·v_46
+
+    ·main_1 = ·v_21 = fn ·v_22:
+      ·foo_0 2, ·v_45, ·v_22
+
+    ·export ·foo_0, ·main_1
+
+
 test 'two module-level bindings — capture threaded as param', fn:
   expect lift fink":
     f = fn x:
