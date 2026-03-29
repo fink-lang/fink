@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/*)",
+      "Read(/**)",
+
+      "Write(/*)",
+      "Write(/**)",
+
+      "Edit(/*)",
+      "Edit(/**)",
+
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(ls *)",
+
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}

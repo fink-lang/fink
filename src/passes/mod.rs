@@ -10,6 +10,4 @@ pub mod lifting;
 pub mod name_res;
 pub mod partial;
 pub mod scopes;
-pub mod wat;
-#[cfg(feature = "compiler")]
 pub mod wasm;

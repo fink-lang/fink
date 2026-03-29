@@ -207,7 +207,6 @@ fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   match ctx.ast_node(cps_id) {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
-      NodeKind::SynthIdent(n) => format!("·$_{}_{}", n, cps_id.0),
       _ => format!("·v_{}", cps_id.0),
     },
     None => format!("·v_{}", cps_id.0),
@@ -219,10 +218,11 @@ fn render_unresolved_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   match ctx.ast_node(cps_id) {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·∅{}", s),
-      NodeKind::SynthIdent(n) => format!("·∅$_{}", n),
-      _ => format!("·∅_{}", cps_id.0),
+      // SynthIdent should always be resolved — if we get here, origin tracking is broken
+      NodeKind::SynthIdent(n) => format!("·⚠$_{}", n),
+      _ => format!("·⚠_{}", cps_id.0),
     },
-    None => format!("·∅_{}", cps_id.0),
+    None => format!("·⚠_{}", cps_id.0),
   }
 }
 

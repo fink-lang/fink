@@ -100,8 +100,8 @@ fn replace_partial<'src>(node: Node<'src>, param_loc: Loc, synth_id: u32) -> Nod
   let id = node.id;
   let loc = node.loc;
   match node.kind {
-    // Reuse the ?'s AstId — maps back to the ? position in source.
-    NodeKind::Partial => Node { id, kind: NodeKind::SynthIdent(synth_id), loc: param_loc },
+    // Reuse the ?'s AstId and loc — maps back to the ? position in source.
+    NodeKind::Partial => Node { id, kind: NodeKind::SynthIdent(synth_id), loc },
 
     // Leaf — return as-is
     NodeKind::LitBool(_)
@@ -190,6 +190,16 @@ fn replace_exprs<'src>(exprs: Exprs<'src>, param_loc: Loc, synth_id: u32) -> Exp
   Exprs { items: replace_vec(exprs.items, param_loc, synth_id), seps: exprs.seps }
 }
 
+/// Find the loc of the first Partial node in the tree.
+fn partial_loc(node: &Node) -> Loc {
+  if matches!(node.kind, NodeKind::Partial) { return node.loc; }
+  let mut loc = node.loc;
+  crate::ast::walk(node, &mut |n| {
+    if matches!(n.kind, NodeKind::Partial) { loc = n.loc; }
+  });
+  loc
+}
+
 /// Wrap an expression in `fn $: expr` if it contains Partial nodes.
 fn wrap_if_partial<'src>(node: Node<'src>, next_id: &mut u32, synth_counter: &mut u32) -> Node<'src> {
   if !has_partial(&node) {
@@ -197,7 +207,7 @@ fn wrap_if_partial<'src>(node: Node<'src>, next_id: &mut u32, synth_counter: &mu
   }
   let synth_id = *synth_counter;
   *synth_counter += 1;
-  let param_loc = node.loc;
+  let param_loc = partial_loc(&node);
   let body = replace_partial(node, param_loc, synth_id);
   let body_loc = body.loc;
   let param = Node { id: fresh_id(next_id), kind: NodeKind::SynthIdent(synth_id), loc: param_loc };
@@ -238,9 +248,16 @@ impl<'src> PartialPass {
         Ok(Node { id, kind: NodeKind::Arm { lhs, sep, body }, loc })
       }
 
-      // Group: explicit scope boundary — process inner as independent stmt
-      NodeKind::Group { inner, .. } => {
-        self.transform_stmt(*inner)
+      // Group: explicit scope boundary — process inner as independent stmt.
+      // When ? is present, the inner gets wrapped in a fn (replacing the scope),
+      // so strip the Group. Otherwise preserve it for downstream passes (CPS scoping).
+      NodeKind::Group { open, close, inner } => {
+        if has_partial(&inner) {
+          self.transform_stmt(*inner)
+        } else {
+          let inner = self.transform_stmt(*inner)?;
+          Ok(Node { id, kind: NodeKind::Group { open, close, inner: Box::new(inner) }, loc })
+        }
       }
 
       // Pipe: each segment is an independent scope
@@ -250,6 +267,12 @@ impl<'src> PartialPass {
           new_items.push(self.transform_stmt(child)?);
         }
         Ok(Node { id, kind: NodeKind::Pipe(Exprs { items: new_items, seps: exprs.seps }), loc })
+      }
+
+      // Fn: body stmts are independent scopes (like Module/Arm)
+      NodeKind::Fn { sep, params, body } => {
+        let body = self.transform_body(body)?;
+        Ok(Node { id, kind: NodeKind::Fn { sep, params, body }, loc })
       }
 
       // Module: recurse into each expression as independent scope

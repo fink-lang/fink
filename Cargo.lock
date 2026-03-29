@@ -433,6 +433,7 @@ name = "fink"
 version = "0.0.0"
 dependencies = [
  "dap",
+ "gimli 0.33.0",
  "pretty_assertions",
  "test-macros",
  "tokio",

@@ -516,6 +516,56 @@ test 'pipe chain', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYgfCBnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUUsQUFBRSxJQUFKLEcsS0FBQSxJO0VBQU0sQUFBRSxJQUFSLEksRSIKfQ==
 
 
+test 'partial apply', fn:
+  expect cps_expr fink":
+    add 3, ?
+  | equals fink":
+    ·fn
+      fn ·v_0, ·v_3: ·∅add 3, ·v_0, ·v_3
+      fn ·v_2: ·v_1 ·v_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQU8sTUFBUCxJLEVBQUEsQUFBQSxNQUFJLEMsRUFBRyxJLEVBQVA7S0FBQSxJLEUsQSxLQUFBIgp9
+
+
+test 'pipe with lambda — literal head', fn:
+  expect cps_expr fink":
+    3 | fn a: a + 2
+  | equals fink":
+    ·fn
+      fn ·a_0, ·v_4: ·op_plus ·a_0, 2, ·v_4
+      fn ·v_3: ·v_3 3, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFHLE1BQUgsSSxFQUFRLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixDLEUiCn0=
+
+
+test 'pipe with lambda — ident head', fn:
+  expect cps_expr fink":
+    x | fn a: a + 2
+  | equals fink":
+    ·fn
+      fn ·a_0, ·v_4: ·op_plus ·a_0, 2, ·v_4
+      fn ·v_3: ·v_3 ·∅x, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFHLE1BQUgsSSxFQUFRLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixHLEUiCn0=
+
+
+test 'pipe with partial', fn:
+  expect cps_expr fink":
+    3 | add 2, ?
+  | equals fink":
+    ·fn
+      fn ·v_0, ·v_4: ·∅add 2, ·v_0, ·v_4
+      fn ·v_3: ·v_3 3, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFPLE1BQVAsSSxFQUFBLEFBQUEsTUFBSSxDLEVBQUcsSSxFQUFQO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixDLEUiCn0=
+
+
+test 'pipe with partial — ident head', fn:
+  expect cps_expr fink":
+    x | add 2, ?
+  | equals fink":
+    ·fn
+      fn ·v_0, ·v_4: ·∅add 2, ·v_0, ·v_4
+      fn ·v_3: ·v_3 ·∅x, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFPLE1BQVAsSSxFQUFBLEFBQUEsTUFBSSxDLEVBQUcsSSxFQUFQO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixHLEUiCn0=
+
+
 ---
 ported from test_cps — functions and closures
 ---
