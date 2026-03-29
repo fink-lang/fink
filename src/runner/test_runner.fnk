@@ -15,3 +15,86 @@ test 'let binding', fn:
       x
   | equals fink":
     42
+
+
+test 'float literal', fn:
+  expect run fink":
+    main = fn:
+      3.14
+  | equals fink":
+    3.14
+
+
+test 'let alias', fn:
+  expect run fink":
+    main = fn:
+      x = 42
+      y = x
+      y
+  | equals fink":
+    42
+
+
+test 'add two literals', fn:
+  expect run fink":
+    main = fn:
+      2 + 3
+  | equals fink":
+    5
+
+
+test 'subtraction', fn:
+  expect run fink":
+    main = fn:
+      10 - 3
+  | equals fink":
+    7
+
+
+test 'multiplication', fn:
+  expect run fink":
+    main = fn:
+      4 * 5
+  | equals fink":
+    20
+
+
+test 'division', fn:
+  expect run fink":
+    main = fn:
+      10 / 4
+  | equals fink":
+    2.5
+
+
+test 'bool literal true', fn:
+  expect run fink":
+    main = fn:
+      true
+  | equals fink":
+    true
+
+
+test 'bool literal false', fn:
+  expect run fink":
+    main = fn:
+      false
+  | equals fink":
+    false
+
+
+test 'comparison', fn:
+  expect run fink":
+    main = fn:
+      3 == 3
+  | equals fink":
+    true
+
+
+test 'not', fn:
+  expect run fink":
+    main = fn:
+      not true
+  | equals fink":
+    false
+

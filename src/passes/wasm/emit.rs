@@ -113,15 +113,26 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
     scan_call_arities(func.body, &mut extra_arities);
     scan_closure_captures(func.body, &mut closure_captures);
   }
-  // closure_N constructors are now emitted as defined functions, not imports.
+  // closure_N constructors are emitted as defined functions, not imports.
   builtins.retain(|name, _| !name.starts_with("_closure_"));
+  // Split builtins: implemented ones become defined functions, rest stay as imports.
+  let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
+    builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
+  // Implemented builtins call their cont with arity 1 — ensure $Fn1 exists.
+  if !impl_builtins.is_empty() {
+    extra_arities.insert(1);
+  }
   // call_ref_or_clos_N dispatch helpers need $FnN types for all call arities.
   // The closure lifted fn arities (call_arity + captures) are already covered
   // by the defined function arities in cps_mod.arities.
   e.closure_captures = closure_captures.clone();
   e.call_arities = extra_arities.clone();
-  e.emit_types(module, &builtins, &extra_arities, &closure_captures);
-  e.emit_imports_from(module, &builtins);
+  // Type section needs arities from both imported and implemented builtins.
+  let mut all_builtins = import_builtins.clone();
+  all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
+  e.emit_types(module, &all_builtins, &extra_arities, &closure_captures);
+  e.emit_imports_from(module, &import_builtins);
+  e.impl_builtins = impl_builtins.clone();
   e.emit_functions(module, &closure_captures, &extra_arities);
   e.emit_globals(module);
   e.emit_exports(module);
@@ -206,8 +217,10 @@ struct Emitter<'a, 'src> {
   structural_locs: Vec<StructuralLoc>,
   /// Closure capture counts found in this module (for $ClosureN types).
   closure_captures: BTreeSet<usize>,
-  /// Call-site arities for Callable::Val calls (for $call_ref_or_clos_N).
+  /// Call-site arities for Callable::Val calls (for $_croc_N).
   call_arities: BTreeSet<usize>,
+  /// Builtins with known implementations (emitted as defined functions).
+  impl_builtins: BTreeMap<String, usize>,
 }
 
 struct RawMapping {
@@ -229,6 +242,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       structural_locs: Vec::new(),
       closure_captures: BTreeSet::new(),
       call_arities: BTreeSet::new(),
+      impl_builtins: BTreeMap::new(),
     }
   }
 
@@ -275,6 +289,25 @@ impl<'a, 'src> Emitter<'a, 'src> {
       },
     });
     self.idx.types.insert("$Num".into(), next_idx);
+    next_idx += 1;
+
+    // $Bool = (sub $Any (struct (field i32)))
+    types.ty().subtype(&SubType {
+      is_final: false,
+      supertype_idx: Some(any_idx),
+      composite_type: CompositeType {
+        inner: CompositeInnerType::Struct(StructType {
+          fields: Box::new([FieldType {
+            element_type: StorageType::Val(ValType::I32),
+            mutable: false,
+          }]),
+        }),
+        shared: false,
+        descriptor: None,
+        describes: None,
+      },
+    });
+    self.idx.types.insert("$Bool".into(), next_idx);
     next_idx += 1;
 
     // $FuncBox = (sub $Any (struct (field funcref)))
@@ -526,7 +559,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    // __box_func helper: (func (param funcref) (result (ref null $Any)))
+    // Implemented builtins as defined functions.
+    for (name, arity) in &self.impl_builtins {
+      let type_idx = self.idx.fn_type_idx(*arity);
+      functions.function(type_idx);
+      let internal_name = format!("_{}", name);
+      self.idx.funcs.insert(internal_name, next_func_idx);
+      next_func_idx += 1;
+    }
+
+    // _box_func helper: (func (param funcref) (result (ref null $Any)))
     let box_func_type_idx = self.idx.type_idx("$BoxFuncTy");
     functions.function(box_func_type_idx);
     self.idx.funcs.insert("_box_func".into(), next_func_idx);
@@ -632,7 +674,23 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    // __box_func body: (struct.new $FuncBox (local.get 0))
+    // Implemented builtin bodies.
+    {
+      let type_indices = super::builtins::TypeIndices {
+        any: self.idx.type_idx("$Any"),
+        num: self.idx.type_idx("$Num"),
+        bool_: self.idx.type_idx("$Bool"),
+        funcbox: self.idx.type_idx("$FuncBox"),
+        fn1: self.idx.fn_type_idx(1),
+      };
+      let names: Vec<String> = self.impl_builtins.keys().cloned().collect();
+      for name in names {
+        let f = super::builtins::emit_builtin(&name, &type_indices);
+        code.function(&f);
+      }
+    }
+
+    // _box_func body: (struct.new $FuncBox (local.get 0))
     {
       let mut f = Function::new(vec![]);
       let funcbox_idx = self.idx.type_idx("$FuncBox");
@@ -828,7 +886,13 @@ impl<'a, 'src> Emitter<'a, 'src> {
         func_names.append(idx, &name);
       }
     }
-    // __box_func helper.
+    // Implemented builtin names.
+    for name in self.impl_builtins.keys() {
+      let internal_name = format!("_{}", name);
+      let idx = self.idx.func_idx(&internal_name);
+      func_names.append(idx, &internal_name);
+    }
+    // _box_func helper.
     let box_func_idx = self.idx.func_idx("_box_func");
     func_names.append(box_func_idx, "_box_func");
     names.functions(&func_names);
@@ -949,13 +1013,11 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 
     ExprKind::If { cond, then, else_ } => {
       fc.mark(expr.id);
-      // Unbox cond: ref.cast (ref $Num), struct.get $Num 0, f64.ne 0
+      // Unbox cond: ref.cast (ref $Bool), struct.get $Bool 0 → i32 (0 or 1).
       emit_val(cond, fc);
-      let num_idx = fc.emitter_idx.type_idx("$Num");
-      fc.instr(&Instruction::RefCastNonNull(HeapType::Concrete(num_idx)));
-      fc.instr(&Instruction::StructGet { struct_type_index: num_idx, field_index: 0 });
-      fc.instr(&Instruction::F64Const(0.0_f64.into()));
-      fc.instr(&Instruction::F64Ne);
+      let bool_idx = fc.emitter_idx.type_idx("$Bool");
+      fc.instr(&Instruction::RefCastNonNull(HeapType::Concrete(bool_idx)));
+      fc.instr(&Instruction::StructGet { struct_type_index: bool_idx, field_index: 0 });
 
       fc.instr(&Instruction::If(wasm_encoder::BlockType::Empty));
       emit_body(then, fc);
@@ -1174,7 +1236,13 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
     }
   }
 
-  let func_idx = fc.emitter_idx.func_idx(fn_name);
+  // Implemented builtins are registered with _ prefix; imported ones keep original name.
+  let internal_name = format!("_{}", fn_name);
+  let func_idx = if fc.emitter_idx.funcs.contains_key(&internal_name) {
+    fc.emitter_idx.func_idx(&internal_name)
+  } else {
+    fc.emitter_idx.func_idx(fn_name)
+  };
   fc.instr(&Instruction::ReturnCall(func_idx));
 }
 
@@ -1231,9 +1299,10 @@ fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::StructNew(num_idx));
     }
     Lit::Bool(b) => {
-      let v = if *b { 1.0_f64 } else { 0.0_f64 };
-      fc.instr(&Instruction::F64Const(v.into()));
-      fc.instr(&Instruction::StructNew(num_idx));
+      let bool_idx = fc.emitter_idx.type_idx("$Bool");
+      let v = if *b { 1i32 } else { 0i32 };
+      fc.instr(&Instruction::I32Const(v));
+      fc.instr(&Instruction::StructNew(bool_idx));
     }
     Lit::Str(_) | Lit::Seq | Lit::Rec => {
       // TODO: not yet implemented.

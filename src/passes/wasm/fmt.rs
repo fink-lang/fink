@@ -101,6 +101,7 @@ struct ParsedType {
 #[derive(Debug, Clone, PartialEq)]
 enum FieldKind {
   F64,
+  I32,
   FuncRef,
   AnyRef(u32), // concrete type index
 }
@@ -132,6 +133,7 @@ enum ParsedInstr {
   LocalGet(u32),
   LocalSet(u32),
   GlobalGet(u32),
+  I32Const(i32),
   F64Const(f64),
   StructNew(u32),
   StructGet { struct_type_index: u32, field_index: u32 },
@@ -346,6 +348,7 @@ fn parse_subtype(sub_type: &SubType) -> ParsedType {
     CompositeInnerType::Struct(s) => {
       let fields: Vec<FieldKind> = s.fields.iter().map(|f| {
         match f.element_type.unpack() {
+          wasmparser::ValType::I32 => FieldKind::I32,
           wasmparser::ValType::F64 => FieldKind::F64,
           wasmparser::ValType::Ref(rt) => {
             match rt.heap_type() {
@@ -376,6 +379,7 @@ fn parse_operator(op: &Operator<'_>) -> ParsedInstr {
     Operator::LocalGet { local_index } => ParsedInstr::LocalGet(*local_index),
     Operator::LocalSet { local_index } => ParsedInstr::LocalSet(*local_index),
     Operator::GlobalGet { global_index } => ParsedInstr::GlobalGet(*global_index),
+    Operator::I32Const { value } => ParsedInstr::I32Const(*value),
     Operator::F64Const { value } => ParsedInstr::F64Const(f64::from_bits(value.bits())),
     Operator::StructNew { struct_type_index } => ParsedInstr::StructNew(*struct_type_index),
     Operator::StructGet { struct_type_index, field_index } => ParsedInstr::StructGet {
@@ -643,6 +647,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
           let super_name = type_name(module, *super_idx);
           let field_strs: Vec<&str> = fields.iter().map(|f| match f {
             FieldKind::F64 => "(field f64)",
+            FieldKind::I32 => "(field i32)",
             FieldKind::FuncRef => "(field funcref)",
             FieldKind::AnyRef(_) => "(field (ref $Any))",
           }).collect();
@@ -762,6 +767,10 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
       ParsedInstr::GlobalGet(idx) => {
         let name = global_name(module, *idx);
         stack.push((format!("(global.get {})", name), *offset));
+        i += 1;
+      }
+      ParsedInstr::I32Const(v) => {
+        stack.push((format!("(i32.const {})", v), *offset));
         i += 1;
       }
       ParsedInstr::F64Const(v) => {
@@ -969,6 +978,7 @@ fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -
     ParsedInstr::LocalGet(idx) => format!("(local.get {})", local_name_by_idx(module, func, *idx)),
     ParsedInstr::LocalSet(idx) => format!("(local.set {})", local_name_by_idx(module, func, *idx)),
     ParsedInstr::GlobalGet(idx) => format!("(global.get {})", global_name(module, *idx)),
+    ParsedInstr::I32Const(v) => format!("(i32.const {})", v),
     ParsedInstr::F64Const(v) => format!("(f64.const {})", format_f64(*v)),
     ParsedInstr::StructNew(idx) => format!("(struct.new {})", type_name(module, *idx)),
     ParsedInstr::StructGet { struct_type_index, field_index } =>
@@ -1027,6 +1037,7 @@ fn type_name(module: &ParsedModule, idx: u32) -> String {
     match &ty.kind {
       ParsedTypeKind::Struct { fields, supertype: None } if fields.is_empty() => return "$Any".into(),
       ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::F64] => return "$Num".into(),
+      ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::I32] => return "$Bool".into(),
       ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::FuncRef] => return "$FuncBox".into(),
       ParsedTypeKind::Struct { fields, supertype: Some(_) } if !fields.is_empty() && fields[0] == FieldKind::FuncRef => {
         // $ClosureN — funcref + N capture fields.

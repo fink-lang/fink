@@ -19,6 +19,8 @@ use super::RunOptions;
 pub enum FinkResult {
   /// Numeric result (f64 from $Num struct).
   Num(f64),
+  /// Boolean result (i32 from $Bool struct).
+  Bool(bool),
   /// No result returned.
   None,
 }
@@ -63,18 +65,21 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
     .ok_or("no '_box_func' export — module may be from an older compiler")?;
 
   // Create the "done" continuation — receives the result.
-  // Store the raw f64 bits directly to avoid GC rooting issues.
-  let result_bits: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
-  let result_clone = result_bits.clone();
+  let result_val: Arc<Mutex<Option<FinkResult>>> = Arc::new(Mutex::new(None));
+  let result_clone = result_val.clone();
 
   // The done func must match (func (param (ref null $Any))) — main's param type.
   let main_ty = main_fn.ty(&store);
   let done = Func::new(&mut store, main_ty, move |mut caller, params, _results| {
     if let Some(Val::AnyRef(Some(any_ref))) = params.first()
       && let Ok(Some(struct_ref)) = any_ref.as_struct(&caller)
-      && let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0)
     {
-      *result_clone.lock().unwrap() = Some(bits);
+      // Try $Num (f64 field) first, then $Bool (i32 field).
+      if let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0) {
+        *result_clone.lock().unwrap() = Some(FinkResult::Num(f64::from_bits(bits)));
+      } else if let Ok(Val::I32(v)) = struct_ref.field(&mut caller, 0) {
+        *result_clone.lock().unwrap() = Some(FinkResult::Bool(v != 0));
+      }
     }
     Ok(())
   });
@@ -89,10 +94,7 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
     .map_err(|e| format!("main failed: {}", e))?;
 
   // Extract the result.
-  match result_bits.lock().unwrap().take() {
-    Some(bits) => Ok(FinkResult::Num(f64::from_bits(bits))),
-    None => Ok(FinkResult::None),
-  }
+  Ok(result_val.lock().unwrap().take().unwrap_or(FinkResult::None))
 }
 
 /// Execute and print the result to stdout.
@@ -105,6 +107,7 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
         println!("{}", v);
       }
     }
+    FinkResult::Bool(b) => println!("{}", b),
     FinkResult::None => {}
   }
   Ok(())

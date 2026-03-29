@@ -116,6 +116,7 @@
 // `$_croc_N` helpers is determined by `Callable::Val` call
 // site arities (already tracked by `scan_call_arities`).
 
+pub mod builtins;
 pub mod collect;
 pub mod dwarf;
 pub mod emit;
