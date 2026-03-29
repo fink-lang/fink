@@ -77,7 +77,7 @@ test 'chained arithmetic — cont body lifted, no closure', fn:
 depth-1 captures — single level, extra params instead of ·closure
 ---
 
-test 'captured binding becomes leading param, no closure at call site', fn:
+test 'captured binding — escaping value needs closure', fn:
   expect lift fink":
     foo = fn a:
       fn b:
@@ -88,9 +88,36 @@ test 'captured binding becomes leading param, no closure at call site', fn:
       ·op_plus ·a_23, ·b_2, ·v_9
 
     ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
-      ·v_7 ·v_22, ·a_1
+      ·closure ·v_22, ·a_1, ·v_7
 
     ·export ·foo_0
+
+
+test 'escaping fn value — closure needed for bind-then-call', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+    main = fn:
+      bar = foo 2
+      bar
+
+  | equals fink":
+    ·v_47 = fn ·b_3, ·v_12, ·a_48:
+      ·op_plus ·a_48, ·b_3, ·v_12
+
+    ·foo_0 = ·v_9 = fn ·a_2, ·v_10:
+      ·closure ·v_47, ·a_2, ·v_10
+
+    ·v_42 = fn ·v_25, ·v_43:
+      ·bar_4 = ·v_25
+      ·v_43 ·bar_4
+
+    ·main_1 = ·v_21 = fn ·v_22:
+      ·foo_0 2, ·v_42, ·v_22
+
+    ·export ·foo_0, ·main_1
 
 
 test 'two module-level bindings — capture threaded as param', fn:
@@ -109,7 +136,7 @@ test 'two module-level bindings — capture threaded as param', fn:
       ·op_plus ·a_36, ·b_4, ·v_18
 
     ·g_1 = ·v_15 = fn ·a_3, ·v_16:
-      ·v_16 ·v_35, ·a_3
+      ·closure ·v_35, ·a_3, ·v_16
 
     ·export ·f_0, ·g_1
 
@@ -126,22 +153,22 @@ test 'depth-2 capture — all values threaded as params', fn:
           a + b + c
 
   | equals fink":
-    ·v_50 = fn ·v_15, ·c_51, ·v_53:
-      ·op_plus ·v_15, ·c_51, ·v_53
+    ·v_48 = fn ·v_15, ·c_49, ·v_51:
+      ·op_plus ·v_15, ·c_49, ·v_51
 
-    ·v_40 = fn ·c_3, ·v_12, ·a_41, ·b_43:
-      ·op_plus ·a_41, ·b_43, ·v_50, ·c_3, ·v_12
+    ·v_39 = fn ·c_3, ·v_12, ·a_40, ·b_42:
+      ·op_plus ·a_40, ·b_42, ·v_48, ·c_3, ·v_12
 
     ·v_32 = fn ·b_2, ·v_10, ·a_33:
-      ·v_10 ·v_40, ·a_33, ·b_2
+      ·closure ·v_39, ·a_33, ·b_2, ·v_10
 
     ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
-      ·v_8 ·v_32, ·a_1
+      ·closure ·v_32, ·a_1, ·v_8
 
     ·export ·foo_0
 
 
-test 'multiple captures at depth-2 — no closure nodes', fn:
+test 'multiple captures at depth-2 — escaping values need closures', fn:
   expect lift fink":
     foo = fn a:
       fn b:
@@ -149,14 +176,14 @@ test 'multiple captures at depth-2 — no closure nodes', fn:
           a + b
 
   | equals fink":
-    ·v_35 = fn ·c_3, ·v_12, ·a_36, ·b_38:
-      ·op_plus ·a_36, ·b_38, ·v_12
+    ·v_34 = fn ·c_3, ·v_12, ·a_35, ·b_37:
+      ·op_plus ·a_35, ·b_37, ·v_12
 
     ·v_27 = fn ·b_2, ·v_10, ·a_28:
-      ·v_10 ·v_35, ·a_28, ·b_2
+      ·closure ·v_34, ·a_28, ·b_2, ·v_10
 
     ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
-      ·v_8 ·v_27, ·a_1
+      ·closure ·v_27, ·a_1, ·v_8
 
     ·export ·foo_0
 

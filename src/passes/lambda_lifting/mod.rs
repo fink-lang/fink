@@ -138,8 +138,14 @@ fn needs_lifting(expr: &Expr<'_>) -> bool {
       contains_nested_structure(fn_body) || cont_needs_lifting(cont)
     }
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
-    ExprKind::App { args, .. } => {
+    ExprKind::App { func, args } => {
+      let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
+        // For ·closure Apps: only flag result cont if its body has nested structure.
+        // The result cont is the consumption site for the closure value — terminal.
+        Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
+          !is_simple_forward_cont(c) && contains_nested_structure(body)
+        }
         Arg::Cont(c) => app_cont_needs_lifting(c),
         Arg::Expr(e) => needs_lifting(e),
         _ => false,
@@ -172,8 +178,13 @@ fn contains_nested_structure(expr: &Expr<'_>) -> bool {
       Cont::Ref(_) => false,
       Cont::Expr { body, .. } => contains_nested_structure(body),
     },
-    ExprKind::App { args, .. } => {
+    ExprKind::App { func, args } => {
+      let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
+        // For ·closure: only flag if the cont body has nested structure to extract.
+        Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
+          !is_simple_forward_cont(c) && contains_nested_structure(body)
+        }
         Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
         Arg::Expr(body) => contains_nested_structure(body),
         _ => false,
@@ -279,13 +290,53 @@ fn lift_expr<'src>(
       Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
     }
 
-    ExprKind::App { func, args } => {
-      let args = args.into_iter().map(|a| match a {
-        Arg::Cont(c) => Arg::Cont(lift_cont(c, alloc)),
-        Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, alloc))),
-        other => other,
-      }).collect();
-      Expr { id: expr.id, kind: ExprKind::App { func, args } }
+    ExprKind::App { func, mut args } => {
+      // Hoist non-simple-forward inline Cont::Expr at module level.
+      // These have no parent fn, so no captures — always pure hoists.
+      let cont_idx = args.iter().rposition(|a| match a {
+        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
+        _ => false,
+      });
+      if let Some(idx) = cont_idx {
+        if let Arg::Cont(Cont::Expr { args: cont_args, body }) = args.remove(idx) {
+          let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
+          let cont_name = alloc.bind(Bind::Cont, None);
+          let cont_name_id = cont_name.id;
+          let body = lift_expr(*body, alloc);
+          let mut hoisted = HoistedFn {
+            name: cont_name,
+            params: cont_params,
+            fn_body: body,
+            cont_args: vec![alloc.synth_bind()],
+          };
+          args.insert(idx, Arg::Cont(Cont::Ref(cont_name_id)));
+          let args = args.into_iter().map(|a| match a {
+            Arg::Cont(c) => Arg::Cont(lift_cont(c, alloc)),
+            Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, alloc))),
+            other => other,
+          }).collect();
+          let inner = Expr { id: expr.id, kind: ExprKind::App { func, args } };
+          let wrapper_id = alloc.next(None);
+          Expr {
+            id: wrapper_id,
+            kind: ExprKind::LetFn {
+              name: hoisted.name,
+              params: hoisted.params,
+              fn_body: Box::new(hoisted.fn_body),
+              cont: Cont::Expr { args: hoisted.cont_args, body: Box::new(inner) },
+            },
+          }
+        } else {
+          unreachable!()
+        }
+      } else {
+        let args = args.into_iter().map(|a| match a {
+          Arg::Cont(c) => Arg::Cont(lift_cont(c, alloc)),
+          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, alloc))),
+          other => other,
+        }).collect();
+        Expr { id: expr.id, kind: ExprKind::App { func, args } }
+      }
     }
 
     ExprKind::If { cond, then, else_ } => {
@@ -397,30 +448,19 @@ fn extract_from_body<'src>(
           cont_args: cont_args_for_hoist,
         });
 
-        // Value closure: call the cont with fn_ref + captures.
+        // Value closure: the fn escapes as a first-class value.
+        // Cont::Ref means the value flows to an unknown consumer (parent fn's
+        // cont param, module boundary) — must box as ·closure.
+        // Cont::Expr means an internal consumer we control — also box for now,
+        // since the receiver binds it as a single callable value.
         let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
-        match call_site_cont {
-          Cont::Ref(cont_id) => {
-            // cont(fn_ref, cap_0, cap_1, ...)
-            let cont_val = alloc.val(ValKind::ContRef(cont_id), None);
-            let mut call_args = vec![Arg::Val(lifted_ref)];
-            call_args.extend(extra_args);
-            alloc.expr(ExprKind::App {
-              func: Callable::Val(cont_val),
-              args: call_args,
-            }, None)
-          }
-          Cont::Expr { args: bind_args, body } => {
-            // TODO: expand bind_args to accept fn_ref + captures
-            let mut new_args = vec![Arg::Val(lifted_ref)];
-            new_args.extend(extra_args);
-            new_args.push(Arg::Cont(Cont::Expr { args: bind_args, body }));
-            alloc.expr(ExprKind::App {
-              func: Callable::BuiltIn(BuiltIn::FnClosure),
-              args: new_args,
-            }, None)
-          }
-        }
+        let mut closure_args = vec![Arg::Val(lifted_ref)];
+        closure_args.extend(extra_args);
+        closure_args.push(Arg::Cont(call_site_cont));
+        alloc.expr(ExprKind::App {
+          func: Callable::BuiltIn(BuiltIn::FnClosure),
+          args: closure_args,
+        }, None)
       }
     }
 
@@ -457,6 +497,24 @@ fn extract_from_body<'src>(
           let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
           let cap_entries = compute_captures(&body, &cont_params, parent_params, scope_binds);
+
+          // ·closure result conts with captures would create infinite chains.
+          // Leave them inline — they're the consumption site for the closure value.
+          let is_closure_app = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
+          if is_closure_app && !cap_entries.is_empty() {
+            let cont_args_back: Vec<BindNode> = cont_params.into_iter().map(|p| match p {
+              Param::Name(b) | Param::Spread(b) => b,
+            }).collect();
+            let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
+            for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
+            let body = extract_from_body(body, parent_params, &inner_scope, alloc, hoisted);
+            args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
+            let args = args.into_iter().map(|a| match a {
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, alloc, hoisted))),
+              other => other,
+            }).collect();
+            return Expr { id: expr.id, kind: ExprKind::App { func, args } };
+          }
 
           if cap_entries.is_empty() {
             // Pure cont — hoist directly, replace with Cont::Ref.
