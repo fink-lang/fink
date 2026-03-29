@@ -1,0 +1,282 @@
+---
+lambda lifting tests
+---
+
+# Lambda lifting — eliminates closures by threading captured bindings as extra
+# parameters through the entire call chain.
+#
+# After lifting, no fn should contain ·closure nodes — all captured values are
+# passed explicitly as params at every call site.
+#
+# Test format:
+#   test 'name', fn:
+#     expect lift fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected lifted CPS — no ·closure anywhere>
+
+{test, equals, expect, fink, lift} = import 'fake!'
+
+
+---
+pure functions — no captures, unchanged (same as closure lifting)
+---
+
+test 'pure fn is unchanged', fn:
+  expect lift fink":
+    f = fn x: x
+
+  | equals fink":
+    ·f_0 = ·v_5 = fn ·x_1, ·v_6:
+      ·v_6 ·x_1
+
+    ·export ·f_0
+
+
+test 'pure nested fn — no captures, hoisted to module scope', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b: b
+
+  | equals fink":
+    ·v_8 = fn ·b_2, ·v_9:
+      ·v_9 ·b_2
+
+    ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
+      ·v_7 ·v_8
+
+    ·export ·foo_0
+
+
+---
+continuation lifting — inline Cont::Expr bodies become named fns
+---
+
+test 'chained arithmetic — cont body lifted, no closure', fn:
+  expect lift fink":
+    main = fn:
+      x = 2 * 3
+      x + 4
+
+  | equals fink":
+    ·v_25 = fn ·v_26, ·v_9:
+      ·x_1 = ·v_9
+      ·op_plus ·x_1, 4, ·v_26
+
+    ·main_0 = ·v_5 = fn ·v_6:
+      ·op_mul 2, 3, ·v_6, ·v_25
+
+    ·export ·main_0
+
+
+---
+depth-1 captures — single level, extra params instead of ·closure
+---
+
+test 'captured binding becomes leading param, no closure at call site', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    ·v_22 = fn ·a_23, ·b_2, ·v_9:
+      ·op_plus ·a_23, ·b_2, ·v_9
+
+    ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
+      ·v_7 ·v_22, ·a_1
+
+    ·export ·foo_0
+
+
+test 'two module-level bindings — capture threaded as param', fn:
+  expect lift fink":
+    f = fn x:
+      x
+    g = fn a:
+      fn b:
+        a + b
+
+  | equals fink":
+    ·f_0 = ·v_9 = fn ·x_2, ·v_10:
+      ·v_10 ·x_2
+
+    ·v_35 = fn ·a_36, ·b_4, ·v_18:
+      ·op_plus ·a_36, ·b_4, ·v_18
+
+    ·g_1 = ·v_15 = fn ·a_3, ·v_16:
+      ·v_16 ·v_35, ·a_3
+
+    ·export ·f_0, ·g_1
+
+
+---
+depth-2 captures — multi-level nesting, all closures eliminated
+---
+
+test 'depth-2 capture — all values threaded as params', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b + c
+
+  | equals fink":
+    ·v_50 = fn ·c_51, ·v_53, ·v_15:
+      ·op_plus ·v_15, ·c_51, ·v_53
+
+    ·v_40 = fn ·a_41, ·b_43, ·c_3, ·v_12:
+      ·op_plus ·a_41, ·b_43, ·c_3, ·v_12, ·v_50
+
+    ·v_32 = fn ·a_33, ·b_2, ·v_10:
+      ·v_10 ·v_40, ·a_33, ·b_2
+
+    ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
+      ·v_8 ·v_32, ·a_1
+
+    ·export ·foo_0
+
+
+test 'multiple captures at depth-2 — no closure nodes', fn:
+  expect lift fink":
+    foo = fn a:
+      fn b:
+        fn c:
+          a + b
+
+  | equals fink":
+    ·v_35 = fn ·a_36, ·b_38, ·c_3, ·v_12:
+      ·op_plus ·a_36, ·b_38, ·v_12
+
+    ·v_27 = fn ·a_28, ·b_2, ·v_10:
+      ·v_10 ·v_35, ·a_28, ·b_2
+
+    ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
+      ·v_8 ·v_27, ·a_1
+
+    ·export ·foo_0
+
+
+---
+yield
+---
+
+test 'yield — cont body lifted, no closure', fn:
+  expect lift fink":
+    main = fn:
+      q = yield 42
+      1 + q
+
+  | equals fink":
+    ·v_24 = fn ·v_25, ·v_8:
+      ·q_1 = ·v_8
+      ·op_plus 1, ·q_1, ·v_25
+
+    ·main_0 = ·v_5 = fn ·v_6:
+      ·yield 42, ·v_6, ·v_24
+
+    ·export ·main_0
+
+
+---
+module-level calls
+---
+
+test 'multi-fn module — add and main', fn:
+  expect lift fink":
+    add = fn a, b:
+      a + b
+
+    main = fn:
+      add 3, 4
+
+  | equals fink":
+    ·add_0 = ·v_8 = fn ·a_2, ·b_3, ·v_9:
+      ·op_plus ·a_2, ·b_3, ·v_9
+
+    ·main_1 = ·v_16 = fn ·v_17:
+      ·add_0 3, 4, ·v_17
+
+    ·export ·add_0, ·main_1
+
+
+test 'chained module-fn calls — cont params threaded, no closure', fn:
+  expect lift fink":
+    double = fn x:
+      x * 2
+    inc = fn x:
+      x + 1
+
+    main = fn:
+      x = double 5
+      inc x
+
+  | equals fink":
+    ·double_0 = ·v_11 = fn ·x_3, ·v_12:
+      ·op_mul ·x_3, 2, ·v_12
+
+    ·inc_1 = ·v_19 = fn ·x_4, ·v_20:
+      ·op_plus ·x_4, 1, ·v_20
+
+    ·v_55 = fn ·v_56, ·v_31:
+      ·x_5 = ·v_31
+      ·inc_1 ·x_5, ·v_56
+
+    ·main_2 = ·v_27 = fn ·v_28:
+      ·double_0 5, ·v_28, ·v_55
+
+    ·export ·double_0, ·inc_1, ·main_2
+
+
+---
+pattern matching (TODO — not yet implemented)
+---
+
+test 'seq destructure — no closures', fn:
+  expect lift fink":
+    main = fn foo:
+      [a] = foo
+      a + 1
+
+  | equals fink":
+    TODO
+
+test 'record destructure — no closures', fn:
+  expect lift fink":
+    main = fn foo:
+      {x} = foo
+      x + 1
+
+  | equals fink":
+    TODO
+
+test 'match — no closures, no forward refs', fn:
+  expect lift fink":
+    foo = fn n:
+      match n:
+        0: 42
+
+  | equals fink":
+    TODO
+
+test 'match with binding — no closures', fn:
+  expect lift fink":
+    foo = fn n:
+      r = match n:
+        0: n + 1
+      r
+
+  | equals fink":
+    TODO
+
+test 'recursive fn in match — no closures', fn:
+  expect lift fink":
+    fib = fn n:
+      r = match n:
+        0: 1
+        _: fib n + 1
+      r
+
+  | equals fink":
+    TODO

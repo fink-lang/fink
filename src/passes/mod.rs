@@ -5,6 +5,7 @@
 
 pub mod ast;
 pub mod cps;
+pub mod lambda_lifting;
 pub mod lifting;
 pub mod name_res;
 pub mod partial;

@@ -1,5 +1,6 @@
 /target
 /.claude/settings.local.json
+/.claude/settings.json
 /.claude.local/
 .DS_Store
 /.vscode/
