@@ -227,3 +227,45 @@ test 'pipe with fn call', fn:
   | equals fink":
     5
 
+
+test 'match literal first arm', fn:
+  expect run fink":
+    main = fn:
+      match 0:
+        0: 42
+        _: 99
+  | equals fink":
+    42
+
+
+test 'match literal second arm', fn:
+  expect run fink":
+    main = fn:
+      match 1:
+        0: 42
+        _: 99
+  | equals fink":
+    99
+
+
+test 'match wildcard binding', fn:
+  expect run fink":
+    main = fn:
+      match 5:
+        0: 0
+        x: x + 1
+  | equals fink":
+    6
+
+
+test 'factorial', fn:
+  expect run fink":
+    fac = fn n:
+      match n:
+        0: 1
+        n: n * fac n - 1
+    main = fn:
+      fac 5
+  | equals fink":
+    120
+

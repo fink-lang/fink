@@ -290,6 +290,8 @@ test 'match literal first arm', fn:
       (type $Fn1 (func (param (ref $Any))))
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn5 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
 
       (func $v_58 (type $Fn3) (param $v_59 (ref $Any)) (param $v_61 (ref $Any)) (param $v_32 (ref $Any))
         (return_call $match_block (struct.new $Num (f64.const 0)) (local.get $v_59) (local.get $v_32) (local.get $v_61))
@@ -321,7 +323,7 @@ test 'match literal first arm', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7MEJBRUkseUJBRkcseUJBR0g7QUFGRiw4QkFBTSxnQ0FDSixrQkFDQSxrQkFGRjtBOztBQUVLLDBCQUFBLGlDQUFBO0E7O0FBQUgsMEJBQUE7QTs7QUFBQSwwR0FBQTtBOzBCQUhHLHlCQUVIO21KQUFBO0E7O0FBQUcsMEJBQUEsaUNBQUE7QTs7QUFBSCw4QkFBQSxrQkFBQSxnQ0FBQSxpQkFBQTtBOztBQUFBLDBHQUFBO0E7QUFGSjtBQUFPLHlCQUFBO21KQUFBO0E7QUFBUDtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBO0E7QTtBOzBCQUVJLHlCQUZHLHlCQUdIO0FBRkYsOEJBQU0sZ0NBQ0osa0JBQ0Esa0JBRkY7QTs7QUFFSywwQkFBQSxpQ0FBQTtBOztBQUFILDBCQUFBO0E7O0FBQUEsMEdBQUE7QTswQkFIRyx5QkFFSDttSkFBQTtBOztBQUFHLDBCQUFBLGlDQUFBO0E7O0FBQUgsOEJBQUEsa0JBQUEsZ0NBQUEsaUJBQUE7QTs7QUFBQSwwR0FBQTtBO0FBRko7QUFBTyx5QkFBQTttSkFBQTtBO0FBQVA7QSIKfQ==
 
 
 test 'match with binding', fn:
@@ -341,6 +343,8 @@ test 'match with binding', fn:
       (type $Fn2 (func (param (ref $Any) (ref $Any))))
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
       (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn5 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn6 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
 
       (func $v_66 (type $Fn4) (param $x_67 (ref $Any)) (param $v_69 (ref $Any)) (param $v_71 (ref $Any)) (param $v_36 (ref $Any))
         (return_call $match_block (local.get $x_67) (local.get $v_69) (local.get $v_36) (local.get $v_71))
@@ -375,7 +379,7 @@ test 'match with binding', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBOzBCQUNFLHlCQUVFLHlCQUhHLHlCQUlIO0FBRkYsOEJBQU0sa0JBQ0osa0JBQ0Esa0JBRkY7QTswQkFEQTtBQUdPLDJCQUFGLGtCQUFJLGdDQUFGO0E7O0FBQUwsMEJBQUE7QTswQkFIRix5QkFESyx5QkFHSDtBO0E7QUFIRyxxQkFDTDtBQUFBLHFCQUFBO0FBR0UscUZBQUE7QTs7QUFERywwQkFBQSxnQ0FBQTtBOztBQUFILDhCQUFBLGtCQUFBLGdDQUFBLGtCQUFBO0E7O0FBQUEsMEdBQUE7QTtBQUhKO0FBQU8seUJBQUE7QTtBQUNMLG9CQUFJO21KQUFKO0E7QUFERjtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTswQkFDRSx5QkFFRSx5QkFIRyx5QkFJSDtBQUZGLDhCQUFNLGtCQUNKLGtCQUNBLGtCQUZGO0E7MEJBREE7QUFHTywyQkFBRixrQkFBSSxnQ0FBRjtBOztBQUFMLDBCQUFBO0E7MEJBSEYseUJBREsseUJBR0g7QTtBO0FBSEcscUJBQ0w7QUFBQSxxQkFBQTtBQUdFLHFGQUFBO0E7O0FBREcsMEJBQUEsZ0NBQUE7QTs7QUFBSCw4QkFBQSxrQkFBQSxnQ0FBQSxrQkFBQTtBOztBQUFBLDBHQUFBO0E7QUFISjtBQUFPLHlCQUFBO0E7QUFDTCxvQkFBSTttSkFBSjtBO0FBREY7QSIKfQ==
 
 
 test 'simple recursion', fn:
@@ -397,6 +401,7 @@ test 'simple recursion', fn:
       (type $Fn3 (func (param (ref $Any) (ref $Any) (ref $Any))))
       (type $Fn4 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
       (type $Fn5 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
+      (type $Fn6 (func (param (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any) (ref $Any))))
 
       (func $v_82 (type $Fn4) (param $n_83 (ref $Any)) (param $v_85 (ref $Any)) (param $v_87 (ref $Any)) (param $v_42 (ref $Any))
         (return_call $match_block (local.get $n_83) (local.get $v_85) (local.get $v_42) (local.get $v_87))
@@ -439,7 +444,7 @@ test 'simple recursion', fn:
       (export "recurse" (func $v_7))
       (export "main" (func $v_52))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7MEJBQWEseUJBRVQseUJBRk0seUJBR047QUFGRiw4QkFBTSxrQkFDSixrQkFDQSxrQkFGRjtBO3FEQUVhO0FBQVIsMEJBQVEscUNBQVI7QTswQkFITTtBOztBQUdJLDRCQUFGLGtCQUFJLGdDQUFGO0E7O0FBQWIsMEJBQUE7QTswQkFIUyx5QkFBSCx5QkFFTjtBO0E7QUFGTSxxQkFBRztBQUFBLHNCQUFBO0FBR1QsdUZBQUE7QTs7QUFERywwQkFBQSxpQ0FBQTtBOztBQUFILDhCQUFBLGtCQUFBLGdDQUFBLGtCQUFBO0E7O0FBQUEsMkdBQUE7QTtBQUZKO0FBQVUseUJBQUcsd0JBQUg7bUpBQUc7QTtBQUliO0FBQU8sMEJBQUE7QUFDTCwwQkFBUSxrREFBUjtBO0FBTEY7QUFJQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTswQkFBYSx5QkFFVCx5QkFGTSx5QkFHTjtBQUZGLDhCQUFNLGtCQUNKLGtCQUNBLGtCQUZGO0E7cURBRWE7QUFBUiwwQkFBUSxxQ0FBUjtBOzBCQUhNO0E7O0FBR0ksNEJBQUYsa0JBQUksZ0NBQUY7QTs7QUFBYiwwQkFBQTtBOzBCQUhTLHlCQUFILHlCQUVOO0E7QTtBQUZNLHFCQUFHO0FBQUEsc0JBQUE7QUFHVCx1RkFBQTtBOztBQURHLDBCQUFBLGlDQUFBO0E7O0FBQUgsOEJBQUEsa0JBQUEsZ0NBQUEsa0JBQUE7QTs7QUFBQSwyR0FBQTtBO0FBRko7QUFBVSx5QkFBRyx3QkFBSDttSkFBRztBO0FBSWI7QUFBTywwQkFBQTtBQUNMLDBCQUFRLGtEQUFSO0E7QUFMRjtBQUlBO0EiCn0=
 
 
 test 'closure construction and call', fn:
