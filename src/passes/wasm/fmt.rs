@@ -97,9 +97,17 @@ struct ParsedType {
   kind: ParsedTypeKind,
 }
 
+/// Simplified field type for struct fields.
+#[derive(Debug, Clone, PartialEq)]
+enum FieldKind {
+  F64,
+  FuncRef,
+  AnyRef(u32), // concrete type index
+}
+
 enum ParsedTypeKind {
-  Struct { field_count: usize, supertype: Option<u32> },
-  Func { param_count: usize },
+  Struct { fields: Vec<FieldKind>, supertype: Option<u32> },
+  Func { param_count: usize, has_results: bool },
   Other,
 }
 
@@ -335,15 +343,28 @@ fn parse_subtype(sub_type: &SubType) -> ParsedType {
   let supertype = sub_type.supertype_idx
     .map(|idx| idx.as_module_index().unwrap_or(0));
   match &sub_type.composite_type.inner {
-    CompositeInnerType::Struct(s) => ParsedType {
-      kind: ParsedTypeKind::Struct {
-        field_count: s.fields.len(),
-        supertype,
-      },
-    },
+    CompositeInnerType::Struct(s) => {
+      let fields: Vec<FieldKind> = s.fields.iter().map(|f| {
+        match f.element_type.unpack() {
+          wasmparser::ValType::F64 => FieldKind::F64,
+          wasmparser::ValType::Ref(rt) => {
+            match rt.heap_type() {
+              wasmparser::HeapType::Abstract { ty: wasmparser::AbstractHeapType::Func, .. } => FieldKind::FuncRef,
+              wasmparser::HeapType::Concrete(idx) => FieldKind::AnyRef(idx.as_module_index().unwrap_or(0)),
+              _ => FieldKind::AnyRef(0),
+            }
+          }
+          _ => FieldKind::AnyRef(0),
+        }
+      }).collect();
+      ParsedType {
+        kind: ParsedTypeKind::Struct { fields, supertype },
+      }
+    }
     CompositeInnerType::Func(f) => ParsedType {
       kind: ParsedTypeKind::Func {
         param_count: f.params().len(),
+        has_results: !f.results().is_empty(),
       },
     },
     _ => ParsedType { kind: ParsedTypeKind::Other },
@@ -606,18 +627,23 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
   for (idx, ty) in module.types.iter().enumerate() {
     if !used_types.contains(&(idx as u32)) { continue; }
     match &ty.kind {
-      ParsedTypeKind::Struct { field_count, supertype } => {
+      ParsedTypeKind::Struct { fields, supertype } => {
         let name = type_name(module, idx as u32);
         stop_mark(w);
-        if *field_count == 0 && supertype.is_none() {
+        if fields.is_empty() && supertype.is_none() {
           w.push_str(&format!("  (type {} (sub (struct)))\n", name));
         } else if let Some(super_idx) = supertype {
           let super_name = type_name(module, *super_idx);
-          let fields = if *field_count > 0 { " (field f64)" } else { "" };
-          w.push_str(&format!("  (type {} (sub {} (struct{})))\n", name, super_name, fields));
+          let field_strs: Vec<&str> = fields.iter().map(|f| match f {
+            FieldKind::F64 => "(field f64)",
+            FieldKind::FuncRef => "(field funcref)",
+            FieldKind::AnyRef(_) => "(field (ref $Any))",
+          }).collect();
+          let fields_str = if field_strs.is_empty() { String::new() } else { format!(" {}", field_strs.join(" ")) };
+          w.push_str(&format!("  (type {} (sub {} (struct{})))\n", name, super_name, fields_str));
         }
       }
-      ParsedTypeKind::Func { param_count } => {
+      ParsedTypeKind::Func { param_count, .. } => {
         stop_mark(w);
         let name = type_name(module, idx as u32);
         if *param_count == 0 {
@@ -656,7 +682,7 @@ fn emit_func(module: &ParsedModule, func: &ParsedFunc, func_idx: u32, w: &mut Ma
   let type_name_str = type_name(module, func.type_index);
   let param_count = module.types.get(func.type_index as usize)
     .map(|t| match &t.kind {
-      ParsedTypeKind::Func { param_count } => *param_count,
+      ParsedTypeKind::Func { param_count, .. } => *param_count,
       _ => 0,
     })
     .unwrap_or(0);
@@ -700,6 +726,7 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
   // instructions (local.set, return_call_ref, if, etc.) consume from the
   // stack and emit complete statements.
   let indent = 2usize;
+  let mut block_depth = 0usize;
   let instrs = &func.instructions;
   // Stack of (formatted_string, first_offset) — offset tracks where this value started.
   let mut stack: Vec<(String, u32)> = Vec::new();
@@ -710,7 +737,12 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
     match instr {
       ParsedInstr::End => {
         if i == instrs.len() - 1 { break; } // final End
-        w.push_str(&format!("{})\n", ind(indent)));
+        if block_depth > 0 {
+          block_depth -= 1;
+          w.push_str(&format!("{})\n", ind(indent + block_depth)));
+        } else {
+          w.push_str(&format!("{})\n", ind(indent)));
+        }
         i += 1;
       }
 
@@ -733,7 +765,7 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         let name = type_name(module, *type_idx);
         let fields = module.types.get(*type_idx as usize)
           .map(|t| match &t.kind {
-            ParsedTypeKind::Struct { field_count, .. } => *field_count,
+            ParsedTypeKind::Struct { fields, .. } => fields.len(),
             _ => 0,
           })
           .unwrap_or(0);
@@ -763,10 +795,8 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         i += 1;
       }
       ParsedInstr::Block => {
-        // Block marker — the End case already handles closing.
-        // For dispatch helpers, blocks wrap br_on_cast_fail branches.
-        // Emit as inline and let End close it.
-        w.push_str(&format!("{}(block\n", ind(indent)));
+        w.push_str(&format!("{}(block\n", ind(indent + block_depth)));
+        block_depth += 1;
         i += 1;
       }
       ParsedInstr::BrOnCastFail { depth, to_type_index } => {
@@ -812,7 +842,7 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         // Mark with the binding name (at the local.set instruction offset).
         // The emitter places the name mark just before local.set.
         if let Some(loc) = find_dwarf_loc_last(module, val_off, *offset) { w.mark(loc); }
-        w.push_str(&format!("{}(local.set {} ", ind(indent), name));
+        w.push_str(&format!("{}(local.set {} ", ind(indent + block_depth), name));
         // Mark the value expression with its own DWARF entry.
         if let Some(loc) = find_dwarf_loc(module, val_off, offset.saturating_sub(1)) { w.mark(loc); }
         w.push_str(&format!("{})\n", val));
@@ -822,7 +852,7 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         let type_name_str = type_name(module, *type_idx);
         let param_count = module.types.get(*type_idx as usize)
           .map(|t| match &t.kind {
-            ParsedTypeKind::Func { param_count } => *param_count,
+            ParsedTypeKind::Func { param_count, .. } => *param_count,
             _ => 0,
           })
           .unwrap_or(0);
@@ -836,7 +866,7 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         }
         let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
         if let Some(loc) = find_dwarf_loc(module, first_offset, *offset) { w.mark(loc); }
-        w.push_str(&format!("{}(return_call_ref {}", ind(indent), type_name_str));
+        w.push_str(&format!("{}(return_call_ref {}", ind(indent + block_depth), type_name_str));
         emit_marked_args(&popped, first_offset, module, w);
         w.push_str(")\n");
         i += 1;
@@ -848,7 +878,7 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
         // Operator mark is at the return_call instruction offset (after all args).
         if let Some(loc) = find_dwarf_loc_last(module, first_offset, *offset) { w.mark(loc); }
-        w.push_str(&format!("{}(return_call {}", ind(indent), name));
+        w.push_str(&format!("{}(return_call {}", ind(indent + block_depth), name));
         // Args get their own earlier DWARF marks.
         emit_marked_args(&popped, *offset, module, w);
         w.push_str(")\n");
@@ -858,24 +888,24 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
       ParsedInstr::If => {
         let (cond, cond_off) = stack.pop().unwrap_or_default();
         if let Some(loc) = find_dwarf_loc(module, cond_off, *offset) { w.mark(loc); }
-        w.push_str(&format!("{}(if {}\n", ind(indent), cond));
-        w.push_str(&format!("{}(then\n", ind(indent + 1)));
+        w.push_str(&format!("{}(if {}\n", ind(indent + block_depth), cond));
+        w.push_str(&format!("{}(then\n", ind(indent + block_depth + 1)));
         i += 1;
       }
       ParsedInstr::Else => {
-        w.push_str(&format!("{})\n", ind(indent + 1)));
-        w.push_str(&format!("{}(else\n", ind(indent + 1)));
+        w.push_str(&format!("{})\n", ind(indent + block_depth + 1)));
+        w.push_str(&format!("{}(else\n", ind(indent + block_depth + 1)));
         i += 1;
       }
 
       ParsedInstr::Unreachable => {
-        w.push_str(&format!("{}unreachable\n", ind(indent)));
+        w.push_str(&format!("{}unreachable\n", ind(indent + block_depth)));
         i += 1;
       }
 
       _ => {
         let s = format_instr(module, func, instr);
-        w.push_str(&format!("{}{}\n", ind(indent), s));
+        w.push_str(&format!("{}{}\n", ind(indent + block_depth), s));
         i += 1;
       }
     }
@@ -903,7 +933,7 @@ fn lookup_func_param_count(module: &ParsedModule, func_idx: u32) -> usize {
     let (_, _, type_idx) = &module.imports[func_idx as usize];
     return module.types.get(*type_idx as usize)
       .map(|t| match &t.kind {
-        ParsedTypeKind::Func { param_count } => *param_count,
+        ParsedTypeKind::Func { param_count, .. } => *param_count,
         _ => 0,
       })
       .unwrap_or(0);
@@ -913,7 +943,7 @@ fn lookup_func_param_count(module: &ParsedModule, func_idx: u32) -> usize {
   module.funcs.get(def_idx)
     .and_then(|f| module.types.get(f.type_index as usize))
     .map(|t| match &t.kind {
-      ParsedTypeKind::Func { param_count } => *param_count,
+      ParsedTypeKind::Func { param_count, .. } => *param_count,
       _ => 0,
     })
     .unwrap_or(0)
@@ -988,9 +1018,15 @@ fn type_name(module: &ParsedModule, idx: u32) -> String {
   // $FnN (func types).
   if let Some(ty) = module.types.get(idx as usize) {
     match &ty.kind {
-      ParsedTypeKind::Struct { field_count: 0, supertype: None } => return "$Any".into(),
-      ParsedTypeKind::Struct { supertype: Some(_), .. } => return "$Num".into(),
-      ParsedTypeKind::Func { param_count } => return format!("$Fn{}", param_count),
+      ParsedTypeKind::Struct { fields, supertype: None } if fields.is_empty() => return "$Any".into(),
+      ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::F64] => return "$Num".into(),
+      ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::FuncRef] => return "$FuncBox".into(),
+      ParsedTypeKind::Struct { fields, supertype: Some(_) } if !fields.is_empty() && fields[0] == FieldKind::FuncRef => {
+        // $ClosureN — funcref + N capture fields.
+        return format!("$Closure{}", fields.len() - 1);
+      }
+      ParsedTypeKind::Func { param_count, has_results: false } => return format!("$Fn{}", param_count),
+      ParsedTypeKind::Func { has_results: true, .. } => return format!("$type_{}", idx), // e.g. $BoxFuncTy
       _ => {}
     }
   }

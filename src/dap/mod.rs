@@ -68,9 +68,7 @@ enum ResumeAction {
 
 /// State stored in the Wasmtime Store.
 #[derive(Default)]
-struct DebugState {
-  output: Vec<String>,
-}
+struct DebugState {}
 
 // ── Debug handler ───────────────────────────────────────────────────────────
 
@@ -188,12 +186,19 @@ pub fn run<R: Read, W: Write>(
     resume_rx: Arc::new(Mutex::new(resume_rx)),
   });
 
+  // Wire up all "env" imports as stubs that trap (builtins not yet implemented).
   let mut linker = wasmtime::Linker::new(&engine);
-  linker
-    .func_wrap("env", "print", |mut caller: wasmtime::Caller<'_, DebugState>, val: i32| {
-      caller.data_mut().output.push(val.to_string());
-    })
-    .map_err(|e| e.to_string())?;
+  for import in module.imports() {
+    if import.module() == "env"
+      && let wasmtime::ExternType::Func(ft) = import.ty()
+    {
+      let name = import.name().to_string();
+      let err_name = name.clone();
+      linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+        Err(wasmtime::Error::msg(format!("builtin '{}' not yet implemented", err_name)))
+      }).map_err(|e| e.to_string())?;
+    }
+  }
 
   // Spawn WASM execution thread with async runtime (required by guest_debug).
   let terminated_tx = stopped_tx;
@@ -203,18 +208,61 @@ pub fn run<R: Read, W: Write>(
       .build()
       .expect("failed to build tokio runtime");
     rt.block_on(async {
-      match linker.instantiate_async(&mut store, &module).await {
-        Ok(inst) => {
-          if let Ok(main) = inst.get_typed_func::<(), ()>(&mut store, "fink_main")
-            && let Err(e) = main.call_async(&mut store, ()).await
-          {
-            eprintln!("[fink dap] wasm error: {e}");
-          }
-          for line in &store.data().output {
-            eprintln!("[wasm] {line}");
+      let inst = match linker.instantiate_async(&mut store, &module).await {
+        Ok(inst) => inst,
+        Err(e) => {
+          eprintln!("[fink dap] instantiation error: {e}");
+          let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
+          return;
+        }
+      };
+
+      // CPS execution: box a host continuation, call main(boxed_cont).
+      let main_fn = match inst.get_func(&mut store, "main") {
+        Some(f) => f,
+        None => {
+          eprintln!("[fink dap] no 'main' export");
+          let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
+          return;
+        }
+      };
+      let box_func = match inst.get_func(&mut store, "__box_func") {
+        Some(f) => f,
+        None => {
+          eprintln!("[fink dap] no '__box_func' export");
+          let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
+          return;
+        }
+      };
+
+      // Create a host "done" continuation that logs the result to stderr.
+      let main_ty = main_fn.ty(&store);
+      let done = wasmtime::Func::new(&mut store, main_ty, |mut caller, params, _results| {
+        if let Some(wasmtime::Val::AnyRef(Some(any_ref))) = params.first()
+          && let Ok(Some(struct_ref)) = any_ref.as_struct(&caller)
+          && let Ok(wasmtime::Val::F64(bits)) = struct_ref.field(&mut caller, 0)
+        {
+          let v = f64::from_bits(bits);
+          if v == v.floor() && v.abs() < 1e15 {
+            eprintln!("[fink dap] result: {}", v as i64);
+          } else {
+            eprintln!("[fink dap] result: {}", v);
           }
         }
-        Err(e) => eprintln!("[fink dap] instantiation error: {e}"),
+        Ok(())
+      });
+
+      // Box it via __box_func.
+      let mut box_result = [wasmtime::Val::AnyRef(None)];
+      if let Err(e) = box_func.call_async(&mut store, &[wasmtime::Val::FuncRef(Some(done))], &mut box_result).await {
+        eprintln!("[fink dap] __box_func error: {e}");
+        let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
+        return;
+      }
+
+      // Call main with the boxed continuation.
+      if let Err(e) = main_fn.call_async(&mut store, &box_result, &mut []).await {
+        eprintln!("[fink dap] wasm error: {e}");
       }
     });
     // Signal termination with a sentinel.

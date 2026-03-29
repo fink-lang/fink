@@ -916,14 +916,18 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       match cont {
         Cont::Expr { body, .. } => emit_body(body, fc),
         Cont::Ref(id) => {
-          // Tail call to continuation: return_call_ref $Fn1 cont_ref local_val
-          fc.mark(val.id);
-          let cont_label = fc.ctx.label(*id);
-          emit_get(fc, &cont_label);
+          // Tail call to continuation: unbox $FuncBox, return_call_ref $Fn1
           let local_label = fc.ctx.label(name.id);
           let local_idx = fc.local_idx(&local_label);
           fc.instr(&Instruction::LocalGet(local_idx));
+          let cont_label = fc.ctx.label(*id);
+          emit_get(fc, &cont_label);
+          let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
+          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
+          fc.instr(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
           let fn1_type = fc.emitter_idx.fn_type_idx(1);
+          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
+          fc.mark(val.id);
           fc.instr(&Instruction::ReturnCallRef(fn1_type));
         }
       }
@@ -936,23 +940,8 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
           // Operator mark is emitted inside emit_builtin, after args,
           // to avoid DWARF collision with the first arg's value mark.
         }
-        Callable::Val(func_val) => {
-          let is_cont_call = match &func_val.kind {
-            ValKind::ContRef(_) => true,
-            ValKind::Ref(Ref::Synth(id)) => matches!(
-              fc.ctx.ast_node(*id).map(|n| &n.kind),
-              None | Some(crate::ast::NodeKind::Fn { .. })
-            ),
-            _ => false,
-          };
-          if is_cont_call {
-            let mark_id = args.iter()
-              .find_map(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
-              .unwrap_or(expr.id);
-            fc.mark(mark_id);
-          } else {
-            fc.mark(expr.id);
-          }
+        Callable::Val(_) => {
+          // Source mark is placed inside emit_call, at the call instruction.
         }
       }
       emit_app(func, args, expr.id, fc);
@@ -991,7 +980,7 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   match func {
     Callable::BuiltIn(op) => emit_builtin(*op, args, expr_id, fc),
-    Callable::Val(val) => emit_call(val, args, fc),
+    Callable::Val(val) => emit_call(val, args, expr_id, fc),
   }
 }
 
@@ -999,15 +988,31 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut Func
 /// When closures exist in the module, dispatches through $call_ref_or_clos_N
 /// which handles both plain funcrefs and closure structs at runtime.
 /// When no closures exist, uses direct return_call_ref.
-fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   let (val_args, cont_arg) = split_args(args);
   let total_arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
+
+  // Determine the source mark id: for cont calls, mark the result value;
+  // for user calls, mark the call expression itself.
+  let is_cont_call = match &func_val.kind {
+    ValKind::ContRef(_) => true,
+    ValKind::Ref(Ref::Synth(id)) => matches!(
+      fc.ctx.ast_node(*id).map(|n| &n.kind),
+      None | Some(crate::ast::NodeKind::Fn { .. })
+    ),
+    _ => false,
+  };
+  let mark_id = if is_cont_call {
+    args.iter()
+      .find_map(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
+      .unwrap_or(expr_id)
+  } else {
+    expr_id
+  };
 
   let has_closures = fc.has_closures;
 
   if has_closures {
-    // Dispatch through $call_ref_or_clos_N.
-    // Expects (args..., callee) — all (ref $Any).
     for arg in val_args {
       emit_arg(arg, fc);
     }
@@ -1016,11 +1021,12 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, 
     }
     emit_val_ref(func_val, fc);
 
+    // Mark the call instruction.
+    fc.mark(mark_id);
     let dispatch_name = format!("call_ref_or_clos_{}", total_arity);
     let dispatch_idx = fc.emitter_idx.func_idx(&dispatch_name);
     fc.instr(&Instruction::ReturnCall(dispatch_idx));
   } else {
-    // No closures — unbox $FuncBox, cast to $FnN, return_call_ref.
     for arg in val_args {
       emit_arg(arg, fc);
     }
@@ -1029,12 +1035,13 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], fc: &mut FuncContext<'_, '_, 
     }
     emit_val_ref(func_val, fc);
 
-    // Callee is (ref null $Any) — unbox from $FuncBox to get funcref.
     let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
     fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
     fc.instr(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
     let type_idx = fc.emitter_idx.fn_type_idx(total_arity);
     fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(type_idx)));
+    // Mark the call instruction.
+    fc.mark(mark_id);
     fc.instr(&Instruction::ReturnCallRef(type_idx));
   }
 }
@@ -1113,7 +1120,17 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
 
         let cont_label = fc.ctx.label(*id);
         emit_get(fc, &cont_label);
+        // Unbox $FuncBox → funcref.
+        let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
+        fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
+        fc.instr(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
         let fn1_type = fc.emitter_idx.fn_type_idx(1);
+        fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
+        // Mark with the first val arg (the funcref to the lifted fn).
+        let mark_id = val_args.first()
+          .and_then(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
+          .unwrap_or(expr_id);
+        fc.mark(mark_id);
         fc.instr(&Instruction::ReturnCallRef(fn1_type));
       }
       None => {
@@ -1124,22 +1141,14 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
   }
 
   // Regular builtin: return_call $builtin_name args...
-  // Skip mark on first val arg (collides with operator mark at same offset).
-  // Mark subsequent args normally — they're at different byte offsets.
+  // All args get their own source mark. The operator mark is placed after
+  // args (at the return_call instruction), so no collision.
   let fn_name = builtin_name(op);
   let (val_args, cont_arg) = split_args(args);
 
-  let mut first_val = true;
   for arg in val_args {
     match arg {
-      Arg::Val(v) | Arg::Spread(v) => {
-        if first_val {
-          emit_val_inner(v, fc);
-          first_val = false;
-        } else {
-          emit_val(v, fc);
-        }
-      }
+      Arg::Val(v) | Arg::Spread(v) => emit_val(v, fc),
       Arg::Cont(cont) => emit_cont(cont, fc),
       _ => fc.instr(&Instruction::Unreachable),
     }
