@@ -381,7 +381,9 @@ fn extract_from_body<'src>(
         }
 
         let inner_fn_body = rewrite_refs(inner_fn_body, &rewrite_map);
-        lifted_params.extend(params);
+        // Params: original params first, then captures trailing.
+        let mut all_params = params;
+        all_params.extend(lifted_params);
 
         let (cont_args_for_hoist, call_site_cont) = match cont {
           Cont::Expr { args: ca, body } => (ca, Cont::Expr { args: vec![alloc.synth_bind()], body }),
@@ -390,58 +392,34 @@ fn extract_from_body<'src>(
 
         hoisted.push(HoistedFn {
           name: lifted_fn_bind,
-          params: lifted_params,
+          params: all_params,
           fn_body: inner_fn_body,
           cont_args: cont_args_for_hoist,
         });
 
-        // At the call site: pass captured values + cont directly (no ·closure).
-        // Value closure case: cont receives (fn_ref, caps...) as result.
-        // Cont closure case: extra args threaded before cont in the caller's builtin.
+        // Value closure: call the cont with fn_ref + captures.
         let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
-        let mut call_args = vec![Arg::Val(lifted_ref)];
-        call_args.extend(extra_args);
-        call_args.push(Arg::Cont(call_site_cont));
-
-        // For value closures (Cont::Ref or Cont::Expr binding the result):
-        // call the cont with fn_ref + captures.
-        // This is just: cont(fn_ref, cap_0, cap_1, ...)
-        //
-        // For now, emit as a direct call to the cont with the fn_ref + captures.
-        // The cont will receive them as multiple values.
-        match call_args.last() {
-          Some(Arg::Cont(Cont::Ref(cont_id))) => {
-            let cont_id = *cont_id;
-            // Remove the Cont from args, build a direct call.
-            call_args.pop();
+        match call_site_cont {
+          Cont::Ref(cont_id) => {
+            // cont(fn_ref, cap_0, cap_1, ...)
             let cont_val = alloc.val(ValKind::ContRef(cont_id), None);
+            let mut call_args = vec![Arg::Val(lifted_ref)];
+            call_args.extend(extra_args);
             alloc.expr(ExprKind::App {
               func: Callable::Val(cont_val),
               args: call_args,
             }, None)
           }
-          Some(Arg::Cont(Cont::Expr { .. })) => {
-            // Cont::Expr — the fn value is bound and used in the body.
-            // For now, emit as App calling the cont with fn_ref + caps.
-            let cont = match call_args.pop() {
-              Some(Arg::Cont(c)) => c,
-              _ => unreachable!(),
-            };
-            match cont {
-              Cont::Expr { args: bind_args, body } => {
-                // TODO: expand bind_args to accept fn_ref + captures
-                // For now fall through — this case needs more work.
-                let mut new_args = call_args;
-                new_args.push(Arg::Cont(Cont::Expr { args: bind_args, body }));
-                alloc.expr(ExprKind::App {
-                  func: Callable::BuiltIn(BuiltIn::FnClosure),
-                  args: new_args,
-                }, None)
-              }
-              _ => unreachable!(),
-            }
+          Cont::Expr { args: bind_args, body } => {
+            // TODO: expand bind_args to accept fn_ref + captures
+            let mut new_args = vec![Arg::Val(lifted_ref)];
+            new_args.extend(extra_args);
+            new_args.push(Arg::Cont(Cont::Expr { args: bind_args, body }));
+            alloc.expr(ExprKind::App {
+              func: Callable::BuiltIn(BuiltIn::FnClosure),
+              args: new_args,
+            }, None)
           }
-          _ => unreachable!("LetFn capture case must have a cont"),
         }
       }
     }
@@ -519,19 +497,21 @@ fn extract_from_body<'src>(
             }
 
             let body = rewrite_refs(body, &rewrite_map);
-            lifted_params.extend(cont_params);
+            // Params: original cont params first, then captures trailing.
+            let mut all_params = cont_params;
+            all_params.extend(lifted_params);
             hoisted.push(HoistedFn {
               name: lifted_fn_bind,
-              params: lifted_params,
+              params: all_params,
               fn_body: body,
               cont_args: vec![alloc.synth_bind()],
             });
 
-            // Thread extra args before the cont in the call.
+            // Thread: cont first (preserves original interface), extra args trail.
+            args.push(Arg::Cont(Cont::Ref(lifted_fn_id)));
             for arg in extra_args {
               args.push(arg);
             }
-            args.push(Arg::Cont(Cont::Ref(lifted_fn_id)));
 
             let args = args.into_iter().map(|a| match a {
               Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, alloc, hoisted))),

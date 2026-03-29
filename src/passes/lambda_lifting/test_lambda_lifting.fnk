@@ -8,6 +8,9 @@ lambda lifting tests
 # After lifting, no fn should contain ·closure nodes — all captured values are
 # passed explicitly as params at every call site.
 #
+# Extra (forwarded) args trail after the cont, preserving the original builtin
+# interface: `builtin operands..., cont, forwarded...`
+#
 # Test format:
 #   test 'name', fn:
 #     expect lift fink":
@@ -60,12 +63,12 @@ test 'chained arithmetic — cont body lifted, no closure', fn:
       x + 4
 
   | equals fink":
-    ·v_25 = fn ·v_26, ·v_9:
+    ·v_25 = fn ·v_9, ·v_26:
       ·x_1 = ·v_9
       ·op_plus ·x_1, 4, ·v_26
 
     ·main_0 = ·v_5 = fn ·v_6:
-      ·op_mul 2, 3, ·v_6, ·v_25
+      ·op_mul 2, 3, ·v_25, ·v_6
 
     ·export ·main_0
 
@@ -81,7 +84,7 @@ test 'captured binding becomes leading param, no closure at call site', fn:
         a + b
 
   | equals fink":
-    ·v_22 = fn ·a_23, ·b_2, ·v_9:
+    ·v_22 = fn ·b_2, ·v_9, ·a_23:
       ·op_plus ·a_23, ·b_2, ·v_9
 
     ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
@@ -102,7 +105,7 @@ test 'two module-level bindings — capture threaded as param', fn:
     ·f_0 = ·v_9 = fn ·x_2, ·v_10:
       ·v_10 ·x_2
 
-    ·v_35 = fn ·a_36, ·b_4, ·v_18:
+    ·v_35 = fn ·b_4, ·v_18, ·a_36:
       ·op_plus ·a_36, ·b_4, ·v_18
 
     ·g_1 = ·v_15 = fn ·a_3, ·v_16:
@@ -123,13 +126,13 @@ test 'depth-2 capture — all values threaded as params', fn:
           a + b + c
 
   | equals fink":
-    ·v_50 = fn ·c_51, ·v_53, ·v_15:
+    ·v_50 = fn ·v_15, ·c_51, ·v_53:
       ·op_plus ·v_15, ·c_51, ·v_53
 
-    ·v_40 = fn ·a_41, ·b_43, ·c_3, ·v_12:
-      ·op_plus ·a_41, ·b_43, ·c_3, ·v_12, ·v_50
+    ·v_40 = fn ·c_3, ·v_12, ·a_41, ·b_43:
+      ·op_plus ·a_41, ·b_43, ·v_50, ·c_3, ·v_12
 
-    ·v_32 = fn ·a_33, ·b_2, ·v_10:
+    ·v_32 = fn ·b_2, ·v_10, ·a_33:
       ·v_10 ·v_40, ·a_33, ·b_2
 
     ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
@@ -146,10 +149,10 @@ test 'multiple captures at depth-2 — no closure nodes', fn:
           a + b
 
   | equals fink":
-    ·v_35 = fn ·a_36, ·b_38, ·c_3, ·v_12:
+    ·v_35 = fn ·c_3, ·v_12, ·a_36, ·b_38:
       ·op_plus ·a_36, ·b_38, ·v_12
 
-    ·v_27 = fn ·a_28, ·b_2, ·v_10:
+    ·v_27 = fn ·b_2, ·v_10, ·a_28:
       ·v_10 ·v_35, ·a_28, ·b_2
 
     ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
@@ -169,12 +172,12 @@ test 'yield — cont body lifted, no closure', fn:
       1 + q
 
   | equals fink":
-    ·v_24 = fn ·v_25, ·v_8:
+    ·v_24 = fn ·v_8, ·v_25:
       ·q_1 = ·v_8
       ·op_plus 1, ·q_1, ·v_25
 
     ·main_0 = ·v_5 = fn ·v_6:
-      ·yield 42, ·v_6, ·v_24
+      ·yield 42, ·v_24, ·v_6
 
     ·export ·main_0
 
@@ -219,19 +222,36 @@ test 'chained module-fn calls — cont params threaded, no closure', fn:
     ·inc_1 = ·v_19 = fn ·x_4, ·v_20:
       ·op_plus ·x_4, 1, ·v_20
 
-    ·v_55 = fn ·v_56, ·v_31:
+    ·v_55 = fn ·v_31, ·v_56:
       ·x_5 = ·v_31
       ·inc_1 ·x_5, ·v_56
 
     ·main_2 = ·v_27 = fn ·v_28:
-      ·double_0 5, ·v_28, ·v_55
+      ·double_0 5, ·v_55, ·v_28
 
     ·export ·double_0, ·inc_1, ·main_2
 
 
 ---
-pattern matching (TODO — not yet implemented)
+pattern matching
 ---
+
+test 'match with guard — no closures', fn:
+  expect lift fink":
+    main = fn foo:
+      a > 0 = foo
+      a + 1
+
+  | equals fink":
+    ·v_27 = fn ·v_16, ·a_28, ·v_30:
+      ·op_plus ·a_28, 1, ·v_30
+
+    ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
+      ·a_2 = ·foo_1
+      ·match_if ·op_gt, ·a_2, 0, panic, ·v_27, ·a_2, ·v_7
+
+    ·export ·main_0
+
 
 test 'seq destructure — no closures', fn:
   expect lift fink":
@@ -240,7 +260,21 @@ test 'seq destructure — no closures', fn:
       a + 1
 
   | equals fink":
-    TODO
+    ·v_47 = fn ·v_14, ·a_48, ·v_50:
+      ·op_plus ·a_48, 1, ·v_50
+
+    ·v_42 = fn ·v_10, ·v_11, ·v_43:
+      ·a_2 = ·v_10
+      ·match_done ·v_11, panic, ·v_47, ·a_2, ·v_43
+
+    ·v_37 = fn ·v_9, ·v_38:
+      ·match_next ·v_9, panic, ·v_42, ·v_38
+
+    ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
+      ·match_seq ·foo_1, panic, ·v_37, ·v_7
+
+    ·export ·main_0
+
 
 test 'record destructure — no closures', fn:
   expect lift fink":
@@ -249,7 +283,18 @@ test 'record destructure — no closures', fn:
       x + 1
 
   | equals fink":
-    TODO
+    ·v_39 = fn ·v_10, ·v_11, ·v_40:
+      ·x_2 = ·v_10
+      ·op_plus ·x_2, 1, ·v_40
+
+    ·v_34 = fn ·v_9, ·v_35:
+      ·match_field ·v_9, 'x', panic, ·v_39, ·v_35
+
+    ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
+      ·match_rec ·foo_1, panic, ·v_34, ·v_7
+
+    ·export ·main_0
+
 
 test 'match — no closures, no forward refs', fn:
   expect lift fink":
@@ -258,7 +303,20 @@ test 'match — no closures, no forward refs', fn:
         0: 42
 
   | equals fink":
-    TODO
+    ·v_33 = fn ·v_21, ·n_34, ·v_36:
+      ·match_block ·n_34, ·v_21, ·v_36
+
+    ·v_40 = fn ·v_14:
+      ·v_14 42
+
+    ·v_43 = fn ·v_11, ·v_9, ·v_10:
+      ·match_value ·v_11, 0, ·v_9, ·v_10
+
+    ·foo_0 = ·v_5 = fn ·n_1, ·v_6:
+      ·match_arm ·v_43, ·v_40, ·v_33, ·n_1, ·v_6
+
+    ·export ·foo_0
+
 
 test 'match with binding — no closures', fn:
   expect lift fink":
@@ -268,7 +326,24 @@ test 'match with binding — no closures', fn:
       r
 
   | equals fink":
-    TODO
+    ·v_53 = fn ·v_26, ·v_54:
+      ·r_2 = ·v_26
+      ·v_54 ·r_2
+
+    ·v_41 = fn ·v_24, ·n_42, ·v_44:
+      ·match_block ·n_42, ·v_24, ·v_53, ·v_44
+
+    ·v_48 = fn ·v_15, ·n_49:
+      ·op_plus ·n_49, 1, ·v_15
+
+    ·v_58 = fn ·v_12, ·v_10, ·v_11:
+      ·match_value ·v_12, 0, ·v_10, ·v_11
+
+    ·foo_0 = ·v_6 = fn ·n_1, ·v_7:
+      ·match_arm ·v_58, ·v_41, ·n_1, ·v_7, ·v_48, ·n_1
+
+    ·export ·foo_0
+
 
 test 'recursive fn in match — no closures', fn:
   expect lift fink":
@@ -279,4 +354,32 @@ test 'recursive fn in match — no closures', fn:
       r
 
   | equals fink":
-    TODO
+    ·v_87 = fn ·v_43, ·v_88:
+      ·r_2 = ·v_43
+      ·v_88 ·r_2
+
+    ·v_70 = fn ·v_41, ·n_71, ·v_73, ·v_75:
+      ·match_block ·n_71, ·v_73, ·v_41, ·v_87, ·v_75
+
+    ·v_95 = fn ·v_32, ·v_96:
+      ·fib_0 ·v_32, ·v_96
+
+    ·v_82 = fn ·v_28, ·n_83:
+      ·op_plus ·n_83, 1, ·v_95, ·v_28
+
+    ·v_92 = fn ·v_26, ·v_24, ·v_25:
+      ·v_25 _
+
+    ·v_60 = fn ·v_22, ·n_61, ·v_63:
+      ·match_arm ·v_92, ·v_70, ·n_61, ·v_22, ·v_63, ·v_82, ·n_61
+
+    ·v_67 = fn ·v_15:
+      ·v_15 1
+
+    ·v_79 = fn ·v_12, ·v_10, ·v_11:
+      ·match_value ·v_12, 0, ·v_10, ·v_11
+
+    ·fib_0 = ·v_6 = fn ·n_1, ·v_7:
+      ·match_arm ·v_79, ·v_67, ·v_60, ·n_1, ·v_7
+
+    ·export ·fib_0
