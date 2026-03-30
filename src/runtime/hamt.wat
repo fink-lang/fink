@@ -86,7 +86,7 @@
   ;; -- Helpers --------------------------------------------------------
 
   ;; hash — phase 0: use i31 value directly as hash
-  (func $hash (param $key (ref eq)) (result i32)
+  (func $_hash(param $key (ref eq)) (result i32)
     local.get $key
     ref.cast (ref i31)
     i31.get_s
@@ -94,7 +94,7 @@
 
   ;; hash_fragment — extract 5-bit fragment at given depth (0-6)
   ;; fragment = (hash >> (depth * 5)) & 0x1f
-  (func $hash_fragment (param $hash i32) (param $depth i32) (result i32)
+  (func $_hash_fragment (param $hash i32) (param $depth i32) (result i32)
     local.get $hash
     local.get $depth
     i32.const 5
@@ -107,7 +107,7 @@
   ;; bit_index — index into the dense children array for a given
   ;; bitmap and hash fragment.
   ;; = popcount(bitmap & ((1 << fragment) - 1))
-  (func $bit_index (param $bitmap i32) (param $fragment i32) (result i32)
+  (func $_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
     local.get $bitmap
     i32.const 1
     local.get $fragment
@@ -123,7 +123,7 @@
 
   ;; Scan a collision node's leaves for a key. Returns the index,
   ;; or -1 if not found.
-  (func $collision_find
+  (func $_collision_find
     (param $leaves (ref $HamtChildren))
     (param $key (ref eq))
     (result i32)
@@ -183,14 +183,14 @@
     (local $col_idx i32)
 
     ;; compute hash once
-    (local.set $h (call $hash (local.get $key)))
+    (local.set $h (call $_hash(local.get $key)))
     (local.set $depth (i32.const 0))
 
     (block $not_found
       (loop $descend
         ;; extract fragment for this depth
         (local.set $fragment
-          (call $hash_fragment (local.get $h) (local.get $depth)))
+          (call $_hash_fragment (local.get $h) (local.get $depth)))
 
         ;; check bitmap
         (local.set $bitmap
@@ -204,7 +204,7 @@
 
         ;; index into dense array
         (local.set $idx
-          (call $bit_index (local.get $bitmap) (local.get $fragment)))
+          (call $_bit_index (local.get $bitmap) (local.get $fragment)))
 
         ;; get child
         (local.set $child
@@ -230,7 +230,7 @@
         (if (ref.test (ref $HamtCollision) (local.get $child))
           (then
             (local.set $col_idx
-              (call $collision_find
+              (call $_collision_find
                 (struct.get $HamtCollision $col_leaves
                   (ref.cast (ref $HamtCollision) (local.get $child)))
                 (local.get $key)))
@@ -271,8 +271,8 @@
 
     (local $h i32)
 
-    (local.set $h (call $hash (local.get $key)))
-    (call $hamt_set_inner
+    (local.set $h (call $_hash(local.get $key)))
+    (call $_hamt_set_inner
       (local.get $current)
       (local.get $key)
       (local.get $val)
@@ -280,7 +280,7 @@
       (i32.const 0))
   )
 
-  (func $hamt_set_inner
+  (func $_hamt_set_inner
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $val (ref eq))
@@ -303,13 +303,13 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
       (struct.get $HamtNode $bitmap (local.get $current)))
     (local.set $idx
-      (call $bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $old_children
       (struct.get $HamtNode $children (local.get $current)))
     (local.set $old_len
@@ -383,7 +383,7 @@
           (struct.get $HamtCollision $col_leaves
             (ref.cast (ref $HamtCollision) (local.get $child))))
         (local.set $col_idx
-          (call $collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_collision_find (local.get $col_leaves) (local.get $key)))
 
         (if (i32.ge_s (local.get $col_idx) (i32.const 0))
           (then
@@ -519,14 +519,14 @@
                 (array.set $HamtChildren
                   (local.get $new_children)
                   (local.get $idx)
-                  (call $hamt_set_inner
-                    (call $hamt_set_inner
+                  (call $_hamt_set_inner
+                    (call $_hamt_set_inner
                       (call $hamt_empty)
                       (struct.get $HamtLeaf $key
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
                       (struct.get $HamtLeaf $val
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
-                      (call $hash
+                      (call $_hash
                         (struct.get $HamtLeaf $key
                           (ref.cast (ref $HamtLeaf) (local.get $child))))
                       (i32.add (local.get $depth) (i32.const 1)))
@@ -551,7 +551,7 @@
     (array.set $HamtChildren
       (local.get $new_children)
       (local.get $idx)
-      (call $hamt_set_inner
+      (call $_hamt_set_inner
         (ref.cast (ref $HamtNode) (local.get $child))
         (local.get $key)
         (local.get $val)
@@ -573,15 +573,15 @@
     (result (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $hash (local.get $key)))
-    (call $hamt_delete_inner
+    (local.set $h (call $_hash(local.get $key)))
+    (call $_hamt_delete_inner
       (local.get $current)
       (local.get $key)
       (local.get $h)
       (i32.const 0))
   )
 
-  (func $hamt_delete_inner
+  (func $_hamt_delete_inner
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $h i32)
@@ -604,7 +604,7 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -619,7 +619,7 @@
       (then (return (local.get $current))))
 
     (local.set $idx
-      (call $bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $HamtChildren
         (local.get $old_children)
@@ -634,7 +634,7 @@
         (local.set $col_len
           (array.len (local.get $col_leaves)))
         (local.set $col_idx
-          (call $collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_collision_find (local.get $col_leaves) (local.get $key)))
 
         ;; key not in collision — unchanged
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
@@ -802,7 +802,7 @@
 
     ;; child is a sub-node — recurse
     (local.set $sub_result
-      (call $hamt_delete_inner
+      (call $_hamt_delete_inner
         (ref.cast (ref $HamtNode) (local.get $child))
         (local.get $key)
         (local.get $h)
@@ -845,15 +845,15 @@
     (result (ref null eq) (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $hash (local.get $key)))
-    (call $hamt_pop_inner
+    (local.set $h (call $_hash(local.get $key)))
+    (call $_hamt_pop_inner
       (local.get $current)
       (local.get $key)
       (local.get $h)
       (i32.const 0))
   )
 
-  (func $hamt_pop_inner
+  (func $_hamt_pop_inner
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $h i32)
@@ -877,7 +877,7 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -893,7 +893,7 @@
         (return (ref.null eq) (local.get $current))))
 
     (local.set $idx
-      (call $bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $HamtChildren
         (local.get $old_children)
@@ -908,7 +908,7 @@
         (local.set $col_len
           (array.len (local.get $col_leaves)))
         (local.set $col_idx
-          (call $collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_collision_find (local.get $col_leaves) (local.get $key)))
 
         ;; not found in collision
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
@@ -1085,7 +1085,7 @@
             (local.get $new_children)))))
 
     ;; child is a sub-node — recurse
-    (call $hamt_pop_inner
+    (call $_hamt_pop_inner
       (ref.cast (ref $HamtNode) (local.get $child))
       (local.get $key)
       (local.get $h)
