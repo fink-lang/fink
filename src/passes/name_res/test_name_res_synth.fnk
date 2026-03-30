@@ -21,7 +21,7 @@ synth ref resolution after lifting
 simple match — synth refs should resolve as local or captured
 ---
 
-# After lifting, the match_block fn's captured bindings resolve as `captured`
+# After lifting, the matcher fn's captured bindings resolve as `captured`
 # and the remaining synth refs (in-scope conts) resolve as `local`.
 
 test 'match — synth refs resolve after lifting', fn:

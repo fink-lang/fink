@@ -125,103 +125,59 @@ Expr = Node<ExprKind>                        -- computation node (has CpsId)
 ### Core
 
 ```
-LetVal { name, val, body }
-  -- bind val to name; visible in body
+LetVal { name, val, cont }
+  -- bind val to name; visible in cont
 
-LetFn { name, params, fn_body, body }
+LetFn { name, params, fn_body, cont }
   -- bind a function; name NOT visible in fn_body (non-recursive)
   -- captures resolved by name resolution (Resolution::Captured entries)
 
-LetRec { bindings: Vec<Binding>, body }
-  -- mutually recursive group; all names visible in all fn_bodies
-  -- Binding = { name, params, fn_body }
-
-App { func: Callable, args, result, body }
-  -- call func with args; bind result; visible in body
+App { func: Callable, args }
+  -- call func with args; last Arg::Cont is the result continuation
   -- func is either a Val (runtime) or BuiltIn (compile-time)
 
 If { cond, then, else_ }
   -- branch on cond
 ```
 
-### Suspension
+### Pattern matching
+
+All patterns lower to **PatternMatch** — a matcher function applied to the subject.
+The CPS transform emits `LetFn` + `App` directly; no dedicated match IR nodes exist.
 
 ```
-Yield { value, result, body }
-  -- suspend execution, yield value to scheduler
-  -- continuation receives resumed value bound to result
-  -- used by later passes to color continuation graphs:
-     every continuation reachable from Yield is "suspendable"
+PatternMatch structure (emitted as LetFn + App):
+
+  LetFn body = fn(bind_names...): <continuation>
+  LetFn matcher = fn(subj, succ, fail): <matcher_body>
+  matcher(subject, body, panic)
 ```
 
-### Terminal
+The matcher tests with temps only; on success it calls `succ(values...)` to forward
+extracted values to the body. On failure it calls `fail()`.
+
+**Literal/guard patterns:** matcher body uses `op_eq`, `op_gt`, etc. with `If`.
+
+**Match blocks:** fail-chain of matchers — each arm's fail tries the next arm:
+`mp_1(subj, k, fn: mp_2(subj, k, fn: panic))`
+
+### Collection primitives
+
+Used inside matcher bodies for sequence and record destructuring:
 
 ```
-Ret(val)                      -- return value to current continuation
-Panic                         -- unconditional failure (irrefutable pattern fail)
-FailCont                      -- delegate to enclosing ·ƒ_fail (inside MatchBlock arms)
+SeqPop(seq, fail, cont(head, tail))
+  -- pop head element from sequence; call fail if empty
+
+RecPop(rec, name, fail, cont(value, rest))
+  -- extract named field from record; call fail if missing
+
+Empty(collection, cont(bool))
+  -- predicate: is the collection empty? Caller branches with If
 ```
 
-### Pattern lowering primitives
-
-All pattern nodes carry an explicit `fail` continuation (Panic or FailCont).
-
-```
-MatchLetVal { name, val, fail, body }
-  -- bind val to name; always succeeds (structural uniformity with fail cont)
-
-MatchApp (removed — never emitted; constructor destructuring deferred to name resolution)
-
-MatchIf (eliminated — inlined as plain App + If)
-
-MatchValue { val, lit, fail, body }
-  -- assert val equals literal; fail if not
-  -- literal patterns: [a, 1], ['hello']
-```
-
-### Sequence pattern traversal
-
-```
-MatchSeq { val, cursor, fail, body }
-  -- assert val is a sequence; open cursor
-
-MatchNext { val, cursor, next_cursor, fail, elem, body }
-  -- pop head from cursor; bind to elem; fail if empty
-
-MatchDone { val, cursor, fail, result, body }
-  -- assert cursor exhausted; forward matched value to result
-
-MatchNotDone { val, cursor, fail, body }
-  -- assert cursor non-empty; fail if exhausted
-
-MatchRest { val, cursor, fail, result, body }
-  -- bind remaining elements; zero-or-more; works on seq and rec cursors
-```
-
-### Record pattern traversal
-
-```
-MatchRec { val, cursor, fail, body }
-  -- assert val is a record; open cursor
-
-MatchField { val, cursor, next_cursor, field, fail, elem, body }
-  -- extract named field; bind to elem; advance cursor
-```
-
-Note: `cursor` fields are `u32` formatting hacks — they render as `·m_N` in
-the pretty-printer. Will be removed when codegen derives position from structure.
-
-### Match block
-
-```
-MatchBlock { params, fail, arm_params, arms, result, body }
-  -- try arms in order; first match wins
-  -- params: values passed into each arm
-  -- arm_params: names each arm receives them as
-  -- fail: exhaustion continuation (Panic or outer FailCont)
-  -- each arm: lowered Match* chain ending in ·ƒ_cont
-  -- result: value received by result cont from winning arm
-```
+Arg order: fail-before-cont (so the continuation lambda renders last in output).
+The "cursor" is the collection itself with items removed — immutable, no iterator protocol.
 
 ---
 
@@ -264,15 +220,13 @@ The pretty-printer synthesizes these from the structural IR:
 **Variable sigils:**
 - User vars — plain: `foo`, `bar`
 - Compiler temps — `·v_{cps_id}`
-- Match cursors — `·m_N`
-- Continuations — `·ƒ_cont`, `·ƒ_fail`
+- Continuations — `·ƒ_cont`
 - Runtime/injected — `·state`
 
 **Rendering conventions:**
 ```
-LetVal  → ·let val, fn name: body
-LetFn   → ·fn fn params: fn_body, fn name: body
-App     → ·apply func, args, ·state, fn result, ·state: body
-Ret     → ·ƒ_cont val, ·state
-BuiltIn → rendered inline as ·op'sym' (operators) or ·prim (data construction)
+LetVal  → ·let val, fn name: cont
+LetFn   → ·fn fn params: fn_body, fn name: cont
+App     → func args, fn result: cont   (builtins: ·op_eq, ·seq_pop, etc.)
+If      → ·if cond, fn: then, fn: else
 ```

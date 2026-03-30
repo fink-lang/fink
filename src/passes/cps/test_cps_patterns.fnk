@@ -3,28 +3,26 @@ CPS pattern lowering tests
 ---
 
 # Expected CPS expansion for every pattern form.
-# Match primitives are emitted as App { BuiltIn::Match* } directly by the CPS transform.
+#
+# All patterns lower to PatternMatch — a matcher function applied to the subject:
+#   ·fn
+#     fn <binds>: <body>                                      — body receives matched values
+#     fn ·v_N:
+#       ·fn
+#         fn ·v_subj, ·v_succ, ·v_fail: <matcher_body>       — matcher tests, calls succ/fail
+#         fn ·v_M: ·v_M subject, ·v_N, ·panic                — matcher(subject, body, panic)
 #
 # Failure continuation convention:
 #   ·panic   — default; pattern mismatch is a compile/runtime error
-#   ·v_fail  — inside a ·match_block arm; failure tries the next arm
+#   ·v_fail  — inside a match arm; failure tries the next arm
 #
-# Every ·match_* primitive shape:
-#   ·match_* scrutinee, …args…, ·fail, fn <bindings>: body
+# Collection primitives (used inside matcher bodies):
+#   ·seq_pop seq, ·fail, fn head, tail: …   — pop head element; fail if empty
+#   ·rec_pop rec, 'name', ·fail, fn val, rest: …  — extract named field; fail if missing
+#   ·empty   collection, fn bool: …         — predicate; caller branches with If
 #
-# Primitives:
-#   ·match_seq      — initialize seq cursor from scrutinee
-#   ·match_next     — pop head from cursor, advance; fn ·v, ·cursor, …
-#   ·match_done     — assert cursor exhausted; ·fail if not
-#   ·match_not_done — assert cursor not exhausted; ·fail if empty
-#   ·match_rest     — bind remaining cursor as value (zero or more)
-#   ·match_rec      — initialize rec cursor from scrutinee
-#   ·match_field    — extract named field from rec cursor; fn ·v, ·cursor, …
-#   ·match_value    — assert extracted temp equals literal; ·fail if not (eliminated → PatternMatch)
-#   ·match_if       — apply fn to args, ·fail if falsy (eliminated → plain App + If)
-#   ·match_apply    — (removed, never emitted; constructor destructuring deferred to name resolution)
-#   ·match_block    — try arms in order; first match wins (eliminated → fail-chain)
-#   ·match_arm      — single arm: matcher cont + body cont (eliminated → LetFn + App)
+# Literal/guard/range patterns use ·op_eq, ·op_gt, etc. inside the matcher.
+# Match blocks use a fail-chain: mp_1(subj, k, fn: mp_2(subj, k, fn: panic))
 #
 # Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
 # Wildcard (_): discard; no binding, temp passed directly to next primitive
