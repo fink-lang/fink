@@ -126,17 +126,6 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // The closure lifted fn arities (call_arity + captures) are already covered
   // by the defined function arities in cps_mod.arities.
   e.closure_captures = closure_captures.clone();
-  e.has_match = import_builtins.contains_key("match_arm")
-    || import_builtins.contains_key("match_block")
-    || import_builtins.contains_key("match_value");
-  // Match builtins need _croc_N dispatch for calling matchers (3 args)
-  // and bodies (1+ args) from the host. Ensure these arities exist.
-  if e.has_match {
-    extra_arities.insert(0); // fail/succ thunks
-    extra_arities.insert(1); // body(cont)
-    extra_arities.insert(2); // body(binding, cont)
-    extra_arities.insert(3); // matcher(subject, fail, succ)
-  }
   e.call_arities = extra_arities.clone();
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
@@ -235,8 +224,6 @@ struct Emitter<'a, 'src> {
   call_arities: BTreeSet<usize>,
   /// Builtins with known implementations (emitted as defined functions).
   impl_builtins: BTreeMap<String, usize>,
-  /// Whether match builtins (match_arm, match_block, match_value) are present.
-  has_match: bool,
 }
 
 struct RawMapping {
@@ -259,7 +246,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       closure_captures: BTreeSet::new(),
       call_arities: BTreeSet::new(),
       impl_builtins: BTreeMap::new(),
-      has_match: false,
     }
   }
 
@@ -472,64 +458,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
-    // $MatchArm = (sub $Any (struct (field (ref null $Any)) (field (ref null $Any))))
-    // Packages matcher + body for match_block dispatch.
-    // Only emitted when match builtins are present.
-    if self.has_match {
-      let arm_fields = [
-        FieldType { element_type: StorageType::Val(any_ref), mutable: false },
-        FieldType { element_type: StorageType::Val(any_ref), mutable: false },
-      ];
-      types.ty().subtype(&SubType {
-        is_final: true,
-        supertype_idx: Some(any_idx),
-        composite_type: CompositeType {
-          inner: CompositeInnerType::Struct(StructType {
-            fields: Box::new(arm_fields),
-          }),
-          shared: false,
-          descriptor: None,
-          describes: None,
-        },
-      });
-      self.idx.types.insert("$MatchArm".into(), next_idx);
-      next_idx += 1;
-
-      // $MatchArmCtor = (func (param (ref null $Any) (ref null $Any)) (result (ref null $Any)))
-      types.ty().subtype(&SubType {
-        is_final: true,
-        supertype_idx: None,
-        composite_type: CompositeType {
-          inner: CompositeInnerType::Func(FuncType::new(
-            vec![any_ref, any_ref],
-            vec![any_ref],
-          )),
-          shared: false,
-          descriptor: None,
-          describes: None,
-        },
-      });
-      self.idx.types.insert("$MatchArmCtor".into(), next_idx);
-      next_idx += 1;
-
-      // $MatchArmGet = (func (param (ref null $Any)) (result (ref null $Any)))
-      types.ty().subtype(&SubType {
-        is_final: true,
-        supertype_idx: None,
-        composite_type: CompositeType {
-          inner: CompositeInnerType::Func(FuncType::new(
-            vec![any_ref],
-            vec![any_ref],
-          )),
-          shared: false,
-          descriptor: None,
-          describes: None,
-        },
-      });
-      self.idx.types.insert("$MatchArmGet".into(), next_idx);
-      next_idx += 1;
-    }
-
     // $CallRefOrClosN = (func (param (ref $Any)... (ref $Any)) (result))
     // Type for $call_ref_or_clos_N dispatch functions.
     // Only emitted when closures exist — otherwise calls use direct return_call_ref.
@@ -649,26 +577,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.funcs.insert("_box_func".into(), next_func_idx);
     next_func_idx += 1;
 
-    // Match arm helpers — only when match builtins are present.
-    if self.has_match {
-      // _make_match_arm: (param (ref null $Any) (ref null $Any)) → (ref null $Any)
-      let ctor_type_idx = self.idx.type_idx("$MatchArmCtor");
-      functions.function(ctor_type_idx);
-      self.idx.funcs.insert("_make_match_arm".into(), next_func_idx);
-      next_func_idx += 1;
-
-      // _match_arm_get_matcher: (param (ref null $Any)) → (ref null $Any)
-      let get_type_idx = self.idx.type_idx("$MatchArmGet");
-      functions.function(get_type_idx);
-      self.idx.funcs.insert("_match_arm_get_matcher".into(), next_func_idx);
-      next_func_idx += 1;
-
-      // _match_arm_get_body: (param (ref null $Any)) → (ref null $Any)
-      functions.function(get_type_idx);
-      self.idx.funcs.insert("_match_arm_get_body".into(), next_func_idx);
-      let _ = next_func_idx;
-    }
-
+    let _ = next_func_idx;
     self.module.section(&functions);
   }
 
@@ -750,14 +659,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    // Export match arm helpers.
-    if self.has_match {
-      for name in ["_make_match_arm", "_match_arm_get_matcher", "_match_arm_get_body"] {
-        let idx = self.idx.func_idx(name);
-        exports.export(name, ExportKind::Func, idx);
-      }
-    }
-
     self.module.section(&exports);
   }
 
@@ -828,40 +729,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&f);
     }
 
-    // Match arm helper bodies.
-    if self.has_match {
-      let matcharm_idx = self.idx.type_idx("$MatchArm");
-
-      // _make_match_arm(matcher, body) → struct.new $MatchArm
-      {
-        let mut f = Function::new(vec![]);
-        f.instruction(&Instruction::LocalGet(0));
-        f.instruction(&Instruction::LocalGet(1));
-        f.instruction(&Instruction::StructNew(matcharm_idx));
-        f.instruction(&Instruction::End);
-        code.function(&f);
-      }
-
-      // _match_arm_get_matcher(arm) → struct.get $MatchArm 0
-      {
-        let mut f = Function::new(vec![]);
-        f.instruction(&Instruction::LocalGet(0));
-        f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(matcharm_idx)));
-        f.instruction(&Instruction::StructGet { struct_type_index: matcharm_idx, field_index: 0 });
-        f.instruction(&Instruction::End);
-        code.function(&f);
-      }
-
-      // _match_arm_get_body(arm) → struct.get $MatchArm 1
-      {
-        let mut f = Function::new(vec![]);
-        f.instruction(&Instruction::LocalGet(0));
-        f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(matcharm_idx)));
-        f.instruction(&Instruction::StructGet { struct_type_index: matcharm_idx, field_index: 1 });
-        f.instruction(&Instruction::End);
-        code.function(&f);
-      }
-    }
 
     self.module.section(&code);
   }
@@ -1067,13 +934,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // _box_func helper.
     let box_func_idx = self.idx.func_idx("_box_func");
     func_names.append(box_func_idx, "_box_func");
-    // Match arm helpers.
-    if self.has_match {
-      for name in ["_make_match_arm", "_match_arm_get_matcher", "_match_arm_get_body"] {
-        let idx = self.idx.func_idx(name);
-        func_names.append(idx, name);
-      }
-    }
     names.functions(&func_names);
 
     // Local names per defined function.

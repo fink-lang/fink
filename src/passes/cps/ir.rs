@@ -222,11 +222,11 @@ pub enum BuiltIn {
   // Closure construction — partially applies a lifted fn with its captures.
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
-  // Pattern matching primitives — emitted directly by the CPS transform.
-  // Each takes val + fail as args; cont receives match results.
-  MatchValue, MatchSeq, MatchNext, MatchDone, MatchNotDone,
-  MatchRest, MatchRec, MatchField, MatchIf, MatchApp,
-  MatchBlock, MatchArm,
+  // Collection primitives — used inside pattern matchers for seq/rec destructuring.
+  // SeqPop(seq, fail, cont(head, tail)) — pop head element; fail if empty
+  // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
+  // Empty(collection, cont(bool)) — predicate; caller branches with If
+  SeqPop, RecPop, Empty,
   // Yield — suspend execution, passing a value to the scheduler.
   // Args: value; cont receives the resumed value.
   Yield,
@@ -289,7 +289,7 @@ impl BuiltIn {
   }
 }
 
-/// What an App/MatchApp/MatchIf calls — either a runtime value or a built-in.
+/// What an App calls — either a runtime value or a built-in.
 /// `BuiltIn` has no CpsId — it's a compile-time tag, not an IR node. The
 /// enclosing `App` node's CpsId carries the AST origin for the operation.
 #[derive(Debug, Clone)]
@@ -330,7 +330,7 @@ pub enum ValKind<'src> {
   Lit(Lit<'src>),     // a literal value
   Panic,              // fail sentinel — irrefutable pattern failure (unreachable)
   ContRef(CpsId),     // reference to a continuation as a value (for fail args)
-  BuiltIn(BuiltIn),   // a compiler-known op used as a value (for MatchIf func arg)
+  BuiltIn(BuiltIn),   // a compiler-known op used as a value
 }
 
 #[derive(Debug, Clone)]
@@ -356,7 +356,7 @@ pub enum Lit<'src> {
 /// `Expr { args, body }` — inline: bind results to `args` in order, then evaluate `body`.
 ///
 /// Single-result continuations use `args: vec![bind]`. Multi-result continuations
-/// (e.g. MatchNext/MatchField which yield elem + next_cursor) use two args.
+/// (e.g. SeqPop/RecPop which yield value + rest_cursor) use two args.
 /// The `CpsId` of each bind is used by the formatter to render compiler-generated
 /// temps as `·v_N`. No pass indexes into any table by these ids.
 #[derive(Debug, Clone)]
@@ -428,8 +428,12 @@ pub enum ExprKind<'src> {
 
   // ---------------------------------------------------------------------------
   // Pattern matching — Match* primitives are emitted as App { BuiltIn::Match*, args }.
-  // MatchArm and MatchBlock use Arg::Cont and Arg::Expr to embed arm structure.
   // Fail conts are encoded as ValKind::Panic or ValKind::ContRef in args.
+  //
+  // Matcher invariant: matchers work with synthetic temps only (Bind::Synth).
+  // No named bindings are created inside a matcher — if a pattern fails,
+  // nothing should be in scope. Temps are forwarded to succ on success;
+  // the body's params give them user-visible names.
   // ---------------------------------------------------------------------------
 
 }
