@@ -57,14 +57,27 @@
 // shape. This keeps the lowering pass mechanical and predictable. The
 // optimizer (wasm-opt) handles inlining and simplification.
 //
+// ## Matcher invariant: temps only, no bindings
+//
+// Matchers work exclusively with synthetic temp values (Bind::Synth).
+// No named bindings are created inside the matcher — if a pattern fails,
+// nothing should have been bound in scope. The matcher extracts and tests
+// using temps, then on success forwards the temp values to succ.
+// The body's params (mb_N) give temps their user-visible names.
+//
+// This means:
+//   - The fail path is clean: nothing to undo, no partial bindings.
+//   - The match_lower pass sees pure test-and-branch logic.
+//   - Name binding is the body's responsibility, not the matcher's.
+//
 // ## Pattern lowering
 //
 // Each pattern type becomes a condition tested in mp_N:
 //
 //   Literal:   `if subj == lit`     (op_eq comparison)
 //   Guard:     `if <guard_expr>`    (e.g. subj > 0)
-//   Wildcard:  always succeeds      (mp_N directly calls mb_N)
-//   Variable:  always succeeds      (bind subj, then call mb_N)
+//   Wildcard:  always succeeds      (mp_N directly calls succ with subj)
+//   Variable:  always succeeds      (forward subj via succ, body names it)
 //   Or-guard:  `if a or b`          (short-circuit or of sub-patterns)
 //
 // Sequence and record patterns will thread cursor/field state through

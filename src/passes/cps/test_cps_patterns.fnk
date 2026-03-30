@@ -46,24 +46,45 @@ test 'plain bind', fn:
       ·v_1 ·x_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtFLEEsS0FBQSIKfQ==
 
+
 test 'simple guard', fn:
   expect cps_expr fink":
     a > 0 = foo
   | equals fink":
-    ·let ·∅foo, fn ·a_0:
-      ·match_if ·op_gt, ·a_0, 0, ·panic, fn: ·v_1 _
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBLEtBQUUsSyxLQUFSLEk7RUFBQSxBQUFBLFVBQUEsTSxFQUFBLEksRUFBSSxDLEVBQUosTSxJLEUiCn0=
+    ·fn
+      fn ·a_10: ·v_1 ·a_10
+      fn ·rest_of_body:
+        ·fn
+          fn ·subj, ·succ, ·fail:
+            ·op_gt ·subj, 0, fn ·v_5:
+              if ·v_5,
+                fn: ·succ ·subj
+                ·fail
+          fn ·match_pattern:
+            ·match_pattern ·∅foo, ·rest_of_body, panic
 
 
 test 'nested guard', fn:
   expect cps_expr fink":
     a > 0 or a < 9 = foo
   | equals fink":
-    ·let ·∅foo, fn ·a_0:
-      ·op_gt ·a_0, 0, fn ·v_5:
-        ·op_lt ·a_0, 9, fn ·v_9:
-          ·match_if ·op_or, ·v_5, ·v_9, ·panic, fn: ·v_1 _
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgb3IgYSA8IDkgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBZSxBQUFBLEtBQUUsSyxLQUFqQixJO0VBQUUsQUFBQSxPQUFGLEksRUFBSSxDLEtBQUosSTtJQUFXLEFBQUEsT0FBRixJLEVBQUksQyxLQUFKLEk7TUFBVCxBQUFBLFVBQUEsTSxFQUFBLEksRUFBUyxJLEVBQVQsTSxJLEUiCn0=
+    ·fn
+      fn ·a_10:
+        # rest of body with a now bound
+        ·v_1 ·a_10
+      fn ·rest_of_body:
+        ·fn
+          # pattern test function
+          fn ·subj, ·succ, ·fail:
+            ·op_gt ·subj, 0, fn ·v_5:
+              ·op_lt ·subj, 9, fn ·v_9:
+                ·op_or ·v_5, ·v_9, fn ·v_10:
+                  if ·v_10,
+                    fn: ·succ ·subj
+                    ·fail
+          fn ·match_pattern:
+            # just a signal that we are pattern matching on foo
+            ·match_pattern ·∅foo, ·rest_of_body, panic
 
 
 ---
@@ -83,6 +104,34 @@ test 'seq — nested empty', fn:
   expect cps_expr fink":
     [a, []] = foo
   | equals fink":
+      ·fn
+        fn ·a_10:
+          ·v_1 ·a_10
+        fn ·rest_of_body:
+          ·fn
+            fn ·subj, ·succ, ·fail:
+              iter_maybe_next subj,
+                fn v, it:
+                  iter_end it,
+                    fn:
+                      #... match v to be empty
+                    fail
+                fail
+            fn ·match_rest_seq:
+              ·fn
+                fn ·subj, ·succ, ·fail:
+                  iter_maybe_next subj,
+                    fn v, it:
+                      ·match_rest_seq it,
+                        fn: succ v
+                        fail
+                    fail
+
+                fn ·match_seq_N:
+                  iter ·∅foo, fn it:
+                    ·match_seq_N it, ·rest_of_body, panic
+
+
     ·match_seq ·∅foo, ·panic, fn ·v_3:
       ·match_next ·v_3, ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·a_0:

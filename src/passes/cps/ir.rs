@@ -430,6 +430,11 @@ pub enum ExprKind<'src> {
   // Pattern matching — Match* primitives are emitted as App { BuiltIn::Match*, args }.
   // MatchArm and MatchBlock use Arg::Cont and Arg::Expr to embed arm structure.
   // Fail conts are encoded as ValKind::Panic or ValKind::ContRef in args.
+  //
+  // Matcher invariant: matchers work with synthetic temps only (Bind::Synth).
+  // No named bindings are created inside a matcher — if a pattern fails,
+  // nothing should be in scope. Temps are forwarded to succ on success;
+  // the body's params give them user-visible names.
   // ---------------------------------------------------------------------------
 
 }
