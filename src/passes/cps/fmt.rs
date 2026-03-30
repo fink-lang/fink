@@ -298,7 +298,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::MatchRest    => "·match_rest".into(),
     BuiltIn::MatchRec     => "·match_rec".into(),
     BuiltIn::MatchField   => "·match_field".into(),
-    BuiltIn::MatchApp     => "·match_app".into(),
     // Async/concurrency
     BuiltIn::Yield        => "·yield".into(),
     // Module
@@ -455,8 +454,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       let is_match_builtin = is_noarg_match || matches!(func, Callable::BuiltIn(
         BuiltIn::MatchSeq | BuiltIn::MatchNext |
         BuiltIn::MatchDone | BuiltIn::MatchRest |
-        BuiltIn::MatchRec | BuiltIn::MatchField |
-        BuiltIn::MatchApp
+        BuiltIn::MatchRec | BuiltIn::MatchField
       ));
       if is_match_builtin {
         // Match builtins: render all args inline (Arg::Cont renders as lambdas).

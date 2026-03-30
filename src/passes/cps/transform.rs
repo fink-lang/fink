@@ -1622,7 +1622,7 @@ pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResul
 /// Implemented: Ident, Wildcard, BindRight, InfixOp (guard + range), Apply (→ MatchGuard),
 ///              LitInt/Float/Bool/Str (→ PatternMatch), LitSeq (plain elems + Spread tail),
 ///              LitRec (fields + spread variants), Range (→ lower_range + MatchGuard w/ ·op_in).
-/// TODO: Apply → MatchApp (after name resolution distinguishes predicate from constructor).
+/// TODO: Apply → constructor destructuring (after name resolution distinguishes predicate from constructor).
 /// TODO(future): StrTempl pattern matching — e.g. `'hello ${name}'` in pattern position;
 ///               deferred, needs a string-matching primitive (·match_str_prefix or similar).
 /// Emit a PatternMatch for a range check: `0..10` or `0...10`.

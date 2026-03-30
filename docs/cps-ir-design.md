@@ -170,13 +170,9 @@ All pattern nodes carry an explicit `fail` continuation (Panic or FailCont).
 MatchLetVal { name, val, fail, body }
   -- bind val to name; always succeeds (structural uniformity with fail cont)
 
-MatchApp { func: Callable, args, fail, result, body }
-  -- apply func to args; fail if tag is wrong
-  -- constructor/extractor patterns: Ok b, Some x
+MatchApp (removed — never emitted; constructor destructuring deferred to name resolution)
 
-MatchIf { func: Callable, args, fail, body }
-  -- apply func to args; fail if falsy; no result binding
-  -- guard predicates: is_even x, a > 0
+MatchIf (eliminated — inlined as plain App + If)
 
 MatchValue { val, lit, fail, body }
   -- assert val equals literal; fail if not

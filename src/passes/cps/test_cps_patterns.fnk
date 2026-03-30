@@ -22,9 +22,7 @@ CPS pattern lowering tests
 #   ·match_field    — extract named field from rec cursor; fn ·v, ·cursor, …
 #   ·match_value    — assert extracted temp equals literal; ·fail if not (eliminated → PatternMatch)
 #   ·match_if       — apply fn to args, ·fail if falsy (eliminated → plain App + If)
-#   ·match_apply    — apply fn to args, bind result; ·fail if wrong tag (constructor/extractor)
-#                     deferred: name resolution distinguishes predicate (→ App + If)
-#                     from constructor/extractor (→ ·match_apply) based on callee
+#   ·match_apply    — (removed, never emitted; constructor destructuring deferred to name resolution)
 #   ·match_block    — try arms in order; first match wins (eliminated → fail-chain)
 #   ·match_arm      — single arm: matcher cont + body cont (eliminated → LetFn + App)
 #

@@ -309,7 +309,6 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::MatchRest     => "match_rest",
     BuiltIn::MatchRec      => "match_rec",
     BuiltIn::MatchField    => "match_field",
-    BuiltIn::MatchApp      => "match_app",
     BuiltIn::Yield         => "yield",
     BuiltIn::Export        => "export",
     BuiltIn::Import        => "import",

@@ -227,7 +227,7 @@ pub enum BuiltIn {
   // MatchValue/MatchBlock/MatchArm/MatchIf have been eliminated — literals,
   // match arms, and guards are lowered to plain PatternMatch (LetFn + App + If).
   MatchSeq, MatchNext, MatchDone, MatchNotDone,
-  MatchRest, MatchRec, MatchField, MatchApp,
+  MatchRest, MatchRec, MatchField,
   // Yield — suspend execution, passing a value to the scheduler.
   // Args: value; cont receives the resumed value.
   Yield,
@@ -290,7 +290,7 @@ impl BuiltIn {
   }
 }
 
-/// What an App/MatchApp calls — either a runtime value or a built-in.
+/// What an App calls — either a runtime value or a built-in.
 /// `BuiltIn` has no CpsId — it's a compile-time tag, not an IR node. The
 /// enclosing `App` node's CpsId carries the AST origin for the operation.
 #[derive(Debug, Clone)]
