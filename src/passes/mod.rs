@@ -6,7 +6,6 @@
 pub mod ast;
 pub mod cps;
 pub mod lifting;
-pub mod name_res;
 pub mod partial;
 pub mod scopes;
 pub mod wasm;
