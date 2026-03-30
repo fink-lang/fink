@@ -1231,12 +1231,13 @@ enum Pending<'src> {
   /// `elem` = field value bind (cont arg 0), `next_cursor` = advanced cursor bind (cont arg 1).
   MatchField { val: Val<'src>, field: &'src str, elem: BindNode, next_cursor: BindNode, origin: Option<AstId> },
   /// Pattern match — matcher function applied to subject.
-  /// Emits: LetFn matcher = fn(subj, succ, fail): body
-  ///        matcher(subject, <cont>, panic)
+  /// Emits: LetFn body = fn(bind_names...): <cont>
+  ///        LetFn matcher = fn(subj, succ, fail): matcher_body
+  ///        matcher(subject, body, panic)
   /// The matcher tests with temps only; succ forwards values to the body.
   PatternMatch {
     subject: Val<'src>,
-    bind_name: BindNode,
+    bind_names: Vec<BindNode>,
     matcher_name: BindNode,
     matcher_params: Vec<Param>,
     matcher_body: Expr<'src>,
@@ -1469,8 +1470,8 @@ fn wrap_with_fail<'src>(
           origin,
         )
       },
-      Pending::PatternMatch { subject, bind_name, matcher_name, matcher_params, matcher_body, origin } => {
-        // Emit: LetFn body = fn(bind_name): <cont>
+      Pending::PatternMatch { subject, bind_names, matcher_name, matcher_params, matcher_body, origin } => {
+        // Emit: LetFn body = fn(bind_names...): <cont>
         //       LetFn matcher = fn(subj, succ, fail): matcher_body
         //       matcher(subject, body, panic)
         let body_name = g.fresh_result(origin);
@@ -1498,12 +1499,17 @@ fn wrap_with_fail<'src>(
           origin,
         );
 
-        // Build: LetFn body = fn(bind_name): <cont>; <with_matcher>
-        // The body's fn receives the matched value as bind_name param,
+        // Build: LetFn body = fn(bind_names...): <cont>; <with_matcher>
+        // The body's fn receives the matched values as params,
         // then continues with the rest of the sequence (cont).
         let body_body = match cont {
           Cont::Ref(cont_id) => {
-            let bind_ref = g.val(ValKind::Ref(Ref::Synth(bind_name.id)), origin);
+            // Forward first bind through the cont ref (for single-bind compat)
+            let bind_ref = if let Some(first) = bind_names.first() {
+              g.val(ValKind::Ref(Ref::Synth(first.id)), origin)
+            } else {
+              g.val(ValKind::Panic, origin) // no binds — shouldn't reach here
+            };
             let cont_ref = g.val(ValKind::ContRef(cont_id), origin);
             g.expr(ExprKind::App {
               func: Callable::Val(cont_ref),
@@ -1512,10 +1518,11 @@ fn wrap_with_fail<'src>(
           }
           Cont::Expr { body, .. } => *body,
         };
+        let body_params: Vec<Param> = bind_names.into_iter().map(Param::Name).collect();
         g.expr(
           ExprKind::LetFn {
             name: body_name,
-            params: vec![Param::Name(bind_name)],
+            params: body_params,
             fn_body: Box::new(body_body),
             cont: Cont::Expr { args: vec![], body: Box::new(with_matcher) },
           },
@@ -1686,7 +1693,7 @@ fn emit_range_pattern<'src>(
   let bind_name = g.fresh_result(origin); // dummy — range produces no named binding
   pending.push(Pending::PatternMatch {
     subject: val,
-    bind_name,
+    bind_names: vec![bind_name],
     matcher_name,
     matcher_params: vec![
       Param::Name(subj_param),
@@ -1750,7 +1757,7 @@ fn emit_literal_pattern<'src>(
   let bind_name = g.fresh_result(origin);
   pending.push(Pending::PatternMatch {
     subject: val,
-    bind_name,
+    bind_names: vec![bind_name],
     matcher_name,
     matcher_params: vec![
       Param::Name(subj_param),
@@ -1855,7 +1862,7 @@ fn lower_pat_lhs<'src>(
       let matcher_name = g.fresh_result(origin);
       pending.push(Pending::PatternMatch {
         subject: val,
-        bind_name: bind,
+        bind_names: vec![bind],
         matcher_name,
         matcher_params: vec![
           Param::Name(subj_param),
