@@ -121,6 +121,7 @@ pub mod collect;
 pub mod dwarf;
 pub mod emit;
 pub mod fmt;
+pub mod link;
 pub mod sourcemap;
 
 #[cfg(feature = "runner")]
