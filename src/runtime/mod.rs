@@ -79,6 +79,13 @@ mod tests {
     result[0].clone()
   }
 
+  /// Helper: call hamt_size(node) → i32
+  fn hamt_size(store: &mut Store<()>, size_fn: &Func, node: &Val) -> i32 {
+    let mut result = [Val::I32(0)];
+    size_fn.call(store, &[node.clone()], &mut result).unwrap();
+    match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
+  }
+
   /// Helper: call hamt_empty() → node
   fn hamt_empty(store: &mut Store<()>, empty_fn: &Func) -> Val {
     let mut result = [Val::AnyRef(None)];
@@ -356,5 +363,52 @@ mod tests {
     assert_eq!(hamt_get(&mut store, &get_fn, &a, 2), None);
     assert_eq!(hamt_get(&mut store, &get_fn, &b, 1), None);
     assert_eq!(hamt_get(&mut store, &get_fn, &b, 2), Some(20));
+  }
+
+  #[test]
+  fn test_size() {
+    let (mut store, instance) = load_hamt();
+    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
+    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
+    let del_fn = instance.get_func(&mut store, "hamt_delete").unwrap();
+    let size_fn = instance.get_func(&mut store, "hamt_size").unwrap();
+
+    let node = hamt_empty(&mut store, &empty_fn);
+    assert_eq!(hamt_size(&mut store, &size_fn, &node), 0);
+
+    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
+    assert_eq!(hamt_size(&mut store, &size_fn, &node), 1);
+
+    let node = hamt_set(&mut store, &set_fn, &node, 2, 20);
+    assert_eq!(hamt_size(&mut store, &size_fn, &node), 2);
+
+    let node = hamt_set(&mut store, &set_fn, &node, 3, 30);
+    assert_eq!(hamt_size(&mut store, &size_fn, &node), 3);
+
+    // Overwrite doesn't change size.
+    let node2 = hamt_set(&mut store, &set_fn, &node, 2, 99);
+    assert_eq!(hamt_size(&mut store, &size_fn, &node2), 3);
+
+    // Delete reduces size.
+    let node3 = hamt_delete(&mut store, &del_fn, &node, 2);
+    assert_eq!(hamt_size(&mut store, &size_fn, &node3), 2);
+
+    // Delete absent key doesn't change size.
+    let node4 = hamt_delete(&mut store, &del_fn, &node, 99);
+    assert_eq!(hamt_size(&mut store, &size_fn, &node4), 3);
+  }
+
+  #[test]
+  fn test_size_many() {
+    let (mut store, instance) = load_hamt();
+    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
+    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
+    let size_fn = instance.get_func(&mut store, "hamt_size").unwrap();
+
+    let mut node = hamt_empty(&mut store, &empty_fn);
+    for i in 0..50u32 {
+      node = hamt_set(&mut store, &set_fn, &node, i, i * 10);
+    }
+    assert_eq!(hamt_size(&mut store, &size_fn, &node), 50);
   }
 }

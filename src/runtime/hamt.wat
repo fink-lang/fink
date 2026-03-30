@@ -35,6 +35,7 @@
 ;;   $hamt_delete  : (ref $HamtNode), (ref eq) -> (ref $HamtNode)
 ;;   $hamt_pop     : (ref $HamtNode), (ref eq) -> (ref null eq), (ref $HamtNode)
 ;;   $hamt_merge   : (ref $HamtNode), (ref $HamtNode) -> (ref $HamtNode)
+;;   $hamt_size    : (ref $HamtNode) -> i32
 ;;                   Merge src into dest. Src entries win on key conflict.
 ;;                   Single-traversal get+delete. Returns (value, rest).
 ;;                   Value is null if key absent; rest is unchanged in that case.
@@ -1234,6 +1235,74 @@
         (br $walk)))
 
     (local.get $dest)
+  )
+
+
+  ;; -- Size -----------------------------------------------------------
+
+  ;; Count the number of key-value entries in the HAMT.
+  ;; Walks the tree, counting leaves and collision entries.
+  (func $hamt_size (export "hamt_size")
+    (param $node (ref $HamtNode))
+    (result i32)
+
+    (call $_hamt_size_node (local.get $node))
+  )
+
+  (func $_hamt_size_node
+    (param $node (ref $HamtNode))
+    (result i32)
+
+    (local $children (ref $HamtChildren))
+    (local $len i32)
+    (local $i i32)
+    (local $count i32)
+    (local $child (ref null $Any))
+
+    (local.set $children
+      (struct.get $HamtNode $children (local.get $node)))
+    (local.set $len
+      (array.len (local.get $children)))
+    (local.set $count (i32.const 0))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+
+        (local.set $child
+          (array.get $HamtChildren
+            (local.get $children)
+            (local.get $i)))
+
+        ;; leaf — count 1
+        (if (ref.test (ref $HamtLeaf) (local.get $child))
+          (then
+            (local.set $count
+              (i32.add (local.get $count) (i32.const 1)))))
+
+        ;; sub-node — recurse
+        (if (ref.test (ref $HamtNode) (local.get $child))
+          (then
+            (local.set $count
+              (i32.add (local.get $count)
+                (call $_hamt_size_node
+                  (ref.cast (ref $HamtNode) (local.get $child)))))))
+
+        ;; collision — count its leaves
+        (if (ref.test (ref $HamtCollision) (local.get $child))
+          (then
+            (local.set $count
+              (i32.add (local.get $count)
+                (array.len
+                  (struct.get $HamtCollision $col_leaves
+                    (ref.cast (ref $HamtCollision) (local.get $child))))))))
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $count)
   )
 
 )
