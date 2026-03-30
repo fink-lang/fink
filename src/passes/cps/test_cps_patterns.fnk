@@ -52,16 +52,13 @@ test 'simple guard', fn:
     a > 0 = foo
   | equals fink":
     ·fn
-      fn ·a_10: ·v_1 ·a_10
-      fn ·rest_of_body:
-        ·fn
-          fn ·subj, ·succ, ·fail:
-            ·op_gt ·subj, 0, fn ·v_5:
-              if ·v_5,
-                fn: ·succ ·subj
-                ·fail
-          fn ·match_pattern:
-            ·match_pattern ·∅foo, ·rest_of_body, panic
+      fn ·v_3, ·v_4, ·v_5:
+        ·op_gt ·v_3, 0, fn ·v_8:
+          ·if ·v_8,
+            fn: ·v_4 ·v_3
+            fn: ·v_5 _
+      fn ·v_16: ·v_16 ·∅foo, ·v_1, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTSxNLEk7SUFBQSxBQUFBLE9BQUEsSSxFQUFJLEMsS0FBSixJO01BQUEsQUFBQSxJQUFBLEk7VSxFQUFBLEEsS0FBQTtVLEVBQUEsQSxLQUFBO0tBQUEsSyxFQUFBLEFBQUEsTUFBUSxLLEUsSSxFQUFSIgp9
 
 
 test 'nested guard', fn:
@@ -69,22 +66,14 @@ test 'nested guard', fn:
     a > 0 or a < 9 = foo
   | equals fink":
     ·fn
-      fn ·a_10:
-        # rest of body with a now bound
-        ·v_1 ·a_10
-      fn ·rest_of_body:
-        ·fn
-          # pattern test function
-          fn ·subj, ·succ, ·fail:
-            ·op_gt ·subj, 0, fn ·v_5:
-              ·op_lt ·subj, 9, fn ·v_9:
-                ·op_or ·v_5, ·v_9, fn ·v_10:
-                  if ·v_10,
-                    fn: ·succ ·subj
-                    ·fail
-          fn ·match_pattern:
-            # just a signal that we are pattern matching on foo
-            ·match_pattern ·∅foo, ·rest_of_body, panic
+      fn ·v_3, ·v_4, ·v_5:
+        ·op_lt ·a_0, 9, fn ·v_8:
+          ·op_or ·v_3, ·v_8, fn ·v_11:
+            ·if ·v_11,
+              fn: ·v_4 ·v_3
+              fn: ·v_5 _
+      fn ·v_20: ·v_20 ·∅foo, ·v_1, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgb3IgYSA8IDkgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTSxNLEk7SUFBVyxBQUFBLE9BQUYsSSxFQUFJLEMsS0FBSixJO01BQVQsQUFBQSxPQUFBLEksRUFBUyxJLEtBQVQsSztRQUFBLEFBQUEsSUFBQSxLO1ksRUFBQSxBLEtBQUE7WSxFQUFBLEEsS0FBQTtLQUFBLEssRUFBQSxBQUFBLE1BQWlCLEssRSxJLEVBQWpCIgp9
 
 
 ---
@@ -104,34 +93,6 @@ test 'seq — nested empty', fn:
   expect cps_expr fink":
     [a, []] = foo
   | equals fink":
-      ·fn
-        fn ·a_10:
-          ·v_1 ·a_10
-        fn ·rest_of_body:
-          ·fn
-            fn ·subj, ·succ, ·fail:
-              iter_maybe_next subj,
-                fn v, it:
-                  iter_end it,
-                    fn:
-                      #... match v to be empty
-                    fail
-                fail
-            fn ·match_rest_seq:
-              ·fn
-                fn ·subj, ·succ, ·fail:
-                  iter_maybe_next subj,
-                    fn v, it:
-                      ·match_rest_seq it,
-                        fn: succ v
-                        fail
-                    fail
-
-                fn ·match_seq_N:
-                  iter ·∅foo, fn it:
-                    ·match_seq_N it, ·rest_of_body, panic
-
-
     ·match_seq ·∅foo, ·panic, fn ·v_3:
       ·match_next ·v_3, ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·a_0:
@@ -232,10 +193,15 @@ test 'seq — infix guard', fn:
       ·match_next ·v_4, ·panic, fn ·v_5, ·v_6:
         ·let ·v_5, fn ·x_0:
           ·match_next ·v_6, ·panic, fn ·v_9, ·v_10:
-            ·let ·v_9, fn ·y_1:
-              ·match_if ·op_gte, ·y_1, 2, ·panic, fn:
-                ·match_done ·v_10, ·panic, ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIHkgPj0gMl0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWMsSyxFQUFkLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxLO1FBQUksQUFBQSxLQUFKLEksS0FBSSxJO1VBQUUsQUFBQSxVQUFBLE8sRUFBRixJLEVBQUssQyxFQUFMLE0sSTtZQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFIgp9
+            ·fn
+              fn ·v_13, ·v_14, ·v_15:
+                ·op_gte ·v_13, 2, fn ·v_18:
+                  ·if ·v_18,
+                    fn: ·v_14 ·v_13
+                    fn: ·v_15 _
+              fn ·v_26:
+                ·v_26 ·v_9, fn ·v_32: ·match_done ·v_10, ·panic, ·v_2, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIHkgPj0gMl0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWMsSyxFQUFkLE0sS0FBQSxJO0VBQUEsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsTUFBQSxLO1FBQUksQUFBQTthQUFBLE8sTyxLO1lBQUUsQUFBQSxRQUFGLEssRUFBSyxDLEtBQUwsSztjQUFBLEFBQUEsSUFBQSxLO2tCLEVBQUEsQSxNQUFBO2tCLEVBQUEsQSxNQUFBO2FBQUEsSztZQUFBLEFBQUEsTUFBSixJLEVBQUksR0FBQSxLLEVBQUosQUFBQSxZQUFBLEssRUFBQSxNLEUsSSxFQUFJIgp9
 
 
 test 'seq — predicate guard', fn:
@@ -536,14 +502,19 @@ test 'match child ·scope — binding in arm body', fn:
   | equals fink":
     ·match_arm
       fn ·v_7, ·v_5, ·v_6:
-        ·let ·v_7, fn ·a_0:
-          ·match_if ·op_gt, ·a_0, 1, ·v_5, fn:
-            ·v_6 ·a_0
-      fn ·a_0, ·v_11:
+        ·fn
+          fn ·v_9, ·v_10, ·v_11:
+            ·op_gt ·v_9, 1, fn ·v_14:
+              ·if ·v_14,
+                fn: ·v_10 ·v_9
+                fn: ·v_11 _
+          fn ·v_22:
+            ·v_22 ·v_7, fn: ·v_6 _, ·v_5
+      fn ·v_23:
         ·let ·a_0, fn ·ni_1:
-          ·v_11 ·ni_1
-      fn ·v_25: ·match_block ·∅n, ·v_25, ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggbjpcbiAgYSA+IDE6XG4gICAgbmkgPSBhXG4gICAgbmkiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssTSxNLEk7SUFBQSxBQUFBLEtBQUEsSSxLQUFBLEk7TUFBRSxBQUFBLFVBQUEsTSxFQUFGLEksRUFBSSxDLEUsSSxJO1FBQUosQSxLQUFBO0tBQUEsTSxLO0lBQ0ssQUFBQSxLQUFFLEksS0FBTCxLO00sQSxNQUNBO0tBRkYsSyxFQURGLEFBQUEsYUFBTSxHLEVBQ0osSyxFIgp9
+          ·v_23 ·ni_1
+      fn ·v_35: ·match_block ·∅n, ·v_35, ·v_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggbjpcbiAgYSA+IDE6XG4gICAgbmkgPSBhXG4gICAgbmkiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssTSxNLEk7SUFBQSxBQUFBO1NBQUEsTSxPLEs7UUFBRSxBQUFBLE9BQUYsSSxFQUFJLEMsS0FBSixLO1VBQUEsQUFBQSxJQUFBLEs7YyxFQUFBLEEsTUFBQTtjLEVBQUEsQSxNQUFBO1NBQUEsSztRQUFBLEFBQUEsTUFBQSxJLEUsRSxFQUFBLEEsS0FBQSxDLEU7SyxLO0lBQ0ssQUFBQSxLQUFFLEksS0FBTCxLO00sQSxNQUNBO0tBRkYsSyxFQURGLEFBQUEsYUFBTSxHLEVBQ0osSyxFIgp9
 
 
 ---
@@ -630,9 +601,14 @@ test 'irrefutable binding with guard', fn:
   expect cps_expr fink":
     x > 2 = foo
   | equals fink":
-    ·let ·∅foo, fn ·x_0:
-      ·match_if ·op_gt, ·x_0, 2, ·panic, fn: ·v_1 _
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA+IDIgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBLEtBQUUsSyxLQUFSLEk7RUFBQSxBQUFBLFVBQUEsTSxFQUFBLEksRUFBSSxDLEVBQUosTSxJLEUiCn0=
+    ·fn
+      fn ·v_3, ·v_4, ·v_5:
+        ·op_gt ·v_3, 2, fn ·v_8:
+          ·if ·v_8,
+            fn: ·v_4 ·v_3
+            fn: ·v_5 _
+      fn ·v_16: ·v_16 ·∅foo, ·v_1, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA+IDIgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTSxNLEk7SUFBQSxBQUFBLE9BQUEsSSxFQUFJLEMsS0FBSixJO01BQUEsQUFBQSxJQUFBLEk7VSxFQUFBLEEsS0FBQTtVLEVBQUEsQSxLQUFBO0tBQUEsSyxFQUFBLEFBQUEsTUFBUSxLLEUsSSxFQUFSIgp9
 
 
 test 'bind right — seq pattern', fn:

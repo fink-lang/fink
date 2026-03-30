@@ -1124,6 +1124,17 @@ enum Pending<'src> {
   /// Extract named field from rec — emits MatchField with ·panic as fail cont.
   /// `elem` = field value bind (cont arg 0), `next_cursor` = advanced cursor bind (cont arg 1).
   MatchField { val: Val<'src>, field: &'src str, elem: BindNode, next_cursor: BindNode, origin: Option<AstId> },
+  /// Pattern match — matcher function applied to subject.
+  /// Emits: LetFn matcher = fn(subj, succ, fail): body
+  ///        matcher(subject, <cont>, panic)
+  /// The matcher tests with temps only; succ forwards values to the body.
+  PatternMatch {
+    subject: Val<'src>,
+    matcher_name: BindNode,
+    matcher_params: Vec<Param>,
+    matcher_body: Expr<'src>,
+    origin: Option<AstId>,
+  },
   /// Yield — suspend execution, yield a value; result bound in continuation.
   Yield { value: Val<'src>, result: BindNode, origin: Option<AstId> },
 }
@@ -1134,6 +1145,7 @@ impl<'src> Pending<'src> {
       Pending::Val { origin, .. } | Pending::Fn { origin, .. } | Pending::App { origin, .. }
       | Pending::MatchBlock { origin, .. } | Pending::MatchArm { origin, .. } | Pending::MatchBind { origin, .. }
       | Pending::MatchGuard { origin, .. } | Pending::MatchValue { origin, .. }
+      | Pending::PatternMatch { origin, .. }
       | Pending::MatchSeq { origin, .. } | Pending::MatchNext { origin, .. }
       | Pending::MatchDone { origin, .. } | Pending::MatchNotDone { origin, .. }
       | Pending::MatchRest { origin, .. } | Pending::MatchRec { origin, .. }
@@ -1352,6 +1364,28 @@ fn wrap_with_fail<'src>(
           origin,
         )
       },
+      Pending::PatternMatch { subject, matcher_name, matcher_params, matcher_body, origin } => {
+        // Emit: LetFn matcher = fn(subj, succ, fail): body
+        //       matcher(subject, cont, panic)
+        let matcher_ref = g.val(ValKind::Ref(Ref::Synth(matcher_name.id)), origin);
+        let fail_val = make_fail_val(g, origin);
+        let call = g.expr(
+          ExprKind::App {
+            func: Callable::Val(matcher_ref),
+            args: vec![Arg::Val(subject), Arg::Cont(cont), Arg::Val(fail_val)],
+          },
+          origin,
+        );
+        g.expr(
+          ExprKind::LetFn {
+            name: matcher_name,
+            params: matcher_params,
+            fn_body: Box::new(matcher_body),
+            cont: Cont::Expr { args: vec![], body: Box::new(call) },
+          },
+          origin,
+        )
+      },
       Pending::Yield { value, result, origin } => g.expr(
         ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::Yield),
@@ -1494,17 +1528,76 @@ fn lower_pat_lhs<'src>(
     }
 
     // Guarded bind: `a > 0 = foo` or `a > 0 or a < 9 = foo`
-    // The innermost ident is the binding; the infix is the guard.
+    // Emits a PatternMatch: matcher function tests with temps, succ forwards value.
     NodeKind::InfixOp { op, lhs: guard_lhs, rhs: guard_rhs } => {
+      // The bind name for the body (succ param gives it its name).
       let bind_ast_id = extract_bind_ast_id(guard_lhs);
       let bind = g.bind_name(bind_ast_id);
       let r = (bind.kind, bind.id);
-      pending.push(Pending::MatchBind { name: bind, val,  origin });
-      let (lv, lp) = lower(g, guard_lhs);
+
+      // Build matcher: fn(subj, succ, fail): op(subj, rhs, fn result: if result succ(subj) else fail)
+      let subj_param = g.fresh_result(origin);
+      let succ_param = g.bind(Bind::Cont, None);
+      let fail_param = g.bind(Bind::Cont, None);
+
+      // Lower the guard RHS (the comparison value, e.g. `0` in `a > 0`).
+      // This is a pure expression, no scope dependency on the bind.
       let (rv, rp) = lower(g, guard_rhs);
-      pending.extend(lp);
-      pending.extend(rp);
-      pending.push(Pending::MatchGuard { func: Callable::BuiltIn(BuiltIn::from_builtin_str(op.src)), args: vec![lv, rv],  origin });
+
+      // Build the guard test: op(subj, rhs, fn result: if result then succ(subj) else fail())
+      let subj_ref = ref_val(g, subj_param.kind, subj_param.id, origin);
+      let result_bind = g.fresh_result(origin);
+      let result_ref = g.val(ValKind::Ref(Ref::Synth(result_bind.id)), origin);
+
+      let succ_ref = g.val(ValKind::ContRef(succ_param.id), origin);
+      let succ_call = g.expr(ExprKind::App {
+        func: Callable::Val(succ_ref),
+        args: vec![Arg::Val(subj_ref.clone())],
+      }, origin);
+
+      let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
+      let fail_call = g.expr(ExprKind::App {
+        func: Callable::Val(fail_ref),
+        args: vec![],
+      }, origin);
+
+      let if_expr = g.expr(ExprKind::If {
+        cond: Box::new(result_ref),
+        then: Box::new(succ_call),
+        else_: Box::new(fail_call),
+      }, origin);
+
+      // Build the op call: op(subj, rhs, fn result: if_expr)
+      let op_builtin = BuiltIn::from_builtin_str(op.src);
+      let guard_call = g.expr(ExprKind::App {
+        func: Callable::BuiltIn(op_builtin),
+        args: vec![
+          Arg::Val(subj_ref),
+          Arg::Val(rv),
+          Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(if_expr) }),
+        ],
+      }, origin);
+
+      // If the RHS lowering produced pendings (e.g. function calls), wrap them.
+      let matcher_body = if rp.is_empty() {
+        guard_call
+      } else {
+        wrap(g, rp, Cont::Expr { args: vec![], body: Box::new(guard_call) })
+      };
+
+      let matcher_name = g.fresh_result(origin);
+      pending.push(Pending::PatternMatch {
+        subject: val,
+        matcher_name,
+        matcher_params: vec![
+          Param::Name(subj_param),
+          Param::Name(succ_param),
+          Param::Name(fail_param),
+        ],
+        matcher_body,
+        origin,
+      });
+
       r
     }
 

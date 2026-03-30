@@ -188,45 +188,52 @@ test 'match with guard', fn:
 
   | equals fink":
     ·fn
-      fn ·x_0, ·v_12:
-        ·v_12 42
-      fn ·v_77:
+      fn ·v_24:
+        ·v_24 42
+      fn ·v_89:
         ·fn
           fn ·v_8, ·v_6, ·v_7:
-            ·let ·v_8, fn ·x_0:
-              ·op_gt ·x_0, 0, fn ·v_89:
-                ·if ·v_89,
-                  fn:
-                    ·v_7 ·x_0
-                  fn:
-                    ·v_6 _
-          fn ·v_78:
-            ·v_78 1,
+            ·fn
+              fn ·v_10, ·v_11, ·v_12:
+                ·op_gt ·v_10, 0, fn ·v_15:
+                  ·if ·v_15,
+                    fn:
+                      ·v_11 ·v_10
+                    fn:
+                      ·v_12 _
+              fn ·v_23:
+                ·v_23 ·v_8, fn:
+                  ·v_7 _, ·v_6
+          fn ·v_90:
+            ·v_90 1,
               fn:
                 ·fn
-                  fn ·x_1, ·v_38:
-                    ·op_plus ·x_1, 1, ·v_38
-                  fn ·v_67:
+                  fn ·v_58:
+                    ·op_plus ·x_1, 1, ·v_58
+                  fn ·v_81:
                     ·fn
-                      fn ·v_28, ·v_26, ·v_27:
-                        ·let ·v_28, fn ·x_1:
-                          ·op_gt ·x_1, 0, fn ·v_32:
-                            ·op_lt ·x_1, 0, fn ·v_36:
-                              ·op_or ·v_32, ·v_36, fn ·v_95:
-                                ·if ·v_95,
+                      fn ·v_38, ·v_36, ·v_37:
+                        ·fn
+                          fn ·v_40, ·v_41, ·v_42:
+                            ·op_lt ·x_1, 0, fn ·v_45:
+                              ·op_or ·v_40, ·v_45, fn ·v_48:
+                                ·if ·v_48,
                                   fn:
-                                    ·v_27 ·x_1
+                                    ·v_41 ·v_40
                                   fn:
-                                    ·v_26 _
-                      fn ·v_68:
-                        ·v_68 1,
+                                    ·v_42 _
+                          fn ·v_57:
+                            ·v_57 ·v_38, fn:
+                              ·v_37 _, ·v_36
+                      fn ·v_82:
+                        ·v_82 1,
                           fn:
                             ·panic _
-                          fn ·v_71:
-                            ·v_67 ·v_71, fn ·v_58:
+                          fn:
+                            ·v_81 fn ·v_72:
                               ·export _
-              fn ·v_81:
-                ·v_77 ·v_81, fn ·v_58:
+              fn:
+                ·v_89 fn ·v_72:
                   ·export _
 
 
