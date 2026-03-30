@@ -36,15 +36,15 @@
 ;;   │   └── struct
 ;;   │       ├── $Num (field f64)     ← float / large number
 ;;   │       ├── $Str                 ← base string type
-;;   │       │     ├── $StrLit       ← string literal
-;;   │       │     ├── $StrTempl     ← string template (interpolated)
-;;   │       │     └── $StrRaw       ← raw / byte string
+;;   │       │     ├── $StrRaw        ← raw source bytes (data section)
+;;   │       │     ├── $StrTempl      ← string template (interpolated)
+;;   │       │     └── $StrRendered   ← rendered / formatted UTF-8 bytes
 ;;   │       ├── $List                ← list (opaque — internals in list.wat)
 ;;   │       ├── $Rec                 ← record (opaque — internals in hamt.wat)
 ;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
 ;;   │       └── $Closure (field (ref func))  ← base closure type
-;;   │             └── $ClosureN             ← subtypes add N capture fields (ref any)
+;;   │             └── $ClosureN              ← subtypes add N capture fields (ref any)
 ;;   │                   (emitter-generated per capture count)
 ;;   │
 ;;   └── func                         ← not GC-managed (opaque refs)
@@ -58,6 +58,36 @@
 ;;   keys/values — the caller casts (ref.cast (ref eq)) at the boundary.
 ;;   This is one cheap tag check per call, not per-node traversal.
 ;;   Internal ref.eq comparisons work directly on (ref eq).
+;;
+;;
+;; Runtime vs std-lib boundary:
+;; ────────────────────────────
+;;
+;;   Runtime (.wat files): direct-style primitives. No CPS, no user code
+;;   callbacks, no lazy value evaluation. Used by the compiler (emitted
+;;   code) and by std-lib internals.
+;;
+;;   Std-lib (fink code): CPS functions exposed to fink user code.
+;;   Formatters, equality protocols, anything that dispatches through
+;;   protocols or touches lazy values. Wraps runtime primitives.
+;;
+;;
+;; Value comparison (direct-style):
+;; ────────────────────────────────
+;;
+;;   Set membership, dict/record keys, and list_find require value
+;;   comparison. Only types that can be compared direct-style (no CPS,
+;;   no protocol dispatch) are valid:
+;;
+;;     i31ref       — ref.eq (identity)
+;;     $Num         — f64 comparison
+;;     $StrRaw      — compare (offset, length) pairs
+;;     $StrRendered — byte-level comparison
+;;
+;;   Templates, closures, records, lists, sets are NOT valid for these
+;;   operations until an Eq protocol exists in the std-lib.
+;;   Runtime deep_eq handles all built-in types via br_on_cast dispatch.
+;;   User-defined types will extend it via the Eq protocol (future).
 ;;
 ;;
 ;; Literals (phase 0):
@@ -101,17 +131,17 @@
     ;; Enables single br_on_cast check for "is this a string?"
     (type $Str (struct))
 
-      ;; $StrLit — string literal (sub $Str).
+      ;; $StrRaw — raw source bytes from literals (sub $Str).
       ;; TODO: field layout TBD (str.wat in progress)
-      (type $StrLit (sub $Str (struct)))
+      (type $StrRaw (sub $Str (struct)))
 
       ;; $StrTempl — string template / interpolated (sub $Str).
       ;; TODO: field layout TBD (str.wat in progress)
       (type $StrTempl (sub $Str (struct)))
 
-      ;; $StrRaw — raw / byte string (sub $Str).
+      ;; $StrRendered — rendered / formatted UTF-8 bytes (sub $Str).
       ;; TODO: field layout TBD (str.wat in progress)
-      (type $StrRaw (sub $Str (struct)))
+      (type $StrRendered (sub $Str (struct)))
 
     ;; $List — sequence. Opaque base type.
     ;; Internals (cons cell layout) defined in list.wat as subtypes.

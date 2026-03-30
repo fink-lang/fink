@@ -21,12 +21,17 @@
 ;;   - Keys and values are (ref eq) — non-nullable. This allows i31ref
 ;;     (for interned symbol ids) and any GC struct/array ref.
 ;;   - Return values are (ref null eq) where null signals "not found".
-;;   - Key equality uses ref.eq (identity). For interned symbols this
-;;     is correct. General dict keys will need a hash+eq protocol later.
+;;   - Key equality uses ref.eq (identity) in phase 0. Will be extended
+;;     to direct-style deep_eq supporting: i31ref, $Num, $StrRaw,
+;;     $StrRendered. General dict keys with user-defined Eq protocol
+;;     will live in the std-lib (CPS).
 ;;
 ;; Hashing:
 ;;   - Phase 0 uses i31.get_s on the key ref as the hash. This works
-;;     for interned symbol ids (small ints). General hashing is TBD.
+;;     for interned symbol ids (small ints). Will be extended to handle
+;;     $Num, $StrRaw, $StrRendered via direct-style dispatch.
+;;     General hashing for user-defined types via Hash protocol (future,
+;;     std-lib, CPS).
 ;;
 ;; Exported functions:
 ;;   $hamt_empty   : () -> (ref $HamtNode)
