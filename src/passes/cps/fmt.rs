@@ -291,7 +291,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
     // Pattern matching primitives
-    BuiltIn::MatchValue   => "·match_value".into(),
     BuiltIn::MatchSeq     => "·match_seq".into(),
     BuiltIn::MatchNext    => "·match_next".into(),
     BuiltIn::MatchDone    => "·match_done".into(),
@@ -301,8 +300,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::MatchField   => "·match_field".into(),
     BuiltIn::MatchIf      => "·match_if".into(),
     BuiltIn::MatchApp     => "·match_app".into(),
-    BuiltIn::MatchBlock   => "·match_block".into(),
-    BuiltIn::MatchArm     => "·match_arm".into(),
     // Async/concurrency
     BuiltIn::Yield        => "·yield".into(),
     // Module
@@ -352,7 +349,7 @@ fn render_cont_body(cont: &Cont<'_>, bound_name: &str, bound_id: CpsId, ctx: &Ct
 }
 
 /// Render a `body: Cont` field as a plain expression for use in a no-arg `fn:` lambda
-/// (e.g. MatchIf, MatchValue, MatchSeq, MatchNotDone, MatchRec).
+/// (e.g. MatchIf, MatchSeq, MatchNotDone, MatchRec).
 /// - `Cont::Expr { body, .. }` → render `body`.
 /// - `Cont::Ref(_)` → `·panic` (these nodes always chain to more expressions; Ref is
 ///   structurally unexpected here but we fall back gracefully).
@@ -453,14 +450,14 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       };
       // Match builtins with no-arg body use render_cont_as_expr (renders as `fn: body`).
       let is_noarg_match = matches!(func, Callable::BuiltIn(
-        BuiltIn::MatchValue | BuiltIn::MatchNotDone | BuiltIn::MatchIf
+        BuiltIn::MatchNotDone | BuiltIn::MatchIf
       ));
       // Match builtins render as `·match_* args, cont` (no ·apply prefix).
       let is_match_builtin = is_noarg_match || matches!(func, Callable::BuiltIn(
         BuiltIn::MatchSeq | BuiltIn::MatchNext |
         BuiltIn::MatchDone | BuiltIn::MatchRest |
         BuiltIn::MatchRec | BuiltIn::MatchField |
-        BuiltIn::MatchApp | BuiltIn::MatchBlock | BuiltIn::MatchArm
+        BuiltIn::MatchApp
       ));
       if is_match_builtin {
         // Match builtins: render all args inline (Arg::Cont renders as lambdas).

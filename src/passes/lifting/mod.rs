@@ -535,7 +535,7 @@ fn extract_from_body<'src>(
           let is_closure_app = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
           if is_closure_app && !cap_entries.is_empty() {
             // Don't hoist the cont itself (infinite chain), but DO recurse into
-            // its body to extract nested structure (·match_arm args etc.).
+            // its body to extract nested structure.
             let cont_args_back: Vec<BindNode> = cont_params.into_iter().map(|p| match p {
               Param::Name(b) | Param::Spread(b) => b,
             }).collect();

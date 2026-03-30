@@ -224,9 +224,10 @@ pub enum BuiltIn {
   FnClosure,
   // Pattern matching primitives — emitted directly by the CPS transform.
   // Each takes val + fail as args; cont receives match results.
-  MatchValue, MatchSeq, MatchNext, MatchDone, MatchNotDone,
+  // MatchValue/MatchBlock/MatchArm have been eliminated — literals and match
+  // arms are lowered to plain PatternMatch (LetFn + App + If).
+  MatchSeq, MatchNext, MatchDone, MatchNotDone,
   MatchRest, MatchRec, MatchField, MatchIf, MatchApp,
-  MatchBlock, MatchArm,
   // Yield — suspend execution, passing a value to the scheduler.
   // Args: value; cont receives the resumed value.
   Yield,
@@ -428,7 +429,6 @@ pub enum ExprKind<'src> {
 
   // ---------------------------------------------------------------------------
   // Pattern matching — Match* primitives are emitted as App { BuiltIn::Match*, args }.
-  // MatchArm and MatchBlock use Arg::Cont and Arg::Expr to embed arm structure.
   // Fail conts are encoded as ValKind::Panic or ValKind::ContRef in args.
   //
   // Matcher invariant: matchers work with synthetic temps only (Bind::Synth).

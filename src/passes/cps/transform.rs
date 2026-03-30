@@ -934,7 +934,7 @@ struct ArmCps<'src> {
 /// a match-block wrapper fn m_0(subj, k): mp_1(subj, k, fn: ... mp_N(subj, k, fn: panic))
 /// followed by m_0(subjects, outer_cont) as Pending::App.
 ///
-/// This replaces MatchBlock + MatchArm builtins — downstream sees only LetFn + App + If.
+/// Downstream sees only LetFn + App + If — no MatchBlock/MatchArm builtins.
 fn lower_match<'src>(
   g: &mut Gen,
   subjects: &'src [Node<'src>],
@@ -1284,7 +1284,7 @@ fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Cont<'src>) -> Ex
 
 /// Like `wrap`, but with an explicit fail cont.
 /// `fail_id`: `None` → emit `·panic`; `Some(id)` → emit a call to that cont.
-/// Used for arm matchers inside a MatchBlock where `fail_id` is the matcher's fail param.
+/// Used for arm matchers where `fail_id` is the matcher's fail param.
 /// `tail` is the continuation for the innermost (last) binding.
 /// Each non-leaf binding gets `Cont::Expr { args: vec![fresh], body: Box::new(next_expr) }`.
 fn wrap_with_fail<'src>(
@@ -1592,8 +1592,8 @@ pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResul
 /// `val` is the scrutinee already lowered from the rhs.
 /// Returns the Bind of the primary binding (used by the caller to construct Ret).
 ///
-/// Implemented: Ident, Wildcard, BindRight, InfixOp (guard + range), Apply (→ MatchGuard/MatchIf),
-///              LitInt/Float/Bool/Str (→ MatchValue), LitSeq (plain elems + Spread tail),
+/// Implemented: Ident, Wildcard, BindRight, InfixOp (guard + range), Apply (→ MatchGuard),
+///              LitInt/Float/Bool/Str (→ PatternMatch), LitSeq (plain elems + Spread tail),
 ///              LitRec (fields + spread variants), Range (→ lower_range + MatchGuard w/ ·op_in).
 /// TODO: Apply → MatchApp (after name resolution distinguishes predicate from constructor).
 /// TODO(future): StrTempl pattern matching — e.g. `'hello ${name}'` in pattern position;
