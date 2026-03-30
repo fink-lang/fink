@@ -88,6 +88,7 @@
 
 use std::collections::BTreeMap;
 
+use gimli::LittleEndian;
 use wasmparser::{Payload, Parser};
 
 // -- Public API ---------------------------------------------------------------
@@ -417,7 +418,8 @@ struct LinkContext {
     func_decls: Vec<u32>,
 
     // Accumulated code bodies (raw, to be rewritten).
-    code_bodies: Vec<(usize, Vec<u8>)>, // (fragment_index, raw_body)
+    // (fragment_index, is_user_code, raw_body)
+    code_bodies: Vec<(usize, bool, Vec<u8>)>,
 
     // Merged exports.
     exports: Vec<(String, wasmparser::ExternalKind, u32)>,
@@ -434,7 +436,7 @@ struct LinkContext {
     global_names: BTreeMap<u32, String>,
     type_names: BTreeMap<u32, String>,
 
-    // DWARF sections to pass through (from user code fragment).
+    // DWARF sections from user code fragment (adjusted before emit).
     dwarf_sections: Vec<(String, Vec<u8>)>,
 
     // Build an export lookup: module_name → export_name → new_func_idx.
@@ -577,8 +579,10 @@ fn merge_functions(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 
 fn merge_code(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
     for (i, frag) in fragments.iter().enumerate() {
+        let is_user = frag.module_name.is_empty();
         for &(start, end) in &frag.code_body_ranges {
-            ctx.code_bodies.push((i, frag.wasm[start..end].to_vec()));
+            ctx.code_bodies
+                .push((i, is_user, frag.wasm[start..end].to_vec()));
         }
     }
 }
@@ -1117,11 +1121,16 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
     }
 
     // 6. Code section — rewrite bodies with remapped indices.
+    // Track runtime code byte size for DWARF offset adjustment.
+    let mut runtime_code_size = 0u32;
     if !ctx.code_bodies.is_empty() {
         let mut code = wasm_encoder::CodeSection::new();
-        for (frag_idx, raw_body) in &ctx.code_bodies {
+        for (frag_idx, is_user, raw_body) in &ctx.code_bodies {
             let remap = &ctx.remaps[*frag_idx];
             let rewritten = rewrite_body(raw_body, remap);
+            if !is_user {
+                runtime_code_size += rewritten.len() as u32;
+            }
             code.raw(&rewritten);
         }
         module.section(&code);
@@ -1174,12 +1183,23 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
         module.section(&names);
     }
 
-    // 8. DWARF custom sections (pass through from user code).
-    for (name, data) in &ctx.dwarf_sections {
-        module.section(&wasm_encoder::CustomSection {
-            name: std::borrow::Cow::Borrowed(name),
-            data: std::borrow::Cow::Borrowed(data),
-        });
+    // 8. DWARF custom sections — adjust addresses by runtime code offset.
+    if runtime_code_size > 0 && !ctx.dwarf_sections.is_empty() {
+        let adjusted = adjust_dwarf(&ctx.dwarf_sections, runtime_code_size);
+        for (name, data) in &adjusted {
+            module.section(&wasm_encoder::CustomSection {
+                name: std::borrow::Cow::Borrowed(name),
+                data: std::borrow::Cow::Borrowed(data),
+            });
+        }
+    } else {
+        // No offset needed — pass through unchanged.
+        for (name, data) in &ctx.dwarf_sections {
+            module.section(&wasm_encoder::CustomSection {
+                name: std::borrow::Cow::Borrowed(name),
+                data: std::borrow::Cow::Borrowed(data),
+            });
+        }
     }
 
     LinkResult {
@@ -1187,6 +1207,207 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
     }
 }
 
+
+/// Adjust DWARF section addresses by a byte offset.
+///
+/// Reads the user code's DWARF line program, adds `offset` to every
+/// address, and re-serializes all DWARF sections. Non-line sections
+/// (.debug_info, .debug_abbrev, .debug_str) are rebuilt from scratch
+/// since gimli::write produces a self-consistent set.
+fn adjust_dwarf(
+    sections: &[(String, Vec<u8>)],
+    offset: u32,
+) -> Vec<(String, Vec<u8>)> {
+    use gimli::EndianSlice;
+
+    // Collect raw section data by name.
+    let mut debug_info_data = &[][..];
+    let mut debug_abbrev_data = &[][..];
+    let mut debug_line_data = &[][..];
+    let mut debug_str_data = &[][..];
+
+    for (name, data) in sections {
+        match name.as_str() {
+            ".debug_info" => debug_info_data = data,
+            ".debug_abbrev" => debug_abbrev_data = data,
+            ".debug_line" => debug_line_data = data,
+            ".debug_str" => debug_str_data = data,
+            _ => {}
+        }
+    }
+
+    // If no line data, just pass through.
+    if debug_line_data.is_empty() || debug_info_data.is_empty() {
+        return sections.to_vec();
+    }
+
+    // Parse DWARF to extract line program rows.
+    let debug_info = gimli::DebugInfo::new(debug_info_data, LittleEndian);
+    let debug_abbrev =
+        gimli::DebugAbbrev::new(debug_abbrev_data, LittleEndian);
+    let debug_line = gimli::DebugLine::new(debug_line_data, LittleEndian);
+    let _debug_str = gimli::DebugStr::new(debug_str_data, LittleEndian);
+
+    let mut units = debug_info.units();
+    let unit_header = match units.next() {
+        Ok(Some(h)) => h,
+        _ => return sections.to_vec(),
+    };
+    let abbrevs = match debug_abbrev
+        .abbreviations(unit_header.debug_abbrev_offset())
+    {
+        Ok(a) => a,
+        Err(_) => return sections.to_vec(),
+    };
+
+    // Extract source file name and producer from root DIE.
+    let mut cursor = unit_header.entries(&abbrevs);
+    if cursor.next_dfs().is_err() {
+        return sections.to_vec();
+    }
+    let root = match cursor.current() {
+        Some(e) => e,
+        None => return sections.to_vec(),
+    };
+
+    let source_name = root
+        .attr_value(gimli::DW_AT_name)
+        .and_then(|v| {
+            if let gimli::AttributeValue::String(s) = v {
+                Some(s.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+
+    let stmt_list = match root.attr_value(gimli::DW_AT_stmt_list) {
+        Some(gimli::AttributeValue::DebugLineRef(o)) => o,
+        _ => return sections.to_vec(),
+    };
+
+    let line_program = match debug_line.program(
+        stmt_list,
+        unit_header.address_size(),
+        None::<EndianSlice<'_, LittleEndian>>,
+        None::<EndianSlice<'_, LittleEndian>>,
+    ) {
+        Ok(p) => p,
+        Err(_) => return sections.to_vec(),
+    };
+
+    // Execute line program, collecting rows with adjusted addresses.
+    struct Row {
+        address: u64,
+        line: u64,
+        col: u64,
+    }
+
+    let mut rows_data = Vec::new();
+    let mut rows = line_program.rows();
+    while let Ok(Some((_header, row))) = rows.next_row() {
+        if row.end_sequence() {
+            continue;
+        }
+        let line = row.line().map(|l| l.get()).unwrap_or(0);
+        if line == 0 {
+            continue;
+        }
+        let col = match row.column() {
+            gimli::ColumnType::LeftEdge => 0,
+            gimli::ColumnType::Column(c) => c.get(),
+        };
+        rows_data.push(Row {
+            address: row.address() + offset as u64,
+            line,
+            col,
+        });
+    }
+
+    // Re-emit DWARF with adjusted addresses using gimli::write.
+    let encoding = gimli::Encoding {
+        format: gimli::Format::Dwarf32,
+        version: 4,
+        address_size: 4,
+    };
+
+    let line_program_w = gimli::write::LineProgram::new(
+        encoding,
+        Default::default(),
+        gimli::write::LineString::String(b".".to_vec()),
+        None,
+        gimli::write::LineString::String(source_name.as_bytes().to_vec()),
+        None,
+    );
+
+    let mut dwarf = gimli::write::DwarfUnit::new(encoding);
+    let root_id = dwarf.unit.root();
+    dwarf.unit.get_mut(root_id).set(
+        gimli::DW_AT_name,
+        gimli::write::AttributeValue::String(
+            source_name.as_bytes().to_vec(),
+        ),
+    );
+    dwarf.unit.get_mut(root_id).set(
+        gimli::DW_AT_producer,
+        gimli::write::AttributeValue::String(b"fink".to_vec()),
+    );
+    dwarf.unit.get_mut(root_id).set(
+        gimli::DW_AT_language,
+        gimli::write::AttributeValue::Udata(0x0001),
+    );
+    dwarf.unit.get_mut(root_id).set(
+        gimli::DW_AT_stmt_list,
+        gimli::write::AttributeValue::LineProgramRef,
+    );
+
+    dwarf.unit.line_program = line_program_w;
+    let dir_id = dwarf.unit.line_program.default_directory();
+    let file_id = dwarf.unit.line_program.add_file(
+        gimli::write::LineString::String(
+            source_name.as_bytes().to_vec(),
+        ),
+        dir_id,
+        None,
+    );
+
+    if !rows_data.is_empty() {
+        let lp = &mut dwarf.unit.line_program;
+        lp.begin_sequence(Some(gimli::write::Address::Constant(0)));
+
+        for r in &rows_data {
+            let row = lp.row();
+            row.address_offset = r.address;
+            row.file = file_id;
+            row.line = r.line;
+            row.column = r.col;
+            row.is_statement = true;
+            lp.generate_row();
+        }
+
+        let last_addr = rows_data.last().map(|r| r.address + 1).unwrap_or(1);
+        lp.end_sequence(last_addr);
+    }
+
+    // Serialize.
+    let mut out_sections =
+        gimli::write::Sections::new(gimli::write::EndianVec::new(LittleEndian));
+    if dwarf.write(&mut out_sections).is_err() {
+        return sections.to_vec();
+    }
+
+    let mut result = Vec::new();
+    let _: Result<(), ()> =
+        out_sections.for_each(|section_id, writer| {
+            let data = writer.slice();
+            if !data.is_empty() {
+                result.push((section_id.name().to_string(), data.to_vec()));
+            }
+            Ok(())
+        });
+
+    result
+}
 
 /// Re-encode a type section from wasmparser types into wasm-encoder,
 /// applying the remap table to all concrete type index references.
@@ -1705,5 +1926,191 @@ mod tests {
             }
         }
         size
+    }
+
+    /// Extract DWARF line program addresses from a WASM module.
+    fn get_dwarf_addresses(wasm: &[u8]) -> Vec<u32> {
+        use gimli::EndianSlice;
+
+        let mut debug_info_data = &[][..];
+        let mut debug_abbrev_data = &[][..];
+        let mut debug_line_data = &[][..];
+
+        for payload in Parser::new(0).parse_all(wasm) {
+            if let Ok(Payload::CustomSection(reader)) = payload {
+                match reader.name() {
+                    ".debug_info" => debug_info_data = reader.data(),
+                    ".debug_abbrev" => debug_abbrev_data = reader.data(),
+                    ".debug_line" => debug_line_data = reader.data(),
+                    _ => {}
+                }
+            }
+        }
+
+        if debug_info_data.is_empty() || debug_line_data.is_empty() {
+            return Vec::new();
+        }
+
+        let debug_info =
+            gimli::DebugInfo::new(debug_info_data, LittleEndian);
+        let debug_abbrev =
+            gimli::DebugAbbrev::new(debug_abbrev_data, LittleEndian);
+        let debug_line =
+            gimli::DebugLine::new(debug_line_data, LittleEndian);
+
+        let mut units = debug_info.units();
+        let unit_header = match units.next() {
+            Ok(Some(h)) => h,
+            _ => return Vec::new(),
+        };
+        let abbrevs = match debug_abbrev
+            .abbreviations(unit_header.debug_abbrev_offset())
+        {
+            Ok(a) => a,
+            Err(_) => return Vec::new(),
+        };
+
+        let mut cursor = unit_header.entries(&abbrevs);
+        if cursor.next_dfs().is_err() {
+            return Vec::new();
+        }
+        let root = match cursor.current() {
+            Some(e) => e,
+            None => return Vec::new(),
+        };
+
+        let stmt_list = match root.attr_value(gimli::DW_AT_stmt_list) {
+            Some(gimli::AttributeValue::DebugLineRef(o)) => o,
+            _ => return Vec::new(),
+        };
+
+        let line_program = match debug_line.program(
+            stmt_list,
+            unit_header.address_size(),
+            None::<EndianSlice<'_, LittleEndian>>,
+            None::<EndianSlice<'_, LittleEndian>>,
+        ) {
+            Ok(p) => p,
+            Err(_) => return Vec::new(),
+        };
+
+        let mut addrs = Vec::new();
+        let mut rows = line_program.rows();
+        while let Ok(Some((_header, row))) = rows.next_row() {
+            if !row.end_sequence() {
+                addrs.push(row.address() as u32);
+            }
+        }
+        addrs
+    }
+
+    #[test]
+    fn t_link_dwarf_offset_adjusted() {
+        // DWARF addresses should be shifted by the size of prepended
+        // runtime code bodies.
+        use crate::passes::wasm::dwarf;
+        use crate::passes::wasm::emit::OffsetMapping;
+        use crate::passes::ast::lexer::{Loc, Pos};
+
+        let wasm_rt = wat(
+            r#"(module
+                (func $helper (result i32) i32.const 1)
+                (func $helper2 (result i32) i32.const 2)
+                (export "helper" (func $helper))
+            )"#,
+        );
+
+        // Build user module with real DWARF.
+        let mut user_wasm = wat(
+            r#"(module
+                (func $main (result i32) i32.const 42)
+                (export "main" (func $main))
+            )"#,
+        );
+
+        // Create DWARF with known addresses.
+        let mappings = vec![
+            OffsetMapping {
+                wasm_offset: 10,
+                loc: Loc {
+                    start: Pos {
+                        idx: 0,
+                        line: 1,
+                        col: 1,
+                    },
+                    end: Pos {
+                        idx: 0,
+                        line: 1,
+                        col: 5,
+                    },
+                },
+            },
+            OffsetMapping {
+                wasm_offset: 20,
+                loc: Loc {
+                    start: Pos {
+                        idx: 0,
+                        line: 2,
+                        col: 1,
+                    },
+                    end: Pos {
+                        idx: 0,
+                        line: 2,
+                        col: 10,
+                    },
+                },
+            },
+        ];
+
+        let dwarf_sections = dwarf::emit_dwarf("test.fnk", None, &mappings);
+        for section in &dwarf_sections {
+            append_custom_section(
+                &mut user_wasm,
+                &section.name,
+                &section.data,
+            );
+        }
+
+        // Get original addresses.
+        let original_addrs = get_dwarf_addresses(&user_wasm);
+        assert_eq!(original_addrs, vec![10, 20]);
+
+        // Link with runtime prepended.
+        let result = link(&[
+            LinkInput {
+                module_name: "@fink/runtime/lib".into(),
+                wasm: wasm_rt,
+            },
+            LinkInput {
+                module_name: String::new(),
+                wasm: user_wasm,
+            },
+        ]);
+
+        validate(&result.wasm);
+
+        // DWARF addresses should be shifted by runtime code size.
+        let adjusted_addrs = get_dwarf_addresses(&result.wasm);
+        assert!(
+            !adjusted_addrs.is_empty(),
+            "should have DWARF addresses"
+        );
+        // All addresses should be greater than originals.
+        assert!(
+            adjusted_addrs[0] > 10,
+            "first address {} should be shifted past 10",
+            adjusted_addrs[0]
+        );
+        assert!(
+            adjusted_addrs[1] > 20,
+            "second address {} should be shifted past 20",
+            adjusted_addrs[1]
+        );
+        // The offset between the two should be preserved.
+        assert_eq!(
+            adjusted_addrs[1] - adjusted_addrs[0],
+            10,
+            "relative offset between addresses should be preserved"
+        );
     }
 }
