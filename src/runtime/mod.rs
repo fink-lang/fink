@@ -411,4 +411,289 @@ mod tests {
     }
     assert_eq!(hamt_size(&mut store, &size_fn, &node), 50);
   }
+
+  // -- List tests -----------------------------------------------------
+
+  fn load_list() -> (Store<()>, Instance) {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let wat = include_bytes!("list.wat");
+    let module = Module::new(&engine, &wat[..]).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
+  }
+
+  fn list_empty(store: &mut Store<()>, nil_fn: &Func) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    nil_fn.call(store, &[], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn list_append(store: &mut Store<()>, cons_fn: &Func, head: u32, tail: &Val) -> Val {
+    let h = i31_key(store, head);
+    let mut result = [Val::AnyRef(None)];
+    cons_fn.call(store, &[h, tail.clone()], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn list_head(store: &mut Store<()>, head_fn: &Func, list: &Val) -> Option<u32> {
+    let mut result = [Val::AnyRef(None)];
+    head_fn.call(&mut *store, &[list.clone()], &mut result).unwrap();
+    get_i31(store, &result[0])
+  }
+
+  fn list_tail(store: &mut Store<()>, tail_fn: &Func, list: &Val) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    tail_fn.call(store, &[list.clone()], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn list_pop(store: &mut Store<()>, pop_fn: &Func, list: &Val) -> (Option<u32>, Val) {
+    let mut result = [Val::AnyRef(None), Val::AnyRef(None)];
+    pop_fn.call(&mut *store, &[list.clone()], &mut result).unwrap();
+    (get_i31(store, &result[0]), result[1].clone())
+  }
+
+  fn list_size(store: &mut Store<()>, len_fn: &Func, list: &Val) -> i32 {
+    let mut result = [Val::I32(0)];
+    len_fn.call(store, &[list.clone()], &mut result).unwrap();
+    match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
+  }
+
+  fn list_concat(store: &mut Store<()>, fn_: &Func, a: &Val, b: &Val) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    fn_.call(store, &[a.clone(), b.clone()], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  /// Build a list from a slice: [1, 2, 3] → cons(1, cons(2, cons(3, nil)))
+  fn build_list(store: &mut Store<()>, nil_fn: &Func, cons_fn: &Func, items: &[u32]) -> Val {
+    let mut list = list_empty(store, nil_fn);
+    for &item in items.iter().rev() {
+      list = list_append(store, cons_fn, item, &list);
+    }
+    list
+  }
+
+  /// Collect a list into a vec for easy assertion.
+  fn collect_list(store: &mut Store<()>, head_fn: &Func, tail_fn: &Func, list: &Val) -> Vec<u32> {
+    let mut result = vec![];
+    let mut current = list.clone();
+    loop {
+      match &current {
+        Val::AnyRef(None) => break,
+        Val::AnyRef(Some(_)) => {
+          result.push(list_head(store, head_fn, &current).unwrap());
+          current = list_tail(store, tail_fn, &current);
+        }
+        _ => break,
+      }
+    }
+    result
+  }
+
+  #[test]
+  fn test_list_empty() {
+    let (mut store, instance) = load_list();
+    let empty_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let size_fn = instance.get_func(&mut store, "list_size").unwrap();
+
+    let nil = list_empty(&mut store, &empty_fn);
+    assert_eq!(list_size(&mut store, &size_fn, &nil), 0);
+  }
+
+  #[test]
+  fn test_list_append_and_head_tail() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let head_fn = instance.get_func(&mut store, "list_head").unwrap();
+    let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
+    let size_fn = instance.get_func(&mut store, "list_size").unwrap();
+
+    // [1, 2, 3]
+    let list = build_list(&mut store, &nil_fn, &cons_fn, &[1, 2, 3]);
+
+    assert_eq!(list_size(&mut store, &size_fn, &list), 3);
+    assert_eq!(list_head(&mut store, &head_fn, &list), Some(1));
+
+    let rest = list_tail(&mut store, &tail_fn, &list);
+    assert_eq!(list_head(&mut store, &head_fn, &rest), Some(2));
+
+    let rest2 = list_tail(&mut store, &tail_fn, &rest);
+    assert_eq!(list_head(&mut store, &head_fn, &rest2), Some(3));
+
+    let rest3 = list_tail(&mut store, &tail_fn, &rest2);
+    assert_eq!(list_size(&mut store, &size_fn, &rest3), 0);
+  }
+
+  #[test]
+  fn test_list_pop() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let pop_fn = instance.get_func(&mut store, "list_pop").unwrap();
+    let size_fn = instance.get_func(&mut store, "list_size").unwrap();
+
+    let list = build_list(&mut store, &nil_fn, &cons_fn, &[10, 20, 30]);
+
+    let (h, rest) = list_pop(&mut store, &pop_fn, &list);
+    assert_eq!(h, Some(10));
+
+    let (h2, rest2) = list_pop(&mut store, &pop_fn, &rest);
+    assert_eq!(h2, Some(20));
+
+    let (h3, rest3) = list_pop(&mut store, &pop_fn, &rest2);
+    assert_eq!(h3, Some(30));
+
+    assert_eq!(list_size(&mut store, &size_fn, &rest3), 0);
+  }
+
+  #[test]
+  fn test_list_size() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let len_fn = instance.get_func(&mut store, "list_size").unwrap();
+
+    let nil = list_empty(&mut store, &nil_fn);
+    assert_eq!(list_size(&mut store, &len_fn, &nil), 0);
+
+    let list = build_list(&mut store, &nil_fn, &cons_fn, &[1, 2, 3, 4, 5]);
+    assert_eq!(list_size(&mut store, &len_fn, &list), 5);
+  }
+
+  #[test]
+  fn test_list_concat() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let head_fn = instance.get_func(&mut store, "list_head").unwrap();
+    let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
+    let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
+
+    let a = build_list(&mut store, &nil_fn, &cons_fn, &[1, 2]);
+    let b = build_list(&mut store, &nil_fn, &cons_fn, &[3, 4, 5]);
+
+    let merged = list_concat(&mut store, &concat_fn, &a, &b);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &merged), vec![1, 2, 3, 4, 5]);
+  }
+
+  #[test]
+  fn test_list_concat_empty() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let head_fn = instance.get_func(&mut store, "list_head").unwrap();
+    let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
+    let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
+
+    let nil = list_empty(&mut store, &nil_fn);
+    let a = build_list(&mut store, &nil_fn, &cons_fn, &[1, 2]);
+
+    // empty ++ a = a
+    let r1 = list_concat(&mut store, &concat_fn, &nil, &a);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &r1), vec![1, 2]);
+
+    // a ++ empty = a
+    let r2 = list_concat(&mut store, &concat_fn, &a, &nil);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &r2), vec![1, 2]);
+  }
+
+  #[test]
+  fn test_list_structural_sharing() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let head_fn = instance.get_func(&mut store, "list_head").unwrap();
+    let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
+
+    // shared = [2, 3]
+    let shared = build_list(&mut store, &nil_fn, &cons_fn, &[2, 3]);
+
+    // v1 = [1, 2, 3] (prepend 1 to shared)
+    let v1 = list_append(&mut store, &cons_fn, 1, &shared);
+
+    // v2 = [9, 2, 3] (prepend 9 to shared)
+    let v2 = list_append(&mut store, &cons_fn, 9, &shared);
+
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &v1), vec![1, 2, 3]);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &v2), vec![9, 2, 3]);
+  }
+
+  #[test]
+  fn test_list_get() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let get_fn = instance.get_func(&mut store, "list_get").unwrap();
+
+    let list = build_list(&mut store, &nil_fn, &cons_fn, &[10, 20, 30]);
+
+    let mut result = [Val::AnyRef(None)];
+
+    // Valid indices.
+    get_fn.call(&mut store, &[list.clone(), Val::I32(0)], &mut result).unwrap();
+    assert_eq!(get_i31(&store, &result[0]), Some(10));
+
+    get_fn.call(&mut store, &[list.clone(), Val::I32(1)], &mut result).unwrap();
+    assert_eq!(get_i31(&store, &result[0]), Some(20));
+
+    get_fn.call(&mut store, &[list.clone(), Val::I32(2)], &mut result).unwrap();
+    assert_eq!(get_i31(&store, &result[0]), Some(30));
+
+    // Out of bounds.
+    get_fn.call(&mut store, &[list.clone(), Val::I32(3)], &mut result).unwrap();
+    assert!(matches!(&result[0], Val::AnyRef(None)));
+
+    // Negative index.
+    get_fn.call(&mut store, &[list.clone(), Val::I32(-1)], &mut result).unwrap();
+    assert!(matches!(&result[0], Val::AnyRef(None)));
+
+    // Empty list.
+    let nil = list_empty(&mut store, &nil_fn);
+    get_fn.call(&mut store, &[nil, Val::I32(0)], &mut result).unwrap();
+    assert!(matches!(&result[0], Val::AnyRef(None)));
+  }
+
+  #[test]
+  fn test_list_find() {
+    let (mut store, instance) = load_list();
+    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let find_fn = instance.get_func(&mut store, "list_find").unwrap();
+
+    let list = build_list(&mut store, &nil_fn, &cons_fn, &[10, 20, 30, 40]);
+
+    // Find existing elements.
+    let v10 = i31_key(&mut store, 10);
+    let v30 = i31_key(&mut store, 30);
+    let v40 = i31_key(&mut store, 40);
+    let v99 = i31_key(&mut store, 99);
+
+    let mut result = [Val::I32(0)];
+    find_fn.call(&mut store, &[list.clone(), v10], &mut result).unwrap();
+    assert_eq!(result[0].unwrap_i32(), 0);
+
+    find_fn.call(&mut store, &[list.clone(), v30], &mut result).unwrap();
+    assert_eq!(result[0].unwrap_i32(), 2);
+
+    find_fn.call(&mut store, &[list.clone(), v40], &mut result).unwrap();
+    assert_eq!(result[0].unwrap_i32(), 3);
+
+    // Not found.
+    find_fn.call(&mut store, &[list.clone(), v99], &mut result).unwrap();
+    assert_eq!(result[0].unwrap_i32(), -1);
+
+    // Empty list.
+    let nil = list_empty(&mut store, &nil_fn);
+    let v1 = i31_key(&mut store, 1);
+    find_fn.call(&mut store, &[nil, v1], &mut result).unwrap();
+    assert_eq!(result[0].unwrap_i32(), -1);
+  }
 }
