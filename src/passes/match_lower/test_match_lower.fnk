@@ -1,0 +1,212 @@
+---
+match lowering — rewrites Match* builtins into primitive CPS (If/LetFn/App)
+---
+
+# Input is a Fink module; output is the CPS after match lowering.
+# At this stage the IR is nested (pre-lifting), no closures.
+#
+# Match* builtins should be gone from the output — replaced by
+# If nodes, comparisons, and regular function calls.
+#
+# Test format:
+#   test 'name', fn:
+#     expect match_lower fink":
+#       <fink source>
+#
+#     | equals fink":
+#       <expected CPS after match lowering>
+
+
+{test, expect, equals, fink, match_lower} = import '!fake'
+
+
+# ---
+# guarded bind
+# ---
+
+# test 'guard bind', fn:
+#   expect match_lower fink":
+#     a > 1 = 5
+#     a
+
+#   | equals fink":
+#     TODO
+
+
+---
+literal matching — single arm
+---
+
+test 'match literal single arm', fn:
+  expect match_lower fink":
+    match 1:
+      1: 42
+
+  | equals fink":
+    ·match_arm
+      fn ·v_6, ·v_4, ·v_5:
+        ·match_value ·v_6, 1, ·v_4, fn:
+          ·v_5 _
+      fn ·v_9:
+        ·v_9 42
+      fn ·v_16:
+        ·match_block 1, ·v_16, fn ·v_18:
+          ·export _
+
+
+test 'match literal first of two arms', fn:
+  expect match_lower fink":
+    match 1:
+      0: 42
+      _: 99
+
+  | equals fink":
+    ·match_arm
+      fn ·v_6, ·v_4, ·v_5:
+        ·match_value ·v_6, 0, ·v_4, fn:
+          ·v_5 _
+      fn ·v_9:
+        ·v_9 42
+      fn ·v_16:
+        ·match_arm
+          fn ·v_20, ·v_18, ·v_19:
+            ·v_19 _
+          fn ·v_22:
+            ·v_22 99
+          fn ·v_28:
+            ·match_block 1, ·v_16, ·v_28, fn ·v_30:
+              ·export _
+
+
+
+test 'match variable binding', fn:
+  expect match_lower fink":
+    match 5:
+      x: x + 1
+
+  | equals fink":
+    ·match_arm
+      fn ·v_7, ·v_5, ·v_6:
+        ·let ·v_7, fn ·x_0:
+          ·v_6 ·x_0
+      fn ·x_0, ·v_9:
+        ·op_plus ·x_0, 1, ·v_9
+      fn ·v_16:
+        ·match_block 5, ·v_16, fn ·v_18:
+          ·export _
+
+
+
+test 'match literal then variable', fn:
+  expect match_lower fink":
+    match 1:
+      0: 42
+      x: x + 1
+
+  | equals fink":
+    ·match_arm
+      fn ·v_7, ·v_5, ·v_6:
+        ·match_value ·v_7, 0, ·v_5, fn:
+          ·v_6 _
+      fn ·v_10:
+        ·v_10 42
+      fn ·v_17:
+        ·match_arm
+          fn ·v_21, ·v_19, ·v_20:
+            ·let ·v_21, fn ·x_0:
+              ·v_20 ·x_0
+          fn ·x_0, ·v_23:
+            ·op_plus ·x_0, 1, ·v_23
+          fn ·v_30:
+            ·match_block 1, ·v_17, ·v_30, fn ·v_32:
+              ·export _
+
+
+
+# Design sketch — target output for match with guard:
+#
+#   mb_2 = fn x, cont: cont x + 1
+#   mp_2 = fn subj, succ, fail:
+#     if subj > 0 or subj < 0,
+#       fn: mb_2 subj, succ
+#       fn: fail _
+#
+#   mb_1 = fn cont: cont 42
+#   mp_1 = fn subj, succ, fail:
+#     if subj > 0,
+#       fn: mb_1 succ
+#       fn: fail _
+#
+#   m_0 = fn subj, cont:
+#     mp_1 subj, cont,
+#       fn: mp_2 subj, cont,
+#         fn: panic _
+#
+#   m_0 1, outer_cont
+
+test 'match with guard', fn:
+  expect match_lower fink":
+    match 1:
+      x > 0: 42
+      x > 0 or x < 0: x + 1
+
+  | equals fink":
+    ·match_arm
+      fn ·v_8, ·v_6, ·v_7:
+        ·let ·v_8, fn ·x_0:
+          ·match_if ·op_gt, ·x_0, 0, ·v_6, fn:
+            ·v_7 _
+      fn ·x_0, ·v_12:
+        ·v_12 42
+      fn ·v_21:
+        ·match_arm
+          fn ·v_25, ·v_23, ·v_24:
+            ·let ·v_25, fn ·x_1:
+              ·op_gt ·x_1, 0, fn ·v_29:
+                ·op_lt ·x_1, 0, fn ·v_33:
+                  ·match_if ·op_or, ·v_29, ·v_33, ·v_23, fn:
+                    ·v_24 _
+          fn ·x_1, ·v_35:
+            ·op_plus ·x_1, 1, ·v_35
+          fn ·v_50:
+            ·match_block 1, ·v_21, ·v_50, fn ·v_52:
+              ·export _
+
+
+
+
+
+
+test 'record destructure with guard', fn:
+  expect match_lower fink":
+    x = 1
+    y = 3
+    match foo:
+      {x, y: z}: x + y + z
+      {z > 1 or z < 1}: x + y + z
+
+  | equals fink":
+    ·let 1, fn ·x_0:
+      ·let 3, fn ·y_1:
+        ·match_arm
+          fn ·v_15, ·v_13, ·v_14:
+            ·match_rec ·v_15, ·v_13, fn ·v_17:
+              ·match_field ·v_17, 'x', ·v_13, fn ·v_18, ·v_19:
+                ·let ·v_18, fn ·x_2:
+                  ·match_field ·v_19, 'y', ·v_13, fn ·v_22, ·v_23:
+                    ·let ·v_22, fn ·z_3:
+                      ·v_14 ·z_3
+          fn ·x_2, ·z_3, ·v_27:
+            ·op_plus ·x_2, ·y_1, fn ·v_30:
+              ·op_plus ·v_30, ·z_3, ·v_27
+          fn ·v_52:
+            ·match_arm
+              fn ·v_56, ·v_54, ·v_55:
+                ·match_rec ·v_56, ·v_54, ·v_55
+              fn ·v_60:
+                ·op_plus ·x_0, ·y_1, fn ·v_63:
+                  ·op_plus ·v_63, ·z_4, ·v_60
+              fn ·v_73:
+                ·match_block ·∅foo, ·v_52, ·v_73, fn ·v_75:
+                  ·export ·x_0, ·y_1
+
