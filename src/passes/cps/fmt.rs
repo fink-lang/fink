@@ -290,7 +290,11 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
-    // Pattern matching primitives
+    // Collection primitives
+    BuiltIn::SeqPop       => "·seq_pop".into(),
+    BuiltIn::RecPop       => "·rec_pop".into(),
+    BuiltIn::Empty        => "·empty".into(),
+    // Legacy match primitives
     BuiltIn::MatchSeq     => "·match_seq".into(),
     BuiltIn::MatchNext    => "·match_next".into(),
     BuiltIn::MatchDone    => "·match_done".into(),

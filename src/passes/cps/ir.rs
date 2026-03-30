@@ -222,10 +222,12 @@ pub enum BuiltIn {
   // Closure construction — partially applies a lifted fn with its captures.
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
-  // Pattern matching primitives — emitted directly by the CPS transform.
-  // Each takes val + fail as args; cont receives match results.
-  // MatchValue/MatchBlock/MatchArm/MatchIf have been eliminated — literals,
-  // match arms, and guards are lowered to plain PatternMatch (LetFn + App + If).
+  // Collection primitives — used inside pattern matchers for seq/rec destructuring.
+  // SeqPop(seq, cont(head, tail), fail) — pop head element; fail if empty
+  // RecPop(rec, name, cont(value, rest), fail) — extract named field; fail if missing
+  // Empty(collection, cont(bool)) — predicate; caller branches with If
+  SeqPop, RecPop, Empty,
+  // Legacy match primitives — being replaced by PatternMatch + collection primitives.
   MatchSeq, MatchNext, MatchDone, MatchNotDone,
   MatchRest, MatchRec, MatchField,
   // Yield — suspend execution, passing a value to the scheduler.
