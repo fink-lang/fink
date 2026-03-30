@@ -290,19 +290,11 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
-    // Pattern matching primitives
-    BuiltIn::MatchValue   => "·match_value".into(),
-    BuiltIn::MatchSeq     => "·match_seq".into(),
-    BuiltIn::MatchNext    => "·match_next".into(),
-    BuiltIn::MatchDone    => "·match_done".into(),
-    BuiltIn::MatchNotDone => "·match_not_done".into(),
-    BuiltIn::MatchRest    => "·match_rest".into(),
-    BuiltIn::MatchRec     => "·match_rec".into(),
-    BuiltIn::MatchField   => "·match_field".into(),
-    BuiltIn::MatchIf      => "·match_if".into(),
-    BuiltIn::MatchApp     => "·match_app".into(),
-    BuiltIn::MatchBlock   => "·match_block".into(),
-    BuiltIn::MatchArm     => "·match_arm".into(),
+    // Collection primitives
+    BuiltIn::SeqPop       => "·seq_pop".into(),
+    BuiltIn::RecPop       => "·rec_pop".into(),
+    BuiltIn::Empty        => "·empty".into(),
+    // Legacy match primitives
     // Async/concurrency
     BuiltIn::Yield        => "·yield".into(),
     // Module
@@ -351,20 +343,6 @@ fn render_cont_body(cont: &Cont<'_>, bound_name: &str, bound_id: CpsId, ctx: &Ct
   }
 }
 
-/// Render a `body: Cont` field as a plain expression for use in a no-arg `fn:` lambda
-/// (e.g. MatchIf, MatchValue, MatchSeq, MatchNotDone, MatchRec).
-/// - `Cont::Expr { body, .. }` → render `body`.
-/// - `Cont::Ref(_)` → `·panic` (these nodes always chain to more expressions; Ref is
-///   structurally unexpected here but we fall back gracefully).
-fn render_cont_as_expr(cont: &Cont<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
-  match cont {
-    Cont::Expr { body, .. } => to_node(body, ctx),
-    Cont::Ref(cont_id) => {
-      let cont_loc = ctx_loc(*cont_id, ctx);
-      ident(&format!("·v_{} _", cont_id.0), cont_loc)
-    }
-  }
-}
 
 pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   // Best-effort loc for the expression itself — used for keyword/wrapper nodes.
@@ -432,12 +410,9 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         return apply(func_node, vec![ident("_", expr_loc)], expr_loc);
       }
       // For builtin operators, map to the op token (e.g. `-` in `n - 1`).
-      // For MatchDone, map to the closing bracket of the seq/rec pattern.
       let builtin_loc = ctx.ast_node(expr.id)
         .and_then(|n| match (&n.kind, func) {
           (NodeKind::InfixOp { op, .. }, _) | (NodeKind::UnaryOp { op, .. }, _) => Some(op.loc),
-          (NodeKind::LitSeq { close, .. }, Callable::BuiltIn(BuiltIn::MatchDone))
-          | (NodeKind::LitRec { close, .. }, Callable::BuiltIn(BuiltIn::MatchDone)) => Some(close.loc),
           _ => None,
         })
         .unwrap_or(expr_loc);
@@ -451,25 +426,14 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
         Callable::BuiltIn(op) => ident(&render_builtin(op), builtin_loc),
       };
-      // Match builtins with no-arg body use render_cont_as_expr (renders as `fn: body`).
-      let is_noarg_match = matches!(func, Callable::BuiltIn(
-        BuiltIn::MatchValue | BuiltIn::MatchNotDone | BuiltIn::MatchIf
+      // Collection builtins render as `·name args, fail, cont` (no ·apply prefix).
+      let is_collection_builtin = matches!(func, Callable::BuiltIn(
+        BuiltIn::SeqPop | BuiltIn::RecPop | BuiltIn::Empty
       ));
-      // Match builtins render as `·match_* args, cont` (no ·apply prefix).
-      let is_match_builtin = is_noarg_match || matches!(func, Callable::BuiltIn(
-        BuiltIn::MatchSeq | BuiltIn::MatchNext |
-        BuiltIn::MatchDone | BuiltIn::MatchRest |
-        BuiltIn::MatchRec | BuiltIn::MatchField |
-        BuiltIn::MatchApp | BuiltIn::MatchBlock | BuiltIn::MatchArm
-      ));
-      if is_match_builtin {
-        // Match builtins: render all args inline (Arg::Cont renders as lambdas).
-        // For no-arg match builtins, the last Arg::Cont uses render_cont_as_expr.
-        let arg_nodes: Vec<Node<'static>> = args.iter().enumerate().map(|(i, a)| match a {
+      if is_collection_builtin {
+        let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
           Arg::Val(v) => val_to_node(v, ctx),
           Arg::Spread(v) => { let n = val_to_node(v, ctx); spread_node(n, ctx_loc(v.id, ctx)) },
-          Arg::Cont(c) if is_noarg_match && i == args.len() - 1 =>
-            state_fn(render_cont_as_expr(c, ctx)),
           Arg::Cont(c) => render_cont(c, ctx),
           Arg::Expr(e) => to_node(e, ctx),
         }).collect();
