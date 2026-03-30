@@ -287,24 +287,31 @@ test 'match — no forward refs after lift', fn:
         0: 42
 
   | equals fink":
-    ·v_35 = fn ·n_36, ·v_38, ·v_23:
-      ·match_block ·n_36, ·v_23, ·v_38
+    ·v_51 = fn ·n_52, ·v_54, ·v_39:
+      ·match_block ·n_52, ·v_39, ·v_54
 
-    ·v_49 = fn ·v_14:
-      ·v_14 42
+    ·v_65 = fn ·v_29:
+      ·v_29 42
 
-    ·v_55 = fn ·v_56:
-      ·v_56 _
+    ·v_72 = fn ·v_73, ·v_75, ·v_18:
+      if ·v_18,
+        fn:
+          ·v_73 _
+        fn:
+          ·v_75 _
 
-    ·v_52 = fn ·v_11, ·v_9, ·v_10:
-      ·v_60 = ·closure ·v_55, ·v_10
-      ·match_value ·v_11, 0, ·v_9, ·v_60
+    ·v_26 = fn ·v_13, ·v_14, ·v_15:
+      ·v_79 = ·closure ·v_72, ·v_14, ·v_15
+      ·op_eq ·v_13, 0, ·v_79
 
-    ·v_46 = fn ·v_42:
-      ·match_arm ·v_52, ·v_49, ·v_42
+    ·v_68 = fn ·v_11, ·v_9, ·v_10:
+      ·v_26 ·v_11, ·v_10, ·v_9
+
+    ·v_62 = fn ·v_58:
+      ·match_arm ·v_68, ·v_65, ·v_58
 
     ·foo_0 = ·v_5 = fn ·n_1, ·v_6:
-      ·closure ·v_35, ·n_1, ·v_6, ·v_46
+      ·closure ·v_51, ·n_1, ·v_6, ·v_62
 
     ·export ·foo_0
 
@@ -317,28 +324,35 @@ test 'match with binding', fn:
       r
 
   | equals fink":
-    ·v_63 = fn ·v_64, ·v_28:
-      ·r_2 = ·v_28
-      ·v_64 ·r_2
+    ·v_79 = fn ·v_80, ·v_44:
+      ·r_2 = ·v_44
+      ·v_80 ·r_2
 
-    ·v_43 = fn ·n_44, ·v_46, ·v_26:
-      ·v_68 = ·closure ·v_63, ·v_46
-      ·match_block ·n_44, ·v_26, ·v_68
+    ·v_59 = fn ·n_60, ·v_62, ·v_42:
+      ·v_84 = ·closure ·v_79, ·v_62
+      ·match_block ·n_60, ·v_42, ·v_84
 
-    ·v_54 = fn ·n_55, ·v_15:
-      ·op_plus ·n_55, 1, ·v_15
+    ·v_70 = fn ·n_71, ·v_30:
+      ·op_plus ·n_71, 1, ·v_30
 
-    ·v_75 = fn ·v_76:
-      ·v_76 _
+    ·v_92 = fn ·v_93, ·v_95, ·v_19:
+      if ·v_19,
+        fn:
+          ·v_93 _
+        fn:
+          ·v_95 _
 
-    ·v_72 = fn ·v_12, ·v_10, ·v_11:
-      ·v_80 = ·closure ·v_75, ·v_11
-      ·match_value ·v_12, 0, ·v_10, ·v_80
+    ·v_27 = fn ·v_14, ·v_15, ·v_16:
+      ·v_99 = ·closure ·v_92, ·v_15, ·v_16
+      ·op_eq ·v_14, 0, ·v_99
+
+    ·v_88 = fn ·v_12, ·v_10, ·v_11:
+      ·v_27 ·v_12, ·v_11, ·v_10
 
     ·foo_0 = ·v_6 = fn ·n_1, ·v_7:
-      ·v_50 = ·closure ·v_43, ·n_1, ·v_7
-      ·v_59 = ·closure ·v_54, ·n_1
-      ·match_arm ·v_72, ·v_59, ·v_50
+      ·v_66 = ·closure ·v_59, ·n_1, ·v_7
+      ·v_75 = ·closure ·v_70, ·n_1
+      ·match_arm ·v_88, ·v_75, ·v_66
 
     ·export ·foo_0
 
@@ -352,43 +366,50 @@ test 'recursive fn in match', fn:
       r
 
   | equals fink":
-    ·v_101 = fn ·v_102, ·v_45:
-      ·r_2 = ·v_45
-      ·v_102 ·r_2
+    ·v_117 = fn ·v_118, ·v_61:
+      ·r_2 = ·v_61
+      ·v_118 ·r_2
 
-    ·v_76 = fn ·n_77, ·v_79, ·v_81, ·v_43:
-      ·v_106 = ·closure ·v_101, ·v_81
-      ·match_block ·n_77, ·v_79, ·v_43, ·v_106
+    ·v_92 = fn ·n_93, ·v_95, ·v_97, ·v_59:
+      ·v_122 = ·closure ·v_117, ·v_97
+      ·match_block ·n_93, ·v_95, ·v_59, ·v_122
 
-    ·v_116 = fn ·v_117, ·v_34:
-      ·fib_0 ·v_34, ·v_117
+    ·v_132 = fn ·v_133, ·v_50:
+      ·fib_0 ·v_50, ·v_133
 
-    ·v_92 = fn ·n_93, ·v_30:
-      ·v_121 = ·closure ·v_116, ·v_30
-      ·op_plus ·n_93, 1, ·v_121
+    ·v_108 = fn ·n_109, ·v_46:
+      ·v_137 = ·closure ·v_132, ·v_46
+      ·op_plus ·n_109, 1, ·v_137
 
-    ·v_113 = fn ·v_28, ·v_26, ·v_27:
-      ·v_27 _
+    ·v_129 = fn ·v_44, ·v_42, ·v_43:
+      ·v_43 _
 
-    ·v_62 = fn ·n_63, ·v_65, ·v_24:
-      ·v_85 = ·closure ·v_76, ·n_63, ·v_24, ·v_65
-      ·v_97 = ·closure ·v_92, ·n_63
-      ·match_arm ·v_113, ·v_97, ·v_85
+    ·v_78 = fn ·n_79, ·v_81, ·v_40:
+      ·v_101 = ·closure ·v_92, ·n_79, ·v_40, ·v_81
+      ·v_113 = ·closure ·v_108, ·n_79
+      ·match_arm ·v_129, ·v_113, ·v_101
 
-    ·v_89 = fn ·v_15:
-      ·v_15 1
+    ·v_105 = fn ·v_30:
+      ·v_30 1
 
-    ·v_125 = fn ·v_126:
-      ·v_126 _
+    ·v_142 = fn ·v_143, ·v_145, ·v_19:
+      if ·v_19,
+        fn:
+          ·v_143 _
+        fn:
+          ·v_145 _
 
-    ·v_110 = fn ·v_12, ·v_10, ·v_11:
-      ·v_130 = ·closure ·v_125, ·v_11
-      ·match_value ·v_12, 0, ·v_10, ·v_130
+    ·v_27 = fn ·v_14, ·v_15, ·v_16:
+      ·v_149 = ·closure ·v_142, ·v_15, ·v_16
+      ·op_eq ·v_14, 0, ·v_149
 
-    ·v_73 = fn ·v_69:
-      ·match_arm ·v_110, ·v_89, ·v_69
+    ·v_126 = fn ·v_12, ·v_10, ·v_11:
+      ·v_27 ·v_12, ·v_11, ·v_10
+
+    ·v_89 = fn ·v_85:
+      ·match_arm ·v_126, ·v_105, ·v_85
 
     ·fib_0 = ·v_6 = fn ·n_1, ·v_7:
-      ·closure ·v_62, ·n_1, ·v_7, ·v_73
+      ·closure ·v_78, ·n_1, ·v_7, ·v_89
 
     ·export ·fib_0

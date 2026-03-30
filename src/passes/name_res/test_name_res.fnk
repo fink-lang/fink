@@ -336,11 +336,17 @@ test 'match with literal arms', fn:
       1: 'one'
       2: 'two'
   | equals fink":
+    (ref 11, ?) == unresolved
+    (ref 16, ?) == unresolved
+    (ref 24, ?) == unresolved
     (ref 9, ?) == unresolved
-    (ref 25, ?) == unresolved
+    (ref 43, ?) == unresolved
+    (ref 48, ?) == unresolved
+    (ref 56, ?) == unresolved
+    (ref 41, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 21, ?) == unresolved
     (ref 37, ?) == unresolved
+    (ref 69, ?) == unresolved
 
 test 'match with outer scope ref in arm', fn:
   expect cps_resolve fink":
@@ -350,12 +356,18 @@ test 'match with outer scope ref in arm', fn:
       1: y
       2: 'two'
   | equals fink":
+    (ref 13, ?) == unresolved
+    (ref 18, ?) == unresolved
+    (ref 26, ?) == unresolved
     (ref 11, ?) == unresolved
     (ref 1, y) == unresolved
-    (ref 27, ?) == unresolved
+    (ref 45, ?) == unresolved
+    (ref 50, ?) == unresolved
+    (ref 58, ?) == unresolved
+    (ref 43, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 23, ?) == unresolved
     (ref 39, ?) == unresolved
+    (ref 71, ?) == unresolved
 
 test 'match result binding', fn:
   expect cps_resolve fink":
@@ -364,12 +376,18 @@ test 'match result binding', fn:
       1: 'one'
       2: 'two'
   | equals fink":
+    (ref 12, ?) == unresolved
+    (ref 17, ?) == unresolved
+    (ref 25, ?) == unresolved
     (ref 10, ?) == unresolved
-    (ref 26, ?) == unresolved
+    (ref 44, ?) == unresolved
+    (ref 49, ?) == unresolved
+    (ref 57, ?) == unresolved
+    (ref 42, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 22, ?) == unresolved
     (ref 38, ?) == unresolved
-    (ref 40, ?) == unresolved
+    (ref 70, ?) == unresolved
+    (ref 72, ?) == unresolved
 
 
 ---
