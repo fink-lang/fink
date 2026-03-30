@@ -298,7 +298,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::MatchRest    => "·match_rest".into(),
     BuiltIn::MatchRec     => "·match_rec".into(),
     BuiltIn::MatchField   => "·match_field".into(),
-    BuiltIn::MatchIf      => "·match_if".into(),
     BuiltIn::MatchApp     => "·match_app".into(),
     // Async/concurrency
     BuiltIn::Yield        => "·yield".into(),
@@ -349,7 +348,7 @@ fn render_cont_body(cont: &Cont<'_>, bound_name: &str, bound_id: CpsId, ctx: &Ct
 }
 
 /// Render a `body: Cont` field as a plain expression for use in a no-arg `fn:` lambda
-/// (e.g. MatchIf, MatchSeq, MatchNotDone, MatchRec).
+/// (e.g. MatchNotDone).
 /// - `Cont::Expr { body, .. }` → render `body`.
 /// - `Cont::Ref(_)` → `·panic` (these nodes always chain to more expressions; Ref is
 ///   structurally unexpected here but we fall back gracefully).
@@ -450,7 +449,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
       };
       // Match builtins with no-arg body use render_cont_as_expr (renders as `fn: body`).
       let is_noarg_match = matches!(func, Callable::BuiltIn(
-        BuiltIn::MatchNotDone | BuiltIn::MatchIf
+        BuiltIn::MatchNotDone
       ));
       // Match builtins render as `·match_* args, cont` (no ·apply prefix).
       let is_match_builtin = is_noarg_match || matches!(func, Callable::BuiltIn(

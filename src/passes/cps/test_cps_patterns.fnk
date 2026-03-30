@@ -20,13 +20,13 @@ CPS pattern lowering tests
 #   ·match_rest     — bind remaining cursor as value (zero or more)
 #   ·match_rec      — initialize rec cursor from scrutinee
 #   ·match_field    — extract named field from rec cursor; fn ·v, ·cursor, …
-#   ·match_value    — assert extracted temp equals literal; ·fail if not
-#   ·match_if       — apply fn to args, ·fail if falsy; no result binding (guard)
+#   ·match_value    — assert extracted temp equals literal; ·fail if not (eliminated → PatternMatch)
+#   ·match_if       — apply fn to args, ·fail if falsy (eliminated → plain App + If)
 #   ·match_apply    — apply fn to args, bind result; ·fail if wrong tag (constructor/extractor)
-#                     deferred: name resolution distinguishes predicate (→ ·match_if)
+#                     deferred: name resolution distinguishes predicate (→ App + If)
 #                     from constructor/extractor (→ ·match_apply) based on callee
-#   ·match_block    — try arms in order; first match wins
-#   ·match_arm      — single arm: matcher cont + body cont
+#   ·match_block    — try arms in order; first match wins (eliminated → fail-chain)
+#   ·match_arm      — single arm: matcher cont + body cont (eliminated → LetFn + App)
 #
 # Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
 # Wildcard (_): discard; no binding, temp passed directly to next primitive
@@ -229,9 +229,11 @@ test 'seq — predicate guard', fn:
         ·let ·v_5, fn ·x_0:
           ·match_next ·v_6, ·panic, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·y_1:
-              ·match_if ·∅is_even, ·y_1, ·panic, fn:
-                ·match_done ·v_10, ·panic, ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX2V2ZW4geV0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWlCLEssRUFBakIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEs7UUFBWSxBQUFBLEtBQVosSSxLQUFZLEk7VUFBUixBQUFBLFVBQUEsUyxFQUFRLEksRUFBUixNLEk7WUFBSixBQUFBLFlBQUEsSyxFQUFBLE0sRSIKfQ==
+              ·∅is_even ·y_1, fn ·v_24:
+                ·if ·v_24,
+                  fn: ·match_done ·v_10, ·panic, ·v_2
+                  fn: ·panic _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX2V2ZW4geV0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWlCLEssRUFBakIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEs7UUFBWSxBQUFBLEtBQVosSSxLQUFZLEk7VUFBUixBQUFBLFVBQVEsSSxLQUFSLEs7WUFBQSxBQUFBLElBQUEsSztnQixFQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFO2dCLEVBQUksQUFBQSxPQUFBIgp9
 
 
 test 'seq — constructor guard with payload', fn:
@@ -243,9 +245,11 @@ test 'seq — constructor guard with payload', fn:
         ·let ·v_5, fn ·x_0:
           ·match_next ·v_6, ·panic, fn ·v_9, ·v_10:
             ·let ·v_9, fn ·b_1:
-              ·match_if ·∅Ok, ·b_1, ·panic, fn:
-                ·match_done ·v_10, ·panic, ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIE9rIGJdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFZLEssRUFBWixNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSztRQUFPLEFBQUEsS0FBUCxJLEtBQU8sSTtVQUFILEFBQUEsVUFBQSxJLEVBQUcsSSxFQUFILE0sSTtZQUFKLEFBQUEsWUFBQSxLLEVBQUEsTSxFIgp9
+              ·∅Ok ·b_1, fn ·v_24:
+                ·if ·v_24,
+                  fn: ·match_done ·v_10, ·panic, ·v_2
+                  fn: ·panic _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIE9rIGJdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxXQUFZLEssRUFBWixNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFELEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSztRQUFPLEFBQUEsS0FBUCxJLEtBQU8sSTtVQUFILEFBQUEsS0FBRyxJLEtBQUgsSztZQUFBLEFBQUEsSUFBQSxLO2dCLEVBQUosQUFBQSxZQUFBLEssRUFBQSxNLEU7Z0IsRUFBSSxBQUFBLE9BQUEiCn0=
 
 
 test 'seq — constructor predicate with wildcard', fn:
@@ -256,9 +260,11 @@ test 'seq — constructor predicate with wildcard', fn:
       ·match_next ·v_3, ·panic, fn ·v_4, ·v_5:
         ·let ·v_4, fn ·x_0:
           ·match_next ·v_5, ·panic, fn ·v_8, ·v_9:
-            ·match_if ·∅is_none, ·v_8, ·panic, fn:
-              ·match_done ·v_9, ·panic, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX25vbmUgX10gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWlCLEssRUFBakIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7UUFBSSxBQUFBLFVBQUEsUyxFQUFRLEksRUFBUixNLEk7VUFBSixBQUFBLFlBQUEsSSxFQUFBLE0sRSIKfQ==
+            ·∅is_none ·v_8, fn ·v_23:
+              ·if ·v_23,
+                fn: ·match_done ·v_9, ·panic, ·v_1
+                fn: ·panic _
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX25vbmUgX10gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQWlCLEssRUFBakIsTSxLQUFBLEk7RUFBQSxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRCxBQUFBLFlBQUEsSSxFQUFBLE0sS0FBQSxNQUFBLEk7UUFBSSxBQUFBLFVBQVEsSSxLQUFSLEs7VUFBQSxBQUFBLElBQUEsSztjLEVBQUosQUFBQSxZQUFBLEksRUFBQSxNLEU7YyxFQUFJLEFBQUEsT0FBQSIKfQ==
 
 
 test 'seq — multi-arg guard with bound element', fn:
@@ -271,27 +277,30 @@ test 'seq — multi-arg guard with bound element', fn:
           fn ·v_22:
             ·match_next ·v_5, ·panic, fn ·v_24, ·v_25:
               ·let ·v_24, fn ·a_0:
-                ·match_if ·∅foo, 2, ·a_0, 3, ·panic, fn:
-                  ·match_next ·v_25, ·panic, fn ·v_33, ·v_34:
-                    ·fn
-                      fn ·v_51: ·match_done ·v_34, ·panic, ·v_1
-                      fn ·v_59:
+                ·∅foo 2, ·a_0, 3, fn ·v_72:
+                  ·if ·v_72,
+                    fn:
+                      ·match_next ·v_25, ·panic, fn ·v_33, ·v_34:
                         ·fn
-                          fn ·v_37, ·v_38, ·v_39:
-                            ·op_eq ·v_37, 4, fn ·v_42:
-                              ·if ·v_42,
-                                fn: ·v_38 _
-                                fn: ·v_39 _
-                          fn ·v_50: ·v_50 ·v_33, ·v_59, ·panic
-          fn ·v_78:
+                          fn ·v_51: ·match_done ·v_34, ·panic, ·v_1
+                          fn ·v_59:
+                            ·fn
+                              fn ·v_37, ·v_38, ·v_39:
+                                ·op_eq ·v_37, 4, fn ·v_42:
+                                  ·if ·v_42,
+                                    fn: ·v_38 _
+                                    fn: ·v_39 _
+                              fn ·v_50: ·v_50 ·v_33, ·v_59, ·panic
+                    fn: ·panic _
+          fn ·v_82:
             ·fn
               fn ·v_8, ·v_9, ·v_10:
                 ·op_eq ·v_8, 1, fn ·v_13:
                   ·if ·v_13,
                     fn: ·v_9 _
                     fn: ·v_10 _
-              fn ·v_21: ·v_21 ·v_4, ·v_78, ·panic
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIGZvbyAyLCBhLCAzOyA0XSA9IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBc0IsSyxFQUF0QixNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUE7U0FBQSxLO1FBQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsT0FBQSxLO1VBQVcsQUFBQSxLQUFYLEssS0FBVyxJO1lBQVAsQUFBQSxVQUFBLEssRUFBSSxDLEVBQUcsSSxFQUFHLEMsRUFBVixNLEk7Y0FBSixBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxPQUFBLEs7Z0JBQWlCLEFBQUE7cUJBQUEsSyxFQUFqQixBQUFBLFlBQUEsSyxFQUFBLE0sRTtxQkFBaUIsSztvQkFBQSxBQUFBO3lCQUFBLE8sTyxLO3dCQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7MEJBQUEsQUFBQSxJQUFBLEs7OEIsRUFBQSxBLE1BQUE7OEIsRUFBQSxBLE1BQUE7eUJBQUEsSyxFQUFBLEFBQUEsTUFBakIsSyxFQUFpQixLLEVBQUE7U0FBaEIsSztRQUFBLEFBQUE7YUFBQSxNLE0sSztZQUFBLEFBQUEsT0FBQSxJLEVBQUEsQyxLQUFBLEs7Y0FBQSxBQUFBLElBQUEsSztrQixFQUFBLEEsS0FBQTtrQixFQUFBLEEsTUFBQTthQUFBLEssRUFBQSxBQUFBLE1BQUQsSSxFQUFDLEssRUFBQSIKfQ==
+              fn ·v_21: ·v_21 ·v_4, ·v_82, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIGZvbyAyLCBhLCAzOyA0XSA9IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBc0IsSyxFQUF0QixNLEtBQUEsSTtFQUFBLEFBQUEsWUFBQSxJLEVBQUEsTSxLQUFBLE1BQUEsSTtJQUFDLEFBQUE7U0FBQSxLO1FBQUQsQUFBQSxZQUFBLEksRUFBQSxNLEtBQUEsT0FBQSxLO1VBQVcsQUFBQSxLQUFYLEssS0FBVyxJO1lBQVAsQUFBQSxNQUFJLEMsRUFBRyxJLEVBQUcsQyxLQUFWLEs7Y0FBQSxBQUFBLElBQUEsSztrQjtrQkFBSixBQUFBLFlBQUEsSyxFQUFBLE0sS0FBQSxPQUFBLEs7b0JBQWlCLEFBQUE7eUJBQUEsSyxFQUFqQixBQUFBLFlBQUEsSyxFQUFBLE0sRTt5QkFBaUIsSzt3QkFBQSxBQUFBOzZCQUFBLE8sTyxLOzRCQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7OEJBQUEsQUFBQSxJQUFBLEs7a0MsRUFBQSxBLE1BQUE7a0MsRUFBQSxBLE1BQUE7NkJBQUEsSyxFQUFBLEFBQUEsTUFBakIsSyxFQUFpQixLLEVBQUE7a0IsRUFBYixBQUFBLE9BQUE7U0FBSCxLO1FBQUEsQUFBQTthQUFBLE0sTSxLO1lBQUEsQUFBQSxPQUFBLEksRUFBQSxDLEtBQUEsSztjQUFBLEFBQUEsSUFBQSxLO2tCLEVBQUEsQSxLQUFBO2tCLEVBQUEsQSxNQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBRCxJLEVBQUMsSyxFQUFBIgp9
 
 
 

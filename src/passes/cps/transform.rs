@@ -1209,8 +1209,8 @@ enum Pending<'src> {
   App { func: Callable<'src>, args: Vec<Arg<'src>>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
   MatchBind { name: BindNode, val: Val<'src>, origin: Option<AstId> },
-  /// Pattern-lowered guard check — emits MatchIf with ·panic as fail cont.
-  /// Used by range patterns and predicate guards (not yet converted to PatternMatch).
+  /// Pattern-lowered guard check — emits func(args) + If with ·panic as fail cont.
+  /// Used by Apply patterns (predicate guards like `is_even y`, `Ok b`).
   MatchGuard { func: Callable<'src>, args: Vec<Val<'src>>, origin: Option<AstId> },
   /// Seq pattern entry — emits MatchSeq with ·panic as fail cont.
   /// `cursor` is the outgoing cursor bind (arg 0 of the body cont).
@@ -1349,17 +1349,44 @@ fn wrap_with_fail<'src>(
         )
       },
       Pending::MatchGuard { func, args, origin } => {
+        // Guard check: call func(args...) → if result then cont else fail.
+        // No BuiltIn::MatchIf — inlined as plain App + If.
         let fail_val = make_fail_val(g, origin);
-        let func_val = match func {
-          Callable::Val(v) => v,
-          Callable::BuiltIn(op) => g.val(ValKind::BuiltIn(op), origin),
+
+        // Build: fail()
+        let fail_call = g.expr(ExprKind::App {
+          func: Callable::Val(fail_val),
+          args: vec![],
+        }, origin);
+
+        // Build: <cont body> — inline the continuation as the then-branch.
+        // The fold may attach a fresh_result param that MatchGuard doesn't use;
+        // just inline the body directly (the unused bind is harmless).
+        let succ_body = match cont {
+          Cont::Ref(cont_id) => {
+            let cont_ref = g.val(ValKind::ContRef(cont_id), origin);
+            g.expr(ExprKind::App {
+              func: Callable::Val(cont_ref),
+              args: vec![],
+            }, origin)
+          }
+          Cont::Expr { body, .. } => *body,
         };
-        let mut new_args: Vec<Arg<'src>> = vec![Arg::Val(func_val)];
-        new_args.extend(args.into_iter().map(Arg::Val));
-        new_args.push(Arg::Val(fail_val));
-        new_args.push(Arg::Cont(cont));
+
+        // Build: if result then succ_body else fail()
+        let result_bind = g.fresh_result(origin);
+        let result_ref = g.val(ValKind::Ref(Ref::Synth(result_bind.id)), origin);
+        let if_expr = g.expr(ExprKind::If {
+          cond: Box::new(result_ref),
+          then: Box::new(succ_body),
+          else_: Box::new(fail_call),
+        }, origin);
+
+        // Build: func(args..., fn result: if_expr)
+        let mut call_args: Vec<Arg<'src>> = args.into_iter().map(Arg::Val).collect();
+        call_args.push(Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(if_expr) }));
         g.expr(
-          ExprKind::App { func: Callable::BuiltIn(BuiltIn::MatchIf), args: new_args },
+          ExprKind::App { func, args: call_args },
           origin,
         )
       },
