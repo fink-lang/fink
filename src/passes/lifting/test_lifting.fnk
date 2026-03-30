@@ -239,21 +239,28 @@ test 'seq destructure', fn:
       a + 1
 
   | equals fink":
-    ·v_55 = fn ·a_56, ·v_58, ·v_14:
-      ·op_plus ·a_56, 1, ·v_58
+    ·v_50 = fn ·v_51, ·v_12:
+      ·a_2 = ·v_12
+      ·op_plus ·a_2, 1, ·v_51
 
-    ·v_46 = fn ·v_47, ·v_10, ·v_11:
-      ·a_2 = ·v_10
-      ·v_62 = ·closure ·v_55, ·a_2, ·v_47
-      ·match_done ·v_11, panic, ·v_62
+    ·v_69 = fn ·v_70, ·v_72, ·v_74, ·v_19:
+      if ·v_19,
+        fn:
+          ·v_70 ·v_72
+        fn:
+          ·v_74 _
 
-    ·v_37 = fn ·v_38, ·v_9:
-      ·v_51 = ·closure ·v_46, ·v_38
-      ·match_next ·v_9, panic, ·v_51
+    ·v_58 = fn ·v_59, ·v_61, ·v_12, ·v_16:
+      ·v_78 = ·closure ·v_69, ·v_59, ·v_12, ·v_61
+      ·empty ·v_16, ·v_78
+
+    ·v_27 = fn ·v_9, ·v_10, ·v_11:
+      ·v_65 = ·closure ·v_58, ·v_10, ·v_11
+      ·seq_pop ·v_9, ·v_11, ·v_65
 
     ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
-      ·v_42 = ·closure ·v_37, ·v_7
-      ·match_seq ·foo_1, panic, ·v_42
+      ·v_53 = ·closure ·v_50, ·v_7
+      ·v_27 ·foo_1, ·v_53, panic
 
     ·export ·main_0
 
@@ -265,17 +272,20 @@ test 'record destructure', fn:
       x + 1
 
   | equals fink":
-    ·v_43 = fn ·v_44, ·v_10, ·v_11:
-      ·x_2 = ·v_10
-      ·op_plus ·x_2, 1, ·v_44
+    ·v_44 = fn ·v_45, ·v_12:
+      ·x_2 = ·v_12
+      ·op_plus ·x_2, 1, ·v_45
 
-    ·v_34 = fn ·v_35, ·v_9:
-      ·v_48 = ·closure ·v_43, ·v_35
-      ·match_field ·v_9, 'x', panic, ·v_48
+    ·v_52 = fn ·v_53, ·v_12, ·v_16:
+      ·v_53 ·v_12
+
+    ·v_21 = fn ·v_9, ·v_10, ·v_11:
+      ·v_57 = ·closure ·v_52, ·v_10
+      ·rec_pop ·v_9, 'x', ·v_11, ·v_57
 
     ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
-      ·v_39 = ·closure ·v_34, ·v_7
-      ·match_rec ·foo_1, panic, ·v_39
+      ·v_47 = ·closure ·v_44, ·v_7
+      ·v_21 ·foo_1, ·v_47, panic
 
     ·export ·main_0
 

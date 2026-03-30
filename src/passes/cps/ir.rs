@@ -223,13 +223,10 @@ pub enum BuiltIn {
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
   // Collection primitives — used inside pattern matchers for seq/rec destructuring.
-  // SeqPop(seq, cont(head, tail), fail) — pop head element; fail if empty
-  // RecPop(rec, name, cont(value, rest), fail) — extract named field; fail if missing
+  // SeqPop(seq, fail, cont(head, tail)) — pop head element; fail if empty
+  // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
   SeqPop, RecPop, Empty,
-  // Legacy match primitives — being replaced by PatternMatch + collection primitives.
-  MatchSeq, MatchNext, MatchDone, MatchNotDone,
-  MatchRest, MatchRec, MatchField,
   // Yield — suspend execution, passing a value to the scheduler.
   // Args: value; cont receives the resumed value.
   Yield,
@@ -359,7 +356,7 @@ pub enum Lit<'src> {
 /// `Expr { args, body }` — inline: bind results to `args` in order, then evaluate `body`.
 ///
 /// Single-result continuations use `args: vec![bind]`. Multi-result continuations
-/// (e.g. MatchNext/MatchField which yield elem + next_cursor) use two args.
+/// (e.g. SeqPop/RecPop which yield value + rest_cursor) use two args.
 /// The `CpsId` of each bind is used by the formatter to render compiler-generated
 /// temps as `·v_N`. No pass indexes into any table by these ids.
 #[derive(Debug, Clone)]
