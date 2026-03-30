@@ -1130,6 +1130,7 @@ enum Pending<'src> {
   /// The matcher tests with temps only; succ forwards values to the body.
   PatternMatch {
     subject: Val<'src>,
+    bind_name: BindNode,
     matcher_name: BindNode,
     matcher_params: Vec<Param>,
     matcher_body: Expr<'src>,
@@ -1364,24 +1365,55 @@ fn wrap_with_fail<'src>(
           origin,
         )
       },
-      Pending::PatternMatch { subject, matcher_name, matcher_params, matcher_body, origin } => {
-        // Emit: LetFn matcher = fn(subj, succ, fail): body
-        //       matcher(subject, cont, panic)
+      Pending::PatternMatch { subject, bind_name, matcher_name, matcher_params, matcher_body, origin } => {
+        // Emit: LetFn body = fn(bind_name): <cont>
+        //       LetFn matcher = fn(subj, succ, fail): matcher_body
+        //       matcher(subject, body, panic)
+        let body_name = g.fresh_result(origin);
+        let body_ref = g.val(ValKind::Ref(Ref::Synth(body_name.id)), origin);
         let matcher_ref = g.val(ValKind::Ref(Ref::Synth(matcher_name.id)), origin);
         let fail_val = make_fail_val(g, origin);
+
+        // Build: matcher(subject, body, panic)
         let call = g.expr(
           ExprKind::App {
             func: Callable::Val(matcher_ref),
-            args: vec![Arg::Val(subject), Arg::Cont(cont), Arg::Val(fail_val)],
+            args: vec![Arg::Val(subject), Arg::Val(body_ref), Arg::Val(fail_val)],
           },
           origin,
         );
-        g.expr(
+
+        // Build: LetFn matcher = fn(subj, succ, fail): matcher_body; <call>
+        let with_matcher = g.expr(
           ExprKind::LetFn {
             name: matcher_name,
             params: matcher_params,
             fn_body: Box::new(matcher_body),
             cont: Cont::Expr { args: vec![], body: Box::new(call) },
+          },
+          origin,
+        );
+
+        // Build: LetFn body = fn(bind_name): <cont>; <with_matcher>
+        // The body's fn receives the matched value as bind_name param,
+        // then continues with the rest of the sequence (cont).
+        let body_body = match cont {
+          Cont::Ref(cont_id) => {
+            let bind_ref = g.val(ValKind::Ref(Ref::Synth(bind_name.id)), origin);
+            let cont_ref = g.val(ValKind::ContRef(cont_id), origin);
+            g.expr(ExprKind::App {
+              func: Callable::Val(cont_ref),
+              args: vec![Arg::Val(bind_ref)],
+            }, origin)
+          }
+          Cont::Expr { body, .. } => *body,
+        };
+        g.expr(
+          ExprKind::LetFn {
+            name: body_name,
+            params: vec![Param::Name(bind_name)],
+            fn_body: Box::new(body_body),
+            cont: Cont::Expr { args: vec![], body: Box::new(with_matcher) },
           },
           origin,
         )
@@ -1588,6 +1620,7 @@ fn lower_pat_lhs<'src>(
       let matcher_name = g.fresh_result(origin);
       pending.push(Pending::PatternMatch {
         subject: val,
+        bind_name: bind,
         matcher_name,
         matcher_params: vec![
           Param::Name(subj_param),
