@@ -1550,28 +1550,6 @@ mod tests {
         names
     }
 
-    /// Extract type names from a WASM module's name section.
-    fn get_type_names(wasm: &[u8]) -> BTreeMap<u32, String> {
-        let mut names = BTreeMap::new();
-        for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::CustomSection(reader)) = payload {
-                if let wasmparser::KnownCustom::Name(name_reader) =
-                    reader.as_known()
-                {
-                    for name in name_reader.into_iter().flatten() {
-                        if let wasmparser::Name::Type(map) = name {
-                            for n in map.into_iter().flatten() {
-                                names
-                                    .insert(n.index, n.name.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        names
-    }
-
     /// Extract exports from a WASM module.
     fn get_exports(wasm: &[u8]) -> Vec<(String, u32)> {
         let mut exports = Vec::new();
