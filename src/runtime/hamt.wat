@@ -34,6 +34,8 @@
 ;;   $hamt_set     : (ref $HamtNode), (ref eq), (ref eq) -> (ref $HamtNode)
 ;;   $hamt_delete  : (ref $HamtNode), (ref eq) -> (ref $HamtNode)
 ;;   $hamt_pop     : (ref $HamtNode), (ref eq) -> (ref null eq), (ref $HamtNode)
+;;   $hamt_merge   : (ref $HamtNode), (ref $HamtNode) -> (ref $HamtNode)
+;;                   Merge src into dest. Src entries win on key conflict.
 ;;                   Single-traversal get+delete. Returns (value, rest).
 ;;                   Value is null if key absent; rest is unchanged in that case.
 
@@ -1118,6 +1120,120 @@
     (struct.new $HamtNode
       (local.get $bitmap)
       (local.get $new_children))
+  )
+
+
+  ;; -- Merge ----------------------------------------------------------
+
+  ;; Merge all entries from src into dest. Src wins on key conflict.
+  ;;   {..dest, ..src}  →  hamt_merge(dest, src)
+  ;;
+  ;; Walks src's tree and calls hamt_set for each leaf found.
+  (func $hamt_merge (export "hamt_merge")
+    (param $dest (ref $HamtNode))
+    (param $src (ref $HamtNode))
+    (result (ref $HamtNode))
+
+    (call $_hamt_merge_node (local.get $dest) (local.get $src))
+  )
+
+  ;; Walk a source node, inserting each leaf into dest.
+  (func $_hamt_merge_node
+    (param $dest (ref $HamtNode))
+    (param $src (ref $HamtNode))
+    (result (ref $HamtNode))
+
+    (local $children (ref $HamtChildren))
+    (local $len i32)
+    (local $i i32)
+    (local $child (ref null $Any))
+
+    (local.set $children
+      (struct.get $HamtNode $children (local.get $src)))
+    (local.set $len
+      (array.len (local.get $children)))
+
+    ;; empty source — return dest unchanged
+    (if (i32.eqz (local.get $len))
+      (then (return (local.get $dest))))
+
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $walk
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+
+        (local.set $child
+          (array.get $HamtChildren
+            (local.get $children)
+            (local.get $i)))
+
+        ;; leaf — insert into dest
+        (if (ref.test (ref $HamtLeaf) (local.get $child))
+          (then
+            (local.set $dest
+              (call $hamt_set
+                (local.get $dest)
+                (struct.get $HamtLeaf $key
+                  (ref.cast (ref $HamtLeaf) (local.get $child)))
+                (struct.get $HamtLeaf $val
+                  (ref.cast (ref $HamtLeaf) (local.get $child)))))))
+
+        ;; sub-node — recurse
+        (if (ref.test (ref $HamtNode) (local.get $child))
+          (then
+            (local.set $dest
+              (call $_hamt_merge_node
+                (local.get $dest)
+                (ref.cast (ref $HamtNode) (local.get $child))))))
+
+        ;; collision node — insert all its leaves
+        (if (ref.test (ref $HamtCollision) (local.get $child))
+          (then
+            (local.set $dest
+              (call $_hamt_merge_collision
+                (local.get $dest)
+                (struct.get $HamtCollision $col_leaves
+                  (ref.cast (ref $HamtCollision) (local.get $child)))))))
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $dest)
+  )
+
+  ;; Insert all leaves from a collision node's array into dest.
+  (func $_hamt_merge_collision
+    (param $dest (ref $HamtNode))
+    (param $leaves (ref $HamtChildren))
+    (result (ref $HamtNode))
+
+    (local $len i32)
+    (local $i i32)
+
+    (local.set $len (array.len (local.get $leaves)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $walk
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $dest
+          (call $hamt_set
+            (local.get $dest)
+            (struct.get $HamtLeaf $key
+              (ref.cast (ref $HamtLeaf)
+                (array.get $HamtChildren
+                  (local.get $leaves)
+                  (local.get $i))))
+            (struct.get $HamtLeaf $val
+              (ref.cast (ref $HamtLeaf)
+                (array.get $HamtChildren
+                  (local.get $leaves)
+                  (local.get $i))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $dest)
   )
 
 )

@@ -72,6 +72,13 @@ mod tests {
     (get_i31(store, &result[0]), result[1].clone())
   }
 
+  /// Helper: call hamt_merge(dest, src) → merged
+  fn hamt_merge(store: &mut Store<()>, merge_fn: &Func, dest: &Val, src: &Val) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    merge_fn.call(store, &[dest.clone(), src.clone()], &mut result).unwrap();
+    result[0].clone()
+  }
+
   /// Helper: call hamt_empty() → node
   fn hamt_empty(store: &mut Store<()>, empty_fn: &Func) -> Val {
     let mut result = [Val::AnyRef(None)];
@@ -263,5 +270,91 @@ mod tests {
     assert_eq!(hamt_get(&mut store, &get_fn, &rest, 1), None);
     assert_eq!(hamt_get(&mut store, &get_fn, &rest, 2), None);
     assert_eq!(hamt_get(&mut store, &get_fn, &rest, 3), Some(30));
+  }
+
+  #[test]
+  fn test_merge_disjoint() {
+    // {1: 10, 2: 20} merge {3: 30, 4: 40} → {1: 10, 2: 20, 3: 30, 4: 40}
+    let (mut store, instance) = load_hamt();
+    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
+    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
+    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+
+    let node = hamt_empty(&mut store, &empty_fn);
+    let a = hamt_set(&mut store, &set_fn, &node, 1, 10);
+    let a = hamt_set(&mut store, &set_fn, &a, 2, 20);
+
+    let b = hamt_set(&mut store, &set_fn, &node, 3, 30);
+    let b = hamt_set(&mut store, &set_fn, &b, 4, 40);
+
+    let merged = hamt_merge(&mut store, &merge_fn, &a, &b);
+
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 1), Some(10));
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 2), Some(20));
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 3), Some(30));
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 4), Some(40));
+  }
+
+  #[test]
+  fn test_merge_overlap_src_wins() {
+    // {1: 10, 2: 20} merge {2: 99, 3: 30} → {1: 10, 2: 99, 3: 30}
+    let (mut store, instance) = load_hamt();
+    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
+    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
+    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+
+    let node = hamt_empty(&mut store, &empty_fn);
+    let a = hamt_set(&mut store, &set_fn, &node, 1, 10);
+    let a = hamt_set(&mut store, &set_fn, &a, 2, 20);
+
+    let b = hamt_set(&mut store, &set_fn, &node, 2, 99);
+    let b = hamt_set(&mut store, &set_fn, &b, 3, 30);
+
+    let merged = hamt_merge(&mut store, &merge_fn, &a, &b);
+
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 1), Some(10));
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 2), Some(99)); // src wins
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 3), Some(30));
+  }
+
+  #[test]
+  fn test_merge_into_empty() {
+    let (mut store, instance) = load_hamt();
+    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
+    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
+    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+
+    let empty = hamt_empty(&mut store, &empty_fn);
+    let b = hamt_set(&mut store, &set_fn, &empty, 1, 10);
+    let b = hamt_set(&mut store, &set_fn, &b, 2, 20);
+
+    let merged = hamt_merge(&mut store, &merge_fn, &empty, &b);
+
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 1), Some(10));
+    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 2), Some(20));
+  }
+
+  #[test]
+  fn test_merge_preserves_originals() {
+    let (mut store, instance) = load_hamt();
+    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
+    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
+    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+
+    let node = hamt_empty(&mut store, &empty_fn);
+    let a = hamt_set(&mut store, &set_fn, &node, 1, 10);
+    let b = hamt_set(&mut store, &set_fn, &node, 2, 20);
+
+    let _merged = hamt_merge(&mut store, &merge_fn, &a, &b);
+
+    // Originals unchanged.
+    assert_eq!(hamt_get(&mut store, &get_fn, &a, 1), Some(10));
+    assert_eq!(hamt_get(&mut store, &get_fn, &a, 2), None);
+    assert_eq!(hamt_get(&mut store, &get_fn, &b, 1), None);
+    assert_eq!(hamt_get(&mut store, &get_fn, &b, 2), Some(20));
   }
 }
