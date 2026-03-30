@@ -31,18 +31,22 @@ test 'match — synth refs resolve after lifting', fn:
         0: 42
 
   | equals fink":
-    (ref 32, n) == unresolved
-    (synth 5, ·v_32) == (local (bind 32))
-    (ref 19, ?) == unresolved
-    (synth 20, ·v_19) == (local (bind 19))
+    (ref 34, n) == unresolved
+    (synth 5, ·v_34) == (local (bind 34))
+    (ref 21, ?) == unresolved
+    (synth 22, ·v_21) == (local (bind 21))
+    (ref 53, ?) == unresolved
+    (synth 57, ·v_53) == (captured 1, (bind 53))
+    (ref 8, ?) == unresolved
+    (synth 55, ·v_8) == (local (bind 8))
     (ref 9, ?) == unresolved
     (synth 10, ·v_9) == (local (bind 9))
-    (ref 31, ?) == unresolved
-    (synth 37, ·v_31) == (captured 1, (bind 31))
+    (ref 33, ?) == unresolved
+    (synth 39, ·v_33) == (captured 1, (bind 33))
     (ref 1, n) == unresolved
-    (synth 33, ·v_1) == (local (bind 1))
+    (synth 35, ·v_1) == (local (bind 1))
     (ref 4, ?) == unresolved
-    (synth 35, ·v_4) == (local (bind 4))
+    (synth 37, ·v_4) == (local (bind 4))
     (ref 3, ?) == unresolved
-    (synth 26, ·v_3) == (local (bind 3))
+    (synth 28, ·v_3) == (local (bind 3))
 

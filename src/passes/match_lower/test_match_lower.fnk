@@ -43,15 +43,21 @@ test 'match literal single arm', fn:
       1: 42
 
   | equals fink":
-    ·match_arm
-      fn ·v_6, ·v_4, ·v_5:
-        ·match_value ·v_6, 1, ·v_4, fn:
-          ·v_5 _
+    ·fn
       fn ·v_9:
         ·v_9 42
-      fn ·v_16:
-        ·match_block 1, ·v_16, fn ·v_18:
-          ·export _
+      fn ·v_27:
+        ·fn
+          fn ·v_6, ·v_4, ·v_5:
+            ·match_value ·v_6, 1, ·v_4, fn:
+              ·v_5 _
+          fn ·v_28:
+            ·v_28 1,
+              fn:
+                ·panic _
+              fn:
+                ·v_27 fn ·v_20:
+                  ·export _
 
 
 test 'match literal first of two arms', fn:
@@ -61,21 +67,34 @@ test 'match literal first of two arms', fn:
       _: 99
 
   | equals fink":
-    ·match_arm
-      fn ·v_6, ·v_4, ·v_5:
-        ·match_value ·v_6, 0, ·v_4, fn:
-          ·v_5 _
+    ·fn
       fn ·v_9:
         ·v_9 42
-      fn ·v_16:
-        ·match_arm
-          fn ·v_20, ·v_18, ·v_19:
-            ·v_19 _
-          fn ·v_22:
-            ·v_22 99
-          fn ·v_28:
-            ·match_block 1, ·v_16, ·v_28, fn ·v_30:
-              ·export _
+      fn ·v_49:
+        ·fn
+          fn ·v_6, ·v_4, ·v_5:
+            ·match_value ·v_6, 0, ·v_4, fn:
+              ·v_5 _
+          fn ·v_50:
+            ·v_50 1,
+              fn:
+                ·fn
+                  fn ·v_24:
+                    ·v_24 99
+                  fn ·v_41:
+                    ·fn
+                      fn ·v_22, ·v_20, ·v_21:
+                        ·v_21 _
+                      fn ·v_42:
+                        ·v_42 1,
+                          fn:
+                            ·panic _
+                          fn:
+                            ·v_41 fn ·v_32:
+                              ·export _
+              fn:
+                ·v_49 fn ·v_32:
+                  ·export _
 
 
 
@@ -85,15 +104,20 @@ test 'match variable binding', fn:
       x: x + 1
 
   | equals fink":
-    ·match_arm
-      fn ·v_7, ·v_5, ·v_6:
-        ·let ·v_7, fn ·x_0:
-          ·v_6 ·x_0
+    ·fn
       fn ·x_0, ·v_9:
         ·op_plus ·x_0, 1, ·v_9
-      fn ·v_16:
-        ·match_block 5, ·v_16, fn ·v_18:
-          ·export _
+      fn ·v_26:
+        ·fn
+          fn ·v_7, ·v_5, ·v_6:
+            ·v_6 ·v_7
+          fn ·v_27:
+            ·v_27 5,
+              fn:
+                ·panic _
+              fn ·v_30:
+                ·v_26 ·v_30, fn ·v_19:
+                  ·export _
 
 
 
@@ -104,22 +128,34 @@ test 'match literal then variable', fn:
       x: x + 1
 
   | equals fink":
-    ·match_arm
-      fn ·v_7, ·v_5, ·v_6:
-        ·match_value ·v_7, 0, ·v_5, fn:
-          ·v_6 _
+    ·fn
       fn ·v_10:
         ·v_10 42
-      fn ·v_17:
-        ·match_arm
-          fn ·v_21, ·v_19, ·v_20:
-            ·let ·v_21, fn ·x_0:
-              ·v_20 ·x_0
-          fn ·x_0, ·v_23:
-            ·op_plus ·x_0, 1, ·v_23
-          fn ·v_30:
-            ·match_block 1, ·v_17, ·v_30, fn ·v_32:
-              ·export _
+      fn ·v_54:
+        ·fn
+          fn ·v_7, ·v_5, ·v_6:
+            ·match_value ·v_7, 0, ·v_5, fn:
+              ·v_6 _
+          fn ·v_55:
+            ·v_55 1,
+              fn:
+                ·fn
+                  fn ·x_0, ·v_25:
+                    ·op_plus ·x_0, 1, ·v_25
+                  fn ·v_44:
+                    ·fn
+                      fn ·v_23, ·v_21, ·v_22:
+                        ·v_22 ·v_23
+                      fn ·v_45:
+                        ·v_45 1,
+                          fn:
+                            ·panic _
+                          fn ·v_48:
+                            ·v_44 ·v_48, fn ·v_35:
+                              ·export _
+              fn:
+                ·v_54 fn ·v_35:
+                  ·export _
 
 
 
@@ -151,26 +187,47 @@ test 'match with guard', fn:
       x > 0 or x < 0: x + 1
 
   | equals fink":
-    ·match_arm
-      fn ·v_8, ·v_6, ·v_7:
-        ·let ·v_8, fn ·x_0:
-          ·match_if ·op_gt, ·x_0, 0, ·v_6, fn:
-            ·v_7 _
+    ·fn
       fn ·x_0, ·v_12:
         ·v_12 42
-      fn ·v_21:
-        ·match_arm
-          fn ·v_25, ·v_23, ·v_24:
-            ·let ·v_25, fn ·x_1:
-              ·op_gt ·x_1, 0, fn ·v_29:
-                ·op_lt ·x_1, 0, fn ·v_33:
-                  ·match_if ·op_or, ·v_29, ·v_33, ·v_23, fn:
-                    ·v_24 _
-          fn ·x_1, ·v_35:
-            ·op_plus ·x_1, 1, ·v_35
-          fn ·v_50:
-            ·match_block 1, ·v_21, ·v_50, fn ·v_52:
-              ·export _
+      fn ·v_77:
+        ·fn
+          fn ·v_8, ·v_6, ·v_7:
+            ·let ·v_8, fn ·x_0:
+              ·op_gt ·x_0, 0, fn ·v_89:
+                ·if ·v_89,
+                  fn:
+                    ·v_7 ·x_0
+                  fn:
+                    ·v_6 _
+          fn ·v_78:
+            ·v_78 1,
+              fn:
+                ·fn
+                  fn ·x_1, ·v_38:
+                    ·op_plus ·x_1, 1, ·v_38
+                  fn ·v_67:
+                    ·fn
+                      fn ·v_28, ·v_26, ·v_27:
+                        ·let ·v_28, fn ·x_1:
+                          ·op_gt ·x_1, 0, fn ·v_32:
+                            ·op_lt ·x_1, 0, fn ·v_36:
+                              ·op_or ·v_32, ·v_36, fn ·v_95:
+                                ·if ·v_95,
+                                  fn:
+                                    ·v_27 ·x_1
+                                  fn:
+                                    ·v_26 _
+                      fn ·v_68:
+                        ·v_68 1,
+                          fn:
+                            ·panic _
+                          fn ·v_71:
+                            ·v_67 ·v_71, fn ·v_58:
+                              ·export _
+              fn ·v_81:
+                ·v_77 ·v_81, fn ·v_58:
+                  ·export _
 
 
 
@@ -188,25 +245,38 @@ test 'record destructure with guard', fn:
   | equals fink":
     ·let 1, fn ·x_0:
       ·let 3, fn ·y_1:
-        ·match_arm
-          fn ·v_15, ·v_13, ·v_14:
-            ·match_rec ·v_15, ·v_13, fn ·v_17:
-              ·match_field ·v_17, 'x', ·v_13, fn ·v_18, ·v_19:
-                ·let ·v_18, fn ·x_2:
-                  ·match_field ·v_19, 'y', ·v_13, fn ·v_22, ·v_23:
-                    ·let ·v_22, fn ·z_3:
-                      ·v_14 ·z_3
+        ·fn
           fn ·x_2, ·z_3, ·v_27:
             ·op_plus ·x_2, ·y_1, fn ·v_30:
               ·op_plus ·v_30, ·z_3, ·v_27
-          fn ·v_52:
-            ·match_arm
-              fn ·v_56, ·v_54, ·v_55:
-                ·match_rec ·v_56, ·v_54, ·v_55
-              fn ·v_60:
-                ·op_plus ·x_0, ·y_1, fn ·v_63:
-                  ·op_plus ·v_63, ·z_4, ·v_60
-              fn ·v_73:
-                ·match_block ·∅foo, ·v_52, ·v_73, fn ·v_75:
-                  ·export ·x_0, ·y_1
+          fn ·v_96:
+            ·fn
+              fn ·v_15, ·v_13, ·v_14:
+                ·match_rec ·v_15, ·v_13, fn ·v_17:
+                  ·match_field ·v_17, 'x', ·v_13, fn ·v_18, ·v_19:
+                    ·let ·v_18, fn ·x_2:
+                      ·match_field ·v_19, 'y', ·v_13, fn ·v_22, ·v_23:
+                        ·let ·v_22, fn ·z_3:
+                          ·v_14 ·z_3
+              fn ·v_97:
+                ·v_97 ·∅foo,
+                  fn:
+                    ·fn
+                      fn ·v_60:
+                        ·op_plus ·x_0, ·y_1, fn ·v_63:
+                          ·op_plus ·v_63, ·z_4, ·v_60
+                      fn ·v_88:
+                        ·fn
+                          fn ·v_56, ·v_54, ·v_55:
+                            ·match_rec ·v_56, ·v_54, ·v_55
+                          fn ·v_89:
+                            ·v_89 ·∅foo,
+                              fn:
+                                ·panic _
+                              fn:
+                                ·v_88 fn ·v_75:
+                                  ·export ·x_0, ·y_1
+                  fn ·v_100, ·v_101:
+                    ·v_96 ·v_100, ·v_101, fn ·v_75:
+                      ·export ·x_0, ·y_1
 

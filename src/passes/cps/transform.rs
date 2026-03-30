@@ -989,17 +989,61 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, arm_params: &[BindN
 
       // Matcher cont: [scrutinee_params..., fail_bind, succ_bind]
       // Pattern chain uses fail_bind.id for failure, succ_bind.id for success.
-      let matcher_body = if arm_pending.is_empty() {
-        // Wildcard / no checks — matcher immediately jumps to succ.
-        // Empty App to succ cont — renders as `·apply ·ƒ_succ`.
+      //
+      // Collect bind values to forward through succ. For bind-only patterns
+      // (simple variable `x: body`), the MatchBind is redundant in the matcher
+      // because the body already receives the value as a param. For guarded
+      // patterns (`a > 1: body`), the MatchBind must stay because the guard
+      // references the bound name.
+      let has_checks = arm_pending.iter().any(|p| !matches!(p, Pending::MatchBind { .. }));
+
+      let matcher_body = if !has_checks {
+        // Bind-only (no guards/checks) — collect vals, skip MatchBind, call succ directly.
+        let bind_vals: Vec<Val<'src>> = arm_pending.into_iter().filter_map(|p| match p {
+          Pending::MatchBind { val, .. } => Some(val),
+          _ => None,
+        }).collect();
+
         let succ_val = g.val(ValKind::ContRef(succ_id), origin);
+        let succ_args: Vec<Arg<'src>> = bind_vals.into_iter().map(Arg::Val).collect();
         g.expr(ExprKind::App {
           func: Callable::Val(succ_val),
-          args: vec![],
+          args: succ_args,
         }, origin)
       } else {
-        wrap_with_fail(g, arm_pending, Cont::Ref(succ_id), Some(fail_bind.id))
+        // Has guards/checks — keep full pending chain with MatchBind + guards.
+        // Build a succ tail that forwards bound values, but only for chains
+        // that don't contain structural matchers (MatchSeq/MatchNext/MatchDone/
+        // MatchField/MatchRec/MatchRest/MatchNotDone) which use cont_with_result
+        // and would mangle a Cont::Expr wrapper.
+        let has_structural = arm_pending.iter().any(|p| matches!(p,
+          Pending::MatchSeq { .. } | Pending::MatchNext { .. } |
+          Pending::MatchDone { .. } | Pending::MatchNotDone { .. } |
+          Pending::MatchRest { .. } | Pending::MatchRec { .. } |
+          Pending::MatchField { .. }
+        ));
+        let succ_tail = if has_structural {
+          // Structural matchers present — use bare Cont::Ref, forwarding
+          // is handled by the structural chain's continuation wiring.
+          Cont::Ref(succ_id)
+        } else {
+          // Only MatchBind + MatchGuard/MatchValue — safe to wrap succ call.
+          let bind_refs: Vec<Arg<'src>> = arm_pending.iter().filter_map(|p| match p {
+            Pending::MatchBind { name, .. } => {
+              Some(Arg::Val(ref_val(g, name.kind, name.id, origin)))
+            }
+            _ => None,
+          }).collect();
+          let succ_val = g.val(ValKind::ContRef(succ_id), origin);
+          let succ_call = g.expr(ExprKind::App {
+            func: Callable::Val(succ_val),
+            args: bind_refs,
+          }, origin);
+          Cont::Expr { args: vec![], body: Box::new(succ_call) }
+        };
+        wrap_with_fail(g, arm_pending, succ_tail, Some(fail_bind.id))
       };
+
       let mut matcher_args = matcher_scrutinee_params;
       matcher_args.push(fail_bind);
       matcher_args.push(succ_bind);
