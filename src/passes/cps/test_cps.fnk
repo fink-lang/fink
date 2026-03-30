@@ -904,7 +904,6 @@ test 'two fns at module level — main calls add', fn:
       fn ·v_5: ·v_4 ·v_5
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSTtJQUFNLEFBQUE7U0FBRyxNQUFHLE1BQU4sSSxFQUNGLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO1NBQUEsSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQUVPLEFBQUE7ZUFBQSxLLEVBQ0wsQUFBQSxPQUFJLEMsRUFBRyxDLEVBREY7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2dCQUZBLEFBQUEsS0FFQTtLQUZBLEksRSxBLEtBQUEiCn0=
 
-# TODO bug in AST parsing `a - add b` wrong, need to re-review once fixed
 test 'shadowed binding — inner add does not affect outer', fn:
   expect cps_expr fink":
     add = fn a, b:
