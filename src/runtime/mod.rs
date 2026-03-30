@@ -696,4 +696,323 @@ mod tests {
     find_fn.call(&mut store, &[nil, v1], &mut result).unwrap();
     assert_eq!(result[0].unwrap_i32(), -1);
   }
+
+  // -- Set tests ------------------------------------------------------
+
+  fn load_set() -> (Store<()>, Instance) {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let wat = include_bytes!("set.wat");
+    let module = Module::new(&engine, &wat[..]).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
+  }
+
+  fn set_empty(store: &mut Store<()>, fn_: &Func) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    fn_.call(store, &[], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn set_set(store: &mut Store<()>, fn_: &Func, node: &Val, key: u32) -> Val {
+    let k = i31_key(store, key);
+    let mut result = [Val::AnyRef(None)];
+    fn_.call(store, &[node.clone(), k], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn set_has(store: &mut Store<()>, fn_: &Func, node: &Val, key: u32) -> bool {
+    let k = i31_key(store, key);
+    let mut result = [Val::I32(0)];
+    fn_.call(store, &[node.clone(), k], &mut result).unwrap();
+    result[0].unwrap_i32() != 0
+  }
+
+  fn set_remove(store: &mut Store<()>, fn_: &Func, node: &Val, key: u32) -> Val {
+    let k = i31_key(store, key);
+    let mut result = [Val::AnyRef(None)];
+    fn_.call(store, &[node.clone(), k], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn set_size(store: &mut Store<()>, fn_: &Func, node: &Val) -> i32 {
+    let mut result = [Val::I32(0)];
+    fn_.call(store, &[node.clone()], &mut result).unwrap();
+    result[0].unwrap_i32()
+  }
+
+  fn set_op(store: &mut Store<()>, fn_: &Func, a: &Val, b: &Val) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    fn_.call(store, &[a.clone(), b.clone()], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  #[test]
+  fn test_set_empty_and_add() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let has_fn = instance.get_func(&mut store, "set_has").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    assert_eq!(set_size(&mut store, &size_fn, &s), 0);
+    assert!(!set_has(&mut store, &has_fn, &s, 1));
+
+    let s = set_set(&mut store, &add_fn, &s, 1);
+    let s = set_set(&mut store, &add_fn, &s, 2);
+    let s = set_set(&mut store, &add_fn, &s, 3);
+
+    assert_eq!(set_size(&mut store, &size_fn, &s), 3);
+    assert!(set_has(&mut store, &has_fn, &s, 1));
+    assert!(set_has(&mut store, &has_fn, &s, 2));
+    assert!(set_has(&mut store, &has_fn, &s, 3));
+    assert!(!set_has(&mut store, &has_fn, &s, 99));
+  }
+
+  #[test]
+  fn test_set_set_duplicate() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let s = set_set(&mut store, &add_fn, &s, 1);
+    let s = set_set(&mut store, &add_fn, &s, 1);
+    let s = set_set(&mut store, &add_fn, &s, 1);
+
+    assert_eq!(set_size(&mut store, &size_fn, &s), 1);
+  }
+
+  #[test]
+  fn test_set_remove() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let has_fn = instance.get_func(&mut store, "set_has").unwrap();
+    let remove_fn = instance.get_func(&mut store, "set_remove").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let s = set_set(&mut store, &add_fn, &s, 1);
+    let s = set_set(&mut store, &add_fn, &s, 2);
+    let s = set_set(&mut store, &add_fn, &s, 3);
+
+    let s2 = set_remove(&mut store, &remove_fn, &s, 2);
+    assert_eq!(set_size(&mut store, &size_fn, &s2), 2);
+    assert!(set_has(&mut store, &has_fn, &s2, 1));
+    assert!(!set_has(&mut store, &has_fn, &s2, 2));
+    assert!(set_has(&mut store, &has_fn, &s2, 3));
+
+    // Original unchanged.
+    assert_eq!(set_size(&mut store, &size_fn, &s), 3);
+  }
+
+  #[test]
+  fn test_set_union() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let has_fn = instance.get_func(&mut store, "set_has").unwrap();
+    let union_fn = instance.get_func(&mut store, "set_union").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let a = set_set(&mut store, &add_fn, &s, 1);
+    let a = set_set(&mut store, &add_fn, &a, 2);
+
+    let b = set_set(&mut store, &add_fn, &s, 2);
+    let b = set_set(&mut store, &add_fn, &b, 3);
+
+    let u = set_op(&mut store, &union_fn, &a, &b);
+    assert_eq!(set_size(&mut store, &size_fn, &u), 3);
+    assert!(set_has(&mut store, &has_fn, &u, 1));
+    assert!(set_has(&mut store, &has_fn, &u, 2));
+    assert!(set_has(&mut store, &has_fn, &u, 3));
+  }
+
+  #[test]
+  fn test_set_intersect() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let has_fn = instance.get_func(&mut store, "set_has").unwrap();
+    let intersect_fn = instance.get_func(&mut store, "set_intersect").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let a = set_set(&mut store, &add_fn, &s, 1);
+    let a = set_set(&mut store, &add_fn, &a, 2);
+    let a = set_set(&mut store, &add_fn, &a, 3);
+
+    let b = set_set(&mut store, &add_fn, &s, 2);
+    let b = set_set(&mut store, &add_fn, &b, 3);
+    let b = set_set(&mut store, &add_fn, &b, 4);
+
+    let i = set_op(&mut store, &intersect_fn, &a, &b);
+    assert_eq!(set_size(&mut store, &size_fn, &i), 2);
+    assert!(!set_has(&mut store, &has_fn, &i, 1));
+    assert!(set_has(&mut store, &has_fn, &i, 2));
+    assert!(set_has(&mut store, &has_fn, &i, 3));
+    assert!(!set_has(&mut store, &has_fn, &i, 4));
+  }
+
+  #[test]
+  fn test_set_difference() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let has_fn = instance.get_func(&mut store, "set_has").unwrap();
+    let diff_fn = instance.get_func(&mut store, "set_difference").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let a = set_set(&mut store, &add_fn, &s, 1);
+    let a = set_set(&mut store, &add_fn, &a, 2);
+    let a = set_set(&mut store, &add_fn, &a, 3);
+
+    let b = set_set(&mut store, &add_fn, &s, 2);
+    let b = set_set(&mut store, &add_fn, &b, 4);
+
+    // a - b = {1, 3}
+    let d = set_op(&mut store, &diff_fn, &a, &b);
+    assert_eq!(set_size(&mut store, &size_fn, &d), 2);
+    assert!(set_has(&mut store, &has_fn, &d, 1));
+    assert!(!set_has(&mut store, &has_fn, &d, 2));
+    assert!(set_has(&mut store, &has_fn, &d, 3));
+  }
+
+  #[test]
+  fn test_set_many() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let has_fn = instance.get_func(&mut store, "set_has").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let mut s = set_empty(&mut store, &empty_fn);
+    for i in 0..100u32 {
+      s = set_set(&mut store, &add_fn, &s, i);
+    }
+    assert_eq!(set_size(&mut store, &size_fn, &s), 100);
+    for i in 0..100u32 {
+      assert!(set_has(&mut store, &has_fn, &s, i), "should have {}", i);
+    }
+    assert!(!set_has(&mut store, &has_fn, &s, 100));
+  }
+
+  fn set_i32(store: &mut Store<()>, fn_: &Func, a: &Val, b: &Val) -> i32 {
+    let mut result = [Val::I32(0)];
+    fn_.call(store, &[a.clone(), b.clone()], &mut result).unwrap();
+    result[0].unwrap_i32()
+  }
+
+  #[test]
+  fn test_set_sym_diff() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let has_fn = instance.get_func(&mut store, "set_has").unwrap();
+    let sym_fn = instance.get_func(&mut store, "set_sym_diff").unwrap();
+    let size_fn = instance.get_func(&mut store, "set_size").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let a = set_set(&mut store, &add_fn, &s, 1);
+    let a = set_set(&mut store, &add_fn, &a, 2);
+    let a = set_set(&mut store, &add_fn, &a, 3);
+
+    let b = set_set(&mut store, &add_fn, &s, 2);
+    let b = set_set(&mut store, &add_fn, &b, 3);
+    let b = set_set(&mut store, &add_fn, &b, 4);
+
+    // a ^ b = {1, 4}
+    let sd = set_op(&mut store, &sym_fn, &a, &b);
+    assert_eq!(set_size(&mut store, &size_fn, &sd), 2);
+    assert!(set_has(&mut store, &has_fn, &sd, 1));
+    assert!(!set_has(&mut store, &has_fn, &sd, 2));
+    assert!(!set_has(&mut store, &has_fn, &sd, 3));
+    assert!(set_has(&mut store, &has_fn, &sd, 4));
+  }
+
+  #[test]
+  fn test_set_subset() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let subset_fn = instance.get_func(&mut store, "set_subset").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let a = set_set(&mut store, &add_fn, &s, 1);
+    let a = set_set(&mut store, &add_fn, &a, 2);
+
+    let b = set_set(&mut store, &add_fn, &s, 1);
+    let b = set_set(&mut store, &add_fn, &b, 2);
+    let b = set_set(&mut store, &add_fn, &b, 3);
+
+    // {1, 2} <= {1, 2, 3} → true
+    assert_eq!(set_i32(&mut store, &subset_fn, &a, &b), 1);
+    // {1, 2, 3} <= {1, 2} → false
+    assert_eq!(set_i32(&mut store, &subset_fn, &b, &a), 0);
+    // {1, 2} <= {1, 2} → true
+    assert_eq!(set_i32(&mut store, &subset_fn, &a, &a), 1);
+    // {} <= {1, 2} → true
+    assert_eq!(set_i32(&mut store, &subset_fn, &s, &a), 1);
+  }
+
+  #[test]
+  fn test_set_disjoint() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let disjoint_fn = instance.get_func(&mut store, "set_disjoint").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let a = set_set(&mut store, &add_fn, &s, 1);
+    let a = set_set(&mut store, &add_fn, &a, 2);
+
+    let b = set_set(&mut store, &add_fn, &s, 3);
+    let b = set_set(&mut store, &add_fn, &b, 4);
+
+    let c = set_set(&mut store, &add_fn, &s, 2);
+    let c = set_set(&mut store, &add_fn, &c, 3);
+
+    // {1, 2} >< {3, 4} → true
+    assert_eq!(set_i32(&mut store, &disjoint_fn, &a, &b), 1);
+    // {1, 2} >< {2, 3} → false
+    assert_eq!(set_i32(&mut store, &disjoint_fn, &a, &c), 0);
+    // {} >< {1, 2} → true
+    assert_eq!(set_i32(&mut store, &disjoint_fn, &s, &a), 1);
+  }
+
+  #[test]
+  fn test_set_eq() {
+    let (mut store, instance) = load_set();
+    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let add_fn = instance.get_func(&mut store, "set_set").unwrap();
+    let eq_fn = instance.get_func(&mut store, "set_eq").unwrap();
+
+    let s = set_empty(&mut store, &empty_fn);
+    let a = set_set(&mut store, &add_fn, &s, 1);
+    let a = set_set(&mut store, &add_fn, &a, 2);
+
+    let b = set_set(&mut store, &add_fn, &s, 2);
+    let b = set_set(&mut store, &add_fn, &b, 1);
+
+    let c = set_set(&mut store, &add_fn, &s, 1);
+    let c = set_set(&mut store, &add_fn, &c, 3);
+
+    // {1, 2} == {2, 1} → true (order independent)
+    assert_eq!(set_i32(&mut store, &eq_fn, &a, &b), 1);
+    // {1, 2} == {1, 3} → false
+    assert_eq!(set_i32(&mut store, &eq_fn, &a, &c), 0);
+    // {} == {} → true
+    assert_eq!(set_i32(&mut store, &eq_fn, &s, &s), 1);
+    // {1, 2} == {} → false
+    assert_eq!(set_i32(&mut store, &eq_fn, &a, &s), 0);
+  }
 }
