@@ -421,7 +421,7 @@ fn lower_bind<'src>(
     }
     _ => {
       // All user binds (ident or pattern) are degenerate pattern matches.
-      // lower_pat_lhs emits MatchLetVal for plain idents, Match* chains for patterns.
+      // lower_pat_lhs emits MatchBind for plain idents, PatternMatch for complex patterns.
       let (bound_kind, bound_id) = lower_pat_lhs(g, lhs, val, origin, &mut pending);
       // Origin for the result val: recover the bound ident's AstId.
       // - Plain ident (`x = rhs`): lhs is the ident itself
@@ -510,7 +510,7 @@ fn lower_iife<'src>(
 /// - a list of Pending entries to prepend to the fn body via wrap().
 ///
 /// Complex destructuring params (e.g. `[1, ..b]`) are desugared to a fresh spread
-/// param `·v_N` and a set of Match* pending entries that destructure it.
+/// param `·v_N` and a set of PatternMatch/MatchBind pending entries that destructure it.
 fn extract_params_with_gen<'src>(
   g: &mut Gen,
   params: &'src Node<'src>,
@@ -537,7 +537,7 @@ fn extract_params_with_gen<'src>(
         };
         param_list.push(Param::Spread(bind));
       }
-      // Complex destructuring param — desugar to a fresh plain param + Match* lowering in body.
+      // Complex destructuring param — desugar to a fresh plain param + pattern lowering in body.
       // The param receives a single value (not varargs); destructuring happens inside the fn.
       _ => {
         let param_name = g.fresh_result(Some(p.id));
@@ -551,7 +551,7 @@ fn extract_params_with_gen<'src>(
   (param_list, deferred)
 }
 
-/// Wrap `body` in Match* nodes for each deferred pattern entry, innermost first.
+/// Wrap `body` in pattern nodes for each deferred pattern entry, innermost first.
 fn prepend_pat_binds<'src>(g: &mut Gen, deferred: Vec<Pending<'src>>, body: Expr<'src>) -> Expr<'src> {
   if deferred.is_empty() { return body; }
   let arg = g.fresh_result(None);
@@ -1203,7 +1203,7 @@ enum Pending<'src> {
   Val { name: BindNode, val: Val<'src>, origin: Option<AstId> },
   Fn { name: BindNode, params: Vec<Param>, fn_body: Expr<'src>, origin: Option<AstId> },
   App { func: Callable<'src>, args: Vec<Arg<'src>>, result: BindNode, origin: Option<AstId> },
-  /// Pattern-lowered bind — emits MatchLetVal with ·panic as fail cont.
+  /// Pattern-lowered bind — emits plain LetVal (fail is always ·panic for irrefutable binds).
   MatchBind { name: BindNode, val: Val<'src>, origin: Option<AstId> },
   /// Pattern-lowered guard check — emits func(args) + If with ·panic as fail cont.
   /// Used by Apply patterns (predicate guards like `is_even y`, `Ok b`).
@@ -1312,7 +1312,7 @@ fn wrap_with_fail<'src>(
         origin,
       ),
       Pending::MatchBind { name, val, origin } => {
-        // MatchLetVal → plain LetVal (fail is always Panic for irrefutable binds)
+        // Plain LetVal (fail is always Panic for irrefutable binds)
         g.expr(
           ExprKind::LetVal { name, val: Box::new(val), cont },
           origin,
@@ -1320,7 +1320,7 @@ fn wrap_with_fail<'src>(
       },
       Pending::MatchGuard { func, args, origin } => {
         // Guard check: call func(args...) → if result then cont else fail.
-        // No BuiltIn::MatchIf — inlined as plain App + If.
+        // Inlined as plain App + If (no dedicated guard builtin).
         let fail_val = make_fail_val(g, origin);
 
         // Build: fail()
@@ -1512,7 +1512,7 @@ pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResul
   CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() }
 }
 
-/// Recursively lower a pattern lhs node, appending Match* pending entries.
+/// Recursively lower a pattern lhs node, appending MatchBind/PatternMatch pending entries.
 /// `val` is the scrutinee already lowered from the rhs.
 /// Returns the Bind of the primary binding (used by the caller to construct Ret).
 ///

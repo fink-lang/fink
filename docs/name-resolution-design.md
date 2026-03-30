@@ -86,7 +86,7 @@ Classification computes the delta between ref's fn_depth and bind's fn_depth:
 5. If no bind found → `Unresolved`.
 
 Self-recursion detection: the CPS transform separates fn definitions (anonymous
-LetFn with Gen name) from their user-facing bindings (LetVal/MatchLetVal in the
+LetFn with Gen name) from their user-facing bindings (LetVal in the
 continuation). The resolver extracts `self_bind` by inspecting the continuation's
 first bind node and looking it up in the hoisted scope.
 

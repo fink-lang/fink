@@ -581,7 +581,7 @@ fn resolve_expr<'src>(
 
       // Determine self_bind for the fn body: the hoisted name that binds
       // this LetFn's result. The CPS transform produces the fn bind in the
-      // continuation — either as LetVal or MatchLetVal. Extract it from
+      // continuation — always as LetVal. Extract it from
       // the continuation's first bind node (if it's Cont::Expr).
       let cont_bind_id = if let Cont::Expr { body: cont_body, .. } = body {
         match &cont_body.kind {

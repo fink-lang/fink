@@ -427,8 +427,8 @@ pub enum ExprKind<'src> {
   },
 
   // ---------------------------------------------------------------------------
-  // Pattern matching — Match* primitives are emitted as App { BuiltIn::Match*, args }.
-  // Fail conts are encoded as ValKind::Panic or ValKind::ContRef in args.
+  // Pattern matching — all patterns lower to PatternMatch (LetFn + App).
+  // Collection primitives (SeqPop, RecPop, Empty) are emitted inside matcher bodies.
   //
   // Matcher invariant: matchers work with synthetic temps only (Bind::Synth).
   // No named bindings are created inside a matcher — if a pattern fails,
