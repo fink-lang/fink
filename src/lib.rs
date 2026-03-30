@@ -11,6 +11,8 @@ pub mod propgraph;
 pub mod sourcemap;
 pub mod strings;
 
+#[cfg(feature = "runner")]
+pub mod runtime;
 pub mod test_context;
 
 // Re-exports for convenience — short paths for foundational types.
