@@ -13,8 +13,11 @@
 ;;
 ;; Value representation:
 ;;   - Keys are (ref eq) — non-nullable
-;;   - Key equality uses ref.eq (identity)
-;;   - Phase 0 hash: i31.get_s
+;;   - Key equality uses ref.eq (identity) in phase 0. Will be extended
+;;     to direct-style deep_eq supporting: i31ref, $Num, $StrRaw,
+;;     $StrRendered. User-defined Eq via std-lib (CPS, future).
+;;   - Phase 0 hash: i31.get_s. Will be extended for $Num, $StrRaw,
+;;     $StrRendered via direct-style dispatch.
 ;;
 ;; Exported functions:
 ;;   $set_empty      : () -> (ref $SetNode)

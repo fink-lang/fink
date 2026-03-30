@@ -27,6 +27,9 @@
 ;;                   Indexed access. Returns null if out of bounds.
 ;;   $list_find    : (ref null $Cons), (ref eq) -> i32
 ;;                   Index of first element matching by ref.eq, or -1.
+;;                   Will be extended to direct-style deep_eq supporting:
+;;                   i31ref, $Num, $StrRaw, $StrRendered.
+;;                   Finding by user-defined Eq will live in std-lib (CPS).
 
 (module
 
