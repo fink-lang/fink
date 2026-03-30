@@ -6,7 +6,6 @@
 pub mod ast;
 pub mod cps;
 pub mod lifting;
-pub mod match_lower;
 pub mod name_res;
 pub mod partial;
 pub mod scopes;

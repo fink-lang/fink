@@ -455,8 +455,19 @@ fn extract_from_body<'src>(
         lifted_params.extend(params);
 
         // Extract cont args for wrap_hoisted binding.
+        // The cont body refs the LetFn's `name.id` (e.g. v_38) to call the function.
+        // After lifting to a closure, the closure instance is bound to a NEW synth id
+        // (e.g. v_112). Rewrite body refs from name.id → new_bind.id so the
+        // continuation uses the correct closure instance.
+        let name_id = name.id;
         let (cont_args_for_hoist, fn_closure_cont) = match cont {
-          Cont::Expr { args: ca, body } => (ca, Cont::Expr { args: vec![alloc.synth_bind()], body }),
+          Cont::Expr { args: ca, body } => {
+            let new_bind = alloc.synth_bind();
+            let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
+            rewrite_map.insert(name_id, new_bind.id);
+            let body = rewrite_refs(*body, &rewrite_map);
+            (ca, Cont::Expr { args: vec![new_bind], body: Box::new(body) })
+          }
           Cont::Ref(_) => (vec![alloc.synth_bind()], cont),
         };
 

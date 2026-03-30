@@ -289,6 +289,8 @@ test 'seq destructure with ref rhs', fn:
     (ref 20, ?) == unresolved
     (ref 1, a) == unresolved
 
+# TODO: (ref 1, a) should resolve to the `a` bound by `{a} = x` — rec destructure
+# bindings are not reaching name resolution correctly.
 test 'rec destructure with ref rhs', fn:
   expect cps_resolve fink":
     x = {a: 1}
@@ -300,6 +302,7 @@ test 'rec destructure with ref rhs', fn:
     (ref 11, ?) == unresolved
     (ref 12, ?) == unresolved
     (ref 1, a) == unresolved
+
 
 test 'nested seq destructure with ref rhs', fn:
   expect cps_resolve fink":
@@ -336,17 +339,24 @@ test 'match with literal arms', fn:
       1: 'one'
       2: 'two'
   | equals fink":
-    (ref 11, ?) == unresolved
-    (ref 16, ?) == unresolved
-    (ref 24, ?) == unresolved
-    (ref 9, ?) == unresolved
+    (ref 30, ?) == unresolved
+    (ref 10, ?) == unresolved
+    (ref 15, ?) == unresolved
+    (ref 23, ?) == unresolved
+    (ref 6, ?) == unresolved
+    (ref 36, ?) == unresolved
+    (ref 67, ?) == unresolved
+    (ref 47, ?) == unresolved
+    (ref 52, ?) == unresolved
+    (ref 60, ?) == unresolved
     (ref 43, ?) == unresolved
-    (ref 48, ?) == unresolved
-    (ref 56, ?) == unresolved
-    (ref 41, ?) == unresolved
+    (ref 73, ?) == unresolved
+    (ref 42, ?) == unresolved
+    (ref 80, ?) == unresolved
+    (ref 79, ?) == unresolved
+    (ref 80, ?) == unresolved
+    (ref 92, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 37, ?) == unresolved
-    (ref 69, ?) == unresolved
 
 test 'match with outer scope ref in arm', fn:
   expect cps_resolve fink":
@@ -356,18 +366,25 @@ test 'match with outer scope ref in arm', fn:
       1: y
       2: 'two'
   | equals fink":
-    (ref 13, ?) == unresolved
-    (ref 18, ?) == unresolved
-    (ref 26, ?) == unresolved
-    (ref 11, ?) == unresolved
     (ref 1, y) == unresolved
+    (ref 32, ?) == unresolved
+    (ref 12, ?) == unresolved
+    (ref 17, ?) == unresolved
+    (ref 25, ?) == unresolved
+    (ref 8, ?) == unresolved
+    (ref 38, ?) == unresolved
+    (ref 69, ?) == unresolved
+    (ref 49, ?) == unresolved
+    (ref 54, ?) == unresolved
+    (ref 62, ?) == unresolved
     (ref 45, ?) == unresolved
-    (ref 50, ?) == unresolved
-    (ref 58, ?) == unresolved
-    (ref 43, ?) == unresolved
+    (ref 75, ?) == unresolved
+    (ref 44, ?) == unresolved
+    (ref 82, ?) == unresolved
+    (ref 81, ?) == unresolved
+    (ref 82, ?) == unresolved
+    (ref 94, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 39, ?) == unresolved
-    (ref 71, ?) == unresolved
 
 test 'match result binding', fn:
   expect cps_resolve fink":
@@ -376,18 +393,25 @@ test 'match result binding', fn:
       1: 'one'
       2: 'two'
   | equals fink":
-    (ref 12, ?) == unresolved
-    (ref 17, ?) == unresolved
-    (ref 25, ?) == unresolved
-    (ref 10, ?) == unresolved
+    (ref 31, ?) == unresolved
+    (ref 11, ?) == unresolved
+    (ref 16, ?) == unresolved
+    (ref 24, ?) == unresolved
+    (ref 7, ?) == unresolved
+    (ref 37, ?) == unresolved
+    (ref 68, ?) == unresolved
+    (ref 48, ?) == unresolved
+    (ref 53, ?) == unresolved
+    (ref 61, ?) == unresolved
     (ref 44, ?) == unresolved
-    (ref 49, ?) == unresolved
-    (ref 57, ?) == unresolved
-    (ref 42, ?) == unresolved
+    (ref 74, ?) == unresolved
+    (ref 43, ?) == unresolved
+    (ref 81, ?) == unresolved
+    (ref 80, ?) == unresolved
+    (ref 81, ?) == unresolved
+    (ref 93, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 38, ?) == unresolved
-    (ref 70, ?) == unresolved
-    (ref 72, ?) == unresolved
+    (ref 94, ?) == unresolved
 
 
 ---
@@ -442,13 +466,18 @@ test 'match arm binding used in arm body', fn:
       a: a
       b: b + a
   | equals fink":
-    (ref 11, ?) == unresolved
     (ref 1, a) == unresolved
-    (ref 23, ?) == unresolved
+    (ref 16, ?) == unresolved
+    (ref 8, ?) == unresolved
     (ref 2, b) == unresolved
+    (ref 32, ?) == unresolved
+    (ref 22, ?) == unresolved
+    (ref 21, ?) == unresolved
+    (ref 38, ?) == unresolved
+    (ref 37, ?) == unresolved
+    (ref 38, ?) == unresolved
+    (ref 50, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 19, ?) == unresolved
-    (ref 33, ?) == unresolved
 
 test 'binding inside match arm body', fn:
   expect cps_resolve fink":
@@ -458,11 +487,14 @@ test 'binding inside match arm body', fn:
         y = a
         y
   | equals fink":
-    (ref 11, ?) == unresolved
     (ref 1, a) == unresolved
     (ref 2, y) == unresolved
+    (ref 18, ?) == unresolved
+    (ref 8, ?) == unresolved
+    (ref 23, ?) == unresolved
+    (ref 24, ?) == unresolved
+    (ref 32, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 21, ?) == unresolved
 
 test 'fn in match arm captures outer', fn:
   expect cps_resolve fink":
@@ -470,10 +502,13 @@ test 'fn in match arm captures outer', fn:
     match x:
       a: fn b: a
   | equals fink":
-    (ref 11, ?) == unresolved
     (ref 1, a) == unresolved
+    (ref 20, ?) == unresolved
+    (ref 8, ?) == unresolved
+    (ref 25, ?) == unresolved
+    (ref 26, ?) == unresolved
+    (ref 34, ?) == unresolved
     (ref 0, x) == unresolved
-    (ref 23, ?) == unresolved
 
 test 'spread param resolves locally', fn:
   expect cps_resolve fink":
