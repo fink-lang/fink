@@ -269,3 +269,17 @@ test 'factorial', fn:
   | equals fink":
     120
 
+
+test 'add list items', fn:
+  expect run fink":
+    sum = fn items, c:
+      match items:
+        []: c
+        [a, ..rest]: sum rest, c + a
+
+    main = fn:
+      sum [1, 2, 3, 4], 0
+
+  | equals fink":
+    10
+

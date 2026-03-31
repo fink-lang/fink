@@ -232,6 +232,8 @@ pub struct EmitResult {
   pub structural_locs: Vec<StructuralLoc>,
   /// Whether the module imports operators from @fink/runtime/operators.
   pub needs_operators: bool,
+  /// Whether the module imports list functions from @fink/runtime/list.
+  pub needs_list: bool,
 }
 
 /// A single source-map entry: WASM byte offset → .fnk source location.
@@ -282,9 +284,16 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Imported operators (op_*) dispatch their continuation via _croc_1.
   // Ensure _croc_1 is always emitted when operators are used, even if
   // the module has no user closures.
-  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_"));
+  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_") || n == "empty");
   if has_operator_imports {
     extra_arities.insert(1);
+  }
+  // List runtime (seq_append, seq_concat, seq_pop) dispatches via _croc_0/1/2.
+  let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
+  if has_list_imports {
+    extra_arities.insert(0);
+    extra_arities.insert(1);
+    extra_arities.insert(2);
   }
   // call_ref_or_clos_N dispatch helpers need $FnN types for all call arities.
   // The closure lifted fn arities (call_arity + captures) are already covered
@@ -292,6 +301,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.closure_captures = closure_captures.clone();
   e.call_arities = extra_arities.clone();
   e.needs_croc_for_operators = has_operator_imports;
+  e.needs_list = has_list_imports;
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
   all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
@@ -311,7 +321,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Sort by wasm_offset for monotonic DWARF line table emission.
   mappings.sort_by_key(|m| m.wasm_offset);
 
-  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_croc_for_operators }
+  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_croc_for_operators, needs_list: e.needs_list }
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +401,8 @@ struct Emitter<'a, 'src> {
   impl_builtins: BTreeMap<String, usize>,
   /// Whether _croc_1 is needed for imported operators (even without user closures).
   needs_croc_for_operators: bool,
+  /// Whether list runtime imports are present (seq_append, seq_concat, seq_pop).
+  needs_list: bool,
 }
 
 struct RawMapping {
@@ -414,6 +426,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       call_arities: BTreeSet::new(),
       impl_builtins: BTreeMap::new(),
       needs_croc_for_operators: false,
+      needs_list: false,
     }
   }
 
@@ -479,7 +492,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // _croc_N dispatch helpers have arity call_arity + 1 (args + callee).
     // They also need $FnN for all possible lifted arities they dispatch to.
     let needs_croc = !closure_captures.is_empty()
-      || builtins.keys().any(|n| n.starts_with("op_"));
+      || builtins.keys().any(|n| n.starts_with("op_") || n.starts_with("seq_") || n == "empty");
     if needs_croc {
       for &call_arity in extra_arities.iter() {
         all_arities.insert(call_arity + 1); // _croc_N's own type
@@ -514,9 +527,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     for (name, arity) in builtins {
       let type_idx = self.idx.fn_type_idx(*arity);
-      // Operators (op_*) are in @fink/runtime/operators, resolved by the linker.
-      // Other builtins (seq_pop, rec_pop, etc.) are host-provided via "env".
-      let module = if name.starts_with("op_") { "@fink/runtime/operators" } else { "env" };
+      // Route builtins to their runtime modules, resolved by the linker.
+      let module = if name.starts_with("op_") || name == "empty" {
+        "@fink/runtime/operators"
+      } else if name.starts_with("seq_") {
+        "@fink/runtime/list"
+      } else {
+        "env"
+      };
       imports.import(module, name, wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert(name.clone(), next_func_idx);
       next_func_idx += 1;
@@ -566,9 +584,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // Helper functions are appended after CPS-defined functions.
     let mut next_func_idx = self.idx.import_count + cps_mod.funcs.len() as u32;
 
-    // _croc_N dispatch functions — when closures exist or operators need _croc_1.
+    // _croc_N dispatch functions — when closures exist or runtime modules need them.
     // Type is $Fn<call_arity + 1> (args + callee, no result — tail calls).
-    let needs_croc = !closure_captures.is_empty() || self.needs_croc_for_operators;
+    let needs_croc = !closure_captures.is_empty() || self.needs_croc_for_operators || self.needs_list;
     if needs_croc {
       for &call_arity in call_arities {
         let type_idx = self.idx.fn_type_idx(call_arity + 1);
@@ -706,8 +724,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&wasm_func);
     }
 
-    // _croc_N dispatch bodies — when closures exist or operators need _croc_1.
-    if !closure_captures.is_empty() || self.needs_croc_for_operators {
+    // _croc_N dispatch bodies — when closures exist or runtime modules need them.
+    if !closure_captures.is_empty() || self.needs_croc_for_operators || self.needs_list {
       let call_arities: Vec<usize> = self.call_arities.iter().copied().collect();
       for call_arity in call_arities {
         code.function(&self.emit_croc(call_arity, closure_captures));
@@ -920,7 +938,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       func_names.append(idx, &func.label);
     }
     // Helper function names.
-    if !closure_captures.is_empty() || self.needs_croc_for_operators {
+    if !closure_captures.is_empty() || self.needs_croc_for_operators || self.needs_list {
       for &call_arity in call_arities {
         let name = format!("_croc_{}", call_arity);
         if let Some(&idx) = self.idx.funcs.get(&name) {

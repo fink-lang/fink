@@ -22,6 +22,21 @@ mod tests {
       "(import \"@fink/runtime/hashing\" \"hash_i31\"\n    (func $hash_i31 (param (ref eq)) (result i32)))",
       "(func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))",
     );
+    // Strip @fink/user imports and CPS wrapper functions — direct-style
+    // tests don't exercise them and can't provide the dispatch stubs.
+    let wat = wat.lines()
+      .filter(|line| !line.contains("(import \"@fink/user\""))
+      .collect::<Vec<_>>()
+      .join("\n");
+    // Remove CPS wrapper section (everything from the marker comment to module end).
+    let wat = if let Some(pos) = wat.find(";; CPS wrappers —") {
+      // Find the last `)` that closes the module — keep it.
+      let before = &wat[..pos];
+      let module_close = wat.rfind(')').unwrap();
+      format!("{}\n{}", before.trim_end(), &wat[module_close..])
+    } else {
+      wat
+    };
     wat.replace(
       "(module\n",
       &format!("(module\n{}\n", type_defs),

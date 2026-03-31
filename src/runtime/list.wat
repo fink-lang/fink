@@ -19,7 +19,7 @@
 ;;
 ;; Exported functions:
 ;;   $list_empty   : () -> (ref null $Cons)
-;;   $list_append    : (ref eq), (ref null $Cons) -> (ref $Cons)
+;;   $list_append  : (ref eq), (ref null $Cons) -> (ref $Cons)
 ;;   $list_head    : (ref $Cons) -> (ref eq)
 ;;   $list_tail    : (ref $Cons) -> (ref null $Cons)
 ;;   $list_pop     : (ref $Cons) -> (ref eq), (ref null $Cons)
@@ -34,11 +34,25 @@
 ;;                   Will be extended to direct-style deep_eq supporting:
 ;;                   i31ref, $Num, $StrRaw, $StrRendered.
 ;;                   Finding by user-defined Eq will live in std-lib (CPS).
+;;
+;; CPS wrappers (compiler-facing):
+;;   All params/results are (ref null any). Continuation dispatch via _croc_N.
+;;
+;;   $seq_append : (list, val, cont) -> _croc_1(new_list, cont)
+;;   $seq_concat : (list_a, list_b, cont) -> _croc_1(merged, cont)
+;;   $seq_pop    : (cursor, fail, succ) -> if empty: _croc_0(fail)
+;;                                         else: _croc_2(head, tail, succ)
 
 (import "@fink/runtime/types" "*" (func (param anyref)))
 
 
 (module
+
+  ;; Continuation dispatch — provided by the compiler's emitted module.
+  ;; The linker resolves these imports from @fink/user.
+  (import "@fink/user" "_croc_0" (func $croc_0 (param (ref null any))))
+  (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
+  (import "@fink/user" "_croc_2" (func $croc_2 (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; -- Type definitions -----------------------------------------------
 
@@ -238,6 +252,59 @@
         (br $scan)))
 
     (i32.const -1)
+  )
+
+
+  ;; =========================================================================
+  ;; CPS wrappers — compiler-facing interface
+  ;; =========================================================================
+  ;;
+  ;; All params are (ref null any). Direct-style functions above do the real
+  ;; work; these wrappers box/unbox and dispatch through continuations.
+
+  ;; seq_append(list, val, cont) — append val to end of list, pass result to cont.
+  ;; Wraps val in a singleton [val], then concatenates list ++ [val].
+  ;; O(n) per call — acceptable for literal construction; future: builder pattern.
+  (func $seq_append (export "seq_append")
+    (param $list (ref null any)) (param $val (ref null any)) (param $cont (ref null any))
+
+    (return_call $croc_1
+      (call $list_concat
+        (ref.cast (ref null $Cons) (local.get $list))
+        (call $list_append
+          (ref.cast (ref eq) (local.get $val))
+          (ref.null $Cons)))
+      (local.get $cont))
+  )
+
+  ;; seq_concat(list_a, list_b, cont) — concatenate two lists, pass result to cont.
+  (func $seq_concat (export "seq_concat")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    (return_call $croc_1
+      (call $list_concat
+        (ref.cast (ref null $Cons) (local.get $a))
+        (ref.cast (ref null $Cons) (local.get $b)))
+      (local.get $cont))
+  )
+
+  ;; seq_pop(cursor, fail, succ) — destructure [head, ..tail].
+  ;; If cursor is null (empty list): tail-call fail continuation with 0 args.
+  ;; If non-null: extract head + tail, tail-call succ continuation with 2 args.
+  (func $seq_pop (export "seq_pop")
+    (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
+
+    (local $cons (ref $Cons))
+
+    (if (ref.is_null (local.get $cursor))
+      (then (return_call $croc_0 (local.get $fail))))
+
+    (local.set $cons (ref.cast (ref $Cons) (local.get $cursor)))
+
+    (return_call $croc_2
+      (struct.get $Cons $head (local.get $cons))
+      (struct.get $Cons $tail (local.get $cons))
+      (local.get $succ))
   )
 
 )
