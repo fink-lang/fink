@@ -1,7 +1,7 @@
 // WASM binary emitter — encodes lifted CPS IR to WASM via wasm-encoder.
 //
 // Produces a WASM binary with:
-//   - WasmGC types ($Any, $Num, $FnN per arity)
+//   - WasmGC types ($Num, $ClosureN, $FnN per arity)
 //   - Imported builtins as functions
 //   - Defined functions from collected CPS IR
 //   - Globals for module-level fn aliases
@@ -29,8 +29,9 @@
 // - **local.set** → point to the binding name (e.g. `x` in `x = 42`).
 //   The mark is placed just before the local.set instruction.
 //
-// - **literals** (struct.new wrapping f64.const) → point to the literal
-//   value in source. Each value gets a mark from emit_val.
+// - **literals** (struct.new $Num wrapping f64.const, or ref.i31 wrapping
+//   i32.const for booleans) → point to the literal value in source.
+//   Each value gets a mark from emit_val.
 //
 // - **structural items** (func headers, params, globals, exports) are
 //   recorded as StructuralLoc entries, not DWARF, since they don't
@@ -155,7 +156,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
 
 /// Maps labels and builtins to WASM index spaces.
 struct Indices {
-  /// Type name → type index (e.g. "$Any" → 0, "$Num" → 1, "$Fn2" → 3).
+  /// Type name → type index (e.g. "$Num" → 0, "$Fn2" → 2).
   types: BTreeMap<String, u32>,
   /// Builtin import name → function index.
   imports: BTreeMap<String, u32>,
@@ -257,28 +258,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let mut types = TypeSection::new();
     let mut next_idx = 0u32;
 
-    let any_idx = next_idx;
+    // Universal value type: (ref null any) — WASM GC built-in, no custom $Any.
+    // All value slots use (ref null any). Structs ($Num, $ClosureN) are
+    // implicitly subtypes of any.
 
-    // $Any = (sub (struct))
+    // $Num = (struct (field f64)) — no supertype, implicitly sub any.
     types.ty().subtype(&SubType {
       is_final: false,
       supertype_idx: None,
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Struct(StructType {
-          fields: Box::new([]),
-        }),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$Any".into(), next_idx);
-    next_idx += 1;
-
-    // $Num = (sub $Any (struct (field f64)))
-    types.ty().subtype(&SubType {
-      is_final: false,
-      supertype_idx: Some(any_idx), // $Any
       composite_type: CompositeType {
         inner: CompositeInnerType::Struct(StructType {
           fields: Box::new([FieldType {
@@ -294,54 +281,18 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.types.insert("$Num".into(), next_idx);
     next_idx += 1;
 
-    // $Bool = (sub $Any (struct (field i32)))
-    types.ty().subtype(&SubType {
-      is_final: false,
-      supertype_idx: Some(any_idx),
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Struct(StructType {
-          fields: Box::new([FieldType {
-            element_type: StorageType::Val(ValType::I32),
-            mutable: false,
-          }]),
-        }),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$Bool".into(), next_idx);
-    next_idx += 1;
+    // Booleans use i31ref (0/1) — no $Bool struct type needed.
+    // i31ref is a subtype of eq which is a subtype of any.
 
-    // $FuncBox = (sub $Any (struct (field funcref)))
-    // Boxes a funcref so it can flow through (ref null $Any) slots.
+    // $BoxFuncTy = (func (param funcref) (result (ref null any)))
+    // Type for the _box_func helper exported for the host.
     let func_ref = ValType::Ref(RefType {
       nullable: true,
       heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Func },
     });
-    types.ty().subtype(&SubType {
-      is_final: true,
-      supertype_idx: Some(any_idx),
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Struct(StructType {
-          fields: Box::new([FieldType {
-            element_type: StorageType::Val(func_ref),
-            mutable: false,
-          }]),
-        }),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$FuncBox".into(), next_idx);
-    next_idx += 1;
-
-    // $BoxFuncTy = (func (param funcref) (result (ref null $Any)))
-    // Type for the __box_func helper exported for the host.
     let any_ref_val = ValType::Ref(RefType {
       nullable: true,
-      heap_type: HeapType::Concrete(any_idx),
+      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
     });
     types.ty().subtype(&SubType {
       is_final: true,
@@ -362,7 +313,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // $FnN for each arity (from defined functions + builtins).
     let any_ref = ValType::Ref(RefType {
       nullable: true,
-      heap_type: HeapType::Concrete(any_idx), // $Any
+      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
     });
     let mut all_arities = cps_mod.arities.clone();
     for &arity in builtins.values() {
@@ -397,23 +348,25 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
-    // $ClosureN = (sub $Any (struct (field (ref $FnM)) (field (ref $Any))...))
-    // where N = capture count, M = call_arity + N (the lifted fn's arity).
-    // We don't know the call_arity at the type level, so the funcref field
-    // is typed as (ref func) — any function reference. The dispatch helper
-    // casts it to the correct $FnM at call time.
-    let func_ref = ValType::Ref(RefType {
-      nullable: true,
-      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Func },
-    });
-    for &n_cap in closure_captures {
+    // $ClosureN = (struct (field funcref) (field (ref any))...)
+    // where N = capture count. Field 0 is funcref to the lifted function,
+    // fields 1..N are captured values. The dispatch helper casts the funcref
+    // to the correct $FnM at call time.
+    //
+    // $Closure0 (funcref only, zero captures) replaces the old $FuncBox —
+    // wraps a raw funcref so it can flow through (ref null any) slots.
+    // Always emitted so bare funcrefs can be boxed.
+    let mut all_closure_sizes: BTreeSet<usize> = closure_captures.clone();
+    all_closure_sizes.insert(0); // always need $Closure0
+
+    for &n_cap in &all_closure_sizes {
       let mut fields = Vec::with_capacity(1 + n_cap);
       // Field 0: funcref to the lifted function.
       fields.push(FieldType {
         element_type: StorageType::Val(func_ref),
         mutable: false,
       });
-      // Fields 1..N: captured values (all (ref $Any)).
+      // Fields 1..N: captured values (all (ref any)).
       for _ in 0..n_cap {
         fields.push(FieldType {
           element_type: StorageType::Val(any_ref),
@@ -422,7 +375,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
       types.ty().subtype(&SubType {
         is_final: true,
-        supertype_idx: Some(any_idx), // sub $Any
+        supertype_idx: None, // implicitly sub any (GC struct)
         composite_type: CompositeType {
           inner: CompositeInnerType::Struct(StructType {
             fields: fields.into_boxed_slice(),
@@ -436,9 +389,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
-    // $ClosureCtorN = (func (param (ref func) (ref $Any)...) (result (ref $Any)))
+    // $ClosureCtorN = (func (param (ref func) (ref any)...) (result (ref any)))
     // Type for $closure_N constructor functions.
-    for &n_cap in closure_captures {
+    for &n_cap in &all_closure_sizes {
       let mut params = Vec::with_capacity(1 + n_cap);
       params.push(func_ref); // funcref
       for _ in 0..n_cap {
@@ -458,10 +411,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
-    // $CallRefOrClosN = (func (param (ref $Any)... (ref $Any)) (result))
+    // $CallRefOrClosN = (func (param (ref any)... (ref any)) (result))
     // Type for $call_ref_or_clos_N dispatch functions.
     // Only emitted when closures exist — otherwise calls use direct return_call_ref.
-    // Params: N call args + 1 callee (all (ref $Any)), no results (tail call).
+    // Params: N call args + 1 callee (all (ref any)), no results (tail call).
     let dispatch_arities = if closure_captures.is_empty() { BTreeSet::new() } else { extra_arities.clone() };
     for &call_arity in &dispatch_arities {
       let params: Vec<ValType> = vec![any_ref; call_arity + 1]; // args + callee
@@ -541,8 +494,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // Helper functions are appended after CPS-defined functions.
     let mut next_func_idx = self.idx.import_count + cps_mod.funcs.len() as u32;
 
-    // $closure_N constructor functions.
-    for &n_cap in closure_captures {
+    // $closure_N constructor functions (including $Closure0 for bare funcref boxing).
+    let mut all_closure_sizes: BTreeSet<usize> = closure_captures.clone();
+    all_closure_sizes.insert(0);
+    for &n_cap in &all_closure_sizes {
       let type_idx = self.idx.type_idx(&format!("$ClosureCtor{}", n_cap));
       functions.function(type_idx);
       // Name matches the old import convention: closure_N where N = total val args (funcref + captures).
@@ -571,7 +526,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
-    // _box_func helper: (func (param funcref) (result (ref null $Any)))
+    // _box_func helper: (func (param funcref) (result (ref null any)))
     let box_func_type_idx = self.idx.type_idx("$BoxFuncTy");
     functions.function(box_func_type_idx);
     self.idx.funcs.insert("_box_func".into(), next_func_idx);
@@ -689,8 +644,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&wasm_func);
     }
 
-    // $closure_N constructor bodies.
-    for &n_cap in closure_captures {
+    // $closure_N constructor bodies (including $Closure0).
+    let mut all_closure_sizes: BTreeSet<usize> = closure_captures.clone();
+    all_closure_sizes.insert(0);
+    for &n_cap in &all_closure_sizes {
       code.function(&self.emit_closure_ctor(n_cap));
     }
 
@@ -705,10 +662,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // Implemented builtin bodies.
     {
       let type_indices = super::builtins::TypeIndices {
-        any: self.idx.type_idx("$Any"),
         num: self.idx.type_idx("$Num"),
-        bool_: self.idx.type_idx("$Bool"),
-        funcbox: self.idx.type_idx("$FuncBox"),
+        closure0: self.idx.type_idx("$Closure0"),
         fn1: self.idx.fn_type_idx(1),
         croc1: self.idx.funcs.get("_croc_1").copied(),
       };
@@ -719,12 +674,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    // _box_func body: (struct.new $FuncBox (local.get 0))
+    // _box_func body: (struct.new $Closure0 (local.get 0))
     {
       let mut f = Function::new(vec![]);
-      let funcbox_idx = self.idx.type_idx("$FuncBox");
+      let closure0_idx = self.idx.type_idx("$Closure0");
       f.instruction(&Instruction::LocalGet(0));
-      f.instruction(&Instruction::StructNew(funcbox_idx));
+      f.instruction(&Instruction::StructNew(closure0_idx));
       f.instruction(&Instruction::End);
       code.function(&f);
     }
@@ -754,7 +709,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   fn emit_call_ref_or_clos(&self, call_arity: usize, closure_captures: &BTreeSet<usize>) -> Function {
     let any_rt = RefType {
       nullable: true,
-      heap_type: HeapType::Concrete(self.idx.type_idx("$Any")),
+      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
     };
     let any_ref = ValType::Ref(any_rt);
     let callee_param = call_arity as u32; // last param index
@@ -831,9 +786,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
       f.instruction(&Instruction::Drop);
     }
 
-    // Fallthrough: plain funcref in $FuncBox. Unbox, cast, call.
+    // Fallthrough: plain funcref in $Closure0. Unbox, cast, call.
     let fn_type_idx = self.idx.fn_type_idx(call_arity);
-    let funcbox_idx = self.idx.type_idx("$FuncBox");
+    let funcbox_idx = self.idx.type_idx("$Closure0");
 
     // Push args.
     for i in 0..call_arity as u32 {
@@ -854,7 +809,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   fn emit_func_body(&mut self, func: &CollectedFn<'_, '_>, def_idx: u32) -> Function {
     let any_ref = ValType::Ref(RefType {
       nullable: true,
-      heap_type: HeapType::Concrete(self.idx.type_idx("$Any")),
+      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
     });
 
     // Build local name → param/local index map for this function.
@@ -912,8 +867,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let idx = self.idx.func_idx(&func.label);
       func_names.append(idx, &func.label);
     }
-    // Helper function names.
-    for &n_cap in closure_captures {
+    // Helper function names (including $Closure0).
+    let mut all_closure_sizes: BTreeSet<usize> = closure_captures.clone();
+    all_closure_sizes.insert(0);
+    for &n_cap in &all_closure_sizes {
       let name = format!("_closure_{}", n_cap + 1);
       let idx = self.idx.func_idx(&name);
       func_names.append(idx, &name);
@@ -1019,15 +976,15 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       match cont {
         Cont::Expr { body, .. } => emit_body(body, fc),
         Cont::Ref(id) => {
-          // Tail call to continuation: unbox $FuncBox, return_call_ref $Fn1
+          // Tail call to continuation: unbox $Closure0, return_call_ref $Fn1
           let local_label = fc.ctx.label(name.id);
           let local_idx = fc.local_idx(&local_label);
           fc.instr(&Instruction::LocalGet(local_idx));
           let cont_label = fc.ctx.label(*id);
           emit_get(fc, &cont_label);
-          let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
-          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
-          fc.instr(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
+          let closure0_idx = fc.emitter_idx.type_idx("$Closure0");
+          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure0_idx)));
+          fc.instr(&Instruction::StructGet { struct_type_index: closure0_idx, field_index: 0 });
           let fn1_type = fc.emitter_idx.fn_type_idx(1);
           fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
           fc.mark(val.id);
@@ -1052,11 +1009,13 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 
     ExprKind::If { cond, then, else_ } => {
       fc.mark(expr.id);
-      // Unbox cond: ref.cast (ref $Bool), struct.get $Bool 0 → i32 (0 or 1).
+      // Unbox cond: ref.cast i31, i31.get_s → i32 (0 or 1).
       emit_val(cond, fc);
-      let bool_idx = fc.emitter_idx.type_idx("$Bool");
-      fc.instr(&Instruction::RefCastNonNull(HeapType::Concrete(bool_idx)));
-      fc.instr(&Instruction::StructGet { struct_type_index: bool_idx, field_index: 0 });
+      fc.instr(&Instruction::RefCastNonNull(HeapType::Abstract {
+        shared: false,
+        ty: AbstractHeapType::I31,
+      }));
+      fc.instr(&Instruction::I31GetS);
 
       fc.instr(&Instruction::If(wasm_encoder::BlockType::Empty));
       emit_body(then, fc);
@@ -1136,9 +1095,9 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut Func
     }
     emit_val_ref(func_val, fc);
 
-    let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
-    fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
-    fc.instr(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
+    let closure0_idx = fc.emitter_idx.type_idx("$Closure0");
+    fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure0_idx)));
+    fc.instr(&Instruction::StructGet { struct_type_index: closure0_idx, field_index: 0 });
     let type_idx = fc.emitter_idx.fn_type_idx(total_arity);
     fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(type_idx)));
     // Mark the call instruction.
@@ -1226,10 +1185,10 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
 
         let cont_label = fc.ctx.label(*id);
         emit_get(fc, &cont_label);
-        // Unbox $FuncBox → funcref.
-        let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
-        fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(funcbox_idx)));
-        fc.instr(&Instruction::StructGet { struct_type_index: funcbox_idx, field_index: 0 });
+        // Unbox $Closure0 → funcref.
+        let closure0_idx = fc.emitter_idx.type_idx("$Closure0");
+        fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure0_idx)));
+        fc.instr(&Instruction::StructGet { struct_type_index: closure0_idx, field_index: 0 });
         let fn1_type = fc.emitter_idx.fn_type_idx(1);
         fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
         // Mark with the first val arg (the funcref to the lifted fn).
@@ -1343,15 +1302,16 @@ fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::StructNew(num_idx));
     }
     Lit::Bool(b) => {
-      let bool_idx = fc.emitter_idx.type_idx("$Bool");
       let v = if *b { 1i32 } else { 0i32 };
       fc.instr(&Instruction::I32Const(v));
-      fc.instr(&Instruction::StructNew(bool_idx));
+      fc.instr(&Instruction::RefI31);
     }
     Lit::Str(_) | Lit::Seq | Lit::Rec => {
       // TODO: not yet implemented.
-      let any_idx = fc.emitter_idx.type_idx("$Any");
-      fc.instr(&Instruction::RefNull(HeapType::Concrete(any_idx)));
+      fc.instr(&Instruction::RefNull(HeapType::Abstract {
+        shared: false,
+        ty: AbstractHeapType::Any,
+      }));
     }
   }
 }
@@ -1415,22 +1375,21 @@ fn emit_cont(cont: &Cont<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 }
 
 /// Emit global.get, ref.func, or local.get depending on what the label refers to.
-/// Emit global.get, ref.func, or local.get depending on what the label refers to.
 /// Function references (global.get for fn aliases, ref.func for lifted fns) are
-/// boxed in $FuncBox so they can flow through (ref null $Any) slots.
+/// boxed in $Closure0 so they can flow through (ref null any) slots.
 fn emit_get(fc: &mut FuncContext<'_, '_, '_>, label: &str) {
-  let funcbox_idx = fc.emitter_idx.type_idx("$FuncBox");
+  let closure0_idx = fc.emitter_idx.type_idx("$Closure0");
   if fc.emitter_idx.globals.contains_key(label) {
     let idx = fc.emitter_idx.global_idx(label);
     fc.instr(&Instruction::GlobalGet(idx));
-    // Global is a funcref — box it for $Any compatibility.
-    fc.instr(&Instruction::StructNew(funcbox_idx));
+    // Global is a funcref — box it in $Closure0 for (ref any) compatibility.
+    fc.instr(&Instruction::StructNew(closure0_idx));
   } else if fc.emitter_idx.funcs.contains_key(label) {
     // Non-global function reference (e.g. lifted continuation) — use ref.func.
     let idx = fc.emitter_idx.func_idx(label);
     fc.instr(&Instruction::RefFunc(idx));
-    // Box the funcref for $Any compatibility.
-    fc.instr(&Instruction::StructNew(funcbox_idx));
+    // Box the funcref in $Closure0 for (ref any) compatibility.
+    fc.instr(&Instruction::StructNew(closure0_idx));
   } else {
     let idx = fc.local_idx(label);
     fc.instr(&Instruction::LocalGet(idx));

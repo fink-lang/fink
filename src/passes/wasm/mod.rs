@@ -42,41 +42,42 @@
 //
 // ### WasmGC types
 //
+// Universal value type: `(ref null any)` — WASM GC built-in. All value
+// slots use this. Structs are implicitly subtypes of `any`.
+//
 // Plain functions use `$FnN` types (one per arity):
 //
-//   (type $Fn2 (func (param (ref $Any) (ref $Any))))
+//   (type $Fn2 (func (param (ref any) (ref any))))
 //
 // Closures use `$ClosureN` struct types (one per capture count N):
 //
-//   (type $Closure1 (sub $Any (struct
-//     (field (ref $Fn2))       ;; funcref to lifted fn (arity = call_arity + N)
-//     (field (ref $Any))       ;; capture 0
-//   )))
+//   (type $Closure0 (struct (field funcref)))           ;; bare funcref wrapper
+//   (type $Closure1 (struct
+//     (field funcref)         ;; funcref to lifted fn (arity = call_arity + N)
+//     (field (ref any))       ;; capture 0
+//   ))
 //
-//   (type $Closure2 (sub $Any (struct
-//     (field (ref $Fn3))       ;; funcref to lifted fn
-//     (field (ref $Any))       ;; capture 0
-//     (field (ref $Any))       ;; capture 1
-//   )))
+// `$Closure0` replaces the old `$FuncBox` — wraps a raw funcref so it can
+// flow through `(ref null any)` slots (funcrefs are not subtypes of `any`
+// in the WASM GC spec).
 //
-// `$ClosureN` is a subtype of `$Any`, so closure values flow through the
-// same `(ref $Any)` slots as all other values.
+// Numbers are `$Num` structs (f64 field). Booleans are i31ref (0/1).
 //
 // ### Construction: `$_closure_N` helper
 //
 // The `·fn_closure` builtin compiles to a call to `$_closure_N` (N = number
 // of captures + 1 for the funcref). This is an emitted helper function:
 //
-//   (func $_closure_2 (param (ref $Fn3)) (param (ref $Any))
+//   (func $_closure_2 (param funcref) (param (ref any))
 //     (struct.new $Closure1 (local.get 0) (local.get 1))
 //   )
 //
 // It takes the funcref + N captures and returns the boxed struct as
-// `(ref $Any)`.
+// `(ref any)`.
 //
 // ### Dispatch: `$_croc_N` helper (call-ref-or-closure)
 //
-// At every `Callable::Val` call site (indirect call through an `(ref $Any)`
+// At every `Callable::Val` call site (indirect call through an `(ref any)`
 // value), we don't statically know whether the callee is a plain funcref
 // or a closure struct. Instead of a static type inference pass, we use
 // WasmGC's `br_on_cast` for runtime dispatch.
@@ -85,9 +86,9 @@
 // tries each `$ClosureK` type that exists in the module:
 //
 //   (func $_croc_2
-//     (param $a0 (ref $Any)) (param $a1 (ref $Any)) (param $callee (ref $Any))
+//     (param $a0 (ref any)) (param $a1 (ref any)) (param $callee (ref any))
 //     (block $try_clos1
-//       (br_on_cast_fail $try_clos1 (ref $Any) (ref $Closure1) (local.get $callee))
+//       (br_on_cast_fail $try_clos1 (ref any) (ref $Closure1) (local.get $callee))
 //       ;; it's $Closure1 — extract funcref + 1 capture, call with arity 3
 //       (struct.get $Closure1 1)   ;; capture 0
 //       (local.get $a0)
@@ -95,9 +96,9 @@
 //       (struct.get $Closure1 0)   ;; funcref
 //       (return_call_ref $Fn3)
 //     )
-//     ;; fallthrough: plain $FuncBox — unbox and call directly
+//     ;; fallthrough: plain $Closure0 — unbox and call directly
 //     (return_call_ref $Fn2 (local.get $a0) (local.get $a1)
-//       (ref.cast (ref $Fn2) (struct.get $FuncBox 0 (local.get $callee))))
+//       (ref.cast (ref $Fn2) (struct.get $Closure0 0 (local.get $callee))))
 //   )
 //
 // This is correct by construction — no static analysis needed. A future
