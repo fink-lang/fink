@@ -16,8 +16,8 @@
 ;;   - Key equality uses ref.eq (identity) in phase 0. Will be extended
 ;;     to direct-style deep_eq supporting: i31ref, $Num, $StrRaw,
 ;;     $StrRendered. User-defined Eq via std-lib (CPS, future).
-;;   - Phase 0 hash: i31.get_s. Will be extended for $Num, $StrRaw,
-;;     $StrRendered via direct-style dispatch.
+;;   - Hash: imported from hashing.wat (hash_i31). Dispatches on i31ref,
+;;     $Num, $Str via br_on_cast.
 ;;
 ;; Type hierarchy (types.wat defines the opaque base type):
 ;;
@@ -83,13 +83,13 @@
   )
 
 
-  ;; -- Helpers --------------------------------------------------------
+  ;; -- Imports ----------------------------------------------------------
 
-  (func $_hash (param $key (ref eq)) (result i32)
-    local.get $key
-    ref.cast (ref i31)
-    i31.get_s
-  )
+  (import "@fink/runtime/hashing" "hash_i31"
+    (func $hash_i31 (param (ref eq)) (result i32)))
+
+
+  ;; -- Helpers --------------------------------------------------------
 
   (func $_hash_fragment (param $hash i32) (param $depth i32) (result i32)
     local.get $hash
@@ -168,7 +168,7 @@
     (local $idx i32)
     (local $child (ref null struct))
 
-    (local.set $h (call $_hash (local.get $key)))
+    (local.set $h (call $hash_i31(local.get $key)))
     (local.set $depth (i32.const 0))
 
     (block $not_found
@@ -232,7 +232,7 @@
     (call $_set_set_inner
       (local.get $current)
       (local.get $key)
-      (call $_hash (local.get $key))
+      (call $hash_i31(local.get $key))
       (i32.const 0))
   )
 
@@ -420,7 +420,7 @@
                       (call $set_empty)
                       (struct.get $SetEntry $key
                         (ref.cast (ref $SetEntry) (local.get $child)))
-                      (call $_hash
+                      (call $hash_i31
                         (struct.get $SetEntry $key
                           (ref.cast (ref $SetEntry) (local.get $child))))
                       (i32.add (local.get $depth) (i32.const 1)))
@@ -465,7 +465,7 @@
     (call $_set_remove_inner
       (local.get $current)
       (local.get $key)
-      (call $_hash (local.get $key))
+      (call $hash_i31(local.get $key))
       (i32.const 0))
   )
 

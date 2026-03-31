@@ -11,10 +11,16 @@ mod tests {
   /// Prepare a WAT source that uses `@fink/runtime/types` imports for
   /// standalone testing: strip the import line and inject the canonical
   /// type definitions that the linker would normally provide.
+  /// Also replaces the `@fink/runtime/hashing` import with an inline stub.
   fn prepare_wat(wat: &str, type_defs: &str) -> String {
     let wat = wat.replace(
       "(import \"@fink/runtime/types\" \"*\" (func (param anyref)))",
       "",
+    );
+    // Replace hashing import with inline stub (i31-only, matching phase 0)
+    let wat = wat.replace(
+      "(import \"@fink/runtime/hashing\" \"hash_i31\"\n    (func $hash_i31 (param (ref eq)) (result i32)))",
+      "(func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))",
     );
     wat.replace(
       "(module\n",

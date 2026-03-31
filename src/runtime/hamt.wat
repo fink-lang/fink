@@ -28,11 +28,9 @@
 ;;     will live in the std-lib (CPS).
 ;;
 ;; Hashing:
-;;   - Phase 0 uses i31.get_s on the key ref as the hash. This works
-;;     for interned symbol ids (small ints). Will be extended to handle
-;;     $Num, $StrRaw, $StrRendered via direct-style dispatch.
-;;     General hashing for user-defined types via Hash protocol (future,
-;;     std-lib, CPS).
+;;   - Imported from hashing.wat (hash_i31). Dispatches on i31ref, $Num,
+;;     $Str via br_on_cast. General hashing for user-defined types via
+;;     Hash protocol (future, std-lib, CPS).
 ;;
 ;; Exported functions:
 ;;   $hamt_empty   : () -> (ref $HamtNode)
@@ -107,14 +105,13 @@
   ;; and we exhaust all 7 trie levels.
 
 
-  ;; -- Helpers --------------------------------------------------------
+  ;; -- Imports ----------------------------------------------------------
 
-  ;; hash — phase 0: use i31 value directly as hash
-  (func $_hash(param $key (ref eq)) (result i32)
-    local.get $key
-    ref.cast (ref i31)
-    i31.get_s
-  )
+  (import "@fink/runtime/hashing" "hash_i31"
+    (func $hash_i31 (param (ref eq)) (result i32)))
+
+
+  ;; -- Helpers --------------------------------------------------------
 
   ;; hash_fragment — extract 5-bit fragment at given depth (0-6)
   ;; fragment = (hash >> (depth * 5)) & 0x1f
@@ -207,7 +204,7 @@
     (local $col_idx i32)
 
     ;; compute hash once
-    (local.set $h (call $_hash(local.get $key)))
+    (local.set $h (call $hash_i31(local.get $key)))
     (local.set $depth (i32.const 0))
 
     (block $not_found
@@ -295,7 +292,7 @@
 
     (local $h i32)
 
-    (local.set $h (call $_hash(local.get $key)))
+    (local.set $h (call $hash_i31(local.get $key)))
     (call $_hamt_set_inner
       (local.get $current)
       (local.get $key)
@@ -550,7 +547,7 @@
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
                       (struct.get $HamtLeaf $val
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
-                      (call $_hash
+                      (call $hash_i31
                         (struct.get $HamtLeaf $key
                           (ref.cast (ref $HamtLeaf) (local.get $child))))
                       (i32.add (local.get $depth) (i32.const 1)))
@@ -597,7 +594,7 @@
     (result (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $_hash(local.get $key)))
+    (local.set $h (call $hash_i31(local.get $key)))
     (call $_hamt_delete_inner
       (local.get $current)
       (local.get $key)
@@ -869,7 +866,7 @@
     (result (ref null eq) (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $_hash(local.get $key)))
+    (local.set $h (call $hash_i31(local.get $key)))
     (call $_hamt_pop_inner
       (local.get $current)
       (local.get $key)
