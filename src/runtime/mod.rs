@@ -1364,4 +1364,137 @@ mod tests {
     assert_eq!(call_test(&mut store, &instance, "test_count"), 2);
     assert_eq!(call_test(&mut store, &instance, "test_get"), 1);
   }
+
+  // -- Range tests ----------------------------------------------------
+
+  const RANGE_TYPE_DEFS: &str = concat!(
+    "  (rec\n",
+    "    (type $Num (struct (field $val f64)))\n",
+    "    (type $Range (sub (struct)))\n",
+    "  )\n",
+  );
+
+  /// Helper: construct a $Num from f64 via an exported WAT helper.
+  fn make_num(store: &mut Store<()>, instance: &Instance, val: f64) -> Val {
+    let func = instance.get_func(&mut *store, "make_num").unwrap();
+    let mut result = [Val::AnyRef(None)];
+    func.call(store, &[Val::F64(val.to_bits())], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn range_excl(store: &mut Store<()>, instance: &Instance, start: f64, end: f64) -> Val {
+    let func = instance.get_func(&mut *store, "range_excl").unwrap();
+    let s = make_num(store, instance, start);
+    let e = make_num(store, instance, end);
+    let mut result = [Val::AnyRef(None)];
+    func.call(store, &[s, e], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn range_incl(store: &mut Store<()>, instance: &Instance, start: f64, end: f64) -> Val {
+    let func = instance.get_func(&mut *store, "range_incl").unwrap();
+    let s = make_num(store, instance, start);
+    let e = make_num(store, instance, end);
+    let mut result = [Val::AnyRef(None)];
+    func.call(store, &[s, e], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  fn range_in(store: &mut Store<()>, instance: &Instance, val: f64, range: &Val) -> bool {
+    let func = instance.get_func(&mut *store, "range_in").unwrap();
+    let v = make_num(store, instance, val);
+    let mut result = [Val::I32(0)];
+    func.call(store, &[v, range.clone()], &mut result).unwrap();
+    result[0].unwrap_i32() != 0
+  }
+
+  /// Load range.wat with a make_num helper injected for test construction.
+  fn load_range_with_helpers() -> (Store<()>, Instance) {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let wat = prepare_wat(include_str!("range.wat"), RANGE_TYPE_DEFS);
+
+    // Inject a make_num helper before the closing )
+    let helper = r#"
+  (func (export "make_num") (param $v f64) (result (ref $Num))
+    (struct.new $Num (local.get $v)))
+"#;
+    let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + helper + "\n)";
+
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
+  }
+
+  #[test]
+  fn test_range_excl_in_bounds() {
+    let (mut store, instance) = load_range_with_helpers();
+    let r = range_excl(&mut store, &instance, 0.0, 10.0);
+    // 0..10: 0 in, 5 in, 9 in, 10 out
+    assert!(range_in(&mut store, &instance, 0.0, &r));
+    assert!(range_in(&mut store, &instance, 5.0, &r));
+    assert!(range_in(&mut store, &instance, 9.0, &r));
+    assert!(!range_in(&mut store, &instance, 10.0, &r));
+  }
+
+  #[test]
+  fn test_range_excl_out_of_bounds() {
+    let (mut store, instance) = load_range_with_helpers();
+    let r = range_excl(&mut store, &instance, 0.0, 10.0);
+    assert!(!range_in(&mut store, &instance, -1.0, &r));
+    assert!(!range_in(&mut store, &instance, 10.0, &r));
+    assert!(!range_in(&mut store, &instance, 11.0, &r));
+  }
+
+  #[test]
+  fn test_range_incl_in_bounds() {
+    let (mut store, instance) = load_range_with_helpers();
+    let r = range_incl(&mut store, &instance, 0.0, 10.0);
+    // 0...10: 0 in, 5 in, 10 in
+    assert!(range_in(&mut store, &instance, 0.0, &r));
+    assert!(range_in(&mut store, &instance, 5.0, &r));
+    assert!(range_in(&mut store, &instance, 10.0, &r));
+  }
+
+  #[test]
+  fn test_range_incl_out_of_bounds() {
+    let (mut store, instance) = load_range_with_helpers();
+    let r = range_incl(&mut store, &instance, 0.0, 10.0);
+    assert!(!range_in(&mut store, &instance, -1.0, &r));
+    assert!(!range_in(&mut store, &instance, 11.0, &r));
+  }
+
+  #[test]
+  fn test_range_excl_empty() {
+    // 5..5 should contain nothing
+    let (mut store, instance) = load_range_with_helpers();
+    let r = range_excl(&mut store, &instance, 5.0, 5.0);
+    assert!(!range_in(&mut store, &instance, 5.0, &r));
+    assert!(!range_in(&mut store, &instance, 4.0, &r));
+  }
+
+  #[test]
+  fn test_range_incl_single() {
+    // 5...5 should contain only 5
+    let (mut store, instance) = load_range_with_helpers();
+    let r = range_incl(&mut store, &instance, 5.0, 5.0);
+    assert!(range_in(&mut store, &instance, 5.0, &r));
+    assert!(!range_in(&mut store, &instance, 4.0, &r));
+    assert!(!range_in(&mut store, &instance, 6.0, &r));
+  }
+
+  #[test]
+  fn test_range_negative_bounds() {
+    let (mut store, instance) = load_range_with_helpers();
+    let r = range_excl(&mut store, &instance, -10.0, -5.0);
+    assert!(range_in(&mut store, &instance, -10.0, &r));
+    assert!(range_in(&mut store, &instance, -7.0, &r));
+    assert!(!range_in(&mut store, &instance, -5.0, &r));
+    assert!(!range_in(&mut store, &instance, 0.0, &r));
+  }
 }
