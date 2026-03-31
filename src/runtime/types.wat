@@ -44,6 +44,7 @@
 ;;   │       ├── $Rec                 ← record (opaque — internals in hamt.wat)
 ;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
+;;   │       ├── $Range              ← numeric range (opaque — internals in range.wat)
 ;;   │       └── $Closure (field (ref func))  ← base closure type
 ;;   │             └── $ClosureN              ← subtypes add N capture fields (ref any)
 ;;   │                   (emitter-generated per capture count)
@@ -173,6 +174,10 @@
     ;; $Set — immutable hash set. Opaque base type.
     ;; Internals (HAMT layout) defined in set.wat as subtypes.
     (type $Set (sub (struct)))
+
+    ;; $Range — numeric range. Opaque base type.
+    ;; Internals (start/end/inclusive) defined in range.wat.
+    (type $Range (sub (struct)))
 
     ;; $Closure — base type for all closures.
     ;; Field 0 is the funcref to the lifted function.
