@@ -21,7 +21,7 @@ test 'literal int', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7QUFBQTs7O0E7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7Ozs7QTtBQUFBO0EiCn0=
 
 
 test 'literal bool', fn:
@@ -42,7 +42,7 @@ test 'literal bool', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB0cnVlIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTs7QTtBQUFBOzs7QTtBQUFBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB0cnVlIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTs7QTs7OztBO0FBQUE7QSIKfQ==
 
 
 test 'literal bool false', fn:
@@ -63,7 +63,7 @@ test 'literal bool false', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7QUFBQTs7O0E7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7Ozs7QTtBQUFBO0EiCn0=
 
 
 
@@ -88,7 +88,7 @@ test 'let binding', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7QUFBQTs7QTs7O0E7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7OztBOzs7QTtBQUFBO0EiCn0=
 
 
 test 'add two literals', fn:
@@ -109,7 +109,7 @@ test 'add two literals', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7QUFBQTs7O0E7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7Ozs7QTtBQUFBO0EiCn0=
 
 
 test 'chained arithmetic', fn:
@@ -139,7 +139,7 @@ test 'chained arithmetic', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7O0E7OztBO0FBQUE7O0E7OztBO0FBQUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7O0E7OztBOzs7QTs7O0E7QUFBQTtBIgp9
 
 
 test 'multiple let bindings used', fn:
@@ -166,7 +166,7 @@ test 'multiple let bindings used', fn:
       )
       (export "main" (func $v_6))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7QUFBQTs7QTtBOzs7O0E7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7O0E7OztBO0E7Ozs7QTtBQUFBO0EiCn0=
 
 
 test 'user fn call', fn:
@@ -195,7 +195,7 @@ test 'user fn call', fn:
       (export "add" (func $v_8))
       (export "main" (func $v_16))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7QUFBQTs7O0E7QUFFQTs7O0E7QUFGQTtBQUVBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7QUFFQTs7O0E7Ozs7QTtBQUZBO0FBRUE7QSIKfQ==
 
 
 test 'chained fn calls', fn:
@@ -239,7 +239,7 @@ test 'chained fn calls', fn:
       (export "inc" (func $v_19))
       (export "main" (func $v_27))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTs7QTtBQUFBOzs7QTtBQUVBOzs7QTs7QTs7O0E7QUFFQTs7QTs7O0E7QUFKQTtBQUVBO0FBRUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIHggPSBkb3VibGUgNVxuICBpbmMgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTs7QTtBQUVBOzs7QTtBQUVBOzs7QTs7QTs7O0E7OztBOzs7QTtBQUpBO0FBRUE7QUFFQTtBIgp9
 
 
 test 'pipe unary', fn:
@@ -280,7 +280,7 @@ test 'pipe unary', fn:
       (export "inc" (func $v_18))
       (export "main" (func $v_26))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7QUFBQTs7O0E7QUFFQTs7O0E7OztBO0FBRUE7O0E7OztBO0FBSkE7QUFFQTtBQUVBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5tYWluID0gZm46XG4gIDUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7QUFFQTs7O0E7QUFFQTs7O0E7OztBOzs7QTs7O0E7QUFKQTtBQUVBO0FBRUE7QSIKfQ==
 
 
 test 'match literal first arm', fn:
@@ -332,8 +332,7 @@ test 'match literal first arm', fn:
         (return_call $_croc_1 (local.get $v_45) (struct.new $Closure (ref.func $v_52) (ref.null $Captures)))
       )
       (func $v_113 (type $Fn0)
-        unreachable
-        (return_call $_croc_0)
+        (return_call $_croc_0 (struct.new $Closure (ref.func $_panic) (ref.null $Captures)))
       )
       (func $v_95 (type $Fn2) (param $v_96 (ref any)) (param $v_98 (ref any))
         (return_call $_croc_3 (local.get $v_96) (local.get $v_98) (struct.new $Closure (ref.func $v_113) (ref.null $Captures)) (struct.new $Closure (ref.func $v_57) (ref.null $Captures)))
@@ -349,7 +348,7 @@ test 'match literal first arm', fn:
       )
       (export "main" (func $v_4))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOztBOzs7QTs7O0E7Ozs7Ozs7OztBOztBOzs7QTs7QTs7O0E7OztBOzs7QTs7OztBOzs7QTs7QTs7O0E7QUFBQTs7O0E7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOztBOzs7QTs7O0E7Ozs7Ozs7OztBOztBOzs7QTs7QTs7O0E7OztBOzs7QTs7O0E7OztBOztBOzs7QTs7OztBO0FBQUE7QSIKfQ==
 
 
 test 'match with binding', fn:
@@ -403,8 +402,7 @@ test 'match with binding', fn:
         (return_call $_croc_1 (local.get $v_47) (local.get $v_106))
       )
       (func $v_151 (type $Fn0)
-        unreachable
-        (return_call $_croc_0)
+        (return_call $_croc_0 (struct.new $Closure (ref.func $_panic) (ref.null $Captures)))
       )
       (func $v_127 (type $Fn3) (param $v_128 (ref any)) (param $v_130 (ref any)) (param $v_132 (ref any))
         (return_call $_croc_3 (local.get $v_130) (local.get $v_132) (struct.new $Closure (ref.func $v_151) (ref.null $Captures)) (local.get $v_128))
@@ -428,7 +426,7 @@ test 'match with binding', fn:
       )
       (export "main" (func $v_5))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTs7QTs7O0E7OztBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7OztBOzs7QTs7O0E7Ozs7QTs7O0E7O0E7OztBO0FBQUE7O0E7QTtBO0E7Ozs7OztBO0FBQUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTs7QTs7O0E7OztBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7OztBOzs7QTs7O0E7OztBOzs7QTs7QTs7O0E7OztBO0E7QTtBOzs7Ozs7QTtBQUFBO0EiCn0=
 
 
 test 'simple recursion', fn:
@@ -488,8 +486,7 @@ test 'simple recursion', fn:
         (return_call $_croc_1 (local.get $v_48) (local.get $v_122))
       )
       (func $v_176 (type $Fn0)
-        unreachable
-        (return_call $_croc_0)
+        (return_call $_croc_0 (struct.new $Closure (ref.func $_panic) (ref.null $Captures)))
       )
       (func $v_152 (type $Fn3) (param $v_153 (ref any)) (param $v_155 (ref any)) (param $v_157 (ref any))
         (return_call $_croc_3 (local.get $v_155) (local.get $v_157) (struct.new $Closure (ref.func $v_176) (ref.null $Captures)) (local.get $v_153))
@@ -516,7 +513,7 @@ test 'simple recursion', fn:
       (export "recurse" (func $v_7))
       (export "main" (func $v_96))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTs7QTs7O0E7OztBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7OztBOzs7QTs7QTs7O0E7OztBOzs7O0E7OztBOztBOzs7QTtBQUFBOztBO0E7QTs7Ozs7QTtBQUlBOzs7QTtBQUpBO0FBSUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5tYWluID0gZm46XG4gIHJlY3Vyc2UgNSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBO0E7QTtBO0E7QTs7QTs7O0E7OztBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7OztBOzs7QTs7QTs7O0E7OztBOzs7QTs7O0E7O0E7OztBO0FBSUE7O0E7QTtBOzs7OztBOzs7O0E7QUFKQTtBQUlBO0EiCn0=
 
 
 test 'closure construction and call', fn:
@@ -557,7 +554,7 @@ test 'closure construction and call', fn:
       )
       (export "main" (func $v_8))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7OztBOzs7QTs7QTs7O0E7QUFBQTs7QTtBOzs7O0E7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7OztBOzs7QTs7QTs7O0E7OztBO0E7Ozs7QTtBQUFBO0EiCn0=
 
 
 
@@ -580,7 +577,7 @@ test 'string literal', fn:
       (export "main" (func $v_4))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTs7QTtBQUFBOzs7QTtBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTs7QTs7OztBO0FBQUE7O0EiCn0=
 
 
 test 'string literal dedup', fn:
@@ -608,4 +605,129 @@ test 'string literal dedup', fn:
       (export "main" (func $v_6))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTs7QTtBQUFBOztBO0E7Ozs7QTtBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTs7QTs7O0E7QTs7OztBO0FBQUE7O0EiCn0=
+
+
+test 'rec literal', fn:
+  expect gen_wat fink":
+    main = fn:
+      {a: 1, b: 2}
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn3 (func (param (ref any) (ref any) (ref any))))
+      (memory 1)
+
+      (func $v_23 (type $Fn2) (param $v_24 (ref any)) (param $v_9 (ref any))
+        (return_call $_rec_set (local.get $v_9) (call $_str_raw (i32.const 0) (i32.const 1)) (struct.new $Num (f64.const 2)) (local.get $v_24))
+      )
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref any))
+        (local $v_28 (ref any))
+        (local.set $v_28 (struct.new $Closure (ref.func $v_23) (array.new_fixed $Captures 1 (local.get $v_5))))
+        (return_call $_rec_set (call $__hamt_rec_new) (call $_str_raw (i32.const 1) (i32.const 1)) (struct.new $Num (f64.const 1)) (local.get $v_28))
+      )
+      (export "main" (func $v_4))
+      (data (offset (i32.const 0)) "ba")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YTogMSwgYjogMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7OztBOzs7QTs7O0E7QUFBQTs7QSIKfQ==
+
+test 'rec destructure', fn:
+  expect gen_wat fink":
+    main = fn:
+      {a, b: c} = {a: 1, b: 2}
+      a + c
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn3 (func (param (ref any) (ref any) (ref any))))
+      (type $Fn4 (func (param (ref any) (ref any) (ref any) (ref any))))
+      (type $Fn5 (func (param (ref any) (ref any) (ref any) (ref any) (ref any))))
+      (memory 1)
+
+      (func $v_84 (type $Fn3) (param $v_85 (ref any)) (param $v_20 (ref any)) (param $v_21 (ref any))
+        (local $a_1 (ref any))
+        (local $c_2 (ref any))
+        (local.set $a_1 (local.get $v_20))
+        (local.set $c_2 (local.get $v_21))
+        (return_call $_op_plus (local.get $a_1) (local.get $c_2) (local.get $v_85))
+      )
+      (func $v_103 (type $Fn4) (param $v_104 (ref any)) (param $v_106 (ref any)) (param $v_21 (ref any)) (param $v_26 (ref any))
+        (return_call $_croc_2 (local.get $v_106) (local.get $v_21) (local.get $v_104))
+      )
+      (func $v_92 (type $Fn4) (param $v_93 (ref any)) (param $v_95 (ref any)) (param $v_20 (ref any)) (param $v_27 (ref any))
+        (local $v_110 (ref any))
+        (local.set $v_110 (struct.new $Closure (ref.func $v_103) (array.new_fixed $Captures 2 (local.get $v_95) (local.get $v_20))))
+        (return_call $_rec_pop (local.get $v_27) (call $_str_raw (i32.const 0) (i32.const 1)) (local.get $v_93) (local.get $v_110))
+      )
+      (func $v_36 (type $Fn3) (param $v_17 (ref any)) (param $v_18 (ref any)) (param $v_19 (ref any))
+        (local $v_99 (ref any))
+        (local.set $v_99 (struct.new $Closure (ref.func $v_92) (array.new_fixed $Captures 2 (local.get $v_19) (local.get $v_18))))
+        (return_call $_rec_pop (local.get $v_17) (call $_str_raw (i32.const 1) (i32.const 1)) (local.get $v_19) (local.get $v_99))
+      )
+      (func $v_75 (type $Fn2) (param $v_76 (ref any)) (param $v_15 (ref any))
+        (local $v_87 (ref any))
+        (local.set $v_87 (struct.new $Closure (ref.func $v_84) (array.new_fixed $Captures 1 (local.get $v_76))))
+        (return_call $_croc_3 (local.get $v_15) (local.get $v_87) (struct.new $Closure (ref.func $_panic) (ref.null $Captures)) (struct.new $Closure (ref.func $v_36) (ref.null $Captures)))
+      )
+      (func $v_66 (type $Fn2) (param $v_67 (ref any)) (param $v_11 (ref any))
+        (local $v_80 (ref any))
+        (local.set $v_80 (struct.new $Closure (ref.func $v_75) (array.new_fixed $Captures 1 (local.get $v_67))))
+        (return_call $_rec_set (local.get $v_11) (call $_str_raw (i32.const 0) (i32.const 1)) (struct.new $Num (f64.const 2)) (local.get $v_80))
+      )
+      (global $main_0 (ref $Fn1) (ref.func $v_6))
+      (func $v_6 (type $Fn1) (param $v_7 (ref any))
+        (local $v_71 (ref any))
+        (local.set $v_71 (struct.new $Closure (ref.func $v_66) (array.new_fixed $Captures 1 (local.get $v_7))))
+        (return_call $_rec_set (call $__hamt_rec_new) (call $_str_raw (i32.const 1) (i32.const 1)) (struct.new $Num (f64.const 1)) (local.get $v_71))
+      )
+      (export "main" (func $v_6))
+      (data (offset (i32.const 0)) "ba")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YSwgYjogY30gPSB7YTogMSwgYjogMn1cbiAgYSArIGMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOztBOztBO0E7Ozs7QTs7O0E7O0E7OztBOztBOzs7QTs7QTs7O0E7O0E7OztBOzs7QTs7O0E7QUFBQTs7QSIKfQ==
+
+test 'rec spread', fn:
+  expect gen_wat fink":
+    main = fn:
+      r = {a: 1, b: 2}
+      {..r, c: 3}
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn3 (func (param (ref any) (ref any) (ref any))))
+      (memory 1)
+
+      (func $v_56 (type $Fn2) (param $v_57 (ref any)) (param $v_18 (ref any))
+        (return_call $_rec_set (local.get $v_18) (call $_str_raw (i32.const 0) (i32.const 1)) (struct.new $Num (f64.const 3)) (local.get $v_57))
+      )
+      (func $v_47 (type $Fn2) (param $v_48 (ref any)) (param $v_14 (ref any))
+        (local $r_1 (ref any))
+        (local $v_61 (ref any))
+        (local.set $r_1 (local.get $v_14))
+        (local.set $v_61 (struct.new $Closure (ref.func $v_56) (array.new_fixed $Captures 1 (local.get $v_48))))
+        (return_call $_rec_merge (call $__hamt_rec_new) (local.get $r_1) (local.get $v_61))
+      )
+      (func $v_38 (type $Fn2) (param $v_39 (ref any)) (param $v_10 (ref any))
+        (local $v_52 (ref any))
+        (local.set $v_52 (struct.new $Closure (ref.func $v_47) (array.new_fixed $Captures 1 (local.get $v_39))))
+        (return_call $_rec_set (local.get $v_10) (call $_str_raw (i32.const 1) (i32.const 1)) (struct.new $Num (f64.const 2)) (local.get $v_52))
+      )
+      (global $main_0 (ref $Fn1) (ref.func $v_5))
+      (func $v_5 (type $Fn1) (param $v_6 (ref any))
+        (local $v_43 (ref any))
+        (local.set $v_43 (struct.new $Closure (ref.func $v_38) (array.new_fixed $Captures 1 (local.get $v_6))))
+        (return_call $_rec_set (call $__hamt_rec_new) (call $_str_raw (i32.const 2) (i32.const 1)) (struct.new $Num (f64.const 1)) (local.get $v_43))
+      )
+      (export "main" (func $v_5))
+      (data (offset (i32.const 0)) "cba")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByID0ge2E6IDEsIGI6IDJ9XG4gIHsuLnIsIGM6IDN9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTtBOztBOzs7QTs7QTtBOzs7O0E7O0E7OztBOzs7QTs7O0E7QUFBQTs7QSIKfQ==

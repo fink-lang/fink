@@ -298,7 +298,7 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::Get      => "op_dot",
     BuiltIn::SeqPrepend  => "seq_prepend",
     BuiltIn::SeqConcat   => "seq_concat",
-    BuiltIn::RecPut     => "rec_put",
+    BuiltIn::RecPut     => "rec_set",
     BuiltIn::RecMerge   => "rec_merge",
     BuiltIn::StrFmt     => "str_fmt",
     BuiltIn::FnClosure  => "closure",

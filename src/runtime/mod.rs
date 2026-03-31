@@ -28,8 +28,13 @@ mod tests {
 
     let engine = Engine::new(&config).unwrap();
     let wat = prepare_wat(include_str!("hamt.wat"), HAMT_TYPE_DEFS);
-    // Inject hash_i31 stub (in merged runtime, comes from hashing.wat).
-    let stub = "\n  (func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))\n)";
+    // Inject stubs for functions from other modules (in merged runtime,
+    // these come from hashing.wat and operators.wat).
+    let stub = concat!(
+      "\n  (func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))",
+      "\n  (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)\n    (ref.eq (local.get $a) (local.get $b)))",
+      "\n)",
+    );
     let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + stub;
     let module = Module::new(&engine, &wat).unwrap();
     let mut store = Store::new(&engine, ());
@@ -730,7 +735,7 @@ mod tests {
     (store, instance)
   }
 
-  fn set_empty(store: &mut Store<()>, fn_: &Func) -> Val {
+  fn set_new(store: &mut Store<()>, fn_: &Func) -> Val {
     let mut result = [Val::AnyRef(None)];
     fn_.call(store, &[], &mut result).unwrap();
     result[0].clone()
@@ -772,12 +777,12 @@ mod tests {
   #[test]
   fn test_set_empty_and_add() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let has_fn = instance.get_func(&mut store, "set_has").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     assert_eq!(set_size(&mut store, &size_fn, &s), 0);
     assert!(!set_has(&mut store, &has_fn, &s, 1));
 
@@ -795,11 +800,11 @@ mod tests {
   #[test]
   fn test_set_set_duplicate() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let s = set_set(&mut store, &add_fn, &s, 1);
     let s = set_set(&mut store, &add_fn, &s, 1);
     let s = set_set(&mut store, &add_fn, &s, 1);
@@ -810,13 +815,13 @@ mod tests {
   #[test]
   fn test_set_remove() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let has_fn = instance.get_func(&mut store, "set_has").unwrap();
     let remove_fn = instance.get_func(&mut store, "set_remove").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let s = set_set(&mut store, &add_fn, &s, 1);
     let s = set_set(&mut store, &add_fn, &s, 2);
     let s = set_set(&mut store, &add_fn, &s, 3);
@@ -834,13 +839,13 @@ mod tests {
   #[test]
   fn test_set_union() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let has_fn = instance.get_func(&mut store, "set_has").unwrap();
     let union_fn = instance.get_func(&mut store, "set_union").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let a = set_set(&mut store, &add_fn, &s, 1);
     let a = set_set(&mut store, &add_fn, &a, 2);
 
@@ -857,13 +862,13 @@ mod tests {
   #[test]
   fn test_set_intersect() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let has_fn = instance.get_func(&mut store, "set_has").unwrap();
     let intersect_fn = instance.get_func(&mut store, "set_intersect").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let a = set_set(&mut store, &add_fn, &s, 1);
     let a = set_set(&mut store, &add_fn, &a, 2);
     let a = set_set(&mut store, &add_fn, &a, 3);
@@ -883,13 +888,13 @@ mod tests {
   #[test]
   fn test_set_difference() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let has_fn = instance.get_func(&mut store, "set_has").unwrap();
     let diff_fn = instance.get_func(&mut store, "set_difference").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let a = set_set(&mut store, &add_fn, &s, 1);
     let a = set_set(&mut store, &add_fn, &a, 2);
     let a = set_set(&mut store, &add_fn, &a, 3);
@@ -908,12 +913,12 @@ mod tests {
   #[test]
   fn test_set_many() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let has_fn = instance.get_func(&mut store, "set_has").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let mut s = set_empty(&mut store, &empty_fn);
+    let mut s = set_new(&mut store, &empty_fn);
     for i in 0..100u32 {
       s = set_set(&mut store, &add_fn, &s, i);
     }
@@ -933,13 +938,13 @@ mod tests {
   #[test]
   fn test_set_sym_diff() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let has_fn = instance.get_func(&mut store, "set_has").unwrap();
     let sym_fn = instance.get_func(&mut store, "set_sym_diff").unwrap();
     let size_fn = instance.get_func(&mut store, "set_size").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let a = set_set(&mut store, &add_fn, &s, 1);
     let a = set_set(&mut store, &add_fn, &a, 2);
     let a = set_set(&mut store, &add_fn, &a, 3);
@@ -960,11 +965,11 @@ mod tests {
   #[test]
   fn test_set_subset() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let subset_fn = instance.get_func(&mut store, "set_subset").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let a = set_set(&mut store, &add_fn, &s, 1);
     let a = set_set(&mut store, &add_fn, &a, 2);
 
@@ -985,11 +990,11 @@ mod tests {
   #[test]
   fn test_set_disjoint() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let disjoint_fn = instance.get_func(&mut store, "set_disjoint").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let a = set_set(&mut store, &add_fn, &s, 1);
     let a = set_set(&mut store, &add_fn, &a, 2);
 
@@ -1010,11 +1015,11 @@ mod tests {
   #[test]
   fn test_set_eq() {
     let (mut store, instance) = load_set();
-    let empty_fn = instance.get_func(&mut store, "set_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "set_new").unwrap();
     let add_fn = instance.get_func(&mut store, "set_set").unwrap();
     let eq_fn = instance.get_func(&mut store, "set_eq").unwrap();
 
-    let s = set_empty(&mut store, &empty_fn);
+    let s = set_new(&mut store, &empty_fn);
     let a = set_set(&mut store, &add_fn, &s, 1);
     let a = set_set(&mut store, &add_fn, &a, 2);
 
