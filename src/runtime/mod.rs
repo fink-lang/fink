@@ -1068,38 +1068,6 @@ mod tests {
     (store, instance)
   }
 
-  fn load_string(data_bytes: &[u8]) -> (Store<()>, Instance) {
-    load_string_with(data_bytes, "")
-  }
-
-  /// Call a function that takes (i32, i32) and returns an anyref.
-  fn call_i32_i32_ref(store: &mut Store<()>, func: &Func, a: i32, b: i32) -> Val {
-    let mut result = [Val::AnyRef(None)];
-    func.call(store, &[Val::I32(a), Val::I32(b)], &mut result).unwrap();
-    result[0].clone()
-  }
-
-  /// Call a function that takes a ref and returns i32.
-  fn call_ref_i32(store: &mut Store<()>, func: &Func, r: &Val) -> i32 {
-    let mut result = [Val::I32(0)];
-    func.call(store, &[r.clone()], &mut result).unwrap();
-    match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
-  }
-
-  /// Call a function that takes a ref and returns a ref.
-  fn call_ref_ref(store: &mut Store<()>, func: &Func, r: &Val) -> Val {
-    let mut result = [Val::AnyRef(None)];
-    func.call(store, &[r.clone()], &mut result).unwrap();
-    result[0].clone()
-  }
-
-  /// Call a function that takes (ref, i32) and returns a ref.
-  fn call_ref_i32_ref(store: &mut Store<()>, func: &Func, r: &Val, i: i32) -> Val {
-    let mut result = [Val::AnyRef(None)];
-    func.call(store, &[r.clone(), Val::I32(i)], &mut result).unwrap();
-    result[0].clone()
-  }
-
   /// Helper: call a no-arg WAT test function that returns i32.
   fn call_test(store: &mut Store<()>, instance: &Instance, name: &str) -> i32 {
     let func = instance.get_func(&mut *store, name).unwrap();
