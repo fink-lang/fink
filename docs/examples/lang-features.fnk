@@ -72,10 +72,10 @@ strings
   \f      - formfeed
   \\      - backslash
   \'      - single quote
-  \b01    - binary code
-  \x0f    - hex code
-  \uff    - Unicode code point between U+0000 and U+10FFFF
-  \u{10_ff_ff} - Unicode code point between U+0000 and U+10FFFF
+  \$      - dollar sign
+  \x0f    - hex byte (exactly 2 hex digits)
+  \u{ff}  - Unicode code point between U+0000 and U+10FFFF
+  \u{10_ff_ff} - underscores allowed for readability
 '
 
 # String indentation handling

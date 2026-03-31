@@ -1015,4 +1015,388 @@ mod tests {
     // {1, 2} == {} → false
     assert_eq!(set_i32(&mut store, &eq_fn, &a, &s), 0);
   }
+
+  // ---- String tests -------------------------------------------------------
+
+  /// Inline type definitions that the linker would provide.
+  /// Inserted at the top of the module body, before internal types.
+  const STRING_TYPE_DEFS: &str = concat!(
+    "  (rec\n",
+    "    (type $Str (sub (struct)))\n",
+    "    (type $StrTempl (sub $Str (struct)))\n",
+    "    (type $StrVal (sub $Str (struct)))\n",
+    "    (type $StrRaw (sub $StrVal (struct)))\n",
+    "    (type $StrBytes (sub $StrVal (struct)))\n",
+    "  )\n",
+  );
+
+  /// Load string.wat with types inlined and test data in linear memory.
+  /// `data_bytes` is placed at offset 0 in the data section.
+  /// `extra_wat` is injected before the closing ) for test-specific functions.
+  /// This is a dirty search-and-replace that simulates what the linker
+  /// will do: replace the import with actual type definitions.
+  fn load_string_with(data_bytes: &[u8], extra_wat: &str) -> (Store<()>, Instance) {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+
+    let wat = include_str!("string.wat");
+    // Remove the import line (linker would resolve it)
+    let wat = wat.replace(
+      "(import \"@fink/runtime/types\" \"*\" (func (param anyref)))",
+      "",
+    );
+    // Insert base type defs at the top of the module body
+    let wat = wat.replace(
+      "(module\n",
+      &format!("(module\n{}\n", STRING_TYPE_DEFS),
+    );
+    // Add memory, data section, and extra WAT before the closing )
+    let data_hex: String = data_bytes.iter().map(|b| format!("\\{b:02x}")).collect();
+    let tail = format!(
+      "\n  (memory (export \"memory\") 1)\n  (data (i32.const 0) \"{}\")\n{}\n)",
+      data_hex, extra_wat,
+    );
+    let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + &tail;
+
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
+  }
+
+  fn load_string(data_bytes: &[u8]) -> (Store<()>, Instance) {
+    load_string_with(data_bytes, "")
+  }
+
+  /// Call a function that takes (i32, i32) and returns an anyref.
+  fn call_i32_i32_ref(store: &mut Store<()>, func: &Func, a: i32, b: i32) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    func.call(store, &[Val::I32(a), Val::I32(b)], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  /// Call a function that takes a ref and returns i32.
+  fn call_ref_i32(store: &mut Store<()>, func: &Func, r: &Val) -> i32 {
+    let mut result = [Val::I32(0)];
+    func.call(store, &[r.clone()], &mut result).unwrap();
+    match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
+  }
+
+  /// Call a function that takes a ref and returns a ref.
+  fn call_ref_ref(store: &mut Store<()>, func: &Func, r: &Val) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    func.call(store, &[r.clone()], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  /// Call a function that takes (ref, i32) and returns a ref.
+  fn call_ref_i32_ref(store: &mut Store<()>, func: &Func, r: &Val, i: i32) -> Val {
+    let mut result = [Val::AnyRef(None)];
+    func.call(store, &[r.clone(), Val::I32(i)], &mut result).unwrap();
+    result[0].clone()
+  }
+
+  /// Helper: call a no-arg WAT test function that returns i32.
+  fn call_test(store: &mut Store<()>, instance: &Instance, name: &str) -> i32 {
+    let func = instance.get_func(&mut *store, name).unwrap();
+    let mut result = [Val::I32(0)];
+    func.call(store, &[], &mut result).unwrap();
+    match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
+  }
+
+  #[test]
+  fn test_str_eq_same_raw() {
+    // Two raw strings from same data section region should be equal
+    let data = b"hello";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_raw (i32.const 0) (i32.const 5))
+          (call $str_raw (i32.const 0) (i32.const 5))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_eq_different_raw() {
+    // "hello" vs "helloX" (different length)
+    let data = b"helloX";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_raw (i32.const 0) (i32.const 5))
+          (call $str_raw (i32.const 0) (i32.const 6))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 0);
+  }
+
+  #[test]
+  fn test_str_escape_passthrough() {
+    // "hello" has no escapes — escaped result should equal the raw
+    let data = b"hello";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 5)))
+          (call $str_raw (i32.const 0) (i32.const 5))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_newline() {
+    // data: "a\nb" (4 bytes) + "\x0a" at offset 4 (the expected result byte)
+    // Escaping "a\nb" should produce [0x61, 0x0A, 0x62] = "a<newline>b"
+    // We store expected as "a" + actual newline + "b" at offset 4
+    let mut data = Vec::new();
+    data.extend_from_slice(b"a\\nb");       // offset 0, len 4: raw with \n
+    data.extend_from_slice(b"a\nb");        // offset 4, len 3: expected after escape
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str_raw (i32.const 4) (i32.const 3)))))
+    "#);
+    // "a\nb" escaped = [0x61, 0x0A, 0x62]
+    // "a<newline>b" escaped = [0x61, 0x0A, 0x62] (no backslash, bytes pass through)
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_hex() {
+    // "\\x41" should escape to "A" (0x41)
+    // Expected: "A" at offset 4
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\x41");   // offset 0, len 4
+    data.extend_from_slice(b"A");       // offset 4, len 1
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str_raw (i32.const 4) (i32.const 1)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_unicode_1byte() {
+    // "\\u{0041}" should escape to "A" (U+0041, 1 byte UTF-8)
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\u{0041}");  // offset 0, len 8
+    data.extend_from_slice(b"A");          // offset 8, len 1
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 8)))
+          (call $str_render_escape (call $str_raw (i32.const 8) (i32.const 1)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_unicode_2byte() {
+    // "\\u{00E9}" should escape to "é" (U+00E9, 2 bytes UTF-8: 0xC3 0xA9)
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\u{00E9}");      // offset 0, len 8
+    data.extend_from_slice("é".as_bytes());    // offset 8, len 2
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 8)))
+          (call $str_render_escape (call $str_raw (i32.const 8) (i32.const 2)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_unicode_3byte() {
+    // "\\u{2603}" should escape to "☃" (U+2603, 3 bytes UTF-8)
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\u{2603}");      // offset 0, len 8
+    data.extend_from_slice("☃".as_bytes());   // offset 8, len 3
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 8)))
+          (call $str_render_escape (call $str_raw (i32.const 8) (i32.const 3)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_unicode_4byte() {
+    // "\\u{1F600}" should escape to "😀" (U+1F600, 4 bytes UTF-8)
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\u{1F600}");     // offset 0, len 9
+    data.extend_from_slice("😀".as_bytes());  // offset 9, len 4
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 9)))
+          (call $str_render_escape (call $str_raw (i32.const 9) (i32.const 4)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_unicode_underscores() {
+    // "\\u{10_FF_FF}" should escape to U+10FFFF (4 bytes UTF-8)
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\u{10_FF_FF}");                // offset 0, len 12
+    let expected = char::from_u32(0x10FFFF).unwrap();
+    let mut buf = [0u8; 4];
+    let expected_bytes = expected.encode_utf8(&mut buf);
+    let exp_len = expected_bytes.len();
+    data.extend_from_slice(expected_bytes.as_bytes());        // offset 12
+    let (mut store, instance) = load_string_with(&data, &format!(r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 12)))
+          (call $str_render_escape (call $str_raw (i32.const 12) (i32.const {exp_len})))))
+    "#));
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_all_simple() {
+    // \n\t\r\f\v\b → 0x0A 0x09 0x0D 0x0C 0x0B 0x08
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\n\\t\\r\\f\\v\\b");  // offset 0, len 12
+    data.extend_from_slice(&[0x0A, 0x09, 0x0D, 0x0C, 0x0B, 0x08]); // offset 12, len 6
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 12)))
+          (call $str_render_escape (call $str_raw (i32.const 12) (i32.const 6)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_special_chars() {
+    // \\ \' \$ → 0x5C 0x27 0x24
+    let mut data = Vec::new();
+    data.extend_from_slice(b"\\\\\\'\\\x24");  // offset 0, len 6: raw input
+    data.extend_from_slice(&[0x5C, 0x27, 0x24]); // offset 6, len 3: expected bytes
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 6)))
+          (call $str_raw (i32.const 6) (i32.const 3))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_empty() {
+    let data = b"";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 0)))
+          (call $str_raw (i32.const 0) (i32.const 0))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_escape_trailing_backslash() {
+    // "abc\" → "abc\" (trailing backslash preserved literally)
+    let mut data = Vec::new();
+    data.extend_from_slice(b"abc\\");          // offset 0, len 4
+    data.extend_from_slice(b"abc\\");          // offset 4, len 4 (expected: same)
+    let (mut store, instance) = load_string_with(&data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str_raw (i32.const 4) (i32.const 4)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_unescape_roundtrip() {
+    // escape "\\n" → [0x0A], unescape → "\\n" = [0x5C, 0x6E]
+    // The unescaped result should equal a raw "\\n"
+    let data = b"\\n";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_unescape
+            (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 2))))
+          (call $str_raw (i32.const 0) (i32.const 2))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_eq_ref_identity() {
+    // Same ref should be equal (fast path)
+    let data = b"hello";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (local $r (ref $StrVal))
+        (local.set $r (call $str_raw (i32.const 0) (i32.const 5)))
+        (call $str_eq (local.get $r) (local.get $r)))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_eq_data_vs_escaped() {
+    // raw "hello" (no escapes) vs escaped "hello" should be equal
+    let data = b"hello";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_raw (i32.const 0) (i32.const 5))
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 5)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_eq_escaped_vs_escaped() {
+    // Two separately escaped copies should be equal
+    let data = b"a\\nb";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_eq
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_tmpl_count_and_get() {
+    // Build a template with 2 segments, verify count and get
+    let data = b"helloworld";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test_count") (result i32)
+        (call $str_tmpl_count
+          (call $str_templ
+            (array.new_fixed $StrSegments 2
+              (call $str_raw (i32.const 0) (i32.const 5))
+              (call $str_raw (i32.const 5) (i32.const 5))))))
+
+      (func (export "test_get") (result i32)
+        (local $t (ref $StrTempl))
+        (local.set $t
+          (call $str_templ
+            (array.new_fixed $StrSegments 2
+              (call $str_raw (i32.const 0) (i32.const 5))
+              (call $str_raw (i32.const 5) (i32.const 5)))))
+        ;; First segment should equal raw "hello"
+        (call $str_eq
+          (ref.cast (ref $StrVal) (call $str_tmpl_get (local.get $t) (i32.const 0)))
+          (call $str_raw (i32.const 0) (i32.const 5))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test_count"), 2);
+    assert_eq!(call_test(&mut store, &instance, "test_get"), 1);
+  }
 }
