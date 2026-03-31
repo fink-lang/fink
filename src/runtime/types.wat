@@ -181,7 +181,7 @@
     ;; br_on_cast check in dispatch ("is this a closure at all?")
     ;; before narrowing to the specific $ClosureN.
     (type $Closure (sub (struct
-      (field $func (ref func))
+      (field $func funcref)
     )))
   )
 
