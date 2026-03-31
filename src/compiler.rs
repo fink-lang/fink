@@ -10,13 +10,17 @@ pub struct CompileResult {
 
 /// Compile Fink source → WASM binary through the full pipeline.
 ///
-/// Pipeline: parse → AST → partial → scopes → CPS → lift → emit → DWARF.
+/// Pipeline: parse → AST → partial → scopes → CPS → lift → emit → DWARF → link.
+///
+/// Each step produces a valid WASM binary. The emit step produces a fragment
+/// with canonical runtime types (from types.wat) and DWARF debug info. The
+/// link step merges in runtime implementation modules (when available).
 pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
   use crate::ast::{build_index, NodeKind};
   use crate::parser::parse;
   use crate::passes::cps::transform::lower_module;
   use crate::passes::lifting::lift;
-  use crate::passes::wasm::{collect, dwarf, emit};
+  use crate::passes::wasm::{collect, dwarf, emit, link};
 
   let r = parse(src).map_err(|e| e.message)?;
   let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
@@ -44,6 +48,12 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
   let dwarf_sections = dwarf::emit_dwarf("input.fnk", Some(src), &result.offset_mappings);
   dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
 
+  // Link: merge user code fragment (+ runtime modules when available).
+  let linked = link::link(&[link::LinkInput {
+    module_name: String::new(),
+    wasm: result.wasm,
+  }]);
+
   // Convert OffsetMapping → WasmMapping for DAP compatibility.
   let mappings = result.offset_mappings.iter().map(|m| WasmMapping {
     wasm_offset: m.wasm_offset,
@@ -51,5 +61,5 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
     src_col: m.loc.start.col,
   }).collect();
 
-  Ok(CompileResult { wasm: result.wasm, mappings })
+  Ok(CompileResult { wasm: linked.wasm, mappings })
 }

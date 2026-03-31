@@ -1,20 +1,24 @@
 // Built-in function implementations — emitted as defined WASM functions.
 //
 // Each builtin follows the CPS calling convention:
-//   (func $op_plus (param $a (ref null $Any)) (param $b (ref null $Any)) (param $cont (ref null $Any))
+//   (func $op_plus (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 //     ;; unbox args, compute, box result, tail-call cont
 //   )
 //
-// The cont is a $FuncBox — must be unboxed before return_call_ref.
+// The cont is a $Closure0 (or $ClosureN) — dispatched via _croc_1 or
+// unboxed directly before return_call_ref.
+//
+// Type conventions:
+//   - Numbers: $Num struct (f64 field)
+//   - Booleans: i31ref (0 = false, 1 = true)
+//   - Functions: $Closure0 (funcref field) or $ClosureN (funcref + captures)
 
-use wasm_encoder::{Function, HeapType, Instruction};
+use wasm_encoder::{AbstractHeapType, Function, HeapType, Instruction};
 
 /// Indices into the type section, passed from the emitter.
 pub struct TypeIndices {
-  pub any: u32,
   pub num: u32,
-  pub bool_: u32,
-  pub funcbox: u32,
+  pub closure0: u32,
   pub fn1: u32,
   /// Function index of $_croc_1 dispatch helper, if closures exist.
   pub croc1: Option<u32>,
@@ -47,7 +51,7 @@ pub fn emit_builtin(name: &str, indices: &TypeIndices) -> Function {
     "op_rem"    => emit_binary_int(indices, Instruction::I64RemS),
     "op_intmod" => emit_binary_int(indices, Instruction::I64RemS), // same as rem for now
 
-    // Comparison: unbox two $Num, f64 compare, box 1.0 or 0.0.
+    // Comparison: unbox two $Num, f64 compare, box as i31ref (0 or 1).
     "op_eq"  => emit_binary_cmp(indices, Instruction::F64Eq),
     "op_neq" => emit_binary_cmp(indices, Instruction::F64Ne),
     "op_lt"  => emit_binary_cmp(indices, Instruction::F64Lt),
@@ -55,7 +59,7 @@ pub fn emit_builtin(name: &str, indices: &TypeIndices) -> Function {
     "op_gt"  => emit_binary_cmp(indices, Instruction::F64Gt),
     "op_gte" => emit_binary_cmp(indices, Instruction::F64Ge),
 
-    // Logic: $Bool ops.
+    // Logic: i31ref bool ops.
     "op_not" => emit_unary_not(indices),
     "op_and" => emit_binary_bool(indices, Instruction::I32And),
     "op_or"  => emit_binary_bool(indices, Instruction::I32Or),
@@ -66,21 +70,21 @@ pub fn emit_builtin(name: &str, indices: &TypeIndices) -> Function {
 }
 
 // ---------------------------------------------------------------------------
-// Shared tail: unbox cont from $FuncBox, return_call_ref $Fn1.
+// Shared tail: unbox cont from $Closure0, return_call_ref $Fn1.
 // Assumes the result value is already on the stack.
 // ---------------------------------------------------------------------------
 
 fn emit_cont_call(f: &mut Function, idx: &TypeIndices, cont_param: u32) {
   // Stack: [result]. Tail-call the continuation.
   if let Some(croc1) = idx.croc1 {
-    // Dispatch through $_croc_1 — handles both $FuncBox and $ClosureN.
+    // Dispatch through $_croc_1 — handles both $Closure0 and $ClosureN.
     f.instruction(&Instruction::LocalGet(cont_param));
     f.instruction(&Instruction::ReturnCall(croc1));
   } else {
-    // No closures — direct $FuncBox unbox.
+    // No closures — direct $Closure0 unbox.
     f.instruction(&Instruction::LocalGet(cont_param));
-    f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.funcbox)));
-    f.instruction(&Instruction::StructGet { struct_type_index: idx.funcbox, field_index: 0 });
+    f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.closure0)));
+    f.instruction(&Instruction::StructGet { struct_type_index: idx.closure0, field_index: 0 });
     f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(idx.fn1)));
     f.instruction(&Instruction::ReturnCallRef(idx.fn1));
   }
@@ -133,7 +137,7 @@ fn emit_binary_int(idx: &TypeIndices, op: Instruction<'_>) -> Function {
 }
 
 // ---------------------------------------------------------------------------
-// Binary comparison: (a, b, cont) → cont(box(unbox(a) CMP unbox(b) ? 1.0 : 0.0))
+// Binary comparison: (a, b, cont) → cont(i31(unbox(a) CMP unbox(b)))
 // ---------------------------------------------------------------------------
 
 fn emit_binary_cmp(idx: &TypeIndices, op: Instruction<'_>) -> Function {
@@ -146,48 +150,49 @@ fn emit_binary_cmp(idx: &TypeIndices, op: Instruction<'_>) -> Function {
   f.instruction(&Instruction::LocalGet(1));
   f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.num)));
   f.instruction(&Instruction::StructGet { struct_type_index: idx.num, field_index: 0 });
-  // Compare → i32 (0 or 1), box as $Bool.
+  // Compare → i32 (0 or 1), box as i31ref.
   f.instruction(&op);
-  f.instruction(&Instruction::StructNew(idx.bool_));
+  f.instruction(&Instruction::RefI31);
   emit_cont_call(&mut f, idx, 2);
   f
 }
 
 // ---------------------------------------------------------------------------
-// Binary bool: (a, b, cont) → cont(box(unbox(a) OP unbox(b)))
+// Binary bool: (a, b, cont) → cont(i31(i31.get_s(a) OP i31.get_s(b)))
 // ---------------------------------------------------------------------------
 
 fn emit_binary_bool(idx: &TypeIndices, op: Instruction<'_>) -> Function {
   let mut f = Function::new(vec![]);
-  // Unbox a.
+  let i31_ht = HeapType::Abstract { shared: false, ty: AbstractHeapType::I31 };
+  // Unbox a: ref.cast i31, i31.get_s → i32.
   f.instruction(&Instruction::LocalGet(0));
-  f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.bool_)));
-  f.instruction(&Instruction::StructGet { struct_type_index: idx.bool_, field_index: 0 });
-  // Unbox b.
+  f.instruction(&Instruction::RefCastNonNull(i31_ht));
+  f.instruction(&Instruction::I31GetS);
+  // Unbox b: ref.cast i31, i31.get_s → i32.
   f.instruction(&Instruction::LocalGet(1));
-  f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.bool_)));
-  f.instruction(&Instruction::StructGet { struct_type_index: idx.bool_, field_index: 0 });
-  // Op + box.
+  f.instruction(&Instruction::RefCastNonNull(i31_ht));
+  f.instruction(&Instruction::I31GetS);
+  // Op + box as i31ref.
   f.instruction(&op);
-  f.instruction(&Instruction::StructNew(idx.bool_));
+  f.instruction(&Instruction::RefI31);
   emit_cont_call(&mut f, idx, 2);
   f
 }
 
 // ---------------------------------------------------------------------------
-// Unary not: (a, cont) → cont(box(unbox(a) == 0.0 ? 1.0 : 0.0))
+// Unary not: (a, cont) → cont(i31(i31.get_s(a) == 0 ? 1 : 0))
 // ---------------------------------------------------------------------------
 
 fn emit_unary_not(idx: &TypeIndices) -> Function {
   let mut f = Function::new(vec![]);
-  // Unbox a — could be $Bool (i32) or $Num (f64). Try $Bool first.
-  // For now, assume $Bool input: struct.get $Bool 0.
+  let i31_ht = HeapType::Abstract { shared: false, ty: AbstractHeapType::I31 };
+  // Unbox a: ref.cast i31, i31.get_s → i32.
   f.instruction(&Instruction::LocalGet(0));
-  f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.bool_)));
-  f.instruction(&Instruction::StructGet { struct_type_index: idx.bool_, field_index: 0 });
-  // i32: 0 → 1, nonzero → 0.
+  f.instruction(&Instruction::RefCastNonNull(i31_ht));
+  f.instruction(&Instruction::I31GetS);
+  // i32: 0 → 1, nonzero → 0. Box as i31ref.
   f.instruction(&Instruction::I32Eqz);
-  f.instruction(&Instruction::StructNew(idx.bool_));
+  f.instruction(&Instruction::RefI31);
   // not has 2 params (a, cont), cont is param 1.
   emit_cont_call(&mut f, idx, 1);
   f

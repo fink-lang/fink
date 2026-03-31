@@ -153,6 +153,14 @@ enum ParsedInstr {
   RefCastNullable(u32),
   /// br_on_cast_fail — relative depth + target type index.
   BrOnCastFail { depth: u32, to_type_index: u32 },
+  /// ref.i31 — wrap i32 as i31ref.
+  RefI31,
+  /// i31.get_s — extract i32 from i31ref (sign-extending).
+  I31GetS,
+  /// ref.cast (ref i31) — cast to i31ref (non-null).
+  RefCastI31,
+  /// ref.null any — null reference to abstract any type.
+  RefNullAny,
   /// Any instruction we don't specifically handle.
   Other(String),
 }
@@ -387,19 +395,21 @@ fn parse_operator(op: &Operator<'_>) -> ParsedInstr {
       field_index: *field_index,
     },
     Operator::RefCastNonNull { hty } => {
-      let idx = match hty {
-        wasmparser::HeapType::Concrete(i) => i.as_module_index().unwrap_or(0),
-        _ => 0,
-      };
-      ParsedInstr::RefCastNonNull(idx)
+      match hty {
+        wasmparser::HeapType::Concrete(i) => ParsedInstr::RefCastNonNull(i.as_module_index().unwrap_or(0)),
+        wasmparser::HeapType::Abstract { ty: wasmparser::AbstractHeapType::I31, .. } => ParsedInstr::RefCastI31,
+        _ => ParsedInstr::RefCastNonNull(0),
+      }
     }
     Operator::RefNull { hty } => {
-      let idx = match hty {
-        wasmparser::HeapType::Concrete(i) => i.as_module_index().unwrap_or(0),
-        _ => 0,
-      };
-      ParsedInstr::RefNull(idx)
+      match hty {
+        wasmparser::HeapType::Concrete(i) => ParsedInstr::RefNull(i.as_module_index().unwrap_or(0)),
+        wasmparser::HeapType::Abstract { ty: wasmparser::AbstractHeapType::Any, .. } => ParsedInstr::RefNullAny,
+        _ => ParsedInstr::RefNull(0),
+      }
     }
+    Operator::RefI31 => ParsedInstr::RefI31,
+    Operator::I31GetS => ParsedInstr::I31GetS,
     Operator::F64Ne => ParsedInstr::F64Ne,
     Operator::ReturnCallRef { type_index } => ParsedInstr::ReturnCallRef(*type_index),
     Operator::ReturnCall { function_index } => ParsedInstr::ReturnCall(*function_index),
@@ -599,7 +609,7 @@ fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
 fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
   // Collect type indices used by visible (non-internal) items.
   let mut used_types: std::collections::HashSet<u32> = std::collections::HashSet::new();
-  // Non-internal struct types ($Any, $Num) are always visible.
+  // Non-internal struct types ($Num) are always visible.
   for (idx, ty) in module.types.iter().enumerate() {
     if matches!(ty.kind, ParsedTypeKind::Struct { .. }) && !is_internal_type(module, idx as u32) {
       used_types.insert(idx as u32);
@@ -638,22 +648,17 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
     if !used_types.contains(&(idx as u32)) { continue; }
     if is_internal_type(module, idx as u32) { continue; }
     match &ty.kind {
-      ParsedTypeKind::Struct { fields, supertype } => {
+      ParsedTypeKind::Struct { fields, .. } => {
         let name = type_name(module, idx as u32);
         stop_mark(w);
-        if fields.is_empty() && supertype.is_none() {
-          w.push_str(&format!("  (type {} (sub (struct)))\n", name));
-        } else if let Some(super_idx) = supertype {
-          let super_name = type_name(module, *super_idx);
-          let field_strs: Vec<&str> = fields.iter().map(|f| match f {
-            FieldKind::F64 => "(field f64)",
-            FieldKind::I32 => "(field i32)",
-            FieldKind::FuncRef => "(field funcref)",
-            FieldKind::AnyRef(_) => "(field (ref $Any))",
-          }).collect();
-          let fields_str = if field_strs.is_empty() { String::new() } else { format!(" {}", field_strs.join(" ")) };
-          w.push_str(&format!("  (type {} (sub {} (struct{})))\n", name, super_name, fields_str));
-        }
+        let field_strs: Vec<&str> = fields.iter().map(|f| match f {
+          FieldKind::F64 => "(field f64)",
+          FieldKind::I32 => "(field i32)",
+          FieldKind::FuncRef => "(field funcref)",
+          FieldKind::AnyRef(_) => "(field (ref any))",
+        }).collect();
+        let fields_str = if field_strs.is_empty() { String::new() } else { format!(" {}", field_strs.join(" ")) };
+        w.push_str(&format!("  (type {} (struct{}))\n", name, fields_str));
       }
       ParsedTypeKind::Func { param_count, .. } => {
         stop_mark(w);
@@ -661,7 +666,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
         if *param_count == 0 {
           w.push_str(&format!("  (type {} (func))\n", name));
         } else {
-          let params: Vec<&str> = (0..*param_count).map(|_| "(ref $Any)").collect();
+          let params: Vec<&str> = (0..*param_count).map(|_| "(ref any)").collect();
           w.push_str(&format!("  (type {} (func (param {})))\n", name, params.join(" ")));
         }
       }
@@ -677,7 +682,7 @@ fn emit_global_for_func(module: &ParsedModule, func_idx: u32, w: &mut MappedWrit
       let g_name = global_name(module, g_idx as u32);
       let type_name_str = global.ref_type_index
         .map(|ti| type_name(module, ti))
-        .unwrap_or_else(|| "$Any".into());
+        .unwrap_or_else(|| "any".into());
       let f_name = func_name(module, func_idx);
       // Apply structural source mark for this global.
       if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::Global { global_idx } if *global_idx == g_idx as u32)) {
@@ -714,7 +719,7 @@ fn emit_func(module: &ParsedModule, func: &ParsedFunc, func_idx: u32, w: &mut Ma
       w.mark(loc);
     }
     let p_name = local_name(module, func_idx, i as u32);
-    w.push_str(&format!("(param {} (ref $Any))", p_name));
+    w.push_str(&format!("(param {} (ref any))", p_name));
   }
   w.push_str("\n");
 
@@ -722,7 +727,7 @@ fn emit_func(module: &ParsedModule, func: &ParsedFunc, func_idx: u32, w: &mut Ma
   for i in 0..func.local_count {
     stop_mark(w);
     let l_name = local_name(module, func_idx, param_count as u32 + i);
-    w.push_str(&format!("    (local {} (ref $Any))\n", l_name));
+    w.push_str(&format!("    (local {} (ref any))\n", l_name));
   }
 
   // Body — emit instructions as WAT statements.
@@ -827,6 +832,25 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
       ParsedInstr::RefNull(type_idx) => {
         let name = type_name(module, *type_idx);
         stack.push((format!("(ref.null {})", name), *offset));
+        i += 1;
+      }
+      ParsedInstr::RefNullAny => {
+        stack.push(("(ref.null any)".into(), *offset));
+        i += 1;
+      }
+      ParsedInstr::RefI31 => {
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(ref.i31 {})", arg), arg_off));
+        i += 1;
+      }
+      ParsedInstr::I31GetS => {
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(i31.get_s {})", arg), arg_off));
+        i += 1;
+      }
+      ParsedInstr::RefCastI31 => {
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(ref.cast i31 {})", arg), arg_off));
         i += 1;
       }
       ParsedInstr::F64Ne => {
@@ -995,6 +1019,10 @@ fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -
     ParsedInstr::RefCastNullable(idx) => format!("(ref.cast (ref null {}))", type_name(module, *idx)),
     ParsedInstr::BrOnCastFail { depth, to_type_index } =>
       format!("(br_on_cast_fail {} (ref null {}))", depth, type_name(module, *to_type_index)),
+    ParsedInstr::RefI31 => "ref.i31".into(),
+    ParsedInstr::I31GetS => "i31.get_s".into(),
+    ParsedInstr::RefCastI31 => "(ref.cast i31)".into(),
+    ParsedInstr::RefNullAny => "(ref.null any)".into(),
     ParsedInstr::If => "(if".into(),
     ParsedInstr::Else => ")(else".into(),
     ParsedInstr::End => ")".into(),
@@ -1031,16 +1059,14 @@ fn stop_mark(w: &mut MappedWriter) {
 // ---------------------------------------------------------------------------
 
 fn type_name(module: &ParsedModule, idx: u32) -> String {
-  // Infer type names from structure: $Any (empty struct), $Num (struct with super),
-  // $FnN (func types).
+  // Infer type names from structure: $Num (struct with f64), $ClosureN (funcref +
+  // N captures), $FnN (func types). No $Any or $Bool — universal type is (ref any),
+  // booleans are i31ref.
   if let Some(ty) = module.types.get(idx as usize) {
     match &ty.kind {
-      ParsedTypeKind::Struct { fields, supertype: None } if fields.is_empty() => return "$Any".into(),
-      ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::F64] => return "$Num".into(),
-      ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::I32] => return "$Bool".into(),
-      ParsedTypeKind::Struct { fields, supertype: Some(_) } if fields == &[FieldKind::FuncRef] => return "$FuncBox".into(),
-      ParsedTypeKind::Struct { fields, supertype: Some(_) } if !fields.is_empty() && fields[0] == FieldKind::FuncRef => {
-        // $ClosureN — funcref + N capture fields.
+      ParsedTypeKind::Struct { fields, .. } if fields == &[FieldKind::F64] => return "$Num".into(),
+      ParsedTypeKind::Struct { fields, .. } if !fields.is_empty() && fields[0] == FieldKind::FuncRef => {
+        // $ClosureN — funcref + N capture fields. $Closure0 = bare funcref wrapper.
         return format!("$Closure{}", fields.len() - 1);
       }
       ParsedTypeKind::Func { param_count, has_results: false } => return format!("$Fn{}", param_count),
@@ -1054,8 +1080,7 @@ fn type_name(module: &ParsedModule, idx: u32) -> String {
 /// Whether a type is compiler infrastructure (hidden from formatted output).
 fn is_internal_type(module: &ParsedModule, idx: u32) -> bool {
   let name = type_name(module, idx);
-  name.starts_with("$FuncBox")
-    || name.starts_with("$Closure")
+  name.starts_with("$Closure")
     || name.starts_with("$type_") // $BoxFuncTy, $ClosureCtorN, $CallRefOrClosN
 }
 
@@ -1151,7 +1176,6 @@ mod tests {
   fn t_format_simple() {
     let wat = compile_and_format("add = fn a, b: a + b");
     assert!(wat.contains("(module"), "should start with (module");
-    assert!(wat.contains("(type $Any"), "should have $Any type");
     assert!(wat.contains("(type $Num"), "should have $Num type");
     assert!(wat.contains("(func"), "should have functions");
     assert!(wat.contains("(export"), "should have exports");

@@ -4,9 +4,14 @@
 // All Fink functions are CPS — the host provides the initial continuation
 // that receives the result.
 //
-// The module exports `_box_func` to box a funcref into $FuncBox (an $Any
-// subtype), so the host can create boxed continuations without needing
-// direct access to GC struct types.
+// The module exports `_box_func` to box a funcref into $Closure0 (a struct
+// subtype of any), so the host can create boxed continuations without
+// needing direct access to GC struct types.
+//
+// Value representation:
+//   - Numbers: $Num struct (f64 field)
+//   - Booleans: i31ref (0 = false, 1 = true)
+//   - Functions: $Closure0 (funcref field) or $ClosureN
 
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +24,7 @@ use super::RunOptions;
 pub enum FinkResult {
   /// Numeric result (f64 from $Num struct).
   Num(f64),
-  /// Boolean result (i32 from $Bool struct).
+  /// Boolean result (i31ref: 0 = false, 1 = true).
   Bool(bool),
   /// No result returned.
   None,
@@ -60,7 +65,7 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   let main_fn = instance.get_func(&mut store, "main")
     .ok_or("no 'main' export")?;
 
-  // Find _box_func: (func (param funcref) (result (ref null $Any))).
+  // Find _box_func: (func (param funcref) (result (ref null any))).
   let box_func = instance.get_func(&mut store, "_box_func")
     .ok_or("no '_box_func' export — module may be from an older compiler")?;
 
@@ -68,23 +73,23 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   let result_val: Arc<Mutex<Option<FinkResult>>> = Arc::new(Mutex::new(None));
   let result_clone = result_val.clone();
 
-  // The done func must match (func (param (ref null $Any))) — main's param type.
+  // The done func must match (func (param (ref null any))) — main's param type.
   let main_ty = main_fn.ty(&store);
   let done = Func::new(&mut store, main_ty, move |mut caller, params, _results| {
-    if let Some(Val::AnyRef(Some(any_ref))) = params.first()
-      && let Ok(Some(struct_ref)) = any_ref.as_struct(&caller)
-    {
-      // Try $Num (f64 field) first, then $Bool (i32 field).
-      if let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0) {
+    if let Some(Val::AnyRef(Some(any_ref))) = params.first() {
+      // Try i31ref first (booleans), then $Num struct (f64 field).
+      if let Ok(Some(i31)) = any_ref.as_i31(&caller) {
+        *result_clone.lock().unwrap() = Some(FinkResult::Bool(i31.get_i32() != 0));
+      } else if let Ok(Some(struct_ref)) = any_ref.as_struct(&caller)
+        && let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0)
+      {
         *result_clone.lock().unwrap() = Some(FinkResult::Num(f64::from_bits(bits)));
-      } else if let Ok(Val::I32(v)) = struct_ref.field(&mut caller, 0) {
-        *result_clone.lock().unwrap() = Some(FinkResult::Bool(v != 0));
       }
     }
     Ok(())
   });
 
-  // Box the done funcref via _box_func → $FuncBox (a subtype of $Any).
+  // Box the done funcref via _box_func → $Closure0 (a struct subtype of any).
   let mut box_result = [Val::AnyRef(None)];
   box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut box_result)
     .map_err(|e| format!("_box_func failed: {}", e))?;

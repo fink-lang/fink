@@ -31,6 +31,9 @@ wasmtime = { version = "43", features = ["debug"], optional = true }
 dap = { version = "0.4.1-alpha1", optional = true }
 tokio = { version = "1", features = ["rt"], optional = true }
 
+[build-dependencies]
+wat-crate = { package = "wat", version = "1" }
+
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }
 pretty_assertions = "1"
