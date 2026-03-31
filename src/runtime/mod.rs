@@ -8,19 +8,49 @@
 mod tests {
   use wasmtime::*;
 
-  /// Load the HAMT module and return (store, instance).
-  fn load_hamt() -> (Store<()>, Instance) {
+  /// Prepare a WAT source that uses `@fink/runtime/types` imports for
+  /// standalone testing: strip the import line and inject the canonical
+  /// type definitions that the linker would normally provide.
+  fn prepare_wat(wat: &str, type_defs: &str) -> String {
+    let wat = wat.replace(
+      "(import \"@fink/runtime/types\" \"*\" (func (param anyref)))",
+      "",
+    );
+    wat.replace(
+      "(module\n",
+      &format!("(module\n{}\n", type_defs),
+    )
+  }
+
+  /// Load a WAT module with injected type defs.
+  fn load_module(wat_src: &str, type_defs: &str) -> (Store<()>, Instance) {
     let mut config = Config::new();
     config.wasm_gc(true);
     config.wasm_function_references(true);
     config.wasm_multi_value(true);
 
     let engine = Engine::new(&config).unwrap();
-    let wat = include_bytes!("hamt.wat");
-    let module = Module::new(&engine, &wat[..]).unwrap();
+    let wat = prepare_wat(wat_src, type_defs);
+    let module = Module::new(&engine, &wat).unwrap();
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[]).unwrap();
     (store, instance)
+  }
+
+  const HAMT_TYPE_DEFS: &str = concat!(
+    "  (rec\n",
+    "    (type $Rec (sub (struct)))\n",
+    "    (type $Dict (sub (struct)))\n",
+    "  )\n",
+  );
+
+  const LIST_TYPE_DEFS: &str = "  (type $List (sub (struct)))\n";
+
+  const SET_TYPE_DEFS: &str = "  (type $Set (sub (struct)))\n";
+
+  /// Load the HAMT module and return (store, instance).
+  fn load_hamt() -> (Store<()>, Instance) {
+    load_module(include_str!("hamt.wat"), HAMT_TYPE_DEFS)
   }
 
   /// Create an i31ref key from an integer.
@@ -415,17 +445,7 @@ mod tests {
   // -- List tests -----------------------------------------------------
 
   fn load_list() -> (Store<()>, Instance) {
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
-    config.wasm_multi_value(true);
-
-    let engine = Engine::new(&config).unwrap();
-    let wat = include_bytes!("list.wat");
-    let module = Module::new(&engine, &wat[..]).unwrap();
-    let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[]).unwrap();
-    (store, instance)
+    load_module(include_str!("list.wat"), LIST_TYPE_DEFS)
   }
 
   fn list_empty(store: &mut Store<()>, nil_fn: &Func) -> Val {
@@ -700,16 +720,7 @@ mod tests {
   // -- Set tests ------------------------------------------------------
 
   fn load_set() -> (Store<()>, Instance) {
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
-
-    let engine = Engine::new(&config).unwrap();
-    let wat = include_bytes!("set.wat");
-    let module = Module::new(&engine, &wat[..]).unwrap();
-    let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[]).unwrap();
-    (store, instance)
+    load_module(include_str!("set.wat"), SET_TYPE_DEFS)
   }
 
   fn set_empty(store: &mut Store<()>, fn_: &Func) -> Val {
@@ -1018,8 +1029,6 @@ mod tests {
 
   // ---- String tests -------------------------------------------------------
 
-  /// Inline type definitions that the linker would provide.
-  /// Inserted at the top of the module body, before internal types.
   const STRING_TYPE_DEFS: &str = concat!(
     "  (rec\n",
     "    (type $Str (sub (struct)))\n",
@@ -1033,8 +1042,6 @@ mod tests {
   /// Load string.wat with types inlined and test data in linear memory.
   /// `data_bytes` is placed at offset 0 in the data section.
   /// `extra_wat` is injected before the closing ) for test-specific functions.
-  /// This is a dirty search-and-replace that simulates what the linker
-  /// will do: replace the import with actual type definitions.
   fn load_string_with(data_bytes: &[u8], extra_wat: &str) -> (Store<()>, Instance) {
     let mut config = Config::new();
     config.wasm_gc(true);
@@ -1043,17 +1050,7 @@ mod tests {
 
     let engine = Engine::new(&config).unwrap();
 
-    let wat = include_str!("string.wat");
-    // Remove the import line (linker would resolve it)
-    let wat = wat.replace(
-      "(import \"@fink/runtime/types\" \"*\" (func (param anyref)))",
-      "",
-    );
-    // Insert base type defs at the top of the module body
-    let wat = wat.replace(
-      "(module\n",
-      &format!("(module\n{}\n", STRING_TYPE_DEFS),
-    );
+    let wat = prepare_wat(include_str!("string.wat"), STRING_TYPE_DEFS);
     // Add memory, data section, and extra WAT before the closing )
     let data_hex: String = data_bytes.iter().map(|b| format!("\\{b:02x}")).collect();
     let tail = format!(

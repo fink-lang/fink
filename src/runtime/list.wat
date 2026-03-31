@@ -7,7 +7,11 @@
 ;;   - Empty list is null (no separate nil type needed)
 ;;   - Structural sharing: [a, ...rest] is O(1) — just take the tail
 ;;   - Prepend (cons) is O(1) — new cell pointing to existing list
-;;   - Integrates with fink's $Any type hierarchy
+;;
+;; Type hierarchy (types.wat defines the opaque base type):
+;;
+;;   $List             ← opaque base (from types.wat)
+;;   └── $Cons         ← internal: head + tail cons cell
 ;;
 ;; Value representation:
 ;;   - Head values are (ref eq) — non-nullable
@@ -31,21 +35,19 @@
 ;;                   i31ref, $Num, $StrRaw, $StrRendered.
 ;;                   Finding by user-defined Eq will live in std-lib (CPS).
 
+(import "@fink/runtime/types" "*" (func (param anyref)))
+
+
 (module
 
   ;; -- Type definitions -----------------------------------------------
 
-  (rec
-    ;; $Any — open supertype for all fink values.
-    (type $Any (sub (struct)))
-
-    ;; $Cons — a list cell, subtype of $Any.
-    ;; head is the value, tail is the rest of the list (null = end).
-    (type $Cons (sub $Any (struct
-      (field $head (ref eq))
-      (field $tail (ref null $Cons))
-    )))
-  )
+  ;; $Cons — a list cell, subtype of $List (from types.wat).
+  ;; head is the value, tail is the rest of the list (null = end).
+  (type $Cons (sub $List (struct
+    (field $head (ref eq))
+    (field $tail (ref null $Cons))
+  )))
 
 
   ;; -- Empty ----------------------------------------------------------

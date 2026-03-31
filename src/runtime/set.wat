@@ -19,6 +19,11 @@
 ;;   - Phase 0 hash: i31.get_s. Will be extended for $Num, $StrRaw,
 ;;     $StrRendered via direct-style dispatch.
 ;;
+;; Type hierarchy (types.wat defines the opaque base type):
+;;
+;;   $Set              ← opaque base (from types.wat)
+;;   └── $SetImpl      ← wrapper: single $SetNode field
+;;
 ;; Exported functions:
 ;;   $set_empty      : () -> (ref $SetNode)
 ;;   $set_set        : (ref $SetNode), (ref eq) -> (ref $SetNode)
@@ -40,31 +45,40 @@
 ;;   $set_eq         : (ref $SetNode), (ref $SetNode) -> i32
 ;;                     a == b — same size and a <= b
 
+(import "@fink/runtime/types" "*" (func (param anyref)))
+
+
 (module
 
   ;; -- Type definitions -----------------------------------------------
 
+  ;; Internal set types. Implementation details — user code sees $Set
+  ;; (from types.wat) via the $SetImpl wrapper below.
+
+  ;; $SetEntry — a single key.
+  (type $SetEntry (struct
+    (field $key (ref eq))
+  ))
+
+  ;; $SetChildren — dense array of struct refs.
+  (type $SetChildren (array (mut (ref null struct))))
+
   (rec
-    (type $Any (sub (struct)))
-
-    ;; $SetEntry — a single key, subtype of $Any.
-    (type $SetEntry (sub $Any (struct
-      (field $key (ref eq))
-    )))
-
-    ;; $SetChildren — dense array of $Any refs.
-    (type $SetChildren (array (mut (ref null $Any))))
-
     ;; $SetNode — bitmap + dense children array.
-    (type $SetNode (sub $Any (struct
+    (type $SetNode (struct
       (field $bitmap (mut i32))
       (field $children (ref $SetChildren))
-    )))
+    ))
 
     ;; $SetCollision — flat array of entries sharing the same hash.
-    (type $SetCollision (sub $Any (struct
+    (type $SetCollision (struct
       (field $col_hash i32)
       (field $col_entries (ref $SetChildren))
+    ))
+
+    ;; $SetImpl — wraps $SetNode as a $Set (from types.wat).
+    (type $SetImpl (sub $Set (struct
+      (field $node (ref $SetNode))
     )))
   )
 
@@ -152,7 +166,7 @@
     (local $bit i32)
     (local $bitmap i32)
     (local $idx i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $h (call $_hash (local.get $key)))
     (local.set $depth (i32.const 0))
@@ -236,7 +250,7 @@
     (local $old_children (ref $SetChildren))
     (local $new_children (ref $SetChildren))
     (local $old_len i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
     (local $new_entry (ref $SetEntry))
     (local $i i32)
     (local $col_entries (ref $SetChildren))
@@ -469,7 +483,7 @@
     (local $old_children (ref $SetChildren))
     (local $new_children (ref $SetChildren))
     (local $old_len i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
     (local $sub_result (ref $SetNode))
     (local $i i32)
     (local $col_entries (ref $SetChildren))
@@ -705,7 +719,7 @@
     (local $len i32)
     (local $i i32)
     (local $count i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $SetNode $children (local.get $node)))
@@ -764,7 +778,7 @@
     (local $children (ref $SetChildren))
     (local $len i32)
     (local $i i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $SetNode $children (local.get $src)))
@@ -857,7 +871,7 @@
     (local $children (ref $SetChildren))
     (local $len i32)
     (local $i i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $SetNode $children (local.get $src)))
@@ -962,7 +976,7 @@
     (local $children (ref $SetChildren))
     (local $len i32)
     (local $i i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $SetNode $children (local.get $src)))
@@ -1082,7 +1096,7 @@
     (local $children (ref $SetChildren))
     (local $len i32)
     (local $i i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $SetNode $children (local.get $src)))
@@ -1175,7 +1189,7 @@
     (local $children (ref $SetChildren))
     (local $len i32)
     (local $i i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $SetNode $children (local.get $src)))
@@ -1259,6 +1273,99 @@
       (then (return (i32.const 0))))
 
     (call $set_subset (local.get $a) (local.get $b))
+  )
+
+
+  ;; -- Set wrappers (user-visible API) -----------------------------------
+  ;; Wrap/unwrap $SetImpl ↔ $SetNode at the boundary.
+
+  (func $set_impl_empty (export "set_impl_empty") (result (ref $SetImpl))
+    (struct.new $SetImpl (global.get $empty_node))
+  )
+
+  (func $set_impl_has (export "set_impl_has")
+    (param $s (ref $SetImpl)) (param $key (ref eq))
+    (result i32)
+    (call $set_has (struct.get $SetImpl $node (local.get $s)) (local.get $key))
+  )
+
+  (func $set_impl_set (export "set_impl_set")
+    (param $s (ref $SetImpl)) (param $key (ref eq))
+    (result (ref $SetImpl))
+    (struct.new $SetImpl
+      (call $set_set (struct.get $SetImpl $node (local.get $s)) (local.get $key)))
+  )
+
+  (func $set_impl_remove (export "set_impl_remove")
+    (param $s (ref $SetImpl)) (param $key (ref eq))
+    (result (ref $SetImpl))
+    (struct.new $SetImpl
+      (call $set_remove (struct.get $SetImpl $node (local.get $s)) (local.get $key)))
+  )
+
+  (func $set_impl_size (export "set_impl_size")
+    (param $s (ref $SetImpl)) (result i32)
+    (call $set_size (struct.get $SetImpl $node (local.get $s)))
+  )
+
+  (func $set_impl_union (export "set_impl_union")
+    (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
+    (result (ref $SetImpl))
+    (struct.new $SetImpl
+      (call $set_union
+        (struct.get $SetImpl $node (local.get $a))
+        (struct.get $SetImpl $node (local.get $b))))
+  )
+
+  (func $set_impl_intersect (export "set_impl_intersect")
+    (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
+    (result (ref $SetImpl))
+    (struct.new $SetImpl
+      (call $set_intersect
+        (struct.get $SetImpl $node (local.get $a))
+        (struct.get $SetImpl $node (local.get $b))))
+  )
+
+  (func $set_impl_difference (export "set_impl_difference")
+    (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
+    (result (ref $SetImpl))
+    (struct.new $SetImpl
+      (call $set_difference
+        (struct.get $SetImpl $node (local.get $a))
+        (struct.get $SetImpl $node (local.get $b))))
+  )
+
+  (func $set_impl_sym_diff (export "set_impl_sym_diff")
+    (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
+    (result (ref $SetImpl))
+    (struct.new $SetImpl
+      (call $set_sym_diff
+        (struct.get $SetImpl $node (local.get $a))
+        (struct.get $SetImpl $node (local.get $b))))
+  )
+
+  (func $set_impl_subset (export "set_impl_subset")
+    (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
+    (result i32)
+    (call $set_subset
+      (struct.get $SetImpl $node (local.get $a))
+      (struct.get $SetImpl $node (local.get $b)))
+  )
+
+  (func $set_impl_disjoint (export "set_impl_disjoint")
+    (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
+    (result i32)
+    (call $set_disjoint
+      (struct.get $SetImpl $node (local.get $a))
+      (struct.get $SetImpl $node (local.get $b)))
+  )
+
+  (func $set_impl_eq (export "set_impl_eq")
+    (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
+    (result i32)
+    (call $set_eq
+      (struct.get $SetImpl $node (local.get $a))
+      (struct.get $SetImpl $node (local.get $b)))
   )
 
 )
