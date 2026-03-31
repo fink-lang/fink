@@ -174,4 +174,17 @@
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
       (local.get $cont)))
 
+  ;; =========================================================================
+  ;; Collection predicates (polymorphic — dispatch on type tag)
+  ;; =========================================================================
+
+  ;; empty(cursor, cont) — test whether a collection cursor is exhausted.
+  ;; Phase-0: only handles list cursors (null = empty).
+  ;; Future: dispatch on type tag for records, dicts, sets.
+  (func $op_empty (export "empty")
+    (param $cursor (ref null any)) (param $cont (ref null any))
+    (return_call $croc_1
+      (ref.i31 (ref.is_null (local.get $cursor)))
+      (local.get $cont)))
+
 )

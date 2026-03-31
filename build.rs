@@ -31,6 +31,7 @@ fn main() {
     let dependent_modules = [
         "src/runtime/dispatch.wat",
         "src/runtime/operators.wat",
+        "src/runtime/list.wat",
     ];
 
     for path in &dependent_modules {

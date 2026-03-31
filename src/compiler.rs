@@ -51,12 +51,19 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
   // Link: merge runtime modules + user code into a standalone binary.
   // Only include runtime modules that the user code actually imports.
   static OPERATORS_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/operators.wasm"));
+  static LIST_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/list.wasm"));
 
   let mut link_inputs = Vec::new();
   if result.needs_operators {
     link_inputs.push(link::LinkInput {
       module_name: "@fink/runtime/operators".into(),
       wasm: OPERATORS_WASM.to_vec(),
+    });
+  }
+  if result.needs_list {
+    link_inputs.push(link::LinkInput {
+      module_name: "@fink/runtime/list".into(),
+      wasm: LIST_WASM.to_vec(),
     });
   }
   link_inputs.push(link::LinkInput {

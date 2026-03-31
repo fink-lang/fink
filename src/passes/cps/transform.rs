@@ -759,6 +759,10 @@ fn lower_member<'src>(
 // Sequence literal: `[a, b, ..c]`
 // ---------------------------------------------------------------------------
 
+// TODO: build right-to-left so seq_append is O(1) cons instead of O(n) append.
+// Currently builds left-to-right: SeqAppend(SeqAppend([], 1), 2) — each append
+// walks to the tail. Reversing iteration gives cons(1, cons(2, [])) — all O(1).
+// Spreads complicate this (SeqConcat order matters), so needs care.
 fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], origin: Option<AstId>) -> Lower<'src> {
   let mut acc = lit_val(g, Lit::Seq, origin);
   let mut pending: Vec<Pending<'src>> = vec![];
