@@ -11,13 +11,14 @@
 ;;     subtrees are shared with the original
 ;;
 ;; Value representation:
-;;   - Integrates with fink's $Any type hierarchy:
-;;       $Any = (sub (struct))       — open supertype for all fink values
-;;       $HamtLeaf (sub $Any)        — key-value pair
-;;       $HamtNode (sub $Any)        — bitmap + children array
-;;       $HamtCollision (sub $Any)   — hash + flat leaf array (same-hash keys)
-;;     This means HAMT nodes are first-class fink values — they can be
-;;     stored in other HAMTs, passed as arguments, etc.
+;;   - Type hierarchy (types.wat defines opaque base types):
+;;       $Rec  (from types.wat)      — opaque record type
+;;       └── $RecImpl (sub $Rec)     — wrapper: single $HamtNode field
+;;       $Dict (from types.wat)      — opaque dict type
+;;       └── $DictImpl (sub $Dict)   — wrapper: single $HamtNode field
+;;       $HamtLeaf                   — key-value pair (internal)
+;;       $HamtNode                   — bitmap + children array (internal)
+;;       $HamtCollision              — hash + flat leaf array (internal)
 ;;   - Keys and values are (ref eq) — non-nullable. This allows i31ref
 ;;     (for interned symbol ids) and any GC struct/array ref.
 ;;   - Return values are (ref null eq) where null signals "not found".
@@ -45,41 +46,56 @@
 ;;                   Single-traversal get+delete. Returns (value, rest).
 ;;                   Value is null if key absent; rest is unchanged in that case.
 
+(import "@fink/runtime/types" "*" (func (param anyref)))
+
+
 (module
 
   ;; -- Type definitions -----------------------------------------------
 
-  ;; All types in a single rec group — $HamtNode references $HamtChildren
-  ;; which references $Any, and all HAMT types are subtypes of $Any.
+  ;; Internal HAMT types. These are implementation details — user code
+  ;; sees $Rec / $Dict (from types.wat) via the wrapper types below.
+  ;; Children array uses structref as the common base for leaves, nodes,
+  ;; and collision nodes.
+
+  ;; $HamtLeaf — key-value pair.
+  ;; Key and val are (ref eq) — non-nullable.
+  (type $HamtLeaf (struct
+    (field $key (ref eq))
+    (field $val (ref eq))
+  ))
+
+  ;; $HamtChildren — dense array of struct refs (leaves, nodes, or collisions).
+  (type $HamtChildren (array (mut (ref null struct))))
+
   (rec
-    ;; $Any — open supertype for all fink values.
-    ;; In the full compiler this is defined in the type section; here we
-    ;; define it locally so the module is self-contained for testing.
-    (type $Any (sub (struct)))
-
-    ;; $HamtLeaf — key-value pair, subtype of $Any.
-    ;; Key and val are (ref eq) — non-nullable.
-    (type $HamtLeaf (sub $Any (struct
-      (field $key (ref eq))
-      (field $val (ref eq))
-    )))
-
-    ;; $HamtChildren — dense array of $Any refs (leaves, nodes, or collisions).
-    (type $HamtChildren (array (mut (ref null $Any))))
-
-    ;; $HamtNode — bitmap + dense children array, subtype of $Any.
+    ;; $HamtNode — bitmap + dense children array.
     ;; bitmap bit i is set iff hash fragment i is occupied.
     ;; children array length = popcount(bitmap).
-    (type $HamtNode (sub $Any (struct
+    (type $HamtNode (struct
       (field $bitmap (mut i32))
       (field $children (ref $HamtChildren))
-    )))
+    ))
 
     ;; $HamtCollision — flat array of leaves that share the same hash.
     ;; Used at max trie depth when multiple keys hash identically.
-    (type $HamtCollision (sub $Any (struct
+    (type $HamtCollision (struct
       (field $col_hash i32)
       (field $col_leaves (ref $HamtChildren))
+    ))
+
+    ;; -- Wrapper types (user-visible) ------------------------------------
+    ;; Single-field wrappers that participate in the canonical type hierarchy.
+    ;; Casting happens only at the runtime API boundary.
+
+    ;; $RecImpl — wraps $HamtNode as a $Rec (from types.wat).
+    (type $RecImpl (sub $Rec (struct
+      (field $hamt (ref $HamtNode))
+    )))
+
+    ;; $DictImpl — wraps $HamtNode as a $Dict (from types.wat).
+    (type $DictImpl (sub $Dict (struct
+      (field $hamt (ref $HamtNode))
     )))
   )
 
@@ -187,7 +203,7 @@
     (local $bit i32)
     (local $bitmap i32)
     (local $idx i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
     (local $col_idx i32)
 
     ;; compute hash once
@@ -303,7 +319,7 @@
     (local $old_children (ref $HamtChildren))
     (local $new_children (ref $HamtChildren))
     (local $old_len i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
     (local $new_leaf (ref $HamtLeaf))
     (local $i i32)
     (local $col_leaves (ref $HamtChildren))
@@ -603,7 +619,7 @@
     (local $old_children (ref $HamtChildren))
     (local $new_children (ref $HamtChildren))
     (local $old_len i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
     (local $sub_result (ref $HamtNode))
     (local $i i32)
     (local $col_leaves (ref $HamtChildren))
@@ -875,7 +891,7 @@
     (local $old_children (ref $HamtChildren))
     (local $new_children (ref $HamtChildren))
     (local $old_len i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
     (local $i i32)
     (local $sub_val (ref null eq))
     (local $sub_rest (ref $HamtNode))
@@ -1152,7 +1168,7 @@
     (local $children (ref $HamtChildren))
     (local $len i32)
     (local $i i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $HamtNode $children (local.get $src)))
@@ -1262,7 +1278,7 @@
     (local $len i32)
     (local $i i32)
     (local $count i32)
-    (local $child (ref null $Any))
+    (local $child (ref null struct))
 
     (local.set $children
       (struct.get $HamtNode $children (local.get $node)))
@@ -1308,6 +1324,118 @@
         (br $walk)))
 
     (local.get $count)
+  )
+
+
+  ;; -- Record wrappers (user-visible API) --------------------------------
+  ;; Wrap/unwrap $RecImpl ↔ $HamtNode at the boundary.
+
+  (func $rec_empty (export "rec_empty") (result (ref $RecImpl))
+    (struct.new $RecImpl (global.get $empty_node))
+  )
+
+  (func $rec_get (export "rec_get")
+    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (result (ref null eq))
+    (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
+  )
+
+  (func $rec_set (export "rec_set")
+    (param $rec (ref $RecImpl)) (param $key (ref eq)) (param $val (ref eq))
+    (result (ref $RecImpl))
+    (struct.new $RecImpl
+      (call $hamt_set (struct.get $RecImpl $hamt (local.get $rec))
+        (local.get $key) (local.get $val)))
+  )
+
+  (func $rec_delete (export "rec_delete")
+    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (result (ref $RecImpl))
+    (struct.new $RecImpl
+      (call $hamt_delete (struct.get $RecImpl $hamt (local.get $rec))
+        (local.get $key)))
+  )
+
+  (func $rec_pop (export "rec_pop")
+    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (result (ref null eq) (ref $RecImpl))
+    (local $val (ref null eq))
+    (local $rest (ref $HamtNode))
+    (call $hamt_pop (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
+    (local.set $rest)
+    (local.set $val)
+    (local.get $val)
+    (struct.new $RecImpl (local.get $rest))
+  )
+
+  (func $rec_merge (export "rec_merge")
+    (param $dest (ref $RecImpl)) (param $src (ref $RecImpl))
+    (result (ref $RecImpl))
+    (struct.new $RecImpl
+      (call $hamt_merge
+        (struct.get $RecImpl $hamt (local.get $dest))
+        (struct.get $RecImpl $hamt (local.get $src))))
+  )
+
+  (func $rec_size (export "rec_size")
+    (param $rec (ref $RecImpl)) (result i32)
+    (call $hamt_size (struct.get $RecImpl $hamt (local.get $rec)))
+  )
+
+
+  ;; -- Dict wrappers (user-visible API) ----------------------------------
+  ;; Same as record wrappers but for $DictImpl ↔ $HamtNode.
+
+  (func $dict_empty (export "dict_empty") (result (ref $DictImpl))
+    (struct.new $DictImpl (global.get $empty_node))
+  )
+
+  (func $dict_get (export "dict_get")
+    (param $dict (ref $DictImpl)) (param $key (ref eq))
+    (result (ref null eq))
+    (call $hamt_get (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
+  )
+
+  (func $dict_set (export "dict_set")
+    (param $dict (ref $DictImpl)) (param $key (ref eq)) (param $val (ref eq))
+    (result (ref $DictImpl))
+    (struct.new $DictImpl
+      (call $hamt_set (struct.get $DictImpl $hamt (local.get $dict))
+        (local.get $key) (local.get $val)))
+  )
+
+  (func $dict_delete (export "dict_delete")
+    (param $dict (ref $DictImpl)) (param $key (ref eq))
+    (result (ref $DictImpl))
+    (struct.new $DictImpl
+      (call $hamt_delete (struct.get $DictImpl $hamt (local.get $dict))
+        (local.get $key)))
+  )
+
+  (func $dict_pop (export "dict_pop")
+    (param $dict (ref $DictImpl)) (param $key (ref eq))
+    (result (ref null eq) (ref $DictImpl))
+    (local $val (ref null eq))
+    (local $rest (ref $HamtNode))
+    (call $hamt_pop (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
+    (local.set $rest)
+    (local.set $val)
+    (local.get $val)
+    (struct.new $DictImpl (local.get $rest))
+  )
+
+  (func $dict_merge (export "dict_merge")
+    (param $dest (ref $DictImpl)) (param $src (ref $DictImpl))
+    (result (ref $DictImpl))
+    (struct.new $DictImpl
+      (call $hamt_merge
+        (struct.get $DictImpl $hamt (local.get $dest))
+        (struct.get $DictImpl $hamt (local.get $src))))
+  )
+
+  (func $dict_size (export "dict_size")
+    (param $dict (ref $DictImpl)) (result i32)
+    (call $hamt_size (struct.get $DictImpl $hamt (local.get $dict)))
   )
 
 )
