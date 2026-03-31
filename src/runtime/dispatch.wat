@@ -12,9 +12,6 @@
 ;;   _croc_N takes N call args + 1 callee (ref null any), tail-calls
 ;;   the function inside the $Closure with captures + args.
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
 
   ;; Shim _croc_1 — used by runtime operators to dispatch continuations.

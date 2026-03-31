@@ -18,9 +18,6 @@
 ;;   $range_incl  : (ref $Num), (ref $Num) -> (ref $Range)
 ;;   $range_in    : (ref $Num), (ref $Range) -> i32
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
 
   ;; -- Type definitions -----------------------------------------------

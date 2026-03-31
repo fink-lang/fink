@@ -8,56 +8,6 @@
 mod tests {
   use wasmtime::*;
 
-  /// Prepare a WAT source that uses `@fink/runtime/types` imports for
-  /// standalone testing: strip the import line and inject the canonical
-  /// type definitions that the linker would normally provide.
-  /// Also replaces the `@fink/runtime/hashing` import with an inline stub.
-  fn prepare_wat(wat: &str, type_defs: &str) -> String {
-    let wat = wat.replace(
-      "(import \"@fink/runtime/types\" \"*\" (func (param anyref)))",
-      "",
-    );
-    // Replace hashing import with inline stub (i31-only, matching phase 0)
-    let wat = wat.replace(
-      "(import \"@fink/runtime/hashing\" \"hash_i31\"\n    (func $hash_i31 (param (ref eq)) (result i32)))",
-      "(func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))",
-    );
-    // Strip @fink/user imports and CPS wrapper functions — direct-style
-    // tests don't exercise them and can't provide the dispatch stubs.
-    let wat = wat.lines()
-      .filter(|line| !line.contains("(import \"@fink/user\""))
-      .collect::<Vec<_>>()
-      .join("\n");
-    // Remove CPS wrapper section (everything from the marker comment to module end).
-    let wat = if let Some(pos) = wat.find(";; CPS wrappers —") {
-      // Find the last `)` that closes the module — keep it.
-      let before = &wat[..pos];
-      let module_close = wat.rfind(')').unwrap();
-      format!("{}\n{}", before.trim_end(), &wat[module_close..])
-    } else {
-      wat
-    };
-    wat.replace(
-      "(module\n",
-      &format!("(module\n{}\n", type_defs),
-    )
-  }
-
-  /// Load a WAT module with injected type defs.
-  fn load_module(wat_src: &str, type_defs: &str) -> (Store<()>, Instance) {
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
-    config.wasm_multi_value(true);
-
-    let engine = Engine::new(&config).unwrap();
-    let wat = prepare_wat(wat_src, type_defs);
-    let module = Module::new(&engine, &wat).unwrap();
-    let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[]).unwrap();
-    (store, instance)
-  }
-
   const HAMT_TYPE_DEFS: &str = concat!(
     "  (rec\n",
     "    (type $Rec (sub (struct)))\n",
@@ -69,9 +19,22 @@ mod tests {
 
   const SET_TYPE_DEFS: &str = "  (type $Set (sub (struct)))\n";
 
-  /// Load the HAMT module and return (store, instance).
+  /// Load the HAMT module standalone with stubs for inter-runtime deps.
   fn load_hamt() -> (Store<()>, Instance) {
-    load_module(include_str!("hamt.wat"), HAMT_TYPE_DEFS)
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let wat = prepare_wat(include_str!("hamt.wat"), HAMT_TYPE_DEFS);
+    // Inject hash_i31 stub (in merged runtime, comes from hashing.wat).
+    let stub = "\n  (func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))\n)";
+    let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + stub;
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
   }
 
   /// Create an i31ref key from an integer.
@@ -466,7 +429,17 @@ mod tests {
   // -- List tests -----------------------------------------------------
 
   fn load_list() -> (Store<()>, Instance) {
-    load_module(include_str!("list.wat"), LIST_TYPE_DEFS)
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let wat = prepare_wat(include_str!("list.wat"), LIST_TYPE_DEFS);
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
   }
 
   fn list_empty(store: &mut Store<()>, nil_fn: &Func) -> Val {
@@ -741,7 +714,20 @@ mod tests {
   // -- Set tests ------------------------------------------------------
 
   fn load_set() -> (Store<()>, Instance) {
-    load_module(include_str!("set.wat"), SET_TYPE_DEFS)
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let wat = prepare_wat(include_str!("set.wat"), SET_TYPE_DEFS);
+    // Inject hash_i31 stub.
+    let stub = "\n  (func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))\n)";
+    let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + stub;
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
   }
 
   fn set_empty(store: &mut Store<()>, fn_: &Func) -> Val {
@@ -1063,6 +1049,28 @@ mod tests {
   /// Load string.wat with types inlined and test data in linear memory.
   /// `data_bytes` is placed at offset 0 in the data section.
   /// `extra_wat` is injected before the closing ) for test-specific functions.
+  /// Prepare a standalone WAT module for testing: inject type defs and
+  /// strip @fink/user imports.
+  fn prepare_wat(wat: &str, type_defs: &str) -> String {
+    // Strip @fink/user imports — direct-style tests can't provide dispatch stubs.
+    let wat: String = wat.lines()
+      .filter(|line| !line.contains("(import \"@fink/user\""))
+      .collect::<Vec<_>>()
+      .join("\n");
+    // Remove CPS wrapper section (everything from the marker comment to module end).
+    let wat = if let Some(pos) = wat.find(";; CPS wrappers —") {
+      let before = &wat[..pos];
+      let module_close = wat.rfind(')').unwrap();
+      format!("{}\n{}", before.trim_end(), &wat[module_close..])
+    } else {
+      wat
+    };
+    wat.replace(
+      "(module\n",
+      &format!("(module\n{}\n", type_defs),
+    )
+  }
+
   fn load_string_with(data_bytes: &[u8], extra_wat: &str) -> (Store<()>, Instance) {
     let mut config = Config::new();
     config.wasm_gc(true);
@@ -1597,8 +1605,7 @@ mod tests {
     "  )\n",
   );
 
-  /// Load hashing.wat with type defs inlined and str_hash_i31 import
-  /// replaced by a local stub.
+  /// Load hashing.wat with type defs and stubs for inter-runtime deps.
   fn load_hashing_with(extra_wat: &str) -> (Store<()>, Instance) {
     let mut config = Config::new();
     config.wasm_gc(true);
@@ -1608,15 +1615,12 @@ mod tests {
     let engine = Engine::new(&config).unwrap();
     let wat = prepare_wat(include_str!("hashing.wat"), HASHING_TYPE_DEFS);
 
-    // Replace the string module import with a local stub
-    let wat = wat.replace(
-      "(import \"@fink/runtime/string\" \"str_hash_i31\"\n    (func $str_hash_i31 (param (ref $Str)) (result i32)))",
-      ";; stub: str_hash_i31 returns 0 for tests\n  (func $str_hash_i31 (param (ref $Str)) (result i32) (i32.const 0))",
-    );
-
-    // Inject make_num helper and extra WAT before closing )
-    let helpers = format!(
-      "\n  (func (export \"make_num\") (param $v f64) (result (ref $Num))\n    (struct.new $Num (local.get $v)))\n{}\n)",
+    // Inject str_hash_i31 stub + make_num helper + extra WAT before closing )
+    let helpers = format!(concat!(
+      "\n  (func $str_hash_i31 (param (ref $Str)) (result i32) (i32.const 0))",
+      "\n  (func (export \"make_num\") (param $v f64) (result (ref $Num))",
+      "\n    (struct.new $Num (local.get $v)))",
+      "\n{}\n)"),
       extra_wat,
     );
     let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + &helpers;

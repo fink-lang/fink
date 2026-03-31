@@ -48,28 +48,13 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
   let dwarf_sections = dwarf::emit_dwarf("input.fnk", Some(src), &result.offset_mappings);
   dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
 
-  // Link: merge runtime modules + user code into a standalone binary.
-  // Only include runtime modules that the user code actually imports.
-  static OPERATORS_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/operators.wasm"));
-  static LIST_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/list.wasm"));
+  // Link: merge core runtime + user code into a standalone binary.
+  static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
 
-  let mut link_inputs = Vec::new();
-  if result.needs_operators {
-    link_inputs.push(link::LinkInput {
-      module_name: "@fink/runtime/operators".into(),
-      wasm: OPERATORS_WASM.to_vec(),
-    });
-  }
-  if result.needs_list {
-    link_inputs.push(link::LinkInput {
-      module_name: "@fink/runtime/list".into(),
-      wasm: LIST_WASM.to_vec(),
-    });
-  }
-  link_inputs.push(link::LinkInput {
-    module_name: "@fink/user".into(),
-    wasm: result.wasm,
-  });
+  let link_inputs = vec![
+    link::LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
+    link::LinkInput { module_name: "@fink/user".into(), wasm: result.wasm },
+  ];
   let linked = link::link(&link_inputs);
 
   // Convert OffsetMapping → WasmMapping for DAP compatibility.

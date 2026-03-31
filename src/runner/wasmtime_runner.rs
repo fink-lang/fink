@@ -26,6 +26,8 @@ pub enum FinkResult {
   Num(f64),
   /// Boolean result (i31ref: 0 = false, 1 = true).
   Bool(bool),
+  /// String result ($StrDataImpl: offset + length into linear memory).
+  Str(String),
   /// No result returned.
   None,
 }
@@ -77,13 +79,29 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   let main_ty = main_fn.ty(&store);
   let done = Func::new(&mut store, main_ty, move |mut caller, params, _results| {
     if let Some(Val::AnyRef(Some(any_ref))) = params.first() {
-      // Try i31ref first (booleans), then $Num struct (f64 field).
+      // Try i31ref first (booleans), then $Num struct (f64 field),
+      // then $StrDataImpl (two i32 fields: offset, length).
       if let Ok(Some(i31)) = any_ref.as_i31(&caller) {
         *result_clone.lock().unwrap() = Some(FinkResult::Bool(i31.get_i32() != 0));
-      } else if let Ok(Some(struct_ref)) = any_ref.as_struct(&caller)
-        && let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0)
-      {
-        *result_clone.lock().unwrap() = Some(FinkResult::Num(f64::from_bits(bits)));
+      } else if let Ok(Some(struct_ref)) = any_ref.as_struct(&caller) {
+        if let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0) {
+          *result_clone.lock().unwrap() = Some(FinkResult::Num(f64::from_bits(bits)));
+        } else if let Ok(Val::I32(offset)) = struct_ref.field(&mut caller, 0)
+          && let Ok(Val::I32(length)) = struct_ref.field(&mut caller, 1)
+        {
+          // $StrDataImpl — read bytes from linear memory.
+          if let Some(memory) = caller.get_export("memory")
+            && let Some(mem) = memory.into_memory()
+          {
+            let data = mem.data(&caller);
+            let start = offset as usize;
+            let end = start + length as usize;
+            if end <= data.len() {
+              let s = String::from_utf8_lossy(&data[start..end]).into_owned();
+              *result_clone.lock().unwrap() = Some(FinkResult::Str(s));
+            }
+          }
+        }
       }
     }
     Ok(())
@@ -113,6 +131,7 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
       }
     }
     FinkResult::Bool(b) => println!("{}", b),
+    FinkResult::Str(s) => println!("{}", s),
     FinkResult::None => {}
   }
   Ok(())

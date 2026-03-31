@@ -43,13 +43,9 @@
 ;;   $seq_pop    : (cursor, fail, succ) -> if empty: _croc_0(fail)
 ;;                                         else: _croc_2(head, tail, succ)
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
 
   ;; Continuation dispatch — provided by the compiler's emitted module.
-  ;; The linker resolves these imports from @fink/user.
   (import "@fink/user" "_croc_0" (func $croc_0 (param (ref null any))))
   (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
   (import "@fink/user" "_croc_2" (func $croc_2 (param (ref null any)) (param (ref null any)) (param (ref null any))))

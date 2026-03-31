@@ -136,7 +136,15 @@ pub fn link(inputs: &[LinkInput]) -> LinkResult {
     // Step 5: Merge exports (strip @fink/ internal imports from output).
     merge_exports(&mut ctx, &fragments);
 
-    // Step 6: Emit final module.
+    // Step 6: Collect memory and data sections from fragments.
+    for frag in &fragments {
+        if let Some(mem) = &frag.memory {
+            ctx.memory = Some(*mem);
+        }
+        ctx.data_segments.extend(frag.data_segments.iter().cloned());
+    }
+
+    // Step 7: Emit final module.
     emit_module(&ctx)
 }
 
@@ -207,6 +215,10 @@ struct ParsedFragment {
     dwarf_sections: Vec<(String, Vec<u8>)>,
     /// Element section entries (declarative ref.func indices).
     elem_func_indices: Vec<u32>,
+    /// Memory type (if declared by this fragment).
+    memory: Option<wasmparser::MemoryType>,
+    /// Active data segments: (memory_index, offset_bytes, data).
+    data_segments: Vec<(u32, Vec<u8>, Vec<u8>)>,
 }
 
 
@@ -232,6 +244,8 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
         },
         dwarf_sections: Vec::new(),
         elem_func_indices: Vec::new(),
+        memory: None,
+        data_segments: Vec::new(),
     };
 
     for payload in Parser::new(0).parse_all(wasm) {
@@ -347,6 +361,24 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                 }
             }
 
+            Payload::MemorySection(reader) => {
+                for mem in reader.into_iter().flatten() {
+                    frag.memory = Some(mem);
+                }
+            }
+
+            Payload::DataSection(reader) => {
+                for seg in reader.into_iter().flatten() {
+                    if let wasmparser::DataKind::Active { memory_index, offset_expr } = seg.kind {
+                        let mut r = offset_expr.get_binary_reader();
+                        let len = r.bytes_remaining();
+                        let offset_bytes = r.read_bytes(len)
+                            .expect("invalid data offset expr").to_vec();
+                        frag.data_segments.push((memory_index, offset_bytes, seg.data.to_vec()));
+                    }
+                }
+            }
+
             Payload::CustomSection(reader) => {
                 let name = reader.name();
                 if let wasmparser::KnownCustom::Name(name_reader) =
@@ -455,6 +487,12 @@ struct LinkContext {
     // Build an export lookup: module_name → export_name → new_func_idx.
     // Populated during merge_functions for import resolution.
     export_map: BTreeMap<String, BTreeMap<String, u32>>,
+
+    // Memory type (from the fragment that declares it).
+    memory: Option<wasmparser::MemoryType>,
+
+    // Data segments: (memory_index, offset_expr_bytes, data).
+    data_segments: Vec<(u32, Vec<u8>, Vec<u8>)>,
 }
 
 impl LinkContext {
@@ -476,6 +514,8 @@ impl LinkContext {
             type_names: BTreeMap::new(),
             dwarf_sections: Vec::new(),
             export_map: BTreeMap::new(),
+            memory: None,
+            data_segments: Vec::new(),
         }
     }
 }
@@ -1093,6 +1133,19 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
         module.section(&funcs);
     }
 
+    // 2b. Memory section.
+    if let Some(mem) = &ctx.memory {
+        let mut memories = wasm_encoder::MemorySection::new();
+        memories.memory(wasm_encoder::MemoryType {
+            minimum: mem.initial,
+            maximum: mem.maximum,
+            memory64: mem.memory64,
+            shared: mem.shared,
+            page_size_log2: None,
+        });
+        module.section(&memories);
+    }
+
     // 3. Global section — re-emit with remapped init expressions.
     if !ctx.globals.is_empty() {
         let mut globals = wasm_encoder::GlobalSection::new();
@@ -1158,6 +1211,16 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
             code.raw(&rewritten);
         }
         module.section(&code);
+    }
+
+    // 6b. Data section — pass through active data segments.
+    if !ctx.data_segments.is_empty() {
+        let mut data = wasm_encoder::DataSection::new();
+        for (mem_idx, offset_bytes, seg_data) in &ctx.data_segments {
+            let offset = remap_const_expr(offset_bytes, &ctx.remaps[0]);
+            data.active(*mem_idx, &offset, seg_data.iter().copied());
+        }
+        module.section(&data);
     }
 
     // 7. Name section.

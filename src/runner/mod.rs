@@ -54,6 +54,7 @@ mod tests {
         }
       }
       Ok(FinkResult::Bool(b)) => format!("{}", b),
+      Ok(FinkResult::Str(s)) => s,
       Ok(FinkResult::None) => String::new(),
       Err(e) => format!("ERROR: {}", e),
     }
