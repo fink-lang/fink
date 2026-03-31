@@ -91,6 +91,10 @@ struct ParsedModule {
   import_func_count: u32,
   /// Structural source locations from the emitter.
   structural_locs: Vec<super::emit::StructuralLoc>,
+  /// Memory declarations: (min_pages, max_pages).
+  memories: Vec<(u64, Option<u64>)>,
+  /// Active data segments: (memory_index, offset, data bytes).
+  data_segments: Vec<(u32, u32, Vec<u8>)>,
 }
 
 struct ParsedType {
@@ -186,6 +190,8 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
     dwarf_locs: BTreeMap::new(),
     import_func_count: 0,
     structural_locs: Vec::new(),
+    memories: Vec::new(),
+    data_segments: Vec::new(),
   };
 
   let mut func_type_indices: Vec<u32> = Vec::new();
@@ -334,6 +340,39 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
           instructions: adjusted,
           local_count,
         });
+      }
+
+      Payload::MemorySection(reader) => {
+        for mem in reader.into_iter().flatten() {
+          module.memories.push((mem.initial, mem.maximum));
+        }
+      }
+
+      Payload::DataSection(reader) => {
+        for seg in reader.into_iter().flatten() {
+          if let wasmparser::DataKind::Active { memory_index, offset_expr } = seg.kind {
+            // Parse the i32.const offset from the init expression bytes.
+            // Format: 0x41 (i32.const) + LEB128 value + 0x0b (end).
+            let mut r = offset_expr.get_binary_reader();
+            let bytes_len = r.bytes_remaining();
+            let raw = r.read_bytes(bytes_len).unwrap_or_default();
+            let offset = if !raw.is_empty() && raw[0] == 0x41 {
+              // Decode LEB128 i32 value after the opcode byte.
+              let mut val = 0u32;
+              let mut shift = 0;
+              for &b in &raw[1..] {
+                if b == 0x0b { break; } // end opcode
+                val |= ((b & 0x7f) as u32) << shift;
+                shift += 7;
+                if b & 0x80 == 0 { break; }
+              }
+              val
+            } else {
+              0
+            };
+            module.data_segments.push((memory_index, offset, seg.data.to_vec()));
+          }
+        }
       }
 
       Payload::CustomSection(reader) => {
@@ -584,6 +623,7 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
   stop_mark(w);
   w.push_str("(module\n");
   emit_type_section(module, w);
+  emit_memory_section(module, w);
   stop_mark(w);
   w.push_str("\n");
 
@@ -596,6 +636,7 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
   }
 
   emit_exports(module, w);
+  emit_data_section(module, w);
   stop_mark(w);
   w.push_str(")\n");
 }
@@ -612,6 +653,30 @@ fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
       }
       w.push_str(&format!("  (export {:?} (func {}))\n", name, f_name));
     }
+  }
+}
+
+fn emit_memory_section(module: &ParsedModule, w: &mut MappedWriter) {
+  for (min, max) in &module.memories {
+    match max {
+      Some(max) => w.push_str(&format!("  (memory {} {})\n", min, max)),
+      None => w.push_str(&format!("  (memory {})\n", min)),
+    }
+  }
+}
+
+fn emit_data_section(module: &ParsedModule, w: &mut MappedWriter) {
+  for (mem_idx, offset, data) in &module.data_segments {
+    // Render data as a quoted string with hex escapes for non-printable bytes.
+    let escaped: String = data.iter().map(|&b| {
+      if b.is_ascii_graphic() || b == b' ' {
+        (b as char).to_string()
+      } else {
+        format!("\\{:02x}", b)
+      }
+    }).collect();
+    let mem = if *mem_idx == 0 { String::new() } else { format!("(memory {}) ", mem_idx) };
+    w.push_str(&format!("  (data {}(offset (i32.const {})) \"{}\")\n", mem, offset, escaped));
   }
 }
 

@@ -46,10 +46,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use wasm_encoder::{
   AbstractHeapType, BlockType, CodeSection, CompositeInnerType, CompositeType,
-  ConstExpr, ElementSection, Elements, ExportKind, ExportSection, FieldType,
-  FuncType, Function, FunctionSection, GlobalSection, GlobalType, HeapType,
-  ImportSection, IndirectNameMap, Instruction,
-  NameMap, NameSection, RefType, StorageType, SubType,
+  ConstExpr, DataSection, ElementSection, Elements, ExportKind, ExportSection,
+  FieldType, FuncType, Function, FunctionSection, GlobalSection, GlobalType,
+  HeapType, ImportSection, IndirectNameMap, Instruction, MemorySection,
+  MemoryType, NameMap, NameSection, RefType, StorageType, SubType,
   StructType, TypeSection, ValType,
 };
 
@@ -68,6 +68,58 @@ use super::collect::{
   CollectedFn, IrCtx, Module as CpsModule,
   builtin_name, collect_locals, split_args,
 };
+
+// ---------------------------------------------------------------------------
+// String intern table — deduplicates string literals in a flat data blob.
+// ---------------------------------------------------------------------------
+
+/// Interned string data: a flat byte blob where each unique literal is stored
+/// once. The intern ID is the byte offset into the blob; the length is stored
+/// alongside. Substring overlap is exploited: if `"hello"` already exists
+/// anywhere in the blob, a new reference to `"hello"` reuses that offset.
+struct StringData {
+  /// Accumulated data section bytes.
+  bytes: Vec<u8>,
+}
+
+impl StringData {
+  fn new() -> Self {
+    Self { bytes: Vec::new() }
+  }
+
+  /// Intern a string literal. Returns `(offset, length)` into the data blob.
+  /// If the byte sequence already exists as a substring, reuses that offset.
+  fn intern(&mut self, s: &str) -> (u32, u32) {
+    let needle = s.as_bytes();
+    let len = needle.len() as u32;
+    // Search for existing substring.
+    if let Some(pos) = find_bytes(&self.bytes, needle) {
+      return (pos as u32, len);
+    }
+    // Not found — append.
+    let offset = self.bytes.len() as u32;
+    self.bytes.extend_from_slice(needle);
+    (offset, len)
+  }
+
+  fn is_empty(&self) -> bool {
+    self.bytes.is_empty()
+  }
+
+  /// Size in WASM pages (64 KiB each), rounded up.
+  fn pages(&self) -> u64 {
+    let size = self.bytes.len() as u64;
+    size.div_ceil(65536)
+  }
+}
+
+/// Find `needle` as a contiguous subsequence in `haystack`.
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+  if needle.is_empty() {
+    return Some(0);
+  }
+  haystack.windows(needle.len()).position(|w| w == needle)
+}
 
 // ---------------------------------------------------------------------------
 // Canonical types from types.wat
@@ -234,6 +286,8 @@ pub struct EmitResult {
   pub needs_operators: bool,
   /// Whether the module imports list functions from @fink/runtime/list.
   pub needs_list: bool,
+  /// Whether the module uses string literals (needs @fink/runtime/string).
+  pub needs_string: bool,
 }
 
 /// A single source-map entry: WASM byte offset → .fnk source location.
@@ -298,10 +352,17 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // call_ref_or_clos_N dispatch helpers need $FnN types for all call arities.
   // The closure lifted fn arities (call_arity + captures) are already covered
   // by the defined function arities in cps_mod.arities.
+  // Scan string literals and intern into the data blob.
+  for func in &module.funcs {
+    scan_strings(func.body, &mut e.string_data);
+  }
+  let has_strings = !e.string_data.is_empty();
+
   e.closure_captures = closure_captures.clone();
   e.call_arities = extra_arities.clone();
   e.needs_croc_for_operators = has_operator_imports;
   e.needs_list = has_list_imports;
+  e.needs_string = has_strings;
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
   all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
@@ -309,10 +370,12 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.emit_imports_from(module, &import_builtins);
   e.impl_builtins = impl_builtins.clone();
   e.emit_functions(module, &closure_captures, &extra_arities);
+  e.emit_memory();
   e.emit_globals(module);
   e.emit_exports(module);
   e.emit_elements();
   e.emit_code(module, &closure_captures);
+  e.emit_data();
   e.emit_names(module, &closure_captures, &extra_arities);
   let wasm = e.module.finish();
 
@@ -321,7 +384,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Sort by wasm_offset for monotonic DWARF line table emission.
   mappings.sort_by_key(|m| m.wasm_offset);
 
-  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_croc_for_operators, needs_list: e.needs_list }
+  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_croc_for_operators, needs_list: e.needs_list, needs_string: has_strings }
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +466,10 @@ struct Emitter<'a, 'src> {
   needs_croc_for_operators: bool,
   /// Whether list runtime imports are present (seq_prepend, seq_concat, seq_pop).
   needs_list: bool,
+  /// Whether string literals are present (needs memory + data section + string runtime).
+  needs_string: bool,
+  /// Interned string literal data.
+  string_data: StringData,
 }
 
 struct RawMapping {
@@ -427,6 +494,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
       impl_builtins: BTreeMap::new(),
       needs_croc_for_operators: false,
       needs_list: false,
+      needs_string: false,
+      string_data: StringData::new(),
     }
   }
 
@@ -474,6 +543,32 @@ impl<'a, 'src> Emitter<'a, 'src> {
     });
     self.idx.types.insert("$BoxFuncTy".into(), next_idx);
     next_idx += 1;
+
+    // $TmpImport0 = (func (param i32 i32) (result (ref $StrRaw)))
+    // Temporary type for the str_raw import — only exists pre-link.
+    // The linker unifies this with string.wat's actual function type.
+    if self.needs_string {
+      let str_raw_idx = self.idx.type_idx("$StrRaw");
+      let str_raw_ref = ValType::Ref(RefType {
+        nullable: false,
+        heap_type: HeapType::Concrete(str_raw_idx),
+      });
+      types.ty().subtype(&SubType {
+        is_final: true,
+        supertype_idx: None,
+        composite_type: CompositeType {
+          inner: CompositeInnerType::Func(FuncType::new(
+            vec![ValType::I32, ValType::I32],
+            vec![str_raw_ref],
+          )),
+          shared: false,
+          descriptor: None,
+          describes: None,
+        },
+      });
+      self.idx.types.insert("$TmpImport0".into(), next_idx);
+      next_idx += 1;
+    }
 
     // $FnN for each arity (from defined functions + builtins + dispatch).
     let mut all_arities = cps_mod.arities.clone();
@@ -540,9 +635,17 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
+    // str_raw: (i32, i32) -> (ref $StrRaw) — wraps data-section pointer.
+    if self.needs_string {
+      let type_idx = self.idx.type_idx("$TmpImport0");
+      imports.import("@fink/runtime/string", "str_raw", wasm_encoder::EntityType::Function(type_idx));
+      self.idx.imports.insert("str_raw".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
     self.idx.import_count = next_func_idx;
 
-    if !builtins.is_empty() {
+    if next_func_idx > 0 {
       self.module.section(&imports);
     }
   }
@@ -614,6 +717,25 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     let _ = next_func_idx;
     self.module.section(&functions);
+  }
+
+  // -------------------------------------------------------------------------
+  // Memory section — linear memory for string data
+  // -------------------------------------------------------------------------
+
+  fn emit_memory(&mut self) {
+    if !self.needs_string {
+      return;
+    }
+    let mut memories = MemorySection::new();
+    memories.memory(MemoryType {
+      minimum: self.string_data.pages().max(1),
+      maximum: None,
+      memory64: false,
+      shared: false,
+      page_size_log2: None,
+    });
+    self.module.section(&memories);
   }
 
   // -------------------------------------------------------------------------
@@ -692,6 +814,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
       if let Some(&idx) = self.idx.funcs.get(&name) {
         exports.export(&name, ExportKind::Func, idx);
       }
+    }
+
+    // TODO: memory should not be exported in production builds — only
+    // needed for the runner to read string data during testing.
+    if self.needs_string {
+      exports.export("memory", ExportKind::Memory, 0);
     }
 
     self.module.section(&exports);
@@ -912,6 +1040,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       raw_mappings: &mut self.raw_mappings,
       def_idx,
       has_closures: !self.closure_captures.is_empty(),
+      string_data: &self.string_data,
     };
     emit_body(func.body, &mut fc);
 
@@ -919,6 +1048,20 @@ impl<'a, 'src> Emitter<'a, 'src> {
     wasm_func.instruction(&Instruction::End);
 
     wasm_func
+  }
+
+  // -------------------------------------------------------------------------
+  // Data section — interned string literals
+  // -------------------------------------------------------------------------
+
+  fn emit_data(&mut self) {
+    if self.string_data.is_empty() {
+      return;
+    }
+    let mut data = DataSection::new();
+    let offset = ConstExpr::i32_const(0);
+    data.active(0, &offset, self.string_data.bytes.iter().copied());
+    self.module.section(&data);
   }
 
   // -------------------------------------------------------------------------
@@ -998,6 +1141,8 @@ struct FuncContext<'a, 'b, 'src> {
   def_idx: u32,
   /// Whether this module has any closures (controls dispatch path).
   has_closures: bool,
+  /// Interned string data for looking up literal offsets.
+  string_data: &'a StringData,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -1379,7 +1524,18 @@ fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::I32Const(v));
       fc.instr(&Instruction::RefI31);
     }
-    Lit::Str(_) | Lit::Seq | Lit::Rec => {
+    Lit::Str(s) => {
+      // Look up the interned offset — string was pre-scanned, so this
+      // always finds a match in the data blob.
+      let (offset, len) = find_bytes(&fc.string_data.bytes, s.as_bytes())
+        .map(|pos| (pos as u32, s.len() as u32))
+        .expect("string literal not interned");
+      let str_raw_idx = fc.emitter_idx.func_idx("str_raw");
+      fc.instr(&Instruction::I32Const(offset as i32));
+      fc.instr(&Instruction::I32Const(len as i32));
+      fc.instr(&Instruction::Call(str_raw_idx));
+    }
+    Lit::Seq | Lit::Rec => {
       // TODO: not yet implemented.
       fc.instr(&Instruction::RefNull(HeapType::Abstract {
         shared: false,
@@ -1596,6 +1752,48 @@ fn scan_closure_captures(expr: &Expr<'_>, captures: &mut BTreeSet<usize>) {
   }
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
     scan_closure_captures(fn_body, captures);
+  }
+}
+
+/// Intern any string literal found in a Val.
+fn scan_val_strings(val: &Val<'_>, data: &mut StringData) {
+  if let ValKind::Lit(Lit::Str(s)) = &val.kind {
+    data.intern(s);
+  }
+}
+
+/// Scan for string literals and intern them into the StringData blob.
+fn scan_strings(expr: &Expr<'_>, data: &mut StringData) {
+  match &expr.kind {
+    ExprKind::LetVal { val, cont, .. } => {
+      scan_val_strings(val, data);
+      match cont {
+        Cont::Expr { body, .. } => scan_strings(body, data),
+        Cont::Ref(_) => {}
+      }
+    }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      scan_strings(fn_body, data);
+      match cont {
+        Cont::Expr { body, .. } => scan_strings(body, data),
+        Cont::Ref(_) => {}
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => scan_val_strings(v, data),
+          Arg::Cont(Cont::Expr { body, .. }) => scan_strings(body, data),
+          Arg::Cont(Cont::Ref(_)) => {}
+          Arg::Expr(e) => scan_strings(e, data),
+        }
+      }
+    }
+    ExprKind::If { cond, then, else_, .. } => {
+      scan_val_strings(cond, data);
+      scan_strings(then, data);
+      scan_strings(else_, data);
+    }
   }
 }
 

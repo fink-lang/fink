@@ -283,3 +283,10 @@ test 'add list items', fn:
   | equals fink":
     10
 
+
+test 'string literal', fn:
+  expect run fink":
+    main = fn:
+      'hello'
+  | equals fink":
+    hello

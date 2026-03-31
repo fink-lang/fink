@@ -527,3 +527,48 @@ test 'closure construction and call', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0FBQ0UsOERBQUE7QTs7QUFFTyw4SEFBSTtBOztBOzs7QTtBQUhiOztBO0E7Ozs7QTtBQUFBO0EiCn0=
 
 
+
+test 'string literal', fn:
+  expect gen_wat fink":
+    main = fn:
+      'hello'
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn1 (func (param (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref any))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_5)))) (call $_str_raw (i32.const 0) (i32.const 5)))
+      )
+      (export "main" (func $v_4))
+      (data (offset (i32.const 0)) "hello")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBO0FBQUE7OztBO0FBQUE7O0EiCn0=
+
+
+test 'string literal dedup', fn:
+  expect gen_wat fink":
+    main = fn:
+      x = 'hello'
+      y = 'hello'
+      x
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn1 (func (param (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn1) (ref.func $v_6))
+      (func $v_6 (type $Fn1) (param $v_7 (ref any))
+        (local $x_1 (ref any))
+        (local $y_2 (ref any))
+        (local.set $x_1 (call $_str_raw (i32.const 0) (i32.const 5)))
+        (local.set $y_2 (call $_str_raw (i32.const 0) (i32.const 5)))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_7)))) (local.get $x_1))
+      )
+      (export "main" (func $v_6))
+      (data (offset (i32.const 0)) "hello")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBO0FBQUE7O0E7QTs7OztBO0FBQUE7O0EiCn0=

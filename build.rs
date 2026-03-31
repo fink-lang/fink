@@ -32,6 +32,7 @@ fn main() {
         "src/runtime/dispatch.wat",
         "src/runtime/operators.wat",
         "src/runtime/list.wat",
+        "src/runtime/string.wat",
     ];
 
     for path in &dependent_modules {

@@ -162,12 +162,19 @@ mod tests {
 
     // Link: merge runtime modules + user code into a standalone binary.
     static OPERATORS_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/operators.wasm"));
+    static STRING_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/string.wasm"));
 
     let mut link_inputs = Vec::new();
     if result.needs_operators {
       link_inputs.push(super::link::LinkInput {
         module_name: "@fink/runtime/operators".into(),
         wasm: OPERATORS_WASM.to_vec(),
+      });
+    }
+    if result.needs_string {
+      link_inputs.push(super::link::LinkInput {
+        module_name: "@fink/runtime/string".into(),
+        wasm: STRING_WASM.to_vec(),
       });
     }
     link_inputs.push(super::link::LinkInput {
