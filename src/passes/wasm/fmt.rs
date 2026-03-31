@@ -653,12 +653,14 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
       }
   }
 
+  let mut emitted_types: std::collections::HashSet<String> = std::collections::HashSet::new();
   for (idx, ty) in module.types.iter().enumerate() {
     if !used_types.contains(&(idx as u32)) { continue; }
     if is_internal_type(module, idx as u32) { continue; }
+    let name = type_name(module, idx as u32);
+    if !emitted_types.insert(name.clone()) { continue; } // deduplicate by name
     match &ty.kind {
       ParsedTypeKind::Struct { fields, .. } => {
-        let name = type_name(module, idx as u32);
         stop_mark(w);
         let field_strs: Vec<&str> = fields.iter().map(|f| match f {
           FieldKind::F64 => "(field f64)",
@@ -671,7 +673,6 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
       }
       ParsedTypeKind::Func { param_count, .. } => {
         stop_mark(w);
-        let name = type_name(module, idx as u32);
         if *param_count == 0 {
           w.push_str(&format!("  (type {} (func))\n", name));
         } else {
@@ -1121,17 +1122,25 @@ fn is_internal_type(module: &ParsedModule, idx: u32) -> bool {
   name == "$Closure"
     || name == "$Captures"
     || name.starts_with("$type_") // $BoxFuncTy
+    || name.starts_with("@fink/") // runtime module types
 }
 
-/// Whether a function is compiler infrastructure (hidden from formatted output).
+/// Whether a function is compiler/runtime infrastructure (hidden from formatted output).
 fn is_internal_func(module: &ParsedModule, idx: u32) -> bool {
   module.func_names.get(&idx)
-    .is_some_and(|n| n.starts_with('_'))
+    .is_some_and(|n| n.starts_with('_') || n.starts_with("@fink/"))
 }
 
 fn func_name(module: &ParsedModule, idx: u32) -> String {
   module.func_names.get(&idx)
-    .map(|n| format!("${}", n))
+    .map(|n| {
+      // Strip module prefix for runtime functions: "@fink/runtime/operators:op_plus" → "_op_plus"
+      if let Some((_module, name)) = n.split_once(':') {
+        format!("$_{}", name)
+      } else {
+        format!("${}", n)
+      }
+    })
     .unwrap_or_else(|| format!("$func_{}", idx))
 }
 

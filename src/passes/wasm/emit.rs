@@ -230,6 +230,8 @@ pub struct EmitResult {
   /// Structural source locations for non-code items (func headers, globals, exports, params).
   /// The formatter uses these to place source marks on WAT structural lines.
   pub structural_locs: Vec<StructuralLoc>,
+  /// Whether the module imports operators from @fink/runtime/operators.
+  pub needs_operators: bool,
 }
 
 /// A single source-map entry: WASM byte offset → .fnk source location.
@@ -277,11 +279,19 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   if !impl_builtins.is_empty() {
     extra_arities.insert(1);
   }
+  // Imported operators (op_*) dispatch their continuation via _croc_1.
+  // Ensure _croc_1 is always emitted when operators are used, even if
+  // the module has no user closures.
+  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_"));
+  if has_operator_imports {
+    extra_arities.insert(1);
+  }
   // call_ref_or_clos_N dispatch helpers need $FnN types for all call arities.
   // The closure lifted fn arities (call_arity + captures) are already covered
   // by the defined function arities in cps_mod.arities.
   e.closure_captures = closure_captures.clone();
   e.call_arities = extra_arities.clone();
+  e.needs_croc_for_operators = has_operator_imports;
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
   all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
@@ -301,7 +311,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Sort by wasm_offset for monotonic DWARF line table emission.
   mappings.sort_by_key(|m| m.wasm_offset);
 
-  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs }
+  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_croc_for_operators }
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +389,8 @@ struct Emitter<'a, 'src> {
   call_arities: BTreeSet<usize>,
   /// Builtins with known implementations (emitted as defined functions).
   impl_builtins: BTreeMap<String, usize>,
+  /// Whether _croc_1 is needed for imported operators (even without user closures).
+  needs_croc_for_operators: bool,
 }
 
 struct RawMapping {
@@ -401,6 +413,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       closure_captures: BTreeSet::new(),
       call_arities: BTreeSet::new(),
       impl_builtins: BTreeMap::new(),
+      needs_croc_for_operators: false,
     }
   }
 
@@ -465,7 +478,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
     }
     // _croc_N dispatch helpers have arity call_arity + 1 (args + callee).
     // They also need $FnN for all possible lifted arities they dispatch to.
-    if !closure_captures.is_empty() {
+    let needs_croc = !closure_captures.is_empty()
+      || builtins.keys().any(|n| n.starts_with("op_"));
+    if needs_croc {
       for &call_arity in extra_arities.iter() {
         all_arities.insert(call_arity + 1); // _croc_N's own type
       }
@@ -499,7 +514,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     for (name, arity) in builtins {
       let type_idx = self.idx.fn_type_idx(*arity);
-      imports.import("env", name, wasm_encoder::EntityType::Function(type_idx));
+      // Operators (op_*) are in @fink/runtime/operators, resolved by the linker.
+      // Other builtins (seq_pop, rec_pop, etc.) are host-provided via "env".
+      let module = if name.starts_with("op_") { "@fink/runtime/operators" } else { "env" };
+      imports.import(module, name, wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert(name.clone(), next_func_idx);
       next_func_idx += 1;
     }
@@ -548,9 +566,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // Helper functions are appended after CPS-defined functions.
     let mut next_func_idx = self.idx.import_count + cps_mod.funcs.len() as u32;
 
-    // _croc_N dispatch functions — only when closures exist.
+    // _croc_N dispatch functions — when closures exist or operators need _croc_1.
     // Type is $Fn<call_arity + 1> (args + callee, no result — tail calls).
-    if !closure_captures.is_empty() {
+    let needs_croc = !closure_captures.is_empty() || self.needs_croc_for_operators;
+    if needs_croc {
       for &call_arity in call_arities {
         let type_idx = self.idx.fn_type_idx(call_arity + 1);
         functions.function(type_idx);
@@ -687,8 +706,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&wasm_func);
     }
 
-    // _croc_N dispatch bodies — only when closures exist.
-    if !closure_captures.is_empty() {
+    // _croc_N dispatch bodies — when closures exist or operators need _croc_1.
+    if !closure_captures.is_empty() || self.needs_croc_for_operators {
       let call_arities: Vec<usize> = self.call_arities.iter().copied().collect();
       for call_arity in call_arities {
         code.function(&self.emit_croc(call_arity, closure_captures));
@@ -901,11 +920,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
       func_names.append(idx, &func.label);
     }
     // Helper function names.
-    if !closure_captures.is_empty() {
+    if !closure_captures.is_empty() || self.needs_croc_for_operators {
       for &call_arity in call_arities {
         let name = format!("_croc_{}", call_arity);
-        let idx = self.idx.func_idx(&name);
-        func_names.append(idx, &name);
+        if let Some(&idx) = self.idx.funcs.get(&name) {
+          func_names.append(idx, &name);
+        }
       }
     }
     // Implemented builtin names.

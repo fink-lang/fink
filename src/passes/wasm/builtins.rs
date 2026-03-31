@@ -25,17 +25,11 @@ pub struct TypeIndices {
   pub croc1: Option<u32>,
 }
 
-/// Check if a builtin has a known WASM implementation.
-pub fn is_implemented(name: &str) -> bool {
-  matches!(name,
-    // Arithmetic
-    "op_plus" | "op_minus" | "op_mul" | "op_div"
-    | "op_intdiv" | "op_rem" | "op_intmod"
-    // Comparison
-    | "op_eq" | "op_neq" | "op_lt" | "op_lte" | "op_gt" | "op_gte"
-    // Logic
-    | "op_not" | "op_and" | "op_or" | "op_xor"
-  )
+/// Check if a builtin has an inline WASM implementation (emitted as a
+/// defined function in the module). Operators are implemented in
+/// runtime/operators.wat and resolved by the linker, not inlined.
+pub fn is_implemented(_name: &str) -> bool {
+  false
 }
 
 /// Emit a builtin body. Panics if the builtin is not implemented.
