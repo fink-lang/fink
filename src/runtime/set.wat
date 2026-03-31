@@ -25,7 +25,9 @@
 ;;   └── $SetImpl      ← wrapper: single $SetNode field
 ;;
 ;; Exported functions:
-;;   $set_empty      : () -> (ref $SetNode)
+;;    TODO: SetNode/SetImpl are internal, public interfaces should use Set.
+;;      Or these functions should be made private _* .
+;;   $set_new        : () -> (ref $SetNode)
 ;;   $set_set        : (ref $SetNode), (ref eq) -> (ref $SetNode)
 ;;   $set_has        : (ref $SetNode), (ref eq) -> i32
 ;;   $set_remove     : (ref $SetNode), (ref eq) -> (ref $SetNode)
@@ -84,7 +86,7 @@
 
   ;; -- Helpers --------------------------------------------------------
 
-  (func $_hash_fragment (param $hash i32) (param $depth i32) (result i32)
+  (func $_set_hash_fragment (param $hash i32) (param $depth i32) (result i32)
     local.get $hash
     local.get $depth
     i32.const 5
@@ -94,7 +96,7 @@
     i32.and
   )
 
-  (func $_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
+  (func $_set_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
     local.get $bitmap
     i32.const 1
     local.get $fragment
@@ -105,7 +107,7 @@
     i32.popcnt
   )
 
-  (func $_collision_find
+  (func $_set_collision_find
     (param $entries (ref $SetChildren))
     (param $key (ref eq))
     (result i32)
@@ -141,7 +143,7 @@
     )
   )
 
-  (func $set_empty (export "set_empty") (result (ref $SetNode))
+  (func $set_new (export "set_new") (result (ref $SetNode))
     global.get $empty_node
   )
 
@@ -167,7 +169,7 @@
     (block $not_found
       (loop $descend
         (local.set $fragment
-          (call $_hash_fragment (local.get $h) (local.get $depth)))
+          (call $_set_hash_fragment (local.get $h) (local.get $depth)))
         (local.set $bitmap
           (struct.get $SetNode $bitmap (local.get $current)))
         (local.set $bit
@@ -177,7 +179,7 @@
           (i32.eqz (i32.and (local.get $bitmap) (local.get $bit))))
 
         (local.set $idx
-          (call $_bit_index (local.get $bitmap) (local.get $fragment)))
+          (call $_set_bit_index (local.get $bitmap) (local.get $fragment)))
         (local.set $child
           (array.get $SetChildren
             (struct.get $SetNode $children (local.get $current))
@@ -198,7 +200,7 @@
           (then
             (return
               (i32.ge_s
-                (call $_collision_find
+                (call $_set_collision_find
                   (struct.get $SetCollision $col_entries
                     (ref.cast (ref $SetCollision) (local.get $child)))
                   (local.get $key))
@@ -251,13 +253,13 @@
     (local $new_col_entries (ref $SetChildren))
 
     (local.set $fragment
-      (call $_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_set_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
       (struct.get $SetNode $bitmap (local.get $current)))
     (local.set $idx
-      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_set_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $old_children
       (struct.get $SetNode $children (local.get $current)))
     (local.set $old_len
@@ -325,7 +327,7 @@
           (struct.get $SetCollision $col_entries
             (ref.cast (ref $SetCollision) (local.get $child))))
         (local.set $col_idx
-          (call $_collision_find (local.get $col_entries) (local.get $key)))
+          (call $_set_collision_find (local.get $col_entries) (local.get $key)))
 
         ;; already present — return unchanged
         (if (i32.ge_s (local.get $col_idx) (i32.const 0))
@@ -410,7 +412,7 @@
                   (local.get $idx)
                   (call $_set_set_inner
                     (call $_set_set_inner
-                      (call $set_empty)
+                      (call $set_new)
                       (struct.get $SetEntry $key
                         (ref.cast (ref $SetEntry) (local.get $child)))
                       (call $hash_i31
@@ -485,7 +487,7 @@
     (local $new_col_entries (ref $SetChildren))
 
     (local.set $fragment
-      (call $_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_set_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -500,7 +502,7 @@
       (then (return (local.get $current))))
 
     (local.set $idx
-      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_set_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $SetChildren
         (local.get $old_children)
@@ -515,7 +517,7 @@
         (local.set $col_len
           (array.len (local.get $col_entries)))
         (local.set $col_idx
-          (call $_collision_find (local.get $col_entries) (local.get $key)))
+          (call $_set_collision_find (local.get $col_entries) (local.get $key)))
 
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
           (then (return (local.get $current))))
@@ -620,7 +622,7 @@
           (then (return (local.get $current))))
 
         (if (i32.eq (local.get $old_len) (i32.const 1))
-          (then (return (call $set_empty))))
+          (then (return (call $set_new))))
 
         (local.set $new_children
           (array.new $SetChildren
@@ -850,7 +852,7 @@
     (result (ref $SetNode))
 
     (call $_set_intersect_node
-      (call $set_empty)
+      (call $set_new)
       (local.get $a)
       (local.get $b))
   )
@@ -955,7 +957,7 @@
     (result (ref $SetNode))
 
     (call $_set_difference_node
-      (call $set_empty)
+      (call $set_new)
       (local.get $a)
       (local.get $b))
   )

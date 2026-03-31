@@ -22,10 +22,9 @@
 ;;   - Keys and values are (ref eq) — non-nullable. This allows i31ref
 ;;     (for interned symbol ids) and any GC struct/array ref.
 ;;   - Return values are (ref null eq) where null signals "not found".
-;;   - Key equality uses ref.eq (identity) in phase 0. Will be extended
-;;     to direct-style deep_eq supporting: i31ref, $Num, $StrRaw,
-;;     $StrRendered. General dict keys with user-defined Eq protocol
-;;     will live in the std-lib (CPS).
+;;   - Key equality uses deep_eq (from operators.wat): i31ref → ref.eq,
+;;     $Num → f64.eq, $StrVal → str_eq. General dict keys with
+;;     user-defined Eq protocol will live in the std-lib (CPS).
 ;;
 ;; Hashing:
 ;;   - Imported from hashing.wat (hash_i31). Dispatches on i31ref, $Num,
@@ -33,6 +32,8 @@
 ;;     Hash protocol (future, std-lib, CPS).
 ;;
 ;; Exported functions:
+;;   TODO HamtNode is internal, public interfaces should use Rec/Dict.
+;;     Or these functions hould be made private _* .
 ;;   $hamt_empty   : () -> (ref $HamtNode)
 ;;   $hamt_get     : (ref $HamtNode), (ref eq) -> (ref null eq)
 ;;   $hamt_set     : (ref $HamtNode), (ref eq), (ref eq) -> (ref $HamtNode)
@@ -45,6 +46,11 @@
 ;;                   Value is null if key absent; rest is unchanged in that case.
 
 (module
+
+  ;; Continuation dispatch — provided by the compiler's emitted module.
+  (import "@fink/user" "_croc_0" (func $croc_0 (param (ref null any))))
+  (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
+  (import "@fink/user" "_croc_2" (func $croc_2 (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; -- Type definitions -----------------------------------------------
 
@@ -108,7 +114,7 @@
 
   ;; hash_fragment — extract 5-bit fragment at given depth (0-6)
   ;; fragment = (hash >> (depth * 5)) & 0x1f
-  (func $_hash_fragment (param $hash i32) (param $depth i32) (result i32)
+  (func $_hamt_hash_fragment (param $hash i32) (param $depth i32) (result i32)
     local.get $hash
     local.get $depth
     i32.const 5
@@ -121,7 +127,7 @@
   ;; bit_index — index into the dense children array for a given
   ;; bitmap and hash fragment.
   ;; = popcount(bitmap & ((1 << fragment) - 1))
-  (func $_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
+  (func $_hamt_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
     local.get $bitmap
     i32.const 1
     local.get $fragment
@@ -137,7 +143,7 @@
 
   ;; Scan a collision node's leaves for a key. Returns the index,
   ;; or -1 if not found.
-  (func $_collision_find
+  (func $_hamt_collision_find
     (param $leaves (ref $HamtChildren))
     (param $key (ref eq))
     (result i32)
@@ -150,7 +156,7 @@
       (loop $scan
         (br_if $not_found
           (i32.ge_u (local.get $i) (local.get $len)))
-        (if (ref.eq
+        (if (call $deep_eq
               (struct.get $HamtLeaf $key
                 (ref.cast (ref $HamtLeaf)
                   (array.get $HamtChildren
@@ -204,7 +210,7 @@
       (loop $descend
         ;; extract fragment for this depth
         (local.set $fragment
-          (call $_hash_fragment (local.get $h) (local.get $depth)))
+          (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
 
         ;; check bitmap
         (local.set $bitmap
@@ -218,7 +224,7 @@
 
         ;; index into dense array
         (local.set $idx
-          (call $_bit_index (local.get $bitmap) (local.get $fragment)))
+          (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
 
         ;; get child
         (local.set $child
@@ -229,7 +235,7 @@
         ;; if child is a leaf, check key equality
         (if (ref.test (ref $HamtLeaf) (local.get $child))
           (then
-            (if (ref.eq
+            (if (call $deep_eq
                   (struct.get $HamtLeaf $key
                     (ref.cast (ref $HamtLeaf) (local.get $child)))
                   (local.get $key))
@@ -244,7 +250,7 @@
         (if (ref.test (ref $HamtCollision) (local.get $child))
           (then
             (local.set $col_idx
-              (call $_collision_find
+              (call $_hamt_collision_find
                 (struct.get $HamtCollision $col_leaves
                   (ref.cast (ref $HamtCollision) (local.get $child)))
                 (local.get $key)))
@@ -317,13 +323,13 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
       (struct.get $HamtNode $bitmap (local.get $current)))
     (local.set $idx
-      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $old_children
       (struct.get $HamtNode $children (local.get $current)))
     (local.set $old_len
@@ -397,7 +403,7 @@
           (struct.get $HamtCollision $col_leaves
             (ref.cast (ref $HamtCollision) (local.get $child))))
         (local.set $col_idx
-          (call $_collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_hamt_collision_find (local.get $col_leaves) (local.get $key)))
 
         (if (i32.ge_s (local.get $col_idx) (i32.const 0))
           (then
@@ -471,7 +477,7 @@
     (if (ref.test (ref $HamtLeaf) (local.get $child))
       (then
         ;; same key — replace value
-        (if (ref.eq
+        (if (call $deep_eq
               (struct.get $HamtLeaf $key
                 (ref.cast (ref $HamtLeaf) (local.get $child)))
               (local.get $key))
@@ -618,7 +624,7 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -633,7 +639,7 @@
       (then (return (local.get $current))))
 
     (local.set $idx
-      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $HamtChildren
         (local.get $old_children)
@@ -648,7 +654,7 @@
         (local.set $col_len
           (array.len (local.get $col_leaves)))
         (local.set $col_idx
-          (call $_collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_hamt_collision_find (local.get $col_leaves) (local.get $key)))
 
         ;; key not in collision — unchanged
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
@@ -754,7 +760,7 @@
       (then
         ;; key mismatch — return unchanged
         (if (i32.eqz
-              (ref.eq
+              (call $deep_eq
                 (struct.get $HamtLeaf $key
                   (ref.cast (ref $HamtLeaf) (local.get $child)))
                 (local.get $key)))
@@ -891,7 +897,7 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -907,7 +913,7 @@
         (return (ref.null eq) (local.get $current))))
 
     (local.set $idx
-      (call $_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $HamtChildren
         (local.get $old_children)
@@ -922,7 +928,7 @@
         (local.set $col_len
           (array.len (local.get $col_leaves)))
         (local.set $col_idx
-          (call $_collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_hamt_collision_find (local.get $col_leaves) (local.get $key)))
 
         ;; not found in collision
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
@@ -1033,7 +1039,7 @@
       (then
         ;; key mismatch — absent
         (if (i32.eqz
-              (ref.eq
+              (call $deep_eq
                 (struct.get $HamtLeaf $key
                   (ref.cast (ref $HamtLeaf) (local.get $child)))
                 (local.get $key)))
@@ -1317,20 +1323,20 @@
   )
 
 
-  ;; -- Record wrappers (user-visible API) --------------------------------
-  ;; Wrap/unwrap $RecImpl ↔ $HamtNode at the boundary.
+  ;; -- Record: direct-style API ------------------------------------------
+  ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
-  (func $rec_empty (export "rec_empty") (result (ref $RecImpl))
+  (func $_hamt_rec_new (export "rec_new") (result (ref $RecImpl))
     (struct.new $RecImpl (global.get $empty_node))
   )
 
-  (func $rec_get (export "rec_get")
+  (func $_hamt_rec_get (export "rec_get")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref null eq))
     (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
   )
 
-  (func $rec_set (export "rec_set")
+  (func $_hamt_rec_set
     (param $rec (ref $RecImpl)) (param $key (ref eq)) (param $val (ref eq))
     (result (ref $RecImpl))
     (struct.new $RecImpl
@@ -1338,7 +1344,7 @@
         (local.get $key) (local.get $val)))
   )
 
-  (func $rec_delete (export "rec_delete")
+  (func $_hamt_rec_delete (export "rec_delete")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref $RecImpl))
     (struct.new $RecImpl
@@ -1346,7 +1352,7 @@
         (local.get $key)))
   )
 
-  (func $rec_pop (export "rec_pop")
+  (func $_hamt_rec_pop
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref null eq) (ref $RecImpl))
     (local $val (ref null eq))
@@ -1358,7 +1364,7 @@
     (struct.new $RecImpl (local.get $rest))
   )
 
-  (func $rec_merge (export "rec_merge")
+  (func $_hamt_rec_merge
     (param $dest (ref $RecImpl)) (param $src (ref $RecImpl))
     (result (ref $RecImpl))
     (struct.new $RecImpl
@@ -1372,6 +1378,11 @@
     (call $hamt_size (struct.get $RecImpl $hamt (local.get $rec)))
   )
 
+  ;; Predicate: is this record empty?
+  (func $rec_is_empty (export "rec_is_empty")
+    (param $val (ref null any)) (result i32)
+    (i32.eqz (call $rec_size (ref.cast (ref $RecImpl) (local.get $val))))
+  )
 
   ;; -- Dict wrappers (user-visible API) ----------------------------------
   ;; Same as record wrappers but for $DictImpl ↔ $HamtNode.
@@ -1427,5 +1438,52 @@
     (param $dict (ref $DictImpl)) (result i32)
     (call $hamt_size (struct.get $DictImpl $hamt (local.get $dict)))
   )
+
+
+  ;; CPS wrappers — compiler-facing interface
+  ;; All params/results are (ref null any). Continuation dispatch via _croc_N.
+  ;;
+  ;;   rec_set: (rec, key, val, cont) → _croc_1(new_rec, cont)
+  ;;   rec_merge: (dest, src, cont) → _croc_1(merged, cont)
+  ;;   rec_pop: (rec, key, fail, succ) → if missing: _croc_0(fail)
+  ;;                                     else: _croc_2(val, rest, succ)
+
+  (func $rec_set (export "rec_set")
+    (param $rec (ref null any)) (param $key (ref null any))
+    (param $val (ref null any)) (param $cont (ref null any))
+    (return_call $croc_1
+      (call $_hamt_rec_set
+        (ref.cast (ref $RecImpl) (local.get $rec))
+        (ref.cast (ref eq) (local.get $key))
+        (ref.cast (ref eq) (local.get $val)))
+      (local.get $cont)))
+
+  (func $rec_merge (export "rec_merge")
+    (param $dest (ref null any)) (param $src (ref null any))
+    (param $cont (ref null any))
+    (return_call $croc_1
+      (call $_hamt_rec_merge
+        (ref.cast (ref $RecImpl) (local.get $dest))
+        (ref.cast (ref $RecImpl) (local.get $src)))
+      (local.get $cont)))
+
+  (func $rec_pop (export "rec_pop")
+    (param $rec (ref null any)) (param $key (ref null any))
+    (param $fail (ref null any)) (param $succ (ref null any))
+    (local $val (ref null eq))
+    (local $rest (ref $RecImpl))
+    (call $_hamt_rec_pop
+      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref eq) (local.get $key)))
+    (local.set $rest)
+    (local.set $val)
+    ;; null value = key not found → call fail
+    (if (ref.is_null (local.get $val))
+      (then (return_call $croc_0 (local.get $fail))))
+    ;; found → pass (value, rest) to succ
+    (return_call $croc_2
+      (local.get $val)
+      (local.get $rest)
+      (local.get $succ)))
 
 )

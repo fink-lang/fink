@@ -323,10 +323,12 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
   let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
   let mut closure_captures: BTreeSet<usize> = BTreeSet::new();
+  let mut has_panic = false;
   for func in &module.funcs {
     scan_builtins(func.body, &mut builtins);
     scan_call_arities(func.body, &mut extra_arities);
     scan_closure_captures(func.body, &mut closure_captures);
+    if !has_panic { has_panic = scan_panic(func.body); }
   }
   // Split builtins: implemented ones become defined functions, rest stay as imports.
   let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
@@ -345,6 +347,13 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // List runtime (seq_prepend, seq_concat, seq_pop) dispatches via _croc_0/1/2.
   let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
   if has_list_imports {
+    extra_arities.insert(0);
+    extra_arities.insert(1);
+    extra_arities.insert(2);
+  }
+  // Record runtime (rec_set, rec_pop, rec_merge) dispatches via _croc_0/1/2.
+  let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"));
+  if has_rec_imports {
     extra_arities.insert(0);
     extra_arities.insert(1);
     extra_arities.insert(2);
@@ -368,7 +377,9 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.call_arities = extra_arities.clone();
   e.needs_croc_for_operators = has_operator_imports;
   e.needs_list = has_list_imports;
+  e.needs_rec = has_rec_imports;
   e.needs_string = has_strings;
+  e.has_panic = has_panic;
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
   all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
@@ -472,8 +483,12 @@ struct Emitter<'a, 'src> {
   needs_croc_for_operators: bool,
   /// Whether list runtime imports are present (seq_prepend, seq_concat, seq_pop).
   needs_list: bool,
+  /// Whether record runtime imports are present (rec_set, rec_pop, rec_merge).
+  needs_rec: bool,
   /// Whether string literals are present (needs memory + data section + string runtime).
   needs_string: bool,
+  /// Whether ValKind::Panic appears in any function body (needs $_panic function).
+  has_panic: bool,
   /// Interned string literal data.
   string_data: StringData,
 }
@@ -500,7 +515,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
       impl_builtins: BTreeMap::new(),
       needs_croc_for_operators: false,
       needs_list: false,
+      needs_rec: false,
       needs_string: false,
+      has_panic: false,
       string_data: StringData::new(),
     }
   }
@@ -576,6 +593,26 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
+    // $TmpImportRec = (func (result (ref null any)))
+    // Temporary type for the rec_empty import — only exists pre-link.
+    if self.needs_rec {
+      types.ty().subtype(&SubType {
+        is_final: true,
+        supertype_idx: None,
+        composite_type: CompositeType {
+          inner: CompositeInnerType::Func(FuncType::new(
+            vec![],
+            vec![any_ref],
+          )),
+          shared: false,
+          descriptor: None,
+          describes: None,
+        },
+      });
+      self.idx.types.insert("$TmpImportRec".into(), next_idx);
+      next_idx += 1;
+    }
+
     // $FnN for each arity (from defined functions + builtins + dispatch).
     let mut all_arities = cps_mod.arities.clone();
     for &arity in builtins.values() {
@@ -634,6 +671,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let type_idx = self.idx.type_idx("$TmpImport0");
       imports.import("@fink/runtime", "str_raw", wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert("str_raw".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
+    // rec_empty: () -> (ref $RecImpl) — creates empty record.
+    if self.needs_rec {
+      let type_idx = self.idx.type_idx("$TmpImportRec");
+      imports.import("@fink/runtime", "rec_new", wasm_encoder::EntityType::Function(type_idx));
+      self.idx.imports.insert("rec_new".into(), next_func_idx);
       next_func_idx += 1;
     }
 
@@ -708,6 +753,15 @@ impl<'a, 'src> Emitter<'a, 'src> {
     functions.function(box_func_type_idx);
     self.idx.funcs.insert("_box_func".into(), next_func_idx);
     next_func_idx += 1;
+
+    // $_panic: (func) — unreachable trap for irrefutable pattern failure.
+    // Only emitted when ValKind::Panic appears in function bodies.
+    if self.has_panic {
+      let type_idx = self.idx.fn_type_idx(0);
+      functions.function(type_idx);
+      self.idx.funcs.insert("_panic".into(), next_func_idx);
+      next_func_idx += 1;
+    }
 
     let _ = next_func_idx;
     self.module.section(&functions);
@@ -877,6 +931,13 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&f);
     }
 
+    // $_panic body: unreachable
+    if self.has_panic {
+      let mut f = Function::new(vec![]);
+      f.instruction(&Instruction::Unreachable);
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
 
     self.module.section(&code);
   }
@@ -1087,6 +1148,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // _box_func helper.
     let box_func_idx = self.idx.func_idx("_box_func");
     func_names.append(box_func_idx, "_box_func");
+    // $_panic helper.
+    if self.has_panic {
+      let panic_idx = self.idx.func_idx("_panic");
+      func_names.append(panic_idx, "_panic");
+    }
     names.functions(&func_names);
 
     // Local names per defined function.
@@ -1483,7 +1549,13 @@ fn emit_val_inner(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::LocalGet(idx));
     }
     ValKind::Panic => {
-      fc.instr(&Instruction::Unreachable);
+      // Emit a $Closure wrapping the $_panic function.
+      let panic_idx = fc.emitter_idx.func_idx("_panic");
+      let closure_idx = fc.emitter_idx.type_idx("$Closure");
+      let captures_idx = fc.emitter_idx.type_idx("$Captures");
+      fc.instr(&Instruction::RefFunc(panic_idx));
+      fc.instr(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
+      fc.instr(&Instruction::StructNew(closure_idx));
     }
     ValKind::BuiltIn(_) => {
       fc.instr(&Instruction::Unreachable);
@@ -1524,12 +1596,17 @@ fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::I32Const(len as i32));
       fc.instr(&Instruction::Call(str_raw_idx));
     }
-    Lit::Seq | Lit::Rec => {
-      // TODO: not yet implemented.
+    Lit::Seq => {
+      // Empty list = null (cons nil).
       fc.instr(&Instruction::RefNull(HeapType::Abstract {
         shared: false,
         ty: AbstractHeapType::Any,
       }));
+    }
+    Lit::Rec => {
+      // Empty record via rec_empty().
+      let rec_empty_idx = fc.emitter_idx.func_idx("rec_new");
+      fc.instr(&Instruction::Call(rec_empty_idx));
     }
   }
 }
@@ -1742,6 +1819,37 @@ fn scan_closure_captures(expr: &Expr<'_>, captures: &mut BTreeSet<usize>) {
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
     scan_closure_captures(fn_body, captures);
   }
+}
+
+/// Check if any Val in the expression tree is ValKind::Panic.
+fn scan_panic(expr: &Expr<'_>) -> bool {
+  match &expr.kind {
+    ExprKind::App { func, args } => {
+      if let Callable::Val(v) = func
+        && matches!(v.kind, ValKind::Panic) { return true; }
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => {
+            if matches!(v.kind, ValKind::Panic) { return true; }
+          }
+          Arg::Cont(Cont::Expr { body, .. }) => {
+            if scan_panic(body) { return true; }
+          }
+          _ => {}
+        }
+      }
+    }
+    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont
+        && scan_panic(body) { return true; }
+    }
+    ExprKind::If { then, else_, .. } => {
+      if scan_panic(then) || scan_panic(else_) { return true; }
+    }
+  }
+  if let ExprKind::LetFn { fn_body, .. } = &expr.kind
+    && scan_panic(fn_body) { return true; }
+  false
 }
 
 /// Intern any string literal found in a Val.

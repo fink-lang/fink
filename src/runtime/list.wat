@@ -18,6 +18,8 @@
 ;;   - Tail is (ref null $Cons) — null means end of list
 ;;
 ;; Exported functions:
+;;  TODO: Cons is internal, public interfaces should use List. Or these functions
+;;     hould be made private _* .
 ;;   $list_empty   : () -> (ref null $Cons)
 ;;   $list_prepend : (ref eq), (ref null $Cons) -> (ref $Cons)
 ;;   $list_head    : (ref $Cons) -> (ref eq)
@@ -65,6 +67,12 @@
   ;; Empty list is just null.
   (func $list_empty (export "list_empty") (result (ref null $Cons))
     (ref.null $Cons)
+  )
+
+  ;; Predicate: is this list empty? (null = empty, $Cons = non-empty)
+  (func $list_is_empty (export "list_is_empty")
+    (param $val (ref null any)) (result i32)
+    (ref.is_null (local.get $val))
   )
 
 

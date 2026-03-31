@@ -87,6 +87,35 @@
   ;; Comparison: unbox two $Num, f64 compare → i31ref (0/1)
   ;; =========================================================================
 
+  ;; Direct-style deep equality. Used by HAMT for key comparison.
+  ;;   i31ref  → ref.eq (identity — fine for small ints and booleans)
+  ;;   $Num    → f64.eq
+  ;;   $StrVal → str_eq
+  (func $deep_eq (export "deep_eq")
+    (param $a (ref eq)) (param $b (ref eq)) (result i32)
+
+    ;; Try $Num
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref eq) (ref $Num)
+            (local.get $a))))
+      (return (f64.eq
+        (struct.get $Num $val)
+        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b))))))
+
+    ;; Try $StrVal
+    (block $not_str
+      (block $is_str (result (ref $StrVal))
+        (br $not_str
+          (br_on_cast $is_str (ref eq) (ref $StrVal)
+            (local.get $a))))
+      (return (call $str_eq
+        (ref.cast (ref $StrVal) (local.get $b)))))
+
+    ;; Fallback: ref.eq (i31ref, other GC types)
+    (ref.eq (local.get $a) (local.get $b)))
+
   ;; Polymorphic ==: dispatch on $a's type.
   ;;   $Num    → f64.eq
   ;;   $StrVal → str_eq
@@ -223,13 +252,42 @@
   ;; Collection predicates (polymorphic — dispatch on type tag)
   ;; =========================================================================
 
-  ;; empty(cursor, cont) — test whether a collection cursor is exhausted.
-  ;; Phase-0: only handles list cursors (null = empty).
-  ;; Future: dispatch on type tag for records, dicts, sets.
+  ;; Polymorphic empty: dispatch on value type to module predicates.
+  ;;   null     → true (always empty)
+  ;;   $List    → list_is_empty
+  ;;   $Rec     → rec_is_empty
   (func $op_empty (export "empty")
-    (param $cursor (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
-      (ref.i31 (ref.is_null (local.get $cursor)))
-      (local.get $cont)))
+    (param $val (ref null any)) (param $cont (ref null any))
+
+    ;; null = empty
+    (if (ref.is_null (local.get $val))
+      (then
+        (return_call $croc_1
+          (ref.i31 (i32.const 1))
+          (local.get $cont))))
+
+    ;; $List → list_is_empty
+    (block $not_list
+      (block $is_list (result (ref $List))
+        (br $not_list
+          (br_on_cast $is_list (ref null any) (ref $List)
+            (local.get $val))))
+      (drop)
+      (return_call $croc_1
+        (ref.i31 (call $list_is_empty (local.get $val)))
+        (local.get $cont)))
+
+    ;; $Rec → rec_is_empty
+    (block $not_rec
+      (block $is_rec (result (ref $Rec))
+        (br $not_rec
+          (br_on_cast $is_rec (ref null any) (ref $Rec)
+            (local.get $val))))
+      (drop)
+      (return_call $croc_1
+        (ref.i31 (call $rec_is_empty (local.get $val)))
+        (local.get $cont)))
+
+    (unreachable))
 
 )

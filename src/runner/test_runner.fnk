@@ -313,3 +313,14 @@ test 'string neq', fn:
       'hello' != 'world'
   | equals fink":
     true
+
+
+test 'rec destructure', fn:
+  expect run fink":
+    main = fn:
+      {a, b: c} = {a: 1, b: 2}
+      a + c
+  | equals fink":
+    3
+
+

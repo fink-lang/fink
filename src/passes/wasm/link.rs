@@ -1608,63 +1608,57 @@ fn convert_global_type(
     }
 }
 
-/// Remap a constant init expression, rewriting ref.func indices.
+/// Remap a constant init expression, rewriting type/func indices.
 ///
-/// Init expressions are typically short: `ref.func $idx` + `end` (2 instructions).
-/// We parse the raw bytes, remap function/type indices, and re-encode.
+/// Handles multi-instruction const exprs (e.g. struct.new, array.new_fixed).
 fn remap_const_expr(
     bytes: &[u8],
     remap: &RemapTable,
 ) -> wasm_encoder::ConstExpr {
+    use wasm_encoder::Instruction as I;
+
     let reader = wasmparser::BinaryReader::new(bytes, 0);
     let const_expr = wasmparser::ConstExpr::new(reader);
+    let mut instrs: Vec<I<'static>> = Vec::new();
+
     for op in const_expr.get_operators_reader().into_iter().flatten() {
         match op {
             wasmparser::Operator::RefFunc { function_index } => {
-                let new_idx = remap.funcs.get(&function_index)
-                    .copied()
-                    .unwrap_or(function_index);
-                return wasm_encoder::ConstExpr::ref_func(new_idx);
+                instrs.push(I::RefFunc(remap_func(remap, function_index)));
             }
             wasmparser::Operator::I32Const { value } => {
-                return wasm_encoder::ConstExpr::i32_const(value);
+                instrs.push(I::I32Const(value));
             }
             wasmparser::Operator::I64Const { value } => {
-                return wasm_encoder::ConstExpr::i64_const(value);
+                instrs.push(I::I64Const(value));
             }
             wasmparser::Operator::F32Const { value } => {
-                return wasm_encoder::ConstExpr::f32_const(f32::from_bits(value.bits()).into());
+                instrs.push(I::F32Const(f32::from_bits(value.bits()).into()));
             }
             wasmparser::Operator::F64Const { value } => {
-                return wasm_encoder::ConstExpr::f64_const(f64::from_bits(value.bits()).into());
+                instrs.push(I::F64Const(f64::from_bits(value.bits()).into()));
             }
             wasmparser::Operator::RefNull { hty } => {
-                let enc_ht = match hty {
-                    wasmparser::HeapType::Abstract { shared, ty } => {
-                        wasm_encoder::HeapType::Abstract {
-                            shared,
-                            ty: convert_abstract_heap_type(ty),
-                        }
-                    }
-                    wasmparser::HeapType::Concrete(idx) => {
-                        let old = idx.as_module_index().unwrap_or(0);
-                        let new = remap.types.get(&old).copied().unwrap_or(old);
-                        wasm_encoder::HeapType::Concrete(new)
-                    }
-                    wasmparser::HeapType::Exact(idx) => {
-                        let old = idx.as_module_index().unwrap_or(0);
-                        let new = remap.types.get(&old).copied().unwrap_or(old);
-                        wasm_encoder::HeapType::Concrete(new)
-                    }
-                };
-                return wasm_encoder::ConstExpr::ref_null(enc_ht);
+                instrs.push(I::RefNull(remap_heap_type(remap, hty)));
+            }
+            wasmparser::Operator::StructNew { struct_type_index } => {
+                instrs.push(I::StructNew(remap_type(remap, struct_type_index)));
+            }
+            wasmparser::Operator::ArrayNewFixed { array_type_index, array_size } => {
+                instrs.push(I::ArrayNewFixed {
+                    array_type_index: remap_type(remap, array_type_index),
+                    array_size,
+                });
+            }
+            wasmparser::Operator::GlobalGet { global_index } => {
+                instrs.push(I::GlobalGet(remap_global(remap, global_index)));
             }
             wasmparser::Operator::End => {}
             _ => panic!("link: unsupported const expr operator: {:?}", op),
         }
     }
-    // Fallback — shouldn't reach here for valid init expressions.
-    wasm_encoder::ConstExpr::i32_const(0)
+
+    wasm_encoder::ConstExpr::extended(instrs)
 }
 
 // -- Tests --------------------------------------------------------------------

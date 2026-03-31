@@ -28,13 +28,13 @@ fn main() {
     // Order doesn't matter for function bodies (WAT allows forward refs),
     // but types (rec group) must come first.
     // Modules wired into the compiler pipeline.
-    // hamt, set, range are not yet used — added when integrated.
-    // (hamt/set also have duplicate internal names that need prefixing first.)
+    // set, range are not yet used — added when integrated.
     let runtime_modules = [
         "src/runtime/string.wat",
         "src/runtime/hashing.wat",
         "src/runtime/operators.wat",
         "src/runtime/list.wat",
+        "src/runtime/hamt.wat",
         "src/runtime/dispatch.wat",
     ];
 
