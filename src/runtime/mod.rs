@@ -1365,6 +1365,74 @@ mod tests {
     assert_eq!(call_test(&mut store, &instance, "test_get"), 1);
   }
 
+  // -- String hashing tests --------------------------------------------
+
+  #[test]
+  fn test_str_hash_same_raw_deterministic() {
+    // Two raw strings from same data should hash the same
+    let data = b"hello";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (i32.eq
+          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))
+          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_hash_different_content() {
+    // "hello" vs "world" should hash differently
+    let data = b"helloworld";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (i32.ne
+          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))
+          (call $str_hash_i31 (call $str_raw (i32.const 5) (i32.const 5)))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
+  #[test]
+  fn test_str_hash_empty() {
+    // Empty string should hash to FNV offset basis masked to 31 bits
+    let data = b"";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 0))))
+    "#);
+    let h = call_test(&mut store, &instance, "test");
+    // FNV-1a 32-bit offset basis = 0x811c9dc5, masked: 0x011c9dc5
+    assert_eq!(h, 0x011c9dc5);
+  }
+
+  #[test]
+  fn test_str_hash_fits_i31() {
+    let data = b"hello";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5))))
+    "#);
+    let h = call_test(&mut store, &instance, "test");
+    assert!(h >= 0, "hash should be non-negative (fits i31)");
+  }
+
+  #[test]
+  fn test_str_hash_bytes_impl() {
+    // Hash a $StrBytesImpl (heap array) — same content as data should
+    // produce the same hash
+    let data = b"hello";
+    let (mut store, instance) = load_string_with(data, r#"
+      (func (export "test") (result i32)
+        (i32.eq
+          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))
+          (call $str_hash_i31
+            (call $str_render_escape
+              (call $str_raw (i32.const 0) (i32.const 5))))))
+    "#);
+    assert_eq!(call_test(&mut store, &instance, "test"), 1);
+  }
+
   // -- Range tests ----------------------------------------------------
 
   const RANGE_TYPE_DEFS: &str = concat!(
@@ -1496,5 +1564,105 @@ mod tests {
     assert!(range_in(&mut store, &instance, -7.0, &r));
     assert!(!range_in(&mut store, &instance, -5.0, &r));
     assert!(!range_in(&mut store, &instance, 0.0, &r));
+  }
+
+
+  // -- Hashing tests --------------------------------------------------------
+
+  const HASHING_TYPE_DEFS: &str = concat!(
+    "  (rec\n",
+    "    (type $Num (struct (field $val f64)))\n",
+    "    (type $Str (sub (struct)))\n",
+    "  )\n",
+  );
+
+  /// Load hashing.wat with type defs inlined and str_hash_i31 import
+  /// replaced by a local stub.
+  fn load_hashing_with(extra_wat: &str) -> (Store<()>, Instance) {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let wat = prepare_wat(include_str!("hashing.wat"), HASHING_TYPE_DEFS);
+
+    // Replace the string module import with a local stub
+    let wat = wat.replace(
+      "(import \"@fink/runtime/string\" \"str_hash_i31\"\n    (func $str_hash_i31 (param (ref $Str)) (result i32)))",
+      ";; stub: str_hash_i31 returns 0 for tests\n  (func $str_hash_i31 (param (ref $Str)) (result i32) (i32.const 0))",
+    );
+
+    // Inject make_num helper and extra WAT before closing )
+    let helpers = format!(
+      "\n  (func (export \"make_num\") (param $v f64) (result (ref $Num))\n    (struct.new $Num (local.get $v)))\n{}\n)",
+      extra_wat,
+    );
+    let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + &helpers;
+
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    (store, instance)
+  }
+
+  fn hash_i31_call(store: &mut Store<()>, instance: &Instance, key: Val) -> i32 {
+    let func = instance.get_func(&mut *store, "hash_i31").unwrap();
+    let mut result = [Val::I32(0)];
+    func.call(store, &[key], &mut result).unwrap();
+    result[0].unwrap_i32()
+  }
+
+  #[test]
+  fn test_hash_i31_positive_int() {
+    let (mut store, instance) = load_hashing_with("");
+    let key = i31_key(&mut store, 42);
+    assert_eq!(hash_i31_call(&mut store, &instance, key), 42);
+  }
+
+  #[test]
+  fn test_hash_i31_zero() {
+    let (mut store, instance) = load_hashing_with("");
+    let key = i31_key(&mut store, 0);
+    assert_eq!(hash_i31_call(&mut store, &instance, key), 0);
+  }
+
+  #[test]
+  fn test_hash_i31_negative_int() {
+    let (mut store, instance) = load_hashing_with("");
+    // i31 wrapping: large u32 becomes negative signed
+    let key = i31_key(&mut store, 0x7fff_ffff);
+    let h = hash_i31_call(&mut store, &instance, key);
+    // Should return the signed i31 value
+    assert_eq!(h, -1);
+  }
+
+  #[test]
+  fn test_hash_i31_num_deterministic() {
+    let (mut store, instance) = load_hashing_with("");
+    let k1 = make_num(&mut store, &instance, 3.14);
+    let k2 = make_num(&mut store, &instance, 3.14);
+    let h1 = hash_i31_call(&mut store, &instance, k1);
+    let h2 = hash_i31_call(&mut store, &instance, k2);
+    assert_eq!(h1, h2);
+  }
+
+  #[test]
+  fn test_hash_i31_num_different_values() {
+    let (mut store, instance) = load_hashing_with("");
+    let k1 = make_num(&mut store, &instance, 1.0);
+    let k2 = make_num(&mut store, &instance, 2.0);
+    let h1 = hash_i31_call(&mut store, &instance, k1);
+    let h2 = hash_i31_call(&mut store, &instance, k2);
+    assert_ne!(h1, h2);
+  }
+
+  #[test]
+  fn test_hash_i31_num_fits_i31() {
+    // Hash must fit in 31 bits (0..=0x7fffffff)
+    let (mut store, instance) = load_hashing_with("");
+    let key = make_num(&mut store, &instance, 1.0e100);
+    let h = hash_i31_call(&mut store, &instance, key);
+    assert!(h >= 0, "hash should be non-negative (fits i31)");
   }
 }
