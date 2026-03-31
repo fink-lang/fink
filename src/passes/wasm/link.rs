@@ -141,6 +141,12 @@ pub fn link(inputs: &[LinkInput]) -> LinkResult {
 }
 
 
+/// Whether a module is the user code fragment (not a runtime library module).
+/// User code keeps original names (no namespace prefix) and owns DWARF info.
+fn is_user_module(module_name: &str) -> bool {
+    module_name.is_empty() || module_name == "@fink/user"
+}
+
 // -- Parsed representation ----------------------------------------------------
 
 /// Import entry from a fragment.
@@ -505,7 +511,7 @@ fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
         // Merge type names with namespace prefix.
         for (&old_idx, name) in &frag.names.type_names {
             let new_idx = ctx.remaps[i].types[&old_idx];
-            let prefixed = if frag.module_name.is_empty() {
+            let prefixed = if is_user_module(&frag.module_name) {
                 name.clone()
             } else {
                 format!("{}:{}", frag.module_name, name)
@@ -529,8 +535,9 @@ fn merge_functions(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
             ctx.func_decls.push(new_type_idx);
 
             // Merge function names.
+            // User code (@fink/user) keeps original names; runtime modules get prefixed.
             if let Some(name) = frag.names.func_names.get(&old_func_idx) {
-                let prefixed = if frag.module_name.is_empty() {
+                let prefixed = if is_user_module(&frag.module_name) {
                     name.clone()
                 } else {
                     format!("{}:{}", frag.module_name, name)
@@ -586,7 +593,7 @@ fn merge_functions(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 
 fn merge_code(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
     for (i, frag) in fragments.iter().enumerate() {
-        let is_user = frag.module_name.is_empty();
+        let is_user = is_user_module(&frag.module_name);
         for &(start, end) in &frag.code_body_ranges {
             ctx.code_bodies
                 .push((i, is_user, frag.wasm[start..end].to_vec()));
@@ -606,7 +613,7 @@ fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 
             // Merge global names.
             if let Some(name) = frag.names.global_names.get(&old_idx) {
-                let prefixed = if frag.module_name.is_empty() {
+                let prefixed = if is_user_module(&frag.module_name) {
                     name.clone()
                 } else {
                     format!("{}:{}", frag.module_name, name)
@@ -622,8 +629,8 @@ fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
             }
         }
 
-        // Collect DWARF from user code fragment (module_name is empty).
-        if frag.module_name.is_empty() {
+        // Collect DWARF from user code fragment.
+        if is_user_module(&frag.module_name) {
             ctx.dwarf_sections.extend(frag.dwarf_sections.clone());
         }
     }
@@ -631,6 +638,9 @@ fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 
 fn merge_exports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
     for (i, frag) in fragments.iter().enumerate() {
+        // Only export from user code — runtime module exports are internal
+        // (used for import resolution only, not in the final binary).
+        if !is_user_module(&frag.module_name) { continue; }
         for export in &frag.exports {
             let new_idx = match export.kind {
                 wasmparser::ExternalKind::Func => {
@@ -1759,8 +1769,9 @@ mod tests {
         assert_eq!(count_types(&result.wasm), 2);
         assert_eq!(count_funcs(&result.wasm), 2);
 
+        // Only user module exports are kept; runtime module exports are internal.
         let exports = get_exports(&result.wasm);
-        assert_eq!(exports.len(), 2);
+        assert_eq!(exports.len(), 1);
     }
 
     #[test]

@@ -109,6 +109,7 @@ enum FieldKind {
 enum ParsedTypeKind {
   Struct { fields: Vec<FieldKind>, supertype: Option<u32> },
   Func { param_count: usize, has_results: bool },
+  Array,
   Other,
 }
 
@@ -137,6 +138,9 @@ enum ParsedInstr {
   F64Const(f64),
   StructNew(u32),
   StructGet { struct_type_index: u32, field_index: u32 },
+  ArrayNewFixed { type_index: u32, size: u32 },
+  ArrayGet(u32),
+  ArrayLen,
   RefCastNonNull(u32),
   RefNull(u32),
   F64Ne,
@@ -378,6 +382,7 @@ fn parse_subtype(sub_type: &SubType) -> ParsedType {
         has_results: !f.results().is_empty(),
       },
     },
+    CompositeInnerType::Array(_) => ParsedType { kind: ParsedTypeKind::Array },
     _ => ParsedType { kind: ParsedTypeKind::Other },
   }
 }
@@ -408,6 +413,10 @@ fn parse_operator(op: &Operator<'_>) -> ParsedInstr {
         _ => ParsedInstr::RefNull(0),
       }
     }
+    Operator::ArrayNewFixed { array_type_index, array_size } =>
+      ParsedInstr::ArrayNewFixed { type_index: *array_type_index, size: *array_size },
+    Operator::ArrayGet { array_type_index } => ParsedInstr::ArrayGet(*array_type_index),
+    Operator::ArrayLen => ParsedInstr::ArrayLen,
     Operator::RefI31 => ParsedInstr::RefI31,
     Operator::I31GetS => ParsedInstr::I31GetS,
     Operator::F64Ne => ParsedInstr::F64Ne,
@@ -644,12 +653,14 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
       }
   }
 
+  let mut emitted_types: std::collections::HashSet<String> = std::collections::HashSet::new();
   for (idx, ty) in module.types.iter().enumerate() {
     if !used_types.contains(&(idx as u32)) { continue; }
     if is_internal_type(module, idx as u32) { continue; }
+    let name = type_name(module, idx as u32);
+    if !emitted_types.insert(name.clone()) { continue; } // deduplicate by name
     match &ty.kind {
       ParsedTypeKind::Struct { fields, .. } => {
-        let name = type_name(module, idx as u32);
         stop_mark(w);
         let field_strs: Vec<&str> = fields.iter().map(|f| match f {
           FieldKind::F64 => "(field f64)",
@@ -662,7 +673,6 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
       }
       ParsedTypeKind::Func { param_count, .. } => {
         stop_mark(w);
-        let name = type_name(module, idx as u32);
         if *param_count == 0 {
           w.push_str(&format!("  (type {} (func))\n", name));
         } else {
@@ -670,7 +680,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
           w.push_str(&format!("  (type {} (func (param {})))\n", name, params.join(" ")));
         }
       }
-      ParsedTypeKind::Other => {}
+      ParsedTypeKind::Array | ParsedTypeKind::Other => {}
     }
   }
 }
@@ -801,6 +811,28 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         let name = type_name(module, *struct_type_index);
         let (arg, arg_off) = stack.pop().unwrap_or_default();
         stack.push((format!("(struct.get {} {} {})", name, field_index, arg), arg_off));
+        i += 1;
+      }
+      ParsedInstr::ArrayNewFixed { type_index, size } => {
+        let name = type_name(module, *type_index);
+        let sz = *size as usize;
+        let popped: Vec<(String, u32)> = stack.split_off(stack.len().saturating_sub(sz));
+        let first_offset = popped.first().map(|(_, o)| *o).unwrap_or(*offset);
+        let args: Vec<&str> = popped.iter().map(|(s, _)| s.as_str()).collect();
+        let args_str = if args.is_empty() { String::new() } else { format!(" {}", args.join(" ")) };
+        stack.push((format!("(array.new_fixed {} {}{})", name, size, args_str), first_offset));
+        i += 1;
+      }
+      ParsedInstr::ArrayGet(type_idx) => {
+        let name = type_name(module, *type_idx);
+        let (idx_arg, _) = stack.pop().unwrap_or_default();
+        let (arr_arg, arr_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(array.get {} {} {})", name, arr_arg, idx_arg), arr_off));
+        i += 1;
+      }
+      ParsedInstr::ArrayLen => {
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        stack.push((format!("(array.len {})", arg), arg_off));
         i += 1;
       }
       ParsedInstr::RefCastNonNull(type_idx) => {
@@ -1007,6 +1039,10 @@ fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -
     ParsedInstr::StructNew(idx) => format!("(struct.new {})", type_name(module, *idx)),
     ParsedInstr::StructGet { struct_type_index, field_index } =>
       format!("(struct.get {} {})", type_name(module, *struct_type_index), field_index),
+    ParsedInstr::ArrayNewFixed { type_index, size } =>
+      format!("(array.new_fixed {} {})", type_name(module, *type_index), size),
+    ParsedInstr::ArrayGet(idx) => format!("(array.get {})", type_name(module, *idx)),
+    ParsedInstr::ArrayLen => "array.len".into(),
     ParsedInstr::RefCastNonNull(idx) => format!("(ref.cast (ref {}))", type_name(module, *idx)),
     ParsedInstr::RefNull(idx) => format!("(ref.null {})", type_name(module, *idx)),
     ParsedInstr::F64Ne => "f64.ne".into(),
@@ -1059,18 +1095,21 @@ fn stop_mark(w: &mut MappedWriter) {
 // ---------------------------------------------------------------------------
 
 fn type_name(module: &ParsedModule, idx: u32) -> String {
-  // Infer type names from structure: $Num (struct with f64), $ClosureN (funcref +
-  // N captures), $FnN (func types). No $Any or $Bool — universal type is (ref any),
-  // booleans are i31ref.
+  // Infer type names from structure: $Num (struct with f64), $Closure (funcref +
+  // captures array ref), $Captures (array type), $FnN (func types).
+  // No $Any or $Bool — universal type is (ref any), booleans are i31ref.
   if let Some(ty) = module.types.get(idx as usize) {
     match &ty.kind {
       ParsedTypeKind::Struct { fields, .. } if fields == &[FieldKind::F64] => return "$Num".into(),
-      ParsedTypeKind::Struct { fields, .. } if !fields.is_empty() && fields[0] == FieldKind::FuncRef => {
-        // $ClosureN — funcref + N capture fields. $Closure0 = bare funcref wrapper.
-        return format!("$Closure{}", fields.len() - 1);
+      ParsedTypeKind::Struct { fields, .. }
+        if fields.len() == 2 && fields[0] == FieldKind::FuncRef =>
+      {
+        // $Closure — funcref + captures array ref (or null).
+        return "$Closure".into();
       }
       ParsedTypeKind::Func { param_count, has_results: false } => return format!("$Fn{}", param_count),
       ParsedTypeKind::Func { has_results: true, .. } => return format!("$type_{}", idx), // e.g. $BoxFuncTy
+      ParsedTypeKind::Array => return "$Captures".into(),
       _ => {}
     }
   }
@@ -1080,19 +1119,28 @@ fn type_name(module: &ParsedModule, idx: u32) -> String {
 /// Whether a type is compiler infrastructure (hidden from formatted output).
 fn is_internal_type(module: &ParsedModule, idx: u32) -> bool {
   let name = type_name(module, idx);
-  name.starts_with("$Closure")
-    || name.starts_with("$type_") // $BoxFuncTy, $ClosureCtorN, $CallRefOrClosN
+  name == "$Closure"
+    || name == "$Captures"
+    || name.starts_with("$type_") // $BoxFuncTy
+    || name.starts_with("@fink/") // runtime module types
 }
 
-/// Whether a function is compiler infrastructure (hidden from formatted output).
+/// Whether a function is compiler/runtime infrastructure (hidden from formatted output).
 fn is_internal_func(module: &ParsedModule, idx: u32) -> bool {
   module.func_names.get(&idx)
-    .is_some_and(|n| n.starts_with('_'))
+    .is_some_and(|n| n.starts_with('_') || n.starts_with("@fink/"))
 }
 
 fn func_name(module: &ParsedModule, idx: u32) -> String {
   module.func_names.get(&idx)
-    .map(|n| format!("${}", n))
+    .map(|n| {
+      // Strip module prefix for runtime functions: "@fink/runtime/operators:op_plus" → "_op_plus"
+      if let Some((_module, name)) = n.split_once(':') {
+        format!("$_{}", name)
+      } else {
+        format!("${}", n)
+      }
+    })
     .unwrap_or_else(|| format!("$func_{}", idx))
 }
 
