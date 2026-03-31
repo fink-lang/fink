@@ -44,6 +44,7 @@
 ;;   │       ├── $Rec                 ← record (opaque — internals in hamt.wat)
 ;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
+;;   │       ├── $Range              ← numeric range (opaque — internals in range.wat)
 ;;   │       ├── $Captures (array)             ← flat capture value array
 ;;   │       └── $Closure (funcref, $Captures) ← universal closure type
 ;;   │
@@ -172,6 +173,10 @@
     ;; $Set — immutable hash set. Opaque base type.
     ;; Internals (HAMT layout) defined in set.wat as subtypes.
     (type $Set (sub (struct)))
+
+    ;; $Range — numeric range. Opaque base type.
+    ;; Internals (start/end/inclusive) defined in range.wat.
+    (type $Range (sub (struct)))
 
     ;; $Captures — flat array of captured values.
     ;; Each element is (ref null any) — nullable to allow default-init
