@@ -19,7 +19,7 @@
 ;;
 ;; Exported functions:
 ;;   $list_empty   : () -> (ref null $Cons)
-;;   $list_append  : (ref eq), (ref null $Cons) -> (ref $Cons)
+;;   $list_prepend : (ref eq), (ref null $Cons) -> (ref $Cons)
 ;;   $list_head    : (ref $Cons) -> (ref eq)
 ;;   $list_tail    : (ref $Cons) -> (ref null $Cons)
 ;;   $list_pop     : (ref $Cons) -> (ref eq), (ref null $Cons)
@@ -38,7 +38,7 @@
 ;; CPS wrappers (compiler-facing):
 ;;   All params/results are (ref null any). Continuation dispatch via _croc_N.
 ;;
-;;   $seq_append : (list, val, cont) -> _croc_1(new_list, cont)
+;;   $seq_prepend: (val, list, cont) -> _croc_1(new_list, cont)   [O(1) cons]
 ;;   $seq_concat : (list_a, list_b, cont) -> _croc_1(merged, cont)
 ;;   $seq_pop    : (cursor, fail, succ) -> if empty: _croc_0(fail)
 ;;                                         else: _croc_2(head, tail, succ)
@@ -75,7 +75,7 @@
   ;; -- Cons -----------------------------------------------------------
 
   ;; Prepend a value to a list. O(1).
-  (func $list_append (export "list_append")
+  (func $list_prepend (export "list_prepend")
     (param $head (ref eq))
     (param $tail (ref null $Cons))
     (result (ref $Cons))
@@ -262,18 +262,15 @@
   ;; All params are (ref null any). Direct-style functions above do the real
   ;; work; these wrappers box/unbox and dispatch through continuations.
 
-  ;; seq_append(list, val, cont) — append val to end of list, pass result to cont.
-  ;; Wraps val in a singleton [val], then concatenates list ++ [val].
-  ;; O(n) per call — acceptable for literal construction; future: builder pattern.
-  (func $seq_append (export "seq_append")
-    (param $list (ref null any)) (param $val (ref null any)) (param $cont (ref null any))
+  ;; seq_prepend(val, list, cont) — prepend val to front of list, pass result to cont.
+  ;; O(1) — single cons cell allocation.
+  (func $seq_prepend (export "seq_prepend")
+    (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))
 
     (return_call $croc_1
-      (call $list_concat
-        (ref.cast (ref null $Cons) (local.get $list))
-        (call $list_append
-          (ref.cast (ref eq) (local.get $val))
-          (ref.null $Cons)))
+      (call $list_prepend
+        (ref.cast (ref eq) (local.get $val))
+        (ref.cast (ref null $Cons) (local.get $list)))
       (local.get $cont))
   )
 

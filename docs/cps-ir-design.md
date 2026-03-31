@@ -68,7 +68,7 @@ BuiltIn                       -- resolved statically, not by scope lookup
   BitAnd, BitXor, Shl, ...   -- bitwise
   Range, RangeIncl, In, NotIn -- range
   Get                         -- member access (.)
-  SeqAppend, SeqConcat        -- [] value construction
+  SeqPrepend, SeqConcat       -- [] value construction
   RecPut, RecMerge            -- {} value construction
   StrFmt                      -- string interpolation
 
