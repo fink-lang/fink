@@ -18,7 +18,8 @@ use wasm_encoder::{AbstractHeapType, Function, HeapType, Instruction};
 /// Indices into the type section, passed from the emitter.
 pub struct TypeIndices {
   pub num: u32,
-  pub closure0: u32,
+  pub closure: u32,
+  pub captures: u32,
   pub fn1: u32,
   /// Function index of $_croc_1 dispatch helper, if closures exist.
   pub croc1: Option<u32>,
@@ -77,14 +78,14 @@ pub fn emit_builtin(name: &str, indices: &TypeIndices) -> Function {
 fn emit_cont_call(f: &mut Function, idx: &TypeIndices, cont_param: u32) {
   // Stack: [result]. Tail-call the continuation.
   if let Some(croc1) = idx.croc1 {
-    // Dispatch through $_croc_1 — handles both $Closure0 and $ClosureN.
+    // Dispatch through $_croc_1 — handles closures with any capture count.
     f.instruction(&Instruction::LocalGet(cont_param));
     f.instruction(&Instruction::ReturnCall(croc1));
   } else {
-    // No closures — direct $Closure0 unbox.
+    // No closures — direct $Closure unbox (captures are null).
     f.instruction(&Instruction::LocalGet(cont_param));
-    f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.closure0)));
-    f.instruction(&Instruction::StructGet { struct_type_index: idx.closure0, field_index: 0 });
+    f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(idx.closure)));
+    f.instruction(&Instruction::StructGet { struct_type_index: idx.closure, field_index: 0 });
     f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(idx.fn1)));
     f.instruction(&Instruction::ReturnCallRef(idx.fn1));
   }

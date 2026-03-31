@@ -44,9 +44,8 @@
 ;;   │       ├── $Rec                 ← record (opaque — internals in hamt.wat)
 ;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
-;;   │       └── $Closure (field (ref func))  ← base closure type
-;;   │             └── $ClosureN              ← subtypes add N capture fields (ref any)
-;;   │                   (emitter-generated per capture count)
+;;   │       ├── $Captures (array)             ← flat capture value array
+;;   │       └── $Closure (funcref, $Captures) ← universal closure type
 ;;   │
 ;;   └── func                         ← not GC-managed (opaque refs)
 ;;       └── $FnN (func ...)          ← typed function refs (per arity)
@@ -174,15 +173,21 @@
     ;; Internals (HAMT layout) defined in set.wat as subtypes.
     (type $Set (sub (struct)))
 
-    ;; $Closure — base type for all closures.
-    ;; Field 0 is the funcref to the lifted function.
-    ;; Subtypes $ClosureN (emitter-generated per capture count) add
-    ;; N capture fields, each (ref any). The base type enables a single
-    ;; br_on_cast check in dispatch ("is this a closure at all?")
-    ;; before narrowing to the specific $ClosureN.
-    (type $Closure (sub (struct
+    ;; $Captures — flat array of captured values.
+    ;; Each element is (ref null any) — nullable to allow default-init
+    ;; by array.new_default. Closures with zero captures use a null
+    ;; $Captures ref instead of an empty array (no allocation).
+    (type $Captures (array (mut (ref null any))))
+
+    ;; $Closure — universal closure type.
+    ;; Field 0: funcref to the lifted function (arity = call_arity + capture_count).
+    ;; Field 1: captured values array, or null if no captures.
+    ;; Dispatch (_croc_N) reads the captures array length to determine
+    ;; how many extra args to push before calling the funcref.
+    (type $Closure (struct
       (field $func funcref)
-    )))
+      (field $captures (ref null $Captures))
+    ))
   )
 
 )
