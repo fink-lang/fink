@@ -14,18 +14,10 @@
 ;; Protocol-based overloading (future) will replace these with dispatch
 ;; through user-defined protocol implementations.
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
 
   ;; _croc_1 is provided by the compiler's emitted module (user code fragment).
-  ;; The emitter always generates _croc_N dispatch helpers that handle all
-  ;; closure capture counts in the module. The linker resolves this import.
   (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
-
-  ;; str_eq from the string runtime — used by polymorphic == and !=.
-  (import "@fink/runtime/string" "str_eq" (func $str_eq (param (ref $StrVal)) (param (ref $StrVal)) (result i32)))
 
   ;; =========================================================================
   ;; Arithmetic: unbox two $Num, f64 op, box result → _croc_1(result, cont)

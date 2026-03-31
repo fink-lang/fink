@@ -1,5 +1,9 @@
 // Build script — compiles runtime WAT files to WASM at build time.
 //
+// The runtime modules are merged into a single WASM module so that
+// inter-runtime calls (e.g. operators → str_eq) are plain function
+// calls within one module — no import/export resolution needed.
+//
 // This avoids a runtime dependency on the `wat` crate, keeping the
 // compiler wasm32-safe. The compiled WASM bytes are embedded via
 // `include_bytes!` in the emitter.
@@ -7,12 +11,8 @@
 fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
 
-    // Compile runtime WAT files to WASM at build time.
-    // Avoids a runtime dependency on the `wat` crate, keeping the
-    // compiler wasm32-safe. The compiled WASM bytes are embedded via
-    // `include_bytes!` in the emitter and linker.
-
-    // types.wat is standalone — compiles directly.
+    // types.wat is standalone — compiled separately for the emitter to
+    // inject canonical type definitions into user modules.
     println!("cargo::rerun-if-changed=src/runtime/types.wat");
     let types_wat = std::fs::read_to_string("src/runtime/types.wat")
         .expect("failed to read types.wat");
@@ -21,50 +21,85 @@ fn main() {
     std::fs::write(format!("{out_dir}/types.wasm"), &types_wasm)
         .expect("failed to write types.wasm");
 
-    // Extract the rec group from types.wat for injection into dependent modules.
-    // This is the content between the first `(rec` and its closing `)`.
+    // Extract the rec group from types.wat for injection into the merged module.
     let type_defs = extract_rec_group(&types_wat);
 
-    // Dependent modules use @fink/runtime/types imports.
-    // Build.rs strips the import and injects type definitions so the module
-    // compiles standalone. The linker handles the real imports at link time.
-    let dependent_modules = [
-        "src/runtime/dispatch.wat",
+    // Runtime modules — merged into a single WASM module.
+    // Order doesn't matter for function bodies (WAT allows forward refs),
+    // but types (rec group) must come first.
+    // Modules wired into the compiler pipeline.
+    // hamt, set, range are not yet used — added when integrated.
+    // (hamt/set also have duplicate internal names that need prefixing first.)
+    let runtime_modules = [
+        "src/runtime/string.wat",
+        "src/runtime/hashing.wat",
         "src/runtime/operators.wat",
         "src/runtime/list.wat",
-        "src/runtime/string.wat",
+        "src/runtime/dispatch.wat",
     ];
 
-    for path in &dependent_modules {
+    let mut imports = Vec::new();
+    let mut merged_body = String::new();
+    for path in &runtime_modules {
         println!("cargo::rerun-if-changed={path}");
         let wat = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
-        let wat = prepare_wat(&wat, &type_defs);
-        let wasm = wat_crate::parse_str(&wat)
-            .unwrap_or_else(|e| panic!("failed to compile {path}: {e}"));
-        let stem = std::path::Path::new(path).file_stem().unwrap().to_str().unwrap();
-        std::fs::write(format!("{out_dir}/{stem}.wasm"), &wasm)
-            .unwrap_or_else(|e| panic!("failed to write {stem}.wasm: {e}"));
+        let (module_imports, body) = extract_module_parts(&wat);
+        imports.extend(module_imports);
+        merged_body.push_str(&format!("\n  ;; --- {} ---\n", path));
+        merged_body.push_str(&body);
     }
+    // Deduplicate imports (e.g. multiple modules importing _croc_1).
+    imports.sort();
+    imports.dedup();
+
+    let imports_str = imports.join("\n");
+    let merged_wat = format!("(module\n{type_defs}\n{imports_str}\n{merged_body})\n");
+    let runtime_wasm = wat_crate::parse_str(&merged_wat)
+        .unwrap_or_else(|e| panic!("failed to compile merged runtime: {e}"));
+    std::fs::write(format!("{out_dir}/runtime.wasm"), &runtime_wasm)
+        .expect("failed to write runtime.wasm");
 }
 
-/// Prepare a WAT source that uses @fink/runtime imports for standalone
-/// compilation: strip the wildcard types import and inject type definitions.
-/// Specific @fink/ function imports inside the module are kept as-is —
-/// they produce WASM import entries that the linker resolves at link time.
-fn prepare_wat(wat: &str, type_defs: &str) -> String {
-    let wat = wat.replace(
-        "(import \"@fink/runtime/types\" \"*\" (func (param anyref)))",
-        "",
-    );
-    wat.replace("(module\n", &format!("(module\n{type_defs}\n"))
+/// Extract module parts: returns (@fink/user imports, body without imports).
+/// Strips @fink/runtime/ imports (internal to merged module).
+/// Hoists @fink/user imports for the caller to deduplicate and place first.
+fn extract_module_parts(wat: &str) -> (Vec<String>, String) {
+    let mut imports: Vec<String> = Vec::new();
+    let mut body_lines: Vec<&str> = Vec::new();
+    let mut inside_module = false;
+
+    for line in wat.lines() {
+        if !inside_module {
+            if line.trim_start().starts_with("(module") {
+                inside_module = true;
+            }
+            continue;
+        }
+        let trimmed = line.trim_start();
+        // Strip @fink/runtime/ imports — resolved internally.
+        if trimmed.starts_with("(import ") && line.contains("@fink/runtime/") {
+            continue;
+        }
+        // Hoist @fink/user imports — the caller places them before body.
+        if trimmed.starts_with("(import ") && line.contains("@fink/user") {
+            imports.push(line.to_string());
+            continue;
+        }
+        // Skip module-level closing paren.
+        if line == ")" {
+            continue;
+        }
+        body_lines.push(line);
+    }
+
+    (imports, body_lines.join("\n"))
 }
 
 /// Extract the rec group block from types.wat (everything from `(rec` to its
-/// matching `)`, inclusive, plus indentation for injection into a module).
+/// matching `)`, inclusive).
 fn extract_rec_group(types_wat: &str) -> String {
     let start = types_wat.find("  (rec").expect("types.wat: no rec group found");
-    // Find the matching closing paren — track depth.
     let bytes = types_wat.as_bytes();
     let mut depth = 0;
     let mut end = start;

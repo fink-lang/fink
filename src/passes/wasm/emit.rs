@@ -624,15 +624,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     for (name, arity) in builtins {
       let type_idx = self.idx.fn_type_idx(*arity);
-      // Route builtins to their runtime modules, resolved by the linker.
-      let module = if name.starts_with("op_") || name == "empty" {
-        "@fink/runtime/operators"
-      } else if name.starts_with("seq_") {
-        "@fink/runtime/list"
-      } else {
-        "env"
-      };
-      imports.import(module, name, wasm_encoder::EntityType::Function(type_idx));
+      imports.import("@fink/runtime", name, wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert(name.clone(), next_func_idx);
       next_func_idx += 1;
     }
@@ -640,7 +632,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // str_raw: (i32, i32) -> (ref $StrRaw) — wraps data-section pointer.
     if self.needs_string {
       let type_idx = self.idx.type_idx("$TmpImport0");
-      imports.import("@fink/runtime/string", "str_raw", wasm_encoder::EntityType::Function(type_idx));
+      imports.import("@fink/runtime", "str_raw", wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert("str_raw".into(), next_func_idx);
       next_func_idx += 1;
     }

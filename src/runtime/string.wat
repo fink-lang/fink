@@ -57,9 +57,6 @@
 ;;   The runtime may provide efficient direct helpers to support std-lib
 ;;   implementations (e.g. escape sequence processing).
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
   ;; ---- Internal types (not visible to user code) ----
 

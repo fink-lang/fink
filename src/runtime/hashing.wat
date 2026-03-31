@@ -14,16 +14,7 @@
 ;; Exported functions:
 ;;   $hash_i31  : (ref eq) -> i32
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
-
-  ;; -- Imports ------------------------------------------------------------
-
-  ;; str_hash_i31 — string module provides its own hash implementation
-  (import "@fink/runtime/string" "str_hash_i31"
-    (func $str_hash_i31 (param (ref $Str)) (result i32)))
 
 
   ;; -- Hash dispatch ------------------------------------------------------

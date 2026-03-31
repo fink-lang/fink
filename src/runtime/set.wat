@@ -45,9 +45,6 @@
 ;;   $set_eq         : (ref $SetNode), (ref $SetNode) -> i32
 ;;                     a == b — same size and a <= b
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
 
   ;; -- Type definitions -----------------------------------------------
@@ -84,10 +81,6 @@
 
 
   ;; -- Imports ----------------------------------------------------------
-
-  (import "@fink/runtime/hashing" "hash_i31"
-    (func $hash_i31 (param (ref eq)) (result i32)))
-
 
   ;; -- Helpers --------------------------------------------------------
 

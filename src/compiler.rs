@@ -49,16 +49,10 @@ pub fn compile_fnk(src: &str) -> Result<CompileResult, String> {
   dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
 
   // Link: merge core runtime + user code into a standalone binary.
-  // All runtime modules are always linked — dead code elimination is
-  // deferred to an optimizer pass.
-  static OPERATORS_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/operators.wasm"));
-  static LIST_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/list.wasm"));
-  static STRING_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/string.wasm"));
+  static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
 
   let link_inputs = vec![
-    link::LinkInput { module_name: "@fink/runtime/string".into(), wasm: STRING_WASM.to_vec() },
-    link::LinkInput { module_name: "@fink/runtime/operators".into(), wasm: OPERATORS_WASM.to_vec() },
-    link::LinkInput { module_name: "@fink/runtime/list".into(), wasm: LIST_WASM.to_vec() },
+    link::LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
     link::LinkInput { module_name: "@fink/user".into(), wasm: result.wasm },
   ];
   let linked = link::link(&link_inputs);

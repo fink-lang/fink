@@ -161,14 +161,10 @@ mod tests {
     super::dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
 
     // Link: merge core runtime + user code into a standalone binary.
-    static OPERATORS_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/operators.wasm"));
-    static LIST_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/list.wasm"));
-    static STRING_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/string.wasm"));
+    static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
 
     let link_inputs = vec![
-      super::link::LinkInput { module_name: "@fink/runtime/string".into(), wasm: STRING_WASM.to_vec() },
-      super::link::LinkInput { module_name: "@fink/runtime/operators".into(), wasm: OPERATORS_WASM.to_vec() },
-      super::link::LinkInput { module_name: "@fink/runtime/list".into(), wasm: LIST_WASM.to_vec() },
+      super::link::LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
       super::link::LinkInput { module_name: "@fink/user".into(), wasm: result.wasm },
     ];
     let linked = super::link::link(&link_inputs);

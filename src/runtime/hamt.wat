@@ -44,9 +44,6 @@
 ;;                   Single-traversal get+delete. Returns (value, rest).
 ;;                   Value is null if key absent; rest is unchanged in that case.
 
-(import "@fink/runtime/types" "*" (func (param anyref)))
-
-
 (module
 
   ;; -- Type definitions -----------------------------------------------
@@ -106,10 +103,6 @@
 
 
   ;; -- Imports ----------------------------------------------------------
-
-  (import "@fink/runtime/hashing" "hash_i31"
-    (func $hash_i31 (param (ref eq)) (result i32)))
-
 
   ;; -- Helpers --------------------------------------------------------
 
