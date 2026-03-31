@@ -1103,6 +1103,113 @@
   )
 
 
+  ;; ---- Hashing ----
+
+  ;; str_hash_i31 : (ref $Str) -> i32
+  ;; Content-based hash for any byte-bearing string.
+  ;; Dispatches on concrete type to avoid allocating a $ByteArray copy.
+  ;; Uses FNV-1a (32-bit), masked to 31 bits for i31ref.
+  ;; $StrTempl is not hashable (unreachable).
+  (func $str_hash_i31 (export "str_hash_i31")
+    (param $str (ref $Str))
+    (result i32)
+
+    (local $data (ref $StrDataImpl))
+
+    ;; Try $StrDataImpl — hash from linear memory
+    (block $not_data
+      (block $is_data (result (ref $StrDataImpl))
+        (br $not_data
+          (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
+            (local.get $str))))
+      (local.set $data)
+      (return (call $_str_hash_data
+        (struct.get $StrDataImpl $offset (local.get $data))
+        (struct.get $StrDataImpl $length (local.get $data)))))
+
+    ;; Try $StrRawBytesImpl — hash from heap array
+    (block $not_raw_bytes
+      (block $is_raw_bytes (result (ref $StrRawBytesImpl))
+        (br $not_raw_bytes
+          (br_on_cast $is_raw_bytes (ref $Str) (ref $StrRawBytesImpl)
+            (local.get $str))))
+      (return (call $_str_hash_array
+        (struct.get $StrRawBytesImpl $bytes))))
+
+    ;; Try $StrBytesImpl — hash from heap array
+    (block $not_bytes
+      (block $is_bytes (result (ref $StrBytesImpl))
+        (br $not_bytes
+          (br_on_cast $is_bytes (ref $Str) (ref $StrBytesImpl)
+            (local.get $str))))
+      (return (call $_str_hash_array
+        (struct.get $StrBytesImpl $bytes))))
+
+    ;; $StrTempl — not hashable
+    (unreachable)
+  )
+
+  ;; $_str_hash_data : (i32, i32) -> i32
+  ;; FNV-1a over bytes in linear memory. Result masked to 31 bits.
+  (func $_str_hash_data
+    (param $offset i32) (param $length i32)
+    (result i32)
+
+    (local $h i32)
+    (local $i i32)
+
+    ;; FNV offset basis
+    (local.set $h (i32.const 0x811c9dc5))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $step
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $length)))
+        ;; h ^= byte
+        (local.set $h
+          (i32.xor (local.get $h)
+            (i32.load8_u (i32.add (local.get $offset) (local.get $i)))))
+        ;; h *= FNV prime (0x01000193)
+        (local.set $h
+          (i32.mul (local.get $h) (i32.const 0x01000193)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $step)))
+
+    ;; Mask to 31 bits
+    (i32.and (local.get $h) (i32.const 0x7fffffff))
+  )
+
+  ;; $_str_hash_array : (ref $ByteArray) -> i32
+  ;; FNV-1a over bytes in a heap array. Result masked to 31 bits.
+  (func $_str_hash_array
+    (param $arr (ref $ByteArray))
+    (result i32)
+
+    (local $h i32)
+    (local $i i32)
+    (local $len i32)
+
+    (local.set $h (i32.const 0x811c9dc5))
+    (local.set $len (array.len (local.get $arr)))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $step
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $h
+          (i32.xor (local.get $h)
+            (array.get_u $ByteArray (local.get $arr) (local.get $i))))
+        (local.set $h
+          (i32.mul (local.get $h) (i32.const 0x01000193)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $step)))
+
+    (i32.and (local.get $h) (i32.const 0x7fffffff))
+  )
+
+
   ;; ---- Internal helpers ----
 
   ;; $_needs_unescape : i32 -> i32
