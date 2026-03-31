@@ -68,7 +68,7 @@
 //      - Rewrite type and function index references in instructions
 //   6. Merge name sections:
 //      - Combine debug names from all fragments, preserving namespaces
-//      - Name format: `@fink/runtime/list:list_append` (free-form UTF-8)
+//      - Name format: `@fink/runtime/list:list_prepend` (free-form UTF-8)
 //   7. Adjust DWARF:
 //      - Runtime fragments (hand-written WAT) carry no DWARF
 //      - User code DWARF offsets adjusted by prepended runtime code size
@@ -80,7 +80,7 @@
 // module-qualified names for all merged items:
 //
 //   @fink/runtime/types:Num        — shared type
-//   @fink/runtime/list:list_append — runtime function
+//   @fink/runtime/list:list_prepend — runtime function
 //   @fink/runtime/hamt:_hash       — runtime internal function
 //
 // These names appear in WAT disassembly and debug tools. User-defined

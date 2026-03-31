@@ -196,7 +196,7 @@ fn lit_to_node(lit: &Lit<'_>, loc: Loc) -> Node<'static> {
 //   synth ident n        → ·$_<n>_<cps_id>
 //   compiler temp        → ·v_<cps_id>   (no AST origin)
 //   cont param           → ·v_<cps_id>
-//   builtins             → ·op_plus, ·seq_append, …
+//   builtins             → ·op_plus, ·seq_prepend, …
 // ---------------------------------------------------------------------------
 
 /// Render a CpsId's name: look up origin → AST node kind → pick rendering.
@@ -282,8 +282,8 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Member access
     BuiltIn::Get       => "·op_dot".into(),
     // Data construction
-    BuiltIn::SeqAppend => "·seq_append".into(),
-    BuiltIn::SeqConcat => "·seq_concat".into(),
+    BuiltIn::SeqPrepend => "·seq_prepend".into(),
+    BuiltIn::SeqConcat  => "·seq_concat".into(),
     BuiltIn::RecPut    => "·rec_put".into(),
     BuiltIn::RecMerge  => "·rec_merge".into(),
     // String interpolation

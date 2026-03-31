@@ -288,7 +288,7 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   if has_operator_imports {
     extra_arities.insert(1);
   }
-  // List runtime (seq_append, seq_concat, seq_pop) dispatches via _croc_0/1/2.
+  // List runtime (seq_prepend, seq_concat, seq_pop) dispatches via _croc_0/1/2.
   let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
   if has_list_imports {
     extra_arities.insert(0);
@@ -401,7 +401,7 @@ struct Emitter<'a, 'src> {
   impl_builtins: BTreeMap<String, usize>,
   /// Whether _croc_1 is needed for imported operators (even without user closures).
   needs_croc_for_operators: bool,
-  /// Whether list runtime imports are present (seq_append, seq_concat, seq_pop).
+  /// Whether list runtime imports are present (seq_prepend, seq_concat, seq_pop).
   needs_list: bool,
 }
 

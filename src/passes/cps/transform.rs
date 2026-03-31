@@ -759,14 +759,12 @@ fn lower_member<'src>(
 // Sequence literal: `[a, b, ..c]`
 // ---------------------------------------------------------------------------
 
-// TODO: build right-to-left so seq_append is O(1) cons instead of O(n) append.
-// Currently builds left-to-right: SeqAppend(SeqAppend([], 1), 2) — each append
-// walks to the tail. Reversing iteration gives cons(1, cons(2, [])) — all O(1).
-// Spreads complicate this (SeqConcat order matters), so needs care.
+// Build right-to-left: SeqPrepend(1, SeqPrepend(2, SeqPrepend(3, []))) — O(1) cons each.
+// Spreads use SeqConcat(spread, acc) — prepend spread list onto accumulator.
 fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], origin: Option<AstId>) -> Lower<'src> {
   let mut acc = lit_val(g, Lit::Seq, origin);
   let mut pending: Vec<Pending<'src>> = vec![];
-  for elem in elems {
+  for elem in elems.iter().rev() {
     let is_spread = matches!(elem.kind, NodeKind::Spread { .. });
     let inner = if is_spread {
       if let NodeKind::Spread { inner: Some(inner), .. } = &elem.kind { inner.as_ref() } else { elem }
@@ -775,10 +773,16 @@ fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], origin: Option<As
     };
     let (ev, ep) = lower(g, inner);
     pending.extend(ep);
-    let op = if is_spread { BuiltIn::SeqConcat } else { BuiltIn::SeqAppend };
+    let (op, args) = if is_spread {
+      // SeqConcat(spread, acc) — prepend spread onto accumulator
+      (BuiltIn::SeqConcat, args_val(vec![ev, acc]))
+    } else {
+      // SeqPrepend(val, acc) — cons val onto front
+      (BuiltIn::SeqPrepend, args_val(vec![ev, acc]))
+    };
     let result = g.fresh_result(origin);
     let (result_kind, result_id) = (result.kind, result.id);
-    pending.push(Pending::App { func: Callable::BuiltIn(op), args: args_val(vec![acc, ev]), result,  origin });
+    pending.push(Pending::App { func: Callable::BuiltIn(op), args, result, origin });
     acc = ref_val(g, result_kind, result_id, origin);
   }
   (acc, pending)

@@ -216,7 +216,7 @@ pub enum BuiltIn {
   // Member access
   Get,
   // Data construction
-  SeqAppend, SeqConcat, RecPut, RecMerge,
+  SeqPrepend, SeqConcat, RecPut, RecMerge,
   // String interpolation
   StrFmt,
   // Closure construction — partially applies a lifted fn with its captures.

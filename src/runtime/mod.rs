@@ -475,7 +475,7 @@ mod tests {
     result[0].clone()
   }
 
-  fn list_append(store: &mut Store<()>, cons_fn: &Func, head: u32, tail: &Val) -> Val {
+  fn list_prepend(store: &mut Store<()>, cons_fn: &Func, head: u32, tail: &Val) -> Val {
     let h = i31_key(store, head);
     let mut result = [Val::AnyRef(None)];
     cons_fn.call(store, &[h, tail.clone()], &mut result).unwrap();
@@ -516,7 +516,7 @@ mod tests {
   fn build_list(store: &mut Store<()>, nil_fn: &Func, cons_fn: &Func, items: &[u32]) -> Val {
     let mut list = list_empty(store, nil_fn);
     for &item in items.iter().rev() {
-      list = list_append(store, cons_fn, item, &list);
+      list = list_prepend(store, cons_fn, item, &list);
     }
     list
   }
@@ -549,10 +549,10 @@ mod tests {
   }
 
   #[test]
-  fn test_list_append_and_head_tail() {
+  fn test_list_prepend_and_head_tail() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
     let size_fn = instance.get_func(&mut store, "list_size").unwrap();
@@ -577,7 +577,7 @@ mod tests {
   fn test_list_pop() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let pop_fn = instance.get_func(&mut store, "list_pop").unwrap();
     let size_fn = instance.get_func(&mut store, "list_size").unwrap();
 
@@ -599,7 +599,7 @@ mod tests {
   fn test_list_size() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let len_fn = instance.get_func(&mut store, "list_size").unwrap();
 
     let nil = list_empty(&mut store, &nil_fn);
@@ -613,7 +613,7 @@ mod tests {
   fn test_list_concat() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
@@ -629,7 +629,7 @@ mod tests {
   fn test_list_concat_empty() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
@@ -650,7 +650,7 @@ mod tests {
   fn test_list_structural_sharing() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
 
@@ -658,10 +658,10 @@ mod tests {
     let shared = build_list(&mut store, &nil_fn, &cons_fn, &[2, 3]);
 
     // v1 = [1, 2, 3] (prepend 1 to shared)
-    let v1 = list_append(&mut store, &cons_fn, 1, &shared);
+    let v1 = list_prepend(&mut store, &cons_fn, 1, &shared);
 
     // v2 = [9, 2, 3] (prepend 9 to shared)
-    let v2 = list_append(&mut store, &cons_fn, 9, &shared);
+    let v2 = list_prepend(&mut store, &cons_fn, 9, &shared);
 
     assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &v1), vec![1, 2, 3]);
     assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &v2), vec![9, 2, 3]);
@@ -671,7 +671,7 @@ mod tests {
   fn test_list_get() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let get_fn = instance.get_func(&mut store, "list_get").unwrap();
 
     let list = build_list(&mut store, &nil_fn, &cons_fn, &[10, 20, 30]);
@@ -706,7 +706,7 @@ mod tests {
   fn test_list_find() {
     let (mut store, instance) = load_list();
     let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
-    let cons_fn = instance.get_func(&mut store, "list_append").unwrap();
+    let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let find_fn = instance.get_func(&mut store, "list_find").unwrap();
 
     let list = build_list(&mut store, &nil_fn, &cons_fn, &[10, 20, 30, 40]);
