@@ -36,9 +36,10 @@
 ;;   │   └── struct
 ;;   │       ├── $Num (field f64)     ← float / large number
 ;;   │       ├── $Str                 ← base string type
-;;   │       │     ├── $StrRaw        ← raw source bytes (data section)
-;;   │       │     ├── $StrTempl      ← string template (interpolated)
-;;   │       │     └── $StrRendered   ← rendered / formatted UTF-8 bytes
+;;   │       │     ├── $StrTempl      ← lazy segment array (interpolated)
+;;   │       │     └── $StrVal        ← has actual bytes
+;;   │       │           ├── $StrRaw  ← escapes unresolved
+;;   │       │           └── $StrBytes ← escapes resolved (UTF-8)
 ;;   │       ├── $List                ← list (opaque — internals in list.wat)
 ;;   │       ├── $Rec                 ← record (opaque — internals in hamt.wat)
 ;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
@@ -81,8 +82,8 @@
 ;;
 ;;     i31ref       — ref.eq (identity)
 ;;     $Num         — f64 comparison
-;;     $StrRaw      — compare (offset, length) pairs
-;;     $StrRendered — byte-level comparison
+;;     $StrRaw      — byte-level comparison (escapes unresolved)
+;;     $StrBytes    — byte-level comparison (escapes resolved)
 ;;
 ;;   Templates, closures, records, lists, sets are NOT valid for these
 ;;   operations until an Eq protocol exists in the std-lib.
@@ -127,21 +128,34 @@
     ))
 
     ;; $Str — base string type. Opaque.
-    ;; Subtypes defined in str.wat with their internal layouts.
+    ;; Subtypes defined in string.wat with their internal layouts.
     ;; Enables single br_on_cast check for "is this a string?"
+    ;;
+    ;;   $Str
+    ;;   ├── $StrTempl      ← lazy segment array (interpolated)
+    ;;   └── $StrVal        ← has actual bytes
+    ;;       ├── $StrRaw    ← escapes unresolved
+    ;;       └── $StrBytes  ← escapes resolved (heap byte array)
+    ;;
     (type $Str (sub (struct)))
 
-      ;; $StrRaw — raw source bytes from literals (sub $Str).
-      ;; TODO: field layout TBD (str.wat in progress)
-      (type $StrRaw (sub $Str (struct)))
-
       ;; $StrTempl — string template / interpolated (sub $Str).
-      ;; TODO: field layout TBD (str.wat in progress)
+      ;; Lazy segment array — not yet formatted.
       (type $StrTempl (sub $Str (struct)))
 
-      ;; $StrRendered — rendered / formatted UTF-8 bytes (sub $Str).
-      ;; TODO: field layout TBD (str.wat in progress)
-      (type $StrRendered (sub $Str (struct)))
+      ;; $StrVal — string with actual bytes (sub $Str).
+      ;; Supertype for all byte-bearing string types.
+      ;; Used as the argument type for str_bytes (IO boundary).
+      (type $StrVal (sub $Str (struct)))
+
+        ;; $StrRaw — raw bytes, escapes NOT resolved (sub $StrVal).
+        ;; Source bytes as-is: \n stored as two bytes ('\', 'n').
+        ;; Formatters must check for this to decide escape handling.
+        (type $StrRaw (sub $StrVal (struct)))
+
+        ;; $StrBytes — processed UTF-8 bytes, escapes resolved (sub $StrVal).
+        ;; Produced by fmt''. \n is byte 0x0A.
+        (type $StrBytes (sub $StrVal (struct)))
 
     ;; $List — sequence. Opaque base type.
     ;; Internals (cons cell layout) defined in list.wat as subtypes.
