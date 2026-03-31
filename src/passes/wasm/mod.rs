@@ -160,27 +160,17 @@ mod tests {
     let dwarf_sections = super::dwarf::emit_dwarf("test", Some(src), &result.offset_mappings);
     super::dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
 
-    // Link: merge runtime modules + user code into a standalone binary.
+    // Link: merge core runtime + user code into a standalone binary.
     static OPERATORS_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/operators.wasm"));
+    static LIST_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/list.wasm"));
     static STRING_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/string.wasm"));
 
-    let mut link_inputs = Vec::new();
-    if result.needs_operators {
-      link_inputs.push(super::link::LinkInput {
-        module_name: "@fink/runtime/operators".into(),
-        wasm: OPERATORS_WASM.to_vec(),
-      });
-    }
-    if result.needs_string {
-      link_inputs.push(super::link::LinkInput {
-        module_name: "@fink/runtime/string".into(),
-        wasm: STRING_WASM.to_vec(),
-      });
-    }
-    link_inputs.push(super::link::LinkInput {
-      module_name: "@fink/user".into(),
-      wasm: result.wasm,
-    });
+    let link_inputs = vec![
+      super::link::LinkInput { module_name: "@fink/runtime/string".into(), wasm: STRING_WASM.to_vec() },
+      super::link::LinkInput { module_name: "@fink/runtime/operators".into(), wasm: OPERATORS_WASM.to_vec() },
+      super::link::LinkInput { module_name: "@fink/runtime/list".into(), wasm: LIST_WASM.to_vec() },
+      super::link::LinkInput { module_name: "@fink/user".into(), wasm: result.wasm },
+    ];
     let linked = super::link::link(&link_inputs);
 
     // Format WASM → WAT with source map (including structural locs).

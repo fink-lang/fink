@@ -290,3 +290,26 @@ test 'string literal', fn:
       'hello'
   | equals fink":
     hello
+
+test 'string eq same', fn:
+  expect run fink":
+    main = fn:
+      'hello' == 'hello'
+  | equals fink":
+    true
+
+
+test 'string eq different', fn:
+  expect run fink":
+    main = fn:
+      'hello' == 'world'
+  | equals fink":
+    false
+
+
+test 'string neq', fn:
+  expect run fink":
+    main = fn:
+      'hello' != 'world'
+  | equals fink":
+    true

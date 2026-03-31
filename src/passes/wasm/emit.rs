@@ -358,6 +358,12 @@ pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   }
   let has_strings = !e.string_data.is_empty();
 
+  // Core runtime modules always need _croc_0, _croc_1, _croc_2 dispatch
+  // (operators import _croc_1, list imports _croc_0/1/2).
+  extra_arities.insert(0);
+  extra_arities.insert(1);
+  extra_arities.insert(2);
+
   e.closure_captures = closure_captures.clone();
   e.call_arities = extra_arities.clone();
   e.needs_croc_for_operators = has_operator_imports;
@@ -585,13 +591,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
     // _croc_N dispatch helpers have arity call_arity + 1 (args + callee).
-    // They also need $FnN for all possible lifted arities they dispatch to.
-    let needs_croc = !closure_captures.is_empty()
-      || builtins.keys().any(|n| n.starts_with("op_") || n.starts_with("seq_") || n == "empty");
-    if needs_croc {
-      for &call_arity in extra_arities.iter() {
-        all_arities.insert(call_arity + 1); // _croc_N's own type
-      }
+    // Always emitted — core runtime modules import them.
+    for &call_arity in extra_arities.iter() {
+      all_arities.insert(call_arity + 1); // _croc_N's own type
     }
     for &arity in &all_arities {
       let params: Vec<ValType> = vec![any_ref; arity];
@@ -654,7 +656,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Function section — declares function signatures
   // -------------------------------------------------------------------------
 
-  fn emit_functions(&mut self, cps_mod: &CpsModule<'_, '_>, closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
+  fn emit_functions(&mut self, cps_mod: &CpsModule<'_, '_>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
     let mut functions = FunctionSection::new();
 
     // CPS-defined functions.
@@ -687,10 +689,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // Helper functions are appended after CPS-defined functions.
     let mut next_func_idx = self.idx.import_count + cps_mod.funcs.len() as u32;
 
-    // _croc_N dispatch functions — when closures exist or runtime modules need them.
+    // _croc_N dispatch functions — always emitted because the core runtime
+    // modules (operators, list) import them from @fink/user.
     // Type is $Fn<call_arity + 1> (args + callee, no result — tail calls).
-    let needs_croc = !closure_captures.is_empty() || self.needs_croc_for_operators || self.needs_list;
-    if needs_croc {
+    {
       for &call_arity in call_arities {
         let type_idx = self.idx.fn_type_idx(call_arity + 1);
         functions.function(type_idx);
@@ -720,13 +722,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
   }
 
   // -------------------------------------------------------------------------
-  // Memory section — linear memory for string data
+  // Memory section — linear memory (required by string runtime)
   // -------------------------------------------------------------------------
 
   fn emit_memory(&mut self) {
-    if !self.needs_string {
-      return;
-    }
     let mut memories = MemorySection::new();
     memories.memory(MemoryType {
       minimum: self.string_data.pages().max(1),
@@ -818,9 +817,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     // TODO: memory should not be exported in production builds — only
     // needed for the runner to read string data during testing.
-    if self.needs_string {
-      exports.export("memory", ExportKind::Memory, 0);
-    }
+    exports.export("memory", ExportKind::Memory, 0);
 
     self.module.section(&exports);
   }
@@ -852,8 +849,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&wasm_func);
     }
 
-    // _croc_N dispatch bodies — when closures exist or runtime modules need them.
-    if !closure_captures.is_empty() || self.needs_croc_for_operators || self.needs_list {
+    // _croc_N dispatch bodies — always emitted for core runtime modules.
+    {
       let call_arities: Vec<usize> = self.call_arities.iter().copied().collect();
       for call_arity in call_arities {
         code.function(&self.emit_croc(call_arity, closure_captures));
@@ -1068,7 +1065,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Name section
   // -------------------------------------------------------------------------
 
-  fn emit_names(&mut self, cps_mod: &CpsModule<'_, '_>, closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
+  fn emit_names(&mut self, cps_mod: &CpsModule<'_, '_>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
     let mut names = NameSection::new();
 
     // Function names (imports + defined + helpers).
@@ -1081,7 +1078,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       func_names.append(idx, &func.label);
     }
     // Helper function names.
-    if !closure_captures.is_empty() || self.needs_croc_for_operators || self.needs_list {
+    {
       for &call_arity in call_arities {
         let name = format!("_croc_{}", call_arity);
         if let Some(&idx) = self.idx.funcs.get(&name) {
@@ -1937,7 +1934,7 @@ mod tests {
   #[test]
   fn t_literal_int_locals() {
     let result = compile("main = fn:\n  42");
-    // Parse back and count locals per function.
+    // Parse back and count locals for the first (user) function.
     use wasmparser::{Parser, Payload};
     for payload in Parser::new(0).parse_all(&result.wasm) {
       if let Ok(Payload::CodeSectionEntry(body)) = payload {
@@ -1946,10 +1943,9 @@ mod tests {
         for group in locals {
           let (count, _ty) = group.unwrap();
           local_count += count;
-          eprintln!("  local group: count={}", count);
         }
-        eprintln!("total locals: {}", local_count);
         assert_eq!(local_count, 0, "main = fn: 42 should have 0 locals");
+        break; // Only check the first defined function (user code).
       }
     }
   }
