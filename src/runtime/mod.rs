@@ -8,40 +8,6 @@
 mod tests {
   use wasmtime::*;
 
-  /// Pre-compiled merged runtime module (built by build.rs).
-  static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
-
-  /// Load the merged runtime WASM and provide _croc_N stubs.
-  /// The runtime imports _croc_0/1/2 from @fink/user for CPS dispatch.
-  /// In direct-style tests, these stubs are unreachable.
-  fn load_runtime() -> (Store<()>, Instance) {
-    let mut config = Config::new();
-    config.wasm_gc(true);
-    config.wasm_function_references(true);
-    config.wasm_multi_value(true);
-
-    let engine = Engine::new(&config).unwrap();
-    let module = Module::new(&engine, RUNTIME_WASM).unwrap();
-    let mut store = Store::new(&engine, ());
-
-    // Provide _croc_N stubs for @fink/user imports.
-    let mut linker = Linker::new(&engine);
-    for import in module.imports() {
-      if import.module() == "@fink/user"
-        && let ExternType::Func(ft) = import.ty()
-      {
-        let name = import.name().to_string();
-        let err_name = name.clone();
-        linker.func_new("@fink/user", &name, ft, move |_caller, _params, _results| {
-          Err(Error::msg(format!("{} stub called in direct-style test", err_name)))
-        }).unwrap();
-      }
-    }
-
-    let instance = linker.instantiate(&mut store, &module).unwrap();
-    (store, instance)
-  }
-
   const HAMT_TYPE_DEFS: &str = concat!(
     "  (rec\n",
     "    (type $Rec (sub (struct)))\n",
