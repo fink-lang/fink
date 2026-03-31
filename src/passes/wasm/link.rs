@@ -162,6 +162,8 @@ struct ParsedExport {
 /// A parsed global from a fragment.
 struct ParsedGlobal {
     ty: wasmparser::GlobalType,
+    /// Raw init expression bytes (includes trailing `end` opcode).
+    init_bytes: Vec<u8>,
 }
 
 /// Parsed name section data.
@@ -318,8 +320,13 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
 
             Payload::GlobalSection(reader) => {
                 for global in reader.into_iter().flatten() {
+                    let mut reader = global.init_expr.get_binary_reader();
+                    let len = reader.bytes_remaining();
+                    let init_bytes = reader.read_bytes(len)
+                        .expect("invalid init expr").to_vec();
                     frag.globals.push(ParsedGlobal {
                         ty: global.ty,
+                        init_bytes,
                     });
                 }
             }
@@ -424,8 +431,8 @@ struct LinkContext {
     // Merged exports.
     exports: Vec<(String, wasmparser::ExternalKind, u32)>,
 
-    // Merged globals (simplified).
-    globals: Vec<(wasmparser::GlobalType, Vec<u8>)>, // (type, raw_init_expr)
+    // Merged globals: (type, raw_init_expr, fragment_index).
+    globals: Vec<(wasmparser::GlobalType, Vec<u8>, usize)>,
 
     // Merged element section func indices.
     elem_func_indices: Vec<u32>,
@@ -595,9 +602,7 @@ fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
             ctx.remaps[i].globals.insert(old_idx, new_idx);
             ctx.next_global_idx += 1;
 
-            // We'll handle init expression encoding during emit.
-            // For now store the raw type.
-            ctx.globals.push((global.ty, Vec::new()));
+            ctx.globals.push((global.ty, global.init_bytes.clone(), i));
 
             // Merge global names.
             if let Some(name) = frag.names.global_names.get(&old_idx) {
@@ -1078,8 +1083,17 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
         module.section(&funcs);
     }
 
-    // 3. Global section.
-    // (Simplified — only supports ref.func and simple const init exprs.)
+    // 3. Global section — re-emit with remapped init expressions.
+    if !ctx.globals.is_empty() {
+        let mut globals = wasm_encoder::GlobalSection::new();
+        for (ty, init_bytes, frag_idx) in &ctx.globals {
+            let remap = &ctx.remaps[*frag_idx];
+            let enc_ty = convert_global_type(ty, remap);
+            let init = remap_const_expr(init_bytes, remap);
+            globals.global(enc_ty, &init);
+        }
+        module.section(&globals);
+    }
 
     // 4. Export section.
     if !ctx.exports.is_empty() {
@@ -1506,6 +1520,79 @@ fn convert_field_type(
     }
 }
 
+
+// -- Global section helpers ---------------------------------------------------
+
+/// Convert a wasmparser GlobalType to wasm-encoder GlobalType with remapped type refs.
+fn convert_global_type(
+    ty: &wasmparser::GlobalType,
+    remap: &RemapTable,
+) -> wasm_encoder::GlobalType {
+    wasm_encoder::GlobalType {
+        val_type: convert_val_type_remapped(ty.content_type, remap),
+        mutable: ty.mutable,
+        shared: ty.shared,
+    }
+}
+
+/// Remap a constant init expression, rewriting ref.func indices.
+///
+/// Init expressions are typically short: `ref.func $idx` + `end` (2 instructions).
+/// We parse the raw bytes, remap function/type indices, and re-encode.
+fn remap_const_expr(
+    bytes: &[u8],
+    remap: &RemapTable,
+) -> wasm_encoder::ConstExpr {
+    let reader = wasmparser::BinaryReader::new(bytes, 0);
+    let const_expr = wasmparser::ConstExpr::new(reader);
+    for op in const_expr.get_operators_reader().into_iter().flatten() {
+        match op {
+            wasmparser::Operator::RefFunc { function_index } => {
+                let new_idx = remap.funcs.get(&function_index)
+                    .copied()
+                    .unwrap_or(function_index);
+                return wasm_encoder::ConstExpr::ref_func(new_idx);
+            }
+            wasmparser::Operator::I32Const { value } => {
+                return wasm_encoder::ConstExpr::i32_const(value);
+            }
+            wasmparser::Operator::I64Const { value } => {
+                return wasm_encoder::ConstExpr::i64_const(value);
+            }
+            wasmparser::Operator::F32Const { value } => {
+                return wasm_encoder::ConstExpr::f32_const(f32::from_bits(value.bits()).into());
+            }
+            wasmparser::Operator::F64Const { value } => {
+                return wasm_encoder::ConstExpr::f64_const(f64::from_bits(value.bits()).into());
+            }
+            wasmparser::Operator::RefNull { hty } => {
+                let enc_ht = match hty {
+                    wasmparser::HeapType::Abstract { shared, ty } => {
+                        wasm_encoder::HeapType::Abstract {
+                            shared,
+                            ty: convert_abstract_heap_type(ty),
+                        }
+                    }
+                    wasmparser::HeapType::Concrete(idx) => {
+                        let old = idx.as_module_index().unwrap_or(0);
+                        let new = remap.types.get(&old).copied().unwrap_or(old);
+                        wasm_encoder::HeapType::Concrete(new)
+                    }
+                    wasmparser::HeapType::Exact(idx) => {
+                        let old = idx.as_module_index().unwrap_or(0);
+                        let new = remap.types.get(&old).copied().unwrap_or(old);
+                        wasm_encoder::HeapType::Concrete(new)
+                    }
+                };
+                return wasm_encoder::ConstExpr::ref_null(enc_ht);
+            }
+            wasmparser::Operator::End => {}
+            _ => panic!("link: unsupported const expr operator: {:?}", op),
+        }
+    }
+    // Fallback — shouldn't reach here for valid init expressions.
+    wasm_encoder::ConstExpr::i32_const(0)
+}
 
 // -- Tests --------------------------------------------------------------------
 

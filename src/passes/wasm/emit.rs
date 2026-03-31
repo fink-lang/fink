@@ -53,6 +53,12 @@ use wasm_encoder::{
   StructType, TypeSection, ValType,
 };
 
+// Pre-compiled canonical type definitions from src/runtime/types.wat.
+// Compiled at build time by build.rs; see that file for details.
+static CANONICAL_TYPES_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/types.wasm"));
+
+use wasmparser;
+
 use crate::lexer::Loc;
 use crate::passes::cps::ir::{
   Arg, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind,
@@ -62,6 +68,156 @@ use super::collect::{
   CollectedFn, IrCtx, Module as CpsModule,
   builtin_name, collect_locals, split_args,
 };
+
+// ---------------------------------------------------------------------------
+// Canonical types from types.wat
+// ---------------------------------------------------------------------------
+
+/// Parsed canonical type definitions from the pre-compiled types.wasm.
+struct CanonicalTypes {
+  /// The rec group subtypes, ready to inject via TypeSection::rec().
+  rec_group: Vec<SubType>,
+  /// Type name → index within the rec group (e.g. "$Num" → 0, "$Closure" → 9).
+  names: BTreeMap<String, u32>,
+  /// Total number of canonical types.
+  count: u32,
+}
+
+/// Parse the pre-compiled canonical types WASM and extract the rec group.
+fn parse_canonical_types() -> CanonicalTypes {
+  let wasm = CANONICAL_TYPES_WASM;
+  let mut rec_group = Vec::new();
+  let mut type_names: BTreeMap<u32, String> = BTreeMap::new();
+
+  for payload in wasmparser::Parser::new(0).parse_all(wasm) {
+    match payload.expect("invalid canonical types WASM") {
+      wasmparser::Payload::TypeSection(reader) => {
+        for rg in reader.into_iter() {
+          let rg = rg.expect("invalid rec group in canonical types");
+          for st in rg.into_types() {
+            rec_group.push(convert_wasmparser_subtype(&st));
+          }
+        }
+      }
+      wasmparser::Payload::CustomSection(reader) => {
+        if let wasmparser::KnownCustom::Name(name_reader) = reader.as_known() {
+          for name in name_reader.into_iter().flatten() {
+            if let wasmparser::Name::Type(map) = name {
+              for n in map.into_iter().flatten() {
+                type_names.insert(n.index, n.name.to_string());
+              }
+            }
+          }
+        }
+      }
+      _ => {}
+    }
+  }
+
+  let count = rec_group.len() as u32;
+  let names: BTreeMap<String, u32> = type_names.into_iter()
+    .map(|(idx, name)| (format!("${name}"), idx))
+    .collect();
+
+  CanonicalTypes { rec_group, names, count }
+}
+
+// -- wasmparser → wasm-encoder type conversion (no index remapping) ----------
+
+fn convert_wasmparser_subtype(st: &wasmparser::SubType) -> SubType {
+  SubType {
+    is_final: st.is_final,
+    supertype_idx: st.supertype_idx
+      .map(|idx| idx.as_module_index().unwrap_or(0)),
+    composite_type: convert_wasmparser_composite(&st.composite_type),
+  }
+}
+
+fn convert_wasmparser_composite(ct: &wasmparser::CompositeType) -> CompositeType {
+  CompositeType {
+    inner: match &ct.inner {
+      wasmparser::CompositeInnerType::Func(f) => {
+        CompositeInnerType::Func(FuncType::new(
+          f.params().iter().map(|vt| convert_wasmparser_val(*vt)).collect::<Vec<_>>(),
+          f.results().iter().map(|vt| convert_wasmparser_val(*vt)).collect::<Vec<_>>(),
+        ))
+      }
+      wasmparser::CompositeInnerType::Struct(s) => {
+        CompositeInnerType::Struct(StructType {
+          fields: s.fields.iter().map(convert_wasmparser_field).collect(),
+        })
+      }
+      wasmparser::CompositeInnerType::Array(a) => {
+        CompositeInnerType::Array(wasm_encoder::ArrayType(convert_wasmparser_field(&a.0)))
+      }
+      wasmparser::CompositeInnerType::Cont(_) => {
+        panic!("canonical types: continuation types not supported")
+      }
+    },
+    shared: ct.shared,
+    descriptor: None,
+    describes: None,
+  }
+}
+
+fn convert_wasmparser_val(vt: wasmparser::ValType) -> ValType {
+  match vt {
+    wasmparser::ValType::I32 => ValType::I32,
+    wasmparser::ValType::I64 => ValType::I64,
+    wasmparser::ValType::F32 => ValType::F32,
+    wasmparser::ValType::F64 => ValType::F64,
+    wasmparser::ValType::V128 => ValType::V128,
+    wasmparser::ValType::Ref(rt) => ValType::Ref(convert_wasmparser_ref(rt)),
+  }
+}
+
+fn convert_wasmparser_ref(rt: wasmparser::RefType) -> RefType {
+  RefType {
+    nullable: rt.is_nullable(),
+    heap_type: match rt.heap_type() {
+      wasmparser::HeapType::Abstract { shared, ty } => HeapType::Abstract {
+        shared,
+        ty: convert_wasmparser_abstract_heap(ty),
+      },
+      wasmparser::HeapType::Concrete(idx) => {
+        HeapType::Concrete(idx.as_module_index().unwrap_or(0))
+      }
+      wasmparser::HeapType::Exact(idx) => {
+        HeapType::Concrete(idx.as_module_index().unwrap_or(0))
+      }
+    },
+  }
+}
+
+fn convert_wasmparser_abstract_heap(ty: wasmparser::AbstractHeapType) -> AbstractHeapType {
+  match ty {
+    wasmparser::AbstractHeapType::Func => AbstractHeapType::Func,
+    wasmparser::AbstractHeapType::Extern => AbstractHeapType::Extern,
+    wasmparser::AbstractHeapType::Any => AbstractHeapType::Any,
+    wasmparser::AbstractHeapType::None => AbstractHeapType::None,
+    wasmparser::AbstractHeapType::NoExtern => AbstractHeapType::NoExtern,
+    wasmparser::AbstractHeapType::NoFunc => AbstractHeapType::NoFunc,
+    wasmparser::AbstractHeapType::Eq => AbstractHeapType::Eq,
+    wasmparser::AbstractHeapType::Struct => AbstractHeapType::Struct,
+    wasmparser::AbstractHeapType::Array => AbstractHeapType::Array,
+    wasmparser::AbstractHeapType::I31 => AbstractHeapType::I31,
+    wasmparser::AbstractHeapType::Exn => AbstractHeapType::Exn,
+    wasmparser::AbstractHeapType::NoExn => AbstractHeapType::NoExn,
+    wasmparser::AbstractHeapType::Cont => AbstractHeapType::Cont,
+    wasmparser::AbstractHeapType::NoCont => AbstractHeapType::NoCont,
+  }
+}
+
+fn convert_wasmparser_field(f: &wasmparser::FieldType) -> FieldType {
+  FieldType {
+    element_type: match f.element_type {
+      wasmparser::StorageType::I8 => StorageType::I8,
+      wasmparser::StorageType::I16 => StorageType::I16,
+      wasmparser::StorageType::Val(vt) => StorageType::Val(convert_wasmparser_val(vt)),
+    },
+    mutable: f.mutable,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -256,33 +412,21 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
   fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>, closure_captures: &BTreeSet<usize>) {
     let mut types = TypeSection::new();
-    let mut next_idx = 0u32;
 
-    // Universal value type: (ref null any) — WASM GC built-in, no custom $Any.
-    // All value slots use (ref null any). Structs ($Num, $ClosureN) are
-    // implicitly subtypes of any.
+    // 1. Canonical runtime types from types.wat — injected as a rec group.
+    //    These define the shared type vocabulary ($Num, $Str, $List, etc.)
+    //    that all modules and runtime fragments share after linking.
+    let canonical = parse_canonical_types();
+    types.ty().rec(canonical.rec_group);
+    for (name, &idx) in &canonical.names {
+      self.idx.types.insert(name.clone(), idx);
+    }
+    let mut next_idx = canonical.count;
 
-    // $Num = (struct (field f64)) — no supertype, implicitly sub any.
-    types.ty().subtype(&SubType {
-      is_final: false,
-      supertype_idx: None,
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Struct(StructType {
-          fields: Box::new([FieldType {
-            element_type: StorageType::Val(ValType::F64),
-            mutable: false,
-          }]),
-        }),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$Num".into(), next_idx);
-    next_idx += 1;
+    // Convenience: supertype index of $Closure base type (for $ClosureN subtypes).
+    let closure_base_idx = self.idx.type_idx("$Closure");
 
-    // Booleans use i31ref (0/1) — no $Bool struct type needed.
-    // i31ref is a subtype of eq which is a subtype of any.
+    // 2. Module-specific types — appended after the canonical rec group.
 
     // $BoxFuncTy = (func (param funcref) (result (ref null any)))
     // Type for the _box_func helper exported for the host.
@@ -290,7 +434,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       nullable: true,
       heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Func },
     });
-    let any_ref_val = ValType::Ref(RefType {
+    let any_ref = ValType::Ref(RefType {
       nullable: true,
       heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
     });
@@ -300,7 +444,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       composite_type: CompositeType {
         inner: CompositeInnerType::Func(FuncType::new(
           vec![func_ref],
-          vec![any_ref_val],
+          vec![any_ref],
         )),
         shared: false,
         descriptor: None,
@@ -311,10 +455,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
     next_idx += 1;
 
     // $FnN for each arity (from defined functions + builtins).
-    let any_ref = ValType::Ref(RefType {
-      nullable: true,
-      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
-    });
     let mut all_arities = cps_mod.arities.clone();
     for &arity in builtins.values() {
       all_arities.insert(arity);
@@ -322,11 +462,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     for &arity in extra_arities {
       all_arities.insert(arity);
     }
-    // Closure constructors and dispatch helpers also need $FnN types.
-    // $closure_N takes N captures + funcref → result, so its arity = N + 1.
-    // But $closure_N returns (ref $Any), so it's not a $FnN type — it uses
-    // a custom type. However, the lifted fn called from dispatch has
-    // arity = call_arity + N captures, which must also be in $FnN.
+    // Lifted fn arities: call_arity + N captures.
     for &n_cap in closure_captures {
       for &call_arity in extra_arities.iter().chain(cps_mod.arities.iter()) {
         all_arities.insert(call_arity + n_cap);
@@ -348,25 +484,18 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
-    // $ClosureN = (struct (field funcref) (field (ref any))...)
-    // where N = capture count. Field 0 is funcref to the lifted function,
-    // fields 1..N are captured values. The dispatch helper casts the funcref
-    // to the correct $FnM at call time.
-    //
-    // $Closure0 (funcref only, zero captures) replaces the old $FuncBox —
-    // wraps a raw funcref so it can flow through (ref null any) slots.
-    // Always emitted so bare funcrefs can be boxed.
+    // $ClosureN = (sub $Closure (struct (field funcref) (field (ref any))...))
+    // Subtypes of the canonical $Closure base type.
+    // $Closure0 (zero captures) always emitted — wraps bare funcrefs.
     let mut all_closure_sizes: BTreeSet<usize> = closure_captures.clone();
     all_closure_sizes.insert(0); // always need $Closure0
 
     for &n_cap in &all_closure_sizes {
       let mut fields = Vec::with_capacity(1 + n_cap);
-      // Field 0: funcref to the lifted function.
       fields.push(FieldType {
         element_type: StorageType::Val(func_ref),
         mutable: false,
       });
-      // Fields 1..N: captured values (all (ref any)).
       for _ in 0..n_cap {
         fields.push(FieldType {
           element_type: StorageType::Val(any_ref),
@@ -375,7 +504,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
       types.ty().subtype(&SubType {
         is_final: true,
-        supertype_idx: None, // implicitly sub any (GC struct)
+        supertype_idx: Some(closure_base_idx),
         composite_type: CompositeType {
           inner: CompositeInnerType::Struct(StructType {
             fields: fields.into_boxed_slice(),
@@ -390,12 +519,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
     }
 
     // $ClosureCtorN = (func (param (ref func) (ref any)...) (result (ref any)))
-    // Type for $closure_N constructor functions.
     for &n_cap in &all_closure_sizes {
       let mut params = Vec::with_capacity(1 + n_cap);
-      params.push(func_ref); // funcref
+      params.push(func_ref);
       for _ in 0..n_cap {
-        params.push(any_ref); // captures
+        params.push(any_ref);
       }
       types.ty().subtype(&SubType {
         is_final: true,
@@ -411,13 +539,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
-    // $CallRefOrClosN = (func (param (ref any)... (ref any)) (result))
-    // Type for $call_ref_or_clos_N dispatch functions.
-    // Only emitted when closures exist — otherwise calls use direct return_call_ref.
-    // Params: N call args + 1 callee (all (ref any)), no results (tail call).
+    // $CallRefOrClosN — dispatch helpers (only when closures exist).
     let dispatch_arities = if closure_captures.is_empty() { BTreeSet::new() } else { extra_arities.clone() };
     for &call_arity in &dispatch_arities {
-      let params: Vec<ValType> = vec![any_ref; call_arity + 1]; // args + callee
+      let params: Vec<ValType> = vec![any_ref; call_arity + 1];
       types.ty().subtype(&SubType {
         is_final: true,
         supertype_idx: None,

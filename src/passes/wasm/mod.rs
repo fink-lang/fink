@@ -160,9 +160,15 @@ mod tests {
     let dwarf_sections = super::dwarf::emit_dwarf("test", Some(src), &result.offset_mappings);
     super::dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
 
+    // Link: merge user code fragment (+ runtime modules when available).
+    let linked = super::link::link(&[super::link::LinkInput {
+      module_name: String::new(),
+      wasm: result.wasm,
+    }]);
+
     // Format WASM → WAT with source map (including structural locs).
     let (wat_output, wat_srcmap) = super::fmt::format_mapped_with_locs(
-      &result.wasm, &result.structural_locs, "test", src,
+      &linked.wasm, &result.structural_locs, "test", src,
     );
     let wat_json = wat_srcmap.to_json();
     let wat_b64 = crate::sourcemap::base64_encode(wat_json.as_bytes());

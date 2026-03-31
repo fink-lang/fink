@@ -129,7 +129,7 @@
     ;; $Str — base string type. Opaque.
     ;; Subtypes defined in str.wat with their internal layouts.
     ;; Enables single br_on_cast check for "is this a string?"
-    (type $Str (struct))
+    (type $Str (sub (struct)))
 
       ;; $StrRaw — raw source bytes from literals (sub $Str).
       ;; TODO: field layout TBD (str.wat in progress)
@@ -145,20 +145,20 @@
 
     ;; $List — sequence. Opaque base type.
     ;; Internals (cons cell layout) defined in list.wat as subtypes.
-    (type $List (struct))
+    (type $List (sub (struct)))
 
     ;; $Rec — record (fixed-shape key-value map). Opaque base type.
     ;; Internals (HAMT layout) defined in hamt.wat as subtypes.
     ;; Distinct from $Dict for future optimisation (known-shape → flat structs).
-    (type $Rec (struct))
+    (type $Rec (sub (struct)))
 
     ;; $Dict — dictionary (dynamic key-value map). Opaque base type.
     ;; Internals (HAMT layout) defined in hamt.wat as subtypes.
-    (type $Dict (struct))
+    (type $Dict (sub (struct)))
 
     ;; $Set — immutable hash set. Opaque base type.
     ;; Internals (HAMT layout) defined in set.wat as subtypes.
-    (type $Set (struct))
+    (type $Set (sub (struct)))
 
     ;; $Closure — base type for all closures.
     ;; Field 0 is the funcref to the lifted function.
@@ -166,9 +166,9 @@
     ;; N capture fields, each (ref any). The base type enables a single
     ;; br_on_cast check in dispatch ("is this a closure at all?")
     ;; before narrowing to the specific $ClosureN.
-    (type $Closure (struct
-      (field $func (ref func))
-    ))
+    (type $Closure (sub (struct
+      (field $func funcref)
+    )))
   )
 
 )
