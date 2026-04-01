@@ -451,3 +451,15 @@ test 'tagged template varargs', fn:
     true
 
 
+test 'varargs mixed fixed and rest', fn:
+  expect run fink":
+    head-and-rest = fn a, ..rest:
+      match rest:
+        [b, ..]: a + b
+
+    main = fn:
+      head-and-rest 10, ..[20, 30]
+  | equals fink":
+    30
+
+
