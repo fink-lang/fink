@@ -1478,6 +1478,32 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
     return;
   }
 
+  if op == BuiltIn::StrFmt {
+    let (val_args, cont_arg) = split_args(args);
+
+    // Build $VarArgs array inline from value args.
+    let varargs_idx = fc.emitter_idx.type_idx("$VarArgs");
+    for arg in val_args {
+      emit_arg(arg, fc);
+    }
+    fc.instr(&Instruction::ArrayNewFixed { array_type_index: varargs_idx, array_size: val_args.len() as u32 });
+
+    // Push continuation.
+    if let Some(cont) = cont_arg {
+      emit_cont(cont, fc);
+    }
+
+    // return_call $str_fmt (segments_array, cont)
+    let internal_name = format!("_{}", builtin_name(op));
+    let func_idx = if fc.emitter_idx.funcs.contains_key(&internal_name) {
+      fc.emitter_idx.func_idx(&internal_name)
+    } else {
+      fc.emitter_idx.func_idx(builtin_name(op))
+    };
+    fc.instr(&Instruction::ReturnCall(func_idx));
+    return;
+  }
+
   // Regular builtin: return_call $builtin_name args...
   // All args get their own source mark. The operator mark is placed after
   // args (at the return_call instruction), so no collision.

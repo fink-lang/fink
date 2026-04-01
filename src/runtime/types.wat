@@ -41,6 +41,7 @@
 ;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
 ;;   │       ├── $Range              ← numeric range (opaque — internals in range.wat)
+;;   │       ├── $VarArgs (array)               ← variable-length argument array
 ;;   │       ├── $Captures (array)             ← flat capture value array
 ;;   │       └── $Closure (funcref, $Captures) ← universal closure type
 ;;   │
@@ -146,6 +147,12 @@
     ;; $Range — numeric range. Opaque base type.
     ;; Internals (start/end/inclusive) defined in range.wat.
     (type $Range (sub (struct)))
+
+    ;; $VarArgs — variable-length argument array.
+    ;; Used by builtins that accept a variable number of arguments
+    ;; (e.g. str_fmt for string templates). The emitter builds the
+    ;; array inline via array.new_fixed at compile time.
+    (type $VarArgs (array (ref null any)))
 
     ;; $Captures — flat array of captured values.
     ;; Each element is (ref null any) — nullable to allow default-init
