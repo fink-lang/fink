@@ -1044,10 +1044,6 @@ mod tests {
   const STRING_TYPE_DEFS: &str = concat!(
     "  (rec\n",
     "    (type $Str (sub (struct)))\n",
-    "    (type $StrTempl (sub $Str (struct)))\n",
-    "    (type $StrVal (sub $Str (struct)))\n",
-    "    (type $StrRaw (sub $StrVal (struct)))\n",
-    "    (type $StrBytes (sub $StrVal (struct)))\n",
     "  )\n",
   );
 
@@ -1114,8 +1110,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_raw (i32.const 0) (i32.const 5))
-          (call $str_raw (i32.const 0) (i32.const 5))))
+          (call $str (i32.const 0) (i32.const 5))
+          (call $str (i32.const 0) (i32.const 5))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1127,8 +1123,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_raw (i32.const 0) (i32.const 5))
-          (call $str_raw (i32.const 0) (i32.const 6))))
+          (call $str (i32.const 0) (i32.const 5))
+          (call $str (i32.const 0) (i32.const 6))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 0);
   }
@@ -1140,8 +1136,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 5)))
-          (call $str_raw (i32.const 0) (i32.const 5))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 5)))
+          (call $str (i32.const 0) (i32.const 5))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1157,8 +1153,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
-          (call $str_render_escape (call $str_raw (i32.const 4) (i32.const 3)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str (i32.const 4) (i32.const 3)))))
     "#);
     // "a\nb" escaped = [0x61, 0x0A, 0x62]
     // "a<newline>b" escaped = [0x61, 0x0A, 0x62] (no backslash, bytes pass through)
@@ -1175,8 +1171,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
-          (call $str_render_escape (call $str_raw (i32.const 4) (i32.const 1)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str (i32.const 4) (i32.const 1)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1190,8 +1186,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 8)))
-          (call $str_render_escape (call $str_raw (i32.const 8) (i32.const 1)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 8)))
+          (call $str_render_escape (call $str (i32.const 8) (i32.const 1)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1205,8 +1201,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 8)))
-          (call $str_render_escape (call $str_raw (i32.const 8) (i32.const 2)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 8)))
+          (call $str_render_escape (call $str (i32.const 8) (i32.const 2)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1220,8 +1216,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 8)))
-          (call $str_render_escape (call $str_raw (i32.const 8) (i32.const 3)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 8)))
+          (call $str_render_escape (call $str (i32.const 8) (i32.const 3)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1235,8 +1231,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 9)))
-          (call $str_render_escape (call $str_raw (i32.const 9) (i32.const 4)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 9)))
+          (call $str_render_escape (call $str (i32.const 9) (i32.const 4)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1254,8 +1250,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, &format!(r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 12)))
-          (call $str_render_escape (call $str_raw (i32.const 12) (i32.const {exp_len})))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 12)))
+          (call $str_render_escape (call $str (i32.const 12) (i32.const {exp_len})))))
     "#));
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1269,8 +1265,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 12)))
-          (call $str_render_escape (call $str_raw (i32.const 12) (i32.const 6)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 12)))
+          (call $str_render_escape (call $str (i32.const 12) (i32.const 6)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1284,8 +1280,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 6)))
-          (call $str_raw (i32.const 6) (i32.const 3))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 6)))
+          (call $str (i32.const 6) (i32.const 3))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1296,8 +1292,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 0)))
-          (call $str_raw (i32.const 0) (i32.const 0))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 0)))
+          (call $str (i32.const 0) (i32.const 0))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1311,8 +1307,8 @@ mod tests {
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
-          (call $str_render_escape (call $str_raw (i32.const 4) (i32.const 4)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str (i32.const 4) (i32.const 4)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1326,8 +1322,8 @@ mod tests {
       (func (export "test") (result i32)
         (call $str_eq
           (call $str_render_unescape
-            (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 2))))
-          (call $str_raw (i32.const 0) (i32.const 2))))
+            (call $str_render_escape (call $str (i32.const 0) (i32.const 2))))
+          (call $str (i32.const 0) (i32.const 2))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1338,8 +1334,8 @@ mod tests {
     let data = b"hello";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (local $r (ref $StrVal))
-        (local.set $r (call $str_raw (i32.const 0) (i32.const 5)))
+        (local $r (ref $Str))
+        (local.set $r (call $str (i32.const 0) (i32.const 5)))
         (call $str_eq (local.get $r) (local.get $r)))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
@@ -1352,8 +1348,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_raw (i32.const 0) (i32.const 5))
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 5)))))
+          (call $str (i32.const 0) (i32.const 5))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 5)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1365,8 +1361,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (call $str_eq
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))
-          (call $str_render_escape (call $str_raw (i32.const 0) (i32.const 4)))))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
+          (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1380,20 +1376,20 @@ mod tests {
         (call $str_tmpl_count
           (call $str_templ
             (array.new_fixed $StrSegments 2
-              (call $str_raw (i32.const 0) (i32.const 5))
-              (call $str_raw (i32.const 5) (i32.const 5))))))
+              (call $str (i32.const 0) (i32.const 5))
+              (call $str (i32.const 5) (i32.const 5))))))
 
       (func (export "test_get") (result i32)
-        (local $t (ref $StrTempl))
+        (local $t (ref $Str))
         (local.set $t
           (call $str_templ
             (array.new_fixed $StrSegments 2
-              (call $str_raw (i32.const 0) (i32.const 5))
-              (call $str_raw (i32.const 5) (i32.const 5)))))
+              (call $str (i32.const 0) (i32.const 5))
+              (call $str (i32.const 5) (i32.const 5)))))
         ;; First segment should equal raw "hello"
         (call $str_eq
-          (ref.cast (ref $StrVal) (call $str_tmpl_get (local.get $t) (i32.const 0)))
-          (call $str_raw (i32.const 0) (i32.const 5))))
+          (ref.cast (ref $Str) (call $str_tmpl_get (local.get $t) (i32.const 0)))
+          (call $str (i32.const 0) (i32.const 5))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test_count"), 2);
     assert_eq!(call_test(&mut store, &instance, "test_get"), 1);
@@ -1408,8 +1404,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (i32.eq
-          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))
-          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))))
+          (call $str_hash_i31 (call $str (i32.const 0) (i32.const 5)))
+          (call $str_hash_i31 (call $str (i32.const 0) (i32.const 5)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1421,8 +1417,8 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (i32.ne
-          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))
-          (call $str_hash_i31 (call $str_raw (i32.const 5) (i32.const 5)))))
+          (call $str_hash_i31 (call $str (i32.const 0) (i32.const 5)))
+          (call $str_hash_i31 (call $str (i32.const 5) (i32.const 5)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
@@ -1433,7 +1429,7 @@ mod tests {
     let data = b"";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 0))))
+        (call $str_hash_i31 (call $str (i32.const 0) (i32.const 0))))
     "#);
     let h = call_test(&mut store, &instance, "test");
     // FNV-1a 32-bit offset basis = 0x811c9dc5, masked: 0x011c9dc5
@@ -1445,7 +1441,7 @@ mod tests {
     let data = b"hello";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5))))
+        (call $str_hash_i31 (call $str (i32.const 0) (i32.const 5))))
     "#);
     let h = call_test(&mut store, &instance, "test");
     assert!(h >= 0, "hash should be non-negative (fits i31)");
@@ -1459,10 +1455,10 @@ mod tests {
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (i32.eq
-          (call $str_hash_i31 (call $str_raw (i32.const 0) (i32.const 5)))
+          (call $str_hash_i31 (call $str (i32.const 0) (i32.const 5)))
           (call $str_hash_i31
             (call $str_render_escape
-              (call $str_raw (i32.const 0) (i32.const 5))))))
+              (call $str (i32.const 0) (i32.const 5))))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }

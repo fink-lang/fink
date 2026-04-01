@@ -14,8 +14,8 @@
 ;; Value representation:
 ;;   - Keys are (ref eq) — non-nullable
 ;;   - Key equality uses ref.eq (identity) in phase 0. Will be extended
-;;     to direct-style deep_eq supporting: i31ref, $Num, $StrRaw,
-;;     $StrRendered. User-defined Eq via std-lib (CPS, future).
+;;     to direct-style deep_eq supporting: i31ref, $Num, $Str.
+;;     User-defined Eq via std-lib (CPS, future).
 ;;   - Hash: imported from hashing.wat (hash_i31). Dispatches on i31ref,
 ;;     $Num, $Str via br_on_cast.
 ;;

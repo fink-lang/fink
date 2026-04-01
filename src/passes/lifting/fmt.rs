@@ -41,7 +41,7 @@ struct FmtCtx<'a, 'src> {
 // Entry point
 // ---------------------------------------------------------------------------
 
-pub fn fmt_flat(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> String {
+pub fn fmt_flat(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
   let fc = FmtCtx { ctx };
   let stmts = collect_stmts(expr, &fc);
   let module = Node::new(NodeKind::Module(Exprs { items: stmts, seps: vec![] }), dummy_loc());
@@ -141,7 +141,7 @@ fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
   }
 }
 
-fn render_val(val: &Val<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
+fn render_val(val: &Val, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match &val.kind {
     ValKind::Lit(lit) => lit_node(lit),
     ValKind::Ref(Ref::Synth(bind_id))      => ident(&render_synth_name(*bind_id, fc)),
@@ -152,7 +152,7 @@ fn render_val(val: &Val<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   }
 }
 
-fn lit_node(lit: &Lit<'_>) -> Node<'static> {
+fn lit_node(lit: &Lit) -> Node<'static> {
   match lit {
     Lit::Bool(b) => Node::new(NodeKind::LitBool(*b), dummy_loc()),
     Lit::Int(n) => {
@@ -169,7 +169,7 @@ fn lit_node(lit: &Lit<'_>) -> Node<'static> {
     }
     Lit::Str(s) => Node::new(NodeKind::LitStr {
       open: tok("'", TokenKind::StrStart), close: tok("'", TokenKind::StrEnd),
-      content: s.to_string(), indent: 0,
+      content: crate::strings::control_pics(s), indent: 0,
     }, dummy_loc()),
     Lit::Seq => Node::new(NodeKind::LitSeq { open: lbrack_tok(), close: rbrack_tok(), items: Exprs::empty() }, dummy_loc()),
     Lit::Rec => Node::new(NodeKind::LitRec { open: lbrace_tok(), close: rbrace_tok(), items: Exprs::empty() }, dummy_loc()),
@@ -184,7 +184,7 @@ fn render_builtin_flat(op: &BuiltIn) -> String {
 // Cont → argument node for App rendering
 // ---------------------------------------------------------------------------
 
-fn render_cont_arg(cont: &Cont<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
+fn render_cont_arg(cont: &Cont, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Ref(id)           => ident(&format!("·v_{}", id.0)),
     Cont::Expr { args, body } => {
@@ -201,7 +201,7 @@ fn render_cont_arg(cont: &Cont<'_>, fc: &FmtCtx<'_, '_>) -> Node<'static> {
 // App → flat Node (a bare expression statement)
 // ---------------------------------------------------------------------------
 
-fn render_app(func: &Callable<'_>, args: &[Arg<'_>], fc: &FmtCtx<'_, '_>) -> Node<'static> {
+fn render_app(func: &Callable, args: &[Arg], fc: &FmtCtx<'_, '_>) -> Node<'static> {
   let func_node = match func {
     Callable::Val(v)       => render_val(v, fc),
     Callable::BuiltIn(op)  => ident(&render_builtin_flat(op)),
@@ -228,7 +228,7 @@ fn render_app(func: &Callable<'_>, args: &[Arg<'_>], fc: &FmtCtx<'_, '_>) -> Nod
 // Core: collect a sequence of flat statement nodes from a CPS expression
 // ---------------------------------------------------------------------------
 
-fn collect_stmts<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
+fn collect_stmts(expr: &Expr, fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
   let mut stmts: Vec<Node<'static>> = vec![];
   collect_into(expr, fc, &mut stmts);
   stmts
@@ -236,7 +236,7 @@ fn collect_stmts<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>) -> Vec<Node<'stat
 
 /// Recursively walk the LetFn/LetVal chain, emitting assignments and then the
 /// tail expression. Consecutive LetFn → LetVal aliases are chained as `b = a = fn ...`.
-fn collect_into<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
+fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
   match &expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       let name_str = render_bind(name, fc);
@@ -317,7 +317,7 @@ fn collect_into<'src>(expr: &Expr<'src>, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node
 
 /// Emit statements for a `Cont` body — either recurse into the inner Expr,
 /// or for `Cont::Ref` emit a tail call passing the last-bound name.
-fn collect_cont_into<'src>(cont: &'src Cont<'src>, bound: &str, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
+fn collect_cont_into(cont: &Cont, bound: &str, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
   match cont {
     Cont::Expr { body, .. } => collect_into(body, fc, out),
     Cont::Ref(id) => {
@@ -347,9 +347,9 @@ fn outermost_name<'a>(node: &'a Node<'static>) -> Option<&'a str> {
 
 fn chain_lhs<'src>(
   name: &str,
-  body: &'src Cont<'src>,
+  body: &'src Cont,
   fc: &FmtCtx<'_, '_>,
-) -> (Node<'static>, &'src Cont<'src>) {
+) -> (Node<'static>, &'src Cont) {
   let body_expr = match body {
     Cont::Expr { args, body } if args.len() == 1 => body.as_ref(),
     _ => return (ident(name), body),
@@ -374,9 +374,9 @@ fn chain_lhs<'src>(
 
 /// Split args into `(value_args, trailing_cont)` if the last arg is `Arg::Cont`.
 /// Returns borrowed slices from the original `args` vec.
-fn split_trailing_cont<'a, 'src>(
-  args: &'a [Arg<'src>],
-) -> Option<(&'a [Arg<'src>], &'a Cont<'src>)> {
+fn split_trailing_cont(
+  args: &[Arg],
+) -> Option<(&[Arg], &Cont)> {
   match args.last() {
     Some(Arg::Cont(c)) => Some((&args[..args.len() - 1], c)),
     _ => None,

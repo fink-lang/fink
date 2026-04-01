@@ -72,7 +72,7 @@ impl<'a, 'src> IrCtx<'a, 'src> {
 // ---------------------------------------------------------------------------
 
 /// A lifted function, ready to emit.
-pub struct CollectedFn<'a, 'src> {
+pub struct CollectedFn<'a> {
   /// WASM function label (e.g. "v_8").
   pub label: String,
   /// CpsId of the LetFn name — used to source-map the (func ...) header.
@@ -80,7 +80,7 @@ pub struct CollectedFn<'a, 'src> {
   /// Parameter (id, label) pairs in order (all anyref). Last is the cont.
   pub params: Vec<(CpsId, String)>,
   /// The fn body expression.
-  pub body: &'a Expr<'src>,
+  pub body: &'a Expr,
   /// Whether this fn is exported under a user name.
   pub export_as: Option<String>,
   /// CpsId of the LetVal alias that names this export — used to source-map (export ...).
@@ -91,8 +91,8 @@ pub struct CollectedFn<'a, 'src> {
 }
 
 /// Module-level collected data.
-pub struct Module<'a, 'src> {
-  pub funcs: Vec<CollectedFn<'a, 'src>>,
+pub struct Module<'a> {
+  pub funcs: Vec<CollectedFn<'a>>,
   /// All function arities encountered (= param count). Used to emit type section.
   pub arities: BTreeSet<usize>,
   /// CpsIds of LetVal aliases for module-level fns — these are globals, not locals.
@@ -104,8 +104,8 @@ pub struct Module<'a, 'src> {
 // ---------------------------------------------------------------------------
 
 /// Walk the top-level chain and collect all lifted functions + the export list.
-pub fn collect<'a, 'src>(root: &'a Expr<'src>, ctx: &IrCtx<'_, 'src>) -> Module<'a, 'src> {
-  let mut funcs: Vec<CollectedFn<'a, 'src>> = Vec::new();
+pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
+  let mut funcs: Vec<CollectedFn<'a>> = Vec::new();
   let mut arities: BTreeSet<usize> = BTreeSet::new();
 
   let exports = collect_exports(root, ctx);
@@ -120,7 +120,7 @@ pub fn collect<'a, 'src>(root: &'a Expr<'src>, ctx: &IrCtx<'_, 'src>) -> Module<
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
-fn collect_exports<'src>(root: &Expr<'src>, ctx: &IrCtx<'_, 'src>) -> Vec<(CpsId, String)> {
+fn collect_exports<'src>(root: &Expr, ctx: &IrCtx<'_, 'src>) -> Vec<(CpsId, String)> {
   let mut expr = root;
   loop {
     match &expr.kind {
@@ -158,10 +158,10 @@ pub fn export_name(ctx: &IrCtx<'_, '_>, id: CpsId) -> String {
 
 /// Recursively walk the top-level chain and populate `funcs`.
 fn collect_chain<'a, 'src>(
-  expr: &'a Expr<'src>,
+  expr: &'a Expr,
   ctx: &IrCtx<'_, 'src>,
   exports: &[(CpsId, String)],
-  funcs: &mut Vec<CollectedFn<'a, 'src>>,
+  funcs: &mut Vec<CollectedFn<'a>>,
   arities: &mut BTreeSet<usize>,
 ) {
   match &expr.kind {
@@ -207,13 +207,13 @@ fn collect_chain<'a, 'src>(
 // Local collection — pre-scan fn body for LetVal names
 // ---------------------------------------------------------------------------
 
-pub fn collect_locals<'src>(expr: &Expr<'_>, ctx: &IrCtx<'_, 'src>) -> Vec<String> {
+pub fn collect_locals<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>) -> Vec<String> {
   let mut locals = Vec::new();
   collect_locals_expr(expr, ctx, &mut locals);
   locals
 }
 
-fn collect_locals_expr<'src>(expr: &Expr<'_>, ctx: &IrCtx<'_, 'src>, out: &mut Vec<String>) {
+fn collect_locals_expr<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<String>) {
   match &expr.kind {
     ExprKind::LetVal { name, cont, .. } => {
       out.push(ctx.label(name.id));
@@ -251,7 +251,7 @@ fn collect_locals_expr<'src>(expr: &Expr<'_>, ctx: &IrCtx<'_, 'src>, out: &mut V
 // ---------------------------------------------------------------------------
 
 /// Split args into (value_args, Option<trailing_cont>).
-pub fn split_args<'a>(args: &'a [Arg<'a>]) -> (&'a [Arg<'a>], Option<&'a Cont<'a>>) {
+pub fn split_args(args: &[Arg]) -> (&[Arg], Option<&Cont>) {
   match args.last() {
     Some(Arg::Cont(c)) => (&args[..args.len() - 1], Some(c)),
     _ => (args, None),

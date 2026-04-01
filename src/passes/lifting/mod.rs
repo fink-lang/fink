@@ -84,12 +84,12 @@ impl Alloc {
     self.bind(Bind::Synth, None)
   }
 
-  fn val<'src>(&mut self, kind: ValKind<'src>, ast_origin: Option<AstId>) -> Val<'src> {
+  fn val(&mut self, kind: ValKind, ast_origin: Option<AstId>) -> Val {
     let id = self.next(ast_origin);
     Val { id, kind }
   }
 
-  fn expr<'src>(&mut self, kind: ExprKind<'src>, ast_origin: Option<AstId>) -> Expr<'src> {
+  fn expr(&mut self, kind: ExprKind, ast_origin: Option<AstId>) -> Expr {
     let id = self.next(ast_origin);
     Expr { id, kind }
   }
@@ -99,10 +99,10 @@ impl Alloc {
 // Hoisted fn — extracted from a fn_body, to be placed as a sibling
 // ---------------------------------------------------------------------------
 
-struct HoistedFn<'src> {
+struct HoistedFn {
   name:    BindNode,
   params:  Vec<Param>,
-  fn_body: Expr<'src>,
+  fn_body: Expr,
   /// The original cont args that bound the fn's result value.
   /// Used by wrap_hoisted to create the correct Cont::Expr binding.
   cont_args: Vec<BindNode>,
@@ -115,9 +115,9 @@ struct HoistedFn<'src> {
 /// Lift all nested fns, one level at a time, until no nested LetFn remain
 /// inside any fn_body. Returns the fully lifted CPS tree.
 pub fn lift<'src>(
-  result: CpsResult<'src>,
+  result: CpsResult,
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
-) -> CpsResult<'src> {
+) -> CpsResult {
   const MAX_ROUNDS: usize = 20;
   let mut current = result;
 
@@ -149,7 +149,7 @@ pub fn lift<'src>(
 // inline Cont::Expr with non-trivial body.
 // ---------------------------------------------------------------------------
 
-fn needs_lifting(expr: &Expr<'_>) -> bool {
+fn needs_lifting(expr: &Expr) -> bool {
   match &expr.kind {
     ExprKind::LetFn { fn_body, cont, name: _, .. } => {
       contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
@@ -173,7 +173,7 @@ fn needs_lifting(expr: &Expr<'_>) -> bool {
   }
 }
 
-fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
+fn cont_needs_lifting(cont: &Cont) -> bool {
   match cont {
     Cont::Ref(_) => false,
     Cont::Expr { body, .. } => needs_lifting(body),
@@ -181,7 +181,7 @@ fn cont_needs_lifting(cont: &Cont<'_>) -> bool {
 }
 
 
-fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
+fn app_cont_needs_lifting(cont: &Cont) -> bool {
   match cont {
     Cont::Ref(_) => false,
     c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
@@ -191,7 +191,7 @@ fn app_cont_needs_lifting(cont: &Cont<'_>) -> bool {
 
 
 /// Does this expression contain a LetFn or an inline Cont::Expr in an App?
-fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
+fn contains_letfn_or_inline_cont(expr: &Expr) -> bool {
   match &expr.kind {
     ExprKind::LetFn { .. } => true,
     ExprKind::LetVal { cont, .. } => match cont {
@@ -221,7 +221,7 @@ fn contains_letfn_or_inline_cont(expr: &Expr<'_>) -> bool {
 /// NOT simple forwards:
 ///   `fn a, b, c: c`       — discards params
 ///   `fn a, b, c: c b, a`  — reorders params
-fn is_simple_forward_cont(cont: &Cont<'_>) -> bool {
+fn is_simple_forward_cont(cont: &Cont) -> bool {
   let (params, body) = match cont {
     Cont::Ref(_) => return false,
     Cont::Expr { args, body } => (args, body.as_ref()),
@@ -268,10 +268,10 @@ fn is_simple_forward_cont(cont: &Cont<'_>) -> bool {
 // ---------------------------------------------------------------------------
 
 fn lift_expr<'src>(
-  expr: Expr<'src>,
+  expr: Expr,
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
-) -> Expr<'src> {
+) -> Expr {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       // Recurse into the cont first.
@@ -279,7 +279,7 @@ fn lift_expr<'src>(
 
       // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
       if contains_letfn_or_inline_cont(&fn_body) {
-        let mut hoisted: Vec<HoistedFn<'src>> = Vec::new();
+        let mut hoisted: Vec<HoistedFn> = Vec::new();
         let new_fn_body = extract_from_body(*fn_body, &params, &[], ast_index, alloc, &mut hoisted);
 
         // Build the LetFn with the cleaned fn_body.
@@ -342,10 +342,10 @@ fn lift_expr<'src>(
 }
 
 fn lift_cont<'src>(
-  cont: Cont<'src>,
+  cont: Cont,
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
-) -> Cont<'src> {
+) -> Cont {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { args, body } => {
@@ -366,13 +366,13 @@ fn lift_cont<'src>(
 /// `scope_binds` accumulates LetVal/LetFn bindings seen so far in the fn body —
 /// these are in scope at the extraction point but would go out of scope after hoisting.
 fn extract_from_body<'src>(
-  expr: Expr<'src>,
+  expr: Expr,
   parent_params: &[Param],
   scope_binds: &[(CpsId, Bind)],
   _ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
   alloc: &mut Alloc,
-  hoisted: &mut Vec<HoistedFn<'src>>,
-) -> Expr<'src> {
+  hoisted: &mut Vec<HoistedFn>,
+) -> Expr {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       // This LetFn is inside a fn_body — extract it one level.
@@ -425,7 +425,7 @@ fn extract_from_body<'src>(
       } else {
         // Closure — add captures as leading params, emit ·fn_closure at call site.
         let mut lifted_params: Vec<Param> = Vec::new();
-        let mut closure_args: Vec<Arg<'src>> = Vec::new();
+        let mut closure_args: Vec<Arg> = Vec::new();
         let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
 
         // Build the lifted fn ref.
@@ -575,7 +575,7 @@ fn extract_from_body<'src>(
             let lifted_fn_bind = alloc.synth_bind();
             let lifted_fn_id = lifted_fn_bind.id;
             let mut lifted_params: Vec<Param> = Vec::new();
-            let mut closure_args: Vec<Arg<'src>> = Vec::new();
+            let mut closure_args: Vec<Arg> = Vec::new();
             for (cap_id, cap_kind) in &cap_entries {
               let ast_origin = alloc.origin.try_get(*cap_id).and_then(|o| *o);
               let param_bind = alloc.bind(*cap_kind, ast_origin);
@@ -639,7 +639,7 @@ fn extract_from_body<'src>(
 // Rewrite refs in an expression tree using a CpsId → CpsId map
 // ---------------------------------------------------------------------------
 
-fn rewrite_refs<'src>(expr: Expr<'src>, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr<'src> {
+fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       let fn_body = rewrite_refs(*fn_body, map);
@@ -673,7 +673,7 @@ fn rewrite_refs<'src>(expr: Expr<'src>, map: &std::collections::HashMap<CpsId, C
   }
 }
 
-fn rewrite_refs_val<'src>(val: Val<'src>, map: &std::collections::HashMap<CpsId, CpsId>) -> Val<'src> {
+fn rewrite_refs_val(val: Val, map: &std::collections::HashMap<CpsId, CpsId>) -> Val {
   match &val.kind {
     ValKind::Ref(Ref::Synth(id)) => {
       if let Some(&new_id) = map.get(id) {
@@ -694,7 +694,7 @@ fn rewrite_refs_val<'src>(val: Val<'src>, map: &std::collections::HashMap<CpsId,
   }
 }
 
-fn rewrite_refs_cont<'src>(cont: Cont<'src>, map: &std::collections::HashMap<CpsId, CpsId>) -> Cont<'src> {
+fn rewrite_refs_cont(cont: Cont, map: &std::collections::HashMap<CpsId, CpsId>) -> Cont {
   match cont {
     Cont::Ref(id) => {
       if let Some(&new_id) = map.get(&id) {
@@ -719,7 +719,7 @@ fn rewrite_refs_cont<'src>(cont: Cont<'src>, map: &std::collections::HashMap<Cps
 /// (and thus would become out of scope after lifting).
 /// Check if a captured CpsId refers to a fn that's already been hoisted in this round.
 /// The capture might be the LetVal bind (scope_bind) that aliases a hoisted fn.
-fn is_hoisted_fn_ref(cap_id: CpsId, hoisted: &[HoistedFn<'_>], alloc: &Alloc) -> bool {
+fn is_hoisted_fn_ref(cap_id: CpsId, hoisted: &[HoistedFn], alloc: &Alloc) -> bool {
   // Check if cap_id matches any hoisted fn's name or cont_args (the binds in scope).
   for h in hoisted {
     if h.name.id == cap_id { return true; }
@@ -737,7 +737,7 @@ fn is_hoisted_fn_ref(cap_id: CpsId, hoisted: &[HoistedFn<'_>], alloc: &Alloc) ->
 }
 
 fn compute_captures_for_lift(
-  fn_body: &Expr<'_>,
+  fn_body: &Expr,
   _fn_params: &[Param],
   parent_params: &[Param],
   scope_binds: &[(CpsId, Bind)],
@@ -759,7 +759,7 @@ fn compute_captures_for_lift(
 
 /// Walk an expression and collect refs that point to one of the parent's param ids.
 fn collect_captured_refs(
-  expr: &Expr<'_>,
+  expr: &Expr,
   parent_ids: &std::collections::HashMap<CpsId, Bind>,
   out: &mut Vec<(CpsId, Bind)>,
   seen: &mut std::collections::HashSet<CpsId>,
@@ -794,7 +794,7 @@ fn collect_captured_refs(
 }
 
 fn collect_captured_refs_cont(
-  cont: &Cont<'_>,
+  cont: &Cont,
   parent_ids: &std::collections::HashMap<CpsId, Bind>,
   out: &mut Vec<(CpsId, Bind)>,
   seen: &mut std::collections::HashSet<CpsId>,
@@ -810,7 +810,7 @@ fn collect_captured_refs_cont(
 }
 
 fn collect_captured_refs_val(
-  val: &Val<'_>,
+  val: &Val,
   parent_ids: &std::collections::HashMap<CpsId, Bind>,
   out: &mut Vec<(CpsId, Bind)>,
   seen: &mut std::collections::HashSet<CpsId>,
