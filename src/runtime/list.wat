@@ -14,24 +14,24 @@
 ;;   └── $Cons         ← internal: head + tail cons cell
 ;;
 ;; Value representation:
-;;   - Head values are (ref eq) — non-nullable
+;;   - Head values are (ref any) — non-nullable
 ;;   - Tail is (ref null $Cons) — null means end of list
 ;;
 ;; Exported functions:
 ;;  TODO: Cons is internal, public interfaces should use List. Or these functions
 ;;     hould be made private _* .
 ;;   $list_empty   : () -> (ref null $Cons)
-;;   $list_prepend : (ref eq), (ref null $Cons) -> (ref $Cons)
-;;   $list_head    : (ref $Cons) -> (ref eq)
+;;   $list_prepend : (ref any), (ref null $Cons) -> (ref $Cons)
+;;   $list_head    : (ref $Cons) -> (ref any)
 ;;   $list_tail    : (ref $Cons) -> (ref null $Cons)
-;;   $list_pop     : (ref $Cons) -> (ref eq), (ref null $Cons)
+;;   $list_pop     : (ref $Cons) -> (ref any), (ref null $Cons)
 ;;                   Single call head+tail for [a, ...rest] = xs
 ;;   $list_size    : (ref null $Cons) -> i32
 ;;   $list_concat  : (ref null $Cons), (ref null $Cons) -> (ref null $Cons)
 ;;                   [..a, ..b] — walks a, rebuilds pointing to b. O(n).
-;;   $list_get     : (ref null $Cons), i32 -> (ref null eq)
+;;   $list_get     : (ref null $Cons), i32 -> (ref null any)
 ;;                   Indexed access. Returns null if out of bounds.
-;;   $list_find    : (ref null $Cons), (ref eq) -> i32
+;;   $list_find    : (ref null $Cons), (ref any) -> i32
 ;;                   Index of first element matching by ref.eq, or -1.
 ;;                   Will be extended to direct-style deep_eq supporting:
 ;;                   i31ref, $Num, $Str.
@@ -57,7 +57,7 @@
   ;; $Cons — a list cell, subtype of $List (from types.wat).
   ;; head is the value, tail is the rest of the list (null = end).
   (type $Cons (sub $List (struct
-    (field $head (ref eq))
+    (field $head (ref any))
     (field $tail (ref null $Cons))
   )))
 
@@ -80,7 +80,7 @@
 
   ;; Prepend a value to a list. O(1).
   (func $list_prepend (export "list_prepend")
-    (param $head (ref eq))
+    (param $head (ref any))
     (param $tail (ref null $Cons))
     (result (ref $Cons))
 
@@ -93,7 +93,7 @@
   ;; Get the first element. Traps on empty list.
   (func $list_head (export "list_head")
     (param $list (ref $Cons))
-    (result (ref eq))
+    (result (ref any))
 
     (struct.get $Cons $head (local.get $list))
   )
@@ -115,7 +115,7 @@
   ;; Returns (head, tail) via multi-value. Traps on empty list.
   (func $list_pop (export "list_pop")
     (param $list (ref $Cons))
-    (result (ref eq) (ref null $Cons))
+    (result (ref any) (ref null $Cons))
 
     (struct.get $Cons $head (local.get $list))
     (struct.get $Cons $tail (local.get $list))
@@ -153,7 +153,7 @@
   (func $list_get (export "list_get")
     (param $list (ref null $Cons))
     (param $index i32)
-    (result (ref null eq))
+    (result (ref null any))
 
     ;; negative index — out of bounds
     (if (i32.lt_s (local.get $index) (i32.const 0))
@@ -235,7 +235,7 @@
   ;; O(n) scan.
   (func $list_find (export "list_find")
     (param $list (ref null $Cons))
-    (param $val (ref eq))
+    (param $val (ref any))
     (result i32)
 
     (local $i i32)
@@ -245,9 +245,9 @@
       (loop $scan
         (br_if $not_found (ref.is_null (local.get $list)))
         (if (ref.eq
-              (struct.get $Cons $head
-                (ref.cast (ref $Cons) (local.get $list)))
-              (local.get $val))
+              (ref.cast (ref eq) (struct.get $Cons $head
+                (ref.cast (ref $Cons) (local.get $list))))
+              (ref.cast (ref eq) (local.get $val)))
           (then (return (local.get $i))))
         (local.set $list
           (struct.get $Cons $tail
@@ -273,7 +273,7 @@
 
     (return_call $croc_1
       (call $list_prepend
-        (ref.cast (ref eq) (local.get $val))
+        (ref.cast (ref any) (local.get $val))
         (ref.cast (ref null $Cons) (local.get $list)))
       (local.get $cont))
   )
