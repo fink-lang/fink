@@ -620,6 +620,134 @@ test 'string literal dedup', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTtBO0E7O0E7O0E7OztBOztBO0E7Ozs7QTs7O0E7OztBO0FBQUE7O0EiCn0=
 
 
+test 'str templ two exprs', fn:
+  expect gen_wat fink":
+    main = fn:
+      '\${a} and \${b}'
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref any))
+        unreachable
+        unreachable
+        (return_call $_str_raw (call $_str_raw (i32.const 0) (i32.const 5)) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+      (data (offset (i32.const 0)) " and ")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBOztBOzs7Ozs7QTtBQUFBOztBIgp9
+
+
+test 'str tagged template', fn:
+  expect gen_wat fink":
+    main = fn:
+      foo'1\n2
+      3'
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref any))
+        unreachable
+        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_5)))) (call $_str_raw (i32.const 0) (i32.const 6)))
+      )
+      (export "main" (func $v_4))
+      (data (offset (i32.const 0)) "1\n2\0a3")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBOztBOzs7OztBO0FBQUE7O0EiCn0=
+
+
+test 'str tagged template escape handling', fn:
+  expect gen_wat fink":
+    main = fn:
+      foo'\n\r\t\f\${bar}\b\v\$\'\\\xE9\u{8A_9E}'
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn4 (func (param (ref any) (ref any) (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref any))
+        unreachable
+        unreachable
+        (return_call_ref $Fn4 (ref.cast (ref null $Fn4) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_5)))) (call $_str_raw (i32.const 0) (i32.const 8)) (call $_str_raw (i32.const 8) (i32.const 23)))
+      )
+      (export "main" (func $v_4))
+      (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEU5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7Ozs7OztBO0FBQUE7O0EiCn0=
+
+
+test 'str implicit formatting handling', fn:
+  expect gen_wat fink":
+    main = fn:
+      '1\n2
+      3'
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref any))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_5)))) (call $_str_raw (i32.const 0) (i32.const 5)))
+      )
+      (export "main" (func $v_4))
+      (data (offset (i32.const 0)) "1\0a2\0a3")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBOztBOzs7O0E7QUFBQTs7QSIKfQ==
+
+
+test 'str implicit formatting escapes', fn:
+  expect gen_wat fink":
+    main = fn:
+      '\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}'
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn0 (func))
+      (type $Fn1 (func (param (ref any))))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn1) (ref.func $v_4))
+      (func $v_4 (type $Fn1) (param $v_5 (ref any))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_5)))) (call $_str_raw (i32.const 0) (i32.const 14)))
+      )
+      (export "main" (func $v_4))
+      (data (offset (i32.const 0)) "\0a\0d\09\0c\08\0b$'\\c3\a9\e8\aa\9e")
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEU5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBOztBOzs7O0E7QUFBQTs7QSIKfQ==
+
+
+test 'str eq', fn:
+  expect gen_wat fink":
+    main = fn:
+      'hello' == 'hello'
+  | equals wat":
+    TODO
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nID09ICdoZWxsbyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTs7QTs7O0E7O0E7OztBOzs7QTs7O0E7QUFBQTs7QSIKfQ==
+
+
 test 'rec literal', fn:
   expect gen_wat fink":
     main = fn:

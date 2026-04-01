@@ -94,8 +94,9 @@
 
   ;; ---- Construction (compiler-emitted) ----
 
+  ;; TODO: rename str_raw → str (matches ·str in CPS)
   ;; str_raw : (i32, i32) -> (ref $StrRaw)
-  ;; Wrap a data-section pointer into a raw string.
+  ;; Wrap a data-section pointer into a string value.
   (func $str_raw (export "str_raw")
     (param $offset i32)
     (param $length i32)
