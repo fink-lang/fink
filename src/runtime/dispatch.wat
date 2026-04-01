@@ -1,25 +1,61 @@
-;; Closure dispatch — call-ref-or-closure helpers.
+;; Closure dispatch — apply_2 / apply_3 helpers.
 ;;
-;; _croc_N (call-ref-or-closure, arity N) dispatches a call through a
-;; $Closure value: extracts the funcref and captures, then tail-calls
-;; the underlying function with captures prepended to the call args.
+;; Universal calling convention:
+;;   $Fn2(captures, args)        — continuations, match arms
+;;   $Fn3(captures, args, cont)  — user functions
 ;;
-;; These are shim implementations for runtime-only testing. The compiler
-;; emits its own _croc_N that covers all capture counts in the module;
-;; the linker replaces these shims with the compiler's versions.
-;;
-;; Convention:
-;;   _croc_N takes N call args + 1 callee (ref null any), tail-calls
-;;   the function inside the $Closure with captures + args.
+;; _apply_2: dispatch a closure call without cont.
+;; _apply_3: dispatch a closure call with cont.
+;; Both are trivial pass-through — extract funcref + captures from
+;; the $Closure struct, tail-call with the appropriate signature.
 
 (module
 
-  ;; Shim _croc_1 — used by runtime operators to dispatch continuations.
-  ;; Replaced by compiler's full implementation at link time.
-  (func $_croc_1 (export "_croc_1")
-    (param $a0 (ref null any))
+  ;; $Fn2 and $Fn3 are defined in types.wat (canonical rec group).
+
+  ;; _apply: dispatch without cont (continuations, match arms).
+  (func $_apply (export "_apply")
+    (param $args (ref null any))
     (param $callee (ref null any))
-    (unreachable)
+
+    (local $clos (ref $Closure))
+    (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
+
+    (return_call_ref $Fn2
+      (struct.get $Closure $captures (local.get $clos))
+      (local.get $args)
+      (ref.cast (ref $Fn2) (struct.get $Closure $func (local.get $clos))))
+  )
+
+  ;; _apply_cont: dispatch with cont.
+  ;; Tries $Fn3 first; if the callee is $Fn2 (continuation), prepends cont
+  ;; onto the args list and dispatches as $Fn2.
+  (func $_apply_cont (export "_apply_cont")
+    (param $args (ref null any))
+    (param $cont (ref null any))
+    (param $callee (ref null any))
+
+    (local $clos (ref $Closure))
+    (local $fref funcref)
+    (local.set $clos (ref.cast (ref $Closure) (local.get $callee)))
+    (local.set $fref (struct.get $Closure $func (local.get $clos)))
+
+    ;; If funcref is $Fn3, call directly with cont as separate param.
+    (if (ref.test (ref $Fn3) (local.get $fref))
+      (then
+        (return_call_ref $Fn3
+          (struct.get $Closure $captures (local.get $clos))
+          (local.get $args)
+          (local.get $cont)
+          (ref.cast (ref $Fn3) (local.get $fref)))))
+
+    ;; Fallback: $Fn2 — prepend cont onto args list.
+    (return_call_ref $Fn2
+      (struct.get $Closure $captures (local.get $clos))
+      (call $list_prepend
+        (ref.as_non_null (local.get $cont))
+        (ref.cast (ref $List) (local.get $args)))
+      (ref.cast (ref $Fn2) (local.get $fref)))
   )
 
 )

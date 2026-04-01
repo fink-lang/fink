@@ -2,13 +2,13 @@
 ;;
 ;; Each operator follows the CPS calling convention:
 ;;   (func $op_plus (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-;;     ;; unbox args, compute, box result, tail-call _croc_1(result, cont)
+;;     ;; unbox args, compute, box result, tail-call _croc([result], cont)
 ;;   )
 ;;
 ;; Type conventions:
 ;;   - Numbers: $Num struct (f64 field)
 ;;   - Booleans: i31ref (0 = false, 1 = true)
-;;   - Continuation dispatch via _croc_1 (imported from dispatch module)
+;;   - Continuation dispatch via _croc (imported from dispatch module)
 ;;
 ;; These are the phase-0 implementations operating on concrete types.
 ;; Protocol-based overloading (future) will replace these with dispatch
@@ -16,16 +16,16 @@
 
 (module
 
-  ;; _croc_1 is provided by the compiler's emitted module (user code fragment).
-  (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
+  ;; Continuation dispatch: $apply_1 (defined in list.wat) wraps a single
+  ;; result in a list and tail-calls $_croc (defined in dispatch.wat).
 
   ;; =========================================================================
-  ;; Arithmetic: unbox two $Num, f64 op, box result → _croc_1(result, cont)
+  ;; Arithmetic: unbox two $Num, f64 op, box result → _croc([result], cont)
   ;; =========================================================================
 
   (func $op_plus (export "op_plus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $Num (f64.add
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -33,7 +33,7 @@
 
   (func $op_minus (export "op_minus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $Num (f64.sub
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -41,7 +41,7 @@
 
   (func $op_mul (export "op_mul")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $Num (f64.mul
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -49,7 +49,7 @@
 
   (func $op_div (export "op_div")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $Num (f64.div
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -61,7 +61,7 @@
 
   (func $op_intdiv (export "op_intdiv")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $Num (f64.convert_i64_s (i64.div_s
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
@@ -69,7 +69,7 @@
 
   (func $op_rem (export "op_rem")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $Num (f64.convert_i64_s (i64.rem_s
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
@@ -77,7 +77,7 @@
 
   (func $op_intmod (export "op_intmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $Num (f64.convert_i64_s (i64.rem_s
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
@@ -129,7 +129,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       ;; $a is $Num — cast $b and compare
-      (return_call $croc_1
+      (return_call $apply_1
         (ref.i31 (f64.eq
           (struct.get $Num $val)
           (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -142,7 +142,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
       ;; $a is $Str — cast $b and call str_eq
-      (return_call $croc_1
+      (return_call $apply_1
         (ref.i31 (call $str_eq
           (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
@@ -162,7 +162,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       ;; $a is $Num — cast $b and compare
-      (return_call $croc_1
+      (return_call $apply_1
         (ref.i31 (f64.ne
           (struct.get $Num $val)
           (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -175,7 +175,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
       ;; $a is $Str — cast $b, call str_eq, invert
-      (return_call $croc_1
+      (return_call $apply_1
         (ref.i31 (i32.eqz (call $str_eq
           (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
@@ -184,7 +184,7 @@
 
   (func $op_lt (export "op_lt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (f64.lt
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -192,7 +192,7 @@
 
   (func $op_lte (export "op_lte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (f64.le
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -200,7 +200,7 @@
 
   (func $op_gt (export "op_gt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (f64.gt
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -208,7 +208,7 @@
 
   (func $op_gte (export "op_gte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (f64.ge
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -220,13 +220,13 @@
 
   (func $op_not (export "op_not")
     (param $a (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $a)))))
       (local.get $cont)))
 
   (func $op_and (export "op_and")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (i32.and
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
@@ -234,7 +234,7 @@
 
   (func $op_or (export "op_or")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (i32.or
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
@@ -242,7 +242,7 @@
 
   (func $op_xor (export "op_xor")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (ref.i31 (i32.xor
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
@@ -262,7 +262,7 @@
     ;; null = empty
     (if (ref.is_null (local.get $val))
       (then
-        (return_call $croc_1
+        (return_call $apply_1
           (ref.i31 (i32.const 1))
           (local.get $cont))))
 
@@ -273,7 +273,7 @@
           (br_on_cast $is_list (ref null any) (ref $List)
             (local.get $val))))
       (drop)
-      (return_call $croc_1
+      (return_call $apply_1
         (ref.i31 (call $list_is_empty (local.get $val)))
         (local.get $cont)))
 
@@ -284,7 +284,7 @@
           (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $val))))
       (drop)
-      (return_call $croc_1
+      (return_call $apply_1
         (ref.i31 (call $rec_is_empty (local.get $val)))
         (local.get $cont)))
 

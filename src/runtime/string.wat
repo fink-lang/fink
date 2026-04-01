@@ -19,8 +19,8 @@
 ;;   $StrBytesImpl — heap-allocated byte array (runtime-constructed, e.g. concat)
 
 (module
-  ;; Continuation dispatch — provided by the compiler's emitted module.
-  (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
+  ;; Continuation dispatch: $apply_1 (defined in list.wat) wraps a single
+  ;; result in a list and tail-calls $_croc (defined in dispatch.wat).
 
   ;; ---- Internal types (not visible to user code) ----
 
@@ -1645,7 +1645,7 @@
   ;; CPS string formatter. First arg is a $VarArgs array of string segments,
   ;; second arg is the continuation. Formats each segment via _str_fmt_val,
   ;; concatenates all results into a single $StrBytesImpl, and passes the
-  ;; result to the continuation via _croc_1.
+  ;; result to the continuation via _croc.
   (func $str_fmt (export "str_fmt")
     (param $segments_any (ref null any)) (param $cont (ref null any))
 
@@ -1703,7 +1703,7 @@
         (br $copy_loop)))
 
     ;; Wrap and pass to continuation.
-    (return_call $croc_1
+    (return_call $apply_1
       (struct.new $StrBytesImpl (local.get $dst))
       (local.get $cont))
   )

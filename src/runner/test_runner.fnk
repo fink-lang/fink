@@ -415,3 +415,52 @@ test 'rec destructure', fn:
     3
 
 
+test 'varargs first', fn:
+  expect run ƒink:
+    first = fn ..args:
+      match args:
+        [a, ..]: a
+
+    main = fn:
+      first ..[42, 99]
+  | equals ƒink:
+    42
+
+
+test 'varargs identity', fn:
+  expect run ƒink:
+    identity = fn ..args: args
+
+    main = fn:
+      match (identity ..[10, 20, 30]):
+        [a, ..]: a
+  | equals ƒink:
+    10
+
+
+test 'tagged template varargs', fn:
+  expect run ƒink:
+    first = fn ..parts:
+      match parts:
+        [a, ..]: a
+
+    main = fn:
+      x = 42
+      y = first'hello ${x} world'
+      y == 'hello '
+  | equals ƒink:
+    true
+
+
+test 'varargs mixed fixed and rest', fn:
+  expect run ƒink:
+    head-and-rest = fn a, ..rest:
+      match rest:
+        [b, ..]: a + b
+
+    main = fn:
+      head-and-rest 10, ..[20, 30]
+  | equals ƒink:
+    30
+
+

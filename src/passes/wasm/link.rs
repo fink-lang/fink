@@ -193,8 +193,11 @@ struct ParsedFragment {
     module_name: String,
     /// The original WASM bytes (needed for code body re-parsing).
     wasm: Vec<u8>,
-    /// Type section entries (raw rec group bytes for re-encoding).
+    /// Total type count across all rec groups.
     type_count: u32,
+    /// Number of types in the first rec group (canonical types from types.wat).
+    /// These are shared across all fragments and should not be duplicated.
+    canonical_type_count: u32,
     /// Raw type section bytes for re-encoding via RawSection.
     type_section_bytes: Option<Vec<u8>>,
     /// Imports (both @fink/ and external).
@@ -229,6 +232,7 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
         module_name: module_name.to_string(),
         wasm: wasm.to_vec(),
         type_count: 0,
+        canonical_type_count: 0,
         type_section_bytes: None,
         imports: Vec::new(),
         import_func_count: 0,
@@ -261,9 +265,16 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                     Some(wasm[range.start..range.end].to_vec());
 
                 let mut count = 0u32;
+                let mut first_rg = true;
                 for rg in reader.into_iter().flatten() {
+                    let mut rg_count = 0u32;
                     for _ in rg.into_types() {
                         count += 1;
+                        rg_count += 1;
+                    }
+                    if first_rg {
+                        frag.canonical_type_count = rg_count;
+                        first_rg = false;
                     }
                 }
                 frag.type_count = count;
@@ -455,9 +466,8 @@ struct LinkContext {
     next_func_idx: u32,
     next_global_idx: u32,
 
-    // Accumulated type section bytes (from all fragments).
-    // We collect raw type section content and re-emit.
-    type_sections: Vec<Vec<u8>>,
+    // Accumulated type section bytes with fragment index (for remap lookup).
+    type_sections: Vec<(usize, Vec<u8>)>,
 
     // Accumulated function declarations: new_type_idx per defined function.
     func_decls: Vec<u32>,
@@ -524,8 +534,13 @@ impl LinkContext {
 // -- Merge steps --------------------------------------------------------------
 
 fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
+    // Fragments that share the same canonical rec group (from types.wat) have
+    // matching canonical_type_count. The first fragment establishes canonical
+    // type indices 0..N. Subsequent fragments with the same count remap their
+    // canonical types to those same indices.
+    let canonical_count = fragments.first().map_or(0, |f| f.canonical_type_count);
+
     for (i, frag) in fragments.iter().enumerate() {
-        // Ensure we have a remap table for this fragment.
         while ctx.remaps.len() <= i {
             ctx.remaps.push(RemapTable {
                 types: BTreeMap::new(),
@@ -534,18 +549,44 @@ fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
             });
         }
 
-        let base = ctx.next_type_idx;
+        if i == 0 {
+            // First fragment: emit all types. Canonical indices = 0..N.
+            let base = ctx.next_type_idx;
+            for old_idx in 0..frag.type_count {
+                ctx.remaps[i].types.insert(old_idx, base + old_idx);
+            }
+            ctx.next_type_idx += frag.type_count;
+            if let Some(ref bytes) = frag.type_section_bytes {
+                ctx.type_sections.push((i, bytes.clone()));
+            }
+        } else {
+            // Subsequent fragments: if canonical type count matches, share
+            // canonical indices. Otherwise, treat all types as unique.
+            // Only dedup if both fragments share the canonical rec group from types.wat.
+            // The canonical rec group has 11+ types ($Num through $Closure + $Fn2/$Fn3).
+            // Small rec groups (from tests or standalone modules) are not canonical.
+            let frag_canonical = if canonical_count >= 11 && frag.canonical_type_count == canonical_count {
+                canonical_count
+            } else {
+                0
+            };
+            for old_idx in 0..frag_canonical {
+                ctx.remaps[i].types.insert(old_idx, old_idx);
+            }
+            let base = ctx.next_type_idx;
+            for old_idx in frag_canonical..frag.type_count {
+                ctx.remaps[i].types.insert(old_idx, base + (old_idx - frag_canonical));
+            }
+            let non_canonical_count = frag.type_count.saturating_sub(frag_canonical);
+            ctx.next_type_idx += non_canonical_count;
 
-        // Map each type in this fragment to a new index.
-        for old_idx in 0..frag.type_count {
-            let new_idx = base + old_idx;
-            ctx.remaps[i].types.insert(old_idx, new_idx);
-        }
-        ctx.next_type_idx += frag.type_count;
-
-        // Collect raw type section bytes for re-encoding.
-        if let Some(ref bytes) = frag.type_section_bytes {
-            ctx.type_sections.push(bytes.clone());
+            // Emit the full type section. Canonical types are duplicated in the
+            // binary but all references are remapped to the first copy's indices.
+            // The duplicate definitions are harmless — WASM allows independent
+            // type definitions, and the remap ensures correct references.
+            if let Some(ref bytes) = frag.type_section_bytes {
+                ctx.type_sections.push((i, bytes.clone()));
+            }
         }
 
         // Merge type names with namespace prefix.
@@ -1114,12 +1155,17 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
     //    types within their own fragment's rec group).
     if !ctx.type_sections.is_empty() {
         let mut combined = wasm_encoder::TypeSection::new();
-        for (frag_idx, raw_bytes) in ctx.type_sections.iter().enumerate() {
+        for (idx, (frag_idx, raw_bytes)) in ctx.type_sections.iter().enumerate() {
             let br = wasmparser::BinaryReader::new(raw_bytes, 0);
             let reader =
                 wasmparser::TypeSectionReader::new(br).unwrap();
-            let remap = &ctx.remaps[frag_idx];
-            reencode_type_section(&mut combined, reader, remap);
+            let remap = &ctx.remaps[*frag_idx];
+            // Skip the canonical rec group for non-first fragments when canonical
+            // types are shared (deduped). Check: if the fragment's first type maps
+            // to itself (0 → 0), it shares canonical types.
+            let shares_canonical = idx > 0
+                && remap.types.get(&0) == Some(&0);
+            reencode_type_section(&mut combined, reader, remap, shares_canonical);
         }
         module.section(&combined);
     }
@@ -1502,8 +1548,17 @@ fn reencode_type_section(
     types: &mut wasm_encoder::TypeSection,
     reader: wasmparser::TypeSectionReader,
     remap: &RemapTable,
+    skip_first_rec_group: bool,
 ) {
+    let mut first = true;
     for rec_group in reader.into_iter().flatten() {
+        if first && skip_first_rec_group {
+            first = false;
+            // Consume the rec group to advance the reader, but don't emit.
+            let _ = rec_group.into_types().count();
+            continue;
+        }
+        first = false;
         let sub_types: Vec<_> = rec_group.into_types().collect();
         if sub_types.len() == 1 {
             let st = &sub_types[0];

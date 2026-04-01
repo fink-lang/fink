@@ -303,16 +303,20 @@ test 'str tagged template', fn:
     foo'1\n2
       3'
   | equals ƒink:
-    ·∅foo '1⧵n2␊3', ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxNQUFJLEEsQ0FBQSxNLEMsRSIKfQ==
+    ·seq_prepend '1⧵n2␊3', [], fn ·v_4:
+      ·∅foo ..·v_4, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFJLEEsQ0FBQSxNLEMsRUFBSixBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLE1BQUEsQSxFQUFBLEksRSIKfQ==
 
 
 test 'str tagged template escape handling', fn:
   expect cps_expr ƒink:
     foo'\n\r\t\f${bar}\b\v\$\'\\\xE9\u{8A_9E}'
   | equals ƒink:
-    ·∅foo '⧵n⧵r⧵t⧵f', ·∅bar, '⧵b⧵v⧵＄⧵′⧵⧵⧵xE9⧵u{8A_9E}', ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxNQUFJLEEsQ0FBQSxRLEMsRUFBVSxLLEVBQUksQSxDQUFBLHVCLEMsRSIKfQ==
+    ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xE9⧵u{8A_9E}', [], fn ·v_4:
+      ·seq_prepend ·∅bar, ·v_4, fn ·v_7:
+        ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·v_10:
+          ·∅foo ..·v_10, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFrQixBLENBQUEsdUIsQyxFQUFsQixBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLGFBQWMsSyxFQUFkLEksS0FBQSxJO0lBQUEsQUFBQSxhQUFJLEEsQ0FBQSxRLEMsRUFBSixJLEtBQUEsSztNQUFBLEFBQUEsTUFBQSxBLEVBQUEsSyxFIgp9
 
 
 test 'str implicit formatting handling', fn:
@@ -974,4 +978,6 @@ test 'shadowed binding — inner add does not affect outer', fn:
                           ·v_11 ·main_2
       fn ·v_10: ·v_9 ·v_10
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbnN1YiA9IGZuIGEsIGI6XG4gIGFkZCA9IGZuIGZvbzogZm9vXG4gIGEgLSBhZGQgYlxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxLO0lBQU0sQUFBQTtTQUFHLE1BQUcsTUFBTixLLEVBQ0YsQUFBQSxTQUFGLEksRUFBSSxJLEVBREE7U0FBQSxLO1FBQUYsQUFBQSxLQUFFLEssS0FBTixNO1VBRU0sQUFBQTtlQUFHLE1BQUcsTUFBTixLO2NBQ0UsQUFBQTttQkFBRyxRQUFILEssRSxBQUFBLE1BQVE7bUJBQVIsSztrQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07b0JBQ0ksQUFBQSxPQUFJLEksS0FBSixLO3NCQUFGLEFBQUEsVUFBRixJLEVBQUksSyxFQUZBO2VBQUEsSztjQUFGLEFBQUEsS0FBRSxLLEtBQU4sTTtnQkFHTyxBQUFBO3FCQUFBLEssRUFDTCxBQUFBLE9BQUksQyxFQUFHLEMsRUFERjtxQkFBQSxLO29CQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztzQkFMQSxBQUFBLE1BS0E7S0FMQSxLLEUsQSxLQUFBIgp9
+
+QUFBO3FCQUFBLEssRUFDTCxBQUFBLE9BQUksQyxFQUFHLEMsRUFERjtxQkFBQSxLO29CQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztzQkFMQSxBQUFBLE1BS0E7S0FMQSxLLEUsQSxLQUFBIgp9
 
