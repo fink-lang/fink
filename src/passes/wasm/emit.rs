@@ -1242,7 +1242,7 @@ fn emit_body(expr: &Expr, fc: &mut FuncContext<'_, '_, '_>) {
           let closure_idx = fc.emitter_idx.type_idx("$Closure");
           fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
           fc.instr(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-          let fn1_type = fc.emitter_idx.fn_type_idx(1);
+          let fn1_type = fc.emitter_idx.fn_type_idx(2);
           fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
           fc.mark(val.id);
           fc.instr(&Instruction::ReturnCallRef(fn1_type));
@@ -1461,7 +1461,7 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
         let closure_idx = fc.emitter_idx.type_idx("$Closure");
         fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
         fc.instr(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-        let fn1_type = fc.emitter_idx.fn_type_idx(1);
+        let fn1_type = fc.emitter_idx.fn_type_idx(2);
         fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
         // Mark with the first val arg (the funcref to the lifted fn).
         let mark_id = val_args.first()
