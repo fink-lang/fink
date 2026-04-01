@@ -59,160 +59,118 @@ fn main() {
     "tokens" => {
       println!("{}", fink::lexer::tokenize_debug(&src));
     }
+
     "ast" => {
-      match fink::parser::parse(&src) {
-        Ok(r) => {
-          if desugar {
-            let (desugared, _) = fink::passes::partial::apply(r.root, r.node_count).unwrap_or_else(|e| {
-              eprintln!("error: {e:?}");
-              process::exit(1);
-            });
-            println!("{}", desugared.print());
-          } else {
-            println!("{}", r.root.print());
-          }
-        }
-        Err(e) => parse_error(&src, e, path),
+      if desugar {
+        let desugared = fink::to_desugared(&src).unwrap_or_else(|e| die(&e));
+        println!("{}", desugared.result.root.print());
+      } else {
+        let ast = fink::to_ast(&src).unwrap_or_else(|e| die(&e));
+        println!("{}", ast.result.root.print());
       }
     }
+
     "fmt" => {
-      match fink::parser::parse(&src) {
-        Ok(r) => {
-          if sourcemap {
-            let (output, srcmap) = if embed_source {
-              fink::ast::fmt::fmt_mapped_with_content(&r.root, path, &src)
-            } else {
-              fink::ast::fmt::fmt_mapped(&r.root, path)
-            };
-            let json = srcmap.to_json();
-            let b64 = fink::sourcemap::base64_encode(json.as_bytes());
-            println!("{output}");
-            println!("//# sourceMappingURL=data:application/json;base64,{b64}");
-          } else {
-            println!("{}", fink::ast::fmt::fmt(&r.root));
-          }
-        }
-        Err(e) => parse_error(&src, e, path),
+      let ast = fink::to_ast(&src).unwrap_or_else(|e| die(&e));
+      if sourcemap {
+        let (output, srcmap) = if embed_source {
+          fink::ast::fmt::fmt_mapped_with_content(&ast.result.root, path, &src)
+        } else {
+          fink::ast::fmt::fmt_mapped(&ast.result.root, path)
+        };
+        print_with_sourcemap(&output, &srcmap);
+      } else {
+        println!("{}", fink::ast::fmt::fmt(&ast.result.root));
       }
     }
+
     "fmt2" => {
-      match fink::parser::parse(&src) {
-        Ok(r) => {
-          let cfg = fink::fmt::FmtConfig::default();
-          let laid_out = fink::fmt::layout::layout(&r.root, &cfg);
-          if sourcemap {
-            let (output, srcmap) = if embed_source {
-              fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
-            } else {
-              fink::fmt::print::print_mapped(&laid_out, path)
-            };
-            let json = srcmap.to_json();
-            let b64 = fink::sourcemap::base64_encode(json.as_bytes());
-            println!("{output}");
-            println!("//# sourceMappingURL=data:application/json;base64,{b64}");
-          } else {
-            println!("{}", fink::fmt::print::print(&laid_out));
-          }
-        }
-        Err(e) => parse_error(&src, e, path),
+      let ast = fink::to_ast(&src).unwrap_or_else(|e| die(&e));
+      let cfg = fink::fmt::FmtConfig::default();
+      let laid_out = fink::fmt::layout::layout(&ast.result.root, &cfg);
+      if sourcemap {
+        let (output, srcmap) = if embed_source {
+          fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
+        } else {
+          fink::fmt::print::print_mapped(&laid_out, path)
+        };
+        print_with_sourcemap(&output, &srcmap);
+      } else {
+        println!("{}", fink::fmt::print::print(&laid_out));
       }
     }
+
     "cps" => {
-      match fink::parser::parse(&src) {
-        Ok(r) => {
-          let ast_index = fink::ast::build_index(&r);
-          let scope = fink::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-          let cps = match &r.root.kind {
-            fink::ast::NodeKind::Module(exprs) => {
-              fink::passes::cps::transform::lower_module(&exprs.items, &scope)
-            }
-            _ => fink::passes::cps::transform::lower_expr(&r.root, &scope),
-          };
+      let desugared = fink::to_desugared(&src).unwrap_or_else(|e| die(&e));
+      let cps = fink::passes::lower(&desugared);
 
-          let result = if lifted.is_some() {
-            fink::passes::lifting::lift(cps, &ast_index)
-          } else {
-            cps
-          };
+      let result = if lifted.is_some() {
+        fink::passes::lift(cps, &desugared).result
+      } else {
+        cps.result
+      };
 
-          let ctx = fink::passes::cps::fmt::Ctx {
-            origin: &result.origin,
-            ast_index: &ast_index,
-            captures: None,
-          };
-          if lifted.as_ref().is_some_and(|v| v.is_none()) {
-            // --lifted (no value): pretty flat formatter
-            println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
-          } else if sourcemap {
-            let (output, srcmap) = if embed_source {
-              fink::passes::cps::fmt::fmt_with_mapped_content(&result.root, &ctx, path, &src)
-            } else {
-              fink::passes::cps::fmt::fmt_with_mapped(&result.root, &ctx, path)
-            };
-            let json = srcmap.to_json();
-            let b64 = fink::sourcemap::base64_encode(json.as_bytes());
-            println!("{output}");
-            println!("//# sourceMappingURL=data:application/json;base64,{b64}");
-          } else {
-            // raw CPS or --lifted=plain: nested formatter
-            println!("{}", fink::passes::cps::fmt::fmt_with(&result.root, &ctx));
-          }
-        }
-        Err(e) => parse_error(&src, e, path),
+      let ctx = fink::passes::cps::fmt::Ctx {
+        origin: &result.origin,
+        ast_index: &desugared.ast_index,
+        captures: None,
+      };
+      if lifted.as_ref().is_some_and(|v| v.is_none()) {
+        println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
+      } else if sourcemap {
+        let (output, srcmap) = if embed_source {
+          fink::passes::cps::fmt::fmt_with_mapped_content(&result.root, &ctx, path, &src)
+        } else {
+          fink::passes::cps::fmt::fmt_with_mapped(&result.root, &ctx, path)
+        };
+        print_with_sourcemap(&output, &srcmap);
+      } else {
+        println!("{}", fink::passes::cps::fmt::fmt_with(&result.root, &ctx));
       }
     }
+
     "wat" => {
-      #[cfg(not(feature = "wat"))]
-      { eprintln!("error: 'wat' command requires the 'wat' feature"); process::exit(1); }
-      #[cfg(feature = "wat")]
+      #[cfg(not(feature = "compile"))]
+      { eprintln!("error: 'wat' command requires the 'compile' feature"); process::exit(1); }
+      #[cfg(feature = "compile")]
       {
-        let result = fink::compiler::compile_fnk(&src).unwrap_or_else(|e| {
-          eprintln!("error: {e}");
-          process::exit(1);
-        });
-        let wasm = if let Some(level) = optimize { wasm_opt(&result.wasm, level) } else { result.wasm };
-        let wat = wasmprinter::print_bytes(&wasm).unwrap_or_else(|e| {
-          eprintln!("error: {e}");
-          process::exit(1);
-        });
+        let mut wasm = fink::to_wasm(&src, path).unwrap_or_else(|e| die(&e));
+        if let Some(level) = optimize {
+          fink::passes::optimize_wasm(&mut wasm, level).unwrap_or_else(|e| die(&e));
+        }
+        let wat = fink::passes::emit_wat(&wasm).unwrap_or_else(|e| die(&e));
         println!("{wat}");
       }
     }
+
     "wasm" => {
-      #[cfg(not(feature = "wat"))]
-      { eprintln!("error: 'wasm' command requires the 'wat' feature"); process::exit(1); }
-      #[cfg(feature = "wat")]
+      #[cfg(not(feature = "compile"))]
+      { eprintln!("error: 'wasm' command requires the 'compile' feature"); process::exit(1); }
+      #[cfg(feature = "compile")]
       {
         use std::io::Write;
-        let result = fink::compiler::compile_fnk(&src).unwrap_or_else(|e| {
-          eprintln!("error: {e}");
-          process::exit(1);
-        });
-        let wasm = if let Some(level) = optimize { wasm_opt(&result.wasm, level) } else { result.wasm };
-        std::io::stdout().write_all(&wasm).unwrap_or_else(|e| {
-          eprintln!("error: {e}");
-          process::exit(1);
-        });
+        let mut wasm = fink::to_wasm(&src, path).unwrap_or_else(|e| die(&e));
+        if let Some(level) = optimize {
+          fink::passes::optimize_wasm(&mut wasm, level).unwrap_or_else(|e| die(&e));
+        }
+        std::io::stdout().write_all(&wasm.binary).unwrap_or_else(|e| die(&e.to_string()));
       }
     }
+
     "run" => {
-      #[cfg(not(feature = "runner"))]
-      { eprintln!("error: 'run' command requires the 'runner' feature"); process::exit(1); }
-      #[cfg(feature = "runner")]
-      if let Err(e) = fink::runner::run_file(Default::default(), path) {
-        eprintln!("error: {e}");
-        process::exit(1);
-      }
+      #[cfg(not(feature = "run"))]
+      { eprintln!("error: 'run' command requires the 'run' feature"); process::exit(1); }
+      #[cfg(feature = "run")]
+      fink::run(&src, path).unwrap_or_else(|e| die(&e));
     }
+
     "dap" => {
-      #[cfg(not(feature = "runner"))]
-      { eprintln!("error: 'dap' command requires the 'runner' feature"); process::exit(1); }
-      #[cfg(feature = "runner")]
-      if let Err(e) = fink::dap::run(std::io::stdin(), std::io::stdout(), path) {
-        eprintln!("error: {e}");
-        process::exit(1);
-      }
+      #[cfg(not(feature = "run"))]
+      { eprintln!("error: 'dap' command requires the 'run' feature"); process::exit(1); }
+      #[cfg(feature = "run")]
+      fink::debug(path).unwrap_or_else(|e| die(&e));
     }
+
     _ => {
       eprintln!("unknown command: {cmd}");
       eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|run|dap> [options] <file>");
@@ -221,42 +179,14 @@ fn main() {
   }
 }
 
-fn wasm_opt(wasm: &[u8], level: &str) -> Vec<u8> {
-  use std::io::Write;
-  use std::process::Command;
-
-  let mut child = Command::new("wasm-opt")
-    .args([level, "--enable-gc", "--enable-reference-types", "--enable-tail-call", "-o", "-", "-"])
-    .stdin(process::Stdio::piped())
-    .stdout(process::Stdio::piped())
-    .stderr(process::Stdio::piped())
-    .spawn()
-    .unwrap_or_else(|e| {
-      eprintln!("error: failed to run wasm-opt: {e}");
-      process::exit(1);
-    });
-
-  child.stdin.take().unwrap().write_all(wasm).unwrap_or_else(|e| {
-    eprintln!("error: wasm-opt stdin: {e}");
-    process::exit(1);
-  });
-
-  let output = child.wait_with_output().unwrap_or_else(|e| {
-    eprintln!("error: wasm-opt: {e}");
-    process::exit(1);
-  });
-
-  if !output.status.success() {
-    eprintln!("error: wasm-opt failed:\n{}", String::from_utf8_lossy(&output.stderr));
-    process::exit(1);
-  }
-
-  output.stdout
+fn die(msg: &str) -> ! {
+  eprintln!("error: {msg}");
+  process::exit(1);
 }
 
-fn parse_error(src: &str, e: fink::parser::ParseError, path: &str) -> ! {
-  let diag = fink::errors::Diagnostic { message: e.message, loc: e.loc, hint: None };
-  let opts = fink::errors::FormatOptions { path: Some(path), ..Default::default() };
-  eprintln!("{}", fink::errors::format_diagnostic(src, &diag, &opts));
-  process::exit(1);
+fn print_with_sourcemap(output: &str, srcmap: &fink::sourcemap::SourceMap) {
+  let json = srcmap.to_json();
+  let b64 = fink::sourcemap::base64_encode(json.as_bytes());
+  println!("{output}");
+  println!("//# sourceMappingURL=data:application/json;base64,{b64}");
 }

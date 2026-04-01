@@ -345,6 +345,7 @@ test 'str_escapes', fn:
       \f
       \\
       \'
+      \${
     '
   | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
@@ -358,20 +359,21 @@ test 'str_escapes', fn:
     StrText '\\f\n', loc [29, 7, 2], [32, 8, 0]
     StrText '\\\\\n', loc [34, 8, 2], [37, 9, 0]
     StrText '\\\'\n', loc [39, 9, 2], [42, 10, 0]
-    StrEnd '\'', loc [42, 10, 0], [43, 10, 1]
-    BlockEnd loc [43, 10, 1], [43, 10, 1]
+    StrText '\\\${\n', loc [44, 10, 2], [48, 11, 0]
+    StrEnd '\'', loc [48, 11, 0], [49, 11, 1]
+    BlockEnd loc [49, 11, 1], [49, 11, 1]
 
 
 test 'str_block_escapes', fn:
   expect tokenize ƒink:
     ":
-      \n\r\v\t\b\f\\\'\b01\x0f\uff\u10_ff_ff
+      \n\r\v\t\b\f\\\'\b01\x0f\u{10_ff_ff}
   | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
-    StrText '\\n\\r\\v\\t\\b\\f\\\\\\\'\\b01\\x0f\\uff\\u10_ff_ff', loc [5, 2, 2], [43, 2, 40]
-    StrEnd '', loc [43, 2, 40], [43, 2, 40]
-    BlockEnd loc [43, 2, 40], [43, 2, 40]
+    StrText '\\n\\r\\v\\t\\b\\f\\\\\\\'\\b01\\x0f\\u{10_ff_ff}', loc [5, 2, 2], [41, 2, 38]
+    StrEnd '', loc [41, 2, 38], [41, 2, 38]
+    BlockEnd loc [41, 2, 38], [41, 2, 38]
 
 
 test 'int', fn:

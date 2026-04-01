@@ -2413,71 +2413,20 @@ fn extract_bind_ast_id<'src>(node: &'src Node<'src>) -> AstId {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod tests {
-  use super::*;
-  use crate::parser::parse;
-  use crate::passes::cps::ir::ExprKind;
-  use crate::passes::scopes;
-
-  fn lower_src(src: &str) -> CpsResult {
-    let src: &'static str = Box::leak(src.to_string().into_boxed_str());
-    let r: &'static crate::ast::ParseResult<'static> =
-      Box::leak(Box::new(parse(src).expect("parse failed")));
-    let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
-    lower_expr(&r.root, &scope)
-  }
-
-  #[test]
-  fn lower_lit_int() {
-    let result = lower_src("42");
-    // wrap_val now emits App(ContRef, [Lit]) directly — no LetVal wrapper.
-    assert!(matches!(result.root.kind, ExprKind::App { .. }));
-    if let ExprKind::App { args, .. } = &result.root.kind {
-      assert!(matches!(args[0], Arg::Val(Val { kind: ValKind::Lit(Lit::Int(42)), .. })));
-    }
-  }
-
-  #[test]
-  fn lower_ident() {
-    let result = lower_src("foo");
-    // wrap_val now emits App(ContRef, [Ref]) directly — no LetVal wrapper.
-    assert!(matches!(result.root.kind, ExprKind::App { .. }));
-    if let ExprKind::App { args, .. } = &result.root.kind {
-      assert!(matches!(args[0], Arg::Val(Val { kind: ValKind::Ref(_), .. })));
-    }
-  }
-
-  #[test]
-  fn lower_apply_simple() {
-    let result = lower_src("foo bar");
-    assert!(matches!(result.root.kind, ExprKind::App { .. }));
-  }
-}
-
-#[cfg(test)]
 mod cps_tests {
-  use crate::parser::parse;
-  use crate::ast::build_index;
   use crate::passes::cps::fmt::Ctx;
-  use crate::passes::scopes;
-  use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
-    match parse(src) {
-      Ok(r) => {
-        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
-          .unwrap_or_else(|e| panic!("partial pass failed: {:?}", e));
-        let r = crate::ast::ParseResult { root, node_count };
-        let ast_index = build_index(&r);
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
-        let cps = lower_expr(&r.root, &scope);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
+    match crate::to_desugared(src) {
+      Ok(desugared) => {
+        let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
         format!("{output}\n#sourcemaps:{b64}")
       }
-      Err(e) => format!("ERROR: {}", e.message),
+      Err(e) => format!("ERROR: {e}"),
     }
   }
 
@@ -2487,28 +2436,19 @@ mod cps_tests {
 
 #[cfg(test)]
 mod pat_tests {
-  use crate::parser::parse;
-  use crate::ast::build_index;
   use crate::passes::cps::fmt::Ctx;
-  use crate::passes::scopes;
-  use super::lower_expr;
 
   fn cps_expr(src: &str) -> String {
-    match parse(src) {
-      Ok(r) => {
-        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
-          .unwrap_or_else(|e| panic!("partial pass failed: {:?}", e));
-        let r = crate::ast::ParseResult { root, node_count };
-        let ast_index = build_index(&r);
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
-        let cps = lower_expr(&r.root, &scope);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
+    match crate::to_desugared(src) {
+      Ok(desugared) => {
+        let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
         format!("{output}\n#sourcemaps:{b64}")
       }
-      Err(e) => format!("ERROR: {}", e.message),
+      Err(e) => format!("ERROR: {e}"),
     }
   }
 
@@ -2517,32 +2457,19 @@ mod pat_tests {
 
 #[cfg(test)]
 mod module_tests {
-  use crate::parser::parse;
-  use crate::ast::{build_index, NodeKind};
   use crate::passes::cps::fmt::Ctx;
-  use crate::passes::scopes;
-  use super::lower_module;
 
   fn cps_module(src: &str) -> String {
-    match parse(src) {
-      Ok(r) => {
-        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
-          .unwrap_or_else(|e| panic!("partial pass failed: {:?}", e));
-        let r = crate::ast::ParseResult { root, node_count };
-        let ast_index = build_index(&r);
-        let exprs = match &r.root.kind {
-          NodeKind::Module(exprs) => exprs.items.as_slice(),
-          _ => std::slice::from_ref(&r.root),
-        };
-        let scope = scopes::analyse(&r.root, r.node_count as usize, &[]);
-        let cps = lower_module(exprs, &scope);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &ast_index, captures: None };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
+    match crate::to_desugared(src) {
+      Ok(desugared) => {
+        let cps = crate::passes::lower(&desugared);
+        let ctx = Ctx { origin: &cps.result.origin, ast_index: &desugared.ast_index, captures: None };
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.result.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
         format!("{output}\n#sourcemaps:{b64}")
       }
-      Err(e) => format!("ERROR: {}", e.message),
+      Err(e) => format!("ERROR: {e}"),
     }
   }
 

@@ -1256,35 +1256,10 @@ fn format_f64(v: f64) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::ast::build_index;
-  use crate::parser::parse;
-  use crate::passes::cps::transform::lower_module;
-  use crate::passes::lifting::lift;
-  use crate::passes::wasm::{collect, dwarf, emit};
 
   fn compile_and_format(src: &str) -> String {
-    let r = parse(src).unwrap_or_else(|e| panic!("parse error: {}", e.message));
-    let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
-      .unwrap_or_else(|e| panic!("partial error: {:?}", e));
-    let r = crate::ast::ParseResult { root, node_count };
-    let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-    let exprs = match &r.root.kind {
-      crate::ast::NodeKind::Module(exprs) => &exprs.items,
-      _ => panic!("expected module"),
-    };
-    let cps = lower_module(exprs, &scope);
-    let lifted = lift(cps, &ast_index);
-
-    let ir_ctx = collect::IrCtx::new(&lifted.origin, &ast_index);
-    let module = collect::collect(&lifted.root, &ir_ctx);
-    let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-    let mut result = emit::emit(&module, &ir_ctx);
-
-    let dwarf_sections = dwarf::emit_dwarf("test.fnk", Some(src), &result.offset_mappings);
-    dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
-
-    format(&result.wasm)
+    let wasm = crate::to_wasm(src, "test.fnk").unwrap_or_else(|e| panic!("{e}"));
+    format(&wasm.binary)
   }
 
   #[test]
@@ -1299,34 +1274,14 @@ mod tests {
   #[test]
   fn t_format_has_names() {
     let wat = compile_and_format("add = fn a, b: a + b");
-    // Should use names from the name section.
     assert!(wat.contains("$add_"), "should have add in names");
   }
 
   #[test]
   fn t_format_mapped() {
     let src = "add = fn a, b: a + b";
-    let r = parse(src).unwrap();
-    let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count).unwrap();
-    let r = crate::ast::ParseResult { root, node_count };
-    let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-    let exprs = match &r.root.kind {
-      crate::ast::NodeKind::Module(exprs) => &exprs.items,
-      _ => panic!("expected module"),
-    };
-    let cps = lower_module(exprs, &scope);
-    let lifted = lift(cps, &ast_index);
-
-    let ir_ctx = collect::IrCtx::new(&lifted.origin, &ast_index);
-    let module = collect::collect(&lifted.root, &ir_ctx);
-    let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-    let mut result = emit::emit(&module, &ir_ctx);
-
-    let dwarf_sections = dwarf::emit_dwarf("test.fnk", Some(src), &result.offset_mappings);
-    dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
-
-    let (wat, srcmap) = format_mapped(&result.wasm, "test.fnk", src);
+    let wasm = crate::to_wasm(src, "test.fnk").unwrap_or_else(|e| panic!("{e}"));
+    let (wat, srcmap) = format_mapped(&wasm.binary, "test.fnk", src);
     assert!(wat.contains("(module"), "WAT should have module");
     let json = srcmap.to_json();
     assert!(json.contains("test.fnk"), "source map should reference test.fnk");
