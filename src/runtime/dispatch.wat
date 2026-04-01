@@ -11,9 +11,7 @@
 
 (module
 
-  ;; Function signatures.
-  (type $Fn2 (func (param (ref null any) (ref null any))))
-  (type $Fn3 (func (param (ref null any) (ref null any) (ref null any))))
+  ;; $Fn2 and $Fn3 are defined in types.wat (canonical rec group).
 
   ;; _apply: dispatch without cont (continuations, match arms).
   (func $_apply (export "_apply")
