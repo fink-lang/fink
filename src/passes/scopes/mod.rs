@@ -646,7 +646,7 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
     // Leaves — no children to walk.
     NodeKind::LitBool(_) | NodeKind::LitInt(_) | NodeKind::LitFloat(_)
     | NodeKind::LitDecimal(_) | NodeKind::LitStr { .. }
-    | NodeKind::Partial | NodeKind::Wildcard | NodeKind::Patterns(_) => {}
+    | NodeKind::Partial | NodeKind::Wildcard | NodeKind::Token(_) | NodeKind::Patterns(_) => {}
 
     NodeKind::BindRight { lhs, rhs, .. } => {
       walk_node(lhs, scope, ctx);

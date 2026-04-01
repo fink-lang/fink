@@ -38,7 +38,8 @@ pub trait Transform<'src> {
       | NodeKind::Ident(_)
       | NodeKind::SynthIdent(_)
       | NodeKind::Partial
-      | NodeKind::Wildcard => self.transform_leaf(node),
+      | NodeKind::Wildcard
+      | NodeKind::Token(_) => self.transform_leaf(node),
 
       NodeKind::LitSeq { open, close, items } => self.transform_lit_seq(open, close, items, loc),
       NodeKind::LitRec { open, close, items } => self.transform_lit_rec(open, close, items, loc),

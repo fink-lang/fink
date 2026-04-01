@@ -43,7 +43,8 @@ fn has_partial(node: &Node) -> bool {
     | NodeKind::LitStr { .. }
     | NodeKind::Ident(_)
     | NodeKind::SynthIdent(_)
-    | NodeKind::Wildcard => false,
+    | NodeKind::Wildcard
+    | NodeKind::Token(_) => false,
 
     // Group is a boundary — don't look inside
     NodeKind::Group { .. } => false,
