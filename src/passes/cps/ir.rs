@@ -93,8 +93,8 @@ impl From<usize> for CpsId {
 }
 
 /// Output of the CPS transform — the IR tree plus metadata.
-pub struct CpsResult<'src> {
-  pub root: Expr<'src>,
+pub struct CpsResult {
+  pub root: Expr,
   /// Maps each CPS node back to the AST expression it was synthesized from.
   /// Compiler-generated nodes with no direct AST origin have `None`.
   /// Node count is `origin.len()`.
@@ -180,11 +180,11 @@ pub enum Param {
 /// Restricting spread to this type (rather than `ValKind`) prevents spread
 /// from appearing in positions where it has no meaning (e.g. `LetVal`, `Ret`).
 #[derive(Debug, Clone)]
-pub enum Arg<'src> {
-  Val(Val<'src>),
-  Spread(Val<'src>),
-  Cont(Cont<'src>),
-  Expr(Box<Expr<'src>>),
+pub enum Arg {
+  Val(Val),
+  Spread(Val),
+  Cont(Cont),
+  Expr(Box<Expr>),
 }
 
 /// Whether a range pattern is exclusive (`..`) or inclusive (`...`).
@@ -293,8 +293,8 @@ impl BuiltIn {
 /// `BuiltIn` has no CpsId — it's a compile-time tag, not an IR node. The
 /// enclosing `App` node's CpsId carries the AST origin for the operation.
 #[derive(Debug, Clone)]
-pub enum Callable<'src> {
-  Val(Val<'src>),
+pub enum Callable {
+  Val(Val),
   BuiltIn(BuiltIn),
 }
 
@@ -318,28 +318,28 @@ pub struct Node<K> {
 // ---------------------------------------------------------------------------
 
 /// An already-computed value — a literal, a local binding reference, or a scope key.
-pub type Val<'src> = Node<ValKind<'src>>;
+pub type Val = Node<ValKind>;
 
 /// A definition-site node — introduces a name into scope.
 /// Has its own `CpsId` so name resolution can point directly at the binding.
 pub type BindNode = Node<Bind>;
 
 #[derive(Debug, Clone)]
-pub enum ValKind<'src> {
+pub enum ValKind {
   Ref(Ref),           // a reference to a binding (user name or compiler temp)
-  Lit(Lit<'src>),     // a literal value
+  Lit(Lit),     // a literal value
   Panic,              // fail sentinel — irrefutable pattern failure (unreachable)
   ContRef(CpsId),     // reference to a continuation as a value (for fail args)
   BuiltIn(BuiltIn),   // a compiler-known op used as a value
 }
 
 #[derive(Debug, Clone)]
-pub enum Lit<'src> {
+pub enum Lit {
   Bool(bool),
   Int(i64),
   Float(f64),
   Decimal(f64),       // distinct from Float for the type system
-  Str(&'src str),
+  Str(String),
   Seq,                // empty sequence literal []
   Rec,                // empty record literal {}
 }
@@ -360,14 +360,14 @@ pub enum Lit<'src> {
 /// The `CpsId` of each bind is used by the formatter to render compiler-generated
 /// temps as `·v_N`. No pass indexes into any table by these ids.
 #[derive(Debug, Clone)]
-pub enum Cont<'src> {
+pub enum Cont {
   Ref(CpsId),
-  Expr { args: Vec<BindNode>, body: Box<Expr<'src>> },
+  Expr { args: Vec<BindNode>, body: Box<Expr> },
 }
 
-impl<'src> Cont<'src> {
+impl Cont {
   /// Return the inline body if this is `Cont::Expr`, else `None`.
-  pub fn body(&self) -> Option<&Expr<'src>> {
+  pub fn body(&self) -> Option<&Expr> {
     match self {
       Cont::Ref(_) => None,
       Cont::Expr { body, .. } => Some(body),
@@ -376,7 +376,7 @@ impl<'src> Cont<'src> {
 
   /// Unwrap the inline body, panicking if this is `Cont::Ref`.
   /// Only use where `Cont::Ref` is structurally impossible.
-  pub fn unwrap_body(self) -> (Vec<BindNode>, Box<Expr<'src>>) {
+  pub fn unwrap_body(self) -> (Vec<BindNode>, Box<Expr>) {
     match self {
       Cont::Expr { args, body } => (args, body),
       Cont::Ref(_) => panic!("Cont::unwrap_body called on Cont::Ref"),
@@ -389,15 +389,15 @@ impl<'src> Cont<'src> {
 // ---------------------------------------------------------------------------
 
 /// A CPS expression node — computation with continuations.
-pub type Expr<'src> = Node<ExprKind<'src>>;
+pub type Expr = Node<ExprKind>;
 
 #[derive(Debug, Clone)]
-pub enum ExprKind<'src> {
+pub enum ExprKind {
   /// Bind a value to a name; visible in body.
   LetVal {
     name: BindNode,
-    val: Box<Val<'src>>,
-    cont: Cont<'src>,
+    val: Box<Val>,
+    cont: Cont,
   },
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
@@ -408,22 +408,22 @@ pub enum ExprKind<'src> {
     name: BindNode,
     params: Vec<Param>,
     // TODO: rename to body
-    fn_body: Box<Expr<'src>>,
-    cont: Cont<'src>,
+    fn_body: Box<Expr>,
+    cont: Cont,
   },
 
   /// Call func with args; the last `Arg::Cont` is the result continuation.
   App {
-    func: Callable<'src>,
-    args: Vec<Arg<'src>>,
+    func: Callable,
+    args: Vec<Arg>,
   },
 
   /// Branch on cond.
   If {
-    cond: Box<Val<'src>>,
+    cond: Box<Val>,
     // TODO: investigate whether then/else_ should be Cont (structurally same as App cont — "what comes next")
-    then: Box<Expr<'src>>,
-    else_: Box<Expr<'src>>,
+    then: Box<Expr>,
+    else_: Box<Expr>,
   },
 
   // ---------------------------------------------------------------------------

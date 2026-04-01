@@ -1,4 +1,4 @@
-;; String — runtime support for fink's three-tier immutable strings
+;; String — runtime support for fink's immutable strings
 ;;
 ;; This module provides direct-style primitives for string construction
 ;; and access. These are used by the compiler (emitted code) and by the
@@ -7,43 +7,30 @@
 ;; No CPS, no user-facing functions — those live in the std-lib.
 ;;
 ;;
-;; Type hierarchy (types.wat defines the opaque base types):
+;; Type hierarchy ($Str is the only public type; everything else is internal):
 ;;
-;;   $Str
-;;   ├── $StrTempl                         ← opaque template
-;;   │     $StrTemplImpl (sub $StrTempl)   ← internal: segment array
-;;   └── $StrVal                           ← opaque byte-bearing string
-;;       ├── $StrRaw                       ← escapes unresolved
-;;       │     $StrDataImpl (sub $StrRaw)  ← internal: (offset, length) into data section
-;;       │     $StrRawBytesImpl (sub $StrRaw) ← internal: heap byte array (from raw'')
-;;       └── $StrBytes                     ← escapes resolved
-;;             $StrBytesImpl (sub $StrBytes) ← internal: heap byte array (from fmt'')
+;;   $Str                               ← public interface (only type visible outside)
+;;   ├── $StrDataImpl  (sub $Str)       ← (offset, length) into data section
+;;   ├── $StrBytesImpl (sub $Str)       ← heap byte array
+;;   └── $StrTemplImpl (sub $Str)       ← segment array (templates with interpolation)
+;;
+;; Escape sequences are resolved at compile time — the runtime only sees
+;; cooked UTF-8 bytes. The compiler calls str / str_fmt_N directly and
+;; never creates template objects. The two string subtypes differ only
+;; in storage:
+;;   $StrDataImpl — points into the WASM data section (compiler-emitted literals)
+;;   $StrBytesImpl — heap-allocated byte array (runtime-constructed, e.g. concat)
 ;;
 ;;
-;; Templates ($StrTempl):
+;; Templates ($StrTemplImpl):
 ;;   The fink "string" value. A list of segments where each segment is
-;;   either a $StrRaw ref, a $StrBytes ref, or an arbitrary value (ref any).
+;;   either a $Str ref or an arbitrary value (ref any).
 ;;   'hello ${name}' → template with segments: [StrData "hello ", value name].
 ;;   A plain string 'hello' is a template with a single StrData segment.
 ;;   First-class, immutable, lazy — formatting deferred to std-lib.
 ;;   Equality is structural via deep_eq (std-lib, CPS).
 ;;
-;; Raw ($StrRaw, subtypes $StrDataImpl / $StrRawBytesImpl):
-;;   Bytes with escapes NOT resolved. \n stored as two bytes ('\', 'n').
-;;   $StrDataImpl — (offset, length) pointing into the WASM data section.
-;;     Produced by compiler for string literals.
-;;   $StrRawBytesImpl — heap byte array.
-;;     Produced by raw'' formatter (copies data section, preserves escapes).
-;;
-;; Bytes ($StrBytes, subtype $StrBytesImpl):
-;;   Flat UTF-8 encoded bytes — escapes resolved. \n is byte 0x0A.
-;;   Produced by fmt'' formatter. Heap-allocated (GC array of bytes).
-;;
-;;
 ;; Formatting (std-lib, not here):
-;;   Two built-in formatters in the std-lib:
-;;     - fmt : resolve escapes in $StrRaw segments, stringify values → $StrBytes
-;;     - raw : no escape processing, copy $StrRaw as-is, stringify values → $StrRaw
 ;;   Tagged formatters (html'...', sql'...') are user-level fink functions.
 ;;   All formatters are CPS — they dispatch through protocols to stringify
 ;;   values. This module provides direct helpers they build on.
@@ -60,57 +47,48 @@
 (module
   ;; ---- Internal types (not visible to user code) ----
 
-  ;; Segment array: interleaved $StrRaw/$StrBytes refs and arbitrary values.
-  ;; Stored as (ref any) — raws, bytes, values, and nested templates all fit.
+  ;; Segment array: string values and arbitrary interpolated values.
+  ;; Stored as (ref any) — strings, values, and nested templates all fit.
   (type $StrSegments (array (ref any)))
 
-  ;; Byte array: UTF-8 bytes. Shared by $StrRawBytesImpl and $StrBytesImpl.
+  ;; Byte array: UTF-8 bytes. Used by $StrBytesImpl.
   ;; Mutable at the WASM level for construction (array.set during escape
   ;; processing), but treated as immutable once wrapped in a $Str* struct.
   (type $ByteArray (array (mut i8)))
 
-  ;; $StrDataImpl — internal layout for $StrRaw (data section variant).
-  ;; offset = byte offset into linear memory (data section)
-  ;; length = byte count
-  (type $StrDataImpl (sub $StrRaw (struct
+  ;; $StrDataImpl — data section string (offset, length into linear memory).
+  (type $StrDataImpl (sub $Str (struct
     (field $offset i32)
     (field $length i32))))
 
-  ;; $StrRawBytesImpl — internal layout for $StrRaw (heap variant).
-  ;; Produced by raw'' — escapes preserved in heap byte array.
-  (type $StrRawBytesImpl (sub $StrRaw (struct
-    (field $bytes (ref $ByteArray)))))
-
-  ;; $StrTemplImpl — internal layout for $StrTempl.
-  ;; Holds the segment array.
-  (type $StrTemplImpl (sub $StrTempl (struct
+  ;; $StrTemplImpl — template string (segment array).
+  (type $StrTemplImpl (sub $Str (struct
     (field $segments (ref $StrSegments)))))
 
-  ;; $StrBytesImpl — internal layout for $StrBytes.
-  ;; Holds the formatted/escape-resolved byte array.
-  (type $StrBytesImpl (sub $StrBytes (struct
+  ;; $StrBytesImpl — heap-allocated string (byte array).
+  (type $StrBytesImpl (sub $Str (struct
     (field $bytes (ref $ByteArray)))))
 
 
   ;; ---- Construction (compiler-emitted) ----
 
-  ;; str_raw : (i32, i32) -> (ref $StrRaw)
-  ;; Wrap a data-section pointer into a raw string.
-  (func $str_raw (export "str_raw")
+  ;; str : (i32, i32) -> (ref $StrDataImpl)
+  ;; Wrap a data-section pointer into a string value.
+  (func $str (export "str")
     (param $offset i32)
     (param $length i32)
-    (result (ref $StrRaw))
+    (result (ref $StrDataImpl))
 
     (struct.new $StrDataImpl
       (local.get $offset)
       (local.get $length))
   )
 
-  ;; str_templ : (ref $StrSegments) -> (ref $StrTempl)
+  ;; str_templ : (ref $StrSegments) -> (ref $Str)
   ;; Build a template from a segment array.
   (func $str_templ (export "str_templ")
     (param $segments (ref $StrSegments))
-    (result (ref $StrTempl))
+    (result (ref $Str))
 
     (struct.new $StrTemplImpl (local.get $segments))
   )
@@ -118,16 +96,14 @@
 
   ;; ---- Access ----
 
-  ;; str_bytes : (ref $StrVal) -> (ref $ByteArray)
-  ;; Get the byte content of any byte-bearing string.
+  ;; str_bytes : (ref $Str) -> (ref $ByteArray)
+  ;; Get the byte content of a string.
   ;; Dispatches via br_on_cast:
-  ;;   $StrDataImpl     → copies bytes from data section into a $ByteArray
-  ;;   $StrRawBytesImpl → returns the existing $ByteArray
-  ;;   $StrBytesImpl    → returns the existing $ByteArray
-  ;; Templates are statically excluded — format first, then get bytes.
-  ;; This is the IO boundary: callers don't need to know the string type.
+  ;;   $StrDataImpl  → copies bytes from data section into a $ByteArray
+  ;;   $StrBytesImpl → returns the existing $ByteArray
+  ;; Templates are not supported — format first, then get bytes.
   (func $str_bytes (export "str_bytes")
-    (param $str (ref $StrVal))
+    (param $str (ref $Str))
     (result (ref $ByteArray))
 
     (local $offset i32)
@@ -139,7 +115,7 @@
     (block $not_data
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
-          (br_on_cast $is_data (ref $StrVal) (ref $StrDataImpl)
+          (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
             (local.get $str))))
       ;; Cast succeeded — $StrDataImpl is on the stack
       (local.set $offset (struct.get $StrDataImpl $offset))
@@ -161,23 +137,15 @@
           (br $copy)))
       (return (local.get $result)))
 
-    ;; Try $StrRawBytesImpl — return existing array
-    (block $not_raw_bytes
-      (block $is_raw_bytes (result (ref $StrRawBytesImpl))
-        (br $not_raw_bytes
-          (br_on_cast $is_raw_bytes (ref $StrVal) (ref $StrRawBytesImpl)
-            (local.get $str))))
-      (return (struct.get $StrRawBytesImpl $bytes)))
-
     ;; Must be $StrBytesImpl — return existing array
     (struct.get $StrBytesImpl $bytes
       (ref.cast (ref $StrBytesImpl) (local.get $str)))
   )
 
-  ;; str_tmpl_count : (ref $StrTempl) -> i32
+  ;; str_tmpl_count : (ref $Str) -> i32
   ;; Number of segments in a template.
   (func $str_tmpl_count (export "str_tmpl_count")
-    (param $tmpl (ref $StrTempl))
+    (param $tmpl (ref $Str))
     (result i32)
 
     (array.len
@@ -185,10 +153,10 @@
         (ref.cast (ref $StrTemplImpl) (local.get $tmpl))))
   )
 
-  ;; str_tmpl_get : (ref $StrTempl), i32 -> (ref any)
+  ;; str_tmpl_get : (ref $Str), i32 -> (ref any)
   ;; Get segment at index (raw or value).
   (func $str_tmpl_get (export "str_tmpl_get")
-    (param $tmpl (ref $StrTempl))
+    (param $tmpl (ref $Str))
     (param $index i32)
     (result (ref any))
 
@@ -201,14 +169,14 @@
 
   ;; ---- Equality ----
 
-  ;; str_eq : (ref $StrVal), (ref $StrVal) -> i32
+  ;; str_eq : (ref $Str), (ref $Str) -> i32
   ;; Compare two byte-bearing strings for byte-level equality.
   ;; Fast path: ref.eq (same object → 1).
   ;; Slow path: dispatch on concrete types, compare byte-by-byte.
   ;; Returns 1 if equal, 0 if not.
   (func $str_eq (export "str_eq")
-    (param $a (ref $StrVal))
-    (param $b (ref $StrVal))
+    (param $a (ref $Str))
+    (param $b (ref $Str))
     (result i32)
 
     (local $da (ref $StrDataImpl))
@@ -222,7 +190,7 @@
     (block $a_not_data
       (block $a_is_data (result (ref $StrDataImpl))
         (br $a_not_data
-          (br_on_cast $a_is_data (ref $StrVal) (ref $StrDataImpl)
+          (br_on_cast $a_is_data (ref $Str) (ref $StrDataImpl)
             (local.get $a))))
       (local.set $da)
 
@@ -230,7 +198,7 @@
       (block $b_not_data
         (block $b_is_data (result (ref $StrDataImpl))
           (br $b_not_data
-            (br_on_cast $b_is_data (ref $StrVal) (ref $StrDataImpl)
+            (br_on_cast $b_is_data (ref $Str) (ref $StrDataImpl)
               (local.get $b))))
         (local.set $db)
         ;; Both data
@@ -250,7 +218,7 @@
     (block $b_not_data2
       (block $b_is_data2 (result (ref $StrDataImpl))
         (br $b_not_data2
-          (br_on_cast $b_is_data2 (ref $StrVal) (ref $StrDataImpl)
+          (br_on_cast $b_is_data2 (ref $Str) (ref $StrDataImpl)
             (local.get $b))))
       (local.set $db)
       ;; $b is data, $a is array — flip args
@@ -265,19 +233,12 @@
       (call $_get_byte_array (local.get $b)))
   )
 
-  ;; $_get_byte_array : (ref $StrVal) -> (ref $ByteArray)
-  ;; Extract the $ByteArray from a $StrRawBytesImpl or $StrBytesImpl.
+  ;; $_get_byte_array : (ref $Str) -> (ref $ByteArray)
+  ;; Extract the $ByteArray from a $StrBytesImpl.
   ;; Caller must ensure it's not a $StrDataImpl.
   (func $_get_byte_array
-    (param $str (ref $StrVal))
+    (param $str (ref $Str))
     (result (ref $ByteArray))
-
-    (block $not_raw_bytes
-      (block $is_raw_bytes (result (ref $StrRawBytesImpl))
-        (br $not_raw_bytes
-          (br_on_cast $is_raw_bytes (ref $StrVal) (ref $StrRawBytesImpl)
-            (local.get $str))))
-      (return (struct.get $StrRawBytesImpl $bytes)))
 
     (struct.get $StrBytesImpl $bytes
       (ref.cast (ref $StrBytesImpl) (local.get $str)))
@@ -369,20 +330,20 @@
 
   ;; ---- Byte processing (for std-lib formatters) ----
 
-  ;; str_render_escape : (ref $StrRaw) -> (ref $StrBytes)
-  ;; Resolve escape sequences in a raw string's bytes:
+  ;; str_render_escape : (ref $Str) -> (ref $Str)
+  ;; Resolve escape sequences in a string's bytes:
   ;; \n, \t, \r, \f, \v, \b, \\, \', \$, \xNN, \u{NNNNNN}
   ;; Dispatches to $_escape_data (linear memory) or $_escape_array (heap).
   ;; Pure byte processing — no user code, no CPS needed.
   (func $str_render_escape (export "str_render_escape")
-    (param $raw (ref $StrRaw))
-    (result (ref $StrBytes))
+    (param $raw (ref $Str))
+    (result (ref $Str))
 
     ;; Try $StrDataImpl — read from linear memory
     (block $not_data
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
-          (br_on_cast $is_data (ref $StrRaw) (ref $StrDataImpl)
+          (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
             (local.get $raw))))
       ;; Cast succeeded — $StrDataImpl on stack
       (return
@@ -391,19 +352,19 @@
           (struct.get $StrDataImpl $length
             (ref.cast (ref $StrDataImpl) (local.get $raw))))))
 
-    ;; Must be $StrRawBytesImpl — read from heap array
+    ;; Must be $StrBytesImpl — read from heap array
     (call $_escape_array
-      (struct.get $StrRawBytesImpl $bytes
-        (ref.cast (ref $StrRawBytesImpl) (local.get $raw))))
+      (struct.get $StrBytesImpl $bytes
+        (ref.cast (ref $StrBytesImpl) (local.get $raw))))
   )
 
-  ;; $_escape_data : (i32, i32) -> (ref $StrBytes)
+  ;; $_escape_data : (i32, i32) -> (ref $Str)
   ;; Escape processing for $StrDataImpl — reads from linear memory.
   ;; Two-pass: count output bytes, then write.
   (func $_escape_data
     (param $base i32)
     (param $src_len i32)
-    (result (ref $StrBytes))
+    (result (ref $Str))
 
     (local $i i32)
     (local $out_len i32)
@@ -657,12 +618,12 @@
     (struct.new $StrBytesImpl (local.get $out))
   )
 
-  ;; $_escape_array : (ref $ByteArray) -> (ref $StrBytes)
-  ;; Escape processing for $StrRawBytesImpl — reads from heap array.
+  ;; $_escape_array : (ref $ByteArray) -> (ref $Str)
+  ;; Escape processing for $StrBytesImpl — reads from heap array.
   ;; Two-pass: count output bytes, then write.
   (func $_escape_array
     (param $src (ref $ByteArray))
-    (result (ref $StrBytes))
+    (result (ref $Str))
 
     (local $src_len i32)
     (local $i i32)
@@ -920,18 +881,18 @@
   )
 
 
-  ;; str_render_unescape : (ref $StrBytes) -> (ref $StrBytes)
+  ;; str_render_unescape : (ref $Str) -> (ref $Str)
   ;; Insert escape sequences for non-printable/special bytes:
   ;; 0x0A → \n, 0x09 → \t, 0x0D → \r, 0x0C → \f, 0x0B → \v,
   ;; 0x08 → \b, 0x5C → \\, 0x27 → \', 0x24 → \$
-  ;; Not a true inverse of escape — lossy, since $StrRaw can have
+  ;; Not a true inverse of escape — lossy, since raw strings can have
   ;; both \n and literal \ n which both escape to the same byte.
   ;; For debug output and serialization.
   ;;
   ;; Two-pass: count then write.
   (func $str_render_unescape (export "str_render_unescape")
-    (param $str (ref $StrBytes))
-    (result (ref $StrBytes))
+    (param $str (ref $Str))
+    (result (ref $Str))
 
     (local $src (ref $ByteArray))
     (local $src_len i32)
@@ -1106,7 +1067,7 @@
   ;; Content-based hash for any byte-bearing string.
   ;; Dispatches on concrete type to avoid allocating a $ByteArray copy.
   ;; Uses FNV-1a (32-bit), masked to 31 bits for i31ref.
-  ;; $StrTempl is not hashable (unreachable).
+  ;; $StrTemplImpl is not hashable (unreachable).
   (func $str_hash_i31 (export "str_hash_i31")
     (param $str (ref $Str))
     (result i32)
@@ -1124,15 +1085,6 @@
         (struct.get $StrDataImpl $offset (local.get $data))
         (struct.get $StrDataImpl $length (local.get $data)))))
 
-    ;; Try $StrRawBytesImpl — hash from heap array
-    (block $not_raw_bytes
-      (block $is_raw_bytes (result (ref $StrRawBytesImpl))
-        (br $not_raw_bytes
-          (br_on_cast $is_raw_bytes (ref $Str) (ref $StrRawBytesImpl)
-            (local.get $str))))
-      (return (call $_str_hash_array
-        (struct.get $StrRawBytesImpl $bytes))))
-
     ;; Try $StrBytesImpl — hash from heap array
     (block $not_bytes
       (block $is_bytes (result (ref $StrBytesImpl))
@@ -1142,7 +1094,7 @@
       (return (call $_str_hash_array
         (struct.get $StrBytesImpl $bytes))))
 
-    ;; $StrTempl — not hashable
+    ;; $StrTemplImpl — not hashable
     (unreachable)
   )
 

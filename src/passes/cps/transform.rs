@@ -100,13 +100,13 @@ impl<'scope> Gen<'scope> {
 
 
   /// Build an Expr with an auto-incrementing CpsId.
-  fn expr<'src>(&mut self, kind: ExprKind<'src>, origin: Option<AstId>) -> Expr<'src> {
+  fn expr(&mut self, kind: ExprKind, origin: Option<AstId>) -> Expr {
     let id = self.next_cps_id(origin);
     Expr { id, kind }
   }
 
   /// Build a Val with an auto-incrementing CpsId.
-  fn val<'src>(&mut self, kind: ValKind<'src>, origin: Option<AstId>) -> Val<'src> {
+  fn val(&mut self, kind: ValKind, origin: Option<AstId>) -> Val {
     let id = self.next_cps_id(origin);
     Val { id, kind }
   }
@@ -139,13 +139,13 @@ impl<'scope> Gen<'scope> {
 // ---------------------------------------------------------------------------
 
 /// Create a Ref::Synth val pointing at the given bind's CpsId.
-fn ref_val<'src>(g: &mut Gen, _bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val<'src> {
+fn ref_val(g: &mut Gen, _bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val {
   g.val(ValKind::Ref(Ref::Synth(bind_id)), origin)
 }
 
 /// Create a Ref::Synth val for a source-level name reference (Ident or SynthIdent).
 /// Looks up the ref's AstId in scope resolution to find the bind's pre-allocated CpsId.
-fn scope_ref_val<'src>(g: &mut Gen, ref_ast_id: AstId) -> Val<'src> {
+fn scope_ref_val(g: &mut Gen, ref_ast_id: AstId) -> Val {
   match g.resolution.try_get(ref_ast_id).and_then(|opt| *opt) {
     Some(bind_id) => {
       // Builtins (e.g. `import`) → emit ValKind::BuiltIn.
@@ -164,7 +164,7 @@ fn scope_ref_val<'src>(g: &mut Gen, ref_ast_id: AstId) -> Val<'src> {
   }
 }
 
-fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src> {
+fn lit_val(g: &mut Gen, lit: Lit, origin: Option<AstId>) -> Val {
   g.val(ValKind::Lit(lit), origin)
 }
 
@@ -172,7 +172,7 @@ fn lit_val<'src>(g: &mut Gen, lit: Lit<'src>, origin: Option<AstId>) -> Val<'src
 
 /// Build an explicit tail call: `App(ContRef(cont_id), [val])`.
 /// Replaces the implicit `Cont::Ref` shortcut so the val's origin is preserved in the propgraph.
-fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val<'src>, _origin: Option<AstId>) -> Expr<'src> {
+fn tail_app(g: &mut Gen, cont_id: CpsId, val: Val, _origin: Option<AstId>) -> Expr {
   // ContRef val gets no origin — it references the cont param, whose origin
   // is already in the propgraph under cont_id. The App expr gets no origin
   // either — it's a synthetic tail call, not a user-written expression.
@@ -185,14 +185,14 @@ fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val<'src>, _origin: Option<A
 
 /// Wrap a bare value as the tail of a function body.
 /// Produces `App(ContRef(cont), [val])` — passes val directly to the cont.
-fn wrap_val<'src>(g: &mut Gen, val: Val<'src>, origin: Option<AstId>) -> Expr<'src> {
+fn wrap_val(g: &mut Gen, val: Val, origin: Option<AstId>) -> Expr {
   let cont_id = g.cont;
   tail_app(g, cont_id, val, origin)
 }
 
 
 /// Wrap a `Vec<Val>` as `Vec<Arg::Val>` — for internal primitives that never spread.
-fn args_val<'src>(vals: Vec<Val<'src>>) -> Vec<Arg<'src>> {
+fn args_val(vals: Vec<Val>) -> Vec<Arg> {
   vals.into_iter().map(Arg::Val).collect()
 }
 
@@ -200,9 +200,9 @@ fn args_val<'src>(vals: Vec<Val<'src>>) -> Vec<Arg<'src>> {
 // Core lowering — returns (value_produced, bindings_accumulated)
 // ---------------------------------------------------------------------------
 
-type Lower<'src> = (Val<'src>, Vec<Pending<'src>>);
+type Lower = (Val, Vec<Pending>);
 
-fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
+fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower {
   let o = Some(node.id);
   match &node.kind {
     // ---- literals ----
@@ -210,7 +210,7 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
     NodeKind::LitInt(s)  => (lit_val(g, Lit::Int(parse_int(s)), o), vec![]),
     NodeKind::LitFloat(s) => (lit_val(g, Lit::Float(parse_float(s)), o), vec![]),
     NodeKind::LitDecimal(s) => (lit_val(g, Lit::Decimal(parse_decimal(s)), o), vec![]),
-    NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(s), o), vec![]),
+    NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(crate::strings::render(s)), o), vec![]),
 
     // ---- identifier reference — resolved via scope analysis ----
     NodeKind::Ident(_) | NodeKind::SynthIdent(_) => (scope_ref_val(g, node.id), vec![]),
@@ -306,13 +306,13 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower<'src> {
 
 /// Lower a sequence of expressions and return an Expr for the whole sequence.
 /// The last expression's value is returned to the current continuation.
-fn lower_seq<'src>(g: &mut Gen, exprs: &'src [Node<'src>]) -> Expr<'src> {
+fn lower_seq<'src>(g: &mut Gen, exprs: &'src [Node<'src>]) -> Expr {
   lower_seq_with_tail(g, exprs, Cont::Ref(g.cont))
 }
 
-fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont<'src>) -> Expr<'src> {
+fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont) -> Expr {
   assert!(!exprs.is_empty(), "empty expression sequence");
-  let mut all_pending: Vec<Pending<'src>> = vec![];
+  let mut all_pending: Vec<Pending> = vec![];
   let n = exprs.len();
   for (i, expr) in exprs.iter().enumerate() {
     let is_last = i + 1 == n;
@@ -373,7 +373,7 @@ fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont<
 
 /// Lower `yield inner` — suspend execution, yield the inner value.
 /// The continuation receives the resumed value bound to a fresh result.
-fn lower_yield<'src>(g: &mut Gen, inner: &'src Node<'src>, origin: Option<AstId>) -> Lower<'src> {
+fn lower_yield<'src>(g: &mut Gen, inner: &'src Node<'src>, origin: Option<AstId>) -> Lower {
   let (val, mut pending) = lower(g, inner);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
@@ -392,7 +392,7 @@ fn lower_bind_stmt<'src>(
   lhs: &'src Node<'src>,
   rhs: &'src Node<'src>,
   origin: Option<AstId>,
-) -> Vec<Pending<'src>> {
+) -> Vec<Pending> {
   let (val, mut pending) = lower(g, rhs);
   match &lhs.kind {
     NodeKind::Wildcard => {
@@ -412,7 +412,7 @@ fn lower_bind<'src>(
   lhs: &'src Node<'src>,
   rhs: &'src Node<'src>,
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let (val, mut pending) = lower(g, rhs);
   match &lhs.kind {
     NodeKind::Wildcard => {
@@ -448,7 +448,7 @@ fn lower_fn<'src>(
   params: &'src Node<'src>,
   body: &'src [Node<'src>],
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
@@ -468,7 +468,7 @@ fn lower_module_as_fn<'src>(
   g: &mut Gen,
   body: &'src [Node<'src>],
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let (cont, prev_cont) = g.push_cont(origin);
@@ -485,7 +485,7 @@ fn lower_iife<'src>(
   params: &'src Node<'src>,
   body: &'src [Node<'src>],
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let fn_name = g.fresh_fn(origin);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
   let (cont, prev_cont) = g.push_cont(origin);
@@ -514,9 +514,9 @@ fn lower_iife<'src>(
 fn extract_params_with_gen<'src>(
   g: &mut Gen,
   params: &'src Node<'src>,
-) -> (Vec<Param>, Vec<Pending<'src>>) {
+) -> (Vec<Param>, Vec<Pending>) {
   let mut param_list = vec![];
-  let mut deferred: Vec<Pending<'src>> = vec![];
+  let mut deferred: Vec<Pending> = vec![];
   let nodes = match &params.kind {
     NodeKind::Patterns(ps) => ps.items.as_slice(),
     _ => std::slice::from_ref(params),
@@ -552,7 +552,7 @@ fn extract_params_with_gen<'src>(
 }
 
 /// Wrap `body` in pattern nodes for each deferred pattern entry, innermost first.
-fn prepend_pat_binds<'src>(g: &mut Gen, deferred: Vec<Pending<'src>>, body: Expr<'src>) -> Expr<'src> {
+fn prepend_pat_binds(g: &mut Gen, deferred: Vec<Pending>, body: Expr) -> Expr {
   if deferred.is_empty() { return body; }
   let arg = g.fresh_result(None);
   wrap(g, deferred, Cont::Expr { args: vec![arg], body: Box::new(body) })
@@ -593,7 +593,7 @@ fn lower_apply<'src>(
   func: &'src Node<'src>,
   args: &'src [Node<'src>],
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let (func_val, mut pending) = lower(g, func);
   let mut arg_vals = vec![];
   for arg in args {
@@ -603,6 +603,15 @@ fn lower_apply<'src>(
     } else {
       arg
     };
+    // Tagged template: splice raw parts as individual args to the tag function.
+    if let NodeKind::StrRawTempl { children, .. } = &inner.kind {
+      for part in children {
+        let (pv, pp) = lower_str_part(g, part);
+        pending.extend(pp);
+        arg_vals.push(Arg::Val(pv));
+      }
+      continue;
+    }
     let (av, ap) = lower(g, inner);
     pending.extend(ap);
     arg_vals.push(if is_spread { Arg::Spread(av) } else { Arg::Val(av) });
@@ -617,7 +626,7 @@ fn lower_apply<'src>(
 // Pipe: `a | b | c` == `c (b a)`
 // ---------------------------------------------------------------------------
 
-fn lower_pipe<'src>(g: &mut Gen, stages: &'src [Node<'src>], origin: Option<AstId>) -> Lower<'src> {
+fn lower_pipe<'src>(g: &mut Gen, stages: &'src [Node<'src>], origin: Option<AstId>) -> Lower {
   assert!(!stages.is_empty(), "empty pipe");
   if stages.len() == 1 {
     return lower(g, &stages[0]);
@@ -645,7 +654,7 @@ fn lower_infix<'src>(
   lhs: &'src Node<'src>,
   rhs: &'src Node<'src>,
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   if matches!(op, ".." | "...") {
     return lower_range(g, op, lhs, rhs, origin);
   }
@@ -663,7 +672,7 @@ fn lower_unary<'src>(
   op: &'src str,
   operand: &'src Node<'src>,
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let (val, mut pending) = lower(g, operand);
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
@@ -675,11 +684,11 @@ fn lower_chained_cmp<'src>(
   g: &mut Gen,
   parts: &'src [CmpPart<'src>],
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   // `a < b < c` → `(a < b) and (b < c)`
   // Walk parts: collect Operand/Op pairs and emit pairwise comparisons.
-  let mut pending: Vec<Pending<'src>> = vec![];
-  let mut operands: Vec<Val<'src>> = vec![];
+  let mut pending: Vec<Pending> = vec![];
+  let mut operands: Vec<Val> = vec![];
   let mut ops: Vec<&'src str> = vec![];
 
   for part in parts {
@@ -695,7 +704,7 @@ fn lower_chained_cmp<'src>(
 
   // Now operands: [a, b, c], ops: [<, <]
   // Emit: cmp0 = a < b; cmp1 = b < c; result = cmp0 and cmp1
-  let mut cmp_vals: Vec<Val<'src>> = vec![];
+  let mut cmp_vals: Vec<Val> = vec![];
   for (i, op) in ops.iter().enumerate() {
     let lv = operands[i].clone();
     let rv = operands[i + 1].clone();
@@ -726,7 +735,7 @@ fn lower_range<'src>(
   start: &'src Node<'src>,
   end: &'src Node<'src>,
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let (sv, mut pending) = lower(g, start);
   let (ev, ep) = lower(g, end);
   pending.extend(ep);
@@ -745,7 +754,7 @@ fn lower_member<'src>(
   lhs: &'src Node<'src>,
   rhs: &'src Node<'src>,
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let (lv, mut pending) = lower(g, lhs);
   let (rv, rp) = lower(g, rhs);
   pending.extend(rp);
@@ -761,9 +770,9 @@ fn lower_member<'src>(
 
 // Build right-to-left: SeqPrepend(1, SeqPrepend(2, SeqPrepend(3, []))) — O(1) cons each.
 // Spreads use SeqConcat(spread, acc) — prepend spread list onto accumulator.
-fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], origin: Option<AstId>) -> Lower<'src> {
+fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], origin: Option<AstId>) -> Lower {
   let mut acc = lit_val(g, Lit::Seq, origin);
-  let mut pending: Vec<Pending<'src>> = vec![];
+  let mut pending: Vec<Pending> = vec![];
   for elem in elems.iter().rev() {
     let is_spread = matches!(elem.kind, NodeKind::Spread { .. });
     let inner = if is_spread {
@@ -792,9 +801,9 @@ fn lower_lit_seq<'src>(g: &mut Gen, elems: &'src [Node<'src>], origin: Option<As
 // Record literal: `{a, b: v, ..c}`
 // ---------------------------------------------------------------------------
 
-fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<AstId>) -> Lower<'src> {
+fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<AstId>) -> Lower {
   let mut acc = lit_val(g, Lit::Rec, origin);
-  let mut pending: Vec<Pending<'src>> = vec![];
+  let mut pending: Vec<Pending> = vec![];
   for field in fields {
     match &field.kind {
       NodeKind::Spread { inner: Some(inner), .. } => {
@@ -807,7 +816,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
       }
       NodeKind::Bind { lhs, rhs, .. } => {
         if let NodeKind::Ident(key) = &lhs.kind {
-          let key_lit = lit_val(g, Lit::Str(key), Some(field.id));
+          let key_lit = lit_val(g, Lit::Str(key.to_string()), Some(field.id));
           let (fv, fp) = lower(g, rhs);
           pending.extend(fp);
           let result = g.fresh_result(origin);
@@ -831,7 +840,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
         let key_node = &**lhs;
         let val_node = body.items.last().expect("arm body empty");
         if let NodeKind::Ident(key) = &key_node.kind {
-          let key_lit = lit_val(g, Lit::Str(key), Some(field.id));
+          let key_lit = lit_val(g, Lit::Str(key.to_string()), Some(field.id));
           let (fv, fp) = lower(g, val_node);
           pending.extend(fp);
           let result = g.fresh_result(origin);
@@ -851,7 +860,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
       }
       NodeKind::Ident(name) => {
         // Shorthand `{foo}` == `{foo: foo}`
-        let key_lit = lit_val(g, Lit::Str(name), Some(field.id));
+        let key_lit = lit_val(g, Lit::Str(name.to_string()), Some(field.id));
         let id_val = scope_ref_val(g, field.id);
         let result = g.fresh_result(origin);
         let (rk, ri) = (result.kind, result.id);
@@ -875,11 +884,22 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
 // String template: `'hello ${name}'`
 // ---------------------------------------------------------------------------
 
-fn lower_str_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Option<AstId>) -> Lower<'src> {
-  let mut pending: Vec<Pending<'src>> = vec![];
-  let mut part_vals: Vec<Arg<'src>> = vec![];
+/// Lower a string template part: LitStr segments stay raw (escape processing
+/// is handled by str_fmt at runtime), everything else lowers normally.
+fn lower_str_part<'src>(g: &mut Gen, part: &'src Node<'src>) -> Lower {
+  if let NodeKind::LitStr { content: s, .. } = &part.kind {
+    let o = Some(part.id);
+    (lit_val(g, Lit::Str(s.to_string()), o), vec![])
+  } else {
+    lower(g, part)
+  }
+}
+
+fn lower_str_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Option<AstId>) -> Lower {
+  let mut pending: Vec<Pending> = vec![];
+  let mut part_vals: Vec<Arg> = vec![];
   for part in parts {
-    let (pv, pp) = lower(g, part);
+    let (pv, pp) = lower_str_part(g, part);
     pending.extend(pp);
     part_vals.push(Arg::Val(pv));
   }
@@ -894,18 +914,27 @@ fn lower_str_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Option<
 // First element of `parts` is the tag function; rest are string segments.
 // ---------------------------------------------------------------------------
 
-fn lower_str_raw_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Option<AstId>) -> Lower<'src> {
-  assert!(!parts.is_empty(), "empty raw string template");
-  let (tag_fn, mut pending) = lower(g, &parts[0]);
-  let mut part_vals: Vec<Arg<'src>> = vec![];
-  for part in &parts[1..] {
-    let (pv, pp) = lower(g, part);
+/// Lower a raw string template (tagged): all segments stay raw.
+/// The tag function is NOT in `parts` — the parser wraps tagged templates as
+/// `Apply(tag, [StrRawTempl])`, so the tag is handled by `lower_apply`.
+/// This function just lowers the segments with escape sequences preserved.
+fn lower_str_raw_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Option<AstId>) -> Lower {
+  // Single raw segment with no interpolation — return as a plain raw Lit::Str.
+  if parts.len() == 1 {
+    let (pv, pp) = lower_str_part(g, &parts[0]);
+    return (pv, pp);
+  }
+  // Multiple segments (interpolation in raw template) — call StrFmt with raw parts.
+  let mut pending: Vec<Pending> = vec![];
+  let mut part_vals: Vec<Arg> = vec![];
+  for part in parts {
+    let (pv, pp) = lower_str_part(g, part);
     pending.extend(pp);
     part_vals.push(Arg::Val(pv));
   }
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::Val(tag_fn), args: part_vals, result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::StrFmt), args: part_vals, result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -922,13 +951,13 @@ fn lower_str_raw_templ<'src>(g: &mut Gen, parts: &'src [Node<'src>], origin: Opt
 /// Calling convention (succ-first, mirrors if then/else):
 ///   mp_N(subj, succ, fail)
 ///   mb_N(..binds, k)
-struct ArmCps<'src> {
+struct ArmCps {
   mp_name: BindNode,
   mp_params: Vec<Param>,
-  mp_body: Expr<'src>,
+  mp_body: Expr,
   mb_name: BindNode,
   mb_params: Vec<Param>,
-  mb_body: Expr<'src>,
+  mb_body: Expr,
   origin: Option<AstId>,
 }
 
@@ -944,18 +973,18 @@ fn lower_match<'src>(
   subjects: &'src [Node<'src>],
   arms: &'src [Node<'src>],
   origin: Option<AstId>,
-) -> Lower<'src> {
-  let mut pending: Vec<Pending<'src>> = vec![];
+) -> Lower {
+  let mut pending: Vec<Pending> = vec![];
 
   // Lower subject expressions.
-  let subject_vals: Vec<Val<'src>> = subjects.iter().map(|s| {
+  let subject_vals: Vec<Val> = subjects.iter().map(|s| {
     let (v, sp) = lower(g, s);
     pending.extend(sp);
     v
   }).collect();
 
   // Lower each arm to its (mp_N, mb_N) components.
-  let arm_cpss: Vec<ArmCps<'src>> = arms.iter().map(|arm| lower_match_arm(g, arm, origin)).collect();
+  let arm_cpss: Vec<ArmCps> = arms.iter().map(|arm| lower_match_arm(g, arm, origin)).collect();
 
   // Emit mb_N and mp_N LetFns as Pending::Fn for each arm.
   for arm in &arm_cpss {
@@ -980,13 +1009,13 @@ fn lower_match<'src>(
   let m0_k_id = m0_k_param.id;
 
   // Build fail-chain right-to-left. Start with panic, wrap each arm from last to first.
-  let chain: Expr<'src> = arm_cpss.iter().rev().fold(
+  let chain: Expr = arm_cpss.iter().rev().fold(
     // Initial: panic (unreachable — no arms matched)
     { let pv = g.val(ValKind::Panic, origin); g.expr(ExprKind::App { func: Callable::Val(pv), args: vec![] }, origin) },
     |fail_expr, arm| {
       // Build: mp_N(subj_0, ..., k, fn: fail_expr)
       let mp_ref = g.val(ValKind::Ref(Ref::Synth(arm.mp_name.id)), origin);
-      let mut call_args: Vec<Arg<'src>> = m0_subj_params.iter().map(|p| {
+      let mut call_args: Vec<Arg> = m0_subj_params.iter().map(|p| {
         Arg::Val(ref_val(g, p.kind, p.id, origin))
       }).collect();
       let k_val = g.val(ValKind::ContRef(m0_k_id), origin);
@@ -1011,7 +1040,7 @@ fn lower_match<'src>(
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
   let m0_ref = g.val(ValKind::Ref(Ref::Synth(m0_name.id)), origin);
-  let call_args: Vec<Arg<'src>> = subject_vals.into_iter().map(Arg::Val).collect();
+  let call_args: Vec<Arg> = subject_vals.into_iter().map(Arg::Val).collect();
   pending.push(Pending::App {
     func: Callable::Val(m0_ref),
     args: call_args,
@@ -1027,7 +1056,7 @@ fn lower_match<'src>(
 /// mb = fn(..binds, k): body expression, calls k with result
 ///
 /// Calling convention: mp(subj, succ, fail) — succ-first like if-then-else.
-fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<AstId>) -> ArmCps<'src> {
+fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<AstId>) -> ArmCps {
   match &arm.kind {
     NodeKind::Arm { lhs, body, .. } => {
       let arm_origin = Some(arm.id);
@@ -1044,7 +1073,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
       let mp_fail_id = mp_fail_param.id;
 
       // Lower patterns against the mp scrutinee params.
-      let mut arm_pending: Vec<Pending<'src>> = vec![];
+      let mut arm_pending: Vec<Pending> = vec![];
       for (pat_node, param) in lhs_nodes.iter().zip(mp_subj_params.iter()) {
         let pat_origin = Some(pat_node.id);
         let scrutinee_val = ref_val(g, param.kind, param.id, pat_origin);
@@ -1070,7 +1099,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
 
       // Build mp body: test pattern, call mb(binds, succ) on success, fail() on failure.
       // The succ cont IS the outer continuation (passed through from m_0).
-      let mp_body: Expr<'src> = {
+      let mp_body: Expr = {
         // Success call: mb_N(bound_vals..., succ)
         let mb_ref = g.val(ValKind::Ref(Ref::Synth(mb_name.id)), arm_origin);
         let succ_val = g.val(ValKind::ContRef(mp_succ_id), arm_origin);
@@ -1085,11 +1114,11 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
 
         } else if arm_pending.iter().all(|p| matches!(p, Pending::MatchBind { .. })) {
           // Bind-only: mp calls mb(scrutinees..., succ).
-          let bind_vals: Vec<Val<'src>> = arm_pending.iter().filter_map(|p| match p {
+          let bind_vals: Vec<Val> = arm_pending.iter().filter_map(|p| match p {
             Pending::MatchBind { val, .. } => Some(val.clone()),
             _ => None,
           }).collect();
-          let mut mb_args: Vec<Arg<'src>> = bind_vals.into_iter().map(Arg::Val).collect();
+          let mut mb_args: Vec<Arg> = bind_vals.into_iter().map(Arg::Val).collect();
           mb_args.push(Arg::Val(succ_val));
           g.expr(ExprKind::App { func: Callable::Val(mb_ref), args: mb_args }, arm_origin)
 
@@ -1140,11 +1169,11 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
         } else {
           // Mixed or structural — legacy path using wrap_with_fail.
           // Build success call: mb(binds, succ)
-          let bind_vals: Vec<Val<'src>> = arm_pending.iter().filter_map(|p| match p {
+          let bind_vals: Vec<Val> = arm_pending.iter().filter_map(|p| match p {
             Pending::MatchBind { val, .. } => Some(val.clone()),
             _ => None,
           }).collect();
-          let mut mb_args: Vec<Arg<'src>> = bind_vals.into_iter().map(Arg::Val).collect();
+          let mut mb_args: Vec<Arg> = bind_vals.into_iter().map(Arg::Val).collect();
           mb_args.push(Arg::Val(succ_val));
           let mb_call = g.expr(ExprKind::App { func: Callable::Val(mb_ref), args: mb_args }, arm_origin);
           let succ_cont = Cont::Expr { args: vec![], body: Box::new(mb_call) };
@@ -1181,7 +1210,7 @@ fn lower_block<'src>(
   params: &'src Node<'src>,
   body: &'src [Node<'src>],
   origin: Option<AstId>,
-) -> Lower<'src> {
+) -> Lower {
   let block_fn_name = g.fresh_fn(origin);
   let mut param_names = extract_params(g, params);
   let (cont, prev_cont) = g.push_cont(origin);
@@ -1207,33 +1236,33 @@ fn lower_block<'src>(
 // ---------------------------------------------------------------------------
 
 // Extend Pending to handle App and Match, which need a body (the next expression).
-enum Pending<'src> {
-  Val { name: BindNode, val: Val<'src>, origin: Option<AstId> },
-  Fn { name: BindNode, params: Vec<Param>, fn_body: Expr<'src>, origin: Option<AstId> },
-  App { func: Callable<'src>, args: Vec<Arg<'src>>, result: BindNode, origin: Option<AstId> },
+enum Pending {
+  Val { name: BindNode, val: Val, origin: Option<AstId> },
+  Fn { name: BindNode, params: Vec<Param>, fn_body: Expr, origin: Option<AstId> },
+  App { func: Callable, args: Vec<Arg>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits plain LetVal (fail is always ·panic for irrefutable binds).
-  MatchBind { name: BindNode, val: Val<'src>, origin: Option<AstId> },
+  MatchBind { name: BindNode, val: Val, origin: Option<AstId> },
   /// Pattern-lowered guard check — emits func(args) + If with ·panic as fail cont.
   /// Used by Apply patterns (predicate guards like `is_even y`, `Ok b`).
-  MatchGuard { func: Callable<'src>, args: Vec<Val<'src>>, origin: Option<AstId> },
+  MatchGuard { func: Callable, args: Vec<Val>, origin: Option<AstId> },
   /// Pattern match — matcher function applied to subject.
   /// Emits: LetFn body = fn(bind_names...): <cont>
   ///        LetFn matcher = fn(subj, succ, fail): matcher_body
   ///        matcher(subject, body, panic)
   /// The matcher tests with temps only; succ forwards values to the body.
   PatternMatch {
-    subject: Val<'src>,
+    subject: Val,
     bind_names: Vec<BindNode>,
     matcher_name: BindNode,
     matcher_params: Vec<Param>,
-    matcher_body: Expr<'src>,
+    matcher_body: Expr,
     origin: Option<AstId>,
   },
   /// Yield — suspend execution, yield a value; result bound in continuation.
-  Yield { value: Val<'src>, result: BindNode, origin: Option<AstId> },
+  Yield { value: Val, result: BindNode, origin: Option<AstId> },
 }
 
-impl<'src> Pending<'src> {
+impl Pending {
   fn origin(&self) -> Option<AstId> {
     match self {
       Pending::Val { origin, .. } | Pending::Fn { origin, .. } | Pending::App { origin, .. }
@@ -1248,7 +1277,7 @@ impl<'src> Pending<'src> {
 /// For `cont:`-typed pending items (App, etc.): when the current item is at
 /// the leaf (`Cont::Ref`), use it directly; when non-leaf, wrap the inner body with the
 /// pre-allocated `result` bind node.
-fn cont_with_result<'src>(cont: Cont<'src>, result: BindNode) -> Cont<'src> {
+fn cont_with_result(cont: Cont, result: BindNode) -> Cont {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { body, .. } => Cont::Expr { args: vec![result], body },
@@ -1256,7 +1285,7 @@ fn cont_with_result<'src>(cont: Cont<'src>, result: BindNode) -> Cont<'src> {
 }
 
 
-fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Cont<'src>) -> Expr<'src> {
+fn wrap(g: &mut Gen, bindings: Vec<Pending>, tail: Cont) -> Expr {
   wrap_with_fail(g, bindings, tail, None)
 }
 
@@ -1265,27 +1294,27 @@ fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending<'src>>, tail: Cont<'src>) -> Ex
 /// Used for arm matchers where `fail_id` is the matcher's fail param.
 /// `tail` is the continuation for the innermost (last) binding.
 /// Each non-leaf binding gets `Cont::Expr { args: vec![fresh], body: Box::new(next_expr) }`.
-fn wrap_with_fail<'src>(
+fn wrap_with_fail(
   g: &mut Gen,
-  bindings: Vec<Pending<'src>>,
-  tail: Cont<'src>,
+  bindings: Vec<Pending>,
+  tail: Cont,
   fail_id: Option<CpsId>,
-) -> Expr<'src> {
+) -> Expr {
   // Fold right-to-left. The accumulator starts as `tail: Cont` and becomes
   // `Expr` after the first (innermost) pending item is processed.
   // We use an enum to track whether we have a Cont (leaf) or Expr (non-leaf).
-  enum Acc<'s> {
-    Tail(Cont<'s>),
-    Expr(Expr<'s>),
+  enum Acc {
+    Tail(Cont),
+    Expr(Expr),
   }
-  let make_fail_val = |g: &mut Gen, origin: Option<AstId>| -> Val<'src> {
+  let make_fail_val = |g: &mut Gen, origin: Option<AstId>| -> Val {
     match fail_id {
       None     => g.val(ValKind::Panic, origin),
       Some(id) => g.val(ValKind::ContRef(id), origin),
     }
   };
   let acc = bindings.into_iter().rev().fold(Acc::Tail(tail), |acc, pending| {
-    let cont: Cont<'src> = match acc {
+    let cont: Cont = match acc {
       Acc::Tail(cont) => cont,
       Acc::Expr(inner) => {
         // TODO: when Pending::Fn is followed by Pending::MatchBind (plain ident
@@ -1361,7 +1390,7 @@ fn wrap_with_fail<'src>(
         }, origin);
 
         // Build: func(args..., fn result: if_expr)
-        let mut call_args: Vec<Arg<'src>> = args.into_iter().map(Arg::Val).collect();
+        let mut call_args: Vec<Arg> = args.into_iter().map(Arg::Val).collect();
         call_args.push(Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(if_expr) }));
         g.expr(
           ExprKind::App { func, args: call_args },
@@ -1479,7 +1508,7 @@ fn collect_module_exports(exprs: &[Node<'_>], bind_site_to_cps: &std::collection
   }).collect()
 }
 
-pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> CpsResult<'src> {
+pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> CpsResult {
   let mut g = Gen::new(scope);
   if exprs.is_empty() {
     // Empty module: export nothing.
@@ -1491,11 +1520,11 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
   let export_ids: Vec<CpsId> = collect_module_exports(exprs, &g.bind_site_to_cps);
 
   // Build the terminal App: ·export ·export_0, ·export_1, ...
-  let export_vals: Vec<Val<'src>> = export_ids.iter().map(|&cps_id| {
+  let export_vals: Vec<Val> = export_ids.iter().map(|&cps_id| {
     let origin = g.origin.try_get(cps_id).and_then(|o| *o);
     g.val(ValKind::Ref(Ref::Synth(cps_id)), origin)
   }).collect();
-  let export_args: Vec<Arg<'src>> = export_vals.into_iter().map(Arg::Val).collect();
+  let export_args: Vec<Arg> = export_vals.into_iter().map(Arg::Val).collect();
   let terminal = g.expr(ExprKind::App {
     func: Callable::BuiltIn(BuiltIn::Export),
     args: export_args,
@@ -1508,7 +1537,7 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
 }
 
 /// Lower a single expression node (or a Module root) to CPS IR.
-pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResult<'src> {
+pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResult {
   let mut g = Gen::new(scope);
   let (val, pending) = lower(&mut g, node);
   let cont = g.cont;
@@ -1535,12 +1564,12 @@ pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResul
 /// Range matches don't produce bindings — succ is called with no args.
 fn emit_range_pattern<'src>(
   g: &mut Gen,
-  val: Val<'src>,
+  val: Val,
   op: &'src str,
   start: &'src Node<'src>,
   end: &'src Node<'src>,
   origin: Option<AstId>,
-  pending: &mut Vec<Pending<'src>>,
+  pending: &mut Vec<Pending>,
 ) {
   let subj_param = g.fresh_result(origin);
   let succ_param = g.bind(Bind::Cont, None);
@@ -1606,12 +1635,12 @@ fn emit_range_pattern<'src>(
 /// Emit a PatternMatch for a literal equality check.
 /// Matcher: fn(subj, succ, fail): op_eq(subj, lit, fn result: if result then succ() else fail())
 /// Literal matches don't produce bindings — succ is called with no args.
-fn emit_literal_pattern<'src>(
+fn emit_literal_pattern(
   g: &mut Gen,
-  val: Val<'src>,
-  lit: Lit<'src>,
+  val: Val,
+  lit: Lit,
   origin: Option<AstId>,
-  pending: &mut Vec<Pending<'src>>,
+  pending: &mut Vec<Pending>,
 ) {
   let subj_param = g.fresh_result(origin);
   let succ_param = g.bind(Bind::Cont, None);
@@ -1677,10 +1706,10 @@ fn emit_literal_pattern<'src>(
 /// folding right-to-left over the element list. Each `SeqPop` wraps the previous body.
 fn emit_seq_pattern<'src>(
   g: &mut Gen,
-  val: Val<'src>,
+  val: Val,
   elems: &'src [Node<'src>],
   origin: Option<AstId>,
-  pending: &mut Vec<Pending<'src>>,
+  pending: &mut Vec<Pending>,
 ) -> (Bind, CpsId) {
   let subj_param = g.fresh_result(origin);
   let succ_param = g.bind(Bind::Cont, None);
@@ -1771,10 +1800,10 @@ fn build_seq_terminal<'src>(
   succ_id: CpsId,
   fail_id: CpsId,
   origin: Option<AstId>,
-) -> (Expr<'src>, BindNode) {
+) -> (Expr, BindNode) {
   // Build succ(temps...) call.
   let succ_ref = g.val(ValKind::ContRef(succ_id), origin);
-  let mut succ_args: Vec<Arg<'src>> = head_temps.iter()
+  let mut succ_args: Vec<Arg> = head_temps.iter()
     .map(|t| Arg::Val(g.val(ValKind::Ref(Ref::Synth(t.id)), origin)))
     .collect();
   if let Some(rt) = rest_temp {
@@ -1849,14 +1878,14 @@ fn build_seq_terminal<'src>(
 /// Fold right over head_temps, wrapping each SeqPop around the body.
 /// `first_cursor` is used as the outermost cursor (typically subj_param).
 /// Returns the fully wrapped body.
-fn fold_seq_pops<'src>(
+fn fold_seq_pops(
   g: &mut Gen,
   head_temps: &[BindNode],
-  terminal: (Expr<'src>, BindNode),
+  terminal: (Expr, BindNode),
   fail_id: CpsId,
   first_cursor: BindNode,
   origin: Option<AstId>,
-) -> Expr<'src> {
+) -> Expr {
   let (mut body, mut next_tail_bind) = terminal;
 
   if head_temps.is_empty() {
@@ -1924,10 +1953,10 @@ struct RecField<'a, 'src> {
 /// After the PatternMatch, recursive `lower_pat_lhs` calls handle sub-patterns.
 fn emit_rec_pattern<'src>(
   g: &mut Gen,
-  val: Val<'src>,
+  val: Val,
   fields: &'src [Node<'src>],
   origin: Option<AstId>,
-  pending: &mut Vec<Pending<'src>>,
+  pending: &mut Vec<Pending>,
 ) -> (Bind, CpsId) {
   let subj_param = g.fresh_result(origin);
   let succ_param = g.bind(Bind::Cont, None);
@@ -2049,10 +2078,10 @@ fn build_rec_terminal<'src>(
   succ_id: CpsId,
   fail_id: CpsId,
   origin: Option<AstId>,
-) -> (Expr<'src>, BindNode) {
+) -> (Expr, BindNode) {
   // Build succ(temps...) call.
   let succ_ref = g.val(ValKind::ContRef(succ_id), origin);
-  let mut succ_args: Vec<Arg<'src>> = field_temps.iter()
+  let mut succ_args: Vec<Arg> = field_temps.iter()
     .map(|t| Arg::Val(g.val(ValKind::Ref(Ref::Synth(t.id)), origin)))
     .collect();
   if let Some(rt) = rest_temp {
@@ -2141,11 +2170,11 @@ fn fold_rec_pops<'src>(
   g: &mut Gen,
   fields: &[RecField<'_, 'src>],
   field_temps: &[BindNode],
-  terminal: (Expr<'src>, BindNode),
+  terminal: (Expr, BindNode),
   fail_id: CpsId,
   first_cursor: BindNode,
   origin: Option<AstId>,
-) -> Expr<'src> {
+) -> Expr {
   let (mut body, mut next_tail_bind) = terminal;
 
   if fields.is_empty() {
@@ -2160,7 +2189,7 @@ fn fold_rec_pops<'src>(
   for i in (0..fields.len()).rev() {
     let cursor_bind = if i == 0 { first_cursor.clone() } else { g.fresh_result(origin) };
     let cursor_ref = g.val(ValKind::Ref(Ref::Synth(cursor_bind.id)), origin);
-    let field_name_val = g.val(ValKind::Lit(Lit::Str(fields[i].name)), origin);
+    let field_name_val = g.val(ValKind::Lit(Lit::Str(fields[i].name.to_string())), origin);
     let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
 
     let pop = g.expr(ExprKind::App {
@@ -2186,9 +2215,9 @@ fn fold_rec_pops<'src>(
 fn lower_pat_lhs<'src>(
   g: &mut Gen,
   lhs: &'src Node<'src>,
-  val: Val<'src>,
+  val: Val,
   origin: Option<AstId>,
-  pending: &mut Vec<Pending<'src>>,
+  pending: &mut Vec<Pending>,
 ) -> (Bind, CpsId) {
   match &lhs.kind {
     // Plain bind: `x = foo` or synthetic `·$_N` from partial desugaring
@@ -2297,7 +2326,7 @@ fn lower_pat_lhs<'src>(
     // Exactly one arg should be an Ident/Wildcard (the "binding slot"); others are
     // literal/value args. All are assembled in order as arguments to MatchGuard.
     NodeKind::Apply { func, args } => {
-      let mut arg_vals: Vec<Val<'src>> = vec![];
+      let mut arg_vals: Vec<Val> = vec![];
       for arg in args.items.iter() {
         let arg_val = match &arg.kind {
           NodeKind::Ident(_) | NodeKind::Wildcard => {
@@ -2332,7 +2361,7 @@ fn lower_pat_lhs<'src>(
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
     NodeKind::LitStr { content: s, .. } => {
-      emit_literal_pattern(g, val, Lit::Str(s), origin, pending);
+      emit_literal_pattern(g, val, Lit::Str(crate::strings::render(s)), origin, pending);
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
 
@@ -2389,7 +2418,7 @@ mod tests {
   use crate::passes::cps::ir::ExprKind;
   use crate::passes::scopes;
 
-  fn lower_src(src: &str) -> CpsResult<'static> {
+  fn lower_src(src: &str) -> CpsResult {
     let src: &'static str = Box::leak(src.to_string().into_boxed_str());
     let r: &'static crate::ast::ParseResult<'static> =
       Box::leak(Box::new(parse(src).expect("parse failed")));

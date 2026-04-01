@@ -23,7 +23,7 @@
 ;;     (for interned symbol ids) and any GC struct/array ref.
 ;;   - Return values are (ref null eq) where null signals "not found".
 ;;   - Key equality uses deep_eq (from operators.wat): i31ref → ref.eq,
-;;     $Num → f64.eq, $StrVal → str_eq. General dict keys with
+;;     $Num → f64.eq, $Str → str_eq. General dict keys with
 ;;     user-defined Eq protocol will live in the std-lib (CPS).
 ;;
 ;; Hashing:
