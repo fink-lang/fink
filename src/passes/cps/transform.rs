@@ -210,17 +210,7 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower {
     NodeKind::LitInt(s)  => (lit_val(g, Lit::Int(parse_int(s)), o), vec![]),
     NodeKind::LitFloat(s) => (lit_val(g, Lit::Float(parse_float(s)), o), vec![]),
     NodeKind::LitDecimal(s) => (lit_val(g, Lit::Decimal(parse_decimal(s)), o), vec![]),
-    NodeKind::LitStr { content: s, .. } => {
-      let cooked = lit_val(g, Lit::Str(crate::strings::render(s)), o);
-      let result = g.fresh_result(o);
-      let (rk, ri) = (result.kind, result.id);
-      let pending = vec![Pending::App {
-        func: Callable::BuiltIn(BuiltIn::Str),
-        args: vec![Arg::Val(cooked)],
-        result, origin: o,
-      }];
-      (ref_val(g, rk, ri, o), pending)
-    }
+    NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(crate::strings::render(s)), o), vec![]),
 
     // ---- identifier reference — resolved via scope analysis ----
     NodeKind::Ident(_) | NodeKind::SynthIdent(_) => (scope_ref_val(g, node.id), vec![]),

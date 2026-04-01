@@ -746,51 +746,51 @@ test 'match literal arms', fn:
       _: 'other'
   | equals fink":
     ·fn
-      fn ·v_22: ·str 'one', ·v_22
-      fn ·v_27:
+      fn ·v_22: ·v_22 'one'
+      fn ·v_26:
         ·fn
           fn ·v_2, ·v_3, ·v_4:
             ·fn
-              fn: ·v_27 ·v_3
-              fn ·v_33:
+              fn: ·v_26 ·v_3
+              fn ·v_32:
                 ·fn
                   fn ·v_6, ·v_7, ·v_8:
                     ·op_eq ·v_6, 1, fn ·v_11:
                       ·if ·v_11,
                         fn: ·v_7 _
                         fn: ·v_8 _
-                  fn ·v_19: ·v_19 ·v_2, ·v_33, ·v_4
-          fn ·v_39:
+                  fn ·v_19: ·v_19 ·v_2, ·v_32, ·v_4
+          fn ·v_38:
             ·fn
-              fn ·v_60: ·str 'two', ·v_60
-              fn ·v_65:
+              fn ·v_59: ·v_59 'two'
+              fn ·v_63:
                 ·fn
-                  fn ·v_40, ·v_41, ·v_42:
+                  fn ·v_39, ·v_40, ·v_41:
                     ·fn
-                      fn: ·v_65 ·v_41
-                      fn ·v_71:
+                      fn: ·v_63 ·v_40
+                      fn ·v_69:
                         ·fn
-                          fn ·v_44, ·v_45, ·v_46:
-                            ·op_eq ·v_44, 2, fn ·v_49:
-                              ·if ·v_49,
+                          fn ·v_43, ·v_44, ·v_45:
+                            ·op_eq ·v_43, 2, fn ·v_48:
+                              ·if ·v_48,
+                                fn: ·v_44 _
                                 fn: ·v_45 _
-                                fn: ·v_46 _
-                          fn ·v_57: ·v_57 ·v_40, ·v_71, ·v_42
-                  fn ·v_77:
+                          fn ·v_56: ·v_56 ·v_39, ·v_69, ·v_41
+                  fn ·v_75:
                     ·fn
-                      fn ·v_82: ·str 'other', ·v_82
-                      fn ·v_87:
+                      fn ·v_80: ·v_80 'other'
+                      fn ·v_84:
                         ·fn
-                          fn ·v_78, ·v_79, ·v_80: ·v_87 ·v_79
-                          fn ·v_92:
+                          fn ·v_76, ·v_77, ·v_78: ·v_84 ·v_77
+                          fn ·v_89:
                             ·fn
-                              fn ·v_93, ·v_94:
-                                ·v_39 ·v_93, ·v_94, fn:
-                                  ·v_77 ·v_93, ·v_94, fn:
-                                    ·v_92 ·v_93, ·v_94, fn:
+                              fn ·v_90, ·v_91:
+                                ·v_38 ·v_90, ·v_91, fn:
+                                  ·v_75 ·v_90, ·v_91, fn:
+                                    ·v_89 ·v_90, ·v_91, fn:
                                       ·panic _
-                              fn ·v_109: ·v_109 ·∅foo, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICAxOiAnb25lJ1xuICAyOiAndHdvJ1xuICBfOiAnb3RoZXInIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLEssRUFBRyxBQUFBLEtBQUEsQSxDQUFBLEcsQyxFO0tBQUgsSztJQUFBLEFBQUE7UyxNLE0sSTtRQUFBLEFBQUE7WSxFQUFBLEFBQUEsTTthQUFBLEs7WUFBQSxBQUFBO2lCQUFBLE0sTSxJO2dCQUFBLEFBQUEsT0FBQSxJLEVBQUEsQyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLEtBQUE7c0IsRUFBQSxBLEtBQUE7aUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxJLEVBQUEsSyxFO1NBQUEsSztRQUNBLEFBQUE7YSxLLEVBQUcsQUFBQSxLQUFBLEEsQ0FBQSxHLEMsRTthQUFILEs7WUFBQSxBQUFBO2lCLE8sTyxLO2dCQUFBLEFBQUE7b0IsRUFBQSxBQUFBLE07cUJBQUEsSztvQkFBQSxBQUFBO3lCQUFBLE8sTyxLO3dCQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7MEJBQUEsQUFBQSxJQUFBLEs7OEIsRUFBQSxBLE1BQUE7OEIsRUFBQSxBLE1BQUE7eUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsSyxFO2lCQUFBLEs7Z0JBQ0EsQUFBQTtxQixLLEVBQUcsQUFBQSxLQUFBLEEsQ0FBQSxLLEMsRTtxQkFBSCxLO29CQUFBLEFBQUE7eUIsTyxPLEssRUFBQSxBQUFBLE07eUJBQUEsSzt3QkFIRixBQUFBOzZCQUFBLE8sSzs0QkFBQSxBQUFBLE1BQUEsSyxFLEssSTs4QkFBQSxBQUFBLE1BQUEsSyxFLEssSTtnQ0FBQSxBQUFBLE1BQUEsSyxFLEssSTtrQ0FBQSxBQUFBLE9BQUE7NkJBQUEsTSxFQUFBLEFBQUEsT0FBTSxLLEUiCn0=
+                              fn ·v_106: ·v_106 ·∅foo, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICAxOiAnb25lJ1xuICAyOiAndHdvJ1xuICBfOiAnb3RoZXInIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLEssRSxBLE1BQUcsQSxDQUFBLEc7S0FBSCxLO0lBQUEsQUFBQTtTLE0sTSxJO1FBQUEsQUFBQTtZLEVBQUEsQUFBQSxNO2FBQUEsSztZQUFBLEFBQUE7aUJBQUEsTSxNLEk7Z0JBQUEsQUFBQSxPQUFBLEksRUFBQSxDLEtBQUEsSztrQkFBQSxBQUFBLElBQUEsSztzQixFQUFBLEEsS0FBQTtzQixFQUFBLEEsS0FBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBQ0EsQUFBQTthLEssRSxBLE1BQUcsQSxDQUFBLEc7YUFBSCxLO1lBQUEsQUFBQTtpQixPLE8sSztnQkFBQSxBQUFBO29CLEVBQUEsQUFBQSxNO3FCQUFBLEs7b0JBQUEsQUFBQTt5QkFBQSxPLE8sSzt3QkFBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLOzBCQUFBLEFBQUEsSUFBQSxLOzhCLEVBQUEsQSxNQUFBOzhCLEVBQUEsQSxNQUFBO3lCQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLEssRTtpQkFBQSxLO2dCQUNBLEFBQUE7cUIsSyxFLEEsTUFBRyxBLENBQUEsSztxQkFBSCxLO29CQUFBLEFBQUE7eUIsTyxPLEssRUFBQSxBQUFBLE07eUJBQUEsSzt3QkFIRixBQUFBOzZCQUFBLE8sSzs0QkFBQSxBQUFBLE1BQUEsSyxFLEssSTs4QkFBQSxBQUFBLE1BQUEsSyxFLEssSTtnQ0FBQSxBQUFBLE1BQUEsSyxFLEssSTtrQ0FBQSxBQUFBLE9BQUE7NkJBQUEsTSxFQUFBLEFBQUEsT0FBTSxLLEUiCn0=
 
 
 test 'match — expression in arm', fn:
@@ -1228,13 +1228,13 @@ test 'range — exclusive in match arm', fn:
       0..10: 'low'
   | equals fink":
     ·fn
-      fn ·v_26: ·str 'low', ·v_26
-      fn ·v_31:
+      fn ·v_26: ·v_26 'low'
+      fn ·v_30:
         ·fn
           fn ·v_2, ·v_3, ·v_4:
             ·fn
-              fn: ·v_31 ·v_3
-              fn ·v_37:
+              fn: ·v_30 ·v_3
+              fn ·v_36:
                 ·fn
                   fn ·v_6, ·v_7, ·v_8:
                     ·op_rngex 0, 10, fn ·v_19:
@@ -1242,14 +1242,14 @@ test 'range — exclusive in match arm', fn:
                         ·if ·v_14,
                           fn: ·v_7 _
                           fn: ·v_8 _
-                  fn ·v_23: ·v_23 ·v_2, ·v_37, ·v_4
-          fn ·v_43:
+                  fn ·v_23: ·v_23 ·v_2, ·v_36, ·v_4
+          fn ·v_42:
             ·fn
-              fn ·v_44, ·v_45:
-                ·v_43 ·v_44, ·v_45, fn:
+              fn ·v_43, ·v_44:
+                ·v_42 ·v_43, ·v_44, fn:
                   ·panic _
-              fn ·v_52: ·v_52 ·∅x, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgMC4uMTA6ICdsb3cnIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLEssRUFBTyxBQUFBLEtBQUEsQSxDQUFBLEcsQyxFO0tBQVAsSztJQUFBLEFBQUE7UyxNLE0sSTtRQUFBLEFBQUE7WSxFQUFBLEFBQUEsTTthQUFBLEs7WUFBQSxBQUFBO2lCQUFBLE0sTSxJO2dCQUFDLEFBQUEsVUFBRCxDLEVBQUcsRSxLQUFILEs7a0JBQUMsQUFBQSxPQUFELEksRUFBQSxLLEtBQUEsSztvQkFBQSxBQUFBLElBQUEsSzt3QixFQUFBLEEsS0FBQTt3QixFQUFBLEEsS0FBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBREYsQUFBQTthQUFBLE8sSztZQUFBLEFBQUEsTUFBQSxLLEUsSyxJO2NBQUEsQUFBQSxPQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBTSxHLEUiCn0=
+              fn ·v_51: ·v_51 ·∅x, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgMC4uMTA6ICdsb3cnIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLEssRSxBLE1BQU8sQSxDQUFBLEc7S0FBUCxLO0lBQUEsQUFBQTtTLE0sTSxJO1FBQUEsQUFBQTtZLEVBQUEsQUFBQSxNO2FBQUEsSztZQUFBLEFBQUE7aUJBQUEsTSxNLEk7Z0JBQUMsQUFBQSxVQUFELEMsRUFBRyxFLEtBQUgsSztrQkFBQyxBQUFBLE9BQUQsSSxFQUFBLEssS0FBQSxLO29CQUFBLEFBQUEsSUFBQSxLO3dCLEVBQUEsQSxLQUFBO3dCLEVBQUEsQSxLQUFBO2lCQUFBLEssRUFBQSxBQUFBLE1BQUEsSSxFQUFBLEssRTtTQUFBLEs7UUFERixBQUFBO2FBQUEsTyxLO1lBQUEsQUFBQSxNQUFBLEssRSxLLEk7Y0FBQSxBQUFBLE9BQUE7YUFBQSxLLEVBQUEsQUFBQSxNQUFNLEcsRSIKfQ==
 
 
 test 'range — inclusive in match arm', fn:
@@ -1258,13 +1258,13 @@ test 'range — inclusive in match arm', fn:
       0...10: 'low'
   | equals fink":
     ·fn
-      fn ·v_26: ·str 'low', ·v_26
-      fn ·v_31:
+      fn ·v_26: ·v_26 'low'
+      fn ·v_30:
         ·fn
           fn ·v_2, ·v_3, ·v_4:
             ·fn
-              fn: ·v_31 ·v_3
-              fn ·v_37:
+              fn: ·v_30 ·v_3
+              fn ·v_36:
                 ·fn
                   fn ·v_6, ·v_7, ·v_8:
                     ·op_rngin 0, 10, fn ·v_19:
@@ -1272,14 +1272,14 @@ test 'range — inclusive in match arm', fn:
                         ·if ·v_14,
                           fn: ·v_7 _
                           fn: ·v_8 _
-                  fn ·v_23: ·v_23 ·v_2, ·v_37, ·v_4
-          fn ·v_43:
+                  fn ·v_23: ·v_23 ·v_2, ·v_36, ·v_4
+          fn ·v_42:
             ·fn
-              fn ·v_44, ·v_45:
-                ·v_43 ·v_44, ·v_45, fn:
+              fn ·v_43, ·v_44:
+                ·v_42 ·v_43, ·v_44, fn:
                   ·panic _
-              fn ·v_52: ·v_52 ·∅x, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgMC4uLjEwOiAnbG93JyJdLAogICJtYXBwaW5ncyI6ICJBQUNFLEFBQUE7SyxLLEVBQVEsQUFBQSxLQUFBLEEsQ0FBQSxHLEMsRTtLQUFSLEs7SUFBQSxBQUFBO1MsTSxNLEk7UUFBQSxBQUFBO1ksRUFBQSxBQUFBLE07YUFBQSxLO1lBQUEsQUFBQTtpQkFBQSxNLE0sSTtnQkFBQyxBQUFBLFVBQUQsQyxFQUFJLEUsS0FBSixLO2tCQUFDLEFBQUEsT0FBRCxJLEVBQUEsSyxLQUFBLEs7b0JBQUEsQUFBQSxJQUFBLEs7d0IsRUFBQSxBLEtBQUE7d0IsRUFBQSxBLEtBQUE7aUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxJLEVBQUEsSyxFO1NBQUEsSztRQURGLEFBQUE7YUFBQSxPLEs7WUFBQSxBQUFBLE1BQUEsSyxFLEssSTtjQUFBLEFBQUEsT0FBQTthQUFBLEssRUFBQSxBQUFBLE1BQU0sRyxFIgp9
+              fn ·v_51: ·v_51 ·∅x, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgMC4uLjEwOiAnbG93JyJdLAogICJtYXBwaW5ncyI6ICJBQUNFLEFBQUE7SyxLLEUsQSxNQUFRLEEsQ0FBQSxHO0tBQVIsSztJQUFBLEFBQUE7UyxNLE0sSTtRQUFBLEFBQUE7WSxFQUFBLEFBQUEsTTthQUFBLEs7WUFBQSxBQUFBO2lCQUFBLE0sTSxJO2dCQUFDLEFBQUEsVUFBRCxDLEVBQUksRSxLQUFKLEs7a0JBQUMsQUFBQSxPQUFELEksRUFBQSxLLEtBQUEsSztvQkFBQSxBQUFBLElBQUEsSzt3QixFQUFBLEEsS0FBQTt3QixFQUFBLEEsS0FBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBREYsQUFBQTthQUFBLE8sSztZQUFBLEFBQUEsTUFBQSxLLEUsSyxJO2NBQUEsQUFBQSxPQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBTSxHLEUiCn0=
 
 
 test 'range — bind-lhs check', fn:

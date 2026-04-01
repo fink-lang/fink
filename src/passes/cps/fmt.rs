@@ -176,7 +176,7 @@ fn lit_to_node(lit: &Lit, loc: Loc) -> Node<'static> {
       let s: &'static str = Box::leak(format!("{}d", f).into_boxed_str());
       node(NodeKind::LitDecimal(s), loc)
     }
-    Lit::Str(s) => node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: crate::strings::control_pics_raw(s), indent: 0 }, loc),
+    Lit::Str(s) => node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: crate::strings::control_pics(s), indent: 0 }, loc),
     Lit::Seq   => node(NodeKind::LitSeq { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }, loc),
     Lit::Rec   => node(NodeKind::LitRec { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }, loc),
   }
@@ -288,7 +288,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::RecMerge  => "·rec_merge".into(),
     // String interpolation
     BuiltIn::StrFmt    => "·str_fmt".into(),
-    BuiltIn::Str => "·str".into(),
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
     // Collection primitives
@@ -427,21 +426,6 @@ pub fn to_node(expr: &Expr, ctx: &Ctx<'_, '_>) -> Node<'static> {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
         Callable::BuiltIn(op) => ident(&render_builtin(op), builtin_loc),
       };
-      // StrRendered: apply full control_pics to the string arg.
-      if matches!(func, Callable::BuiltIn(BuiltIn::Str)) {
-        let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
-          Arg::Val(v) => match &v.kind {
-            ValKind::Lit(Lit::Str(s)) => {
-              let loc = ctx_loc(v.id, ctx);
-              node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: crate::strings::control_pics(s), indent: 0 }, loc)
-            }
-            _ => val_to_node(v, ctx),
-          },
-          Arg::Cont(c) => render_cont(c, ctx),
-          _ => unreachable!("StrRendered only has Val and Cont args"),
-        }).collect();
-        return apply(func_node, arg_nodes, call_loc);
-      }
       // Collection builtins render as `·name args, fail, cont` (no ·apply prefix).
       let is_collection_builtin = matches!(func, Callable::BuiltIn(
         BuiltIn::SeqPop | BuiltIn::RecPop | BuiltIn::Empty

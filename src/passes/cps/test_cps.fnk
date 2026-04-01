@@ -45,8 +45,8 @@ test 'string literal', fn:
   expect cps_expr fink":
     'hello'
   | equals fink":
-    ·str 'hello', ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsS0FBQSxBLENBQUEsSyxDLEUiCn0=
+    ·v_0 'hello'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBQSxBLENBQUEsSyIKfQ==
 
 
 ---
@@ -301,7 +301,7 @@ test 'str tagged template', fn:
     foo'1\n2
       3'
   | equals fink":
-    ·∅foo '1\n2␊3', ·v_0
+    ·∅foo '1⧵n2␊3', ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxNQUFJLEEsQ0FBQSxNLEMsRSIKfQ==
 
 
@@ -309,7 +309,7 @@ test 'str tagged template escape handling', fn:
   expect cps_expr fink":
     foo'\n\r\t\f\${bar}\b\v\$\'\\\xE9\u{8A_9E}'
   | equals fink":
-    ·∅foo '\n\r\t\f', ·∅bar, '\b\v\$\'\\\xE9\u{8A_9E}', ·v_0
+    ·∅foo '⧵n⧵r⧵t⧵f', ·∅bar, '⧵b⧵v⧵＄⧵′⧵⧵⧵xE9⧵u{8A_9E}', ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxNQUFJLEEsQ0FBQSxRLEMsRUFBVSxLLEVBQUksQSxDQUFBLHVCLEMsRSIKfQ==
 
 
@@ -318,16 +318,16 @@ test 'str implicit formatting handling', fn:
     '1\n2
       3'
   | equals fink":
-    ·str '1␊2␊3', ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxLQUFBLEEsQ0FBQSxLLEMsRSIKfQ==
+    ·v_0 '1␊2␊3'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBLEEsQ0FBQSxLIgp9
 
 
 test 'str implicit formatting escapes', fn:
   expect cps_expr fink":
     '\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}'
   | equals fink":
-    ·str '␊␍␉␌␈␋＄′⧵é語', ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxLQUFBLEEsQ0FBQSxXLEMsRSIKfQ==
+    ·v_0 '␊␍␉␌␈␋＄′⧵é語'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBLEEsQ0FBQSxXIgp9
 
 
 ---
