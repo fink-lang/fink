@@ -20,11 +20,11 @@ struct FinkTest {
 ///
 /// Each test has the shape:
 ///   test 'name', fn:
-///     expect <func> [text] fn: <src-body>
-///   | equals[_fink] [text] fn: <exp-body>
+///     expect <func> ƒink: <src-body>
+///   | equals ƒink: <exp-body>
 ///
-/// `text fn:` and bare `fn:` are treated identically — the body is extracted
-/// as raw source text via Loc, then dedented. `text` is a hint for humans only.
+/// Source and expected bodies are extracted as raw text from ƒink: blocks,
+/// ": block strings, '...' string literals, or tag": tagged templates.
 fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec<FinkTest> {
   use fink::ast::NodeKind;
 
@@ -111,23 +111,15 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
             }
           }
           _ => {
-            if let Some(text) = extract_raw_templ(body_node) {
-              // Unescape \${ → ${ so interpolation syntax can appear in fink": src inputs
-              // without triggering the parser's own interpolation. Everything else verbatim.
-              text.replace("\\${", "${")
-            } else if let Some(text) = extract_block_body_text(body_node, file_src) {
-              text
-            } else {
-              extract_fn_body_text(body_node, file_src).unwrap_or_else(|| {
-                panic!("include_fink_tests: test '{}' at line {} — cannot extract source body from `expect {}`", name, stmt.loc.start.line, func_name)
-              })
-            }
+            extract_block_body_text(body_node, file_src).unwrap_or_else(|| {
+              panic!("include_fink_tests: test '{}' at line {} — cannot extract source body from `expect {}`", name, stmt.loc.start.line, func_name)
+            })
           }
         };
         (*func_name, text)
       }
       _ => panic!(
-        "include_fink_tests: test '{}' at line {} — first pipe segment is not `expect <func> fink\":`",
+        "include_fink_tests: test '{}' at line {} — first pipe segment is not `expect <func> ƒink:`",
         name, stmt.loc.start.line
       ),
     };
@@ -147,10 +139,8 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
           _ => {
             if let Some(text) = extract_raw_templ(body_node) {
               text
-            } else if let Some(text) = extract_block_body_text(body_node, file_src) {
-              text
             } else {
-              extract_fn_body_text(body_node, file_src).unwrap_or_else(|| {
+              extract_block_body_text(body_node, file_src).unwrap_or_else(|| {
                 panic!("include_fink_tests: test '{}' at line {} — cannot extract expected body from `equals`", name, stmt.loc.start.line)
               })
             }
@@ -159,7 +149,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
         text
       }
       _ => panic!(
-        "include_fink_tests: test '{}' at line {} — last pipe segment is not `equals fink\":`",
+        "include_fink_tests: test '{}' at line {} — last pipe segment is not `equals ƒink:`",
         name, stmt.loc.start.line
       ),
     };
@@ -176,10 +166,10 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
   out
 }
 
-/// Extract the verbatim string content from a tagged template node (e.g. `fink":`, `wat":`, `wat''`).
+/// Extract the verbatim string content from a tagged template node (e.g. `wat":`, `wat''`).
 ///
 /// Matches `Apply { func: Ident(_), args: [LitStr { content: s } | StrRawTempl { children: [LitStr { content: s }] }] }` and
-/// returns `s` verbatim — no unescaping, no trimming. Any tag name is accepted.
+/// returns `s` verbatim — no unescaping, no trimming. Used for `equals wat":` in wasm tests.
 fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
   use fink::ast::NodeKind;
   let NodeKind::Apply { func, args } = &node.kind else { return None };
@@ -220,42 +210,6 @@ fn extract_block_body_text<'src>(
   let NodeKind::Block { sep, .. } = &node.kind else { return None };
   let body_start = sep.loc.end.idx as usize;
   let body_end = node.loc.end.idx as usize;
-  if body_start >= body_end { return None; }
-  let raw = &file_src[body_start..body_end];
-  Some(dedent_str(raw).trim().to_string())
-}
-
-/// Extract and dedent the body text of a `fn:` or `text fn:` node.
-///
-/// Accepts either:
-///   - `Fn { body }` — bare `fn: <body>`
-///   - `Apply { func: Ident("text"), args: [Fn { body }] }` — `text fn: <body>`
-///
-/// Returns the raw source text of the body, dedented and trimmed.
-fn extract_fn_body_text<'src>(
-  node: &fink::ast::Node<'src>,
-  file_src: &'src str,
-) -> Option<String> {
-  use fink::ast::NodeKind;
-
-  // Unwrap optional `text` wrapper.
-  let fn_node = match &node.kind {
-    NodeKind::Fn { .. } => node,
-    NodeKind::Apply { func, args }
-      if matches!(func.kind, NodeKind::Ident("text")) =>
-    {
-      args.items.first()?
-    }
-    _ => return None,
-  };
-
-  if !matches!(fn_node.kind, NodeKind::Fn { .. }) { return None; }
-
-  // Use the Fn node's loc directly — body content begins after `fn:\n` (+4).
-  // End is whatever the Fn node recorded. When the LitStr loc bug is fixed
-  // this will automatically include closing delimiters.
-  let body_start = fn_node.loc.start.idx as usize + 4;
-  let body_end   = fn_node.loc.end.idx as usize;
   if body_start >= body_end { return None; }
   let raw = &file_src[body_start..body_end];
   Some(dedent_str(raw).trim().to_string())
