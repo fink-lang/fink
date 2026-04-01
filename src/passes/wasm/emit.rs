@@ -2035,7 +2035,8 @@ mod tests {
           let (count, _ty) = group.unwrap();
           local_count += count;
         }
-        assert_eq!(local_count, 0, "main = fn: 42 should have 0 locals");
+        // v2 calling convention: 1 CPS param (cont) + 1 scratch local = 2.
+        assert_eq!(local_count, 2, "main = fn: 42 should have 2 locals (cont + scratch)");
         break; // Only check the first defined function (user code).
       }
     }
