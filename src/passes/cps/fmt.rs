@@ -43,22 +43,22 @@ impl<'a, 'src> Ctx<'a, 'src> {
 // Entry points
 // ---------------------------------------------------------------------------
 
-pub fn fmt_with(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> String {
+pub fn fmt_with(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
   ast::fmt::fmt_block(&to_node(expr, ctx))
 }
 
-pub fn fmt_with_mapped(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, source_name: &str) -> (String, crate::sourcemap::SourceMap) {
+pub fn fmt_with_mapped(expr: &Expr, ctx: &Ctx<'_, '_>, source_name: &str) -> (String, crate::sourcemap::SourceMap) {
   // Note: fmt_block flag not applied to mapped variants (used for codegen source maps, not debug output)
   ast::fmt::fmt_mapped(&to_node(expr, ctx), source_name)
 }
 
-pub fn fmt_with_mapped_content(expr: &Expr<'_>, ctx: &Ctx<'_, '_>, source_name: &str, content: &str) -> (String, crate::sourcemap::SourceMap) {
+pub fn fmt_with_mapped_content(expr: &Expr, ctx: &Ctx<'_, '_>, source_name: &str, content: &str) -> (String, crate::sourcemap::SourceMap) {
   ast::fmt::fmt_mapped_with_content(&to_node(expr, ctx), source_name, content)
 }
 
 /// Format without origin map — falls back to string-based category detection.
 /// Used by tests that don't yet thread the prop graphs.
-pub fn fmt(expr: &Expr<'_>) -> String {
+pub fn fmt(expr: &Expr) -> String {
   ast::fmt::fmt_block(&to_node_no_ctx(expr))
 }
 
@@ -129,7 +129,7 @@ fn ctx_loc(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> Loc {
 
 /// For a pipe-desugared App, return the `|` separator token loc for this call stage.
 /// The App's origin points to the Pipe node; the func val's origin identifies which stage.
-fn pipe_sep_loc(expr_id: CpsId, func_val: &Val<'_>, ctx: &Ctx<'_, '_>) -> Option<Loc> {
+fn pipe_sep_loc(expr_id: CpsId, func_val: &Val, ctx: &Ctx<'_, '_>) -> Option<Loc> {
   let node = ctx.ast_node(expr_id)?;
   let NodeKind::Pipe(exprs) = &node.kind else { return None };
   let func_ast_id = ctx.origin.try_get(func_val.id).and_then(|o| *o)?;
@@ -140,7 +140,7 @@ fn pipe_sep_loc(expr_id: CpsId, func_val: &Val<'_>, ctx: &Ctx<'_, '_>) -> Option
 
 /// Render a Val to an AST node for use in an already-resolved position.
 /// Uses origin map to recover names and source locs from the AST.
-fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+fn val_to_node(v: &Val, ctx: &Ctx<'_, '_>) -> Node<'static> {
   let loc = ctx_loc(v.id, ctx);
   match &v.kind {
     ValKind::Lit(lit) => lit_to_node(lit, loc),
@@ -161,7 +161,7 @@ fn val_to_node(v: &Val<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
   }
 }
 
-fn lit_to_node(lit: &Lit<'_>, loc: Loc) -> Node<'static> {
+fn lit_to_node(lit: &Lit, loc: Loc) -> Node<'static> {
   match lit {
     Lit::Bool(b) => node(NodeKind::LitBool(*b), loc),
     Lit::Int(n) => {
@@ -176,7 +176,7 @@ fn lit_to_node(lit: &Lit<'_>, loc: Loc) -> Node<'static> {
       let s: &'static str = Box::leak(format!("{}d", f).into_boxed_str());
       node(NodeKind::LitDecimal(s), loc)
     }
-    Lit::Str(s) => node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: s.to_string(), indent: 0 }, loc),
+    Lit::Str(s) => node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: crate::strings::control_pics_raw(s), indent: 0 }, loc),
     Lit::Seq   => node(NodeKind::LitSeq { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }, loc),
     Lit::Rec   => node(NodeKind::LitRec { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }, loc),
   }
@@ -288,6 +288,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::RecMerge  => "·rec_merge".into(),
     // String interpolation
     BuiltIn::StrFmt    => "·str_fmt".into(),
+    BuiltIn::Str => "·str".into(),
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
     // Collection primitives
@@ -309,7 +310,7 @@ fn render_builtin(op: &BuiltIn) -> String {
 ///
 /// For `Cont::Ref`, the result param name is synthesised from the cont_id for a stable
 /// display; the `·v_cont` name is fixed (all conts render as `·v_cont` in param position).
-fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+fn render_cont<'src>(cont: &Cont, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { args, body } => {
       // Cont params are synthetic bindings — use their CpsId loc if available.
@@ -331,7 +332,7 @@ fn render_cont<'src>(cont: &Cont<'src>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 /// Render a `body: Cont` field as the body expression of a `fn name:` lambda.
 /// - `Cont::Expr { body, .. }` → render `body`.
 /// - `Cont::Ref(cont_id)` → render as `·v_{cont_id} {name}` — a tail call to the cont.
-fn render_cont_body(cont: &Cont<'_>, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
+fn render_cont_body(cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { body, .. } => to_node(body, ctx),
     Cont::Ref(cont_id) => {
@@ -344,7 +345,7 @@ fn render_cont_body(cont: &Cont<'_>, bound_name: &str, bound_id: CpsId, ctx: &Ct
 }
 
 
-pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
+pub fn to_node(expr: &Expr, ctx: &Ctx<'_, '_>) -> Node<'static> {
   // Best-effort loc for the expression itself — used for keyword/wrapper nodes.
   let expr_loc = ctx_loc(expr.id, ctx);
 
@@ -426,6 +427,21 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
         Callable::Val(func_val) => val_to_node(func_val, ctx),
         Callable::BuiltIn(op) => ident(&render_builtin(op), builtin_loc),
       };
+      // StrRendered: apply full control_pics to the string arg.
+      if matches!(func, Callable::BuiltIn(BuiltIn::Str)) {
+        let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
+          Arg::Val(v) => match &v.kind {
+            ValKind::Lit(Lit::Str(s)) => {
+              let loc = ctx_loc(v.id, ctx);
+              node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: crate::strings::control_pics(s), indent: 0 }, loc)
+            }
+            _ => val_to_node(v, ctx),
+          },
+          Arg::Cont(c) => render_cont(c, ctx),
+          _ => unreachable!("StrRendered only has Val and Cont args"),
+        }).collect();
+        return apply(func_node, arg_nodes, call_loc);
+      }
       // Collection builtins render as `·name args, fail, cont` (no ·apply prefix).
       let is_collection_builtin = matches!(func, Callable::BuiltIn(
         BuiltIn::SeqPop | BuiltIn::RecPop | BuiltIn::Empty
@@ -466,7 +482,7 @@ pub fn to_node(expr: &Expr<'_>, ctx: &Ctx<'_, '_>) -> Node<'static> {
 // No-context fallback — uses string-based category detection
 // ---------------------------------------------------------------------------
 
-fn to_node_no_ctx(expr: &Expr<'_>) -> Node<'static> {
+fn to_node_no_ctx(expr: &Expr) -> Node<'static> {
   // Build empty prop graphs as a dummy context.
   let origin: PropGraph<CpsId, Option<AstId>> = PropGraph::new();
   let ast_index: PropGraph<AstId, Option<&Node<'_>>> = PropGraph::new();
