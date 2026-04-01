@@ -42,7 +42,7 @@
 // WAT text source maps by looking up DWARF entries for each instruction
 // and structural locs for non-code items.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use wasm_encoder::{
   AbstractHeapType, CodeSection, CompositeInnerType, CompositeType,
@@ -358,6 +358,18 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.emit_types(module, &all_builtins, &extra_arities, &closure_captures);
   e.emit_imports_from(module, &import_builtins);
   e.impl_builtins = impl_builtins.clone();
+  // Build set of function labels with has_cont=true ($Fn3 calling convention).
+  // Include both the function label and its alias (LetVal binding name).
+  e.cont_fns = module.funcs.iter()
+    .filter(|f| f.has_cont)
+    .flat_map(|f| {
+      let mut labels = vec![f.label.clone()];
+      if let Some((_, alias)) = &f.alias {
+        labels.push(alias.clone());
+      }
+      labels
+    })
+    .collect();
   e.emit_functions(module, &closure_captures);
   e.emit_memory();
   e.emit_globals(module);
@@ -461,6 +473,8 @@ struct Emitter<'a, 'src> {
   has_panic: bool,
   /// Interned string literal data.
   string_data: StringData,
+  /// Function labels known to have has_cont=true ($Fn3 calling convention).
+  cont_fns: HashSet<String>,
 }
 
 struct RawMapping {
@@ -488,6 +502,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       needs_string: false,
       has_panic: false,
       string_data: StringData::new(),
+      cont_fns: HashSet::new(),
     }
   }
 
@@ -1105,6 +1120,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       _has_closures: !self.closure_captures.is_empty(),
       string_data: &self.string_data,
       scratch_local,
+      cont_fns: &self.cont_fns,
     };
     emit_body(func.body, &mut fc);
 
@@ -1212,6 +1228,8 @@ struct FuncContext<'a, 'b, 'src> {
   string_data: &'a StringData,
   /// Scratch local for building args lists at call sites.
   scratch_local: u32,
+  /// Function labels known to have has_cont=true ($Fn3 calling convention).
+  cont_fns: &'a HashSet<String>,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -1352,10 +1370,30 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
   let list_concat_idx = fc.emitter_idx.func_idx("list_concat");
   let scratch = fc.scratch_local;
 
-  // Build args list (val_args only — cont is a separate WASM param).
+  // Check if the callee is known to be $Fn2 (not in cont_fns).
+  // When the callee is known $Fn2, fold the cont into the args list and use
+  // _apply instead of _apply_cont. This prevents the _apply_cont fallback
+  // from corrupting args by prepending cont for a callee that doesn't expect it.
+  // For unknown callees (params, captures) we keep _apply_cont — the runtime
+  // dispatch handles both $Fn3 and $Fn2 correctly when the callee IS $Fn3.
+  let callee_known_fn2 = cont_arg.is_some() && match &func_val.kind {
+    ValKind::Ref(Ref::Synth(id)) => !fc.cont_fns.contains(&fc.ctx.label(*id)),
+    _ => false,
+  };
+
+  // Build args list. Start with nil, then prepend in reverse order.
+  // For known $Fn2 callees with a cont, prepend cont first so it ends up
+  // as the last element after val_args are prepended on top.
   let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
   fc.instr(&Instruction::Call(list_nil_idx));
   fc.instr(&Instruction::LocalSet(scratch));
+
+  if callee_known_fn2 && let Some(cont) = cont_arg {
+    emit_cont(cont, fc);
+    fc.instr(&Instruction::LocalGet(scratch));
+    fc.instr(&Instruction::Call(list_prepend_idx));
+    fc.instr(&Instruction::LocalSet(scratch));
+  }
 
   for arg in val_args.iter().rev() {
     match arg {
@@ -1377,11 +1415,19 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
   // Dispatch: _apply_cont(args, cont, callee) or _apply(args, callee).
   fc.instr(&Instruction::LocalGet(scratch));  // args list
   if let Some(cont) = cont_arg {
-    emit_cont(cont, fc);                      // cont
-    emit_val_ref(func_val, fc);               // callee
-    fc.mark(mark_id);
-    let idx = fc.emitter_idx.func_idx("_apply_cont");
-    fc.instr(&Instruction::ReturnCall(idx));
+    if callee_known_fn2 {
+      // Cont already folded into args list above.
+      emit_val_ref(func_val, fc);               // callee
+      fc.mark(mark_id);
+      let idx = fc.emitter_idx.func_idx("_apply");
+      fc.instr(&Instruction::ReturnCall(idx));
+    } else {
+      emit_cont(cont, fc);                      // cont
+      emit_val_ref(func_val, fc);               // callee
+      fc.mark(mark_id);
+      let idx = fc.emitter_idx.func_idx("_apply_cont");
+      fc.instr(&Instruction::ReturnCall(idx));
+    }
   } else {
     emit_val_ref(func_val, fc);               // callee
     fc.mark(mark_id);
