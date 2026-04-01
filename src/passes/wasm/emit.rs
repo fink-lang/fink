@@ -567,14 +567,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.types.insert("$BoxFuncTy".into(), next_idx);
     next_idx += 1;
 
-    // $TmpImport0 = (func (param i32 i32) (result (ref $StrRaw)))
-    // Temporary type for the str_raw import — only exists pre-link.
+    // $TmpImport0 = (func (param i32 i32) (result (ref $Str)))
+    // Temporary type for the str import — only exists pre-link.
     // The linker unifies this with string.wat's actual function type.
     if self.needs_string {
-      let str_raw_idx = self.idx.type_idx("$StrRaw");
-      let str_raw_ref = ValType::Ref(RefType {
+      let str_idx = self.idx.type_idx("$Str");
+      let str_ref = ValType::Ref(RefType {
         nullable: false,
-        heap_type: HeapType::Concrete(str_raw_idx),
+        heap_type: HeapType::Concrete(str_idx),
       });
       types.ty().subtype(&SubType {
         is_final: true,
@@ -582,7 +582,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
         composite_type: CompositeType {
           inner: CompositeInnerType::Func(FuncType::new(
             vec![ValType::I32, ValType::I32],
-            vec![str_raw_ref],
+            vec![str_ref],
           )),
           shared: false,
           descriptor: None,
@@ -666,11 +666,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
-    // str_raw: (i32, i32) -> (ref $StrRaw) — wraps data-section pointer.
+    // str: (i32, i32) -> (ref $Str) — wraps data-section pointer.
     if self.needs_string {
       let type_idx = self.idx.type_idx("$TmpImport0");
-      imports.import("@fink/runtime", "str_raw", wasm_encoder::EntityType::Function(type_idx));
-      self.idx.imports.insert("str_raw".into(), next_func_idx);
+      imports.import("@fink/runtime", "str", wasm_encoder::EntityType::Function(type_idx));
+      self.idx.imports.insert("str".into(), next_func_idx);
       next_func_idx += 1;
     }
 
@@ -1591,7 +1591,7 @@ fn emit_lit(lit: &Lit, fc: &mut FuncContext<'_, '_, '_>) {
       let (offset, len) = find_bytes(&fc.string_data.bytes, s.as_bytes())
         .map(|pos| (pos as u32, s.len() as u32))
         .expect("string literal not interned");
-      let str_raw_idx = fc.emitter_idx.func_idx("str_raw");
+      let str_raw_idx = fc.emitter_idx.func_idx("str");
       fc.instr(&Instruction::I32Const(offset as i32));
       fc.instr(&Instruction::I32Const(len as i32));
       fc.instr(&Instruction::Call(str_raw_idx));

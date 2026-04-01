@@ -291,6 +291,42 @@ test 'string literal', fn:
   | equals fink":
     hello
 
+test 'string escape newline', fn:
+  expect run fink":
+    main = fn:
+      'hello\nworld'
+  | equals fink":
+    hello
+    world
+
+test 'string escape tab', fn:
+  expect run fink":
+    main = fn:
+      'a\tb'
+  | equals fink":
+    a	b
+
+test 'string escape backslash', fn:
+  expect run fink":
+    main = fn:
+      'a\\b'
+  | equals fink":
+    a\b
+
+test 'string escape hex', fn:
+  expect run fink":
+    main = fn:
+      '\xE9'
+  | equals fink":
+    é
+
+test 'string escape unicode', fn:
+  expect run fink":
+    main = fn:
+      '\u{1F600}'
+  | equals fink":
+    😀
+
 test 'string eq same', fn:
   expect run fink":
     main = fn:

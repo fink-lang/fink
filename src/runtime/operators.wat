@@ -90,7 +90,7 @@
   ;; Direct-style deep equality. Used by HAMT for key comparison.
   ;;   i31ref  → ref.eq (identity — fine for small ints and booleans)
   ;;   $Num    → f64.eq
-  ;;   $StrVal → str_eq
+  ;;   $Str → str_eq
   (func $deep_eq (export "deep_eq")
     (param $a (ref eq)) (param $b (ref eq)) (result i32)
 
@@ -104,21 +104,21 @@
         (struct.get $Num $val)
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b))))))
 
-    ;; Try $StrVal
+    ;; Try $Str
     (block $not_str
-      (block $is_str (result (ref $StrVal))
+      (block $is_str (result (ref $Str))
         (br $not_str
-          (br_on_cast $is_str (ref eq) (ref $StrVal)
+          (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $a))))
       (return (call $str_eq
-        (ref.cast (ref $StrVal) (local.get $b)))))
+        (ref.cast (ref $Str) (local.get $b)))))
 
     ;; Fallback: ref.eq (i31ref, other GC types)
     (ref.eq (local.get $a) (local.get $b)))
 
   ;; Polymorphic ==: dispatch on $a's type.
   ;;   $Num    → f64.eq
-  ;;   $StrVal → str_eq
+  ;;   $Str → str_eq
   (func $op_eq (export "op_eq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
@@ -135,23 +135,23 @@
           (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
         (local.get $cont)))
 
-    ;; Try $StrVal
+    ;; Try $Str
     (block $not_str
-      (block $is_str (result (ref $StrVal))
+      (block $is_str (result (ref $Str))
         (br $not_str
-          (br_on_cast $is_str (ref null any) (ref $StrVal)
+          (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
-      ;; $a is $StrVal — cast $b and call str_eq
+      ;; $a is $Str — cast $b and call str_eq
       (return_call $croc_1
         (ref.i31 (call $str_eq
-          (ref.cast (ref $StrVal) (local.get $b))))
+          (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
 
     (unreachable))
 
   ;; Polymorphic !=: dispatch on $a's type.
   ;;   $Num    → f64.ne
-  ;;   $StrVal → !str_eq
+  ;;   $Str → !str_eq
   (func $op_neq (export "op_neq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
@@ -168,16 +168,16 @@
           (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
         (local.get $cont)))
 
-    ;; Try $StrVal
+    ;; Try $Str
     (block $not_str
-      (block $is_str (result (ref $StrVal))
+      (block $is_str (result (ref $Str))
         (br $not_str
-          (br_on_cast $is_str (ref null any) (ref $StrVal)
+          (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
-      ;; $a is $StrVal — cast $b, call str_eq, invert
+      ;; $a is $Str — cast $b, call str_eq, invert
       (return_call $croc_1
         (ref.i31 (i32.eqz (call $str_eq
-          (ref.cast (ref $StrVal) (local.get $b)))))
+          (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
 
     (unreachable))
