@@ -795,6 +795,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.funcs.insert("_list_prepend".into(), next_func_idx);
     next_func_idx += 1;
 
+    // _fn2_stub: exported so the runner can get the $Fn2 type for host callbacks.
+    let fn2_type = self.idx.fn_type_idx(2);
+    functions.function(fn2_type);
+    self.idx.funcs.insert("_fn2_stub".into(), next_func_idx);
+    next_func_idx += 1;
+
     // $_panic: (func) — unreachable trap for irrefutable pattern failure.
     // Only emitted when ValKind::Panic appears in function bodies.
     if self.has_panic {
@@ -901,6 +907,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let list_prepend_idx = self.idx.func_idx("_list_prepend");
     exports.export("_list_prepend", ExportKind::Func, list_prepend_idx);
 
+    // _fn2_stub: exported so the runner can get the canonical $Fn2 type.
+    let fn2_stub_idx = self.idx.func_idx("_fn2_stub");
+    exports.export("_fn2_stub", ExportKind::Func, fn2_stub_idx);
+
     // TODO: memory should not be exported in production builds — only
     // needed for the runner to read string data during testing.
     exports.export("memory", ExportKind::Memory, 0);
@@ -979,6 +989,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
       f.instruction(&Instruction::LocalGet(0));
       f.instruction(&Instruction::LocalGet(1));
       f.instruction(&Instruction::Call(list_prepend_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
+    // _fn2_stub body: unreachable (only exists for its type).
+    {
+      let mut f = Function::new(vec![]);
+      f.instruction(&Instruction::Unreachable);
       f.instruction(&Instruction::End);
       code.function(&f);
     }

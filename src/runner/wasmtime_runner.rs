@@ -75,13 +75,11 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   let result_val: Arc<Mutex<Option<FinkResult>>> = Arc::new(Mutex::new(None));
   let result_clone = result_val.clone();
 
-  // The done func matches $Fn2(captures, args) — continuation signature.
-  // params[0] = captures (ignored), params[1] = args list.
-  let done_ty = wasmtime::FuncType::new(
-    store.engine(),
-    [wasmtime::ValType::ANYREF, wasmtime::ValType::ANYREF],
-    [],
-  );
+  // The done func must use the module's $Fn2 type (from the canonical rec group).
+  // _fn2_stub is a dummy function exported solely for its type.
+  let fn2_stub = instance.get_func(&mut store, "_fn2_stub")
+    .ok_or("no '_fn2_stub' export")?;
+  let done_ty = fn2_stub.ty(&store);
   let done = Func::new(&mut store, done_ty, move |mut caller, params, _results| {
     // params[0] = captures (ignore), params[1] = args list ($Cons).
     // The result value is the head (field 0) of the args list.
