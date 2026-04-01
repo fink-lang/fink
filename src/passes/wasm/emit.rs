@@ -628,6 +628,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
       all_arities.insert(arity);
     }
     for &arity in &all_arities {
+      let name = format!("$Fn{}", arity);
+      // Skip if already defined in canonical types (e.g. $Fn2, $Fn3 from types.wat).
+      if self.idx.types.contains_key(&name) { continue; }
       let params: Vec<ValType> = vec![any_ref; arity];
       types.ty().subtype(&SubType {
         is_final: true,
@@ -639,7 +642,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
           describes: None,
         },
       });
-      self.idx.types.insert(format!("$Fn{}", arity), next_idx);
+      self.idx.types.insert(name, next_idx);
       next_idx += 1;
     }
 
