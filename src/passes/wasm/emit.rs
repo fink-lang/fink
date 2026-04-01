@@ -1478,43 +1478,6 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
     return;
   }
 
-  // BuiltIn::Str is identity — emit the value, pass to continuation.
-  if op == BuiltIn::Str {
-    let (val_args, cont_arg) = split_args(args);
-    // Emit the string value onto the stack.
-    for arg in val_args {
-      match arg {
-        Arg::Val(v) | Arg::Spread(v) => emit_val(v, fc),
-        _ => {}
-      }
-    }
-    // Pass result to continuation (same as LetVal tail).
-    if let Some(cont) = cont_arg {
-      match cont {
-        Cont::Expr { args: bind_args, body } => {
-          if let Some(bind) = bind_args.first() {
-            let label = fc.ctx.label(bind.id);
-            let idx = fc.local_idx(&label);
-            fc.instr(&Instruction::LocalSet(idx));
-          }
-          emit_body(body, fc);
-        }
-        Cont::Ref(id) => {
-          // Tail call: value is on stack, get cont closure, return_call_ref.
-          let cont_label = fc.ctx.label(*id);
-          emit_get(fc, &cont_label);
-          let closure_idx = fc.emitter_idx.type_idx("$Closure");
-          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
-          fc.instr(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-          let fn1_type = fc.emitter_idx.fn_type_idx(1);
-          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
-          fc.instr(&Instruction::ReturnCallRef(fn1_type));
-        }
-      }
-    }
-    return;
-  }
-
   // Regular builtin: return_call $builtin_name args...
   // All args get their own source mark. The operator mark is placed after
   // args (at the return_call instruction), so no collision.

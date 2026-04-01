@@ -301,7 +301,6 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::RecPut     => "rec_set",
     BuiltIn::RecMerge   => "rec_merge",
     BuiltIn::StrFmt     => "str_fmt",
-    BuiltIn::Str => "str",
     BuiltIn::FnClosure  => "closure",
     BuiltIn::SeqPop        => "seq_pop",
     BuiltIn::RecPop        => "rec_pop",

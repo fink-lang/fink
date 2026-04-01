@@ -441,3 +441,25 @@ test 'recursive fn in match', fn:
       ·v_139 ·n_1, ·v_149
 
     ·export ·fib_0
+
+
+test 'str eq', fn:
+  expect lift fink":
+    main = fn:
+      'hello' == 'hello'
+  | equals fink":
+    ·main_0 = ·v_4 = fn ·v_5:
+      ·op_eq 'hello', 'hello', ·v_5
+
+    ·export ·main_0
+
+
+test 'str literal', fn:
+  expect lift fink":
+    main = fn:
+      'hello'
+  | equals fink":
+    ·main_0 = ·v_4 = fn ·v_5:
+      ·v_5 'hello'
+
+    ·export ·main_0

@@ -209,21 +209,6 @@ fn render_app(func: &Callable, args: &[Arg], fc: &FmtCtx<'_, '_>) -> Node<'stati
   if args.is_empty() {
     return apply_node(func_node, vec![ident("_")]);
   }
-  // StrRendered: apply full control_pics to the string arg.
-  if matches!(func, Callable::BuiltIn(BuiltIn::Str)) {
-    let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
-      Arg::Val(v) => match &v.kind {
-        ValKind::Lit(Lit::Str(s)) => Node::new(NodeKind::LitStr {
-          open: tok("'", TokenKind::StrStart), close: tok("'", TokenKind::StrEnd),
-          content: crate::strings::control_pics(s), indent: 0,
-        }, dummy_loc()),
-        _ => render_val(v, fc),
-      },
-      Arg::Cont(c) => render_cont_arg(c, fc),
-      _ => unreachable!("StrRendered only has Val and Cont args"),
-    }).collect();
-    return apply_node(func_node, arg_nodes);
-  }
   let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
     Arg::Val(v)    => render_val(v, fc),
     Arg::Spread(v) => Node::new(NodeKind::Spread {
