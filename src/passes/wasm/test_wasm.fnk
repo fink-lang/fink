@@ -592,20 +592,32 @@ test 'string literal dedup', fn:
       (type $Fn0 (func))
       (type $Fn1 (func (param (ref any))))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn3 (func (param (ref any) (ref any) (ref any))))
+      (type $Fn4 (func (param (ref any) (ref any) (ref any) (ref any))))
       (memory 1)
 
+      (func $v_38 (type $Fn3) (param $v_39 (ref any)) (param $x_41 (ref any)) (param $v_12 (ref any))
+        (local $y_2 (ref any))
+        (local.set $y_2 (local.get $v_12))
+        (return_call $_croc_1 (local.get $x_41) (local.get $v_39))
+      )
+      (func $v_29 (type $Fn2) (param $v_30 (ref any)) (param $v_9 (ref any))
+        (local $x_1 (ref any))
+        (local $v_45 (ref any))
+        (local.set $x_1 (local.get $v_9))
+        (local.set $v_45 (struct.new $Closure (ref.func $v_38) (array.new_fixed $Captures 2 (local.get $v_30) (local.get $x_1))))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_45)))) (call $_str_raw (i32.const 0) (i32.const 5)))
+      )
       (global $main_0 (ref $Fn1) (ref.func $v_6))
       (func $v_6 (type $Fn1) (param $v_7 (ref any))
-        (local $x_1 (ref any))
-        (local $y_2 (ref any))
-        (local.set $x_1 (call $_str_raw (i32.const 0) (i32.const 5)))
-        (local.set $y_2 (call $_str_raw (i32.const 0) (i32.const 5)))
-        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_7)))) (local.get $x_1))
+        (local $v_34 (ref any))
+        (local.set $v_34 (struct.new $Closure (ref.func $v_29) (array.new_fixed $Captures 1 (local.get $v_7))))
+        (return_call_ref $Fn1 (ref.cast (ref null $Fn1) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_34)))) (call $_str_raw (i32.const 0) (i32.const 5)))
       )
       (export "main" (func $v_6))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTs7QTs7O0E7QTs7OztBO0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7QTtBO0E7O0E7O0E7OztBOztBO0E7Ozs7QTs7O0E7OztBO0FBQUE7O0EiCn0=
 
 
 test 'rec literal', fn:

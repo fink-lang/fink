@@ -317,7 +317,7 @@ pub enum StructuralKind {
 }
 
 /// Emit a WASM binary from a collected CPS module.
-pub fn emit(module: &CpsModule<'_, '_>, ctx: &IrCtx<'_, '_>) -> EmitResult {
+pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   let mut e = Emitter::new(module, ctx);
   // Scan builtins and call arities needed for the type section.
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
@@ -503,7 +503,7 @@ struct RawMapping {
 }
 
 impl<'a, 'src> Emitter<'a, 'src> {
-  fn new(_module: &CpsModule<'_, '_>, ctx: &'a IrCtx<'a, 'src>) -> Self {
+  fn new(_module: &CpsModule<'a>, ctx: &'a IrCtx<'a, 'src>) -> Self {
     Self {
       module: wasm_encoder::Module::new(),
       idx: Indices::new(),
@@ -526,7 +526,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Type section
   // -------------------------------------------------------------------------
 
-  fn emit_types(&mut self, cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>, closure_captures: &BTreeSet<usize>) {
+  fn emit_types(&mut self, cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>, closure_captures: &BTreeSet<usize>) {
     let mut types = TypeSection::new();
 
     // 1. Canonical runtime types from types.wat — injected as a rec group.
@@ -655,7 +655,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Import section — builtins as imported functions
   // -------------------------------------------------------------------------
 
-  fn emit_imports_from(&mut self, _cps_mod: &CpsModule<'_, '_>, builtins: &BTreeMap<String, usize>) {
+  fn emit_imports_from(&mut self, _cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>) {
     let mut imports = ImportSection::new();
     let mut next_func_idx = 0u32;
 
@@ -693,7 +693,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Function section — declares function signatures
   // -------------------------------------------------------------------------
 
-  fn emit_functions(&mut self, cps_mod: &CpsModule<'_, '_>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
+  fn emit_functions(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
     let mut functions = FunctionSection::new();
 
     // CPS-defined functions.
@@ -787,7 +787,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Global section — module-level fn aliases
   // -------------------------------------------------------------------------
 
-  fn emit_globals(&mut self, cps_mod: &CpsModule<'_, '_>) {
+  fn emit_globals(&mut self, cps_mod: &CpsModule<'a>) {
     let mut globals = GlobalSection::new();
     let mut next_global_idx = 0u32;
 
@@ -830,7 +830,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Export section
   // -------------------------------------------------------------------------
 
-  fn emit_exports(&mut self, cps_mod: &CpsModule<'_, '_>) {
+  fn emit_exports(&mut self, cps_mod: &CpsModule<'a>) {
     let mut exports = ExportSection::new();
 
     for func in &cps_mod.funcs {
@@ -887,7 +887,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Code section — function bodies with byte offset tracking
   // -------------------------------------------------------------------------
 
-  fn emit_code(&mut self, cps_mod: &CpsModule<'_, '_>, closure_captures: &BTreeSet<usize>) {
+  fn emit_code(&mut self, cps_mod: &CpsModule<'a>, closure_captures: &BTreeSet<usize>) {
     let mut code = CodeSection::new();
 
     for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
@@ -1054,7 +1054,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     f
   }
 
-  fn emit_func_body(&mut self, func: &CollectedFn<'_, '_>, def_idx: u32) -> Function {
+  fn emit_func_body(&mut self, func: &CollectedFn<'a>, def_idx: u32) -> Function {
     let any_ref = ValType::Ref(RefType {
       nullable: true,
       heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
@@ -1118,7 +1118,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Name section
   // -------------------------------------------------------------------------
 
-  fn emit_names(&mut self, cps_mod: &CpsModule<'_, '_>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
+  fn emit_names(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
     let mut names = NameSection::new();
 
     // Function names (imports + defined + helpers).
@@ -1226,7 +1226,7 @@ impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
 // Body emission — mirrors wat/writer.rs emit_body logic
 // ---------------------------------------------------------------------------
 
-fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_body(expr: &Expr, fc: &mut FuncContext<'_, '_, '_>) {
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
       // Emit value with its own source mark (e.g. 42 → "42").
@@ -1301,7 +1301,7 @@ fn emit_body(expr: &Expr<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 // Application emission
 // ---------------------------------------------------------------------------
 
-fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_app(func: &Callable, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   match func {
     Callable::BuiltIn(op) => emit_builtin(*op, args, expr_id, fc),
     Callable::Val(val) => emit_call(val, args, expr_id, fc),
@@ -1312,7 +1312,7 @@ fn emit_app(func: &Callable<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut Func
 /// When closures exist in the module, dispatches through $call_ref_or_clos_N
 /// which handles both plain funcrefs and closure structs at runtime.
 /// When no closures exist, uses direct return_call_ref.
-fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   let (val_args, cont_arg) = split_args(args);
   let total_arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
 
@@ -1371,7 +1371,7 @@ fn emit_call(func_val: &Val<'_>, args: &[Arg<'_>], expr_id: CpsId, fc: &mut Func
 }
 
 /// Emit a builtin operation call.
-fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   if op == BuiltIn::FnClosure {
     let (val_args, cont) = split_args(args);
     let n_captures = val_args.len().saturating_sub(1); // first arg is funcref
@@ -1478,6 +1478,43 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
     return;
   }
 
+  // BuiltIn::Str is identity — emit the value, pass to continuation.
+  if op == BuiltIn::Str {
+    let (val_args, cont_arg) = split_args(args);
+    // Emit the string value onto the stack.
+    for arg in val_args {
+      match arg {
+        Arg::Val(v) | Arg::Spread(v) => emit_val(v, fc),
+        _ => {}
+      }
+    }
+    // Pass result to continuation (same as LetVal tail).
+    if let Some(cont) = cont_arg {
+      match cont {
+        Cont::Expr { args: bind_args, body } => {
+          if let Some(bind) = bind_args.first() {
+            let label = fc.ctx.label(bind.id);
+            let idx = fc.local_idx(&label);
+            fc.instr(&Instruction::LocalSet(idx));
+          }
+          emit_body(body, fc);
+        }
+        Cont::Ref(id) => {
+          // Tail call: value is on stack, get cont closure, return_call_ref.
+          let cont_label = fc.ctx.label(*id);
+          emit_get(fc, &cont_label);
+          let closure_idx = fc.emitter_idx.type_idx("$Closure");
+          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
+          fc.instr(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
+          let fn1_type = fc.emitter_idx.fn_type_idx(1);
+          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
+          fc.instr(&Instruction::ReturnCallRef(fn1_type));
+        }
+      }
+    }
+    return;
+  }
+
   // Regular builtin: return_call $builtin_name args...
   // All args get their own source mark. The operator mark is placed after
   // args (at the return_call instruction), so no collision.
@@ -1528,12 +1565,12 @@ fn emit_builtin(op: BuiltIn, args: &[Arg<'_>], expr_id: CpsId, fc: &mut FuncCont
 
 /// Emit a value onto the stack (for inline use in expressions).
 /// Marks the value's source location before emitting its instructions.
-fn emit_val(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_val(val: &Val, fc: &mut FuncContext<'_, '_, '_>) {
   fc.mark(val.id);
   emit_val_inner(val, fc);
 }
 
-fn emit_val_inner(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_val_inner(val: &Val, fc: &mut FuncContext<'_, '_, '_>) {
   match &val.kind {
     ValKind::Lit(lit) => emit_lit(lit, fc),
     ValKind::Ref(Ref::Synth(id)) => {
@@ -1564,12 +1601,12 @@ fn emit_val_inner(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 }
 
 /// Emit a value reference — same as emit_val but used for callee position.
-fn emit_val_ref(val: &Val<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_val_ref(val: &Val, fc: &mut FuncContext<'_, '_, '_>) {
   emit_val(val, fc);
 }
 
 /// Emit a literal value.
-fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_lit(lit: &Lit, fc: &mut FuncContext<'_, '_, '_>) {
   let num_idx = fc.emitter_idx.type_idx("$Num");
   match lit {
     Lit::Int(n) => {
@@ -1613,7 +1650,7 @@ fn emit_lit(lit: &Lit<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 
 /// Emit a funcref argument without $FuncBox boxing.
 /// Used for closure constructor's first arg which expects a raw funcref.
-fn emit_arg_raw_funcref(arg: &Arg<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_arg_raw_funcref(arg: &Arg, fc: &mut FuncContext<'_, '_, '_>) {
   match arg {
     Arg::Val(v) | Arg::Spread(v) => {
       fc.mark(v.id);
@@ -1624,7 +1661,7 @@ fn emit_arg_raw_funcref(arg: &Arg<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 }
 
 /// Emit a raw funcref (ref.func or global.get) without $FuncBox wrapping.
-fn emit_get_raw_funcref(fc: &mut FuncContext<'_, '_, '_>, val: &Val<'_>) {
+fn emit_get_raw_funcref(fc: &mut FuncContext<'_, '_, '_>, val: &Val) {
   match &val.kind {
     ValKind::Ref(Ref::Synth(id)) => {
       let label = fc.ctx.label(*id);
@@ -1645,7 +1682,7 @@ fn emit_get_raw_funcref(fc: &mut FuncContext<'_, '_, '_>, val: &Val<'_>) {
 }
 
 /// Emit a call argument.
-fn emit_arg(arg: &Arg<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_arg(arg: &Arg, fc: &mut FuncContext<'_, '_, '_>) {
   match arg {
     Arg::Val(v) | Arg::Spread(v) => emit_val(v, fc),
     Arg::Cont(cont) => emit_cont(cont, fc),
@@ -1656,7 +1693,7 @@ fn emit_arg(arg: &Arg<'_>, fc: &mut FuncContext<'_, '_, '_>) {
 }
 
 /// Emit a continuation reference onto the stack.
-fn emit_cont(cont: &Cont<'_>, fc: &mut FuncContext<'_, '_, '_>) {
+fn emit_cont(cont: &Cont, fc: &mut FuncContext<'_, '_, '_>) {
   match cont {
     Cont::Ref(id) => {
       let label = fc.ctx.label(*id);
@@ -1698,7 +1735,7 @@ fn emit_get(fc: &mut FuncContext<'_, '_, '_>, label: &str) {
 // Builtin scanning — collect all builtins referenced in function bodies
 // ---------------------------------------------------------------------------
 
-fn scan_builtins(expr: &Expr<'_>, builtins: &mut BTreeMap<String, usize>) {
+fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
   match &expr.kind {
     ExprKind::App { func: Callable::BuiltIn(op), args } => {
       if *op == BuiltIn::FnClosure {
@@ -1744,7 +1781,7 @@ fn scan_builtins(expr: &Expr<'_>, builtins: &mut BTreeMap<String, usize>) {
 /// Scan function bodies for all call arities used by return_call_ref.
 /// These may reference $Fn0 (thunks) or other arities not covered by
 /// defined functions or builtin imports.
-fn scan_call_arities(expr: &Expr<'_>, arities: &mut BTreeSet<usize>) {
+fn scan_call_arities(expr: &Expr, arities: &mut BTreeSet<usize>) {
   match &expr.kind {
     ExprKind::App { func: Callable::Val(_), args } => {
       let (val_args, cont_arg) = split_args(args);
@@ -1785,7 +1822,7 @@ fn scan_call_arities(expr: &Expr<'_>, arities: &mut BTreeSet<usize>) {
 /// Scan for ·fn_closure call sites and collect the capture count for each.
 /// The capture count is val_args.len() - 1 (first val arg is the funcref).
 /// Returns the set of distinct capture counts, used for _croc_N dispatch branches.
-fn scan_closure_captures(expr: &Expr<'_>, captures: &mut BTreeSet<usize>) {
+fn scan_closure_captures(expr: &Expr, captures: &mut BTreeSet<usize>) {
   match &expr.kind {
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
       let (val_args, _) = split_args(args);
@@ -1822,7 +1859,7 @@ fn scan_closure_captures(expr: &Expr<'_>, captures: &mut BTreeSet<usize>) {
 }
 
 /// Check if any Val in the expression tree is ValKind::Panic.
-fn scan_panic(expr: &Expr<'_>) -> bool {
+fn scan_panic(expr: &Expr) -> bool {
   match &expr.kind {
     ExprKind::App { func, args } => {
       if let Callable::Val(v) = func
@@ -1853,14 +1890,14 @@ fn scan_panic(expr: &Expr<'_>) -> bool {
 }
 
 /// Intern any string literal found in a Val.
-fn scan_val_strings(val: &Val<'_>, data: &mut StringData) {
+fn scan_val_strings(val: &Val, data: &mut StringData) {
   if let ValKind::Lit(Lit::Str(s)) = &val.kind {
     data.intern(s);
   }
 }
 
 /// Scan for string literals and intern them into the StringData blob.
-fn scan_strings(expr: &Expr<'_>, data: &mut StringData) {
+fn scan_strings(expr: &Expr, data: &mut StringData) {
   match &expr.kind {
     ExprKind::LetVal { val, cont, .. } => {
       scan_val_strings(val, data);

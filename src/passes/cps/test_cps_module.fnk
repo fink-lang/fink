@@ -73,22 +73,23 @@ test 'import not in exports', fn:
     {foo} = import './bar.fnk'
     main = fn: foo 1
   | equals fink":
-    ·import './bar.fnk', fn ·v_8:
-      ·fn
-        fn ·v_13:
-          ·let ·v_13, fn ·foo_0:
+    ·str './bar.fnk', fn ·v_8:
+      ·import ·v_8, fn ·v_10:
+        ·fn
+          fn ·v_15:
+            ·let ·v_15, fn ·foo_0:
+              ·fn
+                fn ·v_28: ·foo_0 1, ·v_28
+                fn ·v_27:
+                  ·let ·v_27, fn ·main_1:
+                    ·export ·main_1
+          fn ·v_42:
             ·fn
-              fn ·v_26: ·foo_0 1, ·v_26
-              fn ·v_25:
-                ·let ·v_25, fn ·main_1:
-                  ·export ·main_1
-        fn ·v_40:
-          ·fn
-            fn ·v_10, ·v_11, ·v_12:
-              ·rec_pop ·v_10, 'foo', ·v_12, fn ·v_13, ·v_17:
-                ·v_11 ·v_13
-            fn ·v_22: ·v_22 ·v_8, ·v_40, ·panic
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQU8sQSxDQUFBLFMsQyxLQUFQLEk7RUFBUixBQUFBO09BQUEsSztNQUFDLEFBQUEsS0FBRCxLLEtBQUMsTTtRQUNNLEFBQUE7YUFBQSxLLEVBQUksQUFBQSxPQUFJLEMsRUFBUjthQUFBLEs7WUFBRixBQUFBLEtBQUUsSyxLQUFQLE87YyxBLFFBQUE7T0FEQSxLO01BQUEsQUFBQTtXQUFBLE8sTyxLO1VBQUEsQUFBQSxTQUFBLEssRUFBQSxBLENBQUEsRyxDLEUsSyxLQUFBLE9BQUEsSztZQUFBLEEsTUFBQTtXQUFBLEssRUFBQSxBQUFBLE1BQVEsSSxFQUFSLEssRUFBQSIKfQ==
+              fn ·v_12, ·v_13, ·v_14:
+                ·rec_pop ·v_12, 'foo', ·v_14, fn ·v_15, ·v_19:
+                  ·v_13 ·v_15
+              fn ·v_24: ·v_24 ·v_10, ·v_42, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBZSxBQUFBLEtBQUEsQSxDQUFBLFMsQyxLQUFBLEk7RUFBUCxBQUFBLFFBQU8sSSxLQUFQLEs7SUFBUixBQUFBO1NBQUEsSztRQUFDLEFBQUEsS0FBRCxLLEtBQUMsTTtVQUNNLEFBQUE7ZUFBQSxLLEVBQUksQUFBQSxPQUFJLEMsRUFBUjtlQUFBLEs7Y0FBRixBQUFBLEtBQUUsSyxLQUFQLE87Z0IsQSxRQUFBO1NBREEsSztRQUFBLEFBQUE7YUFBQSxPLE8sSztZQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLEssS0FBQSxPQUFBLEs7Y0FBQSxBLE1BQUE7YUFBQSxLLEVBQUEsQUFBQSxNQUFRLEssRUFBUixLLEVBQUEiCn0=
 
 
 ---

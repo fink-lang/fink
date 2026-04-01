@@ -15,7 +15,7 @@
 ///   \\  → backslash      \'  → single quote
 ///   \$  → dollar (prevents interpolation in source; renders as '$')
 ///   \xNN       → byte value (2 hex digits)
-///   \uNNNNNN   → unicode codepoint (up to 6 hex digits, _ separators allowed)
+///   \u{NNNNNN} → unicode codepoint (1-6 hex digits, _ separators allowed)
 pub fn render(raw: &str) -> String {
   let mut out = String::with_capacity(raw.len());
   let bytes = raw.as_bytes();
@@ -43,11 +43,11 @@ pub fn render(raw: &str) -> String {
             out.push_str("\\x");
           }
         }
-        b'u' => {
+        b'u' if bytes.get(i + 1) == Some(&b'{') => {
           let mut codepoint: u32 = 0;
           let mut digits = 0;
-          let mut j = i + 1;
-          while j < bytes.len() && digits < 6 {
+          let mut j = i + 2; // skip past '{'
+          while j < bytes.len() && bytes[j] != b'}' {
             match bytes[j] {
               b'_' => { j += 1; }
               b => {
@@ -61,11 +61,11 @@ pub fn render(raw: &str) -> String {
               }
             }
           }
-          if digits > 0 {
+          if digits > 0 && j < bytes.len() && bytes[j] == b'}' {
             if let Some(ch) = char::from_u32(codepoint) {
               out.push(ch);
             }
-            i = j - 1;
+            i = j; // points at '}', will be incremented at end of loop
           } else {
             out.push_str("\\u");
           }
@@ -92,6 +92,55 @@ pub fn render(raw: &str) -> String {
       continue;
     }
     i += 1;
+  }
+  out
+}
+
+/// Replace control characters with Unicode Control Pictures for test output.
+///
+/// Cooked strings contain actual control bytes (0x0A for \n, etc.).
+/// For test formatting, these are replaced with visible symbols so
+/// the output is unambiguous:
+///   \n → ␊  \r → ␍  \t → ␉  \f → ␌  \b → ␈  \v → ␋
+///   \\ → ⧵  \' → ′  \$ → ＄
+///
+/// Use for cooked strings (escapes already resolved). For raw strings that
+/// still contain literal backslash sequences, only control chars should be
+/// substituted — use `control_pics_raw` instead.
+pub fn control_pics(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  for ch in s.chars() {
+    match ch {
+      '\n' => out.push('␊'),
+      '\r' => out.push('␍'),
+      '\t' => out.push('␉'),
+      '\x0C' => out.push('␌'),
+      '\x08' => out.push('␈'),
+      '\x0B' => out.push('␋'),
+      '\\' => out.push('⧵'),
+      '\'' => out.push('′'),
+      '$' => out.push('＄'),
+      c => out.push(c),
+    }
+  }
+  out
+}
+
+/// Replace only invisible control characters with Unicode Control Pictures.
+/// Safe for raw strings where `\`, `'`, `$` are literal ASCII characters
+/// that must be preserved (e.g. raw `\n` is two chars: `\` + `n`).
+pub fn control_pics_raw(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  for ch in s.chars() {
+    match ch {
+      '\n' => out.push('␊'),
+      '\r' => out.push('␍'),
+      '\t' => out.push('␉'),
+      '\x0C' => out.push('␌'),
+      '\x08' => out.push('␈'),
+      '\x0B' => out.push('␋'),
+      c => out.push(c),
+    }
   }
   out
 }
@@ -144,34 +193,17 @@ mod tests {
     assert_eq!(render_lit_str(r"\x1"), r"\x1");      // only 1 digit → not valid, passed through literally
   }
 
-  // TODO: migrate \u escape to delimited form \u{NNNN} (like Rust/Swift/ES6).
-  // Current variable-length \uNNNNNN (1–6 digits) is ambiguous — e.g. \u0041foo
-  // consumes 4 digits leaving 'foo', but \u00_41 with separators is also unclear.
-  // \u{...} is unambiguous, covers the full Unicode range in one form, and avoids
-  // the boundary problem. Requires lexer change (recognise { after \u in strings).
   #[test]
   fn escape_unicode() {
-    assert_eq!(render_lit_str(r"\u0000"), "\u{0000}");   // U+0000 lowest
-    assert_eq!(render_lit_str(r"\u0041"), "A");          // U+0041 = 'A'
-    assert_eq!(render_lit_str(r"\u00_41"), "A");         // same with _ separator
-    assert_eq!(render_lit_str(r"\u1F423"), "\u{1F423}"); // 🐣 U+1F423 hatching chick
-    assert_eq!(render_lit_str(r"\u1F_42_3"), "\u{1F423}"); // same with _ separators
-    assert_eq!(render_lit_str(r"\u10FFFF"), "\u{10FFFF}"); // U+10FFFF highest valid codepoint
-    // codepoints above U+10FFFF are invalid → char::from_u32 returns None → silently dropped
-    assert_eq!(render_lit_str(r"\u11_00_00"), "");       // U+110000 invalid, dropped
-  }
-
-
-  #[test]
-  #[ignore = "waiting to implement \\u properly so it can be composed"]
-  fn escape_unicode_future() {
-    assert_eq!(render_lit_str(r"\u{00}"), "\u{0000}");   // U+0000 lowest
-    assert_eq!(render_lit_str(r"\u{0041}"), "A");          // U+0041 = 'A'
-    assert_eq!(render_lit_str(r"\u{00_41}"), "A");         // same with _ separator
-    assert_eq!(render_lit_str(r"\u{1F423}"), "\u{1F423}"); // 🐣 U+1F423 hatching chick
+    assert_eq!(render_lit_str(r"\u{00}"), "\u{0000}");       // U+0000 lowest
+    assert_eq!(render_lit_str(r"\u{0041}"), "A");            // U+0041 = 'A'
+    assert_eq!(render_lit_str(r"\u{00_41}"), "A");           // same with _ separator
+    assert_eq!(render_lit_str(r"\u{1F423}"), "\u{1F423}");   // 🐣 U+1F423 hatching chick
     assert_eq!(render_lit_str(r"\u{10_FF_FF}"), "\u{10FFFF}"); // U+10FFFF highest valid codepoint
     // codepoints above U+10FFFF are invalid → char::from_u32 returns None → silently dropped
-    assert_eq!(render_lit_str(r"\u{11_00_00}"), "");       // U+110000 invalid, dropped
+    assert_eq!(render_lit_str(r"\u{11_00_00}"), "");         // U+110000 invalid, dropped
+    // bare \u without { — passed through literally
+    assert_eq!(render_lit_str(r"\u0041"), "\\u0041");
   }
 
 
@@ -192,7 +224,7 @@ mod tests {
     assert_eq!(render_lit_str(r"\u"), r"\u");
     // \x with no digits → passed through as '\x'
     assert_eq!(render_lit_str(r"\x"), r"\x");
-    // \uFF followed by non-hex → consumes 2 digits only
-    assert_eq!(render_lit_str(r"\uFFzz"), "\u{FF}zz");
+    // bare \uFF without { — passed through literally (delimited form required)
+    assert_eq!(render_lit_str(r"\uFFzz"), "\\uFFzz");
   }
 }
