@@ -26,8 +26,6 @@ use dap::types::*;
 
 use crate::passes::wasm::compile::{self, CompileOptions};
 
-// ── Source map (hardcoded for tests/wat/add.wat → tests/fnk/add.fnk) ────────
-
 /// Map a WASM PC offset to a (line, col) in the Fink source.
 /// Returns 1-indexed line and column for DAP.
 fn pc_to_source_location(
