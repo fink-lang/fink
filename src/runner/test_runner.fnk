@@ -437,3 +437,17 @@ test 'varargs identity', fn:
     10
 
 
+test 'tagged template varargs', fn:
+  expect run fink":
+    first = fn ..parts:
+      match parts:
+        [a, ..]: a
+
+    main = fn:
+      x = 42
+      y = first'hello \${x} world'
+      y == 'hello '
+  | equals fink":
+    true
+
+

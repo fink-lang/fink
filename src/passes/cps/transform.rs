@@ -604,13 +604,23 @@ fn lower_apply<'src>(
     } else {
       arg
     };
-    // Tagged template: splice raw parts as individual args to the tag function.
+    // Tagged template: build a list from raw parts and pass as spread arg.
     if let NodeKind::StrRawTempl { children, .. } = &inner.kind {
-      for part in children {
+      let mut acc = lit_val(g, Lit::Seq, origin);
+      for part in children.iter().rev() {
         let (pv, pp) = lower_str_part(g, part);
         pending.extend(pp);
-        arg_vals.push(Arg::Val(pv));
+        let result = g.fresh_result(origin);
+        let (result_kind, result_id) = (result.kind, result.id);
+        pending.push(Pending::App {
+          func: Callable::BuiltIn(BuiltIn::SeqPrepend),
+          args: args_val(vec![pv, acc]),
+          result,
+          origin,
+        });
+        acc = ref_val(g, result_kind, result_id, origin);
       }
+      arg_vals.push(Arg::Spread(acc));
       continue;
     }
     let (av, ap) = lower(g, inner);

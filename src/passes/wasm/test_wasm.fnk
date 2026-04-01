@@ -643,17 +643,23 @@ test 'str tagged template', fn:
       (type $Fn0 (func))
       (type $Fn1 (func (param (ref any))))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn3 (func (param (ref any) (ref any) (ref any))))
       (memory 1)
 
+      (func $v_21 (type $Fn2) (param $v_22 (ref any)) (param $v_9 (ref any))
+        unreachable
+        (return_call $_croc_2 (struct.new $type_93 (ref.cast (ref $type_88) (local.get $v_9))) (local.get $v_22))
+      )
       (global $main_0 (ref $Fn1) (ref.func $v_4))
       (func $v_4 (type $Fn1) (param $v_5 (ref any))
-        unreachable
-        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_5)))) (call $_str (i32.const 0) (i32.const 6)))
+        (local $v_26 (ref any))
+        (local.set $v_26 (struct.new $Closure (ref.func $v_21) (array.new_fixed $Captures 1 (local.get $v_5))))
+        (return_call $_seq_prepend (call $_str (i32.const 0) (i32.const 6)) (ref.null any) (local.get $v_26))
       )
       (export "main" (func $v_4))
       (data (offset (i32.const 0)) "1\n2\0a3")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBOztBOzs7OztBO0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7Ozs7QTs7O0E7OztBO0FBQUE7O0EiCn0=
 
 
 test 'str tagged template escape handling', fn:
@@ -666,19 +672,34 @@ test 'str tagged template escape handling', fn:
       (type $Fn0 (func))
       (type $Fn1 (func (param (ref any))))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn4 (func (param (ref any) (ref any) (ref any) (ref any))))
+      (type $Fn3 (func (param (ref any) (ref any) (ref any))))
       (memory 1)
 
+      (func $v_49 (type $Fn2) (param $v_50 (ref any)) (param $v_15 (ref any))
+        unreachable
+        (return_call $_croc_2 (struct.new $type_93 (ref.cast (ref $type_88) (local.get $v_15))) (local.get $v_50))
+      )
+      (func $v_40 (type $Fn2) (param $v_41 (ref any)) (param $v_12 (ref any))
+        (local $v_54 (ref any))
+        (local.set $v_54 (struct.new $Closure (ref.func $v_49) (array.new_fixed $Captures 1 (local.get $v_41))))
+        (return_call $_seq_prepend (call $_str (i32.const 0) (i32.const 8)) (local.get $v_12) (local.get $v_54))
+      )
+      (func $v_31 (type $Fn2) (param $v_32 (ref any)) (param $v_9 (ref any))
+        (local $v_45 (ref any))
+        (local.set $v_45 (struct.new $Closure (ref.func $v_40) (array.new_fixed $Captures 1 (local.get $v_32))))
+        unreachable
+        (return_call $_seq_prepend (local.get $v_9) (local.get $v_45))
+      )
       (global $main_0 (ref $Fn1) (ref.func $v_4))
       (func $v_4 (type $Fn1) (param $v_5 (ref any))
-        unreachable
-        unreachable
-        (return_call_ref $Fn4 (ref.cast (ref null $Fn4) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_5)))) (call $_str (i32.const 0) (i32.const 8)) (call $_str (i32.const 8) (i32.const 23)))
+        (local $v_36 (ref any))
+        (local.set $v_36 (struct.new $Closure (ref.func $v_31) (array.new_fixed $Captures 1 (local.get $v_5))))
+        (return_call $_seq_prepend (call $_str (i32.const 8) (i32.const 23)) (ref.null any) (local.get $v_36))
       )
       (export "main" (func $v_4))
       (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEU5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7Ozs7OztBO0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEU5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7Ozs7QTs7QTs7O0E7O0E7Ozs7QTs7O0E7OztBO0FBQUE7O0EiCn0=
 
 
 test 'str implicit formatting handling', fn:
