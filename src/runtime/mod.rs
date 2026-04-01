@@ -437,10 +437,18 @@ mod tests {
     let mut config = Config::new();
     config.wasm_gc(true);
     config.wasm_function_references(true);
+    config.wasm_tail_call(true);
     config.wasm_multi_value(true);
 
     let engine = Engine::new(&config).unwrap();
     let wat = prepare_wat(include_str!("list.wat"), LIST_TYPE_DEFS);
+    // Inject stub for $_apply (defined in dispatch.wat in the merged runtime).
+    // CPS wrappers call it but it's dead code in these direct-style tests.
+    let stub = concat!(
+      "\n  (func $_apply (param $args (ref null any)) (param $callee (ref null any))\n    (unreachable))",
+      "\n)",
+    );
+    let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + stub;
     let module = Module::new(&engine, &wat).unwrap();
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[]).unwrap();
@@ -500,18 +508,16 @@ mod tests {
   }
 
   /// Collect a list into a vec for easy assertion.
-  fn collect_list(store: &mut Store<()>, head_fn: &Func, tail_fn: &Func, list: &Val) -> Vec<u32> {
+  /// Uses list_is_empty to detect $Nil (empty list is a non-null struct).
+  fn collect_list(store: &mut Store<()>, head_fn: &Func, tail_fn: &Func, is_empty_fn: &Func, list: &Val) -> Vec<u32> {
     let mut result = vec![];
     let mut current = list.clone();
     loop {
-      match &current {
-        Val::AnyRef(None) => break,
-        Val::AnyRef(Some(_)) => {
-          result.push(list_head(store, head_fn, &current).unwrap());
-          current = list_tail(store, tail_fn, &current);
-        }
-        _ => break,
-      }
+      let mut empty = [Val::I32(0)];
+      is_empty_fn.call(&mut *store, &[current.clone()], &mut empty).unwrap();
+      if empty[0].unwrap_i32() != 0 { break; }
+      result.push(list_head(store, head_fn, &current).unwrap());
+      current = list_tail(store, tail_fn, &current);
     }
     result
   }
@@ -519,7 +525,7 @@ mod tests {
   #[test]
   fn test_list_empty() {
     let (mut store, instance) = load_list();
-    let empty_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let empty_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let size_fn = instance.get_func(&mut store, "list_size").unwrap();
 
     let nil = list_empty(&mut store, &empty_fn);
@@ -529,7 +535,7 @@ mod tests {
   #[test]
   fn test_list_prepend_and_head_tail() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
@@ -554,7 +560,7 @@ mod tests {
   #[test]
   fn test_list_pop() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let pop_fn = instance.get_func(&mut store, "list_pop").unwrap();
     let size_fn = instance.get_func(&mut store, "list_size").unwrap();
@@ -576,7 +582,7 @@ mod tests {
   #[test]
   fn test_list_size() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let len_fn = instance.get_func(&mut store, "list_size").unwrap();
 
@@ -590,26 +596,28 @@ mod tests {
   #[test]
   fn test_list_concat() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
 
     let a = build_list(&mut store, &nil_fn, &cons_fn, &[1, 2]);
     let b = build_list(&mut store, &nil_fn, &cons_fn, &[3, 4, 5]);
 
     let merged = list_concat(&mut store, &concat_fn, &a, &b);
-    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &merged), vec![1, 2, 3, 4, 5]);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &is_empty_fn, &merged), vec![1, 2, 3, 4, 5]);
   }
 
   #[test]
   fn test_list_concat_empty() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
 
     let nil = list_empty(&mut store, &nil_fn);
@@ -617,20 +625,21 @@ mod tests {
 
     // empty ++ a = a
     let r1 = list_concat(&mut store, &concat_fn, &nil, &a);
-    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &r1), vec![1, 2]);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &is_empty_fn, &r1), vec![1, 2]);
 
     // a ++ empty = a
     let r2 = list_concat(&mut store, &concat_fn, &a, &nil);
-    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &r2), vec![1, 2]);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &is_empty_fn, &r2), vec![1, 2]);
   }
 
   #[test]
   fn test_list_structural_sharing() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
 
     // shared = [2, 3]
     let shared = build_list(&mut store, &nil_fn, &cons_fn, &[2, 3]);
@@ -641,14 +650,14 @@ mod tests {
     // v2 = [9, 2, 3] (prepend 9 to shared)
     let v2 = list_prepend(&mut store, &cons_fn, 9, &shared);
 
-    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &v1), vec![1, 2, 3]);
-    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &v2), vec![9, 2, 3]);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &is_empty_fn, &v1), vec![1, 2, 3]);
+    assert_eq!(collect_list(&mut store, &head_fn, &tail_fn, &is_empty_fn, &v2), vec![9, 2, 3]);
   }
 
   #[test]
   fn test_list_get() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let get_fn = instance.get_func(&mut store, "list_get").unwrap();
 
@@ -683,7 +692,7 @@ mod tests {
   #[test]
   fn test_list_find() {
     let (mut store, instance) = load_list();
-    let nil_fn = instance.get_func(&mut store, "list_empty").unwrap();
+    let nil_fn = instance.get_func(&mut store, "list_nil").unwrap();
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let find_fn = instance.get_func(&mut store, "list_find").unwrap();
 
