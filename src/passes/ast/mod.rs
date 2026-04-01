@@ -311,6 +311,7 @@ fn indent(out: &mut String, depth: usize) {
   }
 }
 
+// TODO: include node Loc (start/end) in output so .fnk AST tests can assert on source spans
 fn print_node(node: &Node, out: &mut String, depth: usize) {
   indent(out, depth);
   match &node.kind {

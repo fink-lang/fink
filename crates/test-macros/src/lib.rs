@@ -115,6 +115,8 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
               // Unescape \${ → ${ so interpolation syntax can appear in fink": src inputs
               // without triggering the parser's own interpolation. Everything else verbatim.
               text.replace("\\${", "${")
+            } else if let Some(text) = extract_block_body_text(body_node, file_src) {
+              text
             } else {
               extract_fn_body_text(body_node, file_src).unwrap_or_else(|| {
                 panic!("include_fink_tests: test '{}' at line {} — cannot extract source body from `expect {}`", name, stmt.loc.start.line, func_name)
@@ -144,6 +146,8 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
           NodeKind::LitStr { content: s, .. } => s.clone(),
           _ => {
             if let Some(text) = extract_raw_templ(body_node) {
+              text
+            } else if let Some(text) = extract_block_body_text(body_node, file_src) {
               text
             } else {
               extract_fn_body_text(body_node, file_src).unwrap_or_else(|| {
@@ -200,6 +204,25 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
     }
     _ => None,
   }
+}
+
+/// Extract and dedent the raw source text from a `ƒink:` (or other custom) block node.
+///
+/// Accepts `Block { sep, .. }` — uses `sep.loc.end` .. `node.loc.end`
+/// to slice the original source, then dedents and trims.
+/// The block node's loc extends past trailing comments.
+fn extract_block_body_text<'src>(
+  node: &fink::ast::Node<'src>,
+  file_src: &'src str,
+) -> Option<String> {
+  use fink::ast::NodeKind;
+
+  let NodeKind::Block { sep, .. } = &node.kind else { return None };
+  let body_start = sep.loc.end.idx as usize;
+  let body_end = node.loc.end.idx as usize;
+  if body_start >= body_end { return None; }
+  let raw = &file_src[body_start..body_end];
+  Some(dedent_str(raw).trim().to_string())
 }
 
 /// Extract and dedent the body text of a `fn:` or `text fn:` node.

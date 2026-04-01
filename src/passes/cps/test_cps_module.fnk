@@ -8,12 +8,13 @@ module-level CPS — lower_module produces flat chain + export terminal
 #
 # Test format:
 #   test 'name', fn:
-#     expect cps_module fink":
+#     expect cps_module ƒink:
 #       <fink source>
-#     | equals fink":
+#     | equals ƒink:
 #       <expected cps output>
 
-{test, expect, equals, fink, cps_module} = import '!fake'
+{test, expect, equals, cps_module} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 ---
@@ -21,9 +22,9 @@ single binding
 ---
 
 test 'single binding export', fn:
-  expect cps_module fink":
+  expect cps_module ƒink:
     foo = 1
-  | equals fink":
+  | equals ƒink:
     ·let 1, fn ·foo_0:
       ·export ·foo_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtFLEEsUUFBQSIKfQ==
@@ -34,10 +35,10 @@ multiple bindings
 ---
 
 test 'two bindings export', fn:
-  expect cps_module fink":
+  expect cps_module ƒink:
     foo = 1
     bar = 2
-  | equals fink":
+  | equals ƒink:
     ·let 1, fn ·foo_0:
       ·let 2, fn ·bar_1:
         ·export ·foo_0, ·bar_1
@@ -45,13 +46,13 @@ test 'two bindings export', fn:
 
 
 test 'two fns export', fn:
-  expect cps_module fink":
+  expect cps_module ƒink:
     add = fn a, b:
       a + b
 
     main = fn:
       add 3, 4
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_2, ·b_3, ·v_9: ·op_plus ·a_2, ·b_3, ·v_9
       fn ·v_8:
@@ -69,10 +70,10 @@ imports excluded from exports
 ---
 
 test 'import not in exports', fn:
-  expect cps_module fink":
+  expect cps_module ƒink:
     {foo} = import './bar.fnk'
     main = fn: foo 1
-  | equals fink":
+  | equals ƒink:
     ·import './bar.fnk', fn ·v_8:
       ·fn
         fn ·v_13:
@@ -96,10 +97,10 @@ pattern bindings excluded from exports
 ---
 
 test 'destructure not in exports', fn:
-  expect cps_module fink":
+  expect cps_module ƒink:
     [a, b] = [1, 2]
     foo = fn: a
-  | equals fink":
+  | equals ƒink:
     ·seq_prepend 2, [], fn ·v_8:
       ·seq_prepend 1, ·v_8, fn ·v_11:
         ·fn

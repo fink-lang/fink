@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::ast::{CmpPart, Exprs, Node, NodeKind};
-use crate::lexer::{Lexer, Loc, Token, TokenKind};
+use crate::lexer::{Lexer, Loc, Pos, Token, TokenKind};
 
 // --- block modes ---
 
@@ -33,6 +33,9 @@ pub struct Parser<'src> {
   current: Token<'src>,
   block_names: HashMap<&'src str, BlockMode>,
   next_id: u32,
+  /// End position of the last comment skipped by `skip_trivia`.
+  /// Used to extend block/fn locs past trailing comments.
+  trivia_end: Pos,
 }
 
 impl<'src> Parser<'src> {
@@ -75,7 +78,7 @@ impl<'src> Parser<'src> {
     let mut block_names = HashMap::new();
     block_names.insert("fn", BlockMode::Ast);
     block_names.insert("match", BlockMode::Ast);
-    let mut p = Parser { lexer, src, current, block_names, next_id: 0 };
+    let mut p = Parser { lexer, src, current, block_names, next_id: 0, trivia_end: Pos { idx: 0, line: 0, col: 0 } };
     p.skip_trivia();
     p
   }
@@ -138,6 +141,9 @@ impl<'src> Parser<'src> {
 
   fn skip_trivia(&mut self) {
     while matches!(self.current.kind, TokenKind::Comment | TokenKind::CommentStart | TokenKind::CommentText | TokenKind::CommentEnd) {
+      if self.current.loc.end.idx > self.trivia_end.idx {
+        self.trivia_end = self.current.loc.end;
+      }
       self.current = self.lexer.next_token();
     }
   }
@@ -1627,7 +1633,11 @@ impl<'src> Parser<'src> {
       BlockMode::Ast    => self.parse_colon_body_or_arms()?,
       BlockMode::Tokens => self.parse_colon_body_tokens()?,
     };
-    let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params.loc.end);
+    let mut end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params.loc.end);
+    // Extend past trailing comments that were skipped inside the block body
+    if self.trivia_end.idx > end.idx {
+      end = self.trivia_end;
+    }
     Ok(self.node(
       NodeKind::Block { name: Box::new(name_node), params: Box::new(params), sep, body },
       Loc { start: name_loc.start, end },
@@ -1802,6 +1812,53 @@ mod tests {
     assert_eq!(args.items.len(), 2, "expected 2 args");
     assert_eq!(args.seps.len(), 1, "expected 1 comma sep");
     assert_eq!(args.seps[0].src, ",");
+  }
+
+  #[test]
+  fn block_loc_excludes_dedented_comment() {
+    let src = "test_block:\n  42\n# outside";
+    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
+    let NodeKind::Module(exprs) = &r.root.kind else { panic!("expected Module") };
+    let node = &exprs.items[0];
+    let NodeKind::Block { .. } = &node.kind else { panic!("expected Block") };
+    assert_eq!(
+      node.loc.end.idx as usize, "test_block:\n  42".len(),
+      "block loc must not extend into dedented comment",
+    );
+  }
+
+  #[test]
+  fn block_loc_includes_indented_trailing_comment() {
+    // A comment at the block's own indent level IS part of the block body.
+    let src = "test_block:\n  42\n  # inside";
+    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
+    let NodeKind::Module(exprs) = &r.root.kind else { panic!("expected Module") };
+    let node = &exprs.items[0];
+    let NodeKind::Block { .. } = &node.kind else { panic!("expected Block") };
+    assert_eq!(
+      node.loc.end.idx as usize, src.len(),
+      "block loc must extend past trailing comment inside the block",
+    );
+  }
+
+  #[test]
+  fn nested_block_loc_excludes_sibling_comment() {
+    // Inner block `b:` must not consume `# sibling` which is at `a:`'s indent level
+    let src = "test_block:\n  test_block:\n    42\n  # sibling\n  99";
+    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
+    let NodeKind::Module(exprs) = &r.root.kind else { panic!("expected Module") };
+    let outer = &exprs.items[0];
+    let NodeKind::Block { body: outer_body, .. } = &outer.kind else { panic!("expected outer Block") };
+    let inner = &outer_body.items[0];
+    let NodeKind::Block { .. } = &inner.kind else { panic!("expected inner Block, got {:?}", inner.kind) };
+    // Inner block is "test_block:\n    42" starting at idx 14
+    // "  test_block:\n    42" → inner ends at idx 30 (end of "42")
+    // Must NOT include "  # sibling"
+    assert!(
+      (inner.loc.end.idx as usize) <= "test_block:\n  test_block:\n    42".len(),
+      "inner block loc ({}) must not extend into sibling comment",
+      inner.loc.end.idx,
+    );
   }
 
   test_macros::include_fink_tests!("src/passes/ast/test_yield.fnk");

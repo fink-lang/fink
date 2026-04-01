@@ -10,13 +10,14 @@ unified lifting tests
 #
 # Test format:
 #   test 'name', fn:
-#     expect lift fink":
+#     expect lift ƒink:
 #       <fink source>
 #
-#     | equals fink":
+#     | equals ƒink:
 #       <expected lifted CPS>
 
-{test, equals, expect, fink, lift} = import 'fake!'
+{test, equals, expect, lift} = import 'fake!'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 ---
@@ -24,10 +25,10 @@ pure functions — no captures, unchanged
 ---
 
 test 'pure fn is unchanged', fn:
-  expect lift fink":
+  expect lift ƒink:
     f = fn x: x
 
-  | equals fink":
+  | equals ƒink:
     ·f_0 = ·v_5 = fn ·x_1, ·v_6:
       ·v_6 ·x_1
 
@@ -35,11 +36,11 @@ test 'pure fn is unchanged', fn:
 
 
 test 'pure nested fn — no captures, hoisted to module scope', fn:
-  expect lift fink":
+  expect lift ƒink:
     foo = fn a:
       fn b: b
 
-  | equals fink":
+  | equals ƒink:
     ·v_8 = fn ·b_2, ·v_9:
       ·v_9 ·b_2
 
@@ -54,12 +55,12 @@ continuation lifting — inline Cont::Expr bodies become named fns
 ---
 
 test 'chained arithmetic — cont body lifted', fn:
-  expect lift fink":
+  expect lift ƒink:
     main = fn:
       x = 2 * 3
       x + 4
 
-  | equals fink":
+  | equals ƒink:
     ·v_25 = fn ·v_26, ·v_9:
       ·x_1 = ·v_9
       ·op_plus ·x_1, 4, ·v_26
@@ -76,12 +77,12 @@ depth-1 closures — single level of capture
 ---
 
 test 'captured binding becomes leading param', fn:
-  expect lift fink":
+  expect lift ƒink:
     foo = fn a:
       fn b:
         a + b
 
-  | equals fink":
+  | equals ƒink:
     ·v_22 = fn ·a_23, ·b_2, ·v_9:
       ·op_plus ·a_23, ·b_2, ·v_9
 
@@ -92,14 +93,14 @@ test 'captured binding becomes leading param', fn:
 
 
 test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
-  expect lift fink":
+  expect lift ƒink:
     f = fn x:
       x
     g = fn a:
       fn b:
         a + b
 
-  | equals fink":
+  | equals ƒink:
     ·f_0 = ·v_9 = fn ·x_2, ·v_10:
       ·v_10 ·x_2
 
@@ -117,13 +118,13 @@ depth-2 closures — multiple nesting levels
 ---
 
 test 'depth-2 closure', fn:
-  expect lift fink":
+  expect lift ƒink:
     foo = fn a:
       fn b:
         fn c:
           a + b + c
 
-  | equals fink":
+  | equals ƒink:
     ·v_48 = fn ·c_49, ·v_51, ·v_15:
       ·op_plus ·v_15, ·c_49, ·v_51
 
@@ -141,13 +142,13 @@ test 'depth-2 closure', fn:
 
 
 test 'multiple captures at depth-2', fn:
-  expect lift fink":
+  expect lift ƒink:
     foo = fn a:
       fn b:
         fn c:
           a + b
 
-  | equals fink":
+  | equals ƒink:
     ·v_34 = fn ·a_35, ·b_37, ·c_3, ·v_12:
       ·op_plus ·a_35, ·b_37, ·v_12
 
@@ -161,12 +162,12 @@ test 'multiple captures at depth-2', fn:
 
 
 test 'yield — cont body lifted', fn:
-  expect lift fink":
+  expect lift ƒink:
     main = fn:
       q = yield 42
       1 + q
 
-  | equals fink":
+  | equals ƒink:
     ·v_24 = fn ·v_25, ·v_8:
       ·q_1 = ·v_8
       ·op_plus 1, ·q_1, ·v_25
@@ -179,14 +180,14 @@ test 'yield — cont body lifted', fn:
 
 
 test 'multi-fn module — add and main', fn:
-  expect lift fink":
+  expect lift ƒink:
     add = fn a, b:
       a + b
 
     main = fn:
       add 3, 4
 
-  | equals fink":
+  | equals ƒink:
     ·add_0 = ·v_8 = fn ·a_2, ·b_3, ·v_9:
       ·op_plus ·a_2, ·b_3, ·v_9
 
@@ -201,7 +202,7 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
   # result), so ·v_28 must be baked into the cont beforehand.
   # The ·closure could be eliminated by threading ·v_28 as an extra param
   # through ·double_0 — see the "closure elimination" note in lifting/mod.rs.
-  expect lift fink":
+  expect lift ƒink:
     double = fn x:
       x * 2
     inc = fn x:
@@ -211,7 +212,7 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
       x = double 5
       inc x
 
-  | equals fink":
+  | equals ƒink:
     ·double_0 = ·v_11 = fn ·x_3, ·v_12:
       ·op_mul ·x_3, 2, ·v_12
 
@@ -233,12 +234,12 @@ pattern matching
 ---
 
 test 'seq destructure', fn:
-  expect lift fink":
+  expect lift ƒink:
     main = fn foo:
       [a] = foo
       a + 1
 
-  | equals fink":
+  | equals ƒink:
     ·v_50 = fn ·v_51, ·v_12:
       ·a_2 = ·v_12
       ·op_plus ·a_2, 1, ·v_51
@@ -266,12 +267,12 @@ test 'seq destructure', fn:
 
 
 test 'record destructure', fn:
-  expect lift fink":
+  expect lift ƒink:
     main = fn foo:
       {x} = foo
       x + 1
 
-  | equals fink":
+  | equals ƒink:
     ·v_44 = fn ·v_45, ·v_12:
       ·x_2 = ·v_12
       ·op_plus ·x_2, 1, ·v_45
@@ -291,12 +292,12 @@ test 'record destructure', fn:
 
 
 test 'match — no forward refs after lift', fn:
-  expect lift fink":
+  expect lift ƒink:
     foo = fn n:
       match n:
         0: 42
 
-  | equals fink":
+  | equals ƒink:
     ·v_32 = fn ·v_28:
       ·v_28 42
 
@@ -331,13 +332,13 @@ test 'match — no forward refs after lift', fn:
 
 
 test 'match with binding', fn:
-  expect lift fink":
+  expect lift ƒink:
     foo = fn n:
       r = match n:
         0: n + 1
       r
 
-  | equals fink":
+  | equals ƒink:
     ·v_77 = fn ·n_78, ·v_29:
       ·op_plus ·n_78, 1, ·v_29
 
@@ -380,14 +381,14 @@ test 'match with binding', fn:
 
 
 test 'recursive fn in match', fn:
-  expect lift fink":
+  expect lift ƒink:
     fib = fn n:
       r = match n:
         0: 1
         _: fib n + 1
       r
 
-  | equals fink":
+  | equals ƒink:
     ·v_33 = fn ·v_29:
       ·v_29 1
 
@@ -444,10 +445,10 @@ test 'recursive fn in match', fn:
 
 
 test 'str eq', fn:
-  expect lift fink":
+  expect lift ƒink:
     main = fn:
       'hello' == 'hello'
-  | equals fink":
+  | equals ƒink:
     ·main_0 = ·v_4 = fn ·v_5:
       ·op_eq 'hello', 'hello', ·v_5
 
@@ -455,10 +456,10 @@ test 'str eq', fn:
 
 
 test 'str literal', fn:
-  expect lift fink":
+  expect lift ƒink:
     main = fn:
       'hello'
-  | equals fink":
+  | equals ƒink:
     ·main_0 = ·v_4 = fn ·v_5:
       ·v_5 'hello'
 

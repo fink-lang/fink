@@ -1,16 +1,17 @@
-{test, expect, equals, module, fink} = import '!fake'
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 test 'empty module', fn:
-  expect module fink''
-  | equals fink":
+  expect module ''
+  | equals ƒink:
     Module
 
 
 test 'single expression', fn:
-  expect module fink":
+  expect module ƒink:
     foo bar
-  | equals fink":
+  | equals ƒink:
     Module
       Apply
         Ident 'foo'
@@ -18,10 +19,10 @@ test 'single expression', fn:
 
 
 test 'multiple expressions', fn:
-  expect module fink":
+  expect module ƒink:
     foo = 1
     bar = 2
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         Ident 'foo'
