@@ -125,34 +125,18 @@ pub mod fmt;
 pub mod link;
 pub mod sourcemap;
 
-#[cfg(feature = "runner")]
+#[cfg(feature = "run")]
 pub mod compile;
 
 #[cfg(test)]
 mod tests {
-  use crate::ast::build_index;
-  use crate::parser::parse;
-  use crate::passes::cps::transform::lower_module;
-  use crate::passes::lifting::lift;
-
   /// Round-trip gen_wat: CPS → emit (WASM binary) → format (WAT text + source map).
   fn gen_wat(src: &str) -> String {
-    let r = parse(src).unwrap_or_else(|e| panic!("parse error: {}", e.message));
-    let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
-      .unwrap_or_else(|e| panic!("partial error: {:?}", e));
-    let r = crate::ast::ParseResult { root, node_count };
-    let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-    let exprs = match &r.root.kind {
-      crate::ast::NodeKind::Module(exprs) => &exprs.items,
-      _ => panic!("expected module"),
-    };
-    let cps = lower_module(exprs, &scope);
-    let lifted = lift(cps, &ast_index);
+    let (lifted, desugared) = crate::to_lifted(src).unwrap_or_else(|e| panic!("{e}"));
 
     // Collect + emit WASM binary.
-    let ir_ctx = super::collect::IrCtx::new(&lifted.origin, &ast_index);
-    let module = super::collect::collect(&lifted.root, &ir_ctx);
+    let ir_ctx = super::collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
+    let module = super::collect::collect(&lifted.result.root, &ir_ctx);
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());
     let mut result = super::emit::emit(&module, &ir_ctx);
 

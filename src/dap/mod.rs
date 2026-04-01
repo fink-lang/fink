@@ -26,8 +26,6 @@ use dap::types::*;
 
 use crate::passes::wasm::compile::{self, CompileOptions};
 
-// ── Source map (hardcoded for tests/wat/add.wat → tests/fnk/add.fnk) ────────
-
 /// Map a WASM PC offset to a (line, col) in the Fink source.
 /// Returns 1-indexed line and column for DAP.
 fn pc_to_source_location(
@@ -144,8 +142,8 @@ pub fn run<R: Read, W: Write>(
   let (wasm, source_file, mappings) = if program.ends_with(".fnk") {
     // Fink source: compile through the full pipeline (returns WASM binary directly).
     let src = std::fs::read_to_string(program).map_err(|e| e.to_string())?;
-    let result = crate::runner::compile_fnk(&src)?;
-    (result.wasm, program.to_string(), result.mappings)
+    let wasm = crate::to_wasm(&src, program)?;
+    (wasm.binary, program.to_string(), wasm.mappings)
   } else {
     let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
     let wasm = if bytes.starts_with(b"\0asm") {

@@ -1,8 +1,6 @@
-// Runner: compiles Fink source or loads WAT/WASM, runs it in Wasmtime.
+// Runner: executes compiled WASM in Wasmtime.
 
 pub mod wasmtime_runner;
-
-pub use crate::compiler::{CompileResult, compile_fnk};
 
 pub struct RunOptions {
   pub debug: bool,
@@ -16,20 +14,27 @@ impl Default for RunOptions {
   }
 }
 
+/// Compile source and run it.
+pub fn run_source(mut opts: RunOptions, src: &str, path: &str) -> Result<(), String> {
+  if opts.source_label == "fink" {
+    opts.source_label = path.to_string();
+  }
+  let wasm = crate::to_wasm(src, path)?;
+  wasmtime_runner::run(&opts, &wasm.binary)
+}
+
+/// Read a file and run it. Supports .fnk source and .wasm binaries.
 pub fn run_file(mut opts: RunOptions, path: &str) -> Result<(), String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
   }
 
-  // .fnk files: compile through the full pipeline, then run.
   if path.ends_with(".fnk") {
     let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let result = compile_fnk(&src)?;
-    return wasmtime_runner::run(&opts, &result.wasm);
+    return run_source(opts, &src, path);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-  // WASM binaries start with magic bytes \0asm.
   if bytes.starts_with(b"\0asm") {
     wasmtime_runner::run(&opts, &bytes)
   } else {
@@ -44,8 +49,8 @@ mod tests {
 
   #[allow(unused)]
   fn run(src: &str) -> String {
-    let result = compile_fnk(src).expect("compilation failed");
-    match wasmtime_runner::exec(&RunOptions::default(), &result.wasm) {
+    let wasm = crate::to_wasm(src, "test").expect("compilation failed");
+    match wasmtime_runner::exec(&RunOptions::default(), &wasm.binary) {
       Ok(FinkResult::Num(v)) => {
         if v == v.floor() && v.abs() < 1e15 {
           format!("{}", v as i64)

@@ -12,14 +12,12 @@ edition = "2024"
 
 
 [features]
-# compiler: exposes compile_fnk (Fink source → WASM binary). Safe for wasm32 targets.
-# wasm-encoder and wasmparser are always-on deps; this feature gates the API surface.
-compiler = []
-# wat: WAT disassembly via wasmprinter. Implies compiler. wasm32 safe.
-wat = ["compiler", "dep:wasmprinter"]
-# runner: native execution (wasmtime) + debugger (dap). Implies compiler + wat.
-runner = ["compiler", "wat", "dep:wat-crate", "dep:wasmtime", "dep:dap", "dep:tokio"]
-default = ["compiler", "wat", "runner"]
+# compile: WASM codegen — collect, emit, DWARF, link, WAT disassembly.
+# Safe for wasm32 targets. Gates compiler.rs and wasm passes.
+compile = ["dep:wasmprinter"]
+# run: native execution (wasmtime) + DAP debugger. Implies compile. Native only.
+run = ["compile", "dep:wat-crate", "dep:wasmtime", "dep:dap", "dep:tokio"]
+default = ["compile", "run"]
 
 [dependencies]
 gimli = { version = "0.33", default-features = false, features = ["write", "read"] }
