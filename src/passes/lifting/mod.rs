@@ -836,30 +836,21 @@ fn collect_captured_refs_val(
 mod tests {
   use test_macros::include_fink_tests;
 
-  use crate::ast::build_index;
-  use crate::parser::parse;
   use crate::passes::cps::fmt::Ctx;
-  use crate::passes::ast::NodeKind;
-  use crate::passes::cps::transform::lower_module;
   use super::fmt::fmt_flat;
 
   #[allow(unused)]
   fn lift(src: &str) -> String {
-    match parse(src) {
-      Ok(r) => {
-        let ast_index = build_index(&r);
-        let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-        let NodeKind::Module(ref items) = r.root.kind else { panic!("expected Module root") };
-        let cps = lower_module(&items.items, &scope);
-        let lifted = super::lift(cps, &ast_index);
+    match crate::to_lifted(src) {
+      Ok((lifted, desugared)) => {
         let ctx = Ctx {
-          origin: &lifted.origin,
-          ast_index: &ast_index,
+          origin: &lifted.result.origin,
+          ast_index: &desugared.ast_index,
           captures: None,
         };
-        fmt_flat(&lifted.root, &ctx)
+        fmt_flat(&lifted.result.root, &ctx)
       }
-      Err(e) => format!("ERROR: {}", e.message),
+      Err(e) => format!("ERROR: {e}"),
     }
   }
 

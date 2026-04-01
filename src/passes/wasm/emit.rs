@@ -2000,28 +2000,13 @@ fn fixup_offsets(wasm: &[u8], raw: Vec<RawMapping>) -> Vec<OffsetMapping> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::ast::build_index;
-  use crate::parser::parse;
-  use crate::passes::cps::transform::lower_module;
-  use crate::passes::lifting::lift;
   use crate::passes::wasm::collect;
 
   fn compile(src: &str) -> EmitResult {
-    let r = parse(src).unwrap_or_else(|e| panic!("parse error: {}", e.message));
-    let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
-      .unwrap_or_else(|e| panic!("partial error: {:?}", e));
-    let r = crate::ast::ParseResult { root, node_count };
-    let ast_index = build_index(&r);
-    let scope = crate::passes::scopes::analyse(&r.root, r.node_count as usize, &[]);
-    let exprs = match &r.root.kind {
-      crate::ast::NodeKind::Module(exprs) => &exprs.items,
-      _ => panic!("expected module"),
-    };
-    let cps = lower_module(exprs, &scope);
-    let lifted = lift(cps, &ast_index);
+    let (lifted, desugared) = crate::to_lifted(src).unwrap_or_else(|e| panic!("{e}"));
 
-    let ir_ctx = IrCtx::new(&lifted.origin, &ast_index);
-    let module = collect::collect(&lifted.root, &ir_ctx);
+    let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast_index);
+    let module = collect::collect(&lifted.result.root, &ir_ctx);
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());
     emit(&module, &ir_ctx)
   }

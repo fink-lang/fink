@@ -1,7 +1,0 @@
-add = fn a, b:
-  a + b
-
-fink_main = fn:
-  add 2, 3
-  | print
-

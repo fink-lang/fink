@@ -738,14 +738,9 @@ mod tests {
   use super::*;
 
   fn scope(src: &str) -> String {
-    match crate::parser::parse(src) {
-      Ok(r) => {
-        let (root, node_count) = crate::passes::partial::apply(r.root, r.node_count)
-          .expect("partial pass failed");
-        let result = analyse(&root, node_count as usize, &[]);
-        format_result(&result)
-      }
-      Err(e) => format!("ERROR: {}", e.message),
+    match crate::to_desugared(src) {
+      Ok(desugared) => format_result(&desugared.scope),
+      Err(e) => format!("ERROR: {e}"),
     }
   }
 

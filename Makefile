@@ -2,7 +2,7 @@
 #
 # Prerequisites: cargo, cargo-outdated (cargo install cargo-outdated)
 
-.PHONY: deps-check deps-update deps-install clean build test test-full bless release
+.PHONY: deps-check deps-update deps-install clean build test test-full bless coverage release
 
 deps-check:
 	cargo outdated
@@ -29,6 +29,13 @@ bless:
 
 test-full: test
 	cargo clippy -- -D warnings
+
+coverage:
+	cargo llvm-cov --lib --html
+	@echo "Report: target/llvm-cov/html/index.html"
+
+coverage-summary:
+	cargo llvm-cov --lib --summary-only
 
 release:
 	cargo build --release
