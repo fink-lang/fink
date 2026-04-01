@@ -1,10 +1,11 @@
-{test, expect, equals, fink, gen_wat, wat} = import '!fake'
+{test, expect, equals, gen_wat, wat} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 # Round-trip tests: CPS → emit (WASM binary) → format (WAT text + source map)
 # These validate the full pipeline produces correct, readable WAT.
 
 test 'literal int', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       42
   | equals wat":
@@ -25,7 +26,7 @@ test 'literal int', fn:
 
 
 test 'literal bool', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       true
   | equals wat":
@@ -46,7 +47,7 @@ test 'literal bool', fn:
 
 
 test 'literal bool false', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       false
   | equals wat":
@@ -68,7 +69,7 @@ test 'literal bool false', fn:
 
 
 test 'let binding', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       x = 42
       x
@@ -92,7 +93,7 @@ test 'let binding', fn:
 
 
 test 'add two literals', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       2 + 3
   | equals wat":
@@ -113,7 +114,7 @@ test 'add two literals', fn:
 
 
 test 'chained arithmetic', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       x = 2 * 3
       x + 4
@@ -143,7 +144,7 @@ test 'chained arithmetic', fn:
 
 
 test 'multiple let bindings used', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       x = 2
       y = 3
@@ -170,7 +171,7 @@ test 'multiple let bindings used', fn:
 
 
 test 'user fn call', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     add = fn a, b:
       a + b
     main = fn:
@@ -199,7 +200,7 @@ test 'user fn call', fn:
 
 
 test 'chained fn calls', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     double = fn x:
       x * 2
     inc = fn x:
@@ -243,7 +244,7 @@ test 'chained fn calls', fn:
 
 
 test 'pipe unary', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     double = fn x:
       x * 2
     inc = fn x:
@@ -284,7 +285,7 @@ test 'pipe unary', fn:
 
 
 test 'match literal first arm', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       match 0:
         0: 42
@@ -352,7 +353,7 @@ test 'match literal first arm', fn:
 
 
 test 'match with binding', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       x = 5
       match x:
@@ -430,7 +431,7 @@ test 'match with binding', fn:
 
 
 test 'simple recursion', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     recurse = fn n:
       match n:
         0: 42
@@ -517,7 +518,7 @@ test 'simple recursion', fn:
 
 
 test 'closure construction and call', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       add = fn x:
         fn y: x + y
@@ -559,7 +560,7 @@ test 'closure construction and call', fn:
 
 
 test 'string literal', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       'hello'
   | equals wat":
@@ -581,7 +582,7 @@ test 'string literal', fn:
 
 
 test 'string literal dedup', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       x = 'hello'
       y = 'hello'
@@ -609,9 +610,9 @@ test 'string literal dedup', fn:
 
 
 test 'str templ two exprs', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
-      '\${a} and \${b}'
+      '${a} and ${b}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -633,7 +634,7 @@ test 'str templ two exprs', fn:
 
 
 test 'str tagged template', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       foo'1\n2
       3'
@@ -663,9 +664,9 @@ test 'str tagged template', fn:
 
 
 test 'str tagged template escape handling', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
-      foo'\n\r\t\f\${bar}\b\v\$\'\\\xE9\u{8A_9E}'
+      foo'\n\r\t\f${bar}\b\v\$\'\\\xE9\u{8A_9E}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -703,7 +704,7 @@ test 'str tagged template escape handling', fn:
 
 
 test 'str implicit formatting handling', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       '1\n2
       3'
@@ -726,7 +727,7 @@ test 'str implicit formatting handling', fn:
 
 
 test 'str implicit formatting escapes', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       '\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}'
   | equals wat":
@@ -748,7 +749,7 @@ test 'str implicit formatting escapes', fn:
 
 
 test 'str eq', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       'hello' == 'hello'
   | equals wat":
@@ -771,7 +772,7 @@ test 'str eq', fn:
 
 
 test 'rec literal', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       {a: 1, b: 2}
   | equals wat":
@@ -798,7 +799,7 @@ test 'rec literal', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YTogMSwgYjogMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7O0E7OztBOzs7QTs7O0E7QUFBQTs7QSIKfQ==
 
 test 'rec destructure', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       {a, b: c} = {a: 1, b: 2}
       a + c
@@ -855,7 +856,7 @@ test 'rec destructure', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YSwgYjogY30gPSB7YTogMSwgYjogMn1cbiAgYSArIGMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTtBO0E7QTtBOztBOztBO0E7Ozs7QTs7O0E7O0E7OztBOztBOzs7QTs7QTs7O0E7O0E7OztBOzs7QTs7O0E7QUFBQTs7QSIKfQ==
 
 test 'rec spread', fn:
-  expect gen_wat fink":
+  expect gen_wat ƒink:
     main = fn:
       r = {a: 1, b: 2}
       {..r, c: 3}

@@ -1,11 +1,12 @@
-{test, expect, ast, fink, equals} = import 'fake!'
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 test 'ƒink block with no args', fn:
-  expect ast fink":
+  expect ast ƒink:
     {ƒink} = import '@fink/parse/blocks.fnk'
     ƒink: 'hello'
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         LitRec '{..}',
@@ -20,12 +21,12 @@ test 'ƒink block with no args', fn:
 
 
 test 'ƒink block with params and body', fn:
-  expect ast fink":
+  expect ast ƒink:
     {ƒink} = import '@fink/parse/blocks.fnk'
     ƒink a, b:
       x = a + b
       x * 2
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         LitRec '{..}',
@@ -49,10 +50,10 @@ test 'ƒink block with params and body', fn:
 
 
 test 'ƒtok block with no args', fn:
-  expect ast fink":
+  expect ast ƒink:
     {ƒtok} = import '@fink/parse/blocks.fnk'
     ƒtok: a + b
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         LitRec '{..}',
@@ -69,12 +70,12 @@ test 'ƒtok block with no args', fn:
 
 
 test 'ƒtok block with params and body', fn:
-  expect ast fink":
+  expect ast ƒink:
     {ƒtok} = import '@fink/parse/blocks.fnk'
     ƒtok a, b:
       x = a + b
       x * 2
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         LitRec '{..}',

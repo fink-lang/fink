@@ -1,8 +1,12 @@
 
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
 test 'block with no args and expression body', fn:
-  expect ast fink":
+  expect ast ":
     test_block: 'hello'
-  | equals fink":
+  | equals ƒink:
     Module
       Block ':',
         Ident 'test_block'
@@ -10,9 +14,9 @@ test 'block with no args and expression body', fn:
         LitStr 'hello'
 
 test 'block with patterns and expression body', fn:
-  expect ast fink":
+  expect ast ":
     test_block a, b: a + b
-  | equals fink":
+  | equals ƒink:
     Module
       Block ':',
         Ident 'test_block'
@@ -24,11 +28,11 @@ test 'block with patterns and expression body', fn:
           Ident 'b'
 
 test 'block with patterns and multiline body', fn:
-  expect ast fink":
+  expect ast ":
     test_block a, b:
       x = a + b
       x * 2
-  | equals fink":
+  | equals ƒink:
     Module
       Block ':',
         Ident 'test_block'
@@ -45,11 +49,11 @@ test 'block with patterns and multiline body', fn:
           LitInt '2'
 
 test 'block with arms', fn:
-  expect ast fink":
+  expect ast ":
     test_block a:
       1: 'one'
       2: 'two'
-  | equals fink":
+  | equals ƒink:
     Module
       Block ':',
         Ident 'test_block'
@@ -63,10 +67,10 @@ test 'block with arms', fn:
           LitStr 'two'
 
 test 'block bound to name', fn:
-  expect ast fink":
+  expect ast ":
     result = test_block a, b:
       a + b
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         Ident 'result'
@@ -80,9 +84,9 @@ test 'block bound to name', fn:
             Ident 'b'
 
 test 'inline block in application', fn:
-  expect ast fink":
+  expect ast ":
     log test_block: 'hello'
-  | equals fink":
+  | equals ƒink:
     Module
       Apply
         Ident 'log'
@@ -92,9 +96,9 @@ test 'inline block in application', fn:
           LitStr 'hello'
 
 test 'block with sequence destructure param', fn:
-  expect ast fink":
+  expect ast ":
     test_block [a, b]: a + b
-  | equals fink":
+  | equals ƒink:
     Module
       Block ':',
         Ident 'test_block'
@@ -107,9 +111,9 @@ test 'block with sequence destructure param', fn:
           Ident 'b'
 
 test 'block with record destructure param', fn:
-  expect ast fink":
+  expect ast ":
     test_block {x, y}: x + y
-  | equals fink":
+  | equals ƒink:
     Module
       Block ':',
         Ident 'test_block'

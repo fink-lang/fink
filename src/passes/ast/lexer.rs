@@ -647,9 +647,20 @@ impl<'src> Lexer<'src> {
       self.pending.push(Token { kind: TokenKind::StrText, loc: Loc { start, end: line.end }, src });
     }
 
-    // After trimming, position at the trimmed end (before \n) so the regular
-    // consume_newline logic fires and emits BlockCont — same as any other block.
-    let str_end_pos = raw.last().map_or(p, |l| l.end);
+    // Position at the trimmed end so the regular consume_newline logic fires
+    // and emits BlockCont/BlockEnd — same as any other block.
+    // When raw is empty (e.g. resume after ${} with only a \n before dedent),
+    // p has already advanced past the \n. Back up to the \n so consume_newline
+    // can handle the indent transition and emit the correct BlockEnd tokens.
+    let str_end_pos = if let Some(l) = raw.last() {
+      l.end
+    } else if !interp && p.idx > 0 && bytes.get(p.idx as usize - 1) == Some(&b'\n') {
+      // p is at the start of a dedented line; the \n before it was consumed
+      // by the string but not yet processed by consume_newline.
+      Pos { idx: p.idx - 1, line: p.line - 1, col: 0 }
+    } else {
+      p
+    };
     self.pos = if !interp { str_end_pos } else { p };
 
     // Emit StrEnd '' on dedent/EOF (not on interp — mode stays active)

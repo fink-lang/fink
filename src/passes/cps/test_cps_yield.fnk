@@ -11,31 +11,33 @@ yield — CPS lowering tests
 #   ·yield value, fn ·v_{cps_id}:
 #     <continuation>
 
-{test, equals, expect, fink, cps_expr} = import 'fake!'
+{test, equals, expect, cps_expr} = import 'fake!'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
 
 test 'yield literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     yield 42
 
-  | equals fink":
+  | equals ƒink:
     ·yield 42, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE9BQU0sRSxFIgp9
 
 
 test 'yield ident', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     yield foo
 
-  | equals fink":
+  | equals ƒink:
     ·yield ·∅foo, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPQUFNLEssRSIKfQ==
 
 
 test 'yield bound to name', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     result = yield 42
 
-  | equals fink":
+  | equals ƒink:
     ·yield 42, fn ·v_3:
       ·let ·v_3, fn ·result_0:
         ·v_1 ·result_0
@@ -43,10 +45,10 @@ test 'yield bound to name', fn:
 
 
 test 'yield apply result', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     yield foo bar
 
-  | equals fink":
+  | equals ƒink:
     ·∅foo ·∅bar, fn ·v_3:
       ·yield ·v_3, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsTUFBSSxLLEtBQUosSTtFQUFOLEFBQUEsT0FBTSxJLEUiCn0=

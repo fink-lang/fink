@@ -13,38 +13,40 @@ cps_c IR — pretty-printer tests
 #
 # Test format:
 #   test 'name', fn:
-#     expect cps_expr fink":
+#     expect cps_expr ƒink:
 #       <fink source>
 #
-#     | equals fink":
+#     | equals ƒink:
 #       <expected cps output>
 
-{test, expect, equals, fink, cps_expr} = import '!fake'
+{test, expect, equals, cps_expr} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
 
 ---
 literals — tail position, no synthesis needed
 ---
 
 test 'int literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     42
-  | equals fink":
+  | equals ƒink:
     ·v_0 42
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEiCn0=
 
 
 test 'bool literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     true
-  | equals fink":
+  | equals ƒink:
     ·v_0 true
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBQSIKfQ==
 
 
 test 'string literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     'hello'
-  | equals fink":
+  | equals ƒink:
     ·v_0 'hello'
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBQSxBLENBQUEsSyIKfQ==
 
@@ -54,18 +56,18 @@ binding — ·match_store synthesis
 ---
 
 test 'bind literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x = 42
-  | equals fink":
+  | equals ƒink:
     ·let 42, fn ·x_0:
       ·v_1 ·x_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDQyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUUsQUFBQSxLQUFFLEUsS0FBSixJO0UsQSxLQUFBIgp9
 
 
 test 'bind ident', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x = foo
-  | equals fink":
+  | equals ƒink:
     ·let ·∅foo, fn ·x_0:
       ·v_1 ·x_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtFLEEsS0FBQSIKfQ==
@@ -76,17 +78,17 @@ application — ·apply synthesis
 ---
 
 test '·apply ident to literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo 42
-  | equals fink":
+  | equals ƒink:
     ·∅foo 42, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDQyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxNQUFJLEUsRSIKfQ==
 
 
 test '·apply ident to ident', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo bar
-  | equals fink":
+  | equals ƒink:
     ·∅foo ·∅bar, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTUFBSSxLLEUiCn0=
 
@@ -96,9 +98,9 @@ identifier reference — synthesize ·load
 ---
 
 test 'ident ref', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo
-  | equals fink":
+  | equals ƒink:
     ·v_0 ·∅foo
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBIgp9
 
@@ -108,10 +110,10 @@ block — statement sequences
 ---
 
 test 'block two stmts', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x = 1
     x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_3:
         ·let 1, fn ·x_0:
@@ -121,10 +123,10 @@ test 'block two stmts', fn:
 
 
 test 'block bind then ·apply', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x = 42
     foo x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_3:
         ·let 42, fn ·x_0:
@@ -134,11 +136,11 @@ test 'block bind then ·apply', fn:
 
 
 test 'fn body with bind', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn a:
       x = a + 1
       x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·v_4:
         ·op_plus ·a_0, 1, fn ·v_7:
@@ -153,17 +155,17 @@ pipe — lowered as application
 ---
 
 test 'pipe two stages', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a | foo
-  | equals fink":
+  | equals ƒink:
     ·∅foo ·∅a, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUUsTUFBSixHLEUiCn0=
 
 
 test 'pipe three stages', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a | foo | bar
-  | equals fink":
+  | equals ƒink:
     ·∅foo ·∅a, fn ·v_3:
       ·∅bar ·v_3, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyB8IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUUsTUFBSixHLEtBQUEsSTtFQUFRLEFBQUUsTUFBVixJLEUiCn0=
@@ -174,17 +176,17 @@ infix operators — op ·load + ·apply synthesis
 ---
 
 test 'infix add', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a + b
-  | equals fink":
+  | equals ƒink:
     ·op_plus ·∅a, ·∅b, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSArIGIiXSwKICAibWFwcGluZ3MiOiAiQUFBRSxBQUFBLFNBQUYsRyxFQUFJLEcsRSIKfQ==
 
 
 test 'infix literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a + 1
-  | equals fink":
+  | equals ƒink:
     ·op_plus ·∅a, 1, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBRSxBQUFBLFNBQUYsRyxFQUFJLEMsRSIKfQ==
 
@@ -194,9 +196,9 @@ function definition — ·closure synthesis
 ---
 
 test 'fn one param', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn a: a
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·v_3: ·v_3 ·a_0
       fn ·v_2: ·v_1 ·v_2
@@ -204,9 +206,9 @@ test 'fn one param', fn:
 
 
 test 'fn two params', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn a, b: a
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·b_1, ·v_4: ·v_4 ·a_0
       fn ·v_3: ·v_2 ·v_3
@@ -214,9 +216,9 @@ test 'fn two params', fn:
 
 
 test 'named fn', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     double = fn a: a
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_1, ·v_4: ·v_4 ·a_1
       fn ·v_3:
@@ -230,17 +232,17 @@ unary ops
 ---
 
 test 'unary not', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     not x
-  | equals fink":
+  | equals ƒink:
     ·op_not ·∅x, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibm90IHgiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFFBQUksRyxFIgp9
 
 
 test 'unary minus', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     -x
-  | equals fink":
+  | equals ƒink:
     ·op_minus ·∅x, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLXgiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFVBQUMsRyxFIgp9
 
@@ -249,9 +251,9 @@ chained comparisons
 ---
 
 test 'chained cmp', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a < b < c
-  | equals fink":
+  | equals ƒink:
     ·op_lt ·∅a, ·∅b, fn ·v_4:
       ·op_lt ·∅b, ·∅c, fn ·v_6:
         ·op_and ·v_4, ·v_6, ·v_0
@@ -262,17 +264,17 @@ range
 ---
 
 test 'range excl', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     0..10
-  | equals fink":
+  | equals ƒink:
     ·op_rngex 0, 10, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uMTAiXSwKICAibWFwcGluZ3MiOiAiQUFBQyxBQUFBLFVBQUQsQyxFQUFHLEUsRSIKfQ==
 
 
 test 'range incl', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     0...10
-  | equals fink":
+  | equals ƒink:
     ·op_rngin 0, 10, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uLjEwIl0sCiAgIm1hcHBpbmdzIjogIkFBQUMsQUFBQSxVQUFELEMsRUFBSSxFLEUiCn0=
 
@@ -281,35 +283,35 @@ string templates
 ---
 
 test 'str templ', fn:
-  expect cps_expr fink":
-    'hello \${name}'
-  | equals fink":
+  expect cps_expr ƒink:
+    'hello ${name}'
+  | equals ƒink:
     ·str_fmt 'hello ', ·∅name, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvICR7bmFtZX0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFDLEEsQ0FBQSxNLEMsRUFBUSxNLEUiCn0=
 
 
 test 'str templ two exprs', fn:
-  expect cps_expr fink":
-    '\${a} and \${b}'
-  | equals fink":
+  expect cps_expr ƒink:
+    '${a} and ${b}'
+  | equals ƒink:
     ·str_fmt ·∅a, ' and ', ·∅b, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyR7YX0gYW5kICR7Yn0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFHLEcsRUFBRSxBLENBQUEsSyxDLEVBQU8sRyxFIgp9
 
 
 test 'str tagged template', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo'1\n2
       3'
-  | equals fink":
+  | equals ƒink:
     ·seq_prepend '1⧵n2␊3', [], fn ·v_4:
       ·∅foo ..·v_4, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFJLEEsQ0FBQSxNLEMsRUFBSixBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLE1BQUEsQSxFQUFBLEksRSIKfQ==
 
 
 test 'str tagged template escape handling', fn:
-  expect cps_expr fink":
-    foo'\n\r\t\f\${bar}\b\v\$\'\\\xE9\u{8A_9E}'
-  | equals fink":
+  expect cps_expr ƒink:
+    foo'\n\r\t\f${bar}\b\v\$\'\\\xE9\u{8A_9E}'
+  | equals ƒink:
     ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xE9⧵u{8A_9E}', [], fn ·v_4:
       ·seq_prepend ·∅bar, ·v_4, fn ·v_7:
         ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·v_10:
@@ -318,18 +320,18 @@ test 'str tagged template escape handling', fn:
 
 
 test 'str implicit formatting handling', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     '1\n2
       3'
-  | equals fink":
+  | equals ƒink:
     ·v_0 '1␊2␊3'
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBLEEsQ0FBQSxLIgp9
 
 
 test 'str implicit formatting escapes', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     '\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}'
-  | equals fink":
+  | equals ƒink:
     ·v_0 '␊␍␉␌␈␋＄′⧵é語'
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBLEEsQ0FBQSxXIgp9
 
@@ -339,9 +341,9 @@ sequence and record literals
 ---
 
 test 'seq literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [1, 2, 3]
-  | equals fink":
+  | equals ƒink:
     ·seq_prepend 3, [], fn ·v_3:
       ·seq_prepend 2, ·v_3, fn ·v_6:
         ·seq_prepend 1, ·v_6, ·v_0
@@ -349,34 +351,34 @@ test 'seq literal', fn:
 
 
 test 'empty seq literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     []
-  | equals fink":
+  | equals ƒink:
     ·v_0 []
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW10iXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEsQSxDIgp9
 
 
 test 'rec literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {x: 1, y: 2}
-  | equals fink":
+  | equals ƒink:
     ·rec_put {}, 'x', 1, fn ·v_4:
       ·rec_put ·v_4, 'y', 2, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3g6IDEsIHk6IDJ9Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFBLEEsQyxDLEVBQUMsQSxDQUFBLEMsQyxFQUFHLEMsS0FBSixJO0VBQUEsQUFBQSxTQUFBLEksRUFBTyxBLENBQUEsQyxDLEVBQUcsQyxFIgp9
 
 
 test 'empty rec literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {}
-  | equals fink":
+  | equals ƒink:
     ·v_0 {}
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie30iXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEsQSxDIgp9
 
 
 test 'rec shorthand', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {x, y}
-  | equals fink":
+  | equals ƒink:
     ·rec_put {}, 'x', ·∅x, fn ·v_4:
       ·rec_put ·v_4, 'y', ·∅y, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3gsIHl9Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFBLEEsQyxDLEVBQUMsQSxDQUFBLEMsQyxFQUFBLEcsS0FBRCxJO0VBQUEsQUFBQSxTQUFBLEksRUFBSSxBLENBQUEsQyxDLEVBQUEsRyxFIgp9
@@ -387,17 +389,17 @@ member access
 ---
 
 test 'member static', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo.bar
-  | equals fink":
+  | equals ƒink:
     ·op_dot ·∅foo, ·∅bar, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUUFBQSxLLEVBQUksSyxFIgp9
 
 
 test 'member dynamic', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo.(key)
-  | equals fink":
+  | equals ƒink:
     ·op_dot ·∅foo, ·∅key, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLihrZXkpIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxRQUFBLEssRUFBSyxLLEUiCn0=
 
@@ -407,18 +409,18 @@ spreads in seq and rec literals
 ---
 
 test 'seq spread', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [..xs, 1]
-  | equals fink":
+  | equals ƒink:
     ·seq_prepend 1, [], fn ·v_3:
       ·seq_concat ·∅xs, ·v_3, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4ueHMsIDFdIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFPLEMsRUFBUCxBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLFlBQUcsSSxFQUFILEksRSIKfQ==
 
 
 test 'rec spread', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {..base, x: 1}
-  | equals fink":
+  | equals ƒink:
     ·rec_merge {}, ·∅base, fn ·v_3:
       ·rec_put ·v_3, 'x', 1, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiey4uYmFzZSwgeDogMX0iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQUEsQSxDLEMsRUFBRyxNLEtBQUgsSTtFQUFBLEFBQUEsU0FBQSxJLEVBQVMsQSxDQUFBLEMsQyxFQUFHLEMsRSIKfQ==
@@ -429,9 +431,9 @@ try expression
 ---
 
 test 'try', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     try foo
-  | equals fink":
+  | equals ƒink:
     ·v_0 ·∅foo
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ5IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBSSIKfQ==
 
@@ -441,9 +443,9 @@ tagged literals
 ---
 
 test 'tagged literal', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     10sec
-  | equals fink":
+  | equals ƒink:
     ·∅sec 10, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMTBzZWMiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFFLE1BQUYsRSxFIgp9
 
@@ -453,10 +455,10 @@ ported from test_cps — sequential and module-level
 ---
 
 test 'sequential bindings', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo = 1
     bar = foo + 1
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_4:
         ·let 1, fn ·foo_0:
@@ -468,9 +470,9 @@ test 'sequential bindings', fn:
 
 
 test 'binding rhs is a call', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo = add 1, 2
-  | equals fink":
+  | equals ƒink:
     ·∅add 1, 2, fn ·v_5:
       ·let ·v_5, fn ·foo_0:
         ·v_1 ·foo_0
@@ -478,10 +480,10 @@ test 'binding rhs is a call', fn:
 
 
 test 'expression result discarded', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo 1
     bar
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_2:
         ·∅foo 1, fn ·v_5:
@@ -492,9 +494,9 @@ test 'expression result discarded', fn:
 
 
 test 'chained member access', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo.bar.baz
-  | equals fink":
+  | equals ƒink:
     ·op_dot ·∅foo, ·∅bar, fn ·v_3:
       ·op_dot ·v_3, ·∅baz, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhci5iYXoiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFFBQUEsSyxFQUFJLEssS0FBSixJO0VBQUEsQUFBQSxRQUFBLEksRUFBUSxLLEUiCn0=
@@ -505,60 +507,60 @@ ported from test_cps — calls and application
 ---
 
 test 'simple call', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     add 1, 2
-  | equals fink":
+  | equals ƒink:
     ·∅add 1, 2, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDEsIDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE1BQUksQyxFQUFHLEMsRSIKfQ==
 
 
 test 'nested call', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     add (mul 2, 3), 1
-  | equals fink":
+  | equals ƒink:
     ·∅mul 2, 3, fn ·v_5:
       ·∅add ·v_5, 1, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIChtdWwgMiwgMyksIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBLE1BQUksQyxFQUFHLEMsS0FBUCxJO0VBQUwsQUFBQSxNQUFLLEksRUFBVyxDLEUiCn0=
 
 
 test 'postfix tag', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     (foo bar)tag
-  | equals fink":
+  | equals ƒink:
     ·∅foo ·∅bar, fn ·v_4:
       ·∅tag ·v_4, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiKGZvbyBiYXIpdGFnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUMsQUFBQSxNQUFJLEssS0FBSixJO0VBQUQsQUFBUyxNQUFSLEksRSIKfQ==
 
 
 test 'call with spread', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo a, ..rest
-  | equals fink":
+  | equals ƒink:
     ·∅foo ·∅a, ..·∅rest, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTUFBSSxHLEVBQUssQSxFQUFBLE0sRSIKfQ==
 
 
 test 'simple pipe', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x | f
-  | equals fink":
+  | equals ƒink:
     ·∅f ·∅x, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYiXSwKICAibWFwcGluZ3MiOiAiQUFBRSxBQUFFLElBQUosRyxFIgp9
 
 
 test 'pipe chain', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x | f | g
-  | equals fink":
+  | equals ƒink:
     ·∅f ·∅x, fn ·v_3:
       ·∅g ·v_3, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYgfCBnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUUsQUFBRSxJQUFKLEcsS0FBQSxJO0VBQU0sQUFBRSxJQUFSLEksRSIKfQ==
 
 
 test 'partial apply', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     add 3, ?
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_0, ·v_3: ·∅add 3, ·v_0, ·v_3
       fn ·v_2: ·v_1 ·v_2
@@ -566,9 +568,9 @@ test 'partial apply', fn:
 
 
 test 'pipe with lambda — literal head', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     3 | fn a: a + 2
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·v_4: ·op_plus ·a_0, 2, ·v_4
       fn ·v_3: ·v_3 3, ·v_1
@@ -576,9 +578,9 @@ test 'pipe with lambda — literal head', fn:
 
 
 test 'pipe with lambda — ident head', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x | fn a: a + 2
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·v_4: ·op_plus ·a_0, 2, ·v_4
       fn ·v_3: ·v_3 ·∅x, ·v_1
@@ -586,9 +588,9 @@ test 'pipe with lambda — ident head', fn:
 
 
 test 'pipe with partial', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     3 | add 2, ?
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_0, ·v_4: ·∅add 2, ·v_0, ·v_4
       fn ·v_3: ·v_3 3, ·v_1
@@ -596,9 +598,9 @@ test 'pipe with partial', fn:
 
 
 test 'pipe with partial — ident head', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x | add 2, ?
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_0, ·v_4: ·∅add 2, ·v_0, ·v_4
       fn ·v_3: ·v_3 ·∅x, ·v_1
@@ -610,9 +612,9 @@ ported from test_cps — functions and closures
 ---
 
 test 'function binding', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     inc = fn x: x + 1
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·x_1, ·v_4: ·op_plus ·x_1, 1, ·v_4
       fn ·v_3:
@@ -622,12 +624,12 @@ test 'function binding', fn:
 
 
 test '·closure over outer variable', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo = fn a:
       ni = fn b:
         a + b
       ni
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_1, ·v_6:
         ·fn
@@ -642,11 +644,11 @@ test '·closure over outer variable', fn:
 
 
 test 'three sequential bindings', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a = 1
     b = 2
     c = a + b
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_5:
         ·let 1, fn ·a_0:
@@ -663,10 +665,10 @@ ported from test_cps — forward refs and mutual recursion
 ---
 
 test 'forward ref', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo = fn a: foo a + 1
     foo 1
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_4:
         ·fn
@@ -681,10 +683,10 @@ test 'forward ref', fn:
 
 
 test 'mutual recursion', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     ping = fn x: pong x
     pong = fn x: ping x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·fn
@@ -705,9 +707,9 @@ pattern bindings (bind-right)
 ---
 
 test 'bind right — simple ·id', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x = foo
-  | equals fink":
+  | equals ƒink:
     ·let ·∅foo, fn ·x_0:
       ·v_1 ·x_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtFLEEsS0FBQSIKfQ==
@@ -718,9 +720,9 @@ varargs functions
 ---
 
 test 'multi-param function', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn x, y: x + y
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·x_0, ·y_1, ·v_4: ·op_plus ·x_0, ·y_1, ·v_4
       fn ·v_3: ·v_2 ·v_3
@@ -728,9 +730,9 @@ test 'multi-param function', fn:
 
 
 test 'varargs — collect rest', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn a, ..rest: rest
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ..·rest_1, ·v_4: ·v_4 ·rest_1
       fn ·v_3: ·v_2 ·v_3
@@ -742,10 +744,10 @@ scoping and sequential bindings
 ---
 
 test 'calling a local — still goes through ·load', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     inc = fn x: x + 1
     inc 5
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_4:
         ·fn
@@ -758,9 +760,9 @@ test 'calling a local — still goes through ·load', fn:
 
 
 test 'chained binding is sequential ·match_store', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo = spam = 1
-  | equals fink":
+  | equals ƒink:
     ·let 1, fn ·spam_1:
       ·let ·spam_1, fn ·foo_0:
         ·v_2 ·foo_0
@@ -770,12 +772,12 @@ test 'chained binding is sequential ·match_store', fn:
 # NOTE: Group with binding becomes an immediately-invoked zero-param ·closure;
 # old IR used a `·scope` primitive. Result of the call is bound to spam.
 test 'group with binding — immediately-invoked ·closure', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     spam = (
       ni = ham 1
       ni
     )
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_4:
         ·∅ham 1, fn ·v_7:
@@ -792,28 +794,28 @@ functions — additional
 ---
 
 test 'identity function', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn x: x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·x_0, ·v_3: ·v_3 ·x_0
       fn ·v_2: ·v_1 ·v_2
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBRyxNQUFILEksRSxBQUFBLEtBQU07S0FBTixJLEUsQSxLQUFBIgp9
 
 test 'function with operator in body', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn x: x + 1
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·x_0, ·v_3: ·op_plus ·x_0, 1, ·v_3
       fn ·v_2: ·v_1 ·v_2
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBSCxJLEVBQVEsQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7S0FBQSxJLEUsQSxLQUFBIgp9
 
 test 'try — result bound, code continues', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     ni = try foo bar
     ni + 1
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_3:
         ·∅foo ·∅bar, fn ·v_6:
@@ -830,34 +832,34 @@ seq/rec literals with spreads
 # NOTE: ·seq_prepend/·seq_concat/·rec_put/·rec_merge are loaded from ·scope (not primitives)
 # in cps_c — they're treated as regular identifier references.
 test 'seq literal with spread', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [1, ..a, 2]
-  | equals fink":
+  | equals ƒink:
     ·seq_prepend 2, [], fn ·v_3:
       ·seq_concat ·∅a, ·v_3, fn ·v_6:
         ·seq_prepend 1, ·v_6, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIC4uYSwgMl0iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLGFBQVMsQyxFQUFULEEsQyxDLEtBQUEsSTtFQUFBLEFBQUEsWUFBTSxHLEVBQU4sSSxLQUFBLEk7SUFBQSxBQUFBLGFBQUMsQyxFQUFELEksRSIKfQ==
 
 test 'seq literal leading spread', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [..a, ..b]
-  | equals fink":
+  | equals ƒink:
     ·seq_concat ·∅b, [], fn ·v_3:
       ·seq_concat ·∅a, ·v_3, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4uYSwgLi5iXSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsWUFBUSxHLEVBQVIsQSxDLEMsS0FBQSxJO0VBQUEsQUFBQSxZQUFHLEcsRUFBSCxJLEUiCn0=
 
 test 'rec literal with spread', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {foo: a, ..b}
-  | equals fink":
+  | equals ƒink:
     ·rec_put {}, 'foo', ·∅a, fn ·v_4:
       ·rec_merge ·v_4, ·∅b, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2ZvbzogYSwgLi5ifSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsU0FBQSxBLEMsQyxFQUFDLEEsQ0FBQSxHLEMsRUFBSyxHLEtBQU4sSTtFQUFBLEFBQUEsV0FBQSxJLEVBQVcsRyxFIgp9
 
 test 'rec literal leading spread', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {..a, ..b}
-  | equals fink":
+  | equals ƒink:
     ·rec_merge {}, ·∅a, fn ·v_3:
       ·rec_merge ·v_3, ·∅b, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiey4uYSwgLi5ifSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBQSxBLEMsQyxFQUFHLEcsS0FBSCxJO0VBQUEsQUFBQSxXQUFBLEksRUFBUSxHLEUiCn0=
@@ -871,33 +873,33 @@ varargs — spread preserved in IR
 # The IR stays readable Fink; codegen handles the actual flattening.
 
 test 'varargs — call site spreads iterable', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo 1, ..items
-  | equals fink":
+  | equals ƒink:
     ·∅foo 1, ..·∅items, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDEsIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE1BQUksQyxFQUFLLEEsRUFBQSxPLEUiCn0=
 
 
 test 'call with spread — trailing iterable', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo a, ..rest
-  | equals fink":
+  | equals ƒink:
     ·∅foo ·∅a, ..·∅rest, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTUFBSSxHLEVBQUssQSxFQUFBLE0sRSIKfQ==
 
 
 test 'call with spread — spread only', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo ..items
-  | equals fink":
+  | equals ƒink:
     ·∅foo ..·∅items, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE1BQU0sQSxFQUFBLE8sRSIKfQ==
 
 
 test 'call with spread — passes through from varargs fn', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn ..args: foo ..args
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ..·args_0, ·v_3: ·∅foo ..·args_0, ·v_3
       fn ·v_2: ·v_1 ·v_2
@@ -909,10 +911,10 @@ module level
 ---
 
 test 'two bindings at module level', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     foo = 1
     bar = 2
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_4:
         ·let 1, fn ·foo_0:
@@ -923,12 +925,12 @@ test 'two bindings at module level', fn:
 
 
 test 'two fns at module level — main calls add', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     add = fn a, b:
       a + b
     main = fn:
       add 3, 4
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·fn
@@ -944,7 +946,7 @@ test 'two fns at module level — main calls add', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSTtJQUFNLEFBQUE7U0FBRyxNQUFHLE1BQU4sSSxFQUNGLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO1NBQUEsSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQUVPLEFBQUE7ZUFBQSxLLEVBQ0wsQUFBQSxPQUFJLEMsRUFBRyxDLEVBREY7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2dCQUZBLEFBQUEsS0FFQTtLQUZBLEksRSxBLEtBQUEiCn0=
 
 test 'shadowed binding — inner add does not affect outer', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     add = fn a, b:
       a + b
     sub = fn a, b:
@@ -952,7 +954,7 @@ test 'shadowed binding — inner add does not affect outer', fn:
       a - add b
     main = fn:
       add 3, 4
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_11:
         ·fn

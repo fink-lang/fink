@@ -1,11 +1,12 @@
-{test, expect, equals, fink, partial} = import '!fake'
+{test, expect, equals, partial} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 ---
 no change in AST
 ---
 test 'AST remains the same', fn:
-  expect partial fink":
+  expect partial ƒink:
     5 + 5
   | equals ":
     No Change
@@ -17,9 +18,9 @@ statement-level partial
 ---
 
 test 'partial in infix rhs', fn:
-  expect partial fink":
+  expect partial ƒink:
     ? + 5
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -29,9 +30,9 @@ test 'partial in infix rhs', fn:
 
 
 test 'partial in infix lhs', fn:
-  expect partial fink":
+  expect partial ƒink:
     1 + ?
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -41,9 +42,9 @@ test 'partial in infix lhs', fn:
 
 
 test 'partial used twice - single param', fn:
-  expect partial fink":
+  expect partial ƒink:
     ? + ?
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -53,9 +54,9 @@ test 'partial used twice - single param', fn:
 
 
 test 'partial in apply arg', fn:
-  expect partial fink":
+  expect partial ƒink:
     add 5, ?
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -66,9 +67,9 @@ test 'partial in apply arg', fn:
 
 
 test 'partial in unary', fn:
-  expect partial fink":
+  expect partial ƒink:
     -?
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -77,9 +78,9 @@ test 'partial in unary', fn:
 
 
 test 'partial in member access', fn:
-  expect partial fink":
+  expect partial ƒink:
     ?.foo
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -89,9 +90,9 @@ test 'partial in member access', fn:
 
 
 test 'partial in computed member access', fn:
-  expect partial fink":
+  expect partial ƒink:
     ?.(0)
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -102,9 +103,9 @@ test 'partial in computed member access', fn:
 
 
 test 'partial in range', fn:
-  expect partial fink":
+  expect partial ƒink:
     (1..?)
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -114,9 +115,9 @@ test 'partial in range', fn:
 
 
 test 'partial in spread', fn:
-  expect partial fink":
+  expect partial ƒink:
     [..?]
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -126,9 +127,9 @@ test 'partial in spread', fn:
 
 
 test 'bare partial - identity function', fn:
-  expect partial fink":
+  expect partial ƒink:
     (?)
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -136,9 +137,9 @@ test 'bare partial - identity function', fn:
 
 
 test 'partial in binding rhs', fn:
-  expect partial fink":
+  expect partial ƒink:
     add5 = add 5, ?
-  | equals fink":
+  | equals ƒink:
     Bind '=',
       Ident 'add5'
       Fn ':',
@@ -155,9 +156,9 @@ group as explicit scope boundary
 ---
 
 test 'group narrows scope - member expr key preserves group', fn:
-  expect partial fink":
+  expect partial ƒink:
     foo.(?)
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -168,9 +169,9 @@ test 'group narrows scope - member expr key preserves group', fn:
 
 
 test 'group with multiple partial refs - same param', fn:
-  expect partial fink":
+  expect partial ƒink:
     (foo ?.(1), ?.(2))
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -187,9 +188,9 @@ test 'group with multiple partial refs - same param', fn:
 
 
 test 'nested groups - each is its own scope', fn:
-  expect partial fink":
+  expect partial ƒink:
     (foo (bar ?) ?)
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_1'
@@ -209,9 +210,9 @@ transparent containers - partial bubbles through
 ---
 
 test 'partial in seq literal - seq is transparent', fn:
-  expect partial fink":
+  expect partial ƒink:
     [?, ?]
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -221,9 +222,9 @@ test 'partial in seq literal - seq is transparent', fn:
 
 
 test 'partial with member projection in seq', fn:
-  expect partial fink":
+  expect partial ƒink:
     [?.(0), ?.(1)]
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -239,9 +240,9 @@ test 'partial with member projection in seq', fn:
 
 
 test 'partial in rec literal - rec is transparent', fn:
-  expect partial fink":
+  expect partial ƒink:
     {foo: ?, bar: ?}
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -255,9 +256,9 @@ test 'partial in rec literal - rec is transparent', fn:
 
 
 test 'partial in nested seq - all same param', fn:
-  expect partial fink":
+  expect partial ƒink:
     [?, [?, ?]]
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -269,9 +270,9 @@ test 'partial in nested seq - all same param', fn:
 
 
 test 'partial in spread apply', fn:
-  expect partial fink":
+  expect partial ƒink:
     foo ..?
-  | equals fink":
+  | equals ƒink:
     Fn ':',
       Patterns
         SynthIdent '·$_0'
@@ -286,10 +287,10 @@ pipe segments as scope boundaries
 ---
 
 test 'partial in pipe segment', fn:
-  expect partial fink":
+  expect partial ƒink:
     items
     | filter ? % 2 == 0
-  | equals fink":
+  | equals ƒink:
     Pipe
       Ident 'items'
       Fn ':',
@@ -305,11 +306,11 @@ test 'partial in pipe segment', fn:
 
 
 test 'partial in multiple pipe segments', fn:
-  expect partial fink":
+  expect partial ƒink:
     items
     | filter is_even ?
     | map ? * 2
-  | equals fink":
+  | equals ƒink:
     Pipe
       Ident 'items'
       Fn ':',
@@ -331,11 +332,11 @@ test 'partial in multiple pipe segments', fn:
 
 
 test 'partial in pipe inside fn body', fn:
-  expect partial fink":
+  expect partial ƒink:
     main = fn:
       2
       | add 3, ?
-  | equals fink":
+  | equals ƒink:
     Bind '=',
       Ident 'main'
       Fn ':',
@@ -353,11 +354,11 @@ test 'partial in pipe inside fn body', fn:
 
 
 test 'partial in pipe with ident', fn:
-  expect partial fink":
+  expect partial ƒink:
     main = fn:
       x
       | add 3, ?
-  | equals fink":
+  | equals ƒink:
     Bind '=',
       Ident 'main'
       Fn ':',
