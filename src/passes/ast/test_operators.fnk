@@ -1,100 +1,104 @@
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
 ---
 arithmetic
 ---
 
 test 'unary minus', fn:
-  expect ast fink":
+  expect ast ƒink:
     -a
-  | equals fink":
+  | equals ƒink:
     Module
       UnaryOp '-',
         Ident 'a'
 
 test 'add', fn:
-  expect ast fink":
+  expect ast ƒink:
     a + b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '+',
         Ident 'a'
         Ident 'b'
 
 test 'subtract', fn:
-  expect ast fink":
+  expect ast ƒink:
     a - b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '-',
         Ident 'a'
         Ident 'b'
 
 test 'multiply', fn:
-  expect ast fink":
+  expect ast ƒink:
     a * b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '*',
         Ident 'a'
         Ident 'b'
 
 test 'divide', fn:
-  expect ast fink":
+  expect ast ƒink:
     a / b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '/',
         Ident 'a'
         Ident 'b'
 
 test 'integer divide', fn:
-  expect ast fink":
+  expect ast ƒink:
     a // b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '//',
         Ident 'a'
         Ident 'b'
 
 test 'power', fn:
-  expect ast fink":
+  expect ast ƒink:
     a ** b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '**',
         Ident 'a'
         Ident 'b'
 
 test 'remainder', fn:
-  expect ast fink":
+  expect ast ƒink:
     a % b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '%',
         Ident 'a'
         Ident 'b'
 
 test 'true modulus', fn:
-  expect ast fink":
+  expect ast ƒink:
     a %% b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '%%',
         Ident 'a'
         Ident 'b'
 
 test 'divmod', fn:
-  expect ast fink":
+  expect ast ƒink:
     a /% b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '/%',
         Ident 'a'
         Ident 'b'
 
 test 'power is right associative', fn:
-  expect ast fink":
+  expect ast ƒink:
     a ** b ** c
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '**',
         Ident 'a'
@@ -103,9 +107,9 @@ test 'power is right associative', fn:
           Ident 'c'
 
 test 'multiply binds tighter than add', fn:
-  expect ast fink":
+  expect ast ƒink:
     a + b * c
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '+',
         Ident 'a'
@@ -119,44 +123,44 @@ logical
 ---
 
 test 'not', fn:
-  expect ast fink":
+  expect ast ƒink:
     not a
-  | equals fink":
+  | equals ƒink:
     Module
       UnaryOp 'not',
         Ident 'a'
 
 test 'and', fn:
-  expect ast fink":
+  expect ast ƒink:
     a and b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'and',
         Ident 'a'
         Ident 'b'
 
 test 'or', fn:
-  expect ast fink":
+  expect ast ƒink:
     a or b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'or',
         Ident 'a'
         Ident 'b'
 
 test 'xor', fn:
-  expect ast fink":
+  expect ast ƒink:
     a xor b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'xor',
         Ident 'a'
         Ident 'b'
 
 test 'not binds tighter than and', fn:
-  expect ast fink":
+  expect ast ƒink:
     not a and not b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'and',
         UnaryOp 'not',
@@ -165,9 +169,9 @@ test 'not binds tighter than and', fn:
           Ident 'b'
 
 test 'and binds tighter than or', fn:
-  expect ast fink":
+  expect ast ƒink:
     a or b and c
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'or',
         Ident 'a'
@@ -176,9 +180,9 @@ test 'and binds tighter than or', fn:
           Ident 'c'
 
 test 'add binds tighter than and', fn:
-  expect ast fink":
+  expect ast ƒink:
     a + b and c + d
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'and',
         InfixOp '+',
@@ -194,63 +198,63 @@ comparison
 ---
 
 test 'greater than', fn:
-  expect ast fink":
+  expect ast ƒink:
     a > b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '>',
         Ident 'a'
         Ident 'b'
 
 test 'greater than or equal', fn:
-  expect ast fink":
+  expect ast ƒink:
     a >= b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '>=',
         Ident 'a'
         Ident 'b'
 
 test 'less than', fn:
-  expect ast fink":
+  expect ast ƒink:
     a < b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '<',
         Ident 'a'
         Ident 'b'
 
 test 'less than or equal', fn:
-  expect ast fink":
+  expect ast ƒink:
     a <= b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '<=',
         Ident 'a'
         Ident 'b'
 
 test 'equal', fn:
-  expect ast fink":
+  expect ast ƒink:
     a == b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '==',
         Ident 'a'
         Ident 'b'
 
 test 'not equal', fn:
-  expect ast fink":
+  expect ast ƒink:
     a != b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '!=',
         Ident 'a'
         Ident 'b'
 
 test 'chained comparison same op', fn:
-  expect ast fink":
+  expect ast ƒink:
     a > b > c
-  | equals fink":
+  | equals ƒink:
     Module
       ChainedCmp
         Ident 'a'
@@ -260,9 +264,9 @@ test 'chained comparison same op', fn:
         Ident 'c'
 
 test 'chained comparison mixed ops', fn:
-  expect ast fink":
+  expect ast ƒink:
     a >= b > c
-  | equals fink":
+  | equals ƒink:
     Module
       ChainedCmp
         Ident 'a'
@@ -272,36 +276,36 @@ test 'chained comparison mixed ops', fn:
         Ident 'c'
 
 test 'containment', fn:
-  expect ast fink":
+  expect ast ƒink:
     a in b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'in',
         Ident 'a'
         Ident 'b'
 
 test 'not containment', fn:
-  expect ast fink":
+  expect ast ƒink:
     a not in b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'not in',
         Ident 'a'
         Ident 'b'
 
 test 'disjoint', fn:
-  expect ast fink":
+  expect ast ƒink:
     a >< b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '><',
         Ident 'a'
         Ident 'b'
 
 test 'comparison binds tighter than and', fn:
-  expect ast fink":
+  expect ast ƒink:
     a > 0 and b < 10
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp 'and',
         InfixOp '>',
@@ -317,62 +321,62 @@ bitwise
 ---
 
 test 'bitwise not', fn:
-  expect ast fink":
+  expect ast ƒink:
     ~a
-  | equals fink":
+  | equals ƒink:
     Module
       UnaryOp '~',
         Ident 'a'
 
 test 'bitwise and', fn:
-  expect ast fink":
+  expect ast ƒink:
     a & b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '&',
         Ident 'a'
         Ident 'b'
 
 test 'bitwise xor', fn:
-  expect ast fink":
+  expect ast ƒink:
     a ^ b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '^',
         Ident 'a'
         Ident 'b'
 
 test 'shift right', fn:
-  expect ast fink":
+  expect ast ƒink:
     a >> b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '>>',
         Ident 'a'
         Ident 'b'
 
 test 'shift left', fn:
-  expect ast fink":
+  expect ast ƒink:
     a << b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '<<',
         Ident 'a'
         Ident 'b'
 
 test 'rotate right', fn:
-  expect ast fink":
+  expect ast ƒink:
     a >>> b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '>>>',
         Ident 'a'
         Ident 'b'
 
 test 'rotate left', fn:
-  expect ast fink":
+  expect ast ƒink:
     a <<< b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '<<<',
         Ident 'a'
@@ -384,18 +388,18 @@ member access
 ---
 
 test 'member by name', fn:
-  expect ast fink":
+  expect ast ƒink:
     foo.bar
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         Ident 'foo'
         Ident 'bar'
 
 test 'chained member access', fn:
-  expect ast fink":
+  expect ast ƒink:
     foo.bar.spam
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         Member '.',
@@ -404,18 +408,18 @@ test 'chained member access', fn:
         Ident 'spam'
 
 test 'member by hyphenated name', fn:
-  expect ast fink":
+  expect ast ƒink:
     foo.bar-spam
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         Ident 'foo'
         Ident 'bar-spam'
 
 test 'member by expression', fn:
-  expect ast fink":
+  expect ast ƒink:
     foo.(expr)
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         Ident 'foo'
@@ -423,9 +427,9 @@ test 'member by expression', fn:
           Ident 'expr'
 
 test 'sequence index', fn:
-  expect ast fink":
+  expect ast ƒink:
     [1, 2, 3].(0)
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         LitSeq '[..]',
@@ -436,9 +440,9 @@ test 'sequence index', fn:
           LitInt '0'
 
 test 'sequence range slice', fn:
-  expect ast fink":
+  expect ast ƒink:
     [0, 1, 2, 3, 4].(2...3)
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         LitSeq '[..]',
@@ -453,18 +457,18 @@ test 'sequence range slice', fn:
             LitInt '3'
 
 test 'ident range', fn:
-  expect ast fink":
+  expect ast ƒink:
     start..end
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '..',
         Ident 'start'
         Ident 'end'
 
 test 'member access on record literal', fn:
-  expect ast fink":
+  expect ast ƒink:
     {foo: 123}.foo
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         LitRec '{..}',
@@ -474,9 +478,9 @@ test 'member access on record literal', fn:
         Ident 'foo'
 
 test 'member by string key', fn:
-  expect ast fink":
+  expect ast ƒink:
     {'ni nu': 123}.('ni nu')
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         LitRec '{..}',
@@ -487,9 +491,9 @@ test 'member by string key', fn:
           LitStr 'ni nu'
 
 test 'member by sequence key', fn:
-  expect ast fink":
+  expect ast ƒink:
     [0, 1, 2, 3, 4].([2, 3])
-  | equals fink":
+  | equals ƒink:
     Module
       Member '.',
         LitSeq '[..]',
@@ -505,11 +509,11 @@ test 'member by sequence key', fn:
 
 
 test 'infix rhs multiline block application', fn:
-  expect ast fink":
+  expect ast ƒink:
     [3, 7] == seq
       add 1, 2
       add 3, 4
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '==',
         LitSeq '[..]',
@@ -532,9 +536,9 @@ operator vs application precedence
 ---
 
 test 'subtract with call rhs', fn:
-  expect ast fink":
+  expect ast ƒink:
     a - add b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '-',
         Ident 'a'
@@ -544,9 +548,9 @@ test 'subtract with call rhs', fn:
 
 
 test 'add with multi-arg call rhs', fn:
-  expect ast fink":
+  expect ast ƒink:
     a + foo 1, 2
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '+',
         Ident 'a'
@@ -557,9 +561,9 @@ test 'add with multi-arg call rhs', fn:
 
 
 test 'call rhs with trailing infix', fn:
-  expect ast fink":
+  expect ast ƒink:
     a - foo b + c
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '-',
         Ident 'a'
@@ -571,9 +575,9 @@ test 'call rhs with trailing infix', fn:
 
 
 test 'call on both sides of infix', fn:
-  expect ast fink":
+  expect ast ƒink:
     foo a - bar b
-  | equals fink":
+  | equals ƒink:
     Module
       Apply
         Ident 'foo'
@@ -585,9 +589,9 @@ test 'call on both sides of infix', fn:
 
 
 test 'multiply with call rhs', fn:
-  expect ast fink":
+  expect ast ƒink:
     a * foo b
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '*',
         Ident 'a'

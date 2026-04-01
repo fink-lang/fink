@@ -1,3 +1,7 @@
+
+{test, expect, equals, fmt} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
 ---
 AST → Fink pretty-printer tests
 ---
@@ -9,59 +13,59 @@ Atoms
 ---
 
 test 'ident', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo
 
-  | equals fink":
+  | equals ƒink:
     foo
 
 test 'int literal', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     42
 
-  | equals fink":
+  | equals ƒink:
     42
 
 test 'float literal', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     3.14
 
-  | equals fink":
+  | equals ƒink:
     3.14
 
 test 'bool literal true', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     true
 
-  | equals fink":
+  | equals ƒink:
     true
 
 test 'bool literal false', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     false
 
-  | equals fink":
+  | equals ƒink:
     false
 
 test 'string literal', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     'hello'
 
-  | equals fink":
+  | equals ƒink:
     'hello'
 
 test 'empty seq literal', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     []
 
-  | equals fink":
+  | equals ƒink:
     []
 
 test 'empty rec literal', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     {}
 
-  | equals fink":
+  | equals ƒink:
     {}
 
 
@@ -70,45 +74,45 @@ Tagged string literals
 ---
 
 test 'tagged string — id', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     id'foo'
 
-  | equals fink":
+  | equals ƒink:
     id'foo'
 
 test 'tagged string — op', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     op'+'
 
-  | equals fink":
+  | equals ƒink:
     op'+'
 
 test 'tagged string — str_fink', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     str_fink'hello '
 
-  | equals fink":
+  | equals ƒink:
     str_fink'hello '
 
 test 'tagged template — interpolation', fn:
-  expect fmt fink":
-    fmt'hello \${1 + 2} world'
+  expect fmt ƒink:
+    fmt'hello ${1 + 2} world'
 
-  | equals fink":
+  | equals ƒink:
     fmt'hello \${1 + 2} world'
 
 test 'tagged template — interpolation only expr', fn:
-  expect fmt fink":
-    fmt'\${x}'
+  expect fmt ƒink:
+    fmt'${x}'
 
-  | equals fink":
+  | equals ƒink:
     fmt'\${x}'
 
 test 'tagged template — multiple interpolations', fn:
-  expect fmt fink":
-    fmt'\${a} and \${b}'
+  expect fmt ƒink:
+    fmt'${a} and ${b}'
 
-  | equals fink":
+  | equals ƒink:
     fmt'\${a} and \${b}'
 
 
@@ -117,40 +121,40 @@ Apply
 ---
 
 test 'apply — single arg', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo bar
 
-  | equals fink":
+  | equals ƒink:
     foo bar
 
 test 'apply — multiple args', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo a, b, c
 
-  | equals fink":
+  | equals ƒink:
     foo a, b, c
 
 test 'apply — trailing fn arg breaks to next line', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo a, b, fn x:
       bar x
 
-  | equals fink":
+  | equals ƒink:
     foo a, b, fn x:
       bar x
 
 test 'apply — fn arg inline single atom', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo a, fn x: x
 
-  | equals fink":
+  | equals ƒink:
     foo a, fn x: x
 
 test 'apply — no args', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo
 
-  | equals fink":
+  | equals ƒink:
     foo
 
 
@@ -159,49 +163,49 @@ Fn
 ---
 
 test 'fn — no params, single expr body', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     fn: foo
 
-  | equals fink":
+  | equals ƒink:
     fn: foo
 
 test 'fn — single param, single expr body inline', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     fn x: x
 
-  | equals fink":
+  | equals ƒink:
     fn x: x
 
 test 'fn — multi param', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     fn a, b: a
 
-  | equals fink":
+  | equals ƒink:
     fn a, b: a
 
 test 'fn — body is apply, inline', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     fn x: foo x
 
-  | equals fink":
+  | equals ƒink:
     fn x: foo x
 
 test 'fn — multi-statement body', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     fn x:
       foo x
       bar x
 
-  | equals fink":
+  | equals ƒink:
     fn x:
       foo x
       bar x
 
 test 'fn — spread param', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     fn a, ..rest: rest
 
-  | equals fink":
+  | equals ƒink:
     fn a, ..rest: rest
 
 
@@ -210,17 +214,17 @@ Bind
 ---
 
 test 'bind — simple', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo = bar
 
-  | equals fink":
+  | equals ƒink:
     foo = bar
 
 test 'bind — rhs is apply', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo = bar baz
 
-  | equals fink":
+  | equals ƒink:
     foo = bar baz
 
 
@@ -229,34 +233,34 @@ Nested / chained (CPS-style)
 ---
 
 test 'chained apply with fn continuations', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     load env, id'x', fn ·x, env:
       apply foo, ·x, state, fn v_result, state:
         ƒ_cont v_result, state
 
-  | equals fink":
+  | equals ƒink:
     load env, id'x', fn ·x, env:
       apply foo, ·x, state, fn v_result, state:
         ƒ_cont v_result, state
 
 test 'fn body is chained apply', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     fn x:
       load env, id'x', fn ·x, env:
         ƒ_cont ·x, state
 
-  | equals fink":
+  | equals ƒink:
     fn x:
       load env, id'x', fn ·x, env:
         ƒ_cont ·x, state
 
 test 'module wrapper', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     module fn {load, apply, id}, env, state, ƒ_cont:
       load env, id'x', fn ·x, env:
         ƒ_cont ·x, state
 
-  | equals fink":
+  | equals ƒink:
     module fn {load, apply, id}, env, state, ƒ_cont:
       load env, id'x', fn ·x, env:
         ƒ_cont ·x, state
@@ -267,18 +271,18 @@ Multiple trailing fn args — stacked at same indent
 ---
 
 test 'apply — two trailing fn args', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     match_done m, state,
       fn m, state: ƒ_err state
       fn m, state: ƒ_ok m, state
 
-  | equals fink":
+  | equals ƒink:
     match_done m, state,
       fn m, state: ƒ_err state
       fn m, state: ƒ_ok m, state
 
 test 'apply — three trailing fn args', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     match_bind val, state,
       fn v, state, ƒ_err, ƒ_ok:
         store env, id'foo', v, fn ·foo, env:
@@ -286,7 +290,7 @@ test 'apply — three trailing fn args', fn:
       fn state: panic 'no match', state
       fn v_result, state: ƒ_cont v_result, state
 
-  | equals fink":
+  | equals ƒink:
     match_bind val, state,
       fn v, state, ƒ_err, ƒ_ok:
         store env, id'foo', v, fn ·foo, env:
@@ -296,7 +300,7 @@ test 'apply — three trailing fn args', fn:
 
 test 'apply — non-fn arg followed by fn arg as positional arg', fn:
   # match_branch is itself an arg (not a trailing fn), followed by more fn args
-  expect fmt fink":
+  expect fmt ƒink:
     match_block n, state,
       match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
         ƒ_ok v, state
@@ -305,7 +309,7 @@ test 'apply — non-fn arg followed by fn arg as positional arg', fn:
       fn match_result, state:
         ƒ_cont match_result, state
 
-  | equals fink":
+  | equals ƒink:
     match_block n, state,
       match_branch env, fn v, env, state, ƒ_err, ƒ_ok:
         ƒ_ok v, state
@@ -318,38 +322,38 @@ Operators
 ---
 
 test 'unary minus', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     -a
 
-  | equals fink":
+  | equals ƒink:
     -a
 
 test 'unary not', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     not a
 
-  | equals fink":
+  | equals ƒink:
     not a
 
 test 'infix add', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     a + b
 
-  | equals fink":
+  | equals ƒink:
     a + b
 
 test 'infix multiply', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     a * b
 
-  | equals fink":
+  | equals ƒink:
     a * b
 
 test 'chained comparison', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     a > b > c
 
-  | equals fink":
+  | equals ƒink:
     a > b > c
 
 
@@ -358,17 +362,17 @@ Member access
 ---
 
 test 'member — simple', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo.bar
 
-  | equals fink":
+  | equals ƒink:
     foo.bar
 
 test 'member — chained', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo.bar.spam
 
-  | equals fink":
+  | equals ƒink:
     foo.bar.spam
 
 
@@ -377,18 +381,18 @@ Pipe
 ---
 
 test 'pipe — simple', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo | bar | spam
 
-  | equals fink":
+  | equals ƒink:
     foo | bar | spam
 
 test 'pipe — with block string arg', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     foo ":
       bar
     | spam
-  | equals fink":
+  | equals ƒink:
     foo ":
       bar
     | spam
@@ -399,25 +403,25 @@ Match
 ---
 
 test 'match — simple arms', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     match foo:
       1: 'one'
       2: 'two'
       _: 'other'
 
-  | equals fink":
+  | equals ƒink:
     match foo:
       1: 'one'
       2: 'two'
       _: 'other'
 
 test 'match — binding arm', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     match foo:
       [head, ..tail]: head
       []: 'empty'
 
-  | equals fink":
+  | equals ƒink:
     match foo:
       [head, ..tail]: head
       []: 'empty'
@@ -428,10 +432,10 @@ Bind right
 ---
 
 test 'bind right — simple', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     123 |= b
 
-  | equals fink":
+  | equals ƒink:
     123 |= b
 
 
@@ -440,10 +444,10 @@ Try
 ---
 
 test 'try — simple', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     try foo bar
 
-  | equals fink":
+  | equals ƒink:
     try foo bar
 
 
@@ -452,10 +456,10 @@ Group
 ---
 
 test 'group — parens', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     (a + b) * c
 
-  | equals fink":
+  | equals ƒink:
     (a + b) * c
 
 
@@ -464,10 +468,10 @@ Partial
 ---
 
 test 'partial — hole', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     add 5, ?
 
-  | equals fink":
+  | equals ƒink:
     add 5, ?
 
 
@@ -476,17 +480,17 @@ Seq and Rec with items
 ---
 
 test 'seq literal with items', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     [1, 2, 3]
 
-  | equals fink":
+  | equals ƒink:
     [1, 2, 3]
 
 test 'rec literal with items', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     {foo, bar}
 
-  | equals fink":
+  | equals ƒink:
     {foo, bar}
 
 
@@ -495,8 +499,8 @@ Decimal literal
 ---
 
 test 'decimal literal', fn:
-  expect fmt fink":
+  expect fmt ƒink:
     1.0d
 
-  | equals fink":
+  | equals ƒink:
     1.0d

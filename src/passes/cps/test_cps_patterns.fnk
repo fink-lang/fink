@@ -27,7 +27,8 @@ CPS pattern lowering tests
 # Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
 # Wildcard (_): discard; no binding, temp passed directly to next primitive
 
-{test, equals, expect, fink, cps_expr} = import 'fake!'
+{test, equals, expect, cps_expr} = import 'fake!'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 ---
@@ -35,18 +36,18 @@ bind
 ---
 
 test 'plain bind', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x = foo
-  | equals fink":
+  | equals ƒink:
     ·let ·∅foo, fn ·x_0:
       ·v_1 ·x_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtFLEEsS0FBQSIKfQ==
 
 
 test 'simple guard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a > 0 = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0: ·v_1 ·a_0
       fn ·v_18:
@@ -61,9 +62,9 @@ test 'simple guard', fn:
 
 
 test 'nested guard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     a > 0 or a < 9 = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0: ·v_1 ·a_0
       fn ·v_22:
@@ -83,9 +84,9 @@ seq patterns
 ---
 
 test 'seq — empty', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn: ·v_0 ·panic
       fn ·v_20:
@@ -101,9 +102,9 @@ test 'seq — empty', fn:
 
 
 test 'seq — nested empty', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, []] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·a_0:
@@ -132,9 +133,9 @@ test 'seq — nested empty', fn:
 
 
 test 'seq — exact two elements', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, b] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·a_0:
@@ -155,9 +156,9 @@ test 'seq — exact two elements', fn:
 
 
 test 'seq — lone spread non-empty discard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [..] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn: ·v_0 ·panic
       fn ·v_18:
@@ -171,9 +172,9 @@ test 'seq — lone spread non-empty discard', fn:
 
 
 test 'seq — spread non-empty bound', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [..rest] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·let ·v_6, fn ·rest_0:
@@ -189,9 +190,9 @@ test 'seq — spread non-empty bound', fn:
 
 
 test 'seq — head then spread discard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [head, ..] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·let ·v_6, fn ·head_0:
@@ -207,9 +208,9 @@ test 'seq — head then spread discard', fn:
 
 
 test 'seq — head then spread bound', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [head, ..tail] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·head_0:
@@ -227,19 +228,19 @@ test 'seq — head then spread bound', fn:
 
 --- test 'seq — rest in middle' deferred: needs ·match_reverse ---
 # test 'seq — rest in middle', fn:
-#   expect cps_expr fink":
+#   expect cps_expr ƒink:
 #     [head, ..middle, end] = foo
 #
-#   | equals fink":
+#   | equals ƒink:
 #     # TODO: decomposes as [head, ..rest1] then reverse rest1, pop last as end,
 #     # reverse remainder as middle. Needs ·match_reverse. Deferred — does not
 #     # affect the core primitive set.
 
 
 test 'seq — literal element', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, 1] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·a_0:
@@ -267,9 +268,9 @@ test 'seq — literal element', fn:
 
 
 test 'seq — infix guard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [x, y >= 2] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·x_0:
@@ -297,9 +298,9 @@ test 'seq — infix guard', fn:
 
 
 test 'seq — predicate guard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [x, is_even y] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·x_0:
@@ -322,9 +323,9 @@ test 'seq — predicate guard', fn:
 
 
 test 'seq — constructor guard with payload', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [x, Ok b] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·x_0:
@@ -347,9 +348,9 @@ test 'seq — constructor guard with payload', fn:
 
 
 test 'seq — constructor predicate with wildcard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [x, is_none _] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·x_0:
@@ -371,9 +372,9 @@ test 'seq — constructor predicate with wildcard', fn:
 
 
 test 'seq — multi-arg guard with bound element', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [1, foo 2, a, 3; 4] = bar
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6, ·v_7, ·v_8:
         ·fn
@@ -417,9 +418,9 @@ test 'seq — multi-arg guard with bound element', fn:
 
 
 test 'seq — nested', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, [b, c]] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_8, ·v_9:
         ·let ·v_8, fn ·a_0:
@@ -451,9 +452,9 @@ test 'seq — nested', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIFtiLCBjXV0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUcsQUFBQTtXQUFBLE9BQUEsSztVQUFDLEFBQUEsS0FBRCxLLEtBQUMsSTtZQUFHLEFBQUEsS0FBSixLLEtBQUksSTtjLEEsS0FBQTtXQUFKLEs7VUFBQSxBQUFBO2VBQUEsTyxPLEs7Y0FBQSxBQUFBLFNBQUEsSyxFLEssS0FBQSxPQUFBLEs7Z0JBQUEsQUFBQSxTQUFBLEssRSxLLEtBQUEsT0FBQSxLO2tCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztvQkFBQSxBQUFBLElBQUEsSzt3QixFQUFBLEEsTUFBQSxLLEVBQUE7d0IsRUFBQSxBLE1BQUE7ZUFBQSxLLEVBQUEsQUFBQSxNQUFKLEksRUFBSSxLLEVBQUE7S0FBSixLO0lBQUEsQUFBQTtTQUFBLE0sTSxJO1FBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsTUFBQSxLO1VBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsTUFBQSxLO1lBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2NBQUEsQUFBQSxJQUFBLEs7a0IsRUFBQSxBLEtBQUEsSSxFQUFBO2tCLEVBQUEsQSxLQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBYyxLLEVBQWQsSyxFQUFBIgp9
 
 test 'seq — nested with bind-right', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, [b, c] |= d] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_9, ·v_10:
         ·let ·v_9, fn ·a_0:
@@ -491,9 +492,9 @@ rec patterns
 ---
 
 test 'rec — empty', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_5: ·v_0 ·v_5
       fn ·v_21:
@@ -509,9 +510,9 @@ test 'rec — empty', fn:
 
 
 test 'rec — non-empty', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {..} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_5: ·v_0 ·v_5
       fn ·v_21:
@@ -527,9 +528,9 @@ test 'rec — non-empty', fn:
 
 
 test 'rec — partial match', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {x, y} = point
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·x_0:
@@ -546,9 +547,9 @@ test 'rec — partial match', fn:
 
 
 test 'rec — field rename', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {x, y: z} = point
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·x_0:
@@ -565,9 +566,9 @@ test 'rec — field rename', fn:
 
 
 test 'rec — open rest discarded', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar, ..} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·let ·v_6, fn ·bar_0:
@@ -585,9 +586,9 @@ test 'rec — open rest discarded', fn:
 
 
 test 'rec — open rest bound', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar, ..rest} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·bar_0:
@@ -604,9 +605,9 @@ test 'rec — open rest bound', fn:
 
 
 test 'rec — closed exact', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar, ..{}} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·bar_0:
@@ -632,9 +633,9 @@ test 'rec — closed exact', fn:
 
 
 test 'rec — closed with sub-pattern', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {foo, ..{bar, spam}} = x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_8, ·v_9:
         ·let ·v_8, fn ·foo_0:
@@ -661,11 +662,11 @@ test 'rec — closed with sub-pattern', fn:
 
 
 test 'match block bind', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match foo:
       1: 2
       x: x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_23: ·v_23 2
       fn ·v_27:
@@ -702,10 +703,10 @@ match block — simple arms
 ---
 
 test 'match wildcard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match foo:
       _: 42
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6: ·v_6 42
       fn ·v_10:
@@ -721,10 +722,10 @@ test 'match wildcard', fn:
 
 
 test 'match bind', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match foo:
       x: x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·x_0, ·v_7: ·v_7 ·x_0
       fn ·v_11:
@@ -739,12 +740,12 @@ test 'match bind', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICB4OiB4Il0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLQUFBLE0sSSxFLEEsS0FBRztLQUFILEs7SUFBQSxBQUFBO1MsTSxNLEksRUFBQSxBQUFBLE1BQUEsSSxFO1NBQUEsSztRQURGLEFBQUE7YUFBQSxPLEs7WUFBQSxBQUFBLE1BQUEsSyxFLEssSTtjQUFBLEFBQUEsT0FBQTthQUFBLEssRUFBQSxBQUFBLE1BQU0sSyxFIgp9
 
 test 'match literal arms', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match foo:
       1: 'one'
       2: 'two'
       _: 'other'
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_22: ·v_22 'one'
       fn ·v_26:
@@ -794,11 +795,11 @@ test 'match literal arms', fn:
 
 
 test 'match — expression in arm', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match x:
       true: y + 1
       false: y
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_22: ·op_plus ·∅y, 1, ·v_22
       fn ·v_28:
@@ -841,12 +842,12 @@ test 'match — expression in arm', fn:
 
 
 test 'match child ·scope — binding in arm body', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match n:
       a > 1:
         ni = a
         ni
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_22:
         ·let ·a_0, fn ·ni_1:
@@ -878,10 +879,10 @@ match block — seq/rec pattern arms
 ---
 
 test 'match — seq pattern arm', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match foo:
       [a, b]: a
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·b_1, ·v_36: ·v_36 ·a_0
       fn ·v_40:
@@ -911,10 +912,10 @@ test 'match — seq pattern arm', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICBbYSwgYl06IGEiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0tBQUMsTUFBRyxNLEssRSxBLE1BQUk7S0FBUixLO0lBQUEsQUFBQTtTLE0sTSxJO1FBQUEsQUFBQTthQUFBLE9BQUEsSztZQUFDLEFBQUEsS0FBRCxLLEtBQUMsSTtjQUFHLEFBQUEsS0FBSixLLEtBQUksSTtnQkFBSixBQUFBLE1BQUEsSyxFQUFBLEssRTthQUFBLEs7WUFBQSxBQUFBO2lCQUFBLE0sTSxLO2dCQUFBLEFBQUEsU0FBQSxJLEUsSyxLQUFBLE9BQUEsSztrQkFBQSxBQUFBLFNBQUEsSyxFLEssS0FBQSxPQUFBLEs7b0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO3NCQUFBLEFBQUEsSUFBQSxLOzBCLEVBQUEsQSxLQUFBLEssRUFBQTswQixFQUFBLEEsTUFBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBREYsQUFBQTthQUFBLE8sSztZQUFBLEFBQUEsTUFBQSxLLEUsSyxJO2NBQUEsQUFBQSxPQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBTSxLLEUiCn0=
 
 test 'match — rec pattern arm', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match foo:
       {bar}: bar
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·bar_0, ·v_22: ·v_22 ·bar_0
       fn ·v_26:
@@ -940,11 +941,11 @@ test 'match — rec pattern arm', fn:
 
 
 test 'multi-arm match', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match foo:
       [a]: a
       [a, b]: a
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·v_30: ·v_30 ·a_0
       fn ·v_34:
@@ -995,10 +996,10 @@ test 'multi-arm match', fn:
 
 
 test 'multi-arg match', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match a, b:
       x, y: x
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·x_0, ·y_1, ·v_11: ·v_11 ·x_0
       fn ·v_15:
@@ -1018,9 +1019,9 @@ pattern bindings (bind-lhs, outside match)
 ---
 
 test 'irrefutable binding with guard', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     x > 2 = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·x_0: ·v_1 ·x_0
       fn ·v_18:
@@ -1035,9 +1036,9 @@ test 'irrefutable binding with guard', fn:
 
 
 test 'bind right — seq pattern', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, b] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·a_0:
@@ -1057,9 +1058,9 @@ test 'bind right — seq pattern', fn:
 
 
 test 'bind right — rec pattern', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·let ·v_6, fn ·bar_0:
@@ -1074,9 +1075,9 @@ test 'bind right — rec pattern', fn:
 
 
 test 'seq pattern', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, 1] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·a_0:
@@ -1103,9 +1104,9 @@ test 'seq pattern', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFHLEFBQUE7V0FBQSxLLEVBQUEsQSxLQUFBO1dBQUEsSztVQUFBLEFBQUE7ZUFBQSxPLE8sSztjQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7Z0JBQUEsQUFBQSxJQUFBLEs7b0IsRUFBQSxBLE1BQUE7b0IsRUFBQSxBLE1BQUE7ZUFBQSxLLEVBQUEsQUFBQSxNQUFKLEksRUFBSSxLLEVBQUE7S0FBSixLO0lBQUEsQUFBQTtTQUFBLE0sTSxJO1FBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsTUFBQSxLO1VBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsTUFBQSxLO1lBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2NBQUEsQUFBQSxJQUFBLEs7a0IsRUFBQSxBLEtBQUEsSSxFQUFBO2tCLEVBQUEsQSxLQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBUyxLLEVBQVQsSyxFQUFBIgp9
 
 test 'seq pattern with non-empty rest', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, ..] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·let ·v_6, fn ·a_0:
@@ -1120,9 +1121,9 @@ test 'seq pattern with non-empty rest', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIC4uXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO00sQSxLQUFBO0tBQUQsSztJQUFBLEFBQUE7U0FBQSxNLE0sSTtRQUFBLEFBQUEsU0FBQSxJLEUsSSxLQUFBLE1BQUEsSztVQUFBLEFBQUEsU0FBQSxLLEUsSSxLQUFBLE9BQUEsSztZQUFBLEEsS0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQVUsSyxFQUFWLEssRUFBQSIKfQ==
 
 test 'seq pattern with bound rest', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     [a, ..rest] = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·a_0:
@@ -1138,9 +1139,9 @@ test 'seq pattern with bound rest', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIC4ucmVzdF0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQVcsQUFBQSxLQUFaLEksS0FBTSxPO1EsQSxLQUFBO0tBQU4sSztJQUFBLEFBQUE7U0FBQSxNLE0sSTtRQUFBLEFBQUEsU0FBQSxJLEUsSSxLQUFBLE1BQUEsSztVQUFZLEFBQUEsS0FBWixLLEtBQUEsSTtZQUFBLEEsS0FBQSxJLEVBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFjLEssRUFBZCxLLEVBQUEiCn0=
 
 test 'rec pattern', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·let ·v_6, fn ·bar_0:
@@ -1154,9 +1155,9 @@ test 'rec pattern', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Jhcn0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsTTtNLEEsS0FBQTtLQUFELEs7SUFBQSxBQUFBO1NBQUEsTSxNLEk7UUFBQSxBQUFBLFNBQUEsSSxFQUFBLEEsQ0FBQSxHLEMsRSxJLEtBQUEsTUFBQSxLO1VBQUEsQSxLQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBUSxLLEVBQVIsSyxFQUFBIgp9
 
 test 'rec pattern with non-empty rest', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar, ..} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6:
         ·let ·v_6, fn ·bar_0:
@@ -1173,9 +1174,9 @@ test 'rec pattern with non-empty rest', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi59ID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLE07TSxBLEtBQUE7S0FBRCxLO0lBQUEsQUFBQTtTQUFBLE0sTSxJO1FBQUEsQUFBQSxTQUFBLEksRUFBQSxBLENBQUEsRyxDLEUsSSxLQUFBLE1BQUEsSztVQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztZQUFBLEFBQUEsSUFBQSxLO2dCLEVBQUEsQSxLQUFBO2dCLEVBQUEsQSxLQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBWSxLLEVBQVosSyxFQUFBIgp9
 
 test 'rec pattern exact - empty rest', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar, ..{}} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·bar_0:
@@ -1200,9 +1201,9 @@ test 'rec pattern exact - empty rest', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi57fX0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxNO01BQU8sQUFBQTtXQUFBLEssRUFBQSxBLEtBQUE7V0FBQSxLO1VBQUEsQUFBQTtlQUFBLE8sTyxLO2NBQUEsQUFBQSxLQUFBLEssS0FBQSxLO2dCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztrQkFBQSxBQUFBLElBQUEsSztzQixFQUFBLEEsTUFBQTtzQixFQUFBLEEsTUFBQTtlQUFBLEssRUFBQSxBQUFBLE1BQVIsSSxFQUFRLEssRUFBQTtLQUFSLEs7SUFBQSxBQUFBO1NBQUEsTSxNLEk7UUFBQSxBQUFBLFNBQUEsSSxFQUFBLEEsQ0FBQSxHLEMsRSxJLEtBQUEsTUFBQSxLO1VBQVksQUFBQSxLQUFaLEssS0FBQSxJO1lBQUEsQSxLQUFBLEksRUFBQTtTQUFBLEssRUFBQSxBQUFBLE1BQWMsSyxFQUFkLEssRUFBQSIKfQ==
 
 test 'rec pattern with bound rest', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     {bar, ..rest} = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_7, ·v_8:
         ·let ·v_7, fn ·bar_0:
@@ -1223,10 +1224,10 @@ range patterns
 ---
 
 test 'range — exclusive in match arm', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match x:
       0..10: 'low'
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_26: ·v_26 'low'
       fn ·v_30:
@@ -1253,10 +1254,10 @@ test 'range — exclusive in match arm', fn:
 
 
 test 'range — inclusive in match arm', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     match x:
       0...10: 'low'
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_26: ·v_26 'low'
       fn ·v_30:
@@ -1283,9 +1284,9 @@ test 'range — inclusive in match arm', fn:
 
 
 test 'range — bind-lhs check', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     0..10 = foo
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_20: ·v_0 ·v_20
       fn ·v_23:
@@ -1305,9 +1306,9 @@ fn params (·v_fail = unreachable, type checker guarantees)
 ---
 
 test 'fn — seq destructuring param', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn [a, b]: a
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_4, ·v_34:
         ·fn
@@ -1329,9 +1330,9 @@ test 'fn — seq destructuring param', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gW2EsIGJdOiBhIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFHLE1BQUgsSztJQUFHLEFBQUE7U0FBQSxNQUFBLEs7UUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7VUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7WSxBQUFQLE1BQVc7U0FBUixLO1FBQUEsQUFBQTthQUFBLE0sTSxJO1lBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsTUFBQSxLO2NBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsT0FBQSxLO2dCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztrQkFBQSxBQUFBLElBQUEsSztzQixFQUFBLEEsS0FBQSxJLEVBQUE7c0IsRUFBQSxBLEtBQUE7YUFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEVBQUE7S0FBSCxJLEUsQSxLQUFBIgp9
 
 test 'fn — seq destructuring param with rest', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn [a, ..rest]: rest
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·v_4, ·v_25:
         ·fn
@@ -1351,9 +1352,9 @@ test 'fn — seq destructuring param with rest', fn:
 
 
 test 'varargs — complex destructuring desugars to pattern in body', fn:
-  expect cps_expr fink":
+  expect cps_expr ƒink:
     fn a, [1, ..b]: b
-  | equals fink":
+  | equals ƒink:
     ·fn
       fn ·a_0, ·v_4, ·v_41:
         ·fn

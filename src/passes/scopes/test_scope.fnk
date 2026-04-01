@@ -20,21 +20,22 @@ scope analysis tests
 #   self_ref 'name', 'B0'        — recursive self-reference
 #
 # Example output:
-#   scope 'S0', 'module':
+#   scope 'S0', 'module',
 #     bind 'add', 'B0'
 #     bind 'main', 'B1'
 #
-#     scope 'S1', 'fn add':
+#     scope 'S1', 'fn add',
 #       bind 'a', 'B2'
 #       bind 'b', 'B3'
 #       ref 'a', 'B2'
 #       ref 'b', 'B3'
 #
-#     scope 'S2', 'fn main':
+#     scope 'S2', 'fn main',
 #       ref 'add', 'B0', depth 1
 
 
-{test, expect, equals, fink, scope} = import '!fake'
+{test, expect, equals, scope} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 ---
@@ -42,40 +43,40 @@ basic bindings
 ---
 
 test 'single binding', fn:
-  expect scope fink":
+  expect scope ƒink:
     x = 1
-  | equals fink":
-    scope 3, 'module':
+  | equals ƒink:
+    scope 3, 'module',
       bind 0, 'x'
 
 
 test 'nested bind in rhs is sequential', fn:
-  expect scope fink":
+  expect scope ƒink:
     foo = spam = 1
-  | equals fink":
-    scope 5, 'module':
+  | equals ƒink:
+    scope 5, 'module',
       bind 1, 'spam'
       bind 0, 'foo'
 
 
 test 'guard pattern bind', fn:
-  expect scope fink":
+  expect scope ƒink:
     a > 0 = foo
-  | equals fink":
-    scope 5, 'module':
+  | equals ƒink:
+    scope 5, 'module',
       unresolved 'foo'
       bind 0, 'a'
       ref 'a', 0
 
 
 test 'fn params in scope', fn:
-  expect scope fink":
+  expect scope ƒink:
     f = fn a, b:
       a + b
-  | equals fink":
-    scope 11, 'module':
+  | equals ƒink:
+    scope 11, 'module',
 
-      scope 9, 'fn':
+      scope 9, 'fn',
         bind 2, 'a'
         bind 4, 'b'
         ref 'a', 2
@@ -84,24 +85,24 @@ test 'fn params in scope', fn:
 
 
 test 'partial application', fn:
-  expect scope fink":
+  expect scope ƒink:
     foo = 2 + ?
-  | equals fink":
-    scope 5, 'module':
+  | equals ƒink:
+    scope 5, 'module',
 
-      scope 8, 'fn':
+      scope 8, 'fn',
         bind 6, '·$_0'
         ref '·$_0', 6
       bind 0, 'foo'
 
 
 test 'multiple partials — same param', fn:
-  expect scope fink":
+  expect scope ƒink:
     foo = ? + ?
-  | equals fink":
-    scope 5, 'module':
+  | equals ƒink:
+    scope 5, 'module',
 
-      scope 8, 'fn':
+      scope 8, 'fn',
         bind 6, '·$_0'
         ref '·$_0', 6
         ref '·$_0', 6
@@ -109,51 +110,51 @@ test 'multiple partials — same param', fn:
 
 
 test 'wildcard _ does not bind', fn:
-  expect scope fink":
+  expect scope ƒink:
     f = fn _: 42
-  | equals fink":
-    scope 6, 'module':
+  | equals ƒink:
+    scope 6, 'module',
 
-      scope 4, 'fn':
+      scope 4, 'fn',
       bind 0, 'f'
 
 
 test 'wildcard in destructure', fn:
-  expect scope fink":
+  expect scope ƒink:
     [_, b] = [1, 2]
     b
-  | equals fink":
-    scope 8, 'module':
+  | equals ƒink:
+    scope 8, 'module',
       bind 1, 'b'
       ref 'b', 1
 
 
 test 'wildcard in match arm', fn:
-  expect scope fink":
+  expect scope ƒink:
     f = fn x:
       match x:
         _: 42
-  | equals fink":
-    scope 14, 'module':
+  | equals ƒink:
+    scope 14, 'module',
 
-      scope 12, 'fn':
+      scope 12, 'fn',
         bind 2, 'x'
         ref 'x', 2
 
-        scope 10, 'arm':
+        scope 10, 'arm',
       bind 0, 'f'
 
 
 test 'sequential bindings in fn body', fn:
-  expect scope fink":
+  expect scope ƒink:
     f = fn:
       x = 1
       y = x + 1
       y
-  | equals fink":
-    scope 13, 'module':
+  | equals ƒink:
+    scope 13, 'module',
 
-      scope 11, 'fn':
+      scope 11, 'fn',
         bind 2, 'x'
         ref 'x', 2
         bind 5, 'y'
@@ -162,13 +163,13 @@ test 'sequential bindings in fn body', fn:
 
 
 test 'self-recursion', fn:
-  expect scope fink":
+  expect scope ƒink:
     fib = fn n:
       fib n - 1
-  | equals fink":
-    scope 11, 'module':
+  | equals ƒink:
+    scope 11, 'module',
 
-      scope 9, 'fn':
+      scope 9, 'fn',
         bind 2, 'n'
         self_ref 'fib', 0, depth 1
         ref 'n', 2
@@ -176,17 +177,17 @@ test 'self-recursion', fn:
 
 
 test 'nested fn — closure depth', fn:
-  expect scope fink":
+  expect scope ƒink:
     f = fn a:
       fn b:
         a + b
-  | equals fink":
-    scope 13, 'module':
+  | equals ƒink:
+    scope 13, 'module',
 
-      scope 11, 'fn':
+      scope 11, 'fn',
         bind 2, 'a'
 
-        scope 10, 'fn':
+        scope 10, 'fn',
           bind 5, 'b'
           ref 'a', 2, depth 1
           ref 'b', 5
@@ -198,7 +199,7 @@ unresolved
 ---
 
 test 'unresolved ref', fn:
-  expect scope fink":
+  expect scope ƒink:
     ni = spam
     spam = ni
     bar = spam
@@ -206,8 +207,8 @@ test 'unresolved ref', fn:
     main = fn:
       foo 1
 
-  | equals fink":
-    scope 16, 'module':
+  | equals ƒink:
+    scope 16, 'module',
       unresolved 'spam'
       bind 0, 'ni'
       ref 'ni', 0
@@ -215,7 +216,7 @@ test 'unresolved ref', fn:
       ref 'spam', 3
       bind 6, 'bar'
 
-      scope 14, 'fn':
+      scope 14, 'fn',
         unresolved 'foo'
       bind 9, 'main'
 
@@ -226,30 +227,30 @@ module level — mutual recursion
 ---
 
 test 'two fns — main refs add', fn:
-  expect scope fink":
+  expect scope ƒink:
     add = fn a, b:
       a + b
 
     main = fn:
       add 3, 4
 
-  | equals fink":
-    scope 19, 'module':
+  | equals ƒink:
+    scope 19, 'module',
 
-      scope 9, 'fn':
+      scope 9, 'fn',
         bind 2, 'a'
         bind 4, 'b'
         ref 'a', 2
         ref 'b', 4
       bind 0, 'add'
 
-      scope 17, 'fn':
+      scope 17, 'fn',
         ref 'add', 0, depth 1
       bind 11, 'main'
 
 
 test 'mutual recursion — is-even refs is-odd', fn:
-  expect scope fink":
+  expect scope ƒink:
     is-even = fn n:
       match n:
         0: true
@@ -260,72 +261,72 @@ test 'mutual recursion — is-even refs is-odd', fn:
         0: false
         _: is-even n - 1
 
-  | equals fink":
-    scope 44, 'module':
+  | equals ƒink:
+    scope 44, 'module',
 
-      scope 20, 'fn':
+      scope 20, 'fn',
         bind 2, 'n'
         ref 'n', 2
 
-        scope 10, 'arm':
+        scope 10, 'arm',
 
-        scope 18, 'arm':
+        scope 18, 'arm',
           fwd_ref 'is-odd', 22, depth 2
           ref 'n', 2, depth 1
       bind 0, 'is-even'
 
-      scope 42, 'fn':
+      scope 42, 'fn',
         bind 24, 'n'
         ref 'n', 24
 
-        scope 32, 'arm':
+        scope 32, 'arm',
 
-        scope 40, 'arm':
+        scope 40, 'arm',
           ref 'is-even', 0, depth 2
           ref 'n', 24, depth 1
       bind 22, 'is-odd'
 
 
 test 'match with binding in arm', fn:
-  expect scope fink":
+  expect scope ƒink:
     f = fn x:
       match x:
         0: 42
         n: n + 1
-  | equals fink":
-    scope 21, 'module':
+  | equals ƒink:
+    scope 21, 'module',
 
-      scope 19, 'fn':
+      scope 19, 'fn',
         bind 2, 'x'
         ref 'x', 2
 
-        scope 10, 'arm':
+        scope 10, 'arm',
 
-        scope 17, 'arm':
+        scope 17, 'arm',
           bind 12, 'n'
           ref 'n', 12
       bind 0, 'f'
 
 
 test 'pipe — refs to fns', fn:
-  expect scope fink":
+  expect scope ƒink:
     double = fn x: x * 2
     inc = fn x: x + 1
     main = fn: 5 | double | inc
-  | equals fink":
-    scope 26, 'module':
+  | equals ƒink:
+    scope 26, 'module',
 
-      scope 7, 'fn':
+      scope 7, 'fn',
         bind 2, 'x'
         ref 'x', 2
       bind 0, 'double'
 
-      scope 16, 'fn':
+      scope 16, 'fn',
         bind 11, 'x'
         ref 'x', 11
       bind 9, 'inc'
 
-      scope 24, 'fn':
+      scope 24, 'fn',
         ref 'double', 0, depth 1
         ref 'inc', 9, depth 1
       bind 18, 'main'
@@ -336,7 +337,7 @@ shadowing
 ---
 
 test 'inner binding shadows outer', fn:
-  expect scope fink":
+  expect scope ƒink:
     add = fn a, b:
       a + b
 
@@ -347,21 +348,21 @@ test 'inner binding shadows outer', fn:
 
     main = fn: add 3, 4
 
-  | equals fink":
-    scope 40, 'module':
+  | equals ƒink:
+    scope 40, 'module',
 
-      scope 9, 'fn':
+      scope 9, 'fn',
         bind 2, 'a'
         bind 4, 'b'
         ref 'a', 2
         ref 'b', 4
       bind 0, 'add'
 
-      scope 30, 'fn':
+      scope 30, 'fn',
         bind 13, 'a'
         bind 15, 'b'
 
-        scope 22, 'fn':
+        scope 22, 'fn',
           bind 19, 'foo'
           ref 'foo', 19
         bind 17, 'add'
@@ -370,7 +371,7 @@ test 'inner binding shadows outer', fn:
         ref 'b', 15
       bind 11, 'sub'
 
-      scope 38, 'fn':
+      scope 38, 'fn',
         ref 'add', 0, depth 1
       bind 32, 'main'
 
@@ -380,11 +381,11 @@ destructuring
 ---
 
 test 'seq destructure', fn:
-  expect scope fink":
+  expect scope ƒink:
     [a, b] = [1, 2]
     a + b
-  | equals fink":
-    scope 10, 'module':
+  | equals ƒink:
+    scope 10, 'module',
       bind 0, 'a'
       bind 1, 'b'
       ref 'a', 0
@@ -392,11 +393,11 @@ test 'seq destructure', fn:
 
 
 test 'nested seq destructure', fn:
-  expect scope fink":
+  expect scope ƒink:
     [a, [b, c]] = [1, [2, 3]]
     a + b + c
-  | equals fink":
-    scope 16, 'module':
+  | equals ƒink:
+    scope 16, 'module',
       bind 0, 'a'
       bind 1, 'b'
       bind 2, 'c'
@@ -406,11 +407,11 @@ test 'nested seq destructure', fn:
 
 
 test 'record destructure', fn:
-  expect scope fink":
+  expect scope ƒink:
     {x, y} = {x: 1, y: 2}
     x + y
-  | equals fink":
-    scope 14, 'module':
+  | equals ƒink:
+    scope 14, 'module',
       bind 0, 'x'
       bind 1, 'y'
       ref 'x', 0
@@ -418,12 +419,12 @@ test 'record destructure', fn:
 
 
 test 'fn with destructured params', fn:
-  expect scope fink":
+  expect scope ƒink:
     f = fn [a, b]: a + b
-  | equals fink":
-    scope 10, 'module':
+  | equals ƒink:
+    scope 10, 'module',
 
-      scope 8, 'fn':
+      scope 8, 'fn',
         bind 1, 'a'
         bind 2, 'b'
         ref 'a', 1
@@ -432,11 +433,11 @@ test 'fn with destructured params', fn:
 
 
 test 'spread in seq destructure', fn:
-  expect scope fink":
+  expect scope ƒink:
     [a, ..rest] = [1, 2, 3]
     a + rest
-  | equals fink":
-    scope 12, 'module':
+  | equals ƒink:
+    scope 12, 'module',
       bind 0, 'a'
       bind 1, 'rest'
       ref 'a', 0
@@ -444,11 +445,11 @@ test 'spread in seq destructure', fn:
 
 
 test 'bind-right destructure in seq pattern', fn:
-  expect scope fink":
+  expect scope ƒink:
     [foo |= [bar, spam]] = [[1, 2]]
     foo + bar + spam
-  | equals fink":
-    scope 16, 'module':
+  | equals ƒink:
+    scope 16, 'module',
       bind 0, 'foo'
       bind 1, 'bar'
       bind 2, 'spam'
@@ -458,20 +459,20 @@ test 'bind-right destructure in seq pattern', fn:
 
 
 test 'record destructure with field rename', fn:
-  expect scope fink":
+  expect scope ƒink:
     {x, y: z} = point
-  | equals fink":
-    scope 7, 'module':
+  | equals ƒink:
+    scope 7, 'module',
       bind 0, 'x'
       bind 2, 'z'
       unresolved 'point'
 
 
 test 'predicate guard in seq pattern', fn:
-  expect scope fink":
+  expect scope ƒink:
     [a, is_even b] = foo
-  | equals fink":
-    scope 8, 'module':
+  | equals ƒink:
+    scope 8, 'module',
       bind 0, 'a'
       bind 3, 'b'
       unresolved 'foo'
@@ -483,10 +484,10 @@ prelude
 ---
 
 test 'import resolves to prelude', fn:
-  expect scope fink":
+  expect scope ƒink:
     {foo} = import './bar.fnk'
-  | equals fink":
-    scope 6, 'module':
+  | equals ƒink:
+    scope 6, 'module',
       bind 0, 'foo'
       ref 'import', builtin 0
 

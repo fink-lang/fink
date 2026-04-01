@@ -1,11 +1,12 @@
-{test, expect, tokenize, fink, equals} = import '!fake'
+{test, expect, tokenize, equals} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
 
 
 test 'ops_ws_from_position', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     a + b
     a+b
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'a', loc [0, 1, 0], [1, 1, 1]
     Op '+', loc [2, 1, 2], [3, 1, 3]
@@ -18,12 +19,12 @@ test 'ops_ws_from_position', fn:
 
 
 test 'separators', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     [a, b]
     foo a; b
     {a: b}
     a ?
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     Ident 'a', loc [1, 1, 1], [2, 1, 2]
@@ -48,10 +49,10 @@ test 'separators', fn:
 
 
 test 'ops_greedy_longest_match', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     a = b
     a == b
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'a', loc [0, 1, 0], [1, 1, 1]
     Op '=', loc [2, 1, 2], [3, 1, 3]
@@ -64,7 +65,7 @@ test 'ops_greedy_longest_match', fn:
 
 
 test 'idents', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo
     foo-bar
     foo_bar
@@ -73,7 +74,7 @@ test 'idents', fn:
     café
     $foo
     $foo$bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockCont loc [3, 1, 3], [4, 2, 0]
@@ -94,10 +95,10 @@ test 'idents', fn:
 
 
 test 'ident_hyphen_valid', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo-bar
     foo - bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo-bar', loc [0, 1, 0], [7, 1, 7]
     BlockCont loc [7, 1, 7], [8, 2, 0]
@@ -108,9 +109,9 @@ test 'ident_hyphen_valid', fn:
 
 
 test 'ident_hyphen_trailing_eol', fn:
-  expect tokenize fink":
+  expect tokenize ":
     foo-
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Err 'unterminated identifier', loc [3, 1, 3], [4, 1, 4]
@@ -118,9 +119,9 @@ test 'ident_hyphen_trailing_eol', fn:
 
 
 test 'ident_hyphen_space_after', fn:
-  expect tokenize fink":
+  expect tokenize ":
     foo- a
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Err 'unterminated identifier', loc [3, 1, 3], [4, 1, 4]
@@ -129,11 +130,11 @@ test 'ident_hyphen_space_after', fn:
 
 
 test 'str_block_basic', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ":
       foo
       bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo\n', loc [5, 2, 2], [9, 3, 0]
@@ -145,7 +146,7 @@ test 'str_block_basic', fn:
 test 'str_block_trailing_newline_at_eof', fn:
   expect tokenize '":\n  foo\n  bar\n'
 
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo\n', loc [5, 2, 2], [9, 3, 0]
@@ -156,12 +157,12 @@ test 'str_block_trailing_newline_at_eof', fn:
 
 
 test 'str_block_blank_lines', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ":
       foo
 
       bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo\n', loc [5, 2, 2], [9, 3, 0]
@@ -171,12 +172,12 @@ test 'str_block_blank_lines', fn:
     BlockEnd loc [15, 4, 5], [15, 4, 5]
 
 test 'str_block_blank_and_indentation', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ":
       foo
 
         bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo\n', loc [5, 2, 2], [9, 3, 0]
@@ -187,7 +188,7 @@ test 'str_block_blank_and_indentation', fn:
 
 
 test 'str_block_last_line_handling', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo ":
       spam
     | foo
@@ -196,7 +197,7 @@ test 'str_block_last_line_handling', fn:
       spam
 
     | ni
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     StrStart '":', loc [4, 1, 4], [6, 1, 6]
@@ -217,13 +218,13 @@ test 'str_block_last_line_handling', fn:
 
 
 test 'str_block_end_no_newline', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo ":
       lorem
 
       ipsum
     bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     StrStart '":', loc [4, 1, 4], [6, 1, 6]
@@ -237,13 +238,13 @@ test 'str_block_end_no_newline', fn:
 
 
 test 'str_block_empty_is_error', fn:
-  expect tokenize fink":
+  expect tokenize ":
     ":
     foo
     ":
 
     bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     Err 'empty block-string — no indented content', loc [3, 2, 0], [3, 2, 0]
@@ -259,10 +260,10 @@ test 'str_block_empty_is_error', fn:
 
 
 test 'str_block_interpolation', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ":
-      hello \${name}
-  | equals fink":
+      hello ${name}
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'hello ', loc [5, 2, 2], [11, 2, 8]
@@ -273,11 +274,11 @@ test 'str_block_interpolation', fn:
     BlockEnd loc [18, 2, 15], [18, 2, 15]
 
 test 'str_block_same_line_content', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ": foo
       bar
     baz
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo\n', loc [3, 1, 3], [7, 2, 0]
@@ -288,11 +289,11 @@ test 'str_block_same_line_content', fn:
     BlockEnd loc [16, 3, 3], [16, 3, 3]
 
 test 'str_block_dedent_is_end', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ":
       foo
     bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'foo', loc [5, 2, 2], [8, 2, 5]
@@ -302,10 +303,10 @@ test 'str_block_dedent_is_end', fn:
     BlockEnd loc [12, 3, 3], [12, 3, 3]
 
 test 'str_block_contains_quote', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ":
       it's fine
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText 'it\'s fine', loc [5, 2, 2], [14, 2, 11]
@@ -313,10 +314,10 @@ test 'str_block_contains_quote', fn:
     BlockEnd loc [14, 2, 11], [14, 2, 11]
 
 test 'raw_templ_basic', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     raw":
       hello
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'raw', loc [0, 1, 0], [3, 1, 3]
     StrStart '":', loc [3, 1, 3], [5, 1, 5]
@@ -325,16 +326,16 @@ test 'raw_templ_basic', fn:
     BlockEnd loc [13, 2, 7], [13, 2, 7]
 
 test 'raw_templ_via_macro', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockEnd loc [3, 1, 3], [3, 1, 3]
 
 
 test 'str_escapes', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     '
       \n
       \r
@@ -345,7 +346,7 @@ test 'str_escapes', fn:
       \\
       \'
     '
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText '\n', loc [1, 1, 1], [2, 2, 0]
@@ -362,10 +363,10 @@ test 'str_escapes', fn:
 
 
 test 'str_block_escapes', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ":
       \n\r\v\t\b\f\\\'\b01\x0f\uff\u10_ff_ff
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '":', loc [0, 1, 0], [2, 1, 2]
     StrText '\\n\\r\\v\\t\\b\\f\\\\\\\'\\b01\\x0f\\uff\\u10_ff_ff', loc [5, 2, 2], [43, 2, 40]
@@ -374,13 +375,13 @@ test 'str_block_escapes', fn:
 
 
 test 'int', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     42
     1_000_000
     0xFF_aa_00
     0b1010_010
     0o777_111
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Int '42', loc [0, 1, 0], [2, 1, 2]
     BlockCont loc [2, 1, 2], [3, 2, 0]
@@ -395,12 +396,12 @@ test 'int', fn:
 
 
 test 'float', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     3.14
     1_000.123_456_789
     1.0e100_000
     1.0e-100
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Float '3.14', loc [0, 1, 0], [4, 1, 4]
     BlockCont loc [4, 1, 4], [5, 2, 0]
@@ -413,11 +414,11 @@ test 'float', fn:
 
 
 test 'decimal', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     1.0d
     1_000d
     1.0d-100_000
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Decimal '1.0d', loc [0, 1, 0], [4, 1, 4]
     BlockCont loc [4, 1, 4], [5, 2, 0]
@@ -428,10 +429,10 @@ test 'decimal', fn:
 
 
 test 'strings', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     'hello ƒink'
-    'hello \${name}'
-  | equals fink":
+    'hello ${name}'
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText 'hello ƒink', loc [1, 1, 1], [12, 1, 11]
@@ -447,9 +448,9 @@ test 'strings', fn:
 
 
 test 'string_escape', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     'a\'b'
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText 'a\\\'b', loc [1, 1, 1], [5, 1, 5]
@@ -459,7 +460,7 @@ test 'string_escape', fn:
 
 # TODO: this is incorrect, the strings should be dedented with spam as floor
 test 'string_multiline_indentation_and_final_nl', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     'foo
         bar
       spam'
@@ -467,7 +468,7 @@ test 'string_multiline_indentation_and_final_nl', fn:
         bar
       spam
     '
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText 'foo\n', loc [1, 1, 1], [5, 2, 0]
@@ -483,11 +484,11 @@ test 'string_multiline_indentation_and_final_nl', fn:
     BlockEnd loc [42, 7, 1], [42, 7, 1]
 
 test 'string_multiline_indentation_error', fn:
-  expect tokenize fink":
+  expect tokenize ":
     log
       'foo
     bar'
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'log', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -502,11 +503,11 @@ test 'string_multiline_indentation_error', fn:
 
 
 test 'string_multiline_closing_error', fn:
-  expect tokenize fink":
+  expect tokenize ":
     foo
       bar 'foo
         text-eof
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -522,11 +523,11 @@ test 'string_multiline_closing_error', fn:
 
 test 'brackets', fn:
   # TODO: bug
-  expect tokenize fink":
+  expect tokenize ":
     []
     {}
     ()
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     BracketClose ']', loc [1, 1, 1], [2, 1, 2]
@@ -540,13 +541,13 @@ test 'brackets', fn:
 
 
 test 'bracket_nesting', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     [
       {foo}
     ]
     {foo: [bar]}
     ((a + b) * c)
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     BlockStart loc [1, 1, 1], [4, 2, 2]
@@ -577,13 +578,13 @@ test 'bracket_nesting', fn:
 
 
 test 'block_indent', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo
       bar
         ni
       spam
     ham
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -600,12 +601,12 @@ test 'block_indent', fn:
 
 
 test 'block_dedent_multi', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo
       bar
         ni
     ham
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -620,11 +621,11 @@ test 'block_dedent_multi', fn:
 
 
 test 'block_blank_lines', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo
 
       bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [7, 3, 2]
@@ -634,9 +635,9 @@ test 'block_blank_lines', fn:
 
 
 test 'comment', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo # ƒink about it
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Comment '# ƒink about it', loc [4, 1, 4], [20, 1, 19]
@@ -644,11 +645,11 @@ test 'comment', fn:
 
 
 test 'doc_comment', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ---
     ƒink rocks
     ---
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText '\n', loc [3, 1, 3], [4, 2, 0]
@@ -658,9 +659,9 @@ test 'doc_comment', fn:
 
 
 test 'block_comment_inline', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ---ƒink---
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText 'ƒink', loc [3, 1, 3], [8, 1, 7]
@@ -670,9 +671,9 @@ test 'block_comment_inline', fn:
 
 test 'block_comment_empty', fn:
   # ------ is an empty block comment (open immediately followed by close)
-  expect tokenize fink":
+  expect tokenize ƒink:
     ------
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentEnd '---', loc [3, 1, 3], [6, 1, 6]
@@ -681,12 +682,12 @@ test 'block_comment_empty', fn:
 
 
 test 'block_comment_multiline', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     ---foo
         bar
       spam
     ---
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText 'foo\n', loc [3, 1, 3], [7, 2, 0]
@@ -697,12 +698,12 @@ test 'block_comment_multiline', fn:
 
 
 test 'block_comment_indent_error', fn:
-  expect tokenize fink":
+  expect tokenize ":
     log
       ---foo
     bar
     ---
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'log', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -718,11 +719,11 @@ test 'block_comment_indent_error', fn:
 
 
 test 'block_comment_closing_indent_error', fn:
-  expect tokenize fink":
+  expect tokenize ":
     foo
       ---bar
     ---
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -736,11 +737,11 @@ test 'block_comment_closing_indent_error', fn:
 
 
 test 'block_trailing_blank_lines', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     foo
       bar
 
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -751,7 +752,7 @@ test 'block_trailing_blank_lines', fn:
 
 test 'err_str_eof', fn:
   expect tokenize '\'hello'
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     StrStart '\'', loc [0, 1, 0], [1, 1, 1]
     StrText 'hello', loc [1, 1, 1], [6, 1, 6]
@@ -760,10 +761,10 @@ test 'err_str_eof', fn:
 
 
 test 'err_doc_comment_eof', fn:
-  expect tokenize fink":
+  expect tokenize ":
     ---
     hello
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     CommentStart '---', loc [0, 1, 0], [3, 1, 3]
     CommentText '\n', loc [3, 1, 3], [4, 2, 0]
@@ -773,9 +774,9 @@ test 'err_doc_comment_eof', fn:
 
 
 test 'err_bracket_eof', fn:
-  expect tokenize fink":
+  expect tokenize ":
     [foo
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '[', loc [0, 1, 0], [1, 1, 1]
     Ident 'foo', loc [1, 1, 1], [4, 1, 4]
@@ -784,9 +785,9 @@ test 'err_bracket_eof', fn:
 
 
 test 'err_bracket_mismatch', fn:
-  expect tokenize fink":
+  expect tokenize ":
     {foo]
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '{', loc [0, 1, 0], [1, 1, 1]
     Ident 'foo', loc [1, 1, 1], [4, 1, 4]
@@ -796,12 +797,12 @@ test 'err_bracket_mismatch', fn:
 
 
 test 'err_unexpected_dedent', fn:
-  expect tokenize fink":
+  expect tokenize ":
     foo
       bar
         ni
      ham
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -817,7 +818,7 @@ test 'err_unexpected_dedent', fn:
 
 test 'err_unexpected_dedent2', fn:
   expect tokenize 'foo\n  bar\n    ni\n ham'
-  | equals fink":
+  | equals ":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     BlockStart loc [3, 1, 3], [6, 2, 2]
@@ -834,7 +835,7 @@ test 'err_unexpected_dedent2', fn:
 
 test 'err_tab', fn:
   expect tokenize 'a\tb'
-  | equals fink":
+  | equals ":
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'a', loc [0, 1, 0], [1, 1, 1]
     Err 'tab character not allowed', loc [1, 1, 1], [2, 1, 2]
@@ -843,12 +844,12 @@ test 'err_tab', fn:
 
 
 test 'bracket_multiline_flat', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     {
       foo: 1
       bar: 2
     }
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '{', loc [0, 1, 0], [1, 1, 1]
     BlockStart loc [1, 1, 1], [4, 2, 2]
@@ -865,13 +866,13 @@ test 'bracket_multiline_flat', fn:
 
 
 test 'bracket_multiline_nested', fn:
-  expect tokenize fink":
+  expect tokenize ƒink:
     {
       foo: {
         bar: 1
       }
     }
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     BracketOpen '{', loc [0, 1, 0], [1, 1, 1]
     BlockStart loc [1, 1, 1], [4, 2, 2]
@@ -891,9 +892,9 @@ test 'bracket_multiline_nested', fn:
 
 
 test 'err_unknown_char', fn:
-  expect tokenize fink":
+  expect tokenize ":
     foo @ bar
-  | equals fink":
+  | equals ƒink:
     BlockStart loc [0, 1, 0], [0, 1, 0]
     Ident 'foo', loc [0, 1, 0], [3, 1, 3]
     Err '@', loc [4, 1, 4], [5, 1, 5]

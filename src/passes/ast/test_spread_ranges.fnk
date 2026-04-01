@@ -1,11 +1,15 @@
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
 ---
 spread
 ---
 
 test 'spread into sequence', fn:
-  expect ast fink":
+  expect ast ƒink:
     [head, ..tail]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Ident 'head'
@@ -13,9 +17,9 @@ test 'spread into sequence', fn:
           Ident 'tail'
 
 test 'spread concat sequences', fn:
-  expect ast fink":
+  expect ast ƒink:
     [..seq1, ..seq2]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Spread '..',
@@ -24,9 +28,9 @@ test 'spread concat sequences', fn:
           Ident 'seq2'
 
 test 'spread into record', fn:
-  expect ast fink":
+  expect ast ƒink:
     {foo: bar, ..rest}
-  | equals fink":
+  | equals ƒink:
     Module
       LitRec '{..}',
         Arm ':',
@@ -36,9 +40,9 @@ test 'spread into record', fn:
           Ident 'rest'
 
 test 'spread merge records', fn:
-  expect ast fink":
+  expect ast ƒink:
     {..rec1, ..rec2}
-  | equals fink":
+  | equals ƒink:
     Module
       LitRec '{..}',
         Spread '..',
@@ -47,25 +51,25 @@ test 'spread merge records', fn:
           Ident 'rec2'
 
 test 'bare spread in sequence pattern', fn:
-  expect ast fink":
+  expect ast ƒink:
     [..]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Spread '..'
 
 test 'bare spread in record pattern', fn:
-  expect ast fink":
+  expect ast ƒink:
     {..}
-  | equals fink":
+  | equals ƒink:
     Module
       LitRec '{..}',
         Spread '..'
 
 test 'spread with range guard', fn:
-  expect ast fink":
+  expect ast ƒink:
     [head, ..(0..2), ..rest]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Ident 'head'
@@ -78,9 +82,9 @@ test 'spread with range guard', fn:
           Ident 'rest'
 
 test 'spread with function guard', fn:
-  expect ast fink":
+  expect ast ƒink:
     [..(is_odd), ..evens]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Spread '..',
@@ -90,9 +94,9 @@ test 'spread with function guard', fn:
           Ident 'evens'
 
 test 'spread with range expression guard', fn:
-  expect ast fink":
+  expect ast ƒink:
     [..(1 + 2)..(3 + 4)]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Spread '..',
@@ -107,9 +111,9 @@ test 'spread with range expression guard', fn:
                 LitInt '4'
 
 test 'spread with ident range guard', fn:
-  expect ast fink":
+  expect ast ƒink:
     [..foo...bar]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Spread '..',
@@ -118,9 +122,9 @@ test 'spread with ident range guard', fn:
             Ident 'bar'
 
 test 'spread with bare range guard', fn:
-  expect ast fink":
+  expect ast ƒink:
     [head, ..0..2, ..rest]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Ident 'head'
@@ -132,9 +136,9 @@ test 'spread with bare range guard', fn:
           Ident 'rest'
 
 test 'spread with range to grouped expression', fn:
-  expect ast fink":
+  expect ast ƒink:
     [..0..(l)]
-  | equals fink":
+  | equals ƒink:
     Module
       LitSeq '[..]',
         Spread '..',
@@ -149,36 +153,36 @@ ranges
 ---
 
 test 'exclusive range', fn:
-  expect ast fink":
+  expect ast ƒink:
     0..10
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '..',
         LitInt '0'
         LitInt '10'
 
 test 'inclusive range', fn:
-  expect ast fink":
+  expect ast ƒink:
     0...10
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '...',
         LitInt '0'
         LitInt '10'
 
 test 'char range', fn:
-  expect ast fink":
+  expect ast ƒink:
     'a'...'z'
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '...',
         LitStr 'a'
         LitStr 'z'
 
 test 'expression range exclusive', fn:
-  expect ast fink":
+  expect ast ƒink:
     (1 + 2)..(3 + 4)
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '..',
         Group '(..)',
@@ -191,9 +195,9 @@ test 'expression range exclusive', fn:
             LitInt '4'
 
 test 'expression range inclusive', fn:
-  expect ast fink":
+  expect ast ƒink:
     (1 + 2)...(3 + 4)
-  | equals fink":
+  | equals ƒink:
     Module
       InfixOp '...',
         Group '(..)',

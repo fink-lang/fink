@@ -678,7 +678,7 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
   };
 
   write_indent(out, indent);
-  out.push_str(&format!("scope {}, '{}':\n", info.ast_id.0, kind_str));
+  out.push_str(&format!("scope {}, '{}',\n", info.ast_id.0, kind_str));
 
   // Events in source order — bindings, refs, and child scopes interleaved.
   let events = result.scope_events.get(scope_id);

@@ -1,16 +1,20 @@
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
 
 test 'try bare', fn:
-  expect ast fink":
+  expect ast ƒink:
     try foo
-  | equals fink":
+  | equals ƒink:
     Module
       Try
         Ident 'foo'
 
 test 'try with application', fn:
-  expect ast fink":
+  expect ast ƒink:
     try foo bar
-  | equals fink":
+  | equals ƒink:
     Module
       Try
         Apply
@@ -18,9 +22,9 @@ test 'try with application', fn:
           Ident 'bar'
 
 test 'try bound to name', fn:
-  expect ast fink":
+  expect ast ƒink:
     a = try open 'file.txt'
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         Ident 'a'
@@ -30,9 +34,9 @@ test 'try bound to name', fn:
             LitStr 'file.txt'
 
 test 'try in pipe', fn:
-  expect ast fink":
+  expect ast ƒink:
     try foo | bar
-  | equals fink":
+  | equals ƒink:
     Module
       Pipe
         Try

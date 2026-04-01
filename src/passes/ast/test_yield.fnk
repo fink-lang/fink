@@ -1,21 +1,25 @@
+{test, expect, equals, ast} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
 ---
 yield — suspension point for async/generators/channels
 ---
 
 test 'yield bare', fn:
-  expect ast fink":
+  expect ast ƒink:
     yield foo
 
-  | equals fink":
+  | equals ƒink:
     Module
       Yield
         Ident 'foo'
 
 test 'yield with application', fn:
-  expect ast fink":
+  expect ast ƒink:
     yield foo bar
 
-  | equals fink":
+  | equals ƒink:
     Module
       Yield
         Apply
@@ -23,10 +27,10 @@ test 'yield with application', fn:
           Ident 'bar'
 
 test 'yield bound to name', fn:
-  expect ast fink":
+  expect ast ƒink:
     result = yield value
 
-  | equals fink":
+  | equals ƒink:
     Module
       Bind '=',
         Ident 'result'
