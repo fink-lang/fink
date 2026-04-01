@@ -713,7 +713,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
 
       // Record structural locs for params.
-      for (p_idx, (p_id, _)) in func.params.iter().enumerate() {
+      for (p_idx, (p_id, _, _)) in func.params.iter().enumerate() {
         if let Some(node) = self.ctx.ast_node(*p_id) {
           self.structural_locs.push(StructuralLoc {
             kind: StructuralKind::FuncParam { func_idx, param_idx: p_idx as u32 },
@@ -1062,7 +1062,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     // Build local name → param/local index map for this function.
     let mut local_map: HashMap<String, u32> = HashMap::new();
-    for (i, (_id, label)) in func.params.iter().enumerate() {
+    for (i, (_id, label, _is_spread)) in func.params.iter().enumerate() {
       local_map.insert(label.clone(), i as u32);
     }
 
@@ -1080,6 +1080,18 @@ impl<'a, 'src> Emitter<'a, 'src> {
       vec![]
     };
     let mut wasm_func = Function::new(locals);
+
+    // Unwrap $SpreadArgs for spread params: local.get → cast → struct.get → local.set.
+    // This replaces the $SpreadArgs wrapper with the inner $List at function entry.
+    for (i, (_id, _label, is_spread)) in func.params.iter().enumerate() {
+      if *is_spread {
+        let spread_idx = self.idx.type_idx("$SpreadArgs");
+        wasm_func.instruction(&Instruction::LocalGet(i as u32));
+        wasm_func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(spread_idx)));
+        wasm_func.instruction(&Instruction::StructGet { struct_type_index: spread_idx, field_index: 0 });
+        wasm_func.instruction(&Instruction::LocalSet(i as u32));
+      }
+    }
 
     // Emit body instructions.
     let mut fc = FuncContext {
@@ -1160,7 +1172,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
       let func_idx = self.idx.import_count + def_idx as u32;
       let mut local_names = NameMap::new();
-      for (i, (_id, label)) in func.params.iter().enumerate() {
+      for (i, (_id, label, _)) in func.params.iter().enumerate() {
         local_names.append(i as u32, label);
       }
       let locals_list = collect_locals(func.body, self.ctx);
@@ -1673,7 +1685,16 @@ fn emit_get_raw_funcref(fc: &mut FuncContext<'_, '_, '_>, val: &Val) {
 /// Emit a call argument.
 fn emit_arg(arg: &Arg, fc: &mut FuncContext<'_, '_, '_>) {
   match arg {
-    Arg::Val(v) | Arg::Spread(v) => emit_val(v, fc),
+    Arg::Val(v) => emit_val(v, fc),
+    Arg::Spread(v) => {
+      // Wrap spread value in $SpreadArgs struct for runtime detection.
+      emit_val(v, fc);
+      let spread_idx = fc.emitter_idx.type_idx("$SpreadArgs");
+      fc.instr(&Instruction::RefCastNonNull(HeapType::Concrete(
+        fc.emitter_idx.type_idx("$List"),
+      )));
+      fc.instr(&Instruction::StructNew(spread_idx));
+    }
     Arg::Cont(cont) => emit_cont(cont, fc),
     Arg::Expr(_) => {
       fc.instr(&Instruction::Unreachable);

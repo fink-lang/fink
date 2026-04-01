@@ -41,6 +41,7 @@
 ;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
 ;;   │       ├── $Range              ← numeric range (opaque — internals in range.wat)
+;;   │       ├── $SpreadArgs ($List)             ← spread call marker (wraps list)
 ;;   │       ├── $VarArgs (array)               ← variable-length argument array
 ;;   │       ├── $Captures (array)             ← flat capture value array
 ;;   │       └── $Closure (funcref, $Captures) ← universal closure type
@@ -147,6 +148,15 @@
     ;; $Range — numeric range. Opaque base type.
     ;; Internals (start/end/inclusive) defined in range.wat.
     (type $Range (sub (struct)))
+
+    ;; $SpreadArgs — wrapper for spread arguments at call sites.
+    ;; Contains a $List of the spread values. Used to distinguish a spread
+    ;; call (f ..items) from a regular call passing a list value (f items).
+    ;; _croc uses br_on_cast $SpreadArgs to detect the spread calling
+    ;; convention at runtime.
+    (type $SpreadArgs (struct
+      (field $items (ref $List))
+    ))
 
     ;; $VarArgs — variable-length argument array.
     ;; Used by builtins that accept a variable number of arguments

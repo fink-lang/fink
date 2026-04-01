@@ -77,8 +77,8 @@ pub struct CollectedFn<'a> {
   pub label: String,
   /// CpsId of the LetFn name — used to source-map the (func ...) header.
   pub fn_id: CpsId,
-  /// Parameter (id, label) pairs in order (all anyref). Last is the cont.
-  pub params: Vec<(CpsId, String)>,
+  /// Parameter (id, label, is_spread) triples in order (all anyref). Last is the cont.
+  pub params: Vec<(CpsId, String, bool)>,
   /// The fn body expression.
   pub body: &'a Expr,
   /// Whether this fn is exported under a user name.
@@ -167,9 +167,9 @@ fn collect_chain<'a, 'src>(
   match &expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       let label = ctx.label(name.id);
-      let param_labels: Vec<(CpsId, String)> = params.iter().map(|p| match p {
-        Param::Name(b) => (b.id, ctx.label(b.id)),
-        Param::Spread(b) => (b.id, ctx.label(b.id)),
+      let param_labels: Vec<(CpsId, String, bool)> = params.iter().map(|p| match p {
+        Param::Name(b) => (b.id, ctx.label(b.id), false),
+        Param::Spread(b) => (b.id, ctx.label(b.id), true),
       }).collect();
       arities.insert(param_labels.len());
 

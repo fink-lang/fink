@@ -414,3 +414,26 @@ test 'rec destructure', fn:
     3
 
 
+test 'varargs first', fn:
+  expect run fink":
+    first = fn ..args:
+      match args:
+        [a, ..]: a
+
+    main = fn:
+      first ..[42, 99]
+  | equals fink":
+    42
+
+
+test 'varargs identity', fn:
+  expect run fink":
+    identity = fn ..args: args
+
+    main = fn:
+      match (identity ..[10, 20, 30]):
+        [a, ..]: a
+  | equals fink":
+    10
+
+
