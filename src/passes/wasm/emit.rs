@@ -45,7 +45,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use wasm_encoder::{
-  AbstractHeapType, BlockType, CodeSection, CompositeInnerType, CompositeType,
+  AbstractHeapType, CodeSection, CompositeInnerType, CompositeType,
   ConstExpr, DataSection, ElementSection, Elements, ExportKind, ExportSection,
   FieldType, FuncType, Function, FunctionSection, GlobalSection, GlobalType,
   HeapType, ImportSection, IndirectNameMap, Instruction, MemorySection,
@@ -319,62 +319,34 @@ pub enum StructuralKind {
 /// Emit a WASM binary from a collected CPS module.
 pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   let mut e = Emitter::new(module, ctx);
-  // Scan builtins and call arities needed for the type section.
+  // Scan builtins and closure captures.
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
-  let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
   let mut closure_captures: BTreeSet<usize> = BTreeSet::new();
   let mut has_panic = false;
   for func in &module.funcs {
     scan_builtins(func.body, &mut builtins);
-    scan_call_arities(func.body, &mut extra_arities);
     scan_closure_captures(func.body, &mut closure_captures);
     if !has_panic { has_panic = scan_panic(func.body); }
   }
   // Split builtins: implemented ones become defined functions, rest stay as imports.
   let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
     builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
-  // Implemented builtins call their cont with arity 1 — ensure $Fn1 exists.
-  if !impl_builtins.is_empty() {
-    extra_arities.insert(1);
-  }
-  // Imported operators (op_*) dispatch their continuation via _croc_1.
-  // Ensure _croc_1 is always emitted when operators are used, even if
-  // the module has no user closures.
   let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_") || n == "empty");
-  if has_operator_imports {
-    extra_arities.insert(1);
-  }
-  // List runtime (seq_prepend, seq_concat, seq_pop) dispatches via _croc_0/1/2.
   let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
-  if has_list_imports {
-    extra_arities.insert(0);
-    extra_arities.insert(1);
-    extra_arities.insert(2);
-  }
-  // Record runtime (rec_set, rec_pop, rec_merge) dispatches via _croc_0/1/2.
   let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"));
-  if has_rec_imports {
-    extra_arities.insert(0);
-    extra_arities.insert(1);
-    extra_arities.insert(2);
-  }
-  // call_ref_or_clos_N dispatch helpers need $FnN types for all call arities.
-  // The closure lifted fn arities (call_arity + captures) are already covered
-  // by the defined function arities in cps_mod.arities.
   // Scan string literals and intern into the data blob.
   for func in &module.funcs {
     scan_strings(func.body, &mut e.string_data);
   }
   let has_strings = !e.string_data.is_empty();
 
-  // Core runtime modules always need _croc_0, _croc_1, _croc_2 dispatch
-  // (operators import _croc_1, list imports _croc_0/1/2).
-  extra_arities.insert(0);
-  extra_arities.insert(1);
-  extra_arities.insert(2);
+  // $Fn2(caps, args) for continuations. $Fn3(caps, args, cont) for user functions.
+  let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
+  extra_arities.insert(0); // $Fn0 — $_panic
+  extra_arities.insert(2); // $Fn2 — continuations + _apply(args, callee)
+  extra_arities.insert(3); // $Fn3 — user functions + _apply_cont(args, cont, callee)
 
   e.closure_captures = closure_captures.clone();
-  e.call_arities = extra_arities.clone();
   e.needs_croc_for_operators = has_operator_imports;
   e.needs_list = has_list_imports;
   e.needs_rec = has_rec_imports;
@@ -386,14 +358,14 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.emit_types(module, &all_builtins, &extra_arities, &closure_captures);
   e.emit_imports_from(module, &import_builtins);
   e.impl_builtins = impl_builtins.clone();
-  e.emit_functions(module, &closure_captures, &extra_arities);
+  e.emit_functions(module, &closure_captures);
   e.emit_memory();
   e.emit_globals(module);
   e.emit_exports(module);
   e.emit_elements();
   e.emit_code(module, &closure_captures);
   e.emit_data();
-  e.emit_names(module, &closure_captures, &extra_arities);
+  e.emit_names(module, &closure_captures);
   let wasm = e.module.finish();
 
   // Fixup: convert func-local offsets to absolute offsets.
@@ -473,13 +445,11 @@ struct Emitter<'a, 'src> {
   raw_mappings: Vec<RawMapping>,
   /// Structural source locations for non-code items.
   structural_locs: Vec<StructuralLoc>,
-  /// Closure capture counts found in this module (for _croc_N dispatch).
+  /// Closure capture counts found in this module (for _croc dispatch).
   closure_captures: BTreeSet<usize>,
-  /// Call-site arities for Callable::Val calls (for $_croc_N).
-  call_arities: BTreeSet<usize>,
   /// Builtins with known implementations (emitted as defined functions).
   impl_builtins: BTreeMap<String, usize>,
-  /// Whether _croc_1 is needed for imported operators (even without user closures).
+  /// Whether _croc is needed for imported operators (even without user closures).
   needs_croc_for_operators: bool,
   /// Whether list runtime imports are present (seq_prepend, seq_concat, seq_pop).
   needs_list: bool,
@@ -511,7 +481,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       raw_mappings: Vec::new(),
       structural_locs: Vec::new(),
       closure_captures: BTreeSet::new(),
-      call_arities: BTreeSet::new(),
       impl_builtins: BTreeMap::new(),
       needs_croc_for_operators: false,
       needs_list: false,
@@ -526,7 +495,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Type section
   // -------------------------------------------------------------------------
 
-  fn emit_types(&mut self, cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>, closure_captures: &BTreeSet<usize>) {
+  fn emit_types(&mut self, _cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>, _closure_captures: &BTreeSet<usize>) {
     let mut types = TypeSection::new();
 
     // 1. Canonical runtime types from types.wat — injected as a rec group.
@@ -593,44 +562,70 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_idx += 1;
     }
 
-    // $TmpImportRec = (func (result (ref null any)))
-    // Temporary type for the rec_empty import — only exists pre-link.
-    if self.needs_rec {
-      types.ty().subtype(&SubType {
-        is_final: true,
-        supertype_idx: None,
-        composite_type: CompositeType {
-          inner: CompositeInnerType::Func(FuncType::new(
-            vec![],
-            vec![any_ref],
-          )),
-          shared: false,
-          descriptor: None,
-          describes: None,
-        },
-      });
-      self.idx.types.insert("$TmpImportRec".into(), next_idx);
-      next_idx += 1;
-    }
+    // $TmpImportThunk = (func (result (ref null any)))
+    // Used for list_nil and rec_new imports (both return a single value).
+    types.ty().subtype(&SubType {
+      is_final: true,
+      supertype_idx: None,
+      composite_type: CompositeType {
+        inner: CompositeInnerType::Func(FuncType::new(
+          vec![],
+          vec![any_ref],
+        )),
+        shared: false,
+        descriptor: None,
+        describes: None,
+      },
+    });
+    self.idx.types.insert("$TmpImportThunk".into(), next_idx);
+    next_idx += 1;
 
-    // $FnN for each arity (from defined functions + builtins + dispatch).
-    let mut all_arities = cps_mod.arities.clone();
+    // $TmpImportListOp = (func (param (ref null any)) (result (ref null any)))
+    // Temporary type for list_head / list_tail imports — used for param unpacking.
+    types.ty().subtype(&SubType {
+      is_final: true,
+      supertype_idx: None,
+      composite_type: CompositeType {
+        inner: CompositeInnerType::Func(FuncType::new(
+          vec![any_ref],
+          vec![any_ref],
+        )),
+        shared: false,
+        descriptor: None,
+        describes: None,
+      },
+    });
+    self.idx.types.insert("$TmpImportListOp".into(), next_idx);
+    next_idx += 1;
+
+    // $TmpImportListPrepend = (func (param (ref null any) (ref null any)) (result (ref null any)))
+    // Temporary type for list_prepend import — used to build args lists at call sites.
+    types.ty().subtype(&SubType {
+      is_final: true,
+      supertype_idx: None,
+      composite_type: CompositeType {
+        inner: CompositeInnerType::Func(FuncType::new(
+          vec![any_ref, any_ref],
+          vec![any_ref],
+        )),
+        shared: false,
+        descriptor: None,
+        describes: None,
+      },
+    });
+    self.idx.types.insert("$TmpImportListPrepend".into(), next_idx);
+    next_idx += 1;
+
+    // $FnN for all needed arities.
+    // $Fn2: continuations (caps, args) AND _apply_2(args, callee)
+    // $Fn3: user functions (caps, args, cont) AND _apply_3(args, cont, callee)
+    // Plus builtin arities.
+    let mut all_arities: BTreeSet<usize> = BTreeSet::new();
     for &arity in builtins.values() {
       all_arities.insert(arity);
     }
     for &arity in extra_arities {
       all_arities.insert(arity);
-    }
-    // Lifted fn arities: call_arity + N captures.
-    for &n_cap in closure_captures {
-      for &call_arity in extra_arities.iter().chain(cps_mod.arities.iter()) {
-        all_arities.insert(call_arity + n_cap);
-      }
-    }
-    // _croc_N dispatch helpers have arity call_arity + 1 (args + callee).
-    // Always emitted — core runtime modules import them.
-    for &call_arity in extra_arities.iter() {
-      all_arities.insert(call_arity + 1); // _croc_N's own type
     }
     for &arity in &all_arities {
       let params: Vec<ValType> = vec![any_ref; arity];
@@ -676,9 +671,50 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     // rec_empty: () -> (ref $RecImpl) — creates empty record.
     if self.needs_rec {
-      let type_idx = self.idx.type_idx("$TmpImportRec");
+      let type_idx = self.idx.type_idx("$TmpImportThunk");
       imports.import("@fink/runtime", "rec_new", wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert("rec_new".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
+    // List operations for the universal calling convention.
+    // These are the _any wrappers (defined in list.wat) that take/return
+    // (ref null any), bridging the emitter's type system with $Cons internals.
+    {
+      let list_op_idx = self.idx.type_idx("$TmpImportListOp");
+      imports.import("@fink/runtime", "list_head_any", wasm_encoder::EntityType::Function(list_op_idx));
+      self.idx.imports.insert("list_head".into(), next_func_idx);
+      next_func_idx += 1;
+
+      imports.import("@fink/runtime", "list_tail_any", wasm_encoder::EntityType::Function(list_op_idx));
+      self.idx.imports.insert("list_tail".into(), next_func_idx);
+      next_func_idx += 1;
+
+      let list_prepend_idx = self.idx.type_idx("$TmpImportListPrepend");
+      imports.import("@fink/runtime", "list_prepend_any", wasm_encoder::EntityType::Function(list_prepend_idx));
+      self.idx.imports.insert("list_prepend".into(), next_func_idx);
+      next_func_idx += 1;
+
+      imports.import("@fink/runtime", "list_concat_any", wasm_encoder::EntityType::Function(list_prepend_idx));
+      self.idx.imports.insert("list_concat".into(), next_func_idx);
+      next_func_idx += 1;
+
+      let list_nil_idx = self.idx.type_idx("$TmpImportThunk");
+      imports.import("@fink/runtime", "list_nil", wasm_encoder::EntityType::Function(list_nil_idx));
+      self.idx.imports.insert("list_nil".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
+    // _apply / _apply_cont: closure dispatch (defined in dispatch.wat).
+    {
+      let fn2_idx = self.idx.fn_type_idx(2);
+      imports.import("@fink/runtime", "_apply", wasm_encoder::EntityType::Function(fn2_idx));
+      self.idx.imports.insert("_apply".into(), next_func_idx);
+      next_func_idx += 1;
+
+      let fn3_idx = self.idx.fn_type_idx(3);
+      imports.import("@fink/runtime", "_apply_cont", wasm_encoder::EntityType::Function(fn3_idx));
+      self.idx.imports.insert("_apply_cont".into(), next_func_idx);
       next_func_idx += 1;
     }
 
@@ -693,13 +729,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Function section — declares function signatures
   // -------------------------------------------------------------------------
 
-  fn emit_functions(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
+  fn emit_functions(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>) {
     let mut functions = FunctionSection::new();
 
-    // CPS-defined functions.
+    // CPS-defined functions — $Fn3(caps, args, cont) or $Fn2(caps, args).
+    let fn2_type = self.idx.fn_type_idx(2);
+    let fn3_type = self.idx.fn_type_idx(3);
     for (i, func) in cps_mod.funcs.iter().enumerate() {
-      let arity = func.params.len();
-      let type_idx = self.idx.fn_type_idx(arity);
+      let type_idx = if func.has_cont { fn3_type } else { fn2_type };
       functions.function(type_idx);
       let func_idx = self.idx.import_count + i as u32;
       self.idx.funcs.insert(func.label.clone(), func_idx);
@@ -726,19 +763,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // Helper functions are appended after CPS-defined functions.
     let mut next_func_idx = self.idx.import_count + cps_mod.funcs.len() as u32;
 
-    // _croc_N dispatch functions — always emitted because the core runtime
-    // modules (operators, list) import them from @fink/user.
-    // Type is $Fn<call_arity + 1> (args + callee, no result — tail calls).
-    {
-      for &call_arity in call_arities {
-        let type_idx = self.idx.fn_type_idx(call_arity + 1);
-        functions.function(type_idx);
-        let name = format!("_croc_{}", call_arity);
-        self.idx.funcs.insert(name, next_func_idx);
-        next_func_idx += 1;
-      }
-    }
-
     // Implemented builtins as defined functions.
     for (name, arity) in &self.impl_builtins {
       let type_idx = self.idx.fn_type_idx(*arity);
@@ -752,6 +776,20 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let box_func_type_idx = self.idx.type_idx("$BoxFuncTy");
     functions.function(box_func_type_idx);
     self.idx.funcs.insert("_box_func".into(), next_func_idx);
+    next_func_idx += 1;
+
+    // _list_nil helper: wraps list_nil for the runner.
+    // Type: (func (result (ref null any)))
+    let list_nil_type = self.idx.type_idx("$TmpImportThunk");
+    functions.function(list_nil_type);
+    self.idx.funcs.insert("_list_nil".into(), next_func_idx);
+    next_func_idx += 1;
+
+    // _list_prepend helper: wraps list_prepend for the runner to build args lists.
+    // Type: (func (param (ref null any) (ref null any)) (result (ref null any)))
+    let list_prepend_type = self.idx.type_idx("$TmpImportListPrepend");
+    functions.function(list_prepend_type);
+    self.idx.funcs.insert("_list_prepend".into(), next_func_idx);
     next_func_idx += 1;
 
     // $_panic: (func) — unreachable trap for irrefutable pattern failure.
@@ -791,10 +829,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let mut globals = GlobalSection::new();
     let mut next_global_idx = 0u32;
 
+    let fn2_type = self.idx.fn_type_idx(2);
+    let fn3_type = self.idx.fn_type_idx(3);
     for func in &cps_mod.funcs {
       if let Some((alias_id, alias_label)) = &func.alias {
-        let arity = func.params.len();
-        let fn_type_idx = self.idx.fn_type_idx(arity);
+        let fn_type_idx = if func.has_cont { fn3_type } else { fn2_type };
         let func_idx = self.idx.func_idx(&func.label);
 
         // Record structural loc for global alias.
@@ -853,13 +892,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let box_func_idx = self.idx.func_idx("_box_func");
     exports.export("_box_func", ExportKind::Func, box_func_idx);
 
-    // Export _croc_N dispatch helpers for host-implemented builtins.
-    for &arity in &self.call_arities {
-      let name = format!("_croc_{}", arity);
-      if let Some(&idx) = self.idx.funcs.get(&name) {
-        exports.export(&name, ExportKind::Func, idx);
-      }
-    }
+    // _list_nil / _list_prepend: exported for the runner to build args lists.
+    let list_nil_idx = self.idx.func_idx("_list_nil");
+    exports.export("_list_nil", ExportKind::Func, list_nil_idx);
+    let list_prepend_idx = self.idx.func_idx("_list_prepend");
+    exports.export("_list_prepend", ExportKind::Func, list_prepend_idx);
 
     // TODO: memory should not be exported in production builds — only
     // needed for the runner to read string data during testing.
@@ -887,20 +924,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Code section — function bodies with byte offset tracking
   // -------------------------------------------------------------------------
 
-  fn emit_code(&mut self, cps_mod: &CpsModule<'a>, closure_captures: &BTreeSet<usize>) {
+  fn emit_code(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>) {
     let mut code = CodeSection::new();
 
     for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
       let wasm_func = self.emit_func_body(func, def_idx as u32);
       code.function(&wasm_func);
-    }
-
-    // _croc_N dispatch bodies — always emitted for core runtime modules.
-    {
-      let call_arities: Vec<usize> = self.call_arities.iter().copied().collect();
-      for call_arity in call_arities {
-        code.function(&self.emit_croc(call_arity, closure_captures));
-      }
     }
 
     // Implemented builtin bodies.
@@ -909,8 +938,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
         num: self.idx.type_idx("$Num"),
         closure: self.idx.type_idx("$Closure"),
         captures: self.idx.type_idx("$Captures"),
-        fn1: self.idx.fn_type_idx(1),
-        croc1: self.idx.funcs.get("_croc_1").copied(),
+        fn1: self.idx.fn_type_idx(2), // $Fn2 — continuations
+        croc1: self.idx.funcs.get("_apply_2").copied(),
       };
       let names: Vec<String> = self.impl_builtins.keys().cloned().collect();
       for name in names {
@@ -931,6 +960,26 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&f);
     }
 
+    // _list_nil body: delegates to imported list_nil.
+    {
+      let mut f = Function::new(vec![]);
+      let list_nil_idx = self.idx.func_idx("list_nil");
+      f.instruction(&Instruction::Call(list_nil_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
+    // _list_prepend body: delegates to imported list_prepend.
+    {
+      let mut f = Function::new(vec![]);
+      let list_prepend_idx = self.idx.func_idx("list_prepend");
+      f.instruction(&Instruction::LocalGet(0));
+      f.instruction(&Instruction::LocalGet(1));
+      f.instruction(&Instruction::Call(list_prepend_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
     // $_panic body: unreachable
     if self.has_panic {
       let mut f = Function::new(vec![]);
@@ -942,155 +991,86 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.module.section(&code);
   }
 
-  /// Emit _croc_N dispatch: cast callee to $Closure, branch on captures
-  /// array length, push captures + args, return_call_ref the funcref.
-  ///
-  /// Params: arg_0 .. arg_{N-1}, callee (all (ref null any)).
-  /// The callee is the last param at index N.
-  fn emit_croc(&self, call_arity: usize, closure_captures: &BTreeSet<usize>) -> Function {
-    let callee_param = call_arity as u32; // last param index
-    let closure_idx = self.idx.type_idx("$Closure");
-    let captures_idx = self.idx.type_idx("$Captures");
-
-    // Locals: $clos (ref null $Closure), $caps (ref null $Captures).
-    let closure_ref = ValType::Ref(RefType {
-      nullable: true,
-      heap_type: HeapType::Concrete(closure_idx),
-    });
-    let captures_ref = ValType::Ref(RefType {
-      nullable: true,
-      heap_type: HeapType::Concrete(captures_idx),
-    });
-    let mut f = Function::new(vec![(1, closure_ref), (1, captures_ref)]);
-    let clos_local = (call_arity + 1) as u32;
-    let caps_local = (call_arity + 2) as u32;
-
-    // Cast callee to $Closure, store.
-    f.instruction(&Instruction::LocalGet(callee_param));
-    f.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(closure_idx)));
-    f.instruction(&Instruction::LocalSet(clos_local));
-
-    // Get captures array (may be null for zero-capture closures).
-    f.instruction(&Instruction::LocalGet(clos_local));
-    f.instruction(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 1 });
-    f.instruction(&Instruction::LocalSet(caps_local));
-
-    // Determine all capture counts we need to handle.
-    // Always include 0 (bare funcref wrapped as $Closure with null captures).
-    let mut all_cap_counts: BTreeSet<usize> = closure_captures.clone();
-    all_cap_counts.insert(0);
-
-    // For each capture count, emit a branch.
-    // 0 captures: caps is null → call $Fn<call_arity>
-    // N captures: caps.len == N → push captures, call $Fn<call_arity + N>
-    for &n_cap in &all_cap_counts {
-      let lifted_arity = call_arity + n_cap;
-      let fn_type_idx = self.idx.fn_type_idx(lifted_arity);
-
-      if n_cap == 0 {
-        // (block $not0
-        //   (br_if $not0 (ref.is_null (local.get $caps)))  -- non-null → skip
-        //   ;; null caps = 0 captures: push args, funcref, call
-        // )
-        f.instruction(&Instruction::Block(BlockType::Empty));
-
-        // If caps is NOT null, skip this block.
-        f.instruction(&Instruction::LocalGet(caps_local));
-        f.instruction(&Instruction::RefIsNull);
-        f.instruction(&Instruction::I32Eqz);
-        f.instruction(&Instruction::BrIf(0));
-
-        // Push call args.
-        for i in 0..call_arity as u32 {
-          f.instruction(&Instruction::LocalGet(i));
-        }
-        // Push funcref, cast, call.
-        f.instruction(&Instruction::LocalGet(clos_local));
-        f.instruction(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-        f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(fn_type_idx)));
-        f.instruction(&Instruction::ReturnCallRef(fn_type_idx));
-
-        f.instruction(&Instruction::End);
-      } else {
-        // (block $not_N
-        //   (br_if $not_N (i32.ne (array.len caps) (i32.const N)))
-        //   ;; push captures[0..N], push args, funcref, call
-        // )
-        f.instruction(&Instruction::Block(BlockType::Empty));
-
-        f.instruction(&Instruction::LocalGet(caps_local));
-        f.instruction(&Instruction::RefAsNonNull);
-        f.instruction(&Instruction::ArrayLen);
-        f.instruction(&Instruction::I32Const(n_cap as i32));
-        f.instruction(&Instruction::I32Ne);
-        f.instruction(&Instruction::BrIf(0));
-
-        // Push captures[0..N].
-        for cap_idx in 0..n_cap {
-          f.instruction(&Instruction::LocalGet(caps_local));
-          f.instruction(&Instruction::RefAsNonNull);
-          f.instruction(&Instruction::I32Const(cap_idx as i32));
-          f.instruction(&Instruction::ArrayGet(captures_idx));
-        }
-
-        // Push call args.
-        for i in 0..call_arity as u32 {
-          f.instruction(&Instruction::LocalGet(i));
-        }
-
-        // Push funcref, cast to $Fn<lifted_arity>, call.
-        f.instruction(&Instruction::LocalGet(clos_local));
-        f.instruction(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-        f.instruction(&Instruction::RefCastNullable(HeapType::Concrete(fn_type_idx)));
-        f.instruction(&Instruction::ReturnCallRef(fn_type_idx));
-
-        f.instruction(&Instruction::End);
-      }
-    }
-
-    // Unreachable: all known capture counts handled above.
-    f.instruction(&Instruction::Unreachable);
-    f.instruction(&Instruction::End);
-    f
-  }
-
   fn emit_func_body(&mut self, func: &CollectedFn<'a>, def_idx: u32) -> Function {
     let any_ref = ValType::Ref(RefType {
       nullable: true,
       heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
     });
 
-    // Build local name → param/local index map for this function.
+    // v2 calling convention:
+    //   $Fn2(captures, args)        — continuations, match arms
+    //   $Fn3(captures, args, cont)  — user functions
+    //
+    // WASM params:
+    //   local 0 = captures (ref null any — cast to $Captures array)
+    //   local 1 = args list (ref null any)
+    //   local 2 = cont (ref null any) — only if has_cont
+    //
+    // CPS params split into:
+    //   [0..n_captures)              → from captures array (array.get)
+    //   [n_captures..N-has_cont)     → from args list (list_head/list_tail)
+    //   [N-1] if has_cont            → from WASM cont param (local 2)
+    let wasm_param_count: u32 = if func.has_cont { 3 } else { 2 };
+
     let mut local_map: HashMap<String, u32> = HashMap::new();
+    let param_count = func.params.len() as u32;
     for (i, (_id, label, _is_spread)) in func.params.iter().enumerate() {
-      local_map.insert(label.clone(), i as u32);
+      local_map.insert(label.clone(), wasm_param_count + i as u32);
     }
 
     let locals_list = collect_locals(func.body, self.ctx);
-    let param_count = func.params.len() as u32;
     for (i, label) in locals_list.iter().enumerate() {
-      local_map.insert(label.clone(), param_count + i as u32);
+      local_map.insert(label.clone(), wasm_param_count + param_count + i as u32);
     }
 
-    // Create function with locals (params are implicit, only extra locals declared).
-    let local_count = locals_list.len() as u32;
-    let locals: Vec<(u32, ValType)> = if local_count > 0 {
-      vec![(local_count, any_ref)]
-    } else {
-      vec![]
-    };
+    // Declare locals: CPS params + body locals + 1 scratch (all (ref null any)).
+    let scratch_local = wasm_param_count + param_count + locals_list.len() as u32;
+    let total_locals = param_count + locals_list.len() as u32 + 1;
+    let locals: Vec<(u32, ValType)> = vec![(total_locals, any_ref)];
     let mut wasm_func = Function::new(locals);
 
-    // Unwrap $SpreadArgs for spread params: local.get → cast → struct.get → local.set.
-    // This replaces the $SpreadArgs wrapper with the inner $List at function entry.
-    for (i, (_id, _label, is_spread)) in func.params.iter().enumerate() {
+    let captures_idx = self.idx.type_idx("$Captures");
+    let list_head_idx = self.idx.func_idx("list_head");
+    let list_tail_idx = self.idx.func_idx("list_tail");
+
+    // Unpack capture params from the $Captures array (local 0).
+    for i in 0..func.n_captures {
+      wasm_func.instruction(&Instruction::LocalGet(0));  // captures
+      wasm_func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(captures_idx)));
+      wasm_func.instruction(&Instruction::I32Const(i as i32));
+      wasm_func.instruction(&Instruction::ArrayGet(captures_idx));
+      wasm_func.instruction(&Instruction::LocalSet(wasm_param_count + i as u32));
+    }
+
+    // Unpack value params from the args list (local 1).
+    // Cont (if has_cont) comes from WASM param, not the list.
+    let val_end = if func.has_cont { func.params.len().saturating_sub(1).max(func.n_captures) } else { func.params.len() };
+    let val_params = &func.params[func.n_captures..val_end];
+    for (j, (_id, _label, is_spread)) in val_params.iter().enumerate() {
+      let local_idx = wasm_param_count + (func.n_captures + j) as u32;
       if *is_spread {
-        let spread_idx = self.idx.type_idx("$SpreadArgs");
-        wasm_func.instruction(&Instruction::LocalGet(i as u32));
-        wasm_func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(spread_idx)));
-        wasm_func.instruction(&Instruction::StructGet { struct_type_index: spread_idx, field_index: 0 });
-        wasm_func.instruction(&Instruction::LocalSet(i as u32));
+        // Spread param gets the remaining args list as-is.
+        wasm_func.instruction(&Instruction::LocalGet(1));  // args
+        wasm_func.instruction(&Instruction::LocalSet(local_idx));
+      } else {
+        // Head → param local.
+        wasm_func.instruction(&Instruction::LocalGet(1));  // args
+        wasm_func.instruction(&Instruction::Call(list_head_idx));
+        wasm_func.instruction(&Instruction::LocalSet(local_idx));
+        // Tail → advance args cursor (unless this is the last val param).
+        if j + 1 < val_params.len() {
+          wasm_func.instruction(&Instruction::LocalGet(1));
+          wasm_func.instruction(&Instruction::Call(list_tail_idx));
+          wasm_func.instruction(&Instruction::LocalSet(1));
+        }
       }
+    }
+
+    // Cont param: copy from WASM local 2 → CPS local.
+    if func.has_cont && !func.params.is_empty() {
+      let cont_local = wasm_param_count + (func.params.len() - 1) as u32;
+      wasm_func.instruction(&Instruction::LocalGet(2));
+      wasm_func.instruction(&Instruction::LocalSet(cont_local));
     }
 
     // Emit body instructions.
@@ -1101,8 +1081,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
       ctx: self.ctx,
       raw_mappings: &mut self.raw_mappings,
       def_idx,
-      has_closures: !self.closure_captures.is_empty(),
+      _has_closures: !self.closure_captures.is_empty(),
       string_data: &self.string_data,
+      scratch_local,
     };
     emit_body(func.body, &mut fc);
 
@@ -1130,7 +1111,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Name section
   // -------------------------------------------------------------------------
 
-  fn emit_names(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>, call_arities: &BTreeSet<usize>) {
+  fn emit_names(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>) {
     let mut names = NameSection::new();
 
     // Function names (imports + defined + helpers).
@@ -1142,15 +1123,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let idx = self.idx.func_idx(&func.label);
       func_names.append(idx, &func.label);
     }
-    // Helper function names.
-    {
-      for &call_arity in call_arities {
-        let name = format!("_croc_{}", call_arity);
-        if let Some(&idx) = self.idx.funcs.get(&name) {
-          func_names.append(idx, &name);
-        }
-      }
-    }
+    // _croc is now in the runtime (dispatch.wat), not emitted.
     // Implemented builtin names.
     for name in self.impl_builtins.keys() {
       let internal_name = format!("_{}", name);
@@ -1168,17 +1141,23 @@ impl<'a, 'src> Emitter<'a, 'src> {
     names.functions(&func_names);
 
     // Local names per defined function.
+    // Layout: WASM params (caps, args, [cont]), then CPS params, body locals, scratch.
     let mut all_locals = IndirectNameMap::new();
     for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
       let func_idx = self.idx.import_count + def_idx as u32;
+      let wasm_param_count: u32 = if func.has_cont { 3 } else { 2 };
       let mut local_names = NameMap::new();
+      local_names.append(0, "_caps");
+      local_names.append(1, "_args");
+      if func.has_cont { local_names.append(2, "_cont"); }
+      // CPS params.
       for (i, (_id, label, _)) in func.params.iter().enumerate() {
-        local_names.append(i as u32, label);
+        local_names.append(wasm_param_count + i as u32, label);
       }
       let locals_list = collect_locals(func.body, self.ctx);
       let param_count = func.params.len() as u32;
       for (i, label) in locals_list.iter().enumerate() {
-        local_names.append(param_count + i as u32, label);
+        local_names.append(wasm_param_count + param_count + i as u32, label);
       }
       all_locals.append(func_idx, &local_names);
     }
@@ -1206,10 +1185,12 @@ struct FuncContext<'a, 'b, 'src> {
   ctx: &'a IrCtx<'b, 'src>,
   raw_mappings: &'a mut Vec<RawMapping>,
   def_idx: u32,
-  /// Whether this module has any closures (controls dispatch path).
-  has_closures: bool,
+  /// Whether this module has any closures (for future optimisation).
+  _has_closures: bool,
   /// Interned string data for looking up literal offsets.
   string_data: &'a StringData,
+  /// Scratch local for building args lists at call sites.
+  scratch_local: u32,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -1321,12 +1302,12 @@ fn emit_app(func: &Callable, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
 }
 
 /// Emit a call to a user function or continuation.
-/// When closures exist in the module, dispatches through $call_ref_or_clos_N
-/// which handles both plain funcrefs and closure structs at runtime.
-/// When no closures exist, uses direct return_call_ref.
+///
+/// Universal calling convention: all args (values + continuation) are packed
+/// into a cons-cell list and passed as a single (ref null any) argument.
+/// Dispatch goes through `_croc` which handles both plain funcrefs and closures.
 fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   let (val_args, cont_arg) = split_args(args);
-  let total_arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
 
   // Determine the source mark id: for cont calls, mark the result value;
   // for user calls, mark the call expression itself.
@@ -1346,39 +1327,45 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
     expr_id
   };
 
-  let has_closures = fc.has_closures;
+  let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
+  let list_concat_idx = fc.emitter_idx.func_idx("list_concat");
+  let scratch = fc.scratch_local;
 
-  if has_closures {
-    for arg in val_args {
-      emit_arg(arg, fc);
-    }
-    if let Some(cont) = cont_arg {
-      emit_cont(cont, fc);
-    }
-    emit_val_ref(func_val, fc);
+  // Build args list (val_args only — cont is a separate WASM param).
+  let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
+  fc.instr(&Instruction::Call(list_nil_idx));
+  fc.instr(&Instruction::LocalSet(scratch));
 
-    // Mark the call instruction.
+  for arg in val_args.iter().rev() {
+    match arg {
+      Arg::Spread(v) => {
+        emit_val(v, fc);
+        fc.instr(&Instruction::LocalGet(scratch));
+        fc.instr(&Instruction::Call(list_concat_idx));
+        fc.instr(&Instruction::LocalSet(scratch));
+      }
+      _ => {
+        emit_arg(arg, fc);
+        fc.instr(&Instruction::LocalGet(scratch));
+        fc.instr(&Instruction::Call(list_prepend_idx));
+        fc.instr(&Instruction::LocalSet(scratch));
+      }
+    }
+  }
+
+  // Dispatch: _apply_cont(args, cont, callee) or _apply(args, callee).
+  fc.instr(&Instruction::LocalGet(scratch));  // args list
+  if let Some(cont) = cont_arg {
+    emit_cont(cont, fc);                      // cont
+    emit_val_ref(func_val, fc);               // callee
     fc.mark(mark_id);
-    let dispatch_name = format!("_croc_{}", total_arity);
-    let dispatch_idx = fc.emitter_idx.func_idx(&dispatch_name);
-    fc.instr(&Instruction::ReturnCall(dispatch_idx));
+    let idx = fc.emitter_idx.func_idx("_apply_cont");
+    fc.instr(&Instruction::ReturnCall(idx));
   } else {
-    for arg in val_args {
-      emit_arg(arg, fc);
-    }
-    if let Some(cont) = cont_arg {
-      emit_cont(cont, fc);
-    }
-    emit_val_ref(func_val, fc);
-
-    let closure_idx = fc.emitter_idx.type_idx("$Closure");
-    fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
-    fc.instr(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-    let type_idx = fc.emitter_idx.fn_type_idx(total_arity);
-    fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(type_idx)));
-    // Mark the call instruction.
+    emit_val_ref(func_val, fc);               // callee
     fc.mark(mark_id);
-    fc.instr(&Instruction::ReturnCallRef(type_idx));
+    let idx = fc.emitter_idx.func_idx("_apply");
+    fc.instr(&Instruction::ReturnCall(idx));
   }
 }
 
@@ -1635,11 +1622,9 @@ fn emit_lit(lit: &Lit, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::Call(str_raw_idx));
     }
     Lit::Seq => {
-      // Empty list = null (cons nil).
-      fc.instr(&Instruction::RefNull(HeapType::Abstract {
-        shared: false,
-        ty: AbstractHeapType::Any,
-      }));
+      // Empty list via list_nil (returns $Nil).
+      let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
+      fc.instr(&Instruction::Call(list_nil_idx));
     }
     Lit::Rec => {
       // Empty record via rec_empty().
@@ -1785,47 +1770,6 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
   // Also scan fn bodies in LetFn.
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
     scan_builtins(fn_body, builtins);
-  }
-}
-
-/// Scan function bodies for all call arities used by return_call_ref.
-/// These may reference $Fn0 (thunks) or other arities not covered by
-/// defined functions or builtin imports.
-fn scan_call_arities(expr: &Expr, arities: &mut BTreeSet<usize>) {
-  match &expr.kind {
-    ExprKind::App { func: Callable::Val(_), args } => {
-      let (val_args, cont_arg) = split_args(args);
-      let arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
-      // return_call_ref uses arity + 1 (funcref on stack).
-      // But the type index is for the function being called, which has `arity` params.
-      // Actually we just need all arities that appear. The +1 for funcref is implicit.
-      arities.insert(arity);
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-          scan_call_arities(body, arities);
-        }
-      }
-    }
-    ExprKind::App { func: Callable::BuiltIn(_), args } => {
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-          scan_call_arities(body, arities);
-        }
-      }
-    }
-    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
-      match cont {
-        Cont::Expr { body, .. } => scan_call_arities(body, arities),
-        Cont::Ref(_) => {}
-      }
-    }
-    ExprKind::If { then, else_, .. } => {
-      scan_call_arities(then, arities);
-      scan_call_arities(else_, arities);
-    }
-  }
-  if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
-    scan_call_arities(fn_body, arities);
   }
 }
 

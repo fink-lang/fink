@@ -47,10 +47,8 @@
 
 (module
 
-  ;; Continuation dispatch — provided by the compiler's emitted module.
-  (import "@fink/user" "_croc_0" (func $croc_0 (param (ref null any))))
-  (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
-  (import "@fink/user" "_croc_2" (func $croc_2 (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  ;; Continuation dispatch: $apply_0/1/2 (defined in list.wat) wrap results
+  ;; into lists and tail-call $_croc (defined in dispatch.wat).
 
   ;; -- Type definitions -----------------------------------------------
 
@@ -1443,15 +1441,15 @@
   ;; CPS wrappers — compiler-facing interface
   ;; All params/results are (ref null any). Continuation dispatch via _croc_N.
   ;;
-  ;;   rec_set: (rec, key, val, cont) → _croc_1(new_rec, cont)
-  ;;   rec_merge: (dest, src, cont) → _croc_1(merged, cont)
-  ;;   rec_pop: (rec, key, fail, succ) → if missing: _croc_0(fail)
-  ;;                                     else: _croc_2(val, rest, succ)
+  ;;   rec_set: (rec, key, val, cont) → _croc([new_rec], cont)
+  ;;   rec_merge: (dest, src, cont) → _croc([merged], cont)
+  ;;   rec_pop: (rec, key, fail, succ) → if missing: _croc([], fail)
+  ;;                                     else: _croc([val, rest], succ)
 
   (func $rec_set (export "rec_set")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (call $_hamt_rec_set
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key))
@@ -1461,7 +1459,7 @@
   (func $rec_merge (export "rec_merge")
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
-    (return_call $croc_1
+    (return_call $apply_1
       (call $_hamt_rec_merge
         (ref.cast (ref $RecImpl) (local.get $dest))
         (ref.cast (ref $RecImpl) (local.get $src)))
@@ -1479,9 +1477,9 @@
     (local.set $val)
     ;; null value = key not found → call fail
     (if (ref.is_null (local.get $val))
-      (then (return_call $croc_0 (local.get $fail))))
+      (then (return_call $apply_0 (local.get $fail))))
     ;; found → pass (value, rest) to succ
-    (return_call $croc_2
+    (return_call $apply_2_vals
       (local.get $val)
       (local.get $rest)
       (local.get $succ)))
