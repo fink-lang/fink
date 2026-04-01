@@ -353,56 +353,56 @@ test 'string neq', fn:
 
 
 test 'str template string only', fn:
-  expect run fink":
+  expect run ƒink:
     main = fn:
       name = 'world'
-      'hello \${name}' == 'hello world'
-  | equals fink":
+      'hello ${name}' == 'hello world'
+  | equals ƒink:
     true
 
 
 test 'str template with number', fn:
-  expect run fink":
+  expect run ƒink:
     main = fn:
       x = 42
-      'value: \${x}' == 'value: 42'
-  | equals fink":
+      'value: ${x}' == 'value: 42'
+  | equals ƒink:
     true
 
 
 test 'str template with bool', fn:
-  expect run fink":
+  expect run ƒink:
     main = fn:
-      'done: \${true}' == 'done: true'
-  | equals fink":
+      'done: ${true}' == 'done: true'
+  | equals ƒink:
     true
 
 
 test 'str template multiple segments', fn:
-  expect run fink":
+  expect run ƒink:
     main = fn:
       a = 1
       b = 2
-      '\${a} + \${b} = \${a + b}' == '1 + 2 = 3'
-  | equals fink":
+      '${a} + ${b} = ${a + b}' == '1 + 2 = 3'
+  | equals ƒink:
     true
 
 
 test 'str template with float', fn:
-  expect run fink":
+  expect run ƒink:
     main = fn:
-      'pi: \${3.14}' == 'pi: 3.14'
-  | equals fink":
+      'pi: ${3.14}' == 'pi: 3.14'
+  | equals ƒink:
     true
 
 
 test 'str template float arithmetic', fn:
-  expect run fink":
+  expect run ƒink:
     main = fn:
       x = 1.5
       y = 2.3
-      '\${x} + \${y} = \${x + y}' == '1.5 + 2.3 = 3.8'
-  | equals fink":
+      '${x} + ${y} = ${x + y}' == '1.5 + 2.3 = 3.8'
+  | equals ƒink:
     true
 
 
@@ -411,7 +411,7 @@ test 'rec destructure', fn:
     main = fn:
       {a, b: c} = {a: 1, b: 2}
       a + c
-  | equals ":
+  | equals ƒink:
     3
 
 
