@@ -100,13 +100,13 @@ impl<'scope> Gen<'scope> {
 
 
   /// Build an Expr with an auto-incrementing CpsId.
-  fn expr<'src>(&mut self, kind: ExprKind, origin: Option<AstId>) -> Expr {
+  fn expr(&mut self, kind: ExprKind, origin: Option<AstId>) -> Expr {
     let id = self.next_cps_id(origin);
     Expr { id, kind }
   }
 
   /// Build a Val with an auto-incrementing CpsId.
-  fn val<'src>(&mut self, kind: ValKind, origin: Option<AstId>) -> Val {
+  fn val(&mut self, kind: ValKind, origin: Option<AstId>) -> Val {
     let id = self.next_cps_id(origin);
     Val { id, kind }
   }
@@ -139,13 +139,13 @@ impl<'scope> Gen<'scope> {
 // ---------------------------------------------------------------------------
 
 /// Create a Ref::Synth val pointing at the given bind's CpsId.
-fn ref_val<'src>(g: &mut Gen, _bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val {
+fn ref_val(g: &mut Gen, _bind: Bind, bind_id: CpsId, origin: Option<AstId>) -> Val {
   g.val(ValKind::Ref(Ref::Synth(bind_id)), origin)
 }
 
 /// Create a Ref::Synth val for a source-level name reference (Ident or SynthIdent).
 /// Looks up the ref's AstId in scope resolution to find the bind's pre-allocated CpsId.
-fn scope_ref_val<'src>(g: &mut Gen, ref_ast_id: AstId) -> Val {
+fn scope_ref_val(g: &mut Gen, ref_ast_id: AstId) -> Val {
   match g.resolution.try_get(ref_ast_id).and_then(|opt| *opt) {
     Some(bind_id) => {
       // Builtins (e.g. `import`) → emit ValKind::BuiltIn.
@@ -164,7 +164,7 @@ fn scope_ref_val<'src>(g: &mut Gen, ref_ast_id: AstId) -> Val {
   }
 }
 
-fn lit_val<'src>(g: &mut Gen, lit: Lit, origin: Option<AstId>) -> Val {
+fn lit_val(g: &mut Gen, lit: Lit, origin: Option<AstId>) -> Val {
   g.val(ValKind::Lit(lit), origin)
 }
 
@@ -172,7 +172,7 @@ fn lit_val<'src>(g: &mut Gen, lit: Lit, origin: Option<AstId>) -> Val {
 
 /// Build an explicit tail call: `App(ContRef(cont_id), [val])`.
 /// Replaces the implicit `Cont::Ref` shortcut so the val's origin is preserved in the propgraph.
-fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val, _origin: Option<AstId>) -> Expr {
+fn tail_app(g: &mut Gen, cont_id: CpsId, val: Val, _origin: Option<AstId>) -> Expr {
   // ContRef val gets no origin — it references the cont param, whose origin
   // is already in the propgraph under cont_id. The App expr gets no origin
   // either — it's a synthetic tail call, not a user-written expression.
@@ -185,14 +185,14 @@ fn tail_app<'src>(g: &mut Gen, cont_id: CpsId, val: Val, _origin: Option<AstId>)
 
 /// Wrap a bare value as the tail of a function body.
 /// Produces `App(ContRef(cont), [val])` — passes val directly to the cont.
-fn wrap_val<'src>(g: &mut Gen, val: Val, origin: Option<AstId>) -> Expr {
+fn wrap_val(g: &mut Gen, val: Val, origin: Option<AstId>) -> Expr {
   let cont_id = g.cont;
   tail_app(g, cont_id, val, origin)
 }
 
 
 /// Wrap a `Vec<Val>` as `Vec<Arg::Val>` — for internal primitives that never spread.
-fn args_val<'src>(vals: Vec<Val>) -> Vec<Arg> {
+fn args_val(vals: Vec<Val>) -> Vec<Arg> {
   vals.into_iter().map(Arg::Val).collect()
 }
 
@@ -552,7 +552,7 @@ fn extract_params_with_gen<'src>(
 }
 
 /// Wrap `body` in pattern nodes for each deferred pattern entry, innermost first.
-fn prepend_pat_binds<'src>(g: &mut Gen, deferred: Vec<Pending>, body: Expr) -> Expr {
+fn prepend_pat_binds(g: &mut Gen, deferred: Vec<Pending>, body: Expr) -> Expr {
   if deferred.is_empty() { return body; }
   let arg = g.fresh_result(None);
   wrap(g, deferred, Cont::Expr { args: vec![arg], body: Box::new(body) })
@@ -1262,7 +1262,7 @@ enum Pending {
   Yield { value: Val, result: BindNode, origin: Option<AstId> },
 }
 
-impl<'src> Pending {
+impl Pending {
   fn origin(&self) -> Option<AstId> {
     match self {
       Pending::Val { origin, .. } | Pending::Fn { origin, .. } | Pending::App { origin, .. }
@@ -1277,7 +1277,7 @@ impl<'src> Pending {
 /// For `cont:`-typed pending items (App, etc.): when the current item is at
 /// the leaf (`Cont::Ref`), use it directly; when non-leaf, wrap the inner body with the
 /// pre-allocated `result` bind node.
-fn cont_with_result<'src>(cont: Cont, result: BindNode) -> Cont {
+fn cont_with_result(cont: Cont, result: BindNode) -> Cont {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { body, .. } => Cont::Expr { args: vec![result], body },
@@ -1285,7 +1285,7 @@ fn cont_with_result<'src>(cont: Cont, result: BindNode) -> Cont {
 }
 
 
-fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending>, tail: Cont) -> Expr {
+fn wrap(g: &mut Gen, bindings: Vec<Pending>, tail: Cont) -> Expr {
   wrap_with_fail(g, bindings, tail, None)
 }
 
@@ -1294,7 +1294,7 @@ fn wrap<'src>(g: &mut Gen, bindings: Vec<Pending>, tail: Cont) -> Expr {
 /// Used for arm matchers where `fail_id` is the matcher's fail param.
 /// `tail` is the continuation for the innermost (last) binding.
 /// Each non-leaf binding gets `Cont::Expr { args: vec![fresh], body: Box::new(next_expr) }`.
-fn wrap_with_fail<'src>(
+fn wrap_with_fail(
   g: &mut Gen,
   bindings: Vec<Pending>,
   tail: Cont,
@@ -1635,7 +1635,7 @@ fn emit_range_pattern<'src>(
 /// Emit a PatternMatch for a literal equality check.
 /// Matcher: fn(subj, succ, fail): op_eq(subj, lit, fn result: if result then succ() else fail())
 /// Literal matches don't produce bindings — succ is called with no args.
-fn emit_literal_pattern<'src>(
+fn emit_literal_pattern(
   g: &mut Gen,
   val: Val,
   lit: Lit,
@@ -1878,7 +1878,7 @@ fn build_seq_terminal<'src>(
 /// Fold right over head_temps, wrapping each SeqPop around the body.
 /// `first_cursor` is used as the outermost cursor (typically subj_param).
 /// Returns the fully wrapped body.
-fn fold_seq_pops<'src>(
+fn fold_seq_pops(
   g: &mut Gen,
   head_temps: &[BindNode],
   terminal: (Expr, BindNode),

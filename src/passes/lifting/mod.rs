@@ -84,12 +84,12 @@ impl Alloc {
     self.bind(Bind::Synth, None)
   }
 
-  fn val<'src>(&mut self, kind: ValKind, ast_origin: Option<AstId>) -> Val {
+  fn val(&mut self, kind: ValKind, ast_origin: Option<AstId>) -> Val {
     let id = self.next(ast_origin);
     Val { id, kind }
   }
 
-  fn expr<'src>(&mut self, kind: ExprKind, ast_origin: Option<AstId>) -> Expr {
+  fn expr(&mut self, kind: ExprKind, ast_origin: Option<AstId>) -> Expr {
     let id = self.next(ast_origin);
     Expr { id, kind }
   }
@@ -639,7 +639,7 @@ fn extract_from_body<'src>(
 // Rewrite refs in an expression tree using a CpsId → CpsId map
 // ---------------------------------------------------------------------------
 
-fn rewrite_refs<'src>(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr {
+fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       let fn_body = rewrite_refs(*fn_body, map);
@@ -673,7 +673,7 @@ fn rewrite_refs<'src>(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>)
   }
 }
 
-fn rewrite_refs_val<'src>(val: Val, map: &std::collections::HashMap<CpsId, CpsId>) -> Val {
+fn rewrite_refs_val(val: Val, map: &std::collections::HashMap<CpsId, CpsId>) -> Val {
   match &val.kind {
     ValKind::Ref(Ref::Synth(id)) => {
       if let Some(&new_id) = map.get(id) {
@@ -694,7 +694,7 @@ fn rewrite_refs_val<'src>(val: Val, map: &std::collections::HashMap<CpsId, CpsId
   }
 }
 
-fn rewrite_refs_cont<'src>(cont: Cont, map: &std::collections::HashMap<CpsId, CpsId>) -> Cont {
+fn rewrite_refs_cont(cont: Cont, map: &std::collections::HashMap<CpsId, CpsId>) -> Cont {
   match cont {
     Cont::Ref(id) => {
       if let Some(&new_id) = map.get(&id) {

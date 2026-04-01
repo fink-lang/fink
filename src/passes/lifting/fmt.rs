@@ -228,7 +228,7 @@ fn render_app(func: &Callable, args: &[Arg], fc: &FmtCtx<'_, '_>) -> Node<'stati
 // Core: collect a sequence of flat statement nodes from a CPS expression
 // ---------------------------------------------------------------------------
 
-fn collect_stmts<'src>(expr: &Expr, fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
+fn collect_stmts(expr: &Expr, fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
   let mut stmts: Vec<Node<'static>> = vec![];
   collect_into(expr, fc, &mut stmts);
   stmts
@@ -236,7 +236,7 @@ fn collect_stmts<'src>(expr: &Expr, fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
 
 /// Recursively walk the LetFn/LetVal chain, emitting assignments and then the
 /// tail expression. Consecutive LetFn → LetVal aliases are chained as `b = a = fn ...`.
-fn collect_into<'src>(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
+fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
   match &expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont } => {
       let name_str = render_bind(name, fc);
@@ -317,7 +317,7 @@ fn collect_into<'src>(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'stat
 
 /// Emit statements for a `Cont` body — either recurse into the inner Expr,
 /// or for `Cont::Ref` emit a tail call passing the last-bound name.
-fn collect_cont_into<'src>(cont: &'src Cont, bound: &str, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
+fn collect_cont_into(cont: &Cont, bound: &str, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
   match cont {
     Cont::Expr { body, .. } => collect_into(body, fc, out),
     Cont::Ref(id) => {
@@ -374,9 +374,9 @@ fn chain_lhs<'src>(
 
 /// Split args into `(value_args, trailing_cont)` if the last arg is `Arg::Cont`.
 /// Returns borrowed slices from the original `args` vec.
-fn split_trailing_cont<'a, 'src>(
-  args: &'a [Arg],
-) -> Option<(&'a [Arg], &'a Cont)> {
+fn split_trailing_cont(
+  args: &[Arg],
+) -> Option<(&[Arg], &Cont)> {
   match args.last() {
     Some(Arg::Cont(c)) => Some((&args[..args.len() - 1], c)),
     _ => None,

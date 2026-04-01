@@ -309,7 +309,7 @@ fn render_builtin(op: &BuiltIn) -> String {
 ///
 /// For `Cont::Ref`, the result param name is synthesised from the cont_id for a stable
 /// display; the `·v_cont` name is fixed (all conts render as `·v_cont` in param position).
-fn render_cont<'src>(cont: &Cont, ctx: &Ctx<'_, '_>) -> Node<'static> {
+fn render_cont(cont: &Cont, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { args, body } => {
       // Cont params are synthetic bindings — use their CpsId loc if available.

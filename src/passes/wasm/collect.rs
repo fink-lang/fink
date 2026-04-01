@@ -251,7 +251,7 @@ fn collect_locals_expr<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<S
 // ---------------------------------------------------------------------------
 
 /// Split args into (value_args, Option<trailing_cont>).
-pub fn split_args<'a>(args: &'a [Arg]) -> (&'a [Arg], Option<&'a Cont>) {
+pub fn split_args(args: &[Arg]) -> (&[Arg], Option<&Cont>) {
   match args.last() {
     Some(Arg::Cont(c)) => (&args[..args.len() - 1], Some(c)),
     _ => (args, None),
