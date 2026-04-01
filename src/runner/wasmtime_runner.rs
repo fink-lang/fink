@@ -83,10 +83,10 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   let done = Func::new(&mut store, done_ty, move |mut caller, params, _results| {
     // params[0] = captures (ignore), params[1] = args list ($Cons).
     // The result value is the head (field 0) of the args list.
-    if let Some(Val::AnyRef(Some(args_list))) = params.get(1) {
-      // Unpack: args_list is a $Cons struct. Head (field 0) is the result.
-      if let Ok(Some(cons)) = args_list.as_struct(&caller) {
-        if let Ok(Val::AnyRef(Some(any_ref))) = cons.field(&mut caller, 0) {
+    if let Some(Val::AnyRef(Some(args_list))) = params.get(1)
+      && let Ok(Some(cons)) = args_list.as_struct(&caller)
+      && let Ok(Val::AnyRef(Some(any_ref))) = cons.field(&mut caller, 0)
+    {
           // Try i31ref first (booleans), then $Num struct (f64 field),
           // then $StrDataImpl (two i32 fields: offset, length).
           if let Ok(Some(i31)) = any_ref.as_i31(&caller) {
@@ -111,8 +111,6 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
               }
             }
           }
-        }
-      }
     }
     Ok(())
   });
@@ -133,7 +131,7 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   // Call main: (null_caps, empty_args, done_closure).
   main_fn.call(
     &mut store,
-    &[Val::AnyRef(None), nil[0].clone(), box_result[0].clone()],
+    &[Val::AnyRef(None), nil[0], box_result[0]],
     &mut [],
   ).map_err(|e| format!("main failed: {}", e))?;
 

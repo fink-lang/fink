@@ -305,18 +305,17 @@ fn scan_fn_closures_in_expr<'src>(
       // ·closure fn_ref, cap0, cap1, ...
       // First val arg is the funcref, rest are captures.
       let (val_args, _) = split_args(args);
-      if let Some(Arg::Val(v)) = val_args.first() {
-        if let ValKind::Ref(Ref::Synth(id)) = v.kind {
-          let label = ctx.label(id);
-          let n_captures = val_args.len().saturating_sub(1);
-          counts.insert(label, n_captures);
-        }
+      if let Some(Arg::Val(v)) = val_args.first()
+        && let ValKind::Ref(Ref::Synth(id)) = v.kind
+      {
+        let label = ctx.label(id);
+        let n_captures = val_args.len().saturating_sub(1);
+        counts.insert(label, n_captures);
       }
       // Recurse into cont args.
       for arg in args {
-        match arg {
-          Arg::Cont(Cont::Expr { body, .. }) => scan_fn_closures_in_expr(body, ctx, counts),
-          _ => {}
+        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+          scan_fn_closures_in_expr(body, ctx, counts);
         }
       }
     }
