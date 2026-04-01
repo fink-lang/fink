@@ -1,0 +1,97 @@
+{test, expect, ast, fink, equals} = import 'fake!'
+
+
+test 'ƒink block with no args', fn:
+  expect ast fink":
+    {ƒink} = import '@fink/parse/blocks.fnk'
+    ƒink: 'hello'
+  | equals fink":
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'ƒink'
+        Apply
+          Ident 'import'
+          LitStr '@fink/parse/blocks.fnk'
+      Block ':',
+        Ident 'ƒink'
+        Patterns
+        LitStr 'hello'
+
+
+test 'ƒink block with params and body', fn:
+  expect ast fink":
+    {ƒink} = import '@fink/parse/blocks.fnk'
+    ƒink a, b:
+      x = a + b
+      x * 2
+  | equals fink":
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'ƒink'
+        Apply
+          Ident 'import'
+          LitStr '@fink/parse/blocks.fnk'
+      Block ':',
+        Ident 'ƒink'
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        Bind '=',
+          Ident 'x'
+          InfixOp '+',
+            Ident 'a'
+            Ident 'b'
+        InfixOp '*',
+          Ident 'x'
+          LitInt '2'
+
+
+test 'ƒtok block with no args', fn:
+  expect ast fink":
+    {ƒtok} = import '@fink/parse/blocks.fnk'
+    ƒtok: a + b
+  | equals fink":
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'ƒtok'
+        Apply
+          Ident 'import'
+          LitStr '@fink/parse/blocks.fnk'
+      Block ':',
+        Ident 'ƒtok'
+        Patterns
+        Token 'a'
+        Token '+'
+        Token 'b'
+
+
+test 'ƒtok block with params and body', fn:
+  expect ast fink":
+    {ƒtok} = import '@fink/parse/blocks.fnk'
+    ƒtok a, b:
+      x = a + b
+      x * 2
+  | equals fink":
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'ƒtok'
+        Apply
+          Ident 'import'
+          LitStr '@fink/parse/blocks.fnk'
+      Block ':',
+        Ident 'ƒtok'
+        Patterns
+          Ident 'a'
+          Ident 'b'
+        Token 'x'
+        Token '='
+        Token 'a'
+        Token '+'
+        Token 'b'
+        Token 'x'
+        Token '*'
+        Token '2'

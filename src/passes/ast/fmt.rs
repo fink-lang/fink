@@ -299,6 +299,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     }
     NodeKind::Partial => out.push('?'),
     NodeKind::Wildcard => out.push('_'),
+    NodeKind::Token(s) => out.push_str(s),
     NodeKind::BindRight { op, lhs, rhs } => {
       fmt_node(lhs, out, depth);
       out.push(' ');

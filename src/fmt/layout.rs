@@ -364,7 +364,8 @@ impl<'cfg> Ctx<'cfg> {
             | NodeKind::Ident(_)
             | NodeKind::SynthIdent(_)
             | NodeKind::Partial
-            | NodeKind::Wildcard => {
+            | NodeKind::Wildcard
+            | NodeKind::Token(_) => {
                 let src_len = src_len_of(node);
                 Node::new(node.kind.clone(), loc(at, src_len))
             }

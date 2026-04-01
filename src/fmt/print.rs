@@ -231,6 +231,7 @@ impl Writer {
             }
             NodeKind::Partial => { self.mark(node.loc); self.write(node.loc.start, "?"); }
             NodeKind::Wildcard => { self.mark(node.loc); self.write(node.loc.start, "_"); }
+            NodeKind::Token(s) => { self.mark(node.loc); self.write(node.loc.start, s); }
 
             // --- string literal ---
             NodeKind::LitStr { open, close, content, indent } => {
@@ -452,7 +453,7 @@ mod tests {
     /// the expected result for any well-formed source the print stage should
     /// reproduce verbatim.
     fn print(src: &str) -> String {
-        let result = parser::parse_with_blocks(src, &["test_block"])
+        let result = parser::parse_with_blocks(src, &[("test_block", parser::BlockMode::Ast)])
             .unwrap_or_else(|e| panic!("parse error: {}", e.message));
         let output = super::print(&result.root);
         if output == src { "NO-DIFF".to_string() } else { output }

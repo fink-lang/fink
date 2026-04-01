@@ -543,6 +543,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Partial => out.push('?'),
     NodeKind::Wildcard => out.push('_'),
+    NodeKind::Token(s) => out.push_str(s),
     NodeKind::BindRight { lhs, rhs, .. } => {
       fmt_node(lhs, out, depth);
       out.push_str(" |= ");
