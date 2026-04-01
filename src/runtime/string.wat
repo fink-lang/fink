@@ -11,45 +11,15 @@
 ;;
 ;;   $Str                               ← public interface (only type visible outside)
 ;;   ├── $StrDataImpl  (sub $Str)       ← (offset, length) into data section
-;;   ├── $StrBytesImpl (sub $Str)       ← heap byte array
-;;   └── $StrTemplImpl (sub $Str)       ← segment array (templates with interpolation)
+;;   └── $StrBytesImpl (sub $Str)       ← heap byte array
 ;;
 ;; Escape sequences are resolved at compile time — the runtime only sees
-;; cooked UTF-8 bytes. The compiler calls str / str_fmt_N directly and
-;; never creates template objects. The two string subtypes differ only
-;; in storage:
+;; cooked UTF-8 bytes. The two string subtypes differ only in storage:
 ;;   $StrDataImpl — points into the WASM data section (compiler-emitted literals)
 ;;   $StrBytesImpl — heap-allocated byte array (runtime-constructed, e.g. concat)
-;;
-;;
-;; Templates ($StrTemplImpl):
-;;   The fink "string" value. A list of segments where each segment is
-;;   either a $Str ref or an arbitrary value (ref any).
-;;   'hello ${name}' → template with segments: [StrData "hello ", value name].
-;;   A plain string 'hello' is a template with a single StrData segment.
-;;   First-class, immutable, lazy — formatting deferred to std-lib.
-;;   Equality is structural via deep_eq (std-lib, CPS).
-;;
-;; Formatting (std-lib, not here):
-;;   Tagged formatters (html'...', sql'...') are user-level fink functions.
-;;   All formatters are CPS — they dispatch through protocols to stringify
-;;   values. This module provides direct helpers they build on.
-;;
-;;
-;; Boundary: runtime vs std-lib
-;;   Runtime (this file): direct-style, no user code callbacks, no lazy
-;;   values. Construction, access, byte processing.
-;;   Std-lib: CPS functions exposed to fink code. Formatters, equality,
-;;   anything that touches lazy values or dispatches through protocols.
-;;   The runtime may provide efficient direct helpers to support std-lib
-;;   implementations (e.g. escape sequence processing).
 
 (module
   ;; ---- Internal types (not visible to user code) ----
-
-  ;; Segment array: string values and arbitrary interpolated values.
-  ;; Stored as (ref any) — strings, values, and nested templates all fit.
-  (type $StrSegments (array (ref any)))
 
   ;; Byte array: UTF-8 bytes. Used by $StrBytesImpl.
   ;; Mutable at the WASM level for construction (array.set during escape
@@ -60,10 +30,6 @@
   (type $StrDataImpl (sub $Str (struct
     (field $offset i32)
     (field $length i32))))
-
-  ;; $StrTemplImpl — template string (segment array).
-  (type $StrTemplImpl (sub $Str (struct
-    (field $segments (ref $StrSegments)))))
 
   ;; $StrBytesImpl — heap-allocated string (byte array).
   (type $StrBytesImpl (sub $Str (struct
@@ -83,16 +49,6 @@
       (local.get $offset)
       (local.get $length))
   )
-
-  ;; str_templ : (ref $StrSegments) -> (ref $Str)
-  ;; Build a template from a segment array.
-  (func $str_templ (export "str_templ")
-    (param $segments (ref $StrSegments))
-    (result (ref $Str))
-
-    (struct.new $StrTemplImpl (local.get $segments))
-  )
-
 
   ;; ---- Access ----
 
@@ -141,31 +97,6 @@
     (struct.get $StrBytesImpl $bytes
       (ref.cast (ref $StrBytesImpl) (local.get $str)))
   )
-
-  ;; str_tmpl_count : (ref $Str) -> i32
-  ;; Number of segments in a template.
-  (func $str_tmpl_count (export "str_tmpl_count")
-    (param $tmpl (ref $Str))
-    (result i32)
-
-    (array.len
-      (struct.get $StrTemplImpl $segments
-        (ref.cast (ref $StrTemplImpl) (local.get $tmpl))))
-  )
-
-  ;; str_tmpl_get : (ref $Str), i32 -> (ref any)
-  ;; Get segment at index (raw or value).
-  (func $str_tmpl_get (export "str_tmpl_get")
-    (param $tmpl (ref $Str))
-    (param $index i32)
-    (result (ref any))
-
-    (array.get $StrSegments
-      (struct.get $StrTemplImpl $segments
-        (ref.cast (ref $StrTemplImpl) (local.get $tmpl)))
-      (local.get $index))
-  )
-
 
   ;; ---- Equality ----
 
@@ -1067,7 +998,6 @@
   ;; Content-based hash for any byte-bearing string.
   ;; Dispatches on concrete type to avoid allocating a $ByteArray copy.
   ;; Uses FNV-1a (32-bit), masked to 31 bits for i31ref.
-  ;; $StrTemplImpl is not hashable (unreachable).
   (func $str_hash_i31 (export "str_hash_i31")
     (param $str (ref $Str))
     (result i32)
@@ -1094,7 +1024,7 @@
       (return (call $_str_hash_array
         (struct.get $StrBytesImpl $bytes))))
 
-    ;; $StrTemplImpl — not hashable
+    ;; Only two subtypes — unreachable by construction.
     (unreachable)
   )
 
