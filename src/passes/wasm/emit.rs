@@ -628,9 +628,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       all_arities.insert(arity);
     }
     for &arity in &all_arities {
-      let name = format!("$Fn{}", arity);
-      // Skip if already defined in canonical types (e.g. $Fn2, $Fn3 from types.wat).
-      if self.idx.types.contains_key(&name) { continue; }
       let params: Vec<ValType> = vec![any_ref; arity];
       types.ty().subtype(&SubType {
         is_final: true,
@@ -642,7 +639,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
           describes: None,
         },
       });
-      self.idx.types.insert(name, next_idx);
+      self.idx.types.insert(format!("$Fn{}", arity), next_idx);
       next_idx += 1;
     }
 
@@ -2038,8 +2035,7 @@ mod tests {
           let (count, _ty) = group.unwrap();
           local_count += count;
         }
-        // v2 calling convention: 1 CPS param (cont) + 1 scratch local = 2.
-        assert_eq!(local_count, 2, "main = fn: 42 should have 2 locals (cont + scratch)");
+        assert_eq!(local_count, 0, "main = fn: 42 should have 0 locals");
         break; // Only check the first defined function (user code).
       }
     }
