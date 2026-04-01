@@ -1043,6 +1043,7 @@ mod tests {
 
   const STRING_TYPE_DEFS: &str = concat!(
     "  (rec\n",
+    "    (type $Num (struct (field $val f64)))\n",
     "    (type $Str (sub (struct)))\n",
     "  )\n",
   );
@@ -1365,34 +1366,6 @@ mod tests {
           (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
-  }
-
-  #[test]
-  fn test_str_tmpl_count_and_get() {
-    // Build a template with 2 segments, verify count and get
-    let data = b"helloworld";
-    let (mut store, instance) = load_string_with(data, r#"
-      (func (export "test_count") (result i32)
-        (call $str_tmpl_count
-          (call $str_templ
-            (array.new_fixed $StrSegments 2
-              (call $str (i32.const 0) (i32.const 5))
-              (call $str (i32.const 5) (i32.const 5))))))
-
-      (func (export "test_get") (result i32)
-        (local $t (ref $Str))
-        (local.set $t
-          (call $str_templ
-            (array.new_fixed $StrSegments 2
-              (call $str (i32.const 0) (i32.const 5))
-              (call $str (i32.const 5) (i32.const 5)))))
-        ;; First segment should equal raw "hello"
-        (call $str_eq
-          (ref.cast (ref $Str) (call $str_tmpl_get (local.get $t) (i32.const 0)))
-          (call $str (i32.const 0) (i32.const 5))))
-    "#);
-    assert_eq!(call_test(&mut store, &instance, "test_count"), 2);
-    assert_eq!(call_test(&mut store, &instance, "test_get"), 1);
   }
 
   // -- String hashing tests --------------------------------------------

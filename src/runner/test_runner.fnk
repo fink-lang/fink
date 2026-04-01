@@ -352,6 +352,60 @@ test 'string neq', fn:
     true
 
 
+test 'str template string only', fn:
+  expect run fink":
+    main = fn:
+      name = 'world'
+      'hello \${name}' == 'hello world'
+  | equals fink":
+    true
+
+
+test 'str template with number', fn:
+  expect run fink":
+    main = fn:
+      x = 42
+      'value: \${x}' == 'value: 42'
+  | equals fink":
+    true
+
+
+test 'str template with bool', fn:
+  expect run fink":
+    main = fn:
+      'done: \${true}' == 'done: true'
+  | equals fink":
+    true
+
+
+test 'str template multiple segments', fn:
+  expect run fink":
+    main = fn:
+      a = 1
+      b = 2
+      '\${a} + \${b} = \${a + b}' == '1 + 2 = 3'
+  | equals fink":
+    true
+
+
+test 'str template with float', fn:
+  expect run fink":
+    main = fn:
+      'pi: \${3.14}' == 'pi: 3.14'
+  | equals fink":
+    true
+
+
+test 'str template float arithmetic', fn:
+  expect run fink":
+    main = fn:
+      x = 1.5
+      y = 2.3
+      '\${x} + \${y} = \${x + y}' == '1.5 + 2.3 = 3.8'
+  | equals fink":
+    true
+
+
 test 'rec destructure', fn:
   expect run ƒink:
     main = fn:

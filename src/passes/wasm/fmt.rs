@@ -113,7 +113,7 @@ enum FieldKind {
 enum ParsedTypeKind {
   Struct { fields: Vec<FieldKind>, supertype: Option<u32> },
   Func { param_count: usize, has_results: bool },
-  Array,
+  Array { mutable: bool },
   Other,
 }
 
@@ -421,7 +421,7 @@ fn parse_subtype(sub_type: &SubType) -> ParsedType {
         has_results: !f.results().is_empty(),
       },
     },
-    CompositeInnerType::Array(_) => ParsedType { kind: ParsedTypeKind::Array },
+    CompositeInnerType::Array(a) => ParsedType { kind: ParsedTypeKind::Array { mutable: a.0.mutable } },
     _ => ParsedType { kind: ParsedTypeKind::Other },
   }
 }
@@ -745,7 +745,7 @@ fn emit_type_section(module: &ParsedModule, w: &mut MappedWriter) {
           w.push_str(&format!("  (type {} (func (param {})))\n", name, params.join(" ")));
         }
       }
-      ParsedTypeKind::Array | ParsedTypeKind::Other => {}
+      ParsedTypeKind::Array { .. } | ParsedTypeKind::Other => {}
     }
   }
 }
@@ -1174,7 +1174,8 @@ fn type_name(module: &ParsedModule, idx: u32) -> String {
       }
       ParsedTypeKind::Func { param_count, has_results: false } => return format!("$Fn{}", param_count),
       ParsedTypeKind::Func { has_results: true, .. } => return format!("$type_{}", idx), // e.g. $BoxFuncTy
-      ParsedTypeKind::Array => return "$Captures".into(),
+      ParsedTypeKind::Array { mutable: true } => return "$Captures".into(),
+      ParsedTypeKind::Array { mutable: false } => return "$VarArgs".into(),
       _ => {}
     }
   }
@@ -1186,6 +1187,7 @@ fn is_internal_type(module: &ParsedModule, idx: u32) -> bool {
   let name = type_name(module, idx);
   name == "$Closure"
     || name == "$Captures"
+    || name == "$VarArgs"
     || name.starts_with("$type_") // $BoxFuncTy
     || name.starts_with("@fink/") // runtime module types
 }

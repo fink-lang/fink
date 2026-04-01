@@ -625,7 +625,7 @@ test 'str templ two exprs', fn:
       (func $v_4 (type $Fn1) (param $v_5 (ref any))
         unreachable
         unreachable
-        (return_call $_str (call $_str (i32.const 0) (i32.const 5)) (local.get $v_5))
+        (return_call $_str_fmt (array.new_fixed $VarArgs 3 (call $_str (i32.const 0) (i32.const 5))) (local.get $v_5))
       )
       (export "main" (func $v_4))
       (data (offset (i32.const 0)) " and ")
