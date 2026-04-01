@@ -152,7 +152,7 @@
     ;; Used by builtins that accept a variable number of arguments
     ;; (e.g. str_fmt for string templates). The emitter builds the
     ;; array inline via array.new_fixed at compile time.
-    (type $VarArgs (array (ref any)))
+    (type $VarArgs (array (ref null any)))
 
     ;; $Captures — flat array of captured values.
     ;; Each element is (ref null any) — nullable to allow default-init

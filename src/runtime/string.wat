@@ -19,6 +19,9 @@
 ;;   $StrBytesImpl — heap-allocated byte array (runtime-constructed, e.g. concat)
 
 (module
+  ;; Continuation dispatch — provided by the compiler's emitted module.
+  (import "@fink/user" "_croc_1" (func $croc_1 (param (ref null any)) (param (ref null any))))
+
   ;; ---- Internal types (not visible to user code) ----
 
   ;; Byte array: UTF-8 bytes. Used by $StrBytesImpl.
@@ -57,7 +60,6 @@
   ;; Dispatches via br_on_cast:
   ;;   $StrDataImpl  → copies bytes from data section into a $ByteArray
   ;;   $StrBytesImpl → returns the existing $ByteArray
-  ;; Templates are not supported — format first, then get bytes.
   (func $str_bytes (export "str_bytes")
     (param $str (ref $Str))
     (result (ref $ByteArray))
@@ -1224,6 +1226,312 @@
       (i32.or (i32.const 0x80)
         (i32.and (local.get $cp) (i32.const 0x3F))))
     (i32.add (local.get $j) (i32.const 4))
+  )
+
+
+  ;; ---- String formatting (CPS) ----
+
+  ;; _str_len : (ref $Str) -> i32
+  ;; Byte length of any string subtype.
+  (func $_str_len (param $str (ref $Str)) (result i32)
+
+    ;; Try $StrDataImpl
+    (block $not_data
+      (block $is_data (result (ref $StrDataImpl))
+        (br $not_data
+          (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
+            (local.get $str))))
+      (return (struct.get $StrDataImpl $length)))
+
+    ;; Must be $StrBytesImpl
+    (array.len
+      (struct.get $StrBytesImpl $bytes
+        (ref.cast (ref $StrBytesImpl) (local.get $str))))
+  )
+
+  ;; _str_copy_to : (ref $Str, ref $ByteArray, i32) -> i32
+  ;; Copy bytes from a string into dst at offset. Returns new offset.
+  (func $_str_copy_to
+    (param $str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32)
+    (result i32)
+
+    (local $offset i32)
+    (local $length i32)
+    (local $src (ref $ByteArray))
+    (local $i i32)
+
+    ;; Try $StrDataImpl — copy from linear memory
+    (block $not_data
+      (block $is_data (result (ref $StrDataImpl))
+        (br $not_data
+          (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
+            (local.get $str))))
+      (local.set $offset (struct.get $StrDataImpl $offset))
+      (local.set $length
+        (struct.get $StrDataImpl $length
+          (ref.cast (ref $StrDataImpl) (local.get $str))))
+      (local.set $i (i32.const 0))
+      (block $done
+        (loop $copy
+          (br_if $done
+            (i32.ge_u (local.get $i) (local.get $length)))
+          (array.set $ByteArray (local.get $dst)
+            (i32.add (local.get $pos) (local.get $i))
+            (i32.load8_u (i32.add (local.get $offset) (local.get $i))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $copy)))
+      (return (i32.add (local.get $pos) (local.get $length))))
+
+    ;; Must be $StrBytesImpl — copy from heap array
+    (local.set $src
+      (struct.get $StrBytesImpl $bytes
+        (ref.cast (ref $StrBytesImpl) (local.get $str))))
+    (local.set $length (array.len (local.get $src)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $copy
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $length)))
+        (array.set $ByteArray (local.get $dst)
+          (i32.add (local.get $pos) (local.get $i))
+          (array.get_u $ByteArray (local.get $src) (local.get $i)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy)))
+    (i32.add (local.get $pos) (local.get $length))
+  )
+
+  ;; ---- Value formatting (direct-style) ----
+
+  ;; _str_fmt_val : (ref any) -> (ref $Str)
+  ;; Format any value as a string. Dispatches on runtime type.
+  (func $_str_fmt_val (param $val (ref any)) (result (ref $Str))
+
+    ;; Try $Str — passthrough
+    (block $not_str
+      (block $is_str (result (ref $Str))
+        (br $not_str
+          (br_on_cast $is_str (ref any) (ref $Str)
+            (local.get $val))))
+      (return))
+
+    ;; Try $Num — format f64
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref any) (ref $Num)
+            (local.get $val))))
+      (return (call $_str_fmt_num (struct.get $Num $val))))
+
+    ;; Try i31ref — bool or small int
+    (block $not_i31
+      (block $is_i31 (result (ref i31))
+        (br $not_i31
+          (br_on_cast $is_i31 (ref any) (ref i31)
+            (local.get $val))))
+      (return (call $_str_fmt_i31 (i31.get_s))))
+
+    ;; Unknown type — unreachable for now.
+    (unreachable)
+  )
+
+  ;; _str_fmt_i31 : i32 -> (ref $Str)
+  ;; Format an i31ref value as a boolean: 0 → "false", 1 → "true".
+  ;; i31ref is currently only used for booleans; integer i31 rendering
+  ;; will be added when i31ref is used for small integers.
+  (func $_str_fmt_i31 (param $v i32) (result (ref $Str))
+
+    (local $buf (ref $ByteArray))
+
+    (if (i32.eqz (local.get $v))
+      (then
+        ;; "false" = 66 61 6C 73 65
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 5)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x66))
+        (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x61))
+        (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x6C))
+        (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x73))
+        (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x65))
+        (return (struct.new $StrBytesImpl (local.get $buf)))))
+
+    ;; "true" = 74 72 75 65
+    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 4)))
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x74))
+    (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x72))
+    (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x75))
+    (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x65))
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
+  ;; _str_fmt_num : f64 -> (ref $Str)
+  ;; Format an f64 as a string. Handles integers exactly;
+  ;; non-integer floats produce a placeholder for now.
+  (func $_str_fmt_num (param $v f64) (result (ref $Str))
+
+    (local $i64v i64)
+    (local $i32v i32)
+
+    ;; If the value is an integer that fits in i32, render as integer.
+    (if (f64.eq (local.get $v) (f64.trunc (local.get $v)))
+      (then
+        (local.set $i64v (i64.trunc_sat_f64_s (local.get $v)))
+        (if (i32.and
+              (i64.le_s (local.get $i64v) (i64.const 2147483647))
+              (i64.ge_s (local.get $i64v) (i64.const -2147483648)))
+          (then
+            (return (call $_str_fmt_int
+              (i32.wrap_i64 (local.get $i64v))))))))
+
+    ;; Non-integer float — placeholder "<float>" for now.
+    ;; TODO: implement proper dtoa (Ryu or similar).
+    (call $_str_fmt_placeholder (i32.const 1))
+  )
+
+  ;; _str_fmt_int : i32 -> (ref $Str)
+  ;; Format a signed i32 as a decimal string.
+  (func $_str_fmt_int (param $v i32) (result (ref $Str))
+
+    (local $neg i32)
+    (local $abs i32)
+    (local $digits i32)
+    (local $tmp i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    ;; Zero special case.
+    (if (i32.eqz (local.get $v))
+      (then
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
+        (return (struct.new $StrBytesImpl (local.get $buf)))))
+
+    ;; Handle sign.
+    (local.set $neg (i32.lt_s (local.get $v) (i32.const 0)))
+    (if (local.get $neg)
+      (then (local.set $abs (i32.sub (i32.const 0) (local.get $v))))
+      (else (local.set $abs (local.get $v))))
+
+    ;; Count digits.
+    (local.set $digits (i32.const 0))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $count
+        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
+        (local.set $tmp (i32.div_u (local.get $tmp) (i32.const 10)))
+        (br_if $count (local.get $tmp))
+      ))
+
+    ;; Allocate buffer.
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (local.get $digits) (local.get $neg))))
+
+    ;; Write '-' if negative.
+    (if (local.get $neg)
+      (then (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))))
+
+    ;; Write digits right-to-left.
+    (local.set $pos
+      (i32.sub
+        (i32.add (local.get $digits) (local.get $neg))
+        (i32.const 1)))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $write
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.add (i32.const 0x30) (i32.rem_u (local.get $tmp) (i32.const 10))))
+        (local.set $tmp (i32.div_u (local.get $tmp) (i32.const 10)))
+        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
+        (br_if $write (local.get $tmp))
+      ))
+
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
+  ;; _str_fmt_placeholder : i32 -> (ref $Str)
+  ;; Temporary placeholders for types without full formatting.
+  ;; 1 = "<float>"
+  (func $_str_fmt_placeholder (param $kind i32) (result (ref $Str))
+    (local $buf (ref $ByteArray))
+    ;; "<float>" = 3C 66 6C 6F 61 74 3E
+    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 7)))
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x3C))
+    (array.set $ByteArray (local.get $buf) (i32.const 1) (i32.const 0x66))
+    (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x6C))
+    (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x6F))
+    (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x61))
+    (array.set $ByteArray (local.get $buf) (i32.const 5) (i32.const 0x74))
+    (array.set $ByteArray (local.get $buf) (i32.const 6) (i32.const 0x3E))
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
+
+  ;; CPS wrappers — stripped by unit test harness (prepare_wat).
+
+  ;; str_fmt : (ref null any, ref null any) -> void
+  ;; CPS string formatter. First arg is a $VarArgs array of string segments,
+  ;; second arg is the continuation. Formats each segment via _str_fmt_val,
+  ;; concatenates all results into a single $StrBytesImpl, and passes the
+  ;; result to the continuation via _croc_1.
+  (func $str_fmt (export "str_fmt")
+    (param $segments_any (ref null any)) (param $cont (ref null any))
+
+    (local $segments (ref $VarArgs))
+    (local $len i32)
+    (local $i i32)
+    (local $total i32)
+    (local $dst (ref $ByteArray))
+    (local $pos i32)
+    (local $formatted (ref $Str))
+
+    (local.set $segments
+      (ref.cast (ref $VarArgs) (local.get $segments_any)))
+    (local.set $len
+      (array.len (local.get $segments)))
+
+    ;; Pass 1: format each segment and compute total byte length.
+    ;; We format twice (once for length, once for copy) to avoid
+    ;; allocating a temp array of formatted strings. For short
+    ;; templates this is cheap; revisit if profiling shows otherwise.
+    (local.set $i (i32.const 0))
+    (local.set $total (i32.const 0))
+    (block $done1
+      (loop $len_loop
+        (br_if $done1
+          (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $total
+          (i32.add (local.get $total)
+            (call $_str_len
+              (call $_str_fmt_val
+                (ref.as_non_null
+                  (array.get $VarArgs (local.get $segments) (local.get $i)))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $len_loop)))
+
+    ;; Allocate destination buffer.
+    (local.set $dst
+      (array.new $ByteArray (i32.const 0) (local.get $total)))
+
+    ;; Pass 2: format and copy each segment into the buffer.
+    (local.set $i (i32.const 0))
+    (local.set $pos (i32.const 0))
+    (block $done2
+      (loop $copy_loop
+        (br_if $done2
+          (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $pos
+          (call $_str_copy_to
+            (call $_str_fmt_val
+              (ref.as_non_null
+                (array.get $VarArgs (local.get $segments) (local.get $i))))
+            (local.get $dst)
+            (local.get $pos)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy_loop)))
+
+    ;; Wrap and pass to continuation.
+    (return_call $croc_1
+      (struct.new $StrBytesImpl (local.get $dst))
+      (local.get $cont))
   )
 
 )

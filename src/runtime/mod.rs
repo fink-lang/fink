@@ -1043,6 +1043,7 @@ mod tests {
 
   const STRING_TYPE_DEFS: &str = concat!(
     "  (rec\n",
+    "    (type $Num (struct (field $val f64)))\n",
     "    (type $Str (sub (struct)))\n",
     "  )\n",
   );
