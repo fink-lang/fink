@@ -194,6 +194,9 @@ pub enum NodeKind<'src> {
 
   // Block — name (Ident) + params (Patterns) + sep (:) + body
   Block { name: Box<Node<'src>>, params: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
+
+  // Token — raw token leaf in a Tokens-mode block body
+  Token(&'src str),
 }
 
 // For ChainedCmp interleaved representation
@@ -217,7 +220,8 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::Ident(_)
     | NodeKind::SynthIdent(_)
     | NodeKind::Partial
-    | NodeKind::Wildcard => {}
+    | NodeKind::Wildcard
+    | NodeKind::Token(_) => {}
 
     NodeKind::Module(items)
     | NodeKind::LitSeq { items, .. }
@@ -394,6 +398,7 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     }
     NodeKind::Partial => { out.push_str("Partial"); }
     NodeKind::Wildcard => { out.push_str("Wildcard"); }
+    NodeKind::Token(s) => { out.push_str("Token '"); out.push_str(s); out.push('\''); }
     NodeKind::Try(inner) => {
       out.push_str("Try");
       out.push('\n');

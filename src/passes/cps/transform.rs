@@ -301,6 +301,7 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower {
     // ---- structural nodes lowered via their parents ----
     NodeKind::Patterns(_) => panic!("Patterns node lowered via fn/match"),
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
+    NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
   }
 }
 

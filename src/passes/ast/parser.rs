@@ -1,9 +1,19 @@
 #![allow(dead_code)]
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use crate::ast::{CmpPart, Exprs, Node, NodeKind};
 use crate::lexer::{Lexer, Loc, Token, TokenKind};
+
+// --- block modes ---
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BlockMode {
+  /// Block body is parsed as AST (standard behavior).
+  Ast,
+  /// Block body is lexed into tokens but not parsed.
+  Tokens,
+}
 
 // --- error ---
 
@@ -21,7 +31,7 @@ pub struct Parser<'src> {
   lexer: Lexer<'src>,
   src: &'src str,
   current: Token<'src>,
-  block_names: HashSet<&'static str>,
+  block_names: HashMap<&'src str, BlockMode>,
   next_id: u32,
 }
 
@@ -62,16 +72,49 @@ impl<'src> Parser<'src> {
       lexer.register_separator(sep);
     }
     let current = lexer.next_token();
-    let mut block_names = HashSet::new();
-    block_names.insert("fn");
-    block_names.insert("match");
+    let mut block_names = HashMap::new();
+    block_names.insert("fn", BlockMode::Ast);
+    block_names.insert("match", BlockMode::Ast);
     let mut p = Parser { lexer, src, current, block_names, next_id: 0 };
     p.skip_trivia();
     p
   }
 
-  pub fn register_block(&mut self, name: &'static str) {
-    self.block_names.insert(name);
+  pub fn register_block(&mut self, name: &'src str, mode: BlockMode) {
+    self.block_names.insert(name, mode);
+  }
+
+  /// Inspect a binding for `{...} = import '...'` and register block names
+  /// from the imported module. Currently hardcoded for known URLs.
+  fn handle_import(&mut self, lhs: &Node<'src>, rhs: &Node<'src>) {
+    // Match rhs: Apply(Ident("import"), [LitStr(url)])
+    let NodeKind::Apply { func, args } = &rhs.kind else { return };
+    let NodeKind::Ident("import") = &func.kind else { return };
+    let Some(arg) = args.items.first() else { return };
+    let NodeKind::LitStr { content: url, .. } = &arg.kind else { return };
+
+    // Extract imported names from lhs destructure
+    let names: Vec<&'src str> = match &lhs.kind {
+      NodeKind::LitRec { items, .. } => {
+        items.items.iter().filter_map(|n| match &n.kind {
+          NodeKind::Ident(name) => Some(*name),
+          _ => None,
+        }).collect()
+      }
+      _ => return,
+    };
+
+    // Only register blocks from the known block-definitions module.
+    if url != "@fink/parse/blocks.fnk" { return; }
+
+    for name in names {
+      let mode = match name {
+        "ƒink" => BlockMode::Ast,
+        "ƒtok" => BlockMode::Tokens,
+        _ => continue, // unknown block name — skip silently for now
+      };
+      self.register_block(name, mode);
+    }
   }
 
   fn node(&mut self, kind: NodeKind<'src>, loc: Loc) -> Node<'src> {
@@ -139,6 +182,7 @@ impl<'src> Parser<'src> {
       let op = self.bump();
       self.skip_block_tokens();
       let rhs = self.parse_expr()?;
+      self.handle_import(&lhs, &rhs);
       let loc = Loc { start: lhs.loc.start, end: rhs.loc.end };
       return Ok(self.node(NodeKind::Bind { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }, loc));
     }
@@ -256,7 +300,7 @@ impl<'src> Parser<'src> {
 
       if name == "fn" { return self.parse_fn(loc); }
       if name == "match" { return self.parse_match_expr(loc); }
-      if self.block_names.contains(name) { return self.parse_block(loc, name); }
+      if self.block_names.contains_key(name) { return self.parse_block(loc, name); }
 
       // Tagged template string: ident immediately adjacent to StrStart → raw template
       if self.at(TokenKind::StrStart) && self.peek().loc.start.idx == loc.end.idx {
@@ -309,7 +353,7 @@ impl<'src> Parser<'src> {
     if let NodeKind::Ident(name) = head.kind {
       if name == "fn" { return self.parse_fn(head.loc); }
       if name == "match" { return self.parse_match_expr(head.loc); }
-      if self.block_names.contains(name) && name != "fn" && name != "match" {
+      if self.block_names.contains_key(name) && name != "fn" && name != "match" {
         return self.parse_block(head.loc, name);
       }
       let func = self.node(NodeKind::Ident(name), head.loc);
@@ -411,7 +455,7 @@ impl<'src> Parser<'src> {
     //   func: body             → Block(func, [], body)           [func is registered]
     //   func a, b: body        → Block(func, [a, b], body)      [func is registered]
     //   outer inner: body      → Apply(outer, Block(inner, [], body))   [inner is registered]
-    let func_is_block = matches!(&func.kind, NodeKind::Ident(name) if self.block_names.contains(name));
+    let func_is_block = matches!(&func.kind, NodeKind::Ident(name) if self.block_names.contains_key(name));
 
     if self.at(TokenKind::Colon) {
       if params.is_empty() && func_is_block {
@@ -428,7 +472,7 @@ impl<'src> Parser<'src> {
       // Single ident param that is a registered block name: nested block in application
       if params.len() == 1
         && let NodeKind::Ident(name) = &params[0].kind
-        && self.block_names.contains(name) {
+        && self.block_names.contains_key(name) {
           let block_name = params.remove(0);
           let block_start = block_name.loc.start;
           let params_node = self.node(NodeKind::Patterns(Exprs::empty()), block_name.loc);
@@ -617,7 +661,7 @@ impl<'src> Parser<'src> {
         self.bump();
         return self.parse_match_expr(name_tok.loc);
       }
-      if self.block_names.contains(name_tok.src) {
+      if self.block_names.contains_key(name_tok.src) {
         self.bump();
         return self.parse_block(name_tok.loc, name_tok.src);
       }
@@ -1576,15 +1620,45 @@ impl<'src> Parser<'src> {
   // --- custom block ---
 
   fn parse_block(&mut self, name_loc: Loc, name: &'src str) -> ParseResult<'src> {
+    let mode = self.block_names.get(name).copied().unwrap_or(BlockMode::Ast);
     let name_node = self.node(NodeKind::Ident(name), name_loc);
     let (params, _) = self.parse_params()?;
-    let (sep, body) = self.parse_colon_body_or_arms()?;
+    let (sep, body) = match mode {
+      BlockMode::Ast    => self.parse_colon_body_or_arms()?,
+      BlockMode::Tokens => self.parse_colon_body_tokens()?,
+    };
     let end = body.items.last().map(|n: &Node| n.loc.end).unwrap_or(params.loc.end);
     Ok(self.node(
       NodeKind::Block { name: Box::new(name_node), params: Box::new(params), sep, body },
       Loc { start: name_loc.start, end },
     ))
   }
+
+  /// Collect all tokens in the block body without parsing.
+  /// Skips BlockStart/BlockEnd/BlockCont structural tokens.
+  fn parse_colon_body_tokens(&mut self) -> Result<(Token<'src>, Exprs<'src>), ParseError> {
+    let sep = self.expect(TokenKind::Colon)?;
+    let mut items = vec![];
+    if self.at(TokenKind::BlockStart) {
+      self.bump();
+      loop {
+        if self.at(TokenKind::BlockEnd) || self.at(TokenKind::EOF) { break; }
+        if self.at(TokenKind::BlockCont) { self.bump(); continue; }
+        let tok = self.bump();
+        items.push(self.node(NodeKind::Token(tok.src), tok.loc));
+      }
+    } else {
+      // Inline: collect tokens until end of line (BlockCont/BlockEnd/EOF)
+      while !self.at(TokenKind::BlockCont)
+         && !self.at(TokenKind::BlockEnd)
+         && !self.at(TokenKind::EOF) {
+        let tok = self.bump();
+        items.push(self.node(NodeKind::Token(tok.src), tok.loc));
+      }
+    }
+    Ok((sep, Exprs { items, seps: vec![] }))
+  }
+
 
   // For custom blocks: body may contain arms (key: val) or plain expressions
   fn parse_colon_body_or_arms(&mut self) -> Result<(Token<'src>, Exprs<'src>), ParseError> {
@@ -1629,10 +1703,10 @@ pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
-pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<crate::ast::ParseResult<'a>, ParseError> {
+pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[(&'a str, BlockMode)]) -> Result<crate::ast::ParseResult<'a>, ParseError> {
   let mut p = Parser::new(src);
-  for &name in blocks {
-    p.register_block(name);
+  for &(name, mode) in blocks {
+    p.register_block(name, mode);
   }
   p.expect(TokenKind::BlockStart)?;
   let exprs = p.parse_block_exprs()?;
@@ -1648,6 +1722,7 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[&'static str]) -> Result<cr
 #[cfg(test)]
 mod tests {
   use crate::ast::NodeKind;
+  use super::BlockMode;
 
   /// Extract the single expression from a Module root, panicking if not exactly one.
   fn unwrap_single<'a, 'src>(r: &'a crate::ast::ParseResult<'src>) -> &'a crate::ast::Node<'src> {
@@ -1661,7 +1736,7 @@ mod tests {
   #[test]
   fn test_str_escape_stored_verbatim() {
     // LitStr must store raw source bytes — no rendering at parse time.
-    let r = super::parse_with_blocks(r"'\n\t\\'", &["test_block"]).unwrap();
+    let r = super::parse_with_blocks(r"'\n\t\\'", &[("test_block", BlockMode::Ast)]).unwrap();
     let node = unwrap_single(&r);
     let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, r"\n\t\\");
@@ -1674,14 +1749,14 @@ mod tests {
   \n
   \t
 '"#;
-    let r = super::parse_with_blocks(src, &["test_block"]).unwrap();
+    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
     let node = unwrap_single(&r);
     let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, "\n\\n\n\\t\n");
   }
 
   fn parse_debug(src: &str) -> String {
-    match super::parse_with_blocks(src, &["test_block"]) {
+    match super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]) {
       Ok(r) => r.root.print(),
       Err(e) => format!("ERROR [{}:{}]: {}", e.loc.start.line, e.loc.start.col, e.message),
     }
@@ -1739,5 +1814,6 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_functions.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_blocks.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_block_modes.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
 }
