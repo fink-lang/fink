@@ -645,6 +645,15 @@ test 'rec format in template', fn:
     true
 
 
+test 'rec destructure extra fields', fn:
+  expect run ƒink:
+    main = fn:
+      {a, b} = {a: 1, b: 2, c: 3}
+      a + b
+  | equals ƒink:
+    3
+
+
 test 'rec spread overwrite', fn:
   expect run ƒink:
     main = fn:
@@ -654,6 +663,73 @@ test 'rec spread overwrite', fn:
   | equals ƒink:
     101
 
+
+skip test 'rec rest binding', fn:
+  expect run ƒink:
+    main = fn:
+      {a, ..rest} = {a: 1, b: 2, c: 3}
+      {b} = rest
+      a + b
+  | equals ƒink:
+    3
+
+skip test 'rec empty rest exact match', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1}
+      match r:
+        {a, ..{}}: a
+        _: 0
+  | equals ƒink:
+    1
+
+skip test 'rec empty rest rejects extra', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      match r:
+        {a, ..{}}: a
+        _: 0
+  | equals ƒink:
+    0
+
+skip test 'rec guard literal in match', fn:
+  expect run ƒink:
+    main = fn:
+      r = {kind: 1, val: 42}
+      match r:
+        {kind: 1, val, ..}: val
+        {kind: 2, val, ..}: val + 100
+        _: 0
+  | equals ƒink:
+    42
+
+skip test 'rec guard second arm', fn:
+  expect run ƒink:
+    main = fn:
+      r = {kind: 2, val: 10}
+      match r:
+        {kind: 1, val, ..}: val
+        {kind: 2, val, ..}: val + 100
+        _: 0
+  | equals ƒink:
+    110
+
+skip test 'rec key membership', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      'a' in r
+  | equals ƒink:
+    true
+
+skip test 'rec key not member', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      'c' not in r
+  | equals ƒink:
+    true
 
 test 'rec with list value', fn:
   expect run ƒink:
