@@ -1,4 +1,4 @@
-{test, expect, equals, run} = import '!fake'
+{test, skip, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -415,6 +415,332 @@ test 'rec destructure', fn:
     3
 
 
+test 'rec single field', fn:
+  expect run ƒink:
+    main = fn:
+      {x} = {x: 42}
+      x
+  | equals ƒink:
+    42
+
+
+test 'rec three fields', fn:
+  expect run ƒink:
+    main = fn:
+      {a, b, c} = {a: 1, b: 2, c: 3}
+      a + b + c
+  | equals ƒink:
+    6
+
+
+test 'rec shorthand', fn:
+  expect run ƒink:
+    main = fn:
+      x = 10
+      y = 20
+      {a, b} = {a: x, b: y}
+      a + b
+  | equals ƒink:
+    30
+
+
+test 'rec nested', fn:
+  expect run ƒink:
+    main = fn:
+      {a} = {a: {b: 42}}
+      {b} = a
+      b
+  | equals ƒink:
+    42
+
+
+test 'rec spread update', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      {a, b} = {..r, b: 10}
+      a + b
+  | equals ƒink:
+    11
+
+
+test 'rec spread merge', fn:
+  expect run ƒink:
+    main = fn:
+      r1 = {a: 1}
+      r2 = {b: 2}
+      {a, b} = {..r1, ..r2}
+      a + b
+  | equals ƒink:
+    3
+
+
+test 'rec in fn arg', fn:
+  expect run ƒink:
+    sum-fields = fn rec:
+      {a, b} = rec
+      a + b
+
+    main = fn:
+      sum-fields {a: 10, b: 20}
+  | equals ƒink:
+    30
+
+
+test 'rec fn return', fn:
+  expect run ƒink:
+    make-point = fn x, y:
+      {x: x, y: y}
+
+    main = fn:
+      {x, y} = make-point 3, 4
+      x + y
+  | equals ƒink:
+    7
+
+
+test 'rec match pattern', fn:
+  expect run ƒink:
+    main = fn:
+      r = {x: 42, y: 99}
+      match r:
+        {x, ..}: x
+  | equals ƒink:
+    42
+
+
+test 'rec match extract field', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 5, b: 10}
+      match r:
+        {a, ..}: a
+  | equals ƒink:
+    5
+
+
+test 'rec empty', fn:
+  expect run ƒink:
+    main = fn:
+      r = {}
+      {a} = {..r, a: 1}
+      a
+  | equals ƒink:
+    1
+
+
+test 'rec with bool values', fn:
+  expect run ƒink:
+    main = fn:
+      {a, b} = {a: true, b: false}
+      a and (not b)
+  | equals ƒink:
+    true
+
+
+test 'rec with string values', fn:
+  expect run ƒink:
+    main = fn:
+      {name} = {name: 'hello'}
+      name == 'hello'
+  | equals ƒink:
+    true
+
+
+test 'rec format empty', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {}  }' == '{}'
+  | equals ƒink:
+    true
+
+
+test 'rec format single field', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {a: 1}  }' == '{a: 1}'
+  | equals ƒink:
+    true
+
+
+test 'rec format nested', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {a: {b: 1}}  }' == '{a: {b: 1}}'
+  | equals ƒink:
+    true
+
+
+test 'rec format bool value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {x: true}  }' == '{x: true}'
+  | equals ƒink:
+    true
+
+
+test 'rec format string value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {name: 'hi'}  }' == '{name: hi}'
+  | equals ƒink:
+    true
+
+
+test 'rec format number value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {x: 42}  }' == '{x: 42}'
+  | equals ƒink:
+    true
+
+
+test 'rec format float value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {pi: 3.14}  }' == '{pi: 3.14}'
+  | equals ƒink:
+    true
+
+
+test 'rec string key destructure', fn:
+  expect run ƒink:
+    main = fn:
+      {'foo bar': v} = {'foo bar': 42}
+      v
+  | equals ƒink:
+    42
+
+
+skip test 'rec expr key destructure', fn:
+  expect run ƒink:
+    main = fn:
+      {(4): foo} = {(1 + 3): 42}
+      foo
+  | equals ƒink:
+    42
+
+
+test 'rec format string key', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {'foo bar': 42} }' == '{\'foo bar\': 42}'
+  | equals ƒink:
+    true
+
+skip test 'rec format string key', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {(1 + 2): 42} }' == '{(3): 42}'
+  | equals ƒink:
+    true
+
+
+test 'rec format in template', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1}
+      'got: ${r}' == 'got: {a: 1}'
+  | equals ƒink:
+    true
+
+
+test 'rec destructure extra fields', fn:
+  expect run ƒink:
+    main = fn:
+      {a, b} = {a: 1, b: 2, c: 3}
+      a + b
+  | equals ƒink:
+    3
+
+
+test 'rec spread overwrite', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      {a, b} = {..r, a: 99}
+      a + b
+  | equals ƒink:
+    101
+
+
+skip test 'rec rest binding', fn:
+  expect run ƒink:
+    main = fn:
+      {a, ..rest} = {a: 1, b: 2, c: 3}
+      {b} = rest
+      a + b
+  | equals ƒink:
+    3
+
+skip test 'rec empty rest exact match', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1}
+      match r:
+        {a, ..{}}: a
+        _: 0
+  | equals ƒink:
+    1
+
+skip test 'rec empty rest rejects extra', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      match r:
+        {a, ..{}}: a
+        _: 0
+  | equals ƒink:
+    0
+
+skip test 'rec guard literal in match', fn:
+  expect run ƒink:
+    main = fn:
+      r = {kind: 1, val: 42}
+      match r:
+        {kind: 1, val, ..}: val
+        {kind: 2, val, ..}: val + 100
+        _: 0
+  | equals ƒink:
+    42
+
+skip test 'rec guard second arm', fn:
+  expect run ƒink:
+    main = fn:
+      r = {kind: 2, val: 10}
+      match r:
+        {kind: 1, val, ..}: val
+        {kind: 2, val, ..}: val + 100
+        _: 0
+  | equals ƒink:
+    110
+
+skip test 'rec key membership', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      'a' in r
+  | equals ƒink:
+    true
+
+skip test 'rec key not member', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      'c' not in r
+  | equals ƒink:
+    true
+
+test 'rec with list value', fn:
+  expect run ƒink:
+    main = fn:
+      {items} = {items: [1, 2, 3]}
+      match items:
+        [a, ..]: a
+  | equals ƒink:
+    1
+
+
 test 'varargs first', fn:
   expect run ƒink:
     first = fn ..args:
@@ -538,5 +864,210 @@ test 'range match pattern', fn:
         0..10: true
   | equals ƒink:
     true
+
+
+# --- Bitwise operators ---
+
+skip test 'bitwise and', fn:
+  expect run ƒink:
+    main = fn:
+      0xFF band 0x0F
+  | equals ƒink:
+    15
+
+skip test 'bitwise or', fn:
+  expect run ƒink:
+    main = fn:
+      0xF0 bor 0x0F
+  | equals ƒink:
+    255
+
+skip test 'bitwise xor', fn:
+  expect run ƒink:
+    main = fn:
+      0xFF bxor 0x0F
+  | equals ƒink:
+    240
+
+skip test 'bitwise not', fn:
+  expect run ƒink:
+    main = fn:
+      bnot 0
+  | equals ƒink:
+    -1
+
+skip test 'bitwise shift left', fn:
+  expect run ƒink:
+    main = fn:
+      1 bshl 8
+  | equals ƒink:
+    256
+
+skip test 'bitwise shift right', fn:
+  expect run ƒink:
+    main = fn:
+      256 bshr 4
+  | equals ƒink:
+    16
+
+
+# --- Record property access ---
+
+skip test 'rec dot access', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 42}
+      r.a
+  | equals ƒink:
+    42
+
+skip test 'rec dot access nested', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: {b: 99}}
+      r.a.b
+  | equals ƒink:
+    99
+
+
+# --- List formatting ---
+
+skip test 'list format empty', fn:
+  expect run ƒink:
+    main = fn:
+      '${  []  }' == '[]'
+  | equals ƒink:
+    true
+
+skip test 'list format', fn:
+  expect run ƒink:
+    main = fn:
+      '${  [1, 2, 3]  }' == '[1, 2, 3]'
+  | equals ƒink:
+    true
+
+skip test 'list format nested', fn:
+  expect run ƒink:
+    main = fn:
+      '${  [1, [2, 3]]  }' == '[1, [2, 3]]'
+  | equals ƒink:
+    true
+
+
+# --- List patterns ---
+
+skip test 'list rest in middle', fn:
+  expect run ƒink:
+    main = fn:
+      match [1, 2, 3, 4]:
+        [first, ..mid, last]: first + last
+  | equals ƒink:
+    5
+
+
+# --- String template patterns ---
+
+skip test 'str template pattern', fn:
+  expect run ƒink:
+    main = fn:
+      match 'hello world':
+        'hello ${name}': name == 'world'
+  | equals ƒink:
+    true
+
+
+# --- Record empty check ---
+
+skip test 'rec empty check', fn:
+  expect run ƒink:
+    main = fn:
+      r = {}
+      match r:
+        {}: true
+        _: false
+  | equals ƒink:
+    true
+
+
+# --- Yield ---
+
+skip test 'yield value', fn:
+  expect run ƒink:
+    main = fn:
+      x = 1
+      y = 2
+      x + y
+      yield x + y
+  | equals ƒink:
+    3
+
+skip test 'yield multiple', fn:
+  expect run ƒink:
+    main = fn:
+      yield 1
+      yield 2
+      yield 3
+  | equals ƒink:
+    1
+    2
+    3
+
+
+# --- Error handling ---
+
+skip test 'try unwrap ok', fn:
+  expect run ƒink:
+    main = fn:
+      x = try Ok 42
+      x
+  | equals ƒink:
+    42
+
+skip test 'try propagate err', fn:
+  expect run ƒink:
+    fallible = fn:
+      try Err 'boom'
+      99
+
+    main = fn:
+      match (fallible ..[]):
+        Ok v: v
+        Err e: e == 'boom'
+  | equals ƒink:
+    true
+
+skip test 'match ok err', fn:
+  expect run ƒink:
+    main = fn:
+      r = Ok 42
+      match r:
+        Ok v: v
+        Err _: 0
+  | equals ƒink:
+    42
+
+
+# --- fn match sugar ---
+
+skip test 'fn match simple', fn:
+  expect run ƒink:
+    double = fn match:
+      0: 0
+      n: n * 2
+
+    main = fn:
+      double 5
+  | equals ƒink:
+    10
+
+skip test 'fn match with rec pattern', fn:
+  expect run ƒink:
+    get-x = fn match:
+      {x, ..}: x
+
+    main = fn:
+      get-x {x: 42, y: 99}
+  | equals ƒink:
+    42
 
 

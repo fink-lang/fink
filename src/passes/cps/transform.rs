@@ -1994,14 +1994,29 @@ fn emit_rec_pattern<'src>(
         regular.push(RecField { name, pat: field_node, origin: Some(field_node.id) });
       }
       NodeKind::Bind { lhs, rhs: pat_node, .. } => {
-        if let NodeKind::Ident(key) = &lhs.kind {
-          regular.push(RecField { name: key, pat: pat_node, origin: Some(lhs.id) });
+        match &lhs.kind {
+          NodeKind::Ident(key) => {
+            regular.push(RecField { name: key, pat: pat_node, origin: Some(lhs.id) });
+          }
+          NodeKind::LitStr { content, .. } => {
+            regular.push(RecField { name: content, pat: pat_node, origin: Some(lhs.id) });
+          }
+          _ => {}
         }
       }
       NodeKind::Arm { lhs: arm_lhs, body: arm_body, .. } => {
-        if let NodeKind::Ident(key) = &arm_lhs.kind
-          && let Some(pat_node) = arm_body.items.last() {
-            regular.push(RecField { name: key, pat: pat_node, origin: Some(arm_lhs.id) });
+        match &arm_lhs.kind {
+          NodeKind::Ident(key) => {
+            if let Some(pat_node) = arm_body.items.last() {
+              regular.push(RecField { name: key, pat: pat_node, origin: Some(arm_lhs.id) });
+            }
+          }
+          NodeKind::LitStr { content, .. } => {
+            if let Some(pat_node) = arm_body.items.last() {
+              regular.push(RecField { name: content, pat: pat_node, origin: Some(arm_lhs.id) });
+            }
+          }
+          _ => {}
         }
       }
       _ => {}
