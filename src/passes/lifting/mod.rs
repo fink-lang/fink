@@ -470,7 +470,7 @@ fn extract_from_body<'src>(
         // Record param_info for original params: only the last Bind::Cont is
         // the user return continuation; other Bind::Cont params are just
         // forwarded cont refs (matcher succ/fail, etc.) treated as regular params.
-        let last_is_cont = params.last().map_or(false, |p| {
+        let last_is_cont = params.last().is_some_and(|p| {
           let b = match p { Param::Name(b) | Param::Spread(b) => b };
           b.kind.is_cont()
         });
@@ -622,7 +622,7 @@ fn extract_from_body<'src>(
             let body = rewrite_refs(body, &rewrite_map);
             // Record param_info for the original cont params: only the last
             // Bind::Cont is the user return continuation.
-            let last_is_cont = cont_params.last().map_or(false, |p| {
+            let last_is_cont = cont_params.last().is_some_and(|p| {
               let b = match p { Param::Name(b) | Param::Spread(b) => b };
               b.kind.is_cont()
             });
@@ -884,7 +884,7 @@ fn collect_captured_refs_val(
 fn classify_untagged_params(expr: &Expr, param_info: &mut PropGraph<CpsId, Option<ParamInfo>>) {
   match &expr.kind {
     ExprKind::LetFn { params, fn_body, cont, .. } => {
-      let last_is_cont = params.last().map_or(false, |p| {
+      let last_is_cont = params.last().is_some_and(|p| {
         let b = match p { Param::Name(b) | Param::Spread(b) => b };
         b.kind.is_cont()
       });
