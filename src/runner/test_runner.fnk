@@ -693,7 +693,7 @@ test 'rec empty rest rejects extra', fn:
   | equals ƒink:
     0
 
-skip test 'rec guard literal in match', fn:
+test 'rec guard literal in match', fn:
   expect run ƒink:
     main = fn:
       r = {kind: 1, val: 42}
@@ -704,7 +704,7 @@ skip test 'rec guard literal in match', fn:
   | equals ƒink:
     42
 
-skip test 'rec guard second arm', fn:
+test 'rec guard second arm', fn:
   expect run ƒink:
     main = fn:
       r = {kind: 2, val: 10}
@@ -972,22 +972,22 @@ skip test 'list format nested', fn:
 
 # --- List patterns ---
 
-skip test 'seq guard literal in match', fn:
+test 'seq guard literal in match', fn:
   expect run ƒink:
     main = fn:
       match [1, 42]:
-        [1, val, ..]: val
-        [2, val, ..]: val + 100
+        [1, val, ..rest]: val
+        [2, val, ..rest]: val + 100
         _: 0
   | equals ƒink:
     42
 
-skip test 'seq guard second arm', fn:
+test 'seq guard second arm', fn:
   expect run ƒink:
     main = fn:
       match [2, 10]:
-        [1, val, ..]: val
-        [2, val, ..]: val + 100
+        [1, val, ..rest]: val
+        [2, val, ..rest]: val + 100
         _: 0
   | equals ƒink:
     110

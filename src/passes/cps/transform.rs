@@ -1697,11 +1697,10 @@ fn emit_literal_pattern(
   }, origin);
 
   let matcher_name = g.fresh_result(origin);
-  // No bind_name for literal matches — use a dummy synth that won't be used.
-  let bind_name = g.fresh_result(origin);
+  // Literal matches don't produce bindings — body takes no params.
   pending.push(Pending::PatternMatch {
     subject: val,
-    bind_names: vec![bind_name],
+    bind_names: vec![],
     matcher_name,
     matcher_params: vec![
       Param::Name(subj_param),

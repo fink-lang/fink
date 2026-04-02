@@ -245,16 +245,16 @@ test 'seq — literal element', fn:
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·a_0:
           ·fn
-            fn ·v_44: ·v_1 ·v_44
-            fn ·v_48:
+            fn: ·v_1 ·panic
+            fn ·v_47:
               ·fn
                 fn ·v_30, ·v_31, ·v_32:
                   ·op_eq ·v_30, 1, fn ·v_35:
                     ·if ·v_35,
                       fn: ·v_31 _
                       fn: ·v_32 _
-                fn ·v_43: ·v_43 ·v_7, ·v_48, ·panic
-      fn ·v_61:
+                fn ·v_43: ·v_43 ·v_7, ·v_47, ·panic
+      fn ·v_60:
         ·fn
           fn ·v_3, ·v_4, ·v_5:
             ·seq_pop ·v_3, ·v_5, fn ·v_6, ·v_20:
@@ -263,8 +263,8 @@ test 'seq — literal element', fn:
                   ·if ·v_15,
                     fn: ·v_4 ·v_6, ·v_7
                     fn: ·v_5 _
-          fn ·v_27: ·v_27 ·∅foo, ·v_61, ·panic
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFHLEFBQUE7V0FBQSxLLEVBQUEsQSxLQUFBO1dBQUEsSztVQUFBLEFBQUE7ZUFBQSxPLE8sSztjQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7Z0JBQUEsQUFBQSxJQUFBLEs7b0IsRUFBQSxBLE1BQUE7b0IsRUFBQSxBLE1BQUE7ZUFBQSxLLEVBQUEsQUFBQSxNQUFKLEksRUFBSSxLLEVBQUE7S0FBSixLO0lBQUEsQUFBQTtTQUFBLE0sTSxJO1FBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsTUFBQSxLO1VBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsTUFBQSxLO1lBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2NBQUEsQUFBQSxJQUFBLEs7a0IsRUFBQSxBLEtBQUEsSSxFQUFBO2tCLEVBQUEsQSxLQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBUyxLLEVBQVQsSyxFQUFBIgp9
+          fn ·v_27: ·v_27 ·∅foo, ·v_60, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFHLEFBQUE7VSxFQUFBLEEsS0FBQTtXQUFBLEs7VUFBQSxBQUFBO2VBQUEsTyxPLEs7Y0FBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLO2dCQUFBLEFBQUEsSUFBQSxLO29CLEVBQUEsQSxNQUFBO29CLEVBQUEsQSxNQUFBO2VBQUEsSyxFQUFBLEFBQUEsTUFBSixJLEVBQUksSyxFQUFBO0tBQUosSztJQUFBLEFBQUE7U0FBQSxNLE0sSTtRQUFBLEFBQUEsU0FBQSxJLEUsSSxLQUFBLE1BQUEsSztVQUFBLEFBQUEsU0FBQSxLLEUsSSxLQUFBLE1BQUEsSztZQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztjQUFBLEFBQUEsSUFBQSxLO2tCLEVBQUEsQSxLQUFBLEksRUFBQTtrQixFQUFBLEEsS0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQVMsSyxFQUFULEssRUFBQSIKfQ==
 
 
 test 'seq — infix guard', fn:
@@ -378,31 +378,31 @@ test 'seq — multi-arg guard with bound element', fn:
     ·fn
       fn ·v_6, ·v_7, ·v_8:
         ·fn
-          fn ·v_49:
+          fn:
             ·let ·v_7, fn ·a_0:
-              ·∅foo 2, ·a_0, 3, fn ·v_89:
-                ·if ·v_89,
+              ·∅foo 2, ·a_0, 3, fn ·v_87:
+                ·if ·v_87,
                   fn:
                     ·fn
-                      fn ·v_72: ·v_1 ·v_72
-                      fn ·v_76:
+                      fn: ·v_1 ·panic
+                      fn ·v_74:
                         ·fn
-                          fn ·v_58, ·v_59, ·v_60:
-                            ·op_eq ·v_58, 4, fn ·v_63:
-                              ·if ·v_63,
+                          fn ·v_57, ·v_58, ·v_59:
+                            ·op_eq ·v_57, 4, fn ·v_62:
+                              ·if ·v_62,
+                                fn: ·v_58 _
                                 fn: ·v_59 _
-                                fn: ·v_60 _
-                          fn ·v_71: ·v_71 ·v_8, ·v_76, ·panic
+                          fn ·v_70: ·v_70 ·v_8, ·v_74, ·panic
                   fn: ·panic _
-          fn ·v_96:
+          fn ·v_94:
             ·fn
               fn ·v_35, ·v_36, ·v_37:
                 ·op_eq ·v_35, 1, fn ·v_40:
                   ·if ·v_40,
                     fn: ·v_36 _
                     fn: ·v_37 _
-              fn ·v_48: ·v_48 ·v_6, ·v_96, ·panic
-      fn ·v_104:
+              fn ·v_48: ·v_48 ·v_6, ·v_94, ·panic
+      fn ·v_102:
         ·fn
           fn ·v_3, ·v_4, ·v_5:
             ·seq_pop ·v_3, ·v_5, fn ·v_6, ·v_26:
@@ -412,8 +412,8 @@ test 'seq — multi-arg guard with bound element', fn:
                     ·if ·v_17,
                       fn: ·v_4 ·v_6, ·v_7, ·v_8
                       fn: ·v_5 _
-          fn ·v_33: ·v_33 ·∅bar, ·v_104, ·panic
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIGZvbyAyLCBhLCAzOyA0XSA9IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNQUFBLE1BQUEsSTtJQUFDLEFBQUE7U0FBQSxLO1FBQVUsQUFBQSxLQUFYLEksS0FBVyxJO1VBQVAsQUFBQSxNQUFJLEMsRUFBRyxJLEVBQUcsQyxLQUFWLEs7WUFBQSxBQUFBLElBQUEsSztnQjtnQkFBYSxBQUFBO3FCQUFBLEssRUFBQSxBLEtBQUE7cUJBQUEsSztvQkFBQSxBQUFBO3lCQUFBLE8sTyxLO3dCQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7MEJBQUEsQUFBQSxJQUFBLEs7OEIsRUFBQSxBLE1BQUE7OEIsRUFBQSxBLE1BQUE7eUJBQUEsSyxFQUFBLEFBQUEsTUFBakIsSSxFQUFpQixLLEVBQUE7Z0IsRUFBYixBQUFBLE9BQUE7U0FBSCxLO1FBQUEsQUFBQTthQUFBLE8sTyxLO1lBQUEsQUFBQSxPQUFBLEssRUFBQSxDLEtBQUEsSztjQUFBLEFBQUEsSUFBQSxLO2tCLEVBQUEsQSxNQUFBO2tCLEVBQUEsQSxNQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBRCxJLEVBQUMsSyxFQUFBO0tBQUQsTTtJQUFBLEFBQUE7U0FBQSxNLE0sSTtRQUFBLEFBQUEsU0FBQSxJLEUsSSxLQUFBLE1BQUEsSztVQUFBLEFBQUEsU0FBQSxLLEUsSSxLQUFBLE1BQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsSSxLQUFBLE1BQUEsSztjQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztnQkFBQSxBQUFBLElBQUEsSztvQixFQUFBLEEsS0FBQSxJLEVBQUEsSSxFQUFBO29CLEVBQUEsQSxLQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBc0IsSyxFQUF0QixNLEVBQUEiCn0=
+          fn ·v_33: ·v_33 ·∅bar, ·v_102, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIGZvbyAyLCBhLCAzOyA0XSA9IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNQUFBLE1BQUEsSTtJQUFDLEFBQUE7UTtRQUFVLEFBQUEsS0FBWCxJLEtBQVcsSTtVQUFQLEFBQUEsTUFBSSxDLEVBQUcsSSxFQUFHLEMsS0FBVixLO1lBQUEsQUFBQSxJQUFBLEs7Z0I7Z0JBQWEsQUFBQTtvQixFQUFBLEEsS0FBQTtxQkFBQSxLO29CQUFBLEFBQUE7eUJBQUEsTyxPLEs7d0JBQUEsQUFBQSxPQUFBLEssRUFBQSxDLEtBQUEsSzswQkFBQSxBQUFBLElBQUEsSzs4QixFQUFBLEEsTUFBQTs4QixFQUFBLEEsTUFBQTt5QkFBQSxLLEVBQUEsQUFBQSxNQUFqQixJLEVBQWlCLEssRUFBQTtnQixFQUFiLEFBQUEsT0FBQTtTQUFILEs7UUFBQSxBQUFBO2FBQUEsTyxPLEs7WUFBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLO2NBQUEsQUFBQSxJQUFBLEs7a0IsRUFBQSxBLE1BQUE7a0IsRUFBQSxBLE1BQUE7YUFBQSxLLEVBQUEsQUFBQSxNQUFELEksRUFBQyxLLEVBQUE7S0FBRCxNO0lBQUEsQUFBQTtTQUFBLE0sTSxJO1FBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsTUFBQSxLO1VBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsTUFBQSxLO1lBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsTUFBQSxLO2NBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2dCQUFBLEFBQUEsSUFBQSxLO29CLEVBQUEsQSxLQUFBLEksRUFBQSxJLEVBQUE7b0IsRUFBQSxBLEtBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFzQixLLEVBQXRCLE0sRUFBQSIKfQ==
 
 
 
@@ -660,33 +660,33 @@ test 'match block bind', fn:
       x: x
   | equals ƒink:
     ·fn
-      fn ·v_23: ·v_23 2
-      fn ·v_27:
+      fn ·v_22: ·v_22 2
+      fn ·v_26:
         ·fn
           fn ·v_3, ·v_4, ·v_5:
             ·fn
-              fn: ·v_27 ·v_4
-              fn ·v_33:
+              fn: ·v_26 ·v_4
+              fn ·v_32:
                 ·fn
                   fn ·v_7, ·v_8, ·v_9:
                     ·op_eq ·v_7, 1, fn ·v_12:
                       ·if ·v_12,
                         fn: ·v_8 _
                         fn: ·v_9 _
-                  fn ·v_20: ·v_20 ·v_3, ·v_33, ·v_5
-          fn ·v_39:
+                  fn ·v_20: ·v_20 ·v_3, ·v_32, ·v_5
+          fn ·v_38:
             ·fn
-              fn ·x_0, ·v_44: ·v_44 ·x_0
-              fn ·v_48:
+              fn ·x_0, ·v_43: ·v_43 ·x_0
+              fn ·v_47:
                 ·fn
-                  fn ·v_40, ·v_41, ·v_42: ·v_48 ·v_40, ·v_41
-                  fn ·v_53:
+                  fn ·v_39, ·v_40, ·v_41: ·v_47 ·v_39, ·v_40
+                  fn ·v_52:
                     ·fn
-                      fn ·v_54, ·v_55:
-                        ·v_39 ·v_54, ·v_55, fn:
-                          ·v_53 ·v_54, ·v_55, fn:
+                      fn ·v_53, ·v_54:
+                        ·v_38 ·v_53, ·v_54, fn:
+                          ·v_52 ·v_53, ·v_54, fn:
                             ·panic _
-                      fn ·v_66: ·v_66 ·∅foo, ·v_1
+                      fn ·v_65: ·v_65 ·∅foo, ·v_1
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICAxOiAyXG4gIHg6IHgiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssSyxFLEEsTUFBRztLQUFILEs7SUFBQSxBQUFBO1MsTSxNLEk7UUFBQSxBQUFBO1ksRUFBQSxBQUFBLE07YUFBQSxLO1lBQUEsQUFBQTtpQkFBQSxNLE0sSTtnQkFBQSxBQUFBLE9BQUEsSSxFQUFBLEMsS0FBQSxLO2tCQUFBLEFBQUEsSUFBQSxLO3NCLEVBQUEsQSxLQUFBO3NCLEVBQUEsQSxLQUFBO2lCQUFBLEssRUFBQSxBQUFBLE1BQUEsSSxFQUFBLEssRTtTQUFBLEs7UUFDQSxBQUFBO2FBQUEsTSxLLEUsQSxNQUFHO2FBQUgsSztZQUFBLEFBQUE7aUIsTyxPLEssRUFBQSxBQUFBLE1BQUEsSyxFO2lCQUFBLEs7Z0JBRkYsQUFBQTtxQkFBQSxPLEs7b0JBQUEsQUFBQSxNQUFBLEssRSxLLEk7c0JBQUEsQUFBQSxNQUFBLEssRSxLLEk7d0JBQUEsQUFBQSxPQUFBO3FCQUFBLEssRUFBQSxBQUFBLE1BQU0sSyxFIgp9
 
 
@@ -739,50 +739,50 @@ test 'match literal arms', fn:
       _: 'other'
   | equals ƒink:
     ·fn
-      fn ·v_22: ·v_22 'one'
-      fn ·v_26:
+      fn ·v_21: ·v_21 'one'
+      fn ·v_25:
         ·fn
           fn ·v_2, ·v_3, ·v_4:
             ·fn
-              fn: ·v_26 ·v_3
-              fn ·v_32:
+              fn: ·v_25 ·v_3
+              fn ·v_31:
                 ·fn
                   fn ·v_6, ·v_7, ·v_8:
                     ·op_eq ·v_6, 1, fn ·v_11:
                       ·if ·v_11,
                         fn: ·v_7 _
                         fn: ·v_8 _
-                  fn ·v_19: ·v_19 ·v_2, ·v_32, ·v_4
-          fn ·v_38:
+                  fn ·v_19: ·v_19 ·v_2, ·v_31, ·v_4
+          fn ·v_37:
             ·fn
-              fn ·v_59: ·v_59 'two'
-              fn ·v_63:
+              fn ·v_57: ·v_57 'two'
+              fn ·v_61:
                 ·fn
-                  fn ·v_39, ·v_40, ·v_41:
+                  fn ·v_38, ·v_39, ·v_40:
                     ·fn
-                      fn: ·v_63 ·v_40
-                      fn ·v_69:
+                      fn: ·v_61 ·v_39
+                      fn ·v_67:
                         ·fn
-                          fn ·v_43, ·v_44, ·v_45:
-                            ·op_eq ·v_43, 2, fn ·v_48:
-                              ·if ·v_48,
+                          fn ·v_42, ·v_43, ·v_44:
+                            ·op_eq ·v_42, 2, fn ·v_47:
+                              ·if ·v_47,
+                                fn: ·v_43 _
                                 fn: ·v_44 _
-                                fn: ·v_45 _
-                          fn ·v_56: ·v_56 ·v_39, ·v_69, ·v_41
-                  fn ·v_75:
+                          fn ·v_55: ·v_55 ·v_38, ·v_67, ·v_40
+                  fn ·v_73:
                     ·fn
-                      fn ·v_80: ·v_80 'other'
-                      fn ·v_84:
+                      fn ·v_78: ·v_78 'other'
+                      fn ·v_82:
                         ·fn
-                          fn ·v_76, ·v_77, ·v_78: ·v_84 ·v_77
-                          fn ·v_89:
+                          fn ·v_74, ·v_75, ·v_76: ·v_82 ·v_75
+                          fn ·v_87:
                             ·fn
-                              fn ·v_90, ·v_91:
-                                ·v_38 ·v_90, ·v_91, fn:
-                                  ·v_75 ·v_90, ·v_91, fn:
-                                    ·v_89 ·v_90, ·v_91, fn:
+                              fn ·v_88, ·v_89:
+                                ·v_37 ·v_88, ·v_89, fn:
+                                  ·v_73 ·v_88, ·v_89, fn:
+                                    ·v_87 ·v_88, ·v_89, fn:
                                       ·panic _
-                              fn ·v_106: ·v_106 ·∅foo, ·v_0
+                              fn ·v_104: ·v_104 ·∅foo, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICAxOiAnb25lJ1xuICAyOiAndHdvJ1xuICBfOiAnb3RoZXInIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLLEssRSxBLE1BQUcsQSxDQUFBLEc7S0FBSCxLO0lBQUEsQUFBQTtTLE0sTSxJO1FBQUEsQUFBQTtZLEVBQUEsQUFBQSxNO2FBQUEsSztZQUFBLEFBQUE7aUJBQUEsTSxNLEk7Z0JBQUEsQUFBQSxPQUFBLEksRUFBQSxDLEtBQUEsSztrQkFBQSxBQUFBLElBQUEsSztzQixFQUFBLEEsS0FBQTtzQixFQUFBLEEsS0FBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBQ0EsQUFBQTthLEssRSxBLE1BQUcsQSxDQUFBLEc7YUFBSCxLO1lBQUEsQUFBQTtpQixPLE8sSztnQkFBQSxBQUFBO29CLEVBQUEsQUFBQSxNO3FCQUFBLEs7b0JBQUEsQUFBQTt5QkFBQSxPLE8sSzt3QkFBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLOzBCQUFBLEFBQUEsSUFBQSxLOzhCLEVBQUEsQSxNQUFBOzhCLEVBQUEsQSxNQUFBO3lCQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLEssRTtpQkFBQSxLO2dCQUNBLEFBQUE7cUIsSyxFLEEsTUFBRyxBLENBQUEsSztxQkFBSCxLO29CQUFBLEFBQUE7eUIsTyxPLEssRUFBQSxBQUFBLE07eUJBQUEsSzt3QkFIRixBQUFBOzZCQUFBLE8sSzs0QkFBQSxBQUFBLE1BQUEsSyxFLEssSTs4QkFBQSxBQUFBLE1BQUEsSyxFLEssSTtnQ0FBQSxBQUFBLE1BQUEsSyxFLEssSTtrQ0FBQSxBQUFBLE9BQUE7NkJBQUEsTSxFQUFBLEFBQUEsT0FBTSxLLEUiCn0=
 
 
@@ -793,43 +793,43 @@ test 'match — expression in arm', fn:
       false: y
   | equals ƒink:
     ·fn
-      fn ·v_22: ·op_plus ·∅y, 1, ·v_22
-      fn ·v_28:
+      fn ·v_21: ·op_plus ·∅y, 1, ·v_21
+      fn ·v_27:
         ·fn
           fn ·v_2, ·v_3, ·v_4:
             ·fn
-              fn: ·v_28 ·v_3
-              fn ·v_34:
+              fn: ·v_27 ·v_3
+              fn ·v_33:
                 ·fn
                   fn ·v_6, ·v_7, ·v_8:
                     ·op_eq ·v_6, true, fn ·v_11:
                       ·if ·v_11,
                         fn: ·v_7 _
                         fn: ·v_8 _
-                  fn ·v_19: ·v_19 ·v_2, ·v_34, ·v_4
-          fn ·v_40:
+                  fn ·v_19: ·v_19 ·v_2, ·v_33, ·v_4
+          fn ·v_39:
             ·fn
-              fn ·v_61: ·v_61 ·∅y
-              fn ·v_65:
+              fn ·v_59: ·v_59 ·∅y
+              fn ·v_63:
                 ·fn
-                  fn ·v_41, ·v_42, ·v_43:
+                  fn ·v_40, ·v_41, ·v_42:
                     ·fn
-                      fn: ·v_65 ·v_42
-                      fn ·v_71:
+                      fn: ·v_63 ·v_41
+                      fn ·v_69:
                         ·fn
-                          fn ·v_45, ·v_46, ·v_47:
-                            ·op_eq ·v_45, false, fn ·v_50:
-                              ·if ·v_50,
+                          fn ·v_44, ·v_45, ·v_46:
+                            ·op_eq ·v_44, false, fn ·v_49:
+                              ·if ·v_49,
+                                fn: ·v_45 _
                                 fn: ·v_46 _
-                                fn: ·v_47 _
-                          fn ·v_58: ·v_58 ·v_41, ·v_71, ·v_43
-                  fn ·v_77:
+                          fn ·v_57: ·v_57 ·v_40, ·v_69, ·v_42
+                  fn ·v_75:
                     ·fn
-                      fn ·v_78, ·v_79:
-                        ·v_40 ·v_78, ·v_79, fn:
-                          ·v_77 ·v_78, ·v_79, fn:
+                      fn ·v_76, ·v_77:
+                        ·v_39 ·v_76, ·v_77, fn:
+                          ·v_75 ·v_76, ·v_77, fn:
                             ·panic _
-                      fn ·v_90: ·v_90 ·∅x, ·v_0
+                      fn ·v_88: ·v_88 ·∅x, ·v_0
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggeDpcbiAgdHJ1ZTogeSArIDFcbiAgZmFsc2U6IHkiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0ssSyxFQUFRLEFBQUEsU0FBRixHLEVBQUksQyxFO0tBQVYsSztJQUFBLEFBQUE7UyxNLE0sSTtRQUFBLEFBQUE7WSxFQUFBLEFBQUEsTTthQUFBLEs7WUFBQSxBQUFBO2lCQUFBLE0sTSxJO2dCQUFBLEFBQUEsT0FBQSxJLEVBQUEsSSxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLEtBQUE7c0IsRUFBQSxBLEtBQUE7aUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxJLEVBQUEsSyxFO1NBQUEsSztRQUNBLEFBQUE7YSxLLEUsQSxNQUFPO2FBQVAsSztZQUFBLEFBQUE7aUIsTyxPLEs7Z0JBQUEsQUFBQTtvQixFQUFBLEFBQUEsTTtxQkFBQSxLO29CQUFBLEFBQUE7eUJBQUEsTyxPLEs7d0JBQUEsQUFBQSxPQUFBLEssRUFBQSxLLEtBQUEsSzswQkFBQSxBQUFBLElBQUEsSzs4QixFQUFBLEEsTUFBQTs4QixFQUFBLEEsTUFBQTt5QkFBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxLLEU7aUJBQUEsSztnQkFGRixBQUFBO3FCQUFBLE8sSztvQkFBQSxBQUFBLE1BQUEsSyxFLEssSTtzQkFBQSxBQUFBLE1BQUEsSyxFLEssSTt3QkFBQSxBQUFBLE9BQUE7cUJBQUEsSyxFQUFBLEFBQUEsTUFBTSxHLEUiCn0=
 
 
@@ -939,46 +939,46 @@ test 'match — seq literal guard', fn:
       _: 0
   | equals ƒink:
     ·fn
-      fn ·val_0, ·v_49: ·v_49 ·val_0
-      fn ·v_53:
+      fn ·val_0, ·v_48: ·v_48 ·val_0
+      fn ·v_52:
         ·fn
           fn ·v_3, ·v_4, ·v_5:
             ·fn
               fn ·v_10, ·v_11:
                 ·fn
-                  fn ·v_45:
+                  fn:
                     ·let ·v_11, fn ·val_0:
-                      ·v_53 ·v_11, ·v_4
-                  fn ·v_60:
+                      ·v_52 ·v_11, ·v_4
+                  fn ·v_59:
                     ·fn
                       fn ·v_31, ·v_32, ·v_33:
                         ·op_eq ·v_31, 1, fn ·v_36:
                           ·if ·v_36,
                             fn: ·v_32 _
                             fn: ·v_33 _
-                      fn ·v_44: ·v_44 ·v_10, ·v_60, ·v_5
-              fn ·v_68:
+                      fn ·v_44: ·v_44 ·v_10, ·v_59, ·v_5
+              fn ·v_67:
                 ·fn
                   fn ·v_7, ·v_8, ·v_9:
                     ·seq_pop ·v_7, ·v_9, fn ·v_10, ·v_22:
                       ·seq_pop ·v_22, ·v_9, fn ·v_11, ·v_16:
                         ·seq_pop ·v_16, ·v_9, fn ·v_18, ·v_19:
                           ·v_8 ·v_10, ·v_11
-                  fn ·v_29: ·v_29 ·v_3, ·v_68, ·v_5
-          fn ·v_75:
+                  fn ·v_29: ·v_29 ·v_3, ·v_67, ·v_5
+          fn ·v_74:
             ·fn
-              fn ·v_80: ·v_80 0
-              fn ·v_84:
+              fn ·v_79: ·v_79 0
+              fn ·v_83:
                 ·fn
-                  fn ·v_76, ·v_77, ·v_78: ·v_84 ·v_77
-                  fn ·v_89:
+                  fn ·v_75, ·v_76, ·v_77: ·v_83 ·v_76
+                  fn ·v_88:
                     ·fn
-                      fn ·v_90, ·v_91:
-                        ·v_75 ·v_90, ·v_91, fn:
-                          ·v_89 ·v_90, ·v_91, fn:
+                      fn ·v_89, ·v_90:
+                        ·v_74 ·v_89, ·v_90, fn:
+                          ·v_88 ·v_89, ·v_90, fn:
                             ·panic _
-                      fn ·v_102: ·v_102 ·∅items, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggaXRlbXM6XG4gIFsxLCB2YWwsIC4uXTogdmFsXG4gIF86IDAiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0tBQUksUSxLLEUsQSxNQUFVO0tBQWQsSztJQUFBLEFBQUE7UyxNLE0sSTtRQUFBLEFBQUE7YUFBQSxPQUFBLEs7WUFBQyxBQUFBO2lCQUFBLEs7Z0JBQUcsQUFBQSxLQUFKLEssS0FBSSxNO2tCQUFKLEFBQUEsTUFBQSxLLEU7aUJBQUMsSztnQkFBQSxBQUFBO3FCQUFBLE8sTyxLO29CQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7c0JBQUEsQUFBQSxJQUFBLEs7MEIsRUFBQSxBLE1BQUE7MEIsRUFBQSxBLE1BQUE7cUJBQUEsSyxFQUFBLEFBQUEsTUFBRCxLLEVBQUMsSyxFO2FBQUQsSztZQUFBLEFBQUE7aUJBQUEsTSxNLEk7Z0JBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsT0FBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEUsSSxLQUFBLE9BQUEsSztvQkFBQSxBQUFBLFNBQUEsSyxFLEksS0FBQSxPQUFBLEs7c0JBQUEsQSxLQUFBLEssRUFBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBQ0EsQUFBQTthLEssRSxBLE1BQUc7YUFBSCxLO1lBQUEsQUFBQTtpQixPLE8sSyxFQUFBLEFBQUEsTTtpQkFBQSxLO2dCQUZGLEFBQUE7cUJBQUEsTyxLO29CQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3NCQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3dCQUFBLEFBQUEsT0FBQTtxQkFBQSxNLEVBQUEsQUFBQSxPQUFNLE8sRSIKfQ==
+                      fn ·v_101: ·v_101 ·∅items, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggaXRlbXM6XG4gIFsxLCB2YWwsIC4uXTogdmFsXG4gIF86IDAiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0tBQUksUSxLLEUsQSxNQUFVO0tBQWQsSztJQUFBLEFBQUE7UyxNLE0sSTtRQUFBLEFBQUE7YUFBQSxPQUFBLEs7WUFBQyxBQUFBO2dCO2dCQUFHLEFBQUEsS0FBSixLLEtBQUksTTtrQkFBSixBQUFBLE1BQUEsSyxFO2lCQUFDLEs7Z0JBQUEsQUFBQTtxQkFBQSxPLE8sSztvQkFBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLO3NCQUFBLEFBQUEsSUFBQSxLOzBCLEVBQUEsQSxNQUFBOzBCLEVBQUEsQSxNQUFBO3FCQUFBLEssRUFBQSxBQUFBLE1BQUQsSyxFQUFDLEssRTthQUFELEs7WUFBQSxBQUFBO2lCQUFBLE0sTSxJO2dCQUFBLEFBQUEsU0FBQSxJLEUsSSxLQUFBLE9BQUEsSztrQkFBQSxBQUFBLFNBQUEsSyxFLEksS0FBQSxPQUFBLEs7b0JBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsT0FBQSxLO3NCQUFBLEEsS0FBQSxLLEVBQUE7aUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxJLEVBQUEsSyxFO1NBQUEsSztRQUNBLEFBQUE7YSxLLEUsQSxNQUFHO2FBQUgsSztZQUFBLEFBQUE7aUIsTyxPLEssRUFBQSxBQUFBLE07aUJBQUEsSztnQkFGRixBQUFBO3FCQUFBLE8sSztvQkFBQSxBQUFBLE1BQUEsSyxFLEssSTtzQkFBQSxBQUFBLE1BQUEsSyxFLEssSTt3QkFBQSxBQUFBLE9BQUE7cUJBQUEsTSxFQUFBLEFBQUEsT0FBTSxPLEUiCn0=
 
 
 # TODO not sure this is correct
@@ -989,45 +989,45 @@ test 'match — rec literal guard', fn:
       _: 0
   | equals ƒink:
     ·fn
-      fn ·val_0, ·v_46: ·v_46 ·val_0
-      fn ·v_50:
+      fn ·val_0, ·v_45: ·v_45 ·val_0
+      fn ·v_49:
         ·fn
           fn ·v_3, ·v_4, ·v_5:
             ·fn
               fn ·v_10, ·v_11:
                 ·fn
-                  fn ·v_42:
+                  fn:
                     ·let ·v_11, fn ·val_0:
-                      ·v_50 ·v_11, ·v_4
-                  fn ·v_57:
+                      ·v_49 ·v_11, ·v_4
+                  fn ·v_56:
                     ·fn
                       fn ·v_28, ·v_29, ·v_30:
                         ·op_eq ·kind_28, 1, fn ·v_33:
                           ·if ·kind_33,
                             fn: ·v_29 _
                             fn: ·v_30 _
-                      fn ·v_41: ·kind_41 ·v_10, ·kind_57, ·v_5
-              fn ·v_65:
+                      fn ·v_41: ·kind_41 ·v_10, ·kind_56, ·v_5
+              fn ·v_64:
                 ·fn
                   fn ·v_7, ·v_8, ·v_9:
                     ·rec_pop ·v_7, 'kind', ·v_9, fn ·v_10, ·v_17:
                       ·rec_pop ·v_17, 'val', ·v_9, fn ·v_11, ·v_16:
                         ·v_8 ·v_10, ·v_11
-                  fn ·v_26: ·v_26 ·v_3, ·v_65, ·v_5
-          fn ·v_72:
+                  fn ·v_26: ·v_26 ·v_3, ·v_64, ·v_5
+          fn ·v_71:
             ·fn
-              fn ·v_77: ·v_77 0
-              fn ·v_81:
+              fn ·v_76: ·v_76 0
+              fn ·v_80:
                 ·fn
-                  fn ·v_73, ·v_74, ·v_75: ·v_81 ·v_74
-                  fn ·v_86:
+                  fn ·v_72, ·v_73, ·v_74: ·v_80 ·v_73
+                  fn ·v_85:
                     ·fn
-                      fn ·v_87, ·v_88:
-                        ·v_72 ·v_87, ·v_88, fn:
-                          ·v_86 ·v_87, ·v_88, fn:
+                      fn ·v_86, ·v_87:
+                        ·v_71 ·v_86, ·v_87, fn:
+                          ·v_85 ·v_86, ·v_87, fn:
                             ·panic _
-                      fn ·v_99: ·v_99 ·∅r, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggcjpcbiAge2tpbmQ6IDEsIHZhbH06IHZhbFxuICBfOiAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLQUFVLFEsSyxFLEEsTUFBTTtLQUFoQixLO0lBQUEsQUFBQTtTLE0sTSxJO1FBQUEsQUFBQTthQUFBLE9BQUEsSztZQUFDLEFBQUE7aUJBQUEsSztnQkFBUyxBQUFBLEtBQVYsSyxLQUFVLE07a0JBQVYsQUFBQSxNQUFBLEssRTtpQkFBQyxLO2dCQUFBLEFBQUE7cUJBQUEsTyxPLEs7b0JBQUEsQUFBQSxPQUFBLFEsRUFBQSxDLEtBQUEsSztzQkFBQSxBQUFBLElBQUEsUTswQixFQUFBLEEsTUFBQTswQixFQUFBLEEsTUFBQTtxQkFBQSxLLEVBQUEsQUFBQSxTQUFELEssRUFBQyxRLEU7YUFBRCxLO1lBQUEsQUFBQTtpQkFBQSxNLE0sSTtnQkFBQSxBQUFBLFNBQUEsSSxFQUFBLEEsQ0FBQSxJLEMsRSxJLEtBQUEsT0FBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLEksS0FBQSxPQUFBLEs7b0JBQUEsQSxLQUFBLEssRUFBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBQ0EsQUFBQTthLEssRSxBLE1BQUc7YUFBSCxLO1lBQUEsQUFBQTtpQixPLE8sSyxFQUFBLEFBQUEsTTtpQkFBQSxLO2dCQUZGLEFBQUE7cUJBQUEsTyxLO29CQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3NCQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3dCQUFBLEFBQUEsT0FBQTtxQkFBQSxLLEVBQUEsQUFBQSxNQUFNLEcsRSIKfQ==
+                      fn ·v_98: ·v_98 ·∅r, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggcjpcbiAge2tpbmQ6IDEsIHZhbH06IHZhbFxuICBfOiAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLQUFVLFEsSyxFLEEsTUFBTTtLQUFoQixLO0lBQUEsQUFBQTtTLE0sTSxJO1FBQUEsQUFBQTthQUFBLE9BQUEsSztZQUFDLEFBQUE7Z0I7Z0JBQVMsQUFBQSxLQUFWLEssS0FBVSxNO2tCQUFWLEFBQUEsTUFBQSxLLEU7aUJBQUMsSztnQkFBQSxBQUFBO3FCQUFBLE8sTyxLO29CQUFBLEFBQUEsT0FBQSxRLEVBQUEsQyxLQUFBLEs7c0JBQUEsQUFBQSxJQUFBLFE7MEIsRUFBQSxBLE1BQUE7MEIsRUFBQSxBLE1BQUE7cUJBQUEsSyxFQUFBLEFBQUEsU0FBRCxLLEVBQUMsUSxFO2FBQUQsSztZQUFBLEFBQUE7aUJBQUEsTSxNLEk7Z0JBQUEsQUFBQSxTQUFBLEksRUFBQSxBLENBQUEsSSxDLEUsSSxLQUFBLE9BQUEsSztrQkFBQSxBQUFBLFNBQUEsSyxFQUFBLEEsQ0FBQSxHLEMsRSxJLEtBQUEsT0FBQSxLO29CQUFBLEEsS0FBQSxLLEVBQUE7aUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxJLEVBQUEsSyxFO1NBQUEsSztRQUNBLEFBQUE7YSxLLEUsQSxNQUFHO2FBQUgsSztZQUFBLEFBQUE7aUIsTyxPLEssRUFBQSxBQUFBLE07aUJBQUEsSztnQkFGRixBQUFBO3FCQUFBLE8sSztvQkFBQSxBQUFBLE1BQUEsSyxFLEssSTtzQkFBQSxBQUFBLE1BQUEsSyxFLEssSTt3QkFBQSxBQUFBLE9BQUE7cUJBQUEsSyxFQUFBLEFBQUEsTUFBTSxHLEUiCn0=
 
 test 'multi-arm match', fn:
   expect cps_expr ƒink:
@@ -1171,16 +1171,16 @@ test 'seq pattern', fn:
       fn ·v_6, ·v_7:
         ·let ·v_6, fn ·a_0:
           ·fn
-            fn ·v_44: ·v_1 ·v_44
-            fn ·v_48:
+            fn: ·v_1 ·panic
+            fn ·v_47:
               ·fn
                 fn ·v_30, ·v_31, ·v_32:
                   ·op_eq ·v_30, 1, fn ·v_35:
                     ·if ·v_35,
                       fn: ·v_31 _
                       fn: ·v_32 _
-                fn ·v_43: ·v_43 ·v_7, ·v_48, ·panic
-      fn ·v_61:
+                fn ·v_43: ·v_43 ·v_7, ·v_47, ·panic
+      fn ·v_60:
         ·fn
           fn ·v_3, ·v_4, ·v_5:
             ·seq_pop ·v_3, ·v_5, fn ·v_6, ·v_20:
@@ -1189,8 +1189,8 @@ test 'seq pattern', fn:
                   ·if ·v_15,
                     fn: ·v_4 ·v_6, ·v_7
                     fn: ·v_5 _
-          fn ·v_27: ·v_27 ·∅foo, ·v_61, ·panic
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFHLEFBQUE7V0FBQSxLLEVBQUEsQSxLQUFBO1dBQUEsSztVQUFBLEFBQUE7ZUFBQSxPLE8sSztjQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7Z0JBQUEsQUFBQSxJQUFBLEs7b0IsRUFBQSxBLE1BQUE7b0IsRUFBQSxBLE1BQUE7ZUFBQSxLLEVBQUEsQUFBQSxNQUFKLEksRUFBSSxLLEVBQUE7S0FBSixLO0lBQUEsQUFBQTtTQUFBLE0sTSxJO1FBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsTUFBQSxLO1VBQUEsQUFBQSxTQUFBLEssRSxJLEtBQUEsTUFBQSxLO1lBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2NBQUEsQUFBQSxJQUFBLEs7a0IsRUFBQSxBLEtBQUEsSSxFQUFBO2tCLEVBQUEsQSxLQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBUyxLLEVBQVQsSyxFQUFBIgp9
+          fn ·v_27: ·v_27 ·∅foo, ·v_60, ·panic
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFHLEFBQUE7VSxFQUFBLEEsS0FBQTtXQUFBLEs7VUFBQSxBQUFBO2VBQUEsTyxPLEs7Y0FBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLO2dCQUFBLEFBQUEsSUFBQSxLO29CLEVBQUEsQSxNQUFBO29CLEVBQUEsQSxNQUFBO2VBQUEsSyxFQUFBLEFBQUEsTUFBSixJLEVBQUksSyxFQUFBO0tBQUosSztJQUFBLEFBQUE7U0FBQSxNLE0sSTtRQUFBLEFBQUEsU0FBQSxJLEUsSSxLQUFBLE1BQUEsSztVQUFBLEFBQUEsU0FBQSxLLEUsSSxLQUFBLE1BQUEsSztZQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztjQUFBLEFBQUEsSUFBQSxLO2tCLEVBQUEsQSxLQUFBLEksRUFBQTtrQixFQUFBLEEsS0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQVMsSyxFQUFULEssRUFBQSIKfQ==
 
 test 'seq pattern with non-empty rest', fn:
   expect cps_expr ƒink:
@@ -1437,27 +1437,27 @@ test 'varargs — complex destructuring desugars to pattern in body', fn:
     fn a, [1, ..b]: b
   | equals ƒink:
     ·fn
-      fn ·a_0, ·v_4, ·v_41:
+      fn ·a_0, ·v_4, ·v_40:
         ·fn
           fn ·v_9, ·v_10:
             ·fn
-              fn ·v_37:
+              fn:
                 ·let ·v_10, fn ·b_1:
-                  ·v_41 ·b_1
-              fn ·v_48:
+                  ·v_40 ·b_1
+              fn ·v_47:
                 ·fn
                   fn ·v_23, ·v_24, ·v_25:
                     ·op_eq ·v_23, 1, fn ·v_28:
                       ·if ·v_28,
                         fn: ·v_24 _
                         fn: ·v_25 _
-                  fn ·v_36: ·v_36 ·v_9, ·v_48, ·panic
-          fn ·v_56:
+                  fn ·v_36: ·v_36 ·v_9, ·v_47, ·panic
+          fn ·v_55:
             ·fn
               fn ·v_6, ·v_7, ·v_8:
                 ·seq_pop ·v_6, ·v_8, fn ·v_9, ·v_15:
                   ·let ·v_15, fn ·v_10:
                     ·v_7 ·v_9, ·v_10
-              fn ·v_21: ·v_21 ·v_4, ·v_56, ·panic
+              fn ·v_21: ·v_21 ·v_4, ·v_55, ·panic
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgWzEsIC4uYl06IGIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBRyxNQUFOLEs7SUFBTSxBQUFBO1NBQUEsTUFBQSxLO1FBQUMsQUFBQTthQUFBLEs7WUFBRCxBQUFBLEtBQUEsSyxLQUFNLEk7YyxBQUFaLE1BQWdCO2FBQVQsSztZQUFBLEFBQUE7aUJBQUEsTyxPLEs7Z0JBQUEsQUFBQSxPQUFBLEssRUFBQSxDLEtBQUEsSztrQkFBQSxBQUFBLElBQUEsSztzQixFQUFBLEEsTUFBQTtzQixFQUFBLEEsTUFBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFELEksRUFBQyxLLEVBQUE7U0FBRCxLO1FBQUEsQUFBQTthQUFBLE0sTSxJO1lBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsTUFBQSxLO2NBQUEsQUFBQSxLQUFBLEssS0FBQSxLO2dCQUFBLEEsS0FBQSxJLEVBQUE7YUFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEVBQUE7S0FBTixJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgWzEsIC4uYl06IGIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBRyxNQUFOLEs7SUFBTSxBQUFBO1NBQUEsTUFBQSxLO1FBQUMsQUFBQTtZO1lBQUQsQUFBQSxLQUFBLEssS0FBTSxJO2MsQUFBWixNQUFnQjthQUFULEs7WUFBQSxBQUFBO2lCQUFBLE8sTyxLO2dCQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLE1BQUE7c0IsRUFBQSxBLE1BQUE7aUJBQUEsSyxFQUFBLEFBQUEsTUFBRCxJLEVBQUMsSyxFQUFBO1NBQUQsSztRQUFBLEFBQUE7YUFBQSxNLE0sSTtZQUFBLEFBQUEsU0FBQSxJLEUsSSxLQUFBLE1BQUEsSztjQUFBLEFBQUEsS0FBQSxLLEtBQUEsSztnQkFBQSxBLEtBQUEsSSxFQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBQSxJLEVBQUEsSyxFQUFBO0tBQU4sSSxFLEEsS0FBQSIKfQ==
