@@ -290,4 +290,48 @@
 
     (unreachable))
 
+  ;; =========================================================================
+  ;; Membership: `in` / `not in` — dispatch on container type
+  ;; =========================================================================
+
+  ;; op_in(val, container, cont) → bool
+  (func $op_in (export "op_in")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $range (ref $Range))
+
+    ;; Try $Range
+    (block $not_range
+      (block $is_range (result (ref $Range))
+        (br $not_range
+          (br_on_cast $is_range (ref null any) (ref $Range)
+            (local.get $b))))
+      (local.set $range)
+      (return_call $apply_1
+        (ref.i31 (call $range_in
+          (ref.cast (ref $Num) (local.get $a))
+          (local.get $range)))
+        (local.get $cont)))
+
+    (unreachable))
+
+  ;; op_notin(val, container, cont) → bool
+  (func $op_notin (export "op_notin")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (local $range (ref $Range))
+
+    ;; Try $Range
+    (block $not_range
+      (block $is_range (result (ref $Range))
+        (br $not_range
+          (br_on_cast $is_range (ref null any) (ref $Range)
+            (local.get $b))))
+      (local.set $range)
+      (return_call $apply_1
+        (ref.i31 (call $range_notin
+          (ref.cast (ref $Num) (local.get $a))
+          (local.get $range)))
+        (local.get $cont)))
+
+    (unreachable))
+
 )
