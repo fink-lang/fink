@@ -24,6 +24,9 @@ pub struct Ctx<'a, 'src> {
   /// Optional capture graph — when present, LetFn nodes that are closures
   /// render with a leading `{cap: [x, y]}` param.
   pub captures: Option<&'a PropGraph<CpsId, Vec<(CpsId, crate::passes::cps::ir::Bind)>>>,
+  /// Optional param role metadata — when present, params are rendered grouped:
+  /// `{caps}, [user_params], cont` instead of a flat list.
+  pub param_info: Option<&'a PropGraph<CpsId, Option<super::ir::ParamInfo>>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -470,7 +473,7 @@ fn to_node_no_ctx(expr: &Expr) -> Node<'static> {
   // Build empty prop graphs as a dummy context.
   let origin: PropGraph<CpsId, Option<AstId>> = PropGraph::new();
   let ast_index: PropGraph<AstId, Option<&Node<'_>>> = PropGraph::new();
-  let ctx = Ctx { origin: &origin, ast_index: &ast_index, captures: None };
+  let ctx = Ctx { origin: &origin, ast_index: &ast_index, captures: None, param_info: None };
   to_node(expr, &ctx)
 }
 

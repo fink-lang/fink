@@ -114,6 +114,7 @@ fn main() {
         origin: &result.origin,
         ast_index: &desugared.ast_index,
         captures: None,
+        param_info: Some(&result.param_info),
       };
       if lifted.as_ref().is_some_and(|v| v.is_none()) {
         println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
