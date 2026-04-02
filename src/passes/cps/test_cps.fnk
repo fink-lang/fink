@@ -392,8 +392,8 @@ test 'member static', fn:
   expect cps_expr ƒink:
     foo.bar
   | equals ƒink:
-    ·op_dot ·∅foo, ·∅bar, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUUFBQSxLLEVBQUksSyxFIgp9
+    ·op_dot ·∅foo, 'bar', ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUUFBQSxLLEVBQUksQSxDQUFBLEcsQyxFIgp9
 
 
 test 'member dynamic', fn:
@@ -497,9 +497,9 @@ test 'chained member access', fn:
   expect cps_expr ƒink:
     foo.bar.baz
   | equals ƒink:
-    ·op_dot ·∅foo, ·∅bar, fn ·v_3:
-      ·op_dot ·v_3, ·∅baz, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhci5iYXoiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFFBQUEsSyxFQUFJLEssS0FBSixJO0VBQUEsQUFBQSxRQUFBLEksRUFBUSxLLEUiCn0=
+    ·op_dot ·∅foo, 'bar', fn ·v_3:
+      ·op_dot ·v_3, 'baz', ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhci5iYXoiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFFBQUEsSyxFQUFJLEEsQ0FBQSxHLEMsS0FBSixJO0VBQUEsQUFBQSxRQUFBLEksRUFBUSxBLENBQUEsRyxDLEUiCn0=
 
 
 ---

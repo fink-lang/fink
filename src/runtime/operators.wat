@@ -334,4 +334,29 @@
 
     (unreachable))
 
+  ;; =========================================================================
+  ;; Member access: `.` — dispatch on container type
+  ;; =========================================================================
+
+  ;; op_dot(container, key, cont) → val
+  ;;   $Rec → HAMT lookup by key; traps if key missing
+  (func $op_dot (export "op_dot")
+    (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+    (local $rec (ref $RecImpl))
+
+    ;; $Rec → hamt lookup
+    (block $not_rec
+      (block $is_rec (result (ref $RecImpl))
+        (br $not_rec
+          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+            (local.get $container))))
+      (local.set $rec)
+      (return_call $apply_1
+        (call $_hamt_rec_get
+          (local.get $rec)
+          (ref.cast (ref eq) (local.get $key)))
+        (local.get $cont)))
+
+    (unreachable))
+
 )
