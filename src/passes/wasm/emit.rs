@@ -331,7 +331,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Split builtins: implemented ones become defined functions, rest stay as imports.
   let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
     builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
-  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_") || n == "empty");
+  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_"));
   let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
   let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"))
     || module.funcs.iter().any(|f| scan_rec_lit(f.body));

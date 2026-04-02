@@ -15,7 +15,7 @@
 ;;   $list_head    : (ref $Cons) -> (ref any)
 ;;   $list_tail    : (ref $Cons) -> (ref $List)
 ;;   $list_pop     : (ref $Cons) -> (ref any), (ref $List)
-;;   $list_is_empty: (ref $List) -> i32
+;;   $list_op_empty: (ref $List) -> i32
 ;;   $list_size    : (ref $List) -> i32
 ;;   $list_concat  : (ref $List), (ref $List) -> (ref $List)
 ;;
@@ -65,7 +65,7 @@
   )
 
   ;; Predicate: is this list empty?
-  (func $list_is_empty (export "list_is_empty")
+  (func $list_op_empty (export "list_op_empty")
     (param $val (ref null any)) (result i32)
     (ref.test (ref $Nil) (local.get $val))
   )

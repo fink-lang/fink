@@ -48,7 +48,7 @@
 //
 // Granular imports (naming specific functions) enable selective linking:
 // if user code only uses `seq_pop`, only `list.wasm` is pulled in, not
-// `hamt.wasm` or `set.wasm`. For now the linker pulls the entire module
+// `rec.wasm` or `set.wasm`. For now the linker pulls the entire module
 // for any import from it. Future: trace internal call graph for finer
 // tree shaking, or defer to the WASM runtime's optimizer.
 //

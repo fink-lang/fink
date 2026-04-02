@@ -27,7 +27,7 @@ mod tests {
     config.wasm_multi_value(true);
 
     let engine = Engine::new(&config).unwrap();
-    let wat = prepare_wat(include_str!("hamt.wat"), HAMT_TYPE_DEFS);
+    let wat = prepare_wat(include_str!("rec.wat"), HAMT_TYPE_DEFS);
     // Inject stubs for functions from other modules (in merged runtime,
     // these come from hashing.wat and operators.wat).
     let stub = concat!(
@@ -600,7 +600,7 @@ mod tests {
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
-    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_op_empty").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
 
     let a = build_list(&mut store, &nil_fn, &cons_fn, &[1, 2]);
@@ -617,7 +617,7 @@ mod tests {
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
-    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_op_empty").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
 
     let nil = list_empty(&mut store, &nil_fn);
@@ -639,7 +639,7 @@ mod tests {
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
-    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_op_empty").unwrap();
 
     // shared = [2, 3]
     let shared = build_list(&mut store, &nil_fn, &cons_fn, &[2, 3]);

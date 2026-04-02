@@ -34,7 +34,7 @@ fn main() {
         "src/runtime/hashing.wat",
         "src/runtime/operators.wat",
         "src/runtime/list.wat",
-        "src/runtime/hamt.wat",
+        "src/runtime/rec.wat",
         "src/runtime/range.wat",
         "src/runtime/dispatch.wat",
     ];
