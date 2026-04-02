@@ -554,7 +554,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     // $TmpImport0 = (func (param i32 i32) (result (ref $Str)))
     // Temporary type for the str import — only exists pre-link.
-    // The linker unifies this with string.wat's actual function type.
+    // The linker unifies this with str.wat's actual function type.
     if self.needs_string {
       let str_idx = self.idx.type_idx("$Str");
       let str_ref = ValType::Ref(RefType {

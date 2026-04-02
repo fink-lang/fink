@@ -30,7 +30,7 @@ fn main() {
     // Modules wired into the compiler pipeline.
     // set is not yet used — added when integrated.
     let runtime_modules = [
-        "src/runtime/string.wat",
+        "src/runtime/str.wat",
         "src/runtime/hashing.wat",
         "src/runtime/operators.wat",
         "src/runtime/list.wat",

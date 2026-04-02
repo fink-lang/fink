@@ -125,7 +125,7 @@
     ))
 
     ;; $Str — base string type. Opaque.
-    ;; All internal subtypes defined in string.wat.
+    ;; All internal subtypes defined in str.wat.
     (type $Str (sub (struct)))
 
     ;; $List — sequence. Opaque base type.

@@ -1070,7 +1070,7 @@ mod tests {
     "  (func $_hamt_size_node (param $node (ref $HamtNode)) (result i32) (i32.const 0))\n",
   );
 
-  /// Load string.wat with types inlined and test data in linear memory.
+  /// Load str.wat with types inlined and test data in linear memory.
   /// `data_bytes` is placed at offset 0 in the data section.
   /// `extra_wat` is injected before the closing ) for test-specific functions.
   /// Prepare a standalone WAT module for testing: inject type defs and
@@ -1103,7 +1103,7 @@ mod tests {
 
     let engine = Engine::new(&config).unwrap();
 
-    let wat = prepare_wat(include_str!("string.wat"), STRING_TYPE_DEFS);
+    let wat = prepare_wat(include_str!("str.wat"), STRING_TYPE_DEFS);
     // Add memory, data section, and extra WAT before the closing )
     let data_hex: String = data_bytes.iter().map(|b| format!("\\{b:02x}")).collect();
     let tail = format!(
