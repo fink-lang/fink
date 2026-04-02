@@ -464,3 +464,37 @@ test 'varargs mixed fixed and rest', fn:
     30
 
 
+test 'range exclusive formatting', fn:
+  expect run ƒink:
+    main = fn:
+      '${0..10}' == '0..10'
+  | equals ƒink:
+    true
+
+
+test 'range inclusive formatting', fn:
+  expect run ƒink:
+    main = fn:
+      '${0...10}' == '0...10'
+  | equals ƒink:
+    true
+
+
+test 'range exclusive construction', fn:
+  expect run ƒink:
+    main = fn:
+      r = 2..5
+      '${r}' == '2..5'
+  | equals ƒink:
+    true
+
+
+test 'range inclusive construction', fn:
+  expect run ƒink:
+    main = fn:
+      r = 2...5
+      '${r}' == '2...5'
+  | equals ƒink:
+    true
+
+
