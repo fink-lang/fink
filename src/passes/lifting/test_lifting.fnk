@@ -472,3 +472,157 @@ test 'str literal', fn:
       ·v_5 'hello'
 
     ·export ·main_0
+
+# TODO not sure this is correct
+test 'match — seq literal guard', fn:
+  expect lift ƒink:
+    main = fn:
+      match [1, 42]:
+        [1, val, ..]: val
+        _: 0
+
+  | equals ƒink:
+    ·v_64 = fn [·val_1], ·v_60:
+      ·v_60 ·val_1
+
+    ·v_184 = fn {·v_185, ·v_187}, [·v_56]:
+      ·val_1 = ·v_185
+      ·v_64 ·v_185, ·v_187
+
+    ·v_218 = fn {·v_219, ·v_221}, [·v_47]:
+      if ·v_47,
+        fn:
+          ·v_219 _
+        fn:
+          ·v_221 _
+
+    ·v_55 = fn [·v_42, ·v_43], ·v_44:
+      ·v_225 = ·closure ·v_218, ·v_43, ·v_44
+      ·op_eq ·v_42, 1, ·v_225
+
+    ·v_171 = fn {·v_172, ·v_174}, [·v_21, ·v_22]:
+      ·v_189 = ·closure ·v_184, ·v_22, ·v_172
+      ·v_55 ·v_21, ·v_189, ·v_174
+
+    ·v_229 = fn {·v_230, ·v_232, ·v_234}, [·v_29, ·v_30]:
+      ·v_230 ·v_232, ·v_234
+
+    ·v_205 = fn {·v_206, ·v_208, ·v_210}, [·v_22, ·v_27]:
+      ·v_238 = ·closure ·v_229, ·v_208, ·v_210, ·v_22
+      ·seq_pop ·v_27, ·v_206, ·v_238
+
+    ·v_193 = fn {·v_194, ·v_196}, [·v_21, ·v_33]:
+      ·v_214 = ·closure ·v_205, ·v_194, ·v_196, ·v_21
+      ·seq_pop ·v_33, ·v_194, ·v_214
+
+    ·v_40 = fn [·v_18, ·v_19], ·v_20:
+      ·v_200 = ·closure ·v_193, ·v_20, ·v_19
+      ·seq_pop ·v_18, ·v_20, ·v_200
+
+    ·v_86 = fn [·v_14, ·v_15], ·v_16:
+      ·v_176 = ·closure ·v_171, ·v_15, ·v_16
+      ·v_40 ·v_14, ·v_176, ·v_16
+
+    ·v_95 = fn ·v_91:
+      ·v_91 0
+
+    ·v_100 = fn [·v_87, ·v_88], ·v_89:
+      ·v_95 ·v_88
+
+    ·v_180 = fn:
+      panic _
+
+    ·v_160 = fn {·v_161, ·v_163}:
+      ·v_100 ·v_161, ·v_163, ·v_180
+
+    ·v_113 = fn [·v_101], ·v_102:
+      ·v_167 = ·closure ·v_160, ·v_101, ·v_102
+      ·v_86 ·v_101, ·v_102, ·v_167
+
+    ·v_146 = fn {·v_147}, [·v_12]:
+      ·v_113 ·v_12, ·v_147
+
+    ·v_137 = fn {·v_138}, [·v_9]:
+      ·v_151 = ·closure ·v_146, ·v_138
+      ·seq_prepend 1, ·v_9, ·v_151
+
+    ·main_0 = ·v_5 = fn ·v_6:
+      ·v_142 = ·closure ·v_137, ·v_6
+      ·seq_prepend 42, [], ·v_142
+
+    ·export ·main_0
+
+# TODO not sure this is correct
+test 'match — rec literal guard', fn:
+  expect lift ƒink:
+    main = fn:
+      match {kind: 1, val: 42}:
+        {kind: 1, val}: val
+        _: 0
+
+  | equals ƒink:
+    ·v_63 = fn [·val_1], ·v_59:
+      ·v_59 ·val_1
+
+    ·v_183 = fn {·v_184, ·v_186}, [·v_55]:
+      ·val_1 = ·v_184
+      ·v_63 ·v_184, ·v_186
+
+    ·v_215 = fn {·v_216, ·v_218}, [·v_46]:
+      if ·kind_46,
+        fn:
+          ·v_216 _
+        fn:
+          ·v_218 _
+
+    ·v_54 = fn [·v_41, ·v_42], ·v_43:
+      ·v_222 = ·closure ·v_215, ·v_42, ·v_43
+      ·op_eq ·kind_41, 1, ·v_222
+
+    ·v_170 = fn {·v_171, ·v_173}, [·v_23, ·v_24]:
+      ·v_188 = ·closure ·v_183, ·v_24, ·v_171
+      ·v_54 ·v_23, ·v_188, ·v_173
+
+    ·v_204 = fn {·v_205, ·v_207}, [·v_24, ·v_29]:
+      ·v_205 ·v_207, ·v_24
+
+    ·v_192 = fn {·v_193, ·v_195}, [·v_23, ·v_30]:
+      ·v_211 = ·closure ·v_204, ·v_195, ·v_23
+      ·rec_pop ·v_30, 'val', ·v_193, ·v_211
+
+    ·v_39 = fn [·v_20, ·v_21], ·v_22:
+      ·v_199 = ·closure ·v_192, ·v_22, ·v_21
+      ·rec_pop ·v_20, 'kind', ·v_22, ·v_199
+
+    ·v_85 = fn [·v_16, ·v_17], ·v_18:
+      ·v_175 = ·closure ·v_170, ·v_17, ·v_18
+      ·v_39 ·v_16, ·v_175, ·v_18
+
+    ·v_94 = fn ·v_90:
+      ·v_90 0
+
+    ·v_99 = fn [·v_86, ·v_87], ·v_88:
+      ·v_94 ·v_87
+
+    ·v_179 = fn:
+      panic _
+
+    ·v_159 = fn {·v_160, ·v_162}:
+      ·v_99 ·v_160, ·v_162, ·v_179
+
+    ·v_112 = fn [·v_100], ·v_101:
+      ·v_166 = ·closure ·v_159, ·v_100, ·v_101
+      ·v_85 ·v_100, ·v_101, ·v_166
+
+    ·v_145 = fn {·v_146}, [·v_14]:
+      ·v_112 ·v_14, ·v_146
+
+    ·v_136 = fn {·v_137}, [·v_10]:
+      ·v_150 = ·closure ·v_145, ·v_137
+      ·rec_put ·v_10, 'val', 42, ·v_150
+
+    ·main_0 = ·v_5 = fn ·v_6:
+      ·v_141 = ·closure ·v_136, ·v_6
+      ·rec_put {}, 'kind', 1, ·v_141
+
+    ·export ·main_0

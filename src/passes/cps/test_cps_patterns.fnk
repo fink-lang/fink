@@ -931,6 +931,103 @@ test 'match — rec pattern arm', fn:
               fn ·v_49: ·v_49 ·∅foo, ·v_1
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggZm9vOlxuICB7YmFyfTogYmFyIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLQUFDLFEsSyxFLEEsTUFBTTtLQUFQLEs7SUFBQSxBQUFBO1MsTSxNLEk7UUFBQSxBQUFBO2FBQUEsSztZQUFDLEFBQUEsS0FBRCxLLEtBQUMsTTtjQUFELEFBQUEsTUFBQSxLLEU7YUFBQSxLO1lBQUEsQUFBQTtpQkFBQSxNLE0sSTtnQkFBQSxBQUFBLFNBQUEsSSxFQUFBLEEsQ0FBQSxHLEMsRSxJLEtBQUEsT0FBQSxLO2tCQUFBLEEsS0FBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBREYsQUFBQTthQUFBLE8sSztZQUFBLEFBQUEsTUFBQSxLLEUsSyxJO2NBQUEsQUFBQSxPQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBTSxLLEUiCn0=
 
+# TODO not sure this is correct
+test 'match — seq literal guard', fn:
+  expect cps_expr ƒink:
+    match items:
+      [1, val, ..]: val
+      _: 0
+  | equals ƒink:
+    ·fn
+      fn ·val_0, ·v_49: ·v_49 ·val_0
+      fn ·v_53:
+        ·fn
+          fn ·v_3, ·v_4, ·v_5:
+            ·fn
+              fn ·v_10, ·v_11:
+                ·fn
+                  fn ·v_45:
+                    ·let ·v_11, fn ·val_0:
+                      ·v_53 ·v_11, ·v_4
+                  fn ·v_60:
+                    ·fn
+                      fn ·v_31, ·v_32, ·v_33:
+                        ·op_eq ·v_31, 1, fn ·v_36:
+                          ·if ·v_36,
+                            fn: ·v_32 _
+                            fn: ·v_33 _
+                      fn ·v_44: ·v_44 ·v_10, ·v_60, ·v_5
+              fn ·v_68:
+                ·fn
+                  fn ·v_7, ·v_8, ·v_9:
+                    ·seq_pop ·v_7, ·v_9, fn ·v_10, ·v_22:
+                      ·seq_pop ·v_22, ·v_9, fn ·v_11, ·v_16:
+                        ·seq_pop ·v_16, ·v_9, fn ·v_18, ·v_19:
+                          ·v_8 ·v_10, ·v_11
+                  fn ·v_29: ·v_29 ·v_3, ·v_68, ·v_5
+          fn ·v_75:
+            ·fn
+              fn ·v_80: ·v_80 0
+              fn ·v_84:
+                ·fn
+                  fn ·v_76, ·v_77, ·v_78: ·v_84 ·v_77
+                  fn ·v_89:
+                    ·fn
+                      fn ·v_90, ·v_91:
+                        ·v_75 ·v_90, ·v_91, fn:
+                          ·v_89 ·v_90, ·v_91, fn:
+                            ·panic _
+                      fn ·v_102: ·v_102 ·∅items, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggaXRlbXM6XG4gIFsxLCB2YWwsIC4uXTogdmFsXG4gIF86IDAiXSwKICAibWFwcGluZ3MiOiAiQUFDRSxBQUFBO0tBQUksUSxLLEUsQSxNQUFVO0tBQWQsSztJQUFBLEFBQUE7UyxNLE0sSTtRQUFBLEFBQUE7YUFBQSxPQUFBLEs7WUFBQyxBQUFBO2lCQUFBLEs7Z0JBQUcsQUFBQSxLQUFKLEssS0FBSSxNO2tCQUFKLEFBQUEsTUFBQSxLLEU7aUJBQUMsSztnQkFBQSxBQUFBO3FCQUFBLE8sTyxLO29CQUFBLEFBQUEsT0FBQSxLLEVBQUEsQyxLQUFBLEs7c0JBQUEsQUFBQSxJQUFBLEs7MEIsRUFBQSxBLE1BQUE7MEIsRUFBQSxBLE1BQUE7cUJBQUEsSyxFQUFBLEFBQUEsTUFBRCxLLEVBQUMsSyxFO2FBQUQsSztZQUFBLEFBQUE7aUJBQUEsTSxNLEk7Z0JBQUEsQUFBQSxTQUFBLEksRSxJLEtBQUEsT0FBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEUsSSxLQUFBLE9BQUEsSztvQkFBQSxBQUFBLFNBQUEsSyxFLEksS0FBQSxPQUFBLEs7c0JBQUEsQSxLQUFBLEssRUFBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBQ0EsQUFBQTthLEssRSxBLE1BQUc7YUFBSCxLO1lBQUEsQUFBQTtpQixPLE8sSyxFQUFBLEFBQUEsTTtpQkFBQSxLO2dCQUZGLEFBQUE7cUJBQUEsTyxLO29CQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3NCQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3dCQUFBLEFBQUEsT0FBQTtxQkFBQSxNLEVBQUEsQUFBQSxPQUFNLE8sRSIKfQ==
+
+
+# TODO not sure this is correct
+test 'match — rec literal guard', fn:
+  expect cps_expr ƒink:
+    match r:
+      {kind: 1, val}: val
+      _: 0
+  | equals ƒink:
+    ·fn
+      fn ·val_0, ·v_46: ·v_46 ·val_0
+      fn ·v_50:
+        ·fn
+          fn ·v_3, ·v_4, ·v_5:
+            ·fn
+              fn ·v_10, ·v_11:
+                ·fn
+                  fn ·v_42:
+                    ·let ·v_11, fn ·val_0:
+                      ·v_50 ·v_11, ·v_4
+                  fn ·v_57:
+                    ·fn
+                      fn ·v_28, ·v_29, ·v_30:
+                        ·op_eq ·kind_28, 1, fn ·v_33:
+                          ·if ·kind_33,
+                            fn: ·v_29 _
+                            fn: ·v_30 _
+                      fn ·v_41: ·kind_41 ·v_10, ·kind_57, ·v_5
+              fn ·v_65:
+                ·fn
+                  fn ·v_7, ·v_8, ·v_9:
+                    ·rec_pop ·v_7, 'kind', ·v_9, fn ·v_10, ·v_17:
+                      ·rec_pop ·v_17, 'val', ·v_9, fn ·v_11, ·v_16:
+                        ·v_8 ·v_10, ·v_11
+                  fn ·v_26: ·v_26 ·v_3, ·v_65, ·v_5
+          fn ·v_72:
+            ·fn
+              fn ·v_77: ·v_77 0
+              fn ·v_81:
+                ·fn
+                  fn ·v_73, ·v_74, ·v_75: ·v_81 ·v_74
+                  fn ·v_86:
+                    ·fn
+                      fn ·v_87, ·v_88:
+                        ·v_72 ·v_87, ·v_88, fn:
+                          ·v_86 ·v_87, ·v_88, fn:
+                            ·panic _
+                      fn ·v_99: ·v_99 ·∅r, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggcjpcbiAge2tpbmQ6IDEsIHZhbH06IHZhbFxuICBfOiAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQ0UsQUFBQTtLQUFVLFEsSyxFLEEsTUFBTTtLQUFoQixLO0lBQUEsQUFBQTtTLE0sTSxJO1FBQUEsQUFBQTthQUFBLE9BQUEsSztZQUFDLEFBQUE7aUJBQUEsSztnQkFBUyxBQUFBLEtBQVYsSyxLQUFVLE07a0JBQVYsQUFBQSxNQUFBLEssRTtpQkFBQyxLO2dCQUFBLEFBQUE7cUJBQUEsTyxPLEs7b0JBQUEsQUFBQSxPQUFBLFEsRUFBQSxDLEtBQUEsSztzQkFBQSxBQUFBLElBQUEsUTswQixFQUFBLEEsTUFBQTswQixFQUFBLEEsTUFBQTtxQkFBQSxLLEVBQUEsQUFBQSxTQUFELEssRUFBQyxRLEU7YUFBRCxLO1lBQUEsQUFBQTtpQkFBQSxNLE0sSTtnQkFBQSxBQUFBLFNBQUEsSSxFQUFBLEEsQ0FBQSxJLEMsRSxJLEtBQUEsT0FBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLEksS0FBQSxPQUFBLEs7b0JBQUEsQSxLQUFBLEssRUFBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEksRUFBQSxLLEU7U0FBQSxLO1FBQ0EsQUFBQTthLEssRSxBLE1BQUc7YUFBSCxLO1lBQUEsQUFBQTtpQixPLE8sSyxFQUFBLEFBQUEsTTtpQkFBQSxLO2dCQUZGLEFBQUE7cUJBQUEsTyxLO29CQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3NCQUFBLEFBQUEsTUFBQSxLLEUsSyxJO3dCQUFBLEFBQUEsT0FBQTtxQkFBQSxLLEVBQUEsQUFBQSxNQUFNLEcsRSIKfQ==
 
 test 'multi-arm match', fn:
   expect cps_expr ƒink:
