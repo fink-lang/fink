@@ -767,11 +767,17 @@ fn lower_member<'src>(
   origin: Option<AstId>,
 ) -> Lower {
   let (lv, mut pending) = lower(g, lhs);
-  let (rv, rp) = lower(g, rhs);
-  pending.extend(rp);
+  let rv = match &rhs.kind {
+    NodeKind::Ident(key) => lit_val(g, Lit::Str(key.to_string()), Some(rhs.id)),
+    _ => {
+      let (v, rp) = lower(g, rhs);
+      pending.extend(rp);
+      v
+    }
+  };
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::Get), args: args_val(vec![lv, rv]), result,  origin });
+  pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::Get), args: args_val(vec![lv, rv]), result, origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 

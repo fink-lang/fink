@@ -913,7 +913,7 @@ skip test 'bitwise shift right', fn:
 
 # --- Record property access ---
 
-skip test 'rec dot access', fn:
+test 'rec dot access', fn:
   expect run ƒink:
     main = fn:
       r = {a: 42}
@@ -921,13 +921,29 @@ skip test 'rec dot access', fn:
   | equals ƒink:
     42
 
-skip test 'rec dot access nested', fn:
+test 'rec dot access nested', fn:
   expect run ƒink:
     main = fn:
       r = {a: {b: 99}}
       r.a.b
   | equals ƒink:
     99
+
+skip test 'rec dot access string key', fn:
+  expect run ƒink:
+    main = fn:
+      r = {'foo bar': 42}
+      r.('foo bar')
+  | equals ƒink:
+    42
+
+skip test 'rec dot access string key short', fn:
+  expect run ƒink:
+    main = fn:
+      r = {'foo bar': 42}
+      # TODO parser issue r.'foo bar'
+  | equals ƒink:
+    42
 
 
 # --- List formatting ---

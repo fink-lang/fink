@@ -1168,9 +1168,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let idx = self.idx.func_idx(&internal_name);
       func_names.append(idx, &internal_name);
     }
-    // _box_func helper.
-    let box_func_idx = self.idx.func_idx("_box_func");
-    func_names.append(box_func_idx, "_box_func");
+    // Internal helpers.
+    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub"] {
+      if let Some(&idx) = self.idx.funcs.get(*name) {
+        func_names.append(idx, name);
+      }
+    }
     // $_panic helper.
     if self.has_panic {
       let panic_idx = self.idx.func_idx("_panic");
