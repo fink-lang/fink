@@ -1945,6 +1945,7 @@ fn fold_seq_pops(
 /// Spread variant in a record pattern.
 enum SpreadKind<'a, 'src> {
   BareNonEmpty,                      // `{..}`
+  EmptyRest,                         // `{..{}}` — rest must be empty
   Bound(&'a Node<'src>),             // `{..rest}`
   SubPattern(&'a Node<'src>),        // `{..{bar, spam}}`
 }
@@ -1990,6 +1991,7 @@ fn emit_rec_pattern<'src>(
           None => SpreadKind::BareNonEmpty,
           Some(inner_node) => match &inner_node.kind {
             NodeKind::Ident(_) => SpreadKind::Bound(inner_node),
+            NodeKind::LitRec { items, .. } if items.items.is_empty() => SpreadKind::EmptyRest,
             NodeKind::LitRec { .. } => SpreadKind::SubPattern(inner_node),
             _ => SpreadKind::BareNonEmpty, // fallback
           }
@@ -2155,6 +2157,30 @@ fn build_rec_terminal<'src>(
     // `{x, y}` — partial match (fields extracted, extra OK): just call succ.
     None => {
       (succ_call, cursor_bind)
+    }
+
+    // `{bar, ..{}}` — rest must be empty: empty(cursor, fn e: if e then succ(...) else fail())
+    Some(SpreadKind::EmptyRest) => {
+      let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
+      let fail_call = g.expr(ExprKind::App {
+        func: Callable::Val(fail_ref), args: vec![],
+      }, origin);
+      let result_bind = g.fresh_result(origin);
+      let result_ref = g.val(ValKind::Ref(Ref::Synth(result_bind.id)), origin);
+      let if_expr = g.expr(ExprKind::If {
+        cond: Box::new(result_ref),
+        then: Box::new(succ_call),
+        else_: Box::new(fail_call),
+      }, origin);
+      let cursor_ref = g.val(ValKind::Ref(Ref::Synth(cursor_bind.id)), origin);
+      let empty_call = g.expr(ExprKind::App {
+        func: Callable::BuiltIn(BuiltIn::Empty),
+        args: vec![
+          Arg::Val(cursor_ref),
+          Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(if_expr) }),
+        ],
+      }, origin);
+      (empty_call, cursor_bind)
     }
 
     // `{bar, ..}` — assert non-empty rest: empty(cursor, fn e: if e then fail() else succ(...))

@@ -664,7 +664,7 @@ test 'rec spread overwrite', fn:
     101
 
 
-skip test 'rec rest binding', fn:
+test 'rec rest binding', fn:
   expect run ƒink:
     main = fn:
       {a, ..rest} = {a: 1, b: 2, c: 3}
@@ -673,7 +673,7 @@ skip test 'rec rest binding', fn:
   | equals ƒink:
     3
 
-skip test 'rec empty rest exact match', fn:
+test 'rec empty rest exact match', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1}
@@ -683,7 +683,7 @@ skip test 'rec empty rest exact match', fn:
   | equals ƒink:
     1
 
-skip test 'rec empty rest rejects extra', fn:
+test 'rec empty rest rejects extra', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1, b: 2}
@@ -929,7 +929,7 @@ test 'rec dot access nested', fn:
   | equals ƒink:
     99
 
-skip test 'rec dot access string key', fn:
+test 'rec dot access string key', fn:
   expect run ƒink:
     main = fn:
       r = {'foo bar': 42}

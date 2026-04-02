@@ -1392,7 +1392,7 @@
   )
 
   ;; Predicate: is this record empty?
-  (func $rec_op_empty (export "rec_is_empty")
+  (func $rec_op_empty (export "rec_op_empty")
     (param $val (ref null any)) (result i32)
     (i32.eqz (call $rec_size (ref.cast (ref $RecImpl) (local.get $val))))
   )
