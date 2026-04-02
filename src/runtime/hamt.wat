@@ -1334,6 +1334,21 @@
     (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
   )
 
+  (func $_hamt_rec_op_in (export "rec_op_in")
+    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (result i32)
+    (ref.is_null
+      (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key)))
+    (i32.const 1)
+    (i32.xor)
+  )
+
+  (func $_hamt_rec_op_not_in (export "rec_op_not_in")
+    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (result i32)
+    (i32.eqz (call $_hamt_rec_op_in (local.get $rec) (local.get $key)))
+  )
+
   (func $_hamt_rec_set
     (param $rec (ref $RecImpl)) (param $key (ref eq)) (param $val (ref eq))
     (result (ref $RecImpl))

@@ -1493,8 +1493,8 @@ mod tests {
     result[0].clone()
   }
 
-  fn range_in(store: &mut Store<()>, instance: &Instance, val: f64, range: &Val) -> bool {
-    let func = instance.get_func(&mut *store, "range_in").unwrap();
+  fn range_op_in(store: &mut Store<()>, instance: &Instance, val: f64, range: &Val) -> bool {
+    let func = instance.get_func(&mut *store, "range_op_in").unwrap();
     let v = make_num(store, instance, val);
     let mut result = [Val::I32(0)];
     func.call(store, &[v, range.clone()], &mut result).unwrap();
@@ -1529,19 +1529,19 @@ mod tests {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, 0.0, 10.0);
     // 0..10: 0 in, 5 in, 9 in, 10 out
-    assert!(range_in(&mut store, &instance, 0.0, &r));
-    assert!(range_in(&mut store, &instance, 5.0, &r));
-    assert!(range_in(&mut store, &instance, 9.0, &r));
-    assert!(!range_in(&mut store, &instance, 10.0, &r));
+    assert!(range_op_in(&mut store, &instance, 0.0, &r));
+    assert!(range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(range_op_in(&mut store, &instance, 9.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 10.0, &r));
   }
 
   #[test]
   fn test_range_excl_out_of_bounds() {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, 0.0, 10.0);
-    assert!(!range_in(&mut store, &instance, -1.0, &r));
-    assert!(!range_in(&mut store, &instance, 10.0, &r));
-    assert!(!range_in(&mut store, &instance, 11.0, &r));
+    assert!(!range_op_in(&mut store, &instance, -1.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 10.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 11.0, &r));
   }
 
   #[test]
@@ -1549,17 +1549,17 @@ mod tests {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_incl(&mut store, &instance, 0.0, 10.0);
     // 0...10: 0 in, 5 in, 10 in
-    assert!(range_in(&mut store, &instance, 0.0, &r));
-    assert!(range_in(&mut store, &instance, 5.0, &r));
-    assert!(range_in(&mut store, &instance, 10.0, &r));
+    assert!(range_op_in(&mut store, &instance, 0.0, &r));
+    assert!(range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(range_op_in(&mut store, &instance, 10.0, &r));
   }
 
   #[test]
   fn test_range_incl_out_of_bounds() {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_incl(&mut store, &instance, 0.0, 10.0);
-    assert!(!range_in(&mut store, &instance, -1.0, &r));
-    assert!(!range_in(&mut store, &instance, 11.0, &r));
+    assert!(!range_op_in(&mut store, &instance, -1.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 11.0, &r));
   }
 
   #[test]
@@ -1567,8 +1567,8 @@ mod tests {
     // 5..5 should contain nothing
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, 5.0, 5.0);
-    assert!(!range_in(&mut store, &instance, 5.0, &r));
-    assert!(!range_in(&mut store, &instance, 4.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 4.0, &r));
   }
 
   #[test]
@@ -1576,19 +1576,19 @@ mod tests {
     // 5...5 should contain only 5
     let (mut store, instance) = load_range_with_helpers();
     let r = range_incl(&mut store, &instance, 5.0, 5.0);
-    assert!(range_in(&mut store, &instance, 5.0, &r));
-    assert!(!range_in(&mut store, &instance, 4.0, &r));
-    assert!(!range_in(&mut store, &instance, 6.0, &r));
+    assert!(range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 4.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 6.0, &r));
   }
 
   #[test]
   fn test_range_negative_bounds() {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, -10.0, -5.0);
-    assert!(range_in(&mut store, &instance, -10.0, &r));
-    assert!(range_in(&mut store, &instance, -7.0, &r));
-    assert!(!range_in(&mut store, &instance, -5.0, &r));
-    assert!(!range_in(&mut store, &instance, 0.0, &r));
+    assert!(range_op_in(&mut store, &instance, -10.0, &r));
+    assert!(range_op_in(&mut store, &instance, -7.0, &r));
+    assert!(!range_op_in(&mut store, &instance, -5.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 0.0, &r));
   }
 
 

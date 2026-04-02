@@ -298,6 +298,7 @@
   (func $op_in (export "op_in")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
+    (local $rec (ref $RecImpl))
 
     ;; Try $Range
     (block $not_range
@@ -307,9 +308,22 @@
             (local.get $b))))
       (local.set $range)
       (return_call $apply_1
-        (ref.i31 (call $range_in
+        (ref.i31 (call $range_op_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
+        (local.get $cont)))
+
+    ;; Try $Rec
+    (block $not_rec
+      (block $is_rec (result (ref $RecImpl))
+        (br $not_rec
+          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+            (local.get $b))))
+      (local.set $rec)
+      (return_call $apply_1
+        (ref.i31 (call $_hamt_rec_op_in
+          (local.get $rec)
+          (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
 
     (unreachable))
@@ -318,6 +332,7 @@
   (func $op_notin (export "op_notin")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
+    (local $rec (ref $RecImpl))
 
     ;; Try $Range
     (block $not_range
@@ -327,9 +342,22 @@
             (local.get $b))))
       (local.set $range)
       (return_call $apply_1
-        (ref.i31 (call $range_notin
+        (ref.i31 (call $range_op_not_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
+        (local.get $cont)))
+
+    ;; Try $Rec
+    (block $not_rec
+      (block $is_rec (result (ref $RecImpl))
+        (br $not_rec
+          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+            (local.get $b))))
+      (local.set $rec)
+      (return_call $apply_1
+        (ref.i31 (call $_hamt_rec_op_not_in
+          (local.get $rec)
+          (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
 
     (unreachable))

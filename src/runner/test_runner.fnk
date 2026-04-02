@@ -715,7 +715,7 @@ skip test 'rec guard second arm', fn:
   | equals ƒink:
     110
 
-skip test 'rec key membership', fn:
+test 'rec key membership', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1, b: 2}
@@ -723,7 +723,7 @@ skip test 'rec key membership', fn:
   | equals ƒink:
     true
 
-skip test 'rec key not member', fn:
+test 'rec key not member', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1, b: 2}
