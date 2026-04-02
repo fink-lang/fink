@@ -1055,8 +1055,19 @@ mod tests {
     "    (type $Num (struct (field $val f64)))\n",
     "    (type $Str (sub (struct)))\n",
     "    (type $Range (sub (struct)))\n",
+    "    (type $Rec (sub (struct)))\n",
     "  )\n",
     "  (type $RangeImpl (sub $Range (struct (field $start (ref $Num)) (field $end (ref $Num)) (field $incl i32))))\n",
+    // HAMT types needed by _str_fmt_rec (stubs for standalone string tests).
+    "  (type $HamtLeaf (struct (field $key (ref eq)) (field $val (ref eq))))\n",
+    "  (type $HamtChildren (array (mut (ref null struct))))\n",
+    "  (rec\n",
+    "    (type $HamtNode (struct (field $bitmap (mut i32)) (field $children (ref $HamtChildren))))\n",
+    "    (type $HamtCollision (struct (field $col_hash i32) (field $col_leaves (ref $HamtChildren))))\n",
+    "    (type $RecImpl (sub $Rec (struct (field $hamt (ref $HamtNode)))))\n",
+    "  )\n",
+    // Stub for _hamt_size_node (record formatting calls it for separator counting).
+    "  (func $_hamt_size_node (param $node (ref $HamtNode)) (result i32) (i32.const 0))\n",
   );
 
   /// Load string.wat with types inlined and test data in linear memory.

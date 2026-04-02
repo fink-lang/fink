@@ -333,7 +333,8 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
     builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
   let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_") || n == "empty");
   let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
-  let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"));
+  let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"))
+    || module.funcs.iter().any(|f| scan_rec_lit(f.body));
   // Scan string literals and intern into the data blob.
   for func in &module.funcs {
     scan_strings(func.body, &mut e.string_data);
@@ -1907,6 +1908,43 @@ fn scan_panic(expr: &Expr) -> bool {
   }
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind
     && scan_panic(fn_body) { return true; }
+  false
+}
+
+/// Check whether any value in the expression tree is a Lit::Rec.
+fn scan_rec_lit(expr: &Expr) -> bool {
+  fn is_rec_val(val: &Val) -> bool {
+    matches!(val.kind, ValKind::Lit(Lit::Rec))
+  }
+  match &expr.kind {
+    ExprKind::LetVal { val, cont, .. } => {
+      if is_rec_val(val) { return true; }
+      if let Cont::Expr { body, .. } = cont
+        && scan_rec_lit(body) { return true; }
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => {
+            if is_rec_val(v) { return true; }
+          }
+          Arg::Cont(Cont::Expr { body, .. }) => {
+            if scan_rec_lit(body) { return true; }
+          }
+          _ => {}
+        }
+      }
+    }
+    ExprKind::LetFn { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont
+        && scan_rec_lit(body) { return true; }
+    }
+    ExprKind::If { then, else_, .. } => {
+      if scan_rec_lit(then) || scan_rec_lit(else_) { return true; }
+    }
+  }
+  if let ExprKind::LetFn { fn_body, .. } = &expr.kind
+    && scan_rec_lit(fn_body) { return true; }
   false
 }
 

@@ -415,6 +415,231 @@ test 'rec destructure', fn:
     3
 
 
+test 'rec single field', fn:
+  expect run ƒink:
+    main = fn:
+      {x} = {x: 42}
+      x
+  | equals ƒink:
+    42
+
+
+test 'rec three fields', fn:
+  expect run ƒink:
+    main = fn:
+      {a, b, c} = {a: 1, b: 2, c: 3}
+      a + b + c
+  | equals ƒink:
+    6
+
+
+test 'rec shorthand', fn:
+  expect run ƒink:
+    main = fn:
+      x = 10
+      y = 20
+      {a, b} = {a: x, b: y}
+      a + b
+  | equals ƒink:
+    30
+
+
+test 'rec nested', fn:
+  expect run ƒink:
+    main = fn:
+      {a} = {a: {b: 42}}
+      {b} = a
+      b
+  | equals ƒink:
+    42
+
+
+test 'rec spread update', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      {a, b} = {..r, b: 10}
+      a + b
+  | equals ƒink:
+    11
+
+
+test 'rec spread merge', fn:
+  expect run ƒink:
+    main = fn:
+      r1 = {a: 1}
+      r2 = {b: 2}
+      {a, b} = {..r1, ..r2}
+      a + b
+  | equals ƒink:
+    3
+
+
+test 'rec in fn arg', fn:
+  expect run ƒink:
+    sum-fields = fn rec:
+      {a, b} = rec
+      a + b
+
+    main = fn:
+      sum-fields {a: 10, b: 20}
+  | equals ƒink:
+    30
+
+
+test 'rec fn return', fn:
+  expect run ƒink:
+    make-point = fn x, y:
+      {x: x, y: y}
+
+    main = fn:
+      {x, y} = make-point 3, 4
+      x + y
+  | equals ƒink:
+    7
+
+
+test 'rec match pattern', fn:
+  expect run ƒink:
+    main = fn:
+      r = {x: 42, y: 99}
+      match r:
+        {x, ..}: x
+  | equals ƒink:
+    42
+
+
+test 'rec match extract field', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 5, b: 10}
+      match r:
+        {a, ..}: a
+  | equals ƒink:
+    5
+
+
+test 'rec empty', fn:
+  expect run ƒink:
+    main = fn:
+      r = {}
+      {a} = {..r, a: 1}
+      a
+  | equals ƒink:
+    1
+
+
+test 'rec with bool values', fn:
+  expect run ƒink:
+    main = fn:
+      {a, b} = {a: true, b: false}
+      a and (not b)
+  | equals ƒink:
+    true
+
+
+test 'rec with string values', fn:
+  expect run ƒink:
+    main = fn:
+      {name} = {name: 'hello'}
+      name == 'hello'
+  | equals ƒink:
+    true
+
+
+test 'rec format empty', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {}  }' == '{}'
+  | equals ƒink:
+    true
+
+
+test 'rec format single field', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {a: 1}  }' == '{a: 1}'
+  | equals ƒink:
+    true
+
+
+test 'rec format nested', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {a: {b: 1}}  }' == '{a: {b: 1}}'
+  | equals ƒink:
+    true
+
+
+test 'rec format bool value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {x: true}  }' == '{x: true}'
+  | equals ƒink:
+    true
+
+
+test 'rec format string value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {name: 'hi'}  }' == '{name: hi}'
+  | equals ƒink:
+    true
+
+
+test 'rec format number value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {x: 42}  }' == '{x: 42}'
+  | equals ƒink:
+    true
+
+
+test 'rec format float value', fn:
+  expect run ƒink:
+    main = fn:
+      '${  {pi: 3.14}  }' == '{pi: 3.14}'
+  | equals ƒink:
+    true
+
+
+test 'rec format string key', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {'foo bar': 42} }' == '{\'foo bar\': 42}'
+  | equals ƒink:
+    true
+
+
+test 'rec format in template', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1}
+      'got: ${r}' == 'got: {a: 1}'
+  | equals ƒink:
+    true
+
+
+test 'rec spread overwrite', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1, b: 2}
+      {a, b} = {..r, a: 99}
+      a + b
+  | equals ƒink:
+    101
+
+
+test 'rec with list value', fn:
+  expect run ƒink:
+    main = fn:
+      {items} = {items: [1, 2, 3]}
+      match items:
+        [a, ..]: a
+  | equals ƒink:
+    1
+
+
 test 'varargs first', fn:
   expect run ƒink:
     first = fn ..args:
