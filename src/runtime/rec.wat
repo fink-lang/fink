@@ -178,7 +178,7 @@
     )
   )
 
-  (func $hamt_empty (export "hamt_empty") (result (ref $HamtNode))
+  (func $hamt_empty (result (ref $HamtNode))
     global.get $empty_node
   )
 
@@ -186,7 +186,7 @@
   ;; -- Get ------------------------------------------------------------
 
   ;; Look up a key. Returns null if not found.
-  (func $hamt_get (export "hamt_get")
+  (func $hamt_get
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref null eq))
@@ -281,7 +281,7 @@
 
   ;; Insert or update a key-value pair. Returns a new node (structural
   ;; sharing with the original for unchanged subtrees).
-  (func $hamt_set (export "hamt_set")
+  (func $hamt_set
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $val (ref eq))
@@ -585,7 +585,7 @@
 
   ;; Remove a key. Returns a new node (structural sharing).
   ;; If the key is not present, returns the original node unchanged.
-  (func $hamt_delete (export "hamt_delete")
+  (func $hamt_delete
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref $HamtNode))
@@ -857,7 +857,7 @@
   ;;
   ;; Returns (value, rest_node) via multi-value.
   ;; If key is absent, returns (null, original_node).
-  (func $hamt_pop (export "hamt_pop")
+  (func $hamt_pop
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref null eq) (ref $HamtNode))
@@ -1145,7 +1145,7 @@
   ;;   {..dest, ..src}  →  hamt_merge(dest, src)
   ;;
   ;; Walks src's tree and calls hamt_set for each leaf found.
-  (func $hamt_merge (export "hamt_merge")
+  (func $hamt_merge
     (param $dest (ref $HamtNode))
     (param $src (ref $HamtNode))
     (result (ref $HamtNode))
@@ -1257,7 +1257,7 @@
 
   ;; Count the number of key-value entries in the HAMT.
   ;; Walks the tree, counting leaves and collision entries.
-  (func $hamt_size (export "hamt_size")
+  (func $hamt_size
     (param $node (ref $HamtNode))
     (result i32)
 

@@ -60,7 +60,7 @@
   ;; Dispatches via br_on_cast:
   ;;   $StrDataImpl  → copies bytes from data section into a $ByteArray
   ;;   $StrBytesImpl → returns the existing $ByteArray
-  (func $str_bytes (export "str_bytes")
+  (func $str_bytes
     (param $str (ref $Str))
     (result (ref $ByteArray))
 
@@ -107,7 +107,7 @@
   ;; Fast path: ref.eq (same object → 1).
   ;; Slow path: dispatch on concrete types, compare byte-by-byte.
   ;; Returns 1 if equal, 0 if not.
-  (func $str_eq (export "str_eq")
+  (func $str_eq
     (param $a (ref $Str))
     (param $b (ref $Str))
     (result i32)
@@ -268,7 +268,7 @@
   ;; \n, \t, \r, \f, \v, \b, \\, \', \$, \xNN, \u{NNNNNN}
   ;; Dispatches to $_escape_data (linear memory) or $_escape_array (heap).
   ;; Pure byte processing — no user code, no CPS needed.
-  (func $str_render_escape (export "str_render_escape")
+  (func $str_render_escape
     (param $raw (ref $Str))
     (result (ref $Str))
 
@@ -823,7 +823,7 @@
   ;; For debug output and serialization.
   ;;
   ;; Two-pass: count then write.
-  (func $str_render_unescape (export "str_render_unescape")
+  (func $str_render_unescape
     (param $str (ref $Str))
     (result (ref $Str))
 
@@ -1000,7 +1000,7 @@
   ;; Content-based hash for any byte-bearing string.
   ;; Dispatches on concrete type to avoid allocating a $ByteArray copy.
   ;; Uses FNV-1a (32-bit), masked to 31 bits for i31ref.
-  (func $str_hash_i31 (export "str_hash_i31")
+  (func $str_hash_i31
     (param $str (ref $Str))
     (result i32)
 

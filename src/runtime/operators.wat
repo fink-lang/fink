@@ -91,7 +91,7 @@
   ;;   i31ref  → ref.eq (identity — fine for small ints and booleans)
   ;;   $Num    → f64.eq
   ;;   $Str → str_eq
-  (func $deep_eq (export "deep_eq")
+  (func $deep_eq
     (param $a (ref eq)) (param $b (ref eq)) (result i32)
 
     ;; Try $Num

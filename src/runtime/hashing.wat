@@ -25,7 +25,7 @@
   ;; Unreachable for types that are not valid hash keys (closures,
   ;; collections, templates). The compiler must not emit hash_i31
   ;; calls for those types.
-  (func $hash_i31 (export "hash_i31")
+  (func $hash_i31
     (param $key (ref eq))
     (result i32)
 
