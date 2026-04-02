@@ -99,6 +99,13 @@
     (f64.lt (local.get $v) (local.get $e))
   )
 
+  ;; range_notin(val, range) → 1 if val is NOT in range, 0 otherwise
+  (func $range_notin (export "range_notin")
+    (param $val (ref $Num)) (param $range (ref $Range))
+    (result i32)
+    (i32.eqz (call $range_in (local.get $val) (local.get $range)))
+  )
+
 
   ;; CPS wrappers — stripped by unit test harness (prepare_wat).
 

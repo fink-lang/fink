@@ -498,3 +498,45 @@ test 'range inclusive construction', fn:
     true
 
 
+test 'range in exclusive', fn:
+  expect run ƒink:
+    main = fn:
+      5 in 0..10
+  | equals ƒink:
+    true
+
+
+test 'range in exclusive upper bound', fn:
+  expect run ƒink:
+    main = fn:
+      10 in 0..10
+  | equals ƒink:
+    false
+
+
+test 'range in inclusive upper bound', fn:
+  expect run ƒink:
+    main = fn:
+      10 in 0...10
+  | equals ƒink:
+    true
+
+
+test 'range not in', fn:
+  expect run ƒink:
+    main = fn:
+      20 not in 0..10
+  | equals ƒink:
+    true
+
+
+test 'range match pattern', fn:
+  expect run ƒink:
+    main = fn:
+      x = 5
+      match x:
+        0..10: true
+  | equals ƒink:
+    true
+
+
