@@ -229,19 +229,19 @@ fn render_fn_params_grouped(params: &[Param], fc: &FmtCtx<'_, '_>) -> Vec<Node<'
 /// Render a param node using `param_info` when available.
 /// Captures are rendered using the original binding's source name (via origin CpsId).
 fn render_param_with_info(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
-  if let Some(pi) = fc.ctx.param_info {
-    if let Some(Some(info)) = pi.try_get(bind.id) {
-      return match info {
-        ParamInfo::Cap(origin) => {
-          // Try to recover the source name from the origin's AST node,
-          // but use the param's own CpsId for the numeric suffix so it
-          // matches body refs. Falls back to ·v_{id} for synthetic origins.
-          render_cap_name(bind.id, *origin, fc)
-        }
-        ParamInfo::Param(_) => render_bind(bind, fc),
-        ParamInfo::Cont => render_bind(bind, fc),
-      };
-    }
+  if let Some(pi) = fc.ctx.param_info
+    && let Some(Some(info)) = pi.try_get(bind.id)
+  {
+    return match info {
+      ParamInfo::Cap(origin) => {
+        // Try to recover the source name from the origin's AST node,
+        // but use the param's own CpsId for the numeric suffix so it
+        // matches body refs. Falls back to ·v_{id} for synthetic origins.
+        render_cap_name(bind.id, *origin, fc)
+      }
+      ParamInfo::Param(_) => render_bind(bind, fc),
+      ParamInfo::Cont => render_bind(bind, fc),
+    };
   }
   render_bind(bind, fc)
 }
