@@ -53,7 +53,7 @@ pub mod fmt;
 use crate::ast::AstId;
 use crate::passes::cps::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
-  Param, Ref, Val, ValKind,
+  Param, ParamInfo, Ref, Val, ValKind,
 };
 use crate::propgraph::PropGraph;
 
@@ -64,11 +64,16 @@ use crate::propgraph::PropGraph;
 struct Alloc {
   origin: PropGraph<CpsId, Option<AstId>>,
   synth_alias: PropGraph<CpsId, Option<CpsId>>,
+  param_info: PropGraph<CpsId, Option<ParamInfo>>,
 }
 
 impl Alloc {
-  fn new(origin: PropGraph<CpsId, Option<AstId>>, synth_alias: PropGraph<CpsId, Option<CpsId>>) -> Self {
-    Alloc { origin, synth_alias }
+  fn new(
+    origin: PropGraph<CpsId, Option<AstId>>,
+    synth_alias: PropGraph<CpsId, Option<CpsId>>,
+    param_info: PropGraph<CpsId, Option<ParamInfo>>,
+  ) -> Self {
+    Alloc { origin, synth_alias, param_info }
   }
 
   fn next(&mut self, ast_origin: Option<AstId>) -> CpsId {
@@ -82,6 +87,11 @@ impl Alloc {
 
   fn synth_bind(&mut self) -> BindNode {
     self.bind(Bind::Synth, None)
+  }
+
+  /// Record the semantic role of a function parameter.
+  fn set_param_info(&mut self, cps_id: CpsId, info: ParamInfo) {
+    self.param_info.set(cps_id, Some(info));
   }
 
   fn val(&mut self, kind: ValKind, ast_origin: Option<AstId>) -> Val {
@@ -123,6 +133,9 @@ pub fn lift<'src>(
 
   for round in 0..MAX_ROUNDS {
     if !needs_lifting(&current.root) {
+      // Classify any params that weren't tagged during lifting (pure hoists,
+      // top-level fns that were never moved).
+      classify_untagged_params(&current.root, &mut current.param_info);
       return current;
     }
 
@@ -131,13 +144,14 @@ pub fn lift<'src>(
     }
 
     // Extract LetFn from fn_bodies and hoist inline Cont::Expr (one level).
-    let mut alloc = Alloc::new(current.origin, current.synth_alias);
+    let mut alloc = Alloc::new(current.origin, current.synth_alias, current.param_info);
     let new_root = lift_expr(current.root, ast_index, &mut alloc);
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
       bind_to_cps: current.bind_to_cps,
       synth_alias: alloc.synth_alias,
+      param_info: alloc.param_info,
     };
   }
   unreachable!()
@@ -441,6 +455,7 @@ fn extract_from_body<'src>(
           let idx: usize = param_bind.id.into();
           while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
           alloc.synth_alias.set(param_bind.id, Some(*cap_id));
+          alloc.set_param_info(param_bind.id, ParamInfo::Cap(*cap_id));
           lifted_params.push(Param::Name(param_bind));
 
           // At call site, pass the captured value as a direct ref to its CpsId.
@@ -452,6 +467,22 @@ fn extract_from_body<'src>(
         let inner_fn_body = rewrite_refs(inner_fn_body, &rewrite_map);
 
         // Lifted fn has captures as leading params, then original params.
+        // Record param_info for original params: only the last Bind::Cont is
+        // the user return continuation; other Bind::Cont params are just
+        // forwarded cont refs (matcher succ/fail, etc.) treated as regular params.
+        let last_is_cont = params.last().map_or(false, |p| {
+          let b = match p { Param::Name(b) | Param::Spread(b) => b };
+          b.kind.is_cont()
+        });
+        for (i, p) in params.iter().enumerate() {
+          let b = match p { Param::Name(b) | Param::Spread(b) => b };
+          let info = if last_is_cont && i == params.len() - 1 {
+            ParamInfo::Cont
+          } else {
+            ParamInfo::Param(b.id)
+          };
+          alloc.set_param_info(b.id, info);
+        }
         lifted_params.extend(params);
 
         // Extract cont args for wrap_hoisted binding.
@@ -583,11 +614,27 @@ fn extract_from_body<'src>(
               let idx: usize = param_bind.id.into();
               while alloc.synth_alias.len() <= idx { alloc.synth_alias.push(None); }
               alloc.synth_alias.set(param_bind.id, Some(*cap_id));
+              alloc.set_param_info(param_bind.id, ParamInfo::Cap(*cap_id));
               lifted_params.push(Param::Name(param_bind));
               let arg_val = alloc.val(ValKind::Ref(Ref::Synth(*cap_id)), ast_origin);
               closure_args.push(Arg::Val(arg_val));
             }
             let body = rewrite_refs(body, &rewrite_map);
+            // Record param_info for the original cont params: only the last
+            // Bind::Cont is the user return continuation.
+            let last_is_cont = cont_params.last().map_or(false, |p| {
+              let b = match p { Param::Name(b) | Param::Spread(b) => b };
+              b.kind.is_cont()
+            });
+            for (i, p) in cont_params.iter().enumerate() {
+              let b = match p { Param::Name(b) | Param::Spread(b) => b };
+              let info = if last_is_cont && i == cont_params.len() - 1 {
+                ParamInfo::Cont
+              } else {
+                ParamInfo::Param(b.id)
+              };
+              alloc.set_param_info(b.id, info);
+            }
             lifted_params.extend(cont_params);
             hoisted.push(HoistedFn {
               name: lifted_fn_bind,
@@ -829,6 +876,59 @@ fn collect_captured_refs_val(
 }
 
 // ---------------------------------------------------------------------------
+// Post-lift: classify any params not yet tagged by lifting
+// ---------------------------------------------------------------------------
+
+/// Walk all LetFn in the tree and assign ParamInfo to params that weren't
+/// tagged during lifting (e.g. top-level fns, pure hoists with no captures).
+fn classify_untagged_params(expr: &Expr, param_info: &mut PropGraph<CpsId, Option<ParamInfo>>) {
+  match &expr.kind {
+    ExprKind::LetFn { params, fn_body, cont, .. } => {
+      let last_is_cont = params.last().map_or(false, |p| {
+        let b = match p { Param::Name(b) | Param::Spread(b) => b };
+        b.kind.is_cont()
+      });
+      for (i, p) in params.iter().enumerate() {
+        let b = match p { Param::Name(b) | Param::Spread(b) => b };
+        let already = param_info.try_get(b.id).and_then(|o| *o);
+        if already.is_none() {
+          let info = if last_is_cont && i == params.len() - 1 {
+            ParamInfo::Cont
+          } else {
+            ParamInfo::Param(b.id)
+          };
+          param_info.set(b.id, Some(info));
+        }
+      }
+      classify_untagged_params(fn_body, param_info);
+      classify_untagged_params_cont(cont, param_info);
+    }
+    ExprKind::LetVal { cont, .. } => {
+      classify_untagged_params_cont(cont, param_info);
+    }
+    ExprKind::App { args, .. } => {
+      for a in args {
+        match a {
+          Arg::Cont(c) => classify_untagged_params_cont(c, param_info),
+          Arg::Expr(e) => classify_untagged_params(e, param_info),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      classify_untagged_params(then, param_info);
+      classify_untagged_params(else_, param_info);
+    }
+  }
+}
+
+fn classify_untagged_params_cont(cont: &Cont, param_info: &mut PropGraph<CpsId, Option<ParamInfo>>) {
+  if let Cont::Expr { body, .. } = cont {
+    classify_untagged_params(body, param_info);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -847,6 +947,7 @@ mod tests {
           origin: &lifted.result.origin,
           ast_index: &desugared.ast_index,
           captures: None,
+          param_info: Some(&lifted.result.param_info),
         };
         fmt_flat(&lifted.result.root, &ctx)
       }

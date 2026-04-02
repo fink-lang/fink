@@ -8,6 +8,14 @@ unified lifting tests
 # After lifting, no fn should reference bindings from outer scopes — all values
 # are passed explicitly as params. No forward references to sibling-scope binds.
 #
+# Param display format (purely visual — the IR is a flat param list):
+#   {·a_1, ·b_2}     captures — closed-over variables threaded by lifting
+#   [·x_3, ·y_4]     user params — original function arguments
+#   ·v_5              cont — the return continuation (bare, no brackets)
+#
+# Capture names use the source name from the original binding (via AST origin)
+# paired with the capture param's own CpsId, so they match body refs.
+#
 # Test format:
 #   test 'name', fn:
 #     expect lift ƒink:
@@ -29,7 +37,7 @@ test 'pure fn is unchanged', fn:
     f = fn x: x
 
   | equals ƒink:
-    ·f_0 = ·v_5 = fn ·x_1, ·v_6:
+    ·f_0 = ·v_5 = fn [·x_1], ·v_6:
       ·v_6 ·x_1
 
     ·export ·f_0
@@ -41,10 +49,10 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
       fn b: b
 
   | equals ƒink:
-    ·v_8 = fn ·b_2, ·v_9:
+    ·v_8 = fn [·b_2], ·v_9:
       ·v_9 ·b_2
 
-    ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
+    ·foo_0 = ·v_6 = fn [·a_1], ·v_7:
       ·v_7 ·v_8
 
     ·export ·foo_0
@@ -61,7 +69,7 @@ test 'chained arithmetic — cont body lifted', fn:
       x + 4
 
   | equals ƒink:
-    ·v_25 = fn ·v_26, ·v_9:
+    ·v_25 = fn {·v_26}, [·v_9]:
       ·x_1 = ·v_9
       ·op_plus ·x_1, 4, ·v_26
 
@@ -83,10 +91,10 @@ test 'captured binding becomes leading param', fn:
         a + b
 
   | equals ƒink:
-    ·v_22 = fn ·a_23, ·b_2, ·v_9:
+    ·v_22 = fn {·a_23}, [·b_2], ·v_9:
       ·op_plus ·a_23, ·b_2, ·v_9
 
-    ·foo_0 = ·v_6 = fn ·a_1, ·v_7:
+    ·foo_0 = ·v_6 = fn [·a_1], ·v_7:
       ·closure ·v_22, ·a_1, ·v_7
 
     ·export ·foo_0
@@ -101,13 +109,13 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
         a + b
 
   | equals ƒink:
-    ·f_0 = ·v_9 = fn ·x_2, ·v_10:
+    ·f_0 = ·v_9 = fn [·x_2], ·v_10:
       ·v_10 ·x_2
 
-    ·v_35 = fn ·a_36, ·b_4, ·v_18:
+    ·v_35 = fn {·a_36}, [·b_4], ·v_18:
       ·op_plus ·a_36, ·b_4, ·v_18
 
-    ·g_1 = ·v_15 = fn ·a_3, ·v_16:
+    ·g_1 = ·v_15 = fn [·a_3], ·v_16:
       ·closure ·v_35, ·a_3, ·v_16
 
     ·export ·f_0, ·g_1
@@ -125,17 +133,17 @@ test 'depth-2 closure', fn:
           a + b + c
 
   | equals ƒink:
-    ·v_48 = fn ·c_49, ·v_51, ·v_15:
+    ·v_48 = fn {·c_49, ·v_51}, [·v_15]:
       ·op_plus ·v_15, ·c_49, ·v_51
 
-    ·v_39 = fn ·a_40, ·b_42, ·c_3, ·v_12:
+    ·v_39 = fn {·a_40, ·b_42}, [·c_3], ·v_12:
       ·v_55 = ·closure ·v_48, ·c_3, ·v_12
       ·op_plus ·a_40, ·b_42, ·v_55
 
-    ·v_32 = fn ·a_33, ·b_2, ·v_10:
+    ·v_32 = fn {·a_33}, [·b_2], ·v_10:
       ·closure ·v_39, ·a_33, ·b_2, ·v_10
 
-    ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
+    ·foo_0 = ·v_7 = fn [·a_1], ·v_8:
       ·closure ·v_32, ·a_1, ·v_8
 
     ·export ·foo_0
@@ -149,13 +157,13 @@ test 'multiple captures at depth-2', fn:
           a + b
 
   | equals ƒink:
-    ·v_34 = fn ·a_35, ·b_37, ·c_3, ·v_12:
+    ·v_34 = fn {·a_35, ·b_37}, [·c_3], ·v_12:
       ·op_plus ·a_35, ·b_37, ·v_12
 
-    ·v_27 = fn ·a_28, ·b_2, ·v_10:
+    ·v_27 = fn {·a_28}, [·b_2], ·v_10:
       ·closure ·v_34, ·a_28, ·b_2, ·v_10
 
-    ·foo_0 = ·v_7 = fn ·a_1, ·v_8:
+    ·foo_0 = ·v_7 = fn [·a_1], ·v_8:
       ·closure ·v_27, ·a_1, ·v_8
 
     ·export ·foo_0
@@ -168,7 +176,7 @@ test 'yield — cont body lifted', fn:
       1 + q
 
   | equals ƒink:
-    ·v_24 = fn ·v_25, ·v_8:
+    ·v_24 = fn {·v_25}, [·v_8]:
       ·q_1 = ·v_8
       ·op_plus 1, ·q_1, ·v_25
 
@@ -188,7 +196,7 @@ test 'multi-fn module — add and main', fn:
       add 3, 4
 
   | equals ƒink:
-    ·add_0 = ·v_8 = fn ·a_2, ·b_3, ·v_9:
+    ·add_0 = ·v_8 = fn [·a_2, ·b_3], ·v_9:
       ·op_plus ·a_2, ·b_3, ·v_9
 
     ·main_1 = ·v_16 = fn ·v_17:
@@ -213,13 +221,13 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
       inc x
 
   | equals ƒink:
-    ·double_0 = ·v_11 = fn ·x_3, ·v_12:
+    ·double_0 = ·v_11 = fn [·x_3], ·v_12:
       ·op_mul ·x_3, 2, ·v_12
 
-    ·inc_1 = ·v_19 = fn ·x_4, ·v_20:
+    ·inc_1 = ·v_19 = fn [·x_4], ·v_20:
       ·op_plus ·x_4, 1, ·v_20
 
-    ·v_55 = fn ·v_56, ·v_31:
+    ·v_55 = fn {·v_56}, [·v_31]:
       ·x_5 = ·v_31
       ·inc_1 ·x_5, ·v_56
 
@@ -240,26 +248,26 @@ test 'seq destructure', fn:
       a + 1
 
   | equals ƒink:
-    ·v_50 = fn ·v_51, ·v_12:
+    ·v_50 = fn {·v_51}, [·v_12]:
       ·a_2 = ·v_12
       ·op_plus ·a_2, 1, ·v_51
 
-    ·v_69 = fn ·v_70, ·v_72, ·v_74, ·v_19:
+    ·v_69 = fn {·v_70, ·v_72, ·v_74}, [·v_19]:
       if ·v_19,
         fn:
           ·v_70 ·v_72
         fn:
           ·v_74 _
 
-    ·v_58 = fn ·v_59, ·v_61, ·v_12, ·v_16:
+    ·v_58 = fn {·v_59, ·v_61}, [·v_12, ·v_16]:
       ·v_78 = ·closure ·v_69, ·v_59, ·v_12, ·v_61
       ·empty ·v_16, ·v_78
 
-    ·v_27 = fn ·v_9, ·v_10, ·v_11:
+    ·v_27 = fn [·v_9, ·v_10], ·v_11:
       ·v_65 = ·closure ·v_58, ·v_10, ·v_11
       ·seq_pop ·v_9, ·v_11, ·v_65
 
-    ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
+    ·main_0 = ·v_6 = fn [·foo_1], ·v_7:
       ·v_53 = ·closure ·v_50, ·v_7
       ·v_27 ·foo_1, ·v_53, panic
 
@@ -273,18 +281,18 @@ test 'record destructure', fn:
       x + 1
 
   | equals ƒink:
-    ·v_44 = fn ·v_45, ·v_12:
+    ·v_44 = fn {·v_45}, [·v_12]:
       ·x_2 = ·v_12
       ·op_plus ·x_2, 1, ·v_45
 
-    ·v_52 = fn ·v_53, ·v_12, ·v_16:
+    ·v_52 = fn {·v_53}, [·v_12, ·v_16]:
       ·v_53 ·v_12
 
-    ·v_21 = fn ·v_9, ·v_10, ·v_11:
+    ·v_21 = fn [·v_9, ·v_10], ·v_11:
       ·v_57 = ·closure ·v_52, ·v_10
       ·rec_pop ·v_9, 'x', ·v_11, ·v_57
 
-    ·main_0 = ·v_6 = fn ·foo_1, ·v_7:
+    ·main_0 = ·v_6 = fn [·foo_1], ·v_7:
       ·v_47 = ·closure ·v_44, ·v_7
       ·v_21 ·foo_1, ·v_47, panic
 
@@ -301,31 +309,31 @@ test 'match — no forward refs after lift', fn:
     ·v_32 = fn ·v_28:
       ·v_28 42
 
-    ·v_75 = fn ·v_76:
+    ·v_75 = fn {·v_76}:
       ·v_32 ·v_76
 
-    ·v_83 = fn ·v_84, ·v_86, ·v_17:
+    ·v_83 = fn {·v_84, ·v_86}, [·v_17]:
       if ·v_17,
         fn:
           ·v_84 _
         fn:
           ·v_86 _
 
-    ·v_25 = fn ·v_12, ·v_13, ·v_14:
+    ·v_25 = fn [·v_12, ·v_13], ·v_14:
       ·v_90 = ·closure ·v_83, ·v_13, ·v_14
       ·op_eq ·v_12, 0, ·v_90
 
-    ·v_44 = fn ·v_8, ·v_9, ·v_10:
+    ·v_44 = fn [·v_8, ·v_9], ·v_10:
       ·v_78 = ·closure ·v_75, ·v_9
       ·v_25 ·v_8, ·v_78, ·v_10
 
     ·v_72 = fn:
       panic _
 
-    ·v_53 = fn ·v_45, ·v_46:
+    ·v_53 = fn [·v_45], ·v_46:
       ·v_44 ·v_45, ·v_46, ·v_72
 
-    ·foo_0 = ·v_5 = fn ·n_1, ·v_6:
+    ·foo_0 = ·v_5 = fn [·n_1], ·v_6:
       ·v_53 ·n_1, ·v_6
 
     ·export ·foo_0
@@ -339,38 +347,38 @@ test 'match with binding', fn:
       r
 
   | equals ƒink:
-    ·v_77 = fn ·n_78, ·v_29:
+    ·v_77 = fn {·n_78}, ·v_29:
       ·op_plus ·n_78, 1, ·v_29
 
-    ·v_98 = fn ·v_99, ·v_101:
+    ·v_98 = fn {·v_99, ·v_101}:
       ·v_99 ·v_101
 
-    ·v_120 = fn ·v_121, ·v_123, ·v_18:
+    ·v_120 = fn {·v_121, ·v_123}, [·v_18]:
       if ·v_18,
         fn:
           ·v_121 _
         fn:
           ·v_123 _
 
-    ·v_26 = fn ·v_13, ·v_14, ·v_15:
+    ·v_26 = fn [·v_13, ·v_14], ·v_15:
       ·v_127 = ·closure ·v_120, ·v_14, ·v_15
       ·op_eq ·v_13, 0, ·v_127
 
-    ·v_84 = fn ·v_85, ·v_9, ·v_10, ·v_11:
+    ·v_84 = fn {·v_85}, [·v_9, ·v_10], ·v_11:
       ·v_103 = ·closure ·v_98, ·v_85, ·v_10
       ·v_26 ·v_9, ·v_103, ·v_11
 
     ·v_116 = fn:
       panic _
 
-    ·v_91 = fn ·v_92, ·v_48, ·v_49:
+    ·v_91 = fn {·v_92}, [·v_48], ·v_49:
       ·v_92 ·v_48, ·v_49, ·v_116
 
-    ·v_107 = fn ·v_108, ·v_57:
+    ·v_107 = fn {·v_108}, [·v_57]:
       ·r_2 = ·v_57
       ·v_108 ·r_2
 
-    ·foo_0 = ·v_6 = fn ·n_1, ·v_7:
+    ·foo_0 = ·v_6 = fn [·n_1], ·v_7:
       ·v_80 = ·closure ·v_77, ·n_1
       ·v_87 = ·closure ·v_84, ·v_80
       ·v_94 = ·closure ·v_91, ·v_87
@@ -392,49 +400,49 @@ test 'recursive fn in match', fn:
     ·v_33 = fn ·v_29:
       ·v_29 1
 
-    ·v_129 = fn ·v_130:
+    ·v_129 = fn {·v_130}:
       ·v_33 ·v_130
 
-    ·v_166 = fn ·v_167, ·v_169, ·v_18:
+    ·v_166 = fn {·v_167, ·v_169}, [·v_18]:
       if ·v_18,
         fn:
           ·v_167 _
         fn:
           ·v_169 _
 
-    ·v_26 = fn ·v_13, ·v_14, ·v_15:
+    ·v_26 = fn [·v_13, ·v_14], ·v_15:
       ·v_173 = ·closure ·v_166, ·v_14, ·v_15
       ·op_eq ·v_13, 0, ·v_173
 
-    ·v_45 = fn ·v_9, ·v_10, ·v_11:
+    ·v_45 = fn [·v_9, ·v_10], ·v_11:
       ·v_132 = ·closure ·v_129, ·v_10
       ·v_26 ·v_9, ·v_132, ·v_11
 
-    ·v_120 = fn ·v_121, ·v_54:
+    ·v_120 = fn {·v_121}, [·v_54]:
       ·fib_0 ·v_54, ·v_121
 
-    ·v_104 = fn ·n_105, ·v_50:
+    ·v_104 = fn {·n_105}, ·v_50:
       ·v_125 = ·closure ·v_120, ·v_50
       ·op_plus ·n_105, 1, ·v_125
 
-    ·v_113 = fn ·v_114, ·v_46, ·v_47, ·v_48:
+    ·v_113 = fn {·v_114}, [·v_46, ·v_47], ·v_48:
       ·v_114 ·v_47
 
     ·v_177 = fn:
       panic _
 
-    ·v_153 = fn ·v_154, ·v_156, ·v_158:
+    ·v_153 = fn {·v_154, ·v_156, ·v_158}:
       ·v_154 ·v_156, ·v_158, ·v_177
 
-    ·v_136 = fn ·v_137, ·v_67, ·v_68:
+    ·v_136 = fn {·v_137}, [·v_67], ·v_68:
       ·v_162 = ·closure ·v_153, ·v_137, ·v_67, ·v_68
       ·v_45 ·v_67, ·v_68, ·v_162
 
-    ·v_144 = fn ·v_145, ·v_80:
+    ·v_144 = fn {·v_145}, [·v_80]:
       ·r_2 = ·v_80
       ·v_145 ·r_2
 
-    ·fib_0 = ·v_6 = fn ·n_1, ·v_7:
+    ·fib_0 = ·v_6 = fn [·n_1], ·v_7:
       ·v_107 = ·closure ·v_104, ·n_1
       ·v_116 = ·closure ·v_113, ·v_107
       ·v_139 = ·closure ·v_136, ·v_116

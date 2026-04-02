@@ -29,7 +29,7 @@ use crate::ast::{Node, NodeKind, Exprs};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::passes::cps::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind,
-  Param, Ref, Val, ValKind, Lit,
+  Param, ParamInfo, Ref, Val, ValKind, Lit,
 };
 use crate::passes::cps::fmt::Ctx;
 
@@ -106,6 +106,22 @@ fn fn_node(params: Vec<Node<'static>>, body_stmts: Vec<Node<'static>>) -> Node<'
 // Name rendering
 // ---------------------------------------------------------------------------
 
+/// Render a capture param: use the origin CpsId to recover the source name
+/// (e.g. `a`), but pair it with the param's own CpsId for the suffix so body
+/// refs match. Falls back to `·v_{param_id}` for synthetic origins.
+fn render_cap_name(param_id: CpsId, origin_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
+  match fc.ctx.origin.try_get(origin_id).and_then(|opt| *opt)
+    .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
+    .and_then(|opt| *opt)
+  {
+    Some(node) => match &node.kind {
+      NodeKind::Ident(s) => format!("·{}_{}", s, param_id.0),
+      _ => format!("·v_{}", param_id.0),
+    },
+    None => format!("·v_{}", param_id.0),
+  }
+}
+
 fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
   match fc.ctx.origin.try_get(cps_id).and_then(|opt| *opt)
     .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
@@ -139,6 +155,95 @@ fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
     Bind::SynthName => render_synth_name(bind.id, fc),
     Bind::Synth | Bind::Cont => format!("·v_{}", bind.id.0),
   }
+}
+
+/// Render a single param as an AST node, with spread support.
+fn render_param_node(p: &Param, fc: &FmtCtx<'_, '_>, use_info: bool) -> Node<'static> {
+  match p {
+    Param::Name(b) => {
+      let name = if use_info { render_param_with_info(b, fc) } else { render_bind(b, fc) };
+      ident(&name)
+    }
+    Param::Spread(b) => {
+      let name = if use_info { render_param_with_info(b, fc) } else { render_bind(b, fc) };
+      Node::new(NodeKind::Spread {
+        op: spread_tok(),
+        inner: Some(Box::new(ident(&name))),
+      }, dummy_loc())
+    }
+  }
+}
+
+/// Render function params with grouping when `param_info` is available:
+///   `{cap0, cap1}, [param0, param1], cont`
+/// Falls back to flat rendering when `param_info` is not set.
+fn render_fn_params_grouped(params: &[Param], fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
+  let pi = match fc.ctx.param_info {
+    Some(pi) if !pi.is_empty() => pi,
+    _ => {
+      // No param_info — flat rendering.
+      return params.iter().map(|p| render_param_node(p, fc, false)).collect();
+    }
+  };
+
+  let mut caps: Vec<Node<'static>> = Vec::new();
+  let mut user_params: Vec<Node<'static>> = Vec::new();
+  let mut cont_params: Vec<Node<'static>> = Vec::new();
+
+  for p in params {
+    let b = match p { Param::Name(b) | Param::Spread(b) => b };
+    let info = pi.try_get(b.id).and_then(|o| *o);
+    match info {
+      Some(ParamInfo::Cap(_)) => caps.push(render_param_node(p, fc, true)),
+      Some(ParamInfo::Cont) => cont_params.push(render_param_node(p, fc, true)),
+      Some(ParamInfo::Param(_)) | None => user_params.push(render_param_node(p, fc, true)),
+    }
+  }
+
+  let mut result: Vec<Node<'static>> = Vec::new();
+
+  // Captures: {cap0, cap1}
+  if !caps.is_empty() {
+    let n = caps.len();
+    result.push(Node::new(NodeKind::LitRec {
+      open: lbrace_tok(), close: rbrace_tok(),
+      items: Exprs { items: caps, seps: (0..n.saturating_sub(1)).map(|_| sep_tok()).collect() },
+    }, dummy_loc()));
+  }
+
+  // User params: [param0, param1]
+  if !user_params.is_empty() {
+    let n = user_params.len();
+    result.push(Node::new(NodeKind::LitSeq {
+      open: lbrack_tok(), close: rbrack_tok(),
+      items: Exprs { items: user_params, seps: (0..n.saturating_sub(1)).map(|_| sep_tok()).collect() },
+    }, dummy_loc()));
+  }
+
+  // Cont params: bare (may be multiple for pattern matchers)
+  result.extend(cont_params);
+
+  result
+}
+
+/// Render a param node using `param_info` when available.
+/// Captures are rendered using the original binding's source name (via origin CpsId).
+fn render_param_with_info(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
+  if let Some(pi) = fc.ctx.param_info {
+    if let Some(Some(info)) = pi.try_get(bind.id) {
+      return match info {
+        ParamInfo::Cap(origin) => {
+          // Try to recover the source name from the origin's AST node,
+          // but use the param's own CpsId for the numeric suffix so it
+          // matches body refs. Falls back to ·v_{id} for synthetic origins.
+          render_cap_name(bind.id, *origin, fc)
+        }
+        ParamInfo::Param(_) => render_bind(bind, fc),
+        ParamInfo::Cont => render_bind(bind, fc),
+      };
+    }
+  }
+  render_bind(bind, fc)
 }
 
 fn render_val(val: &Val, fc: &FmtCtx<'_, '_>) -> Node<'static> {
@@ -241,13 +346,7 @@ fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) 
     ExprKind::LetFn { name, params, fn_body, cont } => {
       let name_str = render_bind(name, fc);
 
-      let fn_params: Vec<Node<'static>> = params.iter().map(|p| match p {
-        Param::Name(b)   => ident(&render_bind(b, fc)),
-        Param::Spread(b) => Node::new(NodeKind::Spread {
-          op: spread_tok(),
-          inner: Some(Box::new(ident(&render_bind(b, fc)))),
-        }, dummy_loc()),
-      }).collect();
+      let fn_params = render_fn_params_grouped(params, fc);
 
       let body_stmts = collect_stmts(fn_body, fc);
       let fn_rhs = fn_node(fn_params, body_stmts);

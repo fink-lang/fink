@@ -110,6 +110,11 @@ pub struct CpsResult {
   /// Consumed by name_res: registers the old CpsId as an alias in the synths scope
   /// so that Ref::Synth(old_id) in the hoisted fn body resolves to the new param.
   pub synth_alias: crate::propgraph::PropGraph<CpsId, Option<CpsId>>,
+  /// Semantic role of each function parameter — Cap, Param, or Cont.
+  /// Populated by the lifting pass. Keyed by the param's CpsId.
+  /// Downstream passes (formatter, WASM emitter) read this to distinguish
+  /// param origins without reverse-engineering from call sites.
+  pub param_info: crate::propgraph::PropGraph<CpsId, Option<ParamInfo>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +179,29 @@ impl Bind {
 pub enum Param {
   Name(BindNode),
   Spread(BindNode),
+}
+
+/// Semantic role of a function parameter, populated by the lifting pass.
+///
+/// Captures the distinction between user-written params, captured variables
+/// (threaded as extra params by lifting), and the continuation param added
+/// by the CPS transform. The origin CpsId points back to the original
+/// binding — for captures this is the binding being closed over, for user
+/// params it's the pre-allocated CpsId from scope analysis.
+///
+/// Stored in `CpsResult.param_info: PropGraph<CpsId, Option<ParamInfo>>`.
+/// The WASM emitter can read this directly instead of reverse-engineering
+/// param roles from call-site patterns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParamInfo {
+  /// A captured variable threaded as an extra param by lifting.
+  /// Origin is the CpsId of the original binding being captured.
+  Cap(CpsId),
+  /// An original user-written function parameter.
+  /// Origin is the pre-allocated CpsId from scope analysis.
+  Param(CpsId),
+  /// The continuation parameter added by the CPS transform.
+  Cont,
 }
 
 /// A call-site argument — either a plain value or a spread (`..items`).

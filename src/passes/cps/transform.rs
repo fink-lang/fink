@@ -1524,7 +1524,7 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
   if exprs.is_empty() {
     // Empty module: export nothing.
     let root = g.expr(ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args: vec![] }, None);
-    return CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() };
+    return CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() };
   }
 
   // Collect simple top-level exports before lowering (bind_site_to_cps is populated at Gen::new).
@@ -1544,7 +1544,7 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
   // Lower the module body, using the exports terminal as the tail.
   let tail = Cont::Expr { args: vec![], body: Box::new(terminal) };
   let root = lower_seq_with_tail(&mut g, exprs, tail);
-  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() }
 }
 
 /// Lower a single expression node (or a Module root) to CPS IR.
@@ -1557,7 +1557,7 @@ pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResul
   } else {
     wrap(&mut g, pending, Cont::Ref(cont))
   };
-  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new() }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() }
 }
 
 /// Recursively lower a pattern lhs node, appending MatchBind/PatternMatch pending entries.
@@ -2430,7 +2430,7 @@ mod cps_tests {
     match crate::to_desugared(src) {
       Ok(desugared) => {
         let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None };
+        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
@@ -2452,7 +2452,7 @@ mod pat_tests {
     match crate::to_desugared(src) {
       Ok(desugared) => {
         let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None };
+        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
@@ -2473,7 +2473,7 @@ mod module_tests {
     match crate::to_desugared(src) {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
-        let ctx = Ctx { origin: &cps.result.origin, ast_index: &desugared.ast_index, captures: None };
+        let ctx = Ctx { origin: &cps.result.origin, ast_index: &desugared.ast_index, captures: None, param_info: None };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.result.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
