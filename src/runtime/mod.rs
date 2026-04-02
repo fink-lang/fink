@@ -1054,7 +1054,9 @@ mod tests {
     "  (rec\n",
     "    (type $Num (struct (field $val f64)))\n",
     "    (type $Str (sub (struct)))\n",
+    "    (type $Range (sub (struct)))\n",
     "  )\n",
+    "  (type $RangeImpl (sub $Range (struct (field $start (ref $Num)) (field $end (ref $Num)) (field $incl i32))))\n",
   );
 
   /// Load string.wat with types inlined and test data in linear memory.

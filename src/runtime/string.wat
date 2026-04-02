@@ -1330,6 +1330,14 @@
             (local.get $val))))
       (return (call $_str_fmt_i31 (i31.get_s))))
 
+    ;; Try $Range — format as "start..end" or "start...end"
+    (block $not_range
+      (block $is_range (result (ref $Range))
+        (br $not_range
+          (br_on_cast $is_range (ref any) (ref $Range)
+            (local.get $val))))
+      (return (call $_str_fmt_range)))
+
     ;; Unknown type — unreachable for now.
     (unreachable)
   )
@@ -1585,6 +1593,85 @@
       (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br_if $fcopy (i32.lt_u (local.get $i) (local.get $frac_len))))
+
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
+  ;; _str_fmt_range : (ref $Range) -> (ref $Str)
+  ;; Format a range as "start..end" (exclusive) or "start...end" (inclusive).
+  (func $_str_fmt_range (param $range (ref $Range)) (result (ref $Str))
+    (local $impl (ref $RangeImpl))
+    (local $start_str (ref $Str))
+    (local $end_str (ref $Str))
+    (local $start_bytes (ref $ByteArray))
+    (local $end_bytes (ref $ByteArray))
+    (local $start_len i32)
+    (local $end_len i32)
+    (local $dot_len i32)  ;; 2 for "..", 3 for "..."
+    (local $total i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local $i i32)
+
+    ;; Downcast to $RangeImpl.
+    (local.set $impl (ref.cast (ref $RangeImpl) (local.get $range)))
+
+    ;; Format start and end numbers.
+    (local.set $start_str
+      (call $_str_fmt_num (struct.get $Num $val
+        (struct.get $RangeImpl $start (local.get $impl)))))
+    (local.set $end_str
+      (call $_str_fmt_num (struct.get $Num $val
+        (struct.get $RangeImpl $end (local.get $impl)))))
+
+    ;; Get byte arrays.
+    (local.set $start_bytes (call $str_bytes (local.get $start_str)))
+    (local.set $end_bytes (call $str_bytes (local.get $end_str)))
+    (local.set $start_len (array.len (local.get $start_bytes)))
+    (local.set $end_len (array.len (local.get $end_bytes)))
+
+    ;; Dot count: 2 for exclusive, 3 for inclusive.
+    (local.set $dot_len
+      (if (result i32) (struct.get $RangeImpl $incl (local.get $impl))
+        (then (i32.const 3))
+        (else (i32.const 2))))
+
+    ;; Allocate result buffer.
+    (local.set $total
+      (i32.add (i32.add (local.get $start_len) (local.get $dot_len))
+        (local.get $end_len)))
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
+
+    ;; Copy start bytes.
+    (local.set $pos (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $s_done (loop $s_copy
+      (br_if $s_done (i32.ge_u (local.get $i) (local.get $start_len)))
+      (array.set $ByteArray (local.get $buf) (local.get $pos)
+        (array.get_u $ByteArray (local.get $start_bytes) (local.get $i)))
+      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $s_copy)))
+
+    ;; Write dots: 0x2E = '.'
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (if (i32.eq (local.get $dot_len) (i32.const 3))
+      (then
+        (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+
+    ;; Copy end bytes.
+    (local.set $i (i32.const 0))
+    (block $e_done (loop $e_copy
+      (br_if $e_done (i32.ge_u (local.get $i) (local.get $end_len)))
+      (array.set $ByteArray (local.get $buf) (local.get $pos)
+        (array.get_u $ByteArray (local.get $end_bytes) (local.get $i)))
+      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $e_copy)))
 
     (struct.new $StrBytesImpl (local.get $buf))
   )
