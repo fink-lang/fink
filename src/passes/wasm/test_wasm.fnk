@@ -875,13 +875,12 @@ test 'closure construction and call', fn:
         (local.set $v_13 (call $_list_head_any (local.get $_args)))
         (return_call $_op_plus (local.get $x_55) (local.get $y_2) (local.get $v_13))
       )
-      (func $v_10 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+      (func $v_10 (type $Fn3) (param $_caps (ref any)) (param $_args (ref any)) (param $_cont (ref any))
         (local $x_1 (ref any))
         (local $v_11 (ref any))
-        (local $local_4 (ref any))
+        (local $local_5 (ref any))
         (local.set $x_1 (call $_list_head_any (local.get $_args)))
-        (local.set $_args (call $_list_tail_any (local.get $_args)))
-        (local.set $v_11 (call $_list_head_any (local.get $_args)))
+        (local.set $v_11 (local.get $_cont))
         (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_11)))) (struct.new $Closure (ref.func $v_54) (array.new_fixed $Captures 1 (local.get $x_1))))
       )
       (func $v_44 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -913,7 +912,7 @@ test 'closure construction and call', fn:
       )
       (export "main" (func $v_8))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7OztBOzs7QTtBO0E7QTs7Ozs7Ozs7QTtBQUFBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBOzs7O0E7O0E7QTtBO0E7Ozs7Ozs7O0E7OztBO0E7QTtBOzs7Ozs7OztBO0FBQUE7QSIKfQ==
 
 
 

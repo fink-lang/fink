@@ -563,7 +563,7 @@ fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
             // Subsequent fragments: if canonical type count matches, share
             // canonical indices. Otherwise, treat all types as unique.
             // Only dedup if both fragments share the canonical rec group from types.wat.
-            // The canonical rec group has 11+ types ($Num through $Closure + $Fn2/$Fn3).
+            // The canonical rec group has 11+ types ($Num through $Closure + $Fn2).
             // Small rec groups (from tests or standalone modules) are not canonical.
             let frag_canonical = if canonical_count >= 11 && frag.canonical_type_count == canonical_count {
                 canonical_count

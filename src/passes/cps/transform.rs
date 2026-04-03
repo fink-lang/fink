@@ -23,8 +23,8 @@ use crate::ast::{AstId, CmpPart, Node, NodeKind};
 use crate::propgraph::PropGraph;
 use crate::passes::scopes::{BindId, BindInfo, BindOrigin, ScopeResult};
 use super::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Ref, Lit,
-  Param, Val, ValKind,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsFnKind, CpsId, CpsResult, Expr, ExprKind,
+  Ref, Lit, Param, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -460,7 +460,7 @@ fn lower_fn<'src>(
     };
   g.pop_cont(prev_cont);
   param_names.push(Param::Name(cont));
-  let pending = vec![Pending::Fn { name: fn_name, params: param_names, fn_body, origin }];
+  let pending = vec![Pending::Fn { name: fn_name, params: param_names, fn_kind: CpsFnKind::CpsFunction, fn_body, origin }];
   (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
 }
 
@@ -475,7 +475,7 @@ fn lower_module_as_fn<'src>(
   let (cont, prev_cont) = g.push_cont(origin);
   let fn_body = lower_seq(g, body);
   g.pop_cont(prev_cont);
-  let pending = vec![Pending::Fn { name: fn_name, params: vec![Param::Name(cont)], fn_body, origin }];
+  let pending = vec![Pending::Fn { name: fn_name, params: vec![Param::Name(cont)], fn_kind: CpsFnKind::CpsFunction, fn_body, origin }];
   (ref_val(g, fn_name_kind, fn_name_id, origin), pending)
 }
 
@@ -500,7 +500,7 @@ fn lower_iife<'src>(
   let (result_kind, result_id) = (result.kind, result.id);
   let fn_name_val = ref_val(g, fn_name.kind, fn_name.id, origin);
   let pending = vec![
-    Pending::Fn { name: fn_name, params: param_names, fn_body, origin },
+    Pending::Fn { name: fn_name, params: param_names, fn_kind: CpsFnKind::CpsFunction, fn_body, origin },
     Pending::App { func: Callable::Val(fn_name_val), args: args_val(vec![]), result, origin },
   ];
   (ref_val(g, result_kind, result_id, origin), pending)
@@ -1008,12 +1008,14 @@ fn lower_match<'src>(
     pending.push(Pending::Fn {
       name: arm.mb_name.clone(),
       params: arm.mb_params.clone(),
+      fn_kind: CpsFnKind::CpsClosure,
       fn_body: arm.mb_body.clone(),
       origin: arm.origin,
     });
     pending.push(Pending::Fn {
       name: arm.mp_name.clone(),
       params: arm.mp_params.clone(),
+      fn_kind: CpsFnKind::CpsFunction,
       fn_body: arm.mp_body.clone(),
       origin: arm.origin,
     });
@@ -1048,6 +1050,7 @@ fn lower_match<'src>(
   pending.push(Pending::Fn {
     name: m0_name.clone(),
     params: m0_params,
+    fn_kind: CpsFnKind::CpsFunction,
     fn_body: chain,
     origin,
   });
@@ -1168,6 +1171,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
             let with_inner_mp = g.expr(ExprKind::LetFn {
               name: matcher_name,
               params: matcher_params,
+              fn_kind: CpsFnKind::CpsClosure,
               fn_body: Box::new(matcher_body),
               cont: Cont::Expr { args: vec![], body: Box::new(call) },
             }, arm_origin);
@@ -1176,6 +1180,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
             g.expr(ExprKind::LetFn {
               name: wrapper_name,
               params: vec![],
+              fn_kind: CpsFnKind::CpsClosure,
               fn_body: Box::new(mb_succ_body),
               cont: Cont::Expr { args: vec![], body: Box::new(with_inner_mp) },
             }, arm_origin)
@@ -1236,7 +1241,7 @@ fn lower_block<'src>(
   param_names.push(Param::Name(cont));
   let (name_val, mut pending) = lower(g, name);
   let block_fn_val = ref_val(g, block_fn_name.kind, block_fn_name.id, origin);
-  pending.push(Pending::Fn { name: block_fn_name, params: param_names, fn_body, origin });
+  pending.push(Pending::Fn { name: block_fn_name, params: param_names, fn_kind: CpsFnKind::CpsFunction, fn_body, origin });
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
   pending.push(Pending::App {
@@ -1255,7 +1260,7 @@ fn lower_block<'src>(
 // Extend Pending to handle App and Match, which need a body (the next expression).
 enum Pending {
   Val { name: BindNode, val: Val, origin: Option<AstId> },
-  Fn { name: BindNode, params: Vec<Param>, fn_body: Expr, origin: Option<AstId> },
+  Fn { name: BindNode, params: Vec<Param>, fn_kind: CpsFnKind, fn_body: Expr, origin: Option<AstId> },
   App { func: Callable, args: Vec<Arg>, result: BindNode, origin: Option<AstId> },
   /// Pattern-lowered bind — emits plain LetVal (fail is always ·panic for irrefutable binds).
   MatchBind { name: BindNode, val: Val, origin: Option<AstId> },
@@ -1352,10 +1357,11 @@ fn wrap_with_fail(
         ExprKind::LetVal { name, val: Box::new(val), cont },
         origin,
       ),
-      Pending::Fn { name, params, fn_body, origin } => g.expr(
+      Pending::Fn { name, params, fn_kind, fn_body, origin } => g.expr(
         ExprKind::LetFn {
           name,
           params,
+          fn_kind,
           fn_body: Box::new(fn_body),
           cont,
         },
@@ -1437,6 +1443,7 @@ fn wrap_with_fail(
           ExprKind::LetFn {
             name: matcher_name,
             params: matcher_params,
+            fn_kind: CpsFnKind::CpsClosure,
             fn_body: Box::new(matcher_body),
             cont: Cont::Expr { args: vec![], body: Box::new(call) },
           },
@@ -1467,6 +1474,7 @@ fn wrap_with_fail(
           ExprKind::LetFn {
             name: body_name,
             params: body_params,
+            fn_kind: CpsFnKind::CpsClosure,
             fn_body: Box::new(body_body),
             cont: Cont::Expr { args: vec![], body: Box::new(with_matcher) },
           },

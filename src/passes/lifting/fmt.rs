@@ -343,7 +343,7 @@ fn collect_stmts(expr: &Expr, fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
 /// tail expression. Consecutive LetFn → LetVal aliases are chained as `b = a = fn ...`.
 fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
   match &expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
       let name_str = render_bind(name, fc);
 
       let fn_params = render_fn_params_grouped(params, fc);

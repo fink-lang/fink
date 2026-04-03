@@ -413,6 +413,36 @@ impl Cont {
 }
 
 // ---------------------------------------------------------------------------
+// CPS function classification
+// ---------------------------------------------------------------------------
+
+/// Distinguishes CPS functions from CPS closures at the IR level.
+///
+/// The distinction is about the calling convention: CpsFunction is called
+/// with `Arg::Cont` at the call site (the cont is a separate WASM param
+/// or prepended to the args list in unified $Fn2 mode). CpsClosure is
+/// never called with `Arg::Cont` — it receives any continuation values
+/// as regular `Arg::Val` arguments or captures.
+///
+/// Set once by the CPS transform at creation time. Preserved through lifting.
+/// See `docs/calling-convention-v2.md` for the WASM-level design.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpsFnKind {
+  /// Called with `Arg::Cont` at the call site. Includes user-defined
+  /// functions, match wrappers (m_0), and match matchers (mp_N).
+  /// At the WASM level, the cont is either a separate $Fn3 param
+  /// (current) or prepended to the args list (unified $Fn2).
+  CpsFunction,
+
+  /// Never called with `Arg::Cont`. Includes compiler-generated
+  /// continuations (inline cont bodies), match arm bodies (mb_N),
+  /// PatternMatch bodies and matchers, and success wrappers.
+  /// Continuation values arrive as regular `Arg::Val` or captures.
+  CpsClosure,
+}
+
+
+// ---------------------------------------------------------------------------
 // Expressions
 // ---------------------------------------------------------------------------
 
@@ -430,11 +460,14 @@ pub enum ExprKind {
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
-  /// For user fns the last param is `Param::Name(Bind::Cont)` — the return
-  /// continuation. Lifted continuations may have no cont param at all.
+  ///
+  /// `fn_kind` distinguishes functions called with `Arg::Cont` (CpsFunction)
+  /// from those that never receive a cont via `Arg::Cont` (CpsClosure).
+  /// Set by the CPS transform at creation time. See `docs/calling-convention-v2.md`.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
+    fn_kind: CpsFnKind,
     // TODO: rename to body
     fn_body: Box<Expr>,
     cont: Cont,

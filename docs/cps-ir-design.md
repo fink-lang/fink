@@ -128,9 +128,11 @@ Expr = Node<ExprKind>                        -- computation node (has CpsId)
 LetVal { name, val, cont }
   -- bind val to name; visible in cont
 
-LetFn { name, params, fn_body, cont }
+LetFn { name, params, fn_body, cont, fn_kind }
   -- bind a function; name NOT visible in fn_body (non-recursive)
   -- captures resolved by name resolution (Resolution::Captured entries)
+  -- fn_kind: CpsFunction (takes k from caller) vs CpsClosure (closes over k)
+  --   see docs/calling-convention-v2.md for full design
 
 App { func: Callable, args }
   -- call func with args; last Arg::Cont is the result continuation

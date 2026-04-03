@@ -369,7 +369,7 @@ pub fn to_node(expr: &Expr, ctx: &Ctx<'_, '_>) -> Node<'static> {
       ], let_loc)
     }
 
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
       let plain_name = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);
       let mut fn_params: Vec<Node<'static>> = params.iter()
