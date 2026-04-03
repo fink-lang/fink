@@ -54,15 +54,15 @@ test 'two fns export', fn:
       add 3, 4
   | equals ƒink:
     ·fn
-      fn ·a_2, ·b_3, ·ƒret_9: ·op_plus ·a_2, ·b_3, ·v_9
+      fn ·ƒret_9, ·a_2, ·b_3: ·op_plus ·a_2, ·b_3, ·ƒret_9
       fn ·v_8:
         ·let ·v_8, fn ·add_0:
           ·fn
-            fn ·ƒret_17: ·add_0 3, 4, ·v_17
+            fn ·ƒret_17: ·add_0 ·ƒret_17, 3, 4
             fn ·v_16:
               ·let ·v_16, fn ·main_1:
                 ·export ·add_0, ·main_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUE7S0FBRyxNQUFHLE1BQU4sTyxFQUNGLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO0tBQUEsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNQUdPLEFBQUE7V0FBQSxRLEVBQ0wsQUFBQSxPQUFJLEMsRUFBRyxDLEVBREY7V0FBQSxLO1VBQUYsQUFBQSxLQUFFLEssS0FBUCxPO1ksQSxRQUhBLE0sRUFHQSIKfQ==
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUE7S0FBQSxTQUFHLE1BQUcsSSxFQUNSLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO0tBQUEsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNQUdPLEFBQUE7V0FBQSxRLEVBQ0wsQUFBQSxPQURLLFEsRUFDRCxDLEVBQUc7V0FERixLO1VBQUYsQUFBQSxLQUFFLEssS0FBUCxPO1ksQSxRQUhBLE0sRUFHQSIKfQ==
 
 
 ---
@@ -74,22 +74,22 @@ test 'import not in exports', fn:
     {foo} = import './bar.fnk'
     main = fn: foo 1
   | equals ƒink:
-    ·import './bar.fnk', fn ·v_8:
+    ·import fn ·v_8:
       ·fn
         fn ·v_13:
           ·let ·v_13, fn ·foo_0:
             ·fn
-              fn ·ƒret_26: ·foo_0 1, ·v_26
+              fn ·ƒret_26: ·foo_0 ·ƒret_26, 1
               fn ·v_25:
                 ·let ·v_25, fn ·main_1:
                   ·export ·main_1
         fn ·v_40:
           ·fn
-            fn ·v_10, ·ƒsucc_11, ·ƒfail_12:
+            fn ·ƒsucc_11, ·ƒfail_12, ·v_10:
               ·rec_pop ·v_10, 'foo', ·ƒfail_12, fn ·v_13, ·v_17:
                 ·ƒsucc_11 ·v_13
-            fn ·v_22: ·v_22 ·v_8, ·v_40, ·panic
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQU8sQSxDQUFBLFMsQyxLQUFQLEk7RUFBUixBQUFBO09BQUEsSztNQUFDLEFBQUEsS0FBRCxLLEtBQUMsTTtRQUNNLEFBQUE7YUFBQSxRLEVBQUksQUFBQSxPQUFJLEMsRUFBUjthQUFBLEs7WUFBRixBQUFBLEtBQUUsSyxLQUFQLE87YyxBLFFBQUE7T0FEQSxLO01BQUEsQUFBQTtXQUFBLE8sVyxTO1VBQUEsQUFBQSxTQUFBLEssRUFBQSxBLENBQUEsRyxDLEUsUyxLQUFBLE9BQUEsSztZQUFBLEEsVUFBQTtXQUFBLEssRUFBQSxBQUFBLE1BQVEsSSxFQUFSLEssRUFBQSIKfQ==
+            fn ·v_22: ·v_22 ·v_40, ·panic, ·v_8, './bar.fnk'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQUEsR0FBQSxJO0VBQVIsQUFBQTtPQUFBLEs7TUFBQyxBQUFBLEtBQUQsSyxLQUFDLE07UUFDTSxBQUFBO2FBQUEsUSxFQUFJLEFBQUEsT0FBSixRLEVBQVE7YUFBUixLO1lBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2MsQSxRQUFBO09BREEsSztNQUFBLEFBQUE7VyxXLFdBQUEsSztVQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLFMsS0FBQSxPQUFBLEs7WUFBQSxBLFVBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVEsSSxFQUFPLEEsQ0FBQSxTIgp9
 
 
 ---
@@ -114,12 +114,12 @@ test 'destructure not in exports', fn:
                       ·export ·foo_2
           fn ·v_56:
             ·fn
-              fn ·v_13, ·ƒsucc_14, ·ƒfail_15:
+              fn ·ƒsucc_14, ·ƒfail_15, ·v_13:
                 ·seq_pop ·v_13, ·ƒfail_15, fn ·v_16, ·v_30:
                   ·seq_pop ·v_30, ·ƒfail_15, fn ·v_17, ·v_22:
                     ·empty ·v_22, fn ·v_25:
                       ·if ·v_25,
                         fn: ·ƒsucc_14 ·v_16, ·v_17
                         fn: ·ƒfail_15 _
-              fn ·v_37: ·v_37 ·v_11, ·v_56, ·panic
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsYUFBSSxDLEVBQUosQSxDLEMsS0FBQSxJO0VBQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEtBQUEsSztJQUFULEFBQUE7U0FBQSxPQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7WUFDRSxBQUFBO2lCQUFBLFEsRSxBQUFBLFNBQUk7aUJBQUosSztnQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07a0IsQSxRQUFBO1NBREEsSztRQUFBLEFBQUE7YUFBQSxPLFcsUztZQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztnQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLFVBQUEsSyxFQUFBO3NCLEVBQUEsQSxVQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBUyxLLEVBQVQsSyxFQUFBIgp9
+              fn ·v_37: ·v_37 ·v_56, ·panic, ·v_11
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsYUFBSSxDLEVBQUosQSxDLEMsS0FBQSxJO0VBQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEtBQUEsSztJQUFULEFBQUE7U0FBQSxPQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7WUFDRSxBQUFBO2lCQUFBLFEsRSxBQUFBLFNBQUk7aUJBQUosSztnQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07a0IsQSxRQUFBO1NBREEsSztRQUFBLEFBQUE7YSxXLFdBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztnQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLFVBQUEsSyxFQUFBO3NCLEVBQUEsQSxVQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFTIgp9

@@ -139,7 +139,7 @@ fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
   {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
-      _ => format!("·v_{}", cps_id.0),
+      _ => render_synth_fallback(cps_id, fc),
     },
     None => render_synth_fallback(cps_id, fc),
   }
@@ -216,15 +216,14 @@ fn render_fn_params_grouped(params: &[Param], fc: &FmtCtx<'_, '_>) -> Vec<Node<'
 
   let mut caps: Vec<Node<'static>> = Vec::new();
   let mut user_params: Vec<Node<'static>> = Vec::new();
-  let mut cont_params: Vec<Node<'static>> = Vec::new();
 
   for p in params {
     let b = match p { Param::Name(b) | Param::Spread(b) => b };
     let info = pi.try_get(b.id).and_then(|o| *o);
     match info {
       Some(ParamInfo::Cap(_)) => caps.push(render_param_node(p, fc, true)),
-      Some(ParamInfo::Cont) => cont_params.push(render_param_node(p, fc, true)),
-      Some(ParamInfo::Param(_)) | None => user_params.push(render_param_node(p, fc, true)),
+      // Conts-first: cont params go in the user params group (inside []).
+      Some(ParamInfo::Cont) | Some(ParamInfo::Param(_)) | None => user_params.push(render_param_node(p, fc, true)),
     }
   }
 
@@ -247,9 +246,6 @@ fn render_fn_params_grouped(params: &[Param], fc: &FmtCtx<'_, '_>) -> Vec<Node<'
       items: Exprs { items: user_params, seps: (0..n.saturating_sub(1)).map(|_| sep_tok()).collect() },
     }, dummy_loc()));
   }
-
-  // Cont params: bare (may be multiple for pattern matchers)
-  result.extend(cont_params);
 
   result
 }
@@ -319,7 +315,7 @@ fn render_builtin_flat(op: &BuiltIn) -> String {
 
 fn render_cont_arg(cont: &Cont, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match cont {
-    Cont::Ref(id)           => ident(&format!("·v_{}", id.0)),
+    Cont::Ref(id)           => ident(&render_synth_fallback(*id, fc)),
     Cont::Expr { args, body } => {
       let params: Vec<Node<'static>> = args.iter()
         .map(|b| ident(&render_bind(b, fc)))

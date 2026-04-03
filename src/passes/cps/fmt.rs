@@ -213,7 +213,7 @@ fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   match ctx.ast_node(cps_id) {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
-      _ => format!("·v_{}", cps_id.0),
+      _ => render_synth_fallback(cps_id, ctx),
     },
     None => render_synth_fallback(cps_id, ctx),
   }
@@ -346,21 +346,21 @@ fn render_cont(cont: &Cont, ctx: &Ctx<'_, '_>) -> Node<'static> {
       fn_node(patterns(params), vec![body_node], fn_loc)
     }
     Cont::Ref(cont_id) => {
-      ident(&format!("·v_{}", cont_id.0), ctx_loc(*cont_id, ctx))
+      ident(&render_synth_fallback(*cont_id, ctx), ctx_loc(*cont_id, ctx))
     }
   }
 }
 
 /// Render a `body: Cont` field as the body expression of a `fn name:` lambda.
 /// - `Cont::Expr { body, .. }` → render `body`.
-/// - `Cont::Ref(cont_id)` → render as `·v_{cont_id} {name}` — a tail call to the cont.
+/// - `Cont::Ref(cont_id)` → render as `·ƒret_{cont_id} {name}` — a tail call to the cont.
 fn render_cont_body(cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { body, .. } => to_node(body, ctx),
     Cont::Ref(cont_id) => {
       let cont_loc = ctx_loc(*cont_id, ctx);
       let name_loc = ctx_loc(bound_id, ctx);
-      let cont_name = format!("·v_{}", cont_id.0);
+      let cont_name = render_synth_fallback(*cont_id, ctx);
       apply(ident(&cont_name, cont_loc), vec![ident(bound_name, name_loc)], cont_loc)
     }
   }
