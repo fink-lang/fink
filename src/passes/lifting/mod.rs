@@ -960,11 +960,13 @@ mod tests {
   fn lift(src: &str) -> String {
     match crate::to_lifted(src) {
       Ok((lifted, desugared)) => {
+        let bk = crate::passes::cps::ir::collect_bind_kinds(&lifted.result.root);
         let ctx = Ctx {
           origin: &lifted.result.origin,
           ast_index: &desugared.ast_index,
           captures: None,
           param_info: Some(&lifted.result.param_info),
+          bind_kinds: Some(&bk),
         };
         fmt_flat(&lifted.result.root, &ctx)
       }

@@ -110,11 +110,13 @@ fn main() {
         cps.result
       };
 
+      let bk = fink::passes::cps::ir::collect_bind_kinds(&result.root);
       let ctx = fink::passes::cps::fmt::Ctx {
         origin: &result.origin,
         ast_index: &desugared.ast_index,
         captures: None,
         param_info: Some(&result.param_info),
+        bind_kinds: Some(&bk),
       };
       if lifted.as_ref().is_some_and(|v| v.is_none()) {
         println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));

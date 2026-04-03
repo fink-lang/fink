@@ -115,11 +115,11 @@ test 'block two stmts', fn:
     x
   | equals ƒink:
     ·fn
-      fn ·ret_3:
+      fn ·ƒret_3:
         ·let 1, fn ·x_0:
-          ·v_3 ·x_0
+          ·ƒret_3 ·x_0
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDFcbngiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTTtJQUFFLEFBQUEsS0FBRSxDLEtBQUosSTtNLEFBQUEsS0FDQTtLQURBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDFcbngiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTztJQUFFLEFBQUEsS0FBRSxDLEtBQUosSTtNLEFBQUEsUUFDQTtLQURBLEksRSxBLEtBQUEiCn0=
 
 
 test 'block bind then ·apply', fn:
@@ -128,11 +128,11 @@ test 'block bind then ·apply', fn:
     foo x
   | equals ƒink:
     ·fn
-      fn ·ret_3:
+      fn ·ƒret_3:
         ·let 42, fn ·x_0:
           ·∅foo ·x_0, ·v_3
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDQyXG5mb28geCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNO0lBQUUsQUFBQSxLQUFFLEUsS0FBSixJO01BQ0EsQUFBQSxNQUFJLEksRUFESjtLQUFBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDQyXG5mb28geCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQUUsQUFBQSxLQUFFLEUsS0FBSixJO01BQ0EsQUFBQSxNQUFJLEksRUFESjtLQUFBLEksRSxBLEtBQUEiCn0=
 
 
 test 'fn body with bind', fn:
@@ -142,12 +142,12 @@ test 'fn body with bind', fn:
       x
   | equals ƒink:
     ·fn
-      fn ·a_0, ·ret_4:
+      fn ·a_0, ·ƒret_4:
         ·op_plus ·a_0, 1, fn ·v_7:
           ·let ·v_7, fn ·x_1:
-            ·v_4 ·x_1
+            ·ƒret_4 ·x_1
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYTpcbiAgeCA9IGEgKyAxXG4gIHgiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBSCxNO0lBQ1EsQUFBQSxTQUFGLEksRUFBSSxDLEtBQUosSTtNQUFGLEFBQUEsS0FBRSxJLEtBQUosSTtRLEFBREYsS0FFRTtLQUZGLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYTpcbiAgeCA9IGEgKyAxXG4gIHgiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBSCxPO0lBQ1EsQUFBQSxTQUFGLEksRUFBSSxDLEtBQUosSTtNQUFGLEFBQUEsS0FBRSxJLEtBQUosSTtRLEFBREYsUUFFRTtLQUZGLEksRSxBLEtBQUEiCn0=
 
 
 ---
@@ -200,9 +200,9 @@ test 'fn one param', fn:
     fn a: a
   | equals ƒink:
     ·fn
-      fn ·a_0, ·ret_3: ·v_3 ·a_0
+      fn ·a_0, ·ƒret_3: ·ƒret_3 ·a_0
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBRyxNQUFILE0sRSxBQUFBLEtBQU07S0FBTixJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBRyxNQUFILE8sRSxBQUFBLFFBQU07S0FBTixJLEUsQSxLQUFBIgp9
 
 
 test 'fn two params', fn:
@@ -210,9 +210,9 @@ test 'fn two params', fn:
     fn a, b: a
   | equals ƒink:
     ·fn
-      fn ·a_0, ·b_1, ·ret_4: ·v_4 ·a_0
+      fn ·a_0, ·b_1, ·ƒret_4: ·ƒret_4 ·a_0
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgYjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBRyxNQUFHLE1BQU4sTSxFLEFBQUEsS0FBUztLQUFULEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgYjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBRyxNQUFHLE1BQU4sTyxFLEFBQUEsUUFBUztLQUFULEksRSxBLEtBQUEiCn0=
 
 
 test 'named fn', fn:
@@ -220,11 +220,11 @@ test 'named fn', fn:
     double = fn a: a
   | equals ƒink:
     ·fn
-      fn ·a_1, ·ret_4: ·v_4 ·a_1
+      fn ·a_1, ·ƒret_4: ·ƒret_4 ·a_1
       fn ·v_3:
         ·let ·v_3, fn ·double_0:
           ·v_2 ·double_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUE7S0FBRyxNQUFILE0sRSxBQUFBLEtBQU07S0FBTixJO0lBQUYsQUFBQSxLQUFFLEksS0FBVCxTO00sQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUE7S0FBRyxNQUFILE8sRSxBQUFBLFFBQU07S0FBTixJO0lBQUYsQUFBQSxLQUFFLEksS0FBVCxTO00sQSxLQUFBIgp9
 
 
 ---
@@ -460,13 +460,13 @@ test 'sequential bindings', fn:
     bar = foo + 1
   | equals ƒink:
     ·fn
-      fn ·ret_4:
+      fn ·ƒret_4:
         ·let 1, fn ·foo_0:
           ·op_plus ·foo_0, 1, fn ·v_8:
             ·let ·v_8, fn ·bar_1:
               ·v_4 ·bar_1
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gZm9vICsgMSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNO0lBQUksQUFBQSxLQUFFLEMsS0FBTixNO01BQ1UsQUFBQSxTQUFKLE0sRUFBTSxDLEtBQU4sSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQURBLEFBQUEsS0FDQTtLQURBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gZm9vICsgMSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQUksQUFBQSxLQUFFLEMsS0FBTixNO01BQ1UsQUFBQSxTQUFKLE0sRUFBTSxDLEtBQU4sSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQURBLEFBQUEsS0FDQTtLQURBLEksRSxBLEtBQUEiCn0=
 
 
 test 'binding rhs is a call', fn:
@@ -485,12 +485,12 @@ test 'expression result discarded', fn:
     bar
   | equals ƒink:
     ·fn
-      fn ·ret_2:
+      fn ·ƒret_2:
         ·∅foo 1, fn ·v_5:
           ·let ·v_5, fn ·v_7:
-            ·v_2 ·∅bar
+            ·ƒret_2 ·∅bar
       fn ·v_1: ·v_0 ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDFcbmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNO0lBQUEsQUFBQSxNQUFJLEMsS0FBSixJO01BQUEsQUFBQSxLQUFBLEksS0FBQSxJO1EsQUFBQSxLQUNBO0tBREEsSSxFLEEsS0FBQSIKfQ==
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDFcbmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQUEsQUFBQSxNQUFJLEMsS0FBSixJO01BQUEsQUFBQSxLQUFBLEksS0FBQSxJO1EsQUFBQSxRQUNBO0tBREEsSSxFLEEsS0FBQSIKfQ==
 
 
 test 'chained member access', fn:
@@ -562,9 +562,9 @@ test 'partial apply', fn:
     add 3, ?
   | equals ƒink:
     ·fn
-      fn ·v_0, ·ret_3: ·∅add 3, ·v_0, ·v_3
+      fn ·v_0, ·ƒret_3: ·∅add 3, ·v_0, ·v_3
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQU8sTUFBUCxNLEVBQUEsQUFBQSxNQUFJLEMsRUFBRyxJLEVBQVA7S0FBQSxJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQU8sTUFBUCxPLEVBQUEsQUFBQSxNQUFJLEMsRUFBRyxJLEVBQVA7S0FBQSxJLEUsQSxLQUFBIgp9
 
 
 test 'pipe with lambda — literal head', fn:
@@ -572,9 +572,9 @@ test 'pipe with lambda — literal head', fn:
     3 | fn a: a + 2
   | equals ƒink:
     ·fn
-      fn ·a_0, ·ret_4: ·op_plus ·a_0, 2, ·v_4
+      fn ·a_0, ·ƒret_4: ·op_plus ·a_0, 2, ·v_4
       fn ·v_3: ·v_3 3, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFHLE1BQUgsTSxFQUFRLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixDLEUiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFHLE1BQUgsTyxFQUFRLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixDLEUiCn0=
 
 
 test 'pipe with lambda — ident head', fn:
@@ -582,9 +582,9 @@ test 'pipe with lambda — ident head', fn:
     x | fn a: a + 2
   | equals ƒink:
     ·fn
-      fn ·a_0, ·ret_4: ·op_plus ·a_0, 2, ·v_4
+      fn ·a_0, ·ƒret_4: ·op_plus ·a_0, 2, ·v_4
       fn ·v_3: ·v_3 ·∅x, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFHLE1BQUgsTSxFQUFRLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixHLEUiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFHLE1BQUgsTyxFQUFRLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixHLEUiCn0=
 
 
 test 'pipe with partial', fn:
@@ -592,9 +592,9 @@ test 'pipe with partial', fn:
     3 | add 2, ?
   | equals ƒink:
     ·fn
-      fn ·v_0, ·ret_4: ·∅add 2, ·v_0, ·v_4
+      fn ·v_0, ·ƒret_4: ·∅add 2, ·v_0, ·v_4
       fn ·v_3: ·v_3 3, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFPLE1BQVAsTSxFQUFBLEFBQUEsTUFBSSxDLEVBQUcsSSxFQUFQO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixDLEUiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFPLE1BQVAsTyxFQUFBLEFBQUEsTUFBSSxDLEVBQUcsSSxFQUFQO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixDLEUiCn0=
 
 
 test 'pipe with partial — ident head', fn:
@@ -602,9 +602,9 @@ test 'pipe with partial — ident head', fn:
     x | add 2, ?
   | equals ƒink:
     ·fn
-      fn ·v_0, ·ret_4: ·∅add 2, ·v_0, ·v_4
+      fn ·v_0, ·ƒret_4: ·∅add 2, ·v_0, ·v_4
       fn ·v_3: ·v_3 ·∅x, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFPLE1BQVAsTSxFQUFBLEFBQUEsTUFBSSxDLEVBQUcsSSxFQUFQO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixHLEUiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFPLE1BQVAsTyxFQUFBLEFBQUEsTUFBSSxDLEVBQUcsSSxFQUFQO0tBQUEsSSxFQUFGLEFBQUUsS0FBSixHLEUiCn0=
 
 
 ---
@@ -616,11 +616,11 @@ test 'function binding', fn:
     inc = fn x: x + 1
   | equals ƒink:
     ·fn
-      fn ·x_1, ·ret_4: ·op_plus ·x_1, 1, ·v_4
+      fn ·x_1, ·ƒret_4: ·op_plus ·x_1, 1, ·v_4
       fn ·v_3:
         ·let ·v_3, fn ·inc_0:
           ·v_2 ·inc_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiaW5jID0gZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBO0tBQUcsTUFBSCxNLEVBQVEsQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7S0FBQSxJO0lBQUYsQUFBQSxLQUFFLEksS0FBTixNO00sQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiaW5jID0gZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBO0tBQUcsTUFBSCxPLEVBQVEsQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7S0FBQSxJO0lBQUYsQUFBQSxLQUFFLEksS0FBTixNO00sQSxLQUFBIgp9
 
 
 test '·closure over outer variable', fn:
@@ -631,16 +631,16 @@ test '·closure over outer variable', fn:
       ni
   | equals ƒink:
     ·fn
-      fn ·a_1, ·ret_6:
+      fn ·a_1, ·ƒret_6:
         ·fn
-          fn ·b_2, ·ret_8: ·op_plus ·a_1, ·b_2, ·v_8
+          fn ·b_2, ·ƒret_8: ·op_plus ·a_1, ·b_2, ·v_8
           fn ·v_7:
             ·let ·v_7, fn ·ni_3:
-              ·v_6 ·ni_3
+              ·ƒret_6 ·ni_3
       fn ·v_5:
         ·let ·v_5, fn ·foo_0:
           ·v_4 ·foo_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTpcbiAgbmkgPSBmbiBiOlxuICAgIGEgKyBiXG4gIG5pIl0sCiAgIm1hcHBpbmdzIjogIkFBQU0sQUFBQTtLQUFHLE1BQUgsTTtJQUNDLEFBQUE7U0FBRyxNQUFILE0sRUFDRCxBQUFBLFNBQUYsSSxFQUFJLEksRUFERDtTQUFBLEk7UUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7VSxBQURJLEtBR0o7S0FISSxJO0lBQUYsQUFBQSxLQUFFLEksS0FBTixNO00sQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTpcbiAgbmkgPSBmbiBiOlxuICAgIGEgKyBiXG4gIG5pIl0sCiAgIm1hcHBpbmdzIjogIkFBQU0sQUFBQTtLQUFHLE1BQUgsTztJQUNDLEFBQUE7U0FBRyxNQUFILE8sRUFDRCxBQUFBLFNBQUYsSSxFQUFJLEksRUFERDtTQUFBLEk7UUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7VSxBQURJLFFBR0o7S0FISSxJO0lBQUYsQUFBQSxLQUFFLEksS0FBTixNO00sQSxLQUFBIgp9
 
 
 test 'three sequential bindings', fn:
@@ -650,14 +650,14 @@ test 'three sequential bindings', fn:
     c = a + b
   | equals ƒink:
     ·fn
-      fn ·ret_5:
+      fn ·ƒret_5:
         ·let 1, fn ·a_0:
           ·let 2, fn ·b_1:
             ·op_plus ·a_0, ·b_1, fn ·v_10:
               ·let ·v_10, fn ·c_2:
                 ·v_5 ·c_2
       fn ·v_4: ·v_3 ·v_4
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDFcbmIgPSAyXG5jID0gYSArIGIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTTtJQUFFLEFBQUEsS0FBRSxDLEtBQUosSTtNQUNFLEFBQUEsS0FBRSxDLEtBQUosSTtRQUNNLEFBQUEsU0FBRixJLEVBQUksSSxLQUFKLEs7VUFBRixBQUFBLEtBQUUsSyxLQUFKLEk7WUFGQSxBQUFBLEtBRUE7S0FGQSxJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDFcbmIgPSAyXG5jID0gYSArIGIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTztJQUFFLEFBQUEsS0FBRSxDLEtBQUosSTtNQUNFLEFBQUEsS0FBRSxDLEtBQUosSTtRQUNNLEFBQUEsU0FBRixJLEVBQUksSSxLQUFKLEs7VUFBRixBQUFBLEtBQUUsSyxLQUFKLEk7WUFGQSxBQUFBLEtBRUE7S0FGQSxJLEUsQSxLQUFBIgp9
 
 
 ---
@@ -670,16 +670,16 @@ test 'forward ref', fn:
     foo 1
   | equals ƒink:
     ·fn
-      fn ·ret_4:
+      fn ·ƒret_4:
         ·fn
-          fn ·a_1, ·ret_6:
+          fn ·a_1, ·ƒret_6:
             ·op_plus ·a_1, 1, fn ·v_10:
               ·foo_0 ·v_10, ·v_6
           fn ·v_5:
             ·let ·v_5, fn ·foo_0:
               ·foo_0 1, ·v_4
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTogZm9vIGEgKyAxXG5mb28gMSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNO0lBQU0sQUFBQTtTQUFHLE1BQUgsTTtRQUFZLEFBQUEsU0FBRixJLEVBQUksQyxLQUFKLEs7VUFBSixBQUFBLE9BQUksSyxFQUFWO1NBQUEsSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQUNBLEFBQUEsT0FBSSxDLEVBREo7S0FBQSxJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTogZm9vIGEgKyAxXG5mb28gMSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQU0sQUFBQTtTQUFHLE1BQUgsTztRQUFZLEFBQUEsU0FBRixJLEVBQUksQyxLQUFKLEs7VUFBSixBQUFBLE9BQUksSyxFQUFWO1NBQUEsSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQUNBLEFBQUEsT0FBSSxDLEVBREo7S0FBQSxJLEUsQSxLQUFBIgp9
 
 
 test 'mutual recursion', fn:
@@ -688,18 +688,18 @@ test 'mutual recursion', fn:
     pong = fn x: ping x
   | equals ƒink:
     ·fn
-      fn ·ret_6:
+      fn ·ƒret_6:
         ·fn
-          fn ·x_2, ·ret_8: ·pong_1 ·x_2, ·v_8
+          fn ·x_2, ·ƒret_8: ·pong_1 ·x_2, ·v_8
           fn ·v_7:
             ·let ·v_7, fn ·ping_0:
               ·fn
-                fn ·x_3, ·ret_16: ·ping_0 ·x_3, ·v_16
+                fn ·x_3, ·ƒret_16: ·ping_0 ·x_3, ·v_16
                 fn ·v_15:
                   ·let ·v_15, fn ·pong_1:
                     ·v_6 ·pong_1
       fn ·v_5: ·v_4 ·v_5
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicGluZyA9IGZuIHg6IHBvbmcgeFxucG9uZyA9IGZuIHg6IHBpbmcgeCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNO0lBQU8sQUFBQTtTQUFHLE1BQUgsTSxFQUFNLEFBQUEsUUFBSyxJLEVBQVg7U0FBQSxJO1FBQUYsQUFBQSxLQUFFLEksS0FBUCxPO1VBQ08sQUFBQTtlQUFHLE1BQUgsTyxFQUFNLEFBQUEsUUFBSyxJLEVBQVg7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2dCQURBLEFBQUEsS0FDQTtLQURBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicGluZyA9IGZuIHg6IHBvbmcgeFxucG9uZyA9IGZuIHg6IHBpbmcgeCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQU8sQUFBQTtTQUFHLE1BQUgsTyxFQUFNLEFBQUEsUUFBSyxJLEVBQVg7U0FBQSxJO1FBQUYsQUFBQSxLQUFFLEksS0FBUCxPO1VBQ08sQUFBQTtlQUFHLE1BQUgsUSxFQUFNLEFBQUEsUUFBSyxJLEVBQVg7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2dCQURBLEFBQUEsS0FDQTtLQURBLEksRSxBLEtBQUEiCn0=
 
 
 ---
@@ -724,9 +724,9 @@ test 'multi-param function', fn:
     fn x, y: x + y
   | equals ƒink:
     ·fn
-      fn ·x_0, ·y_1, ·ret_4: ·op_plus ·x_0, ·y_1, ·v_4
+      fn ·x_0, ·y_1, ·ƒret_4: ·op_plus ·x_0, ·y_1, ·v_4
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geCwgeTogeCArIHkiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBRyxNQUFOLE0sRUFBVyxBQUFBLFNBQUYsSSxFQUFJLEksRUFBYjtLQUFBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geCwgeTogeCArIHkiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBRyxNQUFOLE8sRUFBVyxBQUFBLFNBQUYsSSxFQUFJLEksRUFBYjtLQUFBLEksRSxBLEtBQUEiCn0=
 
 
 test 'varargs — collect rest', fn:
@@ -734,9 +734,9 @@ test 'varargs — collect rest', fn:
     fn a, ..rest: rest
   | equals ƒink:
     ·fn
-      fn ·a_0, ..·rest_1, ·ret_4: ·v_4 ·rest_1
+      fn ·a_0, ..·rest_1, ·ƒret_4: ·ƒret_4 ·rest_1
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgLi5yZXN0OiByZXN0Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFHLE1BQUssQSxFQUFBLFNBQVIsTSxFLEFBQUEsS0FBYztLQUFkLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgLi5yZXN0OiByZXN0Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFHLE1BQUssQSxFQUFBLFNBQVIsTyxFLEFBQUEsUUFBYztLQUFkLEksRSxBLEtBQUEiCn0=
 
 
 ---
@@ -749,14 +749,14 @@ test 'calling a local — still goes through ·load', fn:
     inc 5
   | equals ƒink:
     ·fn
-      fn ·ret_4:
+      fn ·ƒret_4:
         ·fn
-          fn ·x_1, ·ret_6: ·op_plus ·x_1, 1, ·v_6
+          fn ·x_1, ·ƒret_6: ·op_plus ·x_1, 1, ·v_6
           fn ·v_5:
             ·let ·v_5, fn ·inc_0:
               ·inc_0 5, ·v_4
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiaW5jID0gZm4geDogeCArIDFcbmluYyA1Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE07SUFBTSxBQUFBO1NBQUcsTUFBSCxNLEVBQVEsQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7U0FBQSxJO1FBQUYsQUFBQSxLQUFFLEksS0FBTixNO1VBQ0EsQUFBQSxPQUFJLEMsRUFESjtLQUFBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiaW5jID0gZm4geDogeCArIDFcbmluYyA1Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE87SUFBTSxBQUFBO1NBQUcsTUFBSCxPLEVBQVEsQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7U0FBQSxJO1FBQUYsQUFBQSxLQUFFLEksS0FBTixNO1VBQ0EsQUFBQSxPQUFJLEMsRUFESjtLQUFBLEksRSxBLEtBQUEiCn0=
 
 
 test 'chained binding is sequential ·match_store', fn:
@@ -779,15 +779,15 @@ test 'group with binding — immediately-invoked ·closure', fn:
     )
   | equals ƒink:
     ·fn
-      fn ·ret_4:
+      fn ·ƒret_4:
         ·∅ham 1, fn ·v_7:
           ·let ·v_7, fn ·ni_1:
-            ·v_4 ·ni_1
+            ·ƒret_4 ·ni_1
       fn ·v_3:
         ·v_3 fn ·v_15:
           ·let ·v_15, fn ·spam_0:
             ·v_2 ·spam_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3BhbSA9IChcbiAgbmkgPSBoYW0gMVxuICBuaVxuKSJdLAogICJtYXBwaW5ncyI6ICJBQUFPLEFBQUE7S0FBQSxNO0lBQ0EsQUFBQSxNQUFJLEMsS0FBSixJO01BQUYsQUFBQSxLQUFFLEksS0FBTCxLO1EsQUFESyxLQUVMO0tBRkssSTtJQUFBLEFBQUEsUUFBQSxLO01BQUYsQUFBQSxLQUFFLEssS0FBUCxPO1EsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3BhbSA9IChcbiAgbmkgPSBoYW0gMVxuICBuaVxuKSJdLAogICJtYXBwaW5ncyI6ICJBQUFPLEFBQUE7S0FBQSxPO0lBQ0EsQUFBQSxNQUFJLEMsS0FBSixJO01BQUYsQUFBQSxLQUFFLEksS0FBTCxLO1EsQUFESyxRQUVMO0tBRkssSTtJQUFBLEFBQUEsUUFBQSxLO01BQUYsQUFBQSxLQUFFLEssS0FBUCxPO1EsQSxLQUFBIgp9
 
 ---
 functions — additional
@@ -798,18 +798,18 @@ test 'identity function', fn:
     fn x: x
   | equals ƒink:
     ·fn
-      fn ·x_0, ·ret_3: ·v_3 ·x_0
+      fn ·x_0, ·ƒret_3: ·ƒret_3 ·x_0
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBRyxNQUFILE0sRSxBQUFBLEtBQU07S0FBTixJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBRyxNQUFILE8sRSxBQUFBLFFBQU07S0FBTixJLEUsQSxLQUFBIgp9
 
 test 'function with operator in body', fn:
   expect cps_expr ƒink:
     fn x: x + 1
   | equals ƒink:
     ·fn
-      fn ·x_0, ·ret_3: ·op_plus ·x_0, 1, ·v_3
+      fn ·x_0, ·ƒret_3: ·op_plus ·x_0, 1, ·v_3
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBSCxNLEVBQVEsQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7S0FBQSxJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUcsTUFBSCxPLEVBQVEsQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7S0FBQSxJLEUsQSxLQUFBIgp9
 
 test 'try — result bound, code continues', fn:
   expect cps_expr ƒink:
@@ -817,12 +817,12 @@ test 'try — result bound, code continues', fn:
     ni + 1
   | equals ƒink:
     ·fn
-      fn ·ret_3:
+      fn ·ƒret_3:
         ·∅foo ·∅bar, fn ·v_6:
           ·let ·v_6, fn ·ni_0:
             ·op_plus ·ni_0, 1, ·v_3
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibmkgPSB0cnkgZm9vIGJhclxubmkgKyAxIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE07SUFBUyxBQUFBLE1BQUksSyxLQUFKLEk7TUFBTixBQUFBLEtBQU0sSSxLQUFULEs7UUFDRyxBQUFBLFNBQUgsSyxFQUFLLEMsRUFETDtLQUFBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibmkgPSB0cnkgZm9vIGJhclxubmkgKyAxIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE87SUFBUyxBQUFBLE1BQUksSyxLQUFKLEk7TUFBTixBQUFBLEtBQU0sSSxLQUFULEs7UUFDRyxBQUFBLFNBQUgsSyxFQUFLLEMsRUFETDtLQUFBLEksRSxBLEtBQUEiCn0=
 
 
 ---
@@ -901,9 +901,9 @@ test 'call with spread — passes through from varargs fn', fn:
     fn ..args: foo ..args
   | equals ƒink:
     ·fn
-      fn ..·args_0, ·ret_3: ·∅foo ..·args_0, ·v_3
+      fn ..·args_0, ·ƒret_3: ·∅foo ..·args_0, ·v_3
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gLi5hcmdzOiBmb28gLi5hcmdzIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFLLEEsRUFBQSxTQUFMLE0sRUFBVyxBQUFBLE1BQU0sQSxFQUFBLE8sRUFBakI7S0FBQSxJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gLi5hcmdzOiBmb28gLi5hcmdzIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFLLEEsRUFBQSxTQUFMLE8sRUFBVyxBQUFBLE1BQU0sQSxFQUFBLE8sRUFBakI7S0FBQSxJLEUsQSxLQUFBIgp9
 
 
 ---
@@ -916,12 +916,12 @@ test 'two bindings at module level', fn:
     bar = 2
   | equals ƒink:
     ·fn
-      fn ·ret_4:
+      fn ·ƒret_4:
         ·let 1, fn ·foo_0:
           ·let 2, fn ·bar_1:
             ·v_4 ·bar_1
       fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gMiJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNO0lBQUksQUFBQSxLQUFFLEMsS0FBTixNO01BQ0ksQUFBQSxLQUFFLEMsS0FBTixNO1FBREEsQUFBQSxLQUNBO0tBREEsSSxFLEEsS0FBQSIKfQ==
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gMiJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQUksQUFBQSxLQUFFLEMsS0FBTixNO01BQ0ksQUFBQSxLQUFFLEMsS0FBTixNO1FBREEsQUFBQSxLQUNBO0tBREEsSSxFLEEsS0FBQSIKfQ==
 
 
 test 'two fns at module level — main calls add', fn:
@@ -932,18 +932,18 @@ test 'two fns at module level — main calls add', fn:
       add 3, 4
   | equals ƒink:
     ·fn
-      fn ·ret_6:
+      fn ·ƒret_6:
         ·fn
-          fn ·a_2, ·b_3, ·ret_8: ·op_plus ·a_2, ·b_3, ·v_8
+          fn ·a_2, ·b_3, ·ƒret_8: ·op_plus ·a_2, ·b_3, ·v_8
           fn ·v_7:
             ·let ·v_7, fn ·add_0:
               ·fn
-                fn ·ret_16: ·add_0 3, 4, ·v_16
+                fn ·ƒret_16: ·add_0 3, 4, ·v_16
                 fn ·v_15:
                   ·let ·v_15, fn ·main_1:
                     ·v_6 ·main_1
       fn ·v_5: ·v_4 ·v_5
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTTtJQUFNLEFBQUE7U0FBRyxNQUFHLE1BQU4sTSxFQUNGLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO1NBQUEsSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQUVPLEFBQUE7ZUFBQSxPLEVBQ0wsQUFBQSxPQUFJLEMsRUFBRyxDLEVBREY7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2dCQUZBLEFBQUEsS0FFQTtLQUZBLEksRSxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbm1haW4gPSBmbjpcbiAgYWRkIDMsIDQiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTztJQUFNLEFBQUE7U0FBRyxNQUFHLE1BQU4sTyxFQUNGLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO1NBQUEsSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQUVPLEFBQUE7ZUFBQSxRLEVBQ0wsQUFBQSxPQUFJLEMsRUFBRyxDLEVBREY7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2dCQUZBLEFBQUEsS0FFQTtLQUZBLEksRSxBLEtBQUEiCn0=
 
 test 'shadowed binding — inner add does not affect outer', fn:
   expect cps_expr ƒink:
@@ -956,15 +956,15 @@ test 'shadowed binding — inner add does not affect outer', fn:
       add 3, 4
   | equals ƒink:
     ·fn
-      fn ·ret_11:
+      fn ·ƒret_11:
         ·fn
-          fn ·a_3, ·b_4, ·ret_13: ·op_plus ·a_3, ·b_4, ·v_13
+          fn ·a_3, ·b_4, ·ƒret_13: ·op_plus ·a_3, ·b_4, ·v_13
           fn ·v_12:
             ·let ·v_12, fn ·add_0:
               ·fn
-                fn ·a_5, ·b_6, ·ret_21:
+                fn ·a_5, ·b_6, ·ƒret_21:
                   ·fn
-                    fn ·foo_7, ·ret_23: ·v_23 ·foo_7
+                    fn ·foo_7, ·ƒret_23: ·ƒret_23 ·foo_7
                     fn ·v_22:
                       ·let ·v_22, fn ·add_8:
                         ·add_8 ·b_6, fn ·v_31:
@@ -972,12 +972,12 @@ test 'shadowed binding — inner add does not affect outer', fn:
                 fn ·v_20:
                   ·let ·v_20, fn ·sub_1:
                     ·fn
-                      fn ·ret_44: ·add_0 3, 4, ·v_44
+                      fn ·ƒret_44: ·add_0 3, 4, ·v_44
                       fn ·v_43:
                         ·let ·v_43, fn ·main_2:
                           ·v_11 ·main_2
       fn ·v_10: ·v_9 ·v_10
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbnN1YiA9IGZuIGEsIGI6XG4gIGFkZCA9IGZuIGZvbzogZm9vXG4gIGEgLSBhZGQgYlxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQU0sQUFBQTtTQUFHLE1BQUcsTUFBTixPLEVBQ0YsQUFBQSxTQUFGLEksRUFBSSxJLEVBREE7U0FBQSxLO1FBQUYsQUFBQSxLQUFFLEssS0FBTixNO1VBRU0sQUFBQTtlQUFHLE1BQUcsTUFBTixPO2NBQ0UsQUFBQTttQkFBRyxRQUFILE8sRSxBQUFBLE1BQVE7bUJBQVIsSztrQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07b0JBQ0ksQUFBQSxPQUFJLEksS0FBSixLO3NCQUFGLEFBQUEsVUFBRixJLEVBQUksSyxFQUZBO2VBQUEsSztjQUFGLEFBQUEsS0FBRSxLLEtBQU4sTTtnQkFHTyxBQUFBO3FCQUFBLE8sRUFDTCxBQUFBLE9BQUksQyxFQUFHLEMsRUFERjtxQkFBQSxLO29CQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztzQkFMQSxBQUFBLE1BS0E7S0FMQSxLLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbnN1YiA9IGZuIGEsIGI6XG4gIGFkZCA9IGZuIGZvbzogZm9vXG4gIGEgLSBhZGQgYlxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxRO0lBQU0sQUFBQTtTQUFHLE1BQUcsTUFBTixRLEVBQ0YsQUFBQSxTQUFGLEksRUFBSSxJLEVBREE7U0FBQSxLO1FBQUYsQUFBQSxLQUFFLEssS0FBTixNO1VBRU0sQUFBQTtlQUFHLE1BQUcsTUFBTixRO2NBQ0UsQUFBQTttQkFBRyxRQUFILFEsRSxBQUFBLFNBQVE7bUJBQVIsSztrQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07b0JBQ0ksQUFBQSxPQUFJLEksS0FBSixLO3NCQUFGLEFBQUEsVUFBRixJLEVBQUksSyxFQUZBO2VBQUEsSztjQUFGLEFBQUEsS0FBRSxLLEtBQU4sTTtnQkFHTyxBQUFBO3FCQUFBLFEsRUFDTCxBQUFBLE9BQUksQyxFQUFHLEMsRUFERjtxQkFBQSxLO29CQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztzQkFMQSxBQUFBLE1BS0E7S0FMQSxLLEUsQSxLQUFBIgp9
 
 QUFBO3FCQUFBLEssRUFDTCxBQUFBLE9BQUksQyxFQUFHLEMsRUFERjtxQkFBQSxLO29CQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztzQkFMQSxBQUFBLE1BS0E7S0FMQSxLLEUsQSxLQUFBIgp9
 

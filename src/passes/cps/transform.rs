@@ -2484,7 +2484,8 @@ mod cps_tests {
     match crate::to_desugared(src) {
       Ok(desugared) => {
         let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None };
+        let bk = super::super::ir::collect_bind_kinds(&cps.root);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None, bind_kinds: Some(&bk) };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
@@ -2506,7 +2507,8 @@ mod pat_tests {
     match crate::to_desugared(src) {
       Ok(desugared) => {
         let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None };
+        let bk = super::super::ir::collect_bind_kinds(&cps.root);
+        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None, bind_kinds: Some(&bk) };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
@@ -2527,7 +2529,8 @@ mod module_tests {
     match crate::to_desugared(src) {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
-        let ctx = Ctx { origin: &cps.result.origin, ast_index: &desugared.ast_index, captures: None, param_info: None };
+        let bk = crate::passes::cps::ir::collect_bind_kinds(&cps.result.root);
+        let ctx = Ctx { origin: &cps.result.origin, ast_index: &desugared.ast_index, captures: None, param_info: None, bind_kinds: Some(&bk) };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.result.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());

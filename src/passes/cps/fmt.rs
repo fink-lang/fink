@@ -27,6 +27,9 @@ pub struct Ctx<'a, 'src> {
   /// Optional param role metadata — when present, params are rendered grouped:
   /// `{caps}, [user_params], cont` instead of a flat list.
   pub param_info: Option<&'a PropGraph<CpsId, Option<super::ir::ParamInfo>>>,
+  /// Optional bind kind map — when present, refs to compiler-generated conts
+  /// render with semantic names (·ret_N, ·succ_N, ·fail_N).
+  pub bind_kinds: Option<&'a PropGraph<CpsId, Option<super::ir::Bind>>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -150,7 +153,7 @@ fn val_to_node(v: &Val, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, ctx), loc),
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(v.id, ctx), loc),
     ValKind::Panic => ident("·panic", loc),
-    ValKind::ContRef(id) => ident(&format!("·v_{}", id.0), ctx_loc(*id, ctx)),
+    ValKind::ContRef(id) => ident(&render_synth_fallback(*id, ctx), ctx_loc(*id, ctx)),
     ValKind::BuiltIn(op) => {
       // For builtin ops whose origin is an InfixOp, use op.loc (e.g. `>` not `a > 1`).
       let op_loc = ctx.ast_node(v.id)
@@ -212,8 +215,23 @@ fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
       _ => format!("·v_{}", cps_id.0),
     },
-    None => format!("·v_{}", cps_id.0),
+    None => render_synth_fallback(cps_id, ctx),
   }
+}
+
+/// Render a compiler-generated node with no AST origin.
+/// Checks bind_kinds for cont semantic names, falls back to ·v_N.
+fn render_synth_fallback(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
+  if let Some(bk) = ctx.bind_kinds
+    && let Some(Some(kind)) = bk.try_get(cps_id) {
+      return match kind {
+        Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
+        Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
+        Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
+        _ => format!("·v_{}", cps_id.0),
+      };
+  }
+  format!("·v_{}", cps_id.0)
 }
 
 /// Render an unresolved ref as `·∅name` (source name) or `·∅_N` (no origin).
@@ -234,9 +252,9 @@ fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, ctx),
     Bind::Synth     => format!("·v_{}", bind.id.0),
-    Bind::Cont(ContKind::Ret)  => format!("·ret_{}", bind.id.0),
-    Bind::Cont(ContKind::Succ) => format!("·succ_{}", bind.id.0),
-    Bind::Cont(ContKind::Fail) => format!("·fail_{}", bind.id.0),
+    Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
+    Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
+    Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
   }
 }
 
@@ -475,7 +493,7 @@ fn to_node_no_ctx(expr: &Expr) -> Node<'static> {
   // Build empty prop graphs as a dummy context.
   let origin: PropGraph<CpsId, Option<AstId>> = PropGraph::new();
   let ast_index: PropGraph<AstId, Option<&Node<'_>>> = PropGraph::new();
-  let ctx = Ctx { origin: &origin, ast_index: &ast_index, captures: None, param_info: None };
+  let ctx = Ctx { origin: &origin, ast_index: &ast_index, captures: None, param_info: None, bind_kinds: None };
   to_node(expr, &ctx)
 }
 

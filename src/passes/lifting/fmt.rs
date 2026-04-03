@@ -131,8 +131,23 @@ fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
       _ => format!("·v_{}", cps_id.0),
     },
-    None => format!("·v_{}", cps_id.0),
+    None => render_synth_fallback(cps_id, fc),
   }
+}
+
+/// Render a compiler-generated node with no AST origin.
+/// Checks bind_kinds for cont semantic names, falls back to ·v_N.
+fn render_synth_fallback(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
+  if let Some(bk) = fc.ctx.bind_kinds
+    && let Some(Some(kind)) = bk.try_get(cps_id) {
+      return match kind {
+        Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
+        Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
+        Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
+        _ => format!("·v_{}", cps_id.0),
+      };
+  }
+  format!("·v_{}", cps_id.0)
 }
 
 fn render_unresolved_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
@@ -154,9 +169,9 @@ fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, fc),
     Bind::Synth => format!("·v_{}", bind.id.0),
-    Bind::Cont(ContKind::Ret)  => format!("·ret_{}", bind.id.0),
-    Bind::Cont(ContKind::Succ) => format!("·succ_{}", bind.id.0),
-    Bind::Cont(ContKind::Fail) => format!("·fail_{}", bind.id.0),
+    Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
+    Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
+    Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
   }
 }
 
@@ -255,7 +270,7 @@ fn render_val(val: &Val, fc: &FmtCtx<'_, '_>) -> Node<'static> {
     ValKind::Ref(Ref::Synth(bind_id))      => ident(&render_synth_name(*bind_id, fc)),
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(val.id, fc)),
     ValKind::Panic           => ident("panic"),
-    ValKind::ContRef(id)     => ident(&format!("·v_{}", id.0)),
+    ValKind::ContRef(id)     => ident(&render_synth_fallback(*id, fc)),
     ValKind::BuiltIn(op)     => ident(&render_builtin_flat(op)),
   }
 }

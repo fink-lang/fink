@@ -514,3 +514,56 @@ pub enum ExprKind {
 
 }
 
+// ---------------------------------------------------------------------------
+// Bind kind collection — for the formatter's ref rendering
+// ---------------------------------------------------------------------------
+
+/// Walk the CPS tree and collect bind kinds into a prop graph.
+/// Used by the formatter to render refs with semantic cont names.
+pub fn collect_bind_kinds(expr: &Expr) -> crate::propgraph::PropGraph<CpsId, Option<Bind>> {
+  let mut bk: crate::propgraph::PropGraph<CpsId, Option<Bind>> = crate::propgraph::PropGraph::new();
+  collect_bk_expr(expr, &mut bk);
+  bk
+}
+
+fn collect_bk_bind(bind: &BindNode, bk: &mut crate::propgraph::PropGraph<CpsId, Option<Bind>>) {
+  let idx: usize = bind.id.into();
+  while bk.len() <= idx { bk.push(None); }
+  bk.set(bind.id, Some(bind.kind));
+}
+
+fn collect_bk_expr(expr: &Expr, bk: &mut crate::propgraph::PropGraph<CpsId, Option<Bind>>) {
+  match &expr.kind {
+    ExprKind::LetVal { name, cont, .. } => {
+      collect_bk_bind(name, bk);
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
+      collect_bk_bind(name, bk);
+      for p in params {
+        let b = match p { Param::Name(b) | Param::Spread(b) => b };
+        collect_bk_bind(b, bk);
+      }
+      collect_bk_expr(fn_body, bk);
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        if let Arg::Cont(c) = arg { collect_bk_cont(c, bk); }
+        if let Arg::Expr(e) = arg { collect_bk_expr(e, bk); }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_bk_expr(then, bk);
+      collect_bk_expr(else_, bk);
+    }
+  }
+}
+
+fn collect_bk_cont(cont: &Cont, bk: &mut crate::propgraph::PropGraph<CpsId, Option<Bind>>) {
+  if let Cont::Expr { args, body } = cont {
+    for a in args { collect_bk_bind(a, bk); }
+    collect_bk_expr(body, bk);
+  }
+}
+
