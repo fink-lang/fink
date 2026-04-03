@@ -52,8 +52,8 @@ pub mod fmt;
 
 use crate::ast::AstId;
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsFnKind, CpsId, CpsResult, Expr, ExprKind,
-  Param, ParamInfo, Ref, Val, ValKind,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsFnKind, CpsId, CpsResult,
+  Expr, ExprKind, Param, ParamInfo, Ref, Val, ValKind,
 };
 use crate::propgraph::PropGraph;
 
@@ -594,7 +594,7 @@ fn extract_from_body<'src>(
 
           if cap_entries.is_empty() {
             // Pure — hoist directly, replace with Cont::Ref.
-            let cont_name = alloc.bind(Bind::Cont, None);
+            let cont_name = alloc.bind(Bind::Cont(ContKind::Ret), None);
             let cont_name_id = cont_name.id;
             // Inline conts are always CpsClosure — they close over k from enclosing scope.
             let fn_kind = CpsFnKind::CpsClosure;
@@ -863,8 +863,9 @@ fn collect_captured_refs_cont(
 ) {
   match cont {
     Cont::Ref(id) => {
-      if parent_ids.contains_key(id) && seen.insert(*id) {
-        out.push((*id, Bind::Cont));
+      if let Some(&kind) = parent_ids.get(id)
+        && seen.insert(*id) {
+          out.push((*id, kind));
       }
     }
     Cont::Expr { body, .. } => collect_captured_refs(body, parent_ids, out, seen),
@@ -885,8 +886,9 @@ fn collect_captured_refs_val(
       }
   // Also check ContRef.
   if let ValKind::ContRef(id) = &val.kind
-    && parent_ids.contains_key(id) && seen.insert(*id) {
-      out.push((*id, Bind::Cont));
+    && let Some(&kind) = parent_ids.get(id)
+    && seen.insert(*id) {
+      out.push((*id, kind));
     }
 }
 

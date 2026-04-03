@@ -28,7 +28,7 @@
 use crate::ast::{Node, NodeKind, Exprs};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsId, Expr, ExprKind,
   Param, ParamInfo, Ref, Val, ValKind, Lit,
 };
 use crate::passes::cps::fmt::Ctx;
@@ -153,7 +153,10 @@ fn render_unresolved_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
 fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, fc),
-    Bind::Synth | Bind::Cont => format!("·v_{}", bind.id.0),
+    Bind::Synth => format!("·v_{}", bind.id.0),
+    Bind::Cont(ContKind::Ret)  => format!("·ret_{}", bind.id.0),
+    Bind::Cont(ContKind::Succ) => format!("·succ_{}", bind.id.0),
+    Bind::Cont(ContKind::Fail) => format!("·fail_{}", bind.id.0),
   }
 }
 

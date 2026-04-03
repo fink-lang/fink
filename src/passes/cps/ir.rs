@@ -131,12 +131,28 @@ pub struct CpsResult {
 /// `Synth` marks a compiler-generated temp with no source origin — intermediate
 /// results, sequence cursors, hoisted cont params, etc. Rendered as `·v_<cps_id>`.
 ///
-/// `Cont` marks a continuation parameter. Rendered as `·ƒ_<cps_id>`.
+/// `Cont(ContKind)` marks a continuation parameter with its semantic role.
+/// Rendered as `·ret_N`, `·succ_N`, or `·fail_N` depending on the kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
-  SynthName,  // source-level binding: pre-allocated CpsId, name via origin map
-  Synth,      // compiler-generated temp: rendered as ·v_{cps_id}
-  Cont,       // continuation parameter: rendered as ·ƒ_{cps_id}
+  SynthName,       // source-level binding: pre-allocated CpsId, name via origin map
+  Synth,           // compiler-generated temp: rendered as ·v_{cps_id}
+  Cont(ContKind),  // continuation parameter with semantic role
+}
+
+/// Semantic role of a continuation parameter.
+///
+/// Used by the formatter for readable names and by the emitter to understand
+/// the calling convention. Set by the CPS transform at creation time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ContKind {
+  /// Return continuation — where to send the function's result.
+  /// Created for every user function and match wrapper.
+  Ret,
+  /// Success continuation — called when a pattern match succeeds.
+  Succ,
+  /// Failure continuation — called when a pattern match fails, tries next arm.
+  Fail,
 }
 
 /// A use site — references a binding by the CpsId of its `BindNode`.
@@ -162,9 +178,8 @@ impl Ref {
 
 impl Bind {
   /// True if this bind introduces a continuation parameter.
-  // TODO: remove once Bind::Cont is collapsed into Bind::Synth.
   pub fn is_cont(self) -> bool {
-    matches!(self, Bind::Cont)
+    matches!(self, Bind::Cont(_))
   }
 
   /// True if this bind is a source-level name (pre-allocated from scope analysis).

@@ -10,7 +10,7 @@
 use crate::ast::{self, AstId, Exprs, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::propgraph::PropGraph;
-use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
+use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Formatter context — carries the prop graphs needed for origin lookups
@@ -234,7 +234,9 @@ fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, ctx),
     Bind::Synth     => format!("·v_{}", bind.id.0),
-    Bind::Cont      => format!("·v_{}", bind.id.0),
+    Bind::Cont(ContKind::Ret)  => format!("·ret_{}", bind.id.0),
+    Bind::Cont(ContKind::Succ) => format!("·succ_{}", bind.id.0),
+    Bind::Cont(ContKind::Fail) => format!("·fail_{}", bind.id.0),
   }
 }
 

@@ -23,8 +23,8 @@ use crate::ast::{AstId, CmpPart, Node, NodeKind};
 use crate::propgraph::PropGraph;
 use crate::passes::scopes::{BindId, BindInfo, BindOrigin, ScopeResult};
 use super::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsFnKind, CpsId, CpsResult, Expr, ExprKind,
-  Ref, Lit, Param, Val, ValKind,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsFnKind, CpsId, CpsResult,
+  Expr, ExprKind, Ref, Lit, Param, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ impl<'scope> Gen<'scope> {
   /// Allocate a fresh cont BindNode, set it as the current cont, and return
   /// (the new cont BindNode, the previous cont id to restore after the fn body).
   pub fn push_cont(&mut self, origin: Option<AstId>) -> (BindNode, CpsId) {
-    let bind = self.bind(Bind::Cont, origin);
+    let bind = self.bind(Bind::Cont(ContKind::Ret), origin);
     let prev = self.cont;
     self.cont = bind.id;
     (bind, prev)
@@ -1024,7 +1024,7 @@ fn lower_match<'src>(
   // Build the match-block wrapper: m_0(subj, k): mp_1(subj, k, fn: mp_2(subj, k, fn: panic))
   // m_0 takes (subjects..., k) and threads k as the succ cont through the fail-chain.
   let m0_subj_params: Vec<BindNode> = subject_vals.iter().map(|_| g.fresh_result(origin)).collect();
-  let m0_k_param = g.bind(Bind::Cont, None);
+  let m0_k_param = g.bind(Bind::Cont(ContKind::Ret), None);
   let m0_k_id = m0_k_param.id;
 
   // Build fail-chain right-to-left. Start with panic, wrap each arm from last to first.
@@ -1087,9 +1087,9 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
 
       // mp params: (subj_0, ..., succ, fail) — succ-first calling convention.
       let mp_subj_params: Vec<BindNode> = lhs_nodes.iter().map(|_| g.fresh_result(None)).collect();
-      let mp_succ_param = g.bind(Bind::Cont, None);
+      let mp_succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
       let mp_succ_id = mp_succ_param.id;
-      let mp_fail_param = g.bind(Bind::Cont, None);
+      let mp_fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
       let mp_fail_id = mp_fail_param.id;
 
       // Lower patterns against the mp scrutinee params.
@@ -1107,7 +1107,7 @@ fn lower_match_arm<'src>(g: &mut Gen, arm: &'src Node<'src>, _origin: Option<Ast
       }).collect();
 
       // mb params: (..binds, k) — body receives bound values + outer cont.
-      let mb_k_param = g.bind(Bind::Cont, None);
+      let mb_k_param = g.bind(Bind::Cont(ContKind::Ret), None);
       let mb_k_id = mb_k_param.id;
       let prev_cont = g.cont;
       g.cont = mb_k_id;
@@ -1597,8 +1597,8 @@ fn emit_range_pattern<'src>(
   pending: &mut Vec<Pending>,
 ) {
   let subj_param = g.fresh_result(origin);
-  let succ_param = g.bind(Bind::Cont, None);
-  let fail_param = g.bind(Bind::Cont, None);
+  let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
+  let fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
 
   let subj_ref = ref_val(g, subj_param.kind, subj_param.id, origin);
 
@@ -1668,8 +1668,8 @@ fn emit_literal_pattern(
   pending: &mut Vec<Pending>,
 ) {
   let subj_param = g.fresh_result(origin);
-  let succ_param = g.bind(Bind::Cont, None);
-  let fail_param = g.bind(Bind::Cont, None);
+  let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
+  let fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
 
   let subj_ref = ref_val(g, subj_param.kind, subj_param.id, origin);
   let lit_val = g.val(ValKind::Lit(lit), origin);
@@ -1736,8 +1736,8 @@ fn emit_seq_pattern<'src>(
   pending: &mut Vec<Pending>,
 ) -> (Bind, CpsId) {
   let subj_param = g.fresh_result(origin);
-  let succ_param = g.bind(Bind::Cont, None);
-  let fail_param = g.bind(Bind::Cont, None);
+  let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
+  let fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
 
   // Separate regular elements from the trailing spread (if any).
   let mut regular: Vec<&'src Node<'src>> = vec![];
@@ -1984,8 +1984,8 @@ fn emit_rec_pattern<'src>(
   pending: &mut Vec<Pending>,
 ) -> (Bind, CpsId) {
   let subj_param = g.fresh_result(origin);
-  let succ_param = g.bind(Bind::Cont, None);
-  let fail_param = g.bind(Bind::Cont, None);
+  let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
+  let fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
 
   // Parse field nodes into RecField structs and detect spread.
   let mut regular: Vec<RecField<'_, 'src>> = vec![];
@@ -2319,8 +2319,8 @@ fn lower_pat_lhs<'src>(
 
       // Build matcher: fn(subj, succ, fail): op(subj, rhs, fn result: if result succ(subj) else fail)
       let subj_param = g.fresh_result(origin);
-      let succ_param = g.bind(Bind::Cont, None);
-      let fail_param = g.bind(Bind::Cont, None);
+      let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
+      let fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
 
       // Lower the guard RHS (the comparison value, e.g. `0` in `a > 0`).
       // This is a pure expression, no scope dependency on the bind.
