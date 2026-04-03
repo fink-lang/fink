@@ -28,7 +28,7 @@
 use crate::ast::{Node, NodeKind, Exprs};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsId, Expr, ExprKind,
   Param, ParamInfo, Ref, Val, ValKind, Lit,
 };
 use crate::passes::cps::fmt::Ctx;
@@ -110,6 +110,16 @@ fn fn_node(params: Vec<Node<'static>>, body_stmts: Vec<Node<'static>>) -> Node<'
 /// (e.g. `a`), but pair it with the param's own CpsId for the suffix so body
 /// refs match. Falls back to `·v_{param_id}` for synthetic origins.
 fn render_cap_name(param_id: CpsId, origin_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
+  // First check if the param itself is a cont — use semantic name.
+  if let Some(bk) = fc.ctx.bind_kinds
+    && let Some(Some(Bind::Cont(ck))) = bk.try_get(param_id) {
+      return match ck {
+        ContKind::Ret  => format!("·ƒret_{}", param_id.0),
+        ContKind::Succ => format!("·ƒsucc_{}", param_id.0),
+        ContKind::Fail => format!("·ƒfail_{}", param_id.0),
+      };
+  }
+  // Otherwise try source name from origin AST node.
   match fc.ctx.origin.try_get(origin_id).and_then(|opt| *opt)
     .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
     .and_then(|opt| *opt)
@@ -129,10 +139,25 @@ fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
   {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
-      _ => format!("·v_{}", cps_id.0),
+      _ => render_synth_fallback(cps_id, fc),
     },
-    None => format!("·v_{}", cps_id.0),
+    None => render_synth_fallback(cps_id, fc),
   }
+}
+
+/// Render a compiler-generated node with no AST origin.
+/// Checks bind_kinds for cont semantic names, falls back to ·v_N.
+fn render_synth_fallback(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
+  if let Some(bk) = fc.ctx.bind_kinds
+    && let Some(Some(kind)) = bk.try_get(cps_id) {
+      return match kind {
+        Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
+        Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
+        Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
+        _ => format!("·v_{}", cps_id.0),
+      };
+  }
+  format!("·v_{}", cps_id.0)
 }
 
 fn render_unresolved_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
@@ -153,7 +178,10 @@ fn render_unresolved_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
 fn render_bind(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, fc),
-    Bind::Synth | Bind::Cont => format!("·v_{}", bind.id.0),
+    Bind::Synth => format!("·v_{}", bind.id.0),
+    Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
+    Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
+    Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
   }
 }
 
@@ -188,15 +216,14 @@ fn render_fn_params_grouped(params: &[Param], fc: &FmtCtx<'_, '_>) -> Vec<Node<'
 
   let mut caps: Vec<Node<'static>> = Vec::new();
   let mut user_params: Vec<Node<'static>> = Vec::new();
-  let mut cont_params: Vec<Node<'static>> = Vec::new();
 
   for p in params {
     let b = match p { Param::Name(b) | Param::Spread(b) => b };
     let info = pi.try_get(b.id).and_then(|o| *o);
     match info {
       Some(ParamInfo::Cap(_)) => caps.push(render_param_node(p, fc, true)),
-      Some(ParamInfo::Cont) => cont_params.push(render_param_node(p, fc, true)),
-      Some(ParamInfo::Param(_)) | None => user_params.push(render_param_node(p, fc, true)),
+      // Conts-first: cont params go in the user params group (inside []).
+      Some(ParamInfo::Cont) | Some(ParamInfo::Param(_)) | None => user_params.push(render_param_node(p, fc, true)),
     }
   }
 
@@ -219,9 +246,6 @@ fn render_fn_params_grouped(params: &[Param], fc: &FmtCtx<'_, '_>) -> Vec<Node<'
       items: Exprs { items: user_params, seps: (0..n.saturating_sub(1)).map(|_| sep_tok()).collect() },
     }, dummy_loc()));
   }
-
-  // Cont params: bare (may be multiple for pattern matchers)
-  result.extend(cont_params);
 
   result
 }
@@ -252,7 +276,7 @@ fn render_val(val: &Val, fc: &FmtCtx<'_, '_>) -> Node<'static> {
     ValKind::Ref(Ref::Synth(bind_id))      => ident(&render_synth_name(*bind_id, fc)),
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(val.id, fc)),
     ValKind::Panic           => ident("panic"),
-    ValKind::ContRef(id)     => ident(&format!("·v_{}", id.0)),
+    ValKind::ContRef(id)     => ident(&render_synth_fallback(*id, fc)),
     ValKind::BuiltIn(op)     => ident(&render_builtin_flat(op)),
   }
 }
@@ -291,7 +315,7 @@ fn render_builtin_flat(op: &BuiltIn) -> String {
 
 fn render_cont_arg(cont: &Cont, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match cont {
-    Cont::Ref(id)           => ident(&format!("·v_{}", id.0)),
+    Cont::Ref(id)           => ident(&render_synth_fallback(*id, fc)),
     Cont::Expr { args, body } => {
       let params: Vec<Node<'static>> = args.iter()
         .map(|b| ident(&render_bind(b, fc)))
@@ -343,7 +367,7 @@ fn collect_stmts(expr: &Expr, fc: &FmtCtx<'_, '_>) -> Vec<Node<'static>> {
 /// tail expression. Consecutive LetFn → LetVal aliases are chained as `b = a = fn ...`.
 fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) {
   match &expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
       let name_str = render_bind(name, fc);
 
       let fn_params = render_fn_params_grouped(params, fc);

@@ -42,7 +42,7 @@
 // WAT text source maps by looking up DWARF entries for each instruction
 // and structural locs for non-code items.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use wasm_encoder::{
   AbstractHeapType, CodeSection, CompositeInnerType, CompositeType,
@@ -331,7 +331,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Split builtins: implemented ones become defined functions, rest stay as imports.
   let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
     builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
-  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_") || n == "empty");
+  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_"));
   let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
   let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"))
     || module.funcs.iter().any(|f| scan_rec_lit(f.body));
@@ -341,11 +341,10 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   }
   let has_strings = !e.string_data.is_empty();
 
-  // $Fn2(caps, args) for continuations. $Fn3(caps, args, cont) for user functions.
+  // $Fn2(caps, args) — unified calling convention for all functions.
   let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
   extra_arities.insert(0); // $Fn0 — $_panic
-  extra_arities.insert(2); // $Fn2 — continuations + _apply(args, callee)
-  extra_arities.insert(3); // $Fn3 — user functions + _apply_cont(args, cont, callee)
+  extra_arities.insert(2); // $Fn2 — all functions + _apply(args, callee)
 
   e.closure_captures = closure_captures.clone();
   e.needs_croc_for_operators = has_operator_imports;
@@ -359,18 +358,6 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.emit_types(module, &all_builtins, &extra_arities, &closure_captures);
   e.emit_imports_from(module, &import_builtins);
   e.impl_builtins = impl_builtins.clone();
-  // Build set of function labels with has_cont=true ($Fn3 calling convention).
-  // Include both the function label and its alias (LetVal binding name).
-  e.cont_fns = module.funcs.iter()
-    .filter(|f| f.has_cont)
-    .flat_map(|f| {
-      let mut labels = vec![f.label.clone()];
-      if let Some((_, alias)) = &f.alias {
-        labels.push(alias.clone());
-      }
-      labels
-    })
-    .collect();
   e.emit_functions(module, &closure_captures);
   e.emit_memory();
   e.emit_globals(module);
@@ -474,8 +461,6 @@ struct Emitter<'a, 'src> {
   has_panic: bool,
   /// Interned string literal data.
   string_data: StringData,
-  /// Function labels known to have has_cont=true ($Fn3 calling convention).
-  cont_fns: HashSet<String>,
 }
 
 struct RawMapping {
@@ -503,7 +488,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       needs_string: false,
       has_panic: false,
       string_data: StringData::new(),
-      cont_fns: HashSet::new(),
     }
   }
 
@@ -554,7 +538,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
     // $TmpImport0 = (func (param i32 i32) (result (ref $Str)))
     // Temporary type for the str import — only exists pre-link.
-    // The linker unifies this with string.wat's actual function type.
+    // The linker unifies this with str.wat's actual function type.
     if self.needs_string {
       let str_idx = self.idx.type_idx("$Str");
       let str_ref = ValType::Ref(RefType {
@@ -633,8 +617,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     next_idx += 1;
 
     // $FnN for all needed arities.
-    // $Fn2: continuations (caps, args) AND _apply_2(args, callee)
-    // $Fn3: user functions (caps, args, cont) AND _apply_3(args, cont, callee)
+    // $Fn2: all functions (caps, args) AND _apply(args, callee)
     // Plus builtin arities.
     let mut all_arities: BTreeSet<usize> = BTreeSet::new();
     for &arity in builtins.values() {
@@ -645,7 +628,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     }
     for &arity in &all_arities {
       let name = format!("$Fn{}", arity);
-      // Skip if already defined in canonical types (e.g. $Fn2, $Fn3 from types.wat).
+      // Skip if already defined in canonical types (e.g. $Fn2 from types.wat).
       if self.idx.types.contains_key(&name) { continue; }
       let params: Vec<ValType> = vec![any_ref; arity];
       types.ty().subtype(&SubType {
@@ -724,16 +707,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
-    // _apply / _apply_cont: closure dispatch (defined in dispatch.wat).
+    // _apply: closure dispatch (defined in dispatch.wat).
     {
       let fn2_idx = self.idx.fn_type_idx(2);
       imports.import("@fink/runtime", "_apply", wasm_encoder::EntityType::Function(fn2_idx));
       self.idx.imports.insert("_apply".into(), next_func_idx);
-      next_func_idx += 1;
-
-      let fn3_idx = self.idx.fn_type_idx(3);
-      imports.import("@fink/runtime", "_apply_cont", wasm_encoder::EntityType::Function(fn3_idx));
-      self.idx.imports.insert("_apply_cont".into(), next_func_idx);
       next_func_idx += 1;
     }
 
@@ -751,11 +729,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
   fn emit_functions(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>) {
     let mut functions = FunctionSection::new();
 
-    // CPS-defined functions — $Fn3(caps, args, cont) or $Fn2(caps, args).
+    // CPS-defined functions — all $Fn2(caps, args).
     let fn2_type = self.idx.fn_type_idx(2);
-    let fn3_type = self.idx.fn_type_idx(3);
     for (i, func) in cps_mod.funcs.iter().enumerate() {
-      let type_idx = if func.has_cont { fn3_type } else { fn2_type };
+      let type_idx = fn2_type;
       functions.function(type_idx);
       let func_idx = self.idx.import_count + i as u32;
       self.idx.funcs.insert(func.label.clone(), func_idx);
@@ -855,10 +832,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let mut next_global_idx = 0u32;
 
     let fn2_type = self.idx.fn_type_idx(2);
-    let fn3_type = self.idx.fn_type_idx(3);
     for func in &cps_mod.funcs {
       if let Some((alias_id, alias_label)) = &func.alias {
-        let fn_type_idx = if func.has_cont { fn3_type } else { fn2_type };
+        let fn_type_idx = fn2_type;
         let func_idx = self.idx.func_idx(&func.label);
 
         // Record structural loc for global alias.
@@ -1034,20 +1010,17 @@ impl<'a, 'src> Emitter<'a, 'src> {
       heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
     });
 
-    // v2 calling convention:
-    //   $Fn2(captures, args)        — continuations, match arms
-    //   $Fn3(captures, args, cont)  — user functions
+    // Unified $Fn2 calling convention:
+    //   $Fn2(captures, args) — all functions
     //
     // WASM params:
     //   local 0 = captures (ref null any — cast to $Captures array)
     //   local 1 = args list (ref null any)
-    //   local 2 = cont (ref null any) — only if has_cont
     //
     // CPS params split into:
     //   [0..n_captures)              → from captures array (array.get)
-    //   [n_captures..N-has_cont)     → from args list (list_head/list_tail)
-    //   [N-1] if has_cont            → from WASM cont param (local 2)
-    let wasm_param_count: u32 = if func.has_cont { 3 } else { 2 };
+    //   [n_captures..N)              → from args list (list_head/list_tail)
+    let wasm_param_count: u32 = 2;
 
     let mut local_map: HashMap<String, u32> = HashMap::new();
     let param_count = func.params.len() as u32;
@@ -1080,9 +1053,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
     }
 
     // Unpack value params from the args list (local 1).
-    // Cont (if has_cont) comes from WASM param, not the list.
-    let val_end = if func.has_cont { func.params.len().saturating_sub(1).max(func.n_captures) } else { func.params.len() };
-    let val_params = &func.params[func.n_captures..val_end];
+    // All params (including conts) come from captures or args list.
+    let val_params = &func.params[func.n_captures..];
     for (j, (_id, _label, is_spread)) in val_params.iter().enumerate() {
       let local_idx = wasm_param_count + (func.n_captures + j) as u32;
       if *is_spread {
@@ -1103,13 +1075,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    // Cont param: copy from WASM local 2 → CPS local.
-    if func.has_cont && !func.params.is_empty() {
-      let cont_local = wasm_param_count + (func.params.len() - 1) as u32;
-      wasm_func.instruction(&Instruction::LocalGet(2));
-      wasm_func.instruction(&Instruction::LocalSet(cont_local));
-    }
-
     // Emit body instructions.
     let mut fc = FuncContext {
       func: &mut wasm_func,
@@ -1121,7 +1086,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       _has_closures: !self.closure_captures.is_empty(),
       string_data: &self.string_data,
       scratch_local,
-      cont_fns: &self.cont_fns,
     };
     emit_body(func.body, &mut fc);
 
@@ -1182,15 +1146,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
     names.functions(&func_names);
 
     // Local names per defined function.
-    // Layout: WASM params (caps, args, [cont]), then CPS params, body locals, scratch.
+    // Layout: WASM params (caps, args), then CPS params, body locals, scratch.
     let mut all_locals = IndirectNameMap::new();
     for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
       let func_idx = self.idx.import_count + def_idx as u32;
-      let wasm_param_count: u32 = if func.has_cont { 3 } else { 2 };
+      let wasm_param_count: u32 = 2;
       let mut local_names = NameMap::new();
       local_names.append(0, "_caps");
       local_names.append(1, "_args");
-      if func.has_cont { local_names.append(2, "_cont"); }
       // CPS params.
       for (i, (_id, label, _)) in func.params.iter().enumerate() {
         local_names.append(wasm_param_count + i as u32, label);
@@ -1232,8 +1195,6 @@ struct FuncContext<'a, 'b, 'src> {
   string_data: &'a StringData,
   /// Scratch local for building args lists at call sites.
   scratch_local: u32,
-  /// Function labels known to have has_cont=true ($Fn3 calling convention).
-  cont_fns: &'a HashSet<String>,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -1374,25 +1335,15 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
   let list_concat_idx = fc.emitter_idx.func_idx("list_concat");
   let scratch = fc.scratch_local;
 
-  // Check if the callee is known to be $Fn2 (not in cont_fns).
-  // When the callee is known $Fn2, fold the cont into the args list and use
-  // _apply instead of _apply_cont. This prevents the _apply_cont fallback
-  // from corrupting args by prepending cont for a callee that doesn't expect it.
-  // For unknown callees (params, captures) we keep _apply_cont — the runtime
-  // dispatch handles both $Fn3 and $Fn2 correctly when the callee IS $Fn3.
-  let callee_known_fn2 = cont_arg.is_some() && match &func_val.kind {
-    ValKind::Ref(Ref::Synth(id)) => !fc.cont_fns.contains(&fc.ctx.label(*id)),
-    _ => false,
-  };
-
   // Build args list. Start with nil, then prepend in reverse order.
-  // For known $Fn2 callees with a cont, prepend cont first so it ends up
-  // as the last element after val_args are prepended on top.
+  // Cont (if present) is prepended first so it ends up as the first
+  // element after val_args are prepended on top (conts-first convention).
   let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
   fc.instr(&Instruction::Call(list_nil_idx));
   fc.instr(&Instruction::LocalSet(scratch));
 
-  if callee_known_fn2 && let Some(cont) = cont_arg {
+  // Cont goes at the end of the prepend sequence (= first in final list).
+  if let Some(cont) = cont_arg {
     emit_cont(cont, fc);
     fc.instr(&Instruction::LocalGet(scratch));
     fc.instr(&Instruction::Call(list_prepend_idx));
@@ -1416,28 +1367,12 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
     }
   }
 
-  // Dispatch: _apply_cont(args, cont, callee) or _apply(args, callee).
+  // Dispatch: always _apply(args, callee).
   fc.instr(&Instruction::LocalGet(scratch));  // args list
-  if let Some(cont) = cont_arg {
-    if callee_known_fn2 {
-      // Cont already folded into args list above.
-      emit_val_ref(func_val, fc);               // callee
-      fc.mark(mark_id);
-      let idx = fc.emitter_idx.func_idx("_apply");
-      fc.instr(&Instruction::ReturnCall(idx));
-    } else {
-      emit_cont(cont, fc);                      // cont
-      emit_val_ref(func_val, fc);               // callee
-      fc.mark(mark_id);
-      let idx = fc.emitter_idx.func_idx("_apply_cont");
-      fc.instr(&Instruction::ReturnCall(idx));
-    }
-  } else {
-    emit_val_ref(func_val, fc);               // callee
-    fc.mark(mark_id);
-    let idx = fc.emitter_idx.func_idx("_apply");
-    fc.instr(&Instruction::ReturnCall(idx));
-  }
+  emit_val_ref(func_val, fc);                 // callee
+  fc.mark(mark_id);
+  let idx = fc.emitter_idx.func_idx("_apply");
+  fc.instr(&Instruction::ReturnCall(idx));
 }
 
 /// Emit a builtin operation call.

@@ -16,7 +16,8 @@
 ;; Exported functions:
 ;;   $range_excl  : (ref $Num), (ref $Num) -> (ref $Range)
 ;;   $range_incl  : (ref $Num), (ref $Num) -> (ref $Range)
-;;   $range_in    : (ref $Num), (ref $Range) -> i32
+;;   $range_op_in    : (ref $Num), (ref $Range) -> i32
+;;   $range_op_not_in : (ref $Num), (ref $Range) -> i32
 
 (module
 
@@ -57,11 +58,11 @@
 
   ;; -- Membership -----------------------------------------------------
 
-  ;; range_in(val, range) → 1 if val is in range, 0 otherwise
+  ;; range_op_in(val, range) → 1 if val is in range, 0 otherwise
   ;;
   ;; For exclusive: start <= val < end
   ;; For inclusive: start <= val <= end
-  (func $range_in (export "range_in")
+  (func $range_op_in (export "range_op_in")
     (param $val (ref $Num)) (param $range (ref $Range))
     (result i32)
     (local $impl (ref $RangeImpl))
@@ -99,11 +100,11 @@
     (f64.lt (local.get $v) (local.get $e))
   )
 
-  ;; range_notin(val, range) → 1 if val is NOT in range, 0 otherwise
-  (func $range_notin (export "range_notin")
+  ;; range_op_not_in(val, range) → 1 if val is NOT in range, 0 otherwise
+  (func $range_op_not_in (export "range_op_not_in")
     (param $val (ref $Num)) (param $range (ref $Range))
     (result i32)
-    (i32.eqz (call $range_in (local.get $val) (local.get $range)))
+    (i32.eqz (call $range_op_in (local.get $val) (local.get $range)))
   )
 
 

@@ -1,7 +1,7 @@
 ;; Set — immutable hash set using HAMT trie structure
 ;;
 ;; WASM GC implementation using struct and array types.
-;; Same trie structure as the HAMT (hamt.wat) but leaves store only
+;; Same trie structure as the HAMT (rec.wat) but leaves store only
 ;; keys, no values — halving per-entry memory.
 ;;
 ;; Design:

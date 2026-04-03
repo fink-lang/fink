@@ -49,6 +49,5 @@ test 'yield apply result', fn:
     yield foo bar
 
   | equals ƒink:
-    ·∅foo ·∅bar, fn ·v_3:
-      ·yield ·v_3, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsTUFBSSxLLEtBQUosSTtFQUFOLEFBQUEsT0FBTSxJLEUiCn0=
+    ·∅foo fn ·v_3: ·yield ·v_3, ·v_0, ·∅bar
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsTUFBQSxHQUFBLEksRUFBTixBQUFBLE9BQU0sSSxFLEksRUFBSSIKfQ==

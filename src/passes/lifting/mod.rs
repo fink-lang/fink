@@ -52,8 +52,8 @@ pub mod fmt;
 
 use crate::ast::AstId;
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
-  Param, ParamInfo, Ref, Val, ValKind,
+  Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsFnKind, CpsId, CpsResult,
+  Expr, ExprKind, Param, ParamInfo, Ref, Val, ValKind,
 };
 use crate::propgraph::PropGraph;
 
@@ -112,6 +112,7 @@ impl Alloc {
 struct HoistedFn {
   name:    BindNode,
   params:  Vec<Param>,
+  fn_kind: CpsFnKind,
   fn_body: Expr,
   /// The original cont args that bound the fn's result value.
   /// Used by wrap_hoisted to create the correct Cont::Expr binding.
@@ -287,7 +288,7 @@ fn lift_expr<'src>(
   alloc: &mut Alloc,
 ) -> Expr {
   match expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       // Recurse into the cont first.
       let cont = lift_cont(cont, ast_index, alloc);
 
@@ -302,6 +303,7 @@ fn lift_expr<'src>(
           kind: ExprKind::LetFn {
             name,
             params,
+            fn_kind,
             fn_body: Box::new(new_fn_body),
             cont,
           },
@@ -315,6 +317,7 @@ fn lift_expr<'src>(
             kind: ExprKind::LetFn {
               name: h.name,
               params: h.params,
+              fn_kind: h.fn_kind,
               fn_body: Box::new(h.fn_body),
               cont: Cont::Expr { args: h.cont_args, body: Box::new(result) },
             },
@@ -327,7 +330,7 @@ fn lift_expr<'src>(
         let fn_body = lift_expr(*fn_body, ast_index, alloc);
         Expr {
           id: expr.id,
-          kind: ExprKind::LetFn { name, params, fn_body: Box::new(fn_body), cont },
+          kind: ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont },
         }
       }
     }
@@ -388,7 +391,7 @@ fn extract_from_body<'src>(
   hoisted: &mut Vec<HoistedFn>,
 ) -> Expr {
   match expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       // This LetFn is inside a fn_body — extract it one level.
       // Don't recurse into the extracted fn's own fn_body — the next
       // iteration handles deeper nesting (one level at a time).
@@ -410,6 +413,7 @@ fn extract_from_body<'src>(
             hoisted.push(HoistedFn {
               name,
               params,
+              fn_kind,
               fn_body: inner_fn_body,
               cont_args,
             });
@@ -423,6 +427,7 @@ fn extract_from_body<'src>(
             hoisted.push(HoistedFn {
               name,
               params,
+              fn_kind,
               fn_body: inner_fn_body,
               cont_args: vec![alloc.synth_bind()],
             });
@@ -502,9 +507,12 @@ fn extract_from_body<'src>(
           Cont::Ref(_) => (vec![alloc.synth_bind()], cont),
         };
 
+        // Closure targets are always CpsClosure: they're called via dispatch
+        // (_apply), not directly with Arg::Cont.
         hoisted.push(HoistedFn {
           name: lifted_fn_bind,
           params: lifted_params,
+          fn_kind: CpsFnKind::CpsClosure,
           fn_body: inner_fn_body,
           cont_args: cont_args_for_hoist,
         });
@@ -585,11 +593,14 @@ fn extract_from_body<'src>(
 
           if cap_entries.is_empty() {
             // Pure — hoist directly, replace with Cont::Ref.
-            let cont_name = alloc.bind(Bind::Cont, None);
+            let cont_name = alloc.bind(Bind::Cont(ContKind::Ret), None);
             let cont_name_id = cont_name.id;
+            // Inline conts are always CpsClosure — they close over k from enclosing scope.
+            let fn_kind = CpsFnKind::CpsClosure;
             hoisted.push(HoistedFn {
               name: cont_name,
               params: cont_params,
+              fn_kind,
               fn_body: body,
               cont_args: vec![alloc.synth_bind()],
             });
@@ -636,9 +647,12 @@ fn extract_from_body<'src>(
               alloc.set_param_info(b.id, info);
             }
             lifted_params.extend(cont_params);
+            // Inline conts with captures are always CpsClosure.
+            let fn_kind = CpsFnKind::CpsClosure;
             hoisted.push(HoistedFn {
               name: lifted_fn_bind,
               params: lifted_params,
+              fn_kind,
               fn_body: body,
               cont_args: vec![alloc.synth_bind()],
             });
@@ -688,10 +702,10 @@ fn extract_from_body<'src>(
 
 fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr {
   match expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       let fn_body = rewrite_refs(*fn_body, map);
       let cont = rewrite_refs_cont(cont, map);
-      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_body: Box::new(fn_body), cont } }
+      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont } }
     }
     ExprKind::LetVal { name, val, cont } => {
       let val = rewrite_refs_val(*val, map);
@@ -848,8 +862,9 @@ fn collect_captured_refs_cont(
 ) {
   match cont {
     Cont::Ref(id) => {
-      if parent_ids.contains_key(id) && seen.insert(*id) {
-        out.push((*id, Bind::Cont));
+      if let Some(&kind) = parent_ids.get(id)
+        && seen.insert(*id) {
+          out.push((*id, kind));
       }
     }
     Cont::Expr { body, .. } => collect_captured_refs(body, parent_ids, out, seen),
@@ -870,8 +885,9 @@ fn collect_captured_refs_val(
       }
   // Also check ContRef.
   if let ValKind::ContRef(id) = &val.kind
-    && parent_ids.contains_key(id) && seen.insert(*id) {
-      out.push((*id, Bind::Cont));
+    && let Some(&kind) = parent_ids.get(id)
+    && seen.insert(*id) {
+      out.push((*id, kind));
     }
 }
 
@@ -943,11 +959,13 @@ mod tests {
   fn lift(src: &str) -> String {
     match crate::to_lifted(src) {
       Ok((lifted, desugared)) => {
+        let bk = crate::passes::cps::ir::collect_bind_kinds(&lifted.result.root);
         let ctx = Ctx {
           origin: &lifted.result.origin,
           ast_index: &desugared.ast_index,
           captures: None,
           param_info: Some(&lifted.result.param_info),
+          bind_kinds: Some(&bk),
         };
         fmt_flat(&lifted.result.root, &ctx)
       }

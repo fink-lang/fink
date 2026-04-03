@@ -37,8 +37,8 @@
 ;;   │       ├── $Num (field f64)     ← float / large number
 ;;   │       ├── $Str                 ← base string type
 ;;   │       ├── $List                ← list (opaque — internals in list.wat)
-;;   │       ├── $Rec                 ← record (opaque — internals in hamt.wat)
-;;   │       ├── $Dict                ← dict (opaque — internals in hamt.wat)
+;;   │       ├── $Rec                 ← record (opaque — internals in rec.wat)
+;;   │       ├── $Dict                ← dict (opaque — internals in rec.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
 ;;   │       ├── $Range              ← numeric range (opaque — internals in range.wat)
 ;;   │       ├── $SpreadArgs ($List)             ← spread call marker (wraps list)
@@ -125,7 +125,7 @@
     ))
 
     ;; $Str — base string type. Opaque.
-    ;; All internal subtypes defined in string.wat.
+    ;; All internal subtypes defined in str.wat.
     (type $Str (sub (struct)))
 
     ;; $List — sequence. Opaque base type.
@@ -133,12 +133,12 @@
     (type $List (sub (struct)))
 
     ;; $Rec — record (fixed-shape key-value map). Opaque base type.
-    ;; Internals (HAMT layout) defined in hamt.wat as subtypes.
+    ;; Internals (HAMT layout) defined in rec.wat as subtypes.
     ;; Distinct from $Dict for future optimisation (known-shape → flat structs).
     (type $Rec (sub (struct)))
 
     ;; $Dict — dictionary (dynamic key-value map). Opaque base type.
-    ;; Internals (HAMT layout) defined in hamt.wat as subtypes.
+    ;; Internals (HAMT layout) defined in rec.wat as subtypes.
     (type $Dict (sub (struct)))
 
     ;; $Set — immutable hash set. Opaque base type.
@@ -180,11 +180,9 @@
       (field $captures (ref null $Captures))
     ))
 
-    ;; Function signatures for the calling convention.
-    ;; $Fn2(captures, args) — continuations, match arms.
-    ;; $Fn3(captures, args, cont) — user functions.
+    ;; Function signature for the unified calling convention.
+    ;; $Fn2(captures, args) — all functions (conts are in captures or args).
     (type $Fn2 (func (param (ref null any) (ref null any))))
-    (type $Fn3 (func (param (ref null any) (ref null any) (ref null any))))
   )
 
 )

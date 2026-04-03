@@ -131,12 +131,28 @@ pub struct CpsResult {
 /// `Synth` marks a compiler-generated temp with no source origin — intermediate
 /// results, sequence cursors, hoisted cont params, etc. Rendered as `·v_<cps_id>`.
 ///
-/// `Cont` marks a continuation parameter. Rendered as `·ƒ_<cps_id>`.
+/// `Cont(ContKind)` marks a continuation parameter with its semantic role.
+/// Rendered as `·ret_N`, `·succ_N`, or `·fail_N` depending on the kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bind {
-  SynthName,  // source-level binding: pre-allocated CpsId, name via origin map
-  Synth,      // compiler-generated temp: rendered as ·v_{cps_id}
-  Cont,       // continuation parameter: rendered as ·ƒ_{cps_id}
+  SynthName,       // source-level binding: pre-allocated CpsId, name via origin map
+  Synth,           // compiler-generated temp: rendered as ·v_{cps_id}
+  Cont(ContKind),  // continuation parameter with semantic role
+}
+
+/// Semantic role of a continuation parameter.
+///
+/// Used by the formatter for readable names and by the emitter to understand
+/// the calling convention. Set by the CPS transform at creation time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ContKind {
+  /// Return continuation — where to send the function's result.
+  /// Created for every user function and match wrapper.
+  Ret,
+  /// Success continuation — called when a pattern match succeeds.
+  Succ,
+  /// Failure continuation — called when a pattern match fails, tries next arm.
+  Fail,
 }
 
 /// A use site — references a binding by the CpsId of its `BindNode`.
@@ -162,9 +178,8 @@ impl Ref {
 
 impl Bind {
   /// True if this bind introduces a continuation parameter.
-  // TODO: remove once Bind::Cont is collapsed into Bind::Synth.
   pub fn is_cont(self) -> bool {
-    matches!(self, Bind::Cont)
+    matches!(self, Bind::Cont(_))
   }
 
   /// True if this bind is a source-level name (pre-allocated from scope analysis).
@@ -413,6 +428,35 @@ impl Cont {
 }
 
 // ---------------------------------------------------------------------------
+// CPS function classification
+// ---------------------------------------------------------------------------
+
+/// Distinguishes CPS functions from CPS closures at the IR level.
+///
+/// The distinction is about the calling convention: CpsFunction is called
+/// with `Arg::Cont` at the call site (the cont is a separate WASM param
+/// or prepended to the args list in unified $Fn2 mode). CpsClosure is
+/// never called with `Arg::Cont` — it receives any continuation values
+/// as regular `Arg::Val` arguments or captures.
+///
+/// Set once by the CPS transform at creation time. Preserved through lifting.
+/// See `docs/calling-convention-v2.md` for the WASM-level design.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpsFnKind {
+  /// Called with `Arg::Cont` at the call site. Includes user-defined
+  /// functions, match wrappers (m_0), and match matchers (mp_N).
+  /// At the WASM level, the cont is prepended to the args list ($Fn2).
+  CpsFunction,
+
+  /// Never called with `Arg::Cont`. Includes compiler-generated
+  /// continuations (inline cont bodies), match arm bodies (mb_N),
+  /// PatternMatch bodies and matchers, and success wrappers.
+  /// Continuation values arrive as regular `Arg::Val` or captures.
+  CpsClosure,
+}
+
+
+// ---------------------------------------------------------------------------
 // Expressions
 // ---------------------------------------------------------------------------
 
@@ -430,11 +474,14 @@ pub enum ExprKind {
 
   /// Bind a function; name NOT visible in fn_body (non-recursive).
   /// Anonymous fns get a compiler-generated synthetic name.
-  /// For user fns the last param is `Param::Name(Bind::Cont)` — the return
-  /// continuation. Lifted continuations may have no cont param at all.
+  ///
+  /// `fn_kind` distinguishes functions called with `Arg::Cont` (CpsFunction)
+  /// from those that never receive a cont via `Arg::Cont` (CpsClosure).
+  /// Set by the CPS transform at creation time. See `docs/calling-convention-v2.md`.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
+    fn_kind: CpsFnKind,
     // TODO: rename to body
     fn_body: Box<Expr>,
     cont: Cont,
@@ -464,5 +511,58 @@ pub enum ExprKind {
   // the body's params give them user-visible names.
   // ---------------------------------------------------------------------------
 
+}
+
+// ---------------------------------------------------------------------------
+// Bind kind collection — for the formatter's ref rendering
+// ---------------------------------------------------------------------------
+
+/// Walk the CPS tree and collect bind kinds into a prop graph.
+/// Used by the formatter to render refs with semantic cont names.
+pub fn collect_bind_kinds(expr: &Expr) -> crate::propgraph::PropGraph<CpsId, Option<Bind>> {
+  let mut bk: crate::propgraph::PropGraph<CpsId, Option<Bind>> = crate::propgraph::PropGraph::new();
+  collect_bk_expr(expr, &mut bk);
+  bk
+}
+
+fn collect_bk_bind(bind: &BindNode, bk: &mut crate::propgraph::PropGraph<CpsId, Option<Bind>>) {
+  let idx: usize = bind.id.into();
+  while bk.len() <= idx { bk.push(None); }
+  bk.set(bind.id, Some(bind.kind));
+}
+
+fn collect_bk_expr(expr: &Expr, bk: &mut crate::propgraph::PropGraph<CpsId, Option<Bind>>) {
+  match &expr.kind {
+    ExprKind::LetVal { name, cont, .. } => {
+      collect_bk_bind(name, bk);
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
+      collect_bk_bind(name, bk);
+      for p in params {
+        let b = match p { Param::Name(b) | Param::Spread(b) => b };
+        collect_bk_bind(b, bk);
+      }
+      collect_bk_expr(fn_body, bk);
+      collect_bk_cont(cont, bk);
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        if let Arg::Cont(c) = arg { collect_bk_cont(c, bk); }
+        if let Arg::Expr(e) = arg { collect_bk_expr(e, bk); }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_bk_expr(then, bk);
+      collect_bk_expr(else_, bk);
+    }
+  }
+}
+
+fn collect_bk_cont(cont: &Cont, bk: &mut crate::propgraph::PropGraph<CpsId, Option<Bind>>) {
+  if let Cont::Expr { args, body } = cont {
+    for a in args { collect_bk_bind(a, bk); }
+    collect_bk_expr(body, bk);
+  }
 }
 

@@ -27,12 +27,27 @@ mod tests {
     config.wasm_multi_value(true);
 
     let engine = Engine::new(&config).unwrap();
-    let wat = prepare_wat(include_str!("hamt.wat"), HAMT_TYPE_DEFS);
+    let wat = prepare_wat(include_str!("rec.wat"), HAMT_TYPE_DEFS);
     // Inject stubs for functions from other modules (in merged runtime,
     // these come from hashing.wat and operators.wat).
+    // Also inject test-only exported wrappers for the direct-style internal
+    // functions $_rec_set, $_rec_merge, $_rec_pop which are not exported by
+    // the surface API (the surface API exposes only CPS wrappers for these).
     let stub = concat!(
       "\n  (func $hash_i31 (param $key (ref eq)) (result i32)\n    (i31.get_s (ref.cast (ref i31) (local.get $key))))",
       "\n  (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)\n    (ref.eq (local.get $a) (local.get $b)))",
+      "\n  (func (export \"rec_set_direct\")",
+      "\n    (param $rec (ref $RecImpl)) (param $key (ref eq)) (param $val (ref eq))",
+      "\n    (result (ref $RecImpl))",
+      "\n    (call $_rec_set (local.get $rec) (local.get $key) (local.get $val)))",
+      "\n  (func (export \"rec_merge_direct\")",
+      "\n    (param $dest (ref $RecImpl)) (param $src (ref $RecImpl))",
+      "\n    (result (ref $RecImpl))",
+      "\n    (call $_rec_merge (local.get $dest) (local.get $src)))",
+      "\n  (func (export \"rec_pop_direct\")",
+      "\n    (param $rec (ref $RecImpl)) (param $key (ref eq))",
+      "\n    (result (ref null eq) (ref $RecImpl))",
+      "\n    (call $_rec_pop (local.get $rec) (local.get $key)))",
       "\n)",
     );
     let wat = wat.trim_end().strip_suffix(')').unwrap().to_string() + stub;
@@ -58,8 +73,8 @@ mod tests {
     }
   }
 
-  /// Helper: call hamt_set(node, key, val) → new_node
-  fn hamt_set(store: &mut Store<()>, set_fn: &Func, node: &Val, key: u32, val: u32) -> Val {
+  /// Helper: call rec_set_direct(rec, key, val) → new_rec
+  fn rec_set_call(store: &mut Store<()>, set_fn: &Func, node: &Val, key: u32, val: u32) -> Val {
     let k = i31_key(store, key);
     let v = i31_key(store, val);
     let mut result = [Val::AnyRef(None)];
@@ -67,46 +82,46 @@ mod tests {
     result[0].clone()
   }
 
-  /// Helper: call hamt_get(node, key) → val or None
-  fn hamt_get(store: &mut Store<()>, get_fn: &Func, node: &Val, key: u32) -> Option<u32> {
+  /// Helper: call rec_get(rec, key) → val or None
+  fn rec_get_call(store: &mut Store<()>, get_fn: &Func, node: &Val, key: u32) -> Option<u32> {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None)];
     get_fn.call(&mut *store, &[node.clone(), k], &mut result).unwrap();
     get_i31(store, &result[0])
   }
 
-  /// Helper: call hamt_delete(node, key) → new_node
-  fn hamt_delete(store: &mut Store<()>, del_fn: &Func, node: &Val, key: u32) -> Val {
+  /// Helper: call rec_delete(rec, key) → new_rec
+  fn rec_delete_call(store: &mut Store<()>, del_fn: &Func, node: &Val, key: u32) -> Val {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None)];
     del_fn.call(store, &[node.clone(), k], &mut result).unwrap();
     result[0].clone()
   }
 
-  /// Helper: call hamt_pop(node, key) → (val, rest_node)
-  fn hamt_pop(store: &mut Store<()>, pop_fn: &Func, node: &Val, key: u32) -> (Option<u32>, Val) {
+  /// Helper: call rec_pop_direct(rec, key) → (val, rest_rec)
+  fn rec_pop_call(store: &mut Store<()>, pop_fn: &Func, node: &Val, key: u32) -> (Option<u32>, Val) {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None), Val::AnyRef(None)];
     pop_fn.call(&mut *store, &[node.clone(), k], &mut result).unwrap();
     (get_i31(store, &result[0]), result[1].clone())
   }
 
-  /// Helper: call hamt_merge(dest, src) → merged
-  fn hamt_merge(store: &mut Store<()>, merge_fn: &Func, dest: &Val, src: &Val) -> Val {
+  /// Helper: call rec_merge_direct(dest, src) → merged
+  fn rec_merge_call(store: &mut Store<()>, merge_fn: &Func, dest: &Val, src: &Val) -> Val {
     let mut result = [Val::AnyRef(None)];
     merge_fn.call(store, &[dest.clone(), src.clone()], &mut result).unwrap();
     result[0].clone()
   }
 
-  /// Helper: call hamt_size(node) → i32
-  fn hamt_size(store: &mut Store<()>, size_fn: &Func, node: &Val) -> i32 {
+  /// Helper: call rec_size(rec) → i32
+  fn rec_size_call(store: &mut Store<()>, size_fn: &Func, node: &Val) -> i32 {
     let mut result = [Val::I32(0)];
     size_fn.call(store, &[node.clone()], &mut result).unwrap();
     match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
   }
 
-  /// Helper: call hamt_empty() → node
-  fn hamt_empty(store: &mut Store<()>, empty_fn: &Func) -> Val {
+  /// Helper: call rec_new() → rec
+  fn rec_new_call(store: &mut Store<()>, empty_fn: &Func) -> Val {
     let mut result = [Val::AnyRef(None)];
     empty_fn.call(store, &[], &mut result).unwrap();
     result[0].clone()
@@ -115,133 +130,133 @@ mod tests {
   #[test]
   fn test_empty() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let node = hamt_empty(&mut store, &empty_fn);
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let node = rec_new_call(&mut store, &empty_fn);
     assert!(matches!(&node, Val::AnyRef(Some(_))));
   }
 
   #[test]
   fn test_set_and_get() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let node = hamt_set(&mut store, &set_fn, &node, 2, 20);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let node = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let node = rec_set_call(&mut store, &set_fn, &node, 2, 20);
 
-    assert_eq!(hamt_get(&mut store, &get_fn, &node, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &node, 2), Some(20));
-    assert_eq!(hamt_get(&mut store, &get_fn, &node, 99), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &node, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &node, 2), Some(20));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &node, 99), None);
   }
 
   #[test]
   fn test_set_overwrite() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let v1 = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let v2 = hamt_set(&mut store, &set_fn, &v1, 1, 99);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let v1 = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let v2 = rec_set_call(&mut store, &set_fn, &v1, 1, 99);
 
     // v2 has the new value.
-    assert_eq!(hamt_get(&mut store, &get_fn, &v2, 1), Some(99));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &v2, 1), Some(99));
     // v1 still has the old value (structural sharing).
-    assert_eq!(hamt_get(&mut store, &get_fn, &v1, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &v1, 1), Some(10));
   }
 
   #[test]
   fn test_delete() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let del_fn = instance.get_func(&mut store, "hamt_delete").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let del_fn = instance.get_func(&mut store, "rec_delete").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let node = hamt_set(&mut store, &set_fn, &node, 2, 20);
-    let node = hamt_set(&mut store, &set_fn, &node, 3, 30);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let node = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let node = rec_set_call(&mut store, &set_fn, &node, 2, 20);
+    let node = rec_set_call(&mut store, &set_fn, &node, 3, 30);
 
-    let deleted = hamt_delete(&mut store, &del_fn, &node, 2);
+    let deleted = rec_delete_call(&mut store, &del_fn, &node, 2);
 
-    assert_eq!(hamt_get(&mut store, &get_fn, &deleted, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &deleted, 2), None);
-    assert_eq!(hamt_get(&mut store, &get_fn, &deleted, 3), Some(30));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &deleted, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &deleted, 2), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &deleted, 3), Some(30));
 
     // Original still has key=2.
-    assert_eq!(hamt_get(&mut store, &get_fn, &node, 2), Some(20));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &node, 2), Some(20));
   }
 
   #[test]
   fn test_delete_absent_key() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let del_fn = instance.get_func(&mut store, "hamt_delete").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let del_fn = instance.get_func(&mut store, "rec_delete").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let deleted = hamt_delete(&mut store, &del_fn, &node, 99);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let node = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let deleted = rec_delete_call(&mut store, &del_fn, &node, 99);
 
-    assert_eq!(hamt_get(&mut store, &get_fn, &deleted, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &deleted, 1), Some(10));
   }
 
   #[test]
   fn test_pop() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let pop_fn = instance.get_func(&mut store, "hamt_pop").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let pop_fn = instance.get_func(&mut store, "rec_pop_direct").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let node = hamt_set(&mut store, &set_fn, &node, 2, 20);
-    let node = hamt_set(&mut store, &set_fn, &node, 3, 30);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let node = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let node = rec_set_call(&mut store, &set_fn, &node, 2, 20);
+    let node = rec_set_call(&mut store, &set_fn, &node, 3, 30);
 
     // Pop key=2 → (20, rest).
-    let (val, rest) = hamt_pop(&mut store, &pop_fn, &node, 2);
+    let (val, rest) = rec_pop_call(&mut store, &pop_fn, &node, 2);
     assert_eq!(val, Some(20));
 
-    assert_eq!(hamt_get(&mut store, &get_fn, &rest, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &rest, 2), None);
-    assert_eq!(hamt_get(&mut store, &get_fn, &rest, 3), Some(30));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &rest, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &rest, 2), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &rest, 3), Some(30));
   }
 
   #[test]
   fn test_pop_absent() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let pop_fn = instance.get_func(&mut store, "hamt_pop").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let pop_fn = instance.get_func(&mut store, "rec_pop_direct").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let node = rec_set_call(&mut store, &set_fn, &node, 1, 10);
 
-    let (val, _rest) = hamt_pop(&mut store, &pop_fn, &node, 99);
+    let (val, _rest) = rec_pop_call(&mut store, &pop_fn, &node, 99);
     assert_eq!(val, None);
   }
 
   #[test]
   fn test_many_keys() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
 
-    let mut node = hamt_empty(&mut store, &empty_fn);
+    let mut node = rec_new_call(&mut store, &empty_fn);
     for i in 0..100u32 {
-      node = hamt_set(&mut store, &set_fn, &node, i, i * 10);
+      node = rec_set_call(&mut store, &set_fn, &node, i, i * 10);
     }
 
     for i in 0..100u32 {
       assert_eq!(
-        hamt_get(&mut store, &get_fn, &node, i), Some(i * 10),
+        rec_get_call(&mut store, &get_fn, &node, i), Some(i * 10),
         "key {} should map to {}", i, i * 10
       );
     }
@@ -250,185 +265,185 @@ mod tests {
   #[test]
   fn test_structural_sharing() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let v1 = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let v1 = hamt_set(&mut store, &set_fn, &v1, 2, 20);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let v1 = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let v1 = rec_set_call(&mut store, &set_fn, &v1, 2, 20);
 
     // Fork: v2 adds key=3.
-    let v2 = hamt_set(&mut store, &set_fn, &v1, 3, 30);
+    let v2 = rec_set_call(&mut store, &set_fn, &v1, 3, 30);
 
     // v1 should NOT have key=3.
-    assert_eq!(hamt_get(&mut store, &get_fn, &v1, 3), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &v1, 3), None);
 
     // v2 should have all three.
-    assert_eq!(hamt_get(&mut store, &get_fn, &v2, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &v2, 2), Some(20));
-    assert_eq!(hamt_get(&mut store, &get_fn, &v2, 3), Some(30));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &v2, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &v2, 2), Some(20));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &v2, 3), Some(30));
   }
 
   #[test]
   fn test_chained_pop_destructure() {
     // Simulates: {a, b, ...rest} = {1: 10, 2: 20, 3: 30}
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let pop_fn = instance.get_func(&mut store, "hamt_pop").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let pop_fn = instance.get_func(&mut store, "rec_pop_direct").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let node = hamt_set(&mut store, &set_fn, &node, 2, 20);
-    let node = hamt_set(&mut store, &set_fn, &node, 3, 30);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let node = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let node = rec_set_call(&mut store, &set_fn, &node, 2, 20);
+    let node = rec_set_call(&mut store, &set_fn, &node, 3, 30);
 
     // Pop key=1 → (10, tmp)
-    let (a, tmp) = hamt_pop(&mut store, &pop_fn, &node, 1);
+    let (a, tmp) = rec_pop_call(&mut store, &pop_fn, &node, 1);
     assert_eq!(a, Some(10));
 
     // Pop key=2 from tmp → (20, rest)
-    let (b, rest) = hamt_pop(&mut store, &pop_fn, &tmp, 2);
+    let (b, rest) = rec_pop_call(&mut store, &pop_fn, &tmp, 2);
     assert_eq!(b, Some(20));
 
     // rest should only have key=3.
-    assert_eq!(hamt_get(&mut store, &get_fn, &rest, 1), None);
-    assert_eq!(hamt_get(&mut store, &get_fn, &rest, 2), None);
-    assert_eq!(hamt_get(&mut store, &get_fn, &rest, 3), Some(30));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &rest, 1), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &rest, 2), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &rest, 3), Some(30));
   }
 
   #[test]
   fn test_merge_disjoint() {
     // {1: 10, 2: 20} merge {3: 30, 4: 40} → {1: 10, 2: 20, 3: 30, 4: 40}
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "rec_merge_direct").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let a = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let a = hamt_set(&mut store, &set_fn, &a, 2, 20);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let a = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let a = rec_set_call(&mut store, &set_fn, &a, 2, 20);
 
-    let b = hamt_set(&mut store, &set_fn, &node, 3, 30);
-    let b = hamt_set(&mut store, &set_fn, &b, 4, 40);
+    let b = rec_set_call(&mut store, &set_fn, &node, 3, 30);
+    let b = rec_set_call(&mut store, &set_fn, &b, 4, 40);
 
-    let merged = hamt_merge(&mut store, &merge_fn, &a, &b);
+    let merged = rec_merge_call(&mut store, &merge_fn, &a, &b);
 
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 2), Some(20));
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 3), Some(30));
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 4), Some(40));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 2), Some(20));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 3), Some(30));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 4), Some(40));
   }
 
   #[test]
   fn test_merge_overlap_src_wins() {
     // {1: 10, 2: 20} merge {2: 99, 3: 30} → {1: 10, 2: 99, 3: 30}
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "rec_merge_direct").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let a = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let a = hamt_set(&mut store, &set_fn, &a, 2, 20);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let a = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let a = rec_set_call(&mut store, &set_fn, &a, 2, 20);
 
-    let b = hamt_set(&mut store, &set_fn, &node, 2, 99);
-    let b = hamt_set(&mut store, &set_fn, &b, 3, 30);
+    let b = rec_set_call(&mut store, &set_fn, &node, 2, 99);
+    let b = rec_set_call(&mut store, &set_fn, &b, 3, 30);
 
-    let merged = hamt_merge(&mut store, &merge_fn, &a, &b);
+    let merged = rec_merge_call(&mut store, &merge_fn, &a, &b);
 
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 2), Some(99)); // src wins
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 3), Some(30));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 2), Some(99)); // src wins
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 3), Some(30));
   }
 
   #[test]
   fn test_merge_into_empty() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "rec_merge_direct").unwrap();
 
-    let empty = hamt_empty(&mut store, &empty_fn);
-    let b = hamt_set(&mut store, &set_fn, &empty, 1, 10);
-    let b = hamt_set(&mut store, &set_fn, &b, 2, 20);
+    let empty = rec_new_call(&mut store, &empty_fn);
+    let b = rec_set_call(&mut store, &set_fn, &empty, 1, 10);
+    let b = rec_set_call(&mut store, &set_fn, &b, 2, 20);
 
-    let merged = hamt_merge(&mut store, &merge_fn, &empty, &b);
+    let merged = rec_merge_call(&mut store, &merge_fn, &empty, &b);
 
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &merged, 2), Some(20));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &merged, 2), Some(20));
   }
 
   #[test]
   fn test_merge_preserves_originals() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let get_fn = instance.get_func(&mut store, "hamt_get").unwrap();
-    let merge_fn = instance.get_func(&mut store, "hamt_merge").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let get_fn = instance.get_func(&mut store, "rec_get").unwrap();
+    let merge_fn = instance.get_func(&mut store, "rec_merge_direct").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    let a = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    let b = hamt_set(&mut store, &set_fn, &node, 2, 20);
+    let node = rec_new_call(&mut store, &empty_fn);
+    let a = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    let b = rec_set_call(&mut store, &set_fn, &node, 2, 20);
 
-    let _merged = hamt_merge(&mut store, &merge_fn, &a, &b);
+    let _merged = rec_merge_call(&mut store, &merge_fn, &a, &b);
 
     // Originals unchanged.
-    assert_eq!(hamt_get(&mut store, &get_fn, &a, 1), Some(10));
-    assert_eq!(hamt_get(&mut store, &get_fn, &a, 2), None);
-    assert_eq!(hamt_get(&mut store, &get_fn, &b, 1), None);
-    assert_eq!(hamt_get(&mut store, &get_fn, &b, 2), Some(20));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &a, 1), Some(10));
+    assert_eq!(rec_get_call(&mut store, &get_fn, &a, 2), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &b, 1), None);
+    assert_eq!(rec_get_call(&mut store, &get_fn, &b, 2), Some(20));
   }
 
   #[test]
   fn test_size() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let del_fn = instance.get_func(&mut store, "hamt_delete").unwrap();
-    let size_fn = instance.get_func(&mut store, "hamt_size").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let del_fn = instance.get_func(&mut store, "rec_delete").unwrap();
+    let size_fn = instance.get_func(&mut store, "rec_size").unwrap();
 
-    let node = hamt_empty(&mut store, &empty_fn);
-    assert_eq!(hamt_size(&mut store, &size_fn, &node), 0);
+    let node = rec_new_call(&mut store, &empty_fn);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node), 0);
 
-    let node = hamt_set(&mut store, &set_fn, &node, 1, 10);
-    assert_eq!(hamt_size(&mut store, &size_fn, &node), 1);
+    let node = rec_set_call(&mut store, &set_fn, &node, 1, 10);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node), 1);
 
-    let node = hamt_set(&mut store, &set_fn, &node, 2, 20);
-    assert_eq!(hamt_size(&mut store, &size_fn, &node), 2);
+    let node = rec_set_call(&mut store, &set_fn, &node, 2, 20);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node), 2);
 
-    let node = hamt_set(&mut store, &set_fn, &node, 3, 30);
-    assert_eq!(hamt_size(&mut store, &size_fn, &node), 3);
+    let node = rec_set_call(&mut store, &set_fn, &node, 3, 30);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node), 3);
 
     // Overwrite doesn't change size.
-    let node2 = hamt_set(&mut store, &set_fn, &node, 2, 99);
-    assert_eq!(hamt_size(&mut store, &size_fn, &node2), 3);
+    let node2 = rec_set_call(&mut store, &set_fn, &node, 2, 99);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node2), 3);
 
     // Delete reduces size.
-    let node3 = hamt_delete(&mut store, &del_fn, &node, 2);
-    assert_eq!(hamt_size(&mut store, &size_fn, &node3), 2);
+    let node3 = rec_delete_call(&mut store, &del_fn, &node, 2);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node3), 2);
 
     // Delete absent key doesn't change size.
-    let node4 = hamt_delete(&mut store, &del_fn, &node, 99);
-    assert_eq!(hamt_size(&mut store, &size_fn, &node4), 3);
+    let node4 = rec_delete_call(&mut store, &del_fn, &node, 99);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node4), 3);
   }
 
   #[test]
   fn test_size_many() {
     let (mut store, instance) = load_hamt();
-    let empty_fn = instance.get_func(&mut store, "hamt_empty").unwrap();
-    let set_fn = instance.get_func(&mut store, "hamt_set").unwrap();
-    let size_fn = instance.get_func(&mut store, "hamt_size").unwrap();
+    let empty_fn = instance.get_func(&mut store, "rec_new").unwrap();
+    let set_fn = instance.get_func(&mut store, "rec_set_direct").unwrap();
+    let size_fn = instance.get_func(&mut store, "rec_size").unwrap();
 
-    let mut node = hamt_empty(&mut store, &empty_fn);
+    let mut node = rec_new_call(&mut store, &empty_fn);
     for i in 0..50u32 {
-      node = hamt_set(&mut store, &set_fn, &node, i, i * 10);
+      node = rec_set_call(&mut store, &set_fn, &node, i, i * 10);
     }
-    assert_eq!(hamt_size(&mut store, &size_fn, &node), 50);
+    assert_eq!(rec_size_call(&mut store, &size_fn, &node), 50);
   }
 
   // -- List tests -----------------------------------------------------
@@ -600,7 +615,7 @@ mod tests {
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
-    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_op_empty").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
 
     let a = build_list(&mut store, &nil_fn, &cons_fn, &[1, 2]);
@@ -617,7 +632,7 @@ mod tests {
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
-    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_op_empty").unwrap();
     let concat_fn = instance.get_func(&mut store, "list_concat").unwrap();
 
     let nil = list_empty(&mut store, &nil_fn);
@@ -639,7 +654,7 @@ mod tests {
     let cons_fn = instance.get_func(&mut store, "list_prepend").unwrap();
     let head_fn = instance.get_func(&mut store, "list_head").unwrap();
     let tail_fn = instance.get_func(&mut store, "list_tail").unwrap();
-    let is_empty_fn = instance.get_func(&mut store, "list_is_empty").unwrap();
+    let is_empty_fn = instance.get_func(&mut store, "list_op_empty").unwrap();
 
     // shared = [2, 3]
     let shared = build_list(&mut store, &nil_fn, &cons_fn, &[2, 3]);
@@ -1070,7 +1085,7 @@ mod tests {
     "  (func $_hamt_size_node (param $node (ref $HamtNode)) (result i32) (i32.const 0))\n",
   );
 
-  /// Load string.wat with types inlined and test data in linear memory.
+  /// Load str.wat with types inlined and test data in linear memory.
   /// `data_bytes` is placed at offset 0 in the data section.
   /// `extra_wat` is injected before the closing ) for test-specific functions.
   /// Prepare a standalone WAT module for testing: inject type defs and
@@ -1103,7 +1118,7 @@ mod tests {
 
     let engine = Engine::new(&config).unwrap();
 
-    let wat = prepare_wat(include_str!("string.wat"), STRING_TYPE_DEFS);
+    let wat = prepare_wat(include_str!("str.wat"), STRING_TYPE_DEFS);
     // Add memory, data section, and extra WAT before the closing )
     let data_hex: String = data_bytes.iter().map(|b| format!("\\{b:02x}")).collect();
     let tail = format!(
@@ -1493,8 +1508,8 @@ mod tests {
     result[0].clone()
   }
 
-  fn range_in(store: &mut Store<()>, instance: &Instance, val: f64, range: &Val) -> bool {
-    let func = instance.get_func(&mut *store, "range_in").unwrap();
+  fn range_op_in(store: &mut Store<()>, instance: &Instance, val: f64, range: &Val) -> bool {
+    let func = instance.get_func(&mut *store, "range_op_in").unwrap();
     let v = make_num(store, instance, val);
     let mut result = [Val::I32(0)];
     func.call(store, &[v, range.clone()], &mut result).unwrap();
@@ -1529,19 +1544,19 @@ mod tests {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, 0.0, 10.0);
     // 0..10: 0 in, 5 in, 9 in, 10 out
-    assert!(range_in(&mut store, &instance, 0.0, &r));
-    assert!(range_in(&mut store, &instance, 5.0, &r));
-    assert!(range_in(&mut store, &instance, 9.0, &r));
-    assert!(!range_in(&mut store, &instance, 10.0, &r));
+    assert!(range_op_in(&mut store, &instance, 0.0, &r));
+    assert!(range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(range_op_in(&mut store, &instance, 9.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 10.0, &r));
   }
 
   #[test]
   fn test_range_excl_out_of_bounds() {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, 0.0, 10.0);
-    assert!(!range_in(&mut store, &instance, -1.0, &r));
-    assert!(!range_in(&mut store, &instance, 10.0, &r));
-    assert!(!range_in(&mut store, &instance, 11.0, &r));
+    assert!(!range_op_in(&mut store, &instance, -1.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 10.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 11.0, &r));
   }
 
   #[test]
@@ -1549,17 +1564,17 @@ mod tests {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_incl(&mut store, &instance, 0.0, 10.0);
     // 0...10: 0 in, 5 in, 10 in
-    assert!(range_in(&mut store, &instance, 0.0, &r));
-    assert!(range_in(&mut store, &instance, 5.0, &r));
-    assert!(range_in(&mut store, &instance, 10.0, &r));
+    assert!(range_op_in(&mut store, &instance, 0.0, &r));
+    assert!(range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(range_op_in(&mut store, &instance, 10.0, &r));
   }
 
   #[test]
   fn test_range_incl_out_of_bounds() {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_incl(&mut store, &instance, 0.0, 10.0);
-    assert!(!range_in(&mut store, &instance, -1.0, &r));
-    assert!(!range_in(&mut store, &instance, 11.0, &r));
+    assert!(!range_op_in(&mut store, &instance, -1.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 11.0, &r));
   }
 
   #[test]
@@ -1567,8 +1582,8 @@ mod tests {
     // 5..5 should contain nothing
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, 5.0, 5.0);
-    assert!(!range_in(&mut store, &instance, 5.0, &r));
-    assert!(!range_in(&mut store, &instance, 4.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 4.0, &r));
   }
 
   #[test]
@@ -1576,19 +1591,19 @@ mod tests {
     // 5...5 should contain only 5
     let (mut store, instance) = load_range_with_helpers();
     let r = range_incl(&mut store, &instance, 5.0, 5.0);
-    assert!(range_in(&mut store, &instance, 5.0, &r));
-    assert!(!range_in(&mut store, &instance, 4.0, &r));
-    assert!(!range_in(&mut store, &instance, 6.0, &r));
+    assert!(range_op_in(&mut store, &instance, 5.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 4.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 6.0, &r));
   }
 
   #[test]
   fn test_range_negative_bounds() {
     let (mut store, instance) = load_range_with_helpers();
     let r = range_excl(&mut store, &instance, -10.0, -5.0);
-    assert!(range_in(&mut store, &instance, -10.0, &r));
-    assert!(range_in(&mut store, &instance, -7.0, &r));
-    assert!(!range_in(&mut store, &instance, -5.0, &r));
-    assert!(!range_in(&mut store, &instance, 0.0, &r));
+    assert!(range_op_in(&mut store, &instance, -10.0, &r));
+    assert!(range_op_in(&mut store, &instance, -7.0, &r));
+    assert!(!range_op_in(&mut store, &instance, -5.0, &r));
+    assert!(!range_op_in(&mut store, &instance, 0.0, &r));
   }
 
 
@@ -1616,6 +1631,8 @@ mod tests {
       "\n  (func $str_hash_i31 (param (ref $Str)) (result i32) (i32.const 0))",
       "\n  (func (export \"make_num\") (param $v f64) (result (ref $Num))",
       "\n    (struct.new $Num (local.get $v)))",
+      "\n  (func (export \"hash_i31\") (param $key (ref eq)) (result i32)",
+      "\n    (call $hash_i31 (local.get $key)))",
       "\n{}\n)"),
       extra_wat,
     );

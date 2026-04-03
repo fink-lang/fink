@@ -664,7 +664,7 @@ test 'rec spread overwrite', fn:
     101
 
 
-skip test 'rec rest binding', fn:
+test 'rec rest binding', fn:
   expect run ƒink:
     main = fn:
       {a, ..rest} = {a: 1, b: 2, c: 3}
@@ -673,7 +673,7 @@ skip test 'rec rest binding', fn:
   | equals ƒink:
     3
 
-skip test 'rec empty rest exact match', fn:
+test 'rec empty rest exact match', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1}
@@ -683,7 +683,7 @@ skip test 'rec empty rest exact match', fn:
   | equals ƒink:
     1
 
-skip test 'rec empty rest rejects extra', fn:
+test 'rec empty rest rejects extra', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1, b: 2}
@@ -693,29 +693,29 @@ skip test 'rec empty rest rejects extra', fn:
   | equals ƒink:
     0
 
-skip test 'rec guard literal in match', fn:
+test 'rec guard literal in match', fn:
   expect run ƒink:
     main = fn:
       r = {kind: 1, val: 42}
       match r:
-        {kind: 1, val, ..}: val
-        {kind: 2, val, ..}: val + 100
+        {kind: 1, val}: val
+        {kind: 2, val}: val + 100
         _: 0
   | equals ƒink:
     42
 
-skip test 'rec guard second arm', fn:
+test 'rec guard second arm', fn:
   expect run ƒink:
     main = fn:
       r = {kind: 2, val: 10}
       match r:
-        {kind: 1, val, ..}: val
-        {kind: 2, val, ..}: val + 100
+        {kind: 1, val}: val
+        {kind: 2, val}: val + 100
         _: 0
   | equals ƒink:
     110
 
-skip test 'rec key membership', fn:
+test 'rec key membership', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1, b: 2}
@@ -723,7 +723,7 @@ skip test 'rec key membership', fn:
   | equals ƒink:
     true
 
-skip test 'rec key not member', fn:
+test 'rec key not member', fn:
   expect run ƒink:
     main = fn:
       r = {a: 1, b: 2}
@@ -929,7 +929,7 @@ test 'rec dot access nested', fn:
   | equals ƒink:
     99
 
-skip test 'rec dot access string key', fn:
+test 'rec dot access string key', fn:
   expect run ƒink:
     main = fn:
       r = {'foo bar': 42}
@@ -971,6 +971,26 @@ skip test 'list format nested', fn:
 
 
 # --- List patterns ---
+
+test 'seq guard literal in match', fn:
+  expect run ƒink:
+    main = fn:
+      match [1, 42]:
+        [1, val, ..rest]: val
+        [2, val, ..rest]: val + 100
+        _: 0
+  | equals ƒink:
+    42
+
+test 'seq guard second arm', fn:
+  expect run ƒink:
+    main = fn:
+      match [2, 10]:
+        [1, val, ..rest]: val
+        [2, val, ..rest]: val + 100
+        _: 0
+  | equals ƒink:
+    110
 
 skip test 'list rest in middle', fn:
   expect run ƒink:

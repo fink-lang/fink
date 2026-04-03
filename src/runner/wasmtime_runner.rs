@@ -120,18 +120,23 @@ pub fn exec(opts: &RunOptions, wasm: &[u8]) -> Result<FinkResult, String> {
   box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut box_result)
     .map_err(|e| format!("_box_func failed: {}", e))?;
 
-  // v2 calling convention: main is $Fn3(captures, args, cont).
-  // main has no captures (null), no user args (empty list), cont = done closure.
+  // Unified $Fn2: main is $Fn2(captures, args). Cont is first element of args.
   let list_nil = instance.get_func(&mut store, "_list_nil")
     .ok_or("no '_list_nil' export")?;
   let mut nil = [Val::AnyRef(None)];
   list_nil.call(&mut store, &[], &mut nil)
     .map_err(|e| format!("_list_nil failed: {}", e))?;
 
-  // Call main: (null_caps, empty_args, done_closure).
+  let list_prepend = instance.get_func(&mut store, "_list_prepend")
+    .ok_or("no '_list_prepend' export")?;
+  let mut args_with_cont = [Val::AnyRef(None)];
+  list_prepend.call(&mut store, &[box_result[0], nil[0]], &mut args_with_cont)
+    .map_err(|e| format!("_list_prepend failed: {}", e))?;
+
+  // Call main: (null_caps, args_with_cont).
   main_fn.call(
     &mut store,
-    &[Val::AnyRef(None), nil[0], box_result[0]],
+    &[Val::AnyRef(None), args_with_cont[0]],
     &mut [],
   ).map_err(|e| format!("main failed: {}", e))?;
 

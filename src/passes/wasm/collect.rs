@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::ast::{AstId, Node as AstNode, NodeKind};
 use crate::passes::cps::ir::{
-  Arg, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind,
+  Arg, BuiltIn, Callable, Cont, CpsFnKind, CpsId, Expr, ExprKind,
   Param, Ref, ValKind,
 };
 use crate::propgraph::PropGraph;
@@ -126,20 +126,8 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
     }
   }
 
-  // Fill in has_cont: true if this function is called with Arg::Cont at any call site,
-  // or if it's an exported function whose last param is Bind::Cont (called from host).
-  let cont_fns = scan_cont_call_targets(&funcs, ctx);
-  for cf in &mut funcs {
-    if cont_fns.contains(&cf.label) {
-      cf.has_cont = true;
-    } else if cf.export_as.is_some() {
-      // Exported functions are called from the host with an explicit cont arg.
-      // Check if the last original param (after captures) is Bind::Cont.
-      // We can't check Bind::Cont directly from CollectedFn, but exported
-      // user functions always have a cont param added by the CPS transform.
-      cf.has_cont = true;
-    }
-  }
+  // has_cont is now set directly from CpsFnKind at collection time.
+  // No call-site scanning needed — the CPS transform tags each LetFn.
 
   // Every module-level fn alias gets a global.
   let globals: HashSet<CpsId> = funcs.iter()
@@ -195,14 +183,14 @@ fn collect_chain<'a, 'src>(
   arities: &mut BTreeSet<usize>,
 ) {
   match &expr.kind {
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       let label = ctx.label(name.id);
       let param_labels: Vec<(CpsId, String, bool)> = params.iter().map(|p| match p {
         Param::Name(b) => (b.id, ctx.label(b.id), false),
         Param::Spread(b) => (b.id, ctx.label(b.id), true),
       }).collect();
-      // has_cont is determined later by scanning call sites.
-      let has_cont = false;
+      // CpsFnKind tells us directly: CpsFunction is called with Arg::Cont.
+      let has_cont = *fn_kind == CpsFnKind::CpsFunction;
       arities.insert(param_labels.len());
 
       let export_as = exports.iter()
@@ -343,67 +331,6 @@ fn scan_fn_closures_in_expr<'src>(
 }
 
 // ---------------------------------------------------------------------------
-// Call-site cont scanning
-// ---------------------------------------------------------------------------
-
-/// Scan all call sites and collect function labels that are called with Arg::Cont.
-/// These functions need $Fn3 (caps, args, cont) calling convention.
-fn scan_cont_call_targets<'a, 'src>(
-  funcs: &[CollectedFn<'a>],
-  ctx: &IrCtx<'_, 'src>,
-) -> HashSet<String> {
-  let mut targets: HashSet<String> = HashSet::new();
-  for func in funcs {
-    scan_cont_calls_in_expr(func.body, ctx, &mut targets);
-  }
-  targets
-}
-
-fn scan_cont_calls_in_expr<'src>(
-  expr: &Expr,
-  ctx: &IrCtx<'_, 'src>,
-  targets: &mut HashSet<String>,
-) {
-  match &expr.kind {
-    ExprKind::App { func: Callable::Val(val), args } => {
-      // Check if the last arg is Arg::Cont.
-      if matches!(args.last(), Some(Arg::Cont(_))) {
-        // The callee is called with a cont — mark it.
-        if let ValKind::Ref(Ref::Synth(id)) = val.kind {
-          targets.insert(ctx.label(id));
-        }
-      }
-      // Recurse into cont args.
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-          scan_cont_calls_in_expr(body, ctx, targets);
-        }
-      }
-    }
-    ExprKind::App { args, .. } => {
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-          scan_cont_calls_in_expr(body, ctx, targets);
-        }
-      }
-    }
-    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
-      match cont {
-        Cont::Expr { body, .. } => scan_cont_calls_in_expr(body, ctx, targets),
-        Cont::Ref(_) => {}
-      }
-    }
-    ExprKind::If { then, else_, .. } => {
-      scan_cont_calls_in_expr(then, ctx, targets);
-      scan_cont_calls_in_expr(else_, ctx, targets);
-    }
-  }
-  if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
-    scan_cont_calls_in_expr(fn_body, ctx, targets);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Argument helpers
 // ---------------------------------------------------------------------------
 
@@ -461,7 +388,7 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::FnClosure  => "closure",
     BuiltIn::SeqPop        => "seq_pop",
     BuiltIn::RecPop        => "rec_pop",
-    BuiltIn::Empty         => "empty",
+    BuiltIn::Empty         => "op_empty",
     BuiltIn::Yield         => "yield",
     BuiltIn::Export        => "export",
     BuiltIn::Import        => "import",

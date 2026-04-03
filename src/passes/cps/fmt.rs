@@ -10,7 +10,7 @@
 use crate::ast::{self, AstId, Exprs, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::propgraph::PropGraph;
-use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
+use super::ir::{Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsId, Expr, ExprKind, Ref, Lit, Param, Val, ValKind};
 
 // ---------------------------------------------------------------------------
 // Formatter context — carries the prop graphs needed for origin lookups
@@ -27,6 +27,9 @@ pub struct Ctx<'a, 'src> {
   /// Optional param role metadata — when present, params are rendered grouped:
   /// `{caps}, [user_params], cont` instead of a flat list.
   pub param_info: Option<&'a PropGraph<CpsId, Option<super::ir::ParamInfo>>>,
+  /// Optional bind kind map — when present, refs to compiler-generated conts
+  /// render with semantic names (·ret_N, ·succ_N, ·fail_N).
+  pub bind_kinds: Option<&'a PropGraph<CpsId, Option<super::ir::Bind>>>,
 }
 
 impl<'a, 'src> Ctx<'a, 'src> {
@@ -150,7 +153,7 @@ fn val_to_node(v: &Val, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, ctx), loc),
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(v.id, ctx), loc),
     ValKind::Panic => ident("·panic", loc),
-    ValKind::ContRef(id) => ident(&format!("·v_{}", id.0), ctx_loc(*id, ctx)),
+    ValKind::ContRef(id) => ident(&render_synth_fallback(*id, ctx), ctx_loc(*id, ctx)),
     ValKind::BuiltIn(op) => {
       // For builtin ops whose origin is an InfixOp, use op.loc (e.g. `>` not `a > 1`).
       let op_loc = ctx.ast_node(v.id)
@@ -210,10 +213,25 @@ fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   match ctx.ast_node(cps_id) {
     Some(node) => match &node.kind {
       NodeKind::Ident(s) => format!("·{}_{}", s, cps_id.0),
-      _ => format!("·v_{}", cps_id.0),
+      _ => render_synth_fallback(cps_id, ctx),
     },
-    None => format!("·v_{}", cps_id.0),
+    None => render_synth_fallback(cps_id, ctx),
   }
+}
+
+/// Render a compiler-generated node with no AST origin.
+/// Checks bind_kinds for cont semantic names, falls back to ·v_N.
+fn render_synth_fallback(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
+  if let Some(bk) = ctx.bind_kinds
+    && let Some(Some(kind)) = bk.try_get(cps_id) {
+      return match kind {
+        Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
+        Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
+        Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
+        _ => format!("·v_{}", cps_id.0),
+      };
+  }
+  format!("·v_{}", cps_id.0)
 }
 
 /// Render an unresolved ref as `·∅name` (source name) or `·∅_N` (no origin).
@@ -234,7 +252,9 @@ fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
   match bind.kind {
     Bind::SynthName => render_synth_name(bind.id, ctx),
     Bind::Synth     => format!("·v_{}", bind.id.0),
-    Bind::Cont      => format!("·v_{}", bind.id.0),
+    Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
+    Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
+    Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
   }
 }
 
@@ -326,21 +346,21 @@ fn render_cont(cont: &Cont, ctx: &Ctx<'_, '_>) -> Node<'static> {
       fn_node(patterns(params), vec![body_node], fn_loc)
     }
     Cont::Ref(cont_id) => {
-      ident(&format!("·v_{}", cont_id.0), ctx_loc(*cont_id, ctx))
+      ident(&render_synth_fallback(*cont_id, ctx), ctx_loc(*cont_id, ctx))
     }
   }
 }
 
 /// Render a `body: Cont` field as the body expression of a `fn name:` lambda.
 /// - `Cont::Expr { body, .. }` → render `body`.
-/// - `Cont::Ref(cont_id)` → render as `·v_{cont_id} {name}` — a tail call to the cont.
+/// - `Cont::Ref(cont_id)` → render as `·ƒret_{cont_id} {name}` — a tail call to the cont.
 fn render_cont_body(cont: &Cont, bound_name: &str, bound_id: CpsId, ctx: &Ctx<'_, '_>) -> Node<'static> {
   match cont {
     Cont::Expr { body, .. } => to_node(body, ctx),
     Cont::Ref(cont_id) => {
       let cont_loc = ctx_loc(*cont_id, ctx);
       let name_loc = ctx_loc(bound_id, ctx);
-      let cont_name = format!("·v_{}", cont_id.0);
+      let cont_name = render_synth_fallback(*cont_id, ctx);
       apply(ident(&cont_name, cont_loc), vec![ident(bound_name, name_loc)], cont_loc)
     }
   }
@@ -369,7 +389,7 @@ pub fn to_node(expr: &Expr, ctx: &Ctx<'_, '_>) -> Node<'static> {
       ], let_loc)
     }
 
-    ExprKind::LetFn { name, params, fn_body, cont } => {
+    ExprKind::LetFn { name, params, fn_body, cont, .. } => {
       let plain_name = render_bind_ctx(name, ctx);
       let name_loc = ctx_loc(name.id, ctx);
       let mut fn_params: Vec<Node<'static>> = params.iter()
@@ -473,7 +493,7 @@ fn to_node_no_ctx(expr: &Expr) -> Node<'static> {
   // Build empty prop graphs as a dummy context.
   let origin: PropGraph<CpsId, Option<AstId>> = PropGraph::new();
   let ast_index: PropGraph<AstId, Option<&Node<'_>>> = PropGraph::new();
-  let ctx = Ctx { origin: &origin, ast_index: &ast_index, captures: None, param_info: None };
+  let ctx = Ctx { origin: &origin, ast_index: &ast_index, captures: None, param_info: None, bind_kinds: None };
   to_node(expr, &ctx)
 }
 

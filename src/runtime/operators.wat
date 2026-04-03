@@ -91,7 +91,7 @@
   ;;   i31ref  → ref.eq (identity — fine for small ints and booleans)
   ;;   $Num    → f64.eq
   ;;   $Str → str_eq
-  (func $deep_eq (export "deep_eq")
+  (func $deep_eq
     (param $a (ref eq)) (param $b (ref eq)) (result i32)
 
     ;; Try $Num
@@ -254,9 +254,9 @@
 
   ;; Polymorphic empty: dispatch on value type to module predicates.
   ;;   null     → true (always empty)
-  ;;   $List    → list_is_empty
-  ;;   $Rec     → rec_is_empty
-  (func $op_empty (export "empty")
+  ;;   $List    → list_op_empty
+  ;;   $Rec     → rec_op_empty
+  (func $op_empty (export "op_empty")
     (param $val (ref null any)) (param $cont (ref null any))
 
     ;; null = empty
@@ -266,7 +266,7 @@
           (ref.i31 (i32.const 1))
           (local.get $cont))))
 
-    ;; $List → list_is_empty
+    ;; $List → list_op_empty
     (block $not_list
       (block $is_list (result (ref $List))
         (br $not_list
@@ -274,10 +274,10 @@
             (local.get $val))))
       (drop)
       (return_call $apply_1
-        (ref.i31 (call $list_is_empty (local.get $val)))
+        (ref.i31 (call $list_op_empty (local.get $val)))
         (local.get $cont)))
 
-    ;; $Rec → rec_is_empty
+    ;; $Rec → rec_op_empty
     (block $not_rec
       (block $is_rec (result (ref $Rec))
         (br $not_rec
@@ -285,7 +285,7 @@
             (local.get $val))))
       (drop)
       (return_call $apply_1
-        (ref.i31 (call $rec_is_empty (local.get $val)))
+        (ref.i31 (call $rec_op_empty (local.get $val)))
         (local.get $cont)))
 
     (unreachable))
@@ -298,6 +298,7 @@
   (func $op_in (export "op_in")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
+    (local $rec (ref $RecImpl))
 
     ;; Try $Range
     (block $not_range
@@ -307,9 +308,22 @@
             (local.get $b))))
       (local.set $range)
       (return_call $apply_1
-        (ref.i31 (call $range_in
+        (ref.i31 (call $range_op_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
+        (local.get $cont)))
+
+    ;; Try $Rec
+    (block $not_rec
+      (block $is_rec (result (ref $RecImpl))
+        (br $not_rec
+          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+            (local.get $b))))
+      (local.set $rec)
+      (return_call $apply_1
+        (ref.i31 (call $rec_op_in
+          (local.get $rec)
+          (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
 
     (unreachable))
@@ -318,6 +332,7 @@
   (func $op_notin (export "op_notin")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
+    (local $rec (ref $RecImpl))
 
     ;; Try $Range
     (block $not_range
@@ -327,9 +342,22 @@
             (local.get $b))))
       (local.set $range)
       (return_call $apply_1
-        (ref.i31 (call $range_notin
+        (ref.i31 (call $range_op_not_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
+        (local.get $cont)))
+
+    ;; Try $Rec
+    (block $not_rec
+      (block $is_rec (result (ref $RecImpl))
+        (br $not_rec
+          (br_on_cast $is_rec (ref null any) (ref $RecImpl)
+            (local.get $b))))
+      (local.set $rec)
+      (return_call $apply_1
+        (ref.i31 (call $rec_op_not_in
+          (local.get $rec)
+          (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
 
     (unreachable))
@@ -339,22 +367,20 @@
   ;; =========================================================================
 
   ;; op_dot(container, key, cont) → val
-  ;;   $Rec → HAMT lookup by key; traps if key missing
+  ;;   $Rec → rec_op_dot
   (func $op_dot (export "op_dot")
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
-    (local $rec (ref $RecImpl))
 
-    ;; $Rec → hamt lookup
+    ;; Try $Rec
     (block $not_rec
       (block $is_rec (result (ref $RecImpl))
         (br $not_rec
           (br_on_cast $is_rec (ref null any) (ref $RecImpl)
             (local.get $container))))
-      (local.set $rec)
-      (return_call $apply_1
-        (call $_hamt_rec_get
-          (local.get $rec)
-          (ref.cast (ref eq) (local.get $key)))
+      (drop)
+      (return_call $rec_op_dot
+        (local.get $container)
+        (local.get $key)
         (local.get $cont)))
 
     (unreachable))

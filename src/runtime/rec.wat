@@ -178,7 +178,7 @@
     )
   )
 
-  (func $hamt_empty (export "hamt_empty") (result (ref $HamtNode))
+  (func $hamt_empty (result (ref $HamtNode))
     global.get $empty_node
   )
 
@@ -186,7 +186,7 @@
   ;; -- Get ------------------------------------------------------------
 
   ;; Look up a key. Returns null if not found.
-  (func $hamt_get (export "hamt_get")
+  (func $hamt_get
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref null eq))
@@ -281,7 +281,7 @@
 
   ;; Insert or update a key-value pair. Returns a new node (structural
   ;; sharing with the original for unchanged subtrees).
-  (func $hamt_set (export "hamt_set")
+  (func $hamt_set
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $val (ref eq))
@@ -585,7 +585,7 @@
 
   ;; Remove a key. Returns a new node (structural sharing).
   ;; If the key is not present, returns the original node unchanged.
-  (func $hamt_delete (export "hamt_delete")
+  (func $hamt_delete
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref $HamtNode))
@@ -857,7 +857,7 @@
   ;;
   ;; Returns (value, rest_node) via multi-value.
   ;; If key is absent, returns (null, original_node).
-  (func $hamt_pop (export "hamt_pop")
+  (func $hamt_pop
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref null eq) (ref $HamtNode))
@@ -1145,7 +1145,7 @@
   ;;   {..dest, ..src}  →  hamt_merge(dest, src)
   ;;
   ;; Walks src's tree and calls hamt_set for each leaf found.
-  (func $hamt_merge (export "hamt_merge")
+  (func $hamt_merge
     (param $dest (ref $HamtNode))
     (param $src (ref $HamtNode))
     (result (ref $HamtNode))
@@ -1257,7 +1257,7 @@
 
   ;; Count the number of key-value entries in the HAMT.
   ;; Walks the tree, counting leaves and collision entries.
-  (func $hamt_size (export "hamt_size")
+  (func $hamt_size
     (param $node (ref $HamtNode))
     (result i32)
 
@@ -1324,17 +1324,32 @@
   ;; -- Record: direct-style API ------------------------------------------
   ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
-  (func $_hamt_rec_new (export "rec_new") (result (ref $RecImpl))
+  (func $_rec_new (export "rec_new") (result (ref $RecImpl))
     (struct.new $RecImpl (global.get $empty_node))
   )
 
-  (func $_hamt_rec_get (export "rec_get")
+  (func $rec_get (export "rec_get")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref null eq))
     (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
   )
 
-  (func $_hamt_rec_set
+  (func $rec_op_in (export "rec_op_in")
+    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (result i32)
+    (ref.is_null
+      (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key)))
+    (i32.const 1)
+    (i32.xor)
+  )
+
+  (func $rec_op_not_in (export "rec_op_not_in")
+    (param $rec (ref $RecImpl)) (param $key (ref eq))
+    (result i32)
+    (i32.eqz (call $rec_op_in (local.get $rec) (local.get $key)))
+  )
+
+  (func $_rec_set
     (param $rec (ref $RecImpl)) (param $key (ref eq)) (param $val (ref eq))
     (result (ref $RecImpl))
     (struct.new $RecImpl
@@ -1342,7 +1357,7 @@
         (local.get $key) (local.get $val)))
   )
 
-  (func $_hamt_rec_delete (export "rec_delete")
+  (func $rec_delete (export "rec_delete")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref $RecImpl))
     (struct.new $RecImpl
@@ -1350,7 +1365,7 @@
         (local.get $key)))
   )
 
-  (func $_hamt_rec_pop
+  (func $_rec_pop
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref null eq) (ref $RecImpl))
     (local $val (ref null eq))
@@ -1362,7 +1377,7 @@
     (struct.new $RecImpl (local.get $rest))
   )
 
-  (func $_hamt_rec_merge
+  (func $_rec_merge
     (param $dest (ref $RecImpl)) (param $src (ref $RecImpl))
     (result (ref $RecImpl))
     (struct.new $RecImpl
@@ -1377,7 +1392,7 @@
   )
 
   ;; Predicate: is this record empty?
-  (func $rec_is_empty (export "rec_is_empty")
+  (func $rec_op_empty (export "rec_op_empty")
     (param $val (ref null any)) (result i32)
     (i32.eqz (call $rec_size (ref.cast (ref $RecImpl) (local.get $val))))
   )
@@ -1450,7 +1465,7 @@
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
-      (call $_hamt_rec_set
+      (call $_rec_set
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key))
         (ref.cast (ref eq) (local.get $val)))
@@ -1460,7 +1475,7 @@
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
     (return_call $apply_1
-      (call $_hamt_rec_merge
+      (call $_rec_merge
         (ref.cast (ref $RecImpl) (local.get $dest))
         (ref.cast (ref $RecImpl) (local.get $src)))
       (local.get $cont)))
@@ -1470,7 +1485,7 @@
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))
     (local $rest (ref $RecImpl))
-    (call $_hamt_rec_pop
+    (call $_rec_pop
       (ref.cast (ref $RecImpl) (local.get $rec))
       (ref.cast (ref eq) (local.get $key)))
     (local.set $rest)
@@ -1483,5 +1498,13 @@
       (local.get $val)
       (local.get $rest)
       (local.get $succ)))
+
+  (func $rec_op_dot (export "rec_op_dot")
+    (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+    (return_call $apply_1
+      (call $rec_get
+        (ref.cast (ref $RecImpl) (local.get $rec))
+        (ref.cast (ref eq) (local.get $key)))
+      (local.get $cont)))
 
 )
