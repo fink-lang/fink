@@ -110,6 +110,16 @@ fn fn_node(params: Vec<Node<'static>>, body_stmts: Vec<Node<'static>>) -> Node<'
 /// (e.g. `a`), but pair it with the param's own CpsId for the suffix so body
 /// refs match. Falls back to `·v_{param_id}` for synthetic origins.
 fn render_cap_name(param_id: CpsId, origin_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
+  // First check if the param itself is a cont — use semantic name.
+  if let Some(bk) = fc.ctx.bind_kinds
+    && let Some(Some(Bind::Cont(ck))) = bk.try_get(param_id) {
+      return match ck {
+        ContKind::Ret  => format!("·ƒret_{}", param_id.0),
+        ContKind::Succ => format!("·ƒsucc_{}", param_id.0),
+        ContKind::Fail => format!("·ƒfail_{}", param_id.0),
+      };
+  }
+  // Otherwise try source name from origin AST node.
   match fc.ctx.origin.try_get(origin_id).and_then(|opt| *opt)
     .and_then(|ast_id| fc.ctx.ast_index.try_get(ast_id))
     .and_then(|opt| *opt)
