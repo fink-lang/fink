@@ -445,8 +445,7 @@ impl Cont {
 pub enum CpsFnKind {
   /// Called with `Arg::Cont` at the call site. Includes user-defined
   /// functions, match wrappers (m_0), and match matchers (mp_N).
-  /// At the WASM level, the cont is either a separate $Fn3 param
-  /// (current) or prepended to the args list (unified $Fn2).
+  /// At the WASM level, the cont is prepended to the args list ($Fn2).
   CpsFunction,
 
   /// Never called with `Arg::Cont`. Includes compiler-generated

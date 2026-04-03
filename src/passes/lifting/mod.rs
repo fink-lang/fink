@@ -508,8 +508,7 @@ fn extract_from_body<'src>(
         };
 
         // Closure targets are always CpsClosure: they're called via dispatch
-        // (_apply/_apply_cont), not directly with Arg::Cont. The dispatcher
-        // handles cont prepending for $Fn2 callees.
+        // (_apply), not directly with Arg::Cont.
         hoisted.push(HoistedFn {
           name: lifted_fn_bind,
           params: lifted_params,

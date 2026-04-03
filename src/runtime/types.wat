@@ -180,11 +180,9 @@
       (field $captures (ref null $Captures))
     ))
 
-    ;; Function signatures for the calling convention.
-    ;; $Fn2(captures, args) — continuations, match arms.
-    ;; $Fn3(captures, args, cont) — user functions.
+    ;; Function signature for the unified calling convention.
+    ;; $Fn2(captures, args) — all functions (conts are in captures or args).
     (type $Fn2 (func (param (ref null any) (ref null any))))
-    (type $Fn3 (func (param (ref null any) (ref null any) (ref null any))))
   )
 
 )
