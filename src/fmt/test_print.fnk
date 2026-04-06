@@ -91,11 +91,6 @@ test 'unary not', fn:
     not a
   | equals 'NO-DIFF'
 
-test 'bitwise not', fn:
-  expect print ƒink:
-    ~a
-  | equals 'NO-DIFF'
-
 test 'add', fn:
   expect print ƒink:
     a + b

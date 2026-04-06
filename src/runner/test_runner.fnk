@@ -871,23 +871,28 @@ test 'range match pattern', fn:
 test 'bitwise and', fn:
   expect run ƒink:
     main = fn:
-      0xFF & 0x0F
+      0xFF and 0x0F
   | equals ƒink:
     15
 
-# TODO: bitwise or — no operator syntax yet (| is pipe)
+test 'bitwise or', fn:
+  expect run ƒink:
+    main = fn:
+      0xFF or 0x0F
+  | equals ƒink:
+    255
 
 test 'bitwise xor', fn:
   expect run ƒink:
     main = fn:
-      0xFF ^ 0x0F
+      0xFF xor 0x0F
   | equals ƒink:
     240
 
 test 'bitwise not', fn:
   expect run ƒink:
     main = fn:
-      ~0
+      not 0
   | equals ƒink:
     -1
 

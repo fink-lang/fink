@@ -252,8 +252,8 @@ pub enum BuiltIn {
   Eq, Neq, Lt, Lte, Gt, Gte, Cmp,
   // Logical
   And, Or, Xor, Not,
-  // Bitwise
-  BitAnd, BitXor, Shl, Shr, RotL, RotR, BitNot,
+  // Shifts / rotations
+  Shl, Shr, RotL, RotR,
   // Range
   Range, RangeIncl, In, NotIn,
   // Member access
@@ -312,14 +312,11 @@ impl BuiltIn {
       "or"  => BuiltIn::Or,
       "xor" => BuiltIn::Xor,
       "not" => BuiltIn::Not,
-      // Bitwise
-      "&"   => BuiltIn::BitAnd,
-      "^"   => BuiltIn::BitXor,
+      // Shifts / rotations
       "<<"  => BuiltIn::Shl,
       ">>"  => BuiltIn::Shr,
       "<<<" => BuiltIn::RotL,
       ">>>" => BuiltIn::RotR,
-      "~"   => BuiltIn::BitNot,
       // Range
       ".."  => BuiltIn::Range,
       "..." => BuiltIn::RangeIncl,
