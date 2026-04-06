@@ -62,25 +62,25 @@
   (func $op_intdiv (export "op_intdiv")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
-      (struct.new $Num (f64.convert_i64_s (i64.div_s
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
+      (call $int_op_div
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_rem (export "op_rem")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
-      (struct.new $Num (f64.convert_i64_s (i64.rem_s
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
+      (call $int_op_rem
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_intmod (export "op_intmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
-      (struct.new $Num (f64.convert_i64_s (i64.rem_s
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
+      (call $int_op_mod
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   ;; =========================================================================
@@ -90,7 +90,7 @@
   ;; Direct-style deep equality. Used by HAMT for key comparison.
   ;;   i31ref  → ref.eq (identity — fine for small ints and booleans)
   ;;   $Num    → f64.eq
-  ;;   $Str → str_eq
+  ;;   $Str → str_op_eq
   (func $deep_eq
     (param $a (ref eq)) (param $b (ref eq)) (result i32)
 
@@ -110,7 +110,7 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $a))))
-      (return (call $str_eq
+      (return (call $str_op_eq
         (ref.cast (ref $Str) (local.get $b)))))
 
     ;; Fallback: ref.eq (i31ref, other GC types)
@@ -118,7 +118,7 @@
 
   ;; Polymorphic ==: dispatch on $a's type.
   ;;   $Num    → f64.eq
-  ;;   $Str → str_eq
+  ;;   $Str → str_op_eq
   (func $op_eq (export "op_eq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
@@ -141,9 +141,9 @@
         (br $not_str
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
-      ;; $a is $Str — cast $b and call str_eq
+      ;; $a is $Str — cast $b and call str_op_eq
       (return_call $apply_1
-        (ref.i31 (call $str_eq
+        (ref.i31 (call $str_op_eq
           (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
 
@@ -151,7 +151,7 @@
 
   ;; Polymorphic !=: dispatch on $a's type.
   ;;   $Num    → f64.ne
-  ;;   $Str → !str_eq
+  ;;   $Str → !str_op_eq
   (func $op_neq (export "op_neq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
@@ -174,9 +174,9 @@
         (br $not_str
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
-      ;; $a is $Str — cast $b, call str_eq, invert
+      ;; $a is $Str — cast $b, call str_op_eq, invert
       (return_call $apply_1
-        (ref.i31 (i32.eqz (call $str_eq
+        (ref.i31 (i32.eqz (call $str_op_eq
           (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
 

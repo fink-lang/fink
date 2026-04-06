@@ -36,6 +36,28 @@
       (i64.const -1)))))
 
   ;; =========================================================================
+  ;; Integer arithmetic: direct-style helpers called from operators.wat
+  ;; =========================================================================
+
+  (func $int_op_div (export "int_op_div")
+    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.div_s
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+
+  (func $int_op_rem (export "int_op_rem")
+    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.rem_s
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+
+  (func $int_op_mod (export "int_op_mod")
+    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.rem_s
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+
+  ;; =========================================================================
   ;; Shifts: unbox $Num → i64, shift, i64 → $Num → apply_1(result, cont)
   ;; =========================================================================
 

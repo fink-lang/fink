@@ -102,12 +102,12 @@
 
   ;; ---- Equality ----
 
-  ;; str_eq : (ref $Str), (ref $Str) -> i32
+  ;; str_op_eq : (ref $Str), (ref $Str) -> i32
   ;; Compare two byte-bearing strings for byte-level equality.
   ;; Fast path: ref.eq (same object → 1).
   ;; Slow path: dispatch on concrete types, compare byte-by-byte.
   ;; Returns 1 if equal, 0 if not.
-  (func $str_eq
+  (func $str_op_eq
     (param $a (ref $Str))
     (param $b (ref $Str))
     (result i32)
@@ -135,14 +135,14 @@
               (local.get $b))))
         (local.set $db)
         ;; Both data
-        (return (call $_str_eq_dd
+        (return (call $_str_op_eq_dd
           (struct.get $StrDataImpl $offset (local.get $da))
           (struct.get $StrDataImpl $length (local.get $da))
           (struct.get $StrDataImpl $offset (local.get $db))
           (struct.get $StrDataImpl $length (local.get $db)))))
 
       ;; $a is data, $b is array
-      (return (call $_str_eq_da
+      (return (call $_str_op_eq_da
         (struct.get $StrDataImpl $offset (local.get $da))
         (struct.get $StrDataImpl $length (local.get $da))
         (call $_get_byte_array (local.get $b)))))
@@ -155,13 +155,13 @@
             (local.get $b))))
       (local.set $db)
       ;; $b is data, $a is array — flip args
-      (return (call $_str_eq_da
+      (return (call $_str_op_eq_da
         (struct.get $StrDataImpl $offset (local.get $db))
         (struct.get $StrDataImpl $length (local.get $db))
         (call $_get_byte_array (local.get $a)))))
 
     ;; Both arrays
-    (call $_str_eq_aa
+    (call $_str_op_eq_aa
       (call $_get_byte_array (local.get $a))
       (call $_get_byte_array (local.get $b)))
   )
@@ -177,9 +177,9 @@
       (ref.cast (ref $StrBytesImpl) (local.get $str)))
   )
 
-  ;; $_str_eq_dd : (i32, i32, i32, i32) -> i32
+  ;; $_str_op_eq_dd : (i32, i32, i32, i32) -> i32
   ;; Compare two data-section strings by linear memory reads.
-  (func $_str_eq_dd
+  (func $_str_op_eq_dd
     (param $off_a i32) (param $len_a i32)
     (param $off_b i32) (param $len_b i32)
     (result i32)
@@ -204,9 +204,9 @@
     (i32.const 1)
   )
 
-  ;; $_str_eq_da : (i32, i32, ref $ByteArray) -> i32
+  ;; $_str_op_eq_da : (i32, i32, ref $ByteArray) -> i32
   ;; Compare data-section string vs heap array.
-  (func $_str_eq_da
+  (func $_str_op_eq_da
     (param $off i32) (param $len i32)
     (param $arr (ref $ByteArray))
     (result i32)
@@ -231,9 +231,9 @@
     (i32.const 1)
   )
 
-  ;; $_str_eq_aa : (ref $ByteArray, ref $ByteArray) -> i32
+  ;; $_str_op_eq_aa : (ref $ByteArray, ref $ByteArray) -> i32
   ;; Compare two heap arrays byte-by-byte.
-  (func $_str_eq_aa
+  (func $_str_op_eq_aa
     (param $a (ref $ByteArray))
     (param $b (ref $ByteArray))
     (result i32)

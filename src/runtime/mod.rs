@@ -1142,12 +1142,12 @@ mod tests {
   }
 
   #[test]
-  fn test_str_eq_same_raw() {
+  fn test_str_op_eq_same_raw() {
     // Two raw strings from same data section region should be equal
     let data = b"hello";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str (i32.const 0) (i32.const 5))
           (call $str (i32.const 0) (i32.const 5))))
     "#);
@@ -1155,12 +1155,12 @@ mod tests {
   }
 
   #[test]
-  fn test_str_eq_different_raw() {
+  fn test_str_op_eq_different_raw() {
     // "hello" vs "helloX" (different length)
     let data = b"helloX";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str (i32.const 0) (i32.const 5))
           (call $str (i32.const 0) (i32.const 6))))
     "#);
@@ -1173,7 +1173,7 @@ mod tests {
     let data = b"hello";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 5)))
           (call $str (i32.const 0) (i32.const 5))))
     "#);
@@ -1190,7 +1190,7 @@ mod tests {
     data.extend_from_slice(b"a\nb");        // offset 4, len 3: expected after escape
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
           (call $str_render_escape (call $str (i32.const 4) (i32.const 3)))))
     "#);
@@ -1208,7 +1208,7 @@ mod tests {
     data.extend_from_slice(b"A");       // offset 4, len 1
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
           (call $str_render_escape (call $str (i32.const 4) (i32.const 1)))))
     "#);
@@ -1223,7 +1223,7 @@ mod tests {
     data.extend_from_slice(b"A");          // offset 8, len 1
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 8)))
           (call $str_render_escape (call $str (i32.const 8) (i32.const 1)))))
     "#);
@@ -1238,7 +1238,7 @@ mod tests {
     data.extend_from_slice("é".as_bytes());    // offset 8, len 2
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 8)))
           (call $str_render_escape (call $str (i32.const 8) (i32.const 2)))))
     "#);
@@ -1253,7 +1253,7 @@ mod tests {
     data.extend_from_slice("☃".as_bytes());   // offset 8, len 3
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 8)))
           (call $str_render_escape (call $str (i32.const 8) (i32.const 3)))))
     "#);
@@ -1268,7 +1268,7 @@ mod tests {
     data.extend_from_slice("😀".as_bytes());  // offset 9, len 4
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 9)))
           (call $str_render_escape (call $str (i32.const 9) (i32.const 4)))))
     "#);
@@ -1287,7 +1287,7 @@ mod tests {
     data.extend_from_slice(expected_bytes.as_bytes());        // offset 12
     let (mut store, instance) = load_string_with(&data, &format!(r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 12)))
           (call $str_render_escape (call $str (i32.const 12) (i32.const {exp_len})))))
     "#));
@@ -1302,7 +1302,7 @@ mod tests {
     data.extend_from_slice(&[0x0A, 0x09, 0x0D, 0x0C, 0x0B, 0x08]); // offset 12, len 6
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 12)))
           (call $str_render_escape (call $str (i32.const 12) (i32.const 6)))))
     "#);
@@ -1317,7 +1317,7 @@ mod tests {
     data.extend_from_slice(&[0x5C, 0x27, 0x24]); // offset 6, len 3: expected bytes
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 6)))
           (call $str (i32.const 6) (i32.const 3))))
     "#);
@@ -1329,7 +1329,7 @@ mod tests {
     let data = b"";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 0)))
           (call $str (i32.const 0) (i32.const 0))))
     "#);
@@ -1344,7 +1344,7 @@ mod tests {
     data.extend_from_slice(b"abc\\");          // offset 4, len 4 (expected: same)
     let (mut store, instance) = load_string_with(&data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
           (call $str_render_escape (call $str (i32.const 4) (i32.const 4)))))
     "#);
@@ -1358,7 +1358,7 @@ mod tests {
     let data = b"\\n";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_unescape
             (call $str_render_escape (call $str (i32.const 0) (i32.const 2))))
           (call $str (i32.const 0) (i32.const 2))))
@@ -1367,25 +1367,25 @@ mod tests {
   }
 
   #[test]
-  fn test_str_eq_ref_identity() {
+  fn test_str_op_eq_ref_identity() {
     // Same ref should be equal (fast path)
     let data = b"hello";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
         (local $r (ref $Str))
         (local.set $r (call $str (i32.const 0) (i32.const 5)))
-        (call $str_eq (local.get $r) (local.get $r)))
+        (call $str_op_eq (local.get $r) (local.get $r)))
     "#);
     assert_eq!(call_test(&mut store, &instance, "test"), 1);
   }
 
   #[test]
-  fn test_str_eq_data_vs_escaped() {
+  fn test_str_op_eq_data_vs_escaped() {
     // raw "hello" (no escapes) vs escaped "hello" should be equal
     let data = b"hello";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str (i32.const 0) (i32.const 5))
           (call $str_render_escape (call $str (i32.const 0) (i32.const 5)))))
     "#);
@@ -1393,12 +1393,12 @@ mod tests {
   }
 
   #[test]
-  fn test_str_eq_escaped_vs_escaped() {
+  fn test_str_op_eq_escaped_vs_escaped() {
     // Two separately escaped copies should be equal
     let data = b"a\\nb";
     let (mut store, instance) = load_string_with(data, r#"
       (func (export "test") (result i32)
-        (call $str_eq
+        (call $str_op_eq
           (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))
           (call $str_render_escape (call $str (i32.const 0) (i32.const 4)))))
     "#);
