@@ -1509,7 +1509,21 @@ fn wrap_with_fail(
 // ---------------------------------------------------------------------------
 
 fn parse_int(s: &str) -> i64 {
-  s.replace('_', "").parse().unwrap_or(0)
+  let s = s.replace('_', "");
+  let (negative, s) = match s.strip_prefix('-') {
+    Some(rest) => (true, rest.to_string()),
+    None => (false, s.strip_prefix('+').unwrap_or(&s).to_string()),
+  };
+  let val = if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+    i64::from_str_radix(hex, 16).unwrap_or(0)
+  } else if let Some(oct) = s.strip_prefix("0o").or_else(|| s.strip_prefix("0O")) {
+    i64::from_str_radix(oct, 8).unwrap_or(0)
+  } else if let Some(bin) = s.strip_prefix("0b").or_else(|| s.strip_prefix("0B")) {
+    i64::from_str_radix(bin, 2).unwrap_or(0)
+  } else {
+    s.parse().unwrap_or(0)
+  };
+  if negative { -val } else { val }
 }
 
 fn parse_float(s: &str) -> f64 {
