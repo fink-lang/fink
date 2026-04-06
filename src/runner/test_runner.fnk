@@ -868,45 +868,40 @@ test 'range match pattern', fn:
 
 # --- Bitwise operators ---
 
-skip test 'bitwise and', fn:
+test 'bitwise and', fn:
   expect run ƒink:
     main = fn:
-      0xFF band 0x0F
+      0xFF & 0x0F
   | equals ƒink:
     15
 
-skip test 'bitwise or', fn:
-  expect run ƒink:
-    main = fn:
-      0xF0 bor 0x0F
-  | equals ƒink:
-    255
+# TODO: bitwise or — no operator syntax yet (| is pipe)
 
-skip test 'bitwise xor', fn:
+test 'bitwise xor', fn:
   expect run ƒink:
     main = fn:
-      0xFF bxor 0x0F
+      0xFF ^ 0x0F
   | equals ƒink:
     240
 
-skip test 'bitwise not', fn:
+test 'bitwise not', fn:
   expect run ƒink:
     main = fn:
-      bnot 0
+      ~0
   | equals ƒink:
     -1
 
-skip test 'bitwise shift left', fn:
+test 'bitwise shift left', fn:
   expect run ƒink:
     main = fn:
-      1 bshl 8
+      1 << 8
   | equals ƒink:
     256
 
-skip test 'bitwise shift right', fn:
+test 'bitwise shift right', fn:
   expect run ƒink:
     main = fn:
-      256 bshr 4
+      256 >> 4
   | equals ƒink:
     16
 
