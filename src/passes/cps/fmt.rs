@@ -313,6 +313,9 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::StrFmt    => "·str_fmt".into(),
     // Closure construction
     BuiltIn::FnClosure => "·closure".into(),
+    // Type guards
+    BuiltIn::IsSeqLike    => "·is_seq_like".into(),
+    BuiltIn::IsRecLike    => "·is_rec_like".into(),
     // Collection primitives
     BuiltIn::SeqPop       => "·seq_pop".into(),
     BuiltIn::RecPop       => "·rec_pop".into(),
@@ -451,6 +454,7 @@ pub fn to_node(expr: &Expr, ctx: &Ctx<'_, '_>) -> Node<'static> {
       };
       // Collection builtins render as `·name args, fail, cont` (no ·apply prefix).
       let is_collection_builtin = matches!(func, Callable::BuiltIn(
+        BuiltIn::IsSeqLike | BuiltIn::IsRecLike |
         BuiltIn::SeqPop | BuiltIn::RecPop | BuiltIn::Empty
       ));
       if is_collection_builtin {

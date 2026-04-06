@@ -1014,7 +1014,7 @@ skip test 'str template pattern', fn:
 
 # --- Record empty check ---
 
-skip test 'rec empty check', fn:
+test 'rec empty check', fn:
   expect run ƒink:
     main = fn:
       r = {}
@@ -1023,6 +1023,46 @@ skip test 'rec empty check', fn:
         _: false
   | equals ƒink:
     true
+
+
+test 'rec pattern rejects empty list', fn:
+  expect run ƒink:
+    main = fn:
+      match []:
+        {}: true
+        _: false
+  | equals ƒink:
+    false
+
+
+test 'rec pattern rejects list', fn:
+  expect run ƒink:
+    main = fn:
+      match [1, 2]:
+        {a, ..}: a
+        _: false
+  | equals ƒink:
+    false
+
+
+test 'seq pattern rejects empty rec', fn:
+  expect run ƒink:
+    main = fn:
+      match {}:
+        []: true
+        _: false
+  | equals ƒink:
+    false
+
+
+test 'seq pattern rejects rec', fn:
+  expect run ƒink:
+    main = fn:
+      match {a: 1}:
+        [x, ..]: x
+        _: false
+  | equals ƒink:
+    false
 
 
 # --- Yield ---

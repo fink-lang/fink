@@ -249,6 +249,34 @@
       (local.get $cont)))
 
   ;; =========================================================================
+  ;; Type guards — is_seq_like / is_rec_like
+  ;; =========================================================================
+
+  ;; is_seq_like(val, succ, fail): succ(val) if $List, else fail()
+  (func $is_seq_like (export "is_seq_like")
+    (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
+    (block $not_seq
+      (block $is_seq (result (ref $List))
+        (br $not_seq
+          (br_on_cast $is_seq (ref null any) (ref $List)
+            (local.get $val))))
+      (drop)
+      (return_call $apply_1 (local.get $val) (local.get $succ)))
+    (return_call $apply_0 (local.get $fail)))
+
+  ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
+  (func $is_rec_like (export "is_rec_like")
+    (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
+    (block $not_rec
+      (block $is_rec (result (ref $Rec))
+        (br $not_rec
+          (br_on_cast $is_rec (ref null any) (ref $Rec)
+            (local.get $val))))
+      (drop)
+      (return_call $apply_1 (local.get $val) (local.get $succ)))
+    (return_call $apply_0 (local.get $fail)))
+
+  ;; =========================================================================
   ;; Collection predicates (polymorphic — dispatch on type tag)
   ;; =========================================================================
 

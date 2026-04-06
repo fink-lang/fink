@@ -266,10 +266,12 @@ pub enum BuiltIn {
   // Args: lifted_fn, cap_0, cap_1, ...; result is a closure value.
   FnClosure,
   // Collection primitives — used inside pattern matchers for seq/rec destructuring.
+  // IsSeqLike(value, succ(value), fail()) — type guard; succ if seq-like (list)
+  // IsRecLike(value, succ(value), fail()) — type guard; succ if rec-like (rec, dict)
   // SeqPop(seq, fail, cont(head, tail)) — pop head element; fail if empty
   // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
-  SeqPop, RecPop, Empty,
+  IsSeqLike, IsRecLike, SeqPop, RecPop, Empty,
   // Yield — suspend execution, passing a value to the scheduler.
   // Args: value; cont receives the resumed value.
   Yield,
@@ -503,7 +505,8 @@ pub enum ExprKind {
 
   // ---------------------------------------------------------------------------
   // Pattern matching — all patterns lower to PatternMatch (LetFn + App).
-  // Collection primitives (SeqPop, RecPop, Empty) are emitted inside matcher bodies.
+  // Type guards (IsSeqLike, IsRecLike) wrap matcher entries; collection primitives
+  // (SeqPop, RecPop, Empty) are emitted inside matcher bodies.
   //
   // Matcher invariant: matchers work with synthetic temps only (Bind::Synth).
   // No named bindings are created inside a matcher — if a pattern fails,

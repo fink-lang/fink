@@ -79,17 +79,20 @@ test 'import not in exports', fn:
         fn ·v_13:
           ·let ·v_13, fn ·foo_0:
             ·fn
-              fn ·ƒret_26: ·foo_0 ·ƒret_26, 1
-              fn ·v_25:
-                ·let ·v_25, fn ·main_1:
+              fn ·ƒret_31: ·foo_0 ·ƒret_31, 1
+              fn ·v_30:
+                ·let ·v_30, fn ·main_1:
                   ·export ·main_1
-        fn ·v_40:
+        fn ·v_45:
           ·fn
             fn ·ƒsucc_11, ·ƒfail_12, ·v_10:
-              ·rec_pop ·v_10, 'foo', ·ƒfail_12, fn ·v_13, ·v_17:
-                ·ƒsucc_11 ·v_13
-            fn ·v_22: ·v_22 ·v_40, ·panic, ·v_8, './bar.fnk'
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQUEsR0FBQSxJO0VBQVIsQUFBQTtPQUFBLEs7TUFBQyxBQUFBLEtBQUQsSyxLQUFDLE07UUFDTSxBQUFBO2FBQUEsUSxFQUFJLEFBQUEsT0FBSixRLEVBQVE7YUFBUixLO1lBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2MsQSxRQUFBO09BREEsSztNQUFBLEFBQUE7VyxXLFdBQUEsSztVQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLFMsS0FBQSxPQUFBLEs7WUFBQSxBLFVBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVEsSSxFQUFPLEEsQ0FBQSxTIgp9
+              ·is_rec_like ·v_10,
+                fn ·v_18:
+                  ·rec_pop ·v_18, 'foo', ·ƒfail_12, fn ·v_13, ·v_17:
+                    ·ƒsucc_11 ·v_13
+                fn: ·ƒfail_12 _
+            fn ·v_27: ·v_27 ·v_45, ·panic, ·v_8, './bar.fnk'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQUEsR0FBQSxJO0VBQVIsQUFBQTtPQUFBLEs7TUFBQyxBQUFBLEtBQUQsSyxLQUFDLE07UUFDTSxBQUFBO2FBQUEsUSxFQUFJLEFBQUEsT0FBSixRLEVBQVE7YUFBUixLO1lBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2MsQSxRQUFBO09BREEsSztNQUFBLEFBQUE7VyxXLFdBQUEsSztVQUFBLEFBQUEsYUFBQSxLO2VBQUEsSztjQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLFMsS0FBQSxPQUFBLEs7Z0JBQUEsQSxVQUFBO2MsRUFBQSxBLFVBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVEsSSxFQUFPLEEsQ0FBQSxTIgp9
 
 
 ---
@@ -108,18 +111,21 @@ test 'destructure not in exports', fn:
             ·let ·v_16, fn ·a_0:
               ·let ·v_17, fn ·b_1:
                 ·fn
-                  fn ·ƒret_42: ·ƒret_42 ·a_0
-                  fn ·v_41:
-                    ·let ·v_41, fn ·foo_2:
+                  fn ·ƒret_47: ·ƒret_47 ·a_0
+                  fn ·v_46:
+                    ·let ·v_46, fn ·foo_2:
                       ·export ·foo_2
-          fn ·v_56:
+          fn ·v_61:
             ·fn
               fn ·ƒsucc_14, ·ƒfail_15, ·v_13:
-                ·seq_pop ·v_13, ·ƒfail_15, fn ·v_16, ·v_30:
-                  ·seq_pop ·v_30, ·ƒfail_15, fn ·v_17, ·v_22:
-                    ·empty ·v_22, fn ·v_25:
-                      ·if ·v_25,
-                        fn: ·ƒsucc_14 ·v_16, ·v_17
-                        fn: ·ƒfail_15 _
-              fn ·v_37: ·v_37 ·v_56, ·panic, ·v_11
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsYUFBSSxDLEVBQUosQSxDLEMsS0FBQSxJO0VBQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEtBQUEsSztJQUFULEFBQUE7U0FBQSxPQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7WUFDRSxBQUFBO2lCQUFBLFEsRSxBQUFBLFNBQUk7aUJBQUosSztnQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07a0IsQSxRQUFBO1NBREEsSztRQUFBLEFBQUE7YSxXLFdBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztnQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLFVBQUEsSyxFQUFBO3NCLEVBQUEsQSxVQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFTIgp9
+                ·is_seq_like ·v_13,
+                  fn ·v_30:
+                    ·seq_pop ·v_30, ·ƒfail_15, fn ·v_16, ·v_31:
+                      ·seq_pop ·v_31, ·ƒfail_15, fn ·v_17, ·v_22:
+                        ·empty ·v_22, fn ·v_25:
+                          ·if ·v_25,
+                            fn: ·ƒsucc_14 ·v_16, ·v_17
+                            fn: ·ƒfail_15 _
+                  fn: ·ƒfail_15 _
+              fn ·v_42: ·v_42 ·v_61, ·panic, ·v_11
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsYUFBSSxDLEVBQUosQSxDLEMsS0FBQSxJO0VBQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEtBQUEsSztJQUFULEFBQUE7U0FBQSxPQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7WUFDRSxBQUFBO2lCQUFBLFEsRSxBQUFBLFNBQUk7aUJBQUosSztnQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07a0IsQSxRQUFBO1NBREEsSztRQUFBLEFBQUE7YSxXLFdBQUEsSztZQUFBLEFBQUEsYUFBQSxLO2lCQUFBLEs7Z0JBQUEsQUFBQSxTQUFBLEssRSxTLEtBQUEsT0FBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztvQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7c0JBQUEsQUFBQSxJQUFBLEs7MEIsRUFBQSxBLFVBQUEsSyxFQUFBOzBCLEVBQUEsQSxVQUFBO2dCLEVBQUEsQSxVQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFTIgp9
