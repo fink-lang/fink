@@ -215,17 +215,41 @@
       (local.get $cont)))
 
   ;; =========================================================================
-  ;; Logic: i31ref bool ops
+  ;; Logic / bitwise: polymorphic — $Num → integer bitwise, i31ref → boolean
   ;; =========================================================================
 
   (func $op_not (export "op_not")
     (param $a (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Num → delegate to int_op_not
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref null any) (ref $Num)
+            (local.get $a))))
+      (return_call $apply_1
+        (call $int_op_not)
+        (local.get $cont)))
+
+    ;; Fallback: i31ref boolean not
     (return_call $apply_1
       (ref.i31 (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $a)))))
       (local.get $cont)))
 
   (func $op_and (export "op_and")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Num → delegate to int_op_and
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref null any) (ref $Num)
+            (local.get $a))))
+      (return_call $apply_1
+        (call $int_op_and (ref.cast (ref $Num) (local.get $b)))
+        (local.get $cont)))
+
+    ;; Fallback: i31ref boolean and
     (return_call $apply_1
       (ref.i31 (i32.and
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
@@ -234,6 +258,18 @@
 
   (func $op_or (export "op_or")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Num → delegate to int_op_or
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref null any) (ref $Num)
+            (local.get $a))))
+      (return_call $apply_1
+        (call $int_op_or (ref.cast (ref $Num) (local.get $b)))
+        (local.get $cont)))
+
+    ;; Fallback: i31ref boolean or
     (return_call $apply_1
       (ref.i31 (i32.or
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
@@ -242,6 +278,18 @@
 
   (func $op_xor (export "op_xor")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Num → delegate to int_op_xor
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref null any) (ref $Num)
+            (local.get $a))))
+      (return_call $apply_1
+        (call $int_op_xor (ref.cast (ref $Num) (local.get $b)))
+        (local.get $cont)))
+
+    ;; Fallback: i31ref boolean xor
     (return_call $apply_1
       (ref.i31 (i32.xor
         (i31.get_s (ref.cast (ref i31) (local.get $a)))

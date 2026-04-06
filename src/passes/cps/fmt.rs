@@ -289,14 +289,11 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Or     => "·op_or".into(),
     BuiltIn::Xor    => "·op_xor".into(),
     BuiltIn::Not    => "·op_not".into(),
-    // Bitwise
-    BuiltIn::BitAnd => "·op_bitand".into(),
-    BuiltIn::BitXor => "·op_bitxor".into(),
+    // Shifts / rotations
     BuiltIn::Shl    => "·op_shl".into(),
     BuiltIn::Shr    => "·op_shr".into(),
     BuiltIn::RotL   => "·op_rotl".into(),
     BuiltIn::RotR   => "·op_rotr".into(),
-    BuiltIn::BitNot => "·op_bitnot".into(),
     // Range
     BuiltIn::Range     => "·op_rngex".into(),
     BuiltIn::RangeIncl => "·op_rngin".into(),

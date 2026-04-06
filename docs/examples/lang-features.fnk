@@ -236,25 +236,25 @@ a >< b          # disjoint - for types, sets, lists
 bitwise
 ---
 
-~a         # not
-a & b      # and
-a or b     # or   TODO:
-a ^ b      # xor
-a >> b     # shift right
-a << b     # shift left
-a >>> b    # rotate right
-a <<< b    # rotate left
+not 0b0101_0101    == 0b1010_1010
+0b1100 and 0b1010  == 0b0000_1000
+0b1100 or 0b1010   == 0b0000_1110
+0b1100 xor 0b1010  == 0b0000_0110
+a >> b                 # shift right
+a << b                 # shift left
+a >>> b                # rotate right
+a <<< b                # rotate left
 
 
 ---
 sets - operators
 ---
 
-a + b       # union (ordered: left to right merge)
+a or b      # union (ordered: left to right merge)
+a xor b     # symmetric difference
+a and b     # intersection
 a - b       # difference
-a ^ b       # symmetric difference
 a * b       # cartesian product
-a & b       # intersection
 
 # comparison — always return bool
 a == b      # equality

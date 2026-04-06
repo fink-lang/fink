@@ -58,9 +58,6 @@ impl<'src> Parser<'src> {
       b">",
       b">=",
       b"><",
-      b"&",
-      b"^",
-      b"~",
       b">>",
       b"<<",
       b">>>",
@@ -282,7 +279,6 @@ impl<'src> Parser<'src> {
       | TokenKind::Partial
       | TokenKind::StrStart => true,
       TokenKind::BracketOpen => true,
-      TokenKind::Sep if self.current.src == "~" => true,
       _ => false,
     }
   }
@@ -340,16 +336,10 @@ impl<'src> Parser<'src> {
 
   // Like parse_apply but no block detection — used for arm patterns and record keys.
   fn parse_apply_no_block(&mut self) -> ParseResult<'src> {
-    // Prefix unary: not, ~
+    // Prefix unary: not
     if self.at(TokenKind::Ident) && self.peek().src == "not" {
       let op_tok = self.bump();
       let operand = self.parse_infix(35)?;
-      let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
-      return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
-    }
-    if self.at(TokenKind::Sep) && self.peek().src == "~" {
-      let op_tok = self.bump();
-      let operand = self.parse_infix(130)?;
       let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
       return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
     }
@@ -704,8 +694,6 @@ impl<'src> Parser<'src> {
       TokenKind::Sep => match tok.src {
         ".." | "..." => Some((50, 51)),
         "==" | "!=" | "<" | "<=" | ">" | ">=" | "><" => Some((60, 61)),
-        "&" => Some((70, 71)),
-        "^" => Some((80, 81)),
         ">>" | "<<" | ">>>" | "<<<" => Some((90, 91)),
         "+" | "-" => Some((100, 101)),
         "*" | "/" | "//" | "%" | "%%" | "/%" => Some((110, 111)),
@@ -961,13 +949,6 @@ impl<'src> Parser<'src> {
     if self.at(TokenKind::Ident) && self.peek().src == "not" {
       let op_tok = self.bump();
       let operand = self.parse_infix(35)?;
-      let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
-      return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
-    }
-    // "~" bitwise not
-    if self.at(TokenKind::Sep) && self.peek().src == "~" {
-      let op_tok = self.bump();
-      let operand = self.parse_infix(130)?;
       let loc = Loc { start: op_tok.loc.start, end: operand.loc.end };
       return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand: Box::new(operand) }, loc));
     }

@@ -1,42 +1,39 @@
-;; Integer bitwise and shift operations — CPS functions.
+;; Integer operations — bitwise, shift, and rotation.
 ;;
-;; Each operator unboxes $Num (f64) to i64 via i64.trunc_f64_s,
-;; applies the integer operation, converts back via f64.convert_i64_s,
-;; and boxes the result as $Num.
+;; Direct-style helpers operate on already-cast (ref $Num) values and return
+;; (ref $Num). Called from polymorphic CPS operators in operators.wat.
 ;;
-;; These are the phase-0 implementations operating on concrete $Num types.
-;; Protocol-based overloading (future) will replace these with dispatch
-;; through user-defined protocol implementations.
+;; CPS shift/rotation operators are self-contained (no polymorphic dispatch).
 
 (module
 
   ;; =========================================================================
-  ;; Bitwise: unbox $Num → i64, bitwise op, i64 → $Num → apply_1(result, cont)
+  ;; Bitwise: direct-style helpers called from polymorphic operators.wat
   ;; =========================================================================
 
-  (func $op_bitand (export "op_bitand")
-    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
-      (struct.new $Num (f64.convert_i64_s (i64.and
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
-      (local.get $cont)))
+  (func $int_op_and (export "int_op_and")
+    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.and
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $op_bitxor (export "op_bitxor")
-    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
-      (struct.new $Num (f64.convert_i64_s (i64.xor
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
-      (local.get $cont)))
+  (func $int_op_or (export "int_op_or")
+    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.or
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $op_bitnot (export "op_bitnot")
-    (param $a (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
-      (struct.new $Num (f64.convert_i64_s (i64.xor
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
-        (i64.const -1))))
-      (local.get $cont)))
+  (func $int_op_xor (export "int_op_xor")
+    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.xor
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+
+  (func $int_op_not (export "int_op_not")
+    (param $a (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.xor
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.const -1)))))
 
   ;; =========================================================================
   ;; Shifts: unbox $Num → i64, shift, i64 → $Num → apply_1(result, cont)

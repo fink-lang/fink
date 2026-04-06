@@ -322,29 +322,38 @@ bitwise
 
 test 'bitwise not', fn:
   expect ast ƒink:
-    ~a
+    not 0xFF
   | equals ƒink:
     Module
-      UnaryOp '~',
-        Ident 'a'
+      UnaryOp 'not',
+        LitInt '0xFF'
 
 test 'bitwise and', fn:
   expect ast ƒink:
-    a & b
+    0xFF and 0x0F
   | equals ƒink:
     Module
-      InfixOp '&',
-        Ident 'a'
-        Ident 'b'
+      InfixOp 'and',
+        LitInt '0xFF'
+        LitInt '0x0F'
+
+test 'bitwise or', fn:
+  expect ast ƒink:
+    0xFF or 0x0F
+  | equals ƒink:
+    Module
+      InfixOp 'or',
+        LitInt '0xFF'
+        LitInt '0x0F'
 
 test 'bitwise xor', fn:
   expect ast ƒink:
-    a ^ b
+    0xFF xor 0x0F
   | equals ƒink:
     Module
-      InfixOp '^',
-        Ident 'a'
-        Ident 'b'
+      InfixOp 'xor',
+        LitInt '0xFF'
+        LitInt '0x0F'
 
 test 'shift right', fn:
   expect ast ƒink:
