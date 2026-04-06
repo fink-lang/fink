@@ -386,6 +386,8 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::RecMerge   => "rec_merge",
     BuiltIn::StrFmt     => "str_fmt",
     BuiltIn::FnClosure  => "closure",
+    BuiltIn::IsSeqLike     => "is_seq_like",
+    BuiltIn::IsRecLike     => "is_rec_like",
     BuiltIn::SeqPop        => "seq_pop",
     BuiltIn::RecPop        => "rec_pop",
     BuiltIn::Empty         => "op_empty",

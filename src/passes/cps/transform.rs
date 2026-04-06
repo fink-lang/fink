@@ -1780,10 +1780,26 @@ fn emit_seq_pattern<'src>(
   let terminal = build_seq_terminal(g, &head_temps, &rest_temp, &spread, succ_param.id, fail_param.id, origin);
 
   // Step 2: fold right — wrap each regular element's SeqPop around the body.
-  // Uses subj_param directly as the outermost cursor (no LetVal alias needed).
-  let final_body = fold_seq_pops(
-    g, &head_temps, terminal, fail_param.id, subj_param.clone(), origin,
+  // The IsSeqLike guard provides a checked cursor; SeqPops use that.
+  let checked_param = g.fresh_result(origin);
+  let inner_body = fold_seq_pops(
+    g, &head_temps, terminal, fail_param.id, checked_param.clone(), origin,
   );
+
+  // Step 3: wrap with IsSeqLike type guard.
+  let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
+  let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
+  let fail_call = g.expr(ExprKind::App {
+    func: Callable::Val(fail_ref), args: vec![],
+  }, origin);
+  let final_body = g.expr(ExprKind::App {
+    func: Callable::BuiltIn(BuiltIn::IsSeqLike),
+    args: vec![
+      Arg::Val(subj_ref),
+      Arg::Cont(Cont::Expr { args: vec![checked_param], body: Box::new(inner_body) }),
+      Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }),
+    ],
+  }, origin);
 
   let matcher_name = g.fresh_result(origin);
   pending.push(Pending::PatternMatch {
@@ -2070,10 +2086,26 @@ fn emit_rec_pattern<'src>(
   let terminal = build_rec_terminal(g, &field_temps, &rest_temp, &spread, succ_param.id, fail_param.id, origin);
 
   // Step 2: fold right — wrap each field's RecPop.
-  // Uses subj_param directly as the outermost cursor (no LetVal alias needed).
-  let final_body = fold_rec_pops(
-    g, &regular, &field_temps, terminal, fail_param.id, subj_param.clone(), origin,
+  // The IsRecLike guard provides a checked cursor; RecPops use that.
+  let checked_param = g.fresh_result(origin);
+  let inner_body = fold_rec_pops(
+    g, &regular, &field_temps, terminal, fail_param.id, checked_param.clone(), origin,
   );
+
+  // Step 3: wrap with IsRecLike type guard.
+  let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
+  let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
+  let fail_call = g.expr(ExprKind::App {
+    func: Callable::Val(fail_ref), args: vec![],
+  }, origin);
+  let final_body = g.expr(ExprKind::App {
+    func: Callable::BuiltIn(BuiltIn::IsRecLike),
+    args: vec![
+      Arg::Val(subj_ref),
+      Arg::Cont(Cont::Expr { args: vec![checked_param], body: Box::new(inner_body) }),
+      Arg::Cont(Cont::Expr { args: vec![], body: Box::new(fail_call) }),
+    ],
+  }, origin);
 
   let matcher_name = g.fresh_result(origin);
   pending.push(Pending::PatternMatch {
