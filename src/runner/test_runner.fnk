@@ -937,11 +937,11 @@ test 'rec dot access string key', fn:
   | equals ƒink:
     42
 
-skip test 'rec dot access string key short', fn:
+test 'rec dot access string key short', fn:
   expect run ƒink:
     main = fn:
       r = {'foo bar': 42}
-      # TODO parser issue r.'foo bar'
+      r.'foo bar'
   | equals ƒink:
     42
 
