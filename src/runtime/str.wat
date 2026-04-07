@@ -100,6 +100,162 @@
       (ref.cast (ref $StrBytesImpl) (local.get $str)))
   )
 
+  ;; ---- Repr ----
+
+  ;; str_repr : (ref $Str) -> (ref $Str)
+  ;; Produce a quoted, escaped representation of a string: 'hello' → '\'hello\''
+  ;; Escapes: \n \r \t \\ \' and non-printable bytes as \xNN.
+  (func $str_repr (export "str_repr")
+    (param $str (ref $Str))
+    (result (ref $Str))
+
+    (local $src (ref $ByteArray))
+    (local $len i32)
+    (local $i i32)
+    (local $b i32)
+    (local $total i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    (local.set $src (call $str_bytes (local.get $str)))
+    (local.set $len (array.len (local.get $src)))
+
+    ;; Pass 1: compute output length.
+    ;; Start with 2 for surrounding quotes.
+    (local.set $total (i32.const 2))
+    (local.set $i (i32.const 0))
+    (block $done1
+      (loop $scan
+        (br_if $done1 (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $b
+          (array.get_u $ByteArray (local.get $src) (local.get $i)))
+
+        (local.set $total (i32.add (local.get $total)
+          (if (result i32) (i32.or
+                (i32.eq (local.get $b) (i32.const 0x0A))  ;; \n
+                (i32.or
+                  (i32.eq (local.get $b) (i32.const 0x0D))  ;; \r
+                  (i32.or
+                    (i32.eq (local.get $b) (i32.const 0x09))  ;; \t
+                    (i32.or
+                      (i32.eq (local.get $b) (i32.const 0x5C))  ;; backslash
+                      (i32.eq (local.get $b) (i32.const 0x27))  ;; single quote
+                    ))))
+            (then (i32.const 2))  ;; escape sequence: 2 bytes
+            (else
+              (if (result i32) (i32.or
+                    (i32.lt_u (local.get $b) (i32.const 0x20))  ;; control chars
+                    (i32.eq (local.get $b) (i32.const 0x7F)))   ;; DEL
+                (then (i32.const 4))  ;; \xNN: 4 bytes
+                (else (i32.const 1)))))))  ;; normal byte
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+
+    ;; Allocate buffer.
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
+
+    ;; Write opening quote.
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x27))
+    (local.set $pos (i32.const 1))
+
+    ;; Pass 2: write escaped bytes.
+    (local.set $i (i32.const 0))
+    (block $done2
+      (loop $write
+        (br_if $done2 (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $b
+          (array.get_u $ByteArray (local.get $src) (local.get $i)))
+
+        ;; \n
+        (if (i32.eq (local.get $b) (i32.const 0x0A))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x6E))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $write)))
+
+        ;; \r
+        (if (i32.eq (local.get $b) (i32.const 0x0D))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x72))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $write)))
+
+        ;; \t
+        (if (i32.eq (local.get $b) (i32.const 0x09))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x74))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $write)))
+
+        ;; \\
+        (if (i32.eq (local.get $b) (i32.const 0x5C))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $write)))
+
+        ;; \'
+        (if (i32.eq (local.get $b) (i32.const 0x27))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x27))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $write)))
+
+        ;; Control chars / DEL → \xNN
+        (if (i32.or
+              (i32.lt_u (local.get $b) (i32.const 0x20))
+              (i32.eq (local.get $b) (i32.const 0x7F)))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5C))  ;; '\'
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x78))  ;; 'x'
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos)
+              (call $_hex_char (i32.shr_u (local.get $b) (i32.const 4))))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos)
+              (call $_hex_char (i32.and (local.get $b) (i32.const 0x0F))))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $write)))
+
+        ;; Normal byte — copy as-is.
+        (array.set $ByteArray (local.get $buf) (local.get $pos) (local.get $b))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $write)))
+
+    ;; Write closing quote.
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x27))
+
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
+  ;; _hex_char : i32 -> i32
+  ;; Convert 0-15 to ASCII hex character ('0'-'9', 'A'-'F').
+  (func $_hex_char (param $v i32) (result i32)
+    (if (result i32) (i32.lt_u (local.get $v) (i32.const 10))
+      (then (i32.add (local.get $v) (i32.const 0x30)))  ;; '0'
+      (else (i32.add (i32.sub (local.get $v) (i32.const 10)) (i32.const 0x41))))  ;; 'A'
+  )
+
+
   ;; ---- Equality ----
 
   ;; str_op_eq : (ref $Str), (ref $Str) -> i32
@@ -1346,8 +1502,33 @@
             (local.get $val))))
       (return (call $_str_fmt_rec)))
 
+    ;; Try $List — format as "[a, b, ...]"
+    (block $not_list
+      (block $is_list (result (ref $List))
+        (br $not_list
+          (br_on_cast $is_list (ref any) (ref $List)
+            (local.get $val))))
+      (return (call $_str_fmt_list)))
+
     ;; Unknown type — unreachable for now.
     (unreachable)
+  )
+
+  ;; _str_fmt_val_repr : (ref any) -> (ref $Str)
+  ;; Like _str_fmt_val but uses str_repr for strings (quoted + escaped).
+  ;; Used by container formatters (list, rec) so strings display as 'hello'.
+  (func $_str_fmt_val_repr (param $val (ref any)) (result (ref $Str))
+
+    ;; Try $Str — repr (quoted + escaped)
+    (block $not_str
+      (block $is_str (result (ref $Str))
+        (br $not_str
+          (br_on_cast $is_str (ref any) (ref $Str)
+            (local.get $val))))
+      (return (call $str_repr)))
+
+    ;; Everything else delegates to _str_fmt_val.
+    (call $_str_fmt_val (local.get $val))
   )
 
   ;; _str_fmt_i31 : i32 -> (ref $Str)
@@ -1763,16 +1944,28 @@
 
   ;; _str_fmt_rec_key_len : (ref eq) -> i32
   ;; Byte length of a formatted record key.
-  ;; Identifiers: key_len. Non-identifiers: key_len + 2 (for quotes).
+  ;; String ident: bare len. String non-ident: str_repr len. Other: repr len + 2 for parens.
   (func $_str_fmt_rec_key_len (param $key (ref eq)) (result i32)
     (local $str (ref $Str))
-    (local $len i32)
-    (local.set $str
-      (call $_str_fmt_val (ref.cast (ref any) (local.get $key))))
-    (local.set $len (call $_str_len (local.get $str)))
-    (if (result i32) (call $_str_is_ident (local.get $str))
-      (then (local.get $len))
-      (else (i32.add (local.get $len) (i32.const 2))))
+
+    ;; Try $Str
+    (block $not_str
+      (block $is_str (result (ref $Str))
+        (br $not_str
+          (br_on_cast $is_str (ref eq) (ref $Str)
+            (local.get $key))))
+      (local.set $str)
+      ;; String key — identifier: bare, otherwise: str_repr (quoted + escaped).
+      (return
+        (if (result i32) (call $_str_is_ident (local.get $str))
+          (then (call $_str_len (local.get $str)))
+          (else (call $_str_len (call $str_repr (local.get $str)))))))
+
+    ;; Non-string key — (repr), add 2 for parens.
+    (i32.add
+      (call $_str_len
+        (call $_str_fmt_val (ref.cast (ref any) (local.get $key))))
+      (i32.const 2))
   )
 
   ;; _str_fmt_rec : (ref $Rec) -> (ref $Str)
@@ -1880,7 +2073,7 @@
                       (struct.get $HamtLeaf $key (local.get $leaf)))
                     (i32.const 2)) ;; ": "
                   (call $_str_len
-                    (call $_str_fmt_val
+                    (call $_str_fmt_val_repr
                       (ref.cast (ref any)
                         (struct.get $HamtLeaf $val (local.get $leaf))))))))))
 
@@ -1937,7 +2130,7 @@
                   (struct.get $HamtLeaf $key (local.get $leaf)))
                 (i32.const 2))
               (call $_str_len
-                (call $_str_fmt_val
+                (call $_str_fmt_val_repr
                   (ref.cast (ref any)
                     (struct.get $HamtLeaf $val (local.get $leaf))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -1947,7 +2140,8 @@
   )
 
   ;; _str_fmt_rec_copy_key : (key, buf, pos) -> new_pos
-  ;; Copy a formatted record key into buf. Wraps non-identifier keys in quotes.
+  ;; Copy a formatted record key into buf.
+  ;; String ident: bare. String non-ident: str_repr. Other: (repr).
   (func $_str_fmt_rec_copy_key
     (param $key (ref eq))
     (param $buf (ref $ByteArray))
@@ -1955,22 +2149,39 @@
     (result i32)
 
     (local $str (ref $Str))
-    (local.set $str
-      (call $_str_fmt_val (ref.cast (ref any) (local.get $key))))
 
-    (if (call $_str_is_ident (local.get $str))
-      (then
-        ;; Identifier — copy as-is.
-        (local.set $pos
-          (call $_str_copy_to (local.get $str) (local.get $buf) (local.get $pos))))
-      (else
-        ;; Non-identifier — wrap in single quotes.
-        (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x27)) ;; '
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-        (local.set $pos
-          (call $_str_copy_to (local.get $str) (local.get $buf) (local.get $pos)))
-        (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x27)) ;; '
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+    ;; Try $Str
+    (block $not_str
+      (block $is_str (result (ref $Str))
+        (br $not_str
+          (br_on_cast $is_str (ref eq) (ref $Str)
+            (local.get $key))))
+      (local.set $str)
+
+      (if (call $_str_is_ident (local.get $str))
+        (then
+          ;; Identifier — copy as-is.
+          (local.set $pos
+            (call $_str_copy_to (local.get $str) (local.get $buf) (local.get $pos))))
+        (else
+          ;; Non-identifier string — use str_repr (quoted + escaped).
+          (local.set $pos
+            (call $_str_copy_to
+              (call $str_repr (local.get $str))
+              (local.get $buf)
+              (local.get $pos)))))
+      (return (local.get $pos)))
+
+    ;; Non-string key — wrap in parens: (repr)
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x28)) ;; '('
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (local.set $pos
+      (call $_str_copy_to
+        (call $_str_fmt_val (ref.cast (ref any) (local.get $key)))
+        (local.get $buf)
+        (local.get $pos)))
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x29)) ;; ')'
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
 
     (local.get $pos)
   )
@@ -2040,7 +2251,7 @@
             ;; Copy val
             (local.set $pos
               (call $_str_copy_to
-                (call $_str_fmt_val
+                (call $_str_fmt_val_repr
                   (ref.cast (ref any)
                     (struct.get $HamtLeaf $val (local.get $leaf))))
                 (local.get $buf)
@@ -2136,7 +2347,7 @@
         ;; Copy val
         (local.set $pos
           (call $_str_copy_to
-            (call $_str_fmt_val
+            (call $_str_fmt_val_repr
               (ref.cast (ref any)
                 (struct.get $HamtLeaf $val (local.get $leaf))))
             (local.get $buf)
@@ -2147,6 +2358,98 @@
 
     (local.get $pos)
   )
+
+  ;; _str_fmt_list : (ref $List) -> (ref $Str)
+  ;; Format a list as "[a, b, c]".
+  ;; Uses only the public list API (list_op_empty, list_head_any, list_tail_any).
+  (func $_str_fmt_list (param $list (ref $List)) (result (ref $Str))
+    (local $cur (ref null any))
+    (local $total i32)
+    (local $count i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local $is_first i32)
+
+    ;; Empty list: return "[]"
+    (if (call $list_op_empty (local.get $list))
+      (then
+        (return (call $_str_from_ascii_2
+          (i32.const 0x5B) ;; '['
+          (i32.const 0x5D) ;; ']'
+        ))))
+
+    ;; Pass 1: compute total byte length.
+    ;; Each element: formatted length. Between elements: 2 (", ").
+    ;; Plus 2 for "[" and "]".
+    (local.set $cur (local.get $list))
+    (local.set $total (i32.const 2)) ;; [ and ]
+    (local.set $count (i32.const 0))
+    (block $done1
+      (loop $len_loop
+        (br_if $done1
+          (call $list_op_empty (local.get $cur)))
+        (local.set $total
+          (i32.add (local.get $total)
+            (call $_str_len
+              (call $_str_fmt_val_repr
+                (ref.as_non_null
+                  (call $list_head_any (local.get $cur)))))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (local.set $cur
+          (call $list_tail_any (local.get $cur)))
+        (br $len_loop)))
+
+    ;; Add separator bytes: (count - 1) * 2
+    (local.set $total
+      (i32.add (local.get $total)
+        (i32.mul
+          (i32.sub (local.get $count) (i32.const 1))
+          (i32.const 2))))
+
+    ;; Allocate buffer.
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0) (local.get $total)))
+
+    ;; Write opening '['.
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x5B))
+    (local.set $pos (i32.const 1))
+
+    ;; Pass 2: format and copy each element.
+    (local.set $cur (local.get $list))
+    (local.set $is_first (i32.const 1))
+    (block $done2
+      (loop $copy_loop
+        (br_if $done2
+          (call $list_op_empty (local.get $cur)))
+
+        ;; Write ", " separator (except before first element).
+        (if (i32.eqz (local.get $is_first))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2C)) ;; ','
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20)) ;; ' '
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+        (local.set $is_first (i32.const 0))
+
+        ;; Format and copy element.
+        (local.set $pos
+          (call $_str_copy_to
+            (call $_str_fmt_val_repr
+              (ref.as_non_null
+                (call $list_head_any (local.get $cur))))
+            (local.get $buf)
+            (local.get $pos)))
+
+        (local.set $cur
+          (call $list_tail_any (local.get $cur)))
+        (br $copy_loop)))
+
+    ;; Write closing ']'.
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5D))
+
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
 
   ;; _str_from_ascii_2 : (i32, i32) -> (ref $Str)
   ;; Build a 2-byte string from ASCII code points.

@@ -550,7 +550,7 @@ test 'rec with string values', fn:
 test 'rec format empty', fn:
   expect run ƒink:
     main = fn:
-      '${  {}  }' == '{}'
+      '${ {} }' == '{}'
   | equals ƒink:
     true
 
@@ -558,7 +558,7 @@ test 'rec format empty', fn:
 test 'rec format single field', fn:
   expect run ƒink:
     main = fn:
-      '${  {a: 1}  }' == '{a: 1}'
+      '${ {a: 1} }' == '{a: 1}'
   | equals ƒink:
     true
 
@@ -566,7 +566,7 @@ test 'rec format single field', fn:
 test 'rec format nested', fn:
   expect run ƒink:
     main = fn:
-      '${  {a: {b: 1}}  }' == '{a: {b: 1}}'
+      '${ {a: {b: 1}} }' == '{a: {b: 1}}'
   | equals ƒink:
     true
 
@@ -574,7 +574,7 @@ test 'rec format nested', fn:
 test 'rec format bool value', fn:
   expect run ƒink:
     main = fn:
-      '${  {x: true}  }' == '{x: true}'
+      '${ {x: true} }' == '{x: true}'
   | equals ƒink:
     true
 
@@ -582,7 +582,7 @@ test 'rec format bool value', fn:
 test 'rec format string value', fn:
   expect run ƒink:
     main = fn:
-      '${  {name: 'hi'}  }' == '{name: hi}'
+      '${ {name: 'foo \n bar'} }' == '{name: \'foo \\n bar\'}'
   | equals ƒink:
     true
 
@@ -590,7 +590,7 @@ test 'rec format string value', fn:
 test 'rec format number value', fn:
   expect run ƒink:
     main = fn:
-      '${  {x: 42}  }' == '{x: 42}'
+      '${ {x: 42} }' == '{x: 42}'
   | equals ƒink:
     true
 
@@ -598,7 +598,7 @@ test 'rec format number value', fn:
 test 'rec format float value', fn:
   expect run ƒink:
     main = fn:
-      '${  {pi: 3.14}  }' == '{pi: 3.14}'
+      '${ {pi: 3.14} }' == '{pi: 3.14}'
   | equals ƒink:
     true
 
@@ -948,24 +948,31 @@ skip test 'rec dot access string key short', fn:
 
 # --- List formatting ---
 
-skip test 'list format empty', fn:
+test 'list format empty', fn:
   expect run ƒink:
     main = fn:
-      '${  []  }' == '[]'
+      '${ [] }' == '[]'
   | equals ƒink:
     true
 
-skip test 'list format', fn:
+test 'list format', fn:
   expect run ƒink:
     main = fn:
-      '${  [1, 2, 3]  }' == '[1, 2, 3]'
+      '${ [1, 2, 3] }' == '[1, 2, 3]'
   | equals ƒink:
     true
 
-skip test 'list format nested', fn:
+test 'list format nested', fn:
   expect run ƒink:
     main = fn:
-      '${  [1, [2, 3]]  }' == '[1, [2, 3]]'
+      '${ [1, [2, 3]] }' == '[1, [2, 3]]'
+  | equals ƒink:
+    true
+
+test 'list format nested strings', fn:
+  expect run ƒink:
+    main = fn:
+      '${ ['foo bar \' spam'] }' == '[\'foo bar \\\' spam\']'
   | equals ƒink:
     true
 
