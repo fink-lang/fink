@@ -1069,9 +1069,14 @@ mod tests {
     "  (rec\n",
     "    (type $Num (struct (field $val f64)))\n",
     "    (type $Str (sub (struct)))\n",
+    "    (type $List (sub (struct)))\n",
     "    (type $Range (sub (struct)))\n",
     "    (type $Rec (sub (struct)))\n",
     "  )\n",
+    // List API stubs for standalone string tests (_str_fmt_list calls these).
+    "  (func $list_op_empty (param (ref null any)) (result i32) (i32.const 1))\n",
+    "  (func $list_head_any (param (ref null any)) (result (ref null any)) (unreachable))\n",
+    "  (func $list_tail_any (param (ref null any)) (result (ref null any)) (unreachable))\n",
     "  (type $RangeImpl (sub $Range (struct (field $start (ref $Num)) (field $end (ref $Num)) (field $incl i32))))\n",
     // HAMT types needed by _str_fmt_rec (stubs for standalone string tests).
     "  (type $HamtLeaf (struct (field $key (ref eq)) (field $val (ref eq))))\n",
