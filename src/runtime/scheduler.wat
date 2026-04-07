@@ -1,6 +1,6 @@
 ;; Cooperative multitasking scheduler.
 ;;
-;; Primitives:
+;; Primitives (direct-param calling convention, like other builtins):
 ;;   yield(value, cont)  — suspend current task, switch to next
 ;;   spawn(task_fn, cont) — create new task, return future
 ;;   await(future, cont)  — wait for future to settle
@@ -27,10 +27,6 @@
 
   ;; -- Helpers -----------------------------------------------------------
 
-  ;; Wrap a closure call into the args-list convention:
-  ;; apply_1(result, cont) packs result into a $Cons and calls $_apply.
-  ;; These are defined in list.wat (merged into same module).
-
   ;; Push a task to the back of the queue.
   (func $queue_push (param $task (ref any))
     (global.set $task_queue
@@ -41,12 +37,10 @@
 
   ;; Pop a task from the front of the queue. Traps if empty.
   (func $queue_pop (result (ref any))
-    (local $head (ref any))
     (local $cons (ref $Cons))
     (local.set $cons (ref.cast (ref $Cons) (global.get $task_queue)))
-    (local.set $head (struct.get $Cons $head (local.get $cons)))
     (global.set $task_queue (struct.get $Cons $tail (local.get $cons)))
-    (local.get $head)
+    (struct.get $Cons $head (local.get $cons))
   )
 
   ;; Run the next task from the queue. All primitives tail-call this.
@@ -55,9 +49,8 @@
   )
 
   ;; Make a thunk (zero-arg task closure) that calls cont with a value.
-  ;; thunk = $Closure(fn(caps, args): _apply([value], cont), [cont, value])
-  ;; We need a lifted function that reads cont and value from captures.
-  (func $_thunk_fn (param $caps (ref null any)) (param $args (ref null any))
+  ;; Captures: [cont, value]. When called: _apply([value], cont).
+  (func $_thunk_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $cont (ref any))
     (local $value (ref any))
@@ -75,7 +68,7 @@
       (array.new_fixed $Captures 2 (local.get $cont) (local.get $value)))
   )
 
-  ;; Make a thunk that calls cont with no meaningful value (unit = i31 0).
+  ;; Make a thunk that calls cont with unit (i31 0).
   (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))
     (call $make_thunk (local.get $cont) (ref.i31 (i32.const 0)))
   )
@@ -83,28 +76,16 @@
 
   ;; -- yield -------------------------------------------------------------
   ;;
-  ;; yield(caps, args):
-  ;;   args = [value, cont]   (value ignored for scheduling, cont = resume)
+  ;; yield(value, cont):
   ;;   1. wrap cont as unit thunk, push to back of queue
   ;;   2. run next task
 
   (func $yield (export "yield")
-    (param $caps (ref null any))
-    (param $args (ref null any))
-
-    (local $args_cons (ref $Cons))
-    (local $value (ref any))
-    (local $cont (ref any))
-
-    ;; Pop value (ignored for now) and cont from args list.
-    (local.set $args_cons (ref.cast (ref $Cons) (local.get $args)))
-    (local.set $cont (struct.get $Cons $head (local.get $args_cons)))
-    (local.set $args_cons (ref.cast (ref $Cons)
-      (struct.get $Cons $tail (local.get $args_cons))))
-    (local.set $value (struct.get $Cons $head (local.get $args_cons)))
+    (param $value (ref null any))
+    (param $cont (ref null any))
 
     ;; Push current continuation as a unit thunk to back of queue.
-    (call $queue_push (call $make_unit_thunk (local.get $cont)))
+    (call $queue_push (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
 
     ;; Run next task.
     (return_call $run_next)
@@ -113,8 +94,7 @@
 
   ;; -- spawn -------------------------------------------------------------
   ;;
-  ;; spawn(caps, args):
-  ;;   args = [task_fn, cont]
+  ;; spawn(task_fn, cont):
   ;;   1. create pending $Future
   ;;   2. create task thunk: fn(): task_fn(fn result: settle(future, result))
   ;;   3. push task to queue
@@ -122,8 +102,8 @@
   ;;   5. run next task
 
   ;; The settle continuation — called when a spawned task produces a result.
-  ;; Captures: [future]. Args: [result, ...].
-  (func $_settle_fn (param $caps (ref null any)) (param $args (ref null any))
+  ;; Captures: [future]. Called via _apply with args list [result].
+  (func $_settle_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
     (local $future (ref $Future))
     (local $result (ref any))
     (local.set $future (ref.cast (ref $Future)
@@ -138,8 +118,8 @@
   )
 
   ;; The spawned task body — calls task_fn with the settle continuation.
-  ;; Captures: [task_fn, settle_cont].
-  (func $_spawn_task_fn (param $caps (ref null any)) (param $args (ref null any))
+  ;; Captures: [task_fn, settle_cont]. Called via _apply.
+  (func $_spawn_task_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $task_fn (ref any))
     (local $settle_cont (ref any))
@@ -155,22 +135,12 @@
   )
 
   (func $spawn (export "spawn")
-    (param $caps (ref null any))
-    (param $args (ref null any))
+    (param $task_fn (ref null any))
+    (param $cont (ref null any))
 
-    (local $args_cons (ref $Cons))
-    (local $cont (ref any))
-    (local $task_fn (ref any))
     (local $future (ref $Future))
     (local $settle_cont (ref $Closure))
     (local $task (ref $Closure))
-
-    ;; Pop cont and task_fn from args list.
-    (local.set $args_cons (ref.cast (ref $Cons) (local.get $args)))
-    (local.set $cont (struct.get $Cons $head (local.get $args_cons)))
-    (local.set $args_cons (ref.cast (ref $Cons)
-      (struct.get $Cons $tail (local.get $args_cons))))
-    (local.set $task_fn (struct.get $Cons $head (local.get $args_cons)))
 
     ;; Create pending future.
     (local.set $future (struct.new $Future
@@ -186,11 +156,15 @@
     ;; Create task thunk: captures [task_fn, settle_cont].
     (local.set $task (struct.new $Closure
       (ref.func $_spawn_task_fn)
-      (array.new_fixed $Captures 2 (local.get $task_fn) (local.get $settle_cont))))
+      (array.new_fixed $Captures 2
+        (ref.as_non_null (local.get $task_fn))
+        (local.get $settle_cont))))
 
     ;; Push task and current continuation (wrapped with future) to queue.
     (call $queue_push (local.get $task))
-    (call $queue_push (call $make_thunk (local.get $cont) (local.get $future)))
+    (call $queue_push (call $make_thunk
+      (ref.as_non_null (local.get $cont))
+      (local.get $future)))
 
     ;; Run next task.
     (return_call $run_next)
@@ -199,28 +173,19 @@
 
   ;; -- await -------------------------------------------------------------
   ;;
-  ;; await(caps, args):
-  ;;   args = [future, cont]
+  ;; await(future, cont):
   ;;   if settled: push thunk(cont, value) to queue
   ;;   if pending: push cont to future.$waiters
   ;;   run next task
 
   (func $await (export "await")
-    (param $caps (ref null any))
-    (param $args (ref null any))
+    (param $future_val (ref null any))
+    (param $cont (ref null any))
 
-    (local $args_cons (ref $Cons))
-    (local $cont (ref any))
     (local $future (ref $Future))
     (local $value (ref null any))
 
-    ;; Pop cont and future from args list.
-    (local.set $args_cons (ref.cast (ref $Cons) (local.get $args)))
-    (local.set $cont (struct.get $Cons $head (local.get $args_cons)))
-    (local.set $args_cons (ref.cast (ref $Cons)
-      (struct.get $Cons $tail (local.get $args_cons))))
-    (local.set $future (ref.cast (ref $Future)
-      (struct.get $Cons $head (local.get $args_cons))))
+    (local.set $future (ref.cast (ref $Future) (local.get $future_val)))
 
     ;; Check if future is settled.
     (local.set $value (struct.get $Future $value (local.get $future)))
@@ -228,12 +193,13 @@
       (then
         ;; Pending — add cont to future's waiters list.
         (struct.set $Future $waiters (local.get $future)
-          (struct.new $Cons (local.get $cont)
+          (struct.new $Cons (ref.as_non_null (local.get $cont))
             (struct.get $Future $waiters (local.get $future)))))
       (else
         ;; Settled — push thunk(cont, value) to task queue.
         (call $queue_push
-          (call $make_thunk (local.get $cont)
+          (call $make_thunk
+            (ref.as_non_null (local.get $cont))
             (ref.as_non_null (local.get $value))))))
 
     ;; Run next task.

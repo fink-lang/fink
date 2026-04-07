@@ -612,7 +612,8 @@ fn lower_apply<'src>(
   }
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::Val(func_val), args: arg_vals, result,  origin });
+  let func = Callable::Val(func_val);
+  pending.push(Pending::App { func, args: arg_vals, result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 

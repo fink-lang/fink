@@ -6,10 +6,10 @@
 cooperative multitasking — yield, spawn, await
 ---
 
-skip test 'yield suspends and resumes', fn:
+test 'yield suspends and resumes', fn:
   expect run ƒink:
     main = fn:
-      yield _
+      yield 0
       42
   | equals ƒink:
     42
