@@ -501,8 +501,6 @@ test 'float tagged literal', fn:
         Ident 'min'
         LitFloat '10.5'
 
-# TODO: bug — Group node is stripped by parse_atom postfix tag path (line ~1279 in parser.rs)
-# should be: Apply, Ident 'min', Group '(..)', Ident 'foo'
 test 'grouped tagged literal', fn:
   expect ast ƒink:
     (foo)min

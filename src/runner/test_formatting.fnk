@@ -1,0 +1,113 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'rec format empty', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {} }' == '{}'
+  | equals ƒink:
+    true
+
+
+test 'rec format single field', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {a: 1} }' == '{a: 1}'
+  | equals ƒink:
+    true
+
+
+test 'rec format nested', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {a: {b: 1}} }' == '{a: {b: 1}}'
+  | equals ƒink:
+    true
+
+
+test 'rec format bool value', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {x: true} }' == '{x: true}'
+  | equals ƒink:
+    true
+
+
+test 'rec format string value', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {name: 'foo \n bar'} }' == '{name: \'foo \\n bar\'}'
+  | equals ƒink:
+    true
+
+
+test 'rec format number value', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {x: 42} }' == '{x: 42}'
+  | equals ƒink:
+    true
+
+
+test 'rec format float value', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {pi: 3.14} }' == '{pi: 3.14}'
+  | equals ƒink:
+    true
+
+
+test 'rec format string key', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {'foo bar': 42} }' == '{\'foo bar\': 42}'
+  | equals ƒink:
+    true
+
+test 'rec format expr key', fn:
+  expect run ƒink:
+    main = fn:
+      '${ {(1 + 2): 42} }' == '{(3): 42}'
+  | equals ƒink:
+    true
+
+
+test 'rec format in template', fn:
+  expect run ƒink:
+    main = fn:
+      r = {a: 1}
+      'got: ${r}' == 'got: {a: 1}'
+  | equals ƒink:
+    true
+
+
+# --- List formatting ---
+
+test 'list format empty', fn:
+  expect run ƒink:
+    main = fn:
+      '${ [] }' == '[]'
+  | equals ƒink:
+    true
+
+test 'list format', fn:
+  expect run ƒink:
+    main = fn:
+      '${ [1, 2, 3] }' == '[1, 2, 3]'
+  | equals ƒink:
+    true
+
+test 'list format nested', fn:
+  expect run ƒink:
+    main = fn:
+      '${ [1, [2, 3]] }' == '[1, [2, 3]]'
+  | equals ƒink:
+    true
+
+test 'list format nested strings', fn:
+  expect run ƒink:
+    main = fn:
+      '${ ['foo bar \' spam'] }' == '[\'foo bar \\\' spam\']'
+  | equals ƒink:
+    true

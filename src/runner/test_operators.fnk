@@ -1,0 +1,184 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'add two literals', fn:
+  expect run ƒink:
+    main = fn:
+      2 + 3
+  | equals ƒink:
+    5
+
+
+test 'subtraction', fn:
+  expect run ƒink:
+    main = fn:
+      10 - 3
+  | equals ƒink:
+    7
+
+
+test 'multiplication', fn:
+  expect run ƒink:
+    main = fn:
+      4 * 5
+  | equals ƒink:
+    20
+
+
+test 'division', fn:
+  expect run ƒink:
+    main = fn:
+      10 / 4
+  | equals ƒink:
+    2.5
+
+
+test 'integer division', fn:
+  expect run ƒink:
+    main = fn:
+      7 // 2
+  | equals ƒink:
+    3
+
+
+test 'modulo', fn:
+  expect run ƒink:
+    main = fn:
+      10 %% 3
+  | equals ƒink:
+    1
+
+
+test 'equal', fn:
+  expect run ƒink:
+    main = fn:
+      3 == 3
+  | equals ƒink:
+    true
+
+
+test 'not equal', fn:
+  expect run ƒink:
+    main = fn:
+      3 != 4
+  | equals ƒink:
+    true
+
+
+test 'less than', fn:
+  expect run ƒink:
+    main = fn:
+      3 < 4
+  | equals ƒink:
+    true
+
+
+test 'less than or equal', fn:
+  expect run ƒink:
+    main = fn:
+      3 <= 3
+  | equals ƒink:
+    true
+
+
+test 'greater than', fn:
+  expect run ƒink:
+    main = fn:
+      4 > 3
+  | equals ƒink:
+    true
+
+
+test 'greater than or equal', fn:
+  expect run ƒink:
+    main = fn:
+      3 >= 3
+  | equals ƒink:
+    true
+
+
+test 'not', fn:
+  expect run ƒink:
+    main = fn:
+      not true
+  | equals ƒink:
+    false
+
+
+test 'and', fn:
+  expect run ƒink:
+    main = fn:
+      true and false
+  | equals ƒink:
+    false
+
+
+test 'or', fn:
+  expect run ƒink:
+    main = fn:
+      true or false
+  | equals ƒink:
+    true
+
+
+test 'xor', fn:
+  expect run ƒink:
+    main = fn:
+      true xor true
+  | equals ƒink:
+    false
+
+
+test 'chain with bool', fn:
+  expect run ƒink:
+    main = fn:
+      x = 3 > 2
+      x and true
+  | equals ƒink:
+    true
+
+
+# --- Bitwise operators ---
+
+test 'bitwise and', fn:
+  expect run ƒink:
+    main = fn:
+      0xFF and 0x0F
+  | equals ƒink:
+    15
+
+test 'bitwise or', fn:
+  expect run ƒink:
+    main = fn:
+      0xFF or 0x0F
+  | equals ƒink:
+    255
+
+test 'bitwise xor', fn:
+  expect run ƒink:
+    main = fn:
+      0xFF xor 0x0F
+  | equals ƒink:
+    240
+
+test 'bitwise not', fn:
+  expect run ƒink:
+    main = fn:
+      not 0
+  | equals ƒink:
+    -1
+
+test 'bitwise shift left', fn:
+  expect run ƒink:
+    main = fn:
+      1 << 8
+  | equals ƒink:
+    256
+
+test 'bitwise shift right', fn:
+  expect run ƒink:
+    main = fn:
+      256 >> 4
+  | equals ƒink:
+    16

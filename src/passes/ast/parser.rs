@@ -1695,7 +1695,6 @@ pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
     _ => p.peek().loc,
   };
   let root = p.node(NodeKind::Module(exprs), loc);
-  // TODO: parse result should always include ast index,
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 

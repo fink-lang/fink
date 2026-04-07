@@ -1,0 +1,132 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'string literal', fn:
+  expect run ƒink:
+    main = fn:
+      'hello'
+  | equals ":
+    hello
+
+test 'string escape newline', fn:
+  expect run ƒink:
+    main = fn:
+      'hello\nworld'
+  | equals ":
+    hello
+    world
+
+test 'string escape tab', fn:
+  expect run ƒink:
+    main = fn:
+      'a\tb'
+  | equals ":
+    a	b
+
+test 'string escape backslash', fn:
+  expect run ƒink:
+    main = fn:
+      'a\\b'
+  | equals ":
+    a\b
+
+test 'string escape hex', fn:
+  expect run ƒink:
+    main = fn:
+      '\xE9'
+  | equals ":
+    é
+
+test 'string escape unicode', fn:
+  expect run ƒink:
+    main = fn:
+      '\u{1F600}'
+  | equals ":
+    😀
+
+test 'string eq same', fn:
+  expect run ƒink:
+    main = fn:
+      'hello' == 'hello'
+  | equals ":
+    true
+
+
+test 'string eq different', fn:
+  expect run ƒink:
+    main = fn:
+      'hello' == 'world'
+  | equals ":
+    false
+
+
+test 'string neq', fn:
+  expect run ƒink:
+    main = fn:
+      'hello' != 'world'
+  | equals ":
+    true
+
+
+test 'str template string only', fn:
+  expect run ƒink:
+    main = fn:
+      name = 'world'
+      'hello ${name}' == 'hello world'
+  | equals ƒink:
+    true
+
+
+test 'str template with number', fn:
+  expect run ƒink:
+    main = fn:
+      x = 42
+      'value: ${x}' == 'value: 42'
+  | equals ƒink:
+    true
+
+
+test 'str template with bool', fn:
+  expect run ƒink:
+    main = fn:
+      'done: ${true}' == 'done: true'
+  | equals ƒink:
+    true
+
+
+test 'str template multiple segments', fn:
+  expect run ƒink:
+    main = fn:
+      a = 1
+      b = 2
+      '${a} + ${b} = ${a + b}' == '1 + 2 = 3'
+  | equals ƒink:
+    true
+
+
+test 'str template with float', fn:
+  expect run ƒink:
+    main = fn:
+      'pi: ${3.14}' == 'pi: 3.14'
+  | equals ƒink:
+    true
+
+
+test 'str template float arithmetic', fn:
+  expect run ƒink:
+    main = fn:
+      x = 1.5
+      y = 2.3
+      '${x} + ${y} = ${x + y}' == '1.5 + 2.3 = 3.8'
+  | equals ƒink:
+    true
+
+
+skip test 'str template pattern', fn:
+  expect run ƒink:
+    main = fn:
+      match 'hello world':
+        'hello ${name}': name == 'world'
+  | equals ƒink:
+    true

@@ -1,0 +1,82 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'seq guard literal in match', fn:
+  expect run ƒink:
+    main = fn:
+      match [1, 42]:
+        [1, val, ..rest]: val
+        [2, val, ..rest]: val + 100
+        _: 0
+  | equals ƒink:
+    42
+
+test 'seq guard second arm', fn:
+  expect run ƒink:
+    main = fn:
+      match [2, 10]:
+        [1, val, ..rest]: val
+        [2, val, ..rest]: val + 100
+        _: 0
+  | equals ƒink:
+    110
+
+skip test 'list rest in middle', fn:
+  expect run ƒink:
+    main = fn:
+      match [1, 2, 3, 4]:
+        [first, ..mid, last]: first + last
+  | equals ƒink:
+    5
+
+
+test 'rec empty check', fn:
+  expect run ƒink:
+    main = fn:
+      r = {}
+      match r:
+        {}: true
+        _: false
+  | equals ƒink:
+    true
+
+
+test 'rec pattern rejects empty list', fn:
+  expect run ƒink:
+    main = fn:
+      match []:
+        {}: true
+        _: false
+  | equals ƒink:
+    false
+
+
+test 'rec pattern rejects list', fn:
+  expect run ƒink:
+    main = fn:
+      match [1, 2]:
+        {a, ..}: a
+        _: false
+  | equals ƒink:
+    false
+
+
+test 'seq pattern rejects empty rec', fn:
+  expect run ƒink:
+    main = fn:
+      match {}:
+        []: true
+        _: false
+  | equals ƒink:
+    false
+
+
+test 'seq pattern rejects rec', fn:
+  expect run ƒink:
+    main = fn:
+      match {a: 1}:
+        [x, ..]: x
+        _: false
+  | equals ƒink:
+    false

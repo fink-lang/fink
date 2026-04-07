@@ -1,0 +1,100 @@
+---
+cps_c IR — pretty-printer tests
+---
+
+# Input is a Fink expression; output is the synthesized CPS Fink source.
+# First-pass CPS — no ·load/·store/·scope synthesis (all names in scope by construction).
+#
+# Rendering conventions:
+#   ·let val, fn name:              — LetVal
+#   ·fn fn params: fn_body, fn name: — LetFn
+#   ·apply func, args, fn result: — App
+#   ·v_cont val             — Ret
+#
+# Test format:
+#   test 'name', fn:
+#     expect cps_expr ƒink:
+#       <fink source>
+#
+#     | equals ƒink:
+#       <expected cps output>
+
+{test, expect, equals, cps_expr} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+---
+literals — tail position, no synthesis needed
+---
+
+test 'int literal', fn:
+  expect cps_expr ƒink:
+    42
+  | equals ƒink:
+    ·v_0 42
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEiCn0=
+
+test 'int literal with underscores', fn:
+  expect cps_expr ƒink:
+    1_000_000
+  | equals ƒink:
+    ·v_0 1000000
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMV8wMDBfMDAwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBIgp9
+
+test 'negative int literal', fn:
+  expect cps_expr ƒink:
+    -1_000
+  | equals ƒink:
+    ·v_0 -1000
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTFfMDAwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBIgp9
+
+test 'hex int literal', fn:
+  expect cps_expr ƒink:
+    0xFF_FF
+  | equals ƒink:
+    ·v_0 65535
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMHhGRl9GRiJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBQSIKfQ==
+
+test 'octal int literal', fn:
+  expect cps_expr ƒink:
+    0o7_7
+  | equals ƒink:
+    ·v_0 63
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMG83XzciXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEiCn0=
+
+test 'binary int literal', fn:
+  expect cps_expr ƒink:
+    0b_1010_1111
+  | equals ƒink:
+    ·v_0 175
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMGJfMTAxMF8xMTExIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBIgp9
+
+test 'float literal with exponent', fn:
+  expect cps_expr ƒink:
+    1.5e1_0
+  | equals ƒink:
+    ·v_0 15000000000
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS41ZTFfMCJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBQSIKfQ==
+
+test 'decimal literal', fn:
+  expect cps_expr ƒink:
+    1.5_0d
+  | equals ƒink:
+    ·v_0 1.5d
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS41XzBkIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBIgp9
+
+
+test 'bool literal', fn:
+  expect cps_expr ƒink:
+    true
+  | equals ƒink:
+    ·v_0 true
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBQSIKfQ==
+
+
+test 'string literal', fn:
+  expect cps_expr ƒink:
+    'hello'
+  | equals ƒink:
+    ·v_0 'hello'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBQSxBLENBQUEsSyIKfQ==
+

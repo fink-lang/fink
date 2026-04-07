@@ -2,13 +2,13 @@
 ;;
 ;; Each operator follows the CPS calling convention:
 ;;   (func $op_plus (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-;;     ;; unbox args, compute, box result, tail-call _croc([result], cont)
+;;     ;; unbox args, compute, box result, tail-call _apply([result], cont)
 ;;   )
 ;;
 ;; Type conventions:
 ;;   - Numbers: $Num struct (f64 field)
 ;;   - Booleans: i31ref (0 = false, 1 = true)
-;;   - Continuation dispatch via _croc (imported from dispatch module)
+;;   - Continuation dispatch via _apply (imported from dispatch module)
 ;;
 ;; These are the phase-0 implementations operating on concrete types.
 ;; Protocol-based overloading (future) will replace these with dispatch
@@ -17,10 +17,10 @@
 (module
 
   ;; Continuation dispatch: $apply_1 (defined in list.wat) wraps a single
-  ;; result in a list and tail-calls $_croc (defined in dispatch.wat).
+  ;; result in a list and tail-calls $_apply (defined in dispatch.wat).
 
   ;; =========================================================================
-  ;; Arithmetic: unbox two $Num, f64 op, box result → _croc([result], cont)
+  ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)
   ;; =========================================================================
 
   (func $op_plus (export "op_plus")

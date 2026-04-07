@@ -1,0 +1,465 @@
+{test, equals, expect, cps_expr} = import 'fake!'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+---
+seq patterns
+---
+
+test 'seq — empty', fn:
+  expect cps_expr ƒink:
+    [] = foo
+  | equals ƒink:
+    ·fn
+      fn: ·v_0 ·panic
+      fn ·v_25:
+        ·fn
+          fn ·ƒsucc_3, ·ƒfail_4, ·v_2:
+            ·is_seq_like ·v_2,
+              fn ·v_15:
+                ·let ·v_15, fn ·v_7:
+                  ·empty ·v_7, fn ·v_10:
+                    ·if ·v_10,
+                      fn: ·ƒsucc_3 _
+                      fn: ·ƒfail_4 _
+              fn: ·ƒfail_4 _
+          fn ·v_22: ·v_22 ·v_25, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW10gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0ksRUFBQSxBLEtBQUE7S0FBQSxLO0lBQUEsQUFBQTtTLFUsVUFBQSxJO1FBQUEsQUFBQSxhQUFBLEk7YUFBQSxLO1lBQUcsQUFBQSxLQUFILEssS0FBQSxJO2NBQUEsQUFBQSxPQUFBLEksS0FBQSxLO2dCQUFBLEFBQUEsSUFBQSxLO29CLEVBQUEsQSxTQUFBO29CLEVBQUEsQSxTQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQUsiCn0=
+
+
+test 'seq — nested empty', fn:
+  expect cps_expr ƒink:
+    [a, []] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_6, ·v_7:
+        ·let ·v_6, fn ·a_0:
+          ·fn
+            fn: ·v_1 ·panic
+            fn ·v_59:
+              ·fn
+                fn ·ƒsucc_36, ·ƒfail_37, ·v_35:
+                  ·is_seq_like ·v_35,
+                    fn ·v_48:
+                      ·let ·v_48, fn ·v_40:
+                        ·empty ·v_40, fn ·v_43:
+                          ·if ·v_43,
+                            fn: ·ƒsucc_36 _
+                            fn: ·ƒfail_37 _
+                    fn: ·ƒfail_37 _
+                fn ·v_55: ·v_55 ·v_59, ·panic, ·v_7
+      fn ·v_72:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·is_seq_like ·v_3,
+              fn ·v_20:
+                ·seq_pop ·v_20, ·ƒfail_5, fn ·v_6, ·v_21:
+                  ·seq_pop ·v_21, ·ƒfail_5, fn ·v_7, ·v_12:
+                    ·empty ·v_12, fn ·v_15:
+                      ·if ·v_15,
+                        fn: ·ƒsucc_4 ·v_6, ·v_7
+                        fn: ·ƒfail_5 _
+              fn: ·ƒfail_5 _
+          fn ·v_32: ·v_32 ·v_72, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIFtdXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBRyxBQUFBO1UsRUFBQSxBLEtBQUE7V0FBQSxLO1VBQUEsQUFBQTtlLFcsV0FBQSxLO2NBQUEsQUFBQSxhQUFBLEs7bUJBQUEsSztrQkFBQSxBQUFBLEtBQUEsSyxLQUFBLEs7b0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO3NCQUFBLEFBQUEsSUFBQSxLOzBCLEVBQUEsQSxVQUFBOzBCLEVBQUEsQSxVQUFBO2tCLEVBQUEsQSxVQUFBO2VBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFKO0tBQUEsSztJQUFBLEFBQUE7UyxVLFVBQUEsSTtRQUFBLEFBQUEsYUFBQSxJO2FBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztnQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLFNBQUEsSSxFQUFBO3NCLEVBQUEsQSxTQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVUiCn0=
+
+
+test 'seq — exact two elements', fn:
+  expect cps_expr ƒink:
+    [a, b] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_7, ·v_8:
+        ·let ·v_7, fn ·a_0:
+          ·let ·v_8, fn ·b_1:
+            ·v_2 ·b_1
+      fn ·v_42:
+        ·fn
+          fn ·ƒsucc_5, ·ƒfail_6, ·v_4:
+            ·is_seq_like ·v_4,
+              fn ·v_21:
+                ·seq_pop ·v_21, ·ƒfail_6, fn ·v_7, ·v_22:
+                  ·seq_pop ·v_22, ·ƒfail_6, fn ·v_8, ·v_13:
+                    ·empty ·v_13, fn ·v_16:
+                      ·if ·v_16,
+                        fn: ·ƒsucc_5 ·v_7, ·v_8
+                        fn: ·ƒfail_6 _
+              fn: ·ƒfail_6 _
+          fn ·v_33: ·v_33 ·v_42, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFHLEFBQUEsS0FBSixJLEtBQUksSTtRLEEsS0FBQTtLQUFKLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLGFBQUEsSTthQUFBLEs7WUFBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7Y0FBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7Z0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2tCQUFBLEFBQUEsSUFBQSxLO3NCLEVBQUEsQSxTQUFBLEksRUFBQTtzQixFQUFBLEEsU0FBQTtZLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFTIgp9
+
+
+
+test 'seq — lone spread non-empty discard', fn:
+  expect cps_expr ƒink:
+    [..] = foo
+  | equals ƒink:
+    ·fn
+      fn: ·v_0 ·panic
+      fn ·v_23:
+        ·fn
+          fn ·ƒsucc_3, ·ƒfail_4, ·v_2:
+            ·is_seq_like ·v_2,
+              fn ·v_13:
+                ·let ·v_13, fn ·v_7:
+                  ·seq_pop ·v_7, ·ƒfail_4, fn ·v_9, ·v_10:
+                    ·ƒsucc_3 _
+              fn: ·ƒfail_4 _
+          fn ·v_20: ·v_20 ·v_23, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4uXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7SSxFQUFBLEEsS0FBQTtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLGFBQUEsSTthQUFBLEs7WUFBSyxBQUFBLEtBQUwsSyxLQUFBLEk7Y0FBQSxBQUFBLFNBQUEsSSxFLFEsS0FBQSxNQUFBLEs7Z0JBQUEsQSxTQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQU8iCn0=
+
+
+test 'seq — spread non-empty bound', fn:
+  expect cps_expr ƒink:
+    [..rest] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_6:
+        ·let ·v_6, fn ·rest_0:
+          ·v_1 ·rest_0
+      fn ·v_26:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·is_seq_like ·v_3,
+              fn ·v_13:
+                ·let ·v_13, fn ·v_10:
+                  ·let ·v_10, fn ·v_6:
+                    ·ƒsucc_4 ·v_6
+              fn: ·ƒfail_5 _
+          fn ·v_20: ·v_20 ·v_26, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4ucmVzdF0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSTtJQUFTLEFBQUEsS0FBVCxJLEtBQUcsTztNLEEsS0FBQTtLQUFILEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLGFBQUEsSTthQUFBLEs7WUFBUyxBQUFBLEtBQVQsSyxLQUFBLEs7Y0FBUyxBQUFBLEtBQVQsSyxLQUFBLEk7Z0JBQUEsQSxTQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVciCn0=
+
+
+test 'seq — head then spread discard', fn:
+  expect cps_expr ƒink:
+    [head, ..] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_6:
+        ·let ·v_6, fn ·head_0:
+          ·v_1 ·head_0
+      fn ·v_30:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·is_seq_like ·v_3,
+              fn ·v_16:
+                ·seq_pop ·v_16, ·ƒfail_5, fn ·v_6, ·v_10:
+                  ·seq_pop ·v_10, ·ƒfail_5, fn ·v_12, ·v_13:
+                    ·ƒsucc_4 ·v_6
+              fn: ·ƒfail_5 _
+          fn ·v_24: ·v_24 ·v_30, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2hlYWQsIC4uXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxPO00sQSxLQUFBO0tBQUQsSztJQUFBLEFBQUE7UyxVLFVBQUEsSTtRQUFBLEFBQUEsYUFBQSxJO2FBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE9BQUEsSztnQkFBQSxBLFNBQUE7WSxFQUFBLEEsU0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBYSIKfQ==
+
+
+test 'seq — head then spread bound', fn:
+  expect cps_expr ƒink:
+    [head, ..tail] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_7, ·v_8:
+        ·let ·v_7, fn ·head_0:
+          ·let ·v_8, fn ·tail_1:
+            ·v_2 ·tail_1
+      fn ·v_33:
+        ·fn
+          fn ·ƒsucc_5, ·ƒfail_6, ·v_4:
+            ·is_seq_like ·v_4,
+              fn ·v_16:
+                ·seq_pop ·v_16, ·ƒfail_6, fn ·v_7, ·v_13:
+                  ·let ·v_13, fn ·v_8:
+                    ·ƒsucc_5 ·v_7, ·v_8
+              fn: ·ƒfail_6 _
+          fn ·v_24: ·v_24 ·v_33, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2hlYWQsIC4udGFpbF0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxPO01BQWMsQUFBQSxLQUFmLEksS0FBUyxPO1EsQSxLQUFBO0tBQVQsSztJQUFBLEFBQUE7UyxVLFVBQUEsSTtRQUFBLEFBQUEsYUFBQSxJO2FBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztjQUFlLEFBQUEsS0FBZixLLEtBQUEsSTtnQkFBQSxBLFNBQUEsSSxFQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQWlCIgp9
+
+
+--- test 'seq — rest in middle' deferred: needs ·match_reverse ---
+# test 'seq — rest in middle', fn:
+#   expect cps_expr ƒink:
+#     [head, ..middle, end] = foo
+#
+#   | equals ƒink:
+#     # TODO: decomposes as [head, ..rest1] then reverse rest1, pop last as end,
+#     # reverse remainder as middle. Needs ·match_reverse. Deferred — does not
+#     # affect the core primitive set.
+
+
+test 'seq — literal element', fn:
+  expect cps_expr ƒink:
+    [a, 1] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_6, ·v_7:
+        ·let ·v_6, fn ·a_0:
+          ·fn
+            fn: ·v_1 ·panic
+            fn ·v_52:
+              ·fn
+                fn ·ƒsucc_36, ·ƒfail_37, ·v_35:
+                  ·op_eq ·v_35, 1, fn ·v_40:
+                    ·if ·v_40,
+                      fn: ·ƒsucc_36 _
+                      fn: ·ƒfail_37 _
+                fn ·v_48: ·v_48 ·v_52, ·panic, ·v_7
+      fn ·v_65:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·is_seq_like ·v_3,
+              fn ·v_20:
+                ·seq_pop ·v_20, ·ƒfail_5, fn ·v_6, ·v_21:
+                  ·seq_pop ·v_21, ·ƒfail_5, fn ·v_7, ·v_12:
+                    ·empty ·v_12, fn ·v_15:
+                      ·if ·v_15,
+                        fn: ·ƒsucc_4 ·v_6, ·v_7
+                        fn: ·ƒfail_5 _
+              fn: ·ƒfail_5 _
+          fn ·v_32: ·v_32 ·v_65, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIDFdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFHLEFBQUE7VSxFQUFBLEEsS0FBQTtXQUFBLEs7VUFBQSxBQUFBO2UsVyxXQUFBLEs7Y0FBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLO2dCQUFBLEFBQUEsSUFBQSxLO29CLEVBQUEsQSxVQUFBO29CLEVBQUEsQSxVQUFBO2VBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFKO0tBQUEsSztJQUFBLEFBQUE7UyxVLFVBQUEsSTtRQUFBLEFBQUEsYUFBQSxJO2FBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztnQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLFNBQUEsSSxFQUFBO3NCLEVBQUEsQSxTQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVMiCn0=
+
+
+test 'seq — infix guard', fn:
+  expect cps_expr ƒink:
+    [x, y >= 2] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_7, ·v_8:
+        ·let ·v_7, fn ·x_0:
+          ·fn
+            fn ·y_1: ·v_2 ·y_1
+            fn ·v_52:
+              ·fn
+                fn ·ƒsucc_37, ·ƒfail_38, ·v_36:
+                  ·op_gte ·v_36, 2, fn ·v_41:
+                    ·if ·v_41,
+                      fn: ·ƒsucc_37 ·v_36
+                      fn: ·ƒfail_38 _
+                fn ·v_49: ·v_49 ·v_52, ·panic, ·v_8
+      fn ·v_65:
+        ·fn
+          fn ·ƒsucc_5, ·ƒfail_6, ·v_4:
+            ·is_seq_like ·v_4,
+              fn ·v_21:
+                ·seq_pop ·v_21, ·ƒfail_6, fn ·v_7, ·v_22:
+                  ·seq_pop ·v_22, ·ƒfail_6, fn ·v_8, ·v_13:
+                    ·empty ·v_13, fn ·v_16:
+                      ·if ·v_16,
+                        fn: ·ƒsucc_5 ·v_7, ·v_8
+                        fn: ·ƒfail_6 _
+              fn: ·ƒfail_6 _
+          fn ·v_33: ·v_33 ·v_65, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIHkgPj0gMl0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUcsQUFBQTtXQUFBLEksRUFBQSxBLEtBQUE7V0FBQSxLO1VBQUEsQUFBQTtlLFcsV0FBQSxLO2NBQUUsQUFBQSxRQUFGLEssRUFBSyxDLEtBQUwsSztnQkFBQSxBQUFBLElBQUEsSztvQixFQUFBLEEsVUFBQTtvQixFQUFBLEEsVUFBQTtlQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBSjtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLGFBQUEsSTthQUFBLEs7WUFBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7Y0FBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7Z0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2tCQUFBLEFBQUEsSUFBQSxLO3NCLEVBQUEsQSxTQUFBLEksRUFBQTtzQixFQUFBLEEsU0FBQTtZLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFjIgp9
+
+
+test 'seq — predicate guard', fn:
+  expect cps_expr ƒink:
+    [x, is_even y] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_7, ·v_8:
+        ·let ·v_7, fn ·x_0:
+          ·let ·v_8, fn ·y_1:
+            ·∅is_even fn ·v_45:
+              ·if ·v_45,
+                fn: ·v_2 _
+                fn: ·panic _, ·y_1
+      fn ·v_54:
+        ·fn
+          fn ·ƒsucc_5, ·ƒfail_6, ·v_4:
+            ·is_seq_like ·v_4,
+              fn ·v_21:
+                ·seq_pop ·v_21, ·ƒfail_6, fn ·v_7, ·v_22:
+                  ·seq_pop ·v_22, ·ƒfail_6, fn ·v_8, ·v_13:
+                    ·empty ·v_13, fn ·v_16:
+                      ·if ·v_16,
+                        fn: ·ƒsucc_5 ·v_7, ·v_8
+                        fn: ·ƒfail_6 _
+              fn: ·ƒfail_6 _
+          fn ·v_33: ·v_33 ·v_54, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX2V2ZW4geV0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQVcsQUFBQSxLQUFaLEksS0FBWSxJO1FBQVIsQUFBQSxVQUFBLEdBQUEsSztVQUFBLEFBQUEsSUFBQSxLO2MsRUFBQSxBLEtBQUE7YyxFQUFBLEFBQUEsT0FBQSxDLEVBQVE7S0FBWixLO0lBQUEsQUFBQTtTLFUsVUFBQSxJO1FBQUEsQUFBQSxhQUFBLEk7YUFBQSxLO1lBQUEsQUFBQSxTQUFBLEssRSxRLEtBQUEsTUFBQSxLO2NBQUEsQUFBQSxTQUFBLEssRSxRLEtBQUEsTUFBQSxLO2dCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztrQkFBQSxBQUFBLElBQUEsSztzQixFQUFBLEEsU0FBQSxJLEVBQUE7c0IsRUFBQSxBLFNBQUE7WSxFQUFBLEEsU0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBaUIiCn0=
+
+
+test 'seq — constructor guard with payload', fn:
+  expect cps_expr ƒink:
+    [x, Ok b] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_7, ·v_8:
+        ·let ·v_7, fn ·x_0:
+          ·let ·v_8, fn ·b_1:
+            ·∅Ok fn ·v_45:
+              ·if ·v_45,
+                fn: ·v_2 _
+                fn: ·panic _, ·b_1
+      fn ·v_54:
+        ·fn
+          fn ·ƒsucc_5, ·ƒfail_6, ·v_4:
+            ·is_seq_like ·v_4,
+              fn ·v_21:
+                ·seq_pop ·v_21, ·ƒfail_6, fn ·v_7, ·v_22:
+                  ·seq_pop ·v_22, ·ƒfail_6, fn ·v_8, ·v_13:
+                    ·empty ·v_13, fn ·v_16:
+                      ·if ·v_16,
+                        fn: ·ƒsucc_5 ·v_7, ·v_8
+                        fn: ·ƒfail_6 _
+              fn: ·ƒfail_6 _
+          fn ·v_33: ·v_33 ·v_54, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIE9rIGJdID0gZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE1BQUEsSTtJQUFDLEFBQUEsS0FBRCxJLEtBQUMsSTtNQUFNLEFBQUEsS0FBUCxJLEtBQU8sSTtRQUFILEFBQUEsS0FBQSxHQUFBLEs7VUFBQSxBQUFBLElBQUEsSztjLEVBQUEsQSxLQUFBO2MsRUFBQSxBQUFBLE9BQUEsQyxFQUFHO0tBQVAsSztJQUFBLEFBQUE7UyxVLFVBQUEsSTtRQUFBLEFBQUEsYUFBQSxJO2FBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztnQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7a0JBQUEsQUFBQSxJQUFBLEs7c0IsRUFBQSxBLFNBQUEsSSxFQUFBO3NCLEVBQUEsQSxTQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVkiCn0=
+
+
+test 'seq — constructor predicate with wildcard', fn:
+  expect cps_expr ƒink:
+    [x, is_none _] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_6, ·v_7:
+        ·let ·v_6, fn ·x_0:
+          ·∅is_none fn ·v_44:
+            ·if ·v_44,
+              fn: ·v_1 _
+              fn: ·panic _, ·v_7
+      fn ·v_51:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·is_seq_like ·v_3,
+              fn ·v_20:
+                ·seq_pop ·v_20, ·ƒfail_5, fn ·v_6, ·v_21:
+                  ·seq_pop ·v_21, ·ƒfail_5, fn ·v_7, ·v_12:
+                    ·empty ·v_12, fn ·v_15:
+                      ·if ·v_15,
+                        fn: ·ƒsucc_4 ·v_6, ·v_7
+                        fn: ·ƒfail_5 _
+              fn: ·ƒfail_5 _
+          fn ·v_32: ·v_32 ·v_51, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW3gsIGlzX25vbmUgX10gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUcsQUFBQSxVQUFBLEdBQUEsSztRQUFBLEFBQUEsSUFBQSxLO1ksRUFBQSxBLEtBQUE7WSxFQUFBLEFBQUEsT0FBQSxDLEVBQVE7S0FBWixLO0lBQUEsQUFBQTtTLFUsVUFBQSxJO1FBQUEsQUFBQSxhQUFBLEk7YUFBQSxLO1lBQUEsQUFBQSxTQUFBLEssRSxRLEtBQUEsTUFBQSxLO2NBQUEsQUFBQSxTQUFBLEssRSxRLEtBQUEsTUFBQSxLO2dCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSztrQkFBQSxBQUFBLElBQUEsSztzQixFQUFBLEEsU0FBQSxJLEVBQUE7c0IsRUFBQSxBLFNBQUE7WSxFQUFBLEEsU0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBaUIiCn0=
+
+
+test 'seq — multi-arg guard with bound element', fn:
+  expect cps_expr ƒink:
+    [1, foo 2, a, 3; 4] = bar
+  | equals ƒink:
+    ·fn
+      fn ·v_6, ·v_7, ·v_8:
+        ·fn
+          fn:
+            ·let ·v_7, fn ·a_0:
+              ·∅foo fn ·v_92:
+                ·if ·v_92,
+                  fn:
+                    ·fn
+                      fn: ·v_1 ·panic
+                      fn ·v_79:
+                        ·fn
+                          fn ·ƒsucc_63, ·ƒfail_64, ·v_62:
+                            ·op_eq ·v_62, 4, fn ·v_67:
+                              ·if ·v_67,
+                                fn: ·ƒsucc_63 _
+                                fn: ·ƒfail_64 _
+                          fn ·v_75: ·v_75 ·v_79, ·panic, ·v_8
+                  fn: ·panic _, 2, ·a_0, 3
+          fn ·v_99:
+            ·fn
+              fn ·ƒsucc_41, ·ƒfail_42, ·v_40:
+                ·op_eq ·v_40, 1, fn ·v_45:
+                  ·if ·v_45,
+                    fn: ·ƒsucc_41 _
+                    fn: ·ƒfail_42 _
+              fn ·v_53: ·v_53 ·v_99, ·panic, ·v_6
+      fn ·v_107:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·is_seq_like ·v_3,
+              fn ·v_22:
+                ·seq_pop ·v_22, ·ƒfail_5, fn ·v_6, ·v_27:
+                  ·seq_pop ·v_27, ·ƒfail_5, fn ·v_7, ·v_23:
+                    ·seq_pop ·v_23, ·ƒfail_5, fn ·v_8, ·v_14:
+                      ·empty ·v_14, fn ·v_17:
+                        ·if ·v_17,
+                          fn: ·ƒsucc_4 ·v_6, ·v_7, ·v_8
+                          fn: ·ƒfail_5 _
+              fn: ·ƒfail_5 _
+          fn ·v_38: ·v_38 ·v_107, ·panic, ·∅bar
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIGZvbyAyLCBhLCAzOyA0XSA9IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNQUFBLE1BQUEsSTtJQUFDLEFBQUE7UTtRQUFVLEFBQUEsS0FBWCxJLEtBQVcsSTtVQUFQLEFBQUEsTUFBQSxHQUFBLEs7WUFBQSxBQUFBLElBQUEsSztnQjtnQkFBYSxBQUFBO29CLEVBQUEsQSxLQUFBO3FCQUFBLEs7b0JBQUEsQUFBQTt5QixXLFdBQUEsSzt3QkFBQSxBQUFBLE9BQUEsSyxFQUFBLEMsS0FBQSxLOzBCQUFBLEFBQUEsSUFBQSxLOzhCLEVBQUEsQSxVQUFBOzhCLEVBQUEsQSxVQUFBO3lCQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBakI7Z0IsRUFBSSxBQUFBLE9BQUEsQyxFQUFJLEMsRUFBRyxJLEVBQUc7U0FBYixLO1FBQUEsQUFBQTthLFcsV0FBQSxLO1lBQUEsQUFBQSxPQUFBLEssRUFBQSxDLEtBQUEsSztjQUFBLEFBQUEsSUFBQSxLO2tCLEVBQUEsQSxVQUFBO2tCLEVBQUEsQSxVQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFEO0tBQUEsTTtJQUFBLEFBQUE7UyxVLFVBQUEsSTtRQUFBLEFBQUEsYUFBQSxJO2FBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztjQUFBLEFBQUEsU0FBQSxLLEUsUSxLQUFBLE1BQUEsSztnQkFBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7a0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO29CQUFBLEFBQUEsSUFBQSxLO3dCLEVBQUEsQSxTQUFBLEksRUFBQSxJLEVBQUE7d0IsRUFBQSxBLFNBQUE7WSxFQUFBLEEsU0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQUEsTSxFQUFBLE0sRUFBc0IiCn0=
+
+
+
+test 'seq — nested', fn:
+  expect cps_expr ƒink:
+    [a, [b, c]] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_8, ·v_9:
+        ·let ·v_8, fn ·a_0:
+          ·fn
+            fn ·v_40, ·v_41:
+              ·let ·v_40, fn ·b_1:
+                ·let ·v_41, fn ·c_2:
+                  ·v_3 ·c_2
+            fn ·v_76:
+              ·fn
+                fn ·ƒsucc_38, ·ƒfail_39, ·v_37:
+                  ·is_seq_like ·v_37,
+                    fn ·v_54:
+                      ·seq_pop ·v_54, ·ƒfail_39, fn ·v_40, ·v_55:
+                        ·seq_pop ·v_55, ·ƒfail_39, fn ·v_41, ·v_46:
+                          ·empty ·v_46, fn ·v_49:
+                            ·if ·v_49,
+                              fn: ·ƒsucc_38 ·v_40, ·v_41
+                              fn: ·ƒfail_39 _
+                    fn: ·ƒfail_39 _
+                fn ·v_66: ·v_66 ·v_76, ·panic, ·v_9
+      fn ·v_86:
+        ·fn
+          fn ·ƒsucc_6, ·ƒfail_7, ·v_5:
+            ·is_seq_like ·v_5,
+              fn ·v_22:
+                ·seq_pop ·v_22, ·ƒfail_7, fn ·v_8, ·v_23:
+                  ·seq_pop ·v_23, ·ƒfail_7, fn ·v_9, ·v_14:
+                    ·empty ·v_14, fn ·v_17:
+                      ·if ·v_17,
+                        fn: ·ƒsucc_6 ·v_8, ·v_9
+                        fn: ·ƒfail_7 _
+              fn: ·ƒfail_7 _
+          fn ·v_34: ·v_34 ·v_86, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIFtiLCBjXV0gPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTUFBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBQyxJO01BQUcsQUFBQTtXQUFBLE9BQUEsSztVQUFDLEFBQUEsS0FBRCxLLEtBQUMsSTtZQUFHLEFBQUEsS0FBSixLLEtBQUksSTtjLEEsS0FBQTtXQUFKLEs7VUFBQSxBQUFBO2UsVyxXQUFBLEs7Y0FBQSxBQUFBLGFBQUEsSzttQkFBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztvQkFBQSxBQUFBLFNBQUEsSyxFLFMsS0FBQSxPQUFBLEs7c0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO3dCQUFBLEFBQUEsSUFBQSxLOzRCLEVBQUEsQSxVQUFBLEssRUFBQTs0QixFQUFBLEEsVUFBQTtrQixFQUFBLEEsVUFBQTtlQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBSjtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLGFBQUEsSTthQUFBLEs7WUFBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7Y0FBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7Z0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2tCQUFBLEFBQUEsSUFBQSxLO3NCLEVBQUEsQSxTQUFBLEksRUFBQTtzQixFQUFBLEEsU0FBQTtZLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFjIgp9
+
+test 'seq — nested with bind-right', fn:
+  expect cps_expr ƒink:
+    [a, [b, c] |= d] = foo
+  | equals ƒink:
+    ·fn
+      fn ·v_9, ·v_10:
+        ·let ·v_9, fn ·a_0:
+          ·let ·v_10, fn ·d_3:
+            ·fn
+              fn ·v_41, ·v_42:
+                ·let ·v_41, fn ·b_1:
+                  ·let ·v_42, fn ·c_2:
+                    ·v_4 ·c_2
+              fn ·v_77:
+                ·fn
+                  fn ·ƒsucc_39, ·ƒfail_40, ·v_38:
+                    ·is_seq_like ·v_38,
+                      fn ·v_55:
+                        ·seq_pop ·v_55, ·ƒfail_40, fn ·v_41, ·v_56:
+                          ·seq_pop ·v_56, ·ƒfail_40, fn ·v_42, ·v_47:
+                            ·empty ·v_47, fn ·v_50:
+                              ·if ·v_50,
+                                fn: ·ƒsucc_39 ·v_41, ·v_42
+                                fn: ·ƒfail_40 _
+                      fn: ·ƒfail_40 _
+                  fn ·v_67: ·v_67 ·v_77, ·panic, ·v_10
+      fn ·v_89:
+        ·fn
+          fn ·ƒsucc_7, ·ƒfail_8, ·v_6:
+            ·is_seq_like ·v_6,
+              fn ·v_23:
+                ·seq_pop ·v_23, ·ƒfail_8, fn ·v_9, ·v_24:
+                  ·seq_pop ·v_24, ·ƒfail_8, fn ·v_10, ·v_15:
+                    ·empty ·v_15, fn ·v_18:
+                      ·if ·v_18,
+                        fn: ·ƒsucc_7 ·v_9, ·v_10
+                        fn: ·ƒfail_8 _
+              fn: ·ƒfail_8 _
+          fn ·v_35: ·v_35 ·v_89, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIFtiLCBjXSB8PSBkXSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNQUFBLEs7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLEk7TUFBVSxBQUFBLEtBQVgsSyxLQUFjLEk7UUFBVixBQUFBO2FBQUEsT0FBQSxLO1lBQUMsQUFBQSxLQUFELEssS0FBQyxJO2NBQUcsQUFBQSxLQUFKLEssS0FBSSxJO2dCLEEsS0FBQTthQUFKLEs7WUFBQSxBQUFBO2lCLFcsV0FBQSxLO2dCQUFBLEFBQUEsYUFBQSxLO3FCQUFBLEs7b0JBQUEsQUFBQSxTQUFBLEssRSxTLEtBQUEsT0FBQSxLO3NCQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSzt3QkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7MEJBQUEsQUFBQSxJQUFBLEs7OEIsRUFBQSxBLFVBQUEsSyxFQUFBOzhCLEVBQUEsQSxVQUFBO29CLEVBQUEsQSxVQUFBO2lCQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBSjtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLGFBQUEsSTthQUFBLEs7WUFBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxNQUFBLEs7Y0FBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxPQUFBLEs7Z0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO2tCQUFBLEFBQUEsSUFBQSxLO3NCLEVBQUEsQSxTQUFBLEksRUFBQTtzQixFQUFBLEEsU0FBQTtZLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFtQiIKfQ==
+
+

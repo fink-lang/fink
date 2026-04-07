@@ -1,0 +1,117 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'pipe with fn call', fn:
+  expect run ƒink:
+    add = fn a, b: a + b
+    main = fn:
+      2
+      | add 3, ?
+  | equals ƒink:
+    5
+
+
+test 'match literal first arm', fn:
+  expect run ƒink:
+    main = fn:
+      match 0:
+        0: 42
+        _: 99
+  | equals ƒink:
+    42
+
+
+test 'match literal second arm', fn:
+  expect run ƒink:
+    main = fn:
+      match 1:
+        0: 42
+        _: 99
+  | equals ƒink:
+    99
+
+
+test 'match wildcard binding', fn:
+  expect run ƒink:
+    main = fn:
+      match 5:
+        0: 0
+        x: x + 1
+  | equals ƒink:
+    6
+
+
+test 'factorial', fn:
+  expect run ƒink:
+    fac = fn n:
+      match n:
+        0: 1
+        n: n * fac n - 1
+    main = fn:
+      fac 5
+  | equals ƒink:
+    120
+
+
+test 'add list items', fn:
+  expect run ƒink:
+    sum = fn items, c:
+      match items:
+        []: c
+        [a, ..rest]: sum rest, c + a
+
+    main = fn:
+      sum [1, 2, 3, 4], 0
+
+  | equals ƒink:
+    10
+
+
+test 'varargs first', fn:
+  expect run ƒink:
+    first = fn ..args:
+      match args:
+        [a, ..]: a
+
+    main = fn:
+      first ..[42, 99]
+  | equals ƒink:
+    42
+
+
+test 'varargs identity', fn:
+  expect run ƒink:
+    identity = fn ..args: args
+
+    main = fn:
+      match (identity ..[10, 20, 30]):
+        [a, ..]: a
+  | equals ƒink:
+    10
+
+
+test 'tagged template varargs', fn:
+  expect run ƒink:
+    first = fn ..parts:
+      match parts:
+        [a, ..]: a
+
+    main = fn:
+      x = 42
+      y = first'hello ${x} world'
+      y == 'hello '
+  | equals ƒink:
+    true
+
+
+test 'varargs mixed fixed and rest', fn:
+  expect run ƒink:
+    head-and-rest = fn a, ..rest:
+      match rest:
+        [b, ..]: a + b
+
+    main = fn:
+      head-and-rest 10, ..[20, 30]
+  | equals ƒink:
+    30

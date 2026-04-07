@@ -489,7 +489,6 @@ test 'str literal', fn:
 
     ·export ·main_0
 
-# TODO not sure this is correct
 test 'match — seq literal guard', fn:
   expect lift ƒink:
     main = fn:
@@ -576,7 +575,6 @@ test 'match — seq literal guard', fn:
 
     ·export ·main_0
 
-# TODO not sure this is correct
 test 'match — rec literal guard', fn:
   expect lift ƒink:
     main = fn:

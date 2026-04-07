@@ -1,0 +1,34 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'literal', fn:
+  expect run ƒink:
+    main = fn:
+      42
+  | equals ƒink:
+    42
+
+
+test 'float literal', fn:
+  expect run ƒink:
+    main = fn:
+      3.14
+  | equals ƒink:
+    3.14
+
+
+test 'bool literal true', fn:
+  expect run ƒink:
+    main = fn:
+      true
+  | equals ƒink:
+    true
+
+
+test 'bool literal false', fn:
+  expect run ƒink:
+    main = fn:
+      false
+  | equals ƒink:
+    false

@@ -19,7 +19,6 @@ use crate::ast::transform::{Transform, TransformError, TransformResult};
 pub fn apply(node: Node<'_>, node_count: u32) -> Result<(Node<'_>, u32), TransformError> {
   let mut pass = PartialPass { next_id: node_count, synth_counter: 0 };
   let result = pass.transform_stmt(node)?;
-  //TODO should return a Parseresult with node and updated ast index
   Ok((result, pass.next_id))
 }
 

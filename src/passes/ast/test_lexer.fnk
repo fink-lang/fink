@@ -460,7 +460,6 @@ test 'string_escape', fn:
     BlockEnd loc [6, 1, 6], [6, 1, 6]
 
 
-# TODO: this is incorrect, the strings should be dedented with spam as floor
 test 'string_multiline_indentation_and_final_nl', fn:
   expect tokenize ƒink:
     'foo
@@ -524,7 +523,6 @@ test 'string_multiline_closing_error', fn:
 
 
 test 'brackets', fn:
-  # TODO: bug
   expect tokenize ":
     []
     {}
