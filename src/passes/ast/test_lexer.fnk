@@ -524,7 +524,6 @@ test 'string_multiline_closing_error', fn:
 
 
 test 'brackets', fn:
-  # TODO: bug
   expect tokenize ":
     []
     {}

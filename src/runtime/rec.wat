@@ -32,8 +32,6 @@
 ;;     Hash protocol (future, std-lib, CPS).
 ;;
 ;; Exported functions:
-;;   TODO HamtNode is internal, public interfaces should use Rec/Dict.
-;;     Or these functions hould be made private _* .
 ;;   $hamt_empty   : () -> (ref $HamtNode)
 ;;   $hamt_get     : (ref $HamtNode), (ref eq) -> (ref null eq)
 ;;   $hamt_set     : (ref $HamtNode), (ref eq), (ref eq) -> (ref $HamtNode)
