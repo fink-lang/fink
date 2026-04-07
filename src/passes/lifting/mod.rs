@@ -160,7 +160,7 @@ pub fn lift<'src>(
 
 // ---------------------------------------------------------------------------
 // Check: does the tree need more lifting?
-// True if any fn_body contains a nested LetFn, or any App/Yield has an
+// True if any fn_body contains a nested LetFn, or any App has an
 // inline Cont::Expr with non-trivial body.
 // ---------------------------------------------------------------------------
 

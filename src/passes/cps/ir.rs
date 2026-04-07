@@ -272,9 +272,6 @@ pub enum BuiltIn {
   // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
   IsSeqLike, IsRecLike, SeqPop, RecPop, Empty,
-  // Yield — suspend execution, passing a value to the scheduler.
-  // Args: value; cont receives the resumed value.
-  Yield,
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
   Export,

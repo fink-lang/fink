@@ -171,9 +171,6 @@ impl<'cfg> Ctx<'cfg> {
             NodeKind::Try(inner) => {
                 Node::new(NodeKind::Try(Box::new(self.fix(inner))), node.loc)
             }
-            NodeKind::Yield(inner) => {
-                Node::new(NodeKind::Yield(Box::new(self.fix(inner))), node.loc)
-            }
             NodeKind::ChainedCmp(parts) => {
                 let new_parts = parts.iter().map(|p| match p {
                     crate::passes::ast::CmpPart::Operand(n) => crate::passes::ast::CmpPart::Operand(self.fix(n)),
@@ -453,9 +450,6 @@ impl<'cfg> Ctx<'cfg> {
             }
             NodeKind::Try(inner) => {
                 self.try_node(inner, at)
-            }
-            NodeKind::Yield(inner) => {
-                self.yield_node(inner, at)
             }
             NodeKind::Block { name, params, sep, body } => {
                 self.block_node(name, params, sep, body, at)
@@ -1228,14 +1222,6 @@ impl<'cfg> Ctx<'cfg> {
         let new_inner = self.node(inner, inner_at);
         let end = new_inner.loc.end;
         Node::new(NodeKind::Try(Box::new(new_inner)), Loc { start: at, end })
-    }
-
-    fn yield_node<'src>(&mut self, inner: &Node<'src>, at: Pos) -> Node<'src> {
-        let kw_end = advance_pos(at, "yield");
-        let inner_at = space_after(kw_end);
-        let new_inner = self.node(inner, inner_at);
-        let end = new_inner.loc.end;
-        Node::new(NodeKind::Yield(Box::new(new_inner)), Loc { start: at, end })
     }
 
     // -----------------------------------------------------------------------

@@ -603,7 +603,7 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
     }
 
     NodeKind::Group { inner, .. } => walk_node(inner, scope, ctx),
-    NodeKind::Try(inner) | NodeKind::Yield(inner) => walk_node(inner, scope, ctx),
+    NodeKind::Try(inner) => walk_node(inner, scope, ctx),
     NodeKind::Member { lhs, .. } => walk_node(lhs, scope, ctx),
     NodeKind::Spread { inner: Some(inner), .. } => walk_node(inner, scope, ctx),
     NodeKind::Spread { inner: None, .. } => {}

@@ -169,24 +169,6 @@ test 'multiple captures at depth-2', fn:
     ·export ·foo_0
 
 
-test 'yield — cont body lifted', fn:
-  expect lift ƒink:
-    main = fn:
-      q = yield 42
-      1 + q
-
-  | equals ƒink:
-    ·v_24 = fn {·ƒret_25}, [·v_8]:
-      ·q_1 = ·v_8
-      ·op_plus 1, ·q_1, ·ƒret_25
-
-    ·main_0 = ·v_5 = fn [·ƒret_6]:
-      ·v_29 = ·closure ·v_24, ·ƒret_6
-      ·yield 42, ·v_29
-
-    ·export ·main_0
-
-
 test 'multi-fn module — add and main', fn:
   expect lift ƒink:
     add = fn a, b:

@@ -317,9 +317,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::SeqPop       => "·seq_pop".into(),
     BuiltIn::RecPop       => "·rec_pop".into(),
     BuiltIn::Empty        => "·empty".into(),
-    // Legacy match primitives
-    // Async/concurrency
-    BuiltIn::Yield        => "·yield".into(),
     // Module
     BuiltIn::Export       => "·export".into(),
     BuiltIn::Import       => "·import".into(),

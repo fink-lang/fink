@@ -264,7 +264,7 @@ impl<'src> Parser<'src> {
   // that need their own parse path and must not be consumed as a plain ident.
   // Future: replace body with a registry lookup.
   fn is_dispatch_keyword(s: &str) -> bool {
-    Self::is_infix_keyword(s) || matches!(s, "true" | "false" | "_" | "try" | "yield")
+    Self::is_infix_keyword(s) || matches!(s, "true" | "false" | "_" | "try")
   }
 
   // --- application ---
@@ -942,13 +942,6 @@ impl<'src> Parser<'src> {
       let inner = self.parse_apply()?;
       let loc = Loc { start: try_tok.loc.start, end: inner.loc.end };
       return Ok(self.node(NodeKind::Try(Box::new(inner)), loc));
-    }
-    // "yield" — suspend execution, yield a value; parsed like application
-    if self.at(TokenKind::Ident) && self.peek().src == "yield" {
-      let yield_tok = self.bump();
-      let inner = self.parse_apply()?;
-      let loc = Loc { start: yield_tok.loc.start, end: inner.loc.end };
-      return Ok(self.node(NodeKind::Yield(Box::new(inner)), loc));
     }
     // "not" prefix unary — bp 35 so it binds tighter than and/or but looser than comparisons
     if self.at(TokenKind::Ident) && self.peek().src == "not" {
@@ -1846,7 +1839,6 @@ mod tests {
     );
   }
 
-  test_macros::include_fink_tests!("src/passes/ast/test_yield.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_try.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_literals.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_operators.fnk");

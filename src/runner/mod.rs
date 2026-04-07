@@ -74,7 +74,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_formatting.fnk");
   test_macros::include_fink_tests!("src/runner/test_patterns.fnk");
   test_macros::include_fink_tests!("src/runner/test_ranges.fnk");
-  test_macros::include_fink_tests!("src/runner/test_yield.fnk");
   test_macros::include_fink_tests!("src/runner/test_errors.fnk");
   test_macros::include_fink_tests!("src/runner/test_fn_match.fnk");
 }
