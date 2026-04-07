@@ -6,7 +6,7 @@ test 'literal', fn:
   expect run ƒink:
     main = fn:
       42
-  | equals ":
+  | equals ƒink:
     42
 
 
@@ -14,7 +14,7 @@ test 'float literal', fn:
   expect run ƒink:
     main = fn:
       3.14
-  | equals ":
+  | equals ƒink:
     3.14
 
 
@@ -22,7 +22,7 @@ test 'bool literal true', fn:
   expect run ƒink:
     main = fn:
       true
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -30,5 +30,5 @@ test 'bool literal false', fn:
   expect run ƒink:
     main = fn:
       false
-  | equals ":
+  | equals ƒink:
     false

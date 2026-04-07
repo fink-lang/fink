@@ -7,7 +7,7 @@ test 'let binding', fn:
     main = fn:
       x = 42
       x
-  | equals ":
+  | equals ƒink:
     42
 
 
@@ -17,7 +17,7 @@ test 'let alias', fn:
       x = 42
       y = x
       y
-  | equals ":
+  | equals ƒink:
     42
 
 
@@ -26,7 +26,7 @@ test 'chained arithmetic', fn:
     main = fn:
       x = 2 * 3
       x + 4
-  | equals ":
+  | equals ƒink:
     10
 
 
@@ -36,7 +36,7 @@ test 'multiple let bindings', fn:
       x = 2
       y = 3
       x + y
-  | equals ":
+  | equals ƒink:
     5
 
 
@@ -46,5 +46,5 @@ test 'nested chains', fn:
       x = 2 + 3
       y = x * 2
       y - 1
-  | equals ":
+  | equals ƒink:
     9

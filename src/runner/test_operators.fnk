@@ -6,7 +6,7 @@ test 'add two literals', fn:
   expect run ƒink:
     main = fn:
       2 + 3
-  | equals ":
+  | equals ƒink:
     5
 
 
@@ -14,7 +14,7 @@ test 'subtraction', fn:
   expect run ƒink:
     main = fn:
       10 - 3
-  | equals ":
+  | equals ƒink:
     7
 
 
@@ -22,7 +22,7 @@ test 'multiplication', fn:
   expect run ƒink:
     main = fn:
       4 * 5
-  | equals ":
+  | equals ƒink:
     20
 
 
@@ -30,7 +30,7 @@ test 'division', fn:
   expect run ƒink:
     main = fn:
       10 / 4
-  | equals ":
+  | equals ƒink:
     2.5
 
 
@@ -38,7 +38,7 @@ test 'integer division', fn:
   expect run ƒink:
     main = fn:
       7 // 2
-  | equals ":
+  | equals ƒink:
     3
 
 
@@ -46,7 +46,7 @@ test 'modulo', fn:
   expect run ƒink:
     main = fn:
       10 %% 3
-  | equals ":
+  | equals ƒink:
     1
 
 
@@ -54,7 +54,7 @@ test 'equal', fn:
   expect run ƒink:
     main = fn:
       3 == 3
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -62,7 +62,7 @@ test 'not equal', fn:
   expect run ƒink:
     main = fn:
       3 != 4
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -70,7 +70,7 @@ test 'less than', fn:
   expect run ƒink:
     main = fn:
       3 < 4
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -78,7 +78,7 @@ test 'less than or equal', fn:
   expect run ƒink:
     main = fn:
       3 <= 3
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -86,7 +86,7 @@ test 'greater than', fn:
   expect run ƒink:
     main = fn:
       4 > 3
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -94,7 +94,7 @@ test 'greater than or equal', fn:
   expect run ƒink:
     main = fn:
       3 >= 3
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -102,7 +102,7 @@ test 'not', fn:
   expect run ƒink:
     main = fn:
       not true
-  | equals ":
+  | equals ƒink:
     false
 
 
@@ -110,7 +110,7 @@ test 'and', fn:
   expect run ƒink:
     main = fn:
       true and false
-  | equals ":
+  | equals ƒink:
     false
 
 
@@ -118,7 +118,7 @@ test 'or', fn:
   expect run ƒink:
     main = fn:
       true or false
-  | equals ":
+  | equals ƒink:
     true
 
 
@@ -126,7 +126,7 @@ test 'xor', fn:
   expect run ƒink:
     main = fn:
       true xor true
-  | equals ":
+  | equals ƒink:
     false
 
 
@@ -135,7 +135,7 @@ test 'chain with bool', fn:
     main = fn:
       x = 3 > 2
       x and true
-  | equals ":
+  | equals ƒink:
     true
 
 

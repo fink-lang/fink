@@ -8,7 +8,7 @@ test 'pipe with fn call', fn:
     main = fn:
       2
       | add 3, ?
-  | equals ":
+  | equals ƒink:
     5
 
 
@@ -18,7 +18,7 @@ test 'match literal first arm', fn:
       match 0:
         0: 42
         _: 99
-  | equals ":
+  | equals ƒink:
     42
 
 
@@ -28,7 +28,7 @@ test 'match literal second arm', fn:
       match 1:
         0: 42
         _: 99
-  | equals ":
+  | equals ƒink:
     99
 
 
@@ -38,7 +38,7 @@ test 'match wildcard binding', fn:
       match 5:
         0: 0
         x: x + 1
-  | equals ":
+  | equals ƒink:
     6
 
 
@@ -50,7 +50,7 @@ test 'factorial', fn:
         n: n * fac n - 1
     main = fn:
       fac 5
-  | equals ":
+  | equals ƒink:
     120
 
 
@@ -64,7 +64,7 @@ test 'add list items', fn:
     main = fn:
       sum [1, 2, 3, 4], 0
 
-  | equals ":
+  | equals ƒink:
     10
 
 
