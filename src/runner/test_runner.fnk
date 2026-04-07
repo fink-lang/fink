@@ -612,7 +612,7 @@ test 'rec string key destructure', fn:
     42
 
 
-skip test 'rec expr key destructure', fn:
+test 'rec expr key destructure', fn:
   expect run ƒink:
     main = fn:
       {(4): foo} = {(1 + 3): 42}
@@ -628,7 +628,7 @@ test 'rec format string key', fn:
   | equals ƒink:
     true
 
-skip test 'rec format string key', fn:
+test 'rec format expr key', fn:
   expect run ƒink:
     main = fn:
       '${ {(1 + 2): 42} }' == '{(3): 42}'

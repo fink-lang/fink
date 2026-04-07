@@ -1994,9 +1994,15 @@ enum SpreadKind<'a, 'src> {
   SubPattern(&'a Node<'src>),        // `{..{bar, spam}}`
 }
 
-/// A record field extracted from the AST pattern: field name + sub-pattern node.
+/// Record pattern key: identifier name or computed expression.
+enum RecKey<'a, 'src> {
+  Ident(&'src str),
+  Expr(&'a Node<'src>),
+}
+
+/// A record field extracted from the AST pattern: key + sub-pattern node.
 struct RecField<'a, 'src> {
-  name: &'src str,
+  key: RecKey<'a, 'src>,
   /// The sub-pattern node for the extracted value.
   /// For `{x}` shorthand: the Ident node itself.
   /// For `{x: pat}`: the pat node.
@@ -2043,32 +2049,33 @@ fn emit_rec_pattern<'src>(
         break;
       }
       NodeKind::Ident(name) => {
-        regular.push(RecField { name, pat: field_node, origin: Some(field_node.id) });
+        regular.push(RecField { key: RecKey::Ident(name), pat: field_node, origin: Some(field_node.id) });
       }
       NodeKind::Bind { lhs, rhs: pat_node, .. } => {
         match &lhs.kind {
           NodeKind::Ident(key) => {
-            regular.push(RecField { name: key, pat: pat_node, origin: Some(lhs.id) });
+            regular.push(RecField { key: RecKey::Ident(key), pat: pat_node, origin: Some(lhs.id) });
           }
           NodeKind::LitStr { content, .. } => {
-            regular.push(RecField { name: content, pat: pat_node, origin: Some(lhs.id) });
+            regular.push(RecField { key: RecKey::Ident(content), pat: pat_node, origin: Some(lhs.id) });
           }
           _ => {}
         }
       }
       NodeKind::Arm { lhs: arm_lhs, body: arm_body, .. } => {
-        match &arm_lhs.kind {
-          NodeKind::Ident(key) => {
-            if let Some(pat_node) = arm_body.items.last() {
-              regular.push(RecField { name: key, pat: pat_node, origin: Some(arm_lhs.id) });
+        if let Some(pat_node) = arm_body.items.last() {
+          match &arm_lhs.kind {
+            NodeKind::Ident(key) => {
+              regular.push(RecField { key: RecKey::Ident(key), pat: pat_node, origin: Some(arm_lhs.id) });
             }
-          }
-          NodeKind::LitStr { content, .. } => {
-            if let Some(pat_node) = arm_body.items.last() {
-              regular.push(RecField { name: content, pat: pat_node, origin: Some(arm_lhs.id) });
+            NodeKind::LitStr { content, .. } => {
+              regular.push(RecField { key: RecKey::Ident(content), pat: pat_node, origin: Some(arm_lhs.id) });
             }
+            NodeKind::Group { inner, .. } => {
+              regular.push(RecField { key: RecKey::Expr(inner), pat: pat_node, origin: Some(arm_lhs.id) });
+            }
+            _ => {}
           }
-          _ => {}
         }
       }
       _ => {}
@@ -2307,14 +2314,17 @@ fn fold_rec_pops<'src>(
   for i in (0..fields.len()).rev() {
     let cursor_bind = if i == 0 { first_cursor.clone() } else { g.fresh_result(origin) };
     let cursor_ref = g.val(ValKind::Ref(Ref::Synth(cursor_bind.id)), origin);
-    let field_name_val = g.val(ValKind::Lit(Lit::Str(fields[i].name.to_string())), origin);
+    let (field_key_val, key_pending) = match &fields[i].key {
+      RecKey::Ident(name) => (g.val(ValKind::Lit(Lit::Str(name.to_string())), origin), vec![]),
+      RecKey::Expr(node) => lower(g, node),
+    };
     let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
 
     let pop = g.expr(ExprKind::App {
       func: Callable::BuiltIn(BuiltIn::RecPop),
       args: vec![
         Arg::Val(cursor_ref),
-        Arg::Val(field_name_val),
+        Arg::Val(field_key_val),
         Arg::Val(fail_ref),
         Arg::Cont(Cont::Expr {
           args: vec![field_temps[i].clone(), next_tail_bind],
@@ -2323,7 +2333,7 @@ fn fold_rec_pops<'src>(
       ],
     }, origin);
 
-    body = pop;
+    body = prepend_pat_binds(g, key_pending, pop);
     next_tail_bind = cursor_bind;
   }
 
