@@ -65,5 +65,16 @@ mod tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/runner/test_runner.fnk");
+  test_macros::include_fink_tests!("src/runner/test_literals.fnk");
+  test_macros::include_fink_tests!("src/runner/test_bindings.fnk");
+  test_macros::include_fink_tests!("src/runner/test_operators.fnk");
+  test_macros::include_fink_tests!("src/runner/test_functions.fnk");
+  test_macros::include_fink_tests!("src/runner/test_strings.fnk");
+  test_macros::include_fink_tests!("src/runner/test_records.fnk");
+  test_macros::include_fink_tests!("src/runner/test_formatting.fnk");
+  test_macros::include_fink_tests!("src/runner/test_patterns.fnk");
+  test_macros::include_fink_tests!("src/runner/test_ranges.fnk");
+  test_macros::include_fink_tests!("src/runner/test_yield.fnk");
+  test_macros::include_fink_tests!("src/runner/test_errors.fnk");
+  test_macros::include_fink_tests!("src/runner/test_fn_match.fnk");
 }

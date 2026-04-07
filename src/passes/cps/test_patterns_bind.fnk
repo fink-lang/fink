@@ -1,0 +1,81 @@
+---
+CPS pattern lowering tests
+---
+
+# Expected CPS expansion for every pattern form.
+#
+# All patterns lower to PatternMatch — a matcher function applied to the subject:
+#   ·fn
+#     fn <binds>: <body>                                      — body receives matched values
+#     fn ·v_N:
+#       ·fn
+#         fn ·v_subj, ·v_succ, ·v_fail: <matcher_body>       — matcher tests, calls succ/fail
+#         fn ·v_M: ·v_M subject, ·v_N, ·panic                — matcher(subject, body, panic)
+#
+# Failure continuation convention:
+#   ·panic   — default; pattern mismatch is a compile/runtime error
+#   ·v_fail  — inside a match arm; failure tries the next arm
+#
+# Collection primitives (used inside matcher bodies):
+#   ·seq_pop seq, ·fail, fn head, tail: …   — pop head element; fail if empty
+#   ·rec_pop rec, 'name', ·fail, fn val, rest: …  — extract named field; fail if missing
+#   ·empty   collection, fn bool: …         — predicate; caller branches with If
+#
+# Literal/guard/range patterns use ·op_eq, ·op_gt, etc. inside the matcher.
+# Match blocks use a fail-chain: mp_1(subj, k, fn: mp_2(subj, k, fn: panic))
+#
+# Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
+# Wildcard (_): discard; no binding, temp passed directly to next primitive
+
+{test, equals, expect, cps_expr} = import 'fake!'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+bind
+---
+
+test 'plain bind', fn:
+  expect cps_expr ƒink:
+    x = foo
+  | equals ƒink:
+    ·let ·∅foo, fn ·x_0:
+      ·v_1 ·x_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtFLEEsS0FBQSIKfQ==
+
+
+test 'simple guard', fn:
+  expect cps_expr ƒink:
+    a > 0 = foo
+  | equals ƒink:
+    ·fn
+      fn ·a_0: ·v_1 ·a_0
+      fn ·v_18:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·op_gt ·v_3, 0, fn ·v_8:
+              ·if ·v_8,
+                fn: ·ƒsucc_4 ·v_3
+                fn: ·ƒfail_5 _
+          fn ·v_16: ·v_16 ·v_18, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSSxFQUFBLEEsS0FBQTtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLE9BQUEsSSxFQUFJLEMsS0FBSixJO1VBQUEsQUFBQSxJQUFBLEk7YyxFQUFBLEEsU0FBQTtjLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFRIgp9
+
+
+test 'nested guard', fn:
+  expect cps_expr ƒink:
+    a > 0 or a < 9 = foo
+  | equals ƒink:
+    ·fn
+      fn ·a_0: ·v_1 ·a_0
+      fn ·v_22:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·op_lt ·a_0, 9, fn ·v_8:
+              ·op_or ·v_3, ·v_8, fn ·v_11:
+                ·if ·v_11,
+                  fn: ·ƒsucc_4 ·v_3
+                  fn: ·ƒfail_5 _
+          fn ·v_20: ·v_20 ·v_22, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgb3IgYSA8IDkgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSSxFQUFBLEEsS0FBQTtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBVyxBQUFBLE9BQUYsSSxFQUFJLEMsS0FBSixJO1VBQVQsQUFBQSxPQUFBLEksRUFBUyxJLEtBQVQsSztZQUFBLEFBQUEsSUFBQSxLO2dCLEVBQUEsQSxTQUFBO2dCLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFpQiIKfQ==
+
+

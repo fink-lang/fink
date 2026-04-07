@@ -1,0 +1,75 @@
+{test, expect, equals, cps_expr} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+---
+infix operators — op ·load + ·apply synthesis
+---
+
+test 'infix add', fn:
+  expect cps_expr ƒink:
+    a + b
+  | equals ƒink:
+    ·op_plus ·∅a, ·∅b, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSArIGIiXSwKICAibWFwcGluZ3MiOiAiQUFBRSxBQUFBLFNBQUYsRyxFQUFJLEcsRSIKfQ==
+
+
+test 'infix literal', fn:
+  expect cps_expr ƒink:
+    a + 1
+  | equals ƒink:
+    ·op_plus ·∅a, 1, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBRSxBQUFBLFNBQUYsRyxFQUFJLEMsRSIKfQ==
+
+
+
+---
+unary ops
+---
+
+test 'unary not', fn:
+  expect cps_expr ƒink:
+    not x
+  | equals ƒink:
+    ·op_not ·∅x, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibm90IHgiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFFBQUksRyxFIgp9
+
+
+test 'unary minus', fn:
+  expect cps_expr ƒink:
+    -x
+  | equals ƒink:
+    ·op_minus ·∅x, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLXgiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFVBQUMsRyxFIgp9
+
+---
+chained comparisons
+---
+
+test 'chained cmp', fn:
+  expect cps_expr ƒink:
+    a < b < c
+  | equals ƒink:
+    ·op_lt ·∅a, ·∅b, fn ·v_4:
+      ·op_lt ·∅b, ·∅c, fn ·v_6:
+        ·op_and ·v_4, ·v_6, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA8IGIgPCBjIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPQUFBLEcsRUFBSSxHLEtBQUosSTtFQUFBLEFBQUEsT0FBSSxHLEVBQUksRyxLQUFSLEk7SUFBQSxBQUFBLFFBQUEsSSxFQUFBLEksRSIKfQ==
+
+---
+range
+---
+
+test 'range excl', fn:
+  expect cps_expr ƒink:
+    0..10
+  | equals ƒink:
+    ·op_rngex 0, 10, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uMTAiXSwKICAibWFwcGluZ3MiOiAiQUFBQyxBQUFBLFVBQUQsQyxFQUFHLEUsRSIKfQ==
+
+
+test 'range incl', fn:
+  expect cps_expr ƒink:
+    0...10
+  | equals ƒink:
+    ·op_rngin 0, 10, ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uLjEwIl0sCiAgIm1hcHBpbmdzIjogIkFBQUMsQUFBQSxVQUFELEMsRUFBSSxFLEUiCn0=
+

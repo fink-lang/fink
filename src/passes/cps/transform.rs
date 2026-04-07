@@ -2558,8 +2558,14 @@ mod cps_tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/passes/cps/test_cps.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_cps_yield.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_literals.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_bindings.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_functions.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_operators.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_yield.fnk");
 }
 
 #[cfg(test)]
@@ -2581,7 +2587,11 @@ mod pat_tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/passes/cps/test_cps_patterns.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
 }
 
 #[cfg(test)]
@@ -2603,5 +2613,5 @@ mod module_tests {
     }
   }
 
-  test_macros::include_fink_tests!("src/passes/cps/test_cps_module.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_module.fnk");
 }

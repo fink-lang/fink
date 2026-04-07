@@ -1,0 +1,191 @@
+{test, expect, equals, gen_wat, wat} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+# Round-trip tests: CPS → emit (WASM binary) → format (WAT text + source map)
+# These validate the full pipeline produces correct, readable WAT.
+
+test 'literal int', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      42
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
+      (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_5 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 42)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTtBQUFBO0EiCn0=
+
+
+test 'literal bool', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      true
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
+      (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_5 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (ref.i31 (i32.const 1)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB0cnVlIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOzs7QTtBOzs7OztBO0FBQUE7QSIKfQ==
+
+
+test 'literal bool false', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      false
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
+      (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_5 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (ref.i31 (i32.const 0)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTtBQUFBO0EiCn0=
+
+
+
+test 'let binding', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      x = 42
+      x
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_5))
+      (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_6 (ref any))
+        (local $x_1 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_6 (call $_list_head_any (local.get $_args)))
+        (local.set $x_1 (struct.new $Num (f64.const 42)))
+        (local.set $local_4 (call $_list_nil))
+        (local.set $local_4 (call $_list_prepend_any (local.get $x_1) (local.get $local_4)))
+        (return_call $__apply (local.get $local_4) (local.get $v_6))
+      )
+      (export "main" (func $v_5))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTtBOzs7Ozs7QTtBQUFBO0EiCn0=
+
+
+test 'add two literals', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      2 + 3
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
+      (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_5 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_plus (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7O0E7QUFBQTtBIgp9
+
+
+test 'chained arithmetic', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      x = 2 * 3
+      x + 4
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $v_25 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_26 (ref any))
+        (local $v_9 (ref any))
+        (local $x_1 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_26 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_9 (call $_list_head_any (local.get $_args)))
+        (local.set $x_1 (local.get $v_9))
+        (return_call $_op_plus (local.get $x_1) (struct.new $Num (f64.const 4)) (local.get $v_26))
+      )
+      (global $main_0 (ref $Fn2) (ref.func $v_5))
+      (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_6 (ref any))
+        (local $v_30 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_6 (call $_list_head_any (local.get $_args)))
+        (local.set $v_30 (struct.new $Closure (ref.func $v_25) (array.new_fixed $Captures 1 (local.get $v_6))))
+        (return_call $_op_mul (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_30))
+      )
+      (export "main" (func $v_5))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7Ozs7O0E7OztBO0E7QTs7OztBO0FBQUE7QSIKfQ==
+
+
+test 'multiple let bindings used', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      x = 2
+      y = 3
+      x + y
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_6))
+      (func $v_6 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_7 (ref any))
+        (local $x_1 (ref any))
+        (local $y_2 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_7 (call $_list_head_any (local.get $_args)))
+        (local.set $x_1 (struct.new $Num (f64.const 2)))
+        (local.set $y_2 (struct.new $Num (f64.const 3)))
+        (return_call $_op_plus (local.get $x_1) (local.get $y_2) (local.get $v_7))
+      )
+      (export "main" (func $v_6))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTtBO0E7Ozs7O0E7QUFBQTtBIgp9
+
+
