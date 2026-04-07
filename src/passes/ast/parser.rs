@@ -770,12 +770,15 @@ impl<'src> Parser<'src> {
       let Some((l_bp, r_bp)) = Self::infix_bp(&tok) else { break };
       if l_bp < min_bp { break; }
 
-      // Member access: foo.bar or foo.(expr)
+      // Member access: foo.bar, foo.'str key', or foo.(expr)
       if tok.kind == TokenKind::Sep && tok.src == "." {
         let dot = self.bump(); // consume "."
         let rhs = if self.at(TokenKind::BracketOpen) && self.peek().src == "(" {
           // computed: foo.(expr)
           self.parse_group()?
+        } else if self.at(TokenKind::StrStart) {
+          // string key: foo.'bar baz'
+          self.parse_string(false)?
         } else {
           let t = self.expect(TokenKind::Ident)?;
           self.node(NodeKind::Ident(t.src), t.loc)
@@ -878,6 +881,8 @@ impl<'src> Parser<'src> {
         let dot = self.bump();
         let rhs = if self.at(TokenKind::BracketOpen) && self.peek().src == "(" {
           self.parse_group()?
+        } else if self.at(TokenKind::StrStart) {
+          self.parse_string(false)?
         } else {
           let t = self.expect(TokenKind::Ident)?;
           self.node(NodeKind::Ident(t.src), t.loc)

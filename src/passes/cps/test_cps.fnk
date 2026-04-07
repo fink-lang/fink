@@ -452,6 +452,14 @@ test 'member dynamic', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLihrZXkpIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxRQUFBLEssRUFBSyxLLEUiCn0=
 
 
+test 'member string key shorthand', fn:
+  expect cps_expr ƒink:
+    foo.'bar baz'
+  | equals ƒink:
+    ·op_dot ·∅foo, 'bar baz', ·v_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLidiYXIgYmF6JyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUUFBQSxLLEVBQUksQSxDQUFBLE8sQyxFIgp9
+
+
 ---
 spreads in seq and rec literals
 ---

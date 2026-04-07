@@ -435,6 +435,15 @@ test 'member by expression', fn:
         Group '(..)',
           Ident 'expr'
 
+test 'member by string key shorthand', fn:
+  expect ast ƒink:
+    foo.'bar baz'
+  | equals ƒink:
+    Module
+      Member '.',
+        Ident 'foo'
+        LitStr 'bar baz'
+
 test 'sequence index', fn:
   expect ast ƒink:
     [1, 2, 3].(0)
