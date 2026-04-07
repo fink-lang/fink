@@ -1414,6 +1414,26 @@ test 'rec pattern with bound rest', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2JhciwgLi5yZXN0fSA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxNQUFBLEk7SUFBQyxBQUFBLEtBQUQsSSxLQUFDLE07TUFBYSxBQUFBLEtBQWQsSSxLQUFRLE87USxBLEtBQUE7S0FBUixLO0lBQUEsQUFBQTtTLFUsVUFBQSxJO1FBQUEsQUFBQSxhQUFBLEk7YUFBQSxLO1lBQUEsQUFBQSxTQUFBLEssRUFBQSxBLENBQUEsRyxDLEUsUSxLQUFBLE1BQUEsSztjQUFjLEFBQUEsS0FBZCxLLEtBQUEsSTtnQkFBQSxBLFNBQUEsSSxFQUFBO1ksRUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQWdCIgp9
 
 
+test 'rec — expr key destructure', fn:
+  expect cps_expr ƒink:
+    {(4): foo} = rec
+  | equals ƒink:
+    ·fn
+      fn ·v_6:
+        ·let ·v_6, fn ·foo_0:
+          ·v_1 ·foo_0
+      fn ·v_26:
+        ·fn
+          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+            ·is_rec_like ·v_3,
+              fn ·v_11:
+                ·rec_pop ·v_11, 4, ·ƒfail_5, fn ·v_6, ·v_10:
+                  ·ƒsucc_4 ·v_6
+              fn: ·ƒfail_5 _
+          fn ·v_20: ·v_20 ·v_26, ·panic, ·∅rec
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieyg0KTogZm9vfSA9IHJlYyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxJO0lBQUMsQUFBQSxLQUFELEksS0FBTSxNO00sQSxLQUFBO0tBQU4sSztJQUFBLEFBQUE7UyxVLFVBQUEsSTtRQUFBLEFBQUEsYUFBQSxJO2FBQUEsSztZQUFBLEFBQUEsU0FBQSxLLEVBQUUsQyxFLFEsS0FBRixNQUFBLEs7Y0FBQSxBLFNBQUE7WSxFQUFBLEEsU0FBQTtTQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBYSIKfQ==
+
+
 ---
 range patterns
 ---
