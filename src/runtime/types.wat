@@ -41,6 +41,7 @@
 ;;   │       ├── $Dict                ← dict (opaque — internals in rec.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
 ;;   │       ├── $Range              ← numeric range (opaque — internals in range.wat)
+;;   │       ├── $Future             ← opaque future (settled flag + value)
 ;;   │       ├── $SpreadArgs ($List)             ← spread call marker (wraps list)
 ;;   │       ├── $VarArgs (array)               ← variable-length argument array
 ;;   │       ├── $Captures (array)             ← flat capture value array
@@ -148,6 +149,15 @@
     ;; $Range — numeric range. Opaque base type.
     ;; Internals (start/end/inclusive) defined in range.wat.
     (type $Range (sub (struct)))
+
+    ;; $Future — opaque future for cooperative multitasking.
+    ;; Returned by `spawn`; passed to `await`. Null value = pending;
+    ;; non-null = settled (fink has no null values, so this is unambiguous).
+    ;; Waiters: continuations waiting for this future to settle.
+    (type $Future (struct
+      (field $value   (mut (ref null any)))
+      (field $waiters (mut (ref $List)))
+    ))
 
     ;; $SpreadArgs — wrapper for spread arguments at call sites.
     ;; Contains a $List of the spread values. Used to distinguish a spread

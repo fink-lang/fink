@@ -37,6 +37,7 @@ fn main() {
         "src/runtime/rec.wat",
         "src/runtime/int.wat",
         "src/runtime/range.wat",
+        "src/runtime/scheduler.wat",
         "src/runtime/dispatch.wat",
     ];
 

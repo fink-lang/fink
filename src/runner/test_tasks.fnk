@@ -1,0 +1,26 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+cooperative multitasking — yield, spawn, await
+---
+
+skip test 'yield suspends and resumes', fn:
+  expect run ƒink:
+    main = fn:
+      yield _
+      42
+  | equals ƒink:
+    42
+
+
+skip test 'spawn and await', fn:
+  expect run ƒink:
+    main = fn:
+      fut = spawn fn: 42
+      result = await fut
+      result
+  | equals ƒink:
+    42
+

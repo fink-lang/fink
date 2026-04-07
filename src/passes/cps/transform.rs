@@ -2538,6 +2538,7 @@ mod cps_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_scheduling.fnk");
 }
 
 #[cfg(test)]

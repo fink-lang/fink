@@ -317,6 +317,10 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::SeqPop       => "·seq_pop".into(),
     BuiltIn::RecPop       => "·rec_pop".into(),
     BuiltIn::Empty        => "·empty".into(),
+    // Scheduling
+    BuiltIn::Yield        => "·yield".into(),
+    BuiltIn::Spawn        => "·spawn".into(),
+    BuiltIn::Await        => "·await".into(),
     // Module
     BuiltIn::Export       => "·export".into(),
     BuiltIn::Import       => "·import".into(),

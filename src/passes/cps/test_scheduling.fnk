@@ -1,0 +1,63 @@
+{test, expect, equals, cps_expr} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+---
+scheduling builtins — yield, spawn, await
+---
+
+test 'yield literal', fn:
+  expect cps_expr ƒink:
+    yield 42
+
+  | equals ƒink:
+    ·yield ·v_1, 42
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE8sSSxFQUFNIgp9
+
+
+test 'yield ident', fn:
+  expect cps_expr ƒink:
+    yield foo
+
+  | equals ƒink:
+    ·yield ·v_1, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPLEksRUFBTSIKfQ==
+
+
+test 'spawn ident', fn:
+  expect cps_expr ƒink:
+    spawn task_fn
+
+  | equals ƒink:
+    ·spawn ·v_1, ·∅task_fn
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3Bhd24gdGFza19mbiJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTyxJLEVBQU0iCn0=
+
+
+test 'await ident', fn:
+  expect cps_expr ƒink:
+    await fut
+
+  | equals ƒink:
+    ·await ·v_1, ·∅fut
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPLEksRUFBTSIKfQ==
+
+
+test 'spawn bound to name', fn:
+  expect cps_expr ƒink:
+    future = spawn task
+
+  | equals ƒink:
+    ·spawn fn ·v_5:
+      ·let ·v_5, fn ·future_0:
+        ·v_2 ·future_0, ·∅task
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZnV0dXJlID0gc3Bhd24gdGFzayJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsT0FBQSxHQUFBLEk7RUFBRixBQUFBLEtBQUUsSSxLQUFULFM7SSxBLEtBQUEsUyxFQUFlIgp9
+
+
+test 'await bound to name', fn:
+  expect cps_expr ƒink:
+    result = await fut
+
+  | equals ƒink:
+    ·await fn ·v_5:
+      ·let ·v_5, fn ·result_0:
+        ·v_2 ·result_0, ·∅fut
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0gYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQVMsQUFBQSxPQUFBLEdBQUEsSTtFQUFGLEFBQUEsS0FBRSxJLEtBQVQsUztJLEEsS0FBQSxTLEVBQWUiCn0=
