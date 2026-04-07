@@ -5,7 +5,7 @@
 //     ;; unbox args, compute, box result, tail-call cont
 //   )
 //
-// The cont is a $Closure0 (or $ClosureN) — dispatched via _croc_1 or
+// The cont is a $Closure0 (or $ClosureN) — dispatched via _apply_2 or
 // unboxed directly before return_call_ref.
 //
 // Type conventions:
@@ -21,8 +21,8 @@ pub struct TypeIndices {
   pub closure: u32,
   pub captures: u32,
   pub fn1: u32,
-  /// Function index of $_croc_1 dispatch helper, if closures exist.
-  pub croc1: Option<u32>,
+  /// Function index of $_apply_2 dispatch helper, if closures exist.
+  pub apply2: Option<u32>,
 }
 
 /// Check if a builtin has an inline WASM implementation (emitted as a
@@ -71,10 +71,10 @@ pub fn emit_builtin(name: &str, indices: &TypeIndices) -> Function {
 
 fn emit_cont_call(f: &mut Function, idx: &TypeIndices, cont_param: u32) {
   // Stack: [result]. Tail-call the continuation.
-  if let Some(croc1) = idx.croc1 {
-    // Dispatch through $_croc_1 — handles closures with any capture count.
+  if let Some(apply2) = idx.apply2 {
+    // Dispatch through $_apply_2 — handles closures with any capture count.
     f.instruction(&Instruction::LocalGet(cont_param));
-    f.instruction(&Instruction::ReturnCall(croc1));
+    f.instruction(&Instruction::ReturnCall(apply2));
   } else {
     // No closures — direct $Closure unbox (captures are null).
     f.instruction(&Instruction::LocalGet(cont_param));

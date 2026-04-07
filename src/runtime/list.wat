@@ -20,12 +20,12 @@
 ;;   $list_concat  : (ref $List), (ref $List) -> (ref $List)
 ;;
 ;; CPS wrappers (compiler-facing):
-;;   All params/results are (ref null any). Continuation dispatch via _croc.
+;;   All params/results are (ref null any). Continuation dispatch via _apply.
 ;;
-;;   $seq_prepend: (val, list, cont) -> _croc([new_list], cont)   [O(1) cons]
-;;   $seq_concat : (list_a, list_b, cont) -> _croc([merged], cont)
-;;   $seq_pop    : (cursor, fail, succ) -> if empty: _croc([], fail)
-;;                                         else: _croc([head, tail], succ)
+;;   $seq_prepend: (val, list, cont) -> _apply([new_list], cont)   [O(1) cons]
+;;   $seq_concat : (list_a, list_b, cont) -> _apply([merged], cont)
+;;   $seq_pop    : (cursor, fail, succ) -> if empty: _apply([], fail)
+;;                                         else: _apply([head, tail], succ)
 
 (module
 

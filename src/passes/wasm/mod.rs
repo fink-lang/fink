@@ -75,17 +75,17 @@
 // It takes the funcref + N captures and returns the boxed struct as
 // `(ref any)`.
 //
-// ### Dispatch: `$_croc_N` helper (call-ref-or-closure)
+// ### Dispatch: `$_apply_N` helper (call-ref-or-closure)
 //
 // At every `Callable::Val` call site (indirect call through an `(ref any)`
 // value), we don't statically know whether the callee is a plain funcref
 // or a closure struct. Instead of a static type inference pass, we use
 // WasmGC's `br_on_cast` for runtime dispatch.
 //
-// For each call-site arity N, an emitted helper `$_croc_N`
+// For each call-site arity N, an emitted helper `$_apply_N`
 // tries each `$ClosureK` type that exists in the module:
 //
-//   (func $_croc_2
+//   (func $_apply_2
 //     (param $a0 (ref any)) (param $a1 (ref any)) (param $callee (ref any))
 //     (block $try_clos1
 //       (br_on_cast_fail $try_clos1 (ref any) (ref $Closure1) (local.get $callee))
@@ -114,7 +114,7 @@
 //
 // The set of `$ClosureN` types to emit is determined by scanning for
 // `·fn_closure` call sites during collection. The set of
-// `$_croc_N` helpers is determined by `Callable::Val` call
+// `$_apply_N` helpers is determined by `Callable::Val` call
 // site arities (already tracked by `scan_call_arities`).
 
 pub mod builtins;

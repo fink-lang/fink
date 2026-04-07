@@ -38,7 +38,7 @@ match arm    → $Fn(ref $VarArgs)  where args = [subject, ...]
 ```
 
 This is required because lifting can turn any of these into a closure,
-and `_croc` dispatch needs a uniform target signature.
+and `_apply` dispatch needs a uniform target signature.
 
 #### Call site
 
@@ -95,7 +95,7 @@ forwarding:
 4. return_call_ref funcref(new_args)
 ```
 
-All `_croc_N` variants collapse into a single `_croc`. All `$FnN` types
+All `_apply_N` variants collapse into a single `_apply`. All `$FnN` types
 collapse into a single `$Fn`.
 
 ### Builtins
@@ -122,7 +122,7 @@ list — raw string segments and interpolated values interleaved.
 - Uniform — one calling convention handles all permutations
 - No flow analysis needed
 - No `$FnN` type proliferation (single `$Fn`)
-- `_croc` collapses to a single function
+- `_apply` collapses to a single function
 - Varargs and spread work everywhere, including higher-order and closures
 - Any function can be lifted to a closure without signature changes
 
@@ -139,7 +139,7 @@ This is a breaking change to the emitter and closure dispatch. Affected:
 
 1. `emit.rs` — function signatures, call emission, closure construction
 2. `collect.rs` — param collection (all functions become single `$Fn`)
-3. `_croc_N` → single `_croc` in runtime
+3. `_apply_N` → single `_apply` in runtime
 4. `$FnN` types → single `$Fn`
 5. Closure construction — captures prepended to `$VarArgs` at dispatch time
 6. CPS `Param::Spread` / `Arg::Spread` — emitter handles them for real

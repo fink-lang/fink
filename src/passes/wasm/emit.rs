@@ -347,7 +347,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   extra_arities.insert(2); // $Fn2 — all functions + _apply(args, callee)
 
   e.closure_captures = closure_captures.clone();
-  e.needs_croc_for_operators = has_operator_imports;
+  e.needs_apply_for_operators = has_operator_imports;
   e.needs_list = has_list_imports;
   e.needs_rec = has_rec_imports;
   e.needs_string = has_strings;
@@ -373,7 +373,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Sort by wasm_offset for monotonic DWARF line table emission.
   mappings.sort_by_key(|m| m.wasm_offset);
 
-  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_croc_for_operators, needs_list: e.needs_list, needs_string: has_strings }
+  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_apply_for_operators, needs_list: e.needs_list, needs_string: has_strings }
 }
 
 // ---------------------------------------------------------------------------
@@ -445,12 +445,12 @@ struct Emitter<'a, 'src> {
   raw_mappings: Vec<RawMapping>,
   /// Structural source locations for non-code items.
   structural_locs: Vec<StructuralLoc>,
-  /// Closure capture counts found in this module (for _croc dispatch).
+  /// Closure capture counts found in this module (for _apply dispatch).
   closure_captures: BTreeSet<usize>,
   /// Builtins with known implementations (emitted as defined functions).
   impl_builtins: BTreeMap<String, usize>,
-  /// Whether _croc is needed for imported operators (even without user closures).
-  needs_croc_for_operators: bool,
+  /// Whether _apply is needed for imported operators (even without user closures).
+  needs_apply_for_operators: bool,
   /// Whether list runtime imports are present (seq_prepend, seq_concat, seq_pop).
   needs_list: bool,
   /// Whether record runtime imports are present (rec_set, rec_pop, rec_merge).
@@ -482,7 +482,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       structural_locs: Vec::new(),
       closure_captures: BTreeSet::new(),
       impl_builtins: BTreeMap::new(),
-      needs_croc_for_operators: false,
+      needs_apply_for_operators: false,
       needs_list: false,
       needs_rec: false,
       needs_string: false,
@@ -944,7 +944,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
         closure: self.idx.type_idx("$Closure"),
         captures: self.idx.type_idx("$Captures"),
         fn1: self.idx.fn_type_idx(2), // $Fn2 — continuations
-        croc1: self.idx.funcs.get("_apply_2").copied(),
+        apply2: self.idx.funcs.get("_apply_2").copied(),
       };
       let names: Vec<String> = self.impl_builtins.keys().cloned().collect();
       for name in names {
@@ -1125,7 +1125,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let idx = self.idx.func_idx(&func.label);
       func_names.append(idx, &func.label);
     }
-    // _croc is now in the runtime (dispatch.wat), not emitted.
+    // _apply is now in the runtime (dispatch.wat), not emitted.
     // Implemented builtin names.
     for name in self.impl_builtins.keys() {
       let internal_name = format!("_{}", name);
@@ -1309,7 +1309,7 @@ fn emit_app(func: &Callable, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
 ///
 /// Universal calling convention: all args (values + continuation) are packed
 /// into a cons-cell list and passed as a single (ref null any) argument.
-/// Dispatch goes through `_croc` which handles both plain funcrefs and closures.
+/// Dispatch goes through `_apply` which handles both plain funcrefs and closures.
 fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   let (val_args, cont_arg) = split_args(args);
 
@@ -1781,7 +1781,7 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
 
 /// Scan for ·fn_closure call sites and collect the capture count for each.
 /// The capture count is val_args.len() - 1 (first val arg is the funcref).
-/// Returns the set of distinct capture counts, used for _croc_N dispatch branches.
+/// Returns the set of distinct capture counts, used for _apply dispatch branches.
 fn scan_closure_captures(expr: &Expr, captures: &mut BTreeSet<usize>) {
   match &expr.kind {
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {

@@ -48,7 +48,7 @@
 (module
 
   ;; Continuation dispatch: $apply_0/1/2 (defined in list.wat) wrap results
-  ;; into lists and tail-call $_croc (defined in dispatch.wat).
+  ;; into lists and tail-call $_apply (defined in dispatch.wat).
 
   ;; -- Type definitions -----------------------------------------------
 
@@ -1454,12 +1454,12 @@
 
 
   ;; CPS wrappers — compiler-facing interface
-  ;; All params/results are (ref null any). Continuation dispatch via _croc_N.
+  ;; All params/results are (ref null any). Continuation dispatch via _apply_N.
   ;;
-  ;;   rec_set: (rec, key, val, cont) → _croc([new_rec], cont)
-  ;;   rec_merge: (dest, src, cont) → _croc([merged], cont)
-  ;;   rec_pop: (rec, key, fail, succ) → if missing: _croc([], fail)
-  ;;                                     else: _croc([val, rest], succ)
+  ;;   rec_set: (rec, key, val, cont) → _apply([new_rec], cont)
+  ;;   rec_merge: (dest, src, cont) → _apply([merged], cont)
+  ;;   rec_pop: (rec, key, fail, succ) → if missing: _apply([], fail)
+  ;;                                     else: _apply([val, rest], succ)
 
   (func $rec_set (export "rec_set")
     (param $rec (ref null any)) (param $key (ref null any))

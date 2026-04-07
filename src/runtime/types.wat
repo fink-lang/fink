@@ -152,7 +152,7 @@
     ;; $SpreadArgs — wrapper for spread arguments at call sites.
     ;; Contains a $List of the spread values. Used to distinguish a spread
     ;; call (f ..items) from a regular call passing a list value (f items).
-    ;; _croc uses br_on_cast $SpreadArgs to detect the spread calling
+    ;; _apply uses br_on_cast $SpreadArgs to detect the spread calling
     ;; convention at runtime.
     (type $SpreadArgs (struct
       (field $items (ref $List))
@@ -173,7 +173,7 @@
     ;; $Closure — universal closure type.
     ;; Field 0: funcref to the lifted function (arity = call_arity + capture_count).
     ;; Field 1: captured values array, or null if no captures.
-    ;; Dispatch (_croc_N) reads the captures array length to determine
+    ;; Dispatch (_apply_N) reads the captures array length to determine
     ;; how many extra args to push before calling the funcref.
     (type $Closure (struct
       (field $func funcref)

@@ -20,7 +20,7 @@
 
 (module
   ;; Continuation dispatch: $apply_1 (defined in list.wat) wraps a single
-  ;; result in a list and tail-calls $_croc (defined in dispatch.wat).
+  ;; result in a list and tail-calls $_apply (defined in dispatch.wat).
 
   ;; ---- Internal types (not visible to user code) ----
 
@@ -2517,7 +2517,7 @@
   ;; CPS string formatter. First arg is a $VarArgs array of string segments,
   ;; second arg is the continuation. Formats each segment via _str_fmt_val,
   ;; concatenates all results into a single $StrBytesImpl, and passes the
-  ;; result to the continuation via _croc.
+  ;; result to the continuation via _apply.
   (func $str_fmt (export "str_fmt")
     (param $segments_any (ref null any)) (param $cont (ref null any))
 

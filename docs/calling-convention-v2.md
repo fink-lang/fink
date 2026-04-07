@@ -146,7 +146,7 @@ They dispatch results to continuations via `apply_1` → `_apply`:
 
 - `$FnN` per-arity types → `$Fn2` + `$Fn3` (two types total)
 - `$Captures` array → per-function struct subtypes
-- `_croc` with prepend loop → `_apply` / `_apply_cont` (trivial dispatch)
+- `_apply` / `_apply_cont` (trivial dispatch)
 - `$SpreadArgs` wrapper → removed (spread = take whole args list)
 - `$VarArgs` array → still used by `str_fmt` (builtin-internal, unchanged)
 

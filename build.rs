@@ -51,7 +51,7 @@ fn main() {
         merged_body.push_str(&format!("\n  ;; --- {} ---\n", path));
         merged_body.push_str(&body);
     }
-    // Deduplicate imports (e.g. multiple modules importing _croc_1).
+    // Deduplicate imports (e.g. multiple modules importing _apply).
     imports.sort();
     imports.dedup();
 
