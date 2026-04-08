@@ -375,10 +375,14 @@ fn drain_channel(
 /// channel setup, scheduler, IO bridging, and exit.
 /// The host provides host_exit, host_write_stdout, host_write_stderr.
 ///
-/// TODO: accept stdout/stderr as parameters (Arc<Mutex<dyn Write>>) so tests
-/// can capture output via _run_main instead of the separate exec_main path.
-/// Goal: remove exec_main entirely — tests go through run() with testable streams.
-pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<i64, String> {
+/// stdout/stderr are injected so callers control where output goes
+/// (real stdio for the CLI, buffers for tests).
+pub fn run(
+  opts: &RunOptions,
+  wasm: &[u8],
+  stdout: super::IoStream,
+  stderr: super::IoStream,
+) -> Result<i64, String> {
   use std::io::Write;
 
   let mut config = Config::new();
@@ -415,6 +419,7 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<i64, String> {
           }).map_err(|e| e.to_string())?;
         }
         "host_write_stdout" => {
+          let out = stdout.clone();
           linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
             let offset = params[0].unwrap_i32() as usize;
             let length = params[1].unwrap_i32() as usize;
@@ -423,15 +428,16 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<i64, String> {
             {
               let data = mem.data(&caller);
               if offset + length <= data.len() {
-                let mut out = std::io::stdout();
-                out.write_all(&data[offset..offset + length]).ok();
-                out.write_all(b"\n").ok();
+                let mut w = out.lock().unwrap();
+                w.write_all(&data[offset..offset + length]).ok();
+                w.write_all(b"\n").ok();
               }
             }
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
         "host_write_stderr" => {
+          let err = stderr.clone();
           linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
             let offset = params[0].unwrap_i32() as usize;
             let length = params[1].unwrap_i32() as usize;
@@ -440,9 +446,9 @@ pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<i64, String> {
             {
               let data = mem.data(&caller);
               if offset + length <= data.len() {
-                let mut err = std::io::stderr();
-                err.write_all(&data[offset..offset + length]).ok();
-                err.write_all(b"\n").ok();
+                let mut w = err.lock().unwrap();
+                w.write_all(&data[offset..offset + length]).ok();
+                w.write_all(b"\n").ok();
               }
             }
             Ok(())

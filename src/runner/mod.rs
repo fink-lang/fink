@@ -1,6 +1,11 @@
 // Runner: executes compiled WASM in Wasmtime.
 
+use std::sync::{Arc, Mutex};
+
 pub mod wasmtime_runner;
+
+/// Shared, thread-safe IO stream (stdout or stderr).
+pub type IoStream = Arc<Mutex<dyn std::io::Write + Send>>;
 
 pub struct RunOptions {
   pub debug: bool,
@@ -15,29 +20,40 @@ impl Default for RunOptions {
 }
 
 /// Compile source and run it. Returns the exit code from main.
-pub fn run_source(mut opts: RunOptions, src: &str, path: &str) -> Result<i64, String> {
+pub fn run_source(
+  mut opts: RunOptions,
+  src: &str,
+  path: &str,
+  stdout: IoStream,
+  stderr: IoStream,
+) -> Result<i64, String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
   }
   let wasm = crate::to_wasm(src, path)?;
-  wasmtime_runner::run(&opts, &wasm.binary)
+  wasmtime_runner::run(&opts, &wasm.binary, stdout, stderr)
 }
 
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
 /// Returns the exit code from main.
-pub fn run_file(mut opts: RunOptions, path: &str) -> Result<i64, String> {
+pub fn run_file(
+  mut opts: RunOptions,
+  path: &str,
+  stdout: IoStream,
+  stderr: IoStream,
+) -> Result<i64, String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
   }
 
   if path.ends_with(".fnk") {
     let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    return run_source(opts, &src, path);
+    return run_source(opts, &src, path, stdout, stderr);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
   if bytes.starts_with(b"\0asm") {
-    wasmtime_runner::run(&opts, &bytes)
+    wasmtime_runner::run(&opts, &bytes, stdout, stderr)
   } else {
     Err("only .fnk and .wasm files are supported".into())
   }
@@ -66,25 +82,43 @@ mod tests {
     }
   }
 
+  // TODO: move run_main to a test helper module — it is not part of the runner.
   #[allow(unused)]
   fn run_main(src: &str) -> String {
     let wasm = crate::to_wasm(src, "test").expect("compilation failed");
-    match wasmtime_runner::exec_main(&RunOptions::default(), &wasm.binary) {
-      Ok(result) => {
-        let mut out = format!("{}", result.exit_code);
-        if !result.stdout_lines.is_empty() {
+    let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+
+    match wasmtime_runner::run(
+      &RunOptions::default(),
+      &wasm.binary,
+      stdout_buf.clone(),
+      stderr_buf.clone(),
+    ) {
+      Ok(exit_code) => {
+        let stdout_bytes = stdout_buf.lock().unwrap();
+        let stdout = String::from_utf8_lossy(&stdout_bytes);
+        let stderr_bytes = stderr_buf.lock().unwrap();
+        let stderr = String::from_utf8_lossy(&stderr_bytes);
+
+        let mut out = format!("{}", exit_code);
+
+        let stdout_lines: Vec<&str> = stdout.split('\n').filter(|s| !s.is_empty()).collect();
+        if !stdout_lines.is_empty() {
           out.push_str("\nstdout == \":");
-          for line in &result.stdout_lines {
+          for line in &stdout_lines {
             out.push_str(&format!("\n  {}", line));
           }
         }
-        if !result.stderr_lines.is_empty() {
+
+        let stderr_lines: Vec<&str> = stderr.split('\n').filter(|s| !s.is_empty()).collect();
+        if !stderr_lines.is_empty() {
           out.push_str("\nstderr == \":");
-          for line in &result.stderr_lines {
+          for line in &stderr_lines {
             out.push_str(&format!("\n  {}", line));
           }
         }
-        // Trim trailing newline for test comparison.
+
         out.trim_end().to_string()
       }
       Err(e) => format!("ERROR: {}", e),
