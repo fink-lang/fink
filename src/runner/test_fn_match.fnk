@@ -8,7 +8,7 @@ skip test 'fn match simple', fn:
       0: 0
       n: n * 2
 
-    main = fn:
+    test_main = fn:
       double 5
   | equals ƒink:
     10
@@ -18,7 +18,7 @@ skip test 'fn match with rec pattern', fn:
     get-x = fn match:
       {x, ..}: x
 
-    main = fn:
+    test_main = fn:
       get-x {x: 42, y: 99}
   | equals ƒink:
     42

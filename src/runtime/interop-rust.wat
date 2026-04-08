@@ -23,9 +23,6 @@
   (import "env" "host_write_stdout" (func $host_write_stdout (param i32 i32)))
   (import "env" "host_write_stderr" (func $host_write_stderr (param i32 i32)))
 
-  ;; -- User code import ------------------------------------------------------
-
-  (import "@fink/user" "main" (func $main (type $Fn2)))
 
 
   ;; -- Done continuation -----------------------------------------------------
@@ -161,6 +158,7 @@
   ;; 6. When scheduler drains, returns here (but sys_exit already called)
 
   (func $_run_main (export "_run_main")
+    (param $entry (ref null any))
 
     (local $stdin  (ref null any))
     (local $stdout (ref null any))
@@ -220,7 +218,9 @@
         (local.get $done) (local.get $args)))
 
     ;; Enter CPS world. Never returns — sys_exit terminates.
-    (return_call $main (ref.null any) (local.get $args))
+    (call $_apply
+      (local.get $args)
+      (local.get $entry))
   )
 
 )

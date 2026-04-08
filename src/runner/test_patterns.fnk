@@ -4,7 +4,7 @@
 
 test 'seq guard literal in match', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match [1, 42]:
         [1, val, ..rest]: val
         [2, val, ..rest]: val + 100
@@ -14,7 +14,7 @@ test 'seq guard literal in match', fn:
 
 test 'seq guard second arm', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match [2, 10]:
         [1, val, ..rest]: val
         [2, val, ..rest]: val + 100
@@ -24,7 +24,7 @@ test 'seq guard second arm', fn:
 
 skip test 'list rest in middle', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match [1, 2, 3, 4]:
         [first, ..mid, last]: first + last
   | equals ƒink:
@@ -33,7 +33,7 @@ skip test 'list rest in middle', fn:
 
 test 'rec empty check', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {}
       match r:
         {}: true
@@ -44,7 +44,7 @@ test 'rec empty check', fn:
 
 test 'rec pattern rejects empty list', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match []:
         {}: true
         _: false
@@ -54,7 +54,7 @@ test 'rec pattern rejects empty list', fn:
 
 test 'rec pattern rejects list', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match [1, 2]:
         {a, ..}: a
         _: false
@@ -64,7 +64,7 @@ test 'rec pattern rejects list', fn:
 
 test 'seq pattern rejects empty rec', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match {}:
         []: true
         _: false
@@ -74,7 +74,7 @@ test 'seq pattern rejects empty rec', fn:
 
 test 'seq pattern rejects rec', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match {a: 1}:
         [x, ..]: x
         _: false
