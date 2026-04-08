@@ -30,7 +30,7 @@ test 'channel send and receive', fn:
   expect run ƒink:
     main = fn:
       ch = channel 0
-      send ch, 42
+      42 >> ch
       msg = receive ch
       msg
   | equals ƒink:
@@ -42,7 +42,7 @@ test 'channel with spawned sender', fn:
     main = fn:
       ch = channel 0
       spawn fn:
-        send ch, 99
+        99 >> ch
       msg = receive ch
       msg
   | equals ƒink:
@@ -53,8 +53,8 @@ test 'channel multiple messages FIFO', fn:
   expect run ƒink:
     main = fn:
       ch = channel 0
-      send ch, 1
-      send ch, 2
+      1 >> ch
+      2 >> ch
       a = receive ch
       a
   | equals ƒink:
@@ -67,7 +67,7 @@ test 'channel receiver waits for sender', fn:
       ch = channel 0
       fut = spawn fn:
         receive ch
-      send ch, 77
+      77 >> ch
       result = await fut
       result
   | equals ƒink:

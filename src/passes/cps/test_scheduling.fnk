@@ -72,14 +72,6 @@ test 'channel creation', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2hhbm5lbCAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTLEksRUFBUSIKfQ==
 
 
-test 'send to channel', fn:
-  expect cps_expr ƒink:
-    send ch, 42
-
-  | equals ƒink:
-    ·send ·v_1, ·∅ch, 42
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic2VuZCBjaCwgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE0sSSxFQUFLLEksRUFBSSIKfQ==
-
 
 test 'receive from channel', fn:
   expect cps_expr ƒink:
