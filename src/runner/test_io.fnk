@@ -1,0 +1,63 @@
+{test, skip, expect, equals, run_main} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+IO — main receives stdin, stdout, stderr channels
+---
+
+test 'main returns exit code', fn:
+  expect run_main ƒink:
+    main = fn stdin, stdout, stderr:
+      0
+  | equals ƒink:
+    0
+
+
+test 'stdout single message', fn:
+  expect run_main ƒink:
+    main = fn stdin, stdout, stderr:
+      'hello' >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      hello
+
+
+test 'stdout multiple messages', fn:
+  expect run_main ƒink:
+    main = fn stdin, stdout, stderr:
+      'hello' >> stdout
+      'world' >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      hello
+      world
+
+
+test 'stderr output', fn:
+  expect run_main ƒink:
+    main = fn stdin, stdout, stderr:
+      'error' >> stderr
+      1
+  | equals ":
+    1
+    stderr == ":
+      error
+
+
+test 'stdout and stderr', fn:
+  expect run_main ƒink:
+    main = fn stdin, stdout, stderr:
+      'out' >> stdout
+      'err' >> stderr
+      0
+  | equals ":
+    0
+    stdout == ":
+      out
+    stderr == ":
+      err
