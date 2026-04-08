@@ -69,9 +69,9 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
   passes::emit_wat(&wasm)
 }
 
-/// Compile and run source.
+/// Compile and run source. Returns the exit code from main.
 #[cfg(feature = "run")]
-pub fn run(src: &str, path: &str) -> Result<(), String> {
+pub fn run(src: &str, path: &str) -> Result<i64, String> {
   runner::run_source(Default::default(), src, path)
 }
 

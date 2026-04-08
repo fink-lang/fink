@@ -369,20 +369,103 @@ fn drain_channel(
   Ok(lines)
 }
 
-/// Execute and print the result to stdout.
-pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<(), String> {
-  match exec(opts, wasm)? {
-    FinkResult::Num(v) => {
-      if v == v.floor() && v.abs() < 1e15 {
-        println!("{}", v as i64);
-      } else {
-        println!("{}", v);
+/// Execute a compiled Fink module with IO channels.
+///
+/// Calls _run_main which handles everything internally:
+/// channel setup, scheduler, IO bridging, and exit.
+/// The host provides host_exit, host_write_stdout, host_write_stderr.
+///
+/// TODO: accept stdout/stderr as parameters (Arc<Mutex<dyn Write>>) so tests
+/// can capture output via _run_main instead of the separate exec_main path.
+/// Goal: remove exec_main entirely — tests go through run() with testable streams.
+pub fn run(opts: &RunOptions, wasm: &[u8]) -> Result<i64, String> {
+  use std::io::Write;
+
+  let mut config = Config::new();
+  config.wasm_gc(true);
+  config.wasm_tail_call(true);
+  config.wasm_function_references(true);
+  if opts.debug {
+    config.debug_info(true);
+    config.cranelift_opt_level(OptLevel::None);
+  }
+
+  let engine = Engine::new(&config).map_err(|e| e.to_string())?;
+  let module = Module::new(&engine, wasm).map_err(|e| e.to_string())?;
+
+  // TODO: move exit code handling into _run_main (return i32 directly),
+  // removing the need for host_exit import and this shared state.
+  let exit_code: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
+  let exit_code_clone = exit_code.clone();
+  let mut store = Store::new(&engine, ());
+
+  // Wire up "env" imports.
+  let mut linker = Linker::new(&engine);
+  for import in module.imports() {
+    if import.module() == "env"
+      && let ExternType::Func(ft) = import.ty()
+    {
+      let name = import.name().to_string();
+      match name.as_str() {
+        "host_exit" => {
+          let code = exit_code_clone.clone();
+          linker.func_new("env", &name, ft.clone(), move |_caller, params, _results| {
+            *code.lock().unwrap() = params[0].unwrap_i32() as i64;
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_write_stdout" => {
+          linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
+            let offset = params[0].unwrap_i32() as usize;
+            let length = params[1].unwrap_i32() as usize;
+            if let Some(memory) = caller.get_export("memory")
+              && let Some(mem) = memory.into_memory()
+            {
+              let data = mem.data(&caller);
+              if offset + length <= data.len() {
+                let mut out = std::io::stdout();
+                out.write_all(&data[offset..offset + length]).ok();
+                out.write_all(b"\n").ok();
+              }
+            }
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_write_stderr" => {
+          linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
+            let offset = params[0].unwrap_i32() as usize;
+            let length = params[1].unwrap_i32() as usize;
+            if let Some(memory) = caller.get_export("memory")
+              && let Some(mem) = memory.into_memory()
+            {
+              let data = mem.data(&caller);
+              if offset + length <= data.len() {
+                let mut err = std::io::stderr();
+                err.write_all(&data[offset..offset + length]).ok();
+                err.write_all(b"\n").ok();
+              }
+            }
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        _ => {
+          let err_name = name.clone();
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Err(Error::msg(format!("builtin '{}' not yet implemented", err_name)))
+          }).map_err(|e| e.to_string())?;
+        }
       }
     }
-    FinkResult::Bool(b) => println!("{}", b),
-    FinkResult::Str(s) => println!("{}", s),
-    FinkResult::None => {}
   }
-  Ok(())
+
+  let instance = linker.instantiate(&mut store, &module).map_err(|e| e.to_string())?;
+
+  // Call _run_main — handles everything internally.
+  let run_main = instance.get_func(&mut store, "_run_main")
+    .ok_or("no '_run_main' export")?;
+  run_main.call(&mut store, &[], &mut [])
+    .map_err(|e| format!("_run_main failed: {}", e))?;
+
+  Ok(*exit_code.lock().unwrap())
 }
 

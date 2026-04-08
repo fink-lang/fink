@@ -163,6 +163,9 @@ struct ParsedImport {
     name: String,
     /// True if module starts with `@fink/` — resolved by linker, not kept.
     is_fink: bool,
+    /// For func imports: the type index in the fragment's type space.
+    /// Used to re-emit non-@fink/ imports in the linked output.
+    func_type_idx: Option<u32>,
 }
 
 /// Exported item from a fragment.
@@ -290,16 +293,17 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                         wasmparser::Imports::Single(_, import) => {
                             let is_fink =
                                 import.module.starts_with("@fink/");
-                            if matches!(
-                                import.ty,
-                                wasmparser::TypeRef::Func(_)
-                            ) {
+                            let func_type_idx = if let wasmparser::TypeRef::Func(idx) = import.ty {
                                 frag.import_func_count += 1;
-                            }
+                                Some(idx)
+                            } else {
+                                None
+                            };
                             frag.imports.push(ParsedImport {
                                 module: import.module.to_string(),
                                 name: import.name.to_string(),
                                 is_fink,
+                                func_type_idx,
                             });
                         }
                         wasmparser::Imports::Compact1 {
@@ -309,16 +313,17 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                             for item in items.into_iter().flatten() {
                                 let is_fink =
                                     mod_name.starts_with("@fink/");
-                                if matches!(
-                                    item.ty,
-                                    wasmparser::TypeRef::Func(_)
-                                ) {
+                                let func_type_idx = if let wasmparser::TypeRef::Func(idx) = item.ty {
                                     frag.import_func_count += 1;
-                                }
+                                    Some(idx)
+                                } else {
+                                    None
+                                };
                                 frag.imports.push(ParsedImport {
                                     module: mod_name.to_string(),
                                     name: item.name.to_string(),
                                     is_fink,
+                                    func_type_idx,
                                 });
                             }
                         }
@@ -469,6 +474,10 @@ struct LinkContext {
     // Accumulated type section bytes with fragment index (for remap lookup).
     type_sections: Vec<(usize, Vec<u8>)>,
 
+    // External (non-@fink/) func imports to preserve in output.
+    // (module_name, import_name, remapped_type_idx)
+    external_imports: Vec<(String, String, u32)>,
+
     // Accumulated function declarations: new_type_idx per defined function.
     func_decls: Vec<u32>,
 
@@ -513,6 +522,7 @@ impl LinkContext {
             next_func_idx: 0,
             next_global_idx: 0,
             type_sections: Vec::new(),
+            external_imports: Vec::new(),
             func_decls: Vec::new(),
             code_bodies: Vec::new(),
             exports: Vec::new(),
@@ -603,6 +613,34 @@ fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 }
 
 fn merge_functions(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
+    // Pass 0: collect external (non-@fink/) func imports, dedup, assign indices.
+    // These occupy function indices 0..N in the output module.
+    let mut seen_externals: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for (i, frag) in fragments.iter().enumerate() {
+        for (import_idx, import) in frag.imports.iter().enumerate() {
+            if import.is_fink || import.func_type_idx.is_none() {
+                continue;
+            }
+            let key = (import.module.clone(), import.name.clone());
+            let new_func_idx = if let Some(&idx) = seen_externals.get(&key) {
+                idx
+            } else {
+                let idx = ctx.next_func_idx;
+                let type_idx = import.func_type_idx.unwrap();
+                let new_type_idx = ctx.remaps[i].types[&type_idx];
+                ctx.external_imports.push((
+                    import.module.clone(),
+                    import.name.clone(),
+                    new_type_idx,
+                ));
+                seen_externals.insert(key, idx);
+                ctx.next_func_idx += 1;
+                idx
+            };
+            ctx.remaps[i].funcs.insert(import_idx as u32, new_func_idx);
+        }
+    }
+
     // First pass: assign indices to all defined functions and build export map.
     for (i, frag) in fragments.iter().enumerate() {
         let base = ctx.next_func_idx;
@@ -1168,6 +1206,19 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
             reencode_type_section(&mut combined, reader, remap, shares_canonical);
         }
         module.section(&combined);
+    }
+
+    // 1b. Import section — external (non-@fink/) imports preserved from input.
+    if !ctx.external_imports.is_empty() {
+        let mut imports = wasm_encoder::ImportSection::new();
+        for (mod_name, imp_name, type_idx) in &ctx.external_imports {
+            imports.import(
+                mod_name,
+                imp_name,
+                wasm_encoder::EntityType::Function(*type_idx),
+            );
+        }
+        module.section(&imports);
     }
 
     // 2. Function section.
@@ -2190,6 +2241,80 @@ mod tests {
             }
         }
         addrs
+    }
+
+    #[test]
+    fn t_link_preserves_external_imports() {
+        // Module with an "env" import should survive linking.
+        // The linker must preserve non-@fink/ imports in the output.
+        let wasm_rt = wat(
+            r#"(module
+                (import "env" "host_write" (func $host_write (param i32 i32)))
+                (func $helper (param i32 i32)
+                    local.get 0
+                    local.get 1
+                    call $host_write)
+                (export "helper" (func $helper))
+            )"#,
+        );
+        let wasm_user = wat(
+            r#"(module
+                (import "@fink/runtime/io" "helper"
+                    (func $helper (param i32 i32)))
+                (func $main
+                    i32.const 0
+                    i32.const 5
+                    call $helper)
+                (export "main" (func $main))
+            )"#,
+        );
+
+        let result = link(&[
+            LinkInput {
+                module_name: "@fink/runtime/io".into(),
+                wasm: wasm_rt,
+            },
+            LinkInput {
+                module_name: String::new(),
+                wasm: wasm_user,
+            },
+        ]);
+
+        validate(&result.wasm);
+
+        // "env" import should survive.
+        let mut env_imports = Vec::new();
+        for payload in Parser::new(0).parse_all(&result.wasm) {
+            if let Ok(Payload::ImportSection(reader)) = payload {
+                for group in reader {
+                    match group.unwrap() {
+                        wasmparser::Imports::Single(_, import) => {
+                            env_imports.push((
+                                import.module.to_string(),
+                                import.name.to_string(),
+                            ));
+                        }
+                        wasmparser::Imports::Compact1 { module, items } => {
+                            for item in items.into_iter().flatten() {
+                                env_imports.push((
+                                    module.to_string(),
+                                    item.name.to_string(),
+                                ));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            env_imports,
+            vec![("env".to_string(), "host_write".to_string())],
+            "env imports should be preserved in linked output"
+        );
+
+        // Should have 2 defined functions + 1 import = 3 total in function index space.
+        assert_eq!(count_funcs(&result.wasm), 2);
     }
 
     #[test]
