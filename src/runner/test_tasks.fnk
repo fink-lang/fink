@@ -73,3 +73,14 @@ test 'channel receiver waits for sender', fn:
   | equals ƒink:
     77
 
+
+test 'channel << send and receive', fn:
+  expect run ƒink:
+    main = fn:
+      ch = channel 0
+      ch << 42
+      msg = receive ch
+      msg
+  | equals ƒink:
+    42
+
