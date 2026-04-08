@@ -34,7 +34,7 @@ fn main() {
       a.strip_prefix("--lifted=").map(|v| Some(v.to_string()))
     }
   });
-  let positional: Vec<&str> = args.iter().skip(1).filter(|a| !a.starts_with("-")).map(|s| s.as_str()).collect();
+  let positional: Vec<&str> = args.iter().skip(1).filter(|a| *a == "-" || !a.starts_with("-")).map(|s| s.as_str()).collect();
 
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
@@ -50,10 +50,20 @@ fn main() {
     }
   };
 
-  let src = fs::read_to_string(path).unwrap_or_else(|e| {
-    eprintln!("error: {path}: {e}");
-    process::exit(1);
-  });
+  let src = if path == "-" {
+    use std::io::Read;
+    let mut buf = String::new();
+    std::io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {
+      eprintln!("error: stdin: {e}");
+      process::exit(1);
+    });
+    buf
+  } else {
+    fs::read_to_string(path).unwrap_or_else(|e| {
+      eprintln!("error: {path}: {e}");
+      process::exit(1);
+    })
+  };
 
   match cmd {
     "tokens" => {
@@ -164,7 +174,10 @@ fn main() {
       #[cfg(not(feature = "run"))]
       { eprintln!("error: 'run' command requires the 'run' feature"); process::exit(1); }
       #[cfg(feature = "run")]
-      fink::run(&src, path).unwrap_or_else(|e| die(&e));
+      {
+        let exit_code = fink::run(&src, path).unwrap_or_else(|e| die(&e));
+        process::exit(exit_code as i32);
+      }
     }
 
     "dap" => {

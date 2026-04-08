@@ -733,6 +733,15 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
+    // _run_main: self-contained main runner from interop-rust.wat.
+    // Type: () -> () — calls sys_exit internally, never returns a value.
+    {
+      let run_main_idx = self.idx.fn_type_idx(0);
+      imports.import("@fink/runtime", "_run_main", wasm_encoder::EntityType::Function(run_main_idx));
+      self.idx.imports.insert("_run_main".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
     // _apply: closure dispatch (defined in dispatch.wat).
     {
       let fn2_idx = self.idx.fn_type_idx(2);
@@ -825,6 +834,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let channel_new_type = self.idx.type_idx("$TmpImportChannelNew");
     functions.function(channel_new_type);
     self.idx.funcs.insert("_channel_new_export".into(), next_func_idx);
+    next_func_idx += 1;
+
+    // _run_main helper: wraps _run_main import for the runner.
+    let run_main_type = self.idx.fn_type_idx(0);
+    functions.function(run_main_type);
+    self.idx.funcs.insert("_run_main_export".into(), next_func_idx);
     next_func_idx += 1;
 
     // $_panic: (func) — unreachable trap for irrefutable pattern failure.
@@ -940,6 +955,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let channel_new_idx = self.idx.func_idx("_channel_new_export");
     exports.export("_channel_new", ExportKind::Func, channel_new_idx);
 
+    // _run_main: exported for the runner to execute main with IO.
+    let run_main_idx = self.idx.func_idx("_run_main_export");
+    exports.export("_run_main", ExportKind::Func, run_main_idx);
+
     // TODO: memory should not be exported in production builds — only
     // needed for the runner to read string data during testing.
     exports.export("memory", ExportKind::Memory, 0);
@@ -1036,6 +1055,15 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let channel_new_idx = self.idx.func_idx("_channel_new");
       f.instruction(&Instruction::LocalGet(0));
       f.instruction(&Instruction::Call(channel_new_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
+    // _run_main body: delegates to imported _run_main.
+    {
+      let mut f = Function::new(vec![]);
+      let run_main_idx = self.idx.func_idx("_run_main");
+      f.instruction(&Instruction::Call(run_main_idx));
       f.instruction(&Instruction::End);
       code.function(&f);
     }
@@ -1180,7 +1208,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       func_names.append(idx, &internal_name);
     }
     // Internal helpers.
-    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export"] {
+    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export", "_run_main_export"] {
       if let Some(&idx) = self.idx.funcs.get(*name) {
         func_names.append(idx, name);
       }

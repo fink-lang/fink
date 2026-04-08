@@ -40,6 +40,7 @@ fn main() {
         "src/runtime/scheduler.wat",
         "src/runtime/channel.wat",
         "src/runtime/dispatch.wat",
+        "src/runtime/interop-rust.wat",
     ];
 
     let mut imports = Vec::new();
@@ -67,7 +68,9 @@ fn main() {
 
 /// Extract module parts: returns (@fink/user imports, body without imports).
 /// Strips @fink/runtime/ imports (internal to merged module).
-/// Hoists @fink/user imports for the caller to deduplicate and place first.
+/// Hoists imports for the caller to deduplicate and place first.
+/// Strips @fink/runtime/ imports (resolved internally in merged module).
+/// Hoists @fink/user and "env" imports to appear before function bodies.
 fn extract_module_parts(wat: &str) -> (Vec<String>, String) {
     let mut imports: Vec<String> = Vec::new();
     let mut body_lines: Vec<&str> = Vec::new();
@@ -85,8 +88,8 @@ fn extract_module_parts(wat: &str) -> (Vec<String>, String) {
         if trimmed.starts_with("(import ") && line.contains("@fink/runtime/") {
             continue;
         }
-        // Hoist @fink/user imports — the caller places them before body.
-        if trimmed.starts_with("(import ") && line.contains("@fink/user") {
+        // Hoist @fink/user and "env" imports — the caller places them before body.
+        if trimmed.starts_with("(import ") && (line.contains("@fink/user") || line.contains("\"env\"")) {
             imports.push(line.to_string());
             continue;
         }

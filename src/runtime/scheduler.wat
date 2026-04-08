@@ -44,7 +44,11 @@
   )
 
   ;; Run the next task from the queue. All primitives tail-call this.
+  ;; Returns when the queue is empty — control propagates back through
+  ;; the tail-call chain to whoever first entered CPS.
   (func $run_next
+    (if (ref.test (ref $Nil) (global.get $task_queue))
+      (then (return)))
     (return_call $_apply (struct.new $Nil) (call $queue_pop))
   )
 
