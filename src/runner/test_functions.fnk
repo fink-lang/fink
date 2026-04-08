@@ -5,7 +5,7 @@
 test 'pipe with fn call', fn:
   expect run ƒink:
     add = fn a, b: a + b
-    main = fn:
+    test_main = fn:
       2
       | add 3, ?
   | equals ƒink:
@@ -14,7 +14,7 @@ test 'pipe with fn call', fn:
 
 test 'match literal first arm', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match 0:
         0: 42
         _: 99
@@ -24,7 +24,7 @@ test 'match literal first arm', fn:
 
 test 'match literal second arm', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match 1:
         0: 42
         _: 99
@@ -34,7 +34,7 @@ test 'match literal second arm', fn:
 
 test 'match wildcard binding', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match 5:
         0: 0
         x: x + 1
@@ -48,7 +48,7 @@ test 'factorial', fn:
       match n:
         0: 1
         n: n * fac n - 1
-    main = fn:
+    test_main = fn:
       fac 5
   | equals ƒink:
     120
@@ -61,7 +61,7 @@ test 'add list items', fn:
         []: c
         [a, ..rest]: sum rest, c + a
 
-    main = fn:
+    test_main = fn:
       sum [1, 2, 3, 4], 0
 
   | equals ƒink:
@@ -74,7 +74,7 @@ test 'varargs first', fn:
       match args:
         [a, ..]: a
 
-    main = fn:
+    test_main = fn:
       first ..[42, 99]
   | equals ƒink:
     42
@@ -84,7 +84,7 @@ test 'varargs identity', fn:
   expect run ƒink:
     identity = fn ..args: args
 
-    main = fn:
+    test_main = fn:
       match (identity ..[10, 20, 30]):
         [a, ..]: a
   | equals ƒink:
@@ -97,7 +97,7 @@ test 'tagged template varargs', fn:
       match parts:
         [a, ..]: a
 
-    main = fn:
+    test_main = fn:
       x = 42
       y = first'hello ${x} world'
       y == 'hello '
@@ -111,7 +111,7 @@ test 'varargs mixed fixed and rest', fn:
       match rest:
         [b, ..]: a + b
 
-    main = fn:
+    test_main = fn:
       head-and-rest 10, ..[20, 30]
   | equals ƒink:
     30

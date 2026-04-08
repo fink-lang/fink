@@ -4,7 +4,7 @@
 
 test 'rec destructure', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {a, b: c} = {a: 1, b: 2}
       a + c
   | equals ƒink:
@@ -13,7 +13,7 @@ test 'rec destructure', fn:
 
 test 'rec single field', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {x} = {x: 42}
       x
   | equals ƒink:
@@ -22,7 +22,7 @@ test 'rec single field', fn:
 
 test 'rec three fields', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {a, b, c} = {a: 1, b: 2, c: 3}
       a + b + c
   | equals ƒink:
@@ -31,7 +31,7 @@ test 'rec three fields', fn:
 
 test 'rec shorthand', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 10
       y = 20
       {a, b} = {a: x, b: y}
@@ -42,7 +42,7 @@ test 'rec shorthand', fn:
 
 test 'rec nested', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {a} = {a: {b: 42}}
       {b} = a
       b
@@ -52,7 +52,7 @@ test 'rec nested', fn:
 
 test 'rec spread update', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 1, b: 2}
       {a, b} = {..r, b: 10}
       a + b
@@ -62,7 +62,7 @@ test 'rec spread update', fn:
 
 test 'rec spread merge', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r1 = {a: 1}
       r2 = {b: 2}
       {a, b} = {..r1, ..r2}
@@ -77,7 +77,7 @@ test 'rec in fn arg', fn:
       {a, b} = rec
       a + b
 
-    main = fn:
+    test_main = fn:
       sum-fields {a: 10, b: 20}
   | equals ƒink:
     30
@@ -88,7 +88,7 @@ test 'rec fn return', fn:
     make-point = fn x, y:
       {x: x, y: y}
 
-    main = fn:
+    test_main = fn:
       {x, y} = make-point 3, 4
       x + y
   | equals ƒink:
@@ -97,7 +97,7 @@ test 'rec fn return', fn:
 
 test 'rec match pattern', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {x: 42, y: 99}
       match r:
         {x, ..}: x
@@ -107,7 +107,7 @@ test 'rec match pattern', fn:
 
 test 'rec match extract field', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 5, b: 10}
       match r:
         {a, ..}: a
@@ -117,7 +117,7 @@ test 'rec match extract field', fn:
 
 test 'rec empty', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {}
       {a} = {..r, a: 1}
       a
@@ -127,7 +127,7 @@ test 'rec empty', fn:
 
 test 'rec with bool values', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {a, b} = {a: true, b: false}
       a and (not b)
   | equals ƒink:
@@ -136,7 +136,7 @@ test 'rec with bool values', fn:
 
 test 'rec with string values', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {name} = {name: 'hello'}
       name == 'hello'
   | equals ƒink:
@@ -145,7 +145,7 @@ test 'rec with string values', fn:
 
 test 'rec string key destructure', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {'foo bar': v} = {'foo bar': 42}
       v
   | equals ƒink:
@@ -154,7 +154,7 @@ test 'rec string key destructure', fn:
 
 test 'rec expr key destructure', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {(4): foo} = {(1 + 3): 42}
       foo
   | equals ƒink:
@@ -163,7 +163,7 @@ test 'rec expr key destructure', fn:
 
 test 'rec destructure extra fields', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {a, b} = {a: 1, b: 2, c: 3}
       a + b
   | equals ƒink:
@@ -172,7 +172,7 @@ test 'rec destructure extra fields', fn:
 
 test 'rec spread overwrite', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 1, b: 2}
       {a, b} = {..r, a: 99}
       a + b
@@ -182,7 +182,7 @@ test 'rec spread overwrite', fn:
 
 test 'rec rest binding', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {a, ..rest} = {a: 1, b: 2, c: 3}
       {b} = rest
       a + b
@@ -191,7 +191,7 @@ test 'rec rest binding', fn:
 
 test 'rec empty rest exact match', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 1}
       match r:
         {a, ..{}}: a
@@ -201,7 +201,7 @@ test 'rec empty rest exact match', fn:
 
 test 'rec empty rest rejects extra', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 1, b: 2}
       match r:
         {a, ..{}}: a
@@ -211,7 +211,7 @@ test 'rec empty rest rejects extra', fn:
 
 test 'rec guard literal in match', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {kind: 1, val: 42}
       match r:
         {kind: 1, val}: val
@@ -222,7 +222,7 @@ test 'rec guard literal in match', fn:
 
 test 'rec guard second arm', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {kind: 2, val: 10}
       match r:
         {kind: 1, val}: val
@@ -233,7 +233,7 @@ test 'rec guard second arm', fn:
 
 test 'rec key membership', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 1, b: 2}
       'a' in r
   | equals ƒink:
@@ -241,7 +241,7 @@ test 'rec key membership', fn:
 
 test 'rec key not member', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 1, b: 2}
       'c' not in r
   | equals ƒink:
@@ -249,7 +249,7 @@ test 'rec key not member', fn:
 
 test 'rec with list value', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       {items} = {items: [1, 2, 3]}
       match items:
         [a, ..]: a
@@ -261,7 +261,7 @@ test 'rec with list value', fn:
 
 test 'rec dot access', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: 42}
       r.a
   | equals ƒink:
@@ -269,7 +269,7 @@ test 'rec dot access', fn:
 
 test 'rec dot access nested', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {a: {b: 99}}
       r.a.b
   | equals ƒink:
@@ -277,7 +277,7 @@ test 'rec dot access nested', fn:
 
 test 'rec dot access string key', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {'foo bar': 42}
       r.('foo bar')
   | equals ƒink:
@@ -285,7 +285,7 @@ test 'rec dot access string key', fn:
 
 test 'rec dot access string key short', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = {'foo bar': 42}
       r.'foo bar'
   | equals ƒink:

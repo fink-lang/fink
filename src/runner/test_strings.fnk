@@ -4,14 +4,14 @@
 
 test 'string literal', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'hello'
   | equals ":
     hello
 
 test 'string escape newline', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'hello\nworld'
   | equals ":
     hello
@@ -19,35 +19,35 @@ test 'string escape newline', fn:
 
 test 'string escape tab', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'a\tb'
   | equals ":
     a	b
 
 test 'string escape backslash', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'a\\b'
   | equals ":
     a\b
 
 test 'string escape hex', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       '\xE9'
   | equals ":
     é
 
 test 'string escape unicode', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       '\u{1F600}'
   | equals ":
     😀
 
 test 'string eq same', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'hello' == 'hello'
   | equals ":
     true
@@ -55,7 +55,7 @@ test 'string eq same', fn:
 
 test 'string eq different', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'hello' == 'world'
   | equals ":
     false
@@ -63,7 +63,7 @@ test 'string eq different', fn:
 
 test 'string neq', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'hello' != 'world'
   | equals ":
     true
@@ -71,7 +71,7 @@ test 'string neq', fn:
 
 test 'str template string only', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       name = 'world'
       'hello ${name}' == 'hello world'
   | equals ƒink:
@@ -80,7 +80,7 @@ test 'str template string only', fn:
 
 test 'str template with number', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 42
       'value: ${x}' == 'value: 42'
   | equals ƒink:
@@ -89,7 +89,7 @@ test 'str template with number', fn:
 
 test 'str template with bool', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'done: ${true}' == 'done: true'
   | equals ƒink:
     true
@@ -97,7 +97,7 @@ test 'str template with bool', fn:
 
 test 'str template multiple segments', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       a = 1
       b = 2
       '${a} + ${b} = ${a + b}' == '1 + 2 = 3'
@@ -107,7 +107,7 @@ test 'str template multiple segments', fn:
 
 test 'str template with float', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       'pi: ${3.14}' == 'pi: 3.14'
   | equals ƒink:
     true
@@ -115,7 +115,7 @@ test 'str template with float', fn:
 
 test 'str template float arithmetic', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 1.5
       y = 2.3
       '${x} + ${y} = ${x + y}' == '1.5 + 2.3 = 3.8'
@@ -125,7 +125,7 @@ test 'str template float arithmetic', fn:
 
 skip test 'str template pattern', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       match 'hello world':
         'hello ${name}': name == 'world'
   | equals ƒink:

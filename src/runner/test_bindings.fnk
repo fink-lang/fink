@@ -4,7 +4,7 @@
 
 test 'let binding', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 42
       x
   | equals ƒink:
@@ -13,7 +13,7 @@ test 'let binding', fn:
 
 test 'let alias', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 42
       y = x
       y
@@ -23,7 +23,7 @@ test 'let alias', fn:
 
 test 'chained arithmetic', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 2 * 3
       x + 4
   | equals ƒink:
@@ -32,7 +32,7 @@ test 'chained arithmetic', fn:
 
 test 'multiple let bindings', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 2
       y = 3
       x + y
@@ -42,7 +42,7 @@ test 'multiple let bindings', fn:
 
 test 'nested chains', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 2 + 3
       y = x * 2
       y - 1
