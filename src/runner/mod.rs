@@ -15,6 +15,7 @@ impl Default for RunOptions {
 }
 
 /// Compile source and run it. Returns the exit code from main.
+#[cfg(feature = "compile")]
 pub fn run_source(mut opts: RunOptions, src: &str, path: &str) -> Result<i64, String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
@@ -25,6 +26,7 @@ pub fn run_source(mut opts: RunOptions, src: &str, path: &str) -> Result<i64, St
 
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
 /// Returns the exit code from main.
+#[cfg(feature = "compile")]
 pub fn run_file(mut opts: RunOptions, path: &str) -> Result<i64, String> {
   if opts.source_label == "fink" {
     opts.source_label = path.to_string();
