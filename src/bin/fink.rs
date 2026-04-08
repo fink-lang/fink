@@ -213,7 +213,10 @@ fn main() {
       { eprintln!("error: 'run' command requires the 'run' feature"); process::exit(1); }
       #[cfg(feature = "run")]
       {
-        let exit_code = fink::run(&src, path).unwrap_or_else(|e| die(&e));
+        use std::sync::{Arc, Mutex};
+        let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
+        let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
+        let exit_code = fink::run(&src, path, stdout, stderr).unwrap_or_else(|e| die(&e));
         process::exit(exit_code as i32);
       }
     }

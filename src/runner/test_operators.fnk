@@ -4,7 +4,7 @@
 
 test 'add two literals', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       2 + 3
   | equals ƒink:
     5
@@ -12,7 +12,7 @@ test 'add two literals', fn:
 
 test 'subtraction', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       10 - 3
   | equals ƒink:
     7
@@ -20,7 +20,7 @@ test 'subtraction', fn:
 
 test 'multiplication', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       4 * 5
   | equals ƒink:
     20
@@ -28,7 +28,7 @@ test 'multiplication', fn:
 
 test 'division', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       10 / 4
   | equals ƒink:
     2.5
@@ -36,7 +36,7 @@ test 'division', fn:
 
 test 'integer division', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       7 // 2
   | equals ƒink:
     3
@@ -44,7 +44,7 @@ test 'integer division', fn:
 
 test 'modulo', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       10 %% 3
   | equals ƒink:
     1
@@ -52,7 +52,7 @@ test 'modulo', fn:
 
 test 'equal', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       3 == 3
   | equals ƒink:
     true
@@ -60,7 +60,7 @@ test 'equal', fn:
 
 test 'not equal', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       3 != 4
   | equals ƒink:
     true
@@ -68,7 +68,7 @@ test 'not equal', fn:
 
 test 'less than', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       3 < 4
   | equals ƒink:
     true
@@ -76,7 +76,7 @@ test 'less than', fn:
 
 test 'less than or equal', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       3 <= 3
   | equals ƒink:
     true
@@ -84,7 +84,7 @@ test 'less than or equal', fn:
 
 test 'greater than', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       4 > 3
   | equals ƒink:
     true
@@ -92,7 +92,7 @@ test 'greater than', fn:
 
 test 'greater than or equal', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       3 >= 3
   | equals ƒink:
     true
@@ -100,7 +100,7 @@ test 'greater than or equal', fn:
 
 test 'not', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       not true
   | equals ƒink:
     false
@@ -108,7 +108,7 @@ test 'not', fn:
 
 test 'and', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       true and false
   | equals ƒink:
     false
@@ -116,7 +116,7 @@ test 'and', fn:
 
 test 'or', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       true or false
   | equals ƒink:
     true
@@ -124,7 +124,7 @@ test 'or', fn:
 
 test 'xor', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       true xor true
   | equals ƒink:
     false
@@ -132,7 +132,7 @@ test 'xor', fn:
 
 test 'chain with bool', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = 3 > 2
       x and true
   | equals ƒink:
@@ -143,42 +143,42 @@ test 'chain with bool', fn:
 
 test 'bitwise and', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       0xFF and 0x0F
   | equals ƒink:
     15
 
 test 'bitwise or', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       0xFF or 0x0F
   | equals ƒink:
     255
 
 test 'bitwise xor', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       0xFF xor 0x0F
   | equals ƒink:
     240
 
 test 'bitwise not', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       not 0
   | equals ƒink:
     -1
 
 test 'bitwise shift left', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       1 << 8
   | equals ƒink:
     256
 
 test 'bitwise shift right', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       256 >> 4
   | equals ƒink:
     16

@@ -26,8 +26,11 @@ fn main() {
     }
   };
 
+  use std::sync::{Arc, Mutex};
   let opts = fink::runner::RunOptions::default();
-  match fink::runner::wasmtime_runner::run(&opts, &wasm) {
+  let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
+  let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
+  match fink::runner::wasmtime_runner::run(&opts, &wasm, stdout, stderr) {
     Ok(exit_code) => process::exit(exit_code as i32),
     Err(e) => {
       eprintln!("error: {e}");

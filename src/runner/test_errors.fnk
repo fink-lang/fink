@@ -4,7 +4,7 @@
 
 skip test 'try unwrap ok', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       x = try Ok 42
       x
   | equals ƒink:
@@ -16,7 +16,7 @@ skip test 'try propagate err', fn:
       try Err 'boom'
       99
 
-    main = fn:
+    test_main = fn:
       match (fallible ..[]):
         Ok v: v
         Err e: e == 'boom'
@@ -25,7 +25,7 @@ skip test 'try propagate err', fn:
 
 skip test 'match ok err', fn:
   expect run ƒink:
-    main = fn:
+    test_main = fn:
       r = Ok 42
       match r:
         Ok v: v

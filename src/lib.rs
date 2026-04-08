@@ -73,8 +73,13 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
 
 /// Compile and run source. Returns the exit code from main.
 #[cfg(feature = "run")]
-pub fn run(src: &str, path: &str) -> Result<i64, String> {
-  runner::run_source(Default::default(), src, path)
+pub fn run(
+  src: &str,
+  path: &str,
+  stdout: runner::IoStream,
+  stderr: runner::IoStream,
+) -> Result<i64, String> {
+  runner::run_source(Default::default(), src, path, stdout, stderr)
 }
 
 /// Start DAP debug server for a .fnk file, communicating over stdin/stdout.

@@ -344,6 +344,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // $Fn2(caps, args) — unified calling convention for all functions.
   let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
   extra_arities.insert(0); // $Fn0 — $_panic
+  extra_arities.insert(1); // $Fn1 — _run_main(entry)
   extra_arities.insert(2); // $Fn2 — all functions + _apply(args, callee)
 
   e.closure_captures = closure_captures.clone();
@@ -733,10 +734,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
-    // _run_main: self-contained main runner from interop-rust.wat.
-    // Type: () -> () — calls sys_exit internally, never returns a value.
+    // _run_main: main runner from interop-rust.wat.
+    // Type: (ref null any) -> () — takes the entry function (boxed $Closure).
     {
-      let run_main_idx = self.idx.fn_type_idx(0);
+      let run_main_idx = self.idx.fn_type_idx(1);
       imports.import("@fink/runtime", "_run_main", wasm_encoder::EntityType::Function(run_main_idx));
       self.idx.imports.insert("_run_main".into(), next_func_idx);
       next_func_idx += 1;
@@ -837,7 +838,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
     next_func_idx += 1;
 
     // _run_main helper: wraps _run_main import for the runner.
-    let run_main_type = self.idx.fn_type_idx(0);
+    let run_main_type = self.idx.fn_type_idx(1);
     functions.function(run_main_type);
     self.idx.funcs.insert("_run_main_export".into(), next_func_idx);
     next_func_idx += 1;
@@ -1059,10 +1060,11 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&f);
     }
 
-    // _run_main body: delegates to imported _run_main.
+    // _run_main body: forwards entry param to imported _run_main.
     {
       let mut f = Function::new(vec![]);
       let run_main_idx = self.idx.func_idx("_run_main");
+      f.instruction(&Instruction::LocalGet(0)); // entry function
       f.instruction(&Instruction::Call(run_main_idx));
       f.instruction(&Instruction::End);
       code.function(&f);
