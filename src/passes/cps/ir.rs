@@ -272,9 +272,11 @@ pub enum BuiltIn {
   // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
   IsSeqLike, IsRecLike, SeqPop, RecPop, Empty,
-  // Yield — suspend execution, passing a value to the scheduler.
-  // Args: value; cont receives the resumed value.
-  Yield,
+  // Scheduling — cooperative multitasking primitives.
+  // Yield(value, cont) — suspend current task, switch to next; value for future message passing.
+  // Spawn(task_fn, cont) — create new task from task_fn; cont receives future.
+  // Await(future, cont) — wait for future to settle; cont receives settled value.
+  Yield, Spawn, Await,
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
   Export,
@@ -324,6 +326,10 @@ impl BuiltIn {
       "not in" => BuiltIn::NotIn,
       // Member access
       "."   => BuiltIn::Get,
+      // Scheduling
+      "yield" => BuiltIn::Yield,
+      "spawn" => BuiltIn::Spawn,
+      "await" => BuiltIn::Await,
       // Module
       "import" => BuiltIn::Import,
       _     => panic!("BuiltIn::from_builtin_str: unknown name {:?}", s),

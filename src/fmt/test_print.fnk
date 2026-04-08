@@ -275,7 +275,7 @@ test 'multiline arm body', fn:
 
 
 ---
-try / yield
+try
 ---
 
 test 'try bare', fn:
@@ -286,11 +286,6 @@ test 'try bare', fn:
 test 'try with application', fn:
   expect print ƒink:
     try foo bar
-  | equals 'NO-DIFF'
-
-test 'yield bare', fn:
-  expect print ƒink:
-    yield foo
   | equals 'NO-DIFF'
 
 

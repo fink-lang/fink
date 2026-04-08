@@ -234,9 +234,6 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower {
     // ---- try: lower transparently for now ----
     NodeKind::Try(inner) => lower(g, inner),
 
-    // ---- yield: suspend execution, yield a value ----
-    NodeKind::Yield(inner) => lower_yield(g, inner, o),
-
     // ---- bind: `name = rhs` ----
     NodeKind::Bind { lhs, rhs, .. } => lower_bind(g, lhs, rhs, o),
 
@@ -366,20 +363,6 @@ fn lower_seq_with_tail<'src>(g: &mut Gen, exprs: &'src [Node<'src>], tail: Cont)
     }
   }
   unreachable!()
-}
-
-// ---------------------------------------------------------------------------
-// Yield
-// ---------------------------------------------------------------------------
-
-/// Lower `yield inner` — suspend execution, yield the inner value.
-/// The continuation receives the resumed value bound to a fresh result.
-fn lower_yield<'src>(g: &mut Gen, inner: &'src Node<'src>, origin: Option<AstId>) -> Lower {
-  let (val, mut pending) = lower(g, inner);
-  let result = g.fresh_result(origin);
-  let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::Yield { value: val, result,  origin });
-  (ref_val(g, result_kind, result_id, origin), pending)
 }
 
 // ---------------------------------------------------------------------------
@@ -629,7 +612,8 @@ fn lower_apply<'src>(
   }
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  pending.push(Pending::App { func: Callable::Val(func_val), args: arg_vals, result,  origin });
+  let func = Callable::Val(func_val);
+  pending.push(Pending::App { func, args: arg_vals, result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -1281,8 +1265,6 @@ enum Pending {
     matcher_body: Expr,
     origin: Option<AstId>,
   },
-  /// Yield — suspend execution, yield a value; result bound in continuation.
-  Yield { value: Val, result: BindNode, origin: Option<AstId> },
 }
 
 impl Pending {
@@ -1291,8 +1273,7 @@ impl Pending {
       Pending::Val { origin, .. } | Pending::Fn { origin, .. } | Pending::App { origin, .. }
       | Pending::MatchBind { origin, .. }
       | Pending::MatchGuard { origin, .. }
-      | Pending::PatternMatch { origin, .. }
-      | Pending::Yield { origin, .. } => *origin,
+      | Pending::PatternMatch { origin, .. } => *origin,
     }
   }
 }
@@ -1488,13 +1469,6 @@ fn wrap_with_fail(
           origin,
         )
       },
-      Pending::Yield { value, result, origin } => g.expr(
-        ExprKind::App {
-          func: Callable::BuiltIn(BuiltIn::Yield),
-          args: vec![Arg::Val(value), Arg::Cont(cont_with_result(cont, result))],
-        },
-        origin,
-      ),
     })
   });
   match acc {
@@ -2565,7 +2539,7 @@ mod cps_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_yield.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_scheduling.fnk");
 }
 
 #[cfg(test)]

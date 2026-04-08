@@ -10,7 +10,7 @@
 //   the Pos line/col fields: if the line number increases, emit newlines then
 //   spaces to reach the target column; otherwise emit spaces.
 //
-//   Keywords (fn, match, try, yield, not, ~) are not stored as tokens in the
+//   Keywords (fn, match, try, not, ~) are not stored as tokens in the
 //   AST — they are always located at the node's own loc.start, with fixed text.
 //   String interpolation delimiters (${ and }) are not stored either; they are
 //   derived from the locs of adjacent children.
@@ -376,14 +376,10 @@ impl Writer {
                 self.exprs(body);
             }
 
-            // --- error handling / suspension ---
-            // `try` / `yield` keywords at node.loc.start.
+            // --- error handling ---
+            // `try` keyword at node.loc.start.
             NodeKind::Try(inner) => {
                 self.keyword(node.loc.start, "try");
-                self.node(inner);
-            }
-            NodeKind::Yield(inner) => {
-                self.keyword(node.loc.start, "yield");
                 self.node(inner);
             }
 

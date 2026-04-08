@@ -700,7 +700,6 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       fmt_body(&body.items, out, depth, true);
     }
     NodeKind::Try(inner) => { out.push_str("try "); fmt_node(inner, out, depth); }
-    NodeKind::Yield(inner) => { out.push_str("yield "); fmt_node(inner, out, depth); }
     NodeKind::Block { name, params, body, .. } => {
       fmt_node(name, out, depth);
       out.push(' ');

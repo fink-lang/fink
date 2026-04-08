@@ -346,10 +346,6 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       out.push_str("try ");
       fmt_node(inner, out, depth);
     }
-    NodeKind::Yield(inner) => {
-      out.push_str("yield ");
-      fmt_node(inner, out, depth);
-    }
     NodeKind::StrTempl { open, close, children } => {
       if open.src == "\":" {
         // Block string with interpolation

@@ -184,12 +184,6 @@ pub enum NodeKind<'src> {
   // Try — unwrap Ok or propagate Err from enclosing function
   Try(Box<Node<'src>>),
 
-  // --- suspension ---
-
-  // Yield — suspend execution, yield a value; resumed with a result
-  // result = yield value
-  Yield(Box<Node<'src>>),
-
   // --- custom blocks ---
 
   // Block — name (Ident) + params (Patterns) + sep (:) + body
@@ -253,7 +247,7 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
       walk(rhs, f);
     }
     NodeKind::Group { inner, .. } => walk(inner, f),
-    NodeKind::Try(inner) | NodeKind::Yield(inner) => walk(inner, f),
+    NodeKind::Try(inner) => walk(inner, f),
     NodeKind::Bind { lhs, rhs, .. } | NodeKind::BindRight { lhs, rhs, .. } => {
       walk(lhs, f);
       walk(rhs, f);
@@ -402,11 +396,6 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     NodeKind::Token(s) => { out.push_str("Token '"); out.push_str(s); out.push('\''); }
     NodeKind::Try(inner) => {
       out.push_str("Try");
-      out.push('\n');
-      print_node(inner, out, depth + 1);
-    }
-    NodeKind::Yield(inner) => {
-      out.push_str("Yield");
       out.push('\n');
       print_node(inner, out, depth + 1);
     }

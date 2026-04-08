@@ -1301,6 +1301,20 @@ fn emit_body(expr: &Expr, fc: &mut FuncContext<'_, '_, '_>) {
 fn emit_app(func: &Callable, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   match func {
     Callable::BuiltIn(op) => emit_builtin(*op, args, expr_id, fc),
+    // Scope-resolved builtins (yield, spawn, await) arrive as Callable::Val
+    // wrapping ValKind::BuiltIn. Args are in cont-first order (user call
+    // convention). Emit val args then cont, call the builtin directly.
+    Callable::Val(val) if matches!(val.kind, ValKind::BuiltIn(_)) => {
+      if let ValKind::BuiltIn(op) = val.kind {
+        // Args are [cont, val_args...]. Emit val_args first, cont last.
+        for arg in &args[1..] { emit_arg(arg, fc); }
+        emit_arg(&args[0], fc);
+        fc.mark(expr_id);
+        let name = builtin_name(op);
+        let idx = fc.emitter_idx.func_idx(name);
+        fc.instr(&Instruction::ReturnCall(idx));
+      }
+    }
     Callable::Val(val) => emit_call(val, args, expr_id, fc),
   }
 }
@@ -1754,8 +1768,16 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
         builtins.entry(name).or_insert(arity);
       }
     }
-    ExprKind::App { args, .. } => {
-      // User call — scan cont bodies for nested builtins.
+    ExprKind::App { func: Callable::Val(val), args } => {
+      // Scope-resolved builtins (yield, spawn, await) arrive as Callable::Val
+      // wrapping ValKind::BuiltIn — register them as imports.
+      if let ValKind::BuiltIn(op) = val.kind {
+        let name = builtin_name(op).to_string();
+        // Arity: val args (excl. cont) + 1 for cont. Cont is first in args
+        // (user call convention), so subtract 1 for cont, add 1 back = total.
+        builtins.entry(name).or_insert(args.len());
+      }
+      // Scan cont bodies for nested builtins.
       for arg in args {
         if let Arg::Cont(Cont::Expr { body, .. }) = arg {
           scan_builtins(body, builtins);

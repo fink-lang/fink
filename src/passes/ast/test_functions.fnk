@@ -611,3 +611,16 @@ test 'fn as rhs of ==', fn:
           LitSeq '[..]',
             LitInt '1'
             Ident '$'
+
+
+---
+inline fn body terminates apply arg list
+---
+
+# TODO: inline `fn:` body as last arg should not consume the next line.
+# `foo fn: 42` followed by `x` on the next line at the same indent
+# treats `x` as a second arg to `foo`. The fn body should terminate the
+# arg list. Workaround: use multiline `fn:` with indented body.
+#
+# Can't write this as a .fnk test — the test file parser has the same
+# bug, so the test source itself gets misparsed.

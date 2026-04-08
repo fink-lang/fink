@@ -52,7 +52,6 @@ pub trait Transform<'src> {
       NodeKind::Member { op, lhs, rhs } => self.transform_member(op, *lhs, *rhs, loc),
       NodeKind::Group { open, close, inner } => self.transform_group(open, close, *inner, loc),
       NodeKind::Try(inner) => self.transform_try(*inner, loc),
-      NodeKind::Yield(inner) => self.transform_yield(*inner, loc),
       NodeKind::Bind { op, lhs, rhs } => self.transform_bind(op, *lhs, *rhs, loc),
       NodeKind::BindRight { op, lhs, rhs } => self.transform_bind_right(op, *lhs, *rhs, loc),
       NodeKind::Apply { func, args } => self.transform_apply(*func, args, loc),
@@ -187,11 +186,6 @@ pub trait Transform<'src> {
   fn transform_try(&mut self, inner: Node<'src>, loc: Loc) -> TransformResult<'src> {
     let inner = self.transform(inner)?;
     Ok(Node::new(NodeKind::Try(Box::new(inner)), loc))
-  }
-
-  fn transform_yield(&mut self, inner: Node<'src>, loc: Loc) -> TransformResult<'src> {
-    let inner = self.transform(inner)?;
-    Ok(Node::new(NodeKind::Yield(Box::new(inner)), loc))
   }
 
   fn transform_bind(
