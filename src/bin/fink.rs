@@ -34,18 +34,28 @@ fn main() {
       a.strip_prefix("--lifted=").map(|v| Some(v.to_string()))
     }
   });
-  let positional: Vec<&str> = args.iter().skip(1).filter(|a| *a == "-" || !a.starts_with("-")).map(|s| s.as_str()).collect();
+  let target = args.iter().find_map(|a| a.strip_prefix("--target=").map(|v| v.to_string()));
+  let output = args.iter().zip(args.iter().skip(1)).find_map(|(a, v)| {
+    if a == "-o" { Some(v.to_string()) } else { None }
+  });
+
+  let positional: Vec<&str> = args.iter().skip(1)
+    .filter(|a| *a == "-" || !a.starts_with("-"))
+    // Skip the value after -o (already captured above).
+    .filter(|a| !args.iter().zip(args.iter().skip(1)).any(|(f, v)| f == "-o" && v.as_str() == a.as_str()))
+    .map(|s| s.as_str()).collect();
 
   let (cmd, path) = match positional.as_slice() {
     [cmd, path] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|run|dap> [options] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|compile|run|dap> [options] <file>");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
       eprintln!("  fmt/cps [--sourcemap]        emit source map");
       eprintln!("  fmt/cps [--embed-source]     embed source in source map");
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wat/wasm [-O|-O1..4|-Os|-Oz]  run wasm-opt (default -O)");
+      eprintln!("  compile --target=<wasm|triple> [-o output] <file>");
       process::exit(1);
     }
   };
@@ -170,6 +180,34 @@ fn main() {
       }
     }
 
+    "compile" => {
+      #[cfg(not(feature = "compile"))]
+      { eprintln!("error: 'compile' command requires the 'compile' feature"); process::exit(1); }
+      #[cfg(feature = "compile")]
+      {
+        let target = target.as_deref().unwrap_or("wasm");
+        let target = if target == "native" { env!("TARGET") } else { target };
+        let out_path = output.unwrap_or_else(|| fink::compile::default_output(path, target));
+
+        let fink_dir = env::current_exe().unwrap_or_else(|e| die(&e.to_string()))
+          .parent().unwrap().to_path_buf();
+        let search = fink::compile::FinkrtSearch {
+          fink_dir,
+          targets_dir: env::var("FINK_TARGETS_DIR").ok().map(Into::into),
+        };
+
+        if target == "wasm" {
+          fink::compile::compile_to_wasm(&src, path, &out_path)
+            .unwrap_or_else(|e| die(&e));
+        } else {
+          fink::compile::compile_to_native(&src, path, target, &out_path, &search)
+            .unwrap_or_else(|e| die(&e));
+        }
+
+        eprintln!("wrote {out_path} (target: {target})");
+      }
+    }
+
     "run" => {
       #[cfg(not(feature = "run"))]
       { eprintln!("error: 'run' command requires the 'run' feature"); process::exit(1); }
@@ -202,6 +240,8 @@ fn die(msg: &str) -> ! {
   eprintln!("error: {msg}");
   process::exit(1);
 }
+
+
 
 fn print_with_sourcemap(output: &str, srcmap: &fink::sourcemap::SourceMap) {
   let json = srcmap.to_json();

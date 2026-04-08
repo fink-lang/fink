@@ -20,6 +20,7 @@ impl Default for RunOptions {
 }
 
 /// Compile source and run it. Returns the exit code from main.
+#[cfg(feature = "compile")]
 pub fn run_source(
   mut opts: RunOptions,
   src: &str,
@@ -36,6 +37,7 @@ pub fn run_source(
 
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
 /// Returns the exit code from main.
+#[cfg(feature = "compile")]
 pub fn run_file(
   mut opts: RunOptions,
   path: &str,

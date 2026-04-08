@@ -15,8 +15,10 @@ edition = "2024"
 # compile: WASM codegen — collect, emit, DWARF, link, WAT disassembly.
 # Safe for wasm32 targets. Gates compiler.rs and wasm passes.
 compile = ["dep:wasmprinter"]
-# run: native execution (wasmtime) + DAP debugger. Implies compile. Native only.
-run = ["compile", "dep:wat-crate", "dep:wasmtime", "dep:dap", "dep:tokio"]
+# runtime: wasmtime runner only — no compiler. Used by finkrt standalone binary.
+runtime = ["dep:wasmtime"]
+# run: native execution (wasmtime) + DAP debugger. Implies compile + runtime. Native only.
+run = ["compile", "runtime", "dep:wat-crate", "dep:dap", "dep:tokio"]
 default = ["compile", "run"]
 
 [dependencies]
@@ -28,6 +30,11 @@ wat-crate = { package = "wat", version = "1", features = ["dwarf"], optional = t
 wasmtime = { version = "43", features = ["debug"], optional = true }
 dap = { version = "0.4.1-alpha1", optional = true }
 tokio = { version = "1", features = ["rt"], optional = true }
+
+[[bin]]
+name = "finkrt"
+path = "src/bin/finkrt.rs"
+required-features = ["runtime"]
 
 [build-dependencies]
 wat-crate = { package = "wat", version = "1" }

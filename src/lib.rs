@@ -1,8 +1,10 @@
 pub mod errors;
 pub mod fmt;
+#[cfg(feature = "compile")]
+pub mod compile;
 #[cfg(feature = "run")]
 pub mod dap;
-#[cfg(feature = "run")]
+#[cfg(feature = "runtime")]
 pub mod runner;
 pub mod passes;
 pub mod propgraph;
