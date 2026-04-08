@@ -159,6 +159,15 @@
       (field $waiters (mut (ref $List)))
     ))
 
+    ;; $Channel — multi-message async channel (point-to-point).
+    ;; send buffers messages; an internal task drains (msg, receiver) pairs.
+    ;; $tag: user-supplied metadata value (set at creation, immutable).
+    (type $Channel (struct
+      (field $messages  (mut (ref $List)))
+      (field $receivers (mut (ref $List)))
+      (field $tag       (ref any))
+    ))
+
     ;; $SpreadArgs — wrapper for spread arguments at call sites.
     ;; Contains a $List of the spread values. Used to distinguish a spread
     ;; call (f ..items) from a regular call passing a list value (f items).

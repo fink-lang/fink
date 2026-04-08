@@ -277,6 +277,11 @@ pub enum BuiltIn {
   // Spawn(task_fn, cont) — create new task from task_fn; cont receives future.
   // Await(future, cont) — wait for future to settle; cont receives settled value.
   Yield, Spawn, Await,
+  // Channels — multi-message async communication between tasks (point-to-point).
+  // Channel(ignored, cont) — create new channel; cont receives channel value.
+  // Send(channel, message, cont) — buffer message on channel; cont receives unit.
+  // Receive(channel, cont) — park receiver; cont receives message when matched.
+  Channel, Send, Receive,
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
   Export,
@@ -330,6 +335,10 @@ impl BuiltIn {
       "yield" => BuiltIn::Yield,
       "spawn" => BuiltIn::Spawn,
       "await" => BuiltIn::Await,
+      // Channels
+      "channel" => BuiltIn::Channel,
+      "send" => BuiltIn::Send,
+      "receive" => BuiltIn::Receive,
       // Module
       "import" => BuiltIn::Import,
       _     => panic!("BuiltIn::from_builtin_str: unknown name {:?}", s),
