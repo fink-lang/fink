@@ -60,7 +60,7 @@
   ;; =========================================================================
   ;; Shifts: unbox $Num → i64, shift, i64 → $Num → apply_1(result, cont)
   ;; =========================================================================
-
+  ;; TODO: should become int_op_shl and operators.wat have op_shl to dispatch
   (func $op_shl (export "op_shl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
@@ -69,18 +69,16 @@
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
       (local.get $cont)))
 
-  (func $op_shr (export "op_shr")
-    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
-      (struct.new $Num (f64.convert_i64_s (i64.shr_s
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
-        (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
-      (local.get $cont)))
+  (func $int_op_shr (export "int_op_shr")
+    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (struct.new $Num (f64.convert_i64_s (i64.shr_s
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
   ;; =========================================================================
   ;; Rotations: unbox $Num → i64, rotate, i64 → $Num → apply_1(result, cont)
   ;; =========================================================================
-
+  ;; TODO: should become int_op_rotl and operators.wat have op_rotl to dispatch
   (func $op_rotl (export "op_rotl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
@@ -89,6 +87,7 @@
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
       (local.get $cont)))
 
+  ;; TODO: should become int_op_rotr and operators.wat have op_rotr to dispatch
   (func $op_rotr (export "op_rotr")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1

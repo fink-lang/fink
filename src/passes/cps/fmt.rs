@@ -323,7 +323,6 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Await        => "·await".into(),
     // Channels
     BuiltIn::Channel      => "·channel".into(),
-    BuiltIn::Send         => "·send".into(),
     BuiltIn::Receive      => "·receive".into(),
     // Module
     BuiltIn::Export       => "·export".into(),

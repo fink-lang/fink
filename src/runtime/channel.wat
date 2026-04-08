@@ -54,15 +54,15 @@
   )
 
 
-  ;; -- send -----------------------------------------------------------------
+  ;; -- channel_op_shr (>> on channels) --------------------------------------
   ;;
-  ;; send(ch, msg, cont):
+  ;; channel_op_shr(ch, msg, cont):
   ;;   1. append msg to ch.$messages
   ;;   2. push process_msg_q(ch) to task queue
   ;;   3. push unit_thunk(cont) to task queue
   ;;   4. run_next
 
-  (func $send (export "send")
+  (func $channel_op_shr
     (param $ch_val (ref null any))
     (param $msg    (ref null any))
     (param $cont   (ref null any))
