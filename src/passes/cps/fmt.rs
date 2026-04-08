@@ -321,6 +321,10 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Yield        => "·yield".into(),
     BuiltIn::Spawn        => "·spawn".into(),
     BuiltIn::Await        => "·await".into(),
+    // Channels
+    BuiltIn::Channel      => "·channel".into(),
+    BuiltIn::Send         => "·send".into(),
+    BuiltIn::Receive      => "·receive".into(),
     // Module
     BuiltIn::Export       => "·export".into(),
     BuiltIn::Import       => "·import".into(),

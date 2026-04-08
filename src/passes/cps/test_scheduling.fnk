@@ -2,7 +2,7 @@
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---
-scheduling builtins — yield, spawn, await
+scheduling builtins — yield, spawn, await, channel, send, receive
 ---
 
 test 'yield literal', fn:
@@ -61,3 +61,52 @@ test 'await bound to name', fn:
       ·let ·v_5, fn ·result_0:
         ·v_2 ·result_0, ·∅fut
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0gYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQVMsQUFBQSxPQUFBLEdBQUEsSTtFQUFGLEFBQUEsS0FBRSxJLEtBQVQsUztJLEEsS0FBQSxTLEVBQWUiCn0=
+
+
+test 'channel creation', fn:
+  expect cps_expr ƒink:
+    channel 0
+
+  | equals ƒink:
+    ·channel ·v_1, 0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2hhbm5lbCAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTLEksRUFBUSIKfQ==
+
+
+test 'send to channel', fn:
+  expect cps_expr ƒink:
+    send ch, 42
+
+  | equals ƒink:
+    ·send ·v_1, ·∅ch, 42
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic2VuZCBjaCwgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE0sSSxFQUFLLEksRUFBSSIKfQ==
+
+
+test 'receive from channel', fn:
+  expect cps_expr ƒink:
+    receive ch
+
+  | equals ƒink:
+    ·receive ·v_1, ·∅ch
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUyxJLEVBQVEiCn0=
+
+
+test 'channel bound to name', fn:
+  expect cps_expr ƒink:
+    ch = channel 0
+
+  | equals ƒink:
+    ·channel fn ·v_5:
+      ·let ·v_5, fn ·ch_0:
+        ·v_2 ·ch_0, 0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2ggPSBjaGFubmVsIDAiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBLFNBQUEsR0FBQSxJO0VBQUYsQUFBQSxLQUFFLEksS0FBTCxLO0ksQSxLQUFBLEssRUFBYSIKfQ==
+
+
+test 'receive bound to name', fn:
+  expect cps_expr ƒink:
+    msg = receive ch
+
+  | equals ƒink:
+    ·receive fn ·v_5:
+      ·let ·v_5, fn ·msg_0:
+        ·v_2 ·msg_0, ·∅ch
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibXNnID0gcmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsU0FBQSxHQUFBLEk7RUFBRixBQUFBLEtBQUUsSSxLQUFOLE07SSxBLEtBQUEsTSxFQUFjIgp9
