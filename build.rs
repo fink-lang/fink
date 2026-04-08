@@ -9,6 +9,9 @@
 // `include_bytes!` in the emitter.
 
 fn main() {
+    // Expose the host target triple so fink.rs can resolve --target=native.
+    println!("cargo::rustc-env=TARGET={}", std::env::var("TARGET").unwrap());
+
     let out_dir = std::env::var("OUT_DIR").unwrap();
 
     // types.wat is standalone — compiled separately for the emitter to

@@ -186,53 +186,25 @@ fn main() {
       #[cfg(feature = "compile")]
       {
         let target = target.as_deref().unwrap_or("wasm");
-        let wasm = fink::to_wasm(&src, path).unwrap_or_else(|e| die(&e));
+        let target = if target == "native" { env!("TARGET") } else { target };
+        let out_path = output.unwrap_or_else(|| fink::compile::default_output(path, target));
+
+        let fink_dir = env::current_exe().unwrap_or_else(|e| die(&e.to_string()))
+          .parent().unwrap().to_path_buf();
+        let search = fink::compile::FinkrtSearch {
+          fink_dir,
+          targets_dir: env::var("FINK_TARGETS_DIR").ok().map(Into::into),
+        };
 
         if target == "wasm" {
-          // Write .wasm to file (or stdout if no -o).
-          let out_path = output.unwrap_or_else(|| {
-            let stem = std::path::Path::new(path).file_stem()
-              .and_then(|s| s.to_str()).unwrap_or("out");
-            format!("{stem}.wasm")
-          });
-          fs::write(&out_path, &wasm.binary).unwrap_or_else(|e| die(&e.to_string()));
-          eprintln!("wrote {out_path}");
+          fink::compile::compile_to_wasm(&src, path, &out_path)
+            .unwrap_or_else(|e| die(&e));
         } else {
-          // Native target: copy finkrt, append WASM + trailer.
-          let out_path = output.unwrap_or_else(|| {
-            let stem = std::path::Path::new(path).file_stem()
-              .and_then(|s| s.to_str()).unwrap_or("out");
-            stem.to_string()
-          });
-
-          // Locate finkrt binary next to fink.
-          let fink_exe = env::current_exe().unwrap_or_else(|e| die(&e.to_string()));
-          let finkrt_path = fink_exe.parent().unwrap().join("finkrt");
-          if !finkrt_path.exists() {
-            die(&format!("finkrt not found at {}", finkrt_path.display()));
-          }
-
-          // Copy finkrt → output.
-          let mut binary = fs::read(&finkrt_path).unwrap_or_else(|e| die(&e.to_string()));
-          let offset = binary.len() as u64;
-
-          // Append WASM payload + trailer.
-          binary.extend_from_slice(&wasm.binary);
-          binary.extend_from_slice(&offset.to_le_bytes());
-          binary.extend_from_slice(b"f1nkw4sm");
-
-          fs::write(&out_path, &binary).unwrap_or_else(|e| die(&e.to_string()));
-
-          // Set executable permission on unix.
-          #[cfg(unix)]
-          {
-            use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o755);
-            fs::set_permissions(&out_path, perms).unwrap_or_else(|e| die(&e.to_string()));
-          }
-
-          eprintln!("wrote {out_path} (target: {target})");
+          fink::compile::compile_to_native(&src, path, target, &out_path, &search)
+            .unwrap_or_else(|e| die(&e));
         }
+
+        eprintln!("wrote {out_path} (target: {target})");
       }
     }
 
@@ -265,6 +237,8 @@ fn die(msg: &str) -> ! {
   eprintln!("error: {msg}");
   process::exit(1);
 }
+
+
 
 fn print_with_sourcemap(output: &str, srcmap: &fink::sourcemap::SourceMap) {
   let json = srcmap.to_json();
