@@ -61,3 +61,14 @@ test 'stdout and stderr', fn:
       out
     stderr == ":
       err
+
+
+test 'channel send with <<', fn:
+  expect run_main ƒink:
+    main = fn stdin, stdout, stderr:
+      stdout << 'hello'
+      0
+  | equals ":
+    0
+    stdout == ":
+      hello
