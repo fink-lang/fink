@@ -616,6 +616,24 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.types.insert("$TmpImportListPrepend".into(), next_idx);
     next_idx += 1;
 
+    // $TmpImportChannelNew = (func (param (ref null any)) (result (ref null any)))
+    // Temporary type for _channel_new import — host creates channels before CPS.
+    types.ty().subtype(&SubType {
+      is_final: true,
+      supertype_idx: None,
+      composite_type: CompositeType {
+        inner: CompositeInnerType::Func(FuncType::new(
+          vec![any_ref],
+          vec![any_ref],
+        )),
+        shared: false,
+        descriptor: None,
+        describes: None,
+      },
+    });
+    self.idx.types.insert("$TmpImportChannelNew".into(), next_idx);
+    next_idx += 1;
+
     // $FnN for all needed arities.
     // $Fn2: all functions (caps, args) AND _apply(args, callee)
     // Plus builtin arities.
@@ -707,6 +725,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
+    // _channel_new: direct-style channel constructor for host use.
+    {
+      let ch_new_idx = self.idx.type_idx("$TmpImportChannelNew");
+      imports.import("@fink/runtime", "_channel_new", wasm_encoder::EntityType::Function(ch_new_idx));
+      self.idx.imports.insert("_channel_new".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
     // _apply: closure dispatch (defined in dispatch.wat).
     {
       let fn2_idx = self.idx.fn_type_idx(2);
@@ -792,6 +818,13 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let fn2_type = self.idx.fn_type_idx(2);
     functions.function(fn2_type);
     self.idx.funcs.insert("_fn2_stub".into(), next_func_idx);
+    next_func_idx += 1;
+
+    // _channel_new helper: wraps _channel_new import for the runner.
+    // Type: (func (param (ref null any)) (result (ref null any)))
+    let channel_new_type = self.idx.type_idx("$TmpImportChannelNew");
+    functions.function(channel_new_type);
+    self.idx.funcs.insert("_channel_new_export".into(), next_func_idx);
     next_func_idx += 1;
 
     // $_panic: (func) — unreachable trap for irrefutable pattern failure.
@@ -903,6 +936,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let fn2_stub_idx = self.idx.func_idx("_fn2_stub");
     exports.export("_fn2_stub", ExportKind::Func, fn2_stub_idx);
 
+    // _channel_new: exported for the runner to create channels for main.
+    let channel_new_idx = self.idx.func_idx("_channel_new_export");
+    exports.export("_channel_new", ExportKind::Func, channel_new_idx);
+
     // TODO: memory should not be exported in production builds — only
     // needed for the runner to read string data during testing.
     exports.export("memory", ExportKind::Memory, 0);
@@ -989,6 +1026,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
     {
       let mut f = Function::new(vec![]);
       f.instruction(&Instruction::Unreachable);
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
+    // _channel_new body: delegates to imported _channel_new.
+    {
+      let mut f = Function::new(vec![]);
+      let channel_new_idx = self.idx.func_idx("_channel_new");
+      f.instruction(&Instruction::LocalGet(0));
+      f.instruction(&Instruction::Call(channel_new_idx));
       f.instruction(&Instruction::End);
       code.function(&f);
     }
@@ -1133,7 +1180,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       func_names.append(idx, &internal_name);
     }
     // Internal helpers.
-    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub"] {
+    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export"] {
       if let Some(&idx) = self.idx.funcs.get(*name) {
         func_names.append(idx, name);
       }

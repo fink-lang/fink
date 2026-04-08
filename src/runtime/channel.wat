@@ -29,6 +29,21 @@
   )
 
 
+  ;; -- _channel_new (host helper) -------------------------------------------
+  ;;
+  ;; Direct-style constructor for host use (non-CPS).
+  ;; The host calls this to create channels before entering the CPS world
+  ;; (e.g. for stdin/stdout/stderr injection into main).
+
+  (func $_channel_new (export "_channel_new")
+    (param $tag (ref null any))
+    (result (ref any))
+    (struct.new $Channel
+      (struct.new $Nil)
+      (struct.new $Nil)
+      (ref.as_non_null (local.get $tag))))
+
+
   ;; -- channel --------------------------------------------------------------
   ;;
   ;; channel(tag, cont):

@@ -462,6 +462,35 @@
     (unreachable))
 
   ;; =========================================================================
+  ;; Shift left: `<<` — polymorphic ($Num → bitwise, $Channel → send)
+  ;; =========================================================================
+
+  ;; op_shl(a, b, cont):
+  ;;   $Channel on a → send(a, b, cont)  [ch << msg]
+  ;;   otherwise     → int_op_shl(a, b)  [numeric shift]
+  (func $op_shl (export "op_shl")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Channel on a → channel send
+    (block $not_channel
+      (block $is_channel (result (ref $Channel))
+        (br $not_channel
+          (br_on_cast $is_channel (ref null any) (ref $Channel)
+            (local.get $a))))
+      (drop)
+      (return_call $channel_op_shr
+        (local.get $a)
+        (local.get $b)
+        (local.get $cont)))
+
+    ;; Fallback: numeric shift left
+    (return_call $apply_1
+      (call $int_op_shl
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
+      (local.get $cont)))
+
+  ;; =========================================================================
   ;; Shift right: `>>` — polymorphic ($Num → bitwise, $Channel → send)
   ;; =========================================================================
 

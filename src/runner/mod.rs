@@ -65,6 +65,32 @@ mod tests {
     }
   }
 
+  #[allow(unused)]
+  fn run_main(src: &str) -> String {
+    let wasm = crate::to_wasm(src, "test").expect("compilation failed");
+    match wasmtime_runner::exec_main(&RunOptions::default(), &wasm.binary) {
+      Ok(result) => {
+        let mut out = format!("{}", result.exit_code);
+        if !result.stdout_lines.is_empty() {
+          out.push_str("\nstdout == \":");
+          for line in &result.stdout_lines {
+            out.push_str(&format!("\n  {}", line));
+          }
+        }
+        if !result.stderr_lines.is_empty() {
+          out.push_str("\nstderr == \":");
+          for line in &result.stderr_lines {
+            out.push_str(&format!("\n  {}", line));
+          }
+        }
+        // Trim trailing newline for test comparison.
+        out.trim_end().to_string()
+      }
+      Err(e) => format!("ERROR: {}", e),
+    }
+  }
+
+  test_macros::include_fink_tests!("src/runner/test_io.fnk");
   test_macros::include_fink_tests!("src/runner/test_literals.fnk");
   test_macros::include_fink_tests!("src/runner/test_bindings.fnk");
   test_macros::include_fink_tests!("src/runner/test_operators.fnk");
