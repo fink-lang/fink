@@ -45,6 +45,39 @@ test 'string escape unicode', fn:
   | equals ":
     😀
 
+test 'empty string literal', fn:
+  expect run ƒink:
+    test_main = fn:
+      ''
+  | equals ''
+
+
+test 'empty string eq', fn:
+  expect run ƒink:
+    test_main = fn:
+      '' == ''
+  | equals ƒink:
+    true
+
+
+test 'match empty string', fn:
+  expect run ƒink:
+    test_main = fn:
+      match '':
+        '': 0
+        _: 1
+  | equals ƒink:
+    0
+
+
+test 'empty string eq template', fn:
+  expect run ƒink:
+    test_main = fn:
+      '' == '${''}'
+  | equals ƒink:
+    true
+
+
 test 'string eq same', fn:
   expect run ƒink:
     test_main = fn:

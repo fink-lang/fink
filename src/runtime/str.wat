@@ -10,6 +10,7 @@
 ;; Type hierarchy ($Str is the only public type; everything else is internal):
 ;;
 ;;   $Str                               ← public interface (only type visible outside)
+;;   ├── $StrEmpty     (sub $Str)       ← singleton empty string
 ;;   ├── $StrDataImpl  (sub $Str)       ← (offset, length) into data section
 ;;   └── $StrBytesImpl (sub $Str)       ← heap byte array
 ;;
@@ -29,6 +30,9 @@
   ;; processing), but treated as immutable once wrapped in a $Str* struct.
   (type $ByteArray (array (mut i8)))
 
+  ;; $StrEmpty — singleton empty string. No fields, no storage.
+  (type $StrEmpty (sub $Str (struct)))
+
   ;; $StrDataImpl — data section string (offset, length into linear memory).
   (type $StrDataImpl (sub $Str (struct
     (field $offset i32)
@@ -38,6 +42,12 @@
   (type $StrBytesImpl (sub $Str (struct
     (field $bytes (ref $ByteArray)))))
 
+
+  ;; ---- Singleton empty string ----
+
+  (global $str_empty (ref $StrEmpty) (struct.new $StrEmpty))
+  (func $str_empty (export "str_empty") (result (ref $Str))
+    (global.get $str_empty))
 
   ;; ---- Construction (compiler-emitted) ----
 
@@ -62,6 +72,8 @@
     (param $bytes (ref null any))
     (result (ref any))
 
+    (if (i32.eqz (array.len (ref.cast (ref $ByteArray) (local.get $bytes))))
+      (then (return (global.get $str_empty))))
     (struct.new $StrBytesImpl
       (ref.cast (ref $ByteArray) (local.get $bytes)))
   )
@@ -82,6 +94,10 @@
     (local $length i32)
     (local $result (ref $ByteArray))
     (local $i i32)
+
+    ;; Empty string — return zero-length array
+    (if (ref.test (ref $StrEmpty) (local.get $str))
+      (then (return (array.new_fixed $ByteArray 0))))
 
     ;; Try $StrDataImpl — copy from data section to heap
     (block $not_data
@@ -129,6 +145,10 @@
     (local $scratch_offset i32)
     (local $pages_needed i32)
     (local $i i32)
+
+    ;; Empty string — return (0, 0).
+    (if (ref.test (ref $StrEmpty) (local.get $str))
+      (then (return (i32.const 0) (i32.const 0))))
 
     ;; Try $StrDataImpl — already in linear memory, zero copy.
     (block $not_data
@@ -351,9 +371,15 @@
     (local $da (ref $StrDataImpl))
     (local $db (ref $StrDataImpl))
 
-    ;; Fast path: same object
+    ;; Fast path: same object (also catches empty == empty)
     (if (ref.eq (local.get $a) (local.get $b))
       (then (return (i32.const 1))))
+
+    ;; Empty string is only equal to itself (handled above).
+    (if (ref.test (ref $StrEmpty) (local.get $a))
+      (then (return (i32.const 0))))
+    (if (ref.test (ref $StrEmpty) (local.get $b))
+      (then (return (i32.const 0))))
 
     ;; Dispatch on $a's type — try $StrDataImpl
     (block $a_not_data
@@ -507,6 +533,10 @@
   (func $str_render_escape
     (param $raw (ref $Str))
     (result (ref $Str))
+
+    ;; Empty string — nothing to escape
+    (if (ref.test (ref $StrEmpty) (local.get $raw))
+      (then (return (local.get $raw))))
 
     ;; Try $StrDataImpl — read from linear memory
     (block $not_data
@@ -1071,6 +1101,10 @@
     (local $j i32)
     (local $byte i32)
 
+    ;; Empty string — nothing to unescape
+    (if (ref.test (ref $StrEmpty) (local.get $str))
+      (then (return (local.get $str))))
+
     (local.set $src
       (struct.get $StrBytesImpl $bytes
         (ref.cast (ref $StrBytesImpl) (local.get $str))))
@@ -1241,6 +1275,10 @@
     (result i32)
 
     (local $data (ref $StrDataImpl))
+
+    ;; Empty string — hash of zero bytes (FNV offset basis).
+    (if (ref.test (ref $StrEmpty) (local.get $str))
+      (then (return (i32.const 0x811c9dc5))))
 
     ;; Try $StrDataImpl — hash from linear memory
     (block $not_data
@@ -1471,6 +1509,10 @@
   ;; Byte length of any string subtype.
   (func $_str_len (param $str (ref $Str)) (result i32)
 
+    ;; Empty string — length 0.
+    (if (ref.test (ref $StrEmpty) (local.get $str))
+      (then (return (i32.const 0))))
+
     ;; Try $StrDataImpl
     (block $not_data
       (block $is_data (result (ref $StrDataImpl))
@@ -1495,6 +1537,10 @@
     (local $length i32)
     (local $src (ref $ByteArray))
     (local $i i32)
+
+    ;; Empty string — nothing to copy.
+    (if (ref.test (ref $StrEmpty) (local.get $str))
+      (then (return (local.get $pos))))
 
     ;; Try $StrDataImpl — copy from linear memory
     (block $not_data

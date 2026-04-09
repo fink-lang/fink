@@ -336,8 +336,9 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"))
     || module.funcs.iter().any(|f| scan_rec_lit(f.body));
   // Scan string literals and intern into the data blob.
+  let mut has_str_empty = false;
   for func in &module.funcs {
-    scan_strings(func.body, &mut e.string_data);
+    has_str_empty |= scan_strings(func.body, &mut e.string_data);
   }
   let has_strings = !e.string_data.is_empty();
 
@@ -352,6 +353,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.needs_list = has_list_imports;
   e.needs_rec = has_rec_imports;
   e.needs_string = has_strings;
+  e.needs_str_empty = has_str_empty;
   e.has_panic = has_panic;
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
@@ -456,8 +458,10 @@ struct Emitter<'a, 'src> {
   needs_list: bool,
   /// Whether record runtime imports are present (rec_set, rec_pop, rec_merge).
   needs_rec: bool,
-  /// Whether string literals are present (needs memory + data section + string runtime).
+  /// Whether non-empty string literals are present (needs memory + data section + str import).
   needs_string: bool,
+  /// Whether empty string literals are present (needs str_empty import).
+  needs_str_empty: bool,
   /// Whether ValKind::Panic appears in any function body (needs $_panic function).
   has_panic: bool,
   /// Interned string literal data.
@@ -487,6 +491,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       needs_list: false,
       needs_rec: false,
       needs_string: false,
+      needs_str_empty: false,
       has_panic: false,
       string_data: StringData::new(),
     }
@@ -687,6 +692,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let type_idx = self.idx.type_idx("$TmpImport0");
       imports.import("@fink/runtime", "str", wasm_encoder::EntityType::Function(type_idx));
       self.idx.imports.insert("str".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
+    // str_empty: () -> (ref $Str) — singleton empty string.
+    if self.needs_str_empty {
+      let type_idx = self.idx.type_idx("$TmpImportThunk");
+      imports.import("@fink/runtime", "str_empty", wasm_encoder::EntityType::Function(type_idx));
+      self.idx.imports.insert("str_empty".into(), next_func_idx);
       next_func_idx += 1;
     }
 
@@ -1769,15 +1782,21 @@ fn emit_lit(lit: &Lit, fc: &mut FuncContext<'_, '_, '_>) {
       fc.instr(&Instruction::RefI31);
     }
     Lit::Str(s) => {
-      // Look up the interned offset — string was pre-scanned, so this
-      // always finds a match in the data blob.
-      let (offset, len) = find_bytes(&fc.string_data.bytes, s.as_bytes())
-        .map(|pos| (pos as u32, s.len() as u32))
-        .expect("string literal not interned");
-      let str_raw_idx = fc.emitter_idx.func_idx("str");
-      fc.instr(&Instruction::I32Const(offset as i32));
-      fc.instr(&Instruction::I32Const(len as i32));
-      fc.instr(&Instruction::Call(str_raw_idx));
+      if s.is_empty() {
+        // Empty string — use singleton from runtime.
+        let str_empty_idx = fc.emitter_idx.func_idx("str_empty");
+        fc.instr(&Instruction::Call(str_empty_idx));
+      } else {
+        // Look up the interned offset — string was pre-scanned, so this
+        // always finds a match in the data blob.
+        let (offset, len) = find_bytes(&fc.string_data.bytes, s.as_bytes())
+          .map(|pos| (pos as u32, s.len() as u32))
+          .expect("string literal not interned");
+        let str_raw_idx = fc.emitter_idx.func_idx("str");
+        fc.instr(&Instruction::I32Const(offset as i32));
+        fc.instr(&Instruction::I32Const(len as i32));
+        fc.instr(&Instruction::Call(str_raw_idx));
+      }
     }
     Lit::Seq => {
       // Empty list via list_nil (returns $Nil).
@@ -2046,44 +2065,54 @@ fn scan_rec_lit(expr: &Expr) -> bool {
   false
 }
 
-/// Intern any string literal found in a Val.
-fn scan_val_strings(val: &Val, data: &mut StringData) {
+/// Intern any string literal found in a Val. Returns true if an empty string was found.
+fn scan_val_strings(val: &Val, data: &mut StringData) -> bool {
   if let ValKind::Lit(Lit::Str(s)) = &val.kind {
+    if s.is_empty() {
+      return true;
+    }
     data.intern(s);
   }
+  false
 }
 
 /// Scan for string literals and intern them into the StringData blob.
-fn scan_strings(expr: &Expr, data: &mut StringData) {
+/// Returns true if any empty string literal was found.
+fn scan_strings(expr: &Expr, data: &mut StringData) -> bool {
   match &expr.kind {
     ExprKind::LetVal { val, cont, .. } => {
-      scan_val_strings(val, data);
+      let mut found = scan_val_strings(val, data);
       match cont {
-        Cont::Expr { body, .. } => scan_strings(body, data),
+        Cont::Expr { body, .. } => found |= scan_strings(body, data),
         Cont::Ref(_) => {}
       }
+      found
     }
     ExprKind::LetFn { fn_body, cont, .. } => {
-      scan_strings(fn_body, data);
+      let mut found = scan_strings(fn_body, data);
       match cont {
-        Cont::Expr { body, .. } => scan_strings(body, data),
+        Cont::Expr { body, .. } => found |= scan_strings(body, data),
         Cont::Ref(_) => {}
       }
+      found
     }
     ExprKind::App { args, .. } => {
+      let mut found = false;
       for arg in args {
         match arg {
-          Arg::Val(v) | Arg::Spread(v) => scan_val_strings(v, data),
-          Arg::Cont(Cont::Expr { body, .. }) => scan_strings(body, data),
+          Arg::Val(v) | Arg::Spread(v) => found |= scan_val_strings(v, data),
+          Arg::Cont(Cont::Expr { body, .. }) => found |= scan_strings(body, data),
           Arg::Cont(Cont::Ref(_)) => {}
-          Arg::Expr(e) => scan_strings(e, data),
+          Arg::Expr(e) => found |= scan_strings(e, data),
         }
       }
+      found
     }
     ExprKind::If { cond, then, else_, .. } => {
-      scan_val_strings(cond, data);
-      scan_strings(then, data);
-      scan_strings(else_, data);
+      let mut found = scan_val_strings(cond, data);
+      found |= scan_strings(then, data);
+      found |= scan_strings(else_, data);
+      found
     }
   }
 }
