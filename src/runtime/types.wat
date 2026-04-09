@@ -40,11 +40,13 @@
 ;;   │       ├── $Rec                 ← record (opaque — internals in rec.wat)
 ;;   │       ├── $Dict                ← dict (opaque — internals in rec.wat)
 ;;   │       ├── $Set                 ← set (opaque — internals in set.wat)
-;;   │       ├── $Range              ← numeric range (opaque — internals in range.wat)
-;;   │       ├── $Future             ← opaque future (settled flag + value)
-;;   │       ├── $SpreadArgs ($List)             ← spread call marker (wraps list)
-;;   │       ├── $VarArgs (array)               ← variable-length argument array
-;;   │       ├── $Captures (array)             ← flat capture value array
+;;   │       ├── $Range               ← numeric range (opaque — internals in range.wat)
+;;   │       ├── $Channel             ← async channel (non-final)
+;;   │       │   └── $HostChannel     ← host-managed IO channel (stdin etc.)
+;;   │       ├── $Future              ← opaque future (settled flag + value)
+;;   │       ├── $SpreadArgs ($List)  ← spread call marker (wraps list)
+;;   │       ├── $VarArgs (array)     ← variable-length argument array
+;;   │       ├── $Captures (array)    ← flat capture value array
 ;;   │       └── $Closure (funcref, $Captures) ← universal closure type
 ;;   │
 ;;   └── func                         ← not GC-managed (opaque refs)
@@ -166,11 +168,22 @@
     ;; $Channel — multi-message async channel (point-to-point).
     ;; send buffers messages; an internal task drains (msg, receiver) pairs.
     ;; $tag: user-supplied metadata value (set at creation, immutable).
-    (type $Channel (struct
+    ;; Non-final: $HostChannel extends this for host-managed IO channels.
+    (type $Channel (sub (struct
       (field $messages  (mut (ref $List)))
       (field $receivers (mut (ref $List)))
       (field $tag       (ref any))
-    ))
+    )))
+
+    ;; $HostChannel — host-managed IO channel (stdin, stdout, stderr).
+    ;; Subtype of $Channel so `>>` and `<<` work uniformly. The runtime
+    ;; dispatches to host imports for host channels instead of using the
+    ;; internal message queue. Created by interop-rust.wat during setup.
+    (type $HostChannel (sub final $Channel (struct
+      (field $messages  (mut (ref $List)))
+      (field $receivers (mut (ref $List)))
+      (field $tag       (ref any))
+    )))
 
     ;; $SpreadArgs — wrapper for spread arguments at call sites.
     ;; Contains a $List of the spread values. Used to distinguish a spread

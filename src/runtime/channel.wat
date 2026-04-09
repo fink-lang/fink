@@ -65,7 +65,7 @@
       (call $make_thunk
         (ref.as_non_null (local.get $cont))
         (local.get $ch)))
-    (return_call $run_next)
+    (return_call $resume)
   )
 
 
@@ -100,7 +100,7 @@
     (call $queue_push
       (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
 
-    (return_call $run_next)
+    (return_call $resume)
   )
 
 
@@ -111,7 +111,7 @@
   ;;   2. if ch.$messages non-empty, push process_msg_q(ch) to task queue
   ;;   3. run_next
 
-  (func $receive (export "receive")
+  (func $channel_receive
     (param $ch_val (ref null any))
     (param $cont   (ref null any))
 
@@ -131,7 +131,7 @@
       (then
         (call $queue_push (call $make_process_msg_q (local.get $ch)))))
 
-    (return_call $run_next)
+    (return_call $resume)
   )
 
 
@@ -169,7 +169,7 @@
     (if (i32.or
           (ref.test (ref $Nil) (local.get $messages))
           (ref.test (ref $Nil) (local.get $receivers)))
-      (then (return_call $run_next)))
+      (then (return_call $resume)))
 
     ;; Pop one message.
     (local.set $msg_cons (ref.cast (ref $Cons) (local.get $messages)))
@@ -194,7 +194,7 @@
       (then
         (call $queue_push (call $make_process_msg_q (local.get $ch)))))
 
-    (return_call $run_next)
+    (return_call $resume)
   )
 
 )

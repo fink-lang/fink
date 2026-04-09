@@ -4,8 +4,11 @@ use std::sync::{Arc, Mutex};
 
 pub mod wasmtime_runner;
 
-/// Shared, thread-safe IO stream (stdout or stderr).
+/// Shared, thread-safe write stream (stdout or stderr).
 pub type IoStream = Arc<Mutex<dyn std::io::Write + Send>>;
+
+/// Shared, thread-safe read stream (stdin).
+pub type IoReadStream = Arc<Mutex<dyn std::io::Read + Send>>;
 
 pub struct RunOptions {
   pub debug: bool,
@@ -25,6 +28,7 @@ pub fn run_source(
   mut opts: RunOptions,
   src: &str,
   path: &str,
+  stdin: IoReadStream,
   stdout: IoStream,
   stderr: IoStream,
 ) -> Result<i64, String> {
@@ -32,7 +36,7 @@ pub fn run_source(
     opts.source_label = path.to_string();
   }
   let wasm = crate::to_wasm(src, path)?;
-  wasmtime_runner::run(&opts, &wasm.binary, stdout, stderr)
+  wasmtime_runner::run(&opts, &wasm.binary, stdin, stdout, stderr)
 }
 
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
@@ -41,6 +45,7 @@ pub fn run_source(
 pub fn run_file(
   mut opts: RunOptions,
   path: &str,
+  stdin: IoReadStream,
   stdout: IoStream,
   stderr: IoStream,
 ) -> Result<i64, String> {
@@ -50,12 +55,12 @@ pub fn run_file(
 
   if path.ends_with(".fnk") {
     let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    return run_source(opts, &src, path, stdout, stderr);
+    return run_source(opts, &src, path, stdin, stdout, stderr);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
   if bytes.starts_with(b"\0asm") {
-    wasmtime_runner::run(&opts, &bytes, stdout, stderr)
+    wasmtime_runner::run(&opts, &bytes, stdin, stdout, stderr)
   } else {
     Err("only .fnk and .wasm files are supported".into())
   }
@@ -192,12 +197,14 @@ mod tests {
   #[allow(unused)]
   fn run_main(src: &str) -> String {
     let wasm = crate::to_wasm(src, "test").expect("compilation failed");
+    let stdin_buf: IoReadStream = Arc::new(Mutex::new(std::io::Cursor::new(b"hello from stdin".to_vec())));
     let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
 
     match wasmtime_runner::run(
       &RunOptions::default(),
       &wasm.binary,
+      stdin_buf,
       stdout_buf.clone(),
       stderr_buf.clone(),
     ) {

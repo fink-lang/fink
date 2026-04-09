@@ -53,6 +53,20 @@
       (local.get $length))
   )
 
+  ;; _str_wrap_bytes : (ref $ByteArray) -> (ref $Str)
+  ;; Wrap a GC byte array into a $StrBytesImpl.
+  ;; Used by the host to create strings from IO data without
+  ;; touching linear memory — the host creates the $ByteArray
+  ;; directly via the GC API.
+  (func $_str_wrap_bytes (export "_str_wrap_bytes")
+    (param $bytes (ref null any))
+    (result (ref any))
+
+    (struct.new $StrBytesImpl
+      (ref.cast (ref $ByteArray) (local.get $bytes)))
+  )
+
+
   ;; ---- Access ----
 
   ;; str_bytes : (ref $Str) -> (ref $ByteArray)

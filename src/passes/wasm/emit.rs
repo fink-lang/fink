@@ -743,6 +743,24 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
+    // _settle_future: settle a host future (called by host during host_resume).
+    // Type: $Fn2 (param (ref null any) (ref null any)) — future, value.
+    {
+      let fn2_idx = self.idx.fn_type_idx(2);
+      imports.import("@fink/runtime", "_settle_future", wasm_encoder::EntityType::Function(fn2_idx));
+      self.idx.imports.insert("_settle_future".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
+    // _str_wrap_bytes: wrap a GC byte array into a $Str.
+    // Type: same as _channel_new — (param (ref null any)) (result (ref null any)).
+    {
+      let wrap_idx = self.idx.type_idx("$TmpImportChannelNew");
+      imports.import("@fink/runtime", "_str_wrap_bytes", wasm_encoder::EntityType::Function(wrap_idx));
+      self.idx.imports.insert("_str_wrap_bytes".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
     // _apply: closure dispatch (defined in dispatch.wat).
     {
       let fn2_idx = self.idx.fn_type_idx(2);
@@ -841,6 +859,20 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let run_main_type = self.idx.fn_type_idx(1);
     functions.function(run_main_type);
     self.idx.funcs.insert("_run_main_export".into(), next_func_idx);
+    next_func_idx += 1;
+
+    // _settle_future helper: wraps _settle_future import for the host.
+    // Type: $Fn2 (param (ref null any) (ref null any)) — future, value.
+    let settle_type = self.idx.fn_type_idx(2);
+    functions.function(settle_type);
+    self.idx.funcs.insert("_settle_future_export".into(), next_func_idx);
+    next_func_idx += 1;
+
+    // _str_wrap_bytes helper: wraps _str_wrap_bytes import for the host.
+    // Type: same as _channel_new — (param (ref null any)) (result (ref null any)).
+    let wrap_bytes_type = self.idx.type_idx("$TmpImportChannelNew");
+    functions.function(wrap_bytes_type);
+    self.idx.funcs.insert("_str_wrap_bytes_export".into(), next_func_idx);
     next_func_idx += 1;
 
     // $_panic: (func) — unreachable trap for irrefutable pattern failure.
@@ -960,6 +992,14 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let run_main_idx = self.idx.func_idx("_run_main_export");
     exports.export("_run_main", ExportKind::Func, run_main_idx);
 
+    // _settle_future: exported for the host to settle futures during host_resume.
+    let settle_idx = self.idx.func_idx("_settle_future_export");
+    exports.export("_settle_future", ExportKind::Func, settle_idx);
+
+    // _str_wrap_bytes: exported for the host to create $Str from GC byte arrays.
+    let wrap_bytes_idx = self.idx.func_idx("_str_wrap_bytes_export");
+    exports.export("_str_wrap_bytes", ExportKind::Func, wrap_bytes_idx);
+
     // TODO: memory should not be exported in production builds — only
     // needed for the runner to read string data during testing.
     exports.export("memory", ExportKind::Memory, 0);
@@ -1066,6 +1106,27 @@ impl<'a, 'src> Emitter<'a, 'src> {
       let run_main_idx = self.idx.func_idx("_run_main");
       f.instruction(&Instruction::LocalGet(0)); // entry function
       f.instruction(&Instruction::Call(run_main_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
+    // _settle_future body: forwards (future, value) to imported _settle_future.
+    {
+      let mut f = Function::new(vec![]);
+      let settle_idx = self.idx.func_idx("_settle_future");
+      f.instruction(&Instruction::LocalGet(0)); // future ref
+      f.instruction(&Instruction::LocalGet(1)); // value ref
+      f.instruction(&Instruction::Call(settle_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
+    // _str_wrap_bytes body: forwards byte array to imported _str_wrap_bytes.
+    {
+      let mut f = Function::new(vec![]);
+      let wrap_idx = self.idx.func_idx("_str_wrap_bytes");
+      f.instruction(&Instruction::LocalGet(0)); // byte array ref
+      f.instruction(&Instruction::Call(wrap_idx));
       f.instruction(&Instruction::End);
       code.function(&f);
     }
@@ -1210,7 +1271,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       func_names.append(idx, &internal_name);
     }
     // Internal helpers.
-    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export", "_run_main_export"] {
+    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export", "_run_main_export", "_settle_future_export", "_str_wrap_bytes_export"] {
       if let Some(&idx) = self.idx.funcs.get(*name) {
         func_names.append(idx, name);
       }

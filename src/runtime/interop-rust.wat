@@ -1,7 +1,11 @@
 ;; Rust host interop — self-contained main runner.
 ;;
-;; Exports _run_main (direct-style) which sets up IO channels, runs the
+;; Exports _run_main (direct-style) which sets up host IO channels, runs the
 ;; user's main to completion, drains the scheduler, and calls sys_exit.
+;;
+;; Owns $HostChannel — a subtype of $Channel for host-managed IO.
+;; send/recv on host channels delegate to host imports instead of using
+;; the internal message queue. Dispatch is in operators.wat.
 ;;
 ;; The host provides:
 ;;   host_exit(i32)               — terminate with exit code
@@ -14,15 +18,128 @@
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $_io_receiver_fn $_receive_thunk_fn $_done_cont_fn)
+  (elem declare func $_done_cont_fn)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
 
   (import "env" "host_exit" (func $host_exit (param i32)))
-  (import "env" "host_write_stdout" (func $host_write_stdout (param i32 i32)))
-  (import "env" "host_write_stderr" (func $host_write_stderr (param i32 i32)))
+  (import "env" "host_channel_send" (func $host_channel_send (param i32 i32 i32)))
+  (import "env" "host_read" (func $host_read (param (ref any) (ref any) (ref any))))
 
+
+
+  ;; -- Host channel helpers --------------------------------------------------
+
+  ;; Create a host channel with the given tag.
+  (func $create_host_channel (param $tag (ref any)) (result (ref $HostChannel))
+    (struct.new $HostChannel
+      (struct.new $Nil)
+      (struct.new $Nil)
+      (local.get $tag))
+  )
+
+
+  ;; -- host_channel_send -----------------------------------------------------
+  ;;
+  ;; host_channel_send(ch, msg, cont):
+  ;;   1. Write msg to the host via the appropriate host_write import
+  ;;   2. Queue unit_thunk(cont) to resume the sender
+  ;;   3. Resume scheduler
+  ;;
+  ;; Dispatches stdout vs stderr by channel tag (i31ref: 1=stdout, 2=stderr).
+
+  (func $interop_channel_send
+    (param $ch (ref null any))
+    (param $msg (ref null any))
+    (param $cont (ref null any))
+
+    (local $tag i32)
+    (local $offset i32)
+    (local $length i32)
+
+    ;; Write string bytes to scratch memory.
+    (call $str_write_to_mem (ref.cast (ref $Str) (local.get $msg)))
+    (local.set $length)
+    (local.set $offset)
+
+    ;; Read channel tag (i31ref).
+    (local.set $tag
+      (i31.get_s (ref.cast (ref i31)
+        (struct.get $Channel $tag
+          (ref.cast (ref $Channel) (local.get $ch))))))
+
+    ;; Send to host — host dispatches by tag.
+    (call $host_channel_send (local.get $tag) (local.get $offset) (local.get $length))
+
+    ;; Sender continues with unit.
+    (call $queue_push
+      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+
+    (return_call $resume)
+  )
+
+
+  ;; -- host_channel_recv -----------------------------------------------------
+  ;;
+  ;; host_channel_recv(ch, cont):
+  ;;   Parks cont on the channel's receivers list and resumes.
+  ;;   The host will deliver data during host_resume by calling
+  ;;   channel_deliver, which wakes parked receivers.
+  ;;
+  ;; TODO: signal host to start async read for this channel.
+
+  (func $interop_channel_recv
+    (param $ch (ref null any))
+    (param $cont (ref null any))
+
+    (local $host_ch (ref $HostChannel))
+    (local.set $host_ch (ref.cast (ref $HostChannel) (local.get $ch)))
+
+    ;; Park cont on the channel's receivers list (FIFO).
+    (struct.set $Channel $receivers (local.get $host_ch)
+      (call $list_concat
+        (struct.get $Channel $receivers (local.get $host_ch))
+        (struct.new $Cons
+          (ref.as_non_null (local.get $cont))
+          (struct.new $Nil))))
+
+    (return_call $resume)
+  )
+
+
+  ;; -- interop_op_read --------------------------------------------------------
+  ;;
+  ;; interop_op_read(stream, size, cont):
+  ;;   1. Create a pending $Future with cont as waiter
+  ;;   2. Call host_read(stream, size, future) — host starts async read
+  ;;   3. Resume scheduler — task is parked on the future
+  ;;
+  ;; The host settles the future during host_resume when data arrives.
+
+  (func $interop_op_read
+    (param $stream (ref null any))
+    (param $size (ref null any))
+    (param $cont (ref null any))
+
+    (local $future (ref $Future))
+
+    ;; Create pending future with cont as waiter.
+    (local.set $future (struct.new $Future
+      (ref.null any)
+      (struct.new $Cons
+        (ref.as_non_null (local.get $cont))
+        (struct.new $Nil))))
+
+    ;; Tell host to start async read. Host captures the future ref.
+    (call $host_read
+      (ref.as_non_null (local.get $stream))
+      (ref.as_non_null (local.get $size))
+      (local.get $future))
+
+    ;; Resume scheduler — this task is parked on the future.
+    (return_call $resume)
+  )
 
 
   ;; -- Done continuation -----------------------------------------------------
@@ -67,82 +184,10 @@
     )
 
     ;; Drain remaining scheduler tasks (pending IO writes etc.).
-    (call $run_next)
+    (call $resume)
 
     ;; Terminate.
     (return_call $host_exit (local.get $code))
-  )
-
-
-  ;; -- IO receiver ------------------------------------------------------------
-  ;;
-  ;; Single CPS receiver (type $Fn2) for both stdout and stderr.
-  ;; Dispatches to the correct host write based on the channel's $tag field.
-  ;; Called by process_msg_q via _apply([msg], receiver).
-  ;;
-  ;; Captures: [ch]. Args: [msg].
-
-  (func $_io_receiver_fn (type $Fn2)
-    (param $caps (ref null any))
-    (param $args (ref null any))
-
-    (local $ch (ref null any))
-    (local $msg (ref null any))
-    (local $tag i32)
-    (local $offset i32)
-    (local $length i32)
-
-    ;; Extract channel from captures[0].
-    (local.set $ch
-      (array.get $Captures
-        (ref.cast (ref $Captures) (local.get $caps))
-        (i32.const 0)))
-
-    ;; Extract message from args list head.
-    (local.set $msg
-      (call $list_head_any (local.get $args)))
-
-    ;; Write string bytes to scratch memory.
-    (call $str_write_to_mem (ref.cast (ref $Str) (local.get $msg)))
-    (local.set $length)
-    (local.set $offset)
-
-    ;; Read channel tag (i31ref) to dispatch.
-    (local.set $tag
-      (i31.get_s (ref.cast (ref i31)
-        (struct.get $Channel $tag
-          (ref.cast (ref $Channel) (local.get $ch))))))
-
-    ;; Dispatch: tag 1 = stdout, tag 2 = stderr.
-    (if (i32.eq (local.get $tag) (i32.const 1))
-      (then (call $host_write_stdout (local.get $offset) (local.get $length)))
-      (else (call $host_write_stderr (local.get $offset) (local.get $length))))
-
-    ;; Re-register: receive(ch, self_closure).
-    (return_call $receive
-      (local.get $ch)
-      (struct.new $Closure
-        (ref.func $_io_receiver_fn)
-        (ref.cast (ref null $Captures) (local.get $caps))))
-  )
-
-
-  ;; -- Receive thunk ---------------------------------------------------------
-  ;;
-  ;; Scheduler task that calls receive(ch, receiver_closure).
-  ;; Captures: [ch, receiver_closure]. Called via _apply from task queue.
-
-  (func $_receive_thunk_fn (type $Fn2)
-    (param $caps (ref null any))
-    (param $args (ref null any))
-
-    (local $captures (ref null $Captures))
-    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
-
-    ;; receive(ch, receiver_closure)
-    (return_call $receive
-      (array.get $Captures (ref.as_non_null (local.get $captures)) (i32.const 0))
-      (array.get $Captures (ref.as_non_null (local.get $captures)) (i32.const 1)))
   )
 
 
@@ -150,12 +195,11 @@
   ;;
   ;; Direct-style export. The single entry point for the host.
   ;;
-  ;; 1. Creates stdin/stdout/stderr channels
-  ;; 2. Queues receive thunks for stdout/stderr
-  ;; 3. Creates done continuation (captures exit code, drains, calls sys_exit)
-  ;; 4. Builds args list [done_cont, stdin, stdout, stderr]
-  ;; 5. Calls main — enters CPS, scheduler takes over
-  ;; 6. When scheduler drains, returns here (but sys_exit already called)
+  ;; 1. Creates stdin/stdout/stderr host channels
+  ;; 2. Creates done continuation (captures exit code, drains, calls sys_exit)
+  ;; 3. Builds args list [done_cont, stdin, stdout, stderr]
+  ;; 4. Calls main — enters CPS, scheduler takes over
+  ;; 5. When scheduler drains, returns here (but sys_exit already called)
 
   (func $_run_main (export "_run_main")
     (param $entry (ref null any))
@@ -166,35 +210,13 @@
     (local $done   (ref null any))
     (local $args   (ref null any))
 
-    ;; Create channels with i31ref tags (0=stdin, 1=stdout, 2=stderr).
+    ;; Create host channels with i31ref tags (0=stdin, 1=stdout, 2=stderr).
     (local.set $stdin
-      (call $_channel_new (ref.i31 (i32.const 0))))
+      (call $create_host_channel (ref.i31 (i32.const 0))))
     (local.set $stdout
-      (call $_channel_new (ref.i31 (i32.const 1))))
+      (call $create_host_channel (ref.i31 (i32.const 1))))
     (local.set $stderr
-      (call $_channel_new (ref.i31 (i32.const 2))))
-
-    ;; Queue receive thunks for stdout and stderr.
-    ;; Both use $_io_receiver_fn which dispatches by channel tag.
-    (call $queue_push
-      (struct.new $Closure
-        (ref.func $_receive_thunk_fn)
-        (array.new_fixed $Captures 2
-          (ref.as_non_null (local.get $stdout))
-          (struct.new $Closure
-            (ref.func $_io_receiver_fn)
-            (array.new_fixed $Captures 1
-              (ref.as_non_null (local.get $stdout)))))))
-
-    (call $queue_push
-      (struct.new $Closure
-        (ref.func $_receive_thunk_fn)
-        (array.new_fixed $Captures 2
-          (ref.as_non_null (local.get $stderr))
-          (struct.new $Closure
-            (ref.func $_io_receiver_fn)
-            (array.new_fixed $Captures 1
-              (ref.as_non_null (local.get $stderr)))))))
+      (call $create_host_channel (ref.i31 (i32.const 2))))
 
     ;; Create done continuation.
     (local.set $done

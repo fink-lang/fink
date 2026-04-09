@@ -63,7 +63,7 @@ test 'stdout and stderr', fn:
       err
 
 
-test 'channel send with <<', fn:
+test 'send with <<', fn:
   expect run_main ƒink:
     main = fn stdin, stdout, stderr:
       stdout << 'hello'
@@ -72,3 +72,17 @@ test 'channel send with <<', fn:
     0
     stdout == ":
       hello
+
+
+
+test 'read from stdin', fn:
+  expect run_main ƒink:
+    main = fn stdin, stdout, stderr:
+      data = read stdin, 1024
+      data >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      hello from stdin
+

@@ -76,10 +76,11 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
 pub fn run(
   src: &str,
   path: &str,
+  stdin: runner::IoReadStream,
   stdout: runner::IoStream,
   stderr: runner::IoStream,
 ) -> Result<i64, String> {
-  runner::run_source(Default::default(), src, path, stdout, stderr)
+  runner::run_source(Default::default(), src, path, stdin, stdout, stderr)
 }
 
 /// Start DAP debug server for a .fnk file, communicating over stdin/stdout.
