@@ -229,6 +229,224 @@ test 'str implicit formatting escapes', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEU5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7OztBO0E7Ozs7O0E7QUFBQTs7QSIKfQ==
 
 
+test 'empty string literal', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      ''
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
+      (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_5 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (call $_str_empty) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTtBQUFBO0EiCn0=
+
+
+test 'empty string eq', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      '' == ''
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
+      (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_5 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_eq (call $_str_empty) (call $_str_empty) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7O0E7QUFBQTtBIgp9
+
+
+test 'match empty string', fn:
+  expect gen_wat ƒink:
+    main = fn x:
+      match x:
+        '': 0
+        _: 1
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $v_31 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_27 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_27 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 0)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_27))
+      )
+      (func $v_106 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_107 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_107 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (local.get $v_107) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (struct.new $Closure (ref.func $v_31) (ref.null $Captures)))
+      )
+      (func $v_117 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_118 (ref any))
+        (local $v_120 (ref any))
+        (local $v_17 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_118 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_120 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 1)))
+        (local.set $v_17 (call $_list_head_any (local.get $_args)))
+        (if (i31.get_s (ref.cast i31 (local.get $v_17)))
+          (then
+        (local.set $local_5 (call $_list_nil))
+        (return_call $__apply (local.get $local_5) (local.get $v_118))
+          )
+          (else
+        (local.set $local_5 (call $_list_nil))
+        (return_call $__apply (local.get $local_5) (local.get $v_120))
+        )
+      )
+      (func $v_25 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_13 (ref any))
+        (local $v_14 (ref any))
+        (local $v_12 (ref any))
+        (local $v_124 (ref any))
+        (local $local_6 (ref any))
+        (local.set $v_13 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $v_14 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $v_12 (call $_list_head_any (local.get $_args)))
+        (local.set $v_124 (struct.new $Closure (ref.func $v_117) (array.new_fixed $Captures 2 (local.get $v_13) (local.get $v_14))))
+        (return_call $_op_eq (local.get $v_12) (call $_str_empty) (local.get $v_124))
+      )
+      (func $v_43 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_9 (ref any))
+        (local $v_10 (ref any))
+        (local $v_8 (ref any))
+        (local $v_109 (ref any))
+        (local $local_6 (ref any))
+        (local.set $v_9 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $v_10 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $v_8 (call $_list_head_any (local.get $_args)))
+        (local.set $v_109 (struct.new $Closure (ref.func $v_106) (array.new_fixed $Captures 1 (local.get $v_9))))
+        (local.set $local_6 (call $_list_nil))
+        (local.set $local_6 (call $_list_prepend_any (local.get $v_8) (local.get $local_6)))
+        (local.set $local_6 (call $_list_prepend_any (local.get $v_10) (local.get $local_6)))
+        (local.set $local_6 (call $_list_prepend_any (local.get $v_109) (local.get $local_6)))
+        (return_call $__apply (local.get $local_6) (struct.new $Closure (ref.func $v_25) (ref.null $Captures)))
+      )
+      (func $v_52 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_48 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_48 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 1)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_48))
+      )
+      (func $v_57 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_45 (ref any))
+        (local $v_46 (ref any))
+        (local $v_44 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_45 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $v_46 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $v_44 (call $_list_head_any (local.get $_args)))
+        (local.set $local_5 (call $_list_nil))
+        (local.set $local_5 (call $_list_prepend_any (local.get $v_45) (local.get $local_5)))
+        (return_call $__apply (local.get $local_5) (struct.new $Closure (ref.func $v_52) (ref.null $Captures)))
+      )
+      (func $v_113 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (local.set $local_2 (call $_list_nil))
+        (return_call $__apply (local.get $local_2) (struct.new $Closure (ref.func $_panic) (ref.null $Captures)))
+      )
+      (func $v_95 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_96 (ref any))
+        (local $v_98 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_96 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_98 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 1)))
+        (local.set $local_4 (call $_list_nil))
+        (local.set $local_4 (call $_list_prepend_any (local.get $v_98) (local.get $local_4)))
+        (local.set $local_4 (call $_list_prepend_any (struct.new $Closure (ref.func $v_113) (ref.null $Captures)) (local.get $local_4)))
+        (local.set $local_4 (call $_list_prepend_any (local.get $v_96) (local.get $local_4)))
+        (return_call $__apply (local.get $local_4) (struct.new $Closure (ref.func $v_57) (ref.null $Captures)))
+      )
+      (func $v_70 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_59 (ref any))
+        (local $v_58 (ref any))
+        (local $v_102 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_59 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $v_58 (call $_list_head_any (local.get $_args)))
+        (local.set $v_102 (struct.new $Closure (ref.func $v_95) (array.new_fixed $Captures 2 (local.get $v_59) (local.get $v_58))))
+        (local.set $local_5 (call $_list_nil))
+        (local.set $local_5 (call $_list_prepend_any (local.get $v_58) (local.get $local_5)))
+        (local.set $local_5 (call $_list_prepend_any (local.get $v_102) (local.get $local_5)))
+        (local.set $local_5 (call $_list_prepend_any (local.get $v_59) (local.get $local_5)))
+        (return_call $__apply (local.get $local_5) (struct.new $Closure (ref.func $v_43) (ref.null $Captures)))
+      )
+      (global $main_0 (ref $Fn2) (ref.func $v_5))
+      (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_6 (ref any))
+        (local $x_1 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_6 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $x_1 (call $_list_head_any (local.get $_args)))
+        (local.set $local_4 (call $_list_nil))
+        (local.set $local_4 (call $_list_prepend_any (local.get $x_1) (local.get $local_4)))
+        (local.set $local_4 (call $_list_prepend_any (local.get $v_6) (local.get $local_4)))
+        (return_call $__apply (local.get $local_4) (struct.new $Closure (ref.func $v_70) (ref.null $Captures)))
+      )
+      (export "main" (func $v_5))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7OztBOzs7QTtBO0E7Ozs7Ozs7O0E7QUFBQTtBIgp9
+
+
+test 'empty string eq template', fn:
+  expect gen_wat ƒink:
+    main = fn:
+      '' == '${''}'
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
+      (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_5 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_eq (call $_str_empty) (call $_str_empty) (local.get $v_5))
+      )
+      (export "main" (func $v_4))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJHsnJ30nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOzs7QTtBOzs7QTtBQUFBO0EiCn0=
+
+
 test 'str eq', fn:
   expect gen_wat ƒink:
     main = fn:
