@@ -214,9 +214,10 @@ fn main() {
       #[cfg(feature = "run")]
       {
         use std::sync::{Arc, Mutex};
+        let stdin: fink::runner::IoReadStream = Arc::new(Mutex::new(std::io::stdin()));
         let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
         let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
-        let exit_code = fink::run(&src, path, stdout, stderr).unwrap_or_else(|e| die(&e));
+        let exit_code = fink::run(&src, path, stdin, stdout, stderr).unwrap_or_else(|e| die(&e));
         process::exit(exit_code as i32);
       }
     }

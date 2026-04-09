@@ -466,10 +466,24 @@
   ;; =========================================================================
 
   ;; op_shl(a, b, cont):
-  ;;   $Channel on a → send(a, b, cont)  [ch << msg]
-  ;;   otherwise     → int_op_shl(a, b)  [numeric shift]
+  ;;   $HostChannel on a → interop_channel_send(a, b, cont)
+  ;;   $Channel on a     → channel_op_shr(a, b, cont)  [ch << msg]
+  ;;   otherwise         → int_op_shl(a, b)  [numeric shift]
+  ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shl (export "op_shl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $HostChannel on a → host channel send
+    (block $not_host_channel
+      (block $is_host_channel (result (ref $HostChannel))
+        (br $not_host_channel
+          (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
+            (local.get $a))))
+      (drop)
+      (return_call $interop_channel_send
+        (local.get $a)
+        (local.get $b)
+        (local.get $cont)))
 
     ;; Try $Channel on a → channel send
     (block $not_channel
@@ -495,10 +509,24 @@
   ;; =========================================================================
 
   ;; op_shr(a, b, cont):
-  ;;   $Channel on b → send(b, a, cont)  [msg >> ch]
-  ;;   otherwise     → int_op_shr(a, b)  [numeric shift]
+  ;;   $HostChannel on b → interop_channel_send(b, a, cont)
+  ;;   $Channel on b     → channel_op_shr(b, a, cont)  [msg >> ch]
+  ;;   otherwise         → int_op_shr(a, b)  [numeric shift]
+  ;; NB: $HostChannel check must come before $Channel (subtype).
   (func $op_shr (export "op_shr")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $HostChannel on b → host channel send
+    (block $not_host_channel
+      (block $is_host_channel (result (ref $HostChannel))
+        (br $not_host_channel
+          (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
+            (local.get $b))))
+      (drop)
+      (return_call $interop_channel_send
+        (local.get $b)
+        (local.get $a)
+        (local.get $cont)))
 
     ;; Try $Channel on b → channel send
     (block $not_channel
@@ -517,6 +545,51 @@
       (call $int_op_shr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
+      (local.get $cont)))
+
+
+  ;; =========================================================================
+  ;; receive — polymorphic ($HostChannel → host recv, $Channel → channel recv)
+  ;; =========================================================================
+
+  ;; receive(ch, cont):
+  ;;   $HostChannel → interop_channel_recv(ch, cont)
+  ;;   $Channel     → channel_receive(ch, cont)
+  ;; NB: $HostChannel check must come before $Channel (subtype).
+  (func $receive (export "receive")
+    (param $ch (ref null any)) (param $cont (ref null any))
+
+    ;; Try $HostChannel → host channel receive
+    (block $not_host_channel
+      (block $is_host_channel (result (ref $HostChannel))
+        (br $not_host_channel
+          (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
+            (local.get $ch))))
+      (drop)
+      (return_call $interop_channel_recv
+        (local.get $ch)
+        (local.get $cont)))
+
+    ;; Fallback: regular channel receive
+    (return_call $channel_receive
+      (local.get $ch)
+      (local.get $cont)))
+
+
+  ;; =========================================================================
+  ;; read — async read from a stream
+  ;; =========================================================================
+
+  ;; op_read(stream, size, cont):
+  ;;   Dispatches to interop_op_read for host channels.
+  (func $op_read (export "op_read")
+    (param $stream (ref null any))
+    (param $size (ref null any))
+    (param $cont (ref null any))
+
+    (return_call $interop_op_read
+      (local.get $stream)
+      (local.get $size)
       (local.get $cont)))
 
 )

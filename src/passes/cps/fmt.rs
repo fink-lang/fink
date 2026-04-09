@@ -324,6 +324,8 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Channels
     BuiltIn::Channel      => "·channel".into(),
     BuiltIn::Receive      => "·receive".into(),
+    // IO
+    BuiltIn::Read         => "·read".into(),
     // Module
     BuiltIn::Export       => "·export".into(),
     BuiltIn::Import       => "·import".into(),

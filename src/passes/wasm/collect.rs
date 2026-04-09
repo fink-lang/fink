@@ -393,6 +393,7 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::Await         => "await",
     BuiltIn::Channel       => "channel",
     BuiltIn::Receive       => "receive",
+    BuiltIn::Read          => "op_read",
     BuiltIn::Export        => "export",
     BuiltIn::Import        => "import",
   }

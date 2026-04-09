@@ -12,6 +12,12 @@
 ;; queue and pop the next task to run. No primitive ever calls a
 ;; continuation directly.
 ;;
+;; Host interop:
+;;   When the task queue empties, the scheduler calls host_resume to
+;;   yield execution to the host. The host can block on IO (epoll etc.),
+;;   settle host futures via direct WASM calls, and return. If the queue
+;;   is still empty after host_resume, the program is done.
+;;
 ;; Task queue: a $List of $Closure thunks. FIFO via concat-to-end.
 ;; Each thunk is a zero-arg closure: fn(): <resume some continuation>.
 
@@ -19,6 +25,10 @@
 
   ;; Declarative element segment — required by WASM spec for ref.func.
   (elem declare func $_thunk_fn $_settle_fn $_spawn_task_fn)
+
+  ;; -- Host import -------------------------------------------------------
+
+  (import "env" "host_resume" (func $host_resume))
 
   ;; -- Task queue global -------------------------------------------------
 
@@ -43,12 +53,16 @@
     (struct.get $Cons $head (local.get $cons))
   )
 
-  ;; Run the next task from the queue. All primitives tail-call this.
-  ;; Returns when the queue is empty — control propagates back through
-  ;; the tail-call chain to whoever first entered CPS.
-  (func $run_next
+  ;; Resume the scheduler. All primitives tail-call this after
+  ;; enqueuing work. When the queue empties, yields to the host
+  ;; (host_resume) so it can process IO / settle host futures.
+  ;; If the queue is still empty after host_resume, program is done.
+  (func $resume
     (if (ref.test (ref $Nil) (global.get $task_queue))
-      (then (return)))
+      (then
+        (call $host_resume)
+        (if (ref.test (ref $Nil) (global.get $task_queue))
+          (then (return)))))
     (return_call $_apply (struct.new $Nil) (call $queue_pop))
   )
 
@@ -92,7 +106,7 @@
     (call $queue_push (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
 
     ;; Run next task.
-    (return_call $run_next)
+    (return_call $resume)
   )
 
 
@@ -118,7 +132,7 @@
     (local.set $result (struct.get $Cons $head
       (ref.cast (ref $Cons) (local.get $args))))
     (call $settle (local.get $future) (local.get $result))
-    (return_call $run_next)
+    (return_call $resume)
   )
 
   ;; The spawned task body — calls task_fn with the settle continuation.
@@ -171,7 +185,7 @@
       (local.get $future)))
 
     ;; Run next task.
-    (return_call $run_next)
+    (return_call $resume)
   )
 
 
@@ -207,7 +221,7 @@
             (ref.as_non_null (local.get $value))))))
 
     ;; Run next task.
-    (return_call $run_next)
+    (return_call $resume)
   )
 
 
@@ -242,6 +256,21 @@
 
     ;; Clear waiters.
     (struct.set $Future $waiters (local.get $future) (struct.new $Nil))
+  )
+
+
+  ;; -- _settle_future (host-callable) ---------------------------------------
+  ;;
+  ;; Exported for the host to settle futures during host_resume.
+  ;; Takes untyped (ref any) params — casts internally.
+
+  (func $_settle_future (export "_settle_future")
+    (param $future_ref (ref null any))
+    (param $value (ref null any))
+
+    (call $settle
+      (ref.cast (ref $Future) (local.get $future_ref))
+      (ref.as_non_null (local.get $value)))
   )
 
 )
