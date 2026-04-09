@@ -134,6 +134,7 @@ mod tests {
           } else if let Ok(Val::I32(offset)) = struct_ref.field(&mut caller, 0)
             && let Ok(Val::I32(length)) = struct_ref.field(&mut caller, 1)
           {
+            // $StrDataImpl — read directly from linear memory.
             if let Some(memory) = caller.get_export("memory")
               && let Some(mem) = memory.into_memory()
             {
@@ -145,6 +146,19 @@ mod tests {
                 *result_clone.lock().unwrap() = Some(TestResult::Str(s));
               }
             }
+          } else if let Ok(Val::AnyRef(Some(arr_any))) = struct_ref.field(&mut caller, 0)
+            && let Ok(Some(arr)) = arr_any.as_array(&caller)
+            && let Ok(len) = arr.len(&caller)
+          {
+            // $StrBytesImpl — read bytes from GC $ByteArray.
+            let mut bytes = Vec::with_capacity(len as usize);
+            for i in 0..len {
+              if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                bytes.push(b as u8);
+              }
+            }
+            let s = String::from_utf8_lossy(&bytes).into_owned();
+            *result_clone.lock().unwrap() = Some(TestResult::Str(s));
           }
         }
       }

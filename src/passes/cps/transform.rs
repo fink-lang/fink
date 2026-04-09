@@ -207,7 +207,16 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower {
   match &node.kind {
     // ---- literals ----
     NodeKind::LitBool(b) => (lit_val(g, Lit::Bool(*b), o), vec![]),
-    NodeKind::LitInt(s)  => (lit_val(g, Lit::Int(parse_int(s)), o), vec![]),
+    NodeKind::LitInt(s)  => {
+      let n = parse_int(s);
+      // Preserve -0 as f64 negative zero (i64 has no -0).
+      let lit = if n == 0 && s.starts_with('-') {
+        Lit::Float(-0.0_f64)
+      } else {
+        Lit::Int(n)
+      };
+      (lit_val(g, lit, o), vec![])
+    }
     NodeKind::LitFloat(s) => (lit_val(g, Lit::Float(parse_float(s)), o), vec![]),
     NodeKind::LitDecimal(s) => (lit_val(g, Lit::Decimal(parse_decimal(s)), o), vec![]),
     NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(crate::strings::render(s)), o), vec![]),
@@ -2451,7 +2460,13 @@ fn lower_pat_lhs<'src>(
 
     // Literal equality: `1`, `'hello'`, `true` — emits PatternMatch with op_eq test. No binding produced.
     NodeKind::LitInt(s) => {
-      emit_literal_pattern(g, val, Lit::Int(parse_int(s)), origin, pending);
+      let n = parse_int(s);
+      let lit = if n == 0 && s.starts_with('-') {
+        Lit::Float(-0.0_f64)
+      } else {
+        Lit::Int(n)
+      };
+      emit_literal_pattern(g, val, lit, origin, pending);
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
     NodeKind::LitFloat(s) => {

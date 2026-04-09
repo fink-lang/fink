@@ -127,9 +127,8 @@
       (field $val f64)
     ))
 
-    ;; TODO: $Bytes — raw byte buffer type; $Str should become a subtype of $Bytes
-    ;; so that byte-level IO (stdin/stdout/stderr) works with both raw bytes
-    ;; and strings without conversion.
+    ;; TODO: $Utf8 — validated UTF-8 string subtype of $Str for codepoint-level
+    ;; slicing and indexing; $Str stays as the byte-level base type.
 
     ;; $Str — base string type. Opaque.
     ;; All internal subtypes defined in str.wat.

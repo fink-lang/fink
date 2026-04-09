@@ -47,6 +47,13 @@ test 'negative int literal', fn:
     ·v_0 -1000
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTFfMDAwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBIgp9
 
+test 'negative zero literal', fn:
+  expect cps_expr ƒink:
+    -0
+  | equals ƒink:
+    ·v_0 -0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTAiXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEiCn0=
+
 test 'hex int literal', fn:
   expect cps_expr ƒink:
     0xFF_FF

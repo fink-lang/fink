@@ -2706,4 +2706,179 @@
       (local.get $cont))
   )
 
+
+  ;; ---- String slicing ----
+
+  ;; _str_slice(str, start_f, end_f) → (ref null $Str)
+  ;; Internal direct-style slice: extract bytes [start..end).
+  ;; Negative values resolve from end: -1 → len-1, -0.0 → len.
+  ;; Returns null on out-of-bounds (after resolution: 0 <= start <= end <= len).
+  ;; Returns empty string for empty slice, original for full range.
+  (func $_str_slice
+    (param $str (ref $Str)) (param $start_f f64) (param $end_f f64)
+    (result (ref null $Str))
+
+    (local $len i32)
+    (local $start i32)
+    (local $end i32)
+    (local $src (ref $ByteArray))
+    (local $slice_len i32)
+    (local $dst (ref $ByteArray))
+    (local $i i32)
+
+    (local.set $len (call $_str_len (local.get $str)))
+
+    ;; Resolve negative values from end (including -0.0 via copysign check)
+    (if (f64.lt
+          (f64.copysign (f64.const 1) (local.get $start_f))
+          (f64.const 0))
+      (then
+        (local.set $start
+          (i32.add (local.get $len)
+            (i32.trunc_f64_s (local.get $start_f)))))
+      (else
+        (local.set $start
+          (i32.trunc_f64_s (local.get $start_f)))))
+
+    (if (f64.lt
+          (f64.copysign (f64.const 1) (local.get $end_f))
+          (f64.const 0))
+      (then
+        (local.set $end
+          (i32.add (local.get $len)
+            (i32.trunc_f64_s (local.get $end_f)))))
+      (else
+        (local.set $end
+          (i32.trunc_f64_s (local.get $end_f)))))
+
+    ;; Bounds check: 0 <= start <= end <= len
+    (if (i32.or
+          (i32.lt_s (local.get $start) (i32.const 0))
+          (i32.or
+            (i32.gt_s (local.get $start) (local.get $end))
+            (i32.gt_s (local.get $end) (local.get $len))))
+      (then (return (ref.null $Str))))
+
+    ;; Empty slice
+    (local.set $slice_len (i32.sub (local.get $end) (local.get $start)))
+    (if (i32.eqz (local.get $slice_len))
+      (then (return (call $str_empty))))
+
+    ;; Full string — return original
+    (if (i32.and
+          (i32.eqz (local.get $start))
+          (i32.eq (local.get $end) (local.get $len)))
+      (then (return (local.get $str))))
+
+    ;; Convert to byte array, then copy slice
+    (local.set $src (call $str_bytes (local.get $str)))
+    (local.set $dst (array.new $ByteArray (i32.const 0) (local.get $slice_len)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $copy
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $slice_len)))
+        (array.set $ByteArray (local.get $dst)
+          (local.get $i)
+          (array.get_u $ByteArray (local.get $src)
+            (i32.add (local.get $start) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy)))
+    (struct.new $StrBytesImpl (local.get $dst))
+  )
+
+  ;; str_slice(str, start, end, succ, fail)
+  ;; CPS wrapper: extract bytes [start..end) from a string.
+  ;;   succ — called with the substring on success
+  ;;   fail — called with the original string on out-of-bounds
+  (func $str_slice (export "str_slice")
+    (param $str (ref null any))
+    (param $start (ref null any))
+    (param $end (ref null any))
+    (param $succ (ref null any))
+    (param $fail (ref null any))
+
+    (local $s (ref $Str))
+    (local $result (ref null $Str))
+
+    (local.set $s (ref.cast (ref $Str) (local.get $str)))
+    (local.set $result (call $_str_slice
+      (local.get $s)
+      (struct.get $Num 0 (ref.cast (ref $Num) (local.get $start)))
+      (struct.get $Num 0 (ref.cast (ref $Num) (local.get $end)))))
+
+    (if (ref.is_null (local.get $result))
+      (then
+        (return_call $apply_1
+          (local.get $str)
+          (local.get $fail))))
+
+    (return_call $apply_1
+      (ref.as_non_null (local.get $result))
+      (local.get $succ))
+  )
+
+
+  ;; str_op_dot(str, key, cont)
+  ;; Member access on strings:
+  ;;   $Range key → byte slice (start..end or start...end)
+  ;;   $Num key   → single byte at index
+  ;; Out of bounds → unreachable
+  (func $str_op_dot (export "str_op_dot")
+    (param $str (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+
+    (local $s (ref $Str))
+    (local $range (ref $Range))
+    (local $start_f f64)
+    (local $end_f f64)
+    (local $result (ref null $Str))
+
+    (local.set $s (ref.cast (ref $Str) (local.get $str)))
+
+    ;; Try $Range key
+    (block $not_range
+      (block $is_range (result (ref $Range))
+        (br $not_range
+          (br_on_cast $is_range (ref null any) (ref $Range)
+            (local.get $key))))
+      (local.set $range)
+
+      (local.set $start_f (struct.get $Num 0 (call $range_start (local.get $range))))
+      (local.set $end_f (struct.get $Num 0 (call $range_end (local.get $range))))
+
+      ;; Adjust end for inclusive range
+      (if (call $range_is_incl (local.get $range))
+        (then
+          (local.set $end_f (f64.add (local.get $end_f) (f64.const 1)))))
+
+      (local.set $result
+        (call $_str_slice (local.get $s) (local.get $start_f) (local.get $end_f)))
+      (if (ref.is_null (local.get $result))
+        (then (unreachable)))
+      (return_call $apply_1
+        (ref.as_non_null (local.get $result))
+        (local.get $cont)))
+
+    ;; Try $Num key — single byte
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref null any) (ref $Num)
+            (local.get $key))))
+      (local.set $start_f (struct.get $Num 0))
+
+      (local.set $result
+        (call $_str_slice
+          (local.get $s)
+          (local.get $start_f)
+          (f64.add (local.get $start_f) (f64.const 1))))
+      (if (ref.is_null (local.get $result))
+        (then (unreachable)))
+      (return_call $apply_1
+        (ref.as_non_null (local.get $result))
+        (local.get $cont)))
+
+    (unreachable)
+  )
+
 )
