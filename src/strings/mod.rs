@@ -17,30 +17,31 @@
 ///   \xNN       → byte value (2 hex digits)
 ///   \u{NNNNNN} → unicode codepoint (1-6 hex digits, _ separators allowed)
 pub fn render(raw: &str) -> String {
-  let mut out = String::with_capacity(raw.len());
+  let mut out = Vec::with_capacity(raw.len());
   let bytes = raw.as_bytes();
   let mut i = 0;
   while i < bytes.len() {
     if bytes[i] == b'\\' && i + 1 < bytes.len() {
       i += 1;
       match bytes[i] {
-        b'n'  => out.push('\n'),
-        b'r'  => out.push('\r'),
-        b't'  => out.push('\t'),
-        b'v'  => out.push('\x0B'),
-        b'b'  => out.push('\x08'),
-        b'f'  => out.push('\x0C'),
-        b'\'' => out.push('\''),
-        b'\\' => out.push('\\'),
-        b'$'  => out.push('$'),
+        b'n'  => out.push(b'\n'),
+        b'r'  => out.push(b'\r'),
+        b't'  => out.push(b'\t'),
+        b'v'  => out.push(0x0B),
+        b'b'  => out.push(0x08),
+        b'f'  => out.push(0x0C),
+        b'\'' => out.push(b'\''),
+        b'\\' => out.push(b'\\'),
+        b'$'  => out.push(b'$'),
         b'x'  => {
+          // \xNN emits a raw byte, not a Unicode codepoint.
           let hi = hex_digit(bytes.get(i + 1).copied().unwrap_or(0));
           let lo = hex_digit(bytes.get(i + 2).copied().unwrap_or(0));
           if let (Some(hi), Some(lo)) = (hi, lo) {
-            out.push((hi << 4 | lo) as char);
+            out.push(hi << 4 | lo);
             i += 2;
           } else {
-            out.push_str("\\x");
+            out.extend_from_slice(b"\\x");
           }
         }
         b'u' if bytes.get(i + 1) == Some(&b'{') => {
@@ -63,16 +64,18 @@ pub fn render(raw: &str) -> String {
           }
           if digits > 0 && j < bytes.len() && bytes[j] == b'}' {
             if let Some(ch) = char::from_u32(codepoint) {
-              out.push(ch);
+              let mut buf = [0u8; 4];
+              let encoded = ch.encode_utf8(&mut buf);
+              out.extend_from_slice(encoded.as_bytes());
             }
             i = j; // points at '}', will be incremented at end of loop
           } else {
-            out.push_str("\\u");
+            out.extend_from_slice(b"\\u");
           }
         }
         b => {
-          out.push('\\');
-          out.push(b as char);
+          out.push(b'\\');
+          out.push(b);
         }
       }
     } else {
@@ -84,16 +87,14 @@ pub fn render(raw: &str) -> String {
         b if b & 0b1100_0000 == 0b1100_0000 => 2,
         _ => 1,
       };
-      // LitStr must contain valid UTF-8 — invalid sequences indicate a parser bug.
-      let s = std::str::from_utf8(&bytes[i..i + seq_len])
-        .expect("render: invalid UTF-8 sequence in LitStr — parser bug");
-      out.push_str(s);
+      out.extend_from_slice(&bytes[i..i + seq_len]);
       i += seq_len;
       continue;
     }
     i += 1;
   }
-  out
+  String::from_utf8(out)
+    .expect("render: resulting string is not valid UTF-8")
 }
 
 /// Replace control characters with Unicode Control Pictures for test output.
