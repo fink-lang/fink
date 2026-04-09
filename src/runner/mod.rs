@@ -197,7 +197,7 @@ mod tests {
   #[allow(unused)]
   fn run_main(src: &str) -> String {
     let wasm = crate::to_wasm(src, "test").expect("compilation failed");
-    let stdin_buf: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
+    let stdin_buf: IoReadStream = Arc::new(Mutex::new(std::io::Cursor::new(b"hello from stdin".to_vec())));
     let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
 
