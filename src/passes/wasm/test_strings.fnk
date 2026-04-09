@@ -123,7 +123,7 @@ test 'str tagged template', fn:
 test 'str tagged template escape handling', fn:
   expect gen_wat ƒink:
     main = fn:
-      foo'\n\r\t\f${bar}\b\v\$\'\\\xE9\u{8A_9E}'
+      foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -170,12 +170,12 @@ test 'str tagged template escape handling', fn:
         (local $local_4 (ref any))
         (local.set $v_5 (call $_list_head_any (local.get $_args)))
         (local.set $v_36 (struct.new $Closure (ref.func $v_31) (array.new_fixed $Captures 1 (local.get $v_5))))
-        (return_call $_seq_prepend (call $_str (i32.const 8) (i32.const 23)) (call $_list_nil) (local.get $v_36))
+        (return_call $_seq_prepend (call $_str (i32.const 8) (i32.const 27)) (call $_list_nil) (local.get $v_36))
       )
       (export "main" (func $v_4))
-      (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}")
+      (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEU5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7QTs7O0E7QTtBOzs7O0E7QUFBQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOzs7QTtBO0E7Ozs7QTtBQUFBOztBIgp9
 
 
 test 'str implicit formatting handling', fn:
@@ -207,7 +207,7 @@ test 'str implicit formatting handling', fn:
 test 'str implicit formatting escapes', fn:
   expect gen_wat ƒink:
     main = fn:
-      '\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}'
+      '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -226,7 +226,7 @@ test 'str implicit formatting escapes', fn:
       (export "main" (func $v_4))
       (data (offset (i32.const 0)) "\0a\0d\09\0c\08\0b$'\\c3\a9\e8\aa\9e")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEU5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7OztBO0E7Ozs7O0E7QUFBQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTtBQUFBOztBIgp9
 
 
 test 'empty string literal', fn:

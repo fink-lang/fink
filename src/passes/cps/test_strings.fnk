@@ -33,13 +33,13 @@ test 'str tagged template', fn:
 
 test 'str tagged template escape handling', fn:
   expect cps_expr ƒink:
-    foo'\n\r\t\f${bar}\b\v\$\'\\\xE9\u{8A_9E}'
+    foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
-    ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xE9⧵u{8A_9E}', [], fn ·v_4:
+    ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·v_4:
       ·seq_prepend ·∅bar, ·v_4, fn ·v_7:
         ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·v_10:
           ·∅foo ·v_0, ..·v_10
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFrQixBLENBQUEsdUIsQyxFQUFsQixBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLGFBQWMsSyxFQUFkLEksS0FBQSxJO0lBQUEsQUFBQSxhQUFJLEEsQ0FBQSxRLEMsRUFBSixJLEtBQUEsSztNQUFBLEFBQUEsTSxJLEVBQUEsQSxFQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLGFBQWtCLEEsQ0FBQSwyQixDLEVBQWxCLEEsQyxDLEtBQUEsSTtFQUFBLEFBQUEsYUFBYyxLLEVBQWQsSSxLQUFBLEk7SUFBQSxBQUFBLGFBQUksQSxDQUFBLFEsQyxFQUFKLEksS0FBQSxLO01BQUEsQUFBQSxNLEksRUFBQSxBLEVBQUEiCn0=
 
 
 test 'str implicit formatting handling', fn:
@@ -53,9 +53,9 @@ test 'str implicit formatting handling', fn:
 
 test 'str implicit formatting escapes', fn:
   expect cps_expr ƒink:
-    '\n\r\t\f\b\v\$\'\\\xE9\u{8A_9E}'
+    '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
     ·v_0 '␊␍␉␌␈␋＄′⧵é語'
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhFOVxcdXs4QV85RX0nIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBLEEsQ0FBQSxXIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEsQSxDQUFBLFciCn0=
 
 

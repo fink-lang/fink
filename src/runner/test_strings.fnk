@@ -34,7 +34,7 @@ test 'string escape backslash', fn:
 test 'string escape hex', fn:
   expect run ƒink:
     test_main = fn:
-      '\xE9'
+      '\xC3\xA9'
   | equals ":
     é
 
