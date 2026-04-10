@@ -3,6 +3,11 @@ use std::{env, fs, process};
 fn main() {
   let args: Vec<String> = env::args().collect();
 
+  if args.iter().any(|a| a == "--version") {
+    println!("fink {}", env!("CARGO_PKG_VERSION"));
+    return;
+  }
+
   let sourcemap = args.iter().any(|a| a == "--sourcemap");
   let embed_source = args.iter().any(|a| a == "--embed-source");
   let desugar = args.iter().any(|a| a == "--desugar");
@@ -51,6 +56,7 @@ fn main() {
     [cmd, path, ..] => (*cmd, *path),
     _ => {
       eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|compile|run|dap> [options] <file>");
+      eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
       eprintln!("  fmt/cps [--sourcemap]        emit source map");
