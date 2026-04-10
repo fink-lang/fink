@@ -89,16 +89,15 @@ impl StringData {
 
   /// Intern a string literal. Returns `(offset, length)` into the data blob.
   /// If the byte sequence already exists as a substring, reuses that offset.
-  fn intern(&mut self, s: &str) -> (u32, u32) {
-    let needle = s.as_bytes();
-    let len = needle.len() as u32;
+  fn intern(&mut self, s: &[u8]) -> (u32, u32) {
+    let len = s.len() as u32;
     // Search for existing substring.
-    if let Some(pos) = find_bytes(&self.bytes, needle) {
+    if let Some(pos) = find_bytes(&self.bytes, s) {
       return (pos as u32, len);
     }
     // Not found — append.
     let offset = self.bytes.len() as u32;
-    self.bytes.extend_from_slice(needle);
+    self.bytes.extend_from_slice(s);
     (offset, len)
   }
 
@@ -1388,19 +1387,35 @@ fn emit_body(expr: &Expr, fc: &mut FuncContext<'_, '_, '_>) {
       match cont {
         Cont::Expr { body, .. } => emit_body(body, fc),
         Cont::Ref(id) => {
-          // Tail call to continuation: unbox $Closure, return_call_ref $Fn1
+          // Tail call to continuation: cont(bound_val) via the user calling
+          // convention — `_apply(list_of_[bound_val], cont)`.
+          // `$Fn2 = (caps, args)` takes 2 params; we must pack the single
+          // value into a cons-cell list and dispatch through `_apply` which
+          // unboxes the cont closure and calls it with the right shape.
+          //
+          // Stack transitions:
+          //   []                                    — start
+          //   [bound_val]                           — local.get name
+          //   [bound_val, nil]                      — call list_nil
+          //   [list_of_[bound_val]]                 — call list_prepend
+          //   [list_of_[bound_val], cont_closure]   — emit cont ref
+          //   return_call $_apply(list, callee)
           let local_label = fc.ctx.label(name.id);
           let local_idx = fc.local_idx(&local_label);
           fc.instr(&Instruction::LocalGet(local_idx));
+
+          let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
+          let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
+          fc.instr(&Instruction::Call(list_nil_idx));
+          fc.instr(&Instruction::Call(list_prepend_idx));
+
           let cont_label = fc.ctx.label(*id);
           emit_get(fc, &cont_label);
-          let closure_idx = fc.emitter_idx.type_idx("$Closure");
-          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
-          fc.instr(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-          let fn1_type = fc.emitter_idx.fn_type_idx(2);
-          fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
+
           fc.mark(val.id);
-          fc.instr(&Instruction::ReturnCallRef(fn1_type));
+
+          let apply_idx = fc.emitter_idx.func_idx("_apply");
+          fc.instr(&Instruction::ReturnCall(apply_idx));
         }
       }
     }
@@ -1759,7 +1774,7 @@ fn emit_lit(lit: &Lit, fc: &mut FuncContext<'_, '_, '_>) {
       } else {
         // Look up the interned offset — string was pre-scanned, so this
         // always finds a match in the data blob.
-        let (offset, len) = find_bytes(&fc.string_data.bytes, s.as_bytes())
+        let (offset, len) = find_bytes(&fc.string_data.bytes, s)
           .map(|pos| (pos as u32, s.len() as u32))
           .expect("string literal not interned");
         let str_raw_idx = fc.emitter_idx.func_idx("str");

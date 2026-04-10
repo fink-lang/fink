@@ -105,7 +105,10 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
             let start = body_node.loc.start.idx as usize;
             let preceded_by_quote = file_src.as_bytes().get(start) == Some(&b'\'');
             if preceded_by_quote {
-              fink::strings::render(s)
+              // Test source text is always UTF-8. `render` returns bytes; convert
+              // back to `String` for the test harness.
+              String::from_utf8(fink::strings::render(s))
+                .expect("test source after render must be valid UTF-8")
             } else {
               s.to_string()
             }

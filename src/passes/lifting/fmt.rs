@@ -298,7 +298,7 @@ fn lit_node(lit: &Lit) -> Node<'static> {
     }
     Lit::Str(s) => Node::new(NodeKind::LitStr {
       open: tok("'", TokenKind::StrStart), close: tok("'", TokenKind::StrEnd),
-      content: crate::strings::control_pics(s), indent: 0,
+      content: crate::strings::control_pics_bytes(s), indent: 0,
     }, dummy_loc()),
     Lit::Seq => Node::new(NodeKind::LitSeq { open: lbrack_tok(), close: rbrack_tok(), items: Exprs::empty() }, dummy_loc()),
     Lit::Rec => Node::new(NodeKind::LitRec { open: lbrace_tok(), close: rbrace_tok(), items: Exprs::empty() }, dummy_loc()),

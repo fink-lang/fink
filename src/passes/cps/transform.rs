@@ -761,7 +761,7 @@ fn lower_member<'src>(
 ) -> Lower {
   let (lv, mut pending) = lower(g, lhs);
   let rv = match &rhs.kind {
-    NodeKind::Ident(key) => lit_val(g, Lit::Str(key.to_string()), Some(rhs.id)),
+    NodeKind::Ident(key) => lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(rhs.id)),
     _ => {
       let (v, rp) = lower(g, rhs);
       pending.extend(rp);
@@ -826,7 +826,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
       }
       NodeKind::Bind { lhs, rhs, .. } => {
         if let NodeKind::Ident(key) = &lhs.kind {
-          let key_lit = lit_val(g, Lit::Str(key.to_string()), Some(field.id));
+          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(field.id));
           let (fv, fp) = lower(g, rhs);
           pending.extend(fp);
           let result = g.fresh_result(origin);
@@ -850,7 +850,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
         let key_node = &**lhs;
         let val_node = body.items.last().expect("arm body empty");
         if let NodeKind::Ident(key) = &key_node.kind {
-          let key_lit = lit_val(g, Lit::Str(key.to_string()), Some(field.id));
+          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(field.id));
           let (fv, fp) = lower(g, val_node);
           pending.extend(fp);
           let result = g.fresh_result(origin);
@@ -870,7 +870,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
       }
       NodeKind::Ident(name) => {
         // Shorthand `{foo}` == `{foo: foo}`
-        let key_lit = lit_val(g, Lit::Str(name.to_string()), Some(field.id));
+        let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(field.id));
         let id_val = scope_ref_val(g, field.id);
         let result = g.fresh_result(origin);
         let (rk, ri) = (result.kind, result.id);
@@ -899,7 +899,7 @@ fn lower_lit_rec<'src>(g: &mut Gen, fields: &'src [Node<'src>], origin: Option<A
 fn lower_str_part<'src>(g: &mut Gen, part: &'src Node<'src>) -> Lower {
   if let NodeKind::LitStr { content: s, .. } = &part.kind {
     let o = Some(part.id);
-    (lit_val(g, Lit::Str(s.to_string()), o), vec![])
+    (lit_val(g, Lit::Str(s.as_bytes().to_vec()), o), vec![])
   } else {
     lower(g, part)
   }
@@ -2298,7 +2298,7 @@ fn fold_rec_pops<'src>(
     let cursor_bind = if i == 0 { first_cursor.clone() } else { g.fresh_result(origin) };
     let cursor_ref = g.val(ValKind::Ref(Ref::Synth(cursor_bind.id)), origin);
     let (field_key_val, key_pending) = match &fields[i].key {
-      RecKey::Ident(name) => (g.val(ValKind::Lit(Lit::Str(name.to_string())), origin), vec![]),
+      RecKey::Ident(name) => (g.val(ValKind::Lit(Lit::Str(name.as_bytes().to_vec())), origin), vec![]),
       RecKey::Expr(node) => lower(g, node),
     };
     let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
@@ -2333,23 +2333,23 @@ fn emit_str_templ_pattern<'src>(
   origin: Option<AstId>,
   pending: &mut Vec<Pending>,
 ) -> (Bind, CpsId) {
-  // Parse children into (prefix_str, capture_node, suffix_str).
+  // Parse children into (prefix_bytes, capture_node, suffix_bytes).
   // Valid shapes: [Expr], [LitStr, Expr], [Expr, LitStr], [LitStr, Expr, LitStr]
   // Template literal parts are escape-rendered like standalone string literals
   // so byte comparisons in str_match match the runtime representation of the
   // subject string (which is also rendered at the CPS LitStr lowering).
   let render = |s: &str| crate::strings::render(s);
-  let (prefix, capture_node, suffix) = match children {
+  let (prefix, capture_node, suffix): (Vec<u8>, _, Vec<u8>) = match children {
     [expr] if !matches!(expr.kind, NodeKind::LitStr { .. }) =>
-      (String::new(), expr, String::new()),
+      (Vec::new(), expr, Vec::new()),
     [lit, expr] if matches!(lit.kind, NodeKind::LitStr { .. }) => {
       let NodeKind::LitStr { content, .. } = &lit.kind else { unreachable!() };
-      (render(content), expr, String::new())
+      (render(content), expr, Vec::new())
     }
     [expr, lit] if matches!(lit.kind, NodeKind::LitStr { .. })
                && !matches!(expr.kind, NodeKind::LitStr { .. }) => {
       let NodeKind::LitStr { content, .. } = &lit.kind else { unreachable!() };
-      (String::new(), expr, render(content))
+      (Vec::new(), expr, render(content))
     }
     [lit1, expr, lit2]
       if matches!(lit1.kind, NodeKind::LitStr { .. })
