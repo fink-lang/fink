@@ -43,3 +43,19 @@ wat-crate = { package = "wat", version = "1" }
 test-macros = { path = "crates/test-macros" }
 pretty_assertions = "1"
 tempfile = "3"
+
+# Strip symbols from release binaries. Without this, each finkrt ships
+# with its full symbol table, inflating the binary by ~20% (measured on
+# macOS aarch64: 14 MB → 11 MB; Linux numbers are higher, ~30–40%).
+# The homebrew tarball bundles four finkrt binaries — one per tier-1
+# target — so the savings multiply across the extracted install.
+#
+# Tradeoff: `strip = true` removes the symbol table (it maps to
+# `strip = "symbols"`; debuginfo is already absent from release builds by
+# default). Panics still unwind and still print a backtrace, but frames
+# without source info may show raw addresses instead of mangled function
+# names. If we ever need richer crash reports from user machines, revisit
+# this — options: keep symbols (drop strip), ship a separate debug package,
+# or integrate a symbol server.
+[profile.release]
+strip = true
