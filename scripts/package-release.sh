@@ -40,13 +40,14 @@ STAGE_DIR="$DIST_OUT/$STAGE_NAME"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR/targets"
 
-# Host-arch fink + finkrt live at the top of the tree.
-cp "$DIST_IN/$HOST_TARGET/fink"   "$STAGE_DIR/fink"
-cp "$DIST_IN/$HOST_TARGET/finkrt" "$STAGE_DIR/finkrt"
-chmod +x "$STAGE_DIR/fink" "$STAGE_DIR/finkrt"
+# fink is the host-arch compiler — the only binary at the top of the tree.
+cp "$DIST_IN/$HOST_TARGET/fink" "$STAGE_DIR/fink"
+chmod +x "$STAGE_DIR/fink"
 
-# All supported finkrts under targets/<triple>/finkrt — bundled so
-# `fink compile --target=<any>` works without downloading anything.
+# All finkrt binaries live under targets/<triple>/finkrt — bundled so
+# `fink compile --target=<any>` works without downloading anything. No
+# top-level finkrt: it would be redundant with targets/<host>/finkrt and
+# would lie about the "finkrt lives under targets/" invariant.
 for t in "${ALL_TARGETS[@]}"; do
   mkdir -p "$STAGE_DIR/targets/$t"
   cp "$DIST_IN/$t/finkrt" "$STAGE_DIR/targets/$t/finkrt"
