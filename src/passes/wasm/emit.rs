@@ -1634,6 +1634,17 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
     return;
   }
 
+  if op == BuiltIn::Import {
+    // BuiltIn::Import is a compile-time marker for cross-module references.
+    // Multi-module support (wasm-link pass) must rewrite App BuiltIn::Import
+    // nodes before codegen reaches emit_builtin. Reaching here means the
+    // multi-module pipeline didn't run — likely a bug in the caller.
+    panic!(
+      "emit_builtin: App BuiltIn::Import reached codegen; the multi-module \
+       wasm-link pass must handle import nodes upstream"
+    );
+  }
+
   if op == BuiltIn::StrFmt {
     let (val_args, cont_arg) = split_args(args);
 
@@ -1898,6 +1909,15 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
     ExprKind::App { func: Callable::BuiltIn(op), args } => {
       if *op == BuiltIn::FnClosure {
         // FnClosure is inlined (no function call) — just scan continuation bodies.
+        for arg in args {
+          if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+            scan_builtins(body, builtins);
+          }
+        }
+      } else if *op == BuiltIn::Import {
+        // Import is a compile-time marker, not a runtime call. It must not
+        // be registered as a runtime builtin import. Multi-module handling
+        // lives in the wasm-link pass; here we just walk continuation bodies.
         for arg in args {
           if let Arg::Cont(Cont::Expr { body, .. }) = arg {
             scan_builtins(body, builtins);

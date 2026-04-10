@@ -396,6 +396,12 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::Receive       => "receive",
     BuiltIn::Read          => "op_read",
     BuiltIn::Export        => "export",
-    BuiltIn::Import        => "import",
+    // BuiltIn::Import is a compile-time marker, not a runtime call. It must
+    // be handled by the emitter (erased, rewritten to a cross-module WASM
+    // import) before reaching builtin_name. Reaching here is a bug.
+    BuiltIn::Import        => unreachable!(
+      "BuiltIn::Import is a compile-time marker and must not reach the \
+       runtime-builtin name table; see wasm-link multi-module pass"
+    ),
   }
 }
