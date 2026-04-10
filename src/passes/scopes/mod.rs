@@ -687,10 +687,15 @@ fn format_scope(scope_id: ScopeId, result: &ScopeResult, out: &mut String, inden
   };
 
   write_indent(out, indent);
-  out.push_str(&format!("scope {}, '{}',\n", info.ast_id.0, kind_str));
-
-  // Events in source order — bindings, refs, and child scopes interleaved.
+  // Empty scopes omit the trailing comma so the output re-parses as valid
+  // fink syntax (a trailing comma with no following items is a parse error).
   let events = result.scope_events.get(scope_id);
+  if events.is_empty() {
+    out.push_str(&format!("scope {}, '{}'\n", info.ast_id.0, kind_str));
+  } else {
+    out.push_str(&format!("scope {}, '{}',\n", info.ast_id.0, kind_str));
+  }
+  // Events in source order — bindings, refs, and child scopes interleaved.
   for event in events {
     match event {
       ScopeEvent::Bind(bind_id) => {
