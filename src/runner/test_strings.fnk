@@ -38,6 +38,17 @@ test 'string escape hex', fn:
   | equals ":
     é
 
+# Lone \xFF is a valid byte but not valid UTF-8 on its own. Strings in
+# fink are byte arrays, not UTF-8 strings — this must round-trip without
+# panic. Guards against `crate::strings::render` returning a Rust
+# `String` that rejects non-UTF-8 bytes.
+test 'string escape non-utf8 byte', fn:
+  expect run ƒink:
+    test_main = fn:
+      '\xFF' == '\xFF'
+  | equals ƒink:
+    true
+
 test 'string escape unicode', fn:
   expect run ƒink:
     test_main = fn:
@@ -276,6 +287,17 @@ test 'str templ pattern: escape in template', fn:
       foo
   | equals ":
     stuff
+
+# Non-UTF-8 byte sequence in template pattern. Strings in fink are byte
+# arrays, not UTF-8 strings — so \xFF (a lone continuation byte) is a
+# valid 1-byte string. Exercises str template patterns end-to-end with
+# non-UTF-8 literal parts.
+test 'str templ pattern: non-utf8 byte match', fn:
+  expect run ƒink:
+    test_main = fn:
+      '\xFF${foo}\xFF' = '\xFFhello\xFF'
+  | equals ":
+    hello
 
 test 'str templ pattern: empty capture', fn:
   expect run ƒink:

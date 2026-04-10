@@ -403,7 +403,10 @@ pub enum Lit {
   Int(i64),
   Float(f64),
   Decimal(f64),       // distinct from Float for the type system
-  Str(String),
+  /// Byte sequence. Fink strings are byte arrays, not UTF-8 strings — `\xFF`
+  /// is a valid 1-byte string literal. Using `Vec<u8>` avoids Rust's UTF-8
+  /// validation at the CPS boundary.
+  Str(Vec<u8>),
   Seq,                // empty sequence literal []
   Rec,                // empty record literal {}
 }

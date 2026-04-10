@@ -182,7 +182,7 @@ fn lit_to_node(lit: &Lit, loc: Loc) -> Node<'static> {
       let s: &'static str = Box::leak(format!("{}d", f).into_boxed_str());
       node(NodeKind::LitDecimal(s), loc)
     }
-    Lit::Str(s) => node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: crate::strings::control_pics(s), indent: 0 }, loc),
+    Lit::Str(s) => node(NodeKind::LitStr { open: dummy_tok(), close: dummy_tok(), content: crate::strings::control_pics_bytes(s), indent: 0 }, loc),
     Lit::Seq   => node(NodeKind::LitSeq { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }, loc),
     Lit::Rec   => node(NodeKind::LitRec { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() }, loc),
   }
