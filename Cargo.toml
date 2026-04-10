@@ -9,6 +9,11 @@ resolver = "2"
 name = "fink"
 version = "0.0.0" # derived from git tags at publish time
 edition = "2024"
+license = "MIT"
+description = "A functional programming language and compiler toolchain targeting WebAssembly"
+homepage = "https://fink-lang.org"
+repository = "https://github.com/fink-lang/fink"
+readme = "README.md"
 
 
 [features]
