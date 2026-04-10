@@ -388,6 +388,7 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::SeqPop        => "seq_pop",
     BuiltIn::RecPop        => "rec_pop",
     BuiltIn::Empty         => "op_empty",
+    BuiltIn::StrMatch      => "str_match",
     BuiltIn::Yield         => "yield",
     BuiltIn::Spawn         => "spawn",
     BuiltIn::Await         => "await",

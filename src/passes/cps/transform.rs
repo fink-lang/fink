@@ -2323,6 +2323,94 @@ fn fold_rec_pops<'src>(
   body
 }
 
+/// String template pattern: `'prefix${capture}suffix' = val`
+/// Validates exactly one interpolation with at most two literal parts.
+/// Emits StrMatch(subj, prefix, suffix, fail, succ(capture)).
+fn emit_str_templ_pattern<'src>(
+  g: &mut Gen,
+  val: Val,
+  children: &'src [Node<'src>],
+  origin: Option<AstId>,
+  pending: &mut Vec<Pending>,
+) -> (Bind, CpsId) {
+  // Parse children into (prefix_str, capture_node, suffix_str).
+  // Valid shapes: [Expr], [LitStr, Expr], [Expr, LitStr], [LitStr, Expr, LitStr]
+  // Template literal parts are escape-rendered like standalone string literals
+  // so byte comparisons in str_match match the runtime representation of the
+  // subject string (which is also rendered at the CPS LitStr lowering).
+  let render = |s: &str| crate::strings::render(s);
+  let (prefix, capture_node, suffix) = match children {
+    [expr] if !matches!(expr.kind, NodeKind::LitStr { .. }) =>
+      (String::new(), expr, String::new()),
+    [lit, expr] if matches!(lit.kind, NodeKind::LitStr { .. }) => {
+      let NodeKind::LitStr { content, .. } = &lit.kind else { unreachable!() };
+      (render(content), expr, String::new())
+    }
+    [expr, lit] if matches!(lit.kind, NodeKind::LitStr { .. })
+               && !matches!(expr.kind, NodeKind::LitStr { .. }) => {
+      let NodeKind::LitStr { content, .. } = &lit.kind else { unreachable!() };
+      (String::new(), expr, render(content))
+    }
+    [lit1, expr, lit2]
+      if matches!(lit1.kind, NodeKind::LitStr { .. })
+      && matches!(lit2.kind, NodeKind::LitStr { .. }) => {
+      let NodeKind::LitStr { content: c1, .. } = &lit1.kind else { unreachable!() };
+      let NodeKind::LitStr { content: c2, .. } = &lit2.kind else { unreachable!() };
+      (render(c1), expr, render(c2))
+    }
+    _ => panic!("emit_str_templ_pattern: expected single capture with at most two literal parts"),
+  };
+
+  let subj_param = g.fresh_result(origin);
+  let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
+  let fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
+
+  // The capture temp — what succ receives.
+  let capture_temp = g.fresh_result(origin);
+
+  // Build matcher body: ·str_match subj, prefix, suffix, fail, fn capture: succ(capture)
+  let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
+  let prefix_val = g.val(ValKind::Lit(Lit::Str(prefix)), origin);
+  let suffix_val = g.val(ValKind::Lit(Lit::Str(suffix)), origin);
+  let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
+
+  let succ_ref = g.val(ValKind::ContRef(succ_param.id), origin);
+  let capture_ref = g.val(ValKind::Ref(Ref::Synth(capture_temp.id)), origin);
+  let succ_call = g.expr(ExprKind::App {
+    func: Callable::Val(succ_ref),
+    args: vec![Arg::Val(capture_ref)],
+  }, origin);
+
+  let matcher_body = g.expr(ExprKind::App {
+    func: Callable::BuiltIn(BuiltIn::StrMatch),
+    args: vec![
+      Arg::Val(subj_ref),
+      Arg::Val(prefix_val),
+      Arg::Val(suffix_val),
+      Arg::Val(fail_ref),
+      Arg::Cont(Cont::Expr { args: vec![capture_temp.clone()], body: Box::new(succ_call) }),
+    ],
+  }, origin);
+
+  let matcher_name = g.fresh_result(origin);
+  pending.push(Pending::PatternMatch {
+    subject: val,
+    bind_names: vec![capture_temp.clone()],
+    matcher_name,
+    matcher_params: vec![
+      Param::Name(succ_param),
+      Param::Name(fail_param),
+      Param::Name(subj_param),
+    ],
+    matcher_body,
+    origin,
+  });
+
+  // Lower the capture expression as a sub-pattern (could be ident, nested pattern, etc.)
+  let capture_val = ref_val(g, capture_temp.kind, capture_temp.id, origin);
+  lower_pat_lhs(g, capture_node, capture_val, Some(capture_node.id), pending)
+}
+
 fn lower_pat_lhs<'src>(
   g: &mut Gen,
   lhs: &'src Node<'src>,
@@ -2505,9 +2593,12 @@ fn lower_pat_lhs<'src>(
       lower_pat_lhs(g, pat, val, origin, pending)
     }
 
-    // StrTempl in pattern position is deferred to a future version.
-    // It needs a dedicated string-matching primitive (e.g. ·match_str_prefix) not yet designed.
-    NodeKind::StrTempl { .. } => todo!("lower_pat_lhs: StrTempl pattern matching not yet implemented"),
+    // StrTempl pattern: `'prefix${capture}suffix' = val`
+    // Validates exactly one interpolation with at most two literal parts (prefix, suffix).
+    // Emits StrMatch(subj, prefix, suffix, fail, succ(capture)).
+    NodeKind::StrTempl { children, .. } => {
+      emit_str_templ_pattern(g, val, children, origin, pending)
+    }
 
     _ => todo!("lower_pat_lhs: pattern not yet implemented: {:?}", lhs.kind),
   }
@@ -2581,6 +2672,7 @@ mod pat_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
 }
 
 #[cfg(test)]

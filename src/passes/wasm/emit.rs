@@ -1579,67 +1579,37 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
         emit_body(body, fc);
       }
       Some(Cont::Ref(id)) => {
-        // return_call_ref $Fn1 cont closure_result
-        // Stack has: closure_result. Need: cont closure_result.
-        // Emit cont_get, then swap via local.
-        // Actually wasm stack order for return_call_ref is: args... funcref
-        // So: (return_call_ref $Fn1 (local.get $cont) (call $closure_N ...))
-        // Wait — return_call_ref pops funcref last. The type sig is $Fn1 = (func (param (ref $Any)))
-        // So stack order: arg0 funcref → return_call_ref
-        // But $Fn1 takes 1 param, so: the one param, then the funcref.
-        // Actually return_call_ref $Fn1 expects: [param0] [funcref] on stack.
-        // No wait — in WAT inline form it's (return_call_ref $Fn1 callee arg),
-        // but in stack machine, return_call_ref type_idx pops [args...] [funcref].
-        // For $Fn1 with 1 param: stack must be [param0, funcref].
+        // Stack has: [body_closure] (from struct.new $Closure above).
+        // We need to call cont(body_closure) via the user calling convention:
+        //   _apply(list_of_[body_closure], cont)
+        // The `$Fn2 = (caps, args)` calling convention requires packing the
+        // single closure argument into a cons-cell list and going through
+        // `_apply` which handles both plain funcrefs and closures.
         //
-        // The closure call result is already on the stack. We need:
-        //   local.get $cont   (funcref)
-        //   call $closure_N   (produces param0 = closure value)
-        // But we already emitted call, so closure result is on stack.
-        // We need to get the cont ref BEFORE the call... Let me restructure.
-        //
-        // For return_call_ref $Fn1: stack = [param0: ref $Any, funcref: ref $Fn1]
-        // So emit: cont_get, then call closure, then return_call_ref.
-        // No — that puts cont on stack first, then closure result on top.
-        // Stack: [cont, closure_result] → but return_call_ref wants [param, funcref]
-        // where param=closure_result, funcref=cont.
-        // So we need: [closure_result, cont] on stack.
-        //
-        // Since we already emitted the call and the closure result is on stack,
-        // we need to get cont on top. We can use a local.tee or just reorder.
-        // Simplest: emit cont ref, emit call, swap is tricky in wasm.
-        //
-        // Actually, let me re-examine. The WAT writer emits:
-        //   (return_call_ref $Fn1 (local.get $cont) (call $closure_N ...))
-        // In WAT folded form, the first arg is the funcref for return_call_ref?
-        // No — in WAT, return_call_ref $type takes the funcref as the LAST arg
-        // in the unfolded stack form. But folded s-expressions evaluate left to right.
-        //
-        // Let me check: return_call_ref type pops the table: [args...] [funcref].
-        // $Fn1 = (func (param (ref $Any))). So the stack is: [(ref $Any), (ref $Fn1)].
-        // The funcref is on TOP of stack.
-        //
-        // WAT folded: (return_call_ref $Fn1 <arg0> <funcref>)
-        // Evaluates left to right: pushes arg0, pushes funcref, then return_call_ref.
-        //
-        // So we need: push closure_result (the arg), push cont (the funcref).
-        // But we already called closure and result is on stack.
-        // So: result is on stack, now push cont ref, then return_call_ref.
+        // Stack transitions:
+        //   [closure]                                     — from struct.new $Closure
+        //   [closure, nil]                                — call list_nil
+        //   [list_of_[closure]]                           — call list_prepend_any
+        //   [list_of_[closure], cont_closure]             — emit cont ref
+        //   return_call $_apply(list, callee)
+
+        let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
+        let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
+
+        fc.instr(&Instruction::Call(list_nil_idx));
+        fc.instr(&Instruction::Call(list_prepend_idx));
 
         let cont_label = fc.ctx.label(*id);
         emit_get(fc, &cont_label);
-        // Unbox $Closure → funcref.
-        let closure_idx = fc.emitter_idx.type_idx("$Closure");
-        fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
-        fc.instr(&Instruction::StructGet { struct_type_index: closure_idx, field_index: 0 });
-        let fn1_type = fc.emitter_idx.fn_type_idx(2);
-        fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(fn1_type)));
+
         // Mark with the first val arg (the funcref to the lifted fn).
         let mark_id = val_args.first()
           .and_then(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
           .unwrap_or(expr_id);
         fc.mark(mark_id);
-        fc.instr(&Instruction::ReturnCallRef(fn1_type));
+
+        let apply_idx = fc.emitter_idx.func_idx("_apply");
+        fc.instr(&Instruction::ReturnCall(apply_idx));
       }
       None => {
         // Standalone call — result stays on stack (dropped by end).

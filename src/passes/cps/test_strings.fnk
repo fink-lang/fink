@@ -1,4 +1,4 @@
-{test, expect, equals, cps_expr} = import '!fake'
+{test, skip, expect, equals, cps_expr} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---

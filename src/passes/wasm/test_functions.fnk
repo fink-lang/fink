@@ -703,7 +703,7 @@ test 'closure construction and call', fn:
         (local.set $v_11 (call $_list_head_any (local.get $_args)))
         (local.set $_args (call $_list_tail_any (local.get $_args)))
         (local.set $x_1 (call $_list_head_any (local.get $_args)))
-        (return_call_ref $Fn2 (ref.cast (ref null $Fn2) (struct.get $Closure 0 (ref.cast (ref null $Closure) (local.get $v_11)))) (struct.new $Closure (ref.func $v_54) (array.new_fixed $Captures 1 (local.get $x_1))))
+        (return_call $__apply (call $_list_prepend_any (struct.new $Closure (ref.func $v_54) (array.new_fixed $Captures 1 (local.get $x_1))) (call $_list_nil)) (local.get $v_11))
       )
       (func $v_44 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_45 (ref any))

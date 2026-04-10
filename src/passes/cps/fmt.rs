@@ -317,6 +317,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::SeqPop       => "·seq_pop".into(),
     BuiltIn::RecPop       => "·rec_pop".into(),
     BuiltIn::Empty        => "·empty".into(),
+    BuiltIn::StrMatch     => "·str_match".into(),
     // Scheduling
     BuiltIn::Yield        => "·yield".into(),
     BuiltIn::Spawn        => "·spawn".into(),
@@ -458,7 +459,8 @@ pub fn to_node(expr: &Expr, ctx: &Ctx<'_, '_>) -> Node<'static> {
       // Collection builtins render as `·name args, fail, cont` (no ·apply prefix).
       let is_collection_builtin = matches!(func, Callable::BuiltIn(
         BuiltIn::IsSeqLike | BuiltIn::IsRecLike |
-        BuiltIn::SeqPop | BuiltIn::RecPop | BuiltIn::Empty
+        BuiltIn::SeqPop | BuiltIn::RecPop | BuiltIn::Empty |
+        BuiltIn::StrMatch
       ));
       if is_collection_builtin {
         let arg_nodes: Vec<Node<'static>> = args.iter().map(|a| match a {
