@@ -1,0 +1,6 @@
+# Supported release targets — single source of truth for Makefile and CI.
+# Lines starting with # are ignored. Blank lines ignored.
+aarch64-apple-darwin
+x86_64-apple-darwin
+x86_64-unknown-linux-gnu
+aarch64-unknown-linux-gnu

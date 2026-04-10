@@ -1,13 +1,25 @@
 name: Release
 
+# NOTE: while branch `release-artifacts` is in development, this workflow runs
+# the full build + package flow on every push to any branch so we can validate
+# the pipeline end-to-end. The actual tag + `gh release create` step is still
+# gated to pushes on `main`.
+#
+# TODO: before merging release-artifacts, revert `on.push.branches` to [main]
+# so only main-push triggers the release pipeline.
+
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
     branches: [main]
 
 permissions:
   contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
 
 jobs:
   version:
@@ -77,13 +89,114 @@ jobs:
           message: |
             📦 This PR will release **v${{ needs.version.outputs.version }}** (${{ needs.version.outputs.bump }}) when merged.
 
-  release:
-    name: Create Release
+  # Build fink + finkrt for each supported target in parallel. Each job stamps
+  # the real version into Cargo.toml and uploads the two binaries as an
+  # artifact named `bins-<target>` for the package job to consume.
+  build-release:
+    name: Build Release (${{ matrix.target }})
     needs: version
+    if: github.event_name == 'push' && needs.version.outputs.bump != 'none'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-14
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - run: make deps-install
+      - run: make stamp-version VERSION=${{ needs.version.outputs.version }}
+      - run: make build-target TARGET=${{ matrix.target }}
+      - name: Upload target binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: bins-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/fink
+            target/${{ matrix.target }}/release/finkrt
+          if-no-files-found: error
+          retention-days: 7
+
+  # Assemble one tarball per host target, bundling all 4 finkrt runtimes.
+  package:
+    name: Package Release Tarballs
+    needs: [version, build-release]
     if: github.event_name == 'push' && needs.version.outputs.bump != 'none'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download all target binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bins-*
+          path: dist-in-raw
+
+      - name: Stage binaries into DIST_IN layout
+        run: |
+          # actions/download-artifact writes each artifact into its own dir:
+          #   dist-in-raw/bins-<triple>/{fink,finkrt}
+          # package-release.sh expects:
+          #   dist-in/<triple>/{fink,finkrt}
+          mkdir -p dist-in
+          for d in dist-in-raw/bins-*; do
+            triple="${d#dist-in-raw/bins-}"
+            mkdir -p "dist-in/$triple"
+            cp "$d/fink"   "dist-in/$triple/fink"
+            cp "$d/finkrt" "dist-in/$triple/finkrt"
+            chmod +x "dist-in/$triple/fink" "dist-in/$triple/finkrt"
+          done
+          ls -la dist-in/
+
+      - name: Package tarballs
+        run: |
+          mkdir -p dist-out
+          for t in $(grep -vE '^\s*(#|$)' scripts/targets.txt); do
+            make package-release \
+              VERSION=${{ needs.version.outputs.version }} \
+              HOST_TARGET="$t" \
+              DIST_IN="$(pwd)/dist-in" \
+              DIST_OUT="$(pwd)/dist-out"
+          done
+          ls -la dist-out/
+
+      - name: Upload release assets artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist-out/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: [version, package]
+    # Only actually tag + publish when pushing to main. On other branches the
+    # pipeline still runs end-to-end (build + package), artifacts are available
+    # via the workflow run, but no tag is created.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.bump != 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist-out
 
       - name: Create tag and release
         env:
@@ -92,4 +205,4 @@ jobs:
           VERSION="v${{ needs.version.outputs.version }}"
           git tag "$VERSION"
           git push origin "$VERSION"
-          gh release create "$VERSION" --generate-notes
+          gh release create "$VERSION" --generate-notes dist-out/*.tar.gz dist-out/*.sha256

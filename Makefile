@@ -2,7 +2,8 @@
 #
 # Prerequisites: cargo, cargo-outdated (cargo install cargo-outdated)
 
-.PHONY: deps-check deps-update deps-install clean build test test-full bless coverage release
+.PHONY: deps-check deps-update deps-install clean build test test-full bless coverage release \
+	stamp-version build-target package-release release-all
 
 deps-check:
 	cargo outdated
@@ -39,3 +40,33 @@ coverage-summary:
 
 release:
 	cargo build --release
+
+# Rewrite the placeholder version in Cargo.toml to $(VERSION). No-op if VERSION
+# unset. Called by CI before release builds so `fink --version` reports the
+# real version. Local devs don't need this — leave Cargo.toml at 0.0.0.
+stamp-version:
+	@if [ -n "$(VERSION)" ]; then \
+	  sed -i.bak 's/^version = "0.0.0"/version = "$(VERSION)"/' Cargo.toml && rm Cargo.toml.bak; \
+	  echo "Stamped version $(VERSION) into Cargo.toml"; \
+	fi
+
+# Build fink (default features) and finkrt (runtime-only) for a specific
+# target triple, release profile.
+# Usage: make build-target TARGET=aarch64-apple-darwin
+build-target:
+	@test -n "$(TARGET)" || (echo "TARGET must be set" && exit 1)
+	rustup target add $(TARGET) 2>/dev/null || true
+	cargo build --release --target $(TARGET) --bin fink
+	cargo build --release --target $(TARGET) --no-default-features --features runtime --bin finkrt
+
+# Assemble a release tarball for HOST_TARGET, bundling finkrt runtimes for
+# every supported target (so `fink compile --target=<any>` works offline).
+# See scripts/package-release.sh for env var details.
+package-release:
+	@scripts/package-release.sh
+
+# Build + package a full release for every supported target on the host.
+# Slow — requires the host to cross-compile to every target in scripts/targets.txt.
+# Usage: make release-all VERSION=0.9.0
+release-all:
+	@scripts/release-all.sh

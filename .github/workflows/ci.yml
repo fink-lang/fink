@@ -22,3 +22,32 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: make deps-install
       - run: make test-full
+
+  # Build fink + finkrt for every supported release target. Catches
+  # cross-compile breakage on PRs rather than at release time. No artifacts
+  # are uploaded — this job just validates that each target still compiles.
+  build-matrix:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-14
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: make deps-install
+      - run: make build-target TARGET=${{ matrix.target }}
