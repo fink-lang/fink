@@ -621,7 +621,17 @@ fn lower_apply<'src>(
   }
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
-  let func = Callable::Val(func_val);
+  // If the callable resolved to a compiler-known builtin (e.g. `import`,
+  // `yield`, `spawn`, `channel`, ...), represent it as `Callable::BuiltIn`
+  // rather than `Callable::Val`. This routes through the builtin
+  // calling-convention branch in `wrap_with_fail` (cont-last, matching
+  // the runtime-WAT convention these builtins require), instead of the
+  // user convention (cont-first) that mangles val args when the result
+  // is destructured.
+  let func = match func_val.kind {
+    ValKind::BuiltIn(op) => Callable::BuiltIn(op),
+    _ => Callable::Val(func_val),
+  };
   pending.push(Pending::App { func, args: arg_vals, result,  origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }

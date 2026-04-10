@@ -10,8 +10,8 @@ test 'yield literal', fn:
     yield 42
 
   | equals ƒink:
-    ·yield ·v_1, 42
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE8sSSxFQUFNIgp9
+    ·yield 42, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE9BQU0sRSxFIgp9
 
 
 test 'yield ident', fn:
@@ -19,8 +19,8 @@ test 'yield ident', fn:
     yield foo
 
   | equals ƒink:
-    ·yield ·v_1, ·∅foo
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPLEksRUFBTSIKfQ==
+    ·yield ·∅foo, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPQUFNLEssRSIKfQ==
 
 
 test 'spawn ident', fn:
@@ -28,8 +28,8 @@ test 'spawn ident', fn:
     spawn task_fn
 
   | equals ƒink:
-    ·spawn ·v_1, ·∅task_fn
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3Bhd24gdGFza19mbiJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTyxJLEVBQU0iCn0=
+    ·spawn ·∅task_fn, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3Bhd24gdGFza19mbiJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsT0FBTSxTLEUiCn0=
 
 
 test 'await ident', fn:
@@ -37,8 +37,8 @@ test 'await ident', fn:
     await fut
 
   | equals ƒink:
-    ·await ·v_1, ·∅fut
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPLEksRUFBTSIKfQ==
+    ·await ·∅fut, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPQUFNLEssRSIKfQ==
 
 
 test 'spawn bound to name', fn:
@@ -46,10 +46,10 @@ test 'spawn bound to name', fn:
     future = spawn task
 
   | equals ƒink:
-    ·spawn fn ·v_5:
+    ·spawn ·∅task, fn ·v_5:
       ·let ·v_5, fn ·future_0:
-        ·v_2 ·future_0, ·∅task
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZnV0dXJlID0gc3Bhd24gdGFzayJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsT0FBQSxHQUFBLEk7RUFBRixBQUFBLEtBQUUsSSxLQUFULFM7SSxBLEtBQUEsUyxFQUFlIgp9
+        ·v_2 ·future_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZnV0dXJlID0gc3Bhd24gdGFzayJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsT0FBTSxNLEtBQU4sSTtFQUFGLEFBQUEsS0FBRSxJLEtBQVQsUztJLEEsS0FBQSIKfQ==
 
 
 test 'await bound to name', fn:
@@ -57,10 +57,10 @@ test 'await bound to name', fn:
     result = await fut
 
   | equals ƒink:
-    ·await fn ·v_5:
+    ·await ·∅fut, fn ·v_5:
       ·let ·v_5, fn ·result_0:
-        ·v_2 ·result_0, ·∅fut
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0gYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQVMsQUFBQSxPQUFBLEdBQUEsSTtFQUFGLEFBQUEsS0FBRSxJLEtBQVQsUztJLEEsS0FBQSxTLEVBQWUiCn0=
+        ·v_2 ·result_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0gYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQVMsQUFBQSxPQUFNLEssS0FBTixJO0VBQUYsQUFBQSxLQUFFLEksS0FBVCxTO0ksQSxLQUFBIgp9
 
 
 test 'channel creation', fn:
@@ -68,8 +68,8 @@ test 'channel creation', fn:
     channel 0
 
   | equals ƒink:
-    ·channel ·v_1, 0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2hhbm5lbCAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTLEksRUFBUSIKfQ==
+    ·channel 0, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2hhbm5lbCAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFRLEMsRSIKfQ==
 
 
 
@@ -78,8 +78,8 @@ test 'receive from channel', fn:
     receive ch
 
   | equals ƒink:
-    ·receive ·v_1, ·∅ch
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUyxJLEVBQVEiCn0=
+    ·receive ·∅ch, ·v_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsU0FBUSxJLEUiCn0=
 
 
 test 'channel bound to name', fn:
@@ -87,10 +87,10 @@ test 'channel bound to name', fn:
     ch = channel 0
 
   | equals ƒink:
-    ·channel fn ·v_5:
+    ·channel 0, fn ·v_5:
       ·let ·v_5, fn ·ch_0:
-        ·v_2 ·ch_0, 0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2ggPSBjaGFubmVsIDAiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBLFNBQUEsR0FBQSxJO0VBQUYsQUFBQSxLQUFFLEksS0FBTCxLO0ksQSxLQUFBLEssRUFBYSIKfQ==
+        ·v_2 ·ch_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2ggPSBjaGFubmVsIDAiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBLFNBQVEsQyxLQUFSLEk7RUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7SSxBLEtBQUEiCn0=
 
 
 test 'receive bound to name', fn:
@@ -98,7 +98,7 @@ test 'receive bound to name', fn:
     msg = receive ch
 
   | equals ƒink:
-    ·receive fn ·v_5:
+    ·receive ·∅ch, fn ·v_5:
       ·let ·v_5, fn ·msg_0:
-        ·v_2 ·msg_0, ·∅ch
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibXNnID0gcmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsU0FBQSxHQUFBLEk7RUFBRixBQUFBLEtBQUUsSSxLQUFOLE07SSxBLEtBQUEsTSxFQUFjIgp9
+        ·v_2 ·msg_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibXNnID0gcmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsU0FBUSxJLEtBQVIsSTtFQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtJLEEsS0FBQSIKfQ==
