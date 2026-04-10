@@ -1,16 +1,8 @@
 name: Release
 
-# NOTE: while branch `release-artifacts` is in development, this workflow runs
-# the full build + package flow on every push to any branch so we can validate
-# the pipeline end-to-end. The actual tag + `gh release create` step is still
-# gated to pushes on `main`.
-#
-# TODO: before merging release-artifacts, revert `on.push.branches` to [main]
-# so only main-push triggers the release pipeline.
-
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
     branches: [main]
 
