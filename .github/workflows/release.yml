@@ -81,12 +81,29 @@ jobs:
           message: |
             📦 This PR will release **v${{ needs.version.outputs.version }}** (${{ needs.version.outputs.bump }}) when merged.
 
+  # Run the full test suite before releasing. CI does not run on main
+  # pushes (only PRs and feature branches), so this job is the gate that
+  # guarantees main is never released without tests.
+  test:
+    name: Test
+    needs: version
+    if: github.event_name == 'push' && needs.version.outputs.bump != 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: make deps-install
+      - run: make test-full
+
   # Build fink + finkrt for each supported target in parallel. Each job stamps
   # the real version into Cargo.toml and uploads the two binaries as an
   # artifact named `bins-<target>` for the package job to consume.
   build-release:
     name: Build Release (${{ matrix.target }})
-    needs: version
+    needs: [version, test]
     if: github.event_name == 'push' && needs.version.outputs.bump != 'none'
     strategy:
       fail-fast: false
