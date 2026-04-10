@@ -23,11 +23,14 @@ impl Default for RunOptions {
 }
 
 /// Compile source and run it. Returns the exit code from main.
+///
+/// `args` is the CLI argv passed to `main` — argv[0] is the program name.
 #[cfg(feature = "compile")]
 pub fn run_source(
   mut opts: RunOptions,
   src: &str,
   path: &str,
+  args: Vec<Vec<u8>>,
   stdin: IoReadStream,
   stdout: IoStream,
   stderr: IoStream,
@@ -36,15 +39,18 @@ pub fn run_source(
     opts.source_label = path.to_string();
   }
   let wasm = crate::to_wasm(src, path)?;
-  wasmtime_runner::run(&opts, &wasm.binary, stdin, stdout, stderr)
+  wasmtime_runner::run(&opts, &wasm.binary, args, stdin, stdout, stderr)
 }
 
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
 /// Returns the exit code from main.
+///
+/// `args` is the CLI argv passed to `main` — argv[0] is the program name.
 #[cfg(feature = "compile")]
 pub fn run_file(
   mut opts: RunOptions,
   path: &str,
+  args: Vec<Vec<u8>>,
   stdin: IoReadStream,
   stdout: IoStream,
   stderr: IoStream,
@@ -55,12 +61,12 @@ pub fn run_file(
 
   if path.ends_with(".fnk") {
     let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    return run_source(opts, &src, path, stdin, stdout, stderr);
+    return run_source(opts, &src, path, args, stdin, stdout, stderr);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
   if bytes.starts_with(b"\0asm") {
-    wasmtime_runner::run(&opts, &bytes, stdin, stdout, stderr)
+    wasmtime_runner::run(&opts, &bytes, args, stdin, stdout, stderr)
   } else {
     Err("only .fnk and .wasm files are supported".into())
   }
@@ -215,9 +221,13 @@ mod tests {
     let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
 
+    // Fixed fake argv for tests: program name + two dummy args.
+    let args = vec![b"test".to_vec(), b"alpha".to_vec(), b"beta".to_vec()];
+
     match wasmtime_runner::run(
       &RunOptions::default(),
       &wasm.binary,
+      args,
       stdin_buf,
       stdout_buf.clone(),
       stderr_buf.clone(),

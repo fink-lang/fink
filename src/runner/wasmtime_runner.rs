@@ -47,6 +47,7 @@ struct PendingIo {
 pub fn run(
   opts: &RunOptions,
   wasm: &[u8],
+  args: Vec<Vec<u8>>,
   stdin: Arc<Mutex<dyn Read + Send>>,
   stdout: super::IoStream,
   stderr: super::IoStream,
@@ -211,9 +212,13 @@ pub fn run(
   box_func.call(&mut store, &[Val::FuncRef(Some(main_fn))], &mut boxed_main)
     .map_err(|e| format!("_box_func failed: {}", e))?;
 
+  // Build the fink CLI args list as $List<$Str>, prepending in reverse so
+  // the final order matches `args`.
+  let args_list = build_args_list(&mut store, &instance, &args)?;
+
   let run_main = instance.get_func(&mut store, "_run_main")
     .ok_or("no '_run_main' export")?;
-  run_main.call(&mut store, &[boxed_main[0]], &mut [])
+  run_main.call(&mut store, &[boxed_main[0], args_list], &mut [])
     .map_err(|e| format!("_run_main failed: {}", e))?;
 
   Ok(*exit_code.lock().unwrap())
@@ -259,4 +264,56 @@ fn bytes_to_str(caller: &mut Caller<'_, ()>, data: &[u8]) -> Result<Val, Error> 
   let mut result = [Val::AnyRef(None)];
   wrap_fn.call(&mut *caller, &[Val::AnyRef(Some(array_any))], &mut result)?;
   Ok(result[0])
+}
+
+/// Store-based variant of bytes_to_str used during setup before entering
+/// CPS. Builds a $Str from raw bytes via the _str_wrap_bytes export.
+fn bytes_to_str_store(
+  store: &mut Store<()>,
+  instance: &Instance,
+  data: &[u8],
+) -> Result<Val, String> {
+  let array_ty = ArrayType::new(
+    store.engine(),
+    FieldType::new(Mutability::Var, StorageType::I8),
+  );
+  let alloc = ArrayRefPre::new(&mut *store, array_ty);
+  let elems: Vec<Val> = data.iter().map(|&b| Val::I32(b as i32)).collect();
+  let array = ArrayRef::new_fixed(&mut *store, &alloc, &elems)
+    .map_err(|e| format!("byte array alloc failed: {}", e))?;
+
+  let wrap_fn = instance.get_func(&mut *store, "_str_wrap_bytes")
+    .ok_or("no '_str_wrap_bytes' export")?;
+  let array_any = array.to_anyref();
+  let mut result = [Val::AnyRef(None)];
+  wrap_fn.call(&mut *store, &[Val::AnyRef(Some(array_any))], &mut result)
+    .map_err(|e| format!("_str_wrap_bytes failed: {}", e))?;
+  Ok(result[0])
+}
+
+/// Build a fink $List<$Str> from raw byte-string args. Elements are appended
+/// in the order they appear in `args` (i.e. argv[0] is the head).
+fn build_args_list(
+  store: &mut Store<()>,
+  instance: &Instance,
+  args: &[Vec<u8>],
+) -> Result<Val, String> {
+  let list_nil = instance.get_func(&mut *store, "_list_nil")
+    .ok_or("no '_list_nil' export")?;
+  let list_prepend = instance.get_func(&mut *store, "_list_prepend")
+    .ok_or("no '_list_prepend' export")?;
+
+  let mut acc = [Val::AnyRef(None)];
+  list_nil.call(&mut *store, &[], &mut acc)
+    .map_err(|e| format!("_list_nil failed: {}", e))?;
+
+  // Prepend in reverse so the head matches args[0].
+  for arg in args.iter().rev() {
+    let s = bytes_to_str_store(store, instance, arg)?;
+    let mut next = [Val::AnyRef(None)];
+    list_prepend.call(&mut *store, &[s, acc[0]], &mut next)
+      .map_err(|e| format!("_list_prepend failed: {}", e))?;
+    acc = next;
+  }
+  Ok(acc[0])
 }
