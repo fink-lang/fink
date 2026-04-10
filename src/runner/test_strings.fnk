@@ -269,10 +269,7 @@ test 'str templ pattern: capture at end', fn:
   | equals ":
     world
 
-# TODO: escape handling for string template patterns — runtime crashes on
-# escape-containing template literals. Likely needs str_render_escape applied
-# to template parts in runtime, or pre-rendering in emitter.
-skip test 'str templ pattern: escape in template', fn:
+test 'str templ pattern: escape in template', fn:
   expect run ƒink:
     test_main = fn:
       '\n${foo}\n' = '\nstuff\n'

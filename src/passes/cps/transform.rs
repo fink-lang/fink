@@ -2335,24 +2335,28 @@ fn emit_str_templ_pattern<'src>(
 ) -> (Bind, CpsId) {
   // Parse children into (prefix_str, capture_node, suffix_str).
   // Valid shapes: [Expr], [LitStr, Expr], [Expr, LitStr], [LitStr, Expr, LitStr]
+  // Template literal parts are escape-rendered like standalone string literals
+  // so byte comparisons in str_match match the runtime representation of the
+  // subject string (which is also rendered at the CPS LitStr lowering).
+  let render = |s: &str| crate::strings::render(s);
   let (prefix, capture_node, suffix) = match children {
     [expr] if !matches!(expr.kind, NodeKind::LitStr { .. }) =>
-      ("", expr, ""),
+      (String::new(), expr, String::new()),
     [lit, expr] if matches!(lit.kind, NodeKind::LitStr { .. }) => {
       let NodeKind::LitStr { content, .. } = &lit.kind else { unreachable!() };
-      (content.as_ref(), expr, "")
+      (render(content), expr, String::new())
     }
     [expr, lit] if matches!(lit.kind, NodeKind::LitStr { .. })
                && !matches!(expr.kind, NodeKind::LitStr { .. }) => {
       let NodeKind::LitStr { content, .. } = &lit.kind else { unreachable!() };
-      ("", expr, content.as_ref())
+      (String::new(), expr, render(content))
     }
     [lit1, expr, lit2]
       if matches!(lit1.kind, NodeKind::LitStr { .. })
       && matches!(lit2.kind, NodeKind::LitStr { .. }) => {
       let NodeKind::LitStr { content: c1, .. } = &lit1.kind else { unreachable!() };
       let NodeKind::LitStr { content: c2, .. } = &lit2.kind else { unreachable!() };
-      (c1.as_ref(), expr, c2.as_ref())
+      (render(c1), expr, render(c2))
     }
     _ => panic!("emit_str_templ_pattern: expected single capture with at most two literal parts"),
   };
@@ -2366,8 +2370,8 @@ fn emit_str_templ_pattern<'src>(
 
   // Build matcher body: ·str_match subj, prefix, suffix, fail, fn capture: succ(capture)
   let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
-  let prefix_val = g.val(ValKind::Lit(Lit::Str(prefix.to_string())), origin);
-  let suffix_val = g.val(ValKind::Lit(Lit::Str(suffix.to_string())), origin);
+  let prefix_val = g.val(ValKind::Lit(Lit::Str(prefix)), origin);
+  let suffix_val = g.val(ValKind::Lit(Lit::Str(suffix)), origin);
   let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
 
   let succ_ref = g.val(ValKind::ContRef(succ_param.id), origin);
