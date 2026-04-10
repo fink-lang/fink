@@ -957,7 +957,7 @@ mod tests {
 
   #[allow(unused)]
   fn lift(src: &str) -> String {
-    match crate::to_lifted(src) {
+    match crate::to_lifted(src, "test") {
       Ok((lifted, desugared)) => {
         let bk = crate::passes::cps::ir::collect_bind_kinds(&lifted.result.root);
         let ctx = Ctx {

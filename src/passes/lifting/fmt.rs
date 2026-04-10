@@ -44,7 +44,15 @@ struct FmtCtx<'a, 'src> {
 pub fn fmt_flat(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
   let fc = FmtCtx { ctx };
   let stmts = collect_stmts(expr, &fc);
-  let module = Node::new(NodeKind::Module(Exprs { items: stmts, seps: vec![] }), dummy_loc());
+  let module = Node::new(
+    NodeKind::Module {
+      exprs: Exprs { items: stmts, seps: vec![] },
+      // Synthetic: this AST is reconstructed from lifted CPS for display only,
+      // the URL isn't meaningful here.
+      url: String::new(),
+    },
+    dummy_loc(),
+  );
   fmt_ast(&module)
 }
 
@@ -621,7 +629,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
-    NodeKind::Module(exprs) => {
+    NodeKind::Module { exprs, .. } => {
       for (i, child) in exprs.items.iter().enumerate() {
         if i > 0 { out.push_str("\n\n"); ind(out, depth); }
         fmt_node(child, out, depth);

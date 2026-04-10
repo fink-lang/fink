@@ -178,8 +178,14 @@ impl<'cfg> Ctx<'cfg> {
                 }).collect();
                 Node::new(NodeKind::ChainedCmp(new_parts), node.loc)
             }
-            NodeKind::Module(exprs) => {
-                Node::new(NodeKind::Module(self.fix_exprs(exprs)), node.loc)
+            NodeKind::Module { exprs, url } => {
+                Node::new(
+                    NodeKind::Module {
+                        exprs: self.fix_exprs(exprs),
+                        url: url.clone(),
+                    },
+                    node.loc,
+                )
             }
             NodeKind::Pipe(exprs) => {
                 let new_exprs = self.fix_exprs(exprs);
@@ -424,7 +430,7 @@ impl<'cfg> Ctx<'cfg> {
             NodeKind::Pipe(exprs) => {
                 self.pipe(exprs, at)
             }
-            NodeKind::Module(exprs) => {
+            NodeKind::Module { exprs, url } => {
                 let child_col = self.block_col;
                 let mut pos = at;
                 let mut new_items = Vec::new();
@@ -434,7 +440,13 @@ impl<'cfg> Ctx<'cfg> {
                     new_items.push(placed);
                 }
                 let end = new_items.last().map(|n| n.loc.end).unwrap_or(at);
-                Node::new(NodeKind::Module(Exprs { items: new_items, seps: exprs.seps.clone() }), Loc { start: at, end })
+                Node::new(
+                    NodeKind::Module {
+                        exprs: Exprs { items: new_items, seps: exprs.seps.clone() },
+                        url: url.clone(),
+                    },
+                    Loc { start: at, end },
+                )
             }
             NodeKind::Fn { params, sep, body } => {
                 self.fn_node(params, sep, body, at)
@@ -1452,7 +1464,7 @@ mod tests {
     /// Parse source, run through layout + print, return result.
     /// Returns "NO-DIFF" if output equals input.
     fn fmt(src: &str) -> String {
-        let result = parser::parse(src)
+        let result = parser::parse(src, "test")
             .unwrap_or_else(|e| panic!("parse error: {}", e.message));
         let cfg = FmtConfig::default();
         let laid_out = layout(&result.root, &cfg);

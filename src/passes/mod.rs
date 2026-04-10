@@ -52,8 +52,13 @@ pub struct LiftedCps {
 // --- Pipeline functions ---
 
 /// Parse source into a raw AST.
-pub fn parse<'src>(src: &'src str) -> Result<Ast<'src>, ast::parser::ParseError> {
-  let result = ast::parser::parse(src)?;
+///
+/// `url` is the module's stable identity — file path, "@fink/*" virtual URL,
+/// "<stdin>", "test", etc. It gets stored on the root `NodeKind::Module` so
+/// downstream passes (emitter in particular) can recover it without threading
+/// a separate parameter.
+pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::ParseError> {
+  let result = ast::parser::parse(src, url)?;
   Ok(Ast { result })
 }
 
@@ -77,7 +82,7 @@ pub fn lower<'src>(
   desugared: &'src DesugaredAst<'src>,
 ) -> Cps {
   let exprs = match &desugared.result.root.kind {
-    ast::NodeKind::Module(exprs) => &exprs.items,
+    ast::NodeKind::Module { exprs, .. } => &exprs.items,
     _ => panic!("lower: expected Module root"),
   };
   let result = cps::transform::lower_module(exprs, &desugared.scope);

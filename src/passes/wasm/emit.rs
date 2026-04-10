@@ -2174,7 +2174,7 @@ mod tests {
   use crate::passes::wasm::collect;
 
   fn compile(src: &str) -> EmitResult {
-    let (lifted, desugared) = crate::to_lifted(src).unwrap_or_else(|e| panic!("{e}"));
+    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
 
     let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast_index);
     let module = collect::collect(&lifted.result.root, &ir_ctx);

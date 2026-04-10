@@ -90,16 +90,16 @@ fn main() {
 
     "ast" => {
       if desugar {
-        let desugared = fink::to_desugared(&src).unwrap_or_else(|e| die(&e));
+        let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
         println!("{}", desugared.result.root.print());
       } else {
-        let ast = fink::to_ast(&src).unwrap_or_else(|e| die(&e));
+        let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
         println!("{}", ast.result.root.print());
       }
     }
 
     "fmt" => {
-      let ast = fink::to_ast(&src).unwrap_or_else(|e| die(&e));
+      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
       if sourcemap {
         let (output, srcmap) = if embed_source {
           fink::ast::fmt::fmt_mapped_with_content(&ast.result.root, path, &src)
@@ -113,7 +113,7 @@ fn main() {
     }
 
     "fmt2" => {
-      let ast = fink::to_ast(&src).unwrap_or_else(|e| die(&e));
+      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
       let cfg = fink::fmt::FmtConfig::default();
       let laid_out = fink::fmt::layout::layout(&ast.result.root, &cfg);
       if sourcemap {
@@ -129,7 +129,7 @@ fn main() {
     }
 
     "cps" => {
-      let desugared = fink::to_desugared(&src).unwrap_or_else(|e| die(&e));
+      let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
       let cps = fink::passes::lower(&desugared);
 
       let result = if lifted.is_some() {

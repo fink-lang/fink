@@ -94,7 +94,7 @@ fn is_atom(node: &Node) -> bool {
 }
 
 fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
-  if !matches!(node.kind, NodeKind::Module(_)) { out.mark(node.loc); }
+  if !matches!(node.kind, NodeKind::Module { .. }) { out.mark(node.loc); }
   match &node.kind {
     NodeKind::LitBool(v) => out.push_str(if *v { "true" } else { "false" }),
     NodeKind::LitInt(s) => out.push_str(s),
@@ -245,7 +245,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
-    NodeKind::Module(exprs) => {
+    NodeKind::Module { exprs, .. } => {
       for (i, child) in exprs.items.iter().enumerate() {
         if i > 0 { out.push('\n'); ind(out, depth); }
         fmt_node(child, out, depth);
@@ -563,7 +563,7 @@ mod tests {
   use crate::parser::parse;
 
   fn fmt(src: &str) -> String {
-    let result = parse(src).expect("parse failed");
+    let result = parse(src, "test").expect("parse failed");
     ast_fmt(&result.root)
   }
 
@@ -614,7 +614,7 @@ mod tests {
 
   /// Parse source, format with source map, return mappings as (out_line, out_col, src_line, src_col).
   fn mappings(src: &str) -> Vec<(u32, u32, u32, u32)> {
-    let result = parse(src).expect("parse failed");
+    let result = parse(src, "test.fnk").expect("parse failed");
     let (_, srcmap) = fmt_mapped(&result.root, "test.fnk");
     srcmap.iter().collect()
   }

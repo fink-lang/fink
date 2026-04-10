@@ -349,7 +349,7 @@ impl Writer {
 
             // --- functions ---
             // `fn` keyword is at node.loc.start; params follow, then sep `:`, then body.
-            NodeKind::Module(exprs) => {
+            NodeKind::Module { exprs, .. } => {
                 self.exprs(exprs);
             }
             NodeKind::Fn { params, sep, body } => {
@@ -449,7 +449,7 @@ mod tests {
     /// the expected result for any well-formed source the print stage should
     /// reproduce verbatim.
     fn print(src: &str) -> String {
-        let result = parser::parse_with_blocks(src, &[("test_block", parser::BlockMode::Ast)])
+        let result = parser::parse_with_blocks(src, "test", &[("test_block", parser::BlockMode::Ast)])
             .unwrap_or_else(|e| panic!("parse error: {}", e.message));
         let output = super::print(&result.root);
         if output == src { "NO-DIFF".to_string() } else { output }

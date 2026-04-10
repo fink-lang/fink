@@ -48,7 +48,7 @@ fn has_partial(node: &Node) -> bool {
     // Group is a boundary — don't look inside
     NodeKind::Group { .. } => false,
 
-    NodeKind::Module(items)
+    NodeKind::Module { exprs: items, .. }
     | NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. } => {
       items.items.iter().any(has_partial)
     }
@@ -275,9 +275,9 @@ impl<'src> PartialPass {
       }
 
       // Module: recurse into each expression as independent scope
-      NodeKind::Module(exprs) => {
+      NodeKind::Module { exprs, url } => {
         let body = self.transform_body(exprs)?;
-        Ok(Node { id, kind: NodeKind::Module(body), loc })
+        Ok(Node { id, kind: NodeKind::Module { exprs: body, url }, loc })
       }
 
       // Everything else: recurse into children (processing inner Group/Pipe boundaries),
@@ -338,7 +338,7 @@ impl<'src> Transform<'src> for PartialPass {
 mod tests {
   fn partial(src: &str) -> String {
     use crate::ast::NodeKind;
-    match crate::parser::parse(src) {
+    match crate::parser::parse(src, "test") {
       Err(e) => format!("PARSE ERROR: {}", e.message),
       Ok(result) => {
         let before = result.root.print();
@@ -348,7 +348,7 @@ mod tests {
             if before == after {
               return "No Change".to_string();
             }
-            if let NodeKind::Module(exprs) = &node.kind {
+            if let NodeKind::Module { exprs, .. } = &node.kind {
               if exprs.items.len() == 1 {
                 return exprs.items[0].print();
               }

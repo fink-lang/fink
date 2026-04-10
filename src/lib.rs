@@ -25,26 +25,30 @@ pub use passes::ast::parser;
 // ---------------------------------------------------------------------------
 
 /// Parse source → raw AST.
-pub fn to_ast(src: &str) -> Result<passes::Ast<'_>, String> {
-  passes::parse(src).map_err(|e| e.message)
+///
+/// `url` is the module's stable identity (file path, `"<stdin>"`, `"test"`,
+/// etc.). It's stored in the `Module` node so downstream passes — notably
+/// the WASM emitter — can recover it without a threaded parameter.
+pub fn to_ast<'src>(src: &'src str, url: &str) -> Result<passes::Ast<'src>, String> {
+  passes::parse(src, url).map_err(|e| e.message)
 }
 
 /// Parse + desugar → desugared AST with index and scopes.
-pub fn to_desugared(src: &str) -> Result<passes::DesugaredAst<'_>, String> {
-  let parsed = passes::parse(src).map_err(|e| e.message)?;
+pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::DesugaredAst<'src>, String> {
+  let parsed = passes::parse(src, url).map_err(|e| e.message)?;
   passes::desugar(parsed).map_err(|e| format!("{e:?}"))
 }
 
 /// Compile source → CPS IR (+ desugared AST for context).
-pub fn to_cps(src: &str) -> Result<(passes::Cps, passes::DesugaredAst<'_>), String> {
-  let desugared = to_desugared(src)?;
+pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::DesugaredAst<'src>), String> {
+  let desugared = to_desugared(src, url)?;
   let cps = passes::lower(&desugared);
   Ok((cps, desugared))
 }
 
 /// Compile source → lifted CPS IR (+ desugared AST for context).
-pub fn to_lifted(src: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'_>), String> {
-  let (cps, desugared) = to_cps(src)?;
+pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), String> {
+  let (cps, desugared) = to_cps(src, url)?;
   let lifted = passes::lift(cps, &desugared);
   Ok((lifted, desugared))
 }
@@ -52,7 +56,7 @@ pub fn to_lifted(src: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'
 /// Compile source → WASM binary.
 #[cfg(feature = "compile")]
 pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
-  let (lifted, desugared) = to_lifted(src)?;
+  let (lifted, desugared) = to_lifted(src, path)?;
   Ok(passes::emit_wasm(&lifted, &desugared, path, src))
 }
 

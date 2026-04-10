@@ -289,8 +289,8 @@ fn lower<'src>(g: &mut Gen, node: &'src Node<'src>) -> Lower {
     NodeKind::Block { name, params, body, .. } => lower_block(g, name, params, &body.items, o),
 
     // ---- module: single expression unwrapped; multiple as zero-param function ----
-    NodeKind::Module(exprs) if exprs.items.len() == 1 => lower(g, &exprs.items[0]),
-    NodeKind::Module(exprs) => lower_module_as_fn(g, &exprs.items, o),
+    NodeKind::Module { exprs, .. } if exprs.items.len() == 1 => lower(g, &exprs.items[0]),
+    NodeKind::Module { exprs, .. } => lower_module_as_fn(g, &exprs.items, o),
 
     // ---- should not appear post-partial-pass ----
     NodeKind::Partial => panic!("Partial should be eliminated before CPS transform"),
@@ -2624,7 +2624,7 @@ mod cps_tests {
   use crate::passes::cps::fmt::Ctx;
 
   fn cps_expr(src: &str) -> String {
-    match crate::to_desugared(src) {
+    match crate::to_desugared(src, "test") {
       Ok(desugared) => {
         let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
         let bk = super::super::ir::collect_bind_kinds(&cps.root);
@@ -2653,7 +2653,7 @@ mod pat_tests {
   use crate::passes::cps::fmt::Ctx;
 
   fn cps_expr(src: &str) -> String {
-    match crate::to_desugared(src) {
+    match crate::to_desugared(src, "test") {
       Ok(desugared) => {
         let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
         let bk = super::super::ir::collect_bind_kinds(&cps.root);
@@ -2680,7 +2680,7 @@ mod module_tests {
   use crate::passes::cps::fmt::Ctx;
 
   fn cps_module(src: &str) -> String {
-    match crate::to_desugared(src) {
+    match crate::to_desugared(src, "test") {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&cps.result.root);

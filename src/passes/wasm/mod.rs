@@ -132,7 +132,7 @@ pub mod compile;
 mod tests {
   /// Round-trip gen_wat: CPS → emit (WASM binary) → format (WAT text + source map).
   fn gen_wat(src: &str) -> String {
-    let (lifted, desugared) = crate::to_lifted(src).unwrap_or_else(|e| panic!("{e}"));
+    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
 
     // Collect + emit WASM binary.
     let ir_ctx = super::collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);

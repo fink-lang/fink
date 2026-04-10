@@ -29,7 +29,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
   use fink::ast::NodeKind;
 
   let stmts = match &node.kind {
-    NodeKind::Module(exprs) => exprs,
+    NodeKind::Module { exprs, .. } => exprs,
     NodeKind::Fn { body, .. } => body,
     _ => return vec![],
   };
@@ -137,7 +137,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
           panic!("include_fink_tests: test '{}' at line {} — `equals` has no expected body", name, stmt.loc.start.line);
         };
         // Accept a string literal, raw": tagged template, or a fn/text fn body.
-        let text = match &body_node.kind {
+        match &body_node.kind {
           NodeKind::LitStr { content: s, .. } => s.clone(),
           _ => {
             if let Some(text) = extract_raw_templ(body_node) {
@@ -148,8 +148,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
               })
             }
           }
-        };
-        text
+        }
       }
       _ => panic!(
         "include_fink_tests: test '{}' at line {} — last pipe segment is not `equals ƒink:`",
@@ -185,10 +184,10 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
     // A single plain-text child is fine (e.g. fink": with no ${}).
     // Multiple children means the fink": block contains an unescaped ${...} — use \${ instead.
     NodeKind::StrRawTempl { children, .. } => {
-      if let [child] = children.as_slice() {
-        if let NodeKind::LitStr { content: s, .. } = &child.kind {
-          return Some(s.to_string());
-        }
+      if let [child] = children.as_slice()
+        && let NodeKind::LitStr { content: s, .. } = &child.kind
+      {
+        return Some(s.to_string());
       }
       panic!(
         "include_fink_tests: tagged template block contains interpolation — \
@@ -243,7 +242,7 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
   let src = fs::read_to_string(&abs_path)
     .unwrap_or_else(|_| panic!("include_fink_tests: cannot read {abs_path_str}"));
 
-  let result = fink::parser::parse(&src)
+  let result = fink::parser::parse(&src, &rel_path)
     .unwrap_or_else(|e| {
       let diag = fink::errors::Diagnostic {
         message: e.message.clone(),
