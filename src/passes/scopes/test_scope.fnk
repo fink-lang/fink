@@ -34,7 +34,7 @@ scope analysis tests
 #       ref 'add', 'B0', depth 1
 
 
-{test, expect, equals, scope} = import '!fake'
+{test, skip, expect, equals, scope} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -477,6 +477,43 @@ test 'predicate guard in seq pattern', fn:
       bind 3, 'b'
       unresolved 'foo'
       unresolved 'is_even'
+
+
+test 'str templ pattern', fn:
+  expect scope ƒink:
+    'foo${bar}spam' = val
+    bar
+  | equals ƒink:
+    scope 7, 'module',
+      unresolved 'val'
+      ref 'bar', 1
+
+test 'str templ pattern capture all', fn:
+  expect scope ƒink:
+    '${x}' = val
+    x
+  | equals ƒink:
+    scope 5, 'module',
+      unresolved 'val'
+      ref 'x', 0
+
+# TODO: empty arm scope has trailing comma which is not valid fink syntax
+# for test expected output. Need to fix scope formatter to omit trailing comma
+# for empty scopes.
+skip test 'str templ pattern in match', fn:
+  expect scope ƒink:
+    match val:
+      'foo${x}bar': x
+      _: 0
+  | equals ƒink:
+    scope 15, 'module',
+      unresolved 'val'
+
+      scope 9, 'arm',
+        bind 4, 'x'
+        ref 'x', 4
+
+      scope 13, 'arm'
 
 
 ---

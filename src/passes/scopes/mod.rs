@@ -435,6 +435,15 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
         register_pattern_binds_inner(item, scope, ctx, pre_register);
       }
     }
+    NodeKind::StrTempl { children, .. } => {
+      // String template pattern: `'prefix${capture}suffix'` — register binds from
+      // non-LitStr children (the interpolation expressions).
+      for child in children {
+        if !matches!(child.kind, NodeKind::LitStr { .. }) {
+          register_pattern_binds_inner(child, scope, ctx, pre_register);
+        }
+      }
+    }
     _ => {}
   }
 }

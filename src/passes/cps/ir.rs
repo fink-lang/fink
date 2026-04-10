@@ -272,6 +272,9 @@ pub enum BuiltIn {
   // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
   IsSeqLike, IsRecLike, SeqPop, RecPop, Empty,
+  // StrMatch(subj, prefix, suffix, fail(), succ(capture)) — string template pattern matching.
+  // Checks subj starts with prefix, ends with suffix (non-overlapping), binds the middle slice.
+  StrMatch,
   // Scheduling — cooperative multitasking primitives.
   // Yield(value, cont) — suspend current task, switch to next; value for future message passing.
   // Spawn(task_fn, cont) — create new task from task_fn; cont receives future.

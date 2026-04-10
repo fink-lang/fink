@@ -2881,4 +2881,115 @@
     (unreachable)
   )
 
+
+  ;; str_match(subj, prefix, suffix, fail, succ)
+  ;; CPS string template pattern matching.
+  ;; Checks subj starts with prefix and ends with suffix (non-overlapping).
+  ;; On match: calls succ(middle_slice). On mismatch: calls fail().
+  (func $str_match (export "str_match")
+    (param $subj (ref null any))
+    (param $prefix (ref null any))
+    (param $suffix (ref null any))
+    (param $fail (ref null any))
+    (param $succ (ref null any))
+
+    (local $s_str (ref $Str))
+    (local $p_str (ref $Str))
+    (local $x_str (ref $Str))
+    (local $s_bytes (ref $ByteArray))
+    (local $p_bytes (ref $ByteArray))
+    (local $x_bytes (ref $ByteArray))
+    (local $s_len i32)
+    (local $p_len i32)
+    (local $x_len i32)
+    (local $mid_start i32)
+    (local $mid_len i32)
+    (local $i i32)
+    (local $mid (ref $ByteArray))
+
+    ;; Cast subject to $Str — fail if not a string
+    (if (i32.eqz (ref.test (ref $Str) (local.get $subj)))
+      (then (return_call $apply_0 (local.get $fail))))
+    (local.set $s_str (ref.cast (ref $Str) (local.get $subj)))
+
+    ;; Cast prefix/suffix
+    (local.set $p_str (ref.cast (ref $Str) (local.get $prefix)))
+    (local.set $x_str (ref.cast (ref $Str) (local.get $suffix)))
+
+    ;; Get lengths
+    (local.set $s_len (call $_str_len (local.get $s_str)))
+    (local.set $p_len (call $_str_len (local.get $p_str)))
+    (local.set $x_len (call $_str_len (local.get $x_str)))
+
+    ;; Non-overlapping check: subject must be at least prefix + suffix long
+    (if (i32.lt_u (local.get $s_len)
+          (i32.add (local.get $p_len) (local.get $x_len)))
+      (then (return_call $apply_0 (local.get $fail))))
+
+    ;; Get byte arrays
+    (local.set $s_bytes (call $str_bytes (local.get $s_str)))
+
+    ;; Check prefix match
+    (if (local.get $p_len)
+      (then
+        (local.set $p_bytes (call $str_bytes (local.get $p_str)))
+        (local.set $i (i32.const 0))
+        (block $pfx_fail
+          (loop $pfx_loop
+            (br_if $pfx_fail
+              (i32.ne
+                (array.get_u $ByteArray (local.get $s_bytes) (local.get $i))
+                (array.get_u $ByteArray (local.get $p_bytes) (local.get $i))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br_if $pfx_loop (i32.lt_u (local.get $i) (local.get $p_len))))
+          (br 1)) ;; skip fail — prefix matched
+        (return_call $apply_0 (local.get $fail))))
+
+    ;; Check suffix match
+    (local.set $mid_start (local.get $p_len))
+    (local.set $mid_len (i32.sub (local.get $s_len)
+                          (i32.add (local.get $p_len) (local.get $x_len))))
+    (if (local.get $x_len)
+      (then
+        (local.set $x_bytes (call $str_bytes (local.get $x_str)))
+        (local.set $i (i32.const 0))
+        (block $sfx_fail
+          (loop $sfx_loop
+            (br_if $sfx_fail
+              (i32.ne
+                (array.get_u $ByteArray (local.get $s_bytes)
+                  (i32.add
+                    (i32.add (local.get $mid_start) (local.get $mid_len))
+                    (local.get $i)))
+                (array.get_u $ByteArray (local.get $x_bytes) (local.get $i))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br_if $sfx_loop (i32.lt_u (local.get $i) (local.get $x_len))))
+          (br 1)) ;; skip fail — suffix matched
+        (return_call $apply_0 (local.get $fail))))
+
+    ;; Both matched — slice the middle
+    (if (i32.eqz (local.get $mid_len))
+      (then (return_call $apply_1 (call $str_empty) (local.get $succ))))
+
+    ;; Full string — no prefix or suffix
+    (if (i32.eq (local.get $mid_len) (local.get $s_len))
+      (then (return_call $apply_1 (local.get $s_str) (local.get $succ))))
+
+    ;; Copy middle bytes
+    (local.set $mid (array.new $ByteArray (i32.const 0) (local.get $mid_len)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $copy
+        (br_if $done (i32.ge_u (local.get $i) (local.get $mid_len)))
+        (array.set $ByteArray (local.get $mid)
+          (local.get $i)
+          (array.get_u $ByteArray (local.get $s_bytes)
+            (i32.add (local.get $mid_start) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy)))
+    (return_call $apply_1
+      (struct.new $StrBytesImpl (local.get $mid))
+      (local.get $succ))
+  )
+
 )
