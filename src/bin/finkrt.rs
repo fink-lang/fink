@@ -31,7 +31,15 @@ fn main() {
   let stdin: fink::runner::IoReadStream = Arc::new(Mutex::new(std::io::stdin()));
   let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
   let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
-  match fink::runner::wasmtime_runner::run(&opts, &wasm, stdin, stdout, stderr) {
+
+  // Pass the full CLI argv to the embedded module — argv[0] is this
+  // executable's name, rest are user-supplied args. OsString → lossless
+  // bytes via into_encoded_bytes().
+  let cli_args: Vec<Vec<u8>> = std::env::args_os()
+    .map(|a| a.into_encoded_bytes())
+    .collect();
+
+  match fink::runner::wasmtime_runner::run(&opts, &wasm, cli_args, stdin, stdout, stderr) {
     Ok(exit_code) => process::exit(exit_code as i32),
     Err(e) => {
       eprintln!("error: {e}");

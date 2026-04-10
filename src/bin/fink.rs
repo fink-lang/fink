@@ -46,7 +46,9 @@ fn main() {
     .map(|s| s.as_str()).collect();
 
   let (cmd, path) = match positional.as_slice() {
-    [cmd, path] => (*cmd, *path),
+    // For `run`, extra positionals after the source file are forwarded to
+    // the user's main as CLI args — so accept [cmd, path, ..].
+    [cmd, path, ..] => (*cmd, *path),
     _ => {
       eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|compile|run|dap> [options] <file>");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
@@ -217,7 +219,23 @@ fn main() {
         let stdin: fink::runner::IoReadStream = Arc::new(Mutex::new(std::io::stdin()));
         let stdout: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stdout()));
         let stderr: fink::runner::IoStream = Arc::new(Mutex::new(std::io::stderr()));
-        let exit_code = fink::run(&src, path, stdin, stdout, stderr).unwrap_or_else(|e| die(&e));
+
+        // Build argv for the user program: argv[0] is the source file path,
+        // followed by everything on the CLI after the source file. OsString
+        // round-trips as lossless bytes on both Unix and Windows via
+        // into_encoded_bytes() (fink strings are byte strings).
+        let mut cli_args: Vec<Vec<u8>> = vec![path.as_bytes().to_vec()];
+        let mut os_args = env::args_os().skip(1);
+        let mut after_file = false;
+        for a in &mut os_args {
+          if after_file {
+            cli_args.push(a.into_encoded_bytes());
+          } else if a.to_str() == Some(path) {
+            after_file = true;
+          }
+        }
+
+        let exit_code = fink::run(&src, path, cli_args, stdin, stdout, stderr).unwrap_or_else(|e| die(&e));
         process::exit(exit_code as i32);
       }
     }
