@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches-ignore: [main]
   pull_request:
     branches: [main]
 
@@ -22,3 +22,36 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: make deps-install
       - run: make test-full
+
+  # Build fink + finkrt for every supported release target. Runs only on
+  # pull_request events — branch pushes without an open PR get cheap
+  # test-only CI, while open PRs get the full cross-compile validation
+  # before merge. No artifacts are uploaded; this job just validates that
+  # each target still compiles. On merge to main, the Release workflow
+  # builds the same matrix for packaging, so we don't duplicate it here.
+  build-matrix:
+    name: Build (${{ matrix.target }})
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-14
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: make deps-install
+      - run: make build-target TARGET=${{ matrix.target }}
