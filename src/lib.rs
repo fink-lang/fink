@@ -72,15 +72,19 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
 }
 
 /// Compile and run source. Returns the exit code from main.
+///
+/// `args` is the CLI argv passed to the user's `main` — argv[0] is the
+/// program name, followed by user-supplied CLI arguments.
 #[cfg(feature = "run")]
 pub fn run(
   src: &str,
   path: &str,
+  args: Vec<Vec<u8>>,
   stdin: runner::IoReadStream,
   stdout: runner::IoStream,
   stderr: runner::IoStream,
 ) -> Result<i64, String> {
-  runner::run_source(Default::default(), src, path, stdin, stdout, stderr)
+  runner::run_source(Default::default(), src, path, args, stdin, stdout, stderr)
 }
 
 /// Start DAP debug server for a .fnk file, communicating over stdin/stdout.

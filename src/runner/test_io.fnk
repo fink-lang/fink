@@ -8,7 +8,7 @@ IO — main receives stdin, stdout, stderr channels
 
 test 'main returns exit code', fn:
   expect run_main ƒink:
-    main = fn stdin, stdout, stderr:
+    main = fn args, stdin, stdout, stderr:
       0
   | equals ƒink:
     0
@@ -16,7 +16,7 @@ test 'main returns exit code', fn:
 
 test 'stdout single message', fn:
   expect run_main ƒink:
-    main = fn stdin, stdout, stderr:
+    main = fn args, stdin, stdout, stderr:
       'hello' >> stdout
       0
   | equals ":
@@ -27,7 +27,7 @@ test 'stdout single message', fn:
 
 test 'stdout multiple messages', fn:
   expect run_main ƒink:
-    main = fn stdin, stdout, stderr:
+    main = fn args, stdin, stdout, stderr:
       'hello' >> stdout
       'world' >> stdout
       0
@@ -40,7 +40,7 @@ test 'stdout multiple messages', fn:
 
 test 'stderr output', fn:
   expect run_main ƒink:
-    main = fn stdin, stdout, stderr:
+    main = fn args, stdin, stdout, stderr:
       'error' >> stderr
       1
   | equals ":
@@ -51,7 +51,7 @@ test 'stderr output', fn:
 
 test 'stdout and stderr', fn:
   expect run_main ƒink:
-    main = fn stdin, stdout, stderr:
+    main = fn args, stdin, stdout, stderr:
       'out' >> stdout
       'err' >> stderr
       0
@@ -65,7 +65,7 @@ test 'stdout and stderr', fn:
 
 test 'send with <<', fn:
   expect run_main ƒink:
-    main = fn stdin, stdout, stderr:
+    main = fn args, stdin, stdout, stderr:
       stdout << 'hello'
       0
   | equals ":
@@ -77,7 +77,7 @@ test 'send with <<', fn:
 
 test 'read from stdin', fn:
   expect run_main ƒink:
-    main = fn stdin, stdout, stderr:
+    main = fn args, stdin, stdout, stderr:
       data = read stdin, 1024
       data >> stdout
       0
@@ -85,4 +85,15 @@ test 'read from stdin', fn:
     0
     stdout == ":
       hello from stdin
+
+
+test 'main receives cli args', fn:
+  expect run_main ƒink:
+    main = fn args, stdin, stdout, stderr:
+      '${args}' >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      ['test', 'alpha', 'beta']
 

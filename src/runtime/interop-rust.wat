@@ -197,12 +197,16 @@
   ;;
   ;; 1. Creates stdin/stdout/stderr host channels
   ;; 2. Creates done continuation (captures exit code, drains, calls sys_exit)
-  ;; 3. Builds args list [done_cont, stdin, stdout, stderr]
+  ;; 3. Builds args list [done_cont, cli_args, stdin, stdout, stderr]
   ;; 4. Calls main — enters CPS, scheduler takes over
   ;; 5. When scheduler drains, returns here (but sys_exit already called)
+  ;;
+  ;; $cli_args is a fink $List of $Str (byte strings) built by the host —
+  ;; argv[0] is the program name, rest are CLI arguments.
 
   (func $_run_main (export "_run_main")
     (param $entry (ref null any))
+    (param $cli_args (ref null any))
 
     (local $stdin  (ref null any))
     (local $stdout (ref null any))
@@ -224,7 +228,8 @@
         (ref.func $_done_cont_fn)
         (ref.null $Captures)))
 
-    ;; Build args list: [done, stdin, stdout, stderr] (prepend in reverse).
+    ;; Build args list: [done, cli_args, stdin, stdout, stderr]
+    ;; (prepend in reverse).
     (local.set $args (call $list_nil))
     (local.set $args
       (call $list_prepend_any
@@ -235,6 +240,9 @@
     (local.set $args
       (call $list_prepend_any
         (local.get $stdin) (local.get $args)))
+    (local.set $args
+      (call $list_prepend_any
+        (local.get $cli_args) (local.get $args)))
     (local.set $args
       (call $list_prepend_any
         (local.get $done) (local.get $args)))
