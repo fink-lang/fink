@@ -443,9 +443,22 @@
   ;; =========================================================================
 
   ;; op_dot(container, key, cont) → val
+  ;;   $Str → str_op_dot
   ;;   $Rec → rec_op_dot
   (func $op_dot (export "op_dot")
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Str
+    (block $not_str
+      (block $is_str (result (ref $Str))
+        (br $not_str
+          (br_on_cast $is_str (ref null any) (ref $Str)
+            (local.get $container))))
+      (drop)
+      (return_call $str_op_dot
+        (local.get $container)
+        (local.get $key)
+        (local.get $cont)))
 
     ;; Try $Rec
     (block $not_rec

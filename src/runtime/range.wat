@@ -108,6 +108,30 @@
   )
 
 
+  ;; -- Accessors --------------------------------------------------------
+
+  ;; range_start(range) → start bound as $Num
+  (func $range_start (export "range_start")
+    (param $range (ref $Range))
+    (result (ref $Num))
+    (struct.get $RangeImpl $start
+      (ref.cast (ref $RangeImpl) (local.get $range))))
+
+  ;; range_end(range) → end bound as $Num
+  (func $range_end (export "range_end")
+    (param $range (ref $Range))
+    (result (ref $Num))
+    (struct.get $RangeImpl $end
+      (ref.cast (ref $RangeImpl) (local.get $range))))
+
+  ;; range_is_incl(range) → 1 if inclusive, 0 if exclusive
+  (func $range_is_incl (export "range_is_incl")
+    (param $range (ref $Range))
+    (result i32)
+    (struct.get $RangeImpl $incl
+      (ref.cast (ref $RangeImpl) (local.get $range))))
+
+
   ;; CPS wrappers — stripped by unit test harness (prepare_wat).
 
   (func $op_rngex (export "op_rngex")
