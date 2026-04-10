@@ -115,7 +115,7 @@ test 'wildcard _ does not bind', fn:
   | equals ƒink:
     scope 6, 'module',
 
-      scope 4, 'fn',
+      scope 4, 'fn'
       bind 0, 'f'
 
 
@@ -141,7 +141,7 @@ test 'wildcard in match arm', fn:
         bind 2, 'x'
         ref 'x', 2
 
-        scope 10, 'arm',
+        scope 10, 'arm'
       bind 0, 'f'
 
 
@@ -268,7 +268,7 @@ test 'mutual recursion — is-even refs is-odd', fn:
         bind 2, 'n'
         ref 'n', 2
 
-        scope 10, 'arm',
+        scope 10, 'arm'
 
         scope 18, 'arm',
           fwd_ref 'is-odd', 22, depth 2
@@ -279,7 +279,7 @@ test 'mutual recursion — is-even refs is-odd', fn:
         bind 24, 'n'
         ref 'n', 24
 
-        scope 32, 'arm',
+        scope 32, 'arm'
 
         scope 40, 'arm',
           ref 'is-even', 0, depth 2
@@ -300,7 +300,7 @@ test 'match with binding in arm', fn:
         bind 2, 'x'
         ref 'x', 2
 
-        scope 10, 'arm',
+        scope 10, 'arm'
 
         scope 17, 'arm',
           bind 12, 'n'
@@ -497,10 +497,7 @@ test 'str templ pattern capture all', fn:
       unresolved 'val'
       ref 'x', 0
 
-# TODO: empty arm scope has trailing comma which is not valid fink syntax
-# for test expected output. Need to fix scope formatter to omit trailing comma
-# for empty scopes.
-skip test 'str templ pattern in match', fn:
+test 'str templ pattern in match', fn:
   expect scope ƒink:
     match val:
       'foo${x}bar': x
