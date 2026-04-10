@@ -64,8 +64,10 @@ pub fn run(
   let engine = Engine::new(&config).map_err(|e| e.to_string())?;
   let module = Module::new(&engine, wasm).map_err(|e| e.to_string())?;
 
-  // TODO: move exit code handling into _run_main (return i32 directly),
-  // removing the need for host_exit import and this shared state.
+  // host_exit is the CPS runtime's natural unwind primitive — a tail call
+  // out of the WASM module. Making _run_main return an i32 instead would
+  // force the scheduler to unwind back through _apply, which fights the
+  // CPS model for no real gain.
   let exit_code: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
   let exit_code_clone = exit_code.clone();
   let mut store = Store::new(&engine, ());
