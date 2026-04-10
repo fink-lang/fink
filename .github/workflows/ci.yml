@@ -23,11 +23,15 @@ jobs:
       - run: make deps-install
       - run: make test-full
 
-  # Build fink + finkrt for every supported release target. Catches
-  # cross-compile breakage on PRs rather than at release time. No artifacts
-  # are uploaded — this job just validates that each target still compiles.
+  # Build fink + finkrt for every supported release target. Runs only on
+  # pull_request events — branch pushes without an open PR get cheap
+  # test-only CI, while open PRs get the full cross-compile validation
+  # before merge. No artifacts are uploaded; this job just validates that
+  # each target still compiles. On merge to main, the Release workflow
+  # builds the same matrix for packaging, so we don't duplicate it here.
   build-matrix:
     name: Build (${{ matrix.target }})
+    if: github.event_name == 'pull_request'
     strategy:
       fail-fast: false
       matrix:
