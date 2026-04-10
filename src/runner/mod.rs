@@ -45,6 +45,10 @@ pub fn run_source(
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
 /// Returns the exit code from main.
 ///
+/// For `.fnk` entries, constructs a `FileSourceLoader` and calls
+/// `compile_package` — this is the multi-module path, used by both
+/// `fink run` and any other filesystem-backed invocation.
+///
 /// `args` is the CLI argv passed to `main` — argv[0] is the program name.
 #[cfg(feature = "compile")]
 pub fn run_file(
@@ -60,8 +64,9 @@ pub fn run_file(
   }
 
   if path.ends_with(".fnk") {
-    let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    return run_source(opts, &src, path, args, stdin, stdout, stderr);
+    let mut loader = crate::passes::modules::FileSourceLoader::new();
+    let wasm = crate::compile_package(std::path::Path::new(path), &mut loader)?;
+    return wasmtime_runner::run(&opts, &wasm.binary, args, stdin, stdout, stderr);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;

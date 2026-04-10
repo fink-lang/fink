@@ -54,10 +54,34 @@ pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, 
 }
 
 /// Compile source → WASM binary.
+///
+/// For callers that have a source string in hand and just want to compile
+/// it. Internally wraps the source in a one-entry `InMemorySourceLoader`
+/// and calls `compile_package`, so single-source and multi-source inputs
+/// share the same code path. A single-source program with no imports
+/// works identically to before; a single-source program that tries to
+/// import will get a clean error from the in-memory loader.
 #[cfg(feature = "compile")]
 pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
-  let (lifted, desugared) = to_lifted(src, path)?;
-  Ok(passes::emit_wasm(&lifted, &desugared, path, src))
+  use passes::modules::InMemorySourceLoader;
+  let mut loader = InMemorySourceLoader::single(path, src);
+  passes::wasm_link::compile_package(std::path::Path::new(path), &mut loader)
+}
+
+/// Compile a package rooted at `entry_path` to a linked WASM binary.
+///
+/// The multi-module compile entry point. `loader` is any `SourceLoader`
+/// implementation — typically `FileSourceLoader` for filesystem-backed
+/// compiles or `InMemorySourceLoader` for REPL/test scenarios.
+///
+/// For now this is a thin wrapper over the single-source pipeline —
+/// Slices 4+ extend it with the real multi-module behaviour.
+#[cfg(feature = "compile")]
+pub fn compile_package(
+  entry_path: &std::path::Path,
+  loader: &mut dyn passes::modules::SourceLoader,
+) -> Result<passes::Wasm, String> {
+  passes::wasm_link::compile_package(entry_path, loader)
 }
 
 /// Compile source → optimized WASM binary.

@@ -6,9 +6,13 @@
 pub mod ast;
 pub mod cps;
 pub mod lifting;
+pub mod modules;
 pub mod partial;
 pub mod scopes;
 pub mod wasm;
+#[cfg(feature = "compile")]
+#[path = "wasm-link/mod.rs"]
+pub mod wasm_link;
 
 // ---------------------------------------------------------------------------
 // Pipeline — typed stage results enforce correct pass ordering.
