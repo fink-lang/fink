@@ -181,7 +181,7 @@ test 'match literal first arm', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (drop (local.get $main_0))
+        (global.set $main_closure (local.get $main_0))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_126 (ref any))
@@ -195,8 +195,13 @@ test 'match literal first arm', fn:
         (local $local_10 (ref any))
         (return_call $_module_init (struct.new $Closure (ref.func $v_89) (ref.null $Captures)))
       )
+      (func $main (type $Fn2) (param $local_0 (ref any)) (param $local_1 (ref any))
+        (return_call $__apply (local.get $local_1) (global.get $main_closure))
+      )
+      (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
+      (export "main" (func $main))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7QTtBO0E7QTtBOztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7QTtBO0E7QTtBOztBOzs7QTs7QUFBQTtBIgp9
 
 
 test 'match with binding', fn:
@@ -360,7 +365,7 @@ test 'match with binding', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
-        (drop (local.get $main_0))
+        (global.set $main_closure (local.get $main_0))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_149 (ref any))
@@ -374,8 +379,13 @@ test 'match with binding', fn:
         (local $local_10 (ref any))
         (return_call $_module_init (struct.new $Closure (ref.func $v_95) (ref.null $Captures)))
       )
+      (func $main (type $Fn2) (param $local_0 (ref any)) (param $local_1 (ref any))
+        (return_call $__apply (local.get $local_1) (global.get $main_closure))
+      )
+      (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
+      (export "main" (func $main))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7O0E7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7O0E7OztBOztBQUFBO0EiCn0=
 
 
 test 'simple recursion', fn:
@@ -456,7 +466,7 @@ test 'closure construction and call', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_8) (ref.null $Captures)))
-        (drop (local.get $main_0))
+        (global.set $main_closure (local.get $main_0))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_37 (ref any))
@@ -465,8 +475,13 @@ test 'closure construction and call', fn:
         (local $local_5 (ref any))
         (return_call $_module_init (struct.new $Closure (ref.func $v_44) (ref.null $Captures)))
       )
+      (func $main (type $Fn2) (param $local_0 (ref any)) (param $local_1 (ref any))
+        (return_call $__apply (local.get $local_1) (global.get $main_closure))
+      )
+      (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
+      (export "main" (func $main))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7O0E7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7O0E7OztBOztBQUFBO0EiCn0=
 
 
 
