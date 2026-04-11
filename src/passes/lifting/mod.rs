@@ -575,19 +575,18 @@ fn extract_from_body<'src>(
     }
 
     // For non-LetFn nodes inside fn_body, just recurse.
-    // LetVal introduces a binding — add it to scope_binds for the cont body.
-    // Exception: if the val aliases a hoisted fn, don't add to scope_binds —
-    // the fn will be a sibling at the parent scope, not a capture.
+    // LetVal introduces a binding — add it to scope_binds for the cont body so
+    // nested extractions can detect captures of this name. We add the name even
+    // when the val aliases a hoisted fn: the LetVal ITSELF is still visible at
+    // the current scope (refs at the same level resolve directly), but any
+    // nested inline cont that references it needs to capture it explicitly.
     ExprKind::LetVal { name, val, cont } => {
-      let val_is_hoisted = matches!(&val.kind, ValKind::Ref(Ref::Synth(id)) if hoisted.iter().any(|h| h.name.id == *id));
       let cont = match cont {
         Cont::Ref(_) => cont,
         Cont::Expr { args, body } => {
           let mut extended_binds: Vec<(CpsId, Bind)> = scope_binds.to_vec();
-          if !val_is_hoisted {
-            extended_binds.push((name.id, name.kind));
-            for a in &args { extended_binds.push((a.id, a.kind)); }
-          }
+          extended_binds.push((name.id, name.kind));
+          for a in &args { extended_binds.push((a.id, a.kind)); }
           let body = extract_from_body(*body, parent_params, &extended_binds, _ast_index, alloc, hoisted);
           Cont::Expr { args, body: Box::new(body) }
         }

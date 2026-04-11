@@ -210,12 +210,13 @@ test 'multi-fn module — add and main', fn:
     ·v_8 = fn [·ƒret_9, ·a_2, ·b_3]:
       ·op_plus ·a_2, ·b_3, ·ƒret_9
 
-    ·v_16 = fn [·ƒret_17]:
-      ·add_0 ·ƒret_17, 3, 4
+    ·v_37 = fn {·add_38}, [·ƒret_17]:
+      ·add_38 ·ƒret_17, 3, 4
 
     ·v_33 = fn:
       ·add_0 = ·v_8
-      ·main_1 = ·v_16
+      ·v_40 = ·closure ·v_37, ·add_0
+      ·main_1 = ·v_40
       ·export ·add_0, ·main_1
 
     ·module_init ·v_33
@@ -243,18 +244,19 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
     ·v_19 = fn [·ƒret_20, ·x_4]:
       ·op_plus ·x_4, 1, ·ƒret_20
 
-    ·v_62 = fn {·ƒret_63}, [·v_31]:
+    ·v_70 = fn {·inc_71, ·ƒret_73}, [·v_31]:
       ·x_5 = ·v_31
-      ·inc_1 ·ƒret_63, ·x_5
+      ·inc_71 ·ƒret_73, ·x_5
 
-    ·v_27 = fn [·ƒret_28]:
-      ·v_67 = ·closure ·v_62, ·ƒret_28
-      ·double_0 ·v_67, 5
+    ·v_59 = fn {·double_60, ·inc_62}, [·ƒret_28]:
+      ·v_77 = ·closure ·v_70, ·inc_62, ·ƒret_28
+      ·double_60 ·v_77, 5
 
     ·v_55 = fn:
       ·double_0 = ·v_11
       ·inc_1 = ·v_19
-      ·main_2 = ·v_27
+      ·v_64 = ·closure ·v_59, ·double_0, ·inc_1
+      ·main_2 = ·v_64
       ·export ·double_0, ·inc_1, ·main_2
 
     ·module_init ·v_55
@@ -885,4 +887,52 @@ test 'top-level destructure with import rhs — lift non-convergence', fn:
       ·import './bar.fnk', ·ƒret_44
 
     ·module_init ·v_40
+
+
+---
+Regression test for the fooobar lifting bug — module with multiple
+top-level fns where the results of calls are bound to names. Previously
+downstream wasm emit panicked with `unknown local: add_0` because capture
+analysis didn't track LetVal names that aliased hoisted fn references
+(`add_0 = v_14` where v_14 is the hoisted add-fn). Nested inline conts
+referencing `add_0` couldn't see it in scope_binds and therefore didn't
+capture it. Fixed by always adding LetVal names to scope_binds during
+extraction, regardless of whether the val aliases a hoisted fn.
+---
+
+test 'fooobar — multiple top-level fns with bound call results', fn:
+  expect lift ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      a * b
+
+    p = mul s, 3
+
+  | equals ƒink:
+    ·v_14 = fn [·ƒret_15, ·a_4, ·b_5]:
+      ·op_plus ·a_4, ·b_5, ·ƒret_15
+
+    ·v_27 = fn [·ƒret_28, ·a_6, ·b_7]:
+      ·op_mul ·a_6, ·b_7, ·ƒret_28
+
+    ·v_70 = fn {·add_71, ·s_73, ·mul_75}, [·v_38]:
+      ·p_3 = ·v_38
+      ·export ·add_71, ·s_73, ·mul_75, ·p_3
+
+    ·v_60 = fn {·add_61}, [·v_25]:
+      ·s_1 = ·v_25
+      ·mul_2 = ·v_27
+      ·v_79 = ·closure ·v_70, ·add_61, ·s_1, ·mul_2
+      ·mul_2 ·v_79, ·s_1, 3
+
+    ·v_56 = fn:
+      ·add_0 = ·v_14
+      ·v_65 = ·closure ·v_60, ·add_0
+      ·add_0 ·v_65, 1, 2
+
+    ·module_init ·v_56
 

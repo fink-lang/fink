@@ -171,54 +171,57 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
 /// operators (e.g. `[a,b] = [1,2]` lowers to `·seq_prepend 2, [], fn v_6: ...`).
 /// We walk through all of these until we hit the terminal `·export` App.
 fn collect_exports<'src>(root: &Expr, ctx: &IrCtx<'_, 'src>) -> Vec<(CpsId, String)> {
-  let mut expr = root;
-  loop {
-    match &expr.kind {
-      ExprKind::LetFn { name, fn_body, cont, .. } => {
-        // The synthetic `fink_module` LetFn at the very top holds the
-        // actual module body in its fn_body (ending in `·export`). Its
-        // cont is the outer `·module_init fink_module` call. Any other
-        // LetFn is a regular module-level declaration whose cont body
-        // holds the rest of the chain.
-        let is_fink_module = ctx.label(name.id).starts_with("v_")
-          && matches!(cont, Cont::Expr { body, .. }
-            if matches!(&body.kind, ExprKind::App {
-              func: Callable::BuiltIn(BuiltIn::ModuleInit), ..
-            }));
-        if is_fink_module {
-          expr = fn_body;
-          continue;
-        }
-        match cont {
-          Cont::Expr { body, .. } => { expr = body; }
-          Cont::Ref(_) => return vec![],
-        }
+  // The `·export` App may live anywhere in the tree: in the top-level spine
+  // for simple modules, or deep inside a lifted cont/closure body for modules
+  // whose last statement bound a call result (causing the trailing cont chain
+  // — including the terminal `·export` — to be lifted into a hoisted sibling
+  // fn). We recursively search the whole IR tree for the first
+  // `App(BuiltIn::Export, ...)` occurrence.
+  //
+  // After lifting, the Val args of `·export` reference capture-param CpsIds
+  // (rewritten by the lifting pass) rather than the original LetVal names.
+  // Those capture params have `origin` set to the original source ident node,
+  // so `export_name` still returns the user-visible name (e.g. "add", "s").
+  let mut out: Vec<(CpsId, String)> = Vec::new();
+  find_export_app(root, ctx, &mut out);
+  out
+}
+
+fn find_export_app<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<(CpsId, String)>) {
+  if !out.is_empty() { return; }
+  match &expr.kind {
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args } => {
+      for arg in args {
+        if let Arg::Val(v) = arg
+          && let ValKind::Ref(Ref::Synth(id)) = v.kind {
+            let name = export_name(ctx, id);
+            out.push((id, name));
+          }
       }
-      ExprKind::LetVal { cont, .. } => {
-        match cont {
-          Cont::Expr { body, .. } => { expr = body; }
-          Cont::Ref(_) => return vec![],
-        }
-      }
-      ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args } => {
-        return args.iter().filter_map(|arg| {
-          if let Arg::Val(v) = arg
-            && let ValKind::Ref(Ref::Synth(id)) = v.kind {
-              let name = export_name(ctx, id);
-              return Some((id, name));
-            }
-          None
-        }).collect();
-      }
-      // Any other App at module root: the rest of the module lives in the
-      // last Cont::Expr arg's body. Step into it and continue walking.
-      ExprKind::App { args, .. } => {
-        match args.last() {
-          Some(Arg::Cont(Cont::Expr { body, .. })) => { expr = body; }
-          _ => return vec![],
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Cont(Cont::Expr { body, .. }) => find_export_app(body, ctx, out),
+          Arg::Expr(e) => find_export_app(e, ctx, out),
+          _ => {}
         }
       }
-      _ => return vec![],
+    }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      find_export_app(fn_body, ctx, out);
+      if let Cont::Expr { body, .. } = cont {
+        find_export_app(body, ctx, out);
+      }
+    }
+    ExprKind::LetVal { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_export_app(body, ctx, out);
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      find_export_app(then, ctx, out);
+      find_export_app(else_, ctx, out);
     }
   }
 }
