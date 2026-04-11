@@ -1627,7 +1627,12 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
     // `·export <names>` writes each exported closure into its per-export
     // slot global `<name>_closure`. Wrapper fns (emitted elsewhere) read
     // those slots when the host calls the exported name.
+    //
+    // Locals are typed as (ref any), but the slot globals are typed as
+    // (mut (ref null $Closure)). Insert a ref.cast to downcast before
+    // the global.set so WASM validation accepts the store.
     let _ = expr_id;
+    let closure_idx = fc.emitter_idx.type_idx("$Closure");
     for arg in args {
       if let Arg::Val(v) = arg {
         if let ValKind::Ref(Ref::Synth(id)) = &v.kind {
@@ -1635,6 +1640,7 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
           let slot_label = format!("{}_closure", export_name);
           if let Some(&slot_idx) = fc.emitter_idx.globals.get(&slot_label) {
             emit_val(v, fc);
+            fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
             fc.instr(&Instruction::GlobalSet(slot_idx));
             continue;
           }
