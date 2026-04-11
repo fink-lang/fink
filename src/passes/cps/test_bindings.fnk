@@ -136,14 +136,16 @@ test 'group with binding — immediately-invoked ·closure', fn:
   | equals ƒink:
     ·fn
       fn ·ƒret_4:
-        ·∅ham fn ·v_7:
-          ·let ·v_7, fn ·ni_1:
-            ·ƒret_4 ·ni_1, 1
+        ·∅ham
+          fn ·v_7:
+            ·let ·v_7, fn ·ni_1:
+              ·ƒret_4 ·ni_1
+          1
       fn ·v_3:
         ·v_3 fn ·v_15:
           ·let ·v_15, fn ·spam_0:
             ·v_2 ·spam_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3BhbSA9IChcbiAgbmkgPSBoYW0gMVxuICBuaVxuKSJdLAogICJtYXBwaW5ncyI6ICJBQUFPLEFBQUE7S0FBQSxPO0lBQ0EsQUFBQSxNQUFBLEdBQUEsSTtNQUFGLEFBQUEsS0FBRSxJLEtBQUwsSztRLEFBREssUUFFTCxLLEVBRFM7S0FESixJO0lBQUEsQUFBQSxRQUFBLEs7TUFBRixBQUFBLEtBQUUsSyxLQUFQLE87USxBLEtBQUEiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3BhbSA9IChcbiAgbmkgPSBoYW0gMVxuICBuaVxuKSJdLAogICJtYXBwaW5ncyI6ICJBQUFPLEFBQUE7S0FBQSxPO0lBQ0EsQUFBQTtTQUFBLEk7UUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7VSxBQURLLFFBRUw7TUFEUztLQURKLEk7SUFBQSxBQUFBLFFBQUEsSztNQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztRLEEsS0FBQSIKfQ==
 
 
 ---
@@ -169,10 +171,13 @@ test 'binding rhs is a call', fn:
   expect cps_expr ƒink:
     foo = add 1, 2
   | equals ƒink:
-    ·∅add fn ·v_5:
-      ·let ·v_5, fn ·foo_0:
-        ·v_1 ·foo_0, 1, 2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gYWRkIDEsIDIiXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBLE1BQUEsR0FBQSxJO0VBQUYsQUFBQSxLQUFFLEksS0FBTixNO0ksQSxLQUFBLE0sRUFBVSxDLEVBQUciCn0=
+    ·∅add
+      fn ·v_5:
+        ·let ·v_5, fn ·foo_0:
+          ·v_1 ·foo_0
+      1
+      2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gYWRkIDEsIDIiXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBO0tBQUEsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNLEEsS0FBQTtFQUFVO0VBQUciCn0=
 
 
 test 'expression result discarded', fn:
@@ -182,11 +187,13 @@ test 'expression result discarded', fn:
   | equals ƒink:
     ·fn
       fn ·ƒret_2:
-        ·∅foo fn ·v_5:
-          ·let ·v_5, fn ·v_7:
-            ·ƒret_2 ·∅bar, 1
+        ·∅foo
+          fn ·v_5:
+            ·let ·v_5, fn ·v_7:
+              ·ƒret_2 ·∅bar
+          1
       fn ·v_1: ·v_0 ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDFcbmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQUEsQUFBQSxNQUFBLEdBQUEsSTtNQUFBLEFBQUEsS0FBQSxJLEtBQUEsSTtRLEFBQUEsUUFDQSxLLEVBREk7S0FBSixJLEUsQSxLQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDFcbmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQUEsQUFBQTtTQUFBLEk7UUFBQSxBQUFBLEtBQUEsSSxLQUFBLEk7VSxBQUFBLFFBQ0E7TUFESTtLQUFKLEksRSxBLEtBQUEiCn0=
 
 
 test 'chained member access', fn:
@@ -260,7 +267,9 @@ test 'shadowed binding — inner add does not affect outer', fn:
                     fn ·ƒret_23, ·foo_7: ·ƒret_23 ·foo_7
                     fn ·v_22:
                       ·let ·v_22, fn ·add_8:
-                        ·add_8 fn ·v_31: ·op_minus ·a_5, ·v_31, ·ƒret_21, ·b_6
+                        ·add_8
+                          fn ·v_31: ·op_minus ·a_5, ·v_31, ·ƒret_21
+                          ·b_6
                 fn ·v_20:
                   ·let ·v_20, fn ·sub_1:
                     ·fn
@@ -269,7 +278,7 @@ test 'shadowed binding — inner add does not affect outer', fn:
                         ·let ·v_43, fn ·main_2:
                           ·ƒret_11 ·main_2
       fn ·v_10: ·v_9 ·v_10
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbnN1YiA9IGZuIGEsIGI6XG4gIGFkZCA9IGZuIGZvbzogZm9vXG4gIGEgLSBhZGQgYlxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxRO0lBQU0sQUFBQTtTQUFBLFVBQUcsTUFBRyxJLEVBQ1IsQUFBQSxTQUFGLEksRUFBSSxJLEVBREE7U0FBQSxLO1FBQUYsQUFBQSxLQUFFLEssS0FBTixNO1VBRU0sQUFBQTtlQUFBLFVBQUcsTUFBRyxJO2NBQ0osQUFBQTttQkFBQSxVQUFHLE0sRSxBQUFILFNBQVE7bUJBQVIsSztrQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07b0JBQ0ksQUFBQSxPQUFBLEdBQUEsSyxFQUFGLEFBQUEsVUFBRixJLEVBQUksSyxFQUZBLFEsRUFFSTtlQUZKLEs7Y0FBRixBQUFBLEtBQUUsSyxLQUFOLE07Z0JBR08sQUFBQTtxQkFBQSxRLEVBQ0wsQUFBQSxPQURLLFEsRUFDRCxDLEVBQUc7cUJBREYsSztvQkFBRixBQUFBLEtBQUUsSyxLQUFQLE87c0JBTEEsQUFBQSxTQUtBO0tBTEEsSyxFLEEsS0FBQSIKfQ==
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbnN1YiA9IGZuIGEsIGI6XG4gIGFkZCA9IGZuIGZvbzogZm9vXG4gIGEgLSBhZGQgYlxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxRO0lBQU0sQUFBQTtTQUFBLFVBQUcsTUFBRyxJLEVBQ1IsQUFBQSxTQUFGLEksRUFBSSxJLEVBREE7U0FBQSxLO1FBQUYsQUFBQSxLQUFFLEssS0FBTixNO1VBRU0sQUFBQTtlQUFBLFVBQUcsTUFBRyxJO2NBQ0osQUFBQTttQkFBQSxVQUFHLE0sRSxBQUFILFNBQVE7bUJBQVIsSztrQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07b0JBQ0ksQUFBQTt5QkFBQSxLLEVBQUYsQUFBQSxVQUFGLEksRUFBSSxLLEVBRkE7c0JBRUk7ZUFGSixLO2NBQUYsQUFBQSxLQUFFLEssS0FBTixNO2dCQUdPLEFBQUE7cUJBQUEsUSxFQUNMLEFBQUEsT0FESyxRLEVBQ0QsQyxFQUFHO3FCQURGLEs7b0JBQUYsQUFBQSxLQUFFLEssS0FBUCxPO3NCQUxBLEFBQUEsU0FLQTtLQUxBLEssRSxBLEtBQUEiCn0=
 
 QUFBO3FCQUFBLEssRUFDTCxBQUFBLE9BQUksQyxFQUFHLEMsRUFERjtxQkFBQSxLO29CQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztzQkFMQSxBQUFBLE1BS0E7S0FMQSxLLEUsQSxLQUFBIgp9
 

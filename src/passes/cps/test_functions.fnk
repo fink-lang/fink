@@ -189,10 +189,12 @@ test 'try — result bound, code continues', fn:
   | equals ƒink:
     ·fn
       fn ·ƒret_3:
-        ·∅foo fn ·v_6:
-          ·let ·v_6, fn ·ni_0:
-            ·op_plus ·ni_0, 1, ·ƒret_3, ·∅bar
+        ·∅foo
+          fn ·v_6:
+            ·let ·v_6, fn ·ni_0:
+              ·op_plus ·ni_0, 1, ·ƒret_3
+          ·∅bar
       fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibmkgPSB0cnkgZm9vIGJhclxubmkgKyAxIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE87SUFBUyxBQUFBLE1BQUEsR0FBQSxJO01BQU4sQUFBQSxLQUFNLEksS0FBVCxLO1FBQ0csQUFBQSxTQUFILEssRUFBSyxDLEVBREwsTyxFQUFhO0tBQWIsSSxFLEEsS0FBQSIKfQ==
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibmkgPSB0cnkgZm9vIGJhclxubmkgKyAxIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE87SUFBUyxBQUFBO1NBQUEsSTtRQUFOLEFBQUEsS0FBTSxJLEtBQVQsSztVQUNHLEFBQUEsU0FBSCxLLEVBQUssQyxFQURMO01BQWE7S0FBYixJLEUsQSxLQUFBIgp9
 
 

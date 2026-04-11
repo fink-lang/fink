@@ -15,7 +15,7 @@ module-level CPS — lower_module produces flat chain + export terminal
 
 {test, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
-{·module_init, ·import, ·fn,·let, ·export, ·op_plus, ·is_rec_like, ·rec_pop,
+{·module_init, ·import, ·fn,·let, ·export, ·op_plus, ·op_mul, ·is_rec_like, ·rec_pop,
  ·ƒsucc_11, ·ƒfail_12, ·panic
 } = import '@fink/compile/builtins'
 
@@ -215,27 +215,29 @@ test 'standalone top-level destructure with call rhs', fn:
   | equals ƒink:
     ·fn
       fn:
-        ·∅some_call fn ·v_6:
-          ·fn
-            fn ·v_11, ·v_12:
-              ·let ·v_11, fn ·a_0:
-                ·let ·v_12, fn ·b_1:
-                  ·export _
-            fn ·v_46:
-              ·fn
-                fn ·ƒsucc_9, ·ƒfail_10, ·v_8:
-                  ·is_seq_like ·v_8,
-                    fn ·v_25:
-                      ·seq_pop ·v_25, ·ƒfail_10, fn ·v_11, ·v_26:
-                        ·seq_pop ·v_26, ·ƒfail_10, fn ·v_12, ·v_17:
-                          ·empty ·v_17, fn ·v_20:
-                            ·if ·v_20,
-                              fn: ·ƒsucc_9 ·v_11, ·v_12
-                              fn: ·ƒfail_10 _
-                    fn: ·ƒfail_10 _
-                fn ·v_37: ·v_37 ·v_46, ·panic, ·v_6, ·∅x
+        ·∅some_call
+          fn ·v_6:
+            ·fn
+              fn ·v_11, ·v_12:
+                ·let ·v_11, fn ·a_0:
+                  ·let ·v_12, fn ·b_1:
+                    ·export _
+              fn ·v_46:
+                ·fn
+                  fn ·ƒsucc_9, ·ƒfail_10, ·v_8:
+                    ·is_seq_like ·v_8,
+                      fn ·v_25:
+                        ·seq_pop ·v_25, ·ƒfail_10, fn ·v_11, ·v_26:
+                          ·seq_pop ·v_26, ·ƒfail_10, fn ·v_12, ·v_17:
+                            ·empty ·v_17, fn ·v_20:
+                              ·if ·v_20,
+                                fn: ·ƒsucc_9 ·v_11, ·v_12
+                                fn: ·ƒfail_10 _
+                      fn: ·ƒfail_10 _
+                  fn ·v_37: ·v_37 ·v_46, ·panic, ·v_6
+          ·∅x
       fn ·v_55: ·module_init ·v_55
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gc29tZV9jYWxsIHgiXSwKICAibWFwcGluZ3MiOiAiQSxBO0k7SUFBUyxBQUFBLFlBQUEsR0FBQSxJO01BQVQsQUFBQTtXQUFBLE9BQUEsSztVQUFDLEFBQUEsS0FBRCxLLEtBQUMsSTtZQUFHLEFBQUEsS0FBSixLLEtBQUksSTtjLEEsUTtXQUFKLEs7VUFBQSxBQUFBO2UsVSxXQUFBLEk7Y0FBQSxBQUFBLGFBQUEsSTttQkFBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztvQkFBQSxBQUFBLFNBQUEsSyxFLFMsS0FBQSxPQUFBLEs7c0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO3dCQUFBLEFBQUEsSUFBQSxLOzRCLEVBQUEsQSxTQUFBLEssRUFBQTs0QixFQUFBLEEsVUFBQTtrQixFQUFBLEEsVUFBQTtlQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBUyxJLEVBQVU7SyxLLEUsQSxhIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gc29tZV9jYWxsIHgiXSwKICAibWFwcGluZ3MiOiAiQSxBO0k7SUFBUyxBQUFBO1NBQUEsSTtRQUFULEFBQUE7YUFBQSxPQUFBLEs7WUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7Y0FBRyxBQUFBLEtBQUosSyxLQUFJLEk7Z0IsQSxRO2FBQUosSztZQUFBLEFBQUE7aUIsVSxXQUFBLEk7Z0JBQUEsQUFBQSxhQUFBLEk7cUJBQUEsSztvQkFBQSxBQUFBLFNBQUEsSyxFLFMsS0FBQSxPQUFBLEs7c0JBQUEsQUFBQSxTQUFBLEssRSxTLEtBQUEsT0FBQSxLO3dCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSzswQkFBQSxBQUFBLElBQUEsSzs4QixFQUFBLEEsU0FBQSxLLEVBQUE7OEIsRUFBQSxBLFVBQUE7b0IsRUFBQSxBLFVBQUE7aUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFTO01BQVU7SyxLLEUsQSxhIgp9
 
 
 test 'standalone top-level destructure with import rhs', fn:
@@ -260,4 +262,49 @@ test 'standalone top-level destructure with import rhs', fn:
                 fn ·v_25: ·v_25 ·v_31, ·panic, ·v_6
       fn ·v_40: ·module_init ·v_40
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuayciXSwKICAibWFwcGluZ3MiOiAiQSxBO0k7SUFBUSxBQUFBLFFBQU8sQSxDQUFBLFMsQyxLQUFQLEk7TUFBUixBQUFBO1dBQUEsSztVQUFDLEFBQUEsS0FBRCxLLEtBQUMsTTtZLEEsUTtXQUFELEs7VUFBQSxBQUFBO2UsVSxXQUFBLEk7Y0FBQSxBQUFBLGFBQUEsSTttQkFBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLFMsS0FBQSxPQUFBLEs7b0JBQUEsQSxTQUFBO2tCLEVBQUEsQSxVQUFBO2VBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFRO0ssSyxFLEEsYSIKfQ==
+
+
+---
+·export should only carry binding names — call args must not leak in.
+Repro for the fooobar bug: module with multiple top-level fns + calls
+whose results are bound to names. Yesterday the ·export terminal was
+rendered as `·export ·add_0, ·s_1, ·mul_2, ·p_3, ·s_1, 3, 1, 2` — the
+trailing `·s_1, 3, 1, 2` are args from the two call sites leaking in.
+---
+
+test 'export args do not leak call args', fn:
+  expect cps_module ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      a * b
+
+    p = mul s, 3
+  | equals ƒink:
+    ·fn
+      fn:
+        ·fn
+          fn ·ƒret_15, ·a_4, ·b_5: ·op_plus ·a_4, ·b_5, ·ƒret_15
+          fn ·v_14:
+            ·let ·v_14, fn ·add_0:
+              ·add_0
+                fn ·v_25:
+                  ·let ·v_25, fn ·s_1:
+                    ·fn
+                      fn ·ƒret_28, ·a_6, ·b_7: ·op_mul ·a_6, ·b_7, ·ƒret_28
+                      fn ·v_27:
+                        ·let ·v_27, fn ·mul_2:
+                          ·mul_2
+                            fn ·v_38:
+                              ·let ·v_38, fn ·p_3:
+                                ·export ·add_0, ·s_1, ·mul_2, ·p_3
+                            ·s_1
+                            3
+                1
+                2
+      fn ·v_56: ·module_init ·v_56
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxucyA9IGFkZCAxLCAyXG5cbm11bCA9IGZuIGEsIGI6XG4gIGEgKiBiXG5cbnAgPSBtdWwgcywgMyJdLAogICJtYXBwaW5ncyI6ICJBLEE7STtJQUFNLEFBQUE7U0FBQSxVQUFHLE1BQUcsSSxFQUNSLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO1NBQUEsSztRQUFGLEFBQUEsS0FBRSxLLEtBQU4sTTtVQUdJLEFBQUE7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBSixJO2dCQUVNLEFBQUE7cUJBQUEsVUFBRyxNQUFHLEksRUFDUixBQUFBLFFBQUYsSSxFQUFJLEksRUFEQTtxQkFBQSxLO29CQUFGLEFBQUEsS0FBRSxLLEtBQU4sTTtzQkFHSSxBQUFBOzJCQUFBLEs7MEJBQUYsQUFBQSxLQUFFLEssS0FBSixJOzRCLEEsUUFSQSxNLEVBR0EsSSxFQUVBLE0sRUFHQTt3QkFBUTt3QkFBRztZQUxIO1lBQUc7SyxLLEUsQSxhIgp9
 

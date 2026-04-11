@@ -38,8 +38,10 @@ test 'pipe three stages', fn:
   expect cps_expr ƒink:
     a | foo | bar
   | equals ƒink:
-    ·∅foo fn ·v_3: ·∅bar ·v_0, ·v_3, ·∅a
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyB8IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUUsTUFBSixHQUFBLEksRUFBUSxBQUFFLE0sSSxFQUFWLEksRUFBQSIKfQ==
+    ·∅foo
+      fn ·v_3: ·∅bar ·v_0, ·v_3
+      ·∅a
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyB8IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUU7S0FBSixJLEVBQVEsQUFBRSxNLEksRUFBVjtFQUFBIgp9
 
 
 
@@ -72,16 +74,21 @@ test 'nested call', fn:
   expect cps_expr ƒink:
     add (mul 2, 3), 1
   | equals ƒink:
-    ·∅mul fn ·v_5: ·∅add ·v_0, ·v_5, 1, 2, 3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIChtdWwgMiwgMyksIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBLE1BQUEsR0FBQSxJLEVBQUwsQUFBQSxNLEksRUFBSyxJLEVBQVcsQyxFQUFQLEMsRUFBRyIKfQ==
+    ·∅mul
+      fn ·v_5: ·∅add ·v_0, ·v_5, 1
+      2
+      3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIChtdWwgMiwgMyksIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBO0tBQUEsSSxFQUFMLEFBQUEsTSxJLEVBQUssSSxFQUFXO0VBQVA7RUFBRyIKfQ==
 
 
 test 'postfix tag', fn:
   expect cps_expr ƒink:
     (foo bar)tag
   | equals ƒink:
-    ·∅foo fn ·v_4: ·∅tag ·v_0, ·v_4, ·∅bar
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiKGZvbyBiYXIpdGFnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUMsQUFBQSxNQUFBLEdBQUEsSSxFQUFELEFBQVMsTSxJLEVBQVIsSSxFQUFJIgp9
+    ·∅foo
+      fn ·v_4: ·∅tag ·v_0, ·v_4
+      ·∅bar
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiKGZvbyBiYXIpdGFnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUMsQUFBQTtLQUFBLEksRUFBRCxBQUFTLE0sSSxFQUFSO0VBQUkiCn0=
 
 
 test 'call with spread', fn:
@@ -104,8 +111,10 @@ test 'pipe chain', fn:
   expect cps_expr ƒink:
     x | f | g
   | equals ƒink:
-    ·∅f fn ·v_3: ·∅g ·v_0, ·v_3, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYgfCBnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUUsQUFBRSxJQUFKLEdBQUEsSSxFQUFNLEFBQUUsSSxJLEVBQVIsSSxFQUFBIgp9
+    ·∅f
+      fn ·v_3: ·∅g ·v_0, ·v_3
+      ·∅x
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYgfCBnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUUsQUFBRTtLQUFKLEksRUFBTSxBQUFFLEksSSxFQUFSO0VBQUEiCn0=
 
 
 test 'partial apply', fn:
