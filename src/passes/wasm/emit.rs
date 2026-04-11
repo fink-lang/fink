@@ -896,6 +896,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
+    // Export wrapper fns — one `$<name>` Fn2 per user export. The wrapper
+    // reads the closure from its `<name>_closure` slot and forwards the
+    // args list through `_apply`.
+    let wrapper_fn2_type = self.idx.fn_type_idx(2);
+    for (_cps_id, export_name) in &cps_mod.exports {
+      functions.function(wrapper_fn2_type);
+      self.idx.funcs.insert(export_name.clone(), next_func_idx);
+      next_func_idx += 1;
+    }
+
     let _ = next_func_idx;
     self.module.section(&functions);
   }
@@ -954,6 +964,27 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
+    // Export slots — one mutable `(mut (ref null $Closure))` per export,
+    // initialised to null. Populated by `·export` slot-writes inside
+    // fink_module at init time; read by the user-facing wrapper fns.
+    let closure_type_idx = self.idx.type_idx("$Closure");
+    for (_cps_id, export_name) in &cps_mod.exports {
+      let slot_label = format!("{}_closure", export_name);
+      globals.global(
+        GlobalType {
+          val_type: ValType::Ref(RefType {
+            nullable: true,
+            heap_type: HeapType::Concrete(closure_type_idx),
+          }),
+          mutable: true,
+          shared: false,
+        },
+        &ConstExpr::ref_null(HeapType::Concrete(closure_type_idx)),
+      );
+      self.idx.globals.insert(slot_label, next_global_idx);
+      next_global_idx += 1;
+    }
+
     if next_global_idx > 0 {
       self.module.section(&globals);
     }
@@ -979,6 +1010,20 @@ impl<'a, 'src> Emitter<'a, 'src> {
               loc: node.loc,
             });
           }
+      }
+    }
+
+    // User exports — each `·export <name>` produces a wrapper fn that the
+    // host calls under the user-facing name. The wrapper reads the
+    // `<name>_closure` slot and dispatches through `_apply`.
+    for (cps_id, export_name) in &cps_mod.exports {
+      let func_idx = self.idx.func_idx(export_name);
+      exports.export(export_name, ExportKind::Func, func_idx);
+      if let Some(node) = self.ctx.ast_node(*cps_id) {
+        self.structural_locs.push(StructuralLoc {
+          kind: StructuralKind::Export { name: export_name.clone() },
+          loc: node.loc,
+        });
       }
     }
 
@@ -1152,6 +1197,20 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&f);
     }
 
+    // Export wrapper bodies — `return_call $__apply args, closure_slot`.
+    // WASM Fn2 params: local 0 = caps (ignored), local 1 = args list.
+    let apply_idx = self.idx.func_idx("_apply");
+    for (_cps_id, export_name) in &cps_mod.exports {
+      let slot_label = format!("{}_closure", export_name);
+      let slot_idx = self.idx.global_idx(&slot_label);
+      let mut f = Function::new(vec![]);
+      f.instruction(&Instruction::LocalGet(1));                // args
+      f.instruction(&Instruction::GlobalGet(slot_idx));        // callee closure
+      f.instruction(&Instruction::ReturnCall(apply_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
     self.module.section(&code);
   }
 
@@ -1293,6 +1352,12 @@ impl<'a, 'src> Emitter<'a, 'src> {
     if self.has_panic {
       let panic_idx = self.idx.func_idx("_panic");
       func_names.append(panic_idx, "_panic");
+    }
+    // Export wrapper fns (`$<name>` Fn2 per user export).
+    for (_cps_id, export_name) in &cps_mod.exports {
+      if let Some(&idx) = self.idx.funcs.get(export_name) {
+        func_names.append(idx, export_name);
+      }
     }
     names.functions(&func_names);
 
@@ -1559,18 +1624,25 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
 /// Emit a builtin operation call.
 fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
   if op == BuiltIn::Export {
-    // `·export <names>` terminates a module's init body with its export
-    // list. The real lowering (write each arg to its `_fink_<name>_closure`
-    // slot global) will land once the slot infrastructure is in place.
-    // For now, drop each arg and fall through to the fn's implicit `end`.
+    // `·export <names>` writes each exported closure into its per-export
+    // slot global `<name>_closure`. Wrapper fns (emitted elsewhere) read
+    // those slots when the host calls the exported name.
     let _ = expr_id;
     for arg in args {
-      match arg {
-        Arg::Val(v) | Arg::Spread(v) => {
-          emit_val(v, fc);
-          fc.instr(&Instruction::Drop);
+      if let Arg::Val(v) = arg {
+        if let ValKind::Ref(Ref::Synth(id)) = &v.kind {
+          let export_name = super::collect::export_name(fc.ctx, *id);
+          let slot_label = format!("{}_closure", export_name);
+          if let Some(&slot_idx) = fc.emitter_idx.globals.get(&slot_label) {
+            emit_val(v, fc);
+            fc.instr(&Instruction::GlobalSet(slot_idx));
+            continue;
+          }
         }
-        _ => {}
+        // Fallback: unknown export shape, drop the val so the body
+        // remains syntactically valid.
+        emit_val(v, fc);
+        fc.instr(&Instruction::Drop);
       }
     }
     return;

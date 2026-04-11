@@ -16,6 +16,62 @@ fail during this work and will be re-blessed once the new model is in place.
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
+
+test 'minimal module exports', fn:
+  expect gen_wat ƒink:
+    foo = fn: 123
+    bar = fn: 345
+
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $v_6 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_7 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_7 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 123)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_7))
+      )
+      (func $v_12 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_13 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_13 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 345)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_13))
+      )
+      (func $v_26 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $foo_0 (ref any))
+        (local $v_22 (ref any))
+        (local $bar_1 (ref any))
+        (local $local_5 (ref any))
+        (local.set $foo_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
+        (local.set $bar_1 (struct.new $Closure (ref.func $v_12) (ref.null $Captures)))
+        (global.set $foo_closure (local.get $foo_0))
+        (global.set $bar_closure (local.get $bar_1))
+      )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_20 (ref any))
+        (local $local_3 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_26) (ref.null $Captures)))
+      )
+      (func $foo (type $Fn2) (param $local_0 (ref any)) (param $local_1 (ref any))
+        (return_call $__apply (local.get $local_1) (global.get $foo_closure))
+      )
+      (func $bar (type $Fn2) (param $local_0 (ref any)) (param $local_1 (ref any))
+        (return_call $__apply (local.get $local_1) (global.get $bar_closure))
+      )
+      (global $foo_closure (mut (ref null $Closure)) (ref.null $Closure))
+      (global $bar_closure (mut (ref null $Closure)) (ref.null $Closure))
+      (export "foo" (func $foo))
+      (export "bar" (func $bar))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46IDEyM1xuYmFyID0gZm46IDM0NSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTs7QTs7O0E7OztBOzs7QUFBQTtBQUNBO0EiCn0=
+
 ---
 simple main: module has a $_fink_module function whose body contains
 the module's top-level CPS.

@@ -173,6 +173,8 @@ enum ParsedInstr {
   Drop,
   /// return — explicit function return.
   Return,
+  /// global.set — pop top stack value and write to module global.
+  GlobalSet(u32),
   /// Any instruction we don't specifically handle.
   Other(String),
 }
@@ -472,6 +474,7 @@ fn parse_operator(op: &Operator<'_>) -> ParsedInstr {
     Operator::Unreachable => ParsedInstr::Unreachable,
     Operator::Drop => ParsedInstr::Drop,
     Operator::Return => ParsedInstr::Return,
+    Operator::GlobalSet { global_index } => ParsedInstr::GlobalSet(*global_index),
     Operator::RefFunc { function_index } => ParsedInstr::RefFunc(*function_index),
     Operator::Block { .. } => ParsedInstr::Block,
     Operator::RefCastNullable { hty } => {
@@ -641,6 +644,7 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
     emit_func(module, func, func_idx, w);
   }
 
+  emit_slot_globals(module, w);
   emit_exports(module, w);
   emit_data_section(module, w);
   stop_mark(w);
@@ -771,6 +775,25 @@ fn emit_global_for_func(module: &ParsedModule, func_idx: u32, w: &mut MappedWrit
       }
       w.push_str(&format!("  (global {} (ref {}) (ref.func {}))\n",
         g_name, type_name_str, f_name));
+    }
+  }
+}
+
+/// Emit user-facing mutable slot globals (export closure slots), rendered as
+/// `(global $name (mut (ref null $Closure)) (ref.null $Closure))`. These
+/// globals have no `ref.func` init — they're populated at runtime by
+/// `·export` slot-writes inside fink_module's body.
+fn emit_slot_globals(module: &ParsedModule, w: &mut MappedWriter) {
+  for (g_idx, global) in module.globals.iter().enumerate() {
+    if global.init_func_index.is_none() {
+      let g_name = global_name(module, g_idx as u32);
+      // Skip internal/compiler-owned globals (prefix `_` or namespaced).
+      if g_name.starts_with("$_") || g_name.starts_with("$@") { continue; }
+      let type_name_str = global.ref_type_index
+        .map(|ti| type_name(module, ti))
+        .unwrap_or_else(|| "any".into());
+      w.push_str(&format!("  (global {} (mut (ref null {})) (ref.null {}))\n",
+        g_name, type_name_str, type_name_str));
     }
   }
 }
@@ -1060,6 +1083,16 @@ fn emit_func_body(module: &ParsedModule, func: &ParsedFunc, w: &mut MappedWriter
         i += 1;
       }
 
+      ParsedInstr::GlobalSet(idx) => {
+        // Pop the top value from the s-expr stack and render as the
+        // operand of `(global.set $name ...)`.
+        let name = global_name(module, *idx);
+        let (arg, arg_off) = stack.pop().unwrap_or_default();
+        if let Some(loc) = find_dwarf_loc(module, arg_off, *offset) { w.mark(loc); }
+        w.push_str(&format!("{}(global.set {} {})\n", ind(indent + block_depth), name, arg));
+        i += 1;
+      }
+
       _ => {
         let s = format_instr(module, func, instr);
         w.push_str(&format!("{}{}\n", ind(indent + block_depth), s));
@@ -1146,6 +1179,7 @@ fn format_instr(module: &ParsedModule, func: &ParsedFunc, instr: &ParsedInstr) -
     ParsedInstr::RefNullAny => "(ref.null any)".into(),
     ParsedInstr::Drop => "drop".into(),
     ParsedInstr::Return => "return".into(),
+    ParsedInstr::GlobalSet(idx) => format!("(global.set {})", global_name(module, *idx)),
     ParsedInstr::If => "(if".into(),
     ParsedInstr::Else => ")(else".into(),
     ParsedInstr::End => ")".into(),

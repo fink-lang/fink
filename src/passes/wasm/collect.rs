@@ -104,6 +104,10 @@ pub struct Module<'a> {
   pub arities: BTreeSet<usize>,
   /// CpsIds of LetVal aliases for module-level fns — these are globals, not locals.
   pub globals: HashSet<CpsId>,
+  /// User exports: `(cps_id, source_name)` pairs extracted from the terminal
+  /// `·export` App. Emit allocates one `$<name>_closure` slot global and one
+  /// `$<name>` wrapper fn per entry.
+  pub exports: Vec<(CpsId, String)>,
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +160,7 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
     .filter_map(|cf| cf.alias.as_ref().map(|(id, _)| *id))
     .collect();
 
-  Module { funcs, arities, globals }
+  Module { funcs, arities, globals, exports }
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
@@ -170,7 +174,27 @@ fn collect_exports<'src>(root: &Expr, ctx: &IrCtx<'_, 'src>) -> Vec<(CpsId, Stri
   let mut expr = root;
   loop {
     match &expr.kind {
-      ExprKind::LetFn { cont, .. } | ExprKind::LetVal { cont, .. } => {
+      ExprKind::LetFn { name, fn_body, cont, .. } => {
+        // The synthetic `fink_module` LetFn at the very top holds the
+        // actual module body in its fn_body (ending in `·export`). Its
+        // cont is the outer `·module_init fink_module` call. Any other
+        // LetFn is a regular module-level declaration whose cont body
+        // holds the rest of the chain.
+        let is_fink_module = ctx.label(name.id).starts_with("v_")
+          && matches!(cont, Cont::Expr { body, .. }
+            if matches!(&body.kind, ExprKind::App {
+              func: Callable::BuiltIn(BuiltIn::ModuleInit), ..
+            }));
+        if is_fink_module {
+          expr = fn_body;
+          continue;
+        }
+        match cont {
+          Cont::Expr { body, .. } => { expr = body; }
+          Cont::Ref(_) => return vec![],
+        }
+      }
+      ExprKind::LetVal { cont, .. } => {
         match cont {
           Cont::Expr { body, .. } => { expr = body; }
           Cont::Ref(_) => return vec![],
