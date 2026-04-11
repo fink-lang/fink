@@ -1,0 +1,47 @@
+---
+_fink_module — treat the module root as a regular CPS function
+
+These tests pin the new export model: the CPS root is compiled to a single
+WASM function named $_fink_module, handled by the same emit path as any other
+lifted fn. ·export inside that body becomes slot-writes into per-export module
+globals, and exported user names become thin wrapper fns that read those slots
+and forward via _apply.
+
+This is a work-in-progress scratchpad. Tests here drive the implementation
+one step at a time. Existing tests in test_literals.fnk etc. are expected to
+fail during this work and will be re-blessed once the new model is in place.
+---
+
+{test, expect, equals, gen_wat, wat} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+simple main: module has a $_fink_module function whose body contains
+the module's top-level CPS.
+---
+skip test 'minimal error calling same local func twice', fn:
+  expect gen_wat ƒink:
+    foo = fn:
+      ni = fn a: a
+      na = ni 2
+      ni na
+
+  | equals wat":
+    TODO
+
+
+test 'fooobar', fn:
+  expect gen_wat ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      a * b
+
+    p = mul s, 3
+
+  | equals wat":
+    PANIC: unknown local: add_0

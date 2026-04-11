@@ -293,6 +293,13 @@ pub enum BuiltIn {
   Export,
   // Module import — `import './foo.fnk'` is a builtin function at module level.
   Import,
+  // External bootstrap entry point for a compiled module. `lower_module`
+  // wraps the root in `LetFn(fink_module, ...)` and makes its outer cont
+  // `·module_init fink_module` — handing the module's defined fn to an
+  // externally-provided `module_init` that decides what to do with it
+  // (invoke it, register it, schedule it, etc.). The responsibility of
+  // actually running the module lives outside the generated code.
+  ModuleInit,
 }
 
 impl BuiltIn {

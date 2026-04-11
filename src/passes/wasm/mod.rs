@@ -132,6 +132,25 @@ pub mod compile;
 mod tests {
   /// Round-trip gen_wat: CPS → emit (WASM binary) → format (WAT text + source map).
   fn gen_wat(src: &str) -> String {
+    // Catch panics from emit/link/format so failing tests can still produce a
+    // blessable string showing the panic message.
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || gen_wat_inner(&src_owned))) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+          (*s).to_string()
+        } else if let Some(s) = e.downcast_ref::<String>() {
+          s.clone()
+        } else {
+          "<unknown panic>".to_string()
+        };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  fn gen_wat_inner(src: &str) -> String {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
 
     // Collect + emit WASM binary.
@@ -182,4 +201,5 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/wasm/test_functions.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_records.fnk");
+  test_macros::include_fink_tests!("src/passes/wasm/test_fink_module.fnk");
 }

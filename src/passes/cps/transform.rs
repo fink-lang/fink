@@ -1571,7 +1571,30 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
 
   // Lower the module body, using the exports terminal as the tail.
   let tail = Cont::Expr { args: vec![], body: Box::new(terminal) };
-  let root = lower_seq_with_tail(&mut g, exprs, tail);
+  let body = lower_seq_with_tail(&mut g, exprs, tail);
+
+  // Wrap the module body in a synthetic `fink_module` LetFn. The module
+  // is defined as a function, then handed to `·module_init` — an external
+  // bootstrap provider — as its argument. `module_init` is responsible
+  // for deciding how and when to actually invoke the module (register it,
+  // schedule it, tail-call it, etc). This keeps fink-generated code free
+  // of bootstrap policy.
+  let fn_name = g.fresh_fn(None);
+  let fn_val = g.val(ValKind::Ref(Ref::Synth(fn_name.id)), None);
+  let init_app = g.expr(ExprKind::App {
+    func: Callable::BuiltIn(BuiltIn::ModuleInit),
+    args: vec![Arg::Val(fn_val)],
+  }, None);
+  let root = g.expr(ExprKind::LetFn {
+    name: fn_name,
+    params: vec![],
+    fn_kind: CpsFnKind::CpsFunction,
+    fn_body: Box::new(body),
+    cont: Cont::Expr {
+      args: vec![],
+      body: Box::new(init_app),
+    },
+  }, None);
   CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() }
 }
 

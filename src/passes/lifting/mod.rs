@@ -130,10 +130,11 @@ pub fn lift<'src>(
   ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
 ) -> CpsResult {
   const MAX_ROUNDS: usize = 20;
+
   let mut current = result;
 
   for round in 0..MAX_ROUNDS {
-    if !needs_lifting(&current.root) {
+    if !needs_lifting(&current.root, false) {
       // Classify any params that weren't tagged during lifting (pure hoists,
       // top-level fns that were never moved).
       classify_untagged_params(&current.root, &mut current.param_info);
@@ -164,12 +165,21 @@ pub fn lift<'src>(
 // inline Cont::Expr with non-trivial body.
 // ---------------------------------------------------------------------------
 
-fn needs_lifting(expr: &Expr) -> bool {
+// The `in_fn` flag tracks whether we are walking inside a LetFn's fn_body (i.e.
+// a real function scope with params that could be captured). When inside a fn,
+// inline Cont::Expr args on Apps are candidates for hoisting — they may close
+// over parent params and need to be lifted into sibling fns. At module root
+// (in_fn = false) there are no parent params to capture; LetFns/inline conts
+// sitting in the module's top-level cont spine are already in their final form
+// and hoisting them is both pointless and non-convergent (every round re-creates
+// the same shape).
+fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
   match &expr.kind {
     ExprKind::LetFn { fn_body, cont, name: _, .. } => {
-      contains_letfn_or_inline_cont(fn_body) || cont_needs_lifting(cont)
+      // fn_body is inside a fn scope — set in_fn=true regardless of caller.
+      contains_letfn_or_inline_cont(fn_body, true) || cont_needs_lifting(cont, in_fn)
     }
-    ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont),
+    ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont, in_fn),
     ExprKind::App { func, args } => {
       let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
@@ -177,55 +187,89 @@ fn needs_lifting(expr: &Expr) -> bool {
         // Pure ·closure result conts converge fine; captured ones with no inner structure
         // are terminal (hoisting them creates infinite chains).
         Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
-          !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body)
+          !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body, in_fn)
         }
-        Arg::Cont(c) => app_cont_needs_lifting(c),
-        Arg::Expr(e) => needs_lifting(e),
+        Arg::Cont(c) => app_cont_needs_lifting(c, in_fn),
+        Arg::Expr(e) => needs_lifting(e, in_fn),
         _ => false,
       })
     }
-    ExprKind::If { then, else_, .. } => needs_lifting(then) || needs_lifting(else_),
+    ExprKind::If { then, else_, .. } => needs_lifting(then, in_fn) || needs_lifting(else_, in_fn),
   }
 }
 
-fn cont_needs_lifting(cont: &Cont) -> bool {
+fn cont_needs_lifting(cont: &Cont, in_fn: bool) -> bool {
   match cont {
     Cont::Ref(_) => false,
-    Cont::Expr { body, .. } => needs_lifting(body),
+    Cont::Expr { body, .. } => needs_lifting(body, in_fn),
   }
 }
 
 
-fn app_cont_needs_lifting(cont: &Cont) -> bool {
+fn app_cont_needs_lifting(cont: &Cont, in_fn: bool) -> bool {
   match cont {
     Cont::Ref(_) => false,
     c @ Cont::Expr { .. } if is_simple_forward_cont(c) => false,
-    Cont::Expr { .. } => true,
+    // Inside a fn: any non-simple-forward inline cont is a hoist candidate —
+    // the fn_body extraction path will decide whether it actually has captures.
+    Cont::Expr { .. } if in_fn => true,
+    // At module root: only flag if the body contains something that itself
+    // needs lifting when the walk next enters a fn scope. A LetFn chain at
+    // module level is already in final form.
+    Cont::Expr { body, .. } => needs_lifting(body, false),
   }
 }
 
 
 /// Does this expression contain a LetFn or an inline Cont::Expr in an App?
-fn contains_letfn_or_inline_cont(expr: &Expr) -> bool {
+///
+/// `in_fn` has the same meaning as in `needs_lifting`. When true, we are
+/// scanning a fn_body and any nested LetFn/inline cont is a lift candidate.
+/// When false (module root), LetFns in the cont spine are in final form — we
+/// only descend into them to check their fn_bodies (which ARE fn scopes).
+fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
   match &expr.kind {
-    ExprKind::LetFn { .. } => true,
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      if in_fn {
+        // Nested LetFn inside a fn_body — definitely needs extraction.
+        true
+      } else {
+        // Module-root LetFn: check its fn_body (a real fn scope) and its cont
+        // (the rest of the module-root chain).
+        contains_letfn_or_inline_cont(fn_body, true)
+          || match cont {
+            Cont::Ref(_) => false,
+            Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body, false),
+          }
+      }
+    }
     ExprKind::LetVal { cont, .. } => match cont {
       Cont::Ref(_) => false,
-      Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body),
+      Cont::Expr { body, .. } => contains_letfn_or_inline_cont(body, in_fn),
     },
     ExprKind::App { func, args } => {
       let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
       args.iter().any(|a| match a {
         // For ·closure: only flag if the cont body has nested structure to extract.
         Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
-          !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body)
+          !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body, in_fn)
         }
-        Arg::Cont(c @ Cont::Expr { .. }) => !is_simple_forward_cont(c),
-        Arg::Expr(body) => contains_letfn_or_inline_cont(body),
+        Arg::Cont(c @ Cont::Expr { body, .. }) => {
+          if in_fn {
+            !is_simple_forward_cont(c)
+          } else {
+            // Module root: descend into the cont body rather than unconditionally
+            // flagging. A cont whose body is a LetFn chain at module level is fine.
+            contains_letfn_or_inline_cont(body, false)
+          }
+        }
+        Arg::Expr(body) => contains_letfn_or_inline_cont(body, in_fn),
         _ => false,
       })
     }
-    ExprKind::If { then, else_, .. } => contains_letfn_or_inline_cont(then) || contains_letfn_or_inline_cont(else_),
+    ExprKind::If { then, else_, .. } => {
+      contains_letfn_or_inline_cont(then, in_fn) || contains_letfn_or_inline_cont(else_, in_fn)
+    }
   }
 }
 
@@ -293,7 +337,8 @@ fn lift_expr<'src>(
       let cont = lift_cont(cont, ast_index, alloc);
 
       // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
-      if contains_letfn_or_inline_cont(&fn_body) {
+      // Inside the LetFn being processed, fn_body is always a fn scope.
+      if contains_letfn_or_inline_cont(&fn_body, true) {
         let mut hoisted: Vec<HoistedFn> = Vec::new();
         let new_fn_body = extract_from_body(*fn_body, &params, &[], ast_index, alloc, &mut hoisted);
 

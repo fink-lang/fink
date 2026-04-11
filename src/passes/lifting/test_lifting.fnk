@@ -37,10 +37,14 @@ test 'pure fn is unchanged', fn:
     f = fn x: x
 
   | equals ƒink:
-    ·f_0 = ·v_5 = fn [·ƒret_6, ·x_1]:
+    ·v_5 = fn [·ƒret_6, ·x_1]:
       ·ƒret_6 ·x_1
 
-    ·export ·f_0
+    ·v_15 = fn:
+      ·f_0 = ·v_5
+      ·export ·f_0
+
+    ·module_init ·v_15
 
 
 test 'pure nested fn — no captures, hoisted to module scope', fn:
@@ -52,10 +56,14 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
     ·v_8 = fn [·ƒret_9, ·b_2]:
       ·ƒret_9 ·b_2
 
-    ·foo_0 = ·v_6 = fn [·ƒret_7, ·a_1]:
+    ·v_6 = fn [·ƒret_7, ·a_1]:
       ·ƒret_7 ·v_8
 
-    ·export ·foo_0
+    ·v_20 = fn:
+      ·foo_0 = ·v_6
+      ·export ·foo_0
+
+    ·module_init ·v_20
 
 
 ---
@@ -69,15 +77,19 @@ test 'chained arithmetic — cont body lifted', fn:
       x + 4
 
   | equals ƒink:
-    ·v_25 = fn {·ƒret_26}, [·v_9]:
+    ·v_30 = fn {·ƒret_31}, [·v_9]:
       ·x_1 = ·v_9
-      ·op_plus ·x_1, 4, ·ƒret_26
+      ·op_plus ·x_1, 4, ·ƒret_31
 
-    ·main_0 = ·v_5 = fn [·ƒret_6]:
-      ·v_30 = ·closure ·v_25, ·ƒret_6
-      ·op_mul 2, 3, ·v_30
+    ·v_5 = fn [·ƒret_6]:
+      ·v_35 = ·closure ·v_30, ·ƒret_6
+      ·op_mul 2, 3, ·v_35
 
-    ·export ·main_0
+    ·v_25 = fn:
+      ·main_0 = ·v_5
+      ·export ·main_0
+
+    ·module_init ·v_25
 
 
 ---
@@ -91,13 +103,17 @@ test 'captured binding becomes leading param', fn:
         a + b
 
   | equals ƒink:
-    ·v_22 = fn {·a_23}, [·ƒret_9, ·b_2]:
-      ·op_plus ·a_23, ·b_2, ·ƒret_9
+    ·v_27 = fn {·a_28}, [·ƒret_9, ·b_2]:
+      ·op_plus ·a_28, ·b_2, ·ƒret_9
 
-    ·foo_0 = ·v_6 = fn [·ƒret_7, ·a_1]:
-      ·closure ·v_22, ·a_1, ·ƒret_7
+    ·v_6 = fn [·ƒret_7, ·a_1]:
+      ·closure ·v_27, ·a_1, ·ƒret_7
 
-    ·export ·foo_0
+    ·v_22 = fn:
+      ·foo_0 = ·v_6
+      ·export ·foo_0
+
+    ·module_init ·v_22
 
 
 test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
@@ -109,16 +125,21 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
         a + b
 
   | equals ƒink:
-    ·f_0 = ·v_9 = fn [·ƒret_10, ·x_2]:
+    ·v_9 = fn [·ƒret_10, ·x_2]:
       ·ƒret_10 ·x_2
 
-    ·v_35 = fn {·a_36}, [·ƒret_18, ·b_4]:
-      ·op_plus ·a_36, ·b_4, ·ƒret_18
+    ·v_41 = fn {·a_42}, [·ƒret_18, ·b_4]:
+      ·op_plus ·a_42, ·b_4, ·ƒret_18
 
-    ·g_1 = ·v_15 = fn [·ƒret_16, ·a_3]:
-      ·closure ·v_35, ·a_3, ·ƒret_16
+    ·v_15 = fn [·ƒret_16, ·a_3]:
+      ·closure ·v_41, ·a_3, ·ƒret_16
 
-    ·export ·f_0, ·g_1
+    ·v_35 = fn:
+      ·f_0 = ·v_9
+      ·g_1 = ·v_15
+      ·export ·f_0, ·g_1
+
+    ·module_init ·v_35
 
 
 ---
@@ -133,20 +154,24 @@ test 'depth-2 closure', fn:
           a + b + c
 
   | equals ƒink:
-    ·v_48 = fn {·c_49, ·ƒret_51}, [·v_15]:
-      ·op_plus ·v_15, ·c_49, ·ƒret_51
+    ·v_53 = fn {·c_54, ·ƒret_56}, [·v_15]:
+      ·op_plus ·v_15, ·c_54, ·ƒret_56
 
-    ·v_39 = fn {·a_40, ·b_42}, [·ƒret_12, ·c_3]:
-      ·v_55 = ·closure ·v_48, ·c_3, ·ƒret_12
-      ·op_plus ·a_40, ·b_42, ·v_55
+    ·v_44 = fn {·a_45, ·b_47}, [·ƒret_12, ·c_3]:
+      ·v_60 = ·closure ·v_53, ·c_3, ·ƒret_12
+      ·op_plus ·a_45, ·b_47, ·v_60
 
-    ·v_32 = fn {·a_33}, [·ƒret_10, ·b_2]:
-      ·closure ·v_39, ·a_33, ·b_2, ·ƒret_10
+    ·v_37 = fn {·a_38}, [·ƒret_10, ·b_2]:
+      ·closure ·v_44, ·a_38, ·b_2, ·ƒret_10
 
-    ·foo_0 = ·v_7 = fn [·ƒret_8, ·a_1]:
-      ·closure ·v_32, ·a_1, ·ƒret_8
+    ·v_7 = fn [·ƒret_8, ·a_1]:
+      ·closure ·v_37, ·a_1, ·ƒret_8
 
-    ·export ·foo_0
+    ·v_32 = fn:
+      ·foo_0 = ·v_7
+      ·export ·foo_0
+
+    ·module_init ·v_32
 
 
 test 'multiple captures at depth-2', fn:
@@ -157,16 +182,20 @@ test 'multiple captures at depth-2', fn:
           a + b
 
   | equals ƒink:
-    ·v_34 = fn {·a_35, ·b_37}, [·ƒret_12, ·c_3]:
-      ·op_plus ·a_35, ·b_37, ·ƒret_12
+    ·v_39 = fn {·a_40, ·b_42}, [·ƒret_12, ·c_3]:
+      ·op_plus ·a_40, ·b_42, ·ƒret_12
 
-    ·v_27 = fn {·a_28}, [·ƒret_10, ·b_2]:
-      ·closure ·v_34, ·a_28, ·b_2, ·ƒret_10
+    ·v_32 = fn {·a_33}, [·ƒret_10, ·b_2]:
+      ·closure ·v_39, ·a_33, ·b_2, ·ƒret_10
 
-    ·foo_0 = ·v_7 = fn [·ƒret_8, ·a_1]:
-      ·closure ·v_27, ·a_1, ·ƒret_8
+    ·v_7 = fn [·ƒret_8, ·a_1]:
+      ·closure ·v_32, ·a_1, ·ƒret_8
 
-    ·export ·foo_0
+    ·v_27 = fn:
+      ·foo_0 = ·v_7
+      ·export ·foo_0
+
+    ·module_init ·v_27
 
 
 test 'multi-fn module — add and main', fn:
@@ -178,13 +207,18 @@ test 'multi-fn module — add and main', fn:
       add 3, 4
 
   | equals ƒink:
-    ·add_0 = ·v_8 = fn [·ƒret_9, ·a_2, ·b_3]:
+    ·v_8 = fn [·ƒret_9, ·a_2, ·b_3]:
       ·op_plus ·a_2, ·b_3, ·ƒret_9
 
-    ·main_1 = ·v_16 = fn [·ƒret_17]:
+    ·v_16 = fn [·ƒret_17]:
       ·add_0 ·ƒret_17, 3, 4
 
-    ·export ·add_0, ·main_1
+    ·v_33 = fn:
+      ·add_0 = ·v_8
+      ·main_1 = ·v_16
+      ·export ·add_0, ·main_1
+
+    ·module_init ·v_33
 
 test 'chained module-fn calls via let — cont closes over outer cont', fn:
   # The cont ·v_55 closes over ·v_28 (the outer cont param) via ·closure.
@@ -203,21 +237,27 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
       inc x
 
   | equals ƒink:
-    ·double_0 = ·v_11 = fn [·ƒret_12, ·x_3]:
+    ·v_11 = fn [·ƒret_12, ·x_3]:
       ·op_mul ·x_3, 2, ·ƒret_12
 
-    ·inc_1 = ·v_19 = fn [·ƒret_20, ·x_4]:
+    ·v_19 = fn [·ƒret_20, ·x_4]:
       ·op_plus ·x_4, 1, ·ƒret_20
 
-    ·v_55 = fn {·ƒret_56}, [·v_31]:
+    ·v_62 = fn {·ƒret_63}, [·v_31]:
       ·x_5 = ·v_31
-      ·inc_1 ·ƒret_56, ·x_5
+      ·inc_1 ·ƒret_63, ·x_5
 
-    ·main_2 = ·v_27 = fn [·ƒret_28]:
-      ·v_60 = ·closure ·v_55, ·ƒret_28
-      ·double_0 ·v_60, 5
+    ·v_27 = fn [·ƒret_28]:
+      ·v_67 = ·closure ·v_62, ·ƒret_28
+      ·double_0 ·v_67, 5
 
-    ·export ·double_0, ·inc_1, ·main_2
+    ·v_55 = fn:
+      ·double_0 = ·v_11
+      ·inc_1 = ·v_19
+      ·main_2 = ·v_27
+      ·export ·double_0, ·inc_1, ·main_2
+
+    ·module_init ·v_55
 
 ---
 pattern matching
@@ -230,38 +270,42 @@ test 'seq destructure', fn:
       a + 1
 
   | equals ƒink:
-    ·v_55 = fn {·ƒret_56}, [·v_12]:
+    ·v_60 = fn {·ƒret_61}, [·v_12]:
       ·a_2 = ·v_12
-      ·op_plus ·a_2, 1, ·ƒret_56
+      ·op_plus ·a_2, 1, ·ƒret_61
 
-    ·v_63 = fn {·ƒfail_64}:
-      ·ƒfail_64 _
+    ·v_68 = fn {·ƒfail_69}:
+      ·ƒfail_69 _
 
-    ·v_94 = fn {·ƒsucc_95, ·v_97, ·ƒfail_99}, [·v_19]:
+    ·v_99 = fn {·ƒsucc_100, ·v_102, ·ƒfail_104}, [·v_19]:
       if ·v_19,
         fn:
-          ·ƒsucc_95 ·v_97
+          ·ƒsucc_100 ·v_102
         fn:
-          ·ƒfail_99 _
+          ·ƒfail_104 _
 
-    ·v_83 = fn {·ƒsucc_84, ·ƒfail_86}, [·v_12, ·v_16]:
-      ·v_103 = ·closure ·v_94, ·ƒsucc_84, ·v_12, ·ƒfail_86
-      ·empty ·v_16, ·v_103
+    ·v_88 = fn {·ƒsucc_89, ·ƒfail_91}, [·v_12, ·v_16]:
+      ·v_108 = ·closure ·v_99, ·ƒsucc_89, ·v_12, ·ƒfail_91
+      ·empty ·v_16, ·v_108
 
-    ·v_72 = fn {·ƒfail_73, ·ƒsucc_75}, [·v_24]:
-      ·v_90 = ·closure ·v_83, ·ƒsucc_75, ·ƒfail_73
-      ·seq_pop ·v_24, ·ƒfail_73, ·v_90
+    ·v_77 = fn {·ƒfail_78, ·ƒsucc_80}, [·v_24]:
+      ·v_95 = ·closure ·v_88, ·ƒsucc_80, ·ƒfail_78
+      ·seq_pop ·v_24, ·ƒfail_78, ·v_95
 
     ·v_32 = fn [·ƒsucc_10, ·ƒfail_11, ·v_9]:
-      ·v_68 = ·closure ·v_63, ·ƒfail_11
-      ·v_79 = ·closure ·v_72, ·ƒfail_11, ·ƒsucc_10
-      ·is_seq_like ·v_9, ·v_79, ·v_68
+      ·v_73 = ·closure ·v_68, ·ƒfail_11
+      ·v_84 = ·closure ·v_77, ·ƒfail_11, ·ƒsucc_10
+      ·is_seq_like ·v_9, ·v_84, ·v_73
 
-    ·main_0 = ·v_6 = fn [·ƒret_7, ·foo_1]:
-      ·v_58 = ·closure ·v_55, ·ƒret_7
-      ·v_32 ·v_58, panic, ·foo_1
+    ·v_6 = fn [·ƒret_7, ·foo_1]:
+      ·v_63 = ·closure ·v_60, ·ƒret_7
+      ·v_32 ·v_63, panic, ·foo_1
 
-    ·export ·main_0
+    ·v_55 = fn:
+      ·main_0 = ·v_6
+      ·export ·main_0
+
+    ·module_init ·v_55
 
 
 test 'record destructure', fn:
@@ -271,30 +315,34 @@ test 'record destructure', fn:
       x + 1
 
   | equals ƒink:
-    ·v_49 = fn {·ƒret_50}, [·v_12]:
+    ·v_54 = fn {·ƒret_55}, [·v_12]:
       ·x_2 = ·v_12
-      ·op_plus ·x_2, 1, ·ƒret_50
+      ·op_plus ·x_2, 1, ·ƒret_55
 
-    ·v_57 = fn {·ƒfail_58}:
-      ·ƒfail_58 _
+    ·v_62 = fn {·ƒfail_63}:
+      ·ƒfail_63 _
 
-    ·v_77 = fn {·ƒsucc_78}, [·v_12, ·v_16]:
-      ·ƒsucc_78 ·v_12
+    ·v_82 = fn {·ƒsucc_83}, [·v_12, ·v_16]:
+      ·ƒsucc_83 ·v_12
 
-    ·v_66 = fn {·ƒfail_67, ·ƒsucc_69}, [·v_17]:
-      ·v_82 = ·closure ·v_77, ·ƒsucc_69
-      ·rec_pop ·v_17, 'x', ·ƒfail_67, ·v_82
+    ·v_71 = fn {·ƒfail_72, ·ƒsucc_74}, [·v_17]:
+      ·v_87 = ·closure ·v_82, ·ƒsucc_74
+      ·rec_pop ·v_17, 'x', ·ƒfail_72, ·v_87
 
     ·v_26 = fn [·ƒsucc_10, ·ƒfail_11, ·v_9]:
-      ·v_62 = ·closure ·v_57, ·ƒfail_11
-      ·v_73 = ·closure ·v_66, ·ƒfail_11, ·ƒsucc_10
-      ·is_rec_like ·v_9, ·v_73, ·v_62
+      ·v_67 = ·closure ·v_62, ·ƒfail_11
+      ·v_78 = ·closure ·v_71, ·ƒfail_11, ·ƒsucc_10
+      ·is_rec_like ·v_9, ·v_78, ·v_67
 
-    ·main_0 = ·v_6 = fn [·ƒret_7, ·foo_1]:
-      ·v_52 = ·closure ·v_49, ·ƒret_7
-      ·v_26 ·v_52, panic, ·foo_1
+    ·v_6 = fn [·ƒret_7, ·foo_1]:
+      ·v_57 = ·closure ·v_54, ·ƒret_7
+      ·v_26 ·v_57, panic, ·foo_1
 
-    ·export ·main_0
+    ·v_49 = fn:
+      ·main_0 = ·v_6
+      ·export ·main_0
+
+    ·module_init ·v_49
 
 
 test 'match — no forward refs after lift', fn:
@@ -307,34 +355,38 @@ test 'match — no forward refs after lift', fn:
     ·v_31 = fn [·ƒret_27]:
       ·ƒret_27 42
 
-    ·v_74 = fn {·ƒsucc_75}:
-      ·v_31 ·ƒsucc_75
+    ·v_79 = fn {·ƒsucc_80}:
+      ·v_31 ·ƒsucc_80
 
-    ·v_82 = fn {·ƒsucc_83, ·ƒfail_85}, [·v_17]:
+    ·v_87 = fn {·ƒsucc_88, ·ƒfail_90}, [·v_17]:
       if ·v_17,
         fn:
-          ·ƒsucc_83 _
+          ·ƒsucc_88 _
         fn:
-          ·ƒfail_85 _
+          ·ƒfail_90 _
 
     ·v_25 = fn [·ƒsucc_13, ·ƒfail_14, ·v_12]:
-      ·v_89 = ·closure ·v_82, ·ƒsucc_13, ·ƒfail_14
-      ·op_eq ·v_12, 0, ·v_89
+      ·v_94 = ·closure ·v_87, ·ƒsucc_13, ·ƒfail_14
+      ·op_eq ·v_12, 0, ·v_94
 
     ·v_43 = fn [·ƒsucc_9, ·ƒfail_10, ·v_8]:
-      ·v_77 = ·closure ·v_74, ·ƒsucc_9
-      ·v_25 ·v_77, ·ƒfail_10, ·v_8
+      ·v_82 = ·closure ·v_79, ·ƒsucc_9
+      ·v_25 ·v_82, ·ƒfail_10, ·v_8
 
-    ·ƒret_71 = fn:
+    ·ƒret_76 = fn:
       panic _
 
     ·v_52 = fn [·ƒret_45, ·v_44]:
-      ·v_43 ·ƒret_45, ·ƒret_71, ·v_44
+      ·v_43 ·ƒret_45, ·ƒret_76, ·v_44
 
-    ·foo_0 = ·v_5 = fn [·ƒret_6, ·n_1]:
+    ·v_5 = fn [·ƒret_6, ·n_1]:
       ·v_52 ·ƒret_6, ·n_1
 
-    ·export ·foo_0
+    ·v_68 = fn:
+      ·foo_0 = ·v_5
+      ·export ·foo_0
+
+    ·module_init ·v_68
 
 
 test 'match with binding', fn:
@@ -345,45 +397,49 @@ test 'match with binding', fn:
       r
 
   | equals ƒink:
-    ·v_76 = fn {·n_77}, [·ƒret_28]:
-      ·op_plus ·n_77, 1, ·ƒret_28
+    ·v_81 = fn {·n_82}, [·ƒret_28]:
+      ·op_plus ·n_82, 1, ·ƒret_28
 
-    ·v_97 = fn {·v_98, ·ƒsucc_100}:
-      ·v_98 ·ƒsucc_100
+    ·v_102 = fn {·v_103, ·ƒsucc_105}:
+      ·v_103 ·ƒsucc_105
 
-    ·v_119 = fn {·ƒsucc_120, ·ƒfail_122}, [·v_18]:
+    ·v_124 = fn {·ƒsucc_125, ·ƒfail_127}, [·v_18]:
       if ·v_18,
         fn:
-          ·ƒsucc_120 _
+          ·ƒsucc_125 _
         fn:
-          ·ƒfail_122 _
+          ·ƒfail_127 _
 
     ·v_26 = fn [·ƒsucc_14, ·ƒfail_15, ·v_13]:
-      ·v_126 = ·closure ·v_119, ·ƒsucc_14, ·ƒfail_15
-      ·op_eq ·v_13, 0, ·v_126
+      ·v_131 = ·closure ·v_124, ·ƒsucc_14, ·ƒfail_15
+      ·op_eq ·v_13, 0, ·v_131
 
-    ·v_83 = fn {·v_84}, [·ƒsucc_10, ·ƒfail_11, ·v_9]:
-      ·v_102 = ·closure ·v_97, ·v_84, ·ƒsucc_10
-      ·v_26 ·v_102, ·ƒfail_11, ·v_9
+    ·v_88 = fn {·v_89}, [·ƒsucc_10, ·ƒfail_11, ·v_9]:
+      ·v_107 = ·closure ·v_102, ·v_89, ·ƒsucc_10
+      ·v_26 ·v_107, ·ƒfail_11, ·v_9
 
-    ·ƒret_115 = fn:
+    ·ƒret_120 = fn:
       panic _
 
-    ·v_90 = fn {·v_91}, [·ƒret_48, ·v_47]:
-      ·v_91 ·ƒret_48, ·ƒret_115, ·v_47
+    ·v_95 = fn {·v_96}, [·ƒret_48, ·v_47]:
+      ·v_96 ·ƒret_48, ·ƒret_120, ·v_47
 
-    ·v_106 = fn {·ƒret_107}, [·v_56]:
+    ·v_111 = fn {·ƒret_112}, [·v_56]:
       ·r_2 = ·v_56
-      ·ƒret_107 ·r_2
+      ·ƒret_112 ·r_2
 
-    ·foo_0 = ·v_6 = fn [·ƒret_7, ·n_1]:
-      ·v_79 = ·closure ·v_76, ·n_1
-      ·v_86 = ·closure ·v_83, ·v_79
-      ·v_93 = ·closure ·v_90, ·v_86
-      ·v_111 = ·closure ·v_106, ·ƒret_7
-      ·v_93 ·v_111, ·n_1
+    ·v_6 = fn [·ƒret_7, ·n_1]:
+      ·v_84 = ·closure ·v_81, ·n_1
+      ·v_91 = ·closure ·v_88, ·v_84
+      ·v_98 = ·closure ·v_95, ·v_91
+      ·v_116 = ·closure ·v_111, ·ƒret_7
+      ·v_98 ·v_116, ·n_1
 
-    ·export ·foo_0
+    ·v_76 = fn:
+      ·foo_0 = ·v_6
+      ·export ·foo_0
+
+    ·module_init ·v_76
 
 
 test 'recursive fn in match', fn:
@@ -398,56 +454,60 @@ test 'recursive fn in match', fn:
     ·v_32 = fn [·ƒret_28]:
       ·ƒret_28 1
 
-    ·v_128 = fn {·ƒsucc_129}:
-      ·v_32 ·ƒsucc_129
+    ·v_133 = fn {·ƒsucc_134}:
+      ·v_32 ·ƒsucc_134
 
-    ·v_165 = fn {·ƒsucc_166, ·ƒfail_168}, [·v_18]:
+    ·v_170 = fn {·ƒsucc_171, ·ƒfail_173}, [·v_18]:
       if ·v_18,
         fn:
-          ·ƒsucc_166 _
+          ·ƒsucc_171 _
         fn:
-          ·ƒfail_168 _
+          ·ƒfail_173 _
 
     ·v_26 = fn [·ƒsucc_14, ·ƒfail_15, ·v_13]:
-      ·v_172 = ·closure ·v_165, ·ƒsucc_14, ·ƒfail_15
-      ·op_eq ·v_13, 0, ·v_172
+      ·v_177 = ·closure ·v_170, ·ƒsucc_14, ·ƒfail_15
+      ·op_eq ·v_13, 0, ·v_177
 
     ·v_44 = fn [·ƒsucc_10, ·ƒfail_11, ·v_9]:
-      ·v_131 = ·closure ·v_128, ·ƒsucc_10
-      ·v_26 ·v_131, ·ƒfail_11, ·v_9
+      ·v_136 = ·closure ·v_133, ·ƒsucc_10
+      ·v_26 ·v_136, ·ƒfail_11, ·v_9
 
-    ·v_119 = fn {·ƒret_120}, [·v_53]:
-      ·fib_0 ·ƒret_120, ·v_53
+    ·v_124 = fn {·ƒret_125}, [·v_53]:
+      ·fib_0 ·ƒret_125, ·v_53
 
-    ·v_103 = fn {·n_104}, [·ƒret_49]:
-      ·v_124 = ·closure ·v_119, ·ƒret_49
-      ·op_plus ·n_104, 1, ·v_124
+    ·v_108 = fn {·n_109}, [·ƒret_49]:
+      ·v_129 = ·closure ·v_124, ·ƒret_49
+      ·op_plus ·n_109, 1, ·v_129
 
-    ·v_112 = fn {·v_113}, [·ƒsucc_46, ·ƒfail_47, ·v_45]:
-      ·v_113 ·ƒsucc_46
+    ·v_117 = fn {·v_118}, [·ƒsucc_46, ·ƒfail_47, ·v_45]:
+      ·v_118 ·ƒsucc_46
 
-    ·ƒret_176 = fn:
+    ·ƒret_181 = fn:
       panic _
 
-    ·v_152 = fn {·v_153, ·ƒret_155, ·v_157}:
-      ·v_153 ·ƒret_155, ·ƒret_176, ·v_157
+    ·v_157 = fn {·v_158, ·ƒret_160, ·v_162}:
+      ·v_158 ·ƒret_160, ·ƒret_181, ·v_162
 
-    ·v_135 = fn {·v_136}, [·ƒret_67, ·v_66]:
-      ·v_161 = ·closure ·v_152, ·v_136, ·ƒret_67, ·v_66
-      ·v_44 ·ƒret_67, ·v_161, ·v_66
+    ·v_140 = fn {·v_141}, [·ƒret_67, ·v_66]:
+      ·v_166 = ·closure ·v_157, ·v_141, ·ƒret_67, ·v_66
+      ·v_44 ·ƒret_67, ·v_166, ·v_66
 
-    ·v_143 = fn {·ƒret_144}, [·v_79]:
+    ·v_148 = fn {·ƒret_149}, [·v_79]:
       ·r_2 = ·v_79
-      ·ƒret_144 ·r_2
+      ·ƒret_149 ·r_2
 
-    ·fib_0 = ·v_6 = fn [·ƒret_7, ·n_1]:
-      ·v_106 = ·closure ·v_103, ·n_1
-      ·v_115 = ·closure ·v_112, ·v_106
-      ·v_138 = ·closure ·v_135, ·v_115
-      ·v_148 = ·closure ·v_143, ·ƒret_7
-      ·v_138 ·v_148, ·n_1
+    ·v_6 = fn [·ƒret_7, ·n_1]:
+      ·v_111 = ·closure ·v_108, ·n_1
+      ·v_120 = ·closure ·v_117, ·v_111
+      ·v_143 = ·closure ·v_140, ·v_120
+      ·v_153 = ·closure ·v_148, ·ƒret_7
+      ·v_143 ·v_153, ·n_1
 
-    ·export ·fib_0
+    ·v_103 = fn:
+      ·fib_0 = ·v_6
+      ·export ·fib_0
+
+    ·module_init ·v_103
 
 
 test 'str eq', fn:
@@ -455,10 +515,14 @@ test 'str eq', fn:
     main = fn:
       'hello' == 'hello'
   | equals ƒink:
-    ·main_0 = ·v_4 = fn [·ƒret_5]:
+    ·v_4 = fn [·ƒret_5]:
       ·op_eq 'hello', 'hello', ·ƒret_5
 
-    ·export ·main_0
+    ·v_16 = fn:
+      ·main_0 = ·v_4
+      ·export ·main_0
+
+    ·module_init ·v_16
 
 
 test 'str literal', fn:
@@ -466,10 +530,14 @@ test 'str literal', fn:
     main = fn:
       'hello'
   | equals ƒink:
-    ·main_0 = ·v_4 = fn [·ƒret_5]:
+    ·v_4 = fn [·ƒret_5]:
       ·ƒret_5 'hello'
 
-    ·export ·main_0
+    ·v_14 = fn:
+      ·main_0 = ·v_4
+      ·export ·main_0
+
+    ·module_init ·v_14
 
 test 'match — seq literal guard', fn:
   expect lift ƒink:
@@ -482,51 +550,51 @@ test 'match — seq literal guard', fn:
     ·v_68 = fn [·ƒret_64, ·val_1]:
       ·ƒret_64 ·val_1
 
-    ·v_188 = fn {·v_189, ·ƒsucc_191}:
-      ·val_1 = ·v_189
-      ·v_68 ·ƒsucc_191, ·v_189
+    ·v_193 = fn {·v_194, ·ƒsucc_196}:
+      ·val_1 = ·v_194
+      ·v_68 ·ƒsucc_196, ·v_194
 
-    ·v_218 = fn {·ƒsucc_219, ·ƒfail_221}, [·v_52]:
+    ·v_223 = fn {·ƒsucc_224, ·ƒfail_226}, [·v_52]:
       if ·v_52,
         fn:
-          ·ƒsucc_219 _
+          ·ƒsucc_224 _
         fn:
-          ·ƒfail_221 _
+          ·ƒfail_226 _
 
     ·v_60 = fn [·ƒsucc_48, ·ƒfail_49, ·v_47]:
-      ·v_225 = ·closure ·v_218, ·ƒsucc_48, ·ƒfail_49
-      ·op_eq ·v_47, 1, ·v_225
+      ·v_230 = ·closure ·v_223, ·ƒsucc_48, ·ƒfail_49
+      ·op_eq ·v_47, 1, ·v_230
 
-    ·v_175 = fn {·ƒsucc_176, ·ƒfail_178}, [·v_21, ·v_22]:
-      ·v_193 = ·closure ·v_188, ·v_22, ·ƒsucc_176
-      ·v_60 ·v_193, ·ƒfail_178, ·v_21
+    ·v_180 = fn {·ƒsucc_181, ·ƒfail_183}, [·v_21, ·v_22]:
+      ·v_198 = ·closure ·v_193, ·v_22, ·ƒsucc_181
+      ·v_60 ·v_198, ·ƒfail_183, ·v_21
 
-    ·v_197 = fn {·ƒfail_198}:
-      ·ƒfail_198 _
+    ·v_202 = fn {·ƒfail_203}:
+      ·ƒfail_203 _
 
-    ·v_253 = fn {·ƒsucc_254, ·v_256, ·v_258}, [·v_29, ·v_30]:
-      ·ƒsucc_254 ·v_256, ·v_258
+    ·v_258 = fn {·ƒsucc_259, ·v_261, ·v_263}, [·v_29, ·v_30]:
+      ·ƒsucc_259 ·v_261, ·v_263
 
-    ·v_240 = fn {·ƒfail_241, ·ƒsucc_243, ·v_245}, [·v_22, ·v_27]:
-      ·v_262 = ·closure ·v_253, ·ƒsucc_243, ·v_245, ·v_22
-      ·seq_pop ·v_27, ·ƒfail_241, ·v_262
+    ·v_245 = fn {·ƒfail_246, ·ƒsucc_248, ·v_250}, [·v_22, ·v_27]:
+      ·v_267 = ·closure ·v_258, ·ƒsucc_248, ·v_250, ·v_22
+      ·seq_pop ·v_27, ·ƒfail_246, ·v_267
 
-    ·v_229 = fn {·ƒfail_230, ·ƒsucc_232}, [·v_21, ·v_34]:
-      ·v_249 = ·closure ·v_240, ·ƒfail_230, ·ƒsucc_232, ·v_21
-      ·seq_pop ·v_34, ·ƒfail_230, ·v_249
+    ·v_234 = fn {·ƒfail_235, ·ƒsucc_237}, [·v_21, ·v_34]:
+      ·v_254 = ·closure ·v_245, ·ƒfail_235, ·ƒsucc_237, ·v_21
+      ·seq_pop ·v_34, ·ƒfail_235, ·v_254
 
-    ·v_207 = fn {·ƒfail_208, ·ƒsucc_210}, [·v_33]:
-      ·v_236 = ·closure ·v_229, ·ƒfail_208, ·ƒsucc_210
-      ·seq_pop ·v_33, ·ƒfail_208, ·v_236
+    ·v_212 = fn {·ƒfail_213, ·ƒsucc_215}, [·v_33]:
+      ·v_241 = ·closure ·v_234, ·ƒfail_213, ·ƒsucc_215
+      ·seq_pop ·v_33, ·ƒfail_213, ·v_241
 
     ·v_45 = fn [·ƒsucc_19, ·ƒfail_20, ·v_18]:
-      ·v_202 = ·closure ·v_197, ·ƒfail_20
-      ·v_214 = ·closure ·v_207, ·ƒfail_20, ·ƒsucc_19
-      ·is_seq_like ·v_18, ·v_214, ·v_202
+      ·v_207 = ·closure ·v_202, ·ƒfail_20
+      ·v_219 = ·closure ·v_212, ·ƒfail_20, ·ƒsucc_19
+      ·is_seq_like ·v_18, ·v_219, ·v_207
 
     ·v_90 = fn [·ƒsucc_15, ·ƒfail_16, ·v_14]:
-      ·v_180 = ·closure ·v_175, ·ƒsucc_15, ·ƒfail_16
-      ·v_45 ·v_180, ·ƒfail_16, ·v_14
+      ·v_185 = ·closure ·v_180, ·ƒsucc_15, ·ƒfail_16
+      ·v_45 ·v_185, ·ƒfail_16, ·v_14
 
     ·v_99 = fn [·ƒret_95]:
       ·ƒret_95 0
@@ -534,28 +602,32 @@ test 'match — seq literal guard', fn:
     ·v_104 = fn [·ƒsucc_92, ·ƒfail_93, ·v_91]:
       ·v_99 ·ƒsucc_92
 
-    ·ƒret_184 = fn:
+    ·ƒret_189 = fn:
       panic _
 
-    ·v_164 = fn {·ƒret_165, ·v_167}:
-      ·v_104 ·ƒret_165, ·ƒret_184, ·v_167
+    ·v_169 = fn {·ƒret_170, ·v_172}:
+      ·v_104 ·ƒret_170, ·ƒret_189, ·v_172
 
     ·v_117 = fn [·ƒret_106, ·v_105]:
-      ·v_171 = ·closure ·v_164, ·ƒret_106, ·v_105
-      ·v_90 ·ƒret_106, ·v_171, ·v_105
+      ·v_176 = ·closure ·v_169, ·ƒret_106, ·v_105
+      ·v_90 ·ƒret_106, ·v_176, ·v_105
 
-    ·v_150 = fn {·ƒret_151}, [·v_12]:
-      ·v_117 ·ƒret_151, ·v_12
+    ·v_155 = fn {·ƒret_156}, [·v_12]:
+      ·v_117 ·ƒret_156, ·v_12
 
-    ·v_141 = fn {·ƒret_142}, [·v_9]:
-      ·v_155 = ·closure ·v_150, ·ƒret_142
-      ·seq_prepend 1, ·v_9, ·v_155
+    ·v_146 = fn {·ƒret_147}, [·v_9]:
+      ·v_160 = ·closure ·v_155, ·ƒret_147
+      ·seq_prepend 1, ·v_9, ·v_160
 
-    ·main_0 = ·v_5 = fn [·ƒret_6]:
-      ·v_146 = ·closure ·v_141, ·ƒret_6
-      ·seq_prepend 42, [], ·v_146
+    ·v_5 = fn [·ƒret_6]:
+      ·v_151 = ·closure ·v_146, ·ƒret_6
+      ·seq_prepend 42, [], ·v_151
 
-    ·export ·main_0
+    ·v_141 = fn:
+      ·main_0 = ·v_5
+      ·export ·main_0
+
+    ·module_init ·v_141
 
 test 'match — rec literal guard', fn:
   expect lift ƒink:
@@ -568,47 +640,47 @@ test 'match — rec literal guard', fn:
     ·v_67 = fn [·ƒret_63, ·val_1]:
       ·ƒret_63 ·val_1
 
-    ·v_187 = fn {·v_188, ·ƒsucc_190}:
-      ·val_1 = ·v_188
-      ·v_67 ·ƒsucc_190, ·v_188
+    ·v_192 = fn {·v_193, ·ƒsucc_195}:
+      ·val_1 = ·v_193
+      ·v_67 ·ƒsucc_195, ·v_193
 
-    ·v_217 = fn {·ƒsucc_218, ·ƒfail_220}, [·v_51]:
+    ·v_222 = fn {·ƒsucc_223, ·ƒfail_225}, [·v_51]:
       if ·kind_51,
         fn:
-          ·ƒsucc_218 _
+          ·ƒsucc_223 _
         fn:
-          ·ƒfail_220 _
+          ·ƒfail_225 _
 
     ·v_59 = fn [·ƒsucc_47, ·ƒfail_48, ·v_46]:
-      ·v_224 = ·closure ·v_217, ·ƒsucc_47, ·ƒfail_48
-      ·op_eq ·kind_46, 1, ·v_224
+      ·v_229 = ·closure ·v_222, ·ƒsucc_47, ·ƒfail_48
+      ·op_eq ·kind_46, 1, ·v_229
 
-    ·v_174 = fn {·ƒsucc_175, ·ƒfail_177}, [·v_23, ·v_24]:
-      ·v_192 = ·closure ·v_187, ·v_24, ·ƒsucc_175
-      ·kind_59 ·v_192, ·ƒfail_177, ·v_23
+    ·v_179 = fn {·ƒsucc_180, ·ƒfail_182}, [·v_23, ·v_24]:
+      ·v_197 = ·closure ·v_192, ·v_24, ·ƒsucc_180
+      ·kind_59 ·v_197, ·ƒfail_182, ·v_23
 
-    ·v_196 = fn {·ƒfail_197}:
-      ·ƒfail_197 _
+    ·v_201 = fn {·ƒfail_202}:
+      ·ƒfail_202 _
 
-    ·v_239 = fn {·ƒsucc_240, ·v_242}, [·v_24, ·v_29]:
-      ·ƒsucc_240 ·v_242, ·v_24
+    ·v_244 = fn {·ƒsucc_245, ·v_247}, [·v_24, ·v_29]:
+      ·ƒsucc_245 ·v_247, ·v_24
 
-    ·v_228 = fn {·ƒfail_229, ·ƒsucc_231}, [·v_23, ·v_31]:
-      ·v_246 = ·closure ·v_239, ·ƒsucc_231, ·v_23
-      ·rec_pop ·v_31, 'val', ·ƒfail_229, ·v_246
+    ·v_233 = fn {·ƒfail_234, ·ƒsucc_236}, [·v_23, ·v_31]:
+      ·v_251 = ·closure ·v_244, ·ƒsucc_236, ·v_23
+      ·rec_pop ·v_31, 'val', ·ƒfail_234, ·v_251
 
-    ·v_206 = fn {·ƒfail_207, ·ƒsucc_209}, [·v_30]:
-      ·v_235 = ·closure ·v_228, ·ƒfail_207, ·ƒsucc_209
-      ·rec_pop ·v_30, 'kind', ·ƒfail_207, ·v_235
+    ·v_211 = fn {·ƒfail_212, ·ƒsucc_214}, [·v_30]:
+      ·v_240 = ·closure ·v_233, ·ƒfail_212, ·ƒsucc_214
+      ·rec_pop ·v_30, 'kind', ·ƒfail_212, ·v_240
 
     ·v_44 = fn [·ƒsucc_21, ·ƒfail_22, ·v_20]:
-      ·v_201 = ·closure ·v_196, ·ƒfail_22
-      ·v_213 = ·closure ·v_206, ·ƒfail_22, ·ƒsucc_21
-      ·is_rec_like ·v_20, ·v_213, ·v_201
+      ·v_206 = ·closure ·v_201, ·ƒfail_22
+      ·v_218 = ·closure ·v_211, ·ƒfail_22, ·ƒsucc_21
+      ·is_rec_like ·v_20, ·v_218, ·v_206
 
     ·v_89 = fn [·ƒsucc_17, ·ƒfail_18, ·v_16]:
-      ·v_179 = ·closure ·v_174, ·ƒsucc_17, ·ƒfail_18
-      ·v_44 ·v_179, ·ƒfail_18, ·v_16
+      ·v_184 = ·closure ·v_179, ·ƒsucc_17, ·ƒfail_18
+      ·v_44 ·v_184, ·ƒfail_18, ·v_16
 
     ·v_98 = fn [·ƒret_94]:
       ·ƒret_94 0
@@ -616,28 +688,32 @@ test 'match — rec literal guard', fn:
     ·v_103 = fn [·ƒsucc_91, ·ƒfail_92, ·v_90]:
       ·v_98 ·ƒsucc_91
 
-    ·ƒret_183 = fn:
+    ·ƒret_188 = fn:
       panic _
 
-    ·v_163 = fn {·ƒret_164, ·v_166}:
-      ·v_103 ·ƒret_164, ·ƒret_183, ·v_166
+    ·v_168 = fn {·ƒret_169, ·v_171}:
+      ·v_103 ·ƒret_169, ·ƒret_188, ·v_171
 
     ·v_116 = fn [·ƒret_105, ·v_104]:
-      ·v_170 = ·closure ·v_163, ·ƒret_105, ·v_104
-      ·v_89 ·ƒret_105, ·v_170, ·v_104
+      ·v_175 = ·closure ·v_168, ·ƒret_105, ·v_104
+      ·v_89 ·ƒret_105, ·v_175, ·v_104
 
-    ·v_149 = fn {·ƒret_150}, [·v_14]:
-      ·v_116 ·ƒret_150, ·v_14
+    ·v_154 = fn {·ƒret_155}, [·v_14]:
+      ·v_116 ·ƒret_155, ·v_14
 
-    ·v_140 = fn {·ƒret_141}, [·v_10]:
-      ·v_154 = ·closure ·v_149, ·ƒret_141
-      ·rec_put ·v_10, 'val', 42, ·v_154
+    ·v_145 = fn {·ƒret_146}, [·v_10]:
+      ·v_159 = ·closure ·v_154, ·ƒret_146
+      ·rec_put ·v_10, 'val', 42, ·v_159
 
-    ·main_0 = ·v_5 = fn [·ƒret_6]:
-      ·v_145 = ·closure ·v_140, ·ƒret_6
-      ·rec_put {}, 'kind', 1, ·v_145
+    ·v_5 = fn [·ƒret_6]:
+      ·v_150 = ·closure ·v_145, ·ƒret_6
+      ·rec_put {}, 'kind', 1, ·v_150
 
-    ·export ·main_0
+    ·v_140 = fn:
+      ·main_0 = ·v_5
+      ·export ·main_0
+
+    ·module_init ·v_140
 
 
 # BROKEN: lift panics with "did not converge after 20 rounds" when a
@@ -655,7 +731,48 @@ test 'top-level seq destructure with literal rhs — lift non-convergence', fn:
     [a, b] = [1, 2]
 
   | equals ƒink:
-    TODO
+    ·v_49 = fn [·v_14, ·v_15]:
+      ·a_0 = ·v_14
+      ·b_1 = ·v_15
+      ·export _
+
+    ·v_72 = fn {·ƒfail_73}:
+      ·ƒfail_73 _
+
+    ·v_116 = fn {·ƒsucc_117, ·v_119, ·v_121, ·ƒfail_123}, [·v_23]:
+      if ·v_23,
+        fn:
+          ·ƒsucc_117 ·v_119, ·v_121
+        fn:
+          ·ƒfail_123 _
+
+    ·v_103 = fn {·ƒsucc_104, ·v_106, ·ƒfail_108}, [·v_15, ·v_20]:
+      ·v_127 = ·closure ·v_116, ·ƒsucc_104, ·v_106, ·v_15, ·ƒfail_108
+      ·empty ·v_20, ·v_127
+
+    ·v_92 = fn {·ƒfail_93, ·ƒsucc_95}, [·v_14, ·v_29]:
+      ·v_112 = ·closure ·v_103, ·ƒsucc_95, ·v_14, ·ƒfail_93
+      ·seq_pop ·v_29, ·ƒfail_93, ·v_112
+
+    ·v_81 = fn {·ƒfail_82, ·ƒsucc_84}, [·v_28]:
+      ·v_99 = ·closure ·v_92, ·ƒfail_82, ·ƒsucc_84
+      ·seq_pop ·v_28, ·ƒfail_82, ·v_99
+
+    ·v_40 = fn [·ƒsucc_12, ·ƒfail_13, ·v_11]:
+      ·v_77 = ·closure ·v_72, ·ƒfail_13
+      ·v_88 = ·closure ·v_81, ·ƒfail_13, ·ƒsucc_12
+      ·is_seq_like ·v_11, ·v_88, ·v_77
+
+    ·ƒret_67 = fn [·v_9]:
+      ·v_40 ·v_49, panic, ·v_9
+
+    ·ƒret_64 = fn [·v_6]:
+      ·seq_prepend 1, ·v_6, ·ƒret_67
+
+    ·v_60 = fn:
+      ·seq_prepend 2, [], ·ƒret_64
+
+    ·module_init ·v_60
 
 
 test 'top-level rec destructure with literal rhs — lift non-convergence', fn:
@@ -663,7 +780,32 @@ test 'top-level rec destructure with literal rhs — lift non-convergence', fn:
     {x} = {x: 1}
 
   | equals ƒink:
-    TODO
+    ·v_31 = fn [·v_11]:
+      ·x_0 = ·v_11
+      ·export _
+
+    ·v_49 = fn {·ƒfail_50}:
+      ·ƒfail_50 _
+
+    ·v_69 = fn {·ƒsucc_70}, [·v_11, ·v_15]:
+      ·ƒsucc_70 ·v_11
+
+    ·v_58 = fn {·ƒfail_59, ·ƒsucc_61}, [·v_16]:
+      ·v_74 = ·closure ·v_69, ·ƒsucc_61
+      ·rec_pop ·v_16, 'x', ·ƒfail_59, ·v_74
+
+    ·v_25 = fn [·ƒsucc_9, ·ƒfail_10, ·v_8]:
+      ·v_54 = ·closure ·v_49, ·ƒfail_10
+      ·v_65 = ·closure ·v_58, ·ƒfail_10, ·ƒsucc_9
+      ·is_rec_like ·v_8, ·v_65, ·v_54
+
+    ·ƒret_44 = fn [·v_6]:
+      ·v_25 ·v_31, panic, ·v_6
+
+    ·v_40 = fn:
+      ·rec_put {}, 'x', 1, ·ƒret_44
+
+    ·module_init ·v_40
 
 
 test 'top-level destructure with call rhs — lift non-convergence', fn:
@@ -671,7 +813,45 @@ test 'top-level destructure with call rhs — lift non-convergence', fn:
     [a, b] = some_call x
 
   | equals ƒink:
-    TODO
+    ·v_46 = fn [·v_11, ·v_12]:
+      ·a_0 = ·v_11
+      ·b_1 = ·v_12
+      ·export _
+
+    ·v_64 = fn {·ƒfail_65}:
+      ·ƒfail_65 _
+
+    ·v_108 = fn {·ƒsucc_109, ·v_111, ·v_113, ·ƒfail_115}, [·v_20]:
+      if ·v_20,
+        fn:
+          ·ƒsucc_109 ·v_111, ·v_113
+        fn:
+          ·ƒfail_115 _
+
+    ·v_95 = fn {·ƒsucc_96, ·v_98, ·ƒfail_100}, [·v_12, ·v_17]:
+      ·v_119 = ·closure ·v_108, ·ƒsucc_96, ·v_98, ·v_12, ·ƒfail_100
+      ·empty ·v_17, ·v_119
+
+    ·v_84 = fn {·ƒfail_85, ·ƒsucc_87}, [·v_11, ·v_26]:
+      ·v_104 = ·closure ·v_95, ·ƒsucc_87, ·v_11, ·ƒfail_85
+      ·seq_pop ·v_26, ·ƒfail_85, ·v_104
+
+    ·v_73 = fn {·ƒfail_74, ·ƒsucc_76}, [·v_25]:
+      ·v_91 = ·closure ·v_84, ·ƒfail_74, ·ƒsucc_76
+      ·seq_pop ·v_25, ·ƒfail_74, ·v_91
+
+    ·v_37 = fn [·ƒsucc_9, ·ƒfail_10, ·v_8]:
+      ·v_69 = ·closure ·v_64, ·ƒfail_10
+      ·v_80 = ·closure ·v_73, ·ƒfail_10, ·ƒsucc_9
+      ·is_seq_like ·v_8, ·v_80, ·v_69
+
+    ·ƒret_59 = fn [·v_6]:
+      ·v_37 ·v_46, panic, ·v_6
+
+    ·v_55 = fn:
+      ·∅some_call ·ƒret_59, ·∅x
+
+    ·module_init ·v_55
 
 
 test 'top-level destructure with import rhs — lift non-convergence', fn:
@@ -679,5 +859,30 @@ test 'top-level destructure with import rhs — lift non-convergence', fn:
     {foo} = import './bar.fnk'
 
   | equals ƒink:
-    TODO
+    ·v_31 = fn [·v_11]:
+      ·foo_0 = ·v_11
+      ·export _
+
+    ·v_49 = fn {·ƒfail_50}:
+      ·ƒfail_50 _
+
+    ·v_69 = fn {·ƒsucc_70}, [·v_11, ·v_15]:
+      ·ƒsucc_70 ·v_11
+
+    ·v_58 = fn {·ƒfail_59, ·ƒsucc_61}, [·v_16]:
+      ·v_74 = ·closure ·v_69, ·ƒsucc_61
+      ·rec_pop ·v_16, 'foo', ·ƒfail_59, ·v_74
+
+    ·v_25 = fn [·ƒsucc_9, ·ƒfail_10, ·v_8]:
+      ·v_54 = ·closure ·v_49, ·ƒfail_10
+      ·v_65 = ·closure ·v_58, ·ƒfail_10, ·ƒsucc_9
+      ·is_rec_like ·v_8, ·v_65, ·v_54
+
+    ·ƒret_44 = fn [·v_6]:
+      ·v_25 ·v_31, panic, ·v_6
+
+    ·v_40 = fn:
+      ·import './bar.fnk', ·ƒret_44
+
+    ·module_init ·v_40
 

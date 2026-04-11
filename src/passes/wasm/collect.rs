@@ -138,6 +138,12 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
+///
+/// The module-root spine is a mix of LetFn/LetVal (whose cont body holds the
+/// rest of the chain) and Apps whose last Cont::Expr arg holds the rest of the
+/// chain. This happens when a top-level statement's RHS lowers to runtime
+/// operators (e.g. `[a,b] = [1,2]` lowers to `·seq_prepend 2, [], fn v_6: ...`).
+/// We walk through all of these until we hit the terminal `·export` App.
 fn collect_exports<'src>(root: &Expr, ctx: &IrCtx<'_, 'src>) -> Vec<(CpsId, String)> {
   let mut expr = root;
   loop {
@@ -157,6 +163,14 @@ fn collect_exports<'src>(root: &Expr, ctx: &IrCtx<'_, 'src>) -> Vec<(CpsId, Stri
             }
           None
         }).collect();
+      }
+      // Any other App at module root: the rest of the module lives in the
+      // last Cont::Expr arg's body. Step into it and continue walking.
+      ExprKind::App { args, .. } => {
+        match args.last() {
+          Some(Arg::Cont(Cont::Expr { body, .. })) => { expr = body; }
+          _ => return vec![],
+        }
       }
       _ => return vec![],
     }
@@ -219,7 +233,15 @@ fn collect_chain<'a, 'src>(
         Cont::Ref(_) => {}
       }
     }
-    ExprKind::App { .. } | ExprKind::If { .. } => {}
+    // Module-root Apps (e.g. `·seq_prepend 2, [], fn v_6: <rest>`) hold the
+    // rest of the module in their last Cont::Expr arg. Descend so we keep
+    // finding LetFn/LetVal siblings that live inside the cont spine.
+    ExprKind::App { args, .. } => {
+      if let Some(Arg::Cont(Cont::Expr { body, .. })) = args.last() {
+        collect_chain(body, ctx, exports, funcs, arities);
+      }
+    }
+    ExprKind::If { .. } => {}
   }
 }
 
@@ -238,13 +260,25 @@ fn collect_locals_expr<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<S
     ExprKind::LetVal { name, cont, .. } => {
       out.push(ctx.label(name.id));
       match cont {
-        Cont::Expr { body, .. } => collect_locals_expr(body, ctx, out),
+        Cont::Expr { args, body } => {
+          // Cont args are additional bindings in scope in the body
+          // (e.g. `LetVal v_14, fn add_0:` — add_0 is a new local).
+          for a in args {
+            out.push(ctx.label(a.id));
+          }
+          collect_locals_expr(body, ctx, out);
+        }
         Cont::Ref(_) => {}
       }
     }
     ExprKind::LetFn { cont, .. } => {
       match cont {
-        Cont::Expr { body, .. } => collect_locals_expr(body, ctx, out),
+        Cont::Expr { args, body } => {
+          for a in args {
+            out.push(ctx.label(a.id));
+          }
+          collect_locals_expr(body, ctx, out);
+        }
         Cont::Ref(_) => {}
       }
     }
@@ -403,5 +437,6 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
       "BuiltIn::Import is a compile-time marker and must not reach the \
        runtime-builtin name table; see wasm-link multi-module pass"
     ),
+    BuiltIn::ModuleInit    => "module_init",
   }
 }
