@@ -205,6 +205,21 @@ pub fn run(
 
   let instance = linker.instantiate(&mut store, &module).map_err(|e| e.to_string())?;
 
+  // Bootstrap: run `fink_entry` to populate export slot globals. The
+  // compiler wraps the module root as a synthetic `fink_module` LetFn with
+  // an outer `·module_init fink_module` cont; `$fink_entry` is the emitted
+  // Fn2 that invokes `module_init` with the root closure. Running
+  // fink_entry eagerly runs the module's top-level bindings, writing user
+  // exports into their per-name slot globals. Without this, the `main`
+  // wrapper below reads a null slot and traps inside `_apply`.
+  if let Some(fink_entry) = instance.get_func(&mut store, "fink_entry") {
+    fink_entry.call(
+      &mut store,
+      &[Val::AnyRef(None), Val::AnyRef(None)],
+      &mut [],
+    ).map_err(|e| format!("fink_entry failed: {}", e))?;
+  }
+
   // Look up the user's main function, box it, and pass to _run_main.
   let main_fn = instance.get_func(&mut store, "main")
     .ok_or("no 'main' export")?;

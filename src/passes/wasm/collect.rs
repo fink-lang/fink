@@ -262,9 +262,23 @@ fn collect_chain<'a, 'src>(
 
       funcs.push(CollectedFn { label, fn_id: name.id, params: param_labels, n_captures: 0, has_cont, body: fn_body, export_as, export_bind_id: None, alias: None });
 
+      // Descend into the cont spine (regular case).
       match cont {
         Cont::Expr { body, .. } => collect_chain(body, ctx, exports, funcs, arities),
         Cont::Ref(_) => {}
+      }
+
+      // Special case: the synthetic `fink_module` LetFn (whose outer cont
+      // body is `·module_init fink_module`) holds all module-level LetVal
+      // aliases inside its fn_body, not in its cont. Descend into fn_body
+      // so those aliases get wired up to their corresponding CollectedFn
+      // entries (they become module-level globals).
+      let is_fink_module = matches!(cont, Cont::Expr { body, .. }
+        if matches!(&body.kind, ExprKind::App {
+          func: Callable::BuiltIn(BuiltIn::ModuleInit), ..
+        }));
+      if is_fink_module {
+        collect_chain(fn_body, ctx, exports, funcs, arities);
       }
     }
     ExprKind::LetVal { name, val, cont } => {

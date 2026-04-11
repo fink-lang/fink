@@ -11,6 +11,7 @@ test 'string literal', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -23,7 +24,7 @@ test 'string literal', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -34,9 +35,10 @@ test 'string literal', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOzs7QTtBOzs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTs7O0EiCn0=
 
 
 test 'string literal dedup', fn:
@@ -51,6 +53,7 @@ test 'string literal dedup', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_6))
       (func $v_6 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_7 (ref any))
         (local $x_1 (ref any))
@@ -68,7 +71,7 @@ test 'string literal dedup', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -79,9 +82,10 @@ test 'string literal dedup', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOzs7QTtBO0E7QTtBOzs7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBOzs7QSIKfQ==
 
 
 test 'str templ two exprs', fn:
@@ -94,6 +98,7 @@ test 'str templ two exprs', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -106,7 +111,7 @@ test 'str templ two exprs', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -117,9 +122,10 @@ test 'str templ two exprs', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) " and ")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7OztBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBOzs7QSIKfQ==
 
 
 test 'str tagged template', fn:
@@ -145,6 +151,7 @@ test 'str tagged template', fn:
         unreachable
         (return_call $__apply (local.get $local_4))
       )
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $v_31 (ref any))
@@ -157,7 +164,7 @@ test 'str tagged template', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_19 (ref any))
@@ -169,9 +176,10 @@ test 'str tagged template', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) "1\n2\0a3")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBO0E7O0E7OztBOztBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7Ozs7OztBOzs7QTtBO0E7Ozs7QTs7QTtBOzs7QTs7QTtBOztBOzs7QTs7QUFBQTs7O0EiCn0=
 
 
 test 'str tagged template escape handling', fn:
@@ -217,6 +225,7 @@ test 'str tagged template escape handling', fn:
         unreachable
         (return_call $_seq_prepend (local.get $v_9) (local.get $v_50))
       )
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $v_41 (ref any))
@@ -229,7 +238,7 @@ test 'str tagged template escape handling', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_48 (ref any))
@@ -243,9 +252,10 @@ test 'str tagged template escape handling', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBO0E7QTtBOztBOzs7QTs7QUFBQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOzs7QTtBO0E7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTs7QTs7O0E7O0FBQUE7OztBIgp9
 
 
 test 'str implicit formatting handling', fn:
@@ -259,6 +269,7 @@ test 'str implicit formatting handling', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -271,7 +282,7 @@ test 'str implicit formatting handling', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -282,9 +293,10 @@ test 'str implicit formatting handling', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) "1\0a2\0a3")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7OztBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBOzs7QSIKfQ==
 
 
 test 'str implicit formatting escapes', fn:
@@ -297,6 +309,7 @@ test 'str implicit formatting escapes', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -309,7 +322,7 @@ test 'str implicit formatting escapes', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -320,9 +333,10 @@ test 'str implicit formatting escapes', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) "\0a\0d\09\0c\08\0b$'\\c3\a9\e8\aa\9e")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7OztBIgp9
 
 
 test 'empty string literal', fn:
@@ -335,6 +349,7 @@ test 'empty string literal', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -347,7 +362,7 @@ test 'empty string literal', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -358,8 +373,9 @@ test 'empty string literal', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
 
 
 test 'empty string eq', fn:
@@ -372,6 +388,7 @@ test 'empty string eq', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -382,7 +399,7 @@ test 'empty string eq', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -393,8 +410,9 @@ test 'empty string eq', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBOztBIgp9
 
 
 test 'match empty string', fn:
@@ -529,6 +547,7 @@ test 'match empty string', fn:
         (local.set $local_5 (call $_list_prepend_any (local.get $v_59) (local.get $local_5)))
         (return_call $__apply (local.get $local_5) (struct.new $Closure (ref.func $v_43) (ref.null $Captures)))
       )
+      (global $main_0 (ref $Fn2) (ref.func $v_5))
       (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_6 (ref any))
         (local $x_1 (ref any))
@@ -545,7 +564,7 @@ test 'match empty string', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_127 (ref any))
@@ -564,8 +583,9 @@ test 'match empty string', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7O0E7OztBOztBQUFBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7OztBOzs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7QTtBO0E7QTtBOztBOzs7QTs7QUFBQTs7QSIKfQ==
 
 
 test 'empty string eq template', fn:
@@ -578,6 +598,7 @@ test 'empty string eq template', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -588,7 +609,7 @@ test 'empty string eq template', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -599,8 +620,9 @@ test 'empty string eq template', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJHsnJ30nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJHsnJ30nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOzs7QTtBOzs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
 
 
 test 'str eq', fn:
@@ -613,6 +635,7 @@ test 'str eq', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -623,7 +646,7 @@ test 'str eq', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -634,9 +657,10 @@ test 'str eq', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nID09ICdoZWxsbyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nID09ICdoZWxsbyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7OztBO0E7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTs7O0EiCn0=
 
 
 

@@ -14,6 +14,7 @@ test 'literal int', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -26,7 +27,7 @@ test 'literal int', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -37,8 +38,9 @@ test 'literal int', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
 
 
 test 'literal bool', fn:
@@ -51,6 +53,7 @@ test 'literal bool', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -63,7 +66,7 @@ test 'literal bool', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -74,8 +77,9 @@ test 'literal bool', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB0cnVlIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB0cnVlIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOzs7QTtBOzs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTs7QSIKfQ==
 
 
 test 'literal bool false', fn:
@@ -88,6 +92,7 @@ test 'literal bool false', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -100,7 +105,7 @@ test 'literal bool false', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -111,8 +116,9 @@ test 'literal bool false', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
 
 
 
@@ -127,6 +133,7 @@ test 'let binding', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_5))
       (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_6 (ref any))
         (local $x_1 (ref any))
@@ -141,7 +148,7 @@ test 'let binding', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -152,8 +159,9 @@ test 'let binding', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTtBOzs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
 
 
 test 'add two literals', fn:
@@ -166,6 +174,7 @@ test 'add two literals', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_4))
       (func $v_4 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_5 (ref any))
         (local $local_3 (ref any))
@@ -176,7 +185,7 @@ test 'add two literals', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -187,8 +196,9 @@ test 'add two literals', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTs7QTs7QTs7O0E7O0FBQUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBOztBIgp9
 
 
 test 'chained arithmetic', fn:
@@ -213,6 +223,7 @@ test 'chained arithmetic', fn:
         (local.set $x_1 (local.get $v_9))
         (return_call $_op_plus (local.get $x_1) (struct.new $Num (f64.const 4)) (local.get $v_31))
       )
+      (global $main_0 (ref $Fn2) (ref.func $v_5))
       (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_6 (ref any))
         (local $v_35 (ref any))
@@ -225,7 +236,7 @@ test 'chained arithmetic', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_23 (ref any))
@@ -237,8 +248,9 @@ test 'chained arithmetic', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7Ozs7QTs7QTtBOzs7QTs7QTtBOztBOzs7QTs7QUFBQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTs7Ozs7QTs7O0E7QTtBOzs7O0E7O0E7QTs7O0E7O0E7QTs7QTs7O0E7O0FBQUE7O0EiCn0=
 
 
 test 'multiple let bindings used', fn:
@@ -253,6 +265,7 @@ test 'multiple let bindings used', fn:
       (type $Fn2 (func (param (ref any) (ref any))))
       (memory 1)
 
+      (global $main_0 (ref $Fn2) (ref.func $v_6))
       (func $v_6 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_7 (ref any))
         (local $x_1 (ref any))
@@ -269,7 +282,7 @@ test 'multiple let bindings used', fn:
         (local $main_0 (ref any))
         (local $local_3 (ref any))
         (local.set $main_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
-        (global.set $main_closure (ref.cast (ref null $Closure) (local.get $main_0)))
+        (global.set $main_closure (ref.cast (ref null $Closure) (struct.new $Closure (global.get $main_0) (ref.null $Captures))))
       )
       (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $local_2 (ref any))
@@ -280,7 +293,8 @@ test 'multiple let bindings used', fn:
       )
       (global $main_closure (mut (ref null $Closure)) (ref.null $Closure))
       (export "main" (func $main))
+      (export "fink_entry" (func $fink_entry))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7OztBOztBQUFBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7O0E7QTtBO0E7QTtBOzs7OztBOztBO0E7OztBOztBOztBOzs7QTs7QUFBQTs7QSIKfQ==
 
 

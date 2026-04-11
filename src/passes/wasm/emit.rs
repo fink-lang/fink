@@ -997,8 +997,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
   fn emit_exports(&mut self, cps_mod: &CpsModule<'a>) {
     let mut exports = ExportSection::new();
 
+    // Legacy: `export_as` on CollectedFn was the old direct-export model
+    // where the module-level fn was itself exported under its user name.
+    // The new export model (below) routes user exports through per-name
+    // slot globals and wrapper fns — avoid emitting the same name twice.
+    let new_export_names: std::collections::HashSet<&str> = cps_mod.exports
+      .iter().map(|(_, n)| n.as_str()).collect();
+
     for func in &cps_mod.funcs {
       if let Some(name) = &func.export_as {
+        if new_export_names.contains(name.as_str()) { continue; }
         let func_idx = self.idx.func_idx(&func.label);
         exports.export(name, ExportKind::Func, func_idx);
 
@@ -1030,6 +1038,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
     // Always export __box_func for the host to create boxed continuations.
     let box_func_idx = self.idx.func_idx("_box_func");
     exports.export("_box_func", ExportKind::Func, box_func_idx);
+
+    // fink_entry: the module's bootstrap entry. Calling it runs the module
+    // root (`fink_module`) via `module_init`, which populates the per-export
+    // slot globals. The host must call `fink_entry` once after instantiation
+    // before invoking any user-facing export wrapper. Exported so both the
+    // native runner and the test harness can drive bootstrap.
+    if cps_mod.funcs.iter().any(|f| f.label == "fink_entry") {
+      let fink_entry_idx = self.idx.func_idx("fink_entry");
+      exports.export("fink_entry", ExportKind::Func, fink_entry_idx);
+    }
 
     // _list_nil / _list_prepend: exported for the runner to build args lists.
     let list_nil_idx = self.idx.func_idx("_list_nil");

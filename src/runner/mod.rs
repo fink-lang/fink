@@ -120,6 +120,22 @@ mod tests {
 
     let instance = linker.instantiate(&mut store, &module).map_err(|e| e.to_string())?;
 
+    // Bootstrap: run `fink_entry` to populate export slot globals. The
+    // compiler emits a synthetic fink_module wrap whose outer cont is
+    // `·module_init fink_module`, and `$fink_entry` is the Fn2 that
+    // invokes `module_init` with the root closure. Running fink_entry
+    // eagerly runs the module's top-level bindings, writing user exports
+    // into their per-name slot globals. Without this, `test_main` (and
+    // any other user-facing export wrapper) reads a null slot and traps
+    // inside `_apply`.
+    if let Some(fink_entry) = instance.get_func(&mut store, "fink_entry") {
+      fink_entry.call(
+        &mut store,
+        &[Val::AnyRef(None), Val::AnyRef(None)],
+        &mut [],
+      ).map_err(|e| format!("fink_entry failed: {}", e))?;
+    }
+
     let test_fn = instance.get_func(&mut store, export_name)
       .ok_or_else(|| format!("no '{}' export", export_name))?;
     let box_func = instance.get_func(&mut store, "_box_func")
