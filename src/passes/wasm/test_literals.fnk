@@ -28,8 +28,12 @@ test 'literal int', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA0MiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBO0EiCn0=
 
 
 test 'literal bool', fn:
@@ -56,8 +60,12 @@ test 'literal bool', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB0cnVlIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7O0E7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB0cnVlIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7QSIKfQ==
 
 
 test 'literal bool false', fn:
@@ -84,8 +92,12 @@ test 'literal bool false', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBO0EiCn0=
 
 
 
@@ -116,8 +128,12 @@ test 'let binding', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_17) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7OztBOztBO0E7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNDJcbiAgeCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7OztBOztBO0E7OztBOztBOztBO0EiCn0=
 
 
 test 'add two literals', fn:
@@ -142,8 +158,12 @@ test 'add two literals', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_16) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAyICsgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTs7QTs7QTtBIgp9
 
 
 test 'chained arithmetic', fn:
@@ -182,8 +202,13 @@ test 'chained arithmetic', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_23 (ref any))
+        (local $local_3 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_25) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7Ozs7QTs7QTtBOzs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMiAqIDNcbiAgeCArIDQiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7Ozs7QTs7QTtBOzs7QTs7QTtBOztBO0EiCn0=
 
 
 test 'multiple let bindings used', fn:
@@ -216,7 +241,11 @@ test 'multiple let bindings used', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_24) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7O0E7O0E7QTs7O0E7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gMlxuICB5ID0gM1xuICB4ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7QSIKfQ==
 
 

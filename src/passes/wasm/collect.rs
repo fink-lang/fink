@@ -118,6 +118,28 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
   let exports = collect_exports(root, ctx);
   collect_chain(root, ctx, &exports, &mut funcs, &mut arities);
 
+  // Synthesize `fink_entry` — the outer cont of the top-level fink_module
+  // LetFn. Its body contains `·module_init fink_module`, handing the
+  // module's defined fn to the host bootstrap. Without synthesising a
+  // container, the outer cont is unemitted dead code and module_init never
+  // fires. fink_entry is the module's entry point: instantiating the WASM
+  // module gives the host a fn to call, and that fn runs `fink_entry`
+  // which in turn calls `module_init` with the fink_module closure.
+  if let ExprKind::LetFn { cont: Cont::Expr { body, .. }, .. } = &root.kind {
+    arities.insert(2);
+    funcs.push(CollectedFn {
+      label: "fink_entry".into(),
+      fn_id: root.id,
+      params: vec![],
+      n_captures: 0,
+      has_cont: false,
+      body,
+      export_as: None,
+      export_bind_id: None,
+      alias: None,
+    });
+  }
+
   // Fill in n_captures for each function by scanning FnClosure call sites.
   let cap_counts = scan_fn_capture_counts(&funcs, ctx);
   for cf in &mut funcs {

@@ -183,8 +183,20 @@ test 'match literal first arm', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_126 (ref any))
+        (local $v_80 (ref any))
+        (local $v_78 (ref any))
+        (local $v_76 (ref any))
+        (local $v_118 (ref any))
+        (local $v_104 (ref any))
+        (local $v_74 (ref any))
+        (local $v_87 (ref any))
+        (local $local_10 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_89) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7Ozs7O0E7O0E7QTs7O0E7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBtYXRjaCAwOlxuICAgIDA6IDQyXG4gICAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7QTtBO0E7QTtBOztBO0EiCn0=
 
 
 test 'match with binding', fn:
@@ -350,8 +362,20 @@ test 'match with binding', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_149 (ref any))
+        (local $v_84 (ref any))
+        (local $v_82 (ref any))
+        (local $v_80 (ref any))
+        (local $v_156 (ref any))
+        (local $v_138 (ref any))
+        (local $v_78 (ref any))
+        (local $v_93 (ref any))
+        (local $local_10 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_95) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBOzs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gNVxuICBtYXRjaCB4OlxuICAgIDA6IDBcbiAgICBfOiB4ICsgMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7O0E7QSIKfQ==
 
 
 test 'simple recursion', fn:
@@ -434,8 +458,19 @@ test 'closure construction and call', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_8) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_37 (ref any))
+        (local $v_52 (ref any))
+        (local $v_42 (ref any))
+        (local $local_5 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_44) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7O0E7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7O0E7QSIKfQ==
+
+
+
+
 
 
 

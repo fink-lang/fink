@@ -25,9 +25,13 @@ test 'string literal', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7O0E7O0E7O0E7O0EiCn0=
 
 
 test 'string literal dedup', fn:
@@ -61,9 +65,13 @@ test 'string literal dedup', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_21) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB4ID0gJ2hlbGxvJ1xuICB5ID0gJ2hlbGxvJ1xuICB4Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7QSIKfQ==
 
 
 test 'str templ two exprs', fn:
@@ -90,9 +98,13 @@ test 'str templ two exprs', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_17) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) " and ")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7QSIKfQ==
 
 
 test 'str tagged template', fn:
@@ -132,9 +144,14 @@ test 'str tagged template', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_19 (ref any))
+        (local $local_3 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_21) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "1\n2\0a3")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBO0E7O0E7O0EiCn0=
 
 
 test 'str tagged template escape handling', fn:
@@ -194,9 +211,16 @@ test 'str tagged template escape handling', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_48 (ref any))
+        (local $v_39 (ref any))
+        (local $v_29 (ref any))
+        (local $local_5 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_31) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBmb28nXFxuXFxyXFx0XFxmJHtiYXJ9XFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBO0E7QTtBOztBOztBIgp9
 
 
 test 'str implicit formatting handling', fn:
@@ -224,9 +248,13 @@ test 'str implicit formatting handling', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "1\0a2\0a3")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnMVxcbjJcbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7QTs7QTs7QTs7QSIKfQ==
 
 
 test 'str implicit formatting escapes', fn:
@@ -253,9 +281,13 @@ test 'str implicit formatting escapes', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "\0a\0d\09\0c\08\0b$'\\c3\a9\e8\aa\9e")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBOztBIgp9
 
 
 test 'empty string literal', fn:
@@ -282,8 +314,12 @@ test 'empty string literal', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBO0EiCn0=
 
 
 test 'empty string eq', fn:
@@ -308,8 +344,12 @@ test 'empty string eq', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_16) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTs7QTs7QTtBIgp9
 
 
 test 'match empty string', fn:
@@ -462,8 +502,20 @@ test 'match empty string', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_127 (ref any))
+        (local $v_81 (ref any))
+        (local $v_79 (ref any))
+        (local $v_77 (ref any))
+        (local $v_119 (ref any))
+        (local $v_105 (ref any))
+        (local $v_75 (ref any))
+        (local $v_88 (ref any))
+        (local $local_10 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_90) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7O0E7QSIKfQ==
 
 
 test 'empty string eq template', fn:
@@ -488,8 +540,12 @@ test 'empty string eq template', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_16) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJHsnJ30nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBO0E7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJHsnJ30nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBO0E7OztBOztBOztBO0EiCn0=
 
 
 test 'str eq', fn:
@@ -514,9 +570,13 @@ test 'str eq', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_16) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nID09ICdoZWxsbyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnaGVsbG8nID09ICdoZWxsbyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0E7QTs7O0E7O0E7O0E7O0EiCn0=
 
 
 

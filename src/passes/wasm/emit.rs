@@ -1558,14 +1558,11 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
 
 /// Emit a builtin operation call.
 fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
-  if op == BuiltIn::Export || op == BuiltIn::ModuleInit {
-    // Compile-time markers: `·export <names>` terminates a module's init
-    // body with its export list; `·module_init <fn>` is the module's
-    // outer cont handing fink_module to the host bootstrap. Neither is
-    // implemented as a runtime call yet — the real export model (wrapper
-    // fns + slot globals) will lower these explicitly. For now, emit the
-    // args as no-ops so the WAT shows them. The WASM fn's implicit `end`
-    // terminates the frame; no explicit return needed.
+  if op == BuiltIn::Export {
+    // `·export <names>` terminates a module's init body with its export
+    // list. The real lowering (write each arg to its `_fink_<name>_closure`
+    // slot global) will land once the slot infrastructure is in place.
+    // For now, drop each arg and fall through to the fn's implicit `end`.
     let _ = expr_id;
     for arg in args {
       match arg {
@@ -1943,10 +1940,10 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
             scan_builtins(body, builtins);
           }
         }
-      } else if *op == BuiltIn::Export || *op == BuiltIn::ModuleInit {
-        // Compile-time markers for the module shape — not real runtime
-        // calls (yet). emit_builtin replaces them with drop+return
-        // placeholders. Walk cont bodies for completeness.
+      } else if *op == BuiltIn::Export {
+        // `·export` is a module-shape marker, not a runtime call. It is
+        // not registered as a runtime import. Walk cont bodies for
+        // completeness.
         for arg in args {
           if let Arg::Cont(Cont::Expr { body, .. }) = arg {
             scan_builtins(body, builtins);

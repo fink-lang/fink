@@ -191,6 +191,21 @@
   )
 
 
+  ;; -- ·module_init ----------------------------------------------------------
+  ;;
+  ;; The fink compiler wraps each module's root in a synthetic `fink_module`
+  ;; LetFn whose outer cont is `·module_init fink_module` — handing the
+  ;; defined module fn to the host bootstrap. This stub receives the closure
+  ;; as its single arg and is currently a no-op; a real implementation will
+  ;; invoke fink_module with a done continuation and wire up exports. Exists
+  ;; so the linker resolves the call; real semantics TBD.
+
+  (func $module_init (export "module_init")
+    (param $fink_module (ref null any))
+    unreachable
+  )
+
+
   ;; -- _run_main -------------------------------------------------------------
   ;;
   ;; Direct-style export. The single entry point for the host.

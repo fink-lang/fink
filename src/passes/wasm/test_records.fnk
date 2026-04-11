@@ -33,9 +33,14 @@ test 'rec literal', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_21 (ref any))
+        (local $local_3 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_23) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YTogMSwgYjogMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YTogMSwgYjogMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7O0E7QTs7O0E7O0E7QTs7QTs7QSIKfQ==
 
 test 'rec destructure', fn:
   expect gen_wat ƒink:
@@ -169,9 +174,20 @@ test 'rec destructure', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_105 (ref any))
+        (local $v_138 (ref any))
+        (local $v_127 (ref any))
+        (local $v_116 (ref any))
+        (local $v_88 (ref any))
+        (local $v_79 (ref any))
+        (local $v_69 (ref any))
+        (local $local_9 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_71) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YSwgYjogY30gPSB7YTogMSwgYjogMn1cbiAgYSArIGMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7Ozs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YSwgYjogY30gPSB7YTogMSwgYjogMn1cbiAgYSArIGMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTtBO0E7QTtBOztBOztBIgp9
 
 test 'rec spread', fn:
   expect gen_wat ƒink:
@@ -229,9 +245,16 @@ test 'rec spread', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_55 (ref any))
+        (local $v_46 (ref any))
+        (local $v_36 (ref any))
+        (local $local_5 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_38) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "cba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByID0ge2E6IDEsIGI6IDJ9XG4gIHsuLnIsIGM6IDN9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTs7OztBOztBO0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBOzs7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByID0ge2E6IDEsIGI6IDJ9XG4gIHsuLnIsIGM6IDN9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTs7OztBOztBO0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBOzs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7O0E7O0EiCn0=
 
 test 'rec empty literal', fn:
   expect gen_wat ƒink:
@@ -257,8 +280,12 @@ test 'rec empty literal', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_14) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7fSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7fSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBO0E7OztBOztBOztBO0EiCn0=
 
 test 'rec single field', fn:
   expect gen_wat ƒink:
@@ -282,9 +309,13 @@ test 'rec single field', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_17) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "a")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YTogMX0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YTogMX0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0E7QTs7O0E7O0E7O0E7O0EiCn0=
 
 test 'rec nested destructure', fn:
   expect gen_wat ƒink:
@@ -461,9 +492,22 @@ test 'rec nested destructure', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_151 (ref any))
+        (local $v_180 (ref any))
+        (local $v_171 (ref any))
+        (local $v_130 (ref any))
+        (local $v_160 (ref any))
+        (local $v_142 (ref any))
+        (local $v_106 (ref any))
+        (local $v_97 (ref any))
+        (local $v_87 (ref any))
+        (local $local_11 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_89) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YX0gPSB7YToge2I6IDQyfX1cbiAge2J9ID0gYVxuICBiIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBOzs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBOzs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICB7YX0gPSB7YToge2I6IDQyfX1cbiAge2J9ID0gYVxuICBiIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBOzs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBOzs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBO0E7QTtBO0E7QTtBO0E7QTtBOztBOztBIgp9
 
 test 'rec spread merge two', fn:
   expect gen_wat ƒink:
@@ -529,9 +573,16 @@ test 'rec spread merge two', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_6) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_60 (ref any))
+        (local $v_49 (ref any))
+        (local $v_39 (ref any))
+        (local $local_5 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_41) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByMSA9IHthOiAxfVxuICByMiA9IHtiOiAyfVxuICB7Li5yMSwgLi5yMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByMSA9IHthOiAxfVxuICByMiA9IHtiOiAyfVxuICB7Li5yMSwgLi5yMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBO0E7QTtBOztBOztBIgp9
 
 test 'rec format template', fn:
   expect gen_wat ƒink:
@@ -569,9 +620,14 @@ test 'rec format template', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_24 (ref any))
+        (local $local_3 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_26) (ref.null $Captures)))
+      )
       (data (offset (i32.const 0)) "got: a")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByID0ge2E6IDF9XG4gICdnb3Q6ICR7cn0nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7O0E7O0E7QTtBOzs7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByID0ge2E6IDF9XG4gICdnb3Q6ICR7cn0nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7O0E7O0E7QTtBOzs7O0E7O0E7QTs7O0E7O0E7QTs7QTs7QSIKfQ==
 
 test 'recursive list sum', fn:
   expect gen_wat ƒink:
@@ -608,8 +664,12 @@ test 'range exclusive', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $local_2 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_16) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAwLi4xMCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAwLi4xMCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QTtBOzs7QTs7QTs7QTtBIgp9
 
 
 test 'range in', fn:
@@ -644,5 +704,10 @@ test 'range in', fn:
         (local.set $main_0 (struct.new $Closure (ref.func $v_4) (ref.null $Captures)))
         (drop (local.get $main_0))
       )
+      (func $fink_entry (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_19 (ref any))
+        (local $local_3 (ref any))
+        (return_call $_module_init (struct.new $Closure (ref.func $v_21) (ref.null $Captures)))
+      )
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA1IGluIDAuLjEwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTs7OztBOztBO0E7QTs7OztBOztBO0E7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA1IGluIDAuLjEwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTs7OztBOztBO0E7QTs7OztBOztBO0E7OztBOztBO0E7O0E7QSIKfQ==
