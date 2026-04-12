@@ -182,6 +182,8 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
     ExprKind::LetVal { cont, .. } => cont_needs_lifting(cont, in_fn),
     ExprKind::App { func, args } => {
       let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
+      let is_module_scope = matches!(func,
+        Callable::BuiltIn(BuiltIn::FinkModule) | Callable::BuiltIn(BuiltIn::Pub));
       args.iter().any(|a| match a {
         // For ·closure Apps: only flag result cont if its body has nested structure.
         // Pure ·closure result conts converge fine; captured ones with no inner structure
@@ -189,6 +191,18 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
         Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
           !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body, in_fn)
         }
+        // ·ƒink_module / ·ƒpub conts are never hoist candidates themselves.
+        // At module root: LetFns at top of cont body are stable, only flag
+        //   if LetFns are deeper inside ·ƒpub conts.
+        // At module root: use module-specific check (top-level LetFns stable).
+        // Inside a fn body: standard check — ·ƒpub conts are like any other.
+        Arg::Cont(Cont::Expr { body, .. }) if is_module_scope && !in_fn => {
+          module_body_needs_lifting(body)
+        }
+        Arg::Cont(Cont::Expr { body, .. }) if is_module_scope => {
+          contains_letfn_or_inline_cont(body, true)
+        }
+        Arg::Cont(Cont::Ref(_)) if is_module_scope => false,
         Arg::Cont(c) => app_cont_needs_lifting(c, in_fn),
         Arg::Expr(e) => needs_lifting(e, in_fn),
         _ => false,
@@ -221,6 +235,66 @@ fn app_cont_needs_lifting(cont: &Cont, in_fn: bool) -> bool {
 }
 
 
+/// Check whether a module-scope cont body needs lifting.
+///
+/// LetFns at the top of the body are already in final position (lifted siblings).
+/// Only flag if:
+/// - A top-level LetFn's fn_body contains nested LetFns (standard fn-scope check)
+/// - A ·ƒpub/·ƒink_module cont body contains LetFns (those need extraction)
+fn module_body_needs_lifting(expr: &Expr) -> bool {
+  match &expr.kind {
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      // Top-level LetFn in module body: check its fn_body for nested structure.
+      contains_letfn_or_inline_cont(fn_body, true)
+        || match cont {
+          Cont::Ref(_) => false,
+          Cont::Expr { body, .. } => module_body_needs_lifting(body),
+        }
+    }
+    ExprKind::LetVal { cont, .. } => match cont {
+      Cont::Ref(_) => false,
+      Cont::Expr { body, .. } => module_body_needs_lifting(body),
+    },
+    ExprKind::App { func, args } => {
+      let is_module_builtin = matches!(func,
+        Callable::BuiltIn(BuiltIn::FinkModule) | Callable::BuiltIn(BuiltIn::Pub));
+      args.iter().any(|a| match a {
+        Arg::Cont(Cont::Expr { body, .. }) if is_module_builtin => {
+          // ·ƒpub / ·ƒink_module cont body: only flag if it contains LetFns.
+          // Inline conts on regular Apps inside the init chain should stay put —
+          // they're just call continuations, not function definitions.
+          body_contains_letfn(body)
+        }
+        Arg::Cont(Cont::Expr { body, .. }) => module_body_needs_lifting(body),
+        Arg::Expr(e) => module_body_needs_lifting(e),
+        _ => false,
+      })
+    }
+    ExprKind::If { then, else_, .. } => {
+      module_body_needs_lifting(then) || module_body_needs_lifting(else_)
+    }
+  }
+}
+
+/// Check if an expression contains a LetFn anywhere (not inline conts).
+fn body_contains_letfn(expr: &Expr) -> bool {
+  match &expr.kind {
+    ExprKind::LetFn { .. } => true,
+    ExprKind::LetVal { cont, .. } => match cont {
+      Cont::Ref(_) => false,
+      Cont::Expr { body, .. } => body_contains_letfn(body),
+    },
+    ExprKind::App { args, .. } => {
+      args.iter().any(|a| match a {
+        Arg::Cont(Cont::Expr { body, .. }) => body_contains_letfn(body),
+        Arg::Expr(e) => body_contains_letfn(e),
+        _ => false,
+      })
+    }
+    ExprKind::If { then, else_, .. } => body_contains_letfn(then) || body_contains_letfn(else_),
+  }
+}
+
 /// Does this expression contain a LetFn or an inline Cont::Expr in an App?
 ///
 /// `in_fn` has the same meaning as in `needs_lifting`. When true, we are
@@ -249,10 +323,20 @@ fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
     },
     ExprKind::App { func, args } => {
       let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
+      let is_module_scope = matches!(func,
+        Callable::BuiltIn(BuiltIn::FinkModule) | Callable::BuiltIn(BuiltIn::Pub));
       args.iter().any(|a| match a {
         // For ·closure: only flag if the cont body has nested structure to extract.
         Arg::Cont(c @ Cont::Expr { body, .. }) if is_closure => {
           !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body, in_fn)
+        }
+        // ·ƒink_module / ·ƒpub: at module root use module-specific check,
+        // inside a fn body only flag LetFns (not inline conts).
+        Arg::Cont(Cont::Expr { body, .. }) if is_module_scope && !in_fn => {
+          module_body_needs_lifting(body)
+        }
+        Arg::Cont(Cont::Expr { body, .. }) if is_module_scope => {
+          contains_letfn_or_inline_cont(body, true)
         }
         Arg::Cont(c @ Cont::Expr { body, .. }) => {
           if in_fn {
@@ -386,13 +470,56 @@ fn lift_expr<'src>(
     }
 
     ExprKind::App { func, args } => {
-      // Recurse into Arg::Cont and Arg::Expr.
-      let args = args.into_iter().map(|a| match a {
-        Arg::Cont(c) => Arg::Cont(lift_cont(c, ast_index, alloc)),
-        Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast_index, alloc))),
-        other => other,
-      }).collect();
-      Expr { id: expr.id, kind: ExprKind::App { func, args } }
+      let is_module_scope = matches!(&func,
+        Callable::BuiltIn(BuiltIn::FinkModule) | Callable::BuiltIn(BuiltIn::Pub));
+
+      if is_module_scope {
+        // ·ƒink_module / ·ƒpub: extract LetFns from cont bodies and inject
+        // them INSIDE the cont body as a leading LetFn chain (before init code).
+        let mut all_hoisted: Vec<HoistedFn> = Vec::new();
+        let args: Vec<Arg> = args.into_iter().map(|a| match a {
+          Arg::Cont(Cont::Expr { args: cont_args, body }) => {
+            {
+              let mut new_body = if body_contains_letfn(&body) {
+                let parent_params: Vec<Param> = cont_args.iter().map(|b| Param::Name(b.clone())).collect();
+                let extracted = extract_from_body(*body, &parent_params, &[], ast_index, alloc, &mut all_hoisted);
+                // Prepend hoisted fns into the cont body (inside the App).
+                let mut result = extracted;
+                for h in all_hoisted.drain(..).rev() {
+                  let wrapper_id = alloc.next(None);
+                  result = Expr {
+                    id: wrapper_id,
+                    kind: ExprKind::LetFn {
+                      name: h.name,
+                      params: h.params,
+                      fn_kind: h.fn_kind,
+                      fn_body: Box::new(h.fn_body),
+                      cont: Cont::Expr { args: h.cont_args, body: Box::new(result) },
+                    },
+                  };
+                }
+                result
+              } else {
+                *body
+              };
+              // Always recurse into the body to handle fn_body lifting
+              // (e.g. LetFns inside module-scope fns that have nested structure).
+              new_body = lift_expr(new_body, ast_index, alloc);
+              Arg::Cont(Cont::Expr { args: cont_args, body: Box::new(new_body) })
+            }
+          }
+          other => other,
+        }).collect();
+        Expr { id: expr.id, kind: ExprKind::App { func, args } }
+      } else {
+        // Regular App: recurse into Arg::Cont and Arg::Expr.
+        let args = args.into_iter().map(|a| match a {
+          Arg::Cont(c) => Arg::Cont(lift_cont(c, ast_index, alloc)),
+          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast_index, alloc))),
+          other => other,
+        }).collect();
+        Expr { id: expr.id, kind: ExprKind::App { func, args } }
+      }
     }
 
     ExprKind::If { cond, then, else_ } => {
@@ -614,20 +741,36 @@ fn extract_from_body<'src>(
           let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, alloc);
 
           // ·closure result conts with captures would create infinite chains.
-          // Leave them inline — they're the consumption site for the closure value.
+          // ·ƒpub / ·ƒink_module conts are module-scope side effects — leave
+          // them inline but recurse into their body to extract nested LetFns.
           let is_closure_app = matches!(&func, Callable::BuiltIn(BuiltIn::FnClosure));
-          if is_closure_app && !cap_entries.is_empty() {
-            // Don't hoist the cont itself (infinite chain), but DO recurse into
-            // its body to extract nested structure.
+          let is_module_builtin = matches!(&func,
+            Callable::BuiltIn(BuiltIn::Pub) | Callable::BuiltIn(BuiltIn::FinkModule));
+          if is_module_builtin {
+            // ·ƒpub / ·ƒink_module conts stay inline — recurse into their
+            // body to extract nested structure (LetFns and inline conts).
             let cont_args_back: Vec<BindNode> = cont_params.into_iter().map(|p| match p {
               Param::Name(b) | Param::Spread(b) => b,
             }).collect();
-            // The cont's args are in scope for its body.
             let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
             for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
             let body = extract_from_body(body, parent_params, &inner_scope, _ast_index, alloc, hoisted);
             args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
-            // Recurse into other args too.
+            let args = args.into_iter().map(|a| match a {
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
+              other => other,
+            }).collect();
+            return Expr { id: expr.id, kind: ExprKind::App { func, args } };
+          }
+          if is_closure_app && !cap_entries.is_empty() {
+            // ·closure result conts with captures would create infinite chains.
+            let cont_args_back: Vec<BindNode> = cont_params.into_iter().map(|p| match p {
+              Param::Name(b) | Param::Spread(b) => b,
+            }).collect();
+            let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
+            for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
+            let body = extract_from_body(body, parent_params, &inner_scope, _ast_index, alloc, hoisted);
+            args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
             let args = args.into_iter().map(|a| match a {
               Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
               other => other,
