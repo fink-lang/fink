@@ -330,6 +330,8 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Module
     BuiltIn::Export       => "·export".into(),
     BuiltIn::Import       => "·import".into(),
+    BuiltIn::FinkModule   => "·ƒink_module".into(),
+    BuiltIn::Pub          => "·ƒpub".into(),
     BuiltIn::ModuleInit   => "·module_init".into(),
   }
 }

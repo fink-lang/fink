@@ -501,5 +501,7 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
        runtime-builtin name table; see wasm-link multi-module pass"
     ),
     BuiltIn::ModuleInit    => "module_init",
+    BuiltIn::FinkModule    => "fink_module",
+    BuiltIn::Pub           => "pub",
   }
 }

@@ -1,4 +1,4 @@
-{test, skip, expect, equals, cps_expr} = import '!fake'
+{test, skip, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---
@@ -6,56 +6,62 @@ string templates
 ---
 
 test 'str templ', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     'hello ${name}'
   | equals ƒink:
-    ·str_fmt 'hello ', ·∅name, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvICR7bmFtZX0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFDLEEsQ0FBQSxNLEMsRUFBUSxNLEUiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·str_fmt 'hello ', ·∅name, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvICR7bmFtZX0nIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxTQUFDLEEsQ0FBQSxNLEMsRUFBUSxNLEUiCn0=
 
 
 test 'str templ two exprs', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     '${a} and ${b}'
   | equals ƒink:
-    ·str_fmt ·∅a, ' and ', ·∅b, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyR7YX0gYW5kICR7Yn0nIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFHLEcsRUFBRSxBLENBQUEsSyxDLEVBQU8sRyxFIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·str_fmt ·∅a, ' and ', ·∅b, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyR7YX0gYW5kICR7Yn0nIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxTQUFHLEcsRUFBRSxBLENBQUEsSyxDLEVBQU8sRyxFIgp9
 
 
 test 'str tagged template', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo'1\n2
       3'
   | equals ƒink:
-    ·seq_prepend '1⧵n2␊3', [], fn ·v_4:
-      ·∅foo ·v_0, ..·v_4
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFJLEEsQ0FBQSxNLEMsRUFBSixBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLE0sSSxFQUFBLEEsRUFBQSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·seq_prepend '1⧵n2␊3', [], fn ·v_4:
+        ·∅foo ·ƒret_0, ..·v_4
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxhQUFJLEEsQ0FBQSxNLEMsRUFBSixBLEMsQyxLQUFBLEk7SUFBQSxBQUFBLE0sTyxFQUFBLEEsRUFBQSIKfQ==
 
 
 test 'str tagged template escape handling', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
-    ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·v_4:
-      ·seq_prepend ·∅bar, ·v_4, fn ·v_7:
-        ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·v_10:
-          ·∅foo ·v_0, ..·v_10
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLGFBQWtCLEEsQ0FBQSwyQixDLEVBQWxCLEEsQyxDLEtBQUEsSTtFQUFBLEFBQUEsYUFBYyxLLEVBQWQsSSxLQUFBLEk7SUFBQSxBQUFBLGFBQUksQSxDQUFBLFEsQyxFQUFKLEksS0FBQSxLO01BQUEsQUFBQSxNLEksRUFBQSxBLEVBQUEiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·seq_prepend '⧵b⧵v⧵＄⧵′⧵⧵⧵xC3⧵xA9⧵u{8A_9E}', [], fn ·v_4:
+        ·seq_prepend ·∅bar, ·v_4, fn ·v_7:
+          ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·v_10:
+            ·∅foo ·ƒret_0, ..·v_10
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLGFBQWtCLEEsQ0FBQSwyQixDLEVBQWxCLEEsQyxDLEtBQUEsSTtJQUFBLEFBQUEsYUFBYyxLLEVBQWQsSSxLQUFBLEk7TUFBQSxBQUFBLGFBQUksQSxDQUFBLFEsQyxFQUFKLEksS0FBQSxLO1FBQUEsQUFBQSxNLE8sRUFBQSxBLEVBQUEiCn0=
 
 
 test 'str implicit formatting handling', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     '1\n2
       3'
   | equals ƒink:
-    ·v_0 '1␊2␊3'
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxLQUFBLEEsQ0FBQSxLIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·ƒret_0 '1␊2␊3'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJzFcXG4yXG4gIDMnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0UsQSxRQUFBLEEsQ0FBQSxLIgp9
 
 
 test 'str implicit formatting escapes', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals ƒink:
-    ·v_0 '␊␍␉␌␈␋＄′⧵é語'
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEsQSxDQUFBLFciCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·ƒret_0 '␊␍␉␌␈␋＄′⧵é語'
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEsQSxDQUFBLFciCn0=
 
 

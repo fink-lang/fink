@@ -1,4 +1,4 @@
-{test, expect, equals, cps_expr} = import '!fake'
+{test, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---
@@ -6,99 +6,113 @@ scheduling builtins — yield, spawn, await, channel, send, receive
 ---
 
 test 'yield literal', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     yield 42
 
   | equals ƒink:
-    ·yield 42, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE9BQU0sRSxFIgp9
+    ·ƒink_module fn ·ƒret_1:
+      ·yield 42, ·ƒret_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE9BQU0sRSxFIgp9
 
 
 test 'yield ident', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     yield foo
 
   | equals ƒink:
-    ·yield ·∅foo, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPQUFNLEssRSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·yield ·∅foo, ·ƒret_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxPQUFNLEssRSIKfQ==
 
 
 test 'spawn ident', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     spawn task_fn
 
   | equals ƒink:
-    ·spawn ·∅task_fn, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3Bhd24gdGFza19mbiJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsT0FBTSxTLEUiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·spawn ·∅task_fn, ·ƒret_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3Bhd24gdGFza19mbiJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsT0FBTSxTLEUiCn0=
 
 
 test 'await ident', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     await fut
 
   | equals ƒink:
-    ·await ·∅fut, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxPQUFNLEssRSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·await ·∅fut, ·ƒret_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxPQUFNLEssRSIKfQ==
 
 
 test 'spawn bound to name', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     future = spawn task
 
   | equals ƒink:
-    ·spawn ·∅task, fn ·v_5:
-      ·let ·v_5, fn ·future_0:
-        ·v_2 ·future_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZnV0dXJlID0gc3Bhd24gdGFzayJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsT0FBTSxNLEtBQU4sSTtFQUFGLEFBQUEsS0FBRSxJLEtBQVQsUztJLEEsS0FBQSIKfQ==
+    ·ƒink_module fn ·ƒret_2:
+      ·spawn ·∅task, fn ·v_5:
+        ·let ·v_5, fn ·future_0:
+          ·ƒpub ·future_0, fn:
+            ·ƒret_2 ·future_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZnV0dXJlID0gc3Bhd24gdGFzayJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFTLEFBQUEsT0FBTSxNLEtBQU4sSTtJQUFGLEFBQUEsS0FBRSxJLEtBQVQsUztNQUFBLEFBQUEsTUFBQSxTLEk7USxBLFFBQUEiCn0=
 
 
 test 'await bound to name', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     result = await fut
 
   | equals ƒink:
-    ·await ·∅fut, fn ·v_5:
-      ·let ·v_5, fn ·result_0:
-        ·v_2 ·result_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0gYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkFBQVMsQUFBQSxPQUFNLEssS0FBTixJO0VBQUYsQUFBQSxLQUFFLEksS0FBVCxTO0ksQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_2:
+      ·await ·∅fut, fn ·v_5:
+        ·let ·v_5, fn ·result_0:
+          ·ƒpub ·result_0, fn:
+            ·ƒret_2 ·result_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0gYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQVMsQUFBQSxPQUFNLEssS0FBTixJO0lBQUYsQUFBQSxLQUFFLEksS0FBVCxTO01BQUEsQUFBQSxNQUFBLFMsSTtRLEEsUUFBQSIKfQ==
 
 
 test 'channel creation', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     channel 0
 
   | equals ƒink:
-    ·channel 0, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2hhbm5lbCAwIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFRLEMsRSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·channel 0, ·ƒret_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2hhbm5lbCAwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxTQUFRLEMsRSIKfQ==
 
 
 
 test 'receive from channel', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     receive ch
 
   | equals ƒink:
-    ·receive ·∅ch, ·v_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsU0FBUSxJLEUiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·receive ·∅ch, ·ƒret_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsU0FBUSxJLEUiCn0=
 
 
 test 'channel bound to name', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     ch = channel 0
 
   | equals ƒink:
-    ·channel 0, fn ·v_5:
-      ·let ·v_5, fn ·ch_0:
-        ·v_2 ·ch_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2ggPSBjaGFubmVsIDAiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBLFNBQVEsQyxLQUFSLEk7RUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7SSxBLEtBQUEiCn0=
+    ·ƒink_module fn ·ƒret_2:
+      ·channel 0, fn ·v_5:
+        ·let ·v_5, fn ·ch_0:
+          ·ƒpub ·ch_0, fn:
+            ·ƒret_2 ·ch_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2ggPSBjaGFubmVsIDAiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBSyxBQUFBLFNBQVEsQyxLQUFSLEk7SUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7TUFBQSxBQUFBLE1BQUEsSyxJO1EsQSxRQUFBIgp9
 
 
 test 'receive bound to name', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     msg = receive ch
 
   | equals ƒink:
-    ·receive ·∅ch, fn ·v_5:
-      ·let ·v_5, fn ·msg_0:
-        ·v_2 ·msg_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibXNnID0gcmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUEsU0FBUSxJLEtBQVIsSTtFQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtJLEEsS0FBQSIKfQ==
+    ·ƒink_module fn ·ƒret_2:
+      ·receive ·∅ch, fn ·v_5:
+        ·let ·v_5, fn ·msg_0:
+          ·ƒpub ·msg_0, fn:
+            ·ƒret_2 ·msg_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibXNnID0gcmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFNLEFBQUEsU0FBUSxJLEtBQVIsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNQUFBLEFBQUEsTUFBQSxNLEk7USxBLFFBQUEiCn0=

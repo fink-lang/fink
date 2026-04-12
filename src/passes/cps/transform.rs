@@ -1549,53 +1549,137 @@ fn collect_module_exports(exprs: &[Node<'_>], bind_site_to_cps: &std::collection
 
 pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> CpsResult {
   let mut g = Gen::new(scope);
-  if exprs.is_empty() {
-    // Empty module: export nothing.
-    let root = g.expr(ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args: vec![] }, None);
-    return CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() };
-  }
 
-  // Collect simple top-level exports before lowering (bind_site_to_cps is populated at Gen::new).
-  let export_ids: Vec<CpsId> = collect_module_exports(exprs, &g.bind_site_to_cps);
+  // The module-level continuation — ƒret. Pre-allocated by Gen::new.
+  // The module body forwards its last expression's result to ƒret,
+  // just like any function body.
+  let cont_id = g.cont;
+  let fret_bind = BindNode { id: cont_id, kind: Bind::Cont(ContKind::Ret) };
 
-  // Build the terminal App: ·export ·export_0, ·export_1, ...
-  let export_vals: Vec<Val> = export_ids.iter().map(|&cps_id| {
-    let origin = g.origin.try_get(cps_id).and_then(|o| *o);
-    g.val(ValKind::Ref(Ref::Synth(cps_id)), origin)
-  }).collect();
-  let export_args: Vec<Arg> = export_vals.into_iter().map(Arg::Val).collect();
-  let terminal = g.expr(ExprKind::App {
-    func: Callable::BuiltIn(BuiltIn::Export),
-    args: export_args,
-  }, None);
+  // Collect which bindings are exported (module-level simple name = expr).
+  let export_ids: std::collections::HashSet<CpsId> = if exprs.is_empty() {
+    std::collections::HashSet::new()
+  } else {
+    collect_module_exports(exprs, &g.bind_site_to_cps).into_iter().collect()
+  };
 
-  // Lower the module body, using the exports terminal as the tail.
-  let tail = Cont::Expr { args: vec![], body: Box::new(terminal) };
-  let body = lower_seq_with_tail(&mut g, exprs, tail);
-
-  // Wrap the module body in a synthetic `fink_module` LetFn. The module
-  // is defined as a function, then handed to `·module_init` — an external
-  // bootstrap provider — as its argument. `module_init` is responsible
-  // for deciding how and when to actually invoke the module (register it,
-  // schedule it, tail-call it, etc). This keeps fink-generated code free
-  // of bootstrap policy.
-  let fn_name = g.fresh_fn(None);
-  let fn_val = g.val(ValKind::Ref(Ref::Synth(fn_name.id)), None);
-  let init_app = g.expr(ExprKind::App {
-    func: Callable::BuiltIn(BuiltIn::ModuleInit),
-    args: vec![Arg::Val(fn_val)],
-  }, None);
-  let root = g.expr(ExprKind::LetFn {
-    name: fn_name,
-    params: vec![],
-    fn_kind: CpsFnKind::CpsFunction,
-    fn_body: Box::new(body),
-    cont: Cont::Expr {
+  let body = if exprs.is_empty() {
+    // Empty module: call ƒret with no args.
+    let cont_val = g.val(ValKind::ContRef(cont_id), None);
+    g.expr(ExprKind::App {
+      func: Callable::Val(cont_val),
       args: vec![],
-      body: Box::new(init_app),
-    },
+    }, None)
+  } else {
+    // Lower the module body as a sequence — same as any function body.
+    let body = lower_seq_with_tail(&mut g, exprs, Cont::Ref(cont_id));
+    // Post-process: inject ·ƒpub calls after each exported LetVal binding.
+    // TODO: move export detection to an AST desugaring pass; the CPS
+    // transform shouldn't know about implicit module-level pub semantics.
+    if export_ids.is_empty() { body } else { inject_pub_calls(&mut g, body, &export_ids) }
+  };
+
+  // Root: App(FinkModule, [Cont::Expr { args: [ƒret], body }])
+  // The CPS root is a call — every module starts with an action.
+  let root = g.expr(ExprKind::App {
+    func: Callable::BuiltIn(BuiltIn::FinkModule),
+    args: vec![Arg::Cont(Cont::Expr {
+      args: vec![fret_bind],
+      body: Box::new(body),
+    })],
   }, None);
+
   CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() }
+}
+
+/// Walk a lowered module body and wrap each exported LetVal's continuation
+/// with a `·ƒpub name, fn: <original cont>` call. This injects per-binding
+/// export side effects without changing the tail-forwarding structure.
+fn inject_pub_calls(
+  g: &mut Gen,
+  expr: Expr,
+  export_ids: &std::collections::HashSet<CpsId>,
+) -> Expr {
+  match expr.kind {
+    ExprKind::LetVal { name, val, cont } => {
+      let is_exported = export_ids.contains(&name.id);
+      // Recurse into cont first.
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      if is_exported {
+        // Wrap: LetVal name = val; ·ƒpub name, fn: <original cont body>
+        let origin = g.origin.try_get(name.id).and_then(|o| *o);
+        let val_ref = g.val(ValKind::Ref(Ref::Synth(name.id)), origin);
+        let cont_body = match cont {
+          Cont::Expr { args, body } => {
+            // Build: ·ƒpub val_ref, fn: <body>
+            let pub_app = g.expr(ExprKind::App {
+              func: Callable::BuiltIn(BuiltIn::Pub),
+              args: vec![
+                Arg::Val(val_ref),
+                Arg::Cont(Cont::Expr { args: vec![], body }),
+              ],
+            }, origin);
+            Cont::Expr { args, body: Box::new(pub_app) }
+          }
+          Cont::Ref(cont_id) => {
+            // Cont is a direct ref — wrap in ƒpub then forward.
+            let cont_val = g.val(ValKind::ContRef(cont_id), None);
+            let fwd_val = g.val(ValKind::Ref(Ref::Synth(name.id)), origin);
+            let forward = g.expr(ExprKind::App {
+              func: Callable::Val(cont_val),
+              args: vec![Arg::Val(fwd_val)],
+            }, None);
+            let pub_app = g.expr(ExprKind::App {
+              func: Callable::BuiltIn(BuiltIn::Pub),
+              args: vec![
+                Arg::Val(val_ref),
+                Arg::Cont(Cont::Expr { args: vec![], body: Box::new(forward) }),
+              ],
+            }, origin);
+            Cont::Expr { args: vec![], body: Box::new(pub_app) }
+          }
+        };
+        Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont: cont_body } }
+      } else {
+        Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
+      }
+    }
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+      // Don't recurse into fn_body — only module-level scope matters.
+      let cont = match cont {
+        Cont::Ref(_) => cont,
+        Cont::Expr { args, body } => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Cont::Expr { args, body: Box::new(body) }
+        }
+      };
+      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_kind, fn_body, cont } }
+    }
+    // App at module level — recurse into Cont::Expr args to find LetVals
+    // that need ·ƒpub wrapping (e.g. `s = add 1, 2` produces an App whose
+    // cont body contains the LetVal for `s`).
+    ExprKind::App { func, args } => {
+      let args = args.into_iter().map(|a| match a {
+        Arg::Cont(Cont::Expr { args: ca, body }) => {
+          let body = inject_pub_calls(g, *body, export_ids);
+          Arg::Cont(Cont::Expr { args: ca, body: Box::new(body) })
+        }
+        other => other,
+      }).collect();
+      Expr { id: expr.id, kind: ExprKind::App { func, args } }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let then = inject_pub_calls(g, *then, export_ids);
+      let else_ = inject_pub_calls(g, *else_, export_ids);
+      Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
+    }
+  }
 }
 
 /// Lower a single expression node (or a Module root) to CPS IR.
@@ -2653,62 +2737,6 @@ fn extract_bind_ast_id<'src>(node: &'src Node<'src>) -> AstId {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-mod cps_tests {
-  use crate::passes::cps::fmt::Ctx;
-
-  fn cps_expr(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => {
-        let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
-        let bk = super::super::ir::collect_bind_kinds(&cps.root);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None, bind_kinds: Some(&bk) };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
-        let json = srcmap.to_json();
-        let b64 = crate::sourcemap::base64_encode(json.as_bytes());
-        format!("{output}\n#sourcemaps:{b64}")
-      }
-      Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
-  test_macros::include_fink_tests!("src/passes/cps/test_literals.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_bindings.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_functions.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_operators.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_scheduling.fnk");
-}
-
-#[cfg(test)]
-mod pat_tests {
-  use crate::passes::cps::fmt::Ctx;
-
-  fn cps_expr(src: &str) -> String {
-    match crate::to_desugared(src, "test") {
-      Ok(desugared) => {
-        let cps = super::lower_expr(&desugared.result.root, &desugared.scope);
-        let bk = super::super::ir::collect_bind_kinds(&cps.root);
-        let ctx = Ctx { origin: &cps.origin, ast_index: &desugared.ast_index, captures: None, param_info: None, bind_kinds: Some(&bk) };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.root, &ctx, "test", src);
-        let json = srcmap.to_json();
-        let b64 = crate::sourcemap::base64_encode(json.as_bytes());
-        format!("{output}\n#sourcemaps:{b64}")
-      }
-      Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
-  test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
-}
-
-#[cfg(test)]
 mod module_tests {
   use crate::passes::cps::fmt::Ctx;
 
@@ -2728,4 +2756,18 @@ mod module_tests {
   }
 
   test_macros::include_fink_tests!("src/passes/cps/test_module.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_literals.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_bindings.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_functions.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_operators.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_scheduling.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bind.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_seq.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_rec.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_match.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_bindings.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_patterns_str.fnk");
 }

@@ -290,15 +290,22 @@ pub enum BuiltIn {
   Read,
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
+  // Legacy: replaced by Pub for new CPS shape. TODO: remove.
   Export,
+  // Per-binding export — side effect that registers a name as public.
+  // Args: exported value, cont (no args — pure side effect).
+  // Emitted by lower_module after each module-level binding that is exported.
+  Pub,
   // Module import — `import './foo.fnk'` is a builtin function at module level.
   Import,
-  // External bootstrap entry point for a compiled module. `lower_module`
-  // wraps the root in `LetFn(fink_module, ...)` and makes its outer cont
-  // `·module_init fink_module` — handing the module's defined fn to an
-  // externally-provided `module_init` that decides what to do with it
-  // (invoke it, register it, schedule it, etc.). The responsibility of
-  // actually running the module lives outside the generated code.
+  // Module entry point — the root App of every compiled module.
+  // `lower_module` emits `App(FinkModule, [Cont::Expr { args: [ƒret], body }])`
+  // as the CPS root. The module body is the cont's body, ending with a
+  // tail call to ƒret. At runtime, the host provides `fink_module` which
+  // invokes the cont with a done continuation.
+  FinkModule,
+  // Legacy: external bootstrap entry point. Replaced by FinkModule.
+  // TODO: remove once all downstream passes are updated.
   ModuleInit,
 }
 
