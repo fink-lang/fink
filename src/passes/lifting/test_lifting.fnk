@@ -62,6 +62,48 @@ test 'single binding export with trailing expr', fn:
 
 
 
+test 'two fn exports', fn:
+  expect lift ƒink:
+    foo = fn: 123
+    bar = fn: 345
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_2:
+      ·foo_0 = ·v_3 = fn [·ƒret_4]:
+        ·ƒret_4 123
+      ·bar_1 = ·v_9 = fn [·ƒret_10]:
+        ·ƒret_10 345
+      ·ƒpub ·foo_0, fn:
+        ·ƒpub ·bar_1, fn:
+          ·ƒret_2 ·bar_1
+
+test 'fooobar — multi fn with calls', fn:
+  expect lift ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      a * b
+
+    p = mul s, 3
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_8:
+      ·add_0 = ·v_9 = fn [·ƒret_10, ·a_4, ·b_5]:
+        ·op_plus ·a_4, ·b_5, ·ƒret_10
+      ·mul_2 = ·v_22 = fn [·ƒret_23, ·a_6, ·b_7]:
+        ·op_mul ·a_6, ·b_7, ·ƒret_23
+      ·ƒpub ·add_0, fn:
+        ·add_0 fn ·v_20:
+          ·s_1 = ·v_20
+          ·ƒpub ·s_1, fn:
+            ·ƒpub ·mul_2, fn:
+              ·mul_2 fn ·v_33:
+                ·p_3 = ·v_33
+                ·ƒpub ·p_3, fn:
+                  ·ƒret_8 ·p_3, ·s_1, 3, 1, 2
+
+
 ---
 pure functions — no captures, unchanged
 ---
@@ -147,14 +189,14 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
     ·ƒink_module fn ·ƒret_5:
       ·f_0 = ·v_6 = fn [·ƒret_7, ·x_2]:
         ·ƒret_7 ·x_2
+      ·v_40 = fn {·a_41}, [·ƒret_15, ·b_4]:
+        ·op_plus ·a_41, ·b_4, ·ƒret_15
+      ·g_1 = ·v_12 = fn [·ƒret_13, ·a_3]:
+        ·closure ·v_40, ·a_3, ·ƒret_13
+
       ·ƒpub ·f_0, fn:
-        ·v_40 = fn {·a_41}, [·ƒret_15, ·b_4]:
-          ·op_plus ·a_41, ·b_4, ·ƒret_15
-        ·g_1 = ·v_12 = fn [·ƒret_13, ·a_3]:
-          ·closure ·v_40, ·a_3, ·ƒret_13
         ·ƒpub ·g_1, fn:
           ·ƒret_5 ·g_1
-
 
 ---
 depth-2 closures — multiple nesting levels
@@ -213,9 +255,9 @@ test 'multi-fn module — add and main', fn:
     ·ƒink_module fn ·ƒret_4:
       ·add_0 = ·v_5 = fn [·ƒret_6, ·a_2, ·b_3]:
         ·op_plus ·a_2, ·b_3, ·ƒret_6
-      ·ƒpub ·add_0, fn:
-        ·main_1 = ·v_13 = fn [·ƒret_14]:
+      ·main_1 = ·v_13 = fn [·ƒret_14]:
           ·add_0 ·ƒret_14, 3, 4
+      ·ƒpub ·add_0, fn:
         ·ƒpub ·main_1, fn:
           ·ƒret_4 ·main_1
 
@@ -239,16 +281,16 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
     ·ƒink_module fn ·ƒret_6:
       ·double_0 = ·v_7 = fn [·ƒret_8, ·x_3]:
         ·op_mul ·x_3, 2, ·ƒret_8
-      ·ƒpub ·double_0, fn:
-        ·inc_1 = ·v_15 = fn [·ƒret_16, ·x_4]:
+      ·inc_1 = ·v_15 = fn [·ƒret_16, ·x_4]:
           ·op_plus ·x_4, 1, ·ƒret_16
+      ·v_61 = fn {·ƒret_62}, [·v_27]:
+        ·x_5 = ·v_27
+        ·inc_1 ·ƒret_62, ·x_5
+      ·main_2 = ·v_23 = fn [·ƒret_24]:
+        ·v_66 = ·closure ·v_61, ·ƒret_24
+        ·double_0 ·v_66, 5
+      ·ƒpub ·double_0, fn:
         ·ƒpub ·inc_1, fn:
-          ·v_61 = fn {·ƒret_62}, [·v_27]:
-            ·x_5 = ·v_27
-            ·inc_1 ·ƒret_62, ·x_5
-          ·main_2 = ·v_23 = fn [·ƒret_24]:
-            ·v_66 = ·closure ·v_61, ·ƒret_24
-            ·double_0 ·v_66, 5
           ·ƒpub ·main_2, fn:
             ·ƒret_6 ·main_2
 
