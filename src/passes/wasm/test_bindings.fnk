@@ -11,7 +11,6 @@ test 'single binding export', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -29,7 +28,7 @@ test 'single binding export', fn:
       (export "foo" (global $foo))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTs7Ozs7OztBOztBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
 
 
 
@@ -41,7 +40,6 @@ test 'let binding', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -59,7 +57,7 @@ test 'let binding', fn:
       (export "x" (global $x))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDQyXG54Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBOzs7Ozs7O0E7O0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDQyXG54Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTs7Ozs7OztBOztBQUFBOztBIgp9
 
 
 
@@ -72,7 +70,6 @@ test 'multiple let bindings used', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -95,7 +92,7 @@ test 'multiple let bindings used', fn:
       (export "y" (global $y))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDJcbnkgPSAzXG54ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBO0E7QTs7Ozs7OztBOzs7QUFBQTtBQUNBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDJcbnkgPSAzXG54ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7O0FBQUE7QUFDQTs7QSIKfQ==
 
 
 
@@ -108,7 +105,6 @@ test 'binding rhs is a call', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -166,5 +162,5 @@ test 'binding rhs is a call', fn:
       (export "add" (global $add))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjogYSArIGJcbnggPSBhZGQgMSwgMiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBO0E7QTtBOzs7OztBOzs7QTtBO0E7QTs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7Ozs7Ozs7QTs7O0FBQ0E7QUFEQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjogYSArIGJcbnggPSBhZGQgMSwgMiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTs7Ozs7QTs7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7Ozs7O0E7OztBQUNBO0FBREE7O0EiCn0=
 

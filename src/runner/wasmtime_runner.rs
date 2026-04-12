@@ -205,14 +205,46 @@ pub fn run(
 
   let instance = linker.instantiate(&mut store, &module).map_err(|e| e.to_string())?;
 
-  // Bootstrap: run `fink_entry` to populate export slot globals. The
-  // compiler wraps the module root as a synthetic `fink_module` LetFn with
-  // an outer `·module_init fink_module` cont; `$fink_entry` is the emitted
-  // Fn2 that invokes `module_init` with the root closure. Running
-  // fink_entry eagerly runs the module's top-level bindings, writing user
-  // exports into their per-name slot globals. Without this, the `main`
-  // wrapper below reads a null slot and traps inside `_apply`.
-  if let Some(fink_entry) = instance.get_func(&mut store, "fink_entry") {
+  let box_func = instance.get_func(&mut store, "_box_func")
+    .ok_or("no '_box_func' export")?;
+
+  // Bootstrap: run fink_module to populate export slot globals.
+  // Create a no-op done continuation as ƒret, build [done] args,
+  // and call _apply([done], fink_module_closure).
+  if let Some(fink_module) = instance.get_func(&mut store, "fink_module") {
+    let apply = instance.get_func(&mut store, "_apply")
+      .ok_or("no '_apply' export")?;
+
+    // Box fink_module as a $Closure.
+    let mut boxed_module = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(fink_module))], &mut boxed_module)
+      .map_err(|e| format!("_box_func(fink_module) failed: {}", e))?;
+
+    // No-op done continuation — we only care about the global.set side effects.
+    let fn2_stub = instance.get_func(&mut store, "_fn2_stub")
+      .ok_or("no '_fn2_stub' export")?;
+    let done_ty = fn2_stub.ty(&store);
+    let done = Func::new(&mut store, done_ty, |_caller, _params, _results| Ok(()));
+    let mut boxed_done = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut boxed_done)
+      .map_err(|e| format!("_box_func(done) failed: {}", e))?;
+
+    // Build args [done] and call _apply.
+    let list_nil = instance.get_func(&mut store, "_list_nil")
+      .ok_or("no '_list_nil' export")?;
+    let mut nil = [Val::AnyRef(None)];
+    list_nil.call(&mut store, &[], &mut nil)
+      .map_err(|e| format!("_list_nil failed: {}", e))?;
+    let list_prepend = instance.get_func(&mut store, "_list_prepend")
+      .ok_or("no '_list_prepend' export")?;
+    let mut init_args = [Val::AnyRef(None)];
+    list_prepend.call(&mut store, &[boxed_done[0], nil[0]], &mut init_args)
+      .map_err(|e| format!("_list_prepend failed: {}", e))?;
+
+    apply.call(&mut store, &[init_args[0], boxed_module[0]], &mut [])
+      .map_err(|e| format!("fink_module init failed: {}", e))?;
+  } else if let Some(fink_entry) = instance.get_func(&mut store, "fink_entry") {
+    // Legacy bootstrap path.
     fink_entry.call(
       &mut store,
       &[Val::AnyRef(None), Val::AnyRef(None)],
@@ -220,14 +252,19 @@ pub fn run(
     ).map_err(|e| format!("fink_entry failed: {}", e))?;
   }
 
-  // Look up the user's main function, box it, and pass to _run_main.
-  let main_fn = instance.get_func(&mut store, "main")
-    .ok_or("no 'main' export")?;
-  let box_func = instance.get_func(&mut store, "_box_func")
-    .ok_or("no '_box_func' export")?;
-  let mut boxed_main = [Val::AnyRef(None)];
-  box_func.call(&mut store, &[Val::FuncRef(Some(main_fn))], &mut boxed_main)
-    .map_err(|e| format!("_box_func failed: {}", e))?;
+  // Look up main — new model: global holding a $Closure; legacy: function export.
+  let boxed_main = if let Some(main_global) = instance.get_global(&mut store, "main") {
+    // New model: main is already a $Closure in a global.
+    main_global.get(&mut store)
+  } else if let Some(main_fn) = instance.get_func(&mut store, "main") {
+    // Legacy: main is a function export — box it.
+    let mut result = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(main_fn))], &mut result)
+      .map_err(|e| format!("_box_func(main) failed: {}", e))?;
+    result[0]
+  } else {
+    return Err("no 'main' export (neither function nor global)".into());
+  };
 
   // Build the fink CLI args list as $List<$Str>, prepending in reverse so
   // the final order matches `args`.
@@ -235,7 +272,7 @@ pub fn run(
 
   let run_main = instance.get_func(&mut store, "_run_main")
     .ok_or("no '_run_main' export")?;
-  run_main.call(&mut store, &[boxed_main[0], args_list], &mut [])
+  run_main.call(&mut store, &[boxed_main, args_list], &mut [])
     .map_err(|e| format!("_run_main failed: {}", e))?;
 
   Ok(*exit_code.lock().unwrap())

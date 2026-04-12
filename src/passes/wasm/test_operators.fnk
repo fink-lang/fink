@@ -10,7 +10,6 @@ test 'add two literals', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -21,7 +20,7 @@ test 'add two literals', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiArIDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiArIDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
 
 
 
@@ -32,7 +31,6 @@ test 'chained arithmetic', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -54,7 +52,7 @@ test 'chained arithmetic', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiAqIDMgKyA0Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7Ozs7QTs7QTtBO0E7Ozs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiAqIDMgKyA0Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7O0EiCn0=
 
 
 test 'unary not', fn:
@@ -64,7 +62,6 @@ test 'unary not', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -75,7 +72,7 @@ test 'unary not', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibm90IHRydWUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibm90IHRydWUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
 
 
 test 'comparison eq', fn:
@@ -85,7 +82,6 @@ test 'comparison eq', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -96,7 +92,7 @@ test 'comparison eq', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiA9PSAzIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiA9PSAzIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBIgp9
 
 
 test 'comparison lt', fn:
@@ -106,7 +102,6 @@ test 'comparison lt', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -117,7 +112,7 @@ test 'comparison lt', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiA8IDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiA8IDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
 
 
 test 'logical and', fn:
@@ -127,7 +122,6 @@ test 'logical and', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -138,7 +132,7 @@ test 'logical and', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSBhbmQgZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSBhbmQgZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
 
 
 test 'logical or', fn:
@@ -148,7 +142,6 @@ test 'logical or', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -159,7 +152,7 @@ test 'logical or', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSBvciBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSBvciBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
 
 
 test 'range exclusive', fn:
@@ -169,7 +162,6 @@ test 'range exclusive', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -180,7 +172,7 @@ test 'range exclusive', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uMTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uMTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
 
 
 test 'range inclusive', fn:
@@ -190,7 +182,6 @@ test 'range inclusive', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -201,7 +192,7 @@ test 'range inclusive', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uLjEwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uLjEwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBIgp9
 
 
 test 'range in', fn:
@@ -211,7 +202,6 @@ test 'range in', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -233,5 +223,5 @@ test 'range in', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNSBpbiAwLi4xMCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNSBpbiAwLi4xMCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7OztBOztBO0E7QTs7OztBOztBIgp9
 

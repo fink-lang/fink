@@ -9,7 +9,6 @@ test 'literal bool', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -22,7 +21,7 @@ test 'literal bool', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7Ozs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
 
 
 test 'literal bool false', fn:
@@ -32,7 +31,6 @@ test 'literal bool false', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -45,7 +43,7 @@ test 'literal bool false', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
 
 
 test 'literal int', fn:
@@ -55,7 +53,6 @@ test 'literal int', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -68,7 +65,7 @@ test 'literal int', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
 
 
 test 'literal neg 0', fn:
@@ -78,7 +75,6 @@ test 'literal neg 0', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -91,7 +87,7 @@ test 'literal neg 0', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
 
 
 
@@ -102,7 +98,6 @@ test 'literal float', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -115,7 +110,7 @@ test 'literal float', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS4yMzRlKzUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS4yMzRlKzUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
 
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct
@@ -124,6 +119,10 @@ skip test 'literal decimal', fn:
     1.0d
   | equals wat":
     TODO
+
+
+
+
 
 
 

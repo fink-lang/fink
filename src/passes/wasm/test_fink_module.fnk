@@ -24,7 +24,6 @@ test 'single binding export with trailing expr', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -42,7 +41,7 @@ test 'single binding export with trailing expr', fn:
       (export "foo" (global $foo))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7Ozs7O0E7O0FBQUE7O0EiCn0=
 
 
 
@@ -55,7 +54,6 @@ test 'minimal module exports', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -99,7 +97,7 @@ test 'minimal module exports', fn:
       (export "bar" (global $bar))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46IDEyM1xuYmFyID0gZm46IDM0NSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7O0E7QTs7Ozs7QTs7O0E7QTs7Ozs7QTs7O0FBQUE7QUFDQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46IDEyM1xuYmFyID0gZm46IDM0NSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7OztBO0E7Ozs7O0E7OztBO0E7Ozs7O0E7OztBQUFBO0FBQ0E7O0EiCn0=
 
 ---
 simple main: module has a $_fink_module function whose body contains
@@ -116,7 +114,6 @@ test 'minimal error calling same local func twice', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -179,7 +176,7 @@ test 'minimal error calling same local func twice', fn:
       (export "foo" (global $foo))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46XG4gIG5pID0gZm4gYTogYVxuICBuYSA9IG5pIDJcbiAgbmkgbmEiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7OztBOzs7QTtBO0E7QTtBOzs7Ozs7OztBOztBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46XG4gIG5pID0gZm4gYTogYVxuICBuYSA9IG5pIDJcbiAgbmkgbmEiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7O0E7O0E7QTtBOzs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
 
 
 test 'chained fn calls with intermediate bindings', fn:
@@ -198,7 +195,6 @@ test 'chained fn calls with intermediate bindings', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -296,7 +292,7 @@ test 'chained fn calls with intermediate bindings', fn:
       (export "add" (global $add))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxucyA9IGFkZCAxLCAyXG5cbm11bCA9IGZuIGEsIGI6XG4gIGEgKiBiXG5cbnAgPSBtdWwgcywgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7QTs7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7QTtBOzs7Ozs7O0E7Ozs7O0FBUUE7QUFMQTtBQUVBO0FBTEE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxucyA9IGFkZCAxLCAyXG5cbm11bCA9IGZuIGEsIGI6XG4gIGEgKiBiXG5cbnAgPSBtdWwgcywgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7O0E7OztBO0E7QTtBOzs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7OztBOzs7OztBQVFBO0FBTEE7QUFFQTtBQUxBOztBIgp9
 
 
 test 'chained operator calls with intermediate bindings', fn:
@@ -308,7 +304,6 @@ test 'chained operator calls with intermediate bindings', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -354,7 +349,7 @@ test 'chained operator calls with intermediate bindings', fn:
       (export "a" (global $a))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDIgKiAzXG5iID0gYSArIDRcbmIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBOzs7O0E7O0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7O0E7OztBQUNBO0FBREE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDIgKiAzXG5iID0gYSArIDRcbmIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7OztBOzs7QUFDQTtBQURBOztBIgp9
 
 
 # TODO recursive functions

@@ -11,7 +11,6 @@ test 'user fn call', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -46,7 +45,7 @@ test 'user fn call', fn:
       (export "add" (global $add))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbmFkZCAzLCA0Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7O0E7OztBO0E7QTtBOzs7Ozs7O0E7O0FBQUE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcbmFkZCAzLCA0Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7OztBOzs7QTtBO0E7QTs7Ozs7OztBOztBQUFBOztBIgp9
 
 
 test 'chained fn calls', fn:
@@ -62,7 +61,6 @@ test 'chained fn calls', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -137,7 +135,7 @@ test 'chained fn calls', fn:
       (export "inc" (global $inc))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5cbnggPSBkb3VibGUgNVxuaW5jIHgiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7OztBOzs7QTtBO0E7Ozs7O0E7OztBO0E7QTs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBOzs7Ozs7QTs7OztBQUtBO0FBTEE7QUFFQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5cbnggPSBkb3VibGUgNVxuaW5jIHgiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7O0E7QTtBOzs7OztBOzs7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7Ozs7O0E7Ozs7QUFLQTtBQUxBO0FBRUE7O0EiCn0=
 
 
 test 'pipe unary', fn:
@@ -152,7 +150,6 @@ test 'pipe unary', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -221,7 +218,7 @@ test 'pipe unary', fn:
       (export "inc" (global $inc))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5cbjUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7OztBOzs7QTtBO0E7Ozs7O0E7OztBO0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7Ozs7QTs7O0FBQUE7QUFFQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4geDpcbiAgeCAqIDJcbmluYyA9IGZuIHg6XG4gIHggKyAxXG5cbjUgfCBkb3VibGUgfCBpbmMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7O0E7QTtBOzs7OztBOzs7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7Ozs7O0E7OztBQUFBO0FBRUE7O0EiCn0=
 
 
 test 'match literal first arm', fn:
@@ -233,7 +230,6 @@ test 'match literal first arm', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -375,7 +371,7 @@ test 'match literal first arm', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggMDpcbiAgMDogNDJcbiAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggMDpcbiAgMDogNDJcbiAgXzogOTkiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7OztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7OztBOztBIgp9
 
 
 test 'match with binding', fn:
@@ -400,7 +396,6 @@ test 'simple recursion', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -588,7 +583,7 @@ test 'simple recursion', fn:
       (export "recurse" (global $recurse))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5yZWN1cnNlIDUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTtBOzs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7OztBOztBOzs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7QTs7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7OztBOztBQUFBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjdXJzZSA9IGZuIG46XG4gIG1hdGNoIG46XG4gICAgMDogNDJcbiAgICBfOiByZWN1cnNlIG4gLSAxXG5yZWN1cnNlIDUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7OztBOztBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7OztBOztBO0E7QTs7Ozs7OztBOztBO0E7QTtBOzs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7O0E7OztBO0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
 
 
 test 'closure construction and call', fn:
@@ -601,7 +596,6 @@ test 'closure construction and call', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -669,7 +663,7 @@ test 'closure construction and call', fn:
       (export "add" (global $add))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4geDpcbiAgZm4geTogeCArIHlcbmFkZDEgPSBhZGQgMVxuYWRkMSAyIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7O0E7OztBO0E7QTs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBOzs7Ozs7QTs7O0FBRUE7QUFGQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4geDpcbiAgZm4geTogeCArIHlcbmFkZDEgPSBhZGQgMVxuYWRkMSAyIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOzs7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTs7Ozs7O0E7OztBQUVBO0FBRkE7O0EiCn0=
 
 
 # TODO, duplicate?
@@ -685,7 +679,6 @@ test 'recursive list sum', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
-      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -1060,6 +1053,6 @@ test 'recursive list sum', fn:
       (export "sum" (global $sum))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3VtID0gZm4gaXRlbXMsIGM6XG4gIG1hdGNoIGl0ZW1zOlxuICAgIFtdOiBjXG4gICAgW2EsIC4ucmVzdF06IHN1bSByZXN0LCBjICsgYVxuXG5zdW0gWzEsIDIsIDMsIDRdLCAwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0FBR0ksb0JBQUE7QUFBQSxzQkFBQTtBQUFBO0FBRkYsMEJBRUUsa01BRkY7QTs7QTtBO0E7Ozs7O0FBQUEsMEJBQUEscUJBQUE7QTs7QTtBO0E7QUFBQTtBQUFBLHNCQUFBOzs7K0NBQUE7QTs7QTtBOzs7K0NBQUE7QTs7QTtBO0E7QTtBQUFBLHNCQUFBO0FBQUEsc0JBQUE7O0FBQUE7OztBQUFBLDBCQUFBLHFCQURjOzs7OytDQUFBOztBOztBO0E7QTtBO0E7QTs7QUFBQSxzQkFBQTs7O0FBQUEsc0JBQUE7OENBQ1I7QTs7QTtBO0E7QTtBO0E7Ozs7OztBQUFOLHNCQUFBOztvRUFJZ0I7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QUFBbEIsc0JBQUE7Ozs7O0FBTEEsK0NBQUE7QTs7QTtBO0E7QTtBQUtJLHNCQUFBO0FBQUEseUJBQUE7Ozs7O0FBTEosd0JBQUE7QUFLUSwrQ0FBQTtBOztBO0E7QTtBO0E7QTtBQUFKLHNCQUFBOzs7Ozs7QUFMSixzQkFBQTtBQUtXLDJCQUFBLG9DQUFQO0E7O0E7QTtBO0E7QTtBO0E7QTtBQUFBLHNCQUFBO0FBQVUsc0JBQUE7QUFBVjtBQUFBLHNCQUFBOzs7Ozs7Ozs7QTs7QTtBOzs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7OztBOzs7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7QTs7QTtBOzs7QTs7QUFMSjs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3VtID0gZm4gaXRlbXMsIGM6XG4gIG1hdGNoIGl0ZW1zOlxuICAgIFtdOiBjXG4gICAgW2EsIC4ucmVzdF06IHN1bSByZXN0LCBjICsgYVxuXG5zdW0gWzEsIDIsIDMsIDRdLCAwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTs7QUFHSSxzQkFBQTtBQUFBO0FBQUEsMEJBQUEsa01BRkY7QTs7QTtBO0E7QUFBQSxzQkFBQTs7OzsrQ0FBQTtBOztBO0E7QTtBQUFBLHNCQUFBOzs7QUFBQSx3QkFBQTtBQUFBLCtDQUFBO0E7O0E7QTs7OytDQUFBO0E7O0E7QTtBO0E7O0FBQUEsc0JBQUE7O0FBQUE7OzsrQ0FBQTs7OzsrQ0FBQTs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs4Q0FEYztBOztBO0E7QTtBO0E7QTs7Ozs7O0FBQ1Isc0JBQUE7O0FBQUEsK0JBQUEscUNBSVU7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QUFBZCxzQkFBQTs7QUFBSix3QkFBQTs7OytDQUxBO0E7O0E7QTtBO0E7QUFBQSxzQkFBQTtBQUtLLHlCQUFBO0FBQUQscUJBQUE7QUFBQSx3QkFBQTs7OzsrQ0FMSjtBOztBO0E7QTtBO0E7QTtBQUtRLHNCQUFBOztBQUFKLHNCQUFBO0FBQUEsb0JBQUE7Ozs7QUFMSiwrREFBQTtBOztBO0E7QTtBO0E7QTtBO0E7QUFLVyxzQkFBQTtBQUFQLHNCQUFBOztBQUFVOzs7QUFBVix1QkFBQTtBQUFBLHdCQUFBOzs7OztBOztBO0E7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7OztBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7OztBOztBQUxKOztBIgp9
 
 
