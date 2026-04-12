@@ -444,6 +444,19 @@ fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) 
           collect_into(body.as_ref(), fc, out);
           return;
         }
+      // ·ƒpub is a side-effect statement: render as `·ƒpub val` then
+      // continue with the cont body as sequential statements.
+      if matches!(func, Callable::BuiltIn(BuiltIn::Pub))
+        && let Some((value_args, Cont::Expr { body, .. })) = split_trailing_cont(args) {
+          let func_node = ident(&render_builtin_flat(&BuiltIn::Pub));
+          let arg_nodes: Vec<Node<'static>> = value_args.iter().map(|a| match a {
+            Arg::Val(v) => render_val(v, fc),
+            _ => ident("_"),
+          }).collect();
+          out.push(apply_node(func_node, arg_nodes));
+          collect_into(body.as_ref(), fc, out);
+          return;
+        }
       out.push(render_app(func, args, fc));
     }
 

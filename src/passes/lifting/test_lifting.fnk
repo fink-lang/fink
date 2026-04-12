@@ -57,8 +57,8 @@ test 'single binding export', fn:
     ·ƒink_module fn ·ƒret_1:
       ·foo_0 = ·v_2 = fn [·ƒret_3]:
         ·ƒret_3 123
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_1 ·foo_0
+      ·ƒpub ·foo_0
+      ·ƒret_1 ·foo_0
 
 test 'single binding export with trailing expr', fn:
   expect lift ƒink:
@@ -68,8 +68,8 @@ test 'single binding export with trailing expr', fn:
     ·ƒink_module fn ·ƒret_1:
       ·foo_0 = ·v_2 = fn [·ƒret_3]:
         ·ƒret_3 123
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_1 42
+      ·ƒpub ·foo_0
+      ·ƒret_1 42
 
 
 
@@ -81,11 +81,11 @@ test 'two fn exports', fn:
     ·ƒink_module fn ·ƒret_2:
       ·foo_0 = ·v_3 = fn [·ƒret_4]:
         ·ƒret_4 123
-      ·ƒpub ·foo_0, fn:
-        ·bar_1 = ·v_9 = fn [·ƒret_10]:
-          ·ƒret_10 345
-        ·ƒpub ·bar_1, fn:
-          ·ƒret_2 ·bar_1
+      ·ƒpub ·foo_0
+      ·bar_1 = ·v_9 = fn [·ƒret_10]:
+        ·ƒret_10 345
+      ·ƒpub ·bar_1
+      ·ƒret_2 ·bar_1
 
 test 'fooobar — multi fn with calls', fn:
   expect lift ƒink:
@@ -106,20 +106,20 @@ test 'fooobar — multi fn with calls', fn:
         ·op_mul ·a_6, ·b_7, ·ƒret_23
       ·v_76 = fn {·ƒret_77}, [·v_33]:
         ·p_3 = ·v_33
-        ·ƒpub ·p_3, fn:
-          ·ƒret_77 ·p_3
+        ·ƒpub ·p_3
+        ·ƒret_77 ·p_3
       ·v_63 = fn {·ƒret_64}, [·v_20]:
         ·s_1 = ·v_20
-        ·ƒpub ·s_1, fn:
-          ·mul_2 = ·v_22
-          ·ƒpub ·mul_2, fn:
-            ·v_81 = ·closure ·v_76, ·ƒret_64
-            ·mul_2 ·v_81, ·s_1, 3
+        ·ƒpub ·s_1
+        ·mul_2 = ·v_22
+        ·ƒpub ·mul_2
+        ·v_81 = ·closure ·v_76, ·ƒret_64
+        ·mul_2 ·v_81, ·s_1, 3
       ·add_0 = ·v_9
-      ·ƒpub ·add_0, fn:
-        ·ƒret_73 = fn [·v_68]:
-          ·add_0 ·v_68, 1, 2
-        ·closure ·v_63, ·ƒret_8, ·ƒret_73
+      ·ƒpub ·add_0
+      ·ƒret_73 = fn [·v_68]:
+        ·add_0 ·v_68, 1, 2
+      ·closure ·v_63, ·ƒret_8, ·ƒret_73
 
 
 ---
@@ -134,8 +134,8 @@ test 'pure fn is unchanged', fn:
     ·ƒink_module fn ·ƒret_2:
       ·f_0 = ·v_3 = fn [·ƒret_4, ·x_1]:
         ·ƒret_4 ·x_1
-      ·ƒpub ·f_0, fn:
-        ·ƒret_2 ·f_0
+      ·ƒpub ·f_0
+      ·ƒret_2 ·f_0
 
 
 test 'pure nested fn — no captures, hoisted to module scope', fn:
@@ -149,8 +149,8 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
         ·ƒret_7 ·b_2
       ·foo_0 = ·v_4 = fn [·ƒret_5, ·a_1]:
         ·ƒret_5 ·v_6
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_3 ·foo_0
+      ·ƒpub ·foo_0
+      ·ƒret_3 ·foo_0
 
 
 ---
@@ -167,13 +167,13 @@ test 'fn call result bound at module level', fn:
         ·op_plus ·a_2, ·b_3, ·ƒret_6
       ·v_34 = fn {·ƒret_35}, [·v_16]:
         ·x_1 = ·v_16
-        ·ƒpub ·x_1, fn:
-          ·ƒret_35 ·x_1
+        ·ƒpub ·x_1
+        ·ƒret_35 ·x_1
       ·add_0 = ·v_5
-      ·ƒpub ·add_0, fn:
-        ·ƒret_44 = fn [·v_39]:
-          ·add_0 ·v_39, 1, 2
-        ·closure ·v_34, ·ƒret_4, ·ƒret_44
+      ·ƒpub ·add_0
+      ·ƒret_44 = fn [·v_39]:
+        ·add_0 ·v_39, 1, 2
+      ·closure ·v_34, ·ƒret_4, ·ƒret_44
 
 
 test 'chained ops at module level', fn:
@@ -201,8 +201,8 @@ test 'chained arithmetic — cont body lifted', fn:
       ·main_0 = ·v_3 = fn [·ƒret_4]:
         ·v_35 = ·closure ·v_30, ·ƒret_4
         ·op_mul 2, 3, ·v_35
-      ·ƒpub ·main_0, fn:
-        ·ƒret_2 ·main_0
+      ·ƒpub ·main_0
+      ·ƒret_2 ·main_0
 
 
 ---
@@ -221,8 +221,8 @@ test 'captured binding becomes leading param', fn:
         ·op_plus ·a_28, ·b_2, ·ƒret_7
       ·foo_0 = ·v_4 = fn [·ƒret_5, ·a_1]:
         ·closure ·v_27, ·a_1, ·ƒret_5
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_3 ·foo_0
+      ·ƒpub ·foo_0
+      ·ƒret_3 ·foo_0
 
 
 test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
@@ -242,10 +242,10 @@ test 'two module-level bindings — closure hoisted, pure fn unchanged', fn:
       ·v_12 = fn [·ƒret_13, ·a_3]:
         ·closure ·v_42, ·a_3, ·ƒret_13
       ·f_0 = ·v_6
-      ·ƒpub ·f_0, fn:
-        ·g_1 = ·v_12
-        ·ƒpub ·g_1, fn:
-          ·ƒret_5 ·g_1
+      ·ƒpub ·f_0
+      ·g_1 = ·v_12
+      ·ƒpub ·g_1
+      ·ƒret_5 ·g_1
 
 ---
 depth-2 closures — multiple nesting levels
@@ -269,8 +269,8 @@ test 'depth-2 closure', fn:
         ·closure ·v_46, ·a_38, ·b_2, ·ƒret_8
       ·foo_0 = ·v_5 = fn [·ƒret_6, ·a_1]:
         ·closure ·v_37, ·a_1, ·ƒret_6
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_4 ·foo_0
+      ·ƒpub ·foo_0
+      ·ƒret_4 ·foo_0
 
 
 test 'multiple captures at depth-2', fn:
@@ -288,8 +288,8 @@ test 'multiple captures at depth-2', fn:
         ·closure ·v_41, ·a_33, ·b_2, ·ƒret_8
       ·foo_0 = ·v_5 = fn [·ƒret_6, ·a_1]:
         ·closure ·v_32, ·a_1, ·ƒret_6
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_4 ·foo_0
+      ·ƒpub ·foo_0
+      ·ƒret_4 ·foo_0
 
 
 test 'multi-fn module — add and main', fn:
@@ -304,11 +304,11 @@ test 'multi-fn module — add and main', fn:
     ·ƒink_module fn ·ƒret_4:
       ·add_0 = ·v_5 = fn [·ƒret_6, ·a_2, ·b_3]:
         ·op_plus ·a_2, ·b_3, ·ƒret_6
-      ·ƒpub ·add_0, fn:
-        ·main_1 = ·v_13 = fn [·ƒret_14]:
-          ·add_0 ·ƒret_14, 3, 4
-        ·ƒpub ·main_1, fn:
-          ·ƒret_4 ·main_1
+      ·ƒpub ·add_0
+      ·main_1 = ·v_13 = fn [·ƒret_14]:
+        ·add_0 ·ƒret_14, 3, 4
+      ·ƒpub ·main_1
+      ·ƒret_4 ·main_1
 
 test 'chained module-fn calls via let — cont closes over outer cont', fn:
   # The cont ·v_55 closes over ·v_28 (the outer cont param) via ·closure.
@@ -339,14 +339,14 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
         ·v_82 = ·closure ·v_75, ·inc_64, ·ƒret_24
         ·double_62 ·v_82, 5
       ·double_0 = ·v_7
-      ·ƒpub ·double_0, fn:
-        ·ƒret_72 = fn [·v_66]:
-          ·main_2 = ·v_66
-          ·ƒpub ·main_2, fn:
-            ·ƒret_6 ·main_2
-        ·inc_1 = ·v_15
-        ·ƒpub ·inc_1, fn:
-          ·closure ·v_61, ·double_0, ·inc_1, ·ƒret_72
+      ·ƒpub ·double_0
+      ·ƒret_72 = fn [·v_66]:
+        ·main_2 = ·v_66
+        ·ƒpub ·main_2
+        ·ƒret_6 ·main_2
+      ·inc_1 = ·v_15
+      ·ƒpub ·inc_1
+      ·closure ·v_61, ·double_0, ·inc_1, ·ƒret_72
 
 ---
 pattern matching
@@ -384,8 +384,8 @@ test 'seq destructure', fn:
       ·main_0 = ·v_4 = fn [·ƒret_5, ·foo_1]:
         ·v_63 = ·closure ·v_60, ·ƒret_5
         ·v_30 ·v_63, ·panic, ·foo_1
-      ·ƒpub ·main_0, fn:
-        ·ƒret_3 ·main_0
+      ·ƒpub ·main_0
+      ·ƒret_3 ·main_0
 
 
 test 'record destructure', fn:
@@ -413,8 +413,8 @@ test 'record destructure', fn:
       ·main_0 = ·v_4 = fn [·ƒret_5, ·foo_1]:
         ·v_57 = ·closure ·v_54, ·ƒret_5
         ·v_24 ·v_57, ·panic, ·foo_1
-      ·ƒpub ·main_0, fn:
-        ·ƒret_3 ·main_0
+      ·ƒpub ·main_0
+      ·ƒret_3 ·main_0
 
 
 test 'match — no forward refs after lift', fn:
@@ -447,8 +447,8 @@ test 'match — no forward refs after lift', fn:
         ·v_41 ·ƒret_43, ·ƒret_80, ·v_42
       ·foo_0 = ·v_3 = fn [·ƒret_4, ·n_1]:
         ·v_50 ·ƒret_4, ·n_1
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_2 ·foo_0
+      ·ƒpub ·foo_0
+      ·ƒret_2 ·foo_0
 
 
 test 'match with binding', fn:
@@ -489,8 +489,8 @@ test 'match with binding', fn:
         ·v_103 = ·closure ·v_100, ·v_93
         ·v_126 = ·closure ·v_121, ·ƒret_5
         ·v_103 ·v_126, ·n_1
-      ·ƒpub ·foo_0, fn:
-        ·ƒret_3 ·foo_0
+      ·ƒpub ·foo_0
+      ·ƒret_3 ·foo_0
 
 
 test 'recursive fn in match', fn:
@@ -542,8 +542,8 @@ test 'recursive fn in match', fn:
         ·v_154 = ·closure ·v_151, ·v_124
         ·v_173 = ·closure ·v_168, ·ƒret_5
         ·v_154 ·v_173, ·n_1
-      ·ƒpub ·fib_0, fn:
-        ·ƒret_3 ·fib_0
+      ·ƒpub ·fib_0
+      ·ƒret_3 ·fib_0
 
 
 test 'str eq', fn:
@@ -554,8 +554,8 @@ test 'str eq', fn:
     ·ƒink_module fn ·ƒret_1:
       ·main_0 = ·v_2 = fn [·ƒret_3]:
         ·op_eq 'hello', 'hello', ·ƒret_3
-      ·ƒpub ·main_0, fn:
-        ·ƒret_1 ·main_0
+      ·ƒpub ·main_0
+      ·ƒret_1 ·main_0
 
 
 test 'str literal', fn:
@@ -566,8 +566,8 @@ test 'str literal', fn:
     ·ƒink_module fn ·ƒret_1:
       ·main_0 = ·v_2 = fn [·ƒret_3]:
         ·ƒret_3 'hello'
-      ·ƒpub ·main_0, fn:
-        ·ƒret_1 ·main_0
+      ·ƒpub ·main_0
+      ·ƒret_1 ·main_0
 
 test 'match — seq literal guard', fn:
   expect lift ƒink:
@@ -634,8 +634,8 @@ test 'match — seq literal guard', fn:
       ·main_0 = ·v_3 = fn [·ƒret_4]:
         ·v_151 = ·closure ·v_146, ·ƒret_4
         ·seq_prepend 42, [], ·v_151
-      ·ƒpub ·main_0, fn:
-        ·ƒret_2 ·main_0
+      ·ƒpub ·main_0
+      ·ƒret_2 ·main_0
 
 test 'match — rec literal guard', fn:
   expect lift ƒink:
@@ -699,8 +699,8 @@ test 'match — rec literal guard', fn:
       ·main_0 = ·v_3 = fn [·ƒret_4]:
         ·v_150 = ·closure ·v_145, ·ƒret_4
         ·rec_put {}, 'kind', 1, ·v_150
-      ·ƒpub ·main_0, fn:
-        ·ƒret_2 ·main_0
+      ·ƒpub ·main_0
+      ·ƒret_2 ·main_0
 
 
 # BROKEN: lift panics with "did not converge after 20 rounds" when a
@@ -881,18 +881,18 @@ test 'fooobar — multiple top-level fns with bound call results', fn:
         ·op_mul ·a_6, ·b_7, ·ƒret_23
       ·v_76 = fn {·ƒret_77}, [·v_33]:
         ·p_3 = ·v_33
-        ·ƒpub ·p_3, fn:
-          ·ƒret_77 ·p_3
+        ·ƒpub ·p_3
+        ·ƒret_77 ·p_3
       ·v_63 = fn {·ƒret_64}, [·v_20]:
         ·s_1 = ·v_20
-        ·ƒpub ·s_1, fn:
-          ·mul_2 = ·v_22
-          ·ƒpub ·mul_2, fn:
-            ·v_81 = ·closure ·v_76, ·ƒret_64
-            ·mul_2 ·v_81, ·s_1, 3
+        ·ƒpub ·s_1
+        ·mul_2 = ·v_22
+        ·ƒpub ·mul_2
+        ·v_81 = ·closure ·v_76, ·ƒret_64
+        ·mul_2 ·v_81, ·s_1, 3
       ·add_0 = ·v_9
-      ·ƒpub ·add_0, fn:
-        ·ƒret_73 = fn [·v_68]:
-          ·add_0 ·v_68, 1, 2
-        ·closure ·v_63, ·ƒret_8, ·ƒret_73
+      ·ƒpub ·add_0
+      ·ƒret_73 = fn [·v_68]:
+        ·add_0 ·v_68, 1, 2
+      ·closure ·v_63, ·ƒret_8, ·ƒret_73
 
