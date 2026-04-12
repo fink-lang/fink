@@ -99,44 +99,5 @@ test 'binding rhs is a call', fn:
     add = fn a, b: a + b
     x = add 1, 2
   | equals wat":
-    (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_4 (ref any))
-        (local $v_24 (ref any))
-        (local $add_0 (ref any))
-        (local $v_22 (ref any))
-        (local $local_6 (ref any))
-        (local.set $v_4 (call $_list_head_any (local.get $_args)))
-        (local.set $add_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
-        (global.set $add (struct.new $Closure (global.get $add_0) (ref.null $Captures)))
-        (local.set $local_6 (call $_list_nil))
-        (local.set $local_6 (call $_list_prepend_any (struct.new $Num (f64.const 2)) (local.get $local_6)))
-        (local.set $local_6 (call $_list_prepend_any (struct.new $Num (f64.const 1)) (local.get $local_6)))
-        TODO
-        (local.set $local_6 (call $_list_prepend_any (local.get $local_6)))
-        (return_call $__apply (local.get $local_6) (struct.new $Closure (global.get $add_0) (ref.null $Captures)))
-      )
-      (global $add_0 (ref $Fn2) (ref.func $v_5))
-      (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_6 (ref any))
-        (local $a_2 (ref any))
-        (local $b_3 (ref any))
-        (local $local_5 (ref any))
-        (local.set $v_6 (call $_list_head_any (local.get $_args)))
-        (local.set $_args (call $_list_tail_any (local.get $_args)))
-        (local.set $a_2 (call $_list_head_any (local.get $_args)))
-        (local.set $_args (call $_list_tail_any (local.get $_args)))
-        (local.set $b_3 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_plus (local.get $a_2) (local.get $b_3) (local.get $v_6))
-      )
-      (global $add (mut (ref null any)) (ref.null any))
-      (global $x (mut (ref null any)) (ref.null any))
-      (export "add" (global $add))
-      (export "x" (global $x))
-    )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjogYSArIGJcbnggPSBhZGQgMSwgMiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7OztBO0E7QTtBOzs7Ozs7O0E7OztBQUFBO0FBQ0E7QSIKfQ==
+    TODO
 

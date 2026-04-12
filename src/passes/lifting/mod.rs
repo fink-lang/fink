@@ -255,9 +255,10 @@ fn module_body_needs_lifting(expr: &Expr) -> bool {
         Callable::BuiltIn(BuiltIn::FinkModule) | Callable::BuiltIn(BuiltIn::Pub));
       args.iter().any(|a| match a {
         Arg::Cont(Cont::Expr { body, .. }) if is_module_builtin => {
-          // ·ƒpub / ·ƒink_module cont body: flag if it contains LetFns OR
-          // inline conts that need lifting (e.g. conts that capture ·ƒret).
-          contains_letfn_or_inline_cont(body, true)
+          // ·ƒpub / ·ƒink_module cont body: check for inline conts that
+          // need lifting. LetFns inside ·ƒpub stay put (they're init helpers
+          // that may ref aliases only in scope at this level).
+          module_body_needs_lifting(body)
         }
         Arg::Cont(c @ Cont::Expr { body, .. }) => {
           // Inline conts on regular Apps need lifting if non-trivial,
@@ -574,7 +575,7 @@ fn extract_from_body<'src>(
         .collect();
 
       if cap_entries.is_empty() {
-        // Pure fn — hoist directly, no ·fn_closure needed.
+        // Pure fn — hoist directly.
         match cont {
           Cont::Expr { args: cont_args, body } => {
             let _name_id = name.id;
@@ -698,12 +699,6 @@ fn extract_from_body<'src>(
       }
     }
 
-    // For non-LetFn nodes inside fn_body, just recurse.
-    // LetVal introduces a binding — add it to scope_binds for the cont body so
-    // nested extractions can detect captures of this name. We add the name even
-    // when the val aliases a hoisted fn: the LetVal ITSELF is still visible at
-    // the current scope (refs at the same level resolve directly), but any
-    // nested inline cont that references it needs to capture it explicitly.
     ExprKind::LetVal { name, val, cont } => {
       let cont = match cont {
         Cont::Ref(_) => cont,

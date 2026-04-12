@@ -79,13 +79,11 @@ test 'two fn exports', fn:
     bar = fn: 345
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·v_3 = fn [·ƒret_4]:
+      ·foo_0 = ·v_3 = fn [·ƒret_4]:
         ·ƒret_4 123
-      ·v_9 = fn [·ƒret_10]:
-        ·ƒret_10 345
-      ·foo_0 = ·v_3
       ·ƒpub ·foo_0, fn:
-        ·bar_1 = ·v_9
+        ·bar_1 = ·v_9 = fn [·ƒret_10]:
+          ·ƒret_10 345
         ·ƒpub ·bar_1, fn:
           ·ƒret_2 ·bar_1
 
@@ -106,21 +104,22 @@ test 'fooobar — multi fn with calls', fn:
         ·op_plus ·a_4, ·b_5, ·ƒret_10
       ·v_22 = fn [·ƒret_23, ·a_6, ·b_7]:
         ·op_mul ·a_6, ·b_7, ·ƒret_23
-      ·v_73 = fn {·ƒret_74}, [·v_33]:
+      ·v_76 = fn {·ƒret_77}, [·v_33]:
         ·p_3 = ·v_33
         ·ƒpub ·p_3, fn:
-          ·ƒret_74 ·p_3
+          ·ƒret_77 ·p_3
       ·v_63 = fn {·ƒret_64}, [·v_20]:
         ·s_1 = ·v_20
         ·ƒpub ·s_1, fn:
           ·mul_2 = ·v_22
           ·ƒpub ·mul_2, fn:
-            ·v_78 = ·closure ·v_73, ·ƒret_64
-            ·mul_2 ·v_78, ·s_1, 3
+            ·v_81 = ·closure ·v_76, ·ƒret_64
+            ·mul_2 ·v_81, ·s_1, 3
       ·add_0 = ·v_9
       ·ƒpub ·add_0, fn:
-        ·v_68 = ·closure ·v_63, ·ƒret_8
-        ·add_0 ·v_68, 1, 2
+        ·ƒret_73 = fn [·v_68]:
+          ·add_0 ·v_68, 1, 2
+        ·closure ·v_63, ·ƒret_8, ·ƒret_73
 
 
 ---
@@ -157,6 +156,25 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
 ---
 continuation lifting — inline Cont::Expr bodies become named fns
 ---
+
+test 'fn call result bound at module level', fn:
+  expect lift ƒink:
+    add = fn a, b: a + b
+    x = add 1, 2
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_4:
+      ·v_5 = fn [·ƒret_6, ·a_2, ·b_3]:
+        ·op_plus ·a_2, ·b_3, ·ƒret_6
+      ·v_34 = fn {·ƒret_35}, [·v_16]:
+        ·x_1 = ·v_16
+        ·ƒpub ·x_1, fn:
+          ·ƒret_35 ·x_1
+      ·add_0 = ·v_5
+      ·ƒpub ·add_0, fn:
+        ·ƒret_44 = fn [·v_39]:
+          ·add_0 ·v_39, 1, 2
+        ·closure ·v_34, ·ƒret_4, ·ƒret_44
+
 
 test 'chained ops at module level', fn:
   expect lift ƒink:
@@ -284,14 +302,11 @@ test 'multi-fn module — add and main', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒret_4:
-      ·v_5 = fn [·ƒret_6, ·a_2, ·b_3]:
+      ·add_0 = ·v_5 = fn [·ƒret_6, ·a_2, ·b_3]:
         ·op_plus ·a_2, ·b_3, ·ƒret_6
-      ·v_38 = fn {·add_39}, [·ƒret_14]:
-        ·add_39 ·ƒret_14, 3, 4
-      ·add_0 = ·v_5
       ·ƒpub ·add_0, fn:
-        ·v_41 = ·closure ·v_38, ·add_0
-        ·main_1 = ·v_41
+        ·main_1 = ·v_13 = fn [·ƒret_14]:
+          ·add_0 ·ƒret_14, 3, 4
         ·ƒpub ·main_1, fn:
           ·ƒret_4 ·main_1
 
@@ -317,20 +332,21 @@ test 'chained module-fn calls via let — cont closes over outer cont', fn:
         ·op_mul ·x_3, 2, ·ƒret_8
       ·v_15 = fn [·ƒret_16, ·x_4]:
         ·op_plus ·x_4, 1, ·ƒret_16
-      ·v_72 = fn {·inc_73, ·ƒret_75}, [·v_27]:
+      ·v_75 = fn {·inc_76, ·ƒret_78}, [·v_27]:
         ·x_5 = ·v_27
-        ·inc_73 ·ƒret_75, ·x_5
+        ·inc_76 ·ƒret_78, ·x_5
       ·v_61 = fn {·double_62, ·inc_64}, [·ƒret_24]:
-        ·v_79 = ·closure ·v_72, ·inc_64, ·ƒret_24
-        ·double_62 ·v_79, 5
+        ·v_82 = ·closure ·v_75, ·inc_64, ·ƒret_24
+        ·double_62 ·v_82, 5
       ·double_0 = ·v_7
       ·ƒpub ·double_0, fn:
-        ·inc_1 = ·v_15
-        ·ƒpub ·inc_1, fn:
-          ·v_66 = ·closure ·v_61, ·double_0, ·inc_1
+        ·ƒret_72 = fn [·v_66]:
           ·main_2 = ·v_66
           ·ƒpub ·main_2, fn:
             ·ƒret_6 ·main_2
+        ·inc_1 = ·v_15
+        ·ƒpub ·inc_1, fn:
+          ·closure ·v_61, ·double_0, ·inc_1, ·ƒret_72
 
 ---
 pattern matching
@@ -863,19 +879,20 @@ test 'fooobar — multiple top-level fns with bound call results', fn:
         ·op_plus ·a_4, ·b_5, ·ƒret_10
       ·v_22 = fn [·ƒret_23, ·a_6, ·b_7]:
         ·op_mul ·a_6, ·b_7, ·ƒret_23
-      ·v_73 = fn {·ƒret_74}, [·v_33]:
+      ·v_76 = fn {·ƒret_77}, [·v_33]:
         ·p_3 = ·v_33
         ·ƒpub ·p_3, fn:
-          ·ƒret_74 ·p_3
+          ·ƒret_77 ·p_3
       ·v_63 = fn {·ƒret_64}, [·v_20]:
         ·s_1 = ·v_20
         ·ƒpub ·s_1, fn:
           ·mul_2 = ·v_22
           ·ƒpub ·mul_2, fn:
-            ·v_78 = ·closure ·v_73, ·ƒret_64
-            ·mul_2 ·v_78, ·s_1, 3
+            ·v_81 = ·closure ·v_76, ·ƒret_64
+            ·mul_2 ·v_81, ·s_1, 3
       ·add_0 = ·v_9
       ·ƒpub ·add_0, fn:
-        ·v_68 = ·closure ·v_63, ·ƒret_8
-        ·add_0 ·v_68, 1, 2
+        ·ƒret_73 = fn [·v_68]:
+          ·add_0 ·v_68, 1, 2
+        ·closure ·v_63, ·ƒret_8, ·ƒret_73
 
