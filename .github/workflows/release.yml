@@ -215,3 +215,28 @@ jobs:
           git tag "$VERSION"
           git push origin "$VERSION"
           gh release create "$VERSION" --generate-notes dist-out/*.tar.gz dist-out/*.sha256
+
+  # Notify the Homebrew tap to bump the formula to the just-published
+  # release. The tap's bump-fink.yml workflow handles the actual rewrite
+  # and opens a PR for manual review.
+  notify-tap:
+    name: Notify Homebrew Tap
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint installation token
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: fink-lang
+          repositories: homebrew-tap
+
+      - name: Dispatch fink-released event
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api repos/fink-lang/homebrew-tap/dispatches \
+            -f event_type=fink-released \
+            -f "client_payload[version]=v${{ needs.version.outputs.version }}"
