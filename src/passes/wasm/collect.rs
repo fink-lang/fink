@@ -104,11 +104,8 @@ pub struct Module<'a> {
   pub arities: BTreeSet<usize>,
   /// CpsIds of LetVal aliases for module-level fns — these are globals, not locals.
   pub globals: HashSet<CpsId>,
-  /// User exports: `(cps_id, source_name)` pairs from ·ƒpub or legacy ·export.
+  /// User exports: `(cps_id, source_name)` pairs from ·ƒpub.
   pub exports: Vec<(CpsId, String)>,
-  /// True when the CPS root is App(FinkModule) — new export model uses
-  /// global exports (no wrapper fns). False for legacy LetFn root.
-  pub new_export_model: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -146,23 +143,6 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
       // Walk the body for lifted LetFn/LetVal siblings.
       collect_chain(body, ctx, &exports, &mut funcs, &mut arities);
     }
-  } else {
-    // Legacy: LetFn root (old fink_module shape). TODO: remove.
-    collect_chain(root, ctx, &exports, &mut funcs, &mut arities);
-    if let ExprKind::LetFn { cont: Cont::Expr { body, .. }, .. } = &root.kind {
-      arities.insert(2);
-      funcs.push(CollectedFn {
-        label: "fink_entry".into(),
-        fn_id: root.id,
-        params: vec![],
-        n_captures: 0,
-        has_cont: false,
-        body,
-        export_as: None,
-        export_bind_id: None,
-        alias: None,
-      });
-    }
   }
 
   // Fill in n_captures for each function by scanning FnClosure call sites.
@@ -181,8 +161,7 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
     .filter_map(|cf| cf.alias.as_ref().map(|(id, _)| *id))
     .collect();
 
-  let new_export_model = matches!(&root.kind, ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), .. });
-  Module { funcs, arities, globals, exports, new_export_model }
+  Module { funcs, arities, globals, exports }
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
@@ -304,18 +283,6 @@ fn collect_chain<'a, 'src>(
         Cont::Ref(_) => {}
       }
 
-      // Special case: the synthetic `fink_module` LetFn (whose outer cont
-      // body is `·module_init fink_module`) holds all module-level LetVal
-      // aliases inside its fn_body, not in its cont. Descend into fn_body
-      // so those aliases get wired up to their corresponding CollectedFn
-      // entries (they become module-level globals).
-      let is_fink_module = matches!(cont, Cont::Expr { body, .. }
-        if matches!(&body.kind, ExprKind::App {
-          func: Callable::BuiltIn(BuiltIn::ModuleInit), ..
-        }));
-      if is_fink_module {
-        collect_chain(fn_body, ctx, exports, funcs, arities);
-      }
     }
     ExprKind::LetVal { name, val, cont } => {
       if let ValKind::Ref(Ref::Synth(fn_id)) = val.kind
@@ -541,7 +508,6 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
       "BuiltIn::Import is a compile-time marker and must not reach the \
        runtime-builtin name table; see wasm-link multi-module pass"
     ),
-    BuiltIn::ModuleInit    => "module_init",
     BuiltIn::FinkModule    => "fink_module",
     BuiltIn::Pub           => "pub",
   }

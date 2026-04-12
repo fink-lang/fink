@@ -304,9 +304,6 @@ pub enum BuiltIn {
   // tail call to ƒret. At runtime, the host provides `fink_module` which
   // invokes the cont with a done continuation.
   FinkModule,
-  // Legacy: external bootstrap entry point. Replaced by FinkModule.
-  // TODO: remove once all downstream passes are updated.
-  ModuleInit,
 }
 
 impl BuiltIn {

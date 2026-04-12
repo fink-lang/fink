@@ -903,17 +903,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
-    // Export wrapper fns — only for legacy ·export model. The new ·ƒpub model
-    // exports globals directly, no wrapper fn needed.
-    if !cps_mod.new_export_model {
-      let wrapper_fn2_type = self.idx.fn_type_idx(2);
-      for (_cps_id, export_name) in &cps_mod.exports {
-        functions.function(wrapper_fn2_type);
-        self.idx.funcs.insert(export_name.clone(), next_func_idx);
-        next_func_idx += 1;
-      }
-    }
-
     let _ = next_func_idx;
     self.module.section(&functions);
   }
@@ -1047,17 +1036,10 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let box_func_idx = self.idx.func_idx("_box_func");
     exports.export("_box_func", ExportKind::Func, box_func_idx);
 
-    // fink_module / fink_entry: the module's bootstrap entry point.
-    // New model: fink_module is a CPS function exported directly; the host
-    // boxes it and passes it to module_init(closure, on_inited).
-    // Legacy model: fink_entry wraps module_init(fink_module) internally.
-    if cps_mod.new_export_model {
-      let fink_module_idx = self.idx.func_idx("fink_module");
-      exports.export("fink_module", ExportKind::Func, fink_module_idx);
-    } else if cps_mod.funcs.iter().any(|f| f.label == "fink_entry") {
-      let fink_entry_idx = self.idx.func_idx("fink_entry");
-      exports.export("fink_entry", ExportKind::Func, fink_entry_idx);
-    }
+    // fink_module: the module's CPS entry point. The runner boxes it and
+    // calls _apply([done], fink_module_closure) to drive init.
+    let fink_module_idx = self.idx.func_idx("fink_module");
+    exports.export("fink_module", ExportKind::Func, fink_module_idx);
 
     // _apply: exported for the runner to drive module init / call closures.
     let apply_export_idx = self.idx.func_idx("_apply_export");
@@ -1238,21 +1220,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       f.instruction(&Instruction::Unreachable);
       f.instruction(&Instruction::End);
       code.function(&f);
-    }
-
-    // Legacy: Export wrapper bodies for old ·export model.
-    if !cps_mod.new_export_model {
-      let apply_idx = self.idx.func_idx("_apply");
-      for (_cps_id, export_name) in &cps_mod.exports {
-        let slot_label = format!("{}_closure", export_name);
-        let slot_idx = self.idx.global_idx(&slot_label);
-        let mut f = Function::new(vec![]);
-        f.instruction(&Instruction::LocalGet(1));                // args
-        f.instruction(&Instruction::GlobalGet(slot_idx));        // callee closure
-        f.instruction(&Instruction::ReturnCall(apply_idx));
-        f.instruction(&Instruction::End);
-        code.function(&f);
-      }
     }
 
     self.module.section(&code);

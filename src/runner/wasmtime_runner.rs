@@ -211,60 +211,44 @@ pub fn run(
   // Bootstrap: run fink_module to populate export slot globals.
   // Create a no-op done continuation as ƒret, build [done] args,
   // and call _apply([done], fink_module_closure).
-  if let Some(fink_module) = instance.get_func(&mut store, "fink_module") {
-    let apply = instance.get_func(&mut store, "_apply")
-      .ok_or("no '_apply' export")?;
+  let fink_module = instance.get_func(&mut store, "fink_module")
+    .ok_or("no 'fink_module' export")?;
+  let apply = instance.get_func(&mut store, "_apply")
+    .ok_or("no '_apply' export")?;
 
-    // Box fink_module as a $Closure.
-    let mut boxed_module = [Val::AnyRef(None)];
-    box_func.call(&mut store, &[Val::FuncRef(Some(fink_module))], &mut boxed_module)
-      .map_err(|e| format!("_box_func(fink_module) failed: {}", e))?;
+  // Box fink_module as a $Closure.
+  let mut boxed_module = [Val::AnyRef(None)];
+  box_func.call(&mut store, &[Val::FuncRef(Some(fink_module))], &mut boxed_module)
+    .map_err(|e| format!("_box_func(fink_module) failed: {}", e))?;
 
-    // No-op done continuation — we only care about the global.set side effects.
-    let fn2_stub = instance.get_func(&mut store, "_fn2_stub")
-      .ok_or("no '_fn2_stub' export")?;
-    let done_ty = fn2_stub.ty(&store);
-    let done = Func::new(&mut store, done_ty, |_caller, _params, _results| Ok(()));
-    let mut boxed_done = [Val::AnyRef(None)];
-    box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut boxed_done)
-      .map_err(|e| format!("_box_func(done) failed: {}", e))?;
+  // No-op done continuation — we only care about the global.set side effects.
+  let fn2_stub = instance.get_func(&mut store, "_fn2_stub")
+    .ok_or("no '_fn2_stub' export")?;
+  let done_ty = fn2_stub.ty(&store);
+  let done = Func::new(&mut store, done_ty, |_caller, _params, _results| Ok(()));
+  let mut boxed_done = [Val::AnyRef(None)];
+  box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut boxed_done)
+    .map_err(|e| format!("_box_func(done) failed: {}", e))?;
 
-    // Build args [done] and call _apply.
-    let list_nil = instance.get_func(&mut store, "_list_nil")
-      .ok_or("no '_list_nil' export")?;
-    let mut nil = [Val::AnyRef(None)];
-    list_nil.call(&mut store, &[], &mut nil)
-      .map_err(|e| format!("_list_nil failed: {}", e))?;
-    let list_prepend = instance.get_func(&mut store, "_list_prepend")
-      .ok_or("no '_list_prepend' export")?;
-    let mut init_args = [Val::AnyRef(None)];
-    list_prepend.call(&mut store, &[boxed_done[0], nil[0]], &mut init_args)
-      .map_err(|e| format!("_list_prepend failed: {}", e))?;
+  // Build args [done] and call _apply.
+  let list_nil = instance.get_func(&mut store, "_list_nil")
+    .ok_or("no '_list_nil' export")?;
+  let mut nil = [Val::AnyRef(None)];
+  list_nil.call(&mut store, &[], &mut nil)
+    .map_err(|e| format!("_list_nil failed: {}", e))?;
+  let list_prepend = instance.get_func(&mut store, "_list_prepend")
+    .ok_or("no '_list_prepend' export")?;
+  let mut init_args = [Val::AnyRef(None)];
+  list_prepend.call(&mut store, &[boxed_done[0], nil[0]], &mut init_args)
+    .map_err(|e| format!("_list_prepend failed: {}", e))?;
 
-    apply.call(&mut store, &[init_args[0], boxed_module[0]], &mut [])
-      .map_err(|e| format!("fink_module init failed: {}", e))?;
-  } else if let Some(fink_entry) = instance.get_func(&mut store, "fink_entry") {
-    // Legacy bootstrap path.
-    fink_entry.call(
-      &mut store,
-      &[Val::AnyRef(None), Val::AnyRef(None)],
-      &mut [],
-    ).map_err(|e| format!("fink_entry failed: {}", e))?;
-  }
+  apply.call(&mut store, &[init_args[0], boxed_module[0]], &mut [])
+    .map_err(|e| format!("fink_module init failed: {}", e))?;
 
-  // Look up main — new model: global holding a $Closure; legacy: function export.
-  let boxed_main = if let Some(main_global) = instance.get_global(&mut store, "main") {
-    // New model: main is already a $Closure in a global.
-    main_global.get(&mut store)
-  } else if let Some(main_fn) = instance.get_func(&mut store, "main") {
-    // Legacy: main is a function export — box it.
-    let mut result = [Val::AnyRef(None)];
-    box_func.call(&mut store, &[Val::FuncRef(Some(main_fn))], &mut result)
-      .map_err(|e| format!("_box_func(main) failed: {}", e))?;
-    result[0]
-  } else {
-    return Err("no 'main' export (neither function nor global)".into());
-  };
+  // Read main from export global — already a $Closure.
+  let main_global = instance.get_global(&mut store, "main")
+    .ok_or("no 'main' global export")?;
+  let boxed_main = main_global.get(&mut store);
 
   // Build the fink CLI args list as $List<$Str>, prepending in reverse so
   // the final order matches `args`.
