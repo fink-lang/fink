@@ -4,75 +4,66 @@
 
 test 'range exclusive formatting', fn:
   expect run ƒink:
-    test_main = fn:
-      '${0..10}' == '0..10'
+    '${0..10}' == '0..10'
   | equals ƒink:
     true
 
 
 test 'range inclusive formatting', fn:
   expect run ƒink:
-    test_main = fn:
-      '${0...10}' == '0...10'
+    '${0...10}' == '0...10'
   | equals ƒink:
     true
 
 
 test 'range exclusive construction', fn:
   expect run ƒink:
-    test_main = fn:
-      r = 2..5
-      '${r}' == '2..5'
+    r = 2..5
+    '${r}' == '2..5'
   | equals ƒink:
     true
 
 
 test 'range inclusive construction', fn:
   expect run ƒink:
-    test_main = fn:
-      r = 2...5
-      '${r}' == '2...5'
+    r = 2...5
+    '${r}' == '2...5'
   | equals ƒink:
     true
 
 
 test 'range in exclusive', fn:
   expect run ƒink:
-    test_main = fn:
-      5 in 0..10
+    5 in 0..10
   | equals ƒink:
     true
 
 
 test 'range in exclusive upper bound', fn:
   expect run ƒink:
-    test_main = fn:
-      10 in 0..10
+    10 in 0..10
   | equals ƒink:
     false
 
 
 test 'range in inclusive upper bound', fn:
   expect run ƒink:
-    test_main = fn:
-      10 in 0...10
+    10 in 0...10
   | equals ƒink:
     true
 
 
 test 'range not in', fn:
   expect run ƒink:
-    test_main = fn:
-      20 not in 0..10
+    20 not in 0..10
   | equals ƒink:
     true
 
 
 test 'range match pattern', fn:
   expect run ƒink:
-    test_main = fn:
-      x = 5
-      match x:
-        0..10: true
+    x = 5
+    match x:
+      0..10: true
   | equals ƒink:
     true

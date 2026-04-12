@@ -5,39 +5,35 @@
 test 'pipe with fn call', fn:
   expect run ƒink:
     add = fn a, b: a + b
-    test_main = fn:
-      2
-      | add 3, ?
+    2
+    | add 3, ?
   | equals ƒink:
     5
 
 
 test 'match literal first arm', fn:
   expect run ƒink:
-    test_main = fn:
-      match 0:
-        0: 42
-        _: 99
+    match 0:
+      0: 42
+      _: 99
   | equals ƒink:
     42
 
 
 test 'match literal second arm', fn:
   expect run ƒink:
-    test_main = fn:
-      match 1:
-        0: 42
-        _: 99
+    match 1:
+      0: 42
+      _: 99
   | equals ƒink:
     99
 
 
 test 'match wildcard binding', fn:
   expect run ƒink:
-    test_main = fn:
-      match 5:
-        0: 0
-        x: x + 1
+    match 5:
+      0: 0
+      x: x + 1
   | equals ƒink:
     6
 
@@ -48,8 +44,7 @@ test 'factorial', fn:
       match n:
         0: 1
         n: n * fac n - 1
-    test_main = fn:
-      fac 5
+    fac 5
   | equals ƒink:
     120
 
@@ -61,8 +56,7 @@ test 'add list items', fn:
         []: c
         [a, ..rest]: sum rest, c + a
 
-    test_main = fn:
-      sum [1, 2, 3, 4], 0
+    sum [1, 2, 3, 4], 0
 
   | equals ƒink:
     10
@@ -74,8 +68,7 @@ test 'varargs first', fn:
       match args:
         [a, ..]: a
 
-    test_main = fn:
-      first ..[42, 99]
+    first ..[42, 99]
   | equals ƒink:
     42
 
@@ -84,9 +77,8 @@ test 'varargs identity', fn:
   expect run ƒink:
     identity = fn ..args: args
 
-    test_main = fn:
-      match (identity ..[10, 20, 30]):
-        [a, ..]: a
+    match (identity ..[10, 20, 30]):
+      [a, ..]: a
   | equals ƒink:
     10
 
@@ -97,10 +89,9 @@ test 'tagged template varargs', fn:
       match parts:
         [a, ..]: a
 
-    test_main = fn:
-      x = 42
-      y = first'hello ${x} world'
-      y == 'hello '
+    x = 42
+    y = first'hello ${x} world'
+    y == 'hello '
   | equals ƒink:
     true
 
@@ -111,7 +102,6 @@ test 'varargs mixed fixed and rest', fn:
       match rest:
         [b, ..]: a + b
 
-    test_main = fn:
-      head-and-rest 10, ..[20, 30]
+    head-and-rest 10, ..[20, 30]
   | equals ƒink:
     30

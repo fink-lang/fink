@@ -4,69 +4,62 @@
 
 test 'rec destructure', fn:
   expect run ƒink:
-    test_main = fn:
-      {a, b: c} = {a: 1, b: 2}
-      a + c
+    {a, b: c} = {a: 1, b: 2}
+    a + c
   | equals ƒink:
     3
 
 
 test 'rec single field', fn:
   expect run ƒink:
-    test_main = fn:
-      {x} = {x: 42}
-      x
+    {x} = {x: 42}
+    x
   | equals ƒink:
     42
 
 
 test 'rec three fields', fn:
   expect run ƒink:
-    test_main = fn:
-      {a, b, c} = {a: 1, b: 2, c: 3}
-      a + b + c
+    {a, b, c} = {a: 1, b: 2, c: 3}
+    a + b + c
   | equals ƒink:
     6
 
 
 test 'rec shorthand', fn:
   expect run ƒink:
-    test_main = fn:
-      x = 10
-      y = 20
-      {a, b} = {a: x, b: y}
-      a + b
+    x = 10
+    y = 20
+    {a, b} = {a: x, b: y}
+    a + b
   | equals ƒink:
     30
 
 
 test 'rec nested', fn:
   expect run ƒink:
-    test_main = fn:
-      {a} = {a: {b: 42}}
-      {b} = a
-      b
+    {a} = {a: {b: 42}}
+    {b} = a
+    b
   | equals ƒink:
     42
 
 
 test 'rec spread update', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 1, b: 2}
-      {a, b} = {..r, b: 10}
-      a + b
+    r = {a: 1, b: 2}
+    {a, b} = {..r, b: 10}
+    a + b
   | equals ƒink:
     11
 
 
 test 'rec spread merge', fn:
   expect run ƒink:
-    test_main = fn:
-      r1 = {a: 1}
-      r2 = {b: 2}
-      {a, b} = {..r1, ..r2}
-      a + b
+    r1 = {a: 1}
+    r2 = {b: 2}
+    {a, b} = {..r1, ..r2}
+    a + b
   | equals ƒink:
     3
 
@@ -77,8 +70,7 @@ test 'rec in fn arg', fn:
       {a, b} = rec
       a + b
 
-    test_main = fn:
-      sum-fields {a: 10, b: 20}
+    sum-fields {a: 10, b: 20}
   | equals ƒink:
     30
 
@@ -88,171 +80,153 @@ test 'rec fn return', fn:
     make-point = fn x, y:
       {x: x, y: y}
 
-    test_main = fn:
-      {x, y} = make-point 3, 4
-      x + y
+    {x, y} = make-point 3, 4
+    x + y
   | equals ƒink:
     7
 
 
 test 'rec match pattern', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {x: 42, y: 99}
-      match r:
-        {x, ..}: x
+    r = {x: 42, y: 99}
+    match r:
+      {x, ..}: x
   | equals ƒink:
     42
 
 
 test 'rec match extract field', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 5, b: 10}
-      match r:
-        {a, ..}: a
+    r = {a: 5, b: 10}
+    match r:
+      {a, ..}: a
   | equals ƒink:
     5
 
 
 test 'rec empty', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {}
-      {a} = {..r, a: 1}
-      a
+    r = {}
+    {a} = {..r, a: 1}
+    a
   | equals ƒink:
     1
 
 
 test 'rec with bool values', fn:
   expect run ƒink:
-    test_main = fn:
-      {a, b} = {a: true, b: false}
-      a and (not b)
+    {a, b} = {a: true, b: false}
+    a and (not b)
   | equals ƒink:
     true
 
 
 test 'rec with string values', fn:
   expect run ƒink:
-    test_main = fn:
-      {name} = {name: 'hello'}
-      name == 'hello'
+    {name} = {name: 'hello'}
+    name == 'hello'
   | equals ƒink:
     true
 
 
 test 'rec string key destructure', fn:
   expect run ƒink:
-    test_main = fn:
-      {'foo bar': v} = {'foo bar': 42}
-      v
+    {'foo bar': v} = {'foo bar': 42}
+    v
   | equals ƒink:
     42
 
 
 test 'rec expr key destructure', fn:
   expect run ƒink:
-    test_main = fn:
-      {(4): foo} = {(1 + 3): 42}
-      foo
+    {(4): foo} = {(1 + 3): 42}
+    foo
   | equals ƒink:
     42
 
 
 test 'rec destructure extra fields', fn:
   expect run ƒink:
-    test_main = fn:
-      {a, b} = {a: 1, b: 2, c: 3}
-      a + b
+    {a, b} = {a: 1, b: 2, c: 3}
+    a + b
   | equals ƒink:
     3
 
 
 test 'rec spread overwrite', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 1, b: 2}
-      {a, b} = {..r, a: 99}
-      a + b
+    r = {a: 1, b: 2}
+    {a, b} = {..r, a: 99}
+    a + b
   | equals ƒink:
     101
 
 
 test 'rec rest binding', fn:
   expect run ƒink:
-    test_main = fn:
-      {a, ..rest} = {a: 1, b: 2, c: 3}
-      {b} = rest
-      a + b
+    {a, ..rest} = {a: 1, b: 2, c: 3}
+    {b} = rest
+    a + b
   | equals ƒink:
     3
 
 test 'rec empty rest exact match', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 1}
-      match r:
-        {a, ..{}}: a
-        _: 0
+    r = {a: 1}
+    match r:
+      {a, ..{}}: a
+      _: 0
   | equals ƒink:
     1
 
 test 'rec empty rest rejects extra', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 1, b: 2}
-      match r:
-        {a, ..{}}: a
-        _: 0
+    r = {a: 1, b: 2}
+    match r:
+      {a, ..{}}: a
+      _: 0
   | equals ƒink:
     0
 
 test 'rec guard literal in match', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {kind: 1, val: 42}
-      match r:
-        {kind: 1, val}: val
-        {kind: 2, val}: val + 100
-        _: 0
+    r = {kind: 1, val: 42}
+    match r:
+      {kind: 1, val}: val
+      {kind: 2, val}: val + 100
+      _: 0
   | equals ƒink:
     42
 
 test 'rec guard second arm', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {kind: 2, val: 10}
-      match r:
-        {kind: 1, val}: val
-        {kind: 2, val}: val + 100
-        _: 0
+    r = {kind: 2, val: 10}
+    match r:
+      {kind: 1, val}: val
+      {kind: 2, val}: val + 100
+      _: 0
   | equals ƒink:
     110
 
 test 'rec key membership', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 1, b: 2}
-      'a' in r
+    r = {a: 1, b: 2}
+    'a' in r
   | equals ƒink:
     true
 
 test 'rec key not member', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 1, b: 2}
-      'c' not in r
+    r = {a: 1, b: 2}
+    'c' not in r
   | equals ƒink:
     true
 
 test 'rec with list value', fn:
   expect run ƒink:
-    test_main = fn:
-      {items} = {items: [1, 2, 3]}
-      match items:
-        [a, ..]: a
+    {items} = {items: [1, 2, 3]}
+    match items:
+      [a, ..]: a
   | equals ƒink:
     1
 
@@ -261,32 +235,28 @@ test 'rec with list value', fn:
 
 test 'rec dot access', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: 42}
-      r.a
+    r = {a: 42}
+    r.a
   | equals ƒink:
     42
 
 test 'rec dot access nested', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {a: {b: 99}}
-      r.a.b
+    r = {a: {b: 99}}
+    r.a.b
   | equals ƒink:
     99
 
 test 'rec dot access string key', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {'foo bar': 42}
-      r.('foo bar')
+    r = {'foo bar': 42}
+    r.('foo bar')
   | equals ƒink:
     42
 
 test 'rec dot access string key short', fn:
   expect run ƒink:
-    test_main = fn:
-      r = {'foo bar': 42}
-      r.'foo bar'
+    r = {'foo bar': 42}
+    r.'foo bar'
   | equals ƒink:
     42

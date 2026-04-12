@@ -4,37 +4,32 @@
 
 test 'string literal', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'
+    'hello'
   | equals ":
     hello
 
 test 'string escape newline', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello\nworld'
+    'hello\nworld'
   | equals ":
     hello
     world
 
 test 'string escape tab', fn:
   expect run ƒink:
-    test_main = fn:
-      'a\tb'
+    'a\tb'
   | equals ":
     a	b
 
 test 'string escape backslash', fn:
   expect run ƒink:
-    test_main = fn:
-      'a\\b'
+    'a\\b'
   | equals ":
     a\b
 
 test 'string escape hex', fn:
   expect run ƒink:
-    test_main = fn:
-      '\xC3\xA9'
+    '\xC3\xA9'
   | equals ":
     é
 
@@ -44,125 +39,110 @@ test 'string escape hex', fn:
 # `String` that rejects non-UTF-8 bytes.
 test 'string escape non-utf8 byte', fn:
   expect run ƒink:
-    test_main = fn:
-      '\xFF' == '\xFF'
+    '\xFF' == '\xFF'
   | equals ƒink:
     true
 
 test 'string escape unicode', fn:
   expect run ƒink:
-    test_main = fn:
-      '\u{1F600}'
+    '\u{1F600}'
   | equals ":
     😀
 
 test 'empty string literal', fn:
   expect run ƒink:
-    test_main = fn:
-      ''
+    ''
   | equals ''
 
 
 test 'empty string eq', fn:
   expect run ƒink:
-    test_main = fn:
-      '' == ''
+    '' == ''
   | equals ƒink:
     true
 
 
 test 'match empty string', fn:
   expect run ƒink:
-    test_main = fn:
-      match '':
-        '': 0
-        _: 1
+    match '':
+      '': 0
+      _: 1
   | equals ƒink:
     0
 
 
 test 'empty string eq template', fn:
   expect run ƒink:
-    test_main = fn:
-      '' == '${''}'
+    '' == '${''}'
   | equals ƒink:
     true
 
 
 test 'string eq same', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello' == 'hello'
+    'hello' == 'hello'
   | equals ":
     true
 
 
 test 'string eq different', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello' == 'world'
+    'hello' == 'world'
   | equals ":
     false
 
 
 test 'string neq', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello' != 'world'
+    'hello' != 'world'
   | equals ":
     true
 
 
 test 'str template string only', fn:
   expect run ƒink:
-    test_main = fn:
-      name = 'world'
-      'hello ${name}' == 'hello world'
+    name = 'world'
+    'hello ${name}' == 'hello world'
   | equals ƒink:
     true
 
 
 test 'str template with number', fn:
   expect run ƒink:
-    test_main = fn:
-      x = 42
-      'value: ${x}' == 'value: 42'
+    x = 42
+    'value: ${x}' == 'value: 42'
   | equals ƒink:
     true
 
 
 test 'str template with bool', fn:
   expect run ƒink:
-    test_main = fn:
-      'done: ${true}' == 'done: true'
+    'done: ${true}' == 'done: true'
   | equals ƒink:
     true
 
 
 test 'str template multiple segments', fn:
   expect run ƒink:
-    test_main = fn:
-      a = 1
-      b = 2
-      '${a} + ${b} = ${a + b}' == '1 + 2 = 3'
+    a = 1
+    b = 2
+    '${a} + ${b} = ${a + b}' == '1 + 2 = 3'
   | equals ƒink:
     true
 
 
 test 'str template with float', fn:
   expect run ƒink:
-    test_main = fn:
-      'pi: ${3.14}' == 'pi: 3.14'
+    'pi: ${3.14}' == 'pi: 3.14'
   | equals ƒink:
     true
 
 
 test 'str template float arithmetic', fn:
   expect run ƒink:
-    test_main = fn:
-      x = 1.5
-      y = 2.3
-      '${x} + ${y} = ${x + y}' == '1.5 + 2.3 = 3.8'
+    x = 1.5
+    y = 2.3
+    '${x} + ${y} = ${x + y}' == '1.5 + 2.3 = 3.8'
   | equals ƒink:
     true
 
@@ -171,77 +151,66 @@ test 'str template float arithmetic', fn:
 
 test 'str slice exclusive range', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(1..3)
+    'hello'.(1..3)
   | equals ":
     el
 
 test 'str slice inclusive range', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(1...3)
+    'hello'.(1...3)
   | equals ":
     ell
 
 test 'str slice single byte', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(0)
+    'hello'.(0)
   | equals ":
     h
 
 test 'str slice last byte', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(4)
+    'hello'.(4)
   | equals ":
     o
 
 test 'str slice full range', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(0..5)
+    'hello'.(0..5)
   | equals ":
     hello
 
 test 'str slice empty range', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(2..2)
+    'hello'.(2..2)
   | equals ''
 
 test 'str slice from start', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(0..3)
+    'hello'.(0..3)
   | equals ":
     hel
 
 test 'str slice to end', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(3..5)
+    'hello'.(3..5)
   | equals ":
     lo
 
 test 'str slice negative range', fn:
   expect run ƒink:
-    test_main = fn:
-      'foobar'.(-3..-1)
+    'foobar'.(-3..-1)
   | equals ":
     ba
 
 test 'str slice negative single byte', fn:
   expect run ƒink:
-    test_main = fn:
-      'hello'.(-2)
+    'hello'.(-2)
   | equals ":
     l
 
 test 'str slice negative zero end', fn:
   expect run ƒink:
-    test_main = fn:
-      'foobar'.(-3..-0)
+    'foobar'.(-3..-0)
   | equals ":
     bar
 
@@ -250,41 +219,36 @@ test 'str slice negative zero end', fn:
 
 test 'str templ pattern: capture all', fn:
   expect run ƒink:
-    test_main = fn:
-      '${foo}' = 'hello'
-      foo
+    '${foo}' = 'hello'
+    foo
   | equals ":
     hello
 
 test 'str templ pattern: prefix and suffix', fn:
   expect run ƒink:
-    test_main = fn:
-      'foo${bar}spam' = 'fooBARspam'
-      bar
+    'foo${bar}spam' = 'fooBARspam'
+    bar
   | equals ":
     BAR
 
 test 'str templ pattern: capture at start', fn:
   expect run ƒink:
-    test_main = fn:
-      '${foo}bar' = 'hellobar'
-      foo
+    '${foo}bar' = 'hellobar'
+    foo
   | equals ":
     hello
 
 test 'str templ pattern: capture at end', fn:
   expect run ƒink:
-    test_main = fn:
-      'foo${bar}' = 'fooworld'
-      bar
+    'foo${bar}' = 'fooworld'
+    bar
   | equals ":
     world
 
 test 'str templ pattern: escape in template', fn:
   expect run ƒink:
-    test_main = fn:
-      '\n${foo}\n' = '\nstuff\n'
-      foo
+    '\n${foo}\n' = '\nstuff\n'
+    foo
   | equals ":
     stuff
 
@@ -294,48 +258,42 @@ test 'str templ pattern: escape in template', fn:
 # non-UTF-8 literal parts.
 test 'str templ pattern: non-utf8 byte match', fn:
   expect run ƒink:
-    test_main = fn:
-      '\xFF${foo}\xFF' = '\xFFhello\xFF'
+    '\xFF${foo}\xFF' = '\xFFhello\xFF'
   | equals ":
     hello
 
 test 'str templ pattern: empty capture', fn:
   expect run ƒink:
-    test_main = fn:
-      'foo${bar}spam' = 'foospam'
-      bar
+    'foo${bar}spam' = 'foospam'
+    bar
   | equals ''
 
 test 'str templ pattern: overlapping prefix suffix', fn:
   expect run ƒink:
-    test_main = fn:
-      'abc${x}abc' = 'abcabc'
-      x
+    'abc${x}abc' = 'abcabc'
+    x
   | equals ''
 
 test 'str templ pattern: input shorter than template', fn:
   expect run ƒink:
-    test_main = fn:
-      match 'fo':
-        'foo${x}bar': x
-        _: 'no match'
+    match 'fo':
+      'foo${x}bar': x
+      _: 'no match'
   | equals ":
     no match
 
 test 'str templ pattern: match arm', fn:
   expect run ƒink:
-    test_main = fn:
-      match 'hello world':
-        'hello ${name}': name
-        _: 'no match'
+    match 'hello world':
+      'hello ${name}': name
+      _: 'no match'
   | equals ":
     world
 
 test 'str templ pattern: match arm fallthrough', fn:
   expect run ƒink:
-    test_main = fn:
-      match 'goodbye world':
-        'hello ${name}': name
-        _: 'no match'
+    match 'goodbye world':
+      'hello ${name}': name
+      _: 'no match'
   | equals ":
     no match

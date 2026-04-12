@@ -8,79 +8,72 @@ cooperative multitasking — yield, spawn, await, channels
 
 test 'yield suspends and resumes', fn:
   expect run ƒink:
-    test_main = fn:
-      yield 0
-      42
+    yield 0
+    42
   | equals ƒink:
     42
 
 
 test 'spawn and await', fn:
   expect run ƒink:
-    test_main = fn:
-      fut = spawn fn:
-        42
-      result = await fut
-      result
+    fut = spawn fn:
+      42
+    result = await fut
+    result
   | equals ƒink:
     42
 
 
 test 'channel send and receive', fn:
   expect run ƒink:
-    test_main = fn:
-      ch = channel 0
-      42 >> ch
-      msg = receive ch
-      msg
+    ch = channel 0
+    42 >> ch
+    msg = receive ch
+    msg
   | equals ƒink:
     42
 
 
 test 'channel with spawned sender', fn:
   expect run ƒink:
-    test_main = fn:
-      ch = channel 0
-      spawn fn:
-        99 >> ch
-      msg = receive ch
-      msg
+    ch = channel 0
+    spawn fn:
+      99 >> ch
+    msg = receive ch
+    msg
   | equals ƒink:
     99
 
 
 test 'channel multiple messages FIFO', fn:
   expect run ƒink:
-    test_main = fn:
-      ch = channel 0
-      1 >> ch
-      2 >> ch
-      a = receive ch
-      a
+    ch = channel 0
+    1 >> ch
+    2 >> ch
+    a = receive ch
+    a
   | equals ƒink:
     1
 
 
 test 'channel receiver waits for sender', fn:
   expect run ƒink:
-    test_main = fn:
-      ch = channel 0
-      fut = spawn fn:
-        receive ch
-      77 >> ch
-      result = await fut
-      result
+    ch = channel 0
+    fut = spawn fn:
+      receive ch
+    77 >> ch
+    result = await fut
+    result
   | equals ƒink:
     77
 
 
 test 'channel << send and receive', fn:
   expect run ƒink:
-    test_main = fn:
-      ch = channel 0
-      ch << 42
-      msg = receive ch
-      msg
+    ch = channel 0
+    ch << 42
+    msg = receive ch
+    msg
   | equals ƒink:
     42
 
