@@ -104,10 +104,11 @@ pub struct Module<'a> {
   pub arities: BTreeSet<usize>,
   /// CpsIds of LetVal aliases for module-level fns — these are globals, not locals.
   pub globals: HashSet<CpsId>,
-  /// User exports: `(cps_id, source_name)` pairs extracted from the terminal
-  /// `·export` App. Emit allocates one `$<name>_closure` slot global and one
-  /// `$<name>` wrapper fn per entry.
+  /// User exports: `(cps_id, source_name)` pairs from ·ƒpub or legacy ·export.
   pub exports: Vec<(CpsId, String)>,
+  /// True when the CPS root is App(FinkModule) — new export model uses
+  /// global exports (no wrapper fns). False for legacy LetFn root.
+  pub new_export_model: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -120,28 +121,48 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
   let mut arities: BTreeSet<usize> = BTreeSet::new();
 
   let exports = collect_exports(root, ctx);
-  collect_chain(root, ctx, &exports, &mut funcs, &mut arities);
 
-  // Synthesize `fink_entry` — the outer cont of the top-level fink_module
-  // LetFn. Its body contains `·module_init fink_module`, handing the
-  // module's defined fn to the host bootstrap. Without synthesising a
-  // container, the outer cont is unemitted dead code and module_init never
-  // fires. fink_entry is the module's entry point: instantiating the WASM
-  // module gives the host a fn to call, and that fn runs `fink_entry`
-  // which in turn calls `module_init` with the fink_module closure.
-  if let ExprKind::LetFn { cont: Cont::Expr { body, .. }, .. } = &root.kind {
-    arities.insert(2);
-    funcs.push(CollectedFn {
-      label: "fink_entry".into(),
-      fn_id: root.id,
-      params: vec![],
-      n_captures: 0,
-      has_cont: false,
-      body,
-      export_as: None,
-      export_bind_id: None,
-      alias: None,
-    });
+  // New root shape: App(FinkModule, [Cont::Expr { args: [ƒret], body }]).
+  // The Cont::Expr IS the module body function. Its params (ƒret) and body
+  // are the internal fink_module Fn2. Lifted fns inside the body become
+  // sibling WASM functions at module scope.
+  if let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind {
+    if let Some(Arg::Cont(Cont::Expr { args: cont_args, body })) = args.first() {
+      let param_labels: Vec<(CpsId, String, bool)> = cont_args.iter().map(|b| {
+        (b.id, ctx.label(b.id), false)
+      }).collect();
+      arities.insert(param_labels.len());
+      funcs.push(CollectedFn {
+        label: "fink_module".into(),
+        fn_id: root.id,
+        params: param_labels,
+        n_captures: 0,
+        has_cont: false,
+        body,
+        export_as: None,
+        export_bind_id: None,
+        alias: None,
+      });
+      // Walk the body for lifted LetFn/LetVal siblings.
+      collect_chain(body, ctx, &exports, &mut funcs, &mut arities);
+    }
+  } else {
+    // Legacy: LetFn root (old fink_module shape). TODO: remove.
+    collect_chain(root, ctx, &exports, &mut funcs, &mut arities);
+    if let ExprKind::LetFn { cont: Cont::Expr { body, .. }, .. } = &root.kind {
+      arities.insert(2);
+      funcs.push(CollectedFn {
+        label: "fink_entry".into(),
+        fn_id: root.id,
+        params: vec![],
+        n_captures: 0,
+        has_cont: false,
+        body,
+        export_as: None,
+        export_bind_id: None,
+        alias: None,
+      });
+    }
   }
 
   // Fill in n_captures for each function by scanning FnClosure call sites.
@@ -160,7 +181,8 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
     .filter_map(|cf| cf.alias.as_ref().map(|(id, _)| *id))
     .collect();
 
-  Module { funcs, arities, globals, exports }
+  let new_export_model = matches!(&root.kind, ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), .. });
+  Module { funcs, arities, globals, exports, new_export_model }
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
@@ -188,8 +210,8 @@ fn collect_exports<'src>(root: &Expr, ctx: &IrCtx<'_, 'src>) -> Vec<(CpsId, Stri
 }
 
 fn find_export_app<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<(CpsId, String)>) {
-  if !out.is_empty() { return; }
   match &expr.kind {
+    // Legacy: terminal ·export with all names at once.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Export), args } => {
       for arg in args {
         if let Arg::Val(v) = arg
@@ -197,6 +219,20 @@ fn find_export_app<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<(CpsI
             let name = export_name(ctx, id);
             out.push((id, name));
           }
+      }
+    }
+    // New: per-binding ·ƒpub with one val arg + cont.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
+      for arg in args {
+        if let Arg::Val(v) = arg
+          && let ValKind::Ref(Ref::Synth(id)) = v.kind {
+            let name = export_name(ctx, id);
+            out.push((id, name));
+          }
+        // Recurse into the cont body (rest of module).
+        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+          find_export_app(body, ctx, out);
+        }
       }
     }
     ExprKind::App { args, .. } => {

@@ -896,14 +896,15 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
-    // Export wrapper fns — one `$<name>` Fn2 per user export. The wrapper
-    // reads the closure from its `<name>_closure` slot and forwards the
-    // args list through `_apply`.
-    let wrapper_fn2_type = self.idx.fn_type_idx(2);
-    for (_cps_id, export_name) in &cps_mod.exports {
-      functions.function(wrapper_fn2_type);
-      self.idx.funcs.insert(export_name.clone(), next_func_idx);
-      next_func_idx += 1;
+    // Export wrapper fns — only for legacy ·export model. The new ·ƒpub model
+    // exports globals directly, no wrapper fn needed.
+    if !cps_mod.new_export_model {
+      let wrapper_fn2_type = self.idx.fn_type_idx(2);
+      for (_cps_id, export_name) in &cps_mod.exports {
+        functions.function(wrapper_fn2_type);
+        self.idx.funcs.insert(export_name.clone(), next_func_idx);
+        next_func_idx += 1;
+      }
     }
 
     let _ = next_func_idx;
@@ -964,22 +965,22 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    // Export slots — one mutable `(mut (ref null $Closure))` per export,
-    // initialised to null. Populated by `·export` slot-writes inside
-    // fink_module at init time; read by the user-facing wrapper fns.
-    let closure_type_idx = self.idx.type_idx("$Closure");
+    // Export slots — one mutable `(mut (ref null any))` per ·ƒpub export,
+    // initialised to null. Populated by `·ƒpub` slot-writes inside
+    // fink_module at init time. Exported directly as globals.
+    let any_heap = HeapType::Abstract { shared: false, ty: AbstractHeapType::Any };
     for (_cps_id, export_name) in &cps_mod.exports {
-      let slot_label = format!("{}_closure", export_name);
+      let slot_label = export_name.clone();
       globals.global(
         GlobalType {
           val_type: ValType::Ref(RefType {
             nullable: true,
-            heap_type: HeapType::Concrete(closure_type_idx),
+            heap_type: any_heap,
           }),
           mutable: true,
           shared: false,
         },
-        &ConstExpr::ref_null(HeapType::Concrete(closure_type_idx)),
+        &ConstExpr::ref_null(any_heap),
       );
       self.idx.globals.insert(slot_label, next_global_idx);
       next_global_idx += 1;
@@ -1021,17 +1022,17 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
-    // User exports — each `·export <name>` produces a wrapper fn that the
-    // host calls under the user-facing name. The wrapper reads the
-    // `<name>_closure` slot and dispatches through `_apply`.
+    // User exports — each `·ƒpub` export is a global holding (ref null any).
+    // Exported directly as a global; the host reads the value.
     for (cps_id, export_name) in &cps_mod.exports {
-      let func_idx = self.idx.func_idx(export_name);
-      exports.export(export_name, ExportKind::Func, func_idx);
-      if let Some(node) = self.ctx.ast_node(*cps_id) {
-        self.structural_locs.push(StructuralLoc {
-          kind: StructuralKind::Export { name: export_name.clone() },
-          loc: node.loc,
-        });
+      if let Some(&global_idx) = self.idx.globals.get(export_name) {
+        exports.export(export_name, ExportKind::Global, global_idx);
+        if let Some(node) = self.ctx.ast_node(*cps_id) {
+          self.structural_locs.push(StructuralLoc {
+            kind: StructuralKind::Export { name: export_name.clone() },
+            loc: node.loc,
+          });
+        }
       }
     }
 
@@ -1215,18 +1216,19 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&f);
     }
 
-    // Export wrapper bodies — `return_call $__apply args, closure_slot`.
-    // WASM Fn2 params: local 0 = caps (ignored), local 1 = args list.
-    let apply_idx = self.idx.func_idx("_apply");
-    for (_cps_id, export_name) in &cps_mod.exports {
-      let slot_label = format!("{}_closure", export_name);
-      let slot_idx = self.idx.global_idx(&slot_label);
-      let mut f = Function::new(vec![]);
-      f.instruction(&Instruction::LocalGet(1));                // args
-      f.instruction(&Instruction::GlobalGet(slot_idx));        // callee closure
-      f.instruction(&Instruction::ReturnCall(apply_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
+    // Legacy: Export wrapper bodies for old ·export model.
+    if !cps_mod.new_export_model {
+      let apply_idx = self.idx.func_idx("_apply");
+      for (_cps_id, export_name) in &cps_mod.exports {
+        let slot_label = format!("{}_closure", export_name);
+        let slot_idx = self.idx.global_idx(&slot_label);
+        let mut f = Function::new(vec![]);
+        f.instruction(&Instruction::LocalGet(1));                // args
+        f.instruction(&Instruction::GlobalGet(slot_idx));        // callee closure
+        f.instruction(&Instruction::ReturnCall(apply_idx));
+        f.instruction(&Instruction::End);
+        code.function(&f);
+      }
     }
 
     self.module.section(&code);
@@ -1667,6 +1669,24 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
         // remains syntactically valid.
         emit_val(v, fc);
         fc.instr(&Instruction::Drop);
+      }
+    }
+    return;
+  }
+  if op == BuiltIn::Pub {
+    // `·ƒpub val, fn: <rest>` — per-binding export side effect.
+    // Write the exported value into its slot global, then emit the cont body.
+    for arg in args {
+      if let Arg::Val(v) = arg
+        && let ValKind::Ref(Ref::Synth(id)) = &v.kind {
+          let name = super::collect::export_name(fc.ctx, *id);
+          if let Some(&slot_idx) = fc.emitter_idx.globals.get(&name) {
+            emit_val(v, fc);
+            fc.instr(&Instruction::GlobalSet(slot_idx));
+          }
+      }
+      if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+        emit_body(body, fc);
       }
     }
     return;
@@ -2381,8 +2401,9 @@ mod tests {
           let (count, _ty) = group.unwrap();
           local_count += count;
         }
-        // v2 calling convention: 1 CPS param (cont) + 1 scratch local = 2.
-        assert_eq!(local_count, 2, "main = fn: 42 should have 2 locals (cont + scratch)");
+        // New root shape: first code section entry is fink_module.
+        // fink_module has: ƒret param + main_0 alias + ƒpub result + scratch = 4.
+        assert_eq!(local_count, 4, "fink_module should have 4 locals (ƒret + main_0 + ƒpub_result + scratch)");
         break; // Only check the first defined function (user code).
       }
     }

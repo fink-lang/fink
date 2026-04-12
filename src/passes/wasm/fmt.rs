@@ -654,14 +654,25 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
 fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
   use super::emit::StructuralKind;
   for (name, kind, index) in &module.exports {
-    if kind == &ExternalKind::Func {
-      // Hide internal exports (compiler helpers).
-      if name.starts_with('_') { continue; }
-      let f_name = func_name(module, *index);
-      if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::Export { name: n } if n == name)) {
-        w.mark(loc);
+    match kind {
+      ExternalKind::Func => {
+        // Hide internal exports (compiler helpers).
+        if name.starts_with('_') { continue; }
+        let f_name = func_name(module, *index);
+        if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::Export { name: n } if n == name)) {
+          w.mark(loc);
+        }
+        w.push_str(&format!("  (export {:?} (func {}))\n", name, f_name));
       }
-      w.push_str(&format!("  (export {:?} (func {}))\n", name, f_name));
+      ExternalKind::Global => {
+        if name.starts_with('_') { continue; }
+        let g_name = global_name(module, *index);
+        if let Some(loc) = find_structural_loc(module, |k| matches!(k, StructuralKind::Export { name: n } if n == name)) {
+          w.mark(loc);
+        }
+        w.push_str(&format!("  (export {:?} (global {}))\n", name, g_name));
+      }
+      _ => {}
     }
   }
 }
