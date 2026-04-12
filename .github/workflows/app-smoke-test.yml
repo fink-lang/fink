@@ -1,7 +1,25 @@
 name: App smoke test
 
+# Manual harness for verifying the cross-repo auth chain:
+#   fink release → fink-release-bot App → repository_dispatch → homebrew-tap.
+#
+# Defaults fire a `fink-released` event with version=v0.49.2, which is
+# what the tap's bump-fink workflow expects. Override via workflow inputs
+# to test other event types or versions.
+
 on:
   workflow_dispatch:
+    inputs:
+      event_type:
+        description: 'repository_dispatch event_type'
+        required: true
+        type: string
+        default: fink-released
+      version:
+        description: 'Version tag to send in client_payload.version'
+        required: true
+        type: string
+        default: v0.49.2
 
 jobs:
   dispatch:
@@ -19,7 +37,10 @@ jobs:
       - name: Fire test dispatch
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EVENT_TYPE: ${{ inputs.event_type }}
+          VERSION: ${{ inputs.version }}
         run: |
           gh api repos/fink-lang/homebrew-tap/dispatches \
-            -f event_type=ping \
+            -f "event_type=${EVENT_TYPE}" \
+            -f "client_payload[version]=${VERSION}" \
             -f 'client_payload[source]=smoke-test'
