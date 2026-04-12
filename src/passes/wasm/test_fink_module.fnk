@@ -50,7 +50,52 @@ test 'minimal module exports', fn:
     bar = fn: 345
 
   | equals wat":
-    TODO
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_2 (ref any))
+        (local $v_21 (ref any))
+        (local $foo_0 (ref any))
+        (local $v_19 (ref any))
+        (local $v_17 (ref any))
+        (local $bar_1 (ref any))
+        (local $local_8 (ref any))
+        (local.set $v_2 (call $_list_head_any (local.get $_args)))
+        (local.set $foo_0 (struct.new $Closure (ref.func $v_3) (ref.null $Captures)))
+        (global.set $foo (struct.new $Closure (global.get $foo_0) (ref.null $Captures)))
+        (local.set $bar_1 (struct.new $Closure (ref.func $v_9) (ref.null $Captures)))
+        (global.set $bar (struct.new $Closure (global.get $bar_1) (ref.null $Captures)))
+        (local.set $local_8 (call $_list_nil))
+        (local.set $local_8 (call $_list_prepend_any (struct.new $Closure (global.get $bar_1) (ref.null $Captures)) (local.get $local_8)))
+        (return_call $__apply (local.get $local_8) (local.get $v_2))
+      )
+      (global $foo_0 (ref $Fn2) (ref.func $v_3))
+      (func $v_3 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_4 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_4 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 123)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_4))
+      )
+      (global $bar_1 (ref $Fn2) (ref.func $v_9))
+      (func $v_9 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_10 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_10 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 345)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_10))
+      )
+      (global $foo (mut (ref null any)) (ref.null any))
+      (global $bar (mut (ref null any)) (ref.null any))
+      (export "foo" (global $foo))
+      (export "bar" (global $bar))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46IDEyM1xuYmFyID0gZm46IDM0NSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7OztBO0E7Ozs7O0E7OztBO0E7Ozs7O0E7OztBQUFBO0FBQ0E7QSIKfQ==
 
 ---
 simple main: module has a $_fink_module function whose body contains
@@ -131,7 +176,7 @@ test 'minimal error calling same local func twice', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46XG4gIG5pID0gZm4gYTogYVxuICBuYSA9IG5pIDJcbiAgbmkgbmEiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7O0E7O0E7QTtBOzs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QUFBQTtBIgp9
 
 
-test 'fooobar', fn:
+test 'chained fn calls with intermediate bindings', fn:
   expect gen_wat ƒink:
     add = fn a, b:
       a + b
@@ -153,21 +198,16 @@ test 'fooobar', fn:
         (local $v_8 (ref any))
         (local $v_49 (ref any))
         (local $v_41 (ref any))
-        (local $v_76 (ref any))
+        (local $v_79 (ref any))
         (local $v_66 (ref any))
         (local $add_0 (ref any))
         (local $v_47 (ref any))
-        (local $v_68 (ref any))
+        (local $v_74 (ref any))
         (local $local_10 (ref any))
         (local.set $v_8 (call $_list_head_any (local.get $_args)))
         (local.set $add_0 (struct.new $Closure (ref.func $v_9) (ref.null $Captures)))
         (global.set $add (struct.new $Closure (global.get $add_0) (ref.null $Captures)))
-        (local.set $v_68 (struct.new $Closure (ref.func $v_63) (array.new_fixed $Captures 1 (local.get $v_8))))
-        (local.set $local_10 (call $_list_nil))
-        (local.set $local_10 (call $_list_prepend_any (struct.new $Num (f64.const 2)) (local.get $local_10)))
-        (local.set $local_10 (call $_list_prepend_any (struct.new $Num (f64.const 1)) (local.get $local_10)))
-        (local.set $local_10 (call $_list_prepend_any (local.get $v_68) (local.get $local_10)))
-        (return_call $__apply (local.get $local_10) (struct.new $Closure (global.get $add_0) (ref.null $Captures)))
+        (return_call $__apply (call $_list_prepend_any (struct.new $Closure (ref.func $v_63) (array.new_fixed $Captures 1 (local.get $v_8))) (call $_list_nil)) (struct.new $Closure (ref.func $v_73) (ref.null $Captures)))
       )
       (global $add_0 (ref $Fn2) (ref.func $v_9))
       (func $v_9 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -194,18 +234,18 @@ test 'fooobar', fn:
         (local.set $b_7 (call $_list_head_any (local.get $_args)))
         (return_call $_op_mul (local.get $a_6) (local.get $b_7) (local.get $v_23))
       )
-      (func $v_73 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_74 (ref any))
+      (func $v_76 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_77 (ref any))
         (local $v_33 (ref any))
         (local $p_3 (ref any))
         (local $local_5 (ref any))
-        (local.set $v_74 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_77 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
         (local.set $v_33 (call $_list_head_any (local.get $_args)))
         (local.set $p_3 (local.get $v_33))
         (global.set $p (local.get $p_3))
         (local.set $local_5 (call $_list_nil))
         (local.set $local_5 (call $_list_prepend_any (local.get $p_3) (local.get $local_5)))
-        (return_call $__apply (local.get $local_5) (local.get $v_74))
+        (return_call $__apply (local.get $local_5) (local.get $v_77))
       )
       (func $v_63 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_64 (ref any))
@@ -214,7 +254,7 @@ test 'fooobar', fn:
         (local $v_43 (ref any))
         (local $mul_2 (ref any))
         (local $v_39 (ref any))
-        (local $v_78 (ref any))
+        (local $v_81 (ref any))
         (local $local_9 (ref any))
         (local.set $v_64 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
         (local.set $v_20 (call $_list_head_any (local.get $_args)))
@@ -222,12 +262,22 @@ test 'fooobar', fn:
         (global.set $s (local.get $s_1))
         (local.set $mul_2 (struct.new $Closure (ref.func $v_22) (ref.null $Captures)))
         (global.set $mul (local.get $mul_2))
-        (local.set $v_78 (struct.new $Closure (ref.func $v_73) (array.new_fixed $Captures 1 (local.get $v_64))))
+        (local.set $v_81 (struct.new $Closure (ref.func $v_76) (array.new_fixed $Captures 1 (local.get $v_64))))
         (local.set $local_9 (call $_list_nil))
         (local.set $local_9 (call $_list_prepend_any (struct.new $Num (f64.const 3)) (local.get $local_9)))
         (local.set $local_9 (call $_list_prepend_any (local.get $s_1) (local.get $local_9)))
-        (local.set $local_9 (call $_list_prepend_any (local.get $v_78) (local.get $local_9)))
+        (local.set $local_9 (call $_list_prepend_any (local.get $v_81) (local.get $local_9)))
         (return_call $__apply (local.get $local_9) (local.get $mul_2))
+      )
+      (func $v_73 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_68 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_68 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 2)) (local.get $local_3)))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 1)) (local.get $local_3)))
+        (local.set $local_3 (call $_list_prepend_any (local.get $v_68) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (struct.new $Closure (global.get $add_0) (ref.null $Captures)))
       )
       (global $p (mut (ref null any)) (ref.null any))
       (global $s (mut (ref null any)) (ref.null any))
@@ -238,16 +288,63 @@ test 'fooobar', fn:
       (export "mul" (global $mul))
       (export "add" (global $add))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxucyA9IGFkZCAxLCAyXG5cbm11bCA9IGZuIGEsIGI6XG4gIGEgKiBiXG5cbnAgPSBtdWwgcywgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7Ozs7QTs7Ozs7QUFRQTtBQUxBO0FBRUE7QUFMQTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxucyA9IGFkZCAxLCAyXG5cbm11bCA9IGZuIGEsIGI6XG4gIGEgKiBiXG5cbnAgPSBtdWwgcywgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7O0E7OztBO0E7QTtBOzs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7OztBOzs7OztBQVFBO0FBTEE7QUFFQTtBQUxBO0EiCn0=
 
 
-test 'fooooooo 2 ', fn:
+test 'chained operator calls with intermediate bindings', fn:
   expect gen_wat ƒink:
     a = 2 * 3
     b = a + 4
     b
   | equals wat":
-    TODO
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_2 (ref any))
+        (local $v_38 (ref any))
+        (local $v_29 (ref any))
+        (local $v_31 (ref any))
+        (local $local_6 (ref any))
+        (local.set $v_2 (call $_list_head_any (local.get $_args)))
+        (local.set $v_31 (struct.new $Closure (ref.func $v_26) (array.new_fixed $Captures 1 (local.get $v_2))))
+        (return_call $_op_mul (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_31))
+      )
+      (func $v_35 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_36 (ref any))
+        (local $v_9 (ref any))
+        (local $b_1 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_36 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_9 (call $_list_head_any (local.get $_args)))
+        (local.set $b_1 (local.get $v_9))
+        (global.set $b (local.get $b_1))
+        (local.set $local_5 (call $_list_nil))
+        (local.set $local_5 (call $_list_prepend_any (local.get $b_1) (local.get $local_5)))
+        (return_call $__apply (local.get $local_5) (local.get $v_36))
+      )
+      (func $v_26 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_27 (ref any))
+        (local $v_5 (ref any))
+        (local $a_0 (ref any))
+        (local $v_17 (ref any))
+        (local $v_40 (ref any))
+        (local $local_7 (ref any))
+        (local.set $v_27 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_5 (call $_list_head_any (local.get $_args)))
+        (local.set $a_0 (local.get $v_5))
+        (global.set $a (local.get $a_0))
+        (local.set $v_40 (struct.new $Closure (ref.func $v_35) (array.new_fixed $Captures 1 (local.get $v_27))))
+        (return_call $_op_plus (local.get $a_0) (struct.new $Num (f64.const 4)) (local.get $v_40))
+      )
+      (global $b (mut (ref null any)) (ref.null any))
+      (global $a (mut (ref null any)) (ref.null any))
+      (export "b" (global $b))
+      (export "a" (global $a))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDIgKiAzXG5iID0gYSArIDRcbmIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7OztBOzs7QUFDQTtBQURBO0EiCn0=
 
 
 # TODO recursive functions
