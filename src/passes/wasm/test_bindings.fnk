@@ -1,0 +1,142 @@
+{test, expect, equals, gen_wat, wat} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+
+test 'single binding export', fn:
+  expect gen_wat ƒink:
+    foo = 1
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_1 (ref any))
+        (local $foo_0 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_1 (call $_list_head_any (local.get $_args)))
+        (local.set $foo_0 (struct.new $Num (f64.const 1)))
+        (global.set $foo (local.get $foo_0))
+        (local.set $local_4 (call $_list_nil))
+        (local.set $local_4 (call $_list_prepend_any (local.get $foo_0) (local.get $local_4)))
+        (return_call $__apply (local.get $local_4) (local.get $v_1))
+      )
+      (global $foo (mut (ref null any)) (ref.null any))
+      (export "foo" (global $foo))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7QTs7QUFBQTtBIgp9
+
+
+
+test 'let binding', fn:
+  expect gen_wat ƒink:
+    x = 42
+    x
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_1 (ref any))
+        (local $x_0 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_1 (call $_list_head_any (local.get $_args)))
+        (local.set $x_0 (struct.new $Num (f64.const 42)))
+        (global.set $x (local.get $x_0))
+        (local.set $local_4 (call $_list_nil))
+        (local.set $local_4 (call $_list_prepend_any (local.get $x_0) (local.get $local_4)))
+        (return_call $__apply (local.get $local_4) (local.get $v_1))
+      )
+      (global $x (mut (ref null any)) (ref.null any))
+      (export "x" (global $x))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDQyXG54Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTs7Ozs7OztBOztBQUFBO0EiCn0=
+
+
+
+test 'multiple let bindings used', fn:
+  expect gen_wat ƒink:
+    x = 2
+    y = 3
+    x + y
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_2 (ref any))
+        (local $x_0 (ref any))
+        (local $v_12 (ref any))
+        (local $y_1 (ref any))
+        (local $v_10 (ref any))
+        (local $local_7 (ref any))
+        (local.set $v_2 (call $_list_head_any (local.get $_args)))
+        (local.set $x_0 (struct.new $Num (f64.const 2)))
+        (global.set $x (local.get $x_0))
+        (local.set $y_1 (struct.new $Num (f64.const 3)))
+        (global.set $y (local.get $y_1))
+        (return_call $_op_plus (local.get $x_0) (local.get $y_1) (local.get $v_2))
+      )
+      (global $x (mut (ref null any)) (ref.null any))
+      (global $y (mut (ref null any)) (ref.null any))
+      (export "x" (global $x))
+      (export "y" (global $y))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDJcbnkgPSAzXG54ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7O0FBQUE7QUFDQTtBIgp9
+
+
+
+
+test 'binding rhs is a call', fn:
+  expect gen_wat ƒink:
+    add = fn a, b: a + b
+    x = add 1, 2
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_4 (ref any))
+        (local $v_24 (ref any))
+        (local $add_0 (ref any))
+        (local $v_22 (ref any))
+        (local $local_6 (ref any))
+        (local.set $v_4 (call $_list_head_any (local.get $_args)))
+        (local.set $add_0 (struct.new $Closure (ref.func $v_5) (ref.null $Captures)))
+        (global.set $add (struct.new $Closure (global.get $add_0) (ref.null $Captures)))
+        (local.set $local_6 (call $_list_nil))
+        (local.set $local_6 (call $_list_prepend_any (struct.new $Num (f64.const 2)) (local.get $local_6)))
+        (local.set $local_6 (call $_list_prepend_any (struct.new $Num (f64.const 1)) (local.get $local_6)))
+        TODO
+        (local.set $local_6 (call $_list_prepend_any (local.get $local_6)))
+        (return_call $__apply (local.get $local_6) (struct.new $Closure (global.get $add_0) (ref.null $Captures)))
+      )
+      (global $add_0 (ref $Fn2) (ref.func $v_5))
+      (func $v_5 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_6 (ref any))
+        (local $a_2 (ref any))
+        (local $b_3 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_6 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $a_2 (call $_list_head_any (local.get $_args)))
+        (local.set $_args (call $_list_tail_any (local.get $_args)))
+        (local.set $b_3 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_plus (local.get $a_2) (local.get $b_3) (local.get $v_6))
+      )
+      (global $add (mut (ref null any)) (ref.null any))
+      (global $x (mut (ref null any)) (ref.null any))
+      (export "add" (global $add))
+      (export "x" (global $x))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjogYSArIGJcbnggPSBhZGQgMSwgMiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7OztBO0E7QTtBOzs7Ozs7O0E7OztBQUFBO0FBQ0E7QSIKfQ==
+

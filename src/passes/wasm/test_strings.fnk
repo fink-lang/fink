@@ -1,10 +1,47 @@
 {test, expect, equals, gen_wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
+
+test 'empty string literal', fn:
+  expect gen_wat ƒink:
+    ''
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_1 (ref any))
+        (local $v_10 (ref any))
+        (local $main_0 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_1 (call $_list_head_any (local.get $_args)))
+        (local.set $main_0 (struct.new $Closure (ref.func $v_2) (ref.null $Captures)))
+        (global.set $main (struct.new $Closure (global.get $main_0) (ref.null $Captures)))
+        (local.set $local_5 (call $_list_nil))
+        (local.set $local_5 (call $_list_prepend_any (struct.new $Closure (global.get $main_0) (ref.null $Captures)) (local.get $local_5)))
+        (return_call $__apply (local.get $local_5) (local.get $v_1))
+      )
+      (global $main_0 (ref $Fn2) (ref.func $v_2))
+      (func $v_2 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_3 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_3 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (call $_str_empty) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_3))
+      )
+      (global $main (mut (ref null any)) (ref.null any))
+      (export "main" (global $main))
+    )
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7Ozs7OztBOzs7QTtBOzs7OztBOztBQUFBO0EiCn0=
+
+
+
 test 'string literal', fn:
   expect gen_wat ƒink:
-    main = fn:
-      'hello'
+    'hello'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -41,10 +78,8 @@ test 'string literal', fn:
 
 test 'string literal dedup', fn:
   expect gen_wat ƒink:
-    main = fn:
-      x = 'hello'
-      y = 'hello'
-      x
+    x = 'hello'
+    y = 'hello'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -86,8 +121,9 @@ test 'string literal dedup', fn:
 
 test 'str templ two exprs', fn:
   expect gen_wat ƒink:
-    main = fn:
-      '${a} and ${b}'
+    a = 1
+    b = 2
+    '${a} and ${b}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -111,8 +147,7 @@ test 'str templ two exprs', fn:
         (local $v_3 (ref any))
         (local $local_3 (ref any))
         (local.set $v_3 (call $_list_head_any (local.get $_args)))
-        unreachable
-        unreachable
+        TODO
         (return_call $_str_fmt (array.new_fixed $VarArgs 3 (call $_str (i32.const 0) (i32.const 5))) (local.get $v_3))
       )
       (global $main (mut (ref null any)) (ref.null any))
@@ -124,9 +159,7 @@ test 'str templ two exprs', fn:
 
 test 'str tagged template', fn:
   expect gen_wat ƒink:
-    main = fn:
-      foo'1\n2
-      3'
+    foo'1\n2'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -155,7 +188,7 @@ test 'str tagged template', fn:
         (local.set $local_4 (call $_list_nil))
         (local.set $local_4 (call $_list_concat_any (local.get $v_7) (local.get $local_4)))
         (local.set $local_4 (call $_list_prepend_any (local.get $v_26) (local.get $local_4)))
-        unreachable
+        TODO
         (return_call $__apply (local.get $local_4))
       )
       (global $main_0 (ref $Fn2) (ref.func $v_2))
@@ -176,8 +209,7 @@ test 'str tagged template', fn:
 
 test 'str tagged template escape handling', fn:
   expect gen_wat ƒink:
-    main = fn:
-      foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
+    foo'\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -208,7 +240,7 @@ test 'str tagged template escape handling', fn:
         (local.set $local_4 (call $_list_nil))
         (local.set $local_4 (call $_list_concat_any (local.get $v_13) (local.get $local_4)))
         (local.set $local_4 (call $_list_prepend_any (local.get $v_54) (local.get $local_4)))
-        unreachable
+        TODO
         (return_call $__apply (local.get $local_4))
       )
       (func $v_44 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -229,7 +261,7 @@ test 'str tagged template escape handling', fn:
         (local.set $v_36 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
         (local.set $v_7 (call $_list_head_any (local.get $_args)))
         (local.set $v_49 (struct.new $Closure (ref.func $v_44) (array.new_fixed $Captures 1 (local.get $v_36))))
-        unreachable
+        TODO
         (return_call $_seq_prepend (local.get $v_7) (local.get $v_49))
       )
       (global $main_0 (ref $Fn2) (ref.func $v_2))
@@ -250,9 +282,9 @@ test 'str tagged template escape handling', fn:
 
 test 'str implicit formatting handling', fn:
   expect gen_wat ƒink:
-    main = fn:
-      '1\n2
-      3'
+    ":
+      1\n2
+      3
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -289,8 +321,7 @@ test 'str implicit formatting handling', fn:
 
 test 'str implicit formatting escapes', fn:
   expect gen_wat ƒink:
-    main = fn:
-      '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
+    '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -325,47 +356,9 @@ test 'str implicit formatting escapes', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnXFxuXFxyXFx0XFxmXFxiXFx2XFwkXFwnXFxcXFxceEMzXFx4QTlcXHV7OEFfOUV9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7Ozs7OztBOzs7QTtBOzs7OztBOztBQUFBOztBIgp9
 
 
-test 'empty string literal', fn:
-  expect gen_wat ƒink:
-    main = fn:
-      ''
-  | equals wat":
-    (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_1 (ref any))
-        (local $v_10 (ref any))
-        (local $main_0 (ref any))
-        (local $local_5 (ref any))
-        (local.set $v_1 (call $_list_head_any (local.get $_args)))
-        (local.set $main_0 (struct.new $Closure (ref.func $v_2) (ref.null $Captures)))
-        (global.set $main (struct.new $Closure (global.get $main_0) (ref.null $Captures)))
-        (local.set $local_5 (call $_list_nil))
-        (local.set $local_5 (call $_list_prepend_any (struct.new $Closure (global.get $main_0) (ref.null $Captures)) (local.get $local_5)))
-        (return_call $__apply (local.get $local_5) (local.get $v_1))
-      )
-      (global $main_0 (ref $Fn2) (ref.func $v_2))
-      (func $v_2 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_3 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_3 (call $_list_head_any (local.get $_args)))
-        (local.set $local_3 (call $_list_nil))
-        (local.set $local_3 (call $_list_prepend_any (call $_str_empty) (local.get $local_3)))
-        (return_call $__apply (local.get $local_3) (local.get $v_3))
-      )
-      (global $main (mut (ref null any)) (ref.null any))
-      (export "main" (global $main))
-    )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7Ozs7OztBOzs7QTtBOzs7OztBOztBQUFBO0EiCn0=
-
-
 test 'empty string eq', fn:
   expect gen_wat ƒink:
-    main = fn:
-      '' == ''
+    '' == ''
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -397,6 +390,7 @@ test 'empty string eq', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAnJyA9PSAnJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7Ozs7OztBOzs7QTtBOzs7QTs7QUFBQTtBIgp9
 
 
+# TODO: move to ./test_patterns.fnk
 test 'match empty string', fn:
   expect gen_wat ƒink:
     main = fn x:
@@ -570,8 +564,7 @@ test 'match empty string', fn:
 
 test 'empty string eq template', fn:
   expect gen_wat ƒink:
-    main = fn:
-      '' == '${''}'
+    '' == '${''}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -605,8 +598,7 @@ test 'empty string eq template', fn:
 
 test 'str eq', fn:
   expect gen_wat ƒink:
-    main = fn:
-      'hello' == 'hello'
+    'hello' == 'hello'
   | equals wat":
     (module
       (type $Num (struct (field f64)))

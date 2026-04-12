@@ -2002,7 +2002,7 @@ fn emit_cont(cont: &Cont, fc: &mut FuncContext<'_, '_, '_>) {
       emit_get(fc, &label);
     }
     Cont::Expr { .. } => {
-      // Inline cont-as-arg should not appear.
+      // Inline cont-as-arg should not appear post-lifting.
       fc.instr(&Instruction::Unreachable);
     }
   }
@@ -2056,10 +2056,8 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
             scan_builtins(body, builtins);
           }
         }
-      } else if *op == BuiltIn::Export {
-        // `·export` is a module-shape marker, not a runtime call. It is
-        // not registered as a runtime import. Walk cont bodies for
-        // completeness.
+      } else if *op == BuiltIn::Export || *op == BuiltIn::Pub || *op == BuiltIn::FinkModule {
+        // Module-shape markers, not runtime calls. Walk cont bodies.
         for arg in args {
           if let Arg::Cont(Cont::Expr { body, .. }) = arg {
             scan_builtins(body, builtins);

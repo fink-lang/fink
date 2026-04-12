@@ -385,17 +385,22 @@ fn collect_locals_expr<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<S
       collect_locals_expr(then, ctx, out);
       collect_locals_expr(else_, ctx, out);
     }
-    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { args: bind_args, body }) = arg {
-          for bind in bind_args {
-            out.push(ctx.label(bind.id));
+    ExprKind::App { func, args } => {
+      let walk_conts = matches!(func,
+        Callable::BuiltIn(BuiltIn::FnClosure)
+        | Callable::BuiltIn(BuiltIn::Pub)
+        | Callable::BuiltIn(BuiltIn::FinkModule));
+      if walk_conts {
+        for arg in args {
+          if let Arg::Cont(Cont::Expr { args: bind_args, body }) = arg {
+            for bind in bind_args {
+              out.push(ctx.label(bind.id));
+            }
+            collect_locals_expr(body, ctx, out);
           }
-          collect_locals_expr(body, ctx, out);
         }
       }
     }
-    ExprKind::App { .. } => {}
   }
 }
 

@@ -158,6 +158,17 @@ test 'pure nested fn — no captures, hoisted to module scope', fn:
 continuation lifting — inline Cont::Expr bodies become named fns
 ---
 
+test 'chained ops at module level', fn:
+  expect lift ƒink:
+    2 * 3 + 4
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·v_12 = fn {·ƒret_13}, [·v_3]:
+        ·op_plus ·v_3, 4, ·ƒret_13
+      ·v_17 = ·closure ·v_12, ·ƒret_0
+      ·op_mul 2, 3, ·v_17
+
+
 test 'chained arithmetic — cont body lifted', fn:
   expect lift ƒink:
     main = fn:

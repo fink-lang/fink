@@ -192,15 +192,10 @@ fn needs_lifting(expr: &Expr, in_fn: bool) -> bool {
           !is_simple_forward_cont(c) && contains_letfn_or_inline_cont(body, in_fn)
         }
         // ·ƒink_module / ·ƒpub conts are never hoist candidates themselves.
-        // At module root: LetFns at top of cont body are stable, only flag
-        //   if LetFns are deeper inside ·ƒpub conts.
-        // At module root: use module-specific check (top-level LetFns stable).
-        // Inside a fn body: standard check — ·ƒpub conts are like any other.
-        Arg::Cont(Cont::Expr { body, .. }) if is_module_scope && !in_fn => {
-          module_body_needs_lifting(body)
-        }
+        // Check the body for structure that needs lifting: LetFns inside
+        // ·ƒpub conts, AND inline conts on regular Apps.
         Arg::Cont(Cont::Expr { body, .. }) if is_module_scope => {
-          contains_letfn_or_inline_cont(body, true)
+          module_body_needs_lifting(body)
         }
         Arg::Cont(Cont::Ref(_)) if is_module_scope => false,
         Arg::Cont(c) => app_cont_needs_lifting(c, in_fn),
@@ -260,12 +255,20 @@ fn module_body_needs_lifting(expr: &Expr) -> bool {
         Callable::BuiltIn(BuiltIn::FinkModule) | Callable::BuiltIn(BuiltIn::Pub));
       args.iter().any(|a| match a {
         Arg::Cont(Cont::Expr { body, .. }) if is_module_builtin => {
-          // ·ƒpub / ·ƒink_module cont body: only flag if it contains LetFns.
-          // Inline conts on regular Apps inside the init chain should stay put —
-          // they're just call continuations, not function definitions.
-          body_contains_letfn(body)
+          // ·ƒpub / ·ƒink_module cont body: flag if it contains LetFns OR
+          // inline conts that need lifting (e.g. conts that capture ·ƒret).
+          contains_letfn_or_inline_cont(body, true)
         }
-        Arg::Cont(Cont::Expr { body, .. }) => module_body_needs_lifting(body),
+        Arg::Cont(c @ Cont::Expr { body, .. }) => {
+          // Inline conts on regular Apps need lifting if non-trivial,
+          // UNLESS this is a ·closure App (closure result conts are terminal).
+          let is_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
+          if is_closure {
+            !is_simple_forward_cont(c) && module_body_needs_lifting(body)
+          } else {
+            !is_simple_forward_cont(c) || module_body_needs_lifting(body)
+          }
+        }
         Arg::Expr(e) => module_body_needs_lifting(e),
         _ => false,
       })
@@ -480,28 +483,22 @@ fn lift_expr<'src>(
         let args: Vec<Arg> = args.into_iter().map(|a| match a {
           Arg::Cont(Cont::Expr { args: cont_args, body }) => {
             {
-              let mut new_body = if body_contains_letfn(&body) {
-                let parent_params: Vec<Param> = cont_args.iter().map(|b| Param::Name(b.clone())).collect();
-                let extracted = extract_from_body(*body, &parent_params, &[], ast_index, alloc, &mut all_hoisted);
-                // Prepend hoisted fns into the cont body (inside the App).
-                let mut result = extracted;
-                for h in all_hoisted.drain(..).rev() {
-                  let wrapper_id = alloc.next(None);
-                  result = Expr {
-                    id: wrapper_id,
-                    kind: ExprKind::LetFn {
-                      name: h.name,
-                      params: h.params,
-                      fn_kind: h.fn_kind,
-                      fn_body: Box::new(h.fn_body),
-                      cont: Cont::Expr { args: h.cont_args, body: Box::new(result) },
-                    },
-                  };
-                }
-                result
-              } else {
-                *body
-              };
+              let parent_params: Vec<Param> = cont_args.iter().map(|b| Param::Name(b.clone())).collect();
+              let mut new_body = extract_from_body(*body, &parent_params, &[], ast_index, alloc, &mut all_hoisted);
+              // Prepend hoisted fns into the cont body (inside the App).
+              for h in all_hoisted.drain(..).rev() {
+                let wrapper_id = alloc.next(None);
+                new_body = Expr {
+                  id: wrapper_id,
+                  kind: ExprKind::LetFn {
+                    name: h.name,
+                    params: h.params,
+                    fn_kind: h.fn_kind,
+                    fn_body: Box::new(h.fn_body),
+                    cont: Cont::Expr { args: h.cont_args, body: Box::new(new_body) },
+                  },
+                };
+              }
               // Always recurse into the body to handle fn_body lifting
               // (e.g. LetFns inside module-scope fns that have nested structure).
               new_body = lift_expr(new_body, ast_index, alloc);

@@ -197,7 +197,9 @@ mod tests {
     format!("{}\n;;sourcemaps:{wat_b64}", wat_output.trim())
   }
 
+  test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk");
+  test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_functions.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_records.fnk");

@@ -8,7 +8,7 @@ test 'user fn call', fn:
     main = fn:
       add 3, 4
   | equals wat":
-    PANIC: unknown local: main_1
+    TODO
 
 
 test 'chained fn calls', fn:
@@ -21,7 +21,7 @@ test 'chained fn calls', fn:
       x = double 5
       inc x
   | equals wat":
-    PANIC: unknown local: inc_1
+    TODO
 
 
 test 'pipe unary', fn:
@@ -33,7 +33,7 @@ test 'pipe unary', fn:
     main = fn:
       5 | double | inc
   | equals wat":
-    PANIC: unknown local: inc_1
+    TODO
 
 
 test 'match literal first arm', fn:
@@ -397,7 +397,7 @@ test 'simple recursion', fn:
     main = fn:
       recurse 5
   | equals wat":
-    PANIC: unknown local: main_1
+    TODO
 
 
 test 'closure construction and call', fn:
@@ -484,8 +484,17 @@ test 'closure construction and call', fn:
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICBhZGQgPSBmbiB4OlxuICAgIGZuIHk6IHggKyB5XG4gIGFkZDEgPSBhZGQgMVxuICBhZGQxIDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBOzs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7OztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0FBQUE7QSIKfQ==
 
 
+# TODO, duplicate?
+test 'recursive list sum', fn:
+  expect gen_wat ƒink:
+    sum = fn items, c:
+      match items:
+        []: c
+        [a, ..rest]: sum rest, c + a
 
-
-
+    main = fn:
+      sum [1, 2, 3, 4], 0
+  | equals wat":
+    TODO
 
 

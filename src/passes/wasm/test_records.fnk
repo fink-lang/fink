@@ -3,8 +3,7 @@
 
 test 'rec literal', fn:
   expect gen_wat ƒink:
-    main = fn:
-      {a: 1, b: 2}
+    {a: 1, b: 2}
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -49,9 +48,8 @@ test 'rec literal', fn:
 
 test 'rec destructure', fn:
   expect gen_wat ƒink:
-    main = fn:
-      {a, b: c} = {a: 1, b: 2}
-      a + c
+    {a, b: c} = {a: 1, b: 2}
+    a + c
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -200,9 +198,8 @@ test 'rec destructure', fn:
 
 test 'rec spread', fn:
   expect gen_wat ƒink:
-    main = fn:
-      r = {a: 1, b: 2}
-      {..r, c: 3}
+    r = {a: 1, b: 2}
+    {..r, c: 3}
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -272,8 +269,7 @@ test 'rec spread', fn:
 
 test 'rec empty literal', fn:
   expect gen_wat ƒink:
-    main = fn:
-      {}
+    {}
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -308,8 +304,7 @@ test 'rec empty literal', fn:
 
 test 'rec single field', fn:
   expect gen_wat ƒink:
-    main = fn:
-      {a: 1}
+    {a: 1}
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -343,10 +338,9 @@ test 'rec single field', fn:
 
 test 'rec nested destructure', fn:
   expect gen_wat ƒink:
-    main = fn:
-      {a} = {a: {b: 42}}
-      {b} = a
-      b
+    {a} = {a: {b: 42}}
+    {b} = a
+    b
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -539,10 +533,9 @@ test 'rec nested destructure', fn:
 
 test 'rec spread merge two', fn:
   expect gen_wat ƒink:
-    main = fn:
-      r1 = {a: 1}
-      r2 = {b: 2}
-      {..r1, ..r2}
+    r1 = {a: 1}
+    r2 = {b: 2}
+    {..r1, ..r2}
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -617,11 +610,10 @@ test 'rec spread merge two', fn:
     )
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByMSA9IHthOiAxfVxuICByMiA9IHtiOiAyfVxuICB7Li5yMSwgLi5yMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7QTtBO0E7QTs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7O0E7OztBO0E7QTs7OztBOztBQUFBOztBIgp9
 
+# TODO: should this be in strings?
 test 'rec format template', fn:
   expect gen_wat ƒink:
-    main = fn:
-      r = {a: 1}
-      'got: ${r}'
+    'got: ${{a: 1}}'
   | equals wat":
     (module
       (type $Num (struct (field f64)))
@@ -667,95 +659,5 @@ test 'rec format template', fn:
     )
     ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICByID0ge2E6IDF9XG4gICdnb3Q6ICR7cn0nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7OztBOzs7QTtBO0E7Ozs7QTs7QUFBQTs7QSIKfQ==
 
-test 'recursive list sum', fn:
-  expect gen_wat ƒink:
-    sum = fn items, c:
-      match items:
-        []: c
-        [a, ..rest]: sum rest, c + a
-
-    main = fn:
-      sum [1, 2, 3, 4], 0
-  | equals wat":
-    PANIC: unknown local: main_1
 
 
-test 'range exclusive', fn:
-  expect gen_wat ƒink:
-    main = fn:
-      0..10
-  | equals wat":
-    (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_1 (ref any))
-        (local $v_12 (ref any))
-        (local $main_0 (ref any))
-        (local $local_5 (ref any))
-        (local.set $v_1 (call $_list_head_any (local.get $_args)))
-        (local.set $main_0 (struct.new $Closure (ref.func $v_2) (ref.null $Captures)))
-        (global.set $main (struct.new $Closure (global.get $main_0) (ref.null $Captures)))
-        (local.set $local_5 (call $_list_nil))
-        (local.set $local_5 (call $_list_prepend_any (struct.new $Closure (global.get $main_0) (ref.null $Captures)) (local.get $local_5)))
-        (return_call $__apply (local.get $local_5) (local.get $v_1))
-      )
-      (global $main_0 (ref $Fn2) (ref.func $v_2))
-      (func $v_2 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_3 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_3 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_rngex (struct.new $Num (f64.const 0)) (struct.new $Num (f64.const 10)) (local.get $v_3))
-      )
-      (global $main (mut (ref null any)) (ref.null any))
-      (export "main" (global $main))
-    )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICAwLi4xMCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7Ozs7OztBOzs7QTtBOzs7QTs7QUFBQTtBIgp9
-
-
-test 'range in', fn:
-  expect gen_wat ƒink:
-    main = fn:
-      5 in 0..10
-  | equals wat":
-    (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_1 (ref any))
-        (local $v_28 (ref any))
-        (local $v_17 (ref any))
-        (local $main_0 (ref any))
-        (local $local_6 (ref any))
-        (local.set $v_1 (call $_list_head_any (local.get $_args)))
-        (local.set $main_0 (struct.new $Closure (ref.func $v_2) (ref.null $Captures)))
-        (global.set $main (struct.new $Closure (global.get $main_0) (ref.null $Captures)))
-        (local.set $local_6 (call $_list_nil))
-        (local.set $local_6 (call $_list_prepend_any (struct.new $Closure (global.get $main_0) (ref.null $Captures)) (local.get $local_6)))
-        (return_call $__apply (local.get $local_6) (local.get $v_1))
-      )
-      (func $v_25 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_26 (ref any))
-        (local $v_7 (ref any))
-        (local $local_4 (ref any))
-        (local.set $v_26 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
-        (local.set $v_7 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_in (struct.new $Num (f64.const 5)) (local.get $v_7) (local.get $v_26))
-      )
-      (global $main_0 (ref $Fn2) (ref.func $v_2))
-      (func $v_2 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_3 (ref any))
-        (local $v_30 (ref any))
-        (local $local_4 (ref any))
-        (local.set $v_3 (call $_list_head_any (local.get $_args)))
-        (local.set $v_30 (struct.new $Closure (ref.func $v_25) (array.new_fixed $Captures 1 (local.get $v_3))))
-        (return_call $_op_rngex (struct.new $Num (f64.const 0)) (struct.new $Num (f64.const 10)) (local.get $v_30))
-      )
-      (global $main (mut (ref null any)) (ref.null any))
-      (export "main" (global $main))
-    )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuOlxuICA1IGluIDAuLjEwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7Ozs7QTs7O0E7QTtBOzs7O0E7O0FBQUE7QSIKfQ==
