@@ -9,6 +9,7 @@ test 'empty string literal', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -19,8 +20,9 @@ test 'empty string literal', fn:
         (local.set $local_3 (call $_list_prepend_any (call $_str_empty) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
 
 
 
@@ -31,6 +33,7 @@ test 'string literal', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -41,9 +44,10 @@ test 'string literal', fn:
         (local.set $local_3 (call $_list_prepend_any (call $_str (i32.const 0) (i32.const 5)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7Ozs7O0E7OztBIgp9
 
 
 test 'string literal dedup', fn:
@@ -54,6 +58,7 @@ test 'string literal dedup', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -75,9 +80,10 @@ test 'string literal dedup', fn:
       (global $y (mut (ref null any)) (ref.null any))
       (export "x" (global $x))
       (export "y" (global $y))
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9ICdoZWxsbydcbnkgPSAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7OztBOzs7QUFBQTtBQUNBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9ICdoZWxsbydcbnkgPSAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7O0E7OztBQUFBO0FBQ0E7OztBIgp9
 
 
 test 'str templ two exprs', fn:
@@ -89,6 +95,7 @@ test 'str templ two exprs', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -109,9 +116,10 @@ test 'str templ two exprs', fn:
       (global $b (mut (ref null any)) (ref.null any))
       (export "a" (global $a))
       (export "b" (global $b))
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) " and ")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDFcbmIgPSAyXG4nJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7O0E7OztBQUFBO0FBQ0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDFcbmIgPSAyXG4nJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7O0FBQUE7QUFDQTs7O0EiCn0=
 
 
 test 'str tagged template', fn:
@@ -121,6 +129,7 @@ test 'str tagged template', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -144,9 +153,10 @@ test 'str tagged template', fn:
         unreachable
         (return_call $__apply (local.get $local_4))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "1\n2")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBOzs7O0E7O0E7QTtBOzs7Ozs7OztBOzs7QSIKfQ==
 
 
 test 'str tagged template escape handling', fn:
@@ -156,6 +166,7 @@ test 'str tagged template escape handling', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -207,9 +218,10 @@ test 'str tagged template escape handling', fn:
         (local.set $v_27 (call $_list_head_any (local.get $_args)))
         (return_call $_seq_prepend (call $_str (i32.const 8) (i32.const 27)) (call $_list_nil) (local.get $v_27))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7QTs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7O0E7O0E7QTs7O0E7OztBIgp9
 
 
 test 'str implicit formatting handling', fn:
@@ -221,6 +233,7 @@ test 'str implicit formatting handling', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -231,9 +244,10 @@ test 'str implicit formatting handling', fn:
         (local.set $local_3 (call $_list_prepend_any (call $_str (i32.const 0) (i32.const 5)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "1\0a2\0a3")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiXCI6XG4gIDFcXG4yXG4gIDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiXCI6XG4gIDFcXG4yXG4gIDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOzs7QSIKfQ==
 
 
 test 'str implicit formatting escapes', fn:
@@ -243,6 +257,7 @@ test 'str implicit formatting escapes', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -253,9 +268,10 @@ test 'str implicit formatting escapes', fn:
         (local.set $local_3 (call $_list_prepend_any (call $_str (i32.const 0) (i32.const 14)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "\0a\0d\09\0c\08\0b$'\\c3\a9\e8\aa\9e")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOzs7QSIKfQ==
 
 
 test 'empty string eq', fn:
@@ -265,6 +281,7 @@ test 'empty string eq', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -273,8 +290,9 @@ test 'empty string eq', fn:
         (local.set $v_0 (call $_list_head_any (local.get $_args)))
         (return_call $_op_eq (call $_str_empty) (call $_str_empty) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJycgPT0gJyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJycgPT0gJyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
 
 
 # TODO: move to ./test_patterns.fnk
@@ -288,6 +306,7 @@ test 'match empty string', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -445,8 +464,9 @@ test 'match empty string', fn:
       )
       (global $main (mut (ref null any)) (ref.null any))
       (export "main" (global $main))
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7OztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7OztBOztBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7OztBOzs7QTtBO0E7Ozs7Ozs7O0E7O0FBQUE7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTtBO0E7QTtBOzs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7QTs7QTtBOzs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTs7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7O0E7OztBO0E7QTs7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
 
 
 test 'empty string eq template', fn:
@@ -456,6 +476,7 @@ test 'empty string eq template', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -464,8 +485,9 @@ test 'empty string eq template', fn:
         (local.set $v_0 (call $_list_head_any (local.get $_args)))
         (return_call $_op_eq (call $_str_empty) (call $_str_empty) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJycgPT0gJyR7Jyd9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJycgPT0gJyR7Jyd9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7OztBOztBIgp9
 
 
 test 'str eq', fn:
@@ -475,6 +497,7 @@ test 'str eq', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -483,9 +506,10 @@ test 'str eq', fn:
         (local.set $v_0 (call $_list_head_any (local.get $_args)))
         (return_call $_op_eq (call $_str (i32.const 0) (i32.const 5)) (call $_str (i32.const 0) (i32.const 5)) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyA9PSAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyA9PSAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTs7O0E7OztBIgp9
 
 
 

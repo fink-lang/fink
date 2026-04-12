@@ -887,6 +887,13 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.funcs.insert("_str_wrap_bytes_export".into(), next_func_idx);
     next_func_idx += 1;
 
+    // _apply_export: re-exports _apply for the runner to drive module init.
+    // Type: $Fn2 (param (ref null any) (ref null any)).
+    let apply_export_type = self.idx.fn_type_idx(2);
+    functions.function(apply_export_type);
+    self.idx.funcs.insert("_apply_export".into(), next_func_idx);
+    next_func_idx += 1;
+
     // $_panic: (func) — unreachable trap for irrefutable pattern failure.
     // Only emitted when ValKind::Panic appears in function bodies.
     if self.has_panic {
@@ -1040,15 +1047,21 @@ impl<'a, 'src> Emitter<'a, 'src> {
     let box_func_idx = self.idx.func_idx("_box_func");
     exports.export("_box_func", ExportKind::Func, box_func_idx);
 
-    // fink_entry: the module's bootstrap entry. Calling it runs the module
-    // root (`fink_module`) via `module_init`, which populates the per-export
-    // slot globals. The host must call `fink_entry` once after instantiation
-    // before invoking any user-facing export wrapper. Exported so both the
-    // native runner and the test harness can drive bootstrap.
-    if cps_mod.funcs.iter().any(|f| f.label == "fink_entry") {
+    // fink_module / fink_entry: the module's bootstrap entry point.
+    // New model: fink_module is a CPS function exported directly; the host
+    // boxes it and passes it to module_init(closure, on_inited).
+    // Legacy model: fink_entry wraps module_init(fink_module) internally.
+    if cps_mod.new_export_model {
+      let fink_module_idx = self.idx.func_idx("fink_module");
+      exports.export("fink_module", ExportKind::Func, fink_module_idx);
+    } else if cps_mod.funcs.iter().any(|f| f.label == "fink_entry") {
       let fink_entry_idx = self.idx.func_idx("fink_entry");
       exports.export("fink_entry", ExportKind::Func, fink_entry_idx);
     }
+
+    // _apply: exported for the runner to drive module init / call closures.
+    let apply_export_idx = self.idx.func_idx("_apply_export");
+    exports.export("_apply", ExportKind::Func, apply_export_idx);
 
     // _list_nil / _list_prepend: exported for the runner to build args lists.
     let list_nil_idx = self.idx.func_idx("_list_nil");
@@ -1208,6 +1221,17 @@ impl<'a, 'src> Emitter<'a, 'src> {
       code.function(&f);
     }
 
+    // _apply_export body: forwards (args, callee) to imported _apply.
+    {
+      let mut f = Function::new(vec![]);
+      let apply_idx = self.idx.func_idx("_apply");
+      f.instruction(&Instruction::LocalGet(0)); // args
+      f.instruction(&Instruction::LocalGet(1)); // callee
+      f.instruction(&Instruction::Call(apply_idx));
+      f.instruction(&Instruction::End);
+      code.function(&f);
+    }
+
     // $_panic body: unreachable
     if self.has_panic {
       let mut f = Function::new(vec![]);
@@ -1363,7 +1387,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       func_names.append(idx, &internal_name);
     }
     // Internal helpers.
-    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export", "_run_main_export", "_settle_future_export", "_str_wrap_bytes_export"] {
+    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export", "_run_main_export", "_settle_future_export", "_str_wrap_bytes_export", "_apply_export"] {
       if let Some(&idx) = self.idx.funcs.get(*name) {
         func_names.append(idx, name);
       }

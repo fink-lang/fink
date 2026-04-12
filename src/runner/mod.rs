@@ -217,10 +217,128 @@ mod tests {
     Ok(result_val.lock().unwrap().take().unwrap_or(TestResult::None))
   }
 
+  /// Bootstrap a fink module and return the init result.
+  ///
+  /// The module's `fink_module` export is a CPS function that takes [ƒret]
+  /// as its args. We create a done continuation that captures the result,
+  /// build [done] args, and call `_apply([done], fink_module_closure)`.
+  fn exec_module_init(wasm: &[u8]) -> Result<TestResult, String> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_tail_call(true);
+    config.wasm_function_references(true);
+
+    let engine = Engine::new(&config).map_err(|e| e.to_string())?;
+    let module = Module::new(&engine, wasm).map_err(|e| e.to_string())?;
+    let mut store = Store::new(&engine, ());
+
+    // Wire up "env" imports — trap with "not yet implemented".
+    let mut linker = Linker::new(&engine);
+    for import in module.imports() {
+      if import.module() == "env"
+        && let ExternType::Func(ft) = import.ty()
+      {
+        let name = import.name().to_string();
+        let err_name = name.clone();
+        linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+          Err(Error::msg(format!("builtin '{}' not yet implemented", err_name)))
+        }).map_err(|e| e.to_string())?;
+      }
+    }
+
+    let instance = linker.instantiate(&mut store, &module).map_err(|e| e.to_string())?;
+
+    let fink_module = instance.get_func(&mut store, "fink_module")
+      .ok_or("no 'fink_module' export")?;
+    let box_func = instance.get_func(&mut store, "_box_func")
+      .ok_or("no '_box_func' export")?;
+    let apply = instance.get_func(&mut store, "_apply")
+      .ok_or("no '_apply' export")?;
+
+    // Box fink_module as a $Closure.
+    let mut boxed_module = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(fink_module))], &mut boxed_module)
+      .map_err(|e| format!("_box_func(fink_module) failed: {}", e))?;
+
+    // Create the "done" continuation — receives the module init result.
+    let result_val: Arc<Mutex<Option<TestResult>>> = Arc::new(Mutex::new(None));
+    let result_clone = result_val.clone();
+
+    let fn2_stub = instance.get_func(&mut store, "_fn2_stub")
+      .ok_or("no '_fn2_stub' export")?;
+    let done_ty = fn2_stub.ty(&store);
+    let done = Func::new(&mut store, done_ty, move |mut caller, params, _results| {
+      if let Some(Val::AnyRef(Some(args_list))) = params.get(1)
+        && let Ok(Some(cons)) = args_list.as_struct(&caller)
+        && let Ok(Val::AnyRef(Some(any_ref))) = cons.field(&mut caller, 0)
+      {
+        if let Ok(Some(i31)) = any_ref.as_i31(&caller) {
+          *result_clone.lock().unwrap() = Some(TestResult::Bool(i31.get_i32() != 0));
+        } else if let Ok(Some(struct_ref)) = any_ref.as_struct(&caller) {
+          if let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0) {
+            *result_clone.lock().unwrap() = Some(TestResult::Num(f64::from_bits(bits)));
+          } else if let Ok(Val::I32(offset)) = struct_ref.field(&mut caller, 0)
+            && let Ok(Val::I32(length)) = struct_ref.field(&mut caller, 1)
+          {
+            // $StrDataImpl — read directly from linear memory.
+            if let Some(memory) = caller.get_export("memory")
+              && let Some(mem) = memory.into_memory()
+            {
+              let data = mem.data(&caller);
+              let start = offset as usize;
+              let end = start + length as usize;
+              if end <= data.len() {
+                let s = String::from_utf8_lossy(&data[start..end]).into_owned();
+                *result_clone.lock().unwrap() = Some(TestResult::Str(s));
+              }
+            }
+          } else if let Ok(Val::AnyRef(Some(arr_any))) = struct_ref.field(&mut caller, 0)
+            && let Ok(Some(arr)) = arr_any.as_array(&caller)
+            && let Ok(len) = arr.len(&caller)
+          {
+            // $StrBytesImpl — read bytes from GC $ByteArray.
+            let mut bytes = Vec::with_capacity(len as usize);
+            for i in 0..len {
+              if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                bytes.push(b as u8);
+              }
+            }
+            let s = String::from_utf8_lossy(&bytes).into_owned();
+            *result_clone.lock().unwrap() = Some(TestResult::Str(s));
+          }
+        }
+      }
+      Ok(())
+    });
+
+    // Box done as a $Closure and build args [done].
+    let mut boxed_done = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut boxed_done)
+      .map_err(|e| format!("_box_func(done) failed: {}", e))?;
+
+    let list_nil = instance.get_func(&mut store, "_list_nil")
+      .ok_or("no '_list_nil' export")?;
+    let mut nil = [Val::AnyRef(None)];
+    list_nil.call(&mut store, &[], &mut nil)
+      .map_err(|e| format!("_list_nil failed: {}", e))?;
+
+    let list_prepend = instance.get_func(&mut store, "_list_prepend")
+      .ok_or("no '_list_prepend' export")?;
+    let mut args = [Val::AnyRef(None)];
+    list_prepend.call(&mut store, &[boxed_done[0], nil[0]], &mut args)
+      .map_err(|e| format!("_list_prepend failed: {}", e))?;
+
+    // _apply([done], fink_module_closure) — runs the module body.
+    apply.call(&mut store, &[args[0], boxed_module[0]], &mut [])
+      .map_err(|e| format!("module init failed: {}", e))?;
+
+    Ok(result_val.lock().unwrap().take().unwrap_or(TestResult::None))
+  }
+
   #[allow(unused)]
   fn run(src: &str) -> String {
     let wasm = crate::to_wasm(src, "test").expect("compilation failed");
-    match exec_export(&wasm.binary, "test_main") {
+    match exec_module_init(&wasm.binary) {
       Ok(TestResult::Num(v)) => {
         if v == v.floor() && v.abs() < 1e15 {
           format!("{}", v as i64)

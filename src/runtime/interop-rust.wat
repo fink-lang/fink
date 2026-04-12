@@ -191,33 +191,6 @@
   )
 
 
-  ;; -- ·module_init ----------------------------------------------------------
-  ;;
-  ;; The fink compiler wraps each module's root in a synthetic `fink_module`
-  ;; LetFn whose outer cont is `·module_init fink_module` — handing the
-  ;; defined module fn to the host bootstrap.
-  ;;
-  ;; Implementation: tail-call `$_apply` with the fink_module closure and an
-  ;; empty args list. The module root is a zero-param CpsFunction whose body
-  ;; computes any module-level initialization (e.g. `s = add 1, 2`) and writes
-  ;; user exports into their per-name slot globals via `·export` →
-  ;; `global.set $<name>_closure`. The body either falls through (simple
-  ;; modules) or tail-calls through the entire CPS chain of module-level
-  ;; calls; in both cases control eventually unwinds back to the caller of
-  ;; `module_init` (typically `$fink_entry`) with slots populated.
-  ;;
-  ;; For modules with no side-effectful top-level calls this runs to
-  ;; completion synchronously. For modules that spawn tasks or perform IO at
-  ;; the top level, a more elaborate bootstrap is TBD.
-
-  (func $module_init (export "module_init")
-    (param $fink_module (ref null any))
-    (return_call $_apply
-      (call $list_nil)
-      (local.get $fink_module))
-  )
-
-
   ;; -- _run_main -------------------------------------------------------------
   ;;
   ;; Direct-style export. The single entry point for the host.

@@ -9,6 +9,7 @@ test 'literal bool', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -19,8 +20,9 @@ test 'literal bool', fn:
         (local.set $local_3 (call $_list_prepend_any (ref.i31 (i32.const 1)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBO0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7Ozs7O0E7O0EiCn0=
 
 
 test 'literal bool false', fn:
@@ -30,6 +32,7 @@ test 'literal bool false', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -40,8 +43,9 @@ test 'literal bool false', fn:
         (local.set $local_3 (call $_list_prepend_any (ref.i31 (i32.const 0)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
 
 
 test 'literal int', fn:
@@ -51,6 +55,7 @@ test 'literal int', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -61,8 +66,9 @@ test 'literal int', fn:
         (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 42)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
 
 
 test 'literal neg 0', fn:
@@ -72,6 +78,7 @@ test 'literal neg 0', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -82,8 +89,9 @@ test 'literal neg 0', fn:
         (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 0)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
 
 
 
@@ -94,6 +102,7 @@ test 'literal float', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -104,8 +113,9 @@ test 'literal float', fn:
         (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 123400)) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS4yMzRlKzUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS4yMzRlKzUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
 
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct

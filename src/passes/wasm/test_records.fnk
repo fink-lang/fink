@@ -8,6 +8,7 @@ test 'rec literal', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -27,9 +28,10 @@ test 'rec literal', fn:
         (local.set $v_4 (call $_list_head_any (local.get $_args)))
         (return_call $_rec_set (local.get $v_4) (call $_str (i32.const 0) (i32.const 1)) (struct.new $Num (f64.const 2)) (local.get $v_15))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2E6IDEsIGI6IDJ9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2E6IDEsIGI6IDJ9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7Ozs7QTs7QTtBO0E7Ozs7QTs7O0EiCn0=
 
 test 'rec destructure', fn:
   expect gen_wat ƒink:
@@ -39,6 +41,7 @@ test 'rec destructure', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -167,9 +170,10 @@ test 'rec destructure', fn:
         (local.set $v_67 (call $_list_head_any (local.get $_args)))
         (return_call $_rec_set (call $__rec_new) (call $_str (i32.const 1) (i32.const 1)) (struct.new $Num (f64.const 1)) (local.get $v_67))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2EsIGI6IGN9ID0ge2E6IDEsIGI6IDJ9XG5hICsgYyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7OztBOztBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2EsIGI6IGN9ID0ge2E6IDEsIGI6IDJ9XG5hICsgYyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7QTs7O0E7O0E7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBOzs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBOzs7QTs7O0EiCn0=
 
 test 'rec spread', fn:
   expect gen_wat ƒink:
@@ -179,6 +183,7 @@ test 'rec spread', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -231,9 +236,10 @@ test 'rec spread', fn:
       )
       (global $r (mut (ref null any)) (ref.null any))
       (export "r" (global $r))
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "cba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiciA9IHthOiAxLCBiOiAyfVxuey4uciwgYzogM30iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7QTs7QTtBO0E7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBOzs7QTs7QUFBQTs7QSIKfQ==
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiciA9IHthOiAxLCBiOiAyfVxuey4uciwgYzogM30iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7OztBOztBO0E7QTs7OztBOztBO0E7QTtBO0E7QTs7Ozs7OztBOztBO0E7QTtBOzs7OztBOztBO0E7OztBOztBQUFBOzs7QSIKfQ==
 
 test 'rec empty literal', fn:
   expect gen_wat ƒink:
@@ -242,6 +248,7 @@ test 'rec empty literal', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -252,8 +259,9 @@ test 'rec empty literal', fn:
         (local.set $local_3 (call $_list_prepend_any (call $__rec_new) (local.get $local_3)))
         (return_call $__apply (local.get $local_3) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie30iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTtBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie30iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
 
 test 'rec single field', fn:
   expect gen_wat ƒink:
@@ -262,6 +270,7 @@ test 'rec single field', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -270,9 +279,10 @@ test 'rec single field', fn:
         (local.set $v_0 (call $_list_head_any (local.get $_args)))
         (return_call $_rec_set (call $__rec_new) (call $_str (i32.const 0) (i32.const 1)) (struct.new $Num (f64.const 1)) (local.get $v_0))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "a")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2E6IDF9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2E6IDF9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTs7O0E7OztBIgp9
 
 test 'rec nested destructure', fn:
   expect gen_wat ƒink:
@@ -283,6 +293,7 @@ test 'rec nested destructure', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -455,9 +466,10 @@ test 'rec nested destructure', fn:
         (local.set $v_85 (call $_list_head_any (local.get $_args)))
         (return_call $_rec_set (call $__rec_new) (call $_str (i32.const 0) (i32.const 1)) (struct.new $Num (f64.const 42)) (local.get $v_85))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2F9ID0ge2E6IHtiOiA0Mn19XG57Yn0gPSBhXG5iIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7QTtBO0E7OztBOztBO0E7QTtBOzs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBOzs7OztBOztBO0E7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2F9ID0ge2E6IHtiOiA0Mn19XG57Yn0gPSBhXG5iIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTtBO0E7QTs7O0E7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBOzs7O0E7O0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBOzs7O0E7O0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTs7O0E7OztBIgp9
 
 test 'rec spread merge two', fn:
   expect gen_wat ƒink:
@@ -468,6 +480,7 @@ test 'rec spread merge two', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -544,9 +557,10 @@ test 'rec spread merge two', fn:
       (global $r1 (mut (ref null any)) (ref.null any))
       (export "r2" (global $r2))
       (export "r1" (global $r1))
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicjEgPSB7YTogMX1cbnIyID0ge2I6IDJ9XG57Li5yMSwgLi5yMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBOzs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTs7O0E7OztBQUNBO0FBREE7O0EiCn0=
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicjEgPSB7YTogMX1cbnIyID0ge2I6IDJ9XG57Li5yMSwgLi5yMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBOzs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBO0E7Ozs7QTs7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7QTs7QTtBO0E7QTtBOzs7Ozs7QTs7QTtBOzs7QTs7O0FBQ0E7QUFEQTs7O0EiCn0=
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -556,6 +570,7 @@ test 'rec format template', fn:
     (module
       (type $Num (struct (field f64)))
       (type $Fn2 (func (param (ref any) (ref any))))
+      (type $Fn1 (func (param (ref any))))
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
@@ -575,9 +590,10 @@ test 'rec format template', fn:
         (local.set $v_5 (call $_list_head_any (local.get $_args)))
         (return_call $_str_fmt (array.new_fixed $VarArgs 2 (call $_str (i32.const 0) (i32.const 5)) (local.get $v_5)) (local.get $v_14))
       )
+      (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "got: a")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2dvdDogJHt7YTogMX19JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7OztBOztBO0E7QTs7OztBOztBIgp9
+    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2dvdDogJHt7YTogMX19JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTtBOztBOztBO0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7OztBIgp9
 
 
 
