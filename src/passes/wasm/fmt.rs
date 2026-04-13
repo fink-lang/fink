@@ -73,6 +73,8 @@ struct ParsedModule {
   types: Vec<ParsedType>,
   /// Imported functions: (module, name, type_index).
   imports: Vec<(String, String, u32)>,
+  /// Imported globals: (module, name). Always (ref null any) in fink codegen.
+  imported_globals: Vec<(String, String)>,
   /// Defined functions.
   funcs: Vec<ParsedFunc>,
   /// Globals: (type_index for ref type, init func index).
@@ -89,6 +91,8 @@ struct ParsedModule {
   dwarf_locs: BTreeMap<u32, Loc>,
   /// Number of imported functions (offset for defined func indices).
   import_func_count: u32,
+  /// Number of imported globals (offset for defined global indices).
+  import_global_count: u32,
   /// Structural source locations from the emitter.
   structural_locs: Vec<super::emit::StructuralLoc>,
   /// Memory declarations: (min_pages, max_pages).
@@ -187,6 +191,7 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
   let mut module = ParsedModule {
     types: Vec::new(),
     imports: Vec::new(),
+    imported_globals: Vec::new(),
     funcs: Vec::new(),
     globals: Vec::new(),
     exports: Vec::new(),
@@ -195,6 +200,7 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
     global_names: HashMap::new(),
     dwarf_locs: BTreeMap::new(),
     import_func_count: 0,
+    import_global_count: 0,
     structural_locs: Vec::new(),
     memories: Vec::new(),
     data_segments: Vec::new(),
@@ -230,19 +236,29 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
           // Flatten the group into individual imports.
           match imports_group {
             wasmparser::Imports::Single(_, import) => {
-              if let wasmparser::TypeRef::Func(type_idx) = import.ty {
-                module.imports.push((
-                  import.module.to_string(),
-                  import.name.to_string(),
-                  type_idx,
-                ));
-                func_idx_counter += 1;
+              match import.ty {
+                wasmparser::TypeRef::Func(type_idx) => {
+                  module.imports.push((
+                    import.module.to_string(),
+                    import.name.to_string(),
+                    type_idx,
+                  ));
+                  func_idx_counter += 1;
+                }
+                wasmparser::TypeRef::Global(_) => {
+                  module.imported_globals.push((
+                    import.module.to_string(),
+                    import.name.to_string(),
+                  ));
+                  module.import_global_count += 1;
+                }
+                _ => {}
               }
             }
             wasmparser::Imports::Compact1 { module: mod_name, items } => {
-              for item in items {
-                if let Ok(item) = item
-                  && let wasmparser::TypeRef::Func(type_idx) = item.ty {
+              for item in items.into_iter().filter_map(|r| r.ok()) {
+                match item.ty {
+                  wasmparser::TypeRef::Func(type_idx) => {
                     module.imports.push((
                       mod_name.to_string(),
                       item.name.to_string(),
@@ -250,6 +266,15 @@ fn parse_module(wasm: &[u8]) -> ParsedModule {
                     ));
                     func_idx_counter += 1;
                   }
+                  wasmparser::TypeRef::Global(_) => {
+                    module.imported_globals.push((
+                      mod_name.to_string(),
+                      item.name.to_string(),
+                    ));
+                    module.import_global_count += 1;
+                  }
+                  _ => {}
+                }
               }
             }
             wasmparser::Imports::Compact2 { module: mod_name, ty, names } => {
@@ -632,6 +657,7 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
   stop_mark(w);
   w.push_str("(module\n");
   emit_type_section(module, w);
+  emit_imported_globals(module, w);
   emit_memory_section(module, w);
   stop_mark(w);
   w.push_str("\n");
@@ -649,6 +675,15 @@ fn emit_wat(module: &ParsedModule, w: &mut MappedWriter) {
   emit_data_section(module, w);
   stop_mark(w);
   w.push_str(")\n");
+}
+
+fn emit_imported_globals(module: &ParsedModule, w: &mut MappedWriter) {
+  for (mod_name, name) in &module.imported_globals {
+    w.push_str(&format!(
+      "  (import {:?} {:?} (global (ref null any)))\n",
+      mod_name, name
+    ));
+  }
 }
 
 fn emit_exports(module: &ParsedModule, w: &mut MappedWriter) {
@@ -775,7 +810,9 @@ fn emit_global_for_func(module: &ParsedModule, func_idx: u32, w: &mut MappedWrit
   use super::emit::StructuralKind;
   for (g_idx, global) in module.globals.iter().enumerate() {
     if global.init_func_index == Some(func_idx) {
-      let g_name = global_name(module, g_idx as u32);
+      // Absolute global index = imported globals count + defined global index.
+      let abs_g_idx = module.import_global_count + g_idx as u32;
+      let g_name = global_name(module, abs_g_idx);
       let type_name_str = global.ref_type_index
         .map(|ti| type_name(module, ti))
         .unwrap_or_else(|| "any".into());
@@ -797,7 +834,9 @@ fn emit_global_for_func(module: &ParsedModule, func_idx: u32, w: &mut MappedWrit
 fn emit_slot_globals(module: &ParsedModule, w: &mut MappedWriter) {
   for (g_idx, global) in module.globals.iter().enumerate() {
     if global.init_func_index.is_none() {
-      let g_name = global_name(module, g_idx as u32);
+      // Absolute global index = imported globals count + defined global index.
+      let abs_g_idx = module.import_global_count + g_idx as u32;
+      let g_name = global_name(module, abs_g_idx);
       // Skip internal/compiler-owned globals (prefix `_` or namespaced).
       if g_name.starts_with("$_") || g_name.starts_with("$@") { continue; }
       let type_name_str = global.ref_type_index

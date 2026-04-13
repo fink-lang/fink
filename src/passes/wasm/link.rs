@@ -124,19 +124,23 @@ pub fn link(inputs: &[LinkInput]) -> LinkResult {
     // Step 1: Merge types from all fragments.
     merge_types(&mut ctx, &fragments);
 
-    // Step 2: Merge functions — resolve @fink/ imports, assign indices.
+    // Step 2: Collect external global imports — assign output indices before
+    // defined globals so that remap_global works correctly in code rewriting.
+    merge_global_imports(&mut ctx, &fragments);
+
+    // Step 3: Merge functions — resolve @fink/ imports, assign indices.
     merge_functions(&mut ctx, &fragments);
 
-    // Step 3: Merge code — rewrite index references.
+    // Step 4: Merge code — rewrite index references.
     merge_code(&mut ctx, &fragments);
 
-    // Step 4: Merge globals.
+    // Step 5: Merge defined globals.
     merge_globals(&mut ctx, &fragments);
 
-    // Step 5: Merge exports (strip @fink/ internal imports from output).
+    // Step 6: Merge exports (strip @fink/ internal imports from output).
     merge_exports(&mut ctx, &fragments);
 
-    // Step 6: Collect memory and data sections from fragments.
+    // Step 7: Collect memory and data sections from fragments.
     for frag in &fragments {
         if let Some(mem) = &frag.memory {
             ctx.memory = Some(*mem);
@@ -144,7 +148,7 @@ pub fn link(inputs: &[LinkInput]) -> LinkResult {
         ctx.data_segments.extend(frag.data_segments.iter().cloned());
     }
 
-    // Step 7: Emit final module.
+    // Step 8: Emit final module.
     emit_module(&ctx)
 }
 
@@ -166,6 +170,8 @@ struct ParsedImport {
     /// For func imports: the type index in the fragment's type space.
     /// Used to re-emit non-@fink/ imports in the linked output.
     func_type_idx: Option<u32>,
+    /// True if this is a global import (not a function import).
+    is_global: bool,
 }
 
 /// Exported item from a fragment.
@@ -207,6 +213,8 @@ struct ParsedFragment {
     imports: Vec<ParsedImport>,
     /// Number of imported functions (offsets defined function indices).
     import_func_count: u32,
+    /// Number of imported globals (offsets defined global indices).
+    import_global_count: u32,
     /// Function declarations: type index per defined function.
     func_type_indices: Vec<u32>,
     /// Code body ranges into `wasm` — (start, end) per defined function.
@@ -239,6 +247,7 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
         type_section_bytes: None,
         imports: Vec::new(),
         import_func_count: 0,
+        import_global_count: 0,
         func_type_indices: Vec::new(),
         code_body_ranges: Vec::new(),
         exports: Vec::new(),
@@ -293,10 +302,12 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                         wasmparser::Imports::Single(_, import) => {
                             let is_fink =
                                 import.module.starts_with("@fink/");
+                            let is_global = matches!(import.ty, wasmparser::TypeRef::Global(_));
                             let func_type_idx = if let wasmparser::TypeRef::Func(idx) = import.ty {
                                 frag.import_func_count += 1;
                                 Some(idx)
                             } else {
+                                if is_global { frag.import_global_count += 1; }
                                 None
                             };
                             frag.imports.push(ParsedImport {
@@ -304,6 +315,7 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                                 name: import.name.to_string(),
                                 is_fink,
                                 func_type_idx,
+                                is_global,
                             });
                         }
                         wasmparser::Imports::Compact1 {
@@ -313,10 +325,12 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                             for item in items.into_iter().flatten() {
                                 let is_fink =
                                     mod_name.starts_with("@fink/");
+                                let is_global = matches!(item.ty, wasmparser::TypeRef::Global(_));
                                 let func_type_idx = if let wasmparser::TypeRef::Func(idx) = item.ty {
                                     frag.import_func_count += 1;
                                     Some(idx)
                                 } else {
+                                    if is_global { frag.import_global_count += 1; }
                                     None
                                 };
                                 frag.imports.push(ParsedImport {
@@ -324,6 +338,7 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                                     name: item.name.to_string(),
                                     is_fink,
                                     func_type_idx,
+                                    is_global,
                                 });
                             }
                         }
@@ -478,6 +493,10 @@ struct LinkContext {
     // (module_name, import_name, remapped_type_idx)
     external_imports: Vec<(String, String, u32)>,
 
+    // External (non-@fink/) global imports to preserve in output.
+    // (module_name, import_name) — all typed as (ref null any).
+    external_global_imports: Vec<(String, String)>,
+
     // Accumulated function declarations: new_type_idx per defined function.
     func_decls: Vec<u32>,
 
@@ -523,6 +542,7 @@ impl LinkContext {
             next_global_idx: 0,
             type_sections: Vec::new(),
             external_imports: Vec::new(),
+            external_global_imports: Vec::new(),
             func_decls: Vec::new(),
             code_bodies: Vec::new(),
             exports: Vec::new(),
@@ -608,6 +628,46 @@ fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
                 format!("{}:{}", frag.module_name, name)
             };
             ctx.type_names.insert(new_idx, prefixed);
+        }
+    }
+}
+
+/// Collect external (non-@fink/) global imports from user code fragments,
+/// dedup them, and assign output global indices. These occupy global indices
+/// 0..N in the output module, before all defined globals.
+///
+/// Only user code fragments can carry external global imports (runtime
+/// fragments only import from @fink/ namespaces). We remap each imported
+/// global's old index (its position in the fragment's global index space,
+/// which starts at 0) to the new output index.
+fn merge_global_imports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
+    let mut seen: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for (i, frag) in fragments.iter().enumerate() {
+        // Only user fragments carry external global imports.
+        if !is_user_module(&frag.module_name) { continue; }
+
+        // Track which import-index (in the global index space) we're assigning.
+        // Global indices in WASM: imported globals come first (0..import_global_count),
+        // then defined globals (import_global_count..).
+        let mut import_global_idx: u32 = 0;
+        for import in &frag.imports {
+            if !import.is_global { continue; }
+            let key = (import.module.clone(), import.name.clone());
+            let new_global_idx = if let Some(&idx) = seen.get(&key) {
+                idx
+            } else {
+                let idx = ctx.next_global_idx;
+                ctx.external_global_imports.push((import.module.clone(), import.name.clone()));
+                // Give imported globals a unique name in the output name section
+                // so the WAT formatter can distinguish them from defined globals.
+                let name = format!("{}#{}", import.module, import.name);
+                ctx.global_names.insert(idx, name);
+                seen.insert(key, idx);
+                ctx.next_global_idx += 1;
+                idx
+            };
+            ctx.remaps[i].globals.insert(import_global_idx, new_global_idx);
+            import_global_idx += 1;
         }
     }
 }
@@ -723,7 +783,9 @@ fn merge_code(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
     for (i, frag) in fragments.iter().enumerate() {
         for (local_idx, global) in frag.globals.iter().enumerate() {
-            let old_idx = local_idx as u32;
+            // In WASM, defined globals start after imported globals in the index space.
+            // Imported globals were already remapped in merge_global_imports.
+            let old_idx = frag.import_global_count + local_idx as u32;
             let new_idx = ctx.next_global_idx;
             ctx.remaps[i].globals.insert(old_idx, new_idx);
             ctx.next_global_idx += 1;
@@ -1209,8 +1271,29 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
     }
 
     // 1b. Import section — external (non-@fink/) imports preserved from input.
-    if !ctx.external_imports.is_empty() {
+    // Global imports must come before func imports so that global index 0..N
+    // is occupied by imported globals before any defined globals.
+    let has_external_imports = !ctx.external_global_imports.is_empty()
+        || !ctx.external_imports.is_empty();
+    if has_external_imports {
         let mut imports = wasm_encoder::ImportSection::new();
+        for (mod_name, imp_name) in &ctx.external_global_imports {
+            imports.import(
+                mod_name,
+                imp_name,
+                wasm_encoder::EntityType::Global(wasm_encoder::GlobalType {
+                    val_type: wasm_encoder::ValType::Ref(wasm_encoder::RefType {
+                        nullable: true,
+                        heap_type: wasm_encoder::HeapType::Abstract {
+                            shared: false,
+                            ty: wasm_encoder::AbstractHeapType::Any,
+                        },
+                    }),
+                    mutable: false,
+                    shared: false,
+                }),
+            );
+        }
         for (mod_name, imp_name, type_idx) in &ctx.external_imports {
             imports.import(
                 mod_name,

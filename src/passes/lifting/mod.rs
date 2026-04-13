@@ -156,6 +156,7 @@ pub fn lift<'src>(
       synth_alias: alloc.synth_alias,
       param_info: alloc.param_info,
       module_locals: current.module_locals,
+      module_imports: current.module_imports,
     };
   }
   unreachable!()

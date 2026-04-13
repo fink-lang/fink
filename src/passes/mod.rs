@@ -120,7 +120,7 @@ pub fn emit_wasm<'src>(
   use wasm::{collect, dwarf, emit, link};
 
   let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
-  let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals);
+  let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
   let ir_ctx = ir_ctx.with_globals(module.globals.clone());
 
   let mut result = emit::emit(&module, &ir_ctx);

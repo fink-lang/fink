@@ -155,7 +155,7 @@ mod tests {
 
     // Collect + emit WASM binary.
     let ir_ctx = super::collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
-    let module = super::collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals);
+    let module = super::collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());
     let mut result = super::emit::emit(&module, &ir_ctx);
 

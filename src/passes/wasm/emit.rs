@@ -318,7 +318,8 @@ pub enum StructuralKind {
 /// Emit a WASM binary from a collected CPS module.
 pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   let mut e = Emitter::new(module, ctx);
-  // Scan builtins and closure captures.
+  // Scan builtins and closure captures. Module imports come from CpsResult
+  // (collected before lifting, so names survive the rec_pop chain being hoisted).
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
   let mut closure_captures: BTreeSet<usize> = BTreeSet::new();
   let mut has_panic = false;
@@ -327,6 +328,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
     scan_closure_captures(func.body, &mut closure_captures);
     if !has_panic { has_panic = scan_panic(func.body); }
   }
+  e.module_imports = module.module_imports.clone();
   // Split builtins: implemented ones become defined functions, rest stay as imports.
   let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
     builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
@@ -339,6 +341,13 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   for func in &module.funcs {
     has_str_empty |= scan_strings(func.body, &mut e.string_data);
   }
+  // Also intern the module import field names so the BuiltIn::Import emitter
+  // can look them up by offset/length at emit time (same as other string lits).
+  for names in e.module_imports.values() {
+    for name in names {
+      e.string_data.intern(name.as_bytes());
+    }
+  }
   let has_strings = !e.string_data.is_empty();
 
   // $Fn2(caps, args) — unified calling convention for all functions.
@@ -347,18 +356,22 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   extra_arities.insert(1); // $Fn1 — (reserved)
   extra_arities.insert(2); // $Fn2 — all functions + _apply(args, callee)
 
+  // Module imports construct a rec from globals — needs rec_new + str + _rec_set_field.
+  let has_module_imports = !e.module_imports.is_empty();
+
   e.closure_captures = closure_captures.clone();
   e.needs_apply_for_operators = has_operator_imports;
   e.needs_list = has_list_imports;
-  e.needs_rec = has_rec_imports;
-  e.needs_string = has_strings;
+  e.needs_rec = has_rec_imports || has_module_imports;
+  e.needs_string = has_strings || has_module_imports;
   e.needs_str_empty = has_str_empty;
   e.has_panic = has_panic;
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
   all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
   e.emit_types(module, &all_builtins, &extra_arities, &closure_captures);
-  e.emit_imports_from(module, &import_builtins);
+  let module_imports = e.module_imports.clone();
+  e.emit_imports_from(module, &import_builtins, &module_imports);
   e.impl_builtins = impl_builtins.clone();
   e.emit_functions(module, &closure_captures);
   e.emit_memory();
@@ -394,6 +407,8 @@ struct Indices {
   globals: BTreeMap<String, u32>,
   /// Number of imported functions.
   import_count: u32,
+  /// Number of imported globals (module imports). Defined globals are offset by this.
+  imported_global_count: u32,
 }
 
 impl Indices {
@@ -404,6 +419,7 @@ impl Indices {
       funcs: BTreeMap::new(),
       globals: BTreeMap::new(),
       import_count: 0,
+      imported_global_count: 0,
     }
   }
 
@@ -467,6 +483,8 @@ struct Emitter<'a, 'src> {
   string_data: StringData,
   /// Labels of module-level value globals (non-fn-alias LetVals).
   value_globals: HashSet<String>,
+  /// Module imports: url → [name, ...]. Populated during pre-scan, used during emit.
+  module_imports: BTreeMap<String, Vec<String>>,
 }
 
 struct RawMapping {
@@ -496,6 +514,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       has_panic: false,
       string_data: StringData::new(),
       value_globals: cps_mod.value_globals.clone(),
+      module_imports: BTreeMap::new(),
     }
   }
 
@@ -642,6 +661,27 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.types.insert("$TmpImportChannelNew".into(), next_idx);
     next_idx += 1;
 
+    // $TmpImportRecSetField = (func (param (ref null any) (ref null any) (ref null any)) (result (ref null any)))
+    // Direct-style rec field setter: _rec_set_field(rec, key, val) -> rec.
+    // Only emitted when there are module imports that need rec construction.
+    if !self.module_imports.is_empty() {
+      types.ty().subtype(&SubType {
+        is_final: true,
+        supertype_idx: None,
+        composite_type: CompositeType {
+          inner: CompositeInnerType::Func(FuncType::new(
+            vec![any_ref, any_ref, any_ref],
+            vec![any_ref],
+          )),
+          shared: false,
+          descriptor: None,
+          describes: None,
+        },
+      });
+      self.idx.types.insert("$TmpImportRecSetField".into(), next_idx);
+      next_idx += 1;
+    }
+
     // $FnN for all needed arities.
     // $Fn2: all functions (caps, args) AND _apply(args, callee)
     // Plus builtin arities.
@@ -678,7 +718,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
   // Import section — builtins as imported functions
   // -------------------------------------------------------------------------
 
-  fn emit_imports_from(&mut self, _cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>) {
+  fn emit_imports_from(&mut self, _cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>, module_imports: &BTreeMap<String, Vec<String>>) {
     let mut imports = ImportSection::new();
     let mut next_func_idx = 0u32;
 
@@ -784,9 +824,44 @@ impl<'a, 'src> Emitter<'a, 'src> {
       next_func_idx += 1;
     }
 
+    // _rec_set_field: direct-style rec field setter for module import rec construction.
+    // Only imported when there are module imports to handle.
+    if !module_imports.is_empty() {
+      let rec_set_field_idx = self.idx.type_idx("$TmpImportRecSetField");
+      imports.import("@fink/runtime", "_rec_set_field", wasm_encoder::EntityType::Function(rec_set_field_idx));
+      self.idx.imports.insert("_rec_set_field".into(), next_func_idx);
+      next_func_idx += 1;
+    }
+
     self.idx.import_count = next_func_idx;
 
-    if next_func_idx > 0 {
+    // Module global imports — one (ref null any) global per imported name.
+    // Imported globals occupy indices 0..N in the global index space;
+    // defined globals (fn aliases, value globals, export slots) follow after.
+    let any_ref = RefType {
+      nullable: true,
+      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
+    };
+    let mut next_global_idx = 0u32;
+    for (url, names) in module_imports {
+      for name in names {
+        let label = format!("{url}#{name}");
+        imports.import(
+          url,
+          name,
+          wasm_encoder::EntityType::Global(GlobalType {
+            val_type: ValType::Ref(any_ref),
+            mutable: false,
+            shared: false,
+          }),
+        );
+        self.idx.globals.insert(label, next_global_idx);
+        next_global_idx += 1;
+      }
+    }
+    self.idx.imported_global_count = next_global_idx;
+
+    if next_func_idx > 0 || next_global_idx > 0 {
       self.module.section(&imports);
     }
   }
@@ -932,7 +1007,9 @@ impl<'a, 'src> Emitter<'a, 'src> {
 
   fn emit_globals(&mut self, cps_mod: &CpsModule<'a>) {
     let mut globals = GlobalSection::new();
-    let mut next_global_idx = 0u32;
+    // Imported globals (module imports) occupy indices 0..imported_global_count.
+    // Defined globals start after them.
+    let mut next_global_idx = self.idx.imported_global_count;
 
     let fn2_type = self.idx.fn_type_idx(2);
     for func in &cps_mod.funcs {
@@ -1340,6 +1417,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       string_data: &self.string_data,
       scratch_local,
       value_globals: &self.value_globals,
+      module_imports: &self.module_imports,
     };
     emit_body(func.body, &mut fc);
 
@@ -1457,6 +1535,8 @@ struct FuncContext<'a, 'b, 'src> {
   scratch_local: u32,
   /// Labels of module-level value globals (for emit_get to skip $Closure wrapping).
   value_globals: &'a HashSet<String>,
+  /// Module imports: url → [name, ...]. Used by emit_builtin for BuiltIn::Import.
+  module_imports: &'a BTreeMap<String, Vec<String>>,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -1810,14 +1890,87 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
   }
 
   if op == BuiltIn::Import {
-    // BuiltIn::Import is a compile-time marker for cross-module references.
-    // Multi-module support (wasm-link pass) must rewrite App BuiltIn::Import
-    // nodes before codegen reaches emit_builtin. Reaching here means the
-    // multi-module pipeline didn't run — likely a bug in the caller.
-    panic!(
-      "emit_builtin: App BuiltIn::Import reached codegen; the multi-module \
-       wasm-link pass must handle import nodes upstream"
-    );
+    // `·import './foo.fnk', fn ·v: <body>`
+    //
+    // The imported module's exports arrive as WASM global imports
+    // `(import "./foo.fnk" "name" (global (ref null any)))` — one per name.
+    // Here we construct a rec from those globals and bind it to the
+    // continuation param, then inline the continuation body.
+    //
+    // args[0] = Val(LitStr url), args[1] = Cont::Expr { params: [v], body }
+    let url_bytes = args.iter().find_map(|a| {
+      if let Arg::Val(v) = a
+        && let ValKind::Lit(Lit::Str(s)) = &v.kind
+      { Some(s.as_slice()) } else { None }
+    }).expect("BuiltIn::Import: missing URL arg");
+    let url = std::str::from_utf8(url_bytes).expect("import URL is not valid UTF-8");
+
+    let names = fc.module_imports.get(url).cloned().unwrap_or_default();
+
+    // Build rec: rec_new → for each name: rec_set_field(rec, key_str, global_val)
+    // Stack discipline: [rec] in, [rec] out after each _rec_set_field call.
+    let rec_new_idx = fc.emitter_idx.func_idx("rec_new");
+    let str_raw_idx = fc.emitter_idx.func_idx("str");
+    let rec_set_field_idx = fc.emitter_idx.func_idx("_rec_set_field");
+    fc.instr(&Instruction::Call(rec_new_idx));
+
+    for name in &names {
+      // Stack: [rec]
+      // Intern key name bytes and emit as $Str.
+      let name_bytes = name.as_bytes();
+      let (offset, len) = find_bytes(&fc.string_data.bytes, name_bytes)
+        .map(|pos| (pos as u32, name_bytes.len() as u32))
+        .expect("import field name not interned");
+      fc.instr(&Instruction::I32Const(offset as i32));
+      fc.instr(&Instruction::I32Const(len as i32));
+      fc.instr(&Instruction::Call(str_raw_idx));
+      // Stack: [rec, key_str]
+      // Read the imported global value.
+      let global_label = format!("{url}#{name}");
+      let global_idx = fc.emitter_idx.global_idx(&global_label);
+      fc.instr(&Instruction::GlobalGet(global_idx));
+      // Stack: [rec, key_str, val]
+      fc.instr(&Instruction::Call(rec_set_field_idx));
+      // Stack: [rec]  (the updated rec returned by _rec_set_field)
+    }
+
+    // Pass the constructed rec to the continuation.
+    //
+    // After lifting, the continuation is a Cont::Ref (lifted function).
+    // We dispatch through _apply: pack the rec into a list, then return_call _apply.
+    //
+    // Pre-lifting (Cont::Expr), we inline: store the rec in the bind param and
+    // emit the continuation body directly.
+    for arg in args {
+      match arg {
+        Arg::Cont(Cont::Ref(cont_id)) => {
+          // rec is on the stack — wrap in a list and tail-call the cont closure.
+          let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
+          let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
+          fc.instr(&Instruction::Call(list_nil_idx));
+          fc.instr(&Instruction::Call(list_prepend_idx));
+          let cont_label = fc.ctx.label(*cont_id);
+          emit_get(fc, &cont_label);
+          let apply_idx = fc.emitter_idx.func_idx("_apply");
+          fc.instr(&Instruction::ReturnCall(apply_idx));
+        }
+        Arg::Cont(Cont::Expr { args: bind_args, body }) => {
+          if let Some(bind) = bind_args.first() {
+            let label = fc.ctx.label(bind.id);
+            if fc.value_globals.contains(&label) {
+              let idx = fc.emitter_idx.global_idx(&label);
+              fc.instr(&Instruction::GlobalSet(idx));
+            } else {
+              let idx = fc.local_idx(&label);
+              fc.instr(&Instruction::LocalSet(idx));
+            }
+          }
+          emit_body(body, fc);
+        }
+        _ => {}
+      }
+    }
+    return;
   }
 
   if op == BuiltIn::StrFmt {
@@ -2361,7 +2514,7 @@ mod tests {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
 
     let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast_index);
-    let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals);
+    let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());
     emit(&module, &ir_ctx)
   }

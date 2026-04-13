@@ -120,6 +120,10 @@ pub struct CpsResult {
   /// `{x} = ...`). The authoritative source of "which CpsIds become WASM
   /// globals" — not all are exported (see `·ƒpub` for that).
   pub module_locals: Vec<(CpsId, String)>,
+  /// Imports declared at module scope: url → [name, ...].
+  /// Collected from the AST before CPS lowering, so names are available even
+  /// after lifting scatters the rec_pop continuation chain into separate fns.
+  pub module_imports: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 // ---------------------------------------------------------------------------

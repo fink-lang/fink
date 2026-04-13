@@ -1533,6 +1533,37 @@ fn parse_decimal(s: &str) -> f64 {
 // ---------------------------------------------------------------------------
 
 /// Lower a top-level block of statements (module body).
+/// Collect module-scope import declarations: url → [name, ...].
+///
+/// Matches the pattern `{foo, bar} = import './url'` at module scope.
+/// Reads names directly from the AST LHS before CPS lowering, so the result
+/// is stable even after lifting scatters the rec_pop chain into separate fns.
+fn collect_module_imports(exprs: &[Node<'_>]) -> std::collections::BTreeMap<String, Vec<String>> {
+  use crate::passes::ast::NodeKind;
+  let mut result: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+  for expr in exprs {
+    let NodeKind::Bind { lhs, rhs, .. } = &expr.kind else { continue };
+    // RHS must be `import 'url'`.
+    let NodeKind::Apply { func, args } = &rhs.kind else { continue };
+    let NodeKind::Ident(name) = &func.kind else { continue };
+    if *name != "import" { continue; }
+    let url = args.items.iter().find_map(|a| {
+      if let NodeKind::LitStr { content, .. } = &a.kind { Some(content.as_str()) } else { None }
+    });
+    let Some(url) = url else { continue };
+    // LHS must be a rec pattern `{foo, bar, ...}`.
+    let NodeKind::LitRec { items, .. } = &lhs.kind else { continue };
+    let entry: &mut Vec<String> = result.entry(url.to_string()).or_default();
+    for item in items.items.iter() {
+      if let NodeKind::Ident(field) = &item.kind {
+        let s = field.to_string();
+        if !entry.contains(&s) { entry.push(s); }
+      }
+    }
+  }
+  result
+}
+
 /// Collect the CpsIds of simple module-level exports: `name = <non-import expr>` where
 /// lhs is a plain Ident. Pattern destructures and imports are excluded.
 fn collect_module_exports(exprs: &[Node<'_>], bind_site_to_cps: &std::collections::HashMap<u32, CpsId>) -> Vec<CpsId> {
@@ -1630,6 +1661,13 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
   } else {
     collect_module_locals(exprs, &g.bind_site_to_cps)
   };
+  // Collect module-scope import declarations from the AST before lowering.
+  // Names must be read here — after lifting, the rec_pop chain is in separate fns.
+  let module_imports = if exprs.is_empty() {
+    std::collections::BTreeMap::new()
+  } else {
+    collect_module_imports(exprs)
+  };
 
   let body = if exprs.is_empty() {
     // Empty module: call ƒret with no args.
@@ -1657,7 +1695,7 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
     })],
   }, None);
 
-  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new(), module_locals }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new(), module_locals, module_imports }
 }
 
 /// Walk a lowered module body and wrap each exported LetVal's continuation
@@ -1768,7 +1806,7 @@ pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResul
   } else {
     wrap(&mut g, pending, Cont::Ref(cont))
   };
-  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new(), module_locals: Vec::new() }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new(), module_locals: Vec::new(), module_imports: std::collections::BTreeMap::new() }
 }
 
 /// Recursively lower a pattern lhs node, appending MatchBind/PatternMatch pending entries.

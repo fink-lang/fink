@@ -110,6 +110,10 @@ pub struct Module<'a> {
   pub value_globals: HashSet<String>,
   /// User exports: `(cps_id, source_name)` pairs from ·ƒpub.
   pub exports: Vec<(CpsId, String)>,
+  /// Module-scope import declarations: url → [name, ...].
+  /// Carried from CpsResult so the emitter can emit WASM global imports
+  /// and reconstruct the imported rec without re-scanning lifted CPS.
+  pub module_imports: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +130,7 @@ pub fn collect<'a, 'src>(
   root: &'a Expr,
   ctx: &IrCtx<'_, 'src>,
   module_locals: &[(CpsId, String)],
+  module_imports: std::collections::BTreeMap<String, Vec<String>>,
 ) -> Module<'a> {
   let mut funcs: Vec<CollectedFn<'a>> = Vec::new();
   let mut arities: BTreeSet<usize> = BTreeSet::new();
@@ -231,7 +236,7 @@ pub fn collect<'a, 'src>(
     }
   }
 
-  Module { funcs, arities, globals, value_globals, exports }
+  Module { funcs, arities, globals, value_globals, exports, module_imports }
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
