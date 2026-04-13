@@ -734,15 +734,6 @@ test 'match — rec literal guard', fn:
       ·closure ·v_131, ·ƒret_1, ·ƒret_149
 
 
-# BROKEN: lift panics with "did not converge after 20 rounds" when a
-# top-level pattern destructure's RHS lowers to sub-expressions. The
-# pass structurally converges around round 4 but the `needs_lifting`
-# predicate keeps reporting more work until the round cap trips.
-#
-# Ident RHS (e.g. `[a, b] = foo`) does NOT trigger this — the subject
-# is a pre-existing value ref and no sub-lowering is needed.
-#
-# Expected outputs marked TODO — update each once the bug is fixed.
 
 test 'top-level seq destructure with literal rhs — lift non-convergence', fn:
   expect lift ƒink:
