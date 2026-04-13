@@ -115,6 +115,11 @@ pub struct CpsResult {
   /// Downstream passes (formatter, WASM emitter) read this to distinguish
   /// param origins without reverse-engineering from call sites.
   pub param_info: crate::propgraph::PropGraph<CpsId, Option<ParamInfo>>,
+  /// Every module-level binding leaf: `(cps_id, source_name)` for each Ident
+  /// bound at module scope. Includes destructure leaves (e.g. `x` from
+  /// `{x} = ...`). The authoritative source of "which CpsIds become WASM
+  /// globals" — not all are exported (see `·ƒpub` for that).
+  pub module_locals: Vec<(CpsId, String)>,
 }
 
 // ---------------------------------------------------------------------------

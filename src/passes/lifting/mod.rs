@@ -155,6 +155,7 @@ pub fn lift<'src>(
       bind_to_cps: current.bind_to_cps,
       synth_alias: alloc.synth_alias,
       param_info: alloc.param_info,
+      module_locals: current.module_locals,
     };
   }
   unreachable!()
@@ -281,24 +282,6 @@ fn module_body_needs_lifting(expr: &Expr) -> bool {
   }
 }
 
-/// Check if an expression contains a LetFn anywhere (not inline conts).
-fn body_contains_letfn(expr: &Expr) -> bool {
-  match &expr.kind {
-    ExprKind::LetFn { .. } => true,
-    ExprKind::LetVal { cont, .. } => match cont {
-      Cont::Ref(_) => false,
-      Cont::Expr { body, .. } => body_contains_letfn(body),
-    },
-    ExprKind::App { args, .. } => {
-      args.iter().any(|a| match a {
-        Arg::Cont(Cont::Expr { body, .. }) => body_contains_letfn(body),
-        Arg::Expr(e) => body_contains_letfn(e),
-        _ => false,
-      })
-    }
-    ExprKind::If { then, else_, .. } => body_contains_letfn(then) || body_contains_letfn(else_),
-  }
-}
 
 /// Does this expression contain a LetFn or an inline Cont::Expr in an App?
 ///

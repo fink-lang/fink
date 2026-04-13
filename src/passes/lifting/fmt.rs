@@ -156,16 +156,15 @@ fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
 /// Render a compiler-generated node with no AST origin.
 /// Checks bind_kinds for cont semantic names, falls back to ·v_N.
 fn render_synth_fallback(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
-  if let Some(bk) = fc.ctx.bind_kinds {
-    if let Some(Some(kind)) = bk.try_get(cps_id) {
-      return match kind {
-        Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
-        Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
-        Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
-        Bind::SynthName => render_synth_name(cps_id, fc),
-        Bind::Synth => format!("·v_{}", cps_id.0),
-      };
-    }
+  if let Some(bk) = fc.ctx.bind_kinds
+    && let Some(Some(kind)) = bk.try_get(cps_id) {
+    return match kind {
+      Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
+      Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
+      Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
+      Bind::SynthName => render_synth_name(cps_id, fc),
+      Bind::Synth => format!("·v_{}", cps_id.0),
+    };
   }
   format!("·v_{}", cps_id.0)
 }

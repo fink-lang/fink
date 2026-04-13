@@ -117,7 +117,16 @@ pub struct Module<'a> {
 // ---------------------------------------------------------------------------
 
 /// Walk the top-level chain and collect all lifted functions + the export list.
-pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
+///
+/// `module_locals` is the authoritative list of module-level binding leaves
+/// from CPS lowering (includes destructure leaves). It's consulted when
+/// deciding which CpsIds become WASM globals — the CPS spine walk alone
+/// misses bindings that destructure lowering hoists into helper fn bodies.
+pub fn collect<'a, 'src>(
+  root: &'a Expr,
+  ctx: &IrCtx<'_, 'src>,
+  module_locals: &[(CpsId, String)],
+) -> Module<'a> {
   let mut funcs: Vec<CollectedFn<'a>> = Vec::new();
   let mut arities: BTreeSet<usize> = BTreeSet::new();
 
@@ -127,26 +136,25 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
   // The Cont::Expr IS the module body function. Its params (ƒret) and body
   // are the internal fink_module Fn2. Lifted fns inside the body become
   // sibling WASM functions at module scope.
-  if let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind {
-    if let Some(Arg::Cont(Cont::Expr { args: cont_args, body })) = args.first() {
-      let param_labels: Vec<(CpsId, String, bool)> = cont_args.iter().map(|b| {
-        (b.id, ctx.label(b.id), false)
-      }).collect();
-      arities.insert(param_labels.len());
-      funcs.push(CollectedFn {
-        label: "fink_module".into(),
-        fn_id: root.id,
-        params: param_labels,
-        n_captures: 0,
-        has_cont: false,
-        body,
-        export_as: None,
-        export_bind_id: None,
-        alias: None,
-      });
-      // Walk the body for lifted LetFn/LetVal siblings.
-      collect_chain(body, ctx, &exports, &mut funcs, &mut arities);
-    }
+  if let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind
+    && let Some(Arg::Cont(Cont::Expr { args: cont_args, body })) = args.first() {
+    let param_labels: Vec<(CpsId, String, bool)> = cont_args.iter().map(|b| {
+      (b.id, ctx.label(b.id), false)
+    }).collect();
+    arities.insert(param_labels.len());
+    funcs.push(CollectedFn {
+      label: "fink_module".into(),
+      fn_id: root.id,
+      params: param_labels,
+      n_captures: 0,
+      has_cont: false,
+      body,
+      export_as: None,
+      export_bind_id: None,
+      alias: None,
+    });
+    // Walk the body for lifted LetFn/LetVal siblings.
+    collect_chain(body, ctx, &exports, &mut funcs, &mut arities);
   }
 
   // Fill in n_captures for each function by scanning FnClosure call sites.
@@ -187,6 +195,36 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
     // Step 3: intersect — only bindings referenced by siblings become globals.
     for (id, label) in &module_binds {
       if sibling_refs.contains(id) {
+        value_globals.insert(label.clone());
+        globals.insert(*id);
+      }
+    }
+
+    // Step 4: module locals from CPS lowering — patches the destructure-case
+    // gap. Destructure leaves (e.g. `x` from `{x} = ...`) live inside hoisted
+    // matcher success-body fns that scan_module_bindings doesn't reach.
+    //
+    // Promotion criterion: the binding's LetVal lives in fn A, but is read
+    // from a different fn B. Same-fn reads work fine as plain locals.
+    //
+    // We identify A by walking each sibling fn body for the binding's
+    // defining LetVal, and check if any OTHER sibling fn refs the CpsId.
+    let mut letval_owner: HashMap<CpsId, usize> = HashMap::new();
+    for (fi, f) in funcs.iter().enumerate() {
+      collect_letval_ids(f.body, &mut |id| { letval_owner.entry(id).or_insert(fi); });
+    }
+    for (id, _) in module_locals {
+      if globals.contains(id) || module_binds.contains_key(id) { continue; }
+      let Some(&owner_fi) = letval_owner.get(id) else { continue; };
+      let cross_fn_ref = funcs.iter().enumerate()
+        .filter(|(fi, _)| *fi != owner_fi)
+        .any(|(_, f)| {
+          let mut refs = HashSet::new();
+          collect_fn_scoped_refs(f.body, &mut refs);
+          refs.contains(id)
+        });
+      if cross_fn_ref {
+        let label = ctx.label(*id);
         value_globals.insert(label.clone());
         globals.insert(*id);
       }
@@ -385,6 +423,85 @@ fn scan_module_bindings<'src>(
       }
     }
     ExprKind::If { .. } => {}
+  }
+}
+
+/// Visit each LetVal binding CpsId in an expression tree. Recurses into
+/// cont bodies but NOT into LetFn fn_bodies — each fn's locals are its own.
+fn collect_letval_ids(expr: &Expr, visit: &mut impl FnMut(CpsId)) {
+  match &expr.kind {
+    ExprKind::LetVal { name, cont, .. } => {
+      visit(name.id);
+      if let Cont::Expr { body, .. } = cont {
+        collect_letval_ids(body, visit);
+      }
+    }
+    ExprKind::LetFn { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        collect_letval_ids(body, visit);
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Cont(Cont::Expr { args: bind_args, body }) => {
+            for b in bind_args {
+              visit(b.id);
+            }
+            collect_letval_ids(body, visit);
+          }
+          Arg::Expr(e) => collect_letval_ids(e, visit),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      collect_letval_ids(then, visit);
+      collect_letval_ids(else_, visit);
+    }
+  }
+}
+
+/// Collect Ref::Synth CpsIds referenced in an expression tree, scoped to a
+/// single fn: does NOT recurse into nested LetFn fn_bodies. Use this when
+/// you want the refs that belong to *this* fn's body only, not transitive
+/// refs from lifted siblings that haven't been physically detached yet.
+fn collect_fn_scoped_refs(expr: &Expr, out: &mut HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetVal { val, cont, .. } => {
+      collect_val_refs(val, out);
+      if let Cont::Expr { body, .. } = cont {
+        collect_fn_scoped_refs(body, out);
+      } else if let Cont::Ref(id) = cont {
+        out.insert(*id);
+      }
+    }
+    ExprKind::LetFn { cont, .. } => {
+      // Skip fn_body — that's another fn's scope.
+      if let Cont::Expr { body, .. } = cont {
+        collect_fn_scoped_refs(body, out);
+      } else if let Cont::Ref(id) = cont {
+        out.insert(*id);
+      }
+    }
+    ExprKind::App { func, args } => {
+      if let Callable::Val(v) = func {
+        collect_val_refs(v, out);
+      }
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => collect_val_refs(v, out),
+          Arg::Cont(Cont::Expr { body, .. }) => collect_fn_scoped_refs(body, out),
+          Arg::Cont(Cont::Ref(id)) => { out.insert(*id); }
+          Arg::Expr(e) => collect_fn_scoped_refs(e, out),
+        }
+      }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      collect_val_refs(cond, out);
+      collect_fn_scoped_refs(then, out);
+      collect_fn_scoped_refs(else_, out);
+    }
   }
 }
 

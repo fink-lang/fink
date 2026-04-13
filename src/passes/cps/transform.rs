@@ -1547,6 +1547,66 @@ fn collect_module_exports(exprs: &[Node<'_>], bind_site_to_cps: &std::collection
   }).collect()
 }
 
+/// Collect every module-level binding leaf: `(cps_id, source_name)` pairs for
+/// each Ident that appears as a binding site under a module-scope `Bind` LHS.
+/// Includes destructure leaves (e.g. `x` from `{x} = {x: 42}`, `a`/`b` from
+/// `[a, b] = ...`) and guard-pattern idents. Excludes import destructures.
+///
+/// Mirrors `scopes::pre_register_pattern_binds` — any Ident it would register
+/// as a module-scope bind is a module local here.
+fn collect_module_locals(
+  exprs: &[Node<'_>],
+  bind_site_to_cps: &std::collections::HashMap<u32, CpsId>,
+) -> Vec<(CpsId, String)> {
+  let mut out = Vec::new();
+  for expr in exprs {
+    let NodeKind::Bind { lhs, rhs, .. } = &expr.kind else { continue; };
+    // Exclude imports: `{foo} = import './bar'`.
+    if let NodeKind::Apply { func, .. } = &rhs.kind
+      && let NodeKind::Ident(name) = &func.kind
+      && *name == "import" { continue; }
+    walk_bind_lhs(lhs, bind_site_to_cps, &mut out);
+  }
+  out
+}
+
+fn walk_bind_lhs(
+  node: &Node<'_>,
+  bind_site_to_cps: &std::collections::HashMap<u32, CpsId>,
+  out: &mut Vec<(CpsId, String)>,
+) {
+  match &node.kind {
+    NodeKind::Ident(name) => {
+      if let Some(id) = bind_site_to_cps.get(&node.id.0).copied() {
+        out.push((id, name.to_string()));
+      }
+    }
+    NodeKind::LitSeq { items, .. }
+    | NodeKind::LitRec { items, .. }
+    | NodeKind::Patterns(items) => {
+      for item in &items.items {
+        walk_bind_lhs(item, bind_site_to_cps, out);
+      }
+    }
+    NodeKind::Spread { inner: Some(inner), .. } => {
+      walk_bind_lhs(inner, bind_site_to_cps, out);
+    }
+    NodeKind::Bind { lhs, .. } => {
+      // Rec field: `{x: y}` — lhs is the binding target.
+      walk_bind_lhs(lhs, bind_site_to_cps, out);
+    }
+    NodeKind::BindRight { lhs, rhs, .. } => {
+      walk_bind_lhs(lhs, bind_site_to_cps, out);
+      walk_bind_lhs(rhs, bind_site_to_cps, out);
+    }
+    NodeKind::InfixOp { lhs, .. } => {
+      // Guard pattern: `a > 0` — lhs is the bind.
+      walk_bind_lhs(lhs, bind_site_to_cps, out);
+    }
+    _ => {}
+  }
+}
+
 pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> CpsResult {
   let mut g = Gen::new(scope);
 
@@ -1561,6 +1621,14 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
     std::collections::HashSet::new()
   } else {
     collect_module_exports(exprs, &g.bind_site_to_cps).into_iter().collect()
+  };
+  // Collect every module-level binding leaf (superset of exports; includes
+  // destructure leaves like `x` from `{x} = ...`). Authoritative source for
+  // which CpsIds become WASM globals.
+  let module_locals: Vec<(CpsId, String)> = if exprs.is_empty() {
+    Vec::new()
+  } else {
+    collect_module_locals(exprs, &g.bind_site_to_cps)
   };
 
   let body = if exprs.is_empty() {
@@ -1589,7 +1657,7 @@ pub fn lower_module<'src>(exprs: &'src [Node<'src>], scope: &ScopeResult) -> Cps
     })],
   }, None);
 
-  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new(), module_locals }
 }
 
 /// Walk a lowered module body and wrap each exported LetVal's continuation
@@ -1651,7 +1719,15 @@ fn inject_pub_calls(
       }
     }
     ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
-      // Don't recurse into fn_body — only module-level scope matters.
+      // For CpsClosure (synthetic module-cont helpers, e.g. destructure success
+      // wrappers), recurse into fn_body — these are continuations of the module
+      // scope, not separate user scopes. For CpsFunction (user-defined fns), skip
+      // fn_body — those are independent scopes.
+      let fn_body = if fn_kind == CpsFnKind::CpsClosure {
+        Box::new(inject_pub_calls(g, *fn_body, export_ids))
+      } else {
+        fn_body
+      };
       let cont = match cont {
         Cont::Ref(_) => cont,
         Cont::Expr { args, body } => {
@@ -1692,7 +1768,7 @@ pub fn lower_expr<'src>(node: &'src Node<'src>, scope: &ScopeResult) -> CpsResul
   } else {
     wrap(&mut g, pending, Cont::Ref(cont))
   };
-  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new() }
+  CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new(), module_locals: Vec::new() }
 }
 
 /// Recursively lower a pattern lhs node, appending MatchBind/PatternMatch pending entries.
