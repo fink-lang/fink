@@ -42,7 +42,7 @@
 // WAT text source maps by looking up DWARF entries for each instruction
 // and structural locs for non-code items.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use wasm_encoder::{
   AbstractHeapType, CodeSection, CompositeInnerType, CompositeType,
@@ -465,6 +465,8 @@ struct Emitter<'a, 'src> {
   has_panic: bool,
   /// Interned string literal data.
   string_data: StringData,
+  /// Labels of module-level value globals (non-fn-alias LetVals).
+  value_globals: HashSet<String>,
 }
 
 struct RawMapping {
@@ -477,7 +479,7 @@ struct RawMapping {
 }
 
 impl<'a, 'src> Emitter<'a, 'src> {
-  fn new(_module: &CpsModule<'a>, ctx: &'a IrCtx<'a, 'src>) -> Self {
+  fn new(cps_mod: &CpsModule<'a>, ctx: &'a IrCtx<'a, 'src>) -> Self {
     Self {
       module: wasm_encoder::Module::new(),
       idx: Indices::new(),
@@ -493,6 +495,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       needs_str_empty: false,
       has_panic: false,
       string_data: StringData::new(),
+      value_globals: cps_mod.value_globals.clone(),
     }
   }
 
@@ -961,10 +964,28 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
+    // Module-level value globals — non-fn-alias LetVals that sibling functions
+    // may reference. Mutable `(mut (ref null any))`, set during fink_module init.
+    let any_heap = HeapType::Abstract { shared: false, ty: AbstractHeapType::Any };
+    for label in &cps_mod.value_globals {
+      globals.global(
+        GlobalType {
+          val_type: ValType::Ref(RefType {
+            nullable: true,
+            heap_type: any_heap,
+          }),
+          mutable: true,
+          shared: false,
+        },
+        &ConstExpr::ref_null(any_heap),
+      );
+      self.idx.globals.insert(label.clone(), next_global_idx);
+      next_global_idx += 1;
+    }
+
     // Export slots — one mutable `(mut (ref null any))` per ·ƒpub export,
     // initialised to null. Populated by `·ƒpub` slot-writes inside
     // fink_module at init time. Exported directly as globals.
-    let any_heap = HeapType::Abstract { shared: false, ty: AbstractHeapType::Any };
     for (_cps_id, export_name) in &cps_mod.exports {
       let slot_label = export_name.clone();
       globals.global(
@@ -1296,6 +1317,17 @@ impl<'a, 'src> Emitter<'a, 'src> {
       }
     }
 
+    // Copy fink_module params that are value globals: local → global.
+    // Sibling functions read these via global.get.
+    for (_id, label, _) in &func.params {
+      if self.value_globals.contains(label)
+        && let Some(&local) = local_map.get(label) {
+          let global = self.idx.global_idx(label);
+          wasm_func.instruction(&Instruction::LocalGet(local));
+          wasm_func.instruction(&Instruction::GlobalSet(global));
+      }
+    }
+
     // Emit body instructions.
     let mut fc = FuncContext {
       func: &mut wasm_func,
@@ -1307,6 +1339,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       _has_closures: !self.closure_captures.is_empty(),
       string_data: &self.string_data,
       scratch_local,
+      value_globals: &self.value_globals,
     };
     emit_body(func.body, &mut fc);
 
@@ -1422,6 +1455,8 @@ struct FuncContext<'a, 'b, 'src> {
   string_data: &'a StringData,
   /// Scratch local for building args lists at call sites.
   scratch_local: u32,
+  /// Labels of module-level value globals (for emit_get to skip $Closure wrapping).
+  value_globals: &'a HashSet<String>,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -1455,11 +1490,17 @@ fn emit_body(expr: &Expr, fc: &mut FuncContext<'_, '_, '_>) {
     ExprKind::LetVal { name, val, cont } => {
       // Emit value with its own source mark (e.g. 42 → "42").
       emit_val(val, fc);
-      // Mark the local.set instruction with the binding loc (e.g. x).
+      // Mark the set instruction with the binding loc (e.g. x).
       fc.mark(name.id);
       let local_label = fc.ctx.label(name.id);
-      let idx = fc.local_idx(&local_label);
-      fc.instr(&Instruction::LocalSet(idx));
+      if fc.value_globals.contains(&local_label) {
+        // Module-level value binding — store in global.
+        let idx = fc.emitter_idx.global_idx(&local_label);
+        fc.instr(&Instruction::GlobalSet(idx));
+      } else {
+        let idx = fc.local_idx(&local_label);
+        fc.instr(&Instruction::LocalSet(idx));
+      }
 
       match cont {
         Cont::Expr { body, .. } => emit_body(body, fc),
@@ -1478,8 +1519,13 @@ fn emit_body(expr: &Expr, fc: &mut FuncContext<'_, '_, '_>) {
           //   [list_of_[bound_val], cont_closure]   — emit cont ref
           //   return_call $_apply(list, callee)
           let local_label = fc.ctx.label(name.id);
-          let local_idx = fc.local_idx(&local_label);
-          fc.instr(&Instruction::LocalGet(local_idx));
+          if fc.value_globals.contains(&local_label) {
+            let idx = fc.emitter_idx.global_idx(&local_label);
+            fc.instr(&Instruction::GlobalGet(idx));
+          } else {
+            let local_idx = fc.local_idx(&local_label);
+            fc.instr(&Instruction::LocalGet(local_idx));
+          }
 
           let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
           let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
@@ -1713,8 +1759,13 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
       Some(Cont::Expr { args: bind_args, body }) => {
         if let Some(bind) = bind_args.first() {
           let label = fc.ctx.label(bind.id);
-          let idx = fc.local_idx(&label);
-          fc.instr(&Instruction::LocalSet(idx));
+          if fc.value_globals.contains(&label) {
+            let idx = fc.emitter_idx.global_idx(&label);
+            fc.instr(&Instruction::GlobalSet(idx));
+          } else {
+            let idx = fc.local_idx(&label);
+            fc.instr(&Instruction::LocalSet(idx));
+          }
         }
         emit_body(body, fc);
       }
@@ -2008,9 +2059,11 @@ fn emit_get(fc: &mut FuncContext<'_, '_, '_>, label: &str) {
   if fc.emitter_idx.globals.contains_key(label) {
     let idx = fc.emitter_idx.global_idx(label);
     fc.instr(&Instruction::GlobalGet(idx));
-    // Global is a funcref — box in $Closure for (ref any) compatibility.
-    fc.instr(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
-    fc.instr(&Instruction::StructNew(closure_idx));
+    if !fc.value_globals.contains(label) {
+      // Fn-alias global is a funcref — box in $Closure for (ref any) compatibility.
+      fc.instr(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
+      fc.instr(&Instruction::StructNew(closure_idx));
+    }
   } else if fc.emitter_idx.funcs.contains_key(label) {
     // Non-global function reference (e.g. lifted continuation) — use ref.func.
     let idx = fc.emitter_idx.func_idx(label);

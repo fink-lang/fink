@@ -102,8 +102,12 @@ pub struct Module<'a> {
   pub funcs: Vec<CollectedFn<'a>>,
   /// All function arities encountered (= param count). Used to emit type section.
   pub arities: BTreeSet<usize>,
-  /// CpsIds of LetVal aliases for module-level fns — these are globals, not locals.
+  /// CpsIds of module-level bindings that are WASM globals, not locals.
+  /// Includes fn aliases and value bindings visible to sibling functions.
   pub globals: HashSet<CpsId>,
+  /// Labels of module-level value globals (non-fn-alias LetVals).
+  /// These are `(mut (ref null any))` globals — plain values, no $Closure wrapping.
+  pub value_globals: HashSet<String>,
   /// User exports: `(cps_id, source_name)` pairs from ·ƒpub.
   pub exports: Vec<(CpsId, String)>,
 }
@@ -157,11 +161,39 @@ pub fn collect<'a, 'src>(root: &'a Expr, ctx: &IrCtx<'_, 'src>) -> Module<'a> {
   // No call-site scanning needed — the CPS transform tags each LetFn.
 
   // Every module-level fn alias gets a global.
-  let globals: HashSet<CpsId> = funcs.iter()
+  let mut globals: HashSet<CpsId> = funcs.iter()
     .filter_map(|cf| cf.alias.as_ref().map(|(id, _)| *id))
     .collect();
 
-  Module { funcs, arities, globals, exports }
+  // Module-level value bindings (non-fn-alias LetVals and fink_module params)
+  // become globals only if referenced by sibling functions. Collect all
+  // candidates, then intersect with refs from sibling function bodies.
+  let mut value_globals: HashSet<String> = HashSet::new();
+  if let Some(fm) = funcs.first() {
+    // Step 1: collect all module-chain binding CpsIds + fink_module params.
+    let mut module_binds: HashMap<CpsId, String> = HashMap::new();
+    // Include fink_module params (e.g. ·ƒret_N).
+    for (id, label, _) in &fm.params {
+      module_binds.insert(*id, label.clone());
+    }
+    scan_module_bindings(fm.body, ctx, &globals, &mut module_binds);
+
+    // Step 2: collect all refs from sibling function bodies (skip fink_module itself).
+    let mut sibling_refs: HashSet<CpsId> = HashSet::new();
+    for f in funcs.iter().skip(1) {
+      collect_all_refs(f.body, &mut sibling_refs);
+    }
+
+    // Step 3: intersect — only bindings referenced by siblings become globals.
+    for (id, label) in &module_binds {
+      if sibling_refs.contains(id) {
+        value_globals.insert(label.clone());
+        globals.insert(*id);
+      }
+    }
+  }
+
+  Module { funcs, arities, globals, value_globals, exports }
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
@@ -311,6 +343,98 @@ fn collect_chain<'a, 'src>(
   }
 }
 
+/// Walk the module-level chain and collect all non-fn-alias binding CpsIds
+/// with their labels. These are candidates for value globals — the caller
+/// intersects with sibling function refs to determine which actually need
+/// to be promoted.
+fn scan_module_bindings<'src>(
+  expr: &Expr,
+  ctx: &IrCtx<'_, 'src>,
+  fn_alias_globals: &HashSet<CpsId>,
+  out: &mut HashMap<CpsId, String>,
+) {
+  match &expr.kind {
+    ExprKind::LetFn { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        scan_module_bindings(body, ctx, fn_alias_globals, out);
+      }
+    }
+    ExprKind::LetVal { name, cont, .. } => {
+      if !fn_alias_globals.contains(&name.id) {
+        out.insert(name.id, ctx.label(name.id));
+      }
+      if let Cont::Expr { args, body } = cont {
+        for a in args {
+          if !fn_alias_globals.contains(&a.id) {
+            out.insert(a.id, ctx.label(a.id));
+          }
+        }
+        scan_module_bindings(body, ctx, fn_alias_globals, out);
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        if let Arg::Cont(Cont::Expr { args: bind_args, body }) = arg {
+          for a in bind_args {
+            if !fn_alias_globals.contains(&a.id) {
+              out.insert(a.id, ctx.label(a.id));
+            }
+          }
+          scan_module_bindings(body, ctx, fn_alias_globals, out);
+        }
+      }
+    }
+    ExprKind::If { .. } => {}
+  }
+}
+
+/// Collect all Ref::Synth CpsIds referenced in an expression tree.
+fn collect_all_refs(expr: &Expr, out: &mut HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetVal { val, cont, .. } => {
+      collect_val_refs(val, out);
+      collect_cont_refs(cont, out);
+    }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      collect_all_refs(fn_body, out);
+      collect_cont_refs(cont, out);
+    }
+    ExprKind::App { func, args } => {
+      if let Callable::Val(v) = func {
+        collect_val_refs(v, out);
+      }
+      for arg in args {
+        match arg {
+          Arg::Val(v) | Arg::Spread(v) => collect_val_refs(v, out),
+          Arg::Cont(c) => collect_cont_refs(c, out),
+          Arg::Expr(e) => collect_all_refs(e, out),
+        }
+      }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      collect_val_refs(cond, out);
+      collect_all_refs(then, out);
+      collect_all_refs(else_, out);
+    }
+  }
+}
+
+fn collect_val_refs(val: &crate::passes::cps::ir::Val, out: &mut HashSet<CpsId>) {
+  if let ValKind::Ref(Ref::Synth(id)) = val.kind {
+    out.insert(id);
+  }
+  if let ValKind::ContRef(id) = val.kind {
+    out.insert(id);
+  }
+}
+
+fn collect_cont_refs(cont: &Cont, out: &mut HashSet<CpsId>) {
+  match cont {
+    Cont::Ref(id) => { out.insert(*id); }
+    Cont::Expr { body, .. } => collect_all_refs(body, out),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Local collection — pre-scan fn body for LetVal names
 // ---------------------------------------------------------------------------
@@ -327,8 +451,6 @@ fn collect_locals_expr<'src>(expr: &Expr, ctx: &IrCtx<'_, 'src>, out: &mut Vec<S
       out.push(ctx.label(name.id));
       match cont {
         Cont::Expr { args, body } => {
-          // Cont args are additional bindings in scope in the body
-          // (e.g. `LetVal v_14, fn add_0:` — add_0 is a new local).
           for a in args {
             out.push(ctx.label(a.id));
           }
