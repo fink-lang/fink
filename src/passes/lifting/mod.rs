@@ -145,6 +145,7 @@ pub fn lift<'src>(
       panic!("lifting::lift: did not converge after {MAX_ROUNDS} rounds");
     }
 
+
     // Extract LetFn from fn_bodies and hoist inline Cont::Expr (one level).
     let mut alloc = Alloc::new(current.origin, current.synth_alias, current.param_info);
     let new_root = lift_expr(current.root, ast_index, &mut alloc);
@@ -359,6 +360,13 @@ fn contains_letfn_or_inline_cont(expr: &Expr, in_fn: bool) -> bool {
       contains_letfn_or_inline_cont(then, in_fn) || contains_letfn_or_inline_cont(else_, in_fn)
     }
   }
+}
+
+/// Check if a fn_body is a thin ·closure wrapper — just `·closure(fn_ref, caps..., cont)`.
+/// These are already in their final form; extracting them just creates another
+/// wrapper in an infinite cycle.
+fn is_closure_wrapper(fn_body: &Expr) -> bool {
+  matches!(&fn_body.kind, ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), .. })
 }
 
 /// A "simple forward" is `fn p0, p1, ..., pN: pK p0, ..., p(K-1), p(K+1), ..., pN`
@@ -770,6 +778,25 @@ fn extract_from_body<'src>(
             return Expr { id: expr.id, kind: ExprKind::App { func, args } };
           }
 
+          if cap_entries.is_empty() && is_closure_app && is_closure_wrapper(&body) {
+            // Pure ·closure result cont whose body is another ·closure call.
+            // Hoisting this creates a LetFn with a ·closure body that will be
+            // extracted next round, creating another ·closure with an inline
+            // cont — infinite oscillation. Keep inline, recurse into body.
+            let cont_args_back: Vec<BindNode> = cont_params.into_iter().map(|p| match p {
+              Param::Name(b) | Param::Spread(b) => b,
+            }).collect();
+            let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
+            for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
+            let body = extract_from_body(body, parent_params, &inner_scope, _ast_index, alloc, hoisted);
+            args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
+            let args = args.into_iter().map(|a| match a {
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
+              other => other,
+            }).collect();
+            return Expr { id: expr.id, kind: ExprKind::App { func, args } };
+          }
+
           if cap_entries.is_empty() {
             // Pure — hoist directly, replace with Cont::Ref.
             let cont_name = alloc.bind(Bind::Cont(ContKind::Ret), None);
@@ -1136,6 +1163,23 @@ mod tests {
 
   #[allow(unused)]
   fn lift(src: &str) -> String {
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || lift_inner(&src_owned))) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+          (*s).to_string()
+        } else if let Some(s) = e.downcast_ref::<String>() {
+          s.clone()
+        } else {
+          "<unknown panic>".to_string()
+        };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  fn lift_inner(src: &str) -> String {
     match crate::to_lifted(src, "test") {
       Ok((lifted, desugared)) => {
         let bk = crate::passes::cps::ir::collect_bind_kinds(&lifted.result.root);

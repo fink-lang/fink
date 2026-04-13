@@ -37,6 +37,10 @@ unified lifting tests
   ·seq_prepend
   ·rec_put
   ·rec_pop
+  ·spawn
+  ·await
+  ·channel
+  ·receive
 } = import '@fink/compile/builtins'
 
 
@@ -502,15 +506,15 @@ test 'match arm refs top-level binding', fn:
         ·ƒret_23 0
       ·v_107 = fn {·ƒsucc_108}:
         ·v_27 ·ƒsucc_108
-      ·v_170 = fn {·ƒsucc_171, ·ƒfail_173}, [·v_13]:
+      ·v_157 = fn {·ƒsucc_158, ·ƒfail_160}, [·v_13]:
         ·if ·v_13,
           fn:
-            ·ƒsucc_171 _
+            ·ƒsucc_158 _
           fn:
-            ·ƒfail_173 _
+            ·ƒfail_160 _
       ·v_21 = fn [·ƒsucc_9, ·ƒfail_10, ·v_8]:
-        ·v_177 = ·closure ·v_170, ·ƒsucc_9, ·ƒfail_10
-        ·op_eq ·v_8, 0, ·v_177
+        ·v_164 = ·closure ·v_157, ·ƒsucc_9, ·ƒfail_10
+        ·op_eq ·v_8, 0, ·v_164
       ·v_39 = fn [·ƒsucc_5, ·ƒfail_6, ·v_4]:
         ·v_110 = ·closure ·v_107, ·ƒsucc_5
         ·v_21 ·v_110, ·ƒfail_6, ·v_4
@@ -518,26 +522,21 @@ test 'match arm refs top-level binding', fn:
         ·op_plus ·x_89, 1, ·ƒret_44
       ·v_100 = fn {·v_101}, [·ƒsucc_41, ·ƒfail_42, ·v_40]:
         ·v_101 ·ƒsucc_41
-      ·ƒret_204 = fn:
+      ·ƒret_178 = fn:
         ·panic _
-      ·v_157 = fn {·v_158, ·ƒret_160, ·v_162}:
-        ·v_158 ·ƒret_160, ·ƒret_204, ·v_162
-      ·v_131 = fn {·v_132}, [·ƒret_57, ·v_56]:
-        ·v_166 = ·closure ·v_157, ·v_132, ·ƒret_57, ·v_56
-        ·v_39 ·ƒret_57, ·v_166, ·v_56
+      ·v_144 = fn {·v_145, ·ƒret_147, ·v_149}:
+        ·v_145 ·ƒret_147, ·ƒret_178, ·v_149
+      ·v_128 = fn {·v_129}, [·ƒret_57, ·v_56]:
+        ·v_153 = ·closure ·v_144, ·v_129, ·ƒret_57, ·v_56
+        ·v_39 ·ƒret_57, ·v_153, ·v_56
       ·v_114 = fn {·ƒret_115, ·x_117}, [·v_91]:
         ·v_103 = ·closure ·v_100, ·v_91
-        ·v_134 = ·closure ·v_131, ·v_103
-        ·v_134 ·ƒret_115, ·x_117
-      ·v_139 = fn {·x_140}, [·v_119]:
-        ·closure ·v_88, ·x_140, ·v_119
-      ·v_181 = fn {·ƒret_182, ·x_184}, [·v_142]:
-        ·closure ·v_114, ·ƒret_182, ·x_184, ·v_142
+        ·v_131 = ·closure ·v_128, ·v_103
+        ·v_131 ·ƒret_115, ·x_117
       ·x_0 = 5
       ·ƒpub ·x_0
-      ·ƒret_201 = fn [·v_186]:
-        ·closure ·v_139, ·x_0, ·v_186
-      ·closure ·v_181, ·ƒret_1, ·x_0, ·ƒret_201
+      ·v_119 = ·closure ·v_114, ·ƒret_1, ·x_0
+      ·closure ·v_88, ·x_0, ·v_119
 
 
 test 'recursive fn in match', fn:
@@ -928,3 +927,42 @@ test 'multiple top-level fns with bound call results', fn:
         ·add_0 ·v_68, 1, 2
       ·closure ·v_63, ·ƒret_8, ·ƒret_73
 
+
+
+test 'spawn with closure over channel', fn:
+  expect lift ƒink:
+    ch = channel 0
+    fut = spawn fn:
+      receive ch
+    77 >> ch
+    result = await fut
+    result
+
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_7:
+      ·v_68 = fn {·ch_69}, [·ƒret_14]:
+        ·receive ·ch_69, ·ƒret_14
+      ·v_114 = fn {·ƒret_115}, [·v_30]:
+        ·result_2 = ·v_30
+        ·ƒpub ·result_2
+        ·ƒret_115 ·result_2
+      ·v_95 = fn {·fut_96, ·ƒret_98}, [·v_25]:
+        ·v_27 = ·v_25
+        ·v_119 = ·closure ·v_114, ·ƒret_98
+        ·await ·fut_96, ·v_119
+      ·v_129 = fn {·ch_130}, [·v_102]:
+        ·op_shr 77, ·ch_130, ·v_102
+      ·v_80 = fn {·ch_81, ·ƒret_83}, [·v_21]:
+        ·fut_1 = ·v_21
+        ·ƒpub ·fut_1
+        ·v_132 = ·closure ·v_129, ·ch_81
+        ·closure ·v_95, ·fut_1, ·ƒret_83, ·v_132
+      ·v_59 = fn {·ƒret_60}, [·v_10]:
+        ·ch_0 = ·v_10
+        ·ƒpub ·ch_0
+        ·v_71 = ·closure ·v_68, ·ch_0
+        ·v_87 = ·closure ·v_80, ·ch_0, ·ƒret_60
+        ·spawn ·v_71, ·v_87
+      ·ƒret_75 = fn [·v_64]:
+        ·channel 0, ·v_64
+      ·closure ·v_59, ·ƒret_7, ·ƒret_75
