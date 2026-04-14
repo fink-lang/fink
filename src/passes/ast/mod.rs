@@ -30,6 +30,146 @@ pub struct ParseResult<'src> {
   pub node_count: u32,
 }
 
+// ---------------------------------------------------------------------------
+// Flat AST arena (Step A of flat-ast-arena refactor)
+//
+// The long-term home for every AST node is a `PropGraph<AstId, Node>` — the
+// arena — paired with a `root: AstId`. This pair is `Ast`. Nodes reference
+// each other by `AstId` rather than owning children, so the arena can hand
+// out stable node lookups via index rather than `&Node` borrows.
+//
+// Every pass that produces an AST follows an **append-only** discipline:
+// existing nodes are never mutated or overwritten. Passes extend the arena
+// with new nodes and (where they change a subtree) append a fresh copy of
+// each parent whose child-id must be updated. The old nodes stay at their
+// original ids, unreachable from the new root but still valid lookups for
+// any side-table keyed against them.
+//
+// `AstBuilder` is the only handle that can grow the arena. Its API is
+// deliberately minimal — `append` and `read` — so no pass can accidentally
+// rewrite an existing slot through it. Mutating `Ast.nodes` directly via
+// `PropGraph::set` / `get_mut` remains possible from outside the builder,
+// but is a glaring signal in code review and should only happen in debug
+// tooling or a deliberate compaction pass.
+//
+// Step A is pure addition: these types exist alongside the current owning
+// `Node` tree but nothing uses them yet. Steps B and C migrate `NodeKind`
+// children to `AstId` references and wire the parser through `AstBuilder`.
+// ---------------------------------------------------------------------------
+
+/// The flat AST: an arena of nodes plus a root id.
+///
+/// Neither half is meaningful alone — `root` without `nodes` is a dangling
+/// id, `nodes` without `root` is a bag of disconnected subtrees. `Ast` is
+/// the one type that describes "an AST".
+pub struct Ast<'src> {
+  pub nodes: crate::propgraph::PropGraph<AstId, Node<'src>>,
+  pub root: AstId,
+}
+
+impl<'src> Ast<'src> {
+  /// A sentinel empty AST — a single `Module` node with no expressions.
+  /// Used as a placeholder where code needs an `&Ast` but has no real one
+  /// (e.g. the `cps::fmt` stub formatter path).
+  pub fn empty() -> Self {
+    let zero = Loc {
+      start: lexer::Pos { idx: 0, line: 0, col: 0 },
+      end: lexer::Pos { idx: 0, line: 0, col: 0 },
+    };
+    let mut builder = AstBuilder::new();
+    let root = builder.append(
+      NodeKind::Module { exprs: Exprs::empty(), url: String::new() },
+      zero,
+    );
+    builder.finish(root)
+  }
+}
+
+/// Append-only arena builder. The only way to grow an `Ast.nodes` in an
+/// append-safe manner. Owns its `PropGraph` internally and hands it back
+/// via `finish()` once a new root id is known.
+///
+/// Passes typically look like:
+///   let (mut builder, old_root) = AstBuilder::from_ast(input);
+///   let new_root = rewrite(&mut builder, old_root);
+///   builder.finish(new_root)
+pub struct AstBuilder<'src> {
+  nodes: crate::propgraph::PropGraph<AstId, Node<'src>>,
+  /// Length at construction time — used by debug assertions to detect
+  /// accidental shrinking of the arena across a pass boundary.
+  #[cfg(debug_assertions)]
+  start_len: usize,
+}
+
+impl<'src> AstBuilder<'src> {
+  /// Start a fresh builder with an empty arena.
+  pub fn new() -> Self {
+    Self {
+      nodes: crate::propgraph::PropGraph::new(),
+      #[cfg(debug_assertions)]
+      start_len: 0,
+    }
+  }
+
+  /// Take ownership of an existing `Ast` for extension. The current root
+  /// is returned alongside so the caller can use it as its walking entry
+  /// point.
+  pub fn from_ast(ast: Ast<'src>) -> (Self, AstId) {
+    let root = ast.root;
+    #[cfg(debug_assertions)]
+    let start_len = ast.nodes.len();
+    let builder = Self {
+      nodes: ast.nodes,
+      #[cfg(debug_assertions)]
+      start_len,
+    };
+    (builder, root)
+  }
+
+  /// Append a new node to the arena. Returns the freshly allocated id.
+  /// The id stored in `Node.id` is overwritten with the freshly assigned
+  /// value, so callers never need to think about it.
+  pub fn append(&mut self, kind: NodeKind<'src>, loc: Loc) -> AstId {
+    let id = AstId(self.nodes.len() as u32);
+    self.nodes.push(Node { id, kind, loc });
+    id
+  }
+
+  /// Read an existing node from the arena. Panics if `id` is out of range.
+  pub fn read(&self, id: AstId) -> &Node<'src> {
+    self.nodes.get(id)
+  }
+
+  /// Current arena length (i.e. the id that the next `append` will return).
+  pub fn len(&self) -> usize {
+    self.nodes.len()
+  }
+
+  /// True if the arena has no nodes.
+  pub fn is_empty(&self) -> bool {
+    self.nodes.is_empty()
+  }
+
+  /// Finalise the arena into an `Ast` rooted at `root`. Consumes the
+  /// builder so no further appends can happen.
+  pub fn finish(self, root: AstId) -> Ast<'src> {
+    #[cfg(debug_assertions)]
+    debug_assert!(
+      self.nodes.len() >= self.start_len,
+      "AstBuilder shrank the arena: start_len={}, end_len={}",
+      self.start_len,
+      self.nodes.len(),
+    );
+    Ast { nodes: self.nodes, root }
+  }
+}
+
+impl<'src> Default for AstBuilder<'src> {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
 /// Unique identifier for an AST node, assigned by the parser.
 /// Used as a key into property graphs for attaching pass-computed metadata
 /// (name resolution, types, etc.) without modifying the AST structure.
@@ -548,6 +688,102 @@ mod tests {
       }
     });
     assert_eq!(names, vec!["+", "a", "b"]);
+  }
+
+  // --- Step A: AstBuilder / Ast arena tests ---
+
+  #[test]
+  fn builder_append_returns_monotonic_ids() {
+    let mut b = AstBuilder::new();
+    let a = b.append(NodeKind::Ident("a"), loc());
+    let b_id = b.append(NodeKind::Ident("b"), loc());
+    let c = b.append(NodeKind::Ident("c"), loc());
+    assert_eq!(a, AstId(0));
+    assert_eq!(b_id, AstId(1));
+    assert_eq!(c, AstId(2));
+    assert_eq!(b.len(), 3);
+  }
+
+  #[test]
+  fn builder_append_overwrites_node_id() {
+    // Node::new stamps id=AstId(0); AstBuilder::append must replace it with
+    // the real allocation slot so the stored node's id always matches its
+    // arena position.
+    let mut b = AstBuilder::new();
+    let _ = b.append(NodeKind::Ident("first"), loc());
+    let id = b.append(NodeKind::Ident("second"), loc());
+    assert_eq!(b.read(id).id, AstId(1));
+  }
+
+  #[test]
+  fn builder_read_returns_appended_node() {
+    let mut b = AstBuilder::new();
+    let id = b.append(NodeKind::Ident("hello"), loc());
+    match &b.read(id).kind {
+      NodeKind::Ident(name) => assert_eq!(*name, "hello"),
+      _ => panic!("expected Ident"),
+    }
+  }
+
+  #[test]
+  fn builder_finish_preserves_all_nodes() {
+    let mut b = AstBuilder::new();
+    let _ = b.append(NodeKind::Ident("x"), loc());
+    let root = b.append(NodeKind::Ident("root"), loc());
+    let ast = b.finish(root);
+    assert_eq!(ast.nodes.len(), 2);
+    assert_eq!(ast.root, root);
+    assert!(matches!(ast.nodes.get(AstId(0)).kind, NodeKind::Ident("x")));
+    assert!(matches!(ast.nodes.get(AstId(1)).kind, NodeKind::Ident("root")));
+  }
+
+  #[test]
+  fn builder_from_ast_preserves_arena_and_root() {
+    let mut b = AstBuilder::new();
+    let a = b.append(NodeKind::Ident("a"), loc());
+    let b_id = b.append(NodeKind::Ident("b"), loc());
+    let ast = b.finish(a);
+    let (builder, root) = AstBuilder::from_ast(ast);
+    assert_eq!(root, a);
+    assert_eq!(builder.len(), 2);
+    // Read an existing id through the reopened builder.
+    assert!(matches!(builder.read(b_id).kind, NodeKind::Ident("b")));
+  }
+
+  #[test]
+  fn builder_append_only_across_pass_boundary() {
+    // Simulates a pass: take Ast by value, reopen, append one new node,
+    // finish pointing at the new node as the root. Old nodes survive at
+    // their original ids.
+    let mut b = AstBuilder::new();
+    let old_root = b.append(NodeKind::Ident("old"), loc());
+    let input = b.finish(old_root);
+
+    let (mut builder, old_root_id) = AstBuilder::from_ast(input);
+    assert_eq!(builder.len(), 1);
+    let new_root = builder.append(NodeKind::Ident("new"), loc());
+    let output = builder.finish(new_root);
+
+    assert_eq!(output.nodes.len(), 2);
+    assert_eq!(output.root, new_root);
+    // Old id still resolves to the original node — append-only guarantee.
+    assert!(matches!(output.nodes.get(old_root_id).kind, NodeKind::Ident("old")));
+    assert!(matches!(output.nodes.get(new_root).kind, NodeKind::Ident("new")));
+  }
+
+  #[test]
+  fn ast_empty_has_module_root() {
+    let ast = Ast::empty();
+    assert_eq!(ast.nodes.len(), 1);
+    assert_eq!(ast.root, AstId(0));
+    match &ast.nodes.get(ast.root).kind {
+      NodeKind::Module { exprs, url } => {
+        assert!(exprs.items.is_empty());
+        assert!(exprs.seps.is_empty());
+        assert_eq!(url, "");
+      }
+      _ => panic!("expected Module root"),
+    }
   }
 
 }
