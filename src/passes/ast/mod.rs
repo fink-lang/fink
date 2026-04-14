@@ -62,6 +62,7 @@ pub struct ParseResult<'src> {
 /// Neither half is meaningful alone — `root` without `nodes` is a dangling
 /// id, `nodes` without `root` is a bag of disconnected subtrees. `Ast` is
 /// the one type that describes "an AST".
+#[derive(Clone)]
 pub struct Ast<'src> {
   pub nodes: crate::propgraph::PropGraph<AstId, Node<'src>>,
   pub root: AstId,
@@ -840,29 +841,37 @@ mod tests {
     b.finish(root)
   }
 
-  /// Manually clone an Ast's nodes into a fresh Ast with the same root.
-  /// The PropGraph doesn't derive Clone, so we walk + re-push to snapshot.
-  fn clone_ast<'src>(src: &Ast<'src>) -> Ast<'src> {
-    let mut b = AstBuilder::new();
-    for i in 0..src.nodes.len() {
-      let n = src.nodes.get(AstId(i as u32));
-      b.append(n.kind.clone(), n.loc);
-    }
-    b.finish(src.root)
-  }
-
   #[test]
   fn appended_only_accepts_identical_asts() {
     let before = two_node_ast();
-    let after = clone_ast(&before);
+    let after = before.clone();
     assert!(super::appended_only(&before, &after).is_ok());
+  }
+
+  #[test]
+  fn ast_clone_produces_independent_snapshot() {
+    // The two-handle pass apply pattern relies on being able to take a
+    // read-only snapshot of the input Ast before opening the builder
+    // over the original. Confirm that cloning works and produces a
+    // fully independent arena.
+    let before = two_node_ast();
+    let snapshot = before.clone();
+    assert_eq!(snapshot.nodes.len(), before.nodes.len());
+    assert_eq!(snapshot.root, before.root);
+    // And mutating the builder (via from_ast on before) does NOT affect
+    // the snapshot — this is the critical property for the two-handle rule.
+    let (mut builder, _) = AstBuilder::from_ast(before);
+    let _ = builder.append(NodeKind::Ident("added"), loc());
+    let after = builder.finish(AstId(0));
+    assert_eq!(snapshot.nodes.len(), 2);
+    assert_eq!(after.nodes.len(), 3);
   }
 
   #[test]
   fn appended_only_accepts_pure_append() {
     let before = two_node_ast();
     // Simulate a pass that appends one new node.
-    let (mut builder, _root) = AstBuilder::from_ast(clone_ast(&before));
+    let (mut builder, _root) = AstBuilder::from_ast(before.clone());
     let new_root = builder.append(NodeKind::Ident("c"), loc());
     let after = builder.finish(new_root);
     assert!(super::appended_only(&before, &after).is_ok());
@@ -926,7 +935,7 @@ mod tests {
 
     // Reopen and simulate a pass: append a fresh leaf then a fresh group
     // pointing at it. Old slots at leaf_x and group_old are left alone.
-    let (mut builder, old_root) = AstBuilder::from_ast(clone_ast(&before));
+    let (mut builder, old_root) = AstBuilder::from_ast(before.clone());
     assert_eq!(old_root, group_old);
     let leaf_y = builder.append(NodeKind::Ident("y"), loc());
     let group_new = builder.append(
