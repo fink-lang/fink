@@ -26,7 +26,7 @@ pub mod wasm_link;
 //   desugar(Ast) → DesugaredAst  (partial application + index + scopes)
 //   lower(DesugaredAst) → Cps
 //   lift(Cps, DesugaredAst) → LiftedCps
-//   emit_wasm(LiftedCps, DesugaredAst) → Vec<u8>
+//   compile_package(entry, loader) → Wasm  (see wasm_link::compile_package)
 // ---------------------------------------------------------------------------
 
 /// Raw parsed AST — for display/formatting only.
@@ -106,42 +106,6 @@ pub fn lift<'src>(
 pub struct Wasm {
   pub binary: Vec<u8>,
   pub mappings: Vec<wasm::sourcemap::WasmMapping>,
-}
-
-/// Emit WASM binary from lifted CPS IR.
-/// Runs: collect → emit → DWARF → link.
-#[cfg(feature = "compile")]
-pub fn emit_wasm<'src>(
-  lifted: &LiftedCps,
-  desugared: &'src DesugaredAst<'src>,
-  path: &str,
-  src: &str,
-) -> Wasm {
-  use wasm::{collect, dwarf, emit, link};
-
-  let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
-  let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
-  let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-
-  let mut result = emit::emit(&module, &ir_ctx);
-
-  let dwarf_sections = dwarf::emit_dwarf(path, Some(src), &result.offset_mappings);
-  dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
-
-  static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
-  let link_inputs = vec![
-    link::LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
-    link::LinkInput { module_name: "@fink/user".into(), wasm: result.wasm },
-  ];
-  let linked = link::link(&link_inputs);
-
-  let mappings = result.offset_mappings.iter().map(|m| wasm::sourcemap::WasmMapping {
-    wasm_offset: m.wasm_offset,
-    src_line: m.loc.start.line.saturating_sub(1),
-    src_col: m.loc.start.col,
-  }).collect();
-
-  Wasm { binary: linked.wasm, mappings }
 }
 
 /// Emit WAT text from a WASM binary.
