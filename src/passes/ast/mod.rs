@@ -496,14 +496,10 @@ fn print_exprs(exprs: &Exprs, out: &mut String, depth: usize) {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::lexer::{Loc, Pos, Token, TokenKind};
+  use crate::lexer::{Loc, Pos};
 
   fn loc() -> Loc {
     Loc { start: Pos { idx: 0, line: 1, col: 0 }, end: Pos { idx: 0, line: 1, col: 0 } }
-  }
-
-  fn tok(src: &str) -> Token<'_> {
-    Token { kind: TokenKind::Sep, loc: loc(), src }
   }
 
   fn node(kind: NodeKind) -> Node {
