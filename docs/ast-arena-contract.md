@@ -97,6 +97,58 @@ per invocation and leave 99% of the arena untouched.
 
 ---
 
+## Reads and appends — the two-handle rule
+
+A pass that walks an arena and appends to it has a borrow-checker
+problem: holding `&mut builder` for appends precludes holding `&src`
+for reads on the same underlying `PropGraph`. Rust's aliasing rules
+forbid the pattern, and relaxing them (e.g. via `Cell` / `RefCell`)
+adds runtime overhead and breaks the "no mutation through the builder"
+guarantee.
+
+The contract resolves this by **separating read access from write access
+at the pass boundary**:
+
+```rust
+pub fn apply(ast: Ast<'src>) -> Result<Ast<'src>, Error> {
+  let src: Ast<'src> = clone_snapshot(&ast);
+  let (mut builder, root) = AstBuilder::from_ast(ast);
+  let mut pass = MyPass::new();
+  let new_root = pass.transform(&mut builder, &src, root)?;
+  Ok(builder.finish(new_root))
+}
+```
+
+- `src` is a **read-only snapshot** of the pre-pass arena. The pass
+  reads nodes from it via `src.nodes.get(id)`.
+- `builder` holds the post-pass arena that the pass is building up.
+  The pass appends to it via `builder.append(...)`.
+- Pass methods take **both** as parameters: `(builder: &mut AstBuilder,
+  src: &Ast, id: AstId)`. There is no aliasing — `src` and `builder`
+  own separate `PropGraph`s.
+- The newly appended nodes (slots `>= src.nodes.len()`) are visible
+  only through `builder`. The pass already knows their ids because it
+  just allocated them, so it doesn't need to look them up through
+  `src`.
+
+The snapshot costs one full clone of the pre-pass arena per pass
+boundary — roughly 1 MB for a 10000-node AST. Acceptable for
+phase 1; if profiling later shows this dominates, the snapshot can be
+replaced with an `Rc<[Node]>`-backed copy-on-write arena without
+changing the pass API.
+
+**Why not use interior mutability?** A `RefCell<PropGraph>` would let
+reads and writes coexist through a single handle, but it would:
+1. Incur runtime borrow-checking overhead on every `get` and `append`.
+2. Hide the two-phase nature of the pass (read snapshot → write new
+   nodes) behind a single opaque handle.
+3. Risk deadlocks if a method holds a read borrow across an append.
+
+Splitting into two handles makes the phases explicit and the runtime
+cost zero.
+
+---
+
 ## Fast-path: unchanged subtrees
 
 A pass's default behaviour when walking a subtree that doesn't need
