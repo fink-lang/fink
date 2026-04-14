@@ -170,6 +170,50 @@ impl<'src> Default for AstBuilder<'src> {
   }
 }
 
+/// Verify the append-only invariant between two `Ast`s — `after` must be a
+/// strict append-only extension of `before`. Concretely: every existing slot
+/// in `before` must survive verbatim in `after`, and `after.nodes.len() >=
+/// before.nodes.len()`. Returns `Ok(())` on success, or a descriptive error
+/// string on the first violation.
+///
+/// This is the runtime tripwire that complements `AstBuilder`'s compile-time
+/// append-only API. Pass tests can call it via `debug_assert!` to confirm
+/// nothing mutated an old slot:
+///
+/// ```ignore
+/// let before_snapshot = input.clone();      // before pass runs
+/// let output = my_pass::apply(input);
+/// debug_assert!(appended_only(&before_snapshot, &output).is_ok());
+/// ```
+///
+/// Intended for debug builds and tests; the linear scan is `O(n)` over the
+/// old arena length. Use in the body of a pass is valid but wasteful — the
+/// compile-time `AstBuilder` API is the primary defence.
+pub fn appended_only<'src>(
+  before: &Ast<'src>,
+  after: &Ast<'src>,
+) -> Result<(), String> {
+  if after.nodes.len() < before.nodes.len() {
+    return Err(format!(
+      "appended_only: after.nodes.len() = {} < before.nodes.len() = {}",
+      after.nodes.len(),
+      before.nodes.len(),
+    ));
+  }
+  for i in 0..before.nodes.len() {
+    let id = AstId(i as u32);
+    let old_node = before.nodes.get(id);
+    let new_node = after.nodes.get(id);
+    if old_node != new_node {
+      return Err(format!(
+        "appended_only: slot {:?} was mutated — old kind = {:?}, new kind = {:?}",
+        id, old_node.kind, new_node.kind,
+      ));
+    }
+  }
+  Ok(())
+}
+
 /// Unique identifier for an AST node, assigned by the parser.
 /// Used as a key into property graphs for attaching pass-computed metadata
 /// (name resolution, types, etc.) without modifying the AST structure.
@@ -784,6 +828,128 @@ mod tests {
       }
       _ => panic!("expected Module root"),
     }
+  }
+
+  // --- appended_only invariant checker ---
+
+  /// Build a small two-node Ast for the append-only tests.
+  fn two_node_ast() -> Ast<'static> {
+    let mut b = AstBuilder::new();
+    let _ = b.append(NodeKind::Ident("a"), loc());
+    let root = b.append(NodeKind::Ident("b"), loc());
+    b.finish(root)
+  }
+
+  /// Manually clone an Ast's nodes into a fresh Ast with the same root.
+  /// The PropGraph doesn't derive Clone, so we walk + re-push to snapshot.
+  fn clone_ast<'src>(src: &Ast<'src>) -> Ast<'src> {
+    let mut b = AstBuilder::new();
+    for i in 0..src.nodes.len() {
+      let n = src.nodes.get(AstId(i as u32));
+      b.append(n.kind.clone(), n.loc);
+    }
+    b.finish(src.root)
+  }
+
+  #[test]
+  fn appended_only_accepts_identical_asts() {
+    let before = two_node_ast();
+    let after = clone_ast(&before);
+    assert!(super::appended_only(&before, &after).is_ok());
+  }
+
+  #[test]
+  fn appended_only_accepts_pure_append() {
+    let before = two_node_ast();
+    // Simulate a pass that appends one new node.
+    let (mut builder, _root) = AstBuilder::from_ast(clone_ast(&before));
+    let new_root = builder.append(NodeKind::Ident("c"), loc());
+    let after = builder.finish(new_root);
+    assert!(super::appended_only(&before, &after).is_ok());
+    assert_eq!(after.nodes.len(), 3);
+    assert_eq!(after.root, new_root);
+  }
+
+  #[test]
+  fn appended_only_detects_shrinkage() {
+    let before = two_node_ast();
+    // Construct a smaller "after" Ast manually.
+    let mut b = AstBuilder::new();
+    let root = b.append(NodeKind::Ident("a"), loc());
+    let after = b.finish(root);
+    let err = super::appended_only(&before, &after).unwrap_err();
+    assert!(err.contains("after.nodes.len() = 1"));
+    assert!(err.contains("before.nodes.len() = 2"));
+  }
+
+  #[test]
+  fn appended_only_detects_slot_mutation() {
+    let before = two_node_ast();
+    // Build an "after" where slot 0 has been changed.
+    let mut b = AstBuilder::new();
+    let _ = b.append(NodeKind::Ident("MUTATED"), loc()); // slot 0 rewritten
+    let root = b.append(NodeKind::Ident("b"), loc());
+    let after = b.finish(root);
+    let err = super::appended_only(&before, &after).unwrap_err();
+    assert!(err.contains("slot"));
+    assert!(err.contains("mutated"));
+  }
+
+  #[test]
+  fn appended_only_allows_empty_before() {
+    // Edge case: an empty "before" vacuously extends to anything.
+    let before = Ast { nodes: crate::propgraph::PropGraph::new(), root: AstId(0) };
+    let after = two_node_ast();
+    assert!(super::appended_only(&before, &after).is_ok());
+  }
+
+  #[test]
+  fn appended_only_accepts_extend_with_parent_rewrite() {
+    // Realistic pass pattern: a pass walks a tree, finds something to change,
+    // appends a replacement for the target + an appended copy of the parent
+    // pointing at the new child. Old parent + old target survive at their
+    // original slots.
+    //
+    // before: [leaf("x"), group(leaf(0))]   root=1
+    // after:  [leaf("x"), group(leaf(0)), leaf("y"), group(leaf(2))] root=3
+    let mut b = AstBuilder::new();
+    let leaf_x = b.append(NodeKind::Ident("x"), loc());
+    let group_old = b.append(
+      NodeKind::Group {
+        open: Token { kind: crate::lexer::TokenKind::BracketOpen, loc: loc(), src: "(" },
+        close: Token { kind: crate::lexer::TokenKind::BracketClose, loc: loc(), src: ")" },
+        inner: Box::new(Node::new(NodeKind::Ident("x"), loc())),
+      },
+      loc(),
+    );
+    let before = b.finish(group_old);
+
+    // Reopen and simulate a pass: append a fresh leaf then a fresh group
+    // pointing at it. Old slots at leaf_x and group_old are left alone.
+    let (mut builder, old_root) = AstBuilder::from_ast(clone_ast(&before));
+    assert_eq!(old_root, group_old);
+    let leaf_y = builder.append(NodeKind::Ident("y"), loc());
+    let group_new = builder.append(
+      NodeKind::Group {
+        open: Token { kind: crate::lexer::TokenKind::BracketOpen, loc: loc(), src: "(" },
+        close: Token { kind: crate::lexer::TokenKind::BracketClose, loc: loc(), src: ")" },
+        inner: Box::new(Node::new(NodeKind::Ident("y"), loc())),
+      },
+      loc(),
+    );
+    let after = builder.finish(group_new);
+
+    assert!(super::appended_only(&before, &after).is_ok());
+    assert_eq!(after.nodes.len(), 4);
+    // Old root still resolves to the original Group node.
+    assert!(matches!(after.nodes.get(group_old).kind, NodeKind::Group { .. }));
+    // New root is a fresh Group.
+    assert_eq!(after.root, group_new);
+    assert!(matches!(after.nodes.get(group_new).kind, NodeKind::Group { .. }));
+    // And the interim fresh leaf survives too.
+    assert!(matches!(after.nodes.get(leaf_y).kind, NodeKind::Ident("y")));
+    // Old leaf_x unchanged.
+    assert!(matches!(after.nodes.get(leaf_x).kind, NodeKind::Ident("x")));
   }
 
 }
