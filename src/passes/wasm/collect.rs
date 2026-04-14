@@ -113,7 +113,21 @@ pub struct Module<'a> {
   /// Module-scope import declarations: url → [name, ...].
   /// Carried from CpsResult so the emitter can emit WASM global imports
   /// and reconstruct the imported rec without re-scanning lifted CPS.
+  ///
+  /// In multi-module builds, `compile_package` rewrites the keys from the
+  /// raw consumer-relative URLs (as written in source) to canonical
+  /// entry-relative URLs before handing the `Module` to the emitter. The
+  /// emitter itself doesn't care which form the keys are in — as long as
+  /// `url_rewrite` below maps any raw Lit::Str URL in the CPS back to the
+  /// same form used as the key here.
   pub module_imports: std::collections::BTreeMap<String, Vec<String>>,
+  /// Raw source URL → canonical URL mapping for module imports. Empty in
+  /// single-module builds (the emitter falls back to identity lookup).
+  /// Populated by `compile_package` from `canonicalise_url` so the
+  /// `BuiltIn::Import` emit site can translate a CPS `Lit::Str` URL (raw,
+  /// as written in source) to the canonical form used throughout the
+  /// linked binary.
+  pub url_rewrite: std::collections::BTreeMap<String, String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +250,15 @@ pub fn collect<'a, 'src>(
     }
   }
 
-  Module { funcs, arities, globals, value_globals, exports, module_imports }
+  Module {
+    funcs,
+    arities,
+    globals,
+    value_globals,
+    exports,
+    module_imports,
+    url_rewrite: std::collections::BTreeMap::new(),
+  }
 }
 
 /// Scan the top-level chain for the terminal App and extract export pairs.
