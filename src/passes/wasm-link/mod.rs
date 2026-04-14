@@ -273,41 +273,7 @@ mod tests {
   use std::path::{Path, PathBuf};
 
   use super::*;
-  use crate::passes::modules::{FileSourceLoader, InMemorySourceLoader, SourceLoader};
-
-  // -- Rust proof-of-life tests ------------------------------------------------
-  // Kept as the baseline until the .fnk tests below cover the same ground.
-
-  #[test]
-  fn compile_package_single_module_no_imports() {
-    // Single module with no imports should work as before.
-    let src = "foo = fn x: x * 2\nfoo";
-    let mut loader = InMemorySourceLoader::single("test.fnk", src);
-    let wasm = compile_package(Path::new("test.fnk"), &mut loader).unwrap();
-    assert!(!wasm.binary.is_empty());
-    assert!(wasm.binary.starts_with(b"\0asm"));
-  }
-
-  #[test]
-  fn compile_package_two_modules() {
-    // entry.fnk imports foo from lib.fnk and calls it.
-    let lib_src = "foo = fn x: x * 2";
-    let entry_src = "{foo} = import './lib.fnk'\nresult = foo 21";
-
-    let mut loader = InMemorySourceLoader::new();
-    loader.add("./lib.fnk", lib_src);
-    loader.add("./entry.fnk", entry_src);
-
-    let wasm = compile_package(Path::new("./entry.fnk"), &mut loader).unwrap();
-    assert!(!wasm.binary.is_empty());
-    assert!(wasm.binary.starts_with(b"\0asm"));
-
-    // The linked binary should export both fink_module (entry) and
-    // "./lib.fnk:fink_module" (dep).
-    let wat = wasmprinter::print_bytes(&wasm.binary).unwrap();
-    assert!(wat.contains("\"fink_module\""), "missing entry fink_module export");
-    assert!(wat.contains("\"./lib.fnk:fink_module\""), "missing dep fink_module export");
-  }
+  use crate::passes::modules::{FileSourceLoader, SourceLoader};
 
   // -- .fnk snapshot tests -----------------------------------------------------
   //

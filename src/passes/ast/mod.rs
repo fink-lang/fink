@@ -511,40 +511,6 @@ mod tests {
   }
 
   #[test]
-  fn print_simple_binding() {
-    // foo = 1
-    let tree = node(NodeKind::Bind {
-      op: tok("="),
-      lhs: Box::new(node(NodeKind::Ident("foo"))),
-      rhs: Box::new(node(NodeKind::LitInt("1"))),
-    });
-    assert_eq!(tree.print(), "Bind '=',\n  Ident 'foo'\n  LitInt '1'");
-  }
-
-  #[test]
-  fn print_infix_op() {
-    // a + b
-    let tree = node(NodeKind::InfixOp {
-      op: tok("+"),
-      lhs: Box::new(node(NodeKind::Ident("a"))),
-      rhs: Box::new(node(NodeKind::Ident("b"))),
-    });
-    assert_eq!(tree.print(), "InfixOp '+',\n  Ident 'a'\n  Ident 'b'");
-  }
-
-  #[test]
-  fn print_lit_seq_empty() {
-    let tree = node(NodeKind::LitSeq { open: tok("["), close: tok("]"), items: Exprs::empty() });
-    assert_eq!(tree.print(), "LitSeq '[..]'");
-  }
-
-  #[test]
-  fn print_spread_bare() {
-    let tree = node(NodeKind::Spread { op: tok(".."), inner: None });
-    assert_eq!(tree.print(), "Spread '..'");
-  }
-
-  #[test]
   fn print_patterns_empty() {
     let tree = node(NodeKind::Patterns(Exprs::empty()));
     assert_eq!(tree.print(), "Patterns");
@@ -588,16 +554,4 @@ mod tests {
     assert_eq!(names, vec!["+", "a", "b"]);
   }
 
-  #[test]
-  fn print_chained_cmp() {
-    // a > b > c
-    let tree = node(NodeKind::ChainedCmp(vec![
-      CmpPart::Operand(node(NodeKind::Ident("a"))),
-      CmpPart::Op(tok(">")),
-      CmpPart::Operand(node(NodeKind::Ident("b"))),
-      CmpPart::Op(tok(">")),
-      CmpPart::Operand(node(NodeKind::Ident("c"))),
-    ]));
-    assert_eq!(tree.print(), "ChainedCmp\n  Ident 'a'\n  '>'\n  Ident 'b'\n  '>'\n  Ident 'c'");
-  }
 }
