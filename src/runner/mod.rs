@@ -452,9 +452,46 @@ mod tests {
     }
   }
 
+  /// Hybrid SourceLoader for `run_main`:
+  ///
+  /// - The inline test source lives at a synthetic path
+  ///   `<CARGO_MANIFEST_DIR>/src/runner/__test_entry.fnk`.
+  /// - Any imports (e.g. `import './test_modules/entry.fnk'`) resolve
+  ///   relative to that synthetic path's parent — i.e. `src/runner/` —
+  ///   via `FileSourceLoader`, which picks up real files from disk.
+  ///
+  /// This lets `.fnk` runner tests exercise the full multi-module
+  /// compile pipeline from inline source without needing to write the
+  /// entry module out to a real file first.
+  struct RunMainLoader {
+    entry_abs_path: std::path::PathBuf,
+    entry_source: String,
+    disk: crate::passes::modules::FileSourceLoader,
+  }
+
+  impl crate::passes::modules::SourceLoader for RunMainLoader {
+    fn load(&mut self, path: &std::path::Path) -> Result<String, String> {
+      if path == self.entry_abs_path {
+        Ok(self.entry_source.clone())
+      } else {
+        self.disk.load(path)
+      }
+    }
+  }
+
   #[allow(unused)]
   fn run_main(src: &str) -> String {
-    let wasm = crate::to_wasm(src, "test").expect("compilation failed");
+    let entry_abs_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("src/runner/__test_entry.fnk");
+    let mut loader = RunMainLoader {
+      entry_abs_path: entry_abs_path.clone(),
+      entry_source: src.to_string(),
+      disk: crate::passes::modules::FileSourceLoader::new(),
+    };
+    let wasm = match crate::compile_package(&entry_abs_path, &mut loader) {
+      Ok(w) => w,
+      Err(e) => return format!("ERROR: compile: {e}"),
+    };
     let stdin_buf: IoReadStream = Arc::new(Mutex::new(std::io::Cursor::new(b"hello from stdin".to_vec())));
     let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
@@ -513,4 +550,5 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_errors.fnk");
   test_macros::include_fink_tests!("src/runner/test_fn_match.fnk");
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk");
+  test_macros::include_fink_tests!("src/runner/test_modules.fnk");
 }

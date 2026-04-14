@@ -2,12 +2,12 @@
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
-test 'literal', fn:
+test 'multi module import', fn:
   expect run_main ƒink:
     {shrub} = import './test_modules/entry.fnk'
 
     main = fn args, stdin, stdout, stderr:
-      stdout << shrub 21
+      stdout << '${shrub 21}'
 
   | equals ":
     0

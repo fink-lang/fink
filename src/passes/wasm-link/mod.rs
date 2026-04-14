@@ -116,6 +116,15 @@ pub fn compile_package(
   }
 
   // BFS: compile each dep once (memoized by canonical URL).
+  //
+  // TODO(dedup-by-abs-path): `visited` keys on the raw URL string from the
+  // consumer's source. Two different importers using different relative
+  // paths to reach the same on-disk file (e.g. `./foo.fnk` vs
+  // `../dir/foo.fnk`) will each compile a fresh fragment and the linker
+  // will end up with two copies of the same dep. Fix: canonicalize
+  // `dep_abs_path` (realpath) and key `visited` on that, while still
+  // using the raw `import_url` as the `LinkInput.module_name` so the
+  // WASM import section matches what each consumer emitted.
   let mut visited: BTreeSet<String> = BTreeSet::new();
   while let Some((importer_path, import_url)) = queue.pop_front() {
     let dep_abs_path = resolve_url(&importer_path, &import_url)?;
@@ -143,15 +152,27 @@ pub fn compile_package(
     order.push(canonical_url);
   }
 
-  // Link: @fink/runtime + deps (in discovery order) + entry.
+  // Link: @fink/runtime + deps (in topological order: providers before
+  // consumers) + entry. The BFS above visits consumers before their
+  // providers (entry discovers its direct imports first, which in turn
+  // push their own imports onto the queue). Reversing the discovery
+  // order produces a valid topological sort for the acyclic case: the
+  // last fragment BFS visits is always a leaf dep, which must initialize
+  // first because everything above it in the graph depends on its
+  // exported globals being populated.
+  //
+  // The linker preserves fragment order in its export section, so the
+  // linked binary's `<url>:fink_module` exports end up in init order —
+  // the runner iterates them in declaration order without needing a
+  // separate dep-graph side channel.
   static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
 
   let mut link_inputs: Vec<LinkInput> = vec![
     LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
   ];
 
-  // Add deps in BFS discovery order (providers before consumers).
-  for canonical_url in &order {
+  // Reverse BFS order → topological (providers before consumers).
+  for canonical_url in order.iter().rev() {
     if let Some((dep_wasm, _)) = compiled.remove(canonical_url) {
       link_inputs.push(LinkInput {
         module_name: canonical_url.clone(),
@@ -192,6 +213,18 @@ pub fn compile_package(
 ///
 /// Runs: collect → emit → DWARF append. Does NOT link — the caller is
 /// responsible for linking all fragments together.
+///
+/// TODO(dep-helper-bodies): every compiled fragment today emits full bodies
+/// for the host-facing runtime helpers (`_box_func`, `_apply_export`,
+/// `_list_nil`, `_list_prepend`, `_fn2_stub`, `_channel_new_export`,
+/// `_run_main_export`, `_settle_future_export`, `_str_wrap_bytes_export`).
+/// In a dep fragment these are dead weight — they're never called by the
+/// dep's own code and the entry fragment already exports them once. The
+/// formatter hides them from snapshot output but the bytes are still in
+/// the linked binary. Fix: add a `CompileMode::Dep` flag (or equivalent)
+/// that skips emitter synthesis of these host helpers when compiling a
+/// dep fragment. This is the "duplicated code signals runtime belonging"
+/// cleanup Jan flagged during Slice 2 planning.
 #[cfg(feature = "compile")]
 fn compile_fragment(
   lifted: &crate::passes::LiftedCps,
@@ -373,19 +406,21 @@ mod tests {
     let wat_json = wat_srcmap.to_json();
     let wat_b64 = crate::sourcemap::base64_encode(wat_json.as_bytes());
 
-    // Dump files for review (DUMP_WAT=1).
-    if std::env::var("DUMP_WAT").is_ok() {
+    // Dump files for review — set `DUMP_WAT_DIR=<path>` to enable, unset
+    // to skip. No default path: if the env var is missing the block is a
+    // no-op.
+    if let Some(dir) = std::env::var_os("DUMP_WAT_DIR") {
+      let dir = std::path::PathBuf::from(dir);
       let name = crate::test_context::name();
       let slug: String = name.chars()
         .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
         .collect();
-      let dir = ".claude.local/scratch/wasm-link";
-      let _ = std::fs::create_dir_all(dir);
+      let _ = std::fs::create_dir_all(&dir);
       let wat_content = format!(
         "{}\n//# sourceMappingURL=data:application/json;base64,{wat_b64}",
         wat_output.trim()
       );
-      let _ = std::fs::write(format!("{dir}/{slug}.wat.js"), &wat_content);
+      let _ = std::fs::write(dir.join(format!("{slug}.wat.js")), &wat_content);
     }
 
     format!("{}\n;;sourcemaps:{wat_b64}", wat_output.trim())

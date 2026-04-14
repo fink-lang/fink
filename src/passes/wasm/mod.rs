@@ -179,19 +179,18 @@ mod tests {
     let wat_json = wat_srcmap.to_json();
     let wat_b64 = crate::sourcemap::base64_encode(wat_json.as_bytes());
 
-    // Dump files for source map review (DUMP_WAT=1).
-    if std::env::var("DUMP_WAT").is_ok() {
+    // Dump files for source map review — set `DUMP_WAT_DIR=<path>` to
+    // enable, unset to skip. No default path: if the env var is missing
+    // the block is a no-op.
+    if let Some(dir) = std::env::var_os("DUMP_WAT_DIR") {
+      let dir = std::path::PathBuf::from(dir);
       let name = crate::test_context::name();
       let slug: String = name.chars()
         .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
         .collect();
-      let dir = ".claude.local/scratch/wasm";
-      let _ = std::fs::create_dir_all(dir);
-
-      // WAT file
+      let _ = std::fs::create_dir_all(&dir);
       let wat_content = format!("{}\n//# sourceMappingURL=data:application/json;base64,{wat_b64}", wat_output.trim());
-      let _ = std::fs::write(format!("{dir}/{slug}.wat.js"), &wat_content);
-
+      let _ = std::fs::write(dir.join(format!("{slug}.wat.js")), &wat_content);
     }
 
     format!("{}\n;;sourcemaps:{wat_b64}", wat_output.trim())
