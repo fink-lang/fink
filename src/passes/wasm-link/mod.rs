@@ -205,7 +205,8 @@ pub fn compile_package(
   //
   // Without this, setting breakpoints in imported modules or stepping from
   // entry code into a dep will not map back to source. Single-module compiles
-  // still work because emit_wasm in passes/mod.rs builds mappings directly.
+  // are equally affected since `to_wasm` now routes through `compile_package`
+  // — there is no longer a parallel "direct emit" path that builds mappings.
   Ok(crate::passes::Wasm { binary: linked.wasm, mappings: vec![] })
 }
 
