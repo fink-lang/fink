@@ -152,7 +152,6 @@ fn val_to_node(v: &Val, ctx: &Ctx<'_, '_>) -> Node<'static> {
     ValKind::Lit(lit) => lit_to_node(lit, loc),
     ValKind::Ref(Ref::Synth(bind_id)) => ident(&render_synth_name(*bind_id, ctx), loc),
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(v.id, ctx), loc),
-    ValKind::Panic => ident("·panic", loc),
     ValKind::ContRef(id) => ident(&render_synth_fallback(*id, ctx), ctx_loc(*id, ctx)),
     ValKind::BuiltIn(op) => {
       // For builtin ops whose origin is an InfixOp, use op.loc (e.g. `>` not `a > 1`).
@@ -332,6 +331,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Import       => "·import".into(),
     BuiltIn::FinkModule   => "·ƒink_module".into(),
     BuiltIn::Pub          => "·ƒpub".into(),
+    BuiltIn::Panic        => "·panic".into(),
   }
 }
 

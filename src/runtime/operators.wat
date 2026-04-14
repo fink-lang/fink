@@ -605,4 +605,22 @@
       (local.get $size)
       (local.get $cont)))
 
+
+  ;; =========================================================================
+  ;; panic — irrefutable pattern failure
+  ;; =========================================================================
+  ;;
+  ;; Signature matches the universal closure calling convention so `_apply`
+  ;; can dispatch to it like any other continuation: panic is used both as
+  ;; a direct tail-call (terminal of a fail chain) and as a $Closure value
+  ;; passed as a fail continuation to pattern matchers.
+  ;;
+  ;; Delegates to $interop_panic, which calls into the host to trap the
+  ;; instance with a diagnostic message. Today panic carries no payload —
+  ;; future work will pass a reason / source location for better diagnostics.
+  (func $panic (export "panic")
+    (param $_caps (ref null any))
+    (param $_args (ref null any))
+    (return_call $interop_panic))
+
 )

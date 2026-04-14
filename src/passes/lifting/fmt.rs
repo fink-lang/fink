@@ -296,7 +296,6 @@ fn render_val(val: &Val, fc: &FmtCtx<'_, '_>) -> Node<'static> {
       }
     }
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(val.id, fc)),
-    ValKind::Panic           => ident("·panic"),
     ValKind::ContRef(id)     => ident(&render_synth_fallback(*id, fc)),
     ValKind::BuiltIn(op)     => ident(&render_builtin_flat(op)),
   }

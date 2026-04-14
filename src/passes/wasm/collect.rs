@@ -754,5 +754,6 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     ),
     BuiltIn::FinkModule    => "fink_module",
     BuiltIn::Pub           => "pub",
+    BuiltIn::Panic         => "panic",
   }
 }

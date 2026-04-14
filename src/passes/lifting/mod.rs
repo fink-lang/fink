@@ -388,7 +388,8 @@ fn is_simple_forward_cont(cont: &Cont) -> bool {
           Arg::Val(v) => match &v.kind {
             ValKind::Ref(Ref::Synth(id)) => *id == p.id,
             ValKind::ContRef(id) => *id == p.id,
-            ValKind::Panic => true, // panic is a global sentinel
+            // panic is a global sentinel — always valid as a fail continuation
+            ValKind::BuiltIn(BuiltIn::Panic) => true,
             _ => false,
           },
           Arg::Cont(Cont::Ref(id)) => *id == p.id,

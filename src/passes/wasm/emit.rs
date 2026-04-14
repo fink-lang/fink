@@ -322,11 +322,9 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // (collected before lifting, so names survive the rec_pop chain being hoisted).
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
   let mut closure_captures: BTreeSet<usize> = BTreeSet::new();
-  let mut has_panic = false;
   for func in &module.funcs {
     scan_builtins(func.body, &mut builtins);
     scan_closure_captures(func.body, &mut closure_captures);
-    if !has_panic { has_panic = scan_panic(func.body); }
   }
   e.module_imports = module.module_imports.clone();
   // Split builtins: implemented ones become defined functions, rest stay as imports.
@@ -352,7 +350,6 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
 
   // $Fn2(caps, args) — unified calling convention for all functions.
   let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
-  extra_arities.insert(0); // $Fn0 — $_panic
   extra_arities.insert(1); // $Fn1 — (reserved)
   extra_arities.insert(2); // $Fn2 — all functions + _apply(args, callee)
 
@@ -365,7 +362,6 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   e.needs_rec = has_rec_imports || has_module_imports;
   e.needs_string = has_strings || has_module_imports;
   e.needs_str_empty = has_str_empty;
-  e.has_panic = has_panic;
   // Type section needs arities from both imported and implemented builtins.
   let mut all_builtins = import_builtins.clone();
   all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
@@ -477,8 +473,6 @@ struct Emitter<'a, 'src> {
   needs_string: bool,
   /// Whether empty string literals are present (needs str_empty import).
   needs_str_empty: bool,
-  /// Whether ValKind::Panic appears in any function body (needs $_panic function).
-  has_panic: bool,
   /// Interned string literal data.
   string_data: StringData,
   /// Labels of module-level value globals (non-fn-alias LetVals).
@@ -511,7 +505,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       needs_rec: false,
       needs_string: false,
       needs_str_empty: false,
-      has_panic: false,
       string_data: StringData::new(),
       value_globals: cps_mod.value_globals.clone(),
       module_imports: BTreeMap::new(),
@@ -972,15 +965,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
     self.idx.funcs.insert("_apply_export".into(), next_func_idx);
     next_func_idx += 1;
 
-    // $_panic: (func) — unreachable trap for irrefutable pattern failure.
-    // Only emitted when ValKind::Panic appears in function bodies.
-    if self.has_panic {
-      let type_idx = self.idx.fn_type_idx(0);
-      functions.function(type_idx);
-      self.idx.funcs.insert("_panic".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
     let _ = next_func_idx;
     self.module.section(&functions);
   }
@@ -1183,8 +1167,16 @@ impl<'a, 'src> Emitter<'a, 'src> {
   /// Emit a declarative element segment listing all defined functions.
   /// WASM requires functions referenced by ref.func (in code or global
   /// initialisers) to appear in an element segment.
+  ///
+  /// This also includes the imported runtime `panic` function if it's been
+  /// registered as an import — panic is the only runtime import referenced
+  /// as a value (via `ref.func`) rather than called, so WASM validation
+  /// requires it appears here.
   fn emit_elements(&mut self) {
     let mut func_indices: Vec<u32> = self.idx.funcs.values().copied().collect();
+    if let Some(&panic_idx) = self.idx.imports.get("panic") {
+      func_indices.push(panic_idx);
+    }
     func_indices.sort();
     let mut elements = ElementSection::new();
     elements.declared(Elements::Functions(func_indices.into()));
@@ -1308,14 +1300,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       f.instruction(&Instruction::LocalGet(0)); // args
       f.instruction(&Instruction::LocalGet(1)); // callee
       f.instruction(&Instruction::Call(apply_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // $_panic body: unreachable
-    if self.has_panic {
-      let mut f = Function::new(vec![]);
-      f.instruction(&Instruction::Unreachable);
       f.instruction(&Instruction::End);
       code.function(&f);
     }
@@ -1469,11 +1453,6 @@ impl<'a, 'src> Emitter<'a, 'src> {
       if let Some(&idx) = self.idx.funcs.get(*name) {
         func_names.append(idx, name);
       }
-    }
-    // $_panic helper.
-    if self.has_panic {
-      let panic_idx = self.idx.func_idx("_panic");
-      func_names.append(panic_idx, "_panic");
     }
     // Export wrapper fns (`$<name>` Fn2 per user export).
     for (_cps_id, export_name) in &cps_mod.exports {
@@ -1760,6 +1739,19 @@ fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
 
 /// Emit a builtin operation call.
 fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
+  if op == BuiltIn::Panic {
+    // Terminal fail-chain call: `App(Panic, [])`. The CPS carries no args
+    // because panic never returns — it traps via the runtime host bridge.
+    // Runtime `panic` is imported as $Fn2(caps, args); emit null placeholders
+    // so the WASM validator is happy, then tail-call into it.
+    let _ = (args, expr_id);
+    let any_ht = HeapType::Abstract { shared: false, ty: AbstractHeapType::Any };
+    fc.instr(&Instruction::RefNull(any_ht));
+    fc.instr(&Instruction::RefNull(any_ht));
+    let panic_idx = fc.emitter_idx.func_idx("panic");
+    fc.instr(&Instruction::ReturnCall(panic_idx));
+    return;
+  }
   if op == BuiltIn::Export {
     // `·export <names>` writes each exported closure into its per-export
     // slot global `<name>_closure`. Wrapper fns (emitted elsewhere) read
@@ -2069,9 +2061,13 @@ fn emit_val_inner(val: &Val, fc: &mut FuncContext<'_, '_, '_>) {
       let idx = fc.local_idx(&label);
       fc.instr(&Instruction::LocalGet(idx));
     }
-    ValKind::Panic => {
-      // Emit a $Closure wrapping the $_panic function.
-      let panic_idx = fc.emitter_idx.func_idx("_panic");
+    ValKind::BuiltIn(BuiltIn::Panic) => {
+      // Panic used as a value — wrap the imported runtime `panic` funcref in
+      // a $Closure so it can flow through (ref null any) slots and be
+      // dispatched via _apply like any other continuation closure.
+      // Runtime `panic` lives in operators.wat and tail-calls $interop_panic,
+      // which calls host_panic to trap the WASM instance.
+      let panic_idx = fc.emitter_idx.func_idx("panic");
       let closure_idx = fc.emitter_idx.type_idx("$Closure");
       let captures_idx = fc.emitter_idx.type_idx("$Captures");
       fc.instr(&Instruction::RefFunc(panic_idx));
@@ -2260,12 +2256,21 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
             scan_builtins(body, builtins);
           }
         }
+      } else if *op == BuiltIn::Panic {
+        // Runtime panic is always imported as $Fn2 (caps, args) regardless of
+        // how many CPS args the call has — at the direct-call site the emitter
+        // passes null caps and null args list to satisfy the signature.
+        builtins.entry(builtin_name(*op).to_string()).or_insert(2);
       } else {
         let name = builtin_name(*op).to_string();
         // Builtin arity = total args (values + cont).
         let (val_args, cont_arg) = split_args(args);
         let arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
         builtins.entry(name).or_insert(arity);
+      }
+      // Walk arg values for builtin refs (e.g. Panic used as a fail-cont value).
+      for arg in args {
+        if let Arg::Val(v) = arg { scan_val_for_builtin(v, builtins); }
       }
     }
     ExprKind::App { func: Callable::Val(val), args } => {
@@ -2277,6 +2282,10 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
         // (user call convention), so subtract 1 for cont, add 1 back = total.
         builtins.entry(name).or_insert(args.len());
       }
+      // Walk arg values for builtin refs (e.g. Panic used as a fail-cont value).
+      for arg in args {
+        if let Arg::Val(v) = arg { scan_val_for_builtin(v, builtins); }
+      }
       // Scan cont bodies for nested builtins.
       for arg in args {
         if let Arg::Cont(Cont::Expr { body, .. }) = arg {
@@ -2284,11 +2293,12 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
         }
       }
     }
-    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
-      match cont {
-        Cont::Expr { body, .. } => scan_builtins(body, builtins),
-        Cont::Ref(_) => {}
-      }
+    ExprKind::LetVal { cont, val, .. } => {
+      scan_val_for_builtin(val, builtins);
+      if let Cont::Expr { body, .. } = cont { scan_builtins(body, builtins); }
+    }
+    ExprKind::LetFn { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont { scan_builtins(body, builtins); }
     }
     ExprKind::If { then, else_, .. } => {
       scan_builtins(then, builtins);
@@ -2298,6 +2308,16 @@ fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
   // Also scan fn bodies in LetFn.
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
     scan_builtins(fn_body, builtins);
+  }
+}
+
+/// If the value is a `BuiltIn::Panic` reference, register it so the import
+/// gets emitted. Other `ValKind::BuiltIn(_)` variants are call-site only for
+/// now (emit_val_inner's catch-all emits `unreachable` if they reach value
+/// position), so we don't register them here.
+fn scan_val_for_builtin(val: &Val, builtins: &mut BTreeMap<String, usize>) {
+  if let ValKind::BuiltIn(BuiltIn::Panic) = val.kind {
+    builtins.entry("panic".to_string()).or_insert(2);
   }
 }
 
@@ -2338,37 +2358,6 @@ fn scan_closure_captures(expr: &Expr, captures: &mut BTreeSet<usize>) {
   if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
     scan_closure_captures(fn_body, captures);
   }
-}
-
-/// Check if any Val in the expression tree is ValKind::Panic.
-fn scan_panic(expr: &Expr) -> bool {
-  match &expr.kind {
-    ExprKind::App { func, args } => {
-      if let Callable::Val(v) = func
-        && matches!(v.kind, ValKind::Panic) { return true; }
-      for arg in args {
-        match arg {
-          Arg::Val(v) | Arg::Spread(v) => {
-            if matches!(v.kind, ValKind::Panic) { return true; }
-          }
-          Arg::Cont(Cont::Expr { body, .. }) => {
-            if scan_panic(body) { return true; }
-          }
-          _ => {}
-        }
-      }
-    }
-    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
-      if let Cont::Expr { body, .. } = cont
-        && scan_panic(body) { return true; }
-    }
-    ExprKind::If { then, else_, .. } => {
-      if scan_panic(then) || scan_panic(else_) { return true; }
-    }
-  }
-  if let ExprKind::LetFn { fn_body, .. } = &expr.kind
-    && scan_panic(fn_body) { return true; }
-  false
 }
 
 /// Check whether any value in the expression tree is a Lit::Rec.

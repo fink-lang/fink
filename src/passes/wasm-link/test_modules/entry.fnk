@@ -1,0 +1,5 @@
+{spam} = import './foobar/spam.fnk'
+{ham} = import './foobar/ham.fnk'
+
+foo = fn a, b:
+  spam a, ham b

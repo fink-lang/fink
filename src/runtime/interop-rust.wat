@@ -26,6 +26,10 @@
   (import "env" "host_exit" (func $host_exit (param i32)))
   (import "env" "host_channel_send" (func $host_channel_send (param i32 i32 i32)))
   (import "env" "host_read" (func $host_read (param (ref any) (ref any) (ref any))))
+  ;; Irrefutable pattern failure — traps the instance with a diagnostic.
+  ;; TODO: pass reason / source location (offset+length into linear memory)
+  ;; so the host can render a useful message.
+  (import "env" "host_panic" (func $host_panic))
 
 
 
@@ -251,6 +255,17 @@
     (call $_apply
       (local.get $args)
       (local.get $entry))
+  )
+
+
+  ;; -- interop_panic ---------------------------------------------------------
+  ;;
+  ;; Called from runtime `panic` (operators.wat). Delegates to the host which
+  ;; traps the instance with a diagnostic. Never returns.
+
+  (func $interop_panic
+    (call $host_panic)
+    unreachable
   )
 
 )

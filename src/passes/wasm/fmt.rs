@@ -1299,17 +1299,33 @@ fn is_internal_type(module: &ParsedModule, idx: u32) -> bool {
 }
 
 /// Whether a function is compiler/runtime infrastructure (hidden from formatted output).
+/// Matches three naming conventions:
+/// - `_name` — compiler-synthesized host helpers in the user fragment.
+/// - `@fink/...` — runtime module functions.
+/// - `<url>:_name` — dep fragment's host helpers (duplicates of user helpers,
+///   dead code in the linked binary but still emitted per-fragment).
 fn is_internal_func(module: &ParsedModule, idx: u32) -> bool {
   module.func_names.get(&idx)
-    .is_some_and(|n| n.starts_with('_') || n.starts_with("@fink/"))
+    .is_some_and(|n| {
+      n.starts_with('_')
+        || n.starts_with("@fink/")
+        || n.split_once(':').is_some_and(|(_, local)| local.starts_with('_'))
+    })
 }
 
 fn func_name(module: &ParsedModule, idx: u32) -> String {
   module.func_names.get(&idx)
     .map(|n| {
-      // Strip module prefix for runtime functions: "@fink/runtime/operators:op_plus" → "_op_plus"
-      if let Some((_module, name)) = n.split_once(':') {
-        format!("$_{}", name)
+      // Runtime functions carry a `@fink/...:name` prefix — strip to `$_name`
+      // so they render as compiler internals (hidden from test output).
+      // User dep modules carry e.g. `./foo.fnk:name` — keep the full prefix
+      // so `./foo.fnk:fink_module` stays distinguishable in the WAT.
+      if let Some((module_prefix, name)) = n.split_once(':') {
+        if module_prefix.starts_with("@fink/") {
+          format!("$_{}", name)
+        } else {
+          format!("${}", n)
+        }
       } else {
         format!("${}", n)
       }

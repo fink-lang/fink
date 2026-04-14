@@ -16,6 +16,11 @@
 // fink-specific compile orchestration lives in `src/passes/wasm-link/`
 // where the WASM-target import resolver consumes a `SourceLoader` and
 // runs the per-unit compile pipeline over the loaded sources.
+//
+// TODO(fink-tests): the Rust unit tests below are acceptable temporarily
+// because they cover pure host plumbing (in-memory path lookup). Once the
+// multi-module `.fnk` test infrastructure stabilises, replace them with
+// `.fnk` tests driven through the higher-level compile pipeline.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

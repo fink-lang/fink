@@ -1032,8 +1032,8 @@ fn lower_match<'src>(
 
   // Build fail-chain right-to-left. Start with panic, wrap each arm from last to first.
   let chain: Expr = arm_cpss.iter().rev().fold(
-    // Initial: panic (unreachable — no arms matched)
-    { let pv = g.val(ValKind::Panic, origin); g.expr(ExprKind::App { func: Callable::Val(pv), args: vec![] }, origin) },
+    // Initial: panic (runtime-backed builtin — traps via host_panic)
+    g.expr(ExprKind::App { func: Callable::BuiltIn(BuiltIn::Panic), args: vec![] }, origin),
     |fail_expr, arm| {
       // Build: mp_N(k, fn: fail_expr, subj_0, ...) — conts first
       let mp_ref = g.val(ValKind::Ref(Ref::Synth(arm.mp_name.id)), origin);
@@ -1332,7 +1332,7 @@ fn wrap_with_fail(
   }
   let make_fail_val = |g: &mut Gen, origin: Option<AstId>| -> Val {
     match fail_id {
-      None     => g.val(ValKind::Panic, origin),
+      None     => g.val(ValKind::BuiltIn(BuiltIn::Panic), origin),
       Some(id) => g.val(ValKind::ContRef(id), origin),
     }
   };
@@ -1466,7 +1466,7 @@ fn wrap_with_fail(
             let bind_ref = if let Some(first) = bind_names.first() {
               g.val(ValKind::Ref(Ref::Synth(first.id)), origin)
             } else {
-              g.val(ValKind::Panic, origin) // no binds — shouldn't reach here
+              g.val(ValKind::BuiltIn(BuiltIn::Panic), origin) // no binds — shouldn't reach here
             };
             let cont_ref = g.val(ValKind::ContRef(cont_id), origin);
             g.expr(ExprKind::App {

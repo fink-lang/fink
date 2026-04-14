@@ -90,6 +90,15 @@ pub fn run(
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
+        "host_panic" => {
+          // Irrefutable pattern failure — trap the instance with a
+          // diagnostic message. Today panic carries no payload; future
+          // work should plumb a reason string and source location
+          // through runtime `panic` → `interop_panic` → host_panic.
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Err(Error::msg("fink panic: irrefutable pattern failed"))
+          }).map_err(|e| e.to_string())?;
+        }
         "host_channel_send" => {
           // host_channel_send(tag, offset, length)
           // Dispatches by tag: 1=stdout, 2=stderr.

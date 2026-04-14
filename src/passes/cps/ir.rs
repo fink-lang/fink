@@ -313,6 +313,12 @@ pub enum BuiltIn {
   // tail call to ƒret. At runtime, the host provides `fink_module` which
   // invokes the cont with a done continuation.
   FinkModule,
+  // Irrefutable-pattern failure sentinel. The compiler wires this in as the
+  // "fail continuation" at match sites with no alternative. At runtime it
+  // delegates through operators.wat → interop-rust.wat → host_panic, which
+  // traps the WASM instance. Zero args today; future work: pass a reason
+  // string / source location for diagnostics.
+  Panic,
 }
 
 impl BuiltIn {
@@ -412,7 +418,6 @@ pub type BindNode = Node<Bind>;
 pub enum ValKind {
   Ref(Ref),           // a reference to a binding (user name or compiler temp)
   Lit(Lit),     // a literal value
-  Panic,              // fail sentinel — irrefutable pattern failure (unreachable)
   ContRef(CpsId),     // reference to a continuation as a value (for fail args)
   BuiltIn(BuiltIn),   // a compiler-known op used as a value
 }
