@@ -15,6 +15,19 @@ module-level CPS — lower_module produces flat chain + export terminal
 
 {test, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
+{·ƒink_module, ·import, ·fn,·let, ·export, ·op_plus, ·op_mul, ·is_rec_like, ·rec_pop,
+ ·ƒsucc_11, ·ƒfail_12, ·panic
+} = import '@fink/compile/builtins'
+
+
+
+test 'single module expr', fn:
+  expect cps_module ƒink:
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·ƒret_0 42
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEiCn0=
 
 
 ---
@@ -25,9 +38,23 @@ test 'single binding export', fn:
   expect cps_module ƒink:
     foo = 1
   | equals ƒink:
-    ·let 1, fn ·foo_0:
-      ·export ·foo_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtFLEEsUUFBQSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·let 1, fn ·foo_0:
+        ·ƒpub ·foo_0, fn:
+          ·ƒret_1 ·foo_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtJQUFBLEFBQUEsTUFBQSxNLEk7TSxBLFFBQUEiCn0=
+
+
+test 'single binding export with trailing expr', fn:
+  expect cps_module ƒink:
+    foo = 1
+    42
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_1:
+      ·let 1, fn ·foo_0:
+        ·ƒpub ·foo_0, fn:
+          ·ƒret_1 42
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuNDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBSSxBQUFBLEtBQUUsQyxLQUFOLE07SUFBQSxBQUFBLE1BQUEsTSxJO00sQSxRQUNBIgp9
 
 
 ---
@@ -39,10 +66,13 @@ test 'two bindings export', fn:
     foo = 1
     bar = 2
   | equals ƒink:
-    ·let 1, fn ·foo_0:
-      ·let 2, fn ·bar_1:
-        ·export ·foo_0, ·bar_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gMiJdLAogICJtYXBwaW5ncyI6ICJBQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtFQUNJLEFBQUEsS0FBRSxDLEtBQU4sTTtJLEEsUUFEQSxNLEVBQ0EiCn0=
+    ·ƒink_module fn ·ƒret_2:
+      ·let 1, fn ·foo_0:
+        ·ƒpub ·foo_0, fn:
+          ·let 2, fn ·bar_1:
+            ·ƒpub ·bar_1, fn:
+              ·ƒret_2 ·bar_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuYmFyID0gMiJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFJLEFBQUEsS0FBRSxDLEtBQU4sTTtJQUFBLEFBQUEsTUFBQSxNLEk7TUFDSSxBQUFBLEtBQUUsQyxLQUFOLE07UUFBQSxBQUFBLE1BQUEsTSxJO1UsQSxRQUFBIgp9
 
 
 test 'two fns export', fn:
@@ -53,16 +83,19 @@ test 'two fns export', fn:
     main = fn:
       add 3, 4
   | equals ƒink:
-    ·fn
-      fn ·ƒret_9, ·a_2, ·b_3: ·op_plus ·a_2, ·b_3, ·ƒret_9
-      fn ·v_8:
-        ·let ·v_8, fn ·add_0:
-          ·fn
-            fn ·ƒret_17: ·add_0 ·ƒret_17, 3, 4
-            fn ·v_16:
-              ·let ·v_16, fn ·main_1:
-                ·export ·add_0, ·main_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBQUFNLEFBQUE7S0FBQSxTQUFHLE1BQUcsSSxFQUNSLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO0tBQUEsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNQUdPLEFBQUE7V0FBQSxRLEVBQ0wsQUFBQSxPQURLLFEsRUFDRCxDLEVBQUc7V0FERixLO1VBQUYsQUFBQSxLQUFFLEssS0FBUCxPO1ksQSxRQUhBLE0sRUFHQSIKfQ==
+    ·ƒink_module fn ·ƒret_4:
+      ·fn
+        fn ·ƒret_6, ·a_2, ·b_3: ·op_plus ·a_2, ·b_3, ·ƒret_6
+        fn ·v_5:
+          ·let ·v_5, fn ·add_0:
+            ·ƒpub ·add_0, fn:
+              ·fn
+                fn ·ƒret_14: ·add_0 ·ƒret_14, 3, 4
+                fn ·v_13:
+                  ·let ·v_13, fn ·main_1:
+                    ·ƒpub ·main_1, fn:
+                      ·ƒret_4 ·main_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxubWFpbiA9IGZuOlxuICBhZGQgMywgNCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFNLEFBQUE7T0FBQSxTQUFHLE1BQUcsSSxFQUNSLEFBQUEsU0FBRixJLEVBQUksSSxFQURBO09BQUEsSTtNQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtRQUFBLEFBQUEsTUFBQSxNLEk7VUFHTyxBQUFBO2VBQUEsUSxFQUNMLEFBQUEsT0FESyxRLEVBQ0QsQyxFQUFHO2VBREYsSztjQUFGLEFBQUEsS0FBRSxLLEtBQVAsTztnQkFBQSxBQUFBLE1BQUEsTyxJO2tCLEEsUUFBQSIKfQ==
 
 
 ---
@@ -74,25 +107,27 @@ test 'import not in exports', fn:
     {foo} = import './bar.fnk'
     main = fn: foo 1
   | equals ƒink:
-    ·import fn ·v_8:
-      ·fn
-        fn ·v_13:
-          ·let ·v_13, fn ·foo_0:
+    ·ƒink_module fn ·ƒret_3:
+      ·import './bar.fnk', fn ·v_6:
+        ·fn
+          fn ·v_11:
+            ·let ·v_11, fn ·foo_0:
+              ·fn
+                fn ·ƒret_29: ·foo_0 ·ƒret_29, 1
+                fn ·v_28:
+                  ·let ·v_28, fn ·main_1:
+                    ·ƒpub ·main_1, fn:
+                      ·ƒret_3 ·main_1
+          fn ·v_43:
             ·fn
-              fn ·ƒret_31: ·foo_0 ·ƒret_31, 1
-              fn ·v_30:
-                ·let ·v_30, fn ·main_1:
-                  ·export ·main_1
-        fn ·v_45:
-          ·fn
-            fn ·ƒsucc_11, ·ƒfail_12, ·v_10:
-              ·is_rec_like ·v_10,
-                fn ·v_18:
-                  ·rec_pop ·v_18, 'foo', ·ƒfail_12, fn ·v_13, ·v_17:
-                    ·ƒsucc_11 ·v_13
-                fn: ·ƒfail_12 _
-            fn ·v_27: ·v_27 ·v_45, ·panic, ·v_8, './bar.fnk'
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBUSxBQUFBLFFBQUEsR0FBQSxJO0VBQVIsQUFBQTtPQUFBLEs7TUFBQyxBQUFBLEtBQUQsSyxLQUFDLE07UUFDTSxBQUFBO2FBQUEsUSxFQUFJLEFBQUEsT0FBSixRLEVBQVE7YUFBUixLO1lBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2MsQSxRQUFBO09BREEsSztNQUFBLEFBQUE7VyxXLFdBQUEsSztVQUFBLEFBQUEsYUFBQSxLO2VBQUEsSztjQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLFMsS0FBQSxPQUFBLEs7Z0JBQUEsQSxVQUFBO2MsRUFBQSxBLFVBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVEsSSxFQUFPLEEsQ0FBQSxTIgp9
+              fn ·ƒsucc_9, ·ƒfail_10, ·v_8:
+                ·is_rec_like ·v_8,
+                  fn ·v_16:
+                    ·rec_pop ·v_16, 'foo', ·ƒfail_10, fn ·v_11, ·v_15:
+                      ·ƒsucc_9 ·v_11
+                  fn: ·ƒfail_10 _
+              fn ·v_25: ·v_25 ·v_43, ·panic, ·v_6
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuaydcbm1haW4gPSBmbjogZm9vIDEiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBUSxBQUFBLFFBQU8sQSxDQUFBLFMsQyxLQUFQLEk7SUFBUixBQUFBO1NBQUEsSztRQUFDLEFBQUEsS0FBRCxLLEtBQUMsTTtVQUNNLEFBQUE7ZUFBQSxRLEVBQUksQUFBQSxPQUFKLFEsRUFBUTtlQUFSLEs7Y0FBRixBQUFBLEtBQUUsSyxLQUFQLE87Z0JBQUEsQUFBQSxNQUFBLE8sSTtrQixBLFFBQUE7U0FEQSxLO1FBQUEsQUFBQTthLFUsV0FBQSxJO1lBQUEsQUFBQSxhQUFBLEk7aUJBQUEsSztnQkFBQSxBQUFBLFNBQUEsSyxFQUFBLEEsQ0FBQSxHLEMsRSxTLEtBQUEsT0FBQSxLO2tCQUFBLEEsU0FBQTtnQixFQUFBLEEsVUFBQTthQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBUSIKfQ==
 
 
 ---
@@ -104,28 +139,190 @@ test 'destructure not in exports', fn:
     [a, b] = [1, 2]
     foo = fn: a
   | equals ƒink:
-    ·seq_prepend 2, [], fn ·v_8:
-      ·seq_prepend 1, ·v_8, fn ·v_11:
+    ·ƒink_module fn ·ƒret_3:
+      ·seq_prepend 2, [], fn ·v_6:
+        ·seq_prepend 1, ·v_6, fn ·v_9:
+          ·fn
+            fn ·v_14, ·v_15:
+              ·let ·v_14, fn ·a_0:
+                ·let ·v_15, fn ·b_1:
+                  ·fn
+                    fn ·ƒret_45: ·ƒret_45 ·a_0
+                    fn ·v_44:
+                      ·let ·v_44, fn ·foo_2:
+                        ·ƒpub ·foo_2, fn:
+                          ·ƒret_3 ·foo_2
+            fn ·v_59:
+              ·fn
+                fn ·ƒsucc_12, ·ƒfail_13, ·v_11:
+                  ·is_seq_like ·v_11,
+                    fn ·v_28:
+                      ·seq_pop ·v_28, ·ƒfail_13, fn ·v_14, ·v_29:
+                        ·seq_pop ·v_29, ·ƒfail_13, fn ·v_15, ·v_20:
+                          ·empty ·v_20, fn ·v_23:
+                            ·if ·v_23,
+                              fn: ·ƒsucc_12 ·v_14, ·v_15
+                              fn: ·ƒfail_13 _
+                    fn: ·ƒfail_13 _
+                fn ·v_40: ·v_40 ·v_59, ·panic, ·v_9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFTLEFBQUEsYUFBSSxDLEVBQUosQSxDLEMsS0FBQSxJO0lBQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEtBQUEsSTtNQUFULEFBQUE7V0FBQSxPQUFBLEs7VUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7WUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7Y0FDRSxBQUFBO21CQUFBLFEsRSxBQUFBLFNBQUk7bUJBQUosSztrQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07b0JBQUEsQUFBQSxNQUFBLE0sSTtzQixBLFFBQUE7V0FEQSxLO1VBQUEsQUFBQTtlLFcsV0FBQSxLO2NBQUEsQUFBQSxhQUFBLEs7bUJBQUEsSztrQkFBQSxBQUFBLFNBQUEsSyxFLFMsS0FBQSxPQUFBLEs7b0JBQUEsQUFBQSxTQUFBLEssRSxTLEtBQUEsT0FBQSxLO3NCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSzt3QkFBQSxBQUFBLElBQUEsSzs0QixFQUFBLEEsVUFBQSxLLEVBQUE7NEIsRUFBQSxBLFVBQUE7a0IsRUFBQSxBLFVBQUE7ZUFBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVMiCn0=
+
+
+---
+standalone top-level destructures — no trailing binding
+---
+
+# These pin the exact CPS shape that lifting fails to converge on.
+# Mirrors the 4 failing repros in lifting/test_lifting.fnk.
+
+test 'standalone top-level seq destructure with literal rhs', fn:
+  expect cps_module ƒink:
+    [a, b] = [1, 2]
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_2:
+      ·seq_prepend 2, [], fn ·v_5:
+        ·seq_prepend 1, ·v_5, fn ·v_8:
+          ·fn
+            fn ·v_13, ·v_14:
+              ·let ·v_13, fn ·a_0:
+                ·let ·v_14, fn ·b_1:
+                  ·ƒret_2 ·b_1
+            fn ·v_48:
+              ·fn
+                fn ·ƒsucc_11, ·ƒfail_12, ·v_10:
+                  ·is_seq_like ·v_10,
+                    fn ·v_27:
+                      ·seq_pop ·v_27, ·ƒfail_12, fn ·v_13, ·v_28:
+                        ·seq_pop ·v_28, ·ƒfail_12, fn ·v_14, ·v_19:
+                          ·empty ·v_19, fn ·v_22:
+                            ·if ·v_22,
+                              fn: ·ƒsucc_11 ·v_13, ·v_14
+                              fn: ·ƒfail_12 _
+                    fn: ·ƒfail_12 _
+                fn ·v_39: ·v_39 ·v_48, ·panic, ·v_8
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQVMsQUFBQSxhQUFJLEMsRUFBSixBLEMsQyxLQUFBLEk7SUFBQSxBQUFBLGFBQUMsQyxFQUFELEksS0FBQSxJO01BQVQsQUFBQTtXQUFBLE9BQUEsSztVQUFDLEFBQUEsS0FBRCxLLEtBQUMsSTtZQUFHLEFBQUEsS0FBSixLLEtBQUksSTtjLEEsUUFBQTtXQUFKLEs7VUFBQSxBQUFBO2UsVyxXQUFBLEs7Y0FBQSxBQUFBLGFBQUEsSzttQkFBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztvQkFBQSxBQUFBLFNBQUEsSyxFLFMsS0FBQSxPQUFBLEs7c0JBQUEsQUFBQSxPQUFBLEssS0FBQSxLO3dCQUFBLEFBQUEsSUFBQSxLOzRCLEVBQUEsQSxVQUFBLEssRUFBQTs0QixFQUFBLEEsVUFBQTtrQixFQUFBLEEsVUFBQTtlQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBUyIKfQ==
+
+
+test 'standalone top-level rec destructure with literal rhs', fn:
+  expect cps_module ƒink:
+    {x} = {x: 1}
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_1:
+      ·rec_put {}, 'x', 1, fn ·v_5:
         ·fn
-          fn ·v_16, ·v_17:
-            ·let ·v_16, fn ·a_0:
-              ·let ·v_17, fn ·b_1:
-                ·fn
-                  fn ·ƒret_47: ·ƒret_47 ·a_0
-                  fn ·v_46:
-                    ·let ·v_46, fn ·foo_2:
-                      ·export ·foo_2
-          fn ·v_61:
+          fn ·v_10:
+            ·let ·v_10, fn ·x_0:
+              ·ƒret_1 ·x_0
+          fn ·v_30:
             ·fn
-              fn ·ƒsucc_14, ·ƒfail_15, ·v_13:
-                ·is_seq_like ·v_13,
-                  fn ·v_30:
-                    ·seq_pop ·v_30, ·ƒfail_15, fn ·v_16, ·v_31:
-                      ·seq_pop ·v_31, ·ƒfail_15, fn ·v_17, ·v_22:
-                        ·empty ·v_22, fn ·v_25:
-                          ·if ·v_25,
-                            fn: ·ƒsucc_14 ·v_16, ·v_17
-                            fn: ·ƒfail_15 _
-                  fn: ·ƒfail_15 _
-              fn ·v_42: ·v_42 ·v_61, ·panic, ·v_11
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gWzEsIDJdXG5mb28gPSBmbjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUEsYUFBSSxDLEVBQUosQSxDLEMsS0FBQSxJO0VBQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEtBQUEsSztJQUFULEFBQUE7U0FBQSxPQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7WUFDRSxBQUFBO2lCQUFBLFEsRSxBQUFBLFNBQUk7aUJBQUosSztnQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07a0IsQSxRQUFBO1NBREEsSztRQUFBLEFBQUE7YSxXLFdBQUEsSztZQUFBLEFBQUEsYUFBQSxLO2lCQUFBLEs7Z0JBQUEsQUFBQSxTQUFBLEssRSxTLEtBQUEsT0FBQSxLO2tCQUFBLEFBQUEsU0FBQSxLLEUsUyxLQUFBLE9BQUEsSztvQkFBQSxBQUFBLE9BQUEsSyxLQUFBLEs7c0JBQUEsQUFBQSxJQUFBLEs7MEIsRUFBQSxBLFVBQUEsSyxFQUFBOzBCLEVBQUEsQSxVQUFBO2dCLEVBQUEsQSxVQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFTIgp9
+              fn ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                ·is_rec_like ·v_7,
+                  fn ·v_15:
+                    ·rec_pop ·v_15, 'x', ·ƒfail_9, fn ·v_10, ·v_14:
+                      ·ƒsucc_8 ·v_10
+                  fn: ·ƒfail_9 _
+              fn ·v_24: ·v_24 ·v_30, ·panic, ·v_5
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3h9ID0ge3g6IDF9Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQU0sQUFBQSxTQUFBLEEsQyxDLEVBQUMsQSxDQUFBLEMsQyxFQUFHLEMsS0FBSixJO0lBQU4sQUFBQTtTQUFBLEs7UUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7VSxBLFFBQUE7U0FBRCxLO1FBQUEsQUFBQTthLFUsVUFBQSxJO1lBQUEsQUFBQSxhQUFBLEk7aUJBQUEsSztnQkFBQSxBQUFBLFNBQUEsSyxFQUFBLEEsQ0FBQSxDLEMsRSxRLEtBQUEsT0FBQSxLO2tCQUFBLEEsU0FBQTtnQixFQUFBLEEsU0FBQTthQUFBLEssRUFBQSxBQUFBLE1BQUEsSyxFQUFBLE0sRUFBTSIKfQ==
+
+
+test 'standalone top-level destructure with call rhs', fn:
+  expect cps_module ƒink:
+    [a, b] = some_call x
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_2:
+      ·∅some_call
+        fn ·v_5:
+          ·fn
+            fn ·v_10, ·v_11:
+              ·let ·v_10, fn ·a_0:
+                ·let ·v_11, fn ·b_1:
+                  ·ƒret_2 ·b_1
+            fn ·v_45:
+              ·fn
+                fn ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                  ·is_seq_like ·v_7,
+                    fn ·v_24:
+                      ·seq_pop ·v_24, ·ƒfail_9, fn ·v_10, ·v_25:
+                        ·seq_pop ·v_25, ·ƒfail_9, fn ·v_11, ·v_16:
+                          ·empty ·v_16, fn ·v_19:
+                            ·if ·v_19,
+                              fn: ·ƒsucc_8 ·v_10, ·v_11
+                              fn: ·ƒfail_9 _
+                    fn: ·ƒfail_9 _
+                fn ·v_36: ·v_36 ·v_45, ·panic, ·v_5
+        ·∅x
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW2EsIGJdID0gc29tZV9jYWxsIHgiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBUyxBQUFBO09BQUEsSTtNQUFULEFBQUE7V0FBQSxPQUFBLEs7VUFBQyxBQUFBLEtBQUQsSyxLQUFDLEk7WUFBRyxBQUFBLEtBQUosSyxLQUFJLEk7YyxBLFFBQUE7V0FBSixLO1VBQUEsQUFBQTtlLFUsVUFBQSxJO2NBQUEsQUFBQSxhQUFBLEk7bUJBQUEsSztrQkFBQSxBQUFBLFNBQUEsSyxFLFEsS0FBQSxPQUFBLEs7b0JBQUEsQUFBQSxTQUFBLEssRSxRLEtBQUEsT0FBQSxLO3NCQUFBLEFBQUEsT0FBQSxLLEtBQUEsSzt3QkFBQSxBQUFBLElBQUEsSzs0QixFQUFBLEEsU0FBQSxLLEVBQUE7NEIsRUFBQSxBLFNBQUE7a0IsRUFBQSxBLFNBQUE7ZUFBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVM7SUFBVSIKfQ==
+
+
+test 'standalone top-level destructure with import rhs', fn:
+  expect cps_module ƒink:
+    {foo} = import './bar.fnk'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_2:
+      ·import './bar.fnk', fn ·v_5:
+        ·fn
+          fn ·v_10:
+            ·let ·v_10, fn ·foo_0:
+              ·ƒret_2 ·foo_0
+          fn ·v_30:
+            ·fn
+              fn ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                ·is_rec_like ·v_7,
+                  fn ·v_15:
+                    ·rec_pop ·v_15, 'foo', ·ƒfail_9, fn ·v_10, ·v_14:
+                      ·ƒsucc_8 ·v_10
+                  fn: ·ƒfail_9 _
+              fn ·v_24: ·v_24 ·v_30, ·panic, ·v_5
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2Zvb30gPSBpbXBvcnQgJy4vYmFyLmZuayciXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBUSxBQUFBLFFBQU8sQSxDQUFBLFMsQyxLQUFQLEk7SUFBUixBQUFBO1NBQUEsSztRQUFDLEFBQUEsS0FBRCxLLEtBQUMsTTtVLEEsUUFBQTtTQUFELEs7UUFBQSxBQUFBO2EsVSxVQUFBLEk7WUFBQSxBQUFBLGFBQUEsSTtpQkFBQSxLO2dCQUFBLEFBQUEsU0FBQSxLLEVBQUEsQSxDQUFBLEcsQyxFLFEsS0FBQSxPQUFBLEs7a0JBQUEsQSxTQUFBO2dCLEVBQUEsQSxTQUFBO2FBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFRIgp9
+
+
+---
+·export should only carry binding names — call args must not leak in.
+Repro for the fooobar bug: module with multiple top-level fns + calls
+whose results are bound to names. Yesterday the ·export terminal was
+rendered as `·export ·add_0, ·s_1, ·mul_2, ·p_3, ·s_1, 3, 1, 2` — the
+trailing `·s_1, 3, 1, 2` are args from the two call sites leaking in.
+---
+
+test 'export args do not leak call args', fn:
+  expect cps_module ƒink:
+    add = fn a, b:
+      a + b
+
+    s = add 1, 2
+
+    mul = fn a, b:
+      ni = a * b
+      ni
+
+    p = mul s, 3
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_9:
+      ·fn
+        fn ·ƒret_11, ·a_4, ·b_5: ·op_plus ·a_4, ·b_5, ·ƒret_11
+        fn ·v_10:
+          ·let ·v_10, fn ·add_0:
+            ·ƒpub ·add_0, fn:
+              ·add_0
+                fn ·v_21:
+                  ·let ·v_21, fn ·s_1:
+                    ·ƒpub ·s_1, fn:
+                      ·fn
+                        fn ·ƒret_24, ·a_6, ·b_7:
+                          ·op_mul ·a_6, ·b_7, fn ·v_27:
+                            ·let ·v_27, fn ·ni_8:
+                              ·ƒret_24 ·ni_8
+                        fn ·v_23:
+                          ·let ·v_23, fn ·mul_2:
+                            ·ƒpub ·mul_2, fn:
+                              ·mul_2
+                                fn ·v_39:
+                                  ·let ·v_39, fn ·p_3:
+                                    ·ƒpub ·p_3, fn:
+                                      ·ƒret_9 ·p_3
+                                ·s_1
+                                3
+                1
+                2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxucyA9IGFkZCAxLCAyXG5cbm11bCA9IGZuIGEsIGI6XG4gIG5pID0gYSAqIGJcbiAgbmlcblxucCA9IG11bCBzLCAzIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQU0sQUFBQTtPQUFBLFVBQUcsTUFBRyxJLEVBQ1IsQUFBQSxTQUFGLEksRUFBSSxJLEVBREE7T0FBQSxLO01BQUYsQUFBQSxLQUFFLEssS0FBTixNO1FBQUEsQUFBQSxNQUFBLE0sSTtVQUdJLEFBQUE7ZUFBQSxLO2NBQUYsQUFBQSxLQUFFLEssS0FBSixJO2dCQUFBLEFBQUEsTUFBQSxJLEk7a0JBRU0sQUFBQTt1QkFBQSxVQUFHLE1BQUcsSTtzQkFDSCxBQUFBLFFBQUYsSSxFQUFJLEksS0FBSixLO3dCQUFGLEFBQUEsS0FBRSxLLEtBQUwsSzswQixBQURJLFNBRUo7dUJBRkksSztzQkFBRixBQUFBLEtBQUUsSyxLQUFOLE07d0JBQUEsQUFBQSxNQUFBLE0sSTswQkFJSSxBQUFBOytCQUFBLEs7OEJBQUYsQUFBQSxLQUFFLEssS0FBSixJO2dDQUFBLEFBQUEsTUFBQSxJLEk7a0MsQSxRQUFBOzRCQUFROzRCQUFHO1lBTkg7WUFBRyIKfQ==
+

@@ -1,0 +1,15 @@
+{test, skip, expect, equals, run_main} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'multi module import', fn:
+  expect run_main ƒink:
+    {shrub} = import './test_modules/entry.fnk'
+
+    main = fn args, stdin, stdout, stderr:
+      stdout << '${shrub 21}'
+
+  | equals ":
+    0
+    stdout == ":
+      42

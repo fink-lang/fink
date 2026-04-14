@@ -1,0 +1,4 @@
+{ni} = import './ni.fnk'
+
+ham = fn a:
+  ni a, 42

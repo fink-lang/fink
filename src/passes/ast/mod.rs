@@ -159,8 +159,12 @@ pub enum NodeKind<'src> {
 
   // --- module ---
 
-  // Module — top-level container for a source file's expressions
-  Module(Exprs<'src>),
+  // Module — top-level container for a source file's expressions.
+  // `url` is the module's stable identity (file path, "@fink/*" virtual URL,
+  // "<stdin>" for stdin, "test" for in-memory test sources, etc.). It flows
+  // from the caller of the parser into this field and is read by the WASM
+  // emitter as the fragment's `module_name` for cross-module linking.
+  Module { exprs: Exprs<'src>, url: String },
 
   // --- functions ---
 
@@ -217,7 +221,7 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::Wildcard
     | NodeKind::Token(_) => {}
 
-    NodeKind::Module(items)
+    NodeKind::Module { exprs: items, .. }
     | NodeKind::LitSeq { items, .. }
     | NodeKind::LitRec { items, .. }
     | NodeKind::Pipe(items)
@@ -423,7 +427,11 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       out.push_str("Pipe");
       print_children(&exprs.items, out, depth);
     }
-    NodeKind::Module(exprs) => {
+    NodeKind::Module { exprs, .. } => {
+      // URL is intentionally not printed — the AST debug printer is used
+      // in tests that compare strings, and including the URL would force
+      // every test to carry an expected URL. The URL flows through to WASM
+      // emission but isn't part of the structural AST view.
       out.push_str("Module");
       print_exprs(exprs, out, depth);
     }
@@ -544,7 +552,7 @@ mod tests {
 
   #[test]
   fn build_index_returns_nodes_by_id() {
-    let r = crate::parser::parse("foo = 1").unwrap();
+    let r = crate::parser::parse("foo = 1", "test").unwrap();
     // Module + Bind + Ident + LitInt = 4 nodes
     assert_eq!(r.node_count, 4);
     let index = super::build_index(&r);
@@ -557,7 +565,7 @@ mod tests {
 
   #[test]
   fn walk_visits_all_nodes() {
-    let r = crate::parser::parse("foo = [1, 2]").unwrap();
+    let r = crate::parser::parse("foo = [1, 2]", "test").unwrap();
     let mut kinds = vec![];
     super::walk(&r.root, &mut |n| {
       kinds.push(std::mem::discriminant(&n.kind));
@@ -568,7 +576,7 @@ mod tests {
 
   #[test]
   fn walk_visits_in_pre_order() {
-    let r = crate::parser::parse("a + b").unwrap();
+    let r = crate::parser::parse("a + b", "test").unwrap();
     let mut names = vec![];
     super::walk(&r.root, &mut |n| {
       match &n.kind {

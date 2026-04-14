@@ -1,4 +1,4 @@
-{test, expect, equals, cps_expr} = import '!fake'
+{test, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---
@@ -6,47 +6,52 @@ sequence and record literals
 ---
 
 test 'seq literal', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     [1, 2, 3]
   | equals ƒink:
-    ·seq_prepend 3, [], fn ·v_3:
-      ·seq_prepend 2, ·v_3, fn ·v_6:
-        ·seq_prepend 1, ·v_6, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIDIsIDNdIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFPLEMsRUFBUCxBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLGFBQUksQyxFQUFKLEksS0FBQSxJO0lBQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEUiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·seq_prepend 3, [], fn ·v_3:
+        ·seq_prepend 2, ·v_3, fn ·v_6:
+          ·seq_prepend 1, ·v_6, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIDIsIDNdIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxhQUFPLEMsRUFBUCxBLEMsQyxLQUFBLEk7SUFBQSxBQUFBLGFBQUksQyxFQUFKLEksS0FBQSxJO01BQUEsQUFBQSxhQUFDLEMsRUFBRCxJLEUiCn0=
 
 
 test 'empty seq literal', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     []
   | equals ƒink:
-    ·v_0 []
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW10iXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEsQSxDIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·ƒret_0 []
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiW10iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEsQSxDIgp9
 
 
 test 'rec literal', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     {x: 1, y: 2}
   | equals ƒink:
-    ·rec_put {}, 'x', 1, fn ·v_4:
-      ·rec_put ·v_4, 'y', 2, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3g6IDEsIHk6IDJ9Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFBLEEsQyxDLEVBQUMsQSxDQUFBLEMsQyxFQUFHLEMsS0FBSixJO0VBQUEsQUFBQSxTQUFBLEksRUFBTyxBLENBQUEsQyxDLEVBQUcsQyxFIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·rec_put {}, 'x', 1, fn ·v_4:
+        ·rec_put ·v_4, 'y', 2, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3g6IDEsIHk6IDJ9Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxTQUFBLEEsQyxDLEVBQUMsQSxDQUFBLEMsQyxFQUFHLEMsS0FBSixJO0lBQUEsQUFBQSxTQUFBLEksRUFBTyxBLENBQUEsQyxDLEVBQUcsQyxFIgp9
 
 
 test 'empty rec literal', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     {}
   | equals ƒink:
-    ·v_0 {}
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie30iXSwKICAibWFwcGluZ3MiOiAiQSxBLEtBQUEsQSxDIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·ƒret_0 {}
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie30iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEsQSxDIgp9
 
 
 test 'rec shorthand', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     {x, y}
   | equals ƒink:
-    ·rec_put {}, 'x', ·∅x, fn ·v_4:
-      ·rec_put ·v_4, 'y', ·∅y, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3gsIHl9Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxTQUFBLEEsQyxDLEVBQUMsQSxDQUFBLEMsQyxFQUFBLEcsS0FBRCxJO0VBQUEsQUFBQSxTQUFBLEksRUFBSSxBLENBQUEsQyxDLEVBQUEsRyxFIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·rec_put {}, 'x', ·∅x, fn ·v_4:
+        ·rec_put ·v_4, 'y', ·∅y, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3gsIHl9Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxTQUFBLEEsQyxDLEVBQUMsQSxDQUFBLEMsQyxFQUFBLEcsS0FBRCxJO0lBQUEsQUFBQSxTQUFBLEksRUFBSSxBLENBQUEsQyxDLEVBQUEsRyxFIgp9
 
 
 
@@ -55,27 +60,30 @@ member access
 ---
 
 test 'member static', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo.bar
   | equals ƒink:
-    ·op_dot ·∅foo, 'bar', ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUUFBQSxLLEVBQUksQSxDQUFBLEcsQyxFIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·op_dot ·∅foo, 'bar', ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLmJhciJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsUUFBQSxLLEVBQUksQSxDQUFBLEcsQyxFIgp9
 
 
 test 'member dynamic', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo.(key)
   | equals ƒink:
-    ·op_dot ·∅foo, ·∅key, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLihrZXkpIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxRQUFBLEssRUFBSyxLLEUiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·op_dot ·∅foo, ·∅key, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLihrZXkpIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxRQUFBLEssRUFBSyxLLEUiCn0=
 
 
 test 'member string key shorthand', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo.'bar baz'
   | equals ƒink:
-    ·op_dot ·∅foo, 'bar baz', ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLidiYXIgYmF6JyJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsUUFBQSxLLEVBQUksQSxDQUFBLE8sQyxFIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·op_dot ·∅foo, 'bar baz', ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vLidiYXIgYmF6JyJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsUUFBQSxLLEVBQUksQSxDQUFBLE8sQyxFIgp9
 
 
 
@@ -84,21 +92,23 @@ spreads in seq and rec literals
 ---
 
 test 'seq spread', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     [..xs, 1]
   | equals ƒink:
-    ·seq_prepend 1, [], fn ·v_3:
-      ·seq_concat ·∅xs, ·v_3, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4ueHMsIDFdIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxhQUFPLEMsRUFBUCxBLEMsQyxLQUFBLEk7RUFBQSxBQUFBLFlBQUcsSSxFQUFILEksRSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·seq_prepend 1, [], fn ·v_3:
+        ·seq_concat ·∅xs, ·v_3, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4ueHMsIDFdIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxhQUFPLEMsRUFBUCxBLEMsQyxLQUFBLEk7SUFBQSxBQUFBLFlBQUcsSSxFQUFILEksRSIKfQ==
 
 
 test 'rec spread', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     {..base, x: 1}
   | equals ƒink:
-    ·rec_merge {}, ·∅base, fn ·v_3:
-      ·rec_put ·v_3, 'x', 1, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiey4uYmFzZSwgeDogMX0iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLFdBQUEsQSxDLEMsRUFBRyxNLEtBQUgsSTtFQUFBLEFBQUEsU0FBQSxJLEVBQVMsQSxDQUFBLEMsQyxFQUFHLEMsRSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·rec_merge {}, ·∅base, fn ·v_3:
+        ·rec_put ·v_3, 'x', 1, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiey4uYmFzZSwgeDogMX0iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLFdBQUEsQSxDLEMsRUFBRyxNLEtBQUgsSTtJQUFBLEFBQUEsU0FBQSxJLEVBQVMsQSxDQUFBLEMsQyxFQUFHLEMsRSIKfQ==
 
 
 
@@ -107,11 +117,12 @@ tagged literals
 ---
 
 test 'tagged literal', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     10sec
   | equals ƒink:
-    ·∅sec ·v_0, 10
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMTBzZWMiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFFLE0sSSxFQUFGIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·∅sec ·ƒret_0, 10
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMTBzZWMiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFFLE0sTyxFQUFGIgp9
 
 
 
@@ -122,36 +133,40 @@ seq/rec literals with spreads
 # NOTE: ·seq_prepend/·seq_concat/·rec_put/·rec_merge are loaded from ·scope (not primitives)
 # in cps_c — they're treated as regular identifier references.
 test 'seq literal with spread', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     [1, ..a, 2]
   | equals ƒink:
-    ·seq_prepend 2, [], fn ·v_3:
-      ·seq_concat ·∅a, ·v_3, fn ·v_6:
-        ·seq_prepend 1, ·v_6, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIC4uYSwgMl0iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLGFBQVMsQyxFQUFULEEsQyxDLEtBQUEsSTtFQUFBLEFBQUEsWUFBTSxHLEVBQU4sSSxLQUFBLEk7SUFBQSxBQUFBLGFBQUMsQyxFQUFELEksRSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·seq_prepend 2, [], fn ·v_3:
+        ·seq_concat ·∅a, ·v_3, fn ·v_6:
+          ·seq_prepend 1, ·v_6, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWzEsIC4uYSwgMl0iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLGFBQVMsQyxFQUFULEEsQyxDLEtBQUEsSTtJQUFBLEFBQUEsWUFBTSxHLEVBQU4sSSxLQUFBLEk7TUFBQSxBQUFBLGFBQUMsQyxFQUFELEksRSIKfQ==
 
 test 'seq literal leading spread', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     [..a, ..b]
   | equals ƒink:
-    ·seq_concat ·∅b, [], fn ·v_3:
-      ·seq_concat ·∅a, ·v_3, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4uYSwgLi5iXSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsWUFBUSxHLEVBQVIsQSxDLEMsS0FBQSxJO0VBQUEsQUFBQSxZQUFHLEcsRUFBSCxJLEUiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·seq_concat ·∅b, [], fn ·v_3:
+        ·seq_concat ·∅a, ·v_3, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiWy4uYSwgLi5iXSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsWUFBUSxHLEVBQVIsQSxDLEMsS0FBQSxJO0lBQUEsQUFBQSxZQUFHLEcsRUFBSCxJLEUiCn0=
 
 test 'rec literal with spread', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     {foo: a, ..b}
   | equals ƒink:
-    ·rec_put {}, 'foo', ·∅a, fn ·v_4:
-      ·rec_merge ·v_4, ·∅b, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2ZvbzogYSwgLi5ifSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsU0FBQSxBLEMsQyxFQUFDLEEsQ0FBQSxHLEMsRUFBSyxHLEtBQU4sSTtFQUFBLEFBQUEsV0FBQSxJLEVBQVcsRyxFIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·rec_put {}, 'foo', ·∅a, fn ·v_4:
+        ·rec_merge ·v_4, ·∅b, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2ZvbzogYSwgLi5ifSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsU0FBQSxBLEMsQyxFQUFDLEEsQ0FBQSxHLEMsRUFBSyxHLEtBQU4sSTtJQUFBLEFBQUEsV0FBQSxJLEVBQVcsRyxFIgp9
 
 test 'rec literal leading spread', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     {..a, ..b}
   | equals ƒink:
-    ·rec_merge {}, ·∅a, fn ·v_3:
-      ·rec_merge ·v_3, ·∅b, ·v_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiey4uYSwgLi5ifSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsV0FBQSxBLEMsQyxFQUFHLEcsS0FBSCxJO0VBQUEsQUFBQSxXQUFBLEksRUFBUSxHLEUiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·rec_merge {}, ·∅a, fn ·v_3:
+        ·rec_merge ·v_3, ·∅b, ·ƒret_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiey4uYSwgLi5ifSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsV0FBQSxBLEMsQyxFQUFHLEcsS0FBSCxJO0lBQUEsQUFBQSxXQUFBLEksRUFBUSxHLEUiCn0=
 
 

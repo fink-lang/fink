@@ -4,31 +4,27 @@
 
 test 'literal', fn:
   expect run ƒink:
-    test_main = fn:
-      42
+    42
   | equals ƒink:
     42
 
 
 test 'float literal', fn:
   expect run ƒink:
-    test_main = fn:
-      3.14
+    3.14
   | equals ƒink:
     3.14
 
 
 test 'bool literal true', fn:
   expect run ƒink:
-    test_main = fn:
-      true
+    true
   | equals ƒink:
     true
 
 
 test 'bool literal false', fn:
   expect run ƒink:
-    test_main = fn:
-      false
+    false
   | equals ƒink:
     false

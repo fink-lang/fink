@@ -27,7 +27,7 @@ CPS pattern lowering tests
 # Binding: bare ident in pattern position → ·let (always a binding, never a lookup)
 # Wildcard (_): discard; no binding, temp passed directly to next primitive
 
-{test, equals, expect, cps_expr} = import 'fake!'
+{test, equals, expect, cps_module} = import 'fake!'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -36,46 +36,50 @@ bind
 ---
 
 test 'plain bind', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     x = foo
   | equals ƒink:
-    ·let ·∅foo, fn ·x_0:
-      ·v_1 ·x_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtFLEEsS0FBQSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·let ·∅foo, fn ·x_0:
+        ·ƒpub ·x_0, fn:
+          ·ƒret_1 ·x_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFFLEFBQUEsS0FBRSxLLEtBQUosSTtJQUFBLEFBQUEsTUFBQSxJLEk7TSxBLFFBQUEiCn0=
 
 
 test 'simple guard', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     a > 0 = foo
   | equals ƒink:
-    ·fn
-      fn ·a_0: ·v_1 ·a_0
-      fn ·v_18:
-        ·fn
-          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-            ·op_gt ·v_3, 0, fn ·v_8:
-              ·if ·v_8,
-                fn: ·ƒsucc_4 ·v_3
-                fn: ·ƒfail_5 _
-          fn ·v_16: ·v_16 ·v_18, ·panic, ·∅foo
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSSxFQUFBLEEsS0FBQTtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLE9BQUEsSSxFQUFJLEMsS0FBSixJO1VBQUEsQUFBQSxJQUFBLEk7YyxFQUFBLEEsU0FBQTtjLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFRIgp9
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·a_0: ·ƒret_1 ·a_0
+        fn ·v_18:
+          ·fn
+            fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+              ·op_gt ·v_3, 0, fn ·v_8:
+                ·if ·v_8,
+                  fn: ·ƒsucc_4 ·v_3
+                  fn: ·ƒfail_5 _
+            fn ·v_16: ·v_16 ·v_18, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsSSxFQUFBLEEsUUFBQTtPQUFBLEs7TUFBQSxBQUFBO1csVSxVQUFBLEk7VUFBQSxBQUFBLE9BQUEsSSxFQUFJLEMsS0FBSixJO1lBQUEsQUFBQSxJQUFBLEk7Z0IsRUFBQSxBLFNBQUE7Z0IsRUFBQSxBLFNBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVEiCn0=
 
 
 test 'nested guard', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     a > 0 or a < 9 = foo
   | equals ƒink:
-    ·fn
-      fn ·a_0: ·v_1 ·a_0
-      fn ·v_22:
-        ·fn
-          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-            ·op_lt ·a_0, 9, fn ·v_8:
-              ·op_or ·v_3, ·v_8, fn ·v_11:
-                ·if ·v_11,
-                  fn: ·ƒsucc_4 ·v_3
-                  fn: ·ƒfail_5 _
-          fn ·v_20: ·v_20 ·v_22, ·panic, ·∅foo
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgb3IgYSA8IDkgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSSxFQUFBLEEsS0FBQTtLQUFBLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBVyxBQUFBLE9BQUYsSSxFQUFJLEMsS0FBSixJO1VBQVQsQUFBQSxPQUFBLEksRUFBUyxJLEtBQVQsSztZQUFBLEFBQUEsSUFBQSxLO2dCLEVBQUEsQSxTQUFBO2dCLEVBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFpQiIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·a_0: ·ƒret_1 ·a_0
+        fn ·v_22:
+          ·fn
+            fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+              ·op_lt ·a_0, 9, fn ·v_8:
+                ·op_or ·v_3, ·v_8, fn ·v_11:
+                  ·if ·v_11,
+                    fn: ·ƒsucc_4 ·v_3
+                    fn: ·ƒfail_5 _
+            fn ·v_20: ·v_20 ·v_22, ·panic, ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA+IDAgb3IgYSA8IDkgPSBmb28iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsSSxFQUFBLEEsUUFBQTtPQUFBLEs7TUFBQSxBQUFBO1csVSxVQUFBLEk7VUFBVyxBQUFBLE9BQUYsSSxFQUFJLEMsS0FBSixJO1lBQVQsQUFBQSxPQUFBLEksRUFBUyxJLEtBQVQsSztjQUFBLEFBQUEsSUFBQSxLO2tCLEVBQUEsQSxTQUFBO2tCLEVBQUEsQSxTQUFBO1dBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFpQiIKfQ==
 
 

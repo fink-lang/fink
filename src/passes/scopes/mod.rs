@@ -328,12 +328,12 @@ pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize, builtins: &[&str
   ctx.builtins = ["import", "yield", "spawn", "await", "channel", "receive", "read"].iter().chain(builtins.iter()).map(|s| s.to_string()).collect();
 
   // Phase 1: pre-register all module-level bindings (for mutual recursion).
-  if let NodeKind::Module(items) = &root.kind {
+  if let NodeKind::Module { exprs: items, .. } = &root.kind {
     pre_register_binds(&items.items, module_scope, &mut ctx);
   }
 
   // Phase 2: walk the tree and resolve references.
-  if let NodeKind::Module(items) = &root.kind {
+  if let NodeKind::Module { exprs: items, .. } = &root.kind {
     walk_stmts(&items.items, module_scope, &mut ctx);
   }
 
@@ -572,7 +572,7 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
       }
     }
 
-    NodeKind::Module(items) => {
+    NodeKind::Module { exprs: items, .. } => {
       walk_stmts(&items.items, scope, ctx);
     }
 
@@ -752,7 +752,7 @@ mod tests {
   use super::*;
 
   fn scope(src: &str) -> String {
-    match crate::to_desugared(src) {
+    match crate::to_desugared(src, "test") {
       Ok(desugared) => format_result(&desugared.scope),
       Err(e) => format!("ERROR: {e}"),
     }

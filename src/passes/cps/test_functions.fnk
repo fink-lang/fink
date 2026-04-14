@@ -1,4 +1,4 @@
-{test, expect, equals, cps_expr} = import '!fake'
+{test, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---
@@ -6,35 +6,39 @@ function definition — ·closure synthesis
 ---
 
 test 'fn one param', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     fn a: a
   | equals ƒink:
-    ·fn
-      fn ·ƒret_3, ·a_0: ·ƒret_3 ·a_0
-      fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxTQUFHLEksRSxBQUFILFFBQU07S0FBTixJLEUsQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_3, ·a_0: ·ƒret_3 ·a_0
+        fn ·v_2: ·ƒret_1 ·v_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUE7T0FBQSxTQUFHLEksRSxBQUFILFFBQU07T0FBTixJLEUsQSxRQUFBIgp9
 
 
 test 'fn two params', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     fn a, b: a
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·a_0, ·b_1: ·ƒret_4 ·a_0
-      fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgYjogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxTQUFHLE1BQUcsSSxFLEFBQU4sUUFBUztLQUFULEksRSxBLEtBQUEiCn0=
+    ·ƒink_module fn ·ƒret_2:
+      ·fn
+        fn ·ƒret_4, ·a_0, ·b_1: ·ƒret_4 ·a_0
+        fn ·v_3: ·ƒret_2 ·v_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgYjogYSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUE7T0FBQSxTQUFHLE1BQUcsSSxFLEFBQU4sUUFBUztPQUFULEksRSxBLFFBQUEiCn0=
 
 
 test 'named fn', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     double = fn a: a
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·a_1: ·ƒret_4 ·a_1
-      fn ·v_3:
-        ·let ·v_3, fn ·double_0:
-          ·v_2 ·double_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBQUFTLEFBQUE7S0FBQSxTQUFHLEksRSxBQUFILFFBQU07S0FBTixJO0lBQUYsQUFBQSxLQUFFLEksS0FBVCxTO00sQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_2:
+      ·fn
+        fn ·ƒret_4, ·a_1: ·ƒret_4 ·a_1
+        fn ·v_3:
+          ·let ·v_3, fn ·double_0:
+            ·ƒpub ·double_0, fn:
+              ·ƒret_2 ·double_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZG91YmxlID0gZm4gYTogYSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFTLEFBQUE7T0FBQSxTQUFHLEksRSxBQUFILFFBQU07T0FBTixJO01BQUYsQUFBQSxLQUFFLEksS0FBVCxTO1FBQUEsQUFBQSxNQUFBLFMsSTtVLEEsUUFBQSIKfQ==
 
 
 
@@ -43,52 +47,57 @@ ported from test_cps — functions and closures
 ---
 
 test 'function binding', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     inc = fn x: x + 1
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·x_1: ·op_plus ·x_1, 1, ·ƒret_4
-      fn ·v_3:
-        ·let ·v_3, fn ·inc_0:
-          ·v_2 ·inc_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiaW5jID0gZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBTSxBQUFBO0tBQUEsU0FBRyxJLEVBQUssQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7S0FBQSxJO0lBQUYsQUFBQSxLQUFFLEksS0FBTixNO00sQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_2:
+      ·fn
+        fn ·ƒret_4, ·x_1: ·op_plus ·x_1, 1, ·ƒret_4
+        fn ·v_3:
+          ·let ·v_3, fn ·inc_0:
+            ·ƒpub ·inc_0, fn:
+              ·ƒret_2 ·inc_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiaW5jID0gZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBTSxBQUFBO09BQUEsU0FBRyxJLEVBQUssQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7T0FBQSxJO01BQUYsQUFBQSxLQUFFLEksS0FBTixNO1FBQUEsQUFBQSxNQUFBLE0sSTtVLEEsUUFBQSIKfQ==
 
 
 test '·closure over outer variable', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo = fn a:
       ni = fn b:
         a + b
       ni
   | equals ƒink:
-    ·fn
-      fn ·ƒret_6, ·a_1:
-        ·fn
-          fn ·ƒret_8, ·b_2: ·op_plus ·a_1, ·b_2, ·ƒret_8
-          fn ·v_7:
-            ·let ·v_7, fn ·ni_3:
-              ·ƒret_6 ·ni_3
-      fn ·v_5:
-        ·let ·v_5, fn ·foo_0:
-          ·v_4 ·foo_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTpcbiAgbmkgPSBmbiBiOlxuICAgIGEgKyBiXG4gIG5pIl0sCiAgIm1hcHBpbmdzIjogIkFBQU0sQUFBQTtLQUFBLFNBQUcsSTtJQUNGLEFBQUE7U0FBQSxTQUFHLEksRUFDSixBQUFBLFNBQUYsSSxFQUFJLEksRUFERDtTQUFBLEk7UUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7VSxBQURJLFFBR0o7S0FISSxJO0lBQUYsQUFBQSxLQUFFLEksS0FBTixNO00sQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_4:
+      ·fn
+        fn ·ƒret_6, ·a_1:
+          ·fn
+            fn ·ƒret_8, ·b_2: ·op_plus ·a_1, ·b_2, ·ƒret_8
+            fn ·v_7:
+              ·let ·v_7, fn ·ni_3:
+                ·ƒret_6 ·ni_3
+        fn ·v_5:
+          ·let ·v_5, fn ·foo_0:
+            ·ƒpub ·foo_0, fn:
+              ·ƒret_4 ·foo_0
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTpcbiAgbmkgPSBmbiBiOlxuICAgIGEgKyBiXG4gIG5pIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQU0sQUFBQTtPQUFBLFNBQUcsSTtNQUNGLEFBQUE7V0FBQSxTQUFHLEksRUFDSixBQUFBLFNBQUYsSSxFQUFJLEksRUFERDtXQUFBLEk7VUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7WSxBQURJLFFBR0o7T0FISSxJO01BQUYsQUFBQSxLQUFFLEksS0FBTixNO1FBQUEsQUFBQSxNQUFBLE0sSTtVLEEsUUFBQSIKfQ==
 
 
 test 'three sequential bindings', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     a = 1
     b = 2
     c = a + b
   | equals ƒink:
-    ·fn
-      fn ·ƒret_5:
-        ·let 1, fn ·a_0:
+    ·ƒink_module fn ·ƒret_3:
+      ·let 1, fn ·a_0:
+        ·ƒpub ·a_0, fn:
           ·let 2, fn ·b_1:
-            ·op_plus ·a_0, ·b_1, fn ·v_10:
-              ·let ·v_10, fn ·c_2:
-                ·ƒret_5 ·c_2
-      fn ·v_4: ·v_3 ·v_4
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDFcbmIgPSAyXG5jID0gYSArIGIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsTztJQUFFLEFBQUEsS0FBRSxDLEtBQUosSTtNQUNFLEFBQUEsS0FBRSxDLEtBQUosSTtRQUNNLEFBQUEsU0FBRixJLEVBQUksSSxLQUFKLEs7VUFBRixBQUFBLEtBQUUsSyxLQUFKLEk7WUFGQSxBQUFBLFFBRUE7S0FGQSxJLEUsQSxLQUFBIgp9
+            ·ƒpub ·b_1, fn:
+              ·op_plus ·a_0, ·b_1, fn ·v_8:
+                ·let ·v_8, fn ·c_2:
+                  ·ƒpub ·c_2, fn:
+                    ·ƒret_3 ·c_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDFcbmIgPSAyXG5jID0gYSArIGIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBRSxBQUFBLEtBQUUsQyxLQUFKLEk7SUFBQSxBQUFBLE1BQUEsSSxJO01BQ0UsQUFBQSxLQUFFLEMsS0FBSixJO1FBQUEsQUFBQSxNQUFBLEksSTtVQUNNLEFBQUEsU0FBRixJLEVBQUksSSxLQUFKLEk7WUFBRixBQUFBLEtBQUUsSSxLQUFKLEk7Y0FBQSxBQUFBLE1BQUEsSSxJO2dCLEEsUUFBQSIKfQ==
 
 
 
@@ -97,41 +106,40 @@ ported from test_cps — forward refs and mutual recursion
 ---
 
 test 'forward ref', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo = fn a: foo a + 1
     foo 1
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4:
-        ·fn
-          fn ·ƒret_6, ·a_1:
-            ·op_plus ·a_1, 1, fn ·v_10:
-              ·foo_0 ·ƒret_6, ·v_10
-          fn ·v_5:
-            ·let ·v_5, fn ·foo_0:
-              ·foo_0 ·ƒret_4, 1
-      fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTogZm9vIGEgKyAxXG5mb28gMSJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQU0sQUFBQTtTQUFBLFNBQUcsSTtRQUFTLEFBQUEsU0FBRixJLEVBQUksQyxLQUFKLEs7VUFBSixBQUFBLE9BQU4sTyxFQUFVO1NBQVYsSTtRQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtVQUNBLEFBQUEsT0FEQSxPLEVBQ0k7S0FESixJLEUsQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_2:
+      ·fn
+        fn ·ƒret_4, ·a_1:
+          ·op_plus ·a_1, 1, fn ·v_8:
+            ·foo_0 ·ƒret_4, ·v_8
+        fn ·v_3:
+          ·let ·v_3, fn ·foo_0:
+            ·ƒpub ·foo_0, fn:
+              ·foo_0 ·ƒret_2, 1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm4gYTogZm9vIGEgKyAxXG5mb28gMSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFNLEFBQUE7T0FBQSxTQUFHLEk7TUFBUyxBQUFBLFNBQUYsSSxFQUFJLEMsS0FBSixJO1FBQUosQUFBQSxPQUFOLE8sRUFBVTtPQUFWLEk7TUFBRixBQUFBLEtBQUUsSSxLQUFOLE07UUFBQSxBQUFBLE1BQUEsTSxJO1VBQ0EsQUFBQSxPLE8sRUFBSSIKfQ==
 
 
 test 'mutual recursion', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     ping = fn x: pong x
     pong = fn x: ping x
   | equals ƒink:
-    ·fn
-      fn ·ƒret_6:
-        ·fn
-          fn ·ƒret_8, ·x_2: ·pong_1 ·ƒret_8, ·x_2
-          fn ·v_7:
-            ·let ·v_7, fn ·ping_0:
+    ·ƒink_module fn ·ƒret_4:
+      ·fn
+        fn ·ƒret_6, ·x_2: ·pong_1 ·ƒret_6, ·x_2
+        fn ·v_5:
+          ·let ·v_5, fn ·ping_0:
+            ·ƒpub ·ping_0, fn:
               ·fn
-                fn ·ƒret_16, ·x_3: ·ping_0 ·ƒret_16, ·x_3
-                fn ·v_15:
-                  ·let ·v_15, fn ·pong_1:
-                    ·ƒret_6 ·pong_1
-      fn ·v_5: ·v_4 ·v_5
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicGluZyA9IGZuIHg6IHBvbmcgeFxucG9uZyA9IGZuIHg6IHBpbmcgeCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxPO0lBQU8sQUFBQTtTQUFBLFNBQUcsSSxFQUFHLEFBQUEsUUFBTixPLEVBQVc7U0FBWCxJO1FBQUYsQUFBQSxLQUFFLEksS0FBUCxPO1VBQ08sQUFBQTtlQUFBLFVBQUcsSSxFQUFHLEFBQUEsUUFBTixRLEVBQVc7ZUFBWCxLO2NBQUYsQUFBQSxLQUFFLEssS0FBUCxPO2dCQURBLEFBQUEsUUFDQTtLQURBLEksRSxBLEtBQUEiCn0=
+                fn ·ƒret_14, ·x_3: ·ping_0 ·ƒret_14, ·x_3
+                fn ·v_13:
+                  ·let ·v_13, fn ·pong_1:
+                    ·ƒpub ·pong_1, fn:
+                      ·ƒret_4 ·pong_1
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicGluZyA9IGZuIHg6IHBvbmcgeFxucG9uZyA9IGZuIHg6IHBpbmcgeCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFPLEFBQUE7T0FBQSxTQUFHLEksRUFBRyxBQUFBLFFBQU4sTyxFQUFXO09BQVgsSTtNQUFGLEFBQUEsS0FBRSxJLEtBQVAsTztRQUFBLEFBQUEsTUFBQSxPLEk7VUFDTyxBQUFBO2VBQUEsVUFBRyxJLEVBQUcsQUFBQSxRQUFOLFEsRUFBVztlQUFYLEs7Y0FBRixBQUFBLEtBQUUsSyxLQUFQLE87Z0JBQUEsQUFBQSxNQUFBLE8sSTtrQixBLFFBQUEiCn0=
 
 
 
@@ -140,23 +148,25 @@ varargs functions
 ---
 
 test 'multi-param function', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     fn x, y: x + y
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·x_0, ·y_1: ·op_plus ·x_0, ·y_1, ·ƒret_4
-      fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geCwgeTogeCArIHkiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsU0FBRyxNQUFHLEksRUFBSyxBQUFBLFNBQUYsSSxFQUFJLEksRUFBYjtLQUFBLEksRSxBLEtBQUEiCn0=
+    ·ƒink_module fn ·ƒret_2:
+      ·fn
+        fn ·ƒret_4, ·x_0, ·y_1: ·op_plus ·x_0, ·y_1, ·ƒret_4
+        fn ·v_3: ·ƒret_2 ·v_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geCwgeTogeCArIHkiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsU0FBRyxNQUFHLEksRUFBSyxBQUFBLFNBQUYsSSxFQUFJLEksRUFBYjtPQUFBLEksRSxBLFFBQUEiCn0=
 
 
 test 'varargs — collect rest', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     fn a, ..rest: rest
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·a_0, ..·rest_1: ·ƒret_4 ·rest_1
-      fn ·v_3: ·v_2 ·v_3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgLi5yZXN0OiByZXN0Il0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLFNBQUcsTUFBSyxBLEVBQUEsTyxFLEFBQVIsUUFBYztLQUFkLEksRSxBLEtBQUEiCn0=
+    ·ƒink_module fn ·ƒret_2:
+      ·fn
+        fn ·ƒret_4, ·a_0, ..·rest_1: ·ƒret_4 ·rest_1
+        fn ·v_3: ·ƒret_2 ·v_3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gYSwgLi5yZXN0OiByZXN0Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQTtPQUFBLFNBQUcsTUFBSyxBLEVBQUEsTyxFLEFBQVIsUUFBYztPQUFkLEksRSxBLFFBQUEiCn0=
 
 
 
@@ -165,34 +175,37 @@ functions — additional
 ---
 
 test 'identity function', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     fn x: x
   | equals ƒink:
-    ·fn
-      fn ·ƒret_3, ·x_0: ·ƒret_3 ·x_0
-      fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUE7S0FBQSxTQUFHLEksRSxBQUFILFFBQU07S0FBTixJLEUsQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_3, ·x_0: ·ƒret_3 ·x_0
+        fn ·v_2: ·ƒret_1 ·v_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUE7T0FBQSxTQUFHLEksRSxBQUFILFFBQU07T0FBTixJLEUsQSxRQUFBIgp9
 
 test 'function with operator in body', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     fn x: x + 1
   | equals ƒink:
-    ·fn
-      fn ·ƒret_3, ·x_0: ·op_plus ·x_0, 1, ·ƒret_3
-      fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsU0FBRyxJLEVBQUssQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7S0FBQSxJLEUsQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_3, ·x_0: ·op_plus ·x_0, 1, ·ƒret_3
+        fn ·v_2: ·ƒret_1 ·v_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4geDogeCArIDEiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsU0FBRyxJLEVBQUssQUFBQSxTQUFGLEksRUFBSSxDLEVBQVY7T0FBQSxJLEUsQSxRQUFBIgp9
 
 test 'try — result bound, code continues', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     ni = try foo bar
     ni + 1
   | equals ƒink:
-    ·fn
-      fn ·ƒret_3:
-        ·∅foo fn ·v_6:
-          ·let ·v_6, fn ·ni_0:
-            ·op_plus ·ni_0, 1, ·ƒret_3, ·∅bar
-      fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibmkgPSB0cnkgZm9vIGJhclxubmkgKyAxIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLE87SUFBUyxBQUFBLE1BQUEsR0FBQSxJO01BQU4sQUFBQSxLQUFNLEksS0FBVCxLO1FBQ0csQUFBQSxTQUFILEssRUFBSyxDLEVBREwsTyxFQUFhO0tBQWIsSSxFLEEsS0FBQSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·∅foo
+        fn ·v_4:
+          ·let ·v_4, fn ·ni_0:
+            ·ƒpub ·ni_0, fn:
+              ·op_plus ·ni_0, 1, ·ƒret_1
+        ·∅bar
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibmkgPSB0cnkgZm9vIGJhclxubmkgKyAxIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQVMsQUFBQTtPQUFBLEk7TUFBTixBQUFBLEtBQU0sSSxLQUFULEs7UUFBQSxBQUFBLE1BQUEsSyxJO1VBQ0csQUFBQSxTQUFILEssRUFBSyxDLEU7SUFEUSIKfQ==
 
 

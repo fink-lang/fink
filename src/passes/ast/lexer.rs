@@ -1042,7 +1042,7 @@ fn tokenize_debug(src: &str) -> String {
   #[test]
   fn parse_test_file() {
     let src = include_str!("test_lexer.fnk");
-    let result = crate::parser::parse(src);
+    let result = crate::parser::parse(src, "test_lexer.fnk");
     match result {
       Ok(_) => {}
       Err(e) => panic!("parse error in test_lexer.fnk at line {}: {}", e.loc.start.line, e.message),

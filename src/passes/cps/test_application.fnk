@@ -1,4 +1,4 @@
-{test, expect, equals, cps_expr} = import '!fake'
+{test, expect, equals, cps_module} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 ---
@@ -6,19 +6,21 @@ application — ·apply synthesis
 ---
 
 test '·apply ident to literal', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo 42
   | equals ƒink:
-    ·∅foo ·v_0, 42
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDQyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQSxNLEksRUFBSSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo ·ƒret_0, 42
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDQyIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxNLE8sRUFBSSIKfQ==
 
 
 test '·apply ident to ident', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo bar
   | equals ƒink:
-    ·∅foo ·v_0, ·∅bar
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTSxJLEVBQUkiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo ·ƒret_0, ·∅bar
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsTSxPLEVBQUkiCn0=
 
 
 
@@ -27,19 +29,23 @@ pipe — lowered as application
 ---
 
 test 'pipe two stages', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     a | foo
   | equals ƒink:
-    ·∅foo ·v_0, ·∅a
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUUsTSxJLEVBQUoiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo ·ƒret_0, ·∅a
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFFLEFBQUUsTSxPLEVBQUoiCn0=
 
 
 test 'pipe three stages', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     a | foo | bar
   | equals ƒink:
-    ·∅foo fn ·v_3: ·∅bar ·v_0, ·v_3, ·∅a
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyB8IGJhciJdLAogICJtYXBwaW5ncyI6ICJBQUFFLEFBQUUsTUFBSixHQUFBLEksRUFBUSxBQUFFLE0sSSxFQUFWLEksRUFBQSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo
+        fn ·v_3: ·∅bar ·ƒret_0, ·v_3
+        ·∅a
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyB8IGJhciJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFFLEFBQUU7T0FBSixJLEVBQVEsQUFBRSxNLE8sRUFBVjtJQUFBIgp9
 
 
 
@@ -48,11 +54,12 @@ try expression
 ---
 
 test 'try', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     try foo
   | equals ƒink:
-    ·v_0 ·∅foo
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ5IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBLEEsS0FBSSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·ƒret_0 ·∅foo
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ5IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFLEEsUUFBSSIKfQ==
 
 
 
@@ -61,101 +68,119 @@ ported from test_cps — calls and application
 ---
 
 test 'simple call', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     add 1, 2
   | equals ƒink:
-    ·∅add ·v_0, 1, 2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDEsIDIiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE0sSSxFQUFJLEMsRUFBRyIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·∅add ·ƒret_0, 1, 2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDEsIDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE0sTyxFQUFJLEMsRUFBRyIKfQ==
 
 
 test 'nested call', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     add (mul 2, 3), 1
   | equals ƒink:
-    ·∅mul fn ·v_5: ·∅add ·v_0, ·v_5, 1, 2, 3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIChtdWwgMiwgMyksIDEiXSwKICAibWFwcGluZ3MiOiAiQUFBSyxBQUFBLE1BQUEsR0FBQSxJLEVBQUwsQUFBQSxNLEksRUFBSyxJLEVBQVcsQyxFQUFQLEMsRUFBRyIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·∅mul
+        fn ·v_5: ·∅add ·ƒret_0, ·v_5, 1
+        2
+        3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIChtdWwgMiwgMyksIDEiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBSyxBQUFBO09BQUEsSSxFQUFMLEFBQUEsTSxPLEVBQUssSSxFQUFXO0lBQVA7SUFBRyIKfQ==
 
 
 test 'postfix tag', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     (foo bar)tag
   | equals ƒink:
-    ·∅foo fn ·v_4: ·∅tag ·v_0, ·v_4, ·∅bar
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiKGZvbyBiYXIpdGFnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUMsQUFBQSxNQUFBLEdBQUEsSSxFQUFELEFBQVMsTSxJLEVBQVIsSSxFQUFJIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo
+        fn ·v_4: ·∅tag ·ƒret_0, ·v_4
+        ·∅bar
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiKGZvbyBiYXIpdGFnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUMsQUFBQTtPQUFBLEksRUFBRCxBQUFTLE0sTyxFQUFSO0lBQUkiCn0=
 
 
 test 'call with spread', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo a, ..rest
   | equals ƒink:
-    ·∅foo ·v_0, ·∅a, ..·∅rest
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTSxJLEVBQUksRyxFQUFLLEEsRUFBQSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo ·ƒret_0, ·∅a, ..·∅rest
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsTSxPLEVBQUksRyxFQUFLLEEsRUFBQSIKfQ==
 
 
 test 'simple pipe', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     x | f
   | equals ƒink:
-    ·∅f ·v_0, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYiXSwKICAibWFwcGluZ3MiOiAiQUFBRSxBQUFFLEksSSxFQUFKIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·∅f ·ƒret_0, ·∅x
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBRSxBQUFFLEksTyxFQUFKIgp9
 
 
 test 'pipe chain', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     x | f | g
   | equals ƒink:
-    ·∅f fn ·v_3: ·∅g ·v_0, ·v_3, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYgfCBnIl0sCiAgIm1hcHBpbmdzIjogIkFBQUUsQUFBRSxJQUFKLEdBQUEsSSxFQUFNLEFBQUUsSSxJLEVBQVIsSSxFQUFBIgp9
+    ·ƒink_module fn ·ƒret_0:
+      ·∅f
+        fn ·v_3: ·∅g ·ƒret_0, ·v_3
+        ·∅x
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYgfCBnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUUsQUFBRTtPQUFKLEksRUFBTSxBQUFFLEksTyxFQUFSO0lBQUEiCn0=
 
 
 test 'partial apply', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     add 3, ?
   | equals ƒink:
-    ·fn
-      fn ·ƒret_3, ·v_0: ·∅add ·ƒret_3, 3, ·v_0
-      fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsU0FBTyxJLEVBQVAsQUFBQSxNQUFBLE8sRUFBSSxDLEVBQUc7S0FBUCxJLEUsQSxLQUFBIgp9
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_3, ·v_0: ·∅add ·ƒret_3, 3, ·v_0
+        fn ·v_2: ·ƒret_1 ·v_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsU0FBTyxJLEVBQVAsQUFBQSxNQUFBLE8sRUFBSSxDLEVBQUc7T0FBUCxJLEUsQSxRQUFBIgp9
 
 
 test 'pipe with lambda — literal head', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     3 | fn a: a + 2
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
-      fn ·v_3: ·v_3 ·v_1, 3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFBLFNBQUcsSSxFQUFLLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsSyxJLEVBQUoiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
+        fn ·v_3: ·v_3 ·ƒret_1, 3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUcsSSxFQUFLLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO09BQUEsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
 
 
 test 'pipe with lambda — ident head', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     x | fn a: a + 2
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
-      fn ·v_3: ·v_3 ·v_1, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFBLFNBQUcsSSxFQUFLLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO0tBQUEsSSxFQUFGLEFBQUUsSyxJLEVBQUoiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
+        fn ·v_3: ·v_3 ·ƒret_1, ·∅x
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUcsSSxFQUFLLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO09BQUEsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
 
 
 test 'pipe with partial', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     3 | add 2, ?
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
-      fn ·v_3: ·v_3 ·v_1, 3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFBLFNBQU8sSSxFQUFQLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO0tBQVAsSSxFQUFGLEFBQUUsSyxJLEVBQUoiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
+        fn ·v_3: ·v_3 ·ƒret_1, 3
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQU8sSSxFQUFQLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
 
 
 test 'pipe with partial — ident head', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     x | add 2, ?
   | equals ƒink:
-    ·fn
-      fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
-      fn ·v_3: ·v_3 ·v_1, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkFBQUksQUFBQTtLQUFBLFNBQU8sSSxFQUFQLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO0tBQVAsSSxFQUFGLEFBQUUsSyxJLEVBQUoiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
+        fn ·v_3: ·v_3 ·ƒret_1, ·∅x
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQU8sSSxFQUFQLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
 
 
 
@@ -167,36 +192,40 @@ varargs — spread preserved in IR
 # The IR stays readable Fink; codegen handles the actual flattening.
 
 test 'varargs — call site spreads iterable', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo 1, ..items
   | equals ƒink:
-    ·∅foo ·v_0, 1, ..·∅items
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDEsIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE0sSSxFQUFJLEMsRUFBSyxBLEVBQUEiCn0=
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo ·ƒret_0, 1, ..·∅items
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDEsIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE0sTyxFQUFJLEMsRUFBSyxBLEVBQUEiCn0=
 
 
 test 'call with spread — trailing iterable', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo a, ..rest
   | equals ƒink:
-    ·∅foo ·v_0, ·∅a, ..·∅rest
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBQUFBLEFBQUEsTSxJLEVBQUksRyxFQUFLLEEsRUFBQSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo ·ƒret_0, ·∅a, ..·∅rest
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsTSxPLEVBQUksRyxFQUFLLEEsRUFBQSIKfQ==
 
 
 test 'call with spread — spread only', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     foo ..items
   | equals ƒink:
-    ·∅foo ·v_0, ..·∅items
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBLE0sSSxFQUFNLEEsRUFBQSIKfQ==
+    ·ƒink_module fn ·ƒret_0:
+      ·∅foo ·ƒret_0, ..·∅items
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE0sTyxFQUFNLEEsRUFBQSIKfQ==
 
 
 test 'call with spread — passes through from varargs fn', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     fn ..args: foo ..args
   | equals ƒink:
-    ·fn
-      fn ·ƒret_3, ..·args_0: ·∅foo ·ƒret_3, ..·args_0
-      fn ·v_2: ·v_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gLi5hcmdzOiBmb28gLi5hcmdzIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLFNBQUssQSxFQUFBLE8sRUFBTSxBQUFBLE1BQVgsTyxFQUFpQixBLEVBQUE7S0FBakIsSSxFLEEsS0FBQSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_3, ..·args_0: ·∅foo ·ƒret_3, ..·args_0
+        fn ·v_2: ·ƒret_1 ·v_2
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gLi5hcmdzOiBmb28gLi5hcmdzIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQTtPQUFBLFNBQUssQSxFQUFBLE8sRUFBTSxBQUFBLE1BQVgsTyxFQUFpQixBLEVBQUE7T0FBakIsSSxFLEEsUUFBQSIKfQ==
 
 

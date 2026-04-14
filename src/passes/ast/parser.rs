@@ -1678,7 +1678,7 @@ impl<'src> Parser<'src> {
   }
 }
 
-pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
+pub fn parse<'src>(src: &'src str, url: &str) -> Result<crate::ast::ParseResult<'src>, ParseError> {
   let mut p = Parser::new(src);
   // Consume the implicit root BlockStart emitted by the lexer
   p.expect(TokenKind::BlockStart)?;
@@ -1687,11 +1687,15 @@ pub fn parse(src: &str) -> Result<crate::ast::ParseResult<'_>, ParseError> {
     (Some(first), Some(last)) => Loc { start: first.loc.start, end: last.loc.end },
     _ => p.peek().loc,
   };
-  let root = p.node(NodeKind::Module(exprs), loc);
+  let root = p.node(NodeKind::Module { exprs, url: url.to_string() }, loc);
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
-pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[(&'a str, BlockMode)]) -> Result<crate::ast::ParseResult<'a>, ParseError> {
+pub fn parse_with_blocks<'src>(
+  src: &'src str,
+  url: &str,
+  blocks: &[(&'src str, BlockMode)],
+) -> Result<crate::ast::ParseResult<'src>, ParseError> {
   let mut p = Parser::new(src);
   for &(name, mode) in blocks {
     p.register_block(name, mode);
@@ -1702,7 +1706,7 @@ pub fn parse_with_blocks<'a>(src: &'a str, blocks: &[(&'a str, BlockMode)]) -> R
     (Some(first), Some(last)) => Loc { start: first.loc.start, end: last.loc.end },
     _ => p.peek().loc,
   };
-  let root = p.node(NodeKind::Module(exprs), loc);
+  let root = p.node(NodeKind::Module { exprs, url: url.to_string() }, loc);
   Ok(crate::ast::ParseResult { root, node_count: p.next_id })
 }
 
@@ -1714,7 +1718,7 @@ mod tests {
 
   /// Extract the single expression from a Module root, panicking if not exactly one.
   fn unwrap_single<'a, 'src>(r: &'a crate::ast::ParseResult<'src>) -> &'a crate::ast::Node<'src> {
-    let NodeKind::Module(exprs) = &r.root.kind else {
+    let NodeKind::Module { exprs, .. } = &r.root.kind else {
       panic!("expected Module, got {:?}", r.root.kind);
     };
     assert_eq!(exprs.items.len(), 1, "expected single expression in Module");
@@ -1724,7 +1728,7 @@ mod tests {
   #[test]
   fn test_str_escape_stored_verbatim() {
     // LitStr must store raw source bytes — no rendering at parse time.
-    let r = super::parse_with_blocks(r"'\n\t\\'", &[("test_block", BlockMode::Ast)]).unwrap();
+    let r = super::parse_with_blocks(r"'\n\t\\'", "test", &[("test_block", BlockMode::Ast)]).unwrap();
     let node = unwrap_single(&r);
     let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, r"\n\t\\");
@@ -1737,14 +1741,14 @@ mod tests {
   \n
   \t
 '"#;
-    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
+    let r = super::parse_with_blocks(src, "test", &[("test_block", BlockMode::Ast)]).unwrap();
     let node = unwrap_single(&r);
     let NodeKind::LitStr { content: s, .. } = &node.kind else { panic!("expected LitStr, got {:?}", node.kind) };
     assert_eq!(*s, "\n\\n\n\\t\n");
   }
 
   fn parse_debug(src: &str) -> String {
-    match super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]) {
+    match super::parse_with_blocks(src, "test", &[("test_block", BlockMode::Ast)]) {
       Ok(r) => r.root.print(),
       Err(e) => format!("ERROR [{}:{}]: {}", e.loc.start.line, e.loc.start.col, e.message),
     }
@@ -1765,7 +1769,7 @@ mod tests {
     // 'hello ${expr}' — when interpolation is the last child, the AST ends with
     // the expression node. The `}` delimiter is implied (inferred by the print stage
     // from close.loc). The StrTempl.close token holds the closing `'`.
-    let r = super::parse("'hello ${1}'").unwrap();
+    let r = super::parse("'hello ${1}'", "test").unwrap();
     let node = unwrap_single(&r);
     let NodeKind::StrTempl { children, close, .. } = &node.kind else {
       panic!("expected StrTempl, got {:?}", node.kind);
@@ -1782,7 +1786,7 @@ mod tests {
   fn apply_args_preserve_comma_seps() {
     // collect_apply_or_block was dropping comma tokens from args.seps.
     // Commas between Apply args must be stored so the formatter can reproduce them.
-    let r = super::parse("add 1, 2").unwrap();
+    let r = super::parse("add 1, 2", "test").unwrap();
     let node = unwrap_single(&r);
     let NodeKind::Apply { args, .. } = &node.kind else {
       panic!("expected Apply, got {:?}", node.kind);
@@ -1795,8 +1799,8 @@ mod tests {
   #[test]
   fn block_loc_excludes_dedented_comment() {
     let src = "test_block:\n  42\n# outside";
-    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
-    let NodeKind::Module(exprs) = &r.root.kind else { panic!("expected Module") };
+    let r = super::parse_with_blocks(src, "test", &[("test_block", BlockMode::Ast)]).unwrap();
+    let NodeKind::Module { exprs, .. } = &r.root.kind else { panic!("expected Module") };
     let node = &exprs.items[0];
     let NodeKind::Block { .. } = &node.kind else { panic!("expected Block") };
     assert_eq!(
@@ -1809,8 +1813,8 @@ mod tests {
   fn block_loc_includes_indented_trailing_comment() {
     // A comment at the block's own indent level IS part of the block body.
     let src = "test_block:\n  42\n  # inside";
-    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
-    let NodeKind::Module(exprs) = &r.root.kind else { panic!("expected Module") };
+    let r = super::parse_with_blocks(src, "test", &[("test_block", BlockMode::Ast)]).unwrap();
+    let NodeKind::Module { exprs, .. } = &r.root.kind else { panic!("expected Module") };
     let node = &exprs.items[0];
     let NodeKind::Block { .. } = &node.kind else { panic!("expected Block") };
     assert_eq!(
@@ -1823,8 +1827,8 @@ mod tests {
   fn nested_block_loc_excludes_sibling_comment() {
     // Inner block `b:` must not consume `# sibling` which is at `a:`'s indent level
     let src = "test_block:\n  test_block:\n    42\n  # sibling\n  99";
-    let r = super::parse_with_blocks(src, &[("test_block", BlockMode::Ast)]).unwrap();
-    let NodeKind::Module(exprs) = &r.root.kind else { panic!("expected Module") };
+    let r = super::parse_with_blocks(src, "test", &[("test_block", BlockMode::Ast)]).unwrap();
+    let NodeKind::Module { exprs, .. } = &r.root.kind else { panic!("expected Module") };
     let outer = &exprs.items[0];
     let NodeKind::Block { body: outer_body, .. } = &outer.kind else { panic!("expected outer Block") };
     let inner = &outer_body.items[0];

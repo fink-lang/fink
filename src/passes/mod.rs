@@ -6,9 +6,13 @@
 pub mod ast;
 pub mod cps;
 pub mod lifting;
+pub mod modules;
 pub mod partial;
 pub mod scopes;
 pub mod wasm;
+#[cfg(feature = "compile")]
+#[path = "wasm-link/mod.rs"]
+pub mod wasm_link;
 
 // ---------------------------------------------------------------------------
 // Pipeline — typed stage results enforce correct pass ordering.
@@ -52,8 +56,13 @@ pub struct LiftedCps {
 // --- Pipeline functions ---
 
 /// Parse source into a raw AST.
-pub fn parse<'src>(src: &'src str) -> Result<Ast<'src>, ast::parser::ParseError> {
-  let result = ast::parser::parse(src)?;
+///
+/// `url` is the module's stable identity — file path, "@fink/*" virtual URL,
+/// "<stdin>", "test", etc. It gets stored on the root `NodeKind::Module` so
+/// downstream passes (emitter in particular) can recover it without threading
+/// a separate parameter.
+pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::ParseError> {
+  let result = ast::parser::parse(src, url)?;
   Ok(Ast { result })
 }
 
@@ -77,7 +86,7 @@ pub fn lower<'src>(
   desugared: &'src DesugaredAst<'src>,
 ) -> Cps {
   let exprs = match &desugared.result.root.kind {
-    ast::NodeKind::Module(exprs) => &exprs.items,
+    ast::NodeKind::Module { exprs, .. } => &exprs.items,
     _ => panic!("lower: expected Module root"),
   };
   let result = cps::transform::lower_module(exprs, &desugared.scope);
@@ -111,7 +120,7 @@ pub fn emit_wasm<'src>(
   use wasm::{collect, dwarf, emit, link};
 
   let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
-  let module = collect::collect(&lifted.result.root, &ir_ctx);
+  let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
   let ir_ctx = ir_ctx.with_globals(module.globals.clone());
 
   let mut result = emit::emit(&module, &ir_ctx);

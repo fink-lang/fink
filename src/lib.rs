@@ -25,35 +25,63 @@ pub use passes::ast::parser;
 // ---------------------------------------------------------------------------
 
 /// Parse source → raw AST.
-pub fn to_ast(src: &str) -> Result<passes::Ast<'_>, String> {
-  passes::parse(src).map_err(|e| e.message)
+///
+/// `url` is the module's stable identity (file path, `"<stdin>"`, `"test"`,
+/// etc.). It's stored in the `Module` node so downstream passes — notably
+/// the WASM emitter — can recover it without a threaded parameter.
+pub fn to_ast<'src>(src: &'src str, url: &str) -> Result<passes::Ast<'src>, String> {
+  passes::parse(src, url).map_err(|e| e.message)
 }
 
 /// Parse + desugar → desugared AST with index and scopes.
-pub fn to_desugared(src: &str) -> Result<passes::DesugaredAst<'_>, String> {
-  let parsed = passes::parse(src).map_err(|e| e.message)?;
+pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::DesugaredAst<'src>, String> {
+  let parsed = passes::parse(src, url).map_err(|e| e.message)?;
   passes::desugar(parsed).map_err(|e| format!("{e:?}"))
 }
 
 /// Compile source → CPS IR (+ desugared AST for context).
-pub fn to_cps(src: &str) -> Result<(passes::Cps, passes::DesugaredAst<'_>), String> {
-  let desugared = to_desugared(src)?;
+pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::DesugaredAst<'src>), String> {
+  let desugared = to_desugared(src, url)?;
   let cps = passes::lower(&desugared);
   Ok((cps, desugared))
 }
 
 /// Compile source → lifted CPS IR (+ desugared AST for context).
-pub fn to_lifted(src: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'_>), String> {
-  let (cps, desugared) = to_cps(src)?;
+pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), String> {
+  let (cps, desugared) = to_cps(src, url)?;
   let lifted = passes::lift(cps, &desugared);
   Ok((lifted, desugared))
 }
 
 /// Compile source → WASM binary.
+///
+/// For callers that have a source string in hand and just want to compile
+/// it. Internally wraps the source in a one-entry `InMemorySourceLoader`
+/// and calls `compile_package`, so single-source and multi-source inputs
+/// share the same code path. A single-source program with no imports
+/// works identically to before; a single-source program that tries to
+/// import will get a clean error from the in-memory loader.
 #[cfg(feature = "compile")]
 pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
-  let (lifted, desugared) = to_lifted(src)?;
-  Ok(passes::emit_wasm(&lifted, &desugared, path, src))
+  use passes::modules::InMemorySourceLoader;
+  let mut loader = InMemorySourceLoader::single(path, src);
+  passes::wasm_link::compile_package(std::path::Path::new(path), &mut loader)
+}
+
+/// Compile a package rooted at `entry_path` to a linked WASM binary.
+///
+/// The multi-module compile entry point. `loader` is any `SourceLoader`
+/// implementation — typically `FileSourceLoader` for filesystem-backed
+/// compiles or `InMemorySourceLoader` for REPL/test scenarios.
+///
+/// For now this is a thin wrapper over the single-source pipeline —
+/// Slices 4+ extend it with the real multi-module behaviour.
+#[cfg(feature = "compile")]
+pub fn compile_package(
+  entry_path: &std::path::Path,
+  loader: &mut dyn passes::modules::SourceLoader,
+) -> Result<passes::Wasm, String> {
+  passes::wasm_link::compile_package(entry_path, loader)
 }
 
 /// Compile source → optimized WASM binary.

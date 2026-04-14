@@ -1459,6 +1459,17 @@
   ;;   rec_pop: (rec, key, fail, succ) → if missing: _apply([], fail)
   ;;                                     else: _apply([val, rest], succ)
 
+  ;; Direct-style rec field setter — used by the emitter for module import rec construction.
+  ;; Takes (rec, key, val) as (ref null any) and returns (ref null any).
+  ;; Avoids CPS overhead for compile-time-known field sets.
+  (func $rec_set_field (export "_rec_set_field")
+    (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any))
+    (result (ref null any))
+    (call $_rec_set
+      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref eq) (local.get $key))
+      (ref.cast (ref eq) (local.get $val))))
+
   (func $rec_set (export "rec_set")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))

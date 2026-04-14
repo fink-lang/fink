@@ -115,6 +115,15 @@ pub struct CpsResult {
   /// Downstream passes (formatter, WASM emitter) read this to distinguish
   /// param origins without reverse-engineering from call sites.
   pub param_info: crate::propgraph::PropGraph<CpsId, Option<ParamInfo>>,
+  /// Every module-level binding leaf: `(cps_id, source_name)` for each Ident
+  /// bound at module scope. Includes destructure leaves (e.g. `x` from
+  /// `{x} = ...`). The authoritative source of "which CpsIds become WASM
+  /// globals" — not all are exported (see `·ƒpub` for that).
+  pub module_locals: Vec<(CpsId, String)>,
+  /// Imports declared at module scope: url → [name, ...].
+  /// Collected from the AST before CPS lowering, so names are available even
+  /// after lifting scatters the rec_pop continuation chain into separate fns.
+  pub module_imports: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -290,9 +299,26 @@ pub enum BuiltIn {
   Read,
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
+  // Legacy: replaced by Pub for new CPS shape. TODO: remove.
   Export,
+  // Per-binding export — side effect that registers a name as public.
+  // Args: exported value, cont (no args — pure side effect).
+  // Emitted by lower_module after each module-level binding that is exported.
+  Pub,
   // Module import — `import './foo.fnk'` is a builtin function at module level.
   Import,
+  // Module entry point — the root App of every compiled module.
+  // `lower_module` emits `App(FinkModule, [Cont::Expr { args: [ƒret], body }])`
+  // as the CPS root. The module body is the cont's body, ending with a
+  // tail call to ƒret. At runtime, the host provides `fink_module` which
+  // invokes the cont with a done continuation.
+  FinkModule,
+  // Irrefutable-pattern failure sentinel. The compiler wires this in as the
+  // "fail continuation" at match sites with no alternative. At runtime it
+  // delegates through operators.wat → interop-rust.wat → host_panic, which
+  // traps the WASM instance. Zero args today; future work: pass a reason
+  // string / source location for diagnostics.
+  Panic,
 }
 
 impl BuiltIn {
@@ -392,7 +418,6 @@ pub type BindNode = Node<Bind>;
 pub enum ValKind {
   Ref(Ref),           // a reference to a binding (user name or compiler temp)
   Lit(Lit),     // a literal value
-  Panic,              // fail sentinel — irrefutable pattern failure (unreachable)
   ContRef(CpsId),     // reference to a continuation as a value (for fail args)
   BuiltIn(BuiltIn),   // a compiler-known op used as a value
 }

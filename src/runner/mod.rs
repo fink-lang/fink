@@ -45,6 +45,10 @@ pub fn run_source(
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
 /// Returns the exit code from main.
 ///
+/// For `.fnk` entries, constructs a `FileSourceLoader` and calls
+/// `compile_package` — this is the multi-module path, used by both
+/// `fink run` and any other filesystem-backed invocation.
+///
 /// `args` is the CLI argv passed to `main` — argv[0] is the program name.
 #[cfg(feature = "compile")]
 pub fn run_file(
@@ -60,8 +64,9 @@ pub fn run_file(
   }
 
   if path.ends_with(".fnk") {
-    let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    return run_source(opts, &src, path, args, stdin, stdout, stderr);
+    let mut loader = crate::passes::modules::FileSourceLoader::new();
+    let wasm = crate::compile_package(std::path::Path::new(path), &mut loader)?;
+    return wasmtime_runner::run(&opts, &wasm.binary, args, stdin, stdout, stderr);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
@@ -86,10 +91,12 @@ mod tests {
     None,
   }
 
-  /// Call a named export in a compiled WASM module and return the result.
-  /// This is test infrastructure — it calls a CPS function directly,
-  /// bypassing the IO protocol that _run_main uses.
-  fn exec_export(wasm: &[u8], export_name: &str) -> Result<TestResult, String> {
+  /// Bootstrap a fink module and return the init result.
+  ///
+  /// The module's `fink_module` export is a CPS function that takes [ƒret]
+  /// as its args. We create a done continuation that captures the result,
+  /// build [done] args, and call `_apply([done], fink_module_closure)`.
+  fn exec_module_init(wasm: &[u8]) -> Result<TestResult, String> {
     let mut config = Config::new();
     config.wasm_gc(true);
     config.wasm_tail_call(true);
@@ -115,12 +122,19 @@ mod tests {
 
     let instance = linker.instantiate(&mut store, &module).map_err(|e| e.to_string())?;
 
-    let test_fn = instance.get_func(&mut store, export_name)
-      .ok_or_else(|| format!("no '{}' export", export_name))?;
+    let fink_module = instance.get_func(&mut store, "fink_module")
+      .ok_or("no 'fink_module' export")?;
     let box_func = instance.get_func(&mut store, "_box_func")
       .ok_or("no '_box_func' export")?;
+    let apply = instance.get_func(&mut store, "_apply")
+      .ok_or("no '_apply' export")?;
 
-    // Create the "done" continuation — receives the result.
+    // Box fink_module as a $Closure.
+    let mut boxed_module = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(fink_module))], &mut boxed_module)
+      .map_err(|e| format!("_box_func(fink_module) failed: {}", e))?;
+
+    // Create the "done" continuation — receives the module init result.
     let result_val: Arc<Mutex<Option<TestResult>>> = Arc::new(Mutex::new(None));
     let result_clone = result_val.clone();
 
@@ -171,9 +185,10 @@ mod tests {
       Ok(())
     });
 
-    let mut box_result = [Val::AnyRef(None)];
-    box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut box_result)
-      .map_err(|e| format!("_box_func failed: {}", e))?;
+    // Box done as a $Closure and build args [done].
+    let mut boxed_done = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut boxed_done)
+      .map_err(|e| format!("_box_func(done) failed: {}", e))?;
 
     let list_nil = instance.get_func(&mut store, "_list_nil")
       .ok_or("no '_list_nil' export")?;
@@ -183,23 +198,246 @@ mod tests {
 
     let list_prepend = instance.get_func(&mut store, "_list_prepend")
       .ok_or("no '_list_prepend' export")?;
-    let mut args_with_cont = [Val::AnyRef(None)];
-    list_prepend.call(&mut store, &[box_result[0], nil[0]], &mut args_with_cont)
+    let mut args = [Val::AnyRef(None)];
+    list_prepend.call(&mut store, &[boxed_done[0], nil[0]], &mut args)
       .map_err(|e| format!("_list_prepend failed: {}", e))?;
 
-    test_fn.call(
-      &mut store,
-      &[Val::AnyRef(None), args_with_cont[0]],
-      &mut [],
-    ).map_err(|e| format!("{} failed: {}", export_name, e))?;
+    // _apply([done], fink_module_closure) — runs the module body.
+    apply.call(&mut store, &[args[0], boxed_module[0]], &mut [])
+      .map_err(|e| format!("module init failed: {}", e))?;
 
     Ok(result_val.lock().unwrap().take().unwrap_or(TestResult::None))
+  }
+
+  /// Bootstrap a multi-module package and return the entry module's init result.
+  ///
+  /// Discovers all `*:fink_module` dep init exports, calls them first (in
+  /// export order, which is BFS dependency order from compile_package), then
+  /// calls the entry `fink_module` with a done continuation that captures
+  /// the result.
+  ///
+  /// `dep_urls` lists the canonical URLs of dep modules in init order
+  /// (dependencies before their consumers).
+  fn exec_package(wasm: &[u8], dep_urls: &[&str]) -> Result<TestResult, String> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_tail_call(true);
+    config.wasm_function_references(true);
+
+    let engine = Engine::new(&config).map_err(|e| e.to_string())?;
+    let module = Module::new(&engine, wasm).map_err(|e| e.to_string())?;
+    let mut store = Store::new(&engine, ());
+
+    // Wire up host imports ("env" module) — trap with "not implemented".
+    let mut linker = Linker::new(&engine);
+    for import in module.imports() {
+      if import.module() == "env"
+        && let ExternType::Func(ft) = import.ty()
+      {
+        let name = import.name().to_string();
+        let err_name = name.clone();
+        linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+          Err(Error::msg(format!("host builtin '{}' not yet implemented", err_name)))
+        }).map_err(|e| e.to_string())?;
+      }
+    }
+    let instance = linker.instantiate(&mut store, &module).map_err(|e| e.to_string())?;
+
+    let box_func = instance.get_func(&mut store, "_box_func")
+      .ok_or("no '_box_func' export")?;
+    let apply = instance.get_func(&mut store, "_apply")
+      .ok_or("no '_apply' export")?;
+    let list_nil = instance.get_func(&mut store, "_list_nil")
+      .ok_or("no '_list_nil' export")?;
+    let list_prepend = instance.get_func(&mut store, "_list_prepend")
+      .ok_or("no '_list_prepend' export")?;
+    let fn2_stub = instance.get_func(&mut store, "_fn2_stub")
+      .ok_or("no '_fn2_stub' export")?;
+    let fn2_ty = fn2_stub.ty(&store);
+
+    // Initialize each dep module in order (deps before consumers).
+    for dep_url in dep_urls {
+      let export_name = format!("{}:fink_module", dep_url);
+      let dep_fink_module = instance.get_func(&mut store, &export_name)
+        .ok_or_else(|| format!("no '{}' export", export_name))?;
+
+      // Box the dep fink_module.
+      let mut boxed = [Val::AnyRef(None)];
+      box_func.call(&mut store, &[Val::FuncRef(Some(dep_fink_module))], &mut boxed)
+        .map_err(|e| format!("_box_func({}) failed: {}", export_name, e))?;
+
+      // No-op done continuation for dep init — we don't capture the result.
+      let noop = Func::new(&mut store, fn2_ty.clone(), |_caller, _params, _results| Ok(()));
+
+      let mut boxed_noop = [Val::AnyRef(None)];
+      box_func.call(&mut store, &[Val::FuncRef(Some(noop))], &mut boxed_noop)
+        .map_err(|e| format!("_box_func(noop) for {} failed: {}", dep_url, e))?;
+
+      let mut nil = [Val::AnyRef(None)];
+      list_nil.call(&mut store, &[], &mut nil)
+        .map_err(|e| format!("_list_nil failed: {}", e))?;
+
+      let mut args = [Val::AnyRef(None)];
+      list_prepend.call(&mut store, &[boxed_noop[0], nil[0]], &mut args)
+        .map_err(|e| format!("_list_prepend failed: {}", e))?;
+
+      apply.call(&mut store, &[args[0], boxed[0]], &mut [])
+        .map_err(|e| format!("{}:fink_module init failed: {}", dep_url, e))?;
+    }
+
+    // Now run the entry module and capture its result.
+    let fink_module = instance.get_func(&mut store, "fink_module")
+      .ok_or("no 'fink_module' export")?;
+    let mut boxed_module = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(fink_module))], &mut boxed_module)
+      .map_err(|e| format!("_box_func(fink_module) failed: {}", e))?;
+
+    let result_val: Arc<Mutex<Option<TestResult>>> = Arc::new(Mutex::new(None));
+    let result_clone = result_val.clone();
+
+    let done = Func::new(&mut store, fn2_ty.clone(), move |mut caller, params, _results| {
+      if let Some(Val::AnyRef(Some(args_list))) = params.get(1)
+        && let Ok(Some(cons)) = args_list.as_struct(&caller)
+        && let Ok(Val::AnyRef(Some(any_ref))) = cons.field(&mut caller, 0)
+      {
+        if let Ok(Some(i31)) = any_ref.as_i31(&caller) {
+          *result_clone.lock().unwrap() = Some(TestResult::Bool(i31.get_i32() != 0));
+        } else if let Ok(Some(struct_ref)) = any_ref.as_struct(&caller) {
+          if let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0) {
+            *result_clone.lock().unwrap() = Some(TestResult::Num(f64::from_bits(bits)));
+          }
+        }
+      }
+      Ok(())
+    });
+
+    let mut boxed_done = [Val::AnyRef(None)];
+    box_func.call(&mut store, &[Val::FuncRef(Some(done))], &mut boxed_done)
+      .map_err(|e| format!("_box_func(done) failed: {}", e))?;
+
+    let mut nil = [Val::AnyRef(None)];
+    list_nil.call(&mut store, &[], &mut nil)
+      .map_err(|e| format!("_list_nil failed: {}", e))?;
+
+    let mut args = [Val::AnyRef(None)];
+    list_prepend.call(&mut store, &[boxed_done[0], nil[0]], &mut args)
+      .map_err(|e| format!("_list_prepend failed: {}", e))?;
+
+    apply.call(&mut store, &[args[0], boxed_module[0]], &mut [])
+      .map_err(|e| format!("module init failed: {}", e))?;
+
+    Ok(result_val.lock().unwrap().take().unwrap_or(TestResult::None))
+  }
+
+  #[test]
+  fn multi_module_two_files_inline() {
+    // lib.fnk exports `double` (fn x: x * 2).
+    // entry.fnk imports double and returns double 21.
+    let lib_src = "double = fn x: x * 2";
+    let entry_src = "{double} = import './lib.fnk'\ndouble 21";
+
+    let mut loader = crate::passes::modules::InMemorySourceLoader::new();
+    loader.add("./lib.fnk", lib_src);
+    loader.add("./entry.fnk", entry_src);
+
+    let wasm = crate::compile_package(std::path::Path::new("./entry.fnk"), &mut loader)
+      .expect("compile_package failed");
+
+    match exec_package(&wasm.binary, &["./lib.fnk"]) {
+      Ok(TestResult::Num(v)) => {
+        assert_eq!(v, 42.0, "expected double(21) = 42, got {}", v);
+      }
+      Ok(_other) => panic!("expected Num(42), got non-numeric result"),
+      Err(e) => panic!("exec_package failed: {}", e),
+    }
+  }
+
+  #[test]
+  fn multi_module_diamond_shared_dep() {
+    // Diamond-shaped dep graph — verifies the linker handles a shared
+    // dependency correctly (i.e. common.fnk is compiled once and linked once
+    // even though both left.fnk and right.fnk import it).
+    //
+    //       entry
+    //      /     \
+    //   left     right
+    //      \     /
+    //       common
+    //
+    // common.fnk : base = 10
+    // left.fnk   : {base} = import './common.fnk' ; left_val = base + 1   (=11)
+    // right.fnk  : {base} = import './common.fnk' ; right_val = base + 2  (=12)
+    // entry.fnk  : imports left_val + right_val, returns left_val + right_val (=23)
+    let common_src = "base = 10";
+    let left_src = "{base} = import './common.fnk'\nleft_val = base + 1";
+    let right_src = "{base} = import './common.fnk'\nright_val = base + 2";
+    let entry_src =
+      "{left_val} = import './left.fnk'\n\
+       {right_val} = import './right.fnk'\n\
+       left_val + right_val";
+
+    let mut loader = crate::passes::modules::InMemorySourceLoader::new();
+    loader.add("./common.fnk", common_src);
+    loader.add("./left.fnk", left_src);
+    loader.add("./right.fnk", right_src);
+    loader.add("./entry.fnk", entry_src);
+
+    let wasm = crate::compile_package(std::path::Path::new("./entry.fnk"), &mut loader)
+      .expect("compile_package failed");
+
+    // Sanity: common.fnk must be exported exactly once — not duplicated.
+    let wat = wasmprinter::print_bytes(&wasm.binary).expect("wasmprinter failed");
+    let common_export_count = wat.matches("\"./common.fnk:fink_module\"").count();
+    assert_eq!(
+      common_export_count, 1,
+      "common.fnk should be linked exactly once, found {} fink_module exports",
+      common_export_count,
+    );
+
+    // Init order: common before its consumers (left/right), then entry.
+    // BFS from entry discovers left, right (level 1), then common (level 2),
+    // but we need providers before consumers at runtime, so flip to:
+    // common → left → right → entry.
+    let dep_urls = ["./common.fnk", "./left.fnk", "./right.fnk"];
+    match exec_package(&wasm.binary, &dep_urls) {
+      Ok(TestResult::Num(v)) => {
+        assert_eq!(v, 23.0, "expected left_val(11) + right_val(12) = 23, got {}", v);
+      }
+      Ok(_other) => panic!("expected Num(23), got non-numeric result"),
+      Err(e) => panic!("exec_package failed: {}", e),
+    }
+  }
+
+  #[test]
+  fn multi_module_file_loader() {
+    // Test the FileSourceLoader path with the test_modules directory.
+    // entry.fnk: {foo} = import './foobar/spam.fnk' \n shrub = fn ham: foo ham
+    // spam.fnk:  foo = fn ni: ni * 2
+    let entry_path = std::path::Path::new(
+      concat!(env!("CARGO_MANIFEST_DIR"), "/src/runner/test_modules/entry.fnk"),
+    );
+    let mut loader = crate::passes::modules::FileSourceLoader::new();
+    let wasm = crate::compile_package(entry_path, &mut loader)
+      .expect("compile_package from filesystem failed");
+
+    // The binary should be valid WASM.
+    assert!(wasm.binary.starts_with(b"\0asm"), "not a valid WASM binary");
+
+    // Both fink_module exports should be present.
+    let wat = wasmprinter::print_bytes(&wasm.binary)
+      .expect("wasmprinter failed");
+    assert!(wat.contains("\"fink_module\""), "missing entry fink_module export");
+    assert!(
+      wat.contains("\"./foobar/spam.fnk:fink_module\""),
+      "missing dep fink_module export — got wat:\n{}",
+      wat,
+    );
   }
 
   #[allow(unused)]
   fn run(src: &str) -> String {
     let wasm = crate::to_wasm(src, "test").expect("compilation failed");
-    match exec_export(&wasm.binary, "test_main") {
+    match exec_module_init(&wasm.binary) {
       Ok(TestResult::Num(v)) => {
         if v == v.floor() && v.abs() < 1e15 {
           format!("{}", v as i64)
@@ -214,9 +452,46 @@ mod tests {
     }
   }
 
+  /// Hybrid SourceLoader for `run_main`:
+  ///
+  /// - The inline test source lives at a synthetic path
+  ///   `<CARGO_MANIFEST_DIR>/src/runner/__test_entry.fnk`.
+  /// - Any imports (e.g. `import './test_modules/entry.fnk'`) resolve
+  ///   relative to that synthetic path's parent — i.e. `src/runner/` —
+  ///   via `FileSourceLoader`, which picks up real files from disk.
+  ///
+  /// This lets `.fnk` runner tests exercise the full multi-module
+  /// compile pipeline from inline source without needing to write the
+  /// entry module out to a real file first.
+  struct RunMainLoader {
+    entry_abs_path: std::path::PathBuf,
+    entry_source: String,
+    disk: crate::passes::modules::FileSourceLoader,
+  }
+
+  impl crate::passes::modules::SourceLoader for RunMainLoader {
+    fn load(&mut self, path: &std::path::Path) -> Result<String, String> {
+      if path == self.entry_abs_path {
+        Ok(self.entry_source.clone())
+      } else {
+        self.disk.load(path)
+      }
+    }
+  }
+
   #[allow(unused)]
   fn run_main(src: &str) -> String {
-    let wasm = crate::to_wasm(src, "test").expect("compilation failed");
+    let entry_abs_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("src/runner/__test_entry.fnk");
+    let mut loader = RunMainLoader {
+      entry_abs_path: entry_abs_path.clone(),
+      entry_source: src.to_string(),
+      disk: crate::passes::modules::FileSourceLoader::new(),
+    };
+    let wasm = match crate::compile_package(&entry_abs_path, &mut loader) {
+      Ok(w) => w,
+      Err(e) => return format!("ERROR: compile: {e}"),
+    };
     let stdin_buf: IoReadStream = Arc::new(Mutex::new(std::io::Cursor::new(b"hello from stdin".to_vec())));
     let stdout_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let stderr_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
@@ -275,4 +550,5 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_errors.fnk");
   test_macros::include_fink_tests!("src/runner/test_fn_match.fnk");
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk");
+  test_macros::include_fink_tests!("src/runner/test_modules.fnk");
 }

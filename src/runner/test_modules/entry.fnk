@@ -1,0 +1,4 @@
+{foo} = import './foobar/spam.fnk'
+
+shrub = fn ham:
+  foo ham

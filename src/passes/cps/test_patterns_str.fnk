@@ -1,4 +1,4 @@
-{test, skip, expect, equals, cps_expr} = import 'fake!'
+{test, skip, expect, equals, cps_module} = import 'fake!'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -7,100 +7,111 @@ string template patterns
 ---
 
 test 'str templ pattern: capture all', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     '${foo}' = val
   | equals ƒink:
-    ·fn
-      fn ·v_6:
-        ·let ·v_6, fn ·foo_0:
-          ·v_1 ·foo_0
-      fn ·v_20:
-        ·fn
-          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-            ·str_match ·v_3, '', '', ·ƒfail_5, fn ·v_6:
-              ·ƒsucc_4 ·v_6
-          fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyR7Zm9vfScgPSB2YWwiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSTtJQUFHLEFBQUEsS0FBSCxJLEtBQUcsTTtNLEEsS0FBQTtLQUFILEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLFdBQUEsSSxFQUFBLEEsQ0FBQSxBLEMsRUFBQSxBLENBQUEsQSxDLEUsUSxLQUFBLEk7VUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVciCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·v_6:
+          ·let ·v_6, fn ·foo_0:
+            ·ƒret_1 ·foo_0
+        fn ·v_20:
+          ·fn
+            fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+              ·str_match ·v_3, '', '', ·ƒfail_5, fn ·v_6:
+                ·ƒsucc_4 ·v_6
+            fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyR7Zm9vfScgPSB2YWwiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsSTtNQUFHLEFBQUEsS0FBSCxJLEtBQUcsTTtRLEEsUUFBQTtPQUFILEs7TUFBQSxBQUFBO1csVSxVQUFBLEk7VUFBQSxBQUFBLFdBQUEsSSxFQUFBLEEsQ0FBQSxBLEMsRUFBQSxBLENBQUEsQSxDLEUsUSxLQUFBLEk7WUFBQSxBLFNBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQVciCn0=
 
 test 'str templ pattern: prefix and suffix', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     'foo${bar}spam' = val
   | equals ƒink:
-    ·fn
-      fn ·v_6:
-        ·let ·v_6, fn ·bar_0:
-          ·v_1 ·bar_0
-      fn ·v_20:
-        ·fn
-          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-            ·str_match ·v_3, 'foo', 'spam', ·ƒfail_5, fn ·v_6:
-              ·ƒsucc_4 ·v_6
-          fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2ZvbyR7YmFyfXNwYW0nID0gdmFsIl0sCiAgIm1hcHBpbmdzIjogIkFBQUEsQUFBQTtLQUFBLEk7SUFBTSxBQUFBLEtBQU4sSSxLQUFNLE07TSxBLEtBQUE7S0FBTixLO0lBQUEsQUFBQTtTLFUsVUFBQSxJO1FBQUEsQUFBQSxXQUFBLEksRUFBQSxBLENBQUEsRyxDLEVBQUEsQSxDQUFBLEksQyxFLFEsS0FBQSxJO1VBQUEsQSxTQUFBO1NBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFrQiIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·v_6:
+          ·let ·v_6, fn ·bar_0:
+            ·ƒret_1 ·bar_0
+        fn ·v_20:
+          ·fn
+            fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+              ·str_match ·v_3, 'foo', 'spam', ·ƒfail_5, fn ·v_6:
+                ·ƒsucc_4 ·v_6
+            fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2ZvbyR7YmFyfXNwYW0nID0gdmFsIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQTtPQUFBLEk7TUFBTSxBQUFBLEtBQU4sSSxLQUFNLE07USxBLFFBQUE7T0FBTixLO01BQUEsQUFBQTtXLFUsVUFBQSxJO1VBQUEsQUFBQSxXQUFBLEksRUFBQSxBLENBQUEsRyxDLEVBQUEsQSxDQUFBLEksQyxFLFEsS0FBQSxJO1lBQUEsQSxTQUFBO1dBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEVBQUEsTSxFQUFrQiIKfQ==
 
 test 'str templ pattern: capture at start', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     '${foo}bar' = val
   | equals ƒink:
-    ·fn
-      fn ·v_6:
-        ·let ·v_6, fn ·foo_0:
-          ·v_1 ·foo_0
-      fn ·v_20:
-        ·fn
-          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-            ·str_match ·v_3, '', 'bar', ·ƒfail_5, fn ·v_6:
-              ·ƒsucc_4 ·v_6
-          fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyR7Zm9vfWJhcicgPSB2YWwiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSTtJQUFHLEFBQUEsS0FBSCxJLEtBQUcsTTtNLEEsS0FBQTtLQUFILEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLFdBQUEsSSxFQUFBLEEsQ0FBQSxBLEMsRUFBQSxBLENBQUEsRyxDLEUsUSxLQUFBLEk7VUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQWMiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·v_6:
+          ·let ·v_6, fn ·foo_0:
+            ·ƒret_1 ·foo_0
+        fn ·v_20:
+          ·fn
+            fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+              ·str_match ·v_3, '', 'bar', ·ƒfail_5, fn ·v_6:
+                ·ƒsucc_4 ·v_6
+            fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyR7Zm9vfWJhcicgPSB2YWwiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsSTtNQUFHLEFBQUEsS0FBSCxJLEtBQUcsTTtRLEEsUUFBQTtPQUFILEs7TUFBQSxBQUFBO1csVSxVQUFBLEk7VUFBQSxBQUFBLFdBQUEsSSxFQUFBLEEsQ0FBQSxBLEMsRUFBQSxBLENBQUEsRyxDLEUsUSxLQUFBLEk7WUFBQSxBLFNBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQWMiCn0=
 
 test 'str templ pattern: capture at end', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     'foo${bar}' = val
   | equals ƒink:
-    ·fn
-      fn ·v_6:
-        ·let ·v_6, fn ·bar_0:
-          ·v_1 ·bar_0
-      fn ·v_20:
-        ·fn
-          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-            ·str_match ·v_3, 'foo', '', ·ƒfail_5, fn ·v_6:
-              ·ƒsucc_4 ·v_6
-          fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2ZvbyR7YmFyfScgPSB2YWwiXSwKICAibWFwcGluZ3MiOiAiQUFBQSxBQUFBO0tBQUEsSTtJQUFNLEFBQUEsS0FBTixJLEtBQU0sTTtNLEEsS0FBQTtLQUFOLEs7SUFBQSxBQUFBO1MsVSxVQUFBLEk7UUFBQSxBQUFBLFdBQUEsSSxFQUFBLEEsQ0FBQSxHLEMsRUFBQSxBLENBQUEsQSxDLEUsUSxLQUFBLEk7VUFBQSxBLFNBQUE7U0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQWMiCn0=
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·v_6:
+          ·let ·v_6, fn ·bar_0:
+            ·ƒret_1 ·bar_0
+        fn ·v_20:
+          ·fn
+            fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+              ·str_match ·v_3, 'foo', '', ·ƒfail_5, fn ·v_6:
+                ·ƒsucc_4 ·v_6
+            fn ·v_15: ·v_15 ·v_20, ·panic, ·∅val
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2ZvbyR7YmFyfScgPSB2YWwiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsSTtNQUFNLEFBQUEsS0FBTixJLEtBQU0sTTtRLEEsUUFBQTtPQUFOLEs7TUFBQSxBQUFBO1csVSxVQUFBLEk7VUFBQSxBQUFBLFdBQUEsSSxFQUFBLEEsQ0FBQSxHLEMsRUFBQSxBLENBQUEsQSxDLEUsUSxLQUFBLEk7WUFBQSxBLFNBQUE7V0FBQSxLLEVBQUEsQUFBQSxNQUFBLEssRUFBQSxNLEVBQWMiCn0=
 
 test 'str templ pattern: match arm', fn:
-  expect cps_expr ƒink:
+  expect cps_module ƒink:
     match val:
       'foo${x}bar': x
       _: 0
   | equals ƒink:
-    ·fn
-      fn ·ƒret_21, ·x_0: ·ƒret_21 ·x_0
-      fn ·v_25:
-        ·fn
-          fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-            ·fn
-              fn ·v_10:
-                ·let ·v_10, fn ·x_0:
-                  ·v_25 ·ƒsucc_4, ·v_10
-              fn ·v_32:
-                ·fn
-                  fn ·ƒsucc_8, ·ƒfail_9, ·v_7:
-                    ·str_match ·v_7, 'foo', 'bar', ·ƒfail_9, fn ·v_10:
-                      ·ƒsucc_8 ·v_10
-                  fn ·v_19: ·v_19 ·v_32, ·ƒfail_5, ·v_3
-          fn ·v_39:
-            ·fn
-              fn ·ƒret_44: ·ƒret_44 0
-              fn ·v_48:
-                ·fn
-                  fn ·ƒsucc_41, ·ƒfail_42, ·v_40: ·v_48 ·ƒsucc_41
-                  fn ·v_53:
-                    ·fn
-                      fn ·ƒret_55, ·v_54:
-                        ·v_39 ·ƒret_55, fn:
-                          ·v_53 ·ƒret_55, fn: ·panic _, ·v_54, ·v_54
-                      fn ·v_66: ·v_66 ·v_1, ·∅val
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggdmFsOlxuICAnZm9vJHt4fWJhcic6IHhcbiAgXzogMCJdLAogICJtYXBwaW5ncyI6ICJBQUNFLEFBQUE7SyxVQUFNLEksRSxBLFNBQVE7S0FBZCxLO0lBQUEsQUFBQTtTLFUsVSxJO1FBQUEsQUFBQTthQUFBLEs7WUFBTSxBQUFBLEtBQU4sSyxLQUFNLEk7Y0FBTixBQUFBLE0sUSxFQUFBO2FBQUEsSztZQUFBLEFBQUE7aUIsVSxVQUFBLEk7Z0JBQUEsQUFBQSxXQUFBLEksRUFBQSxBLENBQUEsRyxDLEVBQUEsQSxDQUFBLEcsQyxFLFEsS0FBQSxLO2tCQUFBLEEsU0FBQTtpQkFBQSxLLEVBQUEsQUFBQSxNQUFBLEssRSxRLEVBQUE7U0FBQSxLO1FBQ0EsQUFBQTthLFEsRSxBLFNBQUc7YUFBSCxLO1lBQUEsQUFBQTtpQixXLFcsSyxFQUFBLEFBQUEsTTtpQkFBQSxLO2dCQUZGLEFBQUE7cUIsVUFBQSxLO29CQUFBLEFBQUEsTSxRLEUsRTtzQkFBQSxBQUFBLE0sUSxFLEUsRUFBQSxBQUFBLE9BQUEsQyxFQUFBLEssRUFBQTtxQkFBQSxLLEVBQUEsQUFBQSxNLEksRUFBTSIKfQ==
+    ·ƒink_module fn ·ƒret_1:
+      ·fn
+        fn ·ƒret_21, ·x_0: ·ƒret_21 ·x_0
+        fn ·v_25:
+          ·fn
+            fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
+              ·fn
+                fn ·v_10:
+                  ·let ·v_10, fn ·x_0:
+                    ·v_25 ·ƒsucc_4, ·v_10
+                fn ·v_32:
+                  ·fn
+                    fn ·ƒsucc_8, ·ƒfail_9, ·v_7:
+                      ·str_match ·v_7, 'foo', 'bar', ·ƒfail_9, fn ·v_10:
+                        ·ƒsucc_8 ·v_10
+                    fn ·v_19: ·v_19 ·v_32, ·ƒfail_5, ·v_3
+            fn ·v_39:
+              ·fn
+                fn ·ƒret_44: ·ƒret_44 0
+                fn ·v_48:
+                  ·fn
+                    fn ·ƒsucc_41, ·ƒfail_42, ·v_40: ·v_48 ·ƒsucc_41
+                    fn ·v_53:
+                      ·fn
+                        fn ·ƒret_55, ·v_54:
+                          ·v_39
+                            ·ƒret_55
+                            fn:
+                              ·v_53
+                                ·ƒret_55
+                                fn: ·panic _
+                                ·v_54
+                            ·v_54
+                        fn ·v_65: ·v_65 ·ƒret_1, ·∅val
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWF0Y2ggdmFsOlxuICAnZm9vJHt4fWJhcic6IHhcbiAgXzogMCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUNFLEFBQUE7TyxVQUFNLEksRSxBLFNBQVE7T0FBZCxLO01BQUEsQUFBQTtXLFUsVSxJO1VBQUEsQUFBQTtlQUFBLEs7Y0FBTSxBQUFBLEtBQU4sSyxLQUFNLEk7Z0JBQU4sQUFBQSxNLFEsRUFBQTtlQUFBLEs7Y0FBQSxBQUFBO21CLFUsVUFBQSxJO2tCQUFBLEFBQUEsV0FBQSxJLEVBQUEsQSxDQUFBLEcsQyxFQUFBLEEsQ0FBQSxHLEMsRSxRLEtBQUEsSztvQkFBQSxBLFNBQUE7bUJBQUEsSyxFQUFBLEFBQUEsTUFBQSxLLEUsUSxFQUFBO1dBQUEsSztVQUNBLEFBQUE7ZSxRLEUsQSxTQUFHO2VBQUgsSztjQUFBLEFBQUE7bUIsVyxXLEssRUFBQSxBQUFBLE07bUJBQUEsSztrQkFGRixBQUFBO3VCLFVBQUEsSztzQkFBQSxBQUFBO3dCOzBCOzBCQUFBLEFBQUE7NEI7OEIsRUFBQSxBQUFBLE9BQUE7NEJBQUE7d0JBQUE7dUJBQUEsSyxFQUFBLEFBQUEsTSxPLEVBQU0iCn0=

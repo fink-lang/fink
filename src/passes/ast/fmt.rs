@@ -94,7 +94,7 @@ fn is_atom(node: &Node) -> bool {
 }
 
 fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
-  if !matches!(node.kind, NodeKind::Module(_)) { out.mark(node.loc); }
+  if !matches!(node.kind, NodeKind::Module { .. }) { out.mark(node.loc); }
   match &node.kind {
     NodeKind::LitBool(v) => out.push_str(if *v { "true" } else { "false" }),
     NodeKind::LitInt(s) => out.push_str(s),
@@ -245,7 +245,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
-    NodeKind::Module(exprs) => {
+    NodeKind::Module { exprs, .. } => {
       for (i, child) in exprs.items.iter().enumerate() {
         if i > 0 { out.push('\n'); ind(out, depth); }
         fmt_node(child, out, depth);
@@ -445,6 +445,33 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
     .map(|i| i + 1).unwrap_or(0);
   let (plain, trailing) = args.split_at(trailing_start);
 
+  // Bail-out: if a non-last arg in `plain` is fn or multiline, inline
+  // "..., next_arg" rendering would corrupt the output — the multiline arg's
+  // tail line would absorb subsequent `, next_arg` tokens. Force full block
+  // mode: every arg on its own indented line.
+  //
+  // This happens when CPS emits cont-first user calls: `·add_0 fn v_25: <body>, 1, 2`
+  // where the fn arg precedes Val args. The wrong rendering used to produce
+  // `·add_0 fn v_25: <body>, 1, 2` glued into the fn's last line; now every
+  // arg goes on its own line.
+  //
+  // A multiline arg at the *end* of plain is fine (e.g. `log 'foo\n  bar'`) —
+  // nothing follows it to corrupt.
+  let has_bad_inline = plain.len() >= 2 && plain[..plain.len() - 1]
+    .iter().any(|a| is_fn(a) || is_multiline(a));
+  if has_bad_inline {
+    for arg in args {
+      out.push('\n');
+      ind(out, depth + 1);
+      if let NodeKind::Fn { params, sep, body } = &arg.kind {
+        fmt_fn_with_inline(params, sep, &body.items, out, depth + 1, true);
+      } else {
+        fmt_node(arg, out, depth + 1);
+      }
+    }
+    return;
+  }
+
   // First plain arg: space separator; rest: ", "
   for (i, arg) in plain.iter().enumerate() {
     if i == 0 { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
@@ -563,7 +590,7 @@ mod tests {
   use crate::parser::parse;
 
   fn fmt(src: &str) -> String {
-    let result = parse(src).expect("parse failed");
+    let result = parse(src, "test").expect("parse failed");
     ast_fmt(&result.root)
   }
 
@@ -614,7 +641,7 @@ mod tests {
 
   /// Parse source, format with source map, return mappings as (out_line, out_col, src_line, src_col).
   fn mappings(src: &str) -> Vec<(u32, u32, u32, u32)> {
-    let result = parse(src).expect("parse failed");
+    let result = parse(src, "test.fnk").expect("parse failed");
     let (_, srcmap) = fmt_mapped(&result.root, "test.fnk");
     srcmap.iter().collect()
   }

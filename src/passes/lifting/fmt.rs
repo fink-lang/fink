@@ -44,7 +44,15 @@ struct FmtCtx<'a, 'src> {
 pub fn fmt_flat(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
   let fc = FmtCtx { ctx };
   let stmts = collect_stmts(expr, &fc);
-  let module = Node::new(NodeKind::Module(Exprs { items: stmts, seps: vec![] }), dummy_loc());
+  let module = Node::new(
+    NodeKind::Module {
+      exprs: Exprs { items: stmts, seps: vec![] },
+      // Synthetic: this AST is reconstructed from lifted CPS for display only,
+      // the URL isn't meaningful here.
+      url: String::new(),
+    },
+    dummy_loc(),
+  );
   fmt_ast(&module)
 }
 
@@ -150,12 +158,13 @@ fn render_synth_name(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
 fn render_synth_fallback(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> String {
   if let Some(bk) = fc.ctx.bind_kinds
     && let Some(Some(kind)) = bk.try_get(cps_id) {
-      return match kind {
-        Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
-        Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
-        Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
-        _ => format!("·v_{}", cps_id.0),
-      };
+    return match kind {
+      Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
+      Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
+      Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
+      Bind::SynthName => render_synth_name(cps_id, fc),
+      Bind::Synth => format!("·v_{}", cps_id.0),
+    };
   }
   format!("·v_{}", cps_id.0)
 }
@@ -273,9 +282,20 @@ fn render_param_with_info(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
 fn render_val(val: &Val, fc: &FmtCtx<'_, '_>) -> Node<'static> {
   match &val.kind {
     ValKind::Lit(lit) => lit_node(lit),
-    ValKind::Ref(Ref::Synth(bind_id))      => ident(&render_synth_name(*bind_id, fc)),
+    ValKind::Ref(Ref::Synth(bind_id))      => {
+      // Only use AST origin names for SynthName binds (source-level names).
+      // Plain Synth binds (compiler temps like op_eq results) render as ·v_N.
+      let is_synth_name = fc.ctx.bind_kinds
+        .and_then(|bk| bk.try_get(*bind_id))
+        .and_then(|o| *o)
+        .is_some_and(|k| matches!(k, Bind::SynthName));
+      if is_synth_name {
+        ident(&render_synth_name(*bind_id, fc))
+      } else {
+        ident(&render_synth_fallback(*bind_id, fc))
+      }
+    }
     ValKind::Ref(Ref::Unresolved(_)) => ident(&render_unresolved_name(val.id, fc)),
-    ValKind::Panic           => ident("panic"),
     ValKind::ContRef(id)     => ident(&render_synth_fallback(*id, fc)),
     ValKind::BuiltIn(op)     => ident(&render_builtin_flat(op)),
   }
@@ -422,6 +442,19 @@ fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) 
           collect_into(body.as_ref(), fc, out);
           return;
         }
+      // ·ƒpub is a side-effect statement: render as `·ƒpub val` then
+      // continue with the cont body as sequential statements.
+      if matches!(func, Callable::BuiltIn(BuiltIn::Pub))
+        && let Some((value_args, Cont::Expr { body, .. })) = split_trailing_cont(args) {
+          let func_node = ident(&render_builtin_flat(&BuiltIn::Pub));
+          let arg_nodes: Vec<Node<'static>> = value_args.iter().map(|a| match a {
+            Arg::Val(v) => render_val(v, fc),
+            _ => ident("_"),
+          }).collect();
+          out.push(apply_node(func_node, arg_nodes));
+          collect_into(body.as_ref(), fc, out);
+          return;
+        }
       out.push(render_app(func, args, fc));
     }
 
@@ -429,7 +462,7 @@ fn collect_into(expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<Node<'static>>) 
       let cond_node  = render_val(cond, fc);
       let then_stmts = collect_stmts(then, fc);
       let else_stmts = collect_stmts(else_, fc);
-      out.push(apply_node(ident("if"), vec![
+      out.push(apply_node(ident("·if"), vec![
         cond_node,
         fn_node(vec![], then_stmts),
         fn_node(vec![], else_stmts),
@@ -444,7 +477,7 @@ fn collect_cont_into(cont: &Cont, bound: &str, fc: &FmtCtx<'_, '_>, out: &mut Ve
   match cont {
     Cont::Expr { body, .. } => collect_into(body, fc, out),
     Cont::Ref(id) => {
-      out.push(apply_node(ident(&format!("·v_{}", id.0)), vec![ident(bound)]));
+      out.push(apply_node(ident(&render_synth_fallback(*id, fc)), vec![ident(bound)]));
     }
   }
 }
@@ -621,7 +654,7 @@ fn fmt_node(node: &Node, out: &mut String, depth: usize) {
       fmt_node(rhs, out, depth);
     }
     NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
-    NodeKind::Module(exprs) => {
+    NodeKind::Module { exprs, .. } => {
       for (i, child) in exprs.items.iter().enumerate() {
         if i > 0 { out.push_str("\n\n"); ind(out, depth); }
         fmt_node(child, out, depth);

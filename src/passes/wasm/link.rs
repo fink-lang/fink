@@ -119,40 +119,143 @@ pub fn link(inputs: &[LinkInput]) -> LinkResult {
         .map(|input| parse_fragment(&input.module_name, &input.wasm))
         .collect();
 
+    // Compute per-fragment string-data base offsets.
+    //
+    // Every fragment emits its own string intern table as an active data
+    // segment starting at linear memory offset 0. When N fragments are
+    // linked into one binary, they'd all claim offset 0 and overlap, so
+    // earlier fragments' string literals get clobbered by later ones.
+    //
+    // To fix this, each fragment's data segment gets shifted to its own
+    // base offset — the running sum of preceding fragments' data sizes —
+    // and every `(i32.const offset)` argument to `call $str` in that
+    // fragment's code body gets rewritten to `(i32.const (offset + base))`.
+    //
+    // The assumption: each fragment has at most one active data segment
+    // targeting memory 0. That's the current emitter invariant; if a
+    // fragment ever emits multiple data segments this logic needs to
+    // grow per-segment offsets instead of per-fragment.
+    let data_base_offsets: Vec<u32> = {
+        let mut offsets = Vec::with_capacity(fragments.len());
+        let mut running: u32 = 0;
+        for frag in &fragments {
+            offsets.push(running);
+            for (_mem, _off, data) in &frag.data_segments {
+                running = running.saturating_add(data.len() as u32);
+            }
+        }
+        offsets
+    };
+
+    // Find each fragment's local function index for the `@fink/runtime.str`
+    // import, if present. This is what the peephole rewriter in `rewrite_body`
+    // uses to identify `call $str` sites — only `I32Const` arguments to such
+    // calls get shifted by the fragment's base offset.
+    let str_import_indices: Vec<Option<u32>> = fragments.iter().map(|frag| {
+        let mut func_import_idx: u32 = 0;
+        let mut found = None;
+        for import in &frag.imports {
+            if import.func_type_idx.is_some() {
+                if import.module == "@fink/runtime" && import.name == "str" {
+                    found = Some(func_import_idx);
+                    break;
+                }
+                func_import_idx += 1;
+            }
+        }
+        found
+    }).collect();
+
     let mut ctx = LinkContext::new();
+    ctx.data_base_offsets = data_base_offsets;
+    ctx.str_import_indices = str_import_indices;
 
     // Step 1: Merge types from all fragments.
     merge_types(&mut ctx, &fragments);
 
-    // Step 2: Merge functions — resolve @fink/ imports, assign indices.
+    // Step 2a: Assign output global indices to dependency fragments eagerly.
+    // This must happen before merge_global_imports so that cross-fragment
+    // global imports (e.g. `(import "./foo.fnk" "bar" (global ...))`) can
+    // be resolved to the dependency's already-assigned global indices rather
+    // than being left as external (unresolved) imports in the output.
+    assign_dep_globals(&mut ctx, &fragments);
+
+    // Step 2b: Collect external global imports — for each non-@fink/ global
+    // import, check if it resolves to a dep fragment's exported global. If so,
+    // remap directly (no external import emitted). Otherwise, preserve as an
+    // external import in the output.
+    merge_global_imports(&mut ctx, &fragments);
+
+    // Step 3: Merge functions — resolve @fink/ imports, assign indices.
     merge_functions(&mut ctx, &fragments);
 
-    // Step 3: Merge code — rewrite index references.
+    // Step 4: Merge code — rewrite index references.
     merge_code(&mut ctx, &fragments);
 
-    // Step 4: Merge globals.
+    // Step 5: Merge defined globals (skips dep fragments already processed in step 2a).
     merge_globals(&mut ctx, &fragments);
 
-    // Step 5: Merge exports (strip @fink/ internal imports from output).
+    // Step 6: Merge exports (strip @fink/ internal imports from output).
     merge_exports(&mut ctx, &fragments);
 
-    // Step 6: Collect memory and data sections from fragments.
-    for frag in &fragments {
+    // Step 7: Collect memory and data sections from fragments.
+    // Each fragment's data segment gets placed at its computed base offset
+    // so that the intern tables don't overlap in linear memory. We synthesise
+    // a new `(i32.const <base>)` offset expression for each segment.
+    for (i, frag) in fragments.iter().enumerate() {
         if let Some(mem) = &frag.memory {
             ctx.memory = Some(*mem);
         }
-        ctx.data_segments.extend(frag.data_segments.iter().cloned());
+        let base = ctx.data_base_offsets[i];
+        for (mem_idx, _old_offset_bytes, data) in &frag.data_segments {
+            let new_offset_bytes = encode_i32_const_offset(base);
+            ctx.data_segments.push((*mem_idx, new_offset_bytes, data.clone()));
+        }
     }
 
-    // Step 7: Emit final module.
+    // Step 8: Emit final module.
     emit_module(&ctx)
 }
 
+/// Encode an `(i32.const N) end` const-expression for a data segment offset.
+/// Uses signed LEB128 for the value.
+fn encode_i32_const_offset(value: u32) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(6);
+    bytes.push(0x41); // i32.const opcode
+    leb128_signed(value as i64, &mut bytes);
+    bytes.push(0x0b); // end opcode
+    bytes
+}
 
-/// Whether a module is the user code fragment (not a runtime library module).
+/// Encode a signed value as LEB128.
+fn leb128_signed(mut value: i64, out: &mut Vec<u8>) {
+    loop {
+        let mut byte = (value & 0x7f) as u8;
+        value >>= 7;
+        let sign_bit_set = byte & 0x40 != 0;
+        let done = (value == 0 && !sign_bit_set) || (value == -1 && sign_bit_set);
+        if !done {
+            byte |= 0x80;
+        }
+        out.push(byte);
+        if done { break; }
+    }
+}
+
+
+/// Whether a module is the entry user code fragment (not a runtime library module).
 /// User code keeps original names (no namespace prefix) and owns DWARF info.
 fn is_user_module(module_name: &str) -> bool {
     module_name.is_empty() || module_name == "@fink/user"
+}
+
+/// Whether a module is a fink dependency fragment (compiled fink module that
+/// provides exports to the entry module). These are non-runtime, non-entry
+/// fink modules — their `module_name` is a URL like `"./foo.fnk"`.
+fn is_dep_module(module_name: &str) -> bool {
+    !module_name.is_empty()
+        && module_name != "@fink/user"
+        && !module_name.starts_with("@fink/")
 }
 
 // -- Parsed representation ----------------------------------------------------
@@ -166,6 +269,8 @@ struct ParsedImport {
     /// For func imports: the type index in the fragment's type space.
     /// Used to re-emit non-@fink/ imports in the linked output.
     func_type_idx: Option<u32>,
+    /// True if this is a global import (not a function import).
+    is_global: bool,
 }
 
 /// Exported item from a fragment.
@@ -207,6 +312,8 @@ struct ParsedFragment {
     imports: Vec<ParsedImport>,
     /// Number of imported functions (offsets defined function indices).
     import_func_count: u32,
+    /// Number of imported globals (offsets defined global indices).
+    import_global_count: u32,
     /// Function declarations: type index per defined function.
     func_type_indices: Vec<u32>,
     /// Code body ranges into `wasm` — (start, end) per defined function.
@@ -239,6 +346,7 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
         type_section_bytes: None,
         imports: Vec::new(),
         import_func_count: 0,
+        import_global_count: 0,
         func_type_indices: Vec::new(),
         code_body_ranges: Vec::new(),
         exports: Vec::new(),
@@ -293,10 +401,12 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                         wasmparser::Imports::Single(_, import) => {
                             let is_fink =
                                 import.module.starts_with("@fink/");
+                            let is_global = matches!(import.ty, wasmparser::TypeRef::Global(_));
                             let func_type_idx = if let wasmparser::TypeRef::Func(idx) = import.ty {
                                 frag.import_func_count += 1;
                                 Some(idx)
                             } else {
+                                if is_global { frag.import_global_count += 1; }
                                 None
                             };
                             frag.imports.push(ParsedImport {
@@ -304,6 +414,7 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                                 name: import.name.to_string(),
                                 is_fink,
                                 func_type_idx,
+                                is_global,
                             });
                         }
                         wasmparser::Imports::Compact1 {
@@ -313,10 +424,12 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                             for item in items.into_iter().flatten() {
                                 let is_fink =
                                     mod_name.starts_with("@fink/");
+                                let is_global = matches!(item.ty, wasmparser::TypeRef::Global(_));
                                 let func_type_idx = if let wasmparser::TypeRef::Func(idx) = item.ty {
                                     frag.import_func_count += 1;
                                     Some(idx)
                                 } else {
+                                    if is_global { frag.import_global_count += 1; }
                                     None
                                 };
                                 frag.imports.push(ParsedImport {
@@ -324,6 +437,7 @@ fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
                                     name: item.name.to_string(),
                                     is_fink,
                                     func_type_idx,
+                                    is_global,
                                 });
                             }
                         }
@@ -478,6 +592,10 @@ struct LinkContext {
     // (module_name, import_name, remapped_type_idx)
     external_imports: Vec<(String, String, u32)>,
 
+    // External (non-@fink/) global imports to preserve in output.
+    // (module_name, import_name) — all typed as (ref null any).
+    external_global_imports: Vec<(String, String)>,
+
     // Accumulated function declarations: new_type_idx per defined function.
     func_decls: Vec<u32>,
 
@@ -507,6 +625,26 @@ struct LinkContext {
     // Populated during merge_functions for import resolution.
     export_map: BTreeMap<String, BTreeMap<String, u32>>,
 
+    // Cross-fragment global export map: (module_name, export_name) → new_global_idx.
+    // Populated by assign_dep_globals for dep fragments, so that merge_global_imports
+    // can resolve cross-module global imports without adding them as external imports.
+    dep_global_exports: BTreeMap<(String, String), u32>,
+
+    // Fragment indices whose globals were pre-assigned in assign_dep_globals.
+    // merge_globals skips these to avoid double-processing.
+    globals_pre_assigned: std::collections::HashSet<usize>,
+
+    // Per-fragment base offset for string literal data (one entry per input
+    // fragment). Each fragment's string intern table is laid out starting at
+    // this offset in linear memory; `(i32.const N)` operands of `call $str`
+    // in that fragment's code are shifted by this amount.
+    data_base_offsets: Vec<u32>,
+
+    // Per-fragment local function index for the `@fink/runtime.str` import,
+    // if present. Used by the peephole rewriter in `rewrite_body` to detect
+    // string-literal construction sites.
+    str_import_indices: Vec<Option<u32>>,
+
     // Memory type (from the fragment that declares it).
     memory: Option<wasmparser::MemoryType>,
 
@@ -523,6 +661,7 @@ impl LinkContext {
             next_global_idx: 0,
             type_sections: Vec::new(),
             external_imports: Vec::new(),
+            external_global_imports: Vec::new(),
             func_decls: Vec::new(),
             code_bodies: Vec::new(),
             exports: Vec::new(),
@@ -534,6 +673,10 @@ impl LinkContext {
             type_names: BTreeMap::new(),
             dwarf_sections: Vec::new(),
             export_map: BTreeMap::new(),
+            dep_global_exports: BTreeMap::new(),
+            globals_pre_assigned: std::collections::HashSet::new(),
+            data_base_offsets: Vec::new(),
+            str_import_indices: Vec::new(),
             memory: None,
             data_segments: Vec::new(),
         }
@@ -608,6 +751,114 @@ fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
                 format!("{}:{}", frag.module_name, name)
             };
             ctx.type_names.insert(new_idx, prefixed);
+        }
+    }
+}
+
+/// Pre-assign output global indices to dependency (non-runtime, non-entry) fink
+/// module fragments. Dependency globals occupy output global indices 0..N,
+/// before any external imports and before entry module globals.
+///
+/// After this pass, `ctx.dep_global_exports` maps `(module_name, export_name)`
+/// to the output global index, so that `merge_global_imports` can resolve
+/// cross-fragment global imports without leaving them as unresolved external imports.
+///
+/// `ctx.globals_pre_assigned` records which fragment indices were processed here,
+/// so `merge_globals` can skip them to avoid double-processing.
+fn assign_dep_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
+    for (i, frag) in fragments.iter().enumerate() {
+        if !is_dep_module(&frag.module_name) { continue; }
+
+        // Build a map from local defined-global index → export name for this fragment.
+        // A dep fragment may export multiple globals (one per top-level binding).
+        let mut local_global_to_export: BTreeMap<u32, String> = BTreeMap::new();
+        for export in &frag.exports {
+            if matches!(export.kind, wasmparser::ExternalKind::Global) {
+                // export.index is in the fragment's global index space (imported + defined).
+                // Defined globals start at frag.import_global_count.
+                if export.index >= frag.import_global_count {
+                    let local_defined_idx = export.index - frag.import_global_count;
+                    local_global_to_export.insert(local_defined_idx, export.name.clone());
+                }
+            }
+        }
+
+        // Assign output indices for each defined global in this dep fragment.
+        for (local_idx, global) in frag.globals.iter().enumerate() {
+            let old_idx = frag.import_global_count + local_idx as u32;
+            let new_idx = ctx.next_global_idx;
+            ctx.remaps[i].globals.insert(old_idx, new_idx);
+            ctx.next_global_idx += 1;
+
+            ctx.globals.push((global.ty, global.init_bytes.clone(), i));
+
+            // Register in dep_global_exports for each export name.
+            if let Some(export_name) = local_global_to_export.get(&(local_idx as u32)) {
+                ctx.dep_global_exports.insert(
+                    (frag.module_name.clone(), export_name.clone()),
+                    new_idx,
+                );
+            }
+
+            // Merge global names.
+            if let Some(name) = frag.names.global_names.get(&old_idx) {
+                let prefixed = format!("{}:{}", frag.module_name, name);
+                ctx.global_names.insert(new_idx, prefixed);
+            }
+        }
+
+        ctx.globals_pre_assigned.insert(i);
+    }
+}
+
+/// Collect external (non-@fink/) global imports from user code fragments,
+/// dedup them, and assign output global indices. These occupy global indices
+/// 0..N in the output module, before all defined globals.
+///
+/// Only user code fragments can carry external global imports (runtime
+/// fragments only import from @fink/ namespaces). We remap each imported
+/// global's old index (its position in the fragment's global index space,
+/// which starts at 0) to the new output index.
+fn merge_global_imports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
+    // `seen` tracks external imports that couldn't be resolved to a dep fragment.
+    // These remain as external imports in the output (e.g. host-provided globals).
+    let mut seen: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for (i, frag) in fragments.iter().enumerate() {
+        // Only user and dep fragments can have global imports that need resolution.
+        // Runtime (@fink/) fragments never import user-defined globals.
+        if !is_user_module(&frag.module_name) && !is_dep_module(&frag.module_name) {
+            continue;
+        }
+
+        // Track which import-index (in the global index space) we're assigning.
+        // Global indices in WASM: imported globals come first (0..import_global_count),
+        // then defined globals (import_global_count..).
+        let mut import_global_idx: u32 = 0;
+        for import in &frag.imports {
+            if !import.is_global { continue; }
+            let key = (import.module.clone(), import.name.clone());
+
+            let new_global_idx = if let Some(&idx) = ctx.dep_global_exports.get(&key) {
+                // Resolved to a dependency fragment's exported global — remap directly,
+                // no external import emitted.
+                idx
+            } else if let Some(&idx) = seen.get(&key) {
+                // Already registered as an external import (from a previous fragment).
+                idx
+            } else {
+                // Unknown — preserve as an external import in the output.
+                let idx = ctx.next_global_idx;
+                ctx.external_global_imports.push((import.module.clone(), import.name.clone()));
+                // Give imported globals a unique name in the output name section
+                // so the WAT formatter can distinguish them from defined globals.
+                let name = format!("{}#{}", import.module, import.name);
+                ctx.global_names.insert(idx, name);
+                seen.insert(key, idx);
+                ctx.next_global_idx += 1;
+                idx
+            };
+            ctx.remaps[i].globals.insert(import_global_idx, new_global_idx);
+            import_global_idx += 1;
         }
     }
 }
@@ -722,26 +973,33 @@ fn merge_code(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 
 fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
     for (i, frag) in fragments.iter().enumerate() {
-        for (local_idx, global) in frag.globals.iter().enumerate() {
-            let old_idx = local_idx as u32;
-            let new_idx = ctx.next_global_idx;
-            ctx.remaps[i].globals.insert(old_idx, new_idx);
-            ctx.next_global_idx += 1;
+        // Dep fragments had their globals pre-assigned in assign_dep_globals.
+        // Only process globals for non-dep fragments here.
+        if !ctx.globals_pre_assigned.contains(&i) {
+            for (local_idx, global) in frag.globals.iter().enumerate() {
+                // In WASM, defined globals start after imported globals in the index space.
+                // Imported globals were already remapped in merge_global_imports.
+                let old_idx = frag.import_global_count + local_idx as u32;
+                let new_idx = ctx.next_global_idx;
+                ctx.remaps[i].globals.insert(old_idx, new_idx);
+                ctx.next_global_idx += 1;
 
-            ctx.globals.push((global.ty, global.init_bytes.clone(), i));
+                ctx.globals.push((global.ty, global.init_bytes.clone(), i));
 
-            // Merge global names.
-            if let Some(name) = frag.names.global_names.get(&old_idx) {
-                let prefixed = if is_user_module(&frag.module_name) {
-                    name.clone()
-                } else {
-                    format!("{}:{}", frag.module_name, name)
-                };
-                ctx.global_names.insert(new_idx, prefixed);
+                // Merge global names.
+                if let Some(name) = frag.names.global_names.get(&old_idx) {
+                    let prefixed = if is_user_module(&frag.module_name) {
+                        name.clone()
+                    } else {
+                        format!("{}:{}", frag.module_name, name)
+                    };
+                    ctx.global_names.insert(new_idx, prefixed);
+                }
             }
         }
 
-        // Merge element indices.
+        // Merge element indices — done here for all fragments because function
+        // indices are not assigned until merge_functions (which runs before this).
         for &func_idx in &frag.elem_func_indices {
             if let Some(&new_idx) = ctx.remaps[i].funcs.get(&func_idx) {
                 ctx.elem_func_indices.push(new_idx);
@@ -757,10 +1015,38 @@ fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 
 fn merge_exports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
     for (i, frag) in fragments.iter().enumerate() {
-        // Only export from user code — runtime module exports are internal
-        // (used for import resolution only, not in the final binary).
-        if !is_user_module(&frag.module_name) { continue; }
+        let is_user = is_user_module(&frag.module_name);
+        let is_dep = is_dep_module(&frag.module_name);
+
+        // Export from user code and dep fragments.
+        // Runtime (@fink/) module exports are internal — used for import resolution only.
+        if !is_user && !is_dep { continue; }
+
         for export in &frag.exports {
+            // Dep fragments contribute exactly one public export to the linked
+            // binary: their `fink_module` init function, renamed to
+            // `<url>:fink_module` so the runner can call each dep's initializer
+            // in topological order before running the entry's `fink_module`.
+            //
+            // Everything else a dep "exports" is internal linkage:
+            //   - dep user-named globals/funcs (e.g. `./foo.fnk:bar`) are
+            //     already wired into consumers via the linker's
+            //     `dep_global_exports` map — the consumer references them
+            //     directly by global index, no export entry needed.
+            //   - runtime helper re-exports (`_apply`, `_list_nil`, `_box_func`,
+            //     `memory`, etc.) are already provided once by the entry
+            //     fragment.
+            //
+            // So for deps we keep only the `fink_module` func export and drop
+            // everything else. Exports from the entry (is_user) pass through
+            // verbatim — that's where the user-facing API lives.
+            if is_dep {
+                let is_fink_module =
+                    matches!(export.kind, wasmparser::ExternalKind::Func)
+                    && export.name == "fink_module";
+                if !is_fink_module { continue; }
+            }
+
             let new_idx = match export.kind {
                 wasmparser::ExternalKind::Func => {
                     ctx.remaps[i].funcs.get(&export.index).copied()
@@ -771,7 +1057,14 @@ fn merge_exports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
                 _ => Some(export.index),
             };
             if let Some(idx) = new_idx {
-                ctx.exports.push((export.name.clone(), export.kind, idx));
+                // Dep `fink_module` gets the URL-qualified name so the runner
+                // can look up each dep's initializer by its canonical URL.
+                let export_name = if is_dep {
+                    format!("{}:{}", frag.module_name, export.name)
+                } else {
+                    export.name.clone()
+                };
+                ctx.exports.push((export_name, export.kind, idx));
             }
         }
     }
@@ -786,7 +1079,12 @@ fn merge_exports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
 /// boundaries. For operators that carry indices, parse and re-encode
 /// with remapped values. For all others, copy raw bytes verbatim.
 /// This handles any WASM instruction without needing an exhaustive match.
-fn rewrite_body(raw: &[u8], remap: &RemapTable) -> Vec<u8> {
+fn rewrite_body(
+    raw: &[u8],
+    remap: &RemapTable,
+    data_base_offset: u32,
+    str_import_idx: Option<u32>,
+) -> Vec<u8> {
     use wasmparser::{BinaryReader, FunctionBody, Operator};
 
     let reader = BinaryReader::new(raw, 0);
@@ -802,6 +1100,27 @@ fn rewrite_body(raw: &[u8], remap: &RemapTable) -> Vec<u8> {
     let mut prev_pos = ops.original_position();
     let mut ops_iter = ops;
 
+    // Peephole state for string-literal offset shifting.
+    //
+    // The emitter produces every string literal as the three-instruction
+    // sequence `i32.const <offset>; i32.const <length>; call $str`. We
+    // buffer up to two pending `I32Const`s and, when the next operator is a
+    // `call` to the fragment's str import, rewrite the first buffered const
+    // by adding the fragment's data base offset. Any other operator flushes
+    // the buffer unchanged.
+    //
+    // Only active when the fragment actually imports `str` — otherwise the
+    // peephole is inert and every I32Const goes through the raw path.
+    let mut pending: Vec<i32> = Vec::new();
+
+    // Flush any buffered I32Consts verbatim.
+    // Used when the sliding window doesn't match the string-literal idiom.
+    let flush_pending = |pending: &mut Vec<i32>, func: &mut wasm_encoder::Function| {
+        for val in pending.drain(..) {
+            func.instruction(&wasm_encoder::Instruction::I32Const(val));
+        }
+    };
+
     while !ops_iter.eof() {
         let op = match ops_iter.read() {
             Ok(op) => op,
@@ -810,6 +1129,41 @@ fn rewrite_body(raw: &[u8], remap: &RemapTable) -> Vec<u8> {
         let cur_pos = ops_iter.original_position();
         let instr_start = prev_pos;
         let instr_end = cur_pos;
+
+        // Peephole: match `i32.const a; i32.const b; call str_import_idx`
+        // and rewrite `a` to `a + data_base_offset`.
+        if let Some(str_idx) = str_import_idx {
+            match &op {
+                Operator::I32Const { value } => {
+                    if pending.len() == 2 {
+                        // Sliding window overflow — flush oldest verbatim,
+                        // keep the last two for the next window.
+                        let first = pending.remove(0);
+                        func.instruction(&wasm_encoder::Instruction::I32Const(first));
+                    }
+                    pending.push(*value);
+                    prev_pos = cur_pos;
+                    continue;
+                }
+                Operator::Call { function_index } if *function_index == str_idx => {
+                    // Matched the idiom. Rewrite the first buffered const.
+                    if pending.len() == 2 {
+                        let offset = pending[0].wrapping_add(data_base_offset as i32);
+                        let length = pending[1];
+                        func.instruction(&wasm_encoder::Instruction::I32Const(offset));
+                        func.instruction(&wasm_encoder::Instruction::I32Const(length));
+                        pending.clear();
+                        // Emit the remapped call below.
+                    } else {
+                        // Unexpected — flush whatever we have verbatim.
+                        flush_pending(&mut pending, &mut func);
+                    }
+                }
+                _ => {
+                    flush_pending(&mut pending, &mut func);
+                }
+            }
+        }
 
         let needs_rewrite = matches!(
             op,
@@ -862,6 +1216,9 @@ fn rewrite_body(raw: &[u8], remap: &RemapTable) -> Vec<u8> {
 
         prev_pos = cur_pos;
     }
+
+    // Flush any remaining I32Consts at end-of-body (degenerate case).
+    flush_pending(&mut pending, &mut func);
 
     func.into_raw_body()
 }
@@ -1209,8 +1566,29 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
     }
 
     // 1b. Import section — external (non-@fink/) imports preserved from input.
-    if !ctx.external_imports.is_empty() {
+    // Global imports must come before func imports so that global index 0..N
+    // is occupied by imported globals before any defined globals.
+    let has_external_imports = !ctx.external_global_imports.is_empty()
+        || !ctx.external_imports.is_empty();
+    if has_external_imports {
         let mut imports = wasm_encoder::ImportSection::new();
+        for (mod_name, imp_name) in &ctx.external_global_imports {
+            imports.import(
+                mod_name,
+                imp_name,
+                wasm_encoder::EntityType::Global(wasm_encoder::GlobalType {
+                    val_type: wasm_encoder::ValType::Ref(wasm_encoder::RefType {
+                        nullable: true,
+                        heap_type: wasm_encoder::HeapType::Abstract {
+                            shared: false,
+                            ty: wasm_encoder::AbstractHeapType::Any,
+                        },
+                    }),
+                    mutable: false,
+                    shared: false,
+                }),
+            );
+        }
         for (mod_name, imp_name, type_idx) in &ctx.external_imports {
             imports.import(
                 mod_name,
@@ -1294,14 +1672,16 @@ fn emit_module(ctx: &LinkContext) -> LinkResult {
         module.section(&elems);
     }
 
-    // 6. Code section — rewrite bodies with remapped indices.
+    // 6. Code section — rewrite bodies with remapped indices + string-offset shifts.
     // Track runtime code byte size for DWARF offset adjustment.
     let mut runtime_code_size = 0u32;
     if !ctx.code_bodies.is_empty() {
         let mut code = wasm_encoder::CodeSection::new();
         for (frag_idx, is_user, raw_body) in &ctx.code_bodies {
             let remap = &ctx.remaps[*frag_idx];
-            let rewritten = rewrite_body(raw_body, remap);
+            let base = ctx.data_base_offsets.get(*frag_idx).copied().unwrap_or(0);
+            let str_idx = ctx.str_import_indices.get(*frag_idx).copied().flatten();
+            let rewritten = rewrite_body(raw_body, remap, base, str_idx);
             if !is_user {
                 runtime_code_size += rewritten.len() as u32;
             }
