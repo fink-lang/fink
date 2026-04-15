@@ -1,4 +1,5 @@
 pub mod errors;
+pub mod fmt;
 #[cfg(feature = "compile")]
 pub mod compile;
 #[cfg(feature = "run")]

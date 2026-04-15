@@ -113,11 +113,19 @@ fn main() {
     }
 
     "fmt2" => {
-      // The Stage-2 source pretty-printer (`fmt::layout` + `fmt::print`)
-      // is not yet ported to the flat AST. Its 1500 lines of `&Node`
-      // walking are queued as a follow-up.
-      eprintln!("error: fmt2 is temporarily disabled — fmt::layout port pending");
-      process::exit(1);
+      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
+      let cfg = fink::fmt::FmtConfig::default();
+      let laid_out = fink::fmt::layout::layout(&ast, &cfg);
+      if sourcemap {
+        let (output, srcmap) = if embed_source {
+          fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
+        } else {
+          fink::fmt::print::print_mapped(&laid_out, path)
+        };
+        print_with_sourcemap(&output, &srcmap);
+      } else {
+        println!("{}", fink::fmt::print::print(&laid_out));
+      }
     }
 
     "cps" => {
