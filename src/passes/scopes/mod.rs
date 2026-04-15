@@ -11,7 +11,7 @@
 // instead of Ref::Name, so that lifting can rearrange the tree without
 // breaking scope resolution.
 
-use crate::ast::{AstId, Node, NodeKind};
+use crate::ast::{Ast, AstId, NodeKind};
 use crate::propgraph::PropGraph;
 
 // ---------------------------------------------------------------------------
@@ -320,21 +320,23 @@ impl<'src> Ctx<'src> {
 // Public entry point
 // ---------------------------------------------------------------------------
 
-pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize, builtins: &[&str]) -> ScopeResult {
-  let mut ctx = Ctx::new(node_count);
-  let module_scope = ctx.push_scope(ScopeKind::Module, None, root.id);
+pub fn analyse<'src>(ast: &Ast<'src>, builtins: &[&str]) -> ScopeResult {
+  let mut ctx = Ctx::new(ast.nodes.len());
+  let module_scope = ctx.push_scope(ScopeKind::Module, None, ast.root);
 
   // Language builtins (always in scope) + caller-provided extras.
   ctx.builtins = ["import", "yield", "spawn", "await", "channel", "receive", "read"].iter().chain(builtins.iter()).map(|s| s.to_string()).collect();
 
   // Phase 1: pre-register all module-level bindings (for mutual recursion).
-  if let NodeKind::Module { exprs: items, .. } = &root.kind {
-    pre_register_binds(&items.items, module_scope, &mut ctx);
+  if let NodeKind::Module { exprs: items, .. } = &ast.nodes.get(ast.root).kind {
+    let items: Vec<AstId> = items.items.iter().copied().collect();
+    pre_register_binds(ast, &items, module_scope, &mut ctx);
   }
 
   // Phase 2: walk the tree and resolve references.
-  if let NodeKind::Module { exprs: items, .. } = &root.kind {
-    walk_stmts(&items.items, module_scope, &mut ctx);
+  if let NodeKind::Module { exprs: items, .. } = &ast.nodes.get(ast.root).kind {
+    let items: Vec<AstId> = items.items.iter().copied().collect();
+    walk_stmts(ast, &items, module_scope, &mut ctx);
   }
 
   ScopeResult {
@@ -349,39 +351,45 @@ pub fn analyse<'src>(root: &'src Node<'src>, node_count: usize, builtins: &[&str
 // Phase 1: pre-register module-level bindings
 // ---------------------------------------------------------------------------
 
-fn pre_register_binds(stmts: &[Node<'_>], scope: ScopeId, ctx: &mut Ctx<'_>) {
-  for stmt in stmts {
-    if let NodeKind::Bind { lhs, .. } = &stmt.kind {
-      pre_register_pattern_binds(lhs, scope, ctx);
+fn pre_register_binds<'src>(ast: &Ast<'src>, stmts: &[AstId], scope: ScopeId, ctx: &mut Ctx<'src>) {
+  for &stmt_id in stmts {
+    if let NodeKind::Bind { lhs, .. } = &ast.nodes.get(stmt_id).kind {
+      let lhs = *lhs;
+      pre_register_pattern_binds(ast, lhs, scope, ctx);
     }
   }
 }
 
-/// Find the binding Ident node from a simple bind LHS.
-/// For `Ident` → returns the node itself.
+/// Find the binding Ident id from a simple bind LHS.
+/// For `Ident` → returns the id itself.
 /// For `InfixOp { lhs, .. }` (guard pattern like `a > 0`) → recurses into lhs.
 /// For complex patterns (LitSeq, LitRec, etc.) → returns None (handled separately).
-fn binding_ident<'a>(node: &'a Node<'a>) -> Option<&'a Node<'a>> {
-  match &node.kind {
-    NodeKind::Ident(_) => Some(node),
-    NodeKind::InfixOp { lhs, .. } => binding_ident(lhs),
+fn binding_ident<'src>(ast: &Ast<'src>, id: AstId) -> Option<AstId> {
+  match &ast.nodes.get(id).kind {
+    NodeKind::Ident(_) => Some(id),
+    NodeKind::InfixOp { lhs, .. } => {
+      let lhs = *lhs;
+      binding_ident(ast, lhs)
+    }
     _ => None,
   }
 }
 
 /// Register bindings from the LHS of a bind pattern.
-fn register_pattern_binds(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
-  register_pattern_binds_inner(node, scope, ctx, false);
+fn register_pattern_binds<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>) {
+  register_pattern_binds_inner(ast, id, scope, ctx, false);
 }
 
-fn pre_register_pattern_binds(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
-  register_pattern_binds_inner(node, scope, ctx, true);
+fn pre_register_pattern_binds<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>) {
+  register_pattern_binds_inner(ast, id, scope, ctx, true);
 }
 
-fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>, pre_register: bool) {
-  match &node.kind {
+fn register_pattern_binds_inner<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>, pre_register: bool) {
+  // Clone the kind for match to avoid holding a borrow of `ast` across recursive calls.
+  let kind = ast.nodes.get(id).kind.clone();
+  match kind {
     NodeKind::Ident(name) => {
-      let origin = BindOrigin::Ast(node.id);
+      let origin = BindOrigin::Ast(id);
       if pre_register {
         ctx.pre_register_bind(scope, name, origin);
       } else {
@@ -390,7 +398,7 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
     }
     NodeKind::SynthIdent(n) => {
       let name = format!("·$_{n}");
-      let origin = BindOrigin::Ast(node.id);
+      let origin = BindOrigin::Ast(id);
       if pre_register {
         ctx.pre_register_bind(scope, &name, origin);
       } else {
@@ -400,47 +408,47 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
     // Destructuring patterns: [a, b] = ..., {x, y} = ...
     NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. }
     | NodeKind::Patterns(items) => {
-      for item in &items.items {
-        register_pattern_binds(item, scope, ctx);
+      for &item_id in items.items.iter() {
+        register_pattern_binds(ast, item_id, scope, ctx);
       }
     }
-    NodeKind::Spread { inner: Some(inner), .. } => {
-      register_pattern_binds(inner, scope, ctx);
+    NodeKind::Spread { inner: Some(inner_id), .. } => {
+      register_pattern_binds(ast, inner_id, scope, ctx);
     }
     NodeKind::Bind { lhs, .. } => {
       // Nested bind in pattern: `{x: y}` — lhs is the key, rhs is the bind target.
       // The lhs ident is the binding in rec destructure.
-      register_pattern_binds_inner(lhs, scope, ctx, pre_register);
+      register_pattern_binds_inner(ast, lhs, scope, ctx, pre_register);
     }
     NodeKind::BindRight { lhs, rhs, .. } => {
       // `foo |= [bar, spam]` — lhs binds the whole value, rhs destructures it.
-      register_pattern_binds_inner(lhs, scope, ctx, pre_register);
-      register_pattern_binds_inner(rhs, scope, ctx, pre_register);
+      register_pattern_binds_inner(ast, lhs, scope, ctx, pre_register);
+      register_pattern_binds_inner(ast, rhs, scope, ctx, pre_register);
     }
     NodeKind::InfixOp { lhs, .. } => {
       // Guard pattern: `a > 0` — lhs holds the binding Ident; rhs is the guard value.
       // Only the lhs side introduces a binding.
-      register_pattern_binds_inner(lhs, scope, ctx, pre_register);
+      register_pattern_binds_inner(ast, lhs, scope, ctx, pre_register);
     }
     NodeKind::Apply { args, .. } => {
       // Predicate/constructor pattern: `is_even y`, `Ok b` — func is a reference, args are bindings.
-      for arg in &args.items {
-        register_pattern_binds_inner(arg, scope, ctx, pre_register);
+      for &arg_id in args.items.iter() {
+        register_pattern_binds_inner(ast, arg_id, scope, ctx, pre_register);
       }
     }
     NodeKind::Arm { body, .. } => {
       // Record field rename pattern in a LitRec: `y: z` — lhs is the field key (a ref),
       // body items are the binding targets.
-      for item in &body.items {
-        register_pattern_binds_inner(item, scope, ctx, pre_register);
+      for &item_id in body.items.iter() {
+        register_pattern_binds_inner(ast, item_id, scope, ctx, pre_register);
       }
     }
     NodeKind::StrTempl { children, .. } => {
       // String template pattern: `'prefix${capture}suffix'` — register binds from
       // non-LitStr children (the interpolation expressions).
-      for child in children {
-        if !matches!(child.kind, NodeKind::LitStr { .. }) {
-          register_pattern_binds_inner(child, scope, ctx, pre_register);
+      for &child_id in children.iter() {
+        if !matches!(ast.nodes.get(child_id).kind, NodeKind::LitStr { .. }) {
+          register_pattern_binds_inner(ast, child_id, scope, ctx, pre_register);
         }
       }
     }
@@ -454,40 +462,41 @@ fn register_pattern_binds_inner(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'
 /// Pattern nodes contain both binding sites (Ident) and guard expressions
 /// (InfixOp rhs, Apply func). This function walks only the guard/expression
 /// parts, skipping binding idents which are already registered.
-fn walk_pattern_refs(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
-  match &node.kind {
+fn walk_pattern_refs<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>) {
+  let kind = ast.nodes.get(id).kind.clone();
+  match kind {
     NodeKind::InfixOp { lhs, rhs, .. } => {
       // Guard pattern: `a > 0` or `a > 0 or a < 9`.
       // Both sides are expressions — walk them for ref resolution.
       // The binding ident (lhs leaf) resolves to itself (already registered).
-      walk_node(lhs, scope, ctx);
-      walk_node(rhs, scope, ctx);
+      walk_node(ast, lhs, scope, ctx);
+      walk_node(ast, rhs, scope, ctx);
     }
     NodeKind::Apply { func, args, .. } => {
       // Predicate guard: `is_even y` — func is a reference.
-      walk_node(func, scope, ctx);
+      walk_node(ast, func, scope, ctx);
       // args contain bindings — recurse for nested guards.
-      for arg in &args.items {
-        walk_pattern_refs(arg, scope, ctx);
+      for &arg_id in args.items.iter() {
+        walk_pattern_refs(ast, arg_id, scope, ctx);
       }
     }
     NodeKind::LitSeq { items, .. } | NodeKind::LitRec { items, .. }
     | NodeKind::Patterns(items) => {
-      for item in &items.items {
-        walk_pattern_refs(item, scope, ctx);
+      for &item_id in items.items.iter() {
+        walk_pattern_refs(ast, item_id, scope, ctx);
       }
     }
     NodeKind::Bind { lhs, .. } => {
-      walk_pattern_refs(lhs, scope, ctx);
+      walk_pattern_refs(ast, lhs, scope, ctx);
     }
     NodeKind::Arm { lhs, body, .. } => {
-      walk_pattern_refs(lhs, scope, ctx);
-      for item in &body.items {
-        walk_pattern_refs(item, scope, ctx);
+      walk_pattern_refs(ast, lhs, scope, ctx);
+      for &item_id in body.items.iter() {
+        walk_pattern_refs(ast, item_id, scope, ctx);
       }
     }
-    NodeKind::Spread { inner: Some(inner), .. } => {
-      walk_pattern_refs(inner, scope, ctx);
+    NodeKind::Spread { inner: Some(inner_id), .. } => {
+      walk_pattern_refs(ast, inner_id, scope, ctx);
     }
     // Ident, Wildcard, literals — these are binding sites or values, not guard refs.
     _ => {}
@@ -498,158 +507,170 @@ fn walk_pattern_refs(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
 // Phase 2: walk and resolve
 // ---------------------------------------------------------------------------
 
-fn walk_stmts(stmts: &[Node<'_>], scope: ScopeId, ctx: &mut Ctx<'_>) {
-  for stmt in stmts {
-    walk_node(stmt, scope, ctx);
+fn walk_stmts<'src>(ast: &Ast<'src>, stmts: &[AstId], scope: ScopeId, ctx: &mut Ctx<'src>) {
+  for &stmt_id in stmts {
+    walk_node(ast, stmt_id, scope, ctx);
   }
 }
 
-fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
-  match &node.kind {
+fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'src>) {
+  // Clone the kind up front so we can freely call methods on ctx that would
+  // otherwise conflict with a borrow of `ast`. NodeKind clone is cheap —
+  // children are AstId (Copy), tokens are Copy, and only LitStr's String
+  // and Module's url are owned heap data.
+  let kind = ast.nodes.get(id).kind.clone();
+  match kind {
     NodeKind::Bind { lhs, rhs, .. } => {
       // Track which binding we're defining (for self_ref detection).
       let prev_bind = ctx.current_bind_ast_id;
-      if let NodeKind::Ident(_) = &lhs.kind {
-        ctx.current_bind_ast_id = Some(lhs.id);
+      if let NodeKind::Ident(_) = &ast.nodes.get(lhs).kind {
+        ctx.current_bind_ast_id = Some(lhs);
       }
       // Walk RHS first (evaluate the value expression).
-      walk_node(rhs, scope, ctx);
+      walk_node(ast, rhs, scope, ctx);
       ctx.current_bind_ast_id = prev_bind;
       if ctx.scopes.get(scope).kind == ScopeKind::Module {
         // Module scope: binding was pre-registered. Emit the event now (after RHS).
         // For Ident LHS: if not pre-registered (e.g. a nested Bind inside a RHS expression),
         // fall back to sequential registration.
         // For InfixOp LHS (guard pattern): emit event for the Ident inside.
-        let needs_register = match binding_ident(lhs) {
-          Some(ident) => !ctx.emit_bind_event(scope, ident.id),
+        let needs_register = match binding_ident(ast, lhs) {
+          Some(ident_id) => !ctx.emit_bind_event(scope, ident_id),
           None => false,
         };
         if needs_register {
-          register_pattern_binds(lhs, scope, ctx);
+          register_pattern_binds(ast, lhs, scope, ctx);
         }
       } else {
         // Non-module scopes: register the binding now (sequential).
-        register_pattern_binds(lhs, scope, ctx);
+        register_pattern_binds(ast, lhs, scope, ctx);
       }
       // Walk guard expressions in patterns for reference resolution.
-      walk_pattern_refs(lhs, scope, ctx);
+      walk_pattern_refs(ast, lhs, scope, ctx);
     }
 
     NodeKind::Ident(name) => {
       // This is a reference — resolve it.
-      ctx.resolve(name, node.id, scope);
+      ctx.resolve(name, id, scope);
     }
 
     NodeKind::SynthIdent(n) => {
       // Synthetic identifier reference — resolve by its synthetic name.
       let name = format!("·$_{n}");
-      ctx.resolve(&name, node.id, scope);
+      ctx.resolve(&name, id, scope);
     }
 
     NodeKind::Fn { params, body, .. } => {
       // Create a new fn scope.
-      // Try to get fn name from context (the LHS of a Bind).
-      let fn_scope = ctx.push_scope(ScopeKind::Fn, Some(scope), node.id);
+      let fn_scope = ctx.push_scope(ScopeKind::Fn, Some(scope), id);
 
       // Register params as bindings in the fn scope.
-      if let NodeKind::Patterns(pat_items) = &params.kind {
-        for param in &pat_items.items {
-          register_pattern_binds(param, fn_scope, ctx);
+      if let NodeKind::Patterns(pat_items) = &ast.nodes.get(params).kind {
+        let param_ids: Vec<AstId> = pat_items.items.iter().copied().collect();
+        for param_id in param_ids {
+          register_pattern_binds(ast, param_id, fn_scope, ctx);
         }
       }
 
       // Walk body statements.
-      walk_stmts(&body.items, fn_scope, ctx);
+      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      walk_stmts(ast, &body_items, fn_scope, ctx);
 
       // Pop fn scope bindings.
       ctx.pop_scope_binds(fn_scope);
     }
 
     NodeKind::Apply { func, args } => {
-      walk_node(func, scope, ctx);
-      for arg in &args.items {
-        walk_node(arg, scope, ctx);
+      walk_node(ast, func, scope, ctx);
+      for &arg_id in args.items.iter() {
+        walk_node(ast, arg_id, scope, ctx);
       }
     }
 
     NodeKind::Module { exprs: items, .. } => {
-      walk_stmts(&items.items, scope, ctx);
+      let items: Vec<AstId> = items.items.iter().copied().collect();
+      walk_stmts(ast, &items, scope, ctx);
     }
 
     NodeKind::InfixOp { lhs, rhs, .. } => {
-      walk_node(lhs, scope, ctx);
-      walk_node(rhs, scope, ctx);
+      walk_node(ast, lhs, scope, ctx);
+      walk_node(ast, rhs, scope, ctx);
     }
 
     NodeKind::UnaryOp { operand, .. } => {
-      walk_node(operand, scope, ctx);
+      walk_node(ast, operand, scope, ctx);
     }
 
     NodeKind::Match { subjects, arms, .. } => {
-      for subj in &subjects.items {
-        walk_node(subj, scope, ctx);
+      for &subj_id in subjects.items.iter() {
+        walk_node(ast, subj_id, scope, ctx);
       }
-      for arm in &arms.items {
-        walk_node(arm, scope, ctx);
+      for &arm_id in arms.items.iter() {
+        walk_node(ast, arm_id, scope, ctx);
       }
     }
 
     NodeKind::Arm { lhs, body, .. } => {
-      let arm_scope = ctx.push_scope(ScopeKind::Arm, Some(scope), node.id);
+      let arm_scope = ctx.push_scope(ScopeKind::Arm, Some(scope), id);
       // Register pattern bindings from the arm LHS.
-      register_pattern_binds(lhs, arm_scope, ctx);
+      register_pattern_binds(ast, lhs, arm_scope, ctx);
       // Walk guard expressions in patterns for reference resolution.
-      walk_pattern_refs(lhs, arm_scope, ctx);
+      walk_pattern_refs(ast, lhs, arm_scope, ctx);
       // Walk body in arm scope.
-      walk_stmts(&body.items, arm_scope, ctx);
+      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      walk_stmts(ast, &body_items, arm_scope, ctx);
       ctx.pop_scope_binds(arm_scope);
     }
 
     NodeKind::Pipe(items) => {
-      for item in &items.items {
-        walk_node(item, scope, ctx);
+      for &item_id in items.items.iter() {
+        walk_node(ast, item_id, scope, ctx);
       }
     }
 
-    NodeKind::Group { inner, .. } => walk_node(inner, scope, ctx),
-    NodeKind::Try(inner) => walk_node(inner, scope, ctx),
-    NodeKind::Member { lhs, .. } => walk_node(lhs, scope, ctx),
-    NodeKind::Spread { inner: Some(inner), .. } => walk_node(inner, scope, ctx),
+    NodeKind::Group { inner, .. } => walk_node(ast, inner, scope, ctx),
+    NodeKind::Try(inner) => walk_node(ast, inner, scope, ctx),
+    NodeKind::Member { lhs, .. } => walk_node(ast, lhs, scope, ctx),
+    NodeKind::Spread { inner: Some(inner_id), .. } => walk_node(ast, inner_id, scope, ctx),
     NodeKind::Spread { inner: None, .. } => {}
     NodeKind::ChainedCmp(parts) => {
-      for part in parts {
-        if let crate::ast::CmpPart::Operand(n) = part { walk_node(n, scope, ctx); }
+      for part in parts.iter() {
+        if let crate::ast::CmpPart::Operand(n) = part { walk_node(ast, *n, scope, ctx); }
       }
     }
 
     NodeKind::LitSeq { items, .. } => {
-      for item in &items.items {
-        walk_node(item, scope, ctx);
+      for &item_id in items.items.iter() {
+        walk_node(ast, item_id, scope, ctx);
       }
     }
 
     NodeKind::LitRec { items, .. } => {
       // Record literals use Arm nodes for fields ({x: 1} → Arm(Ident("x"), LitInt("1"))).
       // Don't create arm scopes — these are value expressions, not pattern matches.
-      for item in &items.items {
-        match &item.kind {
+      for &item_id in items.items.iter() {
+        match &ast.nodes.get(item_id).kind {
           NodeKind::Arm { lhs: _, body, .. } => {
             // Walk the field value only (not the key — it's a literal key, not a binding).
-            for stmt in &body.items { walk_node(stmt, scope, ctx); }
+            let body_items: Vec<AstId> = body.items.iter().copied().collect();
+            for stmt_id in body_items {
+              walk_node(ast, stmt_id, scope, ctx);
+            }
           }
-          _ => walk_node(item, scope, ctx),
+          _ => walk_node(ast, item_id, scope, ctx),
         }
       }
     }
 
     NodeKind::Block { name, params, body, .. } => {
-      walk_node(name, scope, ctx);
-      walk_node(params, scope, ctx);
-      walk_stmts(&body.items, scope, ctx);
+      walk_node(ast, name, scope, ctx);
+      walk_node(ast, params, scope, ctx);
+      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      walk_stmts(ast, &body_items, scope, ctx);
     }
 
     NodeKind::StrTempl { children, .. } | NodeKind::StrRawTempl { children, .. } => {
-      for child in children { walk_node(child, scope, ctx); }
+      for &child_id in children.iter() { walk_node(ast, child_id, scope, ctx); }
     }
 
     // Leaves — no children to walk.
@@ -658,8 +679,8 @@ fn walk_node(node: &Node<'_>, scope: ScopeId, ctx: &mut Ctx<'_>) {
     | NodeKind::Partial | NodeKind::Wildcard | NodeKind::Token(_) | NodeKind::Patterns(_) => {}
 
     NodeKind::BindRight { lhs, rhs, .. } => {
-      walk_node(lhs, scope, ctx);
-      walk_node(rhs, scope, ctx);
+      walk_node(ast, lhs, scope, ctx);
+      walk_node(ast, rhs, scope, ctx);
     }
   }
 }
@@ -751,10 +772,26 @@ fn write_indent(out: &mut String, level: usize) {
 mod tests {
   use super::*;
 
+  #[cfg(not(feature = "flat-ast-wip"))]
   fn scope(src: &str) -> String {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => format_result(&desugared.scope),
       Err(e) => format!("ERROR: {e}"),
+    }
+  }
+
+  /// Under flat-ast-wip `partial::apply` hasn't been ported yet, so we run
+  /// `analyse` directly on the parsed AST. For tests that don't exercise
+  /// partial this is equivalent; once partial lands, this path collapses
+  /// back into the regular `to_desugared` form above.
+  #[cfg(feature = "flat-ast-wip")]
+  fn scope(src: &str) -> String {
+    match crate::parser::parse(src, "test") {
+      Ok(ast) => {
+        let result = super::analyse(&ast, &[]);
+        format_result(&result)
+      }
+      Err(e) => format!("ERROR: {:?}", e.message),
     }
   }
 

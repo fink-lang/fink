@@ -11,7 +11,6 @@ pub mod lifting;
 pub mod modules;
 #[cfg(not(feature = "flat-ast-wip"))]
 pub mod partial;
-#[cfg(not(feature = "flat-ast-wip"))]
 pub mod scopes;
 #[cfg(not(feature = "flat-ast-wip"))]
 pub mod wasm;
