@@ -2502,7 +2502,7 @@ mod tests {
   fn compile(src: &str) -> EmitResult {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
 
-    let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast_index);
+    let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast);
     let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());
     emit(&module, &ir_ctx)

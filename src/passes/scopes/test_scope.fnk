@@ -88,11 +88,11 @@ test 'partial application', fn:
   expect scope ƒink:
     foo = 2 + ?
   | equals ƒink:
-    scope 5, 'module',
+    scope 13, 'module',
 
-      scope 8, 'fn',
-        bind 6, '·$_0'
-        ref '·$_0', 6
+      scope 11, 'fn',
+        bind 9, '·$_0'
+        ref '·$_0', 9
       bind 0, 'foo'
 
 
@@ -100,12 +100,12 @@ test 'multiple partials — same param', fn:
   expect scope ƒink:
     foo = ? + ?
   | equals ƒink:
-    scope 5, 'module',
+    scope 14, 'module',
 
-      scope 8, 'fn',
-        bind 6, '·$_0'
-        ref '·$_0', 6
-        ref '·$_0', 6
+      scope 12, 'fn',
+        bind 10, '·$_0'
+        ref '·$_0', 10
+        ref '·$_0', 10
       bind 0, 'foo'
 
 
@@ -484,9 +484,9 @@ test 'str templ pattern', fn:
     'foo${bar}spam' = val
     bar
   | equals ƒink:
-    scope 7, 'module',
+    scope 9, 'module',
       unresolved 'val'
-      ref 'bar', 1
+      ref 'bar', 2
 
 test 'str templ pattern capture all', fn:
   expect scope ƒink:
@@ -503,14 +503,14 @@ test 'str templ pattern in match', fn:
       'foo${x}bar': x
       _: 0
   | equals ƒink:
-    scope 15, 'module',
+    scope 17, 'module',
       unresolved 'val'
 
-      scope 9, 'arm',
-        bind 4, 'x'
-        ref 'x', 4
+      scope 11, 'arm',
+        bind 5, 'x'
+        ref 'x', 5
 
-      scope 13, 'arm'
+      scope 15, 'arm'
 
 
 ---
@@ -521,7 +521,7 @@ test 'import resolves to prelude', fn:
   expect scope ƒink:
     {foo} = import './bar.fnk'
   | equals ƒink:
-    scope 6, 'module',
+    scope 8, 'module',
       bind 0, 'foo'
       ref 'import', builtin 0
 

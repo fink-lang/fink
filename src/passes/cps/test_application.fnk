@@ -136,7 +136,7 @@ test 'partial apply', fn:
       ·fn
         fn ·ƒret_3, ·v_0: ·∅add ·ƒret_3, 3, ·v_0
         fn ·v_2: ·ƒret_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsU0FBTyxJLEVBQVAsQUFBQSxNQUFBLE8sRUFBSSxDLEVBQUc7T0FBUCxJLEUsQSxRQUFBIgp9
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsU0FBQSxJLEVBQUEsQUFBQSxNQUFBLE8sRUFBSSxDLEVBQUc7T0FBUCxJLEUsQSxRQUFBIgp9
 
 
 test 'pipe with lambda — literal head', fn:
@@ -169,7 +169,7 @@ test 'pipe with partial', fn:
       ·fn
         fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
         fn ·v_3: ·v_3 ·ƒret_1, 3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQU8sSSxFQUFQLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUEsSSxFQUFBLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
 
 
 test 'pipe with partial — ident head', fn:
@@ -180,7 +180,7 @@ test 'pipe with partial — ident head', fn:
       ·fn
         fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQU8sSSxFQUFQLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUEsSSxFQUFBLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
 
 
 

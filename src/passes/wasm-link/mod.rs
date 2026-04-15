@@ -235,7 +235,7 @@ fn compile_fragment(
 ) -> Vec<u8> {
   use crate::passes::wasm::{collect, dwarf, emit};
 
-  let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
+  let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast);
   let module = collect::collect(
     &lifted.result.root,
     &ir_ctx,

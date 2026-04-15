@@ -6,7 +6,7 @@
 
 use std::cell::Cell;
 
-use crate::ast::{CmpPart, Node, NodeKind};
+use crate::ast::{Ast, AstId, CmpPart, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token};
 use crate::sourcemap::{MappedWriter, SourceMap};
 
@@ -17,34 +17,34 @@ thread_local! {
 }
 
 /// Format an AST back to Fink source, discarding source-map info.
-pub fn fmt(node: &Node) -> String {
+pub fn fmt(ast: &Ast<'_>) -> String {
   let mut out = MappedWriter::new();
-  fmt_node(node, &mut out, 0);
+  fmt_node(ast, ast.root, &mut out, 0);
   out.finish_string()
 }
 
 /// Format an AST back to Fink source with fn bodies always on new lines (for CPS output).
-pub fn fmt_block(node: &Node) -> String {
+pub fn fmt_block(ast: &Ast<'_>) -> String {
   FORCE_BLOCK_FN_BODIES.with(|f| f.set(true));
   let mut out = MappedWriter::new();
-  fmt_node(node, &mut out, 0);
+  fmt_node(ast, ast.root, &mut out, 0);
   let result = out.finish_string();
   FORCE_BLOCK_FN_BODIES.with(|f| f.set(false));
   result
 }
 
 /// Format an AST back to Fink source, returning source + source map.
-pub fn fmt_mapped(node: &Node, source_name: &str) -> (String, SourceMap) {
+pub fn fmt_mapped(ast: &Ast<'_>, source_name: &str) -> (String, SourceMap) {
   let mut out = MappedWriter::new();
-  fmt_node(node, &mut out, 0);
+  fmt_node(ast, ast.root, &mut out, 0);
   out.finish(source_name)
 }
 
 /// Format an AST back to Fink source, returning source + source map
 /// with original source content embedded.
-pub fn fmt_mapped_with_content(node: &Node, source_name: &str, content: &str) -> (String, SourceMap) {
+pub fn fmt_mapped_with_content(ast: &Ast<'_>, source_name: &str, content: &str) -> (String, SourceMap) {
   let mut out = MappedWriter::new();
-  fmt_node(node, &mut out, 0);
+  fmt_node(ast, ast.root, &mut out, 0);
   out.finish_with_content(source_name, content)
 }
 
@@ -61,24 +61,25 @@ fn ind(out: &mut MappedWriter, depth: usize) {
   }
 }
 
-fn is_fn(node: &Node) -> bool {
-  matches!(node.kind, NodeKind::Fn { .. })
+fn is_fn(ast: &Ast<'_>, id: AstId) -> bool {
+  matches!(ast.nodes.get(id).kind, NodeKind::Fn { .. })
 }
 
 /// Check if a node produces multi-line output (block strings, fn bodies, match, etc.)
-fn is_multiline(node: &Node) -> bool {
-  match &node.kind {
+fn is_multiline(ast: &Ast<'_>, id: AstId) -> bool {
+  match &ast.nodes.get(id).kind {
     NodeKind::LitStr { open, content, .. } => open.src == "\":" || content.contains('\n'),
     NodeKind::StrRawTempl { open, .. } => open.src == "\":",
-    NodeKind::Fn { body, .. } => body.items.len() > 1 || body.items.first().is_some_and(|b| !is_inline_expr(b)),
+    NodeKind::Fn { body, .. } => body.items.len() > 1 || body.items.first().is_some_and(|&b| !is_inline_expr(ast, b)),
     NodeKind::Match { .. } | NodeKind::Block { .. } => true,
-    NodeKind::Apply { args, .. } => args.items.iter().any(|a| is_multiline(a) || is_fn(a)),
-    NodeKind::Pipe(exprs) => exprs.items.iter().any(|e| is_multiline(e)),
+    NodeKind::Apply { args, .. } => args.items.iter().any(|&a| is_multiline(ast, a) || is_fn(ast, a)),
+    NodeKind::Pipe(exprs) => exprs.items.iter().any(|&e| is_multiline(ast, e)),
     _ => false,
   }
 }
 
-fn is_atom(node: &Node) -> bool {
+fn is_atom(ast: &Ast<'_>, id: AstId) -> bool {
+  let node = ast.nodes.get(id);
   match &node.kind {
     NodeKind::LitStr { content, .. } => !content.contains('\n'),
     _ => matches!(
@@ -93,10 +94,16 @@ fn is_atom(node: &Node) -> bool {
   }
 }
 
-fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
+fn fmt_node(ast: &Ast<'_>, id: AstId, out: &mut MappedWriter, depth: usize) {
+  let node: &Node<'_> = ast.nodes.get(id);
   if !matches!(node.kind, NodeKind::Module { .. }) { out.mark(node.loc); }
-  match &node.kind {
-    NodeKind::LitBool(v) => out.push_str(if *v { "true" } else { "false" }),
+  // Clone kind out so we don't hold a borrow of `ast` during recursive calls.
+  // NodeKind clone is cheap: children are AstId (Copy), tokens are Copy,
+  // only LitStr's String and Module's url are owned heap data.
+  let node_loc = node.loc;
+  let kind = node.kind.clone();
+  match kind {
+    NodeKind::LitBool(v) => out.push_str(if v { "true" } else { "false" }),
     NodeKind::LitInt(s) => out.push_str(s),
     NodeKind::LitFloat(s) => out.push_str(s),
     NodeKind::LitDecimal(s) => out.push_str(s),
@@ -120,7 +127,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
           // Synthetic string (CPS formatter): unmap the quote, map content to node loc.
           stop_mark(out);
           out.push('\'');
-          out.mark(node.loc);
+          out.mark(node_loc);
         } else {
           out.push('\'');
           out.mark(Loc { start: open.loc.end, end: open.loc.end });
@@ -134,7 +141,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
             out.push_str(line);
           }
         } else {
-          out.push_str(s);
+          out.push_str(&s);
         }
         out.mark(close.loc);
         out.push('\'');
@@ -149,9 +156,9 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::LitSeq { open, close, items, .. } => {
       out.mark(open.loc);
       out.push('[');
-      for (i, child) in items.items.iter().enumerate() {
+      for (i, &child_id) in items.items.iter().enumerate() {
         if i > 0 { stop_mark(out); out.push_str(", "); }
-        fmt_node(child, out, depth);
+        fmt_node(ast, child_id, out, depth);
       }
       stop_mark(out);
       out.mark(close.loc);
@@ -166,9 +173,9 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::LitRec { open, close, items, .. } => {
       out.mark(open.loc);
       out.push('{');
-      for (i, child) in items.items.iter().enumerate() {
+      for (i, &child_id) in items.items.iter().enumerate() {
         if i > 0 { stop_mark(out); out.push_str(", "); }
-        fmt_node(child, out, depth);
+        fmt_node(ast, child_id, out, depth);
       }
       stop_mark(out);
       out.mark(close.loc);
@@ -183,7 +190,8 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         out.push_str("\":");
         let mut at_line_start = true;
         let mut src_line_offset = 0u32;
-        for child in children {
+        for &child_id in children.iter() {
+          let child = ast.nodes.get(child_id);
           match &child.kind {
             NodeKind::LitStr { content: s, .. } => {
               for (i, line) in s.split('\n').enumerate() {
@@ -205,7 +213,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
                 at_line_start = false;
               }
               out.push_str("${");
-              fmt_node(child, out, depth);
+              fmt_node(ast, child_id, out, depth);
               out.push('}');
             }
           }
@@ -214,12 +222,13 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         // Quoted raw template: 'text \${expr} text'
         // Interpolation uses \${...} syntax (unlike StrTempl which uses \${...} differently)
         out.push('\'');
-        for child in children {
+        for &child_id in children.iter() {
+          let child = ast.nodes.get(child_id);
           match &child.kind {
             NodeKind::LitStr { content: s, .. } => out.push_str(s),
             _ => {
               out.push_str("\\${");
-              fmt_node(child, out, depth);
+              fmt_node(ast, child_id, out, depth);
               out.push('}');
             }
           }
@@ -233,49 +242,49 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::Spread { op, inner } => {
       out.mark(op.loc);
       out.push_str("..");
-      if let Some(n) = inner {
-        fmt_node(n, out, depth);
+      if let Some(inner_id) = inner {
+        fmt_node(ast, inner_id, out, depth);
       }
     }
     NodeKind::Bind { op, lhs, rhs } => {
-      fmt_node(lhs, out, depth);
+      fmt_node(ast, lhs, out, depth);
       out.push(' ');
       out.mark(op.loc);
       out.push_str("= ");
-      fmt_node(rhs, out, depth);
+      fmt_node(ast, rhs, out, depth);
     }
-    NodeKind::Apply { func, args } => fmt_apply(func, &args.items, out, depth),
+    NodeKind::Apply { func, args } => fmt_apply(ast, func, &args.items, out, depth),
     NodeKind::Module { exprs, .. } => {
-      for (i, child) in exprs.items.iter().enumerate() {
+      for (i, &child_id) in exprs.items.iter().enumerate() {
         if i > 0 { out.push('\n'); ind(out, depth); }
-        fmt_node(child, out, depth);
+        fmt_node(ast, child_id, out, depth);
       }
     }
-    NodeKind::Fn { params, sep, body } => fmt_fn(params, sep, &body.items, out, depth),
+    NodeKind::Fn { params, sep, body } => fmt_fn(ast, params, &sep, &body.items, out, depth),
     NodeKind::Patterns(exprs) => {
-      for (i, child) in exprs.items.iter().enumerate() {
+      for (i, &child_id) in exprs.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
-        fmt_node(child, out, depth);
+        fmt_node(ast, child_id, out, depth);
       }
     }
     NodeKind::UnaryOp { op, operand } => {
       out.mark(op.loc);
       out.push_str(op.src);
       if !op.src.starts_with('-') { out.push(' '); }
-      fmt_node(operand, out, depth);
+      fmt_node(ast, operand, out, depth);
     }
     NodeKind::InfixOp { op, lhs, rhs } => {
-      fmt_node(lhs, out, depth);
+      fmt_node(ast, lhs, out, depth);
       out.push(' ');
       out.mark(op.loc);
       out.push_str(op.src);
       out.push(' ');
-      fmt_node(rhs, out, depth);
+      fmt_node(ast, rhs, out, depth);
     }
     NodeKind::ChainedCmp(parts) => {
       for part in parts.iter() {
         match part {
-          CmpPart::Operand(n) => fmt_node(n, out, depth),
+          CmpPart::Operand(n) => fmt_node(ast, *n, out, depth),
           CmpPart::Op(tok) => {
             out.push(' ');
             out.mark(tok.loc);
@@ -286,14 +295,14 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::Member { op, lhs, rhs } => {
-      fmt_node(lhs, out, depth);
+      fmt_node(ast, lhs, out, depth);
       out.mark(op.loc);
       out.push('.');
-      fmt_node(rhs, out, depth);
+      fmt_node(ast, rhs, out, depth);
     }
     NodeKind::Group { close, inner, .. } => {
       out.push('(');
-      fmt_node(inner, out, depth);
+      fmt_node(ast, inner, out, depth);
       out.mark(close.loc);
       out.push(')');
     }
@@ -301,15 +310,15 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
     NodeKind::Wildcard => out.push('_'),
     NodeKind::Token(s) => out.push_str(s),
     NodeKind::BindRight { op, lhs, rhs } => {
-      fmt_node(lhs, out, depth);
+      fmt_node(ast, lhs, out, depth);
       out.push(' ');
       out.mark(op.loc);
       out.push_str("|= ");
-      fmt_node(rhs, out, depth);
+      fmt_node(ast, rhs, out, depth);
     }
     NodeKind::Pipe(exprs) => {
-      let multiline = exprs.items.iter().any(|e| is_multiline(e));
-      for (i, child) in exprs.items.iter().enumerate() {
+      let multiline = exprs.items.iter().any(|&e| is_multiline(ast, e));
+      for (i, &child_id) in exprs.items.iter().enumerate() {
         if i > 0 {
           if multiline {
             out.push('\n');
@@ -319,32 +328,32 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
             out.push_str(" | ");
           }
         }
-        fmt_node(child, out, depth);
+        fmt_node(ast, child_id, out, depth);
       }
     }
     NodeKind::Match { subjects, sep, arms } => {
       out.push_str("match ");
-      for (i, subj) in subjects.items.iter().enumerate() {
+      for (i, &subj_id) in subjects.items.iter().enumerate() {
         if i > 0 { out.push_str(", "); }
-        fmt_node(subj, out, depth);
+        fmt_node(ast, subj_id, out, depth);
       }
       out.mark(sep.loc);
       out.push(':');
-      for arm in &arms.items {
+      for &arm_id in arms.items.iter() {
         out.push('\n');
         ind(out, depth + 1);
-        fmt_node(arm, out, depth + 1);
+        fmt_node(ast, arm_id, out, depth + 1);
       }
     }
     NodeKind::Arm { lhs, sep, body } => {
-      fmt_node(lhs, out, depth);
+      fmt_node(ast, lhs, out, depth);
       out.mark(sep.loc);
       out.push(':');
-      fmt_body(&body.items, out, depth, true);
+      fmt_body(ast, &body.items, out, depth, true);
     }
     NodeKind::Try(inner) => {
       out.push_str("try ");
-      fmt_node(inner, out, depth);
+      fmt_node(ast, inner, out, depth);
     }
     NodeKind::StrTempl { open, close, children } => {
       if open.src == "\":" {
@@ -352,7 +361,8 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
         out.push_str("\":");
         // Track whether we're at start of a line (after \n) for indentation
         let mut at_line_start = true;
-        for child in children {
+        for &child_id in children.iter() {
+          let child = ast.nodes.get(child_id);
           match &child.kind {
             NodeKind::LitStr { content: s, .. } => {
               for (i, line) in s.split('\n').enumerate() {
@@ -371,7 +381,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
                 at_line_start = false;
               }
               out.push_str("${");
-              fmt_node(child, out, depth);
+              fmt_node(ast, child_id, out, depth);
               out.push('}');
             }
           }
@@ -379,7 +389,8 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       } else {
         // Quoted string with interpolation
         out.push('\'');
-        for child in children {
+        for &child_id in children.iter() {
+          let child = ast.nodes.get(child_id);
           match &child.kind {
             NodeKind::LitStr { content: s, .. } => {
               if s.contains('\n') {
@@ -396,7 +407,7 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
             }
             _ => {
               out.push_str("\\${");
-              fmt_node(child, out, depth);
+              fmt_node(ast, child_id, out, depth);
               out.push('}');
             }
           }
@@ -406,42 +417,46 @@ fn fmt_node(node: &Node, out: &mut MappedWriter, depth: usize) {
       }
     }
     NodeKind::Block { name, params, sep, body } => {
-      fmt_node(name, out, depth);
+      fmt_node(ast, name, out, depth);
       out.push(' ');
-      fmt_node(params, out, depth);
+      fmt_node(ast, params, out, depth);
       out.mark(sep.loc);
       out.push(':');
-      fmt_body(&body.items, out, depth, true);
+      fmt_body(ast, &body.items, out, depth, true);
     }
   }
 }
 
-fn is_complex_arg(node: &Node) -> bool {
+fn is_complex_arg(ast: &Ast<'_>, id: AstId) -> bool {
   // An arg that has fn args inside it — should go on its own indented line
-  match &node.kind {
-    NodeKind::Apply { args, .. } => args.items.iter().any(is_fn),
+  match &ast.nodes.get(id).kind {
+    NodeKind::Apply { args, .. } => args.items.iter().any(|&a| is_fn(ast, a)),
     _ => false,
   }
 }
 
-fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
+fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter, depth: usize) {
   // Tagged string literal: `id'foo'`, `op'+'` — func ident + single quoted string arg, no separator
   // Excludes block strings (`":`) which need a space separator.
   // Excludes CPS primitives (·-prefixed idents) which are not user-level tagged templates.
-  if let [arg] = args
-    && let NodeKind::Ident(func_name) = &func.kind
-    && !func_name.starts_with('·') && !is_multiline(arg)
-    && matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. }) {
-      fmt_node(func, out, depth);
-      fmt_node(arg, out, depth);
-      return;
+  if let [arg_id] = args {
+    let arg = ast.nodes.get(*arg_id);
+    let func_node = ast.nodes.get(func);
+    if let NodeKind::Ident(func_name) = &func_node.kind
+      && !func_name.starts_with('·') && !is_multiline(ast, *arg_id)
+        && matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. })
+      {
+        fmt_node(ast, func, out, depth);
+        fmt_node(ast, *arg_id, out, depth);
+        return;
+      }
   }
 
-  fmt_node(func, out, depth);
+  fmt_node(ast, func, out, depth);
 
   // Split args into leading non-fn args and trailing fn/complex args
   // "Complex" args (applies with fn args) get treated like trailing fns — each on its own line
-  let trailing_start = args.iter().rposition(|a| !is_fn(a) && !is_complex_arg(a))
+  let trailing_start = args.iter().rposition(|&a| !is_fn(ast, a) && !is_complex_arg(ast, a))
     .map(|i| i + 1).unwrap_or(0);
   let (plain, trailing) = args.split_at(trailing_start);
 
@@ -449,33 +464,29 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   // "..., next_arg" rendering would corrupt the output — the multiline arg's
   // tail line would absorb subsequent `, next_arg` tokens. Force full block
   // mode: every arg on its own indented line.
-  //
-  // This happens when CPS emits cont-first user calls: `·add_0 fn v_25: <body>, 1, 2`
-  // where the fn arg precedes Val args. The wrong rendering used to produce
-  // `·add_0 fn v_25: <body>, 1, 2` glued into the fn's last line; now every
-  // arg goes on its own line.
-  //
-  // A multiline arg at the *end* of plain is fine (e.g. `log 'foo\n  bar'`) —
-  // nothing follows it to corrupt.
   let has_bad_inline = plain.len() >= 2 && plain[..plain.len() - 1]
-    .iter().any(|a| is_fn(a) || is_multiline(a));
+    .iter().any(|&a| is_fn(ast, a) || is_multiline(ast, a));
   if has_bad_inline {
-    for arg in args {
+    for &arg_id in args {
       out.push('\n');
       ind(out, depth + 1);
-      if let NodeKind::Fn { params, sep, body } = &arg.kind {
-        fmt_fn_with_inline(params, sep, &body.items, out, depth + 1, true);
+      let arg_node = ast.nodes.get(arg_id);
+      if let NodeKind::Fn { params, sep, body } = &arg_node.kind {
+        let params = *params;
+        let sep = *sep;
+        let body_items: Vec<AstId> = body.items.to_vec();
+        fmt_fn_with_inline(ast, params, &sep, &body_items, out, depth + 1, true);
       } else {
-        fmt_node(arg, out, depth + 1);
+        fmt_node(ast, arg_id, out, depth + 1);
       }
     }
     return;
   }
 
   // First plain arg: space separator; rest: ", "
-  for (i, arg) in plain.iter().enumerate() {
+  for (i, &arg_id) in plain.iter().enumerate() {
     if i == 0 { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
-    fmt_node(arg, out, depth);
+    fmt_node(ast, arg_id, out, depth);
   }
 
   if trailing.is_empty() {
@@ -483,101 +494,111 @@ fn fmt_apply(func: &Node, args: &[Node], out: &mut MappedWriter, depth: usize) {
   }
 
   // Single trailing fn (no complex args) → keep `fn params:` on same line
-  if trailing.len() == 1 && is_fn(&trailing[0])
-    && let NodeKind::Fn { params, sep, body } = &trailing[0].kind {
+  if trailing.len() == 1 && is_fn(ast, trailing[0]) {
+    let trailing_node = ast.nodes.get(trailing[0]);
+    if let NodeKind::Fn { params, sep, body } = &trailing_node.kind {
+      let params = *params;
+      let sep = *sep;
+      let body_items: Vec<AstId> = body.items.to_vec();
       if plain.is_empty() { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
-      fmt_fn_with_inline(params, sep, &body.items, out, depth, false);
+      fmt_fn_with_inline(ast, params, &sep, &body_items, out, depth, false);
       return;
+    }
   }
 
   // Multiple trailing fns/complex args → each on its own indented line
   if !plain.is_empty() { stop_mark(out); out.push(','); }
-  for arg in trailing {
+  for &arg_id in trailing {
     out.push('\n');
     ind(out, depth + 1);
-    if let NodeKind::Fn { params, sep, body } = &arg.kind {
-      fmt_fn_with_inline(params, sep, &body.items, out, depth + 1, true);
+    let arg_node = ast.nodes.get(arg_id);
+    if let NodeKind::Fn { params, sep, body } = &arg_node.kind {
+      let params = *params;
+      let sep = *sep;
+      let body_items: Vec<AstId> = body.items.to_vec();
+      fmt_fn_with_inline(ast, params, &sep, &body_items, out, depth + 1, true);
     } else {
-      fmt_node(arg, out, depth + 1);
+      fmt_node(ast, arg_id, out, depth + 1);
     }
   }
 }
 
-fn fmt_fn(params: &Node, sep: &Token, body: &[Node], out: &mut MappedWriter, depth: usize) {
-  fmt_fn_with_inline(params, sep, body, out, depth, true);
+fn fmt_fn(ast: &Ast<'_>, params: AstId, sep: &Token, body: &[AstId], out: &mut MappedWriter, depth: usize) {
+  fmt_fn_with_inline(ast, params, sep, body, out, depth, true);
 }
 
-fn fmt_fn_with_inline(params: &Node, sep: &Token, body: &[Node], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
+fn fmt_fn_with_inline(ast: &Ast<'_>, params: AstId, sep: &Token, body: &[AstId], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
   let inline = body.len() == 1 && if allow_apply_inline {
-    is_inline_expr(&body[0])
+    is_inline_expr(ast, body[0])
   } else {
-    is_inline_single_trailing(&body[0])
+    is_inline_single_trailing(ast, body[0])
   };
   if inline {
-    fmt_fn_inline(params, sep, &body[0], out, depth);
+    fmt_fn_inline(ast, params, sep, body[0], out, depth);
   } else {
-    fmt_fn_params(params, out);
+    fmt_fn_params(ast, params, out);
     out.mark(sep.loc);
     out.push(':');
-    fmt_body(body, out, depth, allow_apply_inline);
+    fmt_body(ast, body, out, depth, allow_apply_inline);
   }
 }
 
 /// Inline after `fn params: ` in general (standalone fn, stacked fn args)
-fn is_inline_expr(node: &Node) -> bool {
+fn is_inline_expr(ast: &Ast<'_>, id: AstId) -> bool {
   if FORCE_BLOCK_FN_BODIES.with(|f| f.get()) { return false; }
-  if is_multiline(node) { return false; }
-  match &node.kind {
+  if is_multiline(ast, id) { return false; }
+  match &ast.nodes.get(id).kind {
     // apply with no trailing fn args and no multiline args → inline
-    NodeKind::Apply { args, .. } => !args.items.iter().any(|a| is_fn(a) || is_multiline(a)),
-    _ => is_atom(node),
+    NodeKind::Apply { args, .. } => !args.items.iter().any(|&a| is_fn(ast, a) || is_multiline(ast, a)),
+    _ => is_atom(ast, id),
   }
 }
 
 /// Inline after `fn params: ` when it's the single trailing fn in an apply call
-fn is_inline_single_trailing(node: &Node) -> bool {
+fn is_inline_single_trailing(ast: &Ast<'_>, id: AstId) -> bool {
   if FORCE_BLOCK_FN_BODIES.with(|f| f.get()) { return false; }
-  is_atom(node)
+  is_atom(ast, id)
 }
 
-fn fmt_fn_inline(params: &Node, sep: &Token, expr: &Node, out: &mut MappedWriter, depth: usize) {
-  fmt_fn_params(params, out);
+fn fmt_fn_inline(ast: &Ast<'_>, params: AstId, sep: &Token, expr: AstId, out: &mut MappedWriter, depth: usize) {
+  fmt_fn_params(ast, params, out);
   out.mark(sep.loc);
   out.push_str(": ");
-  fmt_node(expr, out, depth);
+  fmt_node(ast, expr, out, depth);
 }
 
-fn fmt_fn_params(params: &Node, out: &mut MappedWriter) {
+fn fmt_fn_params(ast: &Ast<'_>, params: AstId, out: &mut MappedWriter) {
   out.push_str("fn");
-  if let NodeKind::Patterns(exprs) = &params.kind {
-    for (i, child) in exprs.items.iter().enumerate() {
+  if let NodeKind::Patterns(exprs) = &ast.nodes.get(params).kind {
+    let items: Vec<AstId> = exprs.items.to_vec();
+    for (i, child_id) in items.iter().enumerate() {
       if i == 0 { out.push(' '); } else { out.push_str(", "); }
-      fmt_node(child, out, 0);
+      fmt_node(ast, *child_id, out, 0);
     }
   } else {
     out.push(' ');
-    fmt_node(params, out, 0);
+    fmt_node(ast, params, out, 0);
   }
 }
 
-fn fmt_body(body: &[Node], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
+fn fmt_body(ast: &Ast<'_>, body: &[AstId], out: &mut MappedWriter, depth: usize, allow_apply_inline: bool) {
   if body.len() == 1 {
     let inline = if allow_apply_inline {
-      is_inline_expr(&body[0])
+      is_inline_expr(ast, body[0])
     } else {
-      is_inline_single_trailing(&body[0])
+      is_inline_single_trailing(ast, body[0])
     };
     if inline {
       out.push(' ');
-      fmt_node(&body[0], out, depth);
+      fmt_node(ast, body[0], out, depth);
       return;
     }
   }
   // Block body: each statement on its own indented line
-  for stmt in body {
+  for &stmt_id in body {
     out.push('\n');
     ind(out, depth + 1);
-    fmt_node(stmt, out, depth + 1);
+    fmt_node(ast, stmt_id, out, depth + 1);
   }
 }
 
@@ -590,8 +611,8 @@ mod tests {
   use crate::parser::parse;
 
   fn fmt(src: &str) -> String {
-    let result = parse(src, "test").expect("parse failed");
-    ast_fmt(&result.root)
+    let ast = parse(src, "test").expect("parse failed");
+    ast_fmt(&ast)
   }
 
   test_macros::include_fink_tests!("src/passes/ast/test_fmt.fnk");
@@ -641,8 +662,8 @@ mod tests {
 
   /// Parse source, format with source map, return mappings as (out_line, out_col, src_line, src_col).
   fn mappings(src: &str) -> Vec<(u32, u32, u32, u32)> {
-    let result = parse(src, "test.fnk").expect("parse failed");
-    let (_, srcmap) = fmt_mapped(&result.root, "test.fnk");
+    let ast = parse(src, "test.fnk").expect("parse failed");
+    let (_, srcmap) = fmt_mapped(&ast, "test.fnk");
     srcmap.iter().collect()
   }
 

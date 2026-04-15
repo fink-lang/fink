@@ -33,7 +33,7 @@ pub fn to_ast<'src>(src: &'src str, url: &str) -> Result<passes::Ast<'src>, Stri
   passes::parse(src, url).map_err(|e| e.message)
 }
 
-/// Parse + desugar → desugared AST with index and scopes.
+/// Parse + desugar → desugared AST with scope analysis.
 pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::DesugaredAst<'src>, String> {
   let parsed = passes::parse(src, url).map_err(|e| e.message)?;
   passes::desugar(parsed).map_err(|e| format!("{e:?}"))
@@ -120,4 +120,3 @@ pub fn run(
 pub fn debug(path: &str) -> Result<(), String> {
   dap::run(std::io::stdin(), std::io::stdout(), path)
 }
-

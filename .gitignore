@@ -1,6 +1,9 @@
 .DS_Store
 /.vscode/
-/.claude/settings.local.json
+
+/.claude/*
+!/.claude/settings.json
+!/.claude/hooks/
 
 /_scratch/
 
