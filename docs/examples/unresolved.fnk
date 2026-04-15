@@ -82,3 +82,48 @@ fn foo:
 # with block — introduce context
 with db_ctx:
   result = foo ()
+
+
+
+--- --- ---
+operator precedence: << >> as shift vs channel send
+--- --- ---
+
+# `<<` / `>>` currently serve double duty: bitwise shift (tight
+# precedence, above `==`) and channel send/receive (wants loose
+# precedence, below `==`). Contradictory, so pick a direction.
+#
+# case A — bitwise
+0x88 << 0x1 == 0xFFFF
+# user expects (0x88 << 0x1) == 0xFFFF  ← tight binding
+#
+# case B — channel
+stdout << 'foo' == 'bar'
+# user expects stdout << ('foo' == 'bar')  ← loose binding
+#
+# Options:
+#
+# (a) keep `<<` for channel send, rename bitwise to `shl`/`shr`
+#     keywords, move `<<`/`>>` below `==` (probably below `and`/`or`
+#     too). Preserves the statement-shape arrow for IO code.
+#     Chained sends `a << b << c` require `<<` to return the channel.
+#       stdout << 'hello'
+#       0x88 shl 0x1 == 0xFFFF
+#
+# (b) drop `<<`/`>>` for channels entirely; channels are callable.
+#     `<<`/`>>` stay bitwise with tight precedence. Loses the
+#     arrow but removes a whole operator row from the language.
+#       stdout 'hello'
+#       'hello' | stdout
+#       0x88 << 0x1 == 0xFFFF
+#
+# (c) status quo — live with the C++/Ruby footgun, parenthesise
+#     the RHS of `<<` when comparing. Rejected: footgun is real.
+#
+# Note: `'foo' >> stdout` adds nothing over `'foo' | stdout` once
+# channels are callable. Whichever option wins, `>>` for channel
+# send probably goes.
+#
+# Related decision: should chained sends return the channel (so
+# `a << b << c` sends three messages in order) or return the sent
+# value (current behaviour)? Only matters under option (a).
