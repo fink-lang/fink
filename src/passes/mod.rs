@@ -201,7 +201,7 @@ pub fn emit_wat(wasm: &Wasm) -> Result<String, String> {
 /// Run wasm-opt on a WASM binary. Requires the `wasm-opt` tool on PATH.
 /// `level` is the optimization flag (e.g. "-O", "-O2", "-Os", "-Oz").
 /// Native only — shells out to an external process.
-#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "run")]
 pub fn optimize_wasm(wasm: &mut Wasm, level: &str) -> Result<(), String> {
   use std::io::Write;
   use std::process::Command;

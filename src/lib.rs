@@ -3,16 +3,16 @@ pub mod errors;
 pub mod fmt;
 #[cfg(feature = "compile")]
 pub mod compile;
-#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "run")]
 pub mod dap;
-#[cfg(all(feature = "runtime", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "runtime")]
 pub mod runner;
 pub mod passes;
 pub mod propgraph;
 pub mod sourcemap;
 pub mod strings;
 
-#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "run")]
 pub mod runtime;
 pub mod test_context;
 
@@ -112,7 +112,7 @@ pub fn compile_package(
 }
 
 /// Compile source → optimized WASM binary.
-#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "run")]
 pub fn to_wasm_opt(src: &str, path: &str, level: &str) -> Result<passes::Wasm, String> {
   let mut wasm = to_wasm(src, path)?;
   passes::optimize_wasm(&mut wasm, level)?;
@@ -130,7 +130,7 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
 ///
 /// `args` is the CLI argv passed to the user's `main` — argv[0] is the
 /// program name, followed by user-supplied CLI arguments.
-#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "run")]
 pub fn run(
   src: &str,
   path: &str,
@@ -143,7 +143,7 @@ pub fn run(
 }
 
 /// Start DAP debug server for a .fnk file, communicating over stdin/stdout.
-#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "run")]
 pub fn debug(path: &str) -> Result<(), String> {
   dap::run(std::io::stdin(), std::io::stdout(), path)
 }
