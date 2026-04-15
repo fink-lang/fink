@@ -65,3 +65,22 @@ test 'str implicit formatting escapes', fn:
     #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEsQSxDQUFBLFciCn0=
 
 
+test 'str templ escape handling', fn:
+  expect cps_module ƒink:
+    '\n\r\t\f${bar}\b\v\$\'\\\xC3\xA9\u{8A_9E}'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·str_fmt '␊␍␉␌', ·∅bar, '␈␋＄′⧵é語', ·ƒret_0
+    #sourcemaps:BLESS_ME
+
+
+test 'str templ implicit formatting handling', fn:
+  expect cps_module ƒink:
+    '1\n${bar}
+      3'
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·str_fmt '1␊', ·∅bar, '␊3', ·ƒret_0
+    #sourcemaps:BLESS_ME
+
+
