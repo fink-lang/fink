@@ -1,0 +1,8 @@
+# Imports the SAME common.fnk but via a deliberately different raw
+# relative path (`../sub/common.fnk`) to exercise canonical-URL dedup:
+# both left.fnk and right.fnk must share a single linked copy of
+# common.fnk despite reaching it through different strings.
+# Canonical form (entry-relative): ./sub/common.fnk
+{base} = import '../sub/common.fnk'
+
+right_val = base + 2

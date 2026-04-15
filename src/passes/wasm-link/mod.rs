@@ -18,21 +18,33 @@
 //
 // `compile_package` drives the full multi-module compile:
 //
-//   1. Compile entry module → extract module_imports (URL → [name]).
-//   2. Work-queue: for each imported URL, resolve the absolute path,
+//   1. Compile entry module under its canonical URL `./<basename>`.
+//   2. Work-queue: for each raw import URL in a fragment, compute the
+//      dep's canonical URL via `canonicalise_url`, dedup against seen
+//      canonical URLs, resolve to disk via `resolve_canonical_to_disk`,
 //      compile the dep, extract its imports, enqueue transitive deps.
 //   3. Link: [@fink/runtime, dep1, dep2, ..., entry] in dependency order.
 //
-// ## URL resolution
+// ## Canonical URLs
 //
-// Import URLs in source are relative to the importing module's directory.
-// `resolve_url` converts a relative URL + the importing module's absolute
-// path into the dep's absolute path on disk.
+// Every module (entry and dep) has a canonical URL: entry-module-relative,
+// lexically normalised (`./sub/foo.fnk`, `../lib/util.fnk`). The canonical
+// form is the one-and-only identity string used downstream: WASM import
+// section, WAT symbol names, linker keys, dedup keys.
 //
-// The dep's `module_name` in the `LinkInput` is the *canonical URL* as
-// seen by the consumer — the raw URL string from source (e.g. `./foo.fnk`).
-// This matches the string emitted in the WASM import section, so the
-// linker can resolve cross-fragment global imports by module name.
+// `canonicalise_url` computes a dep's canonical URL from the importer's
+// canonical URL + the raw URL the importer wrote in source. Two consumers
+// reaching the same file via different relative URLs produce the same
+// canonical URL, so the dep is compiled and linked exactly once.
+//
+// The CPS IR is immutable, so raw Lit::Str URLs in `BuiltIn::Import` calls
+// stay as written in source. `compile_fragment` builds a raw→canonical
+// rewrite map (`url_rewrite`) and hands it to the emitter, which translates
+// the Lit::Str URL at `BuiltIn::Import` emit sites before looking it up in
+// `module_imports` (whose keys are also pre-rewritten to canonical form).
+//
+// `resolve_canonical_to_disk` turns a canonical URL into an absolute disk
+// path by joining it with the entry module's directory.
 //
 // ## Dep init ordering
 //
@@ -88,78 +100,184 @@ pub fn compile_package(
 ) -> Result<crate::passes::Wasm, String> {
   use crate::passes::wasm::link::{LinkInput, link};
 
-  let entry_url = entry_path
+  // The entry's canonical URL is always `./<filename>`. This is the single
+  // string the entry is known by throughout the compile: passed to `to_lifted`
+  // as the module's identity, used as the importer key when canonicalising
+  // its own imports, and kept out of the linker's dep table (the entry is
+  // linked as `@fink/user`, not under its canonical URL).
+  let entry_dir = entry_path
+    .parent()
+    .ok_or_else(|| format!("entry path has no parent directory: {}", entry_path.display()))?
+    .to_path_buf();
+  let entry_file_name = entry_path
+    .file_name()
+    .ok_or_else(|| format!("entry path has no file name: {}", entry_path.display()))?
     .to_str()
-    .ok_or_else(|| format!("entry path is not valid UTF-8: {}", entry_path.display()))?
-    .to_string();
+    .ok_or_else(|| format!("entry file name is not valid UTF-8: {}", entry_path.display()))?;
+  let entry_canonical_url = format!("./{entry_file_name}");
 
   // Compile the entry module first to discover its imports.
   let entry_source = loader.load(entry_path)?;
-  let (entry_lifted, entry_desugared) = crate::to_lifted(&entry_source, &entry_url)?;
-  let entry_imports = entry_lifted.result.module_imports.clone();
+  let (entry_lifted, entry_desugared) = crate::to_lifted(&entry_source, &entry_canonical_url)?;
+  let entry_raw_imports = entry_lifted.result.module_imports.clone();
 
-  // Compile the entry module into a WASM fragment.
-  let entry_fragment = compile_fragment(&entry_lifted, &entry_desugared, &entry_url, &entry_source);
+  // Canonicalise the entry's imports. These become the BFS seeds and the
+  // `url_rewrite` map the emitter uses to translate the entry's own
+  // `BuiltIn::Import` Lit::Str URLs to canonical form.
+  let entry_url_rewrite: BTreeMap<String, String> = entry_raw_imports
+    .keys()
+    .map(|raw| (raw.clone(), canonicalise_url(&entry_canonical_url, raw)))
+    .collect();
 
-  // Work-queue: compile all transitive deps.
-  // `compiled`: canonical_url → (wasm_bytes, module_imports of that dep)
-  // `order`: dep canonical URLs in the order they were first discovered (BFS).
-  type DepImports = BTreeMap<String, Vec<String>>;
-  let mut compiled: BTreeMap<String, (Vec<u8>, DepImports)> = BTreeMap::new();
-  let mut order: Vec<String> = Vec::new();
+  // Compile the entry module into a WASM fragment. `compile_fragment`
+  // applies the rewrite map to both `module_imports` keys and the
+  // emitter's `url_rewrite` side-channel, so the entry's WASM import
+  // section and global labels use canonical URLs throughout.
+  let entry_fragment = compile_fragment(
+    &entry_lifted,
+    &entry_desugared,
+    &entry_canonical_url,
+    &entry_source,
+    &entry_url_rewrite,
+  );
 
-  // Seed the queue with the entry module's imports.
-  // Each item: (importer_abs_path, import_url_from_source)
-  let mut queue: VecDeque<(PathBuf, String)> = VecDeque::new();
-  for import_url in entry_imports.keys() {
-    queue.push_back((entry_path.to_path_buf(), import_url.clone()));
+  // Walk all transitive deps, keyed on canonical URL so that two
+  // consumers reaching the same file via different relative paths dedup
+  // to a single fragment. During the walk we build:
+  //
+  //   `compiled`: canonical_url → wasm_bytes
+  //   `dep_edges`: canonical_url → list of dep canonical URLs it imports
+  //
+  // The BFS walk order is only used to drive the *compile* schedule; the
+  // *link* order is derived from `dep_edges` via a post-order DFS from
+  // the entry module so that every dep is emitted after all of its own
+  // transitive deps, regardless of BFS discovery order.
+  //
+  // Why not just reverse BFS order? Reversed-BFS happens to produce a
+  // valid topological sort only when BFS first-visit order matches a
+  // reverse-topological order — which breaks as soon as a parent imports
+  // a transitive dep directly (e.g. entry imports both `./util.fnk` and
+  // `./helpers.fnk`, where `helpers.fnk` itself imports `./util.fnk`).
+  // BFS discovers `util` before `helpers`, so reversing puts `util`
+  // after `helpers` and `helpers`'s init reads an uninitialised global.
+  // A proper post-order DFS avoids this.
+  let mut compiled: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+  let mut dep_edges: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+  // Record entry's own dep edges so the post-order walk below can start
+  // from the entry's imports in a stable, source-declared order.
+  let entry_direct_deps: Vec<String> = entry_raw_imports
+    .keys()
+    .map(|raw| entry_url_rewrite.get(raw).cloned().unwrap_or_else(|| raw.clone()))
+    .collect();
+
+  // BFS compile schedule. Queue order doesn't affect link order; it
+  // just ensures each module is compiled once.
+  let mut queue: VecDeque<String> = VecDeque::new();
+  for canonical_url in &entry_direct_deps {
+    queue.push_back(canonical_url.clone());
   }
 
-  // BFS: compile each dep once (memoized by canonical URL).
-  //
-  // TODO(dedup-by-abs-path): `visited` keys on the raw URL string from the
-  // consumer's source. Two different importers using different relative
-  // paths to reach the same on-disk file (e.g. `./foo.fnk` vs
-  // `../dir/foo.fnk`) will each compile a fresh fragment and the linker
-  // will end up with two copies of the same dep. Fix: canonicalize
-  // `dep_abs_path` (realpath) and key `visited` on that, while still
-  // using the raw `import_url` as the `LinkInput.module_name` so the
-  // WASM import section matches what each consumer emitted.
   let mut visited: BTreeSet<String> = BTreeSet::new();
-  while let Some((importer_path, import_url)) = queue.pop_front() {
-    let dep_abs_path = resolve_url(&importer_path, &import_url)?;
-    let canonical_url = import_url.clone(); // URL as written by the consumer
-
-    if visited.contains(&canonical_url) {
+  while let Some(dep_canonical_url) = queue.pop_front() {
+    if visited.contains(&dep_canonical_url) {
       continue;
     }
-    visited.insert(canonical_url.clone());
+    visited.insert(dep_canonical_url.clone());
+
+    // Canonical URL is entry-relative → the dep's disk path is
+    // `entry_dir.join(<canonical_url without leading ./>)`.
+    let dep_abs_path = resolve_canonical_to_disk(&entry_dir, &dep_canonical_url);
 
     let dep_source = loader.load(&dep_abs_path)?;
-    let (dep_lifted, dep_desugared) = crate::to_lifted(&dep_source, &canonical_url)?;
-    let dep_module_imports = dep_lifted.result.module_imports.clone();
+    let (dep_lifted, dep_desugared) = crate::to_lifted(&dep_source, &dep_canonical_url)?;
+    let dep_raw_imports = dep_lifted.result.module_imports.clone();
 
-    let dep_wasm = compile_fragment(&dep_lifted, &dep_desugared, &canonical_url, &dep_source);
+    // Build the dep's rewrite map from its raw import URLs.
+    let dep_url_rewrite: BTreeMap<String, String> = dep_raw_imports
+      .keys()
+      .map(|raw| (raw.clone(), canonicalise_url(&dep_canonical_url, raw)))
+      .collect();
 
-    // Enqueue transitive deps.
-    for transitive_url in dep_module_imports.keys() {
-      if !visited.contains(transitive_url) {
-        queue.push_back((dep_abs_path.clone(), transitive_url.clone()));
+    // Record this dep's outgoing edges (in source-declared order) for
+    // the post-order DFS below.
+    let dep_direct: Vec<String> = dep_raw_imports
+      .keys()
+      .map(|raw| dep_url_rewrite.get(raw).cloned().unwrap_or_else(|| raw.clone()))
+      .collect();
+    dep_edges.insert(dep_canonical_url.clone(), dep_direct.clone());
+
+    let dep_wasm = compile_fragment(
+      &dep_lifted,
+      &dep_desugared,
+      &dep_canonical_url,
+      &dep_source,
+      &dep_url_rewrite,
+    );
+
+    // Enqueue transitive deps by their canonical URLs.
+    for transitive_canonical in &dep_direct {
+      if !visited.contains(transitive_canonical) {
+        queue.push_back(transitive_canonical.clone());
       }
     }
 
-    compiled.insert(canonical_url.clone(), (dep_wasm, dep_module_imports));
-    order.push(canonical_url);
+    compiled.insert(dep_canonical_url.clone(), dep_wasm);
   }
 
-  // Link: @fink/runtime + deps (in topological order: providers before
-  // consumers) + entry. The BFS above visits consumers before their
-  // providers (entry discovers its direct imports first, which in turn
-  // push their own imports onto the queue). Reversing the discovery
-  // order produces a valid topological sort for the acyclic case: the
-  // last fragment BFS visits is always a leaf dep, which must initialize
-  // first because everything above it in the graph depends on its
-  // exported globals being populated.
+  // Topological sort: post-order DFS starting from the entry's direct
+  // imports. Each dep is appended to `topo_order` only after all of its
+  // transitive deps have been appended, so link inputs are in a valid
+  // provider-before-consumer order.
+  //
+  // Cycles are not expected today — the language does not yet support
+  // circular imports — but the `in_progress` set guards against a
+  // malformed graph by breaking cycles arbitrarily (we simply skip a
+  // back-edge). A proper diagnostic should land alongside cycle support.
+  let mut topo_order: Vec<String> = Vec::new();
+  let mut done: BTreeSet<String> = BTreeSet::new();
+  let mut in_progress: BTreeSet<String> = BTreeSet::new();
+  // Iterative DFS with an explicit frame stack: (node, iter over children).
+  // Each frame advances one child at a time; when all children are done
+  // the frame's node is appended to `topo_order` (post-order).
+  enum Frame {
+    Enter(String),
+    Exit(String),
+  }
+  let mut stack: Vec<Frame> = Vec::new();
+  for dep in &entry_direct_deps {
+    stack.push(Frame::Enter(dep.clone()));
+  }
+  while let Some(frame) = stack.pop() {
+    match frame {
+      Frame::Enter(node) => {
+        if done.contains(&node) || in_progress.contains(&node) {
+          continue;
+        }
+        in_progress.insert(node.clone());
+        // Push Exit first so it runs after all children.
+        stack.push(Frame::Exit(node.clone()));
+        if let Some(children) = dep_edges.get(&node) {
+          // Push children in reverse so the leftmost is popped first —
+          // preserves source-declared order in the final post-order.
+          for child in children.iter().rev() {
+            if !done.contains(child) && !in_progress.contains(child) {
+              stack.push(Frame::Enter(child.clone()));
+            }
+          }
+        }
+      }
+      Frame::Exit(node) => {
+        in_progress.remove(&node);
+        if done.insert(node.clone()) {
+          topo_order.push(node);
+        }
+      }
+    }
+  }
+
+  // Link: @fink/runtime + deps (in post-order: providers before
+  // consumers) + entry.
   //
   // The linker preserves fragment order in its export section, so the
   // linked binary's `<url>:fink_module` exports end up in init order —
@@ -171,9 +289,8 @@ pub fn compile_package(
     LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
   ];
 
-  // Reverse BFS order → topological (providers before consumers).
-  for canonical_url in order.iter().rev() {
-    if let Some((dep_wasm, _)) = compiled.remove(canonical_url) {
+  for canonical_url in &topo_order {
+    if let Some(dep_wasm) = compiled.remove(canonical_url) {
       link_inputs.push(LinkInput {
         module_name: canonical_url.clone(),
         wasm: dep_wasm,
@@ -232,16 +349,35 @@ fn compile_fragment(
   desugared: &crate::passes::DesugaredAst<'_>,
   url: &str,
   src: &str,
+  url_rewrite: &BTreeMap<String, String>,
 ) -> Vec<u8> {
   use crate::passes::wasm::{collect, dwarf, emit};
 
   let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast);
-  let module = collect::collect(
+
+  // Rewrite module_imports keys from raw source URLs to canonical URLs
+  // before handing the Module to the emitter. This is the one place the
+  // raw→canonical map gets applied to the map itself; the CPS IR stays
+  // immutable (Lit::Str URLs remain as written in source) and the emitter
+  // consults `url_rewrite` at BuiltIn::Import sites to look up the key.
+  let canonical_module_imports: BTreeMap<String, Vec<String>> = lifted
+    .result
+    .module_imports
+    .iter()
+    .map(|(raw, names)| {
+      let canonical = url_rewrite.get(raw).cloned().unwrap_or_else(|| raw.clone());
+      (canonical, names.clone())
+    })
+    .collect();
+
+  let mut module = collect::collect(
     &lifted.result.root,
     &ir_ctx,
     &lifted.result.module_locals,
-    lifted.result.module_imports.clone(),
+    canonical_module_imports,
   );
+  module.url_rewrite = url_rewrite.clone();
+
   let ir_ctx = ir_ctx.with_globals(module.globals.clone());
   let mut result = emit::emit(&module, &ir_ctx);
 
@@ -251,21 +387,113 @@ fn compile_fragment(
   result.wasm
 }
 
-/// Resolve an import URL relative to the importing module's absolute path.
+/// Resolve a canonical (entry-relative) URL to an absolute disk path by
+/// joining it with the entry module's directory. The canonical URL's
+/// leading `./` is stripped so the join produces a clean path; a leading
+/// `../` chain is preserved since the URL may legitimately escape the
+/// entry's directory.
 ///
-/// `importer_path` is the absolute path of the importing module.
-/// `import_url` is the URL string as written in source (e.g. `./foo.fnk`).
-///
-/// Returns the absolute path to the dependency on disk.
-fn resolve_url(importer_path: &Path, import_url: &str) -> Result<PathBuf, String> {
-  let importer_dir = importer_path
-    .parent()
-    .ok_or_else(|| format!("importer path has no parent directory: {}", importer_path.display()))?;
+/// Purely lexical — no `fs::canonicalize`, no symlink collapse. The
+/// loader is responsible for making sense of the resulting `PathBuf`.
+fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
+  let rest = canonical_url.strip_prefix("./").unwrap_or(canonical_url);
+  entry_dir.join(rest)
+}
 
-  // Normalize the path (resolve `..` etc.) for correct filesystem access.
-  // We keep the URL as-is for the module_name (canonical identity from consumer's POV).
-  let dep_path = importer_dir.join(import_url);
-  Ok(dep_path)
+/// Canonicalise an import URL to an entry-module-relative, lexically
+/// normalised form.
+///
+/// The canonical form is the single string used everywhere downstream:
+/// WASM import section, WAT symbol names, linker keys, dedup keys. Two
+/// consumers reaching the same file via different relative paths must
+/// produce the same canonical URL so the linker links the dep exactly
+/// once and both consumers' imports resolve to it.
+///
+/// - `importer_canonical_url` is the importer's own canonical URL
+///   (already entry-relative, e.g. `./sub/left.fnk`).
+/// - `raw_url` is the URL string as written in the importer's source
+///   (importer-relative, e.g. `./common.fnk`).
+///
+/// Returns the dep's canonical URL (entry-relative, e.g. `./sub/common.fnk`).
+///
+/// Only relative URLs (starting with `./` or `../`) are canonicalised.
+/// Anything else (bare identifier, `@fink/*`, etc.) passes through
+/// unchanged — the policy is "if we don't know how to resolve it, don't
+/// touch it". Operates purely on strings; no filesystem access, no
+/// `..`-collapsing beyond the source path. On macOS this means
+/// case-insensitive clashes are the user's problem.
+fn canonicalise_url(importer_canonical_url: &str, raw_url: &str) -> String {
+  if !is_relative_url(raw_url) {
+    return raw_url.to_string();
+  }
+
+  // Compute the importer's directory (entry-relative) by stripping the
+  // final path segment from its canonical URL. An empty importer URL
+  // means "the entry is its own importer" — treat directory as `.`.
+  let importer_dir = importer_dir_from_canonical(importer_canonical_url);
+
+  // Join the importer's directory with the raw URL, then lex-normalise.
+  let joined = join_segments(&importer_dir, raw_url);
+  normalise_segments(&joined)
+}
+
+/// A URL is "relative" if it starts with `./` or `../`. These are the
+/// only forms the compiler currently understands as filesystem imports.
+fn is_relative_url(url: &str) -> bool {
+  url.starts_with("./") || url.starts_with("../")
+}
+
+/// Return the importer's directory as a canonical-URL prefix — the
+/// importer's canonical URL with its final segment stripped. Always
+/// ends with `/` (or is the bare `./` for the entry's directory).
+fn importer_dir_from_canonical(importer_canonical_url: &str) -> String {
+  if importer_canonical_url.is_empty() {
+    return "./".to_string();
+  }
+  match importer_canonical_url.rfind('/') {
+    Some(idx) => importer_canonical_url[..=idx].to_string(),
+    None => "./".to_string(),
+  }
+}
+
+/// Concatenate an importer directory (ending with `/`) and a raw URL.
+/// Strips a leading `./` from the raw URL first so the result doesn't
+/// grow a redundant `./` in the middle.
+fn join_segments(importer_dir: &str, raw_url: &str) -> String {
+  let rest = raw_url.strip_prefix("./").unwrap_or(raw_url);
+  format!("{importer_dir}{rest}")
+}
+
+/// Lexically normalise a canonical URL: collapse `.` and `..` segments,
+/// preserve any leading `../` chain (the URL may escape the entry's
+/// directory), and always produce a leading `./` prefix so we never
+/// emit a bare or absolute-looking path.
+fn normalise_segments(url: &str) -> String {
+  let mut stack: Vec<&str> = Vec::new();
+  let mut leading_parents: usize = 0;
+
+  for segment in url.split('/') {
+    match segment {
+      "" | "." => continue,
+      ".." => {
+        if stack.pop().is_none() {
+          leading_parents += 1;
+        }
+      }
+      other => stack.push(other),
+    }
+  }
+
+  let mut out = String::new();
+  if leading_parents == 0 {
+    out.push_str("./");
+  } else {
+    for _ in 0..leading_parents {
+      out.push_str("../");
+    }
+  }
+  out.push_str(&stack.join("/"));
+  out
 }
 
 #[cfg(test)]
@@ -273,7 +501,188 @@ mod tests {
   use std::path::{Path, PathBuf};
 
   use super::*;
-  use crate::passes::modules::{FileSourceLoader, SourceLoader};
+  use crate::passes::modules::{FileSourceLoader, InMemorySourceLoader, SourceLoader};
+
+  // -- canonicalise_url helper -------------------------------------------------
+
+  #[test]
+  fn canonicalise_entry_importing_sibling() {
+    // Entry at ./entry.fnk imports a sibling.
+    assert_eq!(canonicalise_url("./entry.fnk", "./lib.fnk"), "./lib.fnk");
+  }
+
+  #[test]
+  fn canonicalise_into_subdir() {
+    assert_eq!(
+      canonicalise_url("./entry.fnk", "./sub/left.fnk"),
+      "./sub/left.fnk",
+    );
+  }
+
+  #[test]
+  fn canonicalise_subdir_importing_sibling() {
+    // Importer lives in ./sub/; its ./common.fnk is ./sub/common.fnk entry-relative.
+    assert_eq!(
+      canonicalise_url("./sub/left.fnk", "./common.fnk"),
+      "./sub/common.fnk",
+    );
+  }
+
+  #[test]
+  fn canonicalise_parent_traversal() {
+    // ./a/b/c.fnk importing ../d.fnk → ./a/d.fnk
+    assert_eq!(
+      canonicalise_url("./a/b/c.fnk", "../d.fnk"),
+      "./a/d.fnk",
+    );
+  }
+
+  #[test]
+  fn canonicalise_two_paths_to_same_dep() {
+    // The bug we're fixing: different relative URLs, same target.
+    // left.fnk lives in ./sub/, imports ./common.fnk
+    // right.fnk lives at the top, imports ./sub/common.fnk
+    // Both must canonicalise to the same string.
+    let left = canonicalise_url("./sub/left.fnk", "./common.fnk");
+    let right = canonicalise_url("./right.fnk", "./sub/common.fnk");
+    assert_eq!(left, right);
+    assert_eq!(left, "./sub/common.fnk");
+  }
+
+  #[test]
+  fn canonicalise_redundant_dot_slash() {
+    assert_eq!(
+      canonicalise_url("./entry.fnk", "./a/./b.fnk"),
+      "./a/b.fnk",
+    );
+  }
+
+  #[test]
+  fn canonicalise_escapes_entry_dir() {
+    // Importer at ./a/b.fnk imports ../../out.fnk → escapes entry → ../out.fnk
+    assert_eq!(
+      canonicalise_url("./a/b.fnk", "../../out.fnk"),
+      "../out.fnk",
+    );
+  }
+
+  #[test]
+  fn canonicalise_non_relative_passes_through() {
+    // @fink/* and bare identifiers are not filesystem URLs — leave alone.
+    assert_eq!(canonicalise_url("./entry.fnk", "@fink/meta"), "@fink/meta");
+    assert_eq!(canonicalise_url("./entry.fnk", "bare"), "bare");
+  }
+
+  #[test]
+  fn canonicalise_empty_importer_is_entry() {
+    // Empty importer URL = the entry is importing. Equivalent to importer
+    // at the entry directory root.
+    assert_eq!(canonicalise_url("", "./foo.fnk"), "./foo.fnk");
+    assert_eq!(canonicalise_url("", "./sub/foo.fnk"), "./sub/foo.fnk");
+  }
+
+  // -- Rust proof-of-life tests ------------------------------------------------
+  // Kept as the baseline until the .fnk tests below cover the same ground.
+
+  #[test]
+  fn compile_package_single_module_no_imports() {
+    // Single module with no imports should work as before.
+    let src = "foo = fn x: x * 2\nfoo";
+    let mut loader = InMemorySourceLoader::single("test.fnk", src);
+    let wasm = compile_package(Path::new("test.fnk"), &mut loader).unwrap();
+    assert!(!wasm.binary.is_empty());
+    assert!(wasm.binary.starts_with(b"\0asm"));
+  }
+
+  #[test]
+  fn compile_package_two_modules() {
+    // entry.fnk imports foo from lib.fnk and calls it.
+    let lib_src = "foo = fn x: x * 2";
+    let entry_src = "{foo} = import './lib.fnk'\nresult = foo 21";
+
+    let mut loader = InMemorySourceLoader::new();
+    loader.add("./lib.fnk", lib_src);
+    loader.add("./entry.fnk", entry_src);
+
+    let wasm = compile_package(Path::new("./entry.fnk"), &mut loader).unwrap();
+    assert!(!wasm.binary.is_empty());
+    assert!(wasm.binary.starts_with(b"\0asm"));
+
+    // The linked binary should export both fink_module (entry) and
+    // "./lib.fnk:fink_module" (dep).
+    let wat = wasmprinter::print_bytes(&wasm.binary).unwrap();
+    assert!(wat.contains("\"fink_module\""), "missing entry fink_module export");
+    assert!(wat.contains("\"./lib.fnk:fink_module\""), "missing dep fink_module export");
+  }
+
+  #[test]
+  fn compile_package_diamond_two_raw_paths_same_dep() {
+    // Diamond: entry → left, entry → right, both → common.fnk via
+    // *different* raw relative URLs that canonicalise to the same
+    // `./sub/common.fnk`. Verifies:
+    //   (a) common.fnk is linked exactly once,
+    //   (b) both consumers' imports resolve to the shared definition,
+    //   (c) the linked binary still validates as WASM.
+    let common_src = "base = 10";
+    let left_src = "{base} = import './common.fnk'\nleft_val = base + 1";
+    // Right deliberately uses a twisted raw path to the SAME file.
+    let right_src = "{base} = import '../sub/common.fnk'\nright_val = base + 2";
+    let entry_src = "\
+{left_val} = import './sub/left.fnk'
+{right_val} = import './sub/right.fnk'
+total = left_val + right_val
+";
+
+    let mut loader = InMemorySourceLoader::new();
+    loader.add("./sub/common.fnk", common_src);
+    loader.add("./sub/left.fnk", left_src);
+    loader.add("./sub/right.fnk", right_src);
+    loader.add("./entry.fnk", entry_src);
+
+    let wasm = compile_package(Path::new("./entry.fnk"), &mut loader).unwrap();
+    assert!(wasm.binary.starts_with(b"\0asm"));
+
+    let wat = wasmprinter::print_bytes(&wasm.binary).unwrap();
+
+    // common.fnk must appear EXACTLY once as a defined fink_module
+    // function and exactly once as an export.
+    //
+    // `wasmprinter` writes func defs with a `(func $…` prefix followed by a
+    // space — exports write `(func $…)` with a trailing paren. Matching on
+    // `(func $./sub/common.fnk:fink_module ` (trailing space) counts only
+    // definitions.
+    let common_func_defs = wat
+      .matches("(func $./sub/common.fnk:fink_module ")
+      .count();
+    assert_eq!(
+      common_func_defs, 1,
+      "common.fnk:fink_module should be defined exactly once; WAT:\n{wat}"
+    );
+    let common_exports = wat.matches("\"./sub/common.fnk:fink_module\"").count();
+    assert_eq!(
+      common_exports, 1,
+      "common.fnk:fink_module must be exported exactly once"
+    );
+
+    // There should be exactly one defined `base` global for common.fnk.
+    let common_base_globals = wat
+      .matches("global $./sub/common.fnk:base")
+      .count();
+    assert_eq!(
+      common_base_globals, 1,
+      "common.fnk:base global should be defined once"
+    );
+
+    // Both left and right fragments must be present.
+    assert!(
+      wat.contains("func $./sub/left.fnk:fink_module"),
+      "left.fnk:fink_module missing"
+    );
+    assert!(
+      wat.contains("func $./sub/right.fnk:fink_module"),
+      "right.fnk:fink_module missing"
+    );
+  }
 
   // -- .fnk snapshot tests -----------------------------------------------------
   //

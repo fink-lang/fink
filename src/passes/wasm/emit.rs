@@ -327,6 +327,7 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
     scan_closure_captures(func.body, &mut closure_captures);
   }
   e.module_imports = module.module_imports.clone();
+  e.url_rewrite = module.url_rewrite.clone();
   // Split builtins: implemented ones become defined functions, rest stay as imports.
   let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
     builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
@@ -479,6 +480,12 @@ struct Emitter<'a, 'src> {
   value_globals: HashSet<String>,
   /// Module imports: url → [name, ...]. Populated during pre-scan, used during emit.
   module_imports: BTreeMap<String, Vec<String>>,
+  /// Raw source URL → canonical URL mapping. Used at `BuiltIn::Import`
+  /// emit sites to translate the raw Lit::Str URL (as written in source)
+  /// to the canonical form used as `module_imports` keys and in WASM
+  /// import/global labels. Empty in single-module builds (the emitter
+  /// falls back to identity lookup).
+  url_rewrite: BTreeMap<String, String>,
 }
 
 struct RawMapping {
@@ -508,6 +515,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       string_data: StringData::new(),
       value_globals: cps_mod.value_globals.clone(),
       module_imports: BTreeMap::new(),
+      url_rewrite: BTreeMap::new(),
     }
   }
 
@@ -1402,6 +1410,7 @@ impl<'a, 'src> Emitter<'a, 'src> {
       scratch_local,
       value_globals: &self.value_globals,
       module_imports: &self.module_imports,
+      url_rewrite: &self.url_rewrite,
     };
     emit_body(func.body, &mut fc);
 
@@ -1516,6 +1525,10 @@ struct FuncContext<'a, 'b, 'src> {
   value_globals: &'a HashSet<String>,
   /// Module imports: url → [name, ...]. Used by emit_builtin for BuiltIn::Import.
   module_imports: &'a BTreeMap<String, Vec<String>>,
+  /// Raw source URL → canonical URL mapping. Consulted at BuiltIn::Import
+  /// emit sites to translate a CPS Lit::Str URL into the canonical form
+  /// used as the `module_imports` key and in WASM global labels.
+  url_rewrite: &'a BTreeMap<String, String>,
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
@@ -1895,7 +1908,14 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
         && let ValKind::Lit(Lit::Str(s)) = &v.kind
       { Some(s.as_slice()) } else { None }
     }).expect("BuiltIn::Import: missing URL arg");
-    let url = std::str::from_utf8(url_bytes).expect("import URL is not valid UTF-8");
+    let raw_url = std::str::from_utf8(url_bytes).expect("import URL is not valid UTF-8");
+    // Translate the raw source URL to its canonical form. In single-module
+    // builds (and for non-relative URLs) there's no mapping and we fall
+    // back to identity lookup. In multi-module builds `compile_package`
+    // populates `url_rewrite` so the emitter writes canonical strings
+    // into the global labels — matching what `emit_imports_from` wrote
+    // into the import section when iterating `module_imports`.
+    let url = fc.url_rewrite.get(raw_url).map(String::as_str).unwrap_or(raw_url);
 
     let names = fc.module_imports.get(url).cloned().unwrap_or_default();
 

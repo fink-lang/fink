@@ -354,50 +354,54 @@ mod tests {
   #[test]
   fn multi_module_diamond_shared_dep() {
     // Diamond-shaped dep graph — verifies the linker handles a shared
-    // dependency correctly (i.e. common.fnk is compiled once and linked once
-    // even though both left.fnk and right.fnk import it).
+    // dependency correctly (common.fnk is compiled once and linked once
+    // even though both consumers import it). Specifically exercises the
+    // "two different relative URLs reach the same file" case: `left.fnk`
+    // lives in ./sub/ and imports common as `./common.fnk`, while
+    // `right.fnk` lives at the top and imports it as `./sub/common.fnk`.
+    // Both must canonicalise to the same entry-relative form and share
+    // a single fragment in the linked output.
     //
-    //       entry
-    //      /     \
-    //   left     right
-    //      \     /
-    //       common
+    //         entry
+    //        /     \
+    //  sub/left    right
+    //        \     /
+    //     sub/common
     //
-    // common.fnk : base = 10
-    // left.fnk   : {base} = import './common.fnk' ; left_val = base + 1   (=11)
-    // right.fnk  : {base} = import './common.fnk' ; right_val = base + 2  (=12)
-    // entry.fnk  : imports left_val + right_val, returns left_val + right_val (=23)
+    // sub/common.fnk : base = 10
+    // sub/left.fnk   : {base} = import './common.fnk' ; left_val = base + 1   (=11)
+    // right.fnk      : {base} = import './sub/common.fnk' ; right_val = base + 2  (=12)
+    // entry.fnk      : imports left_val + right_val, returns sum (=23)
     let common_src = "base = 10";
     let left_src = "{base} = import './common.fnk'\nleft_val = base + 1";
-    let right_src = "{base} = import './common.fnk'\nright_val = base + 2";
+    let right_src = "{base} = import './sub/common.fnk'\nright_val = base + 2";
     let entry_src =
-      "{left_val} = import './left.fnk'\n\
+      "{left_val} = import './sub/left.fnk'\n\
        {right_val} = import './right.fnk'\n\
        left_val + right_val";
 
     let mut loader = crate::passes::modules::InMemorySourceLoader::new();
-    loader.add("./common.fnk", common_src);
-    loader.add("./left.fnk", left_src);
+    loader.add("./sub/common.fnk", common_src);
+    loader.add("./sub/left.fnk", left_src);
     loader.add("./right.fnk", right_src);
     loader.add("./entry.fnk", entry_src);
 
     let wasm = crate::compile_package(std::path::Path::new("./entry.fnk"), &mut loader)
       .expect("compile_package failed");
 
-    // Sanity: common.fnk must be exported exactly once — not duplicated.
+    // Sanity: common.fnk must be exported exactly once — not duplicated,
+    // even though the two consumers refer to it via different relative URLs.
     let wat = wasmprinter::print_bytes(&wasm.binary).expect("wasmprinter failed");
-    let common_export_count = wat.matches("\"./common.fnk:fink_module\"").count();
+    let common_export_count = wat.matches("\"./sub/common.fnk:fink_module\"").count();
     assert_eq!(
       common_export_count, 1,
-      "common.fnk should be linked exactly once, found {} fink_module exports",
+      "sub/common.fnk should be linked exactly once, found {} fink_module exports",
       common_export_count,
     );
 
     // Init order: common before its consumers (left/right), then entry.
-    // BFS from entry discovers left, right (level 1), then common (level 2),
-    // but we need providers before consumers at runtime, so flip to:
-    // common → left → right → entry.
-    let dep_urls = ["./common.fnk", "./left.fnk", "./right.fnk"];
+    // Names here are entry-relative canonical URLs — what the linker knows them as.
+    let dep_urls = ["./sub/common.fnk", "./sub/left.fnk", "./right.fnk"];
     match exec_package(&wasm.binary, &dep_urls) {
       Ok(TestResult::Num(v)) => {
         assert_eq!(v, 23.0, "expected left_val(11) + right_val(12) = 23, got {}", v);

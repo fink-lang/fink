@@ -1,0 +1,12 @@
+# Diamond entry: pulls in left and right, which both import common.fnk
+# via different raw relative paths. Entry itself imports common.fnk
+# directly via yet another raw path. All three raw URLs canonicalise to
+# `./sub/common.fnk`, so the linked binary must contain exactly one copy.
+{left_val} = import './sub/left.fnk'
+{right_val} = import './sub/right.fnk'
+{base} = import './sub/common.fnk'
+
+# Sum is 10 + (10 + 1) + (10 + 2) = 33. If common.fnk were linked
+# twice and its `base` global initialised inconsistently, or the
+# dedup failed, this sum would diverge.
+total = base + left_val + right_val
