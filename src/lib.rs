@@ -1,17 +1,18 @@
 pub mod errors;
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod fmt;
-#[cfg(feature = "compile")]
+#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
 pub mod compile;
-#[cfg(feature = "run")]
+#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
 pub mod dap;
-#[cfg(feature = "runtime")]
+#[cfg(all(feature = "runtime", not(feature = "flat-ast-wip")))]
 pub mod runner;
 pub mod passes;
 pub mod propgraph;
 pub mod sourcemap;
 pub mod strings;
 
-#[cfg(feature = "run")]
+#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
 pub mod runtime;
 pub mod test_context;
 
@@ -34,12 +35,14 @@ pub fn to_ast<'src>(src: &'src str, url: &str) -> Result<passes::Ast<'src>, Stri
 }
 
 /// Parse + desugar → desugared AST with index and scopes.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::DesugaredAst<'src>, String> {
   let parsed = passes::parse(src, url).map_err(|e| e.message)?;
   passes::desugar(parsed).map_err(|e| format!("{e:?}"))
 }
 
 /// Compile source → CPS IR (+ desugared AST for context).
+#[cfg(not(feature = "flat-ast-wip"))]
 pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::DesugaredAst<'src>), String> {
   let desugared = to_desugared(src, url)?;
   let cps = passes::lower(&desugared);
@@ -47,6 +50,7 @@ pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::D
 }
 
 /// Compile source → lifted CPS IR (+ desugared AST for context).
+#[cfg(not(feature = "flat-ast-wip"))]
 pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), String> {
   let (cps, desugared) = to_cps(src, url)?;
   let lifted = passes::lift(cps, &desugared);
@@ -61,7 +65,7 @@ pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, 
 /// share the same code path. A single-source program with no imports
 /// works identically to before; a single-source program that tries to
 /// import will get a clean error from the in-memory loader.
-#[cfg(feature = "compile")]
+#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
 pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
   use passes::modules::InMemorySourceLoader;
   let mut loader = InMemorySourceLoader::single(path, src);
@@ -76,7 +80,7 @@ pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
 ///
 /// For now this is a thin wrapper over the single-source pipeline —
 /// Slices 4+ extend it with the real multi-module behaviour.
-#[cfg(feature = "compile")]
+#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
 pub fn compile_package(
   entry_path: &std::path::Path,
   loader: &mut dyn passes::modules::SourceLoader,
@@ -85,7 +89,7 @@ pub fn compile_package(
 }
 
 /// Compile source → optimized WASM binary.
-#[cfg(feature = "run")]
+#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
 pub fn to_wasm_opt(src: &str, path: &str, level: &str) -> Result<passes::Wasm, String> {
   let mut wasm = to_wasm(src, path)?;
   passes::optimize_wasm(&mut wasm, level)?;
@@ -93,7 +97,7 @@ pub fn to_wasm_opt(src: &str, path: &str, level: &str) -> Result<passes::Wasm, S
 }
 
 /// Compile source → WAT text.
-#[cfg(feature = "compile")]
+#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
 pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
   let wasm = to_wasm(src, path)?;
   passes::emit_wat(&wasm)
@@ -103,7 +107,7 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
 ///
 /// `args` is the CLI argv passed to the user's `main` — argv[0] is the
 /// program name, followed by user-supplied CLI arguments.
-#[cfg(feature = "run")]
+#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
 pub fn run(
   src: &str,
   path: &str,
@@ -116,7 +120,7 @@ pub fn run(
 }
 
 /// Start DAP debug server for a .fnk file, communicating over stdin/stdout.
-#[cfg(feature = "run")]
+#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
 pub fn debug(path: &str) -> Result<(), String> {
   dap::run(std::io::stdin(), std::io::stdout(), path)
 }

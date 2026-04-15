@@ -26,6 +26,18 @@ runtime = ["dep:wasmtime"]
 run = ["compile", "runtime", "dep:wat-crate", "dep:dap", "dep:tokio"]
 default = ["compile", "run"]
 
+# flat-ast-wip: transient feature used during the flat-AST refactor. When
+# enabled, ONLY the AST layer (lexer/parser/ast/mod.rs/ast/transform.rs/
+# ast/fmt.rs) compiles — every downstream pass (partial, scopes, cps,
+# lifting, wasm, wasm_link, fmt::layout, runner, dap, compiler) is gated
+# off. This lets the refactor flip `NodeKind` child fields from owning
+# trees to `AstId` references with live parser/fmt test feedback at every
+# edit instead of a blind big-bang compile break across 10 files.
+#
+# When the feature is OFF (the default), everything compiles normally as
+# today. When the refactor lands in full, this feature goes away.
+flat-ast-wip = []
+
 [dependencies]
 gimli = { version = "0.33", default-features = false, features = ["write", "read"] }
 wasm-encoder = "0.246"

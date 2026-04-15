@@ -1,5 +1,17 @@
+// During the flat-ast-wip refactor the CLI is not buildable because it
+// dispatches into every downstream pass. The feature gate here replaces
+// `main` with a tiny stub so the binary target still links while the
+// refactor is in flight. Removed when the refactor lands.
+#[cfg(feature = "flat-ast-wip")]
+fn main() {
+  eprintln!("fink: CLI disabled during flat-ast-wip refactor");
+  std::process::exit(1);
+}
+
+#[cfg(not(feature = "flat-ast-wip"))]
 use std::{env, fs, process};
 
+#[cfg(not(feature = "flat-ast-wip"))]
 fn main() {
   let args: Vec<String> = env::args().collect();
 
@@ -261,6 +273,7 @@ fn main() {
   }
 }
 
+#[cfg(not(feature = "flat-ast-wip"))]
 fn die(msg: &str) -> ! {
   eprintln!("error: {msg}");
   process::exit(1);
@@ -268,6 +281,7 @@ fn die(msg: &str) -> ! {
 
 
 
+#[cfg(not(feature = "flat-ast-wip"))]
 fn print_with_sourcemap(output: &str, srcmap: &fink::sourcemap::SourceMap) {
   let json = srcmap.to_json();
   let b64 = fink::sourcemap::base64_encode(json.as_bytes());

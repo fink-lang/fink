@@ -4,13 +4,18 @@
 // contract. See docs/cps-transform-contract.md.
 
 pub mod ast;
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod cps;
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod lifting;
 pub mod modules;
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod partial;
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod scopes;
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod wasm;
-#[cfg(feature = "compile")]
+#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
 #[path = "wasm-link/mod.rs"]
 pub mod wasm_link;
 
@@ -37,6 +42,7 @@ pub struct Ast<'src> {
 
 /// Desugared AST with index and scope analysis — the gateway to CPS.
 /// `result` is boxed so the AST index can hold stable references into it.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub struct DesugaredAst<'src> {
   pub result: Box<ast::ParseResult<'src>>,
   pub ast_index: crate::propgraph::PropGraph<ast::AstId, Option<&'src ast::Node<'src>>>,
@@ -44,11 +50,13 @@ pub struct DesugaredAst<'src> {
 }
 
 /// CPS intermediate representation (not yet closure-lifted).
+#[cfg(not(feature = "flat-ast-wip"))]
 pub struct Cps {
   pub result: cps::ir::CpsResult,
 }
 
 /// Closure-lifted CPS — ready for codegen.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub struct LiftedCps {
   pub result: cps::ir::CpsResult,
 }
@@ -68,6 +76,7 @@ pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::
 
 /// Desugar partial applications and run scope analysis.
 /// Produces the typed result needed by `lower()`.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub fn desugar<'src>(parsed: Ast<'src>) -> Result<DesugaredAst<'src>, ast::transform::TransformError> {
   let (root, node_count) = partial::apply(parsed.result.root, parsed.result.node_count)?;
   let result = Box::new(ast::ParseResult { root, node_count });
@@ -82,6 +91,7 @@ pub fn desugar<'src>(parsed: Ast<'src>) -> Result<DesugaredAst<'src>, ast::trans
 }
 
 /// Lower desugared AST to CPS IR.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub fn lower<'src>(
   desugared: &'src DesugaredAst<'src>,
 ) -> Cps {
@@ -94,6 +104,7 @@ pub fn lower<'src>(
 }
 
 /// Lift closures in CPS IR — produces the result needed by codegen.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub fn lift<'src>(
   cps: Cps,
   desugared: &'src DesugaredAst<'src>,
@@ -103,13 +114,14 @@ pub fn lift<'src>(
 }
 
 /// WASM binary output.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub struct Wasm {
   pub binary: Vec<u8>,
   pub mappings: Vec<wasm::sourcemap::WasmMapping>,
 }
 
 /// Emit WAT text from a WASM binary.
-#[cfg(feature = "compile")]
+#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
 pub fn emit_wat(wasm: &Wasm) -> Result<String, String> {
   wasmprinter::print_bytes(&wasm.binary).map_err(|e| e.to_string())
 }
@@ -117,7 +129,7 @@ pub fn emit_wat(wasm: &Wasm) -> Result<String, String> {
 /// Run wasm-opt on a WASM binary. Requires the `wasm-opt` tool on PATH.
 /// `level` is the optimization flag (e.g. "-O", "-O2", "-Os", "-Oz").
 /// Native only — shells out to an external process.
-#[cfg(feature = "run")]
+#[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
 pub fn optimize_wasm(wasm: &mut Wasm, level: &str) -> Result<(), String> {
   use std::io::Write;
   use std::process::Command;
