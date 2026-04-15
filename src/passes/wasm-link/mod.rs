@@ -141,23 +141,43 @@ pub fn compile_package(
     &entry_url_rewrite,
   );
 
-  // Work-queue: compile all transitive deps, keyed on canonical URL so
-  // that two consumers reaching the same file via different relative
-  // paths dedup to a single fragment.
+  // Walk all transitive deps, keyed on canonical URL so that two
+  // consumers reaching the same file via different relative paths dedup
+  // to a single fragment. During the walk we build:
   //
-  // `compiled`: canonical_url → wasm_bytes
-  // `order`: dep canonical URLs in the order they were first discovered (BFS).
+  //   `compiled`: canonical_url → wasm_bytes
+  //   `dep_edges`: canonical_url → list of dep canonical URLs it imports
+  //
+  // The BFS walk order is only used to drive the *compile* schedule; the
+  // *link* order is derived from `dep_edges` via a post-order DFS from
+  // the entry module so that every dep is emitted after all of its own
+  // transitive deps, regardless of BFS discovery order.
+  //
+  // Why not just reverse BFS order? Reversed-BFS happens to produce a
+  // valid topological sort only when BFS first-visit order matches a
+  // reverse-topological order — which breaks as soon as a parent imports
+  // a transitive dep directly (e.g. entry imports both `./util.fnk` and
+  // `./helpers.fnk`, where `helpers.fnk` itself imports `./util.fnk`).
+  // BFS discovers `util` before `helpers`, so reversing puts `util`
+  // after `helpers` and `helpers`'s init reads an uninitialised global.
+  // A proper post-order DFS avoids this.
   let mut compiled: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-  let mut order: Vec<String> = Vec::new();
+  let mut dep_edges: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
-  // Seed the queue with the entry module's imports, pre-canonicalised.
-  // Each item: canonical URL of the dep to compile.
+  // Record entry's own dep edges so the post-order walk below can start
+  // from the entry's imports in a stable, source-declared order.
+  let entry_direct_deps: Vec<String> = entry_raw_imports
+    .keys()
+    .map(|raw| entry_url_rewrite.get(raw).cloned().unwrap_or_else(|| raw.clone()))
+    .collect();
+
+  // BFS compile schedule. Queue order doesn't affect link order; it
+  // just ensures each module is compiled once.
   let mut queue: VecDeque<String> = VecDeque::new();
-  for canonical_url in entry_url_rewrite.values() {
+  for canonical_url in &entry_direct_deps {
     queue.push_back(canonical_url.clone());
   }
 
-  // BFS: compile each dep once (memoized by canonical URL).
   let mut visited: BTreeSet<String> = BTreeSet::new();
   while let Some(dep_canonical_url) = queue.pop_front() {
     if visited.contains(&dep_canonical_url) {
@@ -179,6 +199,14 @@ pub fn compile_package(
       .map(|raw| (raw.clone(), canonicalise_url(&dep_canonical_url, raw)))
       .collect();
 
+    // Record this dep's outgoing edges (in source-declared order) for
+    // the post-order DFS below.
+    let dep_direct: Vec<String> = dep_raw_imports
+      .keys()
+      .map(|raw| dep_url_rewrite.get(raw).cloned().unwrap_or_else(|| raw.clone()))
+      .collect();
+    dep_edges.insert(dep_canonical_url.clone(), dep_direct.clone());
+
     let dep_wasm = compile_fragment(
       &dep_lifted,
       &dep_desugared,
@@ -188,24 +216,68 @@ pub fn compile_package(
     );
 
     // Enqueue transitive deps by their canonical URLs.
-    for transitive_canonical in dep_url_rewrite.values() {
+    for transitive_canonical in &dep_direct {
       if !visited.contains(transitive_canonical) {
         queue.push_back(transitive_canonical.clone());
       }
     }
 
     compiled.insert(dep_canonical_url.clone(), dep_wasm);
-    order.push(dep_canonical_url);
   }
 
-  // Link: @fink/runtime + deps (in topological order: providers before
-  // consumers) + entry. The BFS above visits consumers before their
-  // providers (entry discovers its direct imports first, which in turn
-  // push their own imports onto the queue). Reversing the discovery
-  // order produces a valid topological sort for the acyclic case: the
-  // last fragment BFS visits is always a leaf dep, which must initialize
-  // first because everything above it in the graph depends on its
-  // exported globals being populated.
+  // Topological sort: post-order DFS starting from the entry's direct
+  // imports. Each dep is appended to `topo_order` only after all of its
+  // transitive deps have been appended, so link inputs are in a valid
+  // provider-before-consumer order.
+  //
+  // Cycles are not expected today — the language does not yet support
+  // circular imports — but the `in_progress` set guards against a
+  // malformed graph by breaking cycles arbitrarily (we simply skip a
+  // back-edge). A proper diagnostic should land alongside cycle support.
+  let mut topo_order: Vec<String> = Vec::new();
+  let mut done: BTreeSet<String> = BTreeSet::new();
+  let mut in_progress: BTreeSet<String> = BTreeSet::new();
+  // Iterative DFS with an explicit frame stack: (node, iter over children).
+  // Each frame advances one child at a time; when all children are done
+  // the frame's node is appended to `topo_order` (post-order).
+  enum Frame {
+    Enter(String),
+    Exit(String),
+  }
+  let mut stack: Vec<Frame> = Vec::new();
+  for dep in &entry_direct_deps {
+    stack.push(Frame::Enter(dep.clone()));
+  }
+  while let Some(frame) = stack.pop() {
+    match frame {
+      Frame::Enter(node) => {
+        if done.contains(&node) || in_progress.contains(&node) {
+          continue;
+        }
+        in_progress.insert(node.clone());
+        // Push Exit first so it runs after all children.
+        stack.push(Frame::Exit(node.clone()));
+        if let Some(children) = dep_edges.get(&node) {
+          // Push children in reverse so the leftmost is popped first —
+          // preserves source-declared order in the final post-order.
+          for child in children.iter().rev() {
+            if !done.contains(child) && !in_progress.contains(child) {
+              stack.push(Frame::Enter(child.clone()));
+            }
+          }
+        }
+      }
+      Frame::Exit(node) => {
+        in_progress.remove(&node);
+        if done.insert(node.clone()) {
+          topo_order.push(node);
+        }
+      }
+    }
+  }
+
+  // Link: @fink/runtime + deps (in post-order: providers before
+  // consumers) + entry.
   //
   // The linker preserves fragment order in its export section, so the
   // linked binary's `<url>:fink_module` exports end up in init order —
@@ -217,8 +289,7 @@ pub fn compile_package(
     LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
   ];
 
-  // Reverse BFS order → topological (providers before consumers).
-  for canonical_url in order.iter().rev() {
+  for canonical_url in &topo_order {
     if let Some(dep_wasm) = compiled.remove(canonical_url) {
       link_inputs.push(LinkInput {
         module_name: canonical_url.clone(),
@@ -542,6 +613,75 @@ mod tests {
     let wat = wasmprinter::print_bytes(&wasm.binary).unwrap();
     assert!(wat.contains("\"fink_module\""), "missing entry fink_module export");
     assert!(wat.contains("\"./lib.fnk:fink_module\""), "missing dep fink_module export");
+  }
+
+  #[test]
+  fn compile_package_diamond_two_raw_paths_same_dep() {
+    // Diamond: entry → left, entry → right, both → common.fnk via
+    // *different* raw relative URLs that canonicalise to the same
+    // `./sub/common.fnk`. Verifies:
+    //   (a) common.fnk is linked exactly once,
+    //   (b) both consumers' imports resolve to the shared definition,
+    //   (c) the linked binary still validates as WASM.
+    let common_src = "base = 10";
+    let left_src = "{base} = import './common.fnk'\nleft_val = base + 1";
+    // Right deliberately uses a twisted raw path to the SAME file.
+    let right_src = "{base} = import '../sub/common.fnk'\nright_val = base + 2";
+    let entry_src = "\
+{left_val} = import './sub/left.fnk'
+{right_val} = import './sub/right.fnk'
+total = left_val + right_val
+";
+
+    let mut loader = InMemorySourceLoader::new();
+    loader.add("./sub/common.fnk", common_src);
+    loader.add("./sub/left.fnk", left_src);
+    loader.add("./sub/right.fnk", right_src);
+    loader.add("./entry.fnk", entry_src);
+
+    let wasm = compile_package(Path::new("./entry.fnk"), &mut loader).unwrap();
+    assert!(wasm.binary.starts_with(b"\0asm"));
+
+    let wat = wasmprinter::print_bytes(&wasm.binary).unwrap();
+
+    // common.fnk must appear EXACTLY once as a defined fink_module
+    // function and exactly once as an export.
+    //
+    // `wasmprinter` writes func defs with a `(func $…` prefix followed by a
+    // space — exports write `(func $…)` with a trailing paren. Matching on
+    // `(func $./sub/common.fnk:fink_module ` (trailing space) counts only
+    // definitions.
+    let common_func_defs = wat
+      .matches("(func $./sub/common.fnk:fink_module ")
+      .count();
+    assert_eq!(
+      common_func_defs, 1,
+      "common.fnk:fink_module should be defined exactly once; WAT:\n{wat}"
+    );
+    let common_exports = wat.matches("\"./sub/common.fnk:fink_module\"").count();
+    assert_eq!(
+      common_exports, 1,
+      "common.fnk:fink_module must be exported exactly once"
+    );
+
+    // There should be exactly one defined `base` global for common.fnk.
+    let common_base_globals = wat
+      .matches("global $./sub/common.fnk:base")
+      .count();
+    assert_eq!(
+      common_base_globals, 1,
+      "common.fnk:base global should be defined once"
+    );
+
+    // Both left and right fragments must be present.
+    assert!(
+      wat.contains("func $./sub/left.fnk:fink_module"),
+      "left.fnk:fink_module missing"
+    );
+    assert!(
+      wat.contains("func $./sub/right.fnk:fink_module"),
+      "right.fnk:fink_module missing"
+    );
   }
 
   // -- .fnk snapshot tests -----------------------------------------------------
