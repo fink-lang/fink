@@ -36,9 +36,17 @@ pub mod wasm_link;
 
 /// Raw parsed AST — for display/formatting only.
 /// To proceed to CPS or codegen, call `desugar()`.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub struct Ast<'src> {
   pub result: ast::ParseResult<'src>,
 }
+
+/// Under the flat-ast-wip refactor, `parse()` returns `ast::Ast<'src>`
+/// directly — the stage-type wrapper collapses because `ast::Ast`
+/// already is "a parsed AST value". The `Ast` alias here exists only
+/// so downstream code that still wants `passes::Ast<'src>` compiles.
+#[cfg(feature = "flat-ast-wip")]
+pub type Ast<'src> = ast::Ast<'src>;
 
 /// Desugared AST with index and scope analysis — the gateway to CPS.
 /// `result` is boxed so the AST index can hold stable references into it.
@@ -69,9 +77,17 @@ pub struct LiftedCps {
 /// "<stdin>", "test", etc. It gets stored on the root `NodeKind::Module` so
 /// downstream passes (emitter in particular) can recover it without threading
 /// a separate parameter.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::ParseError> {
   let result = ast::parser::parse(src, url)?;
   Ok(Ast { result })
+}
+
+/// In the flat-ast-wip mode `parse()` returns `ast::Ast<'src>` directly
+/// — the type alias above makes `passes::Ast<'src>` resolve to it.
+#[cfg(feature = "flat-ast-wip")]
+pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::ParseError> {
+  ast::parser::parse(src, url)
 }
 
 /// Desugar partial applications and run scope analysis.

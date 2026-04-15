@@ -1,3 +1,11 @@
+// `fmt` is the AST pretty-printer (emits Fink source from an AST).
+// During the flat-ast-wip refactor it's gated off because its 750 lines
+// of recursive `&Node` walking need a mechanical port to the arena
+// shape — the same pattern as the parser and Transform trait, just
+// applied to output formatting. Scheduled as a follow-up once the
+// compiler path downstream (partial, scopes, cps, lifting, wasm) has
+// been unstubbed.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod fmt;
 pub mod lexer;
 pub mod parser;
@@ -14,13 +22,13 @@ use lexer::{Loc, Token};
 /// Empty sequences have both vecs empty.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Exprs<'src> {
-  pub items: Vec<Node<'src>>,
+  pub items: Box<[AstId]>,
   pub seps: Vec<Token<'src>>,
 }
 
 impl<'src> Exprs<'src> {
   pub fn empty() -> Self {
-    Self { items: vec![], seps: vec![] }
+    Self { items: Box::new([]), seps: vec![] }
   }
 }
 
@@ -283,10 +291,10 @@ pub enum NodeKind<'src> {
   // --- string templates ---
 
   // StrTempl — interpolated string; open/close mirror first/last child's delimiters
-  StrTempl { open: Token<'src>, close: Token<'src>, children: Vec<Node<'src>> },
+  StrTempl { open: Token<'src>, close: Token<'src>, children: Box<[AstId]> },
 
   // StrRawTempl — tagged template; raw parts + expressions, passed to tag fn unprocessed
-  StrRawTempl { open: Token<'src>, close: Token<'src>, children: Vec<Node<'src>> },
+  StrRawTempl { open: Token<'src>, close: Token<'src>, children: Box<[AstId]> },
 
   // --- identifiers ---
 
@@ -301,24 +309,24 @@ pub enum NodeKind<'src> {
   // --- operators ---
 
   // UnaryOp '-' | 'not' | '~'
-  UnaryOp { op: Token<'src>, operand: Box<Node<'src>> },
+  UnaryOp { op: Token<'src>, operand: AstId },
 
   // InfixOp '+' | '-' | 'srcnd' | '>' | '&' | '..' | '...' | ...
-  InfixOp { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  InfixOp { op: Token<'src>, lhs: AstId, rhs: AstId },
 
   // ChainedCmp — flat interleaved: operand, op, operand, op, operand, ...
   // e.g. a > b > c => [Operand(a), Op(">"), Operand(b), Op(">"), Operand(c)]
-  ChainedCmp(Vec<CmpPart<'src>>),
+  ChainedCmp(Box<[CmpPart<'src>]>),
 
   // Spread — bare (..) or with guard/expr child
-  Spread { op: Token<'src>, inner: Option<Box<Node<'src>>> },
+  Spread { op: Token<'src>, inner: Option<AstId> },
 
   // Member — lhs.rhs; rhs is Ident (name) or Group (expr key)
-  Member { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  Member { op: Token<'src>, lhs: AstId, rhs: AstId },
 
   // Group — parenthesised expr; only preserved where semantically significant
   // (record computed keys, member expression keys, spread guards)
-  Group { open: Token<'src>, close: Token<'src>, inner: Box<Node<'src>> },
+  Group { open: Token<'src>, close: Token<'src>, inner: AstId },
 
   // Partial — ? hole for partial application
   Partial,
@@ -329,15 +337,15 @@ pub enum NodeKind<'src> {
   // --- binding ---
 
   // Bind lhs = rhs
-  Bind { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  Bind { op: Token<'src>, lhs: AstId, rhs: AstId },
 
   // BindRight lhs |= rhs
-  BindRight { op: Token<'src>, lhs: Box<Node<'src>>, rhs: Box<Node<'src>> },
+  BindRight { op: Token<'src>, lhs: AstId, rhs: AstId },
 
   // --- application ---
 
   // Apply func arg arg ...
-  Apply { func: Box<Node<'src>>, args: Exprs<'src> },
+  Apply { func: AstId, args: Exprs<'src> },
 
   // Pipe — left-to-right chain: [a, b, c] means c(b(a)); separated by |
   Pipe(Exprs<'src>),
@@ -354,7 +362,7 @@ pub enum NodeKind<'src> {
   // --- functions ---
 
   // Fn — params (Patterns node) + sep (:) + body
-  Fn { params: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
+  Fn { params: AstId, sep: Token<'src>, body: Exprs<'src> },
 
   // Patterns — expression sequence in pattern position (fn params, match subjects)
   // separated by , ; or block tokens
@@ -366,17 +374,17 @@ pub enum NodeKind<'src> {
   Match { subjects: Exprs<'src>, sep: Token<'src>, arms: Exprs<'src> },
 
   // Arm — lhs (Patterns node) + sep (:) + body
-  Arm { lhs: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
+  Arm { lhs: AstId, sep: Token<'src>, body: Exprs<'src> },
 
   // --- error handling ---
 
   // Try — unwrap Ok or propagate Err from enclosing function
-  Try(Box<Node<'src>>),
+  Try(AstId),
 
   // --- custom blocks ---
 
   // Block — name (Ident) + params (Patterns) + sep (:) + body
-  Block { name: Box<Node<'src>>, params: Box<Node<'src>>, sep: Token<'src>, body: Exprs<'src> },
+  Block { name: AstId, params: AstId, sep: Token<'src>, body: Exprs<'src> },
 
   // Token — raw token leaf in a Tokens-mode block body
   Token(&'src str),
@@ -385,15 +393,21 @@ pub enum NodeKind<'src> {
 // For ChainedCmp interleaved representation
 #[derive(Debug, Clone, PartialEq)]
 pub enum CmpPart<'src> {
-  Operand(Node<'src>),
+  Operand(AstId),
   Op(Token<'src>),
 }
 
 // --- tree walker ---
 
-/// Walk every node in the AST in pre-order, calling `f` on each.
-pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) {
-  f(node);
+/// Walk every node in the AST in pre-order starting from `root_id`, calling
+/// `f(id, &node)` on each.
+pub fn walk<'src, 'a>(
+  ast: &'a Ast<'src>,
+  root_id: AstId,
+  f: &mut impl FnMut(AstId, &'a Node<'src>),
+) {
+  let node = ast.nodes.get(root_id);
+  f(root_id, node);
   match &node.kind {
     NodeKind::LitBool(_)
     | NodeKind::LitInt(_)
@@ -411,79 +425,66 @@ pub fn walk<'src>(node: &'src Node<'src>, f: &mut impl FnMut(&'src Node<'src>)) 
     | NodeKind::LitRec { items, .. }
     | NodeKind::Pipe(items)
     | NodeKind::Patterns(items) => {
-      for child in &items.items { walk(child, f); }
+      for &child_id in items.items.iter() { walk(ast, child_id, f); }
     }
     NodeKind::StrTempl { children, .. }
     | NodeKind::StrRawTempl { children, .. } => {
-      for child in children { walk(child, f); }
+      for &child_id in children.iter() { walk(ast, child_id, f); }
     }
 
-    NodeKind::UnaryOp { operand, .. } => walk(operand, f),
+    NodeKind::UnaryOp { operand, .. } => walk(ast, *operand, f),
     NodeKind::InfixOp { lhs, rhs, .. } => {
-      walk(lhs, f);
-      walk(rhs, f);
+      walk(ast, *lhs, f);
+      walk(ast, *rhs, f);
     }
     NodeKind::ChainedCmp(parts) => {
-      for part in parts {
-        if let CmpPart::Operand(n) = part { walk(n, f); }
+      for part in parts.iter() {
+        if let CmpPart::Operand(n) = part { walk(ast, *n, f); }
       }
     }
     NodeKind::Spread { inner, .. } => {
-      if let Some(n) = inner { walk(n, f); }
+      if let Some(n) = inner { walk(ast, *n, f); }
     }
     NodeKind::Member { lhs, rhs, .. } => {
-      walk(lhs, f);
-      walk(rhs, f);
+      walk(ast, *lhs, f);
+      walk(ast, *rhs, f);
     }
-    NodeKind::Group { inner, .. } => walk(inner, f),
-    NodeKind::Try(inner) => walk(inner, f),
+    NodeKind::Group { inner, .. } => walk(ast, *inner, f),
+    NodeKind::Try(inner) => walk(ast, *inner, f),
     NodeKind::Bind { lhs, rhs, .. } | NodeKind::BindRight { lhs, rhs, .. } => {
-      walk(lhs, f);
-      walk(rhs, f);
+      walk(ast, *lhs, f);
+      walk(ast, *rhs, f);
     }
     NodeKind::Apply { func, args } => {
-      walk(func, f);
-      for arg in &args.items { walk(arg, f); }
+      walk(ast, *func, f);
+      for &arg_id in args.items.iter() { walk(ast, arg_id, f); }
     }
     NodeKind::Fn { params, body, .. } => {
-      walk(params, f);
-      for stmt in &body.items { walk(stmt, f); }
+      walk(ast, *params, f);
+      for &stmt_id in body.items.iter() { walk(ast, stmt_id, f); }
     }
     NodeKind::Match { subjects, arms, .. } => {
-      for subj in &subjects.items { walk(subj, f); }
-      for arm in &arms.items { walk(arm, f); }
+      for &subj_id in subjects.items.iter() { walk(ast, subj_id, f); }
+      for &arm_id in arms.items.iter() { walk(ast, arm_id, f); }
     }
     NodeKind::Arm { lhs, body, .. } => {
-      walk(lhs, f);
-      for stmt in &body.items { walk(stmt, f); }
+      walk(ast, *lhs, f);
+      for &stmt_id in body.items.iter() { walk(ast, stmt_id, f); }
     }
     NodeKind::Block { name, params, body, .. } => {
-      walk(name, f);
-      walk(params, f);
-      for stmt in &body.items { walk(stmt, f); }
+      walk(ast, *name, f);
+      walk(ast, *params, f);
+      for &stmt_id in body.items.iter() { walk(ast, stmt_id, f); }
     }
   }
 }
 
-// --- index builder ---
-
-/// Build a PropGraph mapping AstId → &Node for O(1) lookup by ID.
-/// Walks the tree once, placing each node at its AstId position.
-pub fn build_index<'src>(result: &'src ParseResult<'src>) -> crate::propgraph::PropGraph<AstId, Option<&'src Node<'src>>> {
-  let mut index: crate::propgraph::PropGraph<AstId, Option<&'src Node<'src>>> =
-    crate::propgraph::PropGraph::with_size(result.node_count as usize, None);
-  walk(&result.root, &mut |node| {
-    index.set(node.id, Some(node));
-  });
-  index
-}
-
 // --- s-expression printer ---
 
-impl<'src> Node<'src> {
+impl<'src> Ast<'src> {
   pub fn print(&self) -> String {
     let mut out = String::new();
-    print_node(self, &mut out, 0);
+    print_node(self, self.root, &mut out, 0);
     out
   }
 }
@@ -495,8 +496,9 @@ fn indent(out: &mut String, depth: usize) {
 }
 
 // TODO: include node Loc (start/end) in output so .fnk AST tests can assert on source spans
-fn print_node(node: &Node, out: &mut String, depth: usize) {
+fn print_node(ast: &Ast, id: AstId, out: &mut String, depth: usize) {
   indent(out, depth);
+  let node = ast.nodes.get(id);
   match &node.kind {
     NodeKind::LitBool(v) => {
       out.push_str(if *v { "LitBool true" } else { "LitBool false" });
@@ -521,41 +523,41 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     NodeKind::LitSeq { open, close, items } => {
       out.push_str("LitSeq '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
       if !items.items.is_empty() { out.push(','); }
-      print_exprs(items, out, depth);
+      print_exprs(ast, items, out, depth);
     }
     NodeKind::LitRec { open, close, items } => {
       out.push_str("LitRec '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push('\'');
       if !items.items.is_empty() { out.push(','); }
-      print_exprs(items, out, depth);
+      print_exprs(ast, items, out, depth);
     }
     NodeKind::StrTempl { children, .. } => {
       out.push_str("StrTempl");
-      print_children(children, out, depth);
+      print_id_children(ast, children, out, depth);
     }
     NodeKind::StrRawTempl { children, .. } => {
       out.push_str("StrRawTempl");
-      print_children(children, out, depth);
+      print_id_children(ast, children, out, depth);
     }
     NodeKind::Ident(s) => { out.push_str("Ident '"); out.push_str(s); out.push('\''); }
     NodeKind::SynthIdent(n) => { out.push_str(&format!("SynthIdent '·$_{n}'")); }
     NodeKind::UnaryOp { op, operand } => {
       out.push_str("UnaryOp '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
-      print_node(operand, out, depth + 1);
+      print_node(ast, *operand, out, depth + 1);
     }
     NodeKind::InfixOp { op, lhs, rhs } => {
       out.push_str("InfixOp '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
-      print_node(lhs, out, depth + 1);
+      print_node(ast, *lhs, out, depth + 1);
       out.push('\n');
-      print_node(rhs, out, depth + 1);
+      print_node(ast, *rhs, out, depth + 1);
     }
     NodeKind::ChainedCmp(parts) => {
       out.push_str("ChainedCmp");
-      for part in parts {
+      for part in parts.iter() {
         out.push('\n');
         match part {
-          CmpPart::Operand(n) => print_node(n, out, depth + 1),
+          CmpPart::Operand(n) => print_node(ast, *n, out, depth + 1),
           CmpPart::Op(op) => { indent(out, depth + 1); out.push('\''); out.push_str(op.src); out.push('\''); }
         }
       }
@@ -565,20 +567,20 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       if child.is_some() { out.push(','); }
       if let Some(n) = child {
         out.push('\n');
-        print_node(n, out, depth + 1);
+        print_node(ast, *n, out, depth + 1);
       }
     }
     NodeKind::Member { op, lhs, rhs } => {
       out.push_str("Member '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
-      print_node(lhs, out, depth + 1);
+      print_node(ast, *lhs, out, depth + 1);
       out.push('\n');
-      print_node(rhs, out, depth + 1);
+      print_node(ast, *rhs, out, depth + 1);
     }
     NodeKind::Group { open, close, inner } => {
       out.push_str("Group '"); out.push_str(open.src); out.push_str(".."); out.push_str(close.src); out.push_str("',");
       out.push('\n');
-      print_node(inner, out, depth + 1);
+      print_node(ast, *inner, out, depth + 1);
     }
     NodeKind::Partial => { out.push_str("Partial"); }
     NodeKind::Wildcard => { out.push_str("Wildcard"); }
@@ -586,31 +588,31 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
     NodeKind::Try(inner) => {
       out.push_str("Try");
       out.push('\n');
-      print_node(inner, out, depth + 1);
+      print_node(ast, *inner, out, depth + 1);
     }
     NodeKind::Bind { op, lhs, rhs } => {
       out.push_str("Bind '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
-      print_node(lhs, out, depth + 1);
+      print_node(ast, *lhs, out, depth + 1);
       out.push('\n');
-      print_node(rhs, out, depth + 1);
+      print_node(ast, *rhs, out, depth + 1);
     }
     NodeKind::BindRight { op, lhs, rhs } => {
       out.push_str("BindRight '"); out.push_str(op.src); out.push_str("',");
       out.push('\n');
-      print_node(lhs, out, depth + 1);
+      print_node(ast, *lhs, out, depth + 1);
       out.push('\n');
-      print_node(rhs, out, depth + 1);
+      print_node(ast, *rhs, out, depth + 1);
     }
     NodeKind::Apply { func, args } => {
       out.push_str("Apply");
       out.push('\n');
-      print_node(func, out, depth + 1);
-      print_exprs(args, out, depth);
+      print_node(ast, *func, out, depth + 1);
+      print_exprs(ast, args, out, depth);
     }
     NodeKind::Pipe(exprs) => {
       out.push_str("Pipe");
-      print_children(&exprs.items, out, depth);
+      print_id_children(ast, &exprs.items, out, depth);
     }
     NodeKind::Module { exprs, .. } => {
       // URL is intentionally not printed — the AST debug printer is used
@@ -618,64 +620,64 @@ fn print_node(node: &Node, out: &mut String, depth: usize) {
       // every test to carry an expected URL. The URL flows through to WASM
       // emission but isn't part of the structural AST view.
       out.push_str("Module");
-      print_exprs(exprs, out, depth);
+      print_exprs(ast, exprs, out, depth);
     }
     NodeKind::Fn { params, sep, body } => {
       out.push_str("Fn '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
-      print_node(params, out, depth + 1);
-      for node in &body.items {
+      print_node(ast, *params, out, depth + 1);
+      for &stmt_id in body.items.iter() {
         out.push('\n');
-        print_node(node, out, depth + 1);
+        print_node(ast, stmt_id, out, depth + 1);
       }
     }
     NodeKind::Patterns(exprs) => {
       out.push_str("Patterns");
-      print_exprs(exprs, out, depth);
+      print_exprs(ast, exprs, out, depth);
     }
     NodeKind::Match { subjects, sep, arms } => {
       out.push_str("Match '"); out.push_str(sep.src); out.push_str("',");
-      for subj in &subjects.items {
+      for &subj_id in subjects.items.iter() {
         out.push('\n');
-        print_node(subj, out, depth + 1);
+        print_node(ast, subj_id, out, depth + 1);
       }
-      for arm in &arms.items {
+      for &arm_id in arms.items.iter() {
         out.push('\n');
-        print_node(arm, out, depth + 1);
+        print_node(ast, arm_id, out, depth + 1);
       }
     }
     NodeKind::Arm { lhs, sep, body } => {
       out.push_str("Arm '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
-      print_node(lhs, out, depth + 1);
-      for node in &body.items {
+      print_node(ast, *lhs, out, depth + 1);
+      for &stmt_id in body.items.iter() {
         out.push('\n');
-        print_node(node, out, depth + 1);
+        print_node(ast, stmt_id, out, depth + 1);
       }
     }
     NodeKind::Block { name, params, sep, body } => {
       out.push_str("Block '"); out.push_str(sep.src); out.push_str("',");
       out.push('\n');
-      print_node(name, out, depth + 1);
+      print_node(ast, *name, out, depth + 1);
       out.push('\n');
-      print_node(params, out, depth + 1);
-      for node in &body.items {
+      print_node(ast, *params, out, depth + 1);
+      for &stmt_id in body.items.iter() {
         out.push('\n');
-        print_node(node, out, depth + 1);
+        print_node(ast, stmt_id, out, depth + 1);
       }
     }
   }
 }
 
-fn print_children(children: &[Node], out: &mut String, depth: usize) {
-  for child in children {
+fn print_id_children(ast: &Ast, children: &[AstId], out: &mut String, depth: usize) {
+  for &child_id in children {
     out.push('\n');
-    print_node(child, out, depth + 1);
+    print_node(ast, child_id, out, depth + 1);
   }
 }
 
-fn print_exprs(exprs: &Exprs, out: &mut String, depth: usize) {
-  print_children(&exprs.items, out, depth);
+fn print_exprs(ast: &Ast, exprs: &Exprs, out: &mut String, depth: usize) {
+  print_id_children(ast, &exprs.items, out, depth);
 }
 
 #[cfg(test)]
@@ -687,34 +689,20 @@ mod tests {
     Loc { start: Pos { idx: 0, line: 1, col: 0 }, end: Pos { idx: 0, line: 1, col: 0 } }
   }
 
-  fn node(kind: NodeKind) -> Node {
-    Node::new(kind, loc())
-  }
-
   #[test]
   fn print_patterns_empty() {
-    let tree = node(NodeKind::Patterns(Exprs::empty()));
-    assert_eq!(tree.print(), "Patterns");
-  }
-
-  #[test]
-  fn build_index_returns_nodes_by_id() {
-    let r = crate::parser::parse("foo = 1", "test").unwrap();
-    // Module + Bind + Ident + LitInt = 4 nodes
-    assert_eq!(r.node_count, 4);
-    let index = super::build_index(&r);
-    // Verify each slot is populated and id matches position
-    for i in 0..4 {
-      let node = index.get(AstId(i)).unwrap();
-      assert_eq!(node.id, AstId(i));
-    }
+    // A single Patterns node with no children prints as "Patterns".
+    let mut b = AstBuilder::new();
+    let root = b.append(NodeKind::Patterns(Exprs::empty()), loc());
+    let ast = b.finish(root);
+    assert_eq!(ast.print(), "Patterns");
   }
 
   #[test]
   fn walk_visits_all_nodes() {
-    let r = crate::parser::parse("foo = [1, 2]", "test").unwrap();
+    let ast = crate::parser::parse("foo = [1, 2]", "test").unwrap();
     let mut kinds = vec![];
-    super::walk(&r.root, &mut |n| {
+    super::walk(&ast, ast.root, &mut |_id, n| {
       kinds.push(std::mem::discriminant(&n.kind));
     });
     // Module, Bind, Ident("foo"), LitSeq, LitInt("1"), LitInt("2") = 6 nodes
@@ -723,9 +711,9 @@ mod tests {
 
   #[test]
   fn walk_visits_in_pre_order() {
-    let r = crate::parser::parse("a + b", "test").unwrap();
+    let ast = crate::parser::parse("a + b", "test").unwrap();
     let mut names = vec![];
-    super::walk(&r.root, &mut |n| {
+    super::walk(&ast, ast.root, &mut |_id, n| {
       match &n.kind {
         NodeKind::InfixOp { op, .. } => names.push(op.src),
         NodeKind::Ident(s) => names.push(s),
@@ -997,15 +985,17 @@ mod tests {
     // pointing at the new child. Old parent + old target survive at their
     // original slots.
     //
-    // before: [leaf("x"), group(leaf(0))]   root=1
-    // after:  [leaf("x"), group(leaf(0)), leaf("y"), group(leaf(2))] root=3
+    // before: [leaf("x"), group(inner=0)]   root=1
+    // after:  [leaf("x"), group(inner=0), leaf("y"), group(inner=2)] root=3
+    // The leaf is stored as a real arena slot and the Group's `inner: AstId`
+    // points at it — that's the post-Step-B shape.
     let mut b = AstBuilder::new();
     let leaf_x = b.append(NodeKind::Ident("x"), loc());
     let group_old = b.append(
       NodeKind::Group {
         open: Token { kind: crate::lexer::TokenKind::BracketOpen, loc: loc(), src: "(" },
         close: Token { kind: crate::lexer::TokenKind::BracketClose, loc: loc(), src: ")" },
-        inner: Box::new(Node::new(NodeKind::Ident("x"), loc())),
+        inner: leaf_x,
       },
       loc(),
     );
@@ -1020,7 +1010,7 @@ mod tests {
       NodeKind::Group {
         open: Token { kind: crate::lexer::TokenKind::BracketOpen, loc: loc(), src: "(" },
         close: Token { kind: crate::lexer::TokenKind::BracketClose, loc: loc(), src: ")" },
-        inner: Box::new(Node::new(NodeKind::Ident("y"), loc())),
+        inner: leaf_y,
       },
       loc(),
     );

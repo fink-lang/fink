@@ -10,4 +10,8 @@ proc-macro = true
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "2.0", features = ["full"] }
-fink = { path = "../..", default-features = false }
+# During the flat-ast-wip refactor, test-macros walks the AST at proc-macro
+# expansion time using the same `fink::ast::Node` shape as the main lib.
+# Enabling `flat-ast-wip` here keeps the two in sync — remove when the
+# refactor lands.
+fink = { path = "../..", default-features = false, features = ["flat-ast-wip"] }
