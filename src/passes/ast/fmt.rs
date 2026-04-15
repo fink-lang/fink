@@ -442,15 +442,14 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
   if let [arg_id] = args {
     let arg = ast.nodes.get(*arg_id);
     let func_node = ast.nodes.get(func);
-    if let NodeKind::Ident(func_name) = &func_node.kind {
-      if !func_name.starts_with('·') && !is_multiline(ast, *arg_id)
+    if let NodeKind::Ident(func_name) = &func_node.kind
+      && !func_name.starts_with('·') && !is_multiline(ast, *arg_id)
         && matches!(arg.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. })
       {
         fmt_node(ast, func, out, depth);
         fmt_node(ast, *arg_id, out, depth);
         return;
       }
-    }
   }
 
   fmt_node(ast, func, out, depth);
@@ -475,7 +474,7 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
       if let NodeKind::Fn { params, sep, body } = &arg_node.kind {
         let params = *params;
         let sep = *sep;
-        let body_items: Vec<AstId> = body.items.iter().copied().collect();
+        let body_items: Vec<AstId> = body.items.to_vec();
         fmt_fn_with_inline(ast, params, &sep, &body_items, out, depth + 1, true);
       } else {
         fmt_node(ast, arg_id, out, depth + 1);
@@ -500,7 +499,7 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
     if let NodeKind::Fn { params, sep, body } = &trailing_node.kind {
       let params = *params;
       let sep = *sep;
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       if plain.is_empty() { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
       fmt_fn_with_inline(ast, params, &sep, &body_items, out, depth, false);
       return;
@@ -516,7 +515,7 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
     if let NodeKind::Fn { params, sep, body } = &arg_node.kind {
       let params = *params;
       let sep = *sep;
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       fmt_fn_with_inline(ast, params, &sep, &body_items, out, depth + 1, true);
     } else {
       fmt_node(ast, arg_id, out, depth + 1);
@@ -571,7 +570,7 @@ fn fmt_fn_inline(ast: &Ast<'_>, params: AstId, sep: &Token, expr: AstId, out: &m
 fn fmt_fn_params(ast: &Ast<'_>, params: AstId, out: &mut MappedWriter) {
   out.push_str("fn");
   if let NodeKind::Patterns(exprs) = &ast.nodes.get(params).kind {
-    let items: Vec<AstId> = exprs.items.iter().copied().collect();
+    let items: Vec<AstId> = exprs.items.to_vec();
     for (i, child_id) in items.iter().enumerate() {
       if i == 0 { out.push(' '); } else { out.push_str(", "); }
       fmt_node(ast, *child_id, out, 0);

@@ -81,7 +81,7 @@ pub fn lower<'src>(
 ) -> Cps {
   let root_node = desugared.ast.nodes.get(desugared.ast.root);
   let exprs: Vec<ast::AstId> = match &root_node.kind {
-    ast::NodeKind::Module { exprs, .. } => exprs.items.iter().copied().collect(),
+    ast::NodeKind::Module { exprs, .. } => exprs.items.to_vec(),
     _ => panic!("lower: expected Module root"),
   };
   let result = cps::transform::lower_module(&desugared.ast, &exprs, &desugared.scope);

@@ -67,7 +67,7 @@ mod tests {
   fn get_i31(store: &Store<()>, val: &Val) -> Option<u32> {
     match val {
       Val::AnyRef(Some(any)) => {
-        any.as_i31(&*store).ok().flatten().map(|i| i.get_u32())
+        any.as_i31(store).ok().flatten().map(|i| i.get_u32())
       }
       _ => None,
     }
@@ -78,15 +78,15 @@ mod tests {
     let k = i31_key(store, key);
     let v = i31_key(store, val);
     let mut result = [Val::AnyRef(None)];
-    set_fn.call(store, &[node.clone(), k, v], &mut result).unwrap();
-    result[0].clone()
+    set_fn.call(store, &[*node, k, v], &mut result).unwrap();
+    result[0]
   }
 
   /// Helper: call rec_get(rec, key) → val or None
   fn rec_get_call(store: &mut Store<()>, get_fn: &Func, node: &Val, key: u32) -> Option<u32> {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None)];
-    get_fn.call(&mut *store, &[node.clone(), k], &mut result).unwrap();
+    get_fn.call(&mut *store, &[*node, k], &mut result).unwrap();
     get_i31(store, &result[0])
   }
 
@@ -94,29 +94,29 @@ mod tests {
   fn rec_delete_call(store: &mut Store<()>, del_fn: &Func, node: &Val, key: u32) -> Val {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None)];
-    del_fn.call(store, &[node.clone(), k], &mut result).unwrap();
-    result[0].clone()
+    del_fn.call(store, &[*node, k], &mut result).unwrap();
+    result[0]
   }
 
   /// Helper: call rec_pop_direct(rec, key) → (val, rest_rec)
   fn rec_pop_call(store: &mut Store<()>, pop_fn: &Func, node: &Val, key: u32) -> (Option<u32>, Val) {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None), Val::AnyRef(None)];
-    pop_fn.call(&mut *store, &[node.clone(), k], &mut result).unwrap();
-    (get_i31(store, &result[0]), result[1].clone())
+    pop_fn.call(&mut *store, &[*node, k], &mut result).unwrap();
+    (get_i31(store, &result[0]), result[1])
   }
 
   /// Helper: call rec_merge_direct(dest, src) → merged
   fn rec_merge_call(store: &mut Store<()>, merge_fn: &Func, dest: &Val, src: &Val) -> Val {
     let mut result = [Val::AnyRef(None)];
-    merge_fn.call(store, &[dest.clone(), src.clone()], &mut result).unwrap();
-    result[0].clone()
+    merge_fn.call(store, &[*dest, *src], &mut result).unwrap();
+    result[0]
   }
 
   /// Helper: call rec_size(rec) → i32
   fn rec_size_call(store: &mut Store<()>, size_fn: &Func, node: &Val) -> i32 {
     let mut result = [Val::I32(0)];
-    size_fn.call(store, &[node.clone()], &mut result).unwrap();
+    size_fn.call(store, &[*node], &mut result).unwrap();
     match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
   }
 
@@ -124,7 +124,7 @@ mod tests {
   fn rec_new_call(store: &mut Store<()>, empty_fn: &Func) -> Val {
     let mut result = [Val::AnyRef(None)];
     empty_fn.call(store, &[], &mut result).unwrap();
-    result[0].clone()
+    result[0]
   }
 
   #[test]
@@ -473,44 +473,44 @@ mod tests {
   fn list_empty(store: &mut Store<()>, nil_fn: &Func) -> Val {
     let mut result = [Val::AnyRef(None)];
     nil_fn.call(store, &[], &mut result).unwrap();
-    result[0].clone()
+    result[0]
   }
 
   fn list_prepend(store: &mut Store<()>, cons_fn: &Func, head: u32, tail: &Val) -> Val {
     let h = i31_key(store, head);
     let mut result = [Val::AnyRef(None)];
-    cons_fn.call(store, &[h, tail.clone()], &mut result).unwrap();
-    result[0].clone()
+    cons_fn.call(store, &[h, *tail], &mut result).unwrap();
+    result[0]
   }
 
   fn list_head(store: &mut Store<()>, head_fn: &Func, list: &Val) -> Option<u32> {
     let mut result = [Val::AnyRef(None)];
-    head_fn.call(&mut *store, &[list.clone()], &mut result).unwrap();
+    head_fn.call(&mut *store, &[*list], &mut result).unwrap();
     get_i31(store, &result[0])
   }
 
   fn list_tail(store: &mut Store<()>, tail_fn: &Func, list: &Val) -> Val {
     let mut result = [Val::AnyRef(None)];
-    tail_fn.call(store, &[list.clone()], &mut result).unwrap();
-    result[0].clone()
+    tail_fn.call(store, &[*list], &mut result).unwrap();
+    result[0]
   }
 
   fn list_pop(store: &mut Store<()>, pop_fn: &Func, list: &Val) -> (Option<u32>, Val) {
     let mut result = [Val::AnyRef(None), Val::AnyRef(None)];
-    pop_fn.call(&mut *store, &[list.clone()], &mut result).unwrap();
-    (get_i31(store, &result[0]), result[1].clone())
+    pop_fn.call(&mut *store, &[*list], &mut result).unwrap();
+    (get_i31(store, &result[0]), result[1])
   }
 
   fn list_size(store: &mut Store<()>, len_fn: &Func, list: &Val) -> i32 {
     let mut result = [Val::I32(0)];
-    len_fn.call(store, &[list.clone()], &mut result).unwrap();
+    len_fn.call(store, &[*list], &mut result).unwrap();
     match &result[0] { Val::I32(n) => *n, _ => panic!("expected i32") }
   }
 
   fn list_concat(store: &mut Store<()>, fn_: &Func, a: &Val, b: &Val) -> Val {
     let mut result = [Val::AnyRef(None)];
-    fn_.call(store, &[a.clone(), b.clone()], &mut result).unwrap();
-    result[0].clone()
+    fn_.call(store, &[*a, *b], &mut result).unwrap();
+    result[0]
   }
 
   /// Build a list from a slice: [1, 2, 3] → cons(1, cons(2, cons(3, nil)))
@@ -526,10 +526,10 @@ mod tests {
   /// Uses list_is_empty to detect $Nil (empty list is a non-null struct).
   fn collect_list(store: &mut Store<()>, head_fn: &Func, tail_fn: &Func, is_empty_fn: &Func, list: &Val) -> Vec<u32> {
     let mut result = vec![];
-    let mut current = list.clone();
+    let mut current = *list;
     loop {
       let mut empty = [Val::I32(0)];
-      is_empty_fn.call(&mut *store, &[current.clone()], &mut empty).unwrap();
+      is_empty_fn.call(&mut *store, &[current], &mut empty).unwrap();
       if empty[0].unwrap_i32() != 0 { break; }
       result.push(list_head(store, head_fn, &current).unwrap());
       current = list_tail(store, tail_fn, &current);
@@ -681,21 +681,21 @@ mod tests {
     let mut result = [Val::AnyRef(None)];
 
     // Valid indices.
-    get_fn.call(&mut store, &[list.clone(), Val::I32(0)], &mut result).unwrap();
+    get_fn.call(&mut store, &[list, Val::I32(0)], &mut result).unwrap();
     assert_eq!(get_i31(&store, &result[0]), Some(10));
 
-    get_fn.call(&mut store, &[list.clone(), Val::I32(1)], &mut result).unwrap();
+    get_fn.call(&mut store, &[list, Val::I32(1)], &mut result).unwrap();
     assert_eq!(get_i31(&store, &result[0]), Some(20));
 
-    get_fn.call(&mut store, &[list.clone(), Val::I32(2)], &mut result).unwrap();
+    get_fn.call(&mut store, &[list, Val::I32(2)], &mut result).unwrap();
     assert_eq!(get_i31(&store, &result[0]), Some(30));
 
     // Out of bounds.
-    get_fn.call(&mut store, &[list.clone(), Val::I32(3)], &mut result).unwrap();
+    get_fn.call(&mut store, &[list, Val::I32(3)], &mut result).unwrap();
     assert!(matches!(&result[0], Val::AnyRef(None)));
 
     // Negative index.
-    get_fn.call(&mut store, &[list.clone(), Val::I32(-1)], &mut result).unwrap();
+    get_fn.call(&mut store, &[list, Val::I32(-1)], &mut result).unwrap();
     assert!(matches!(&result[0], Val::AnyRef(None)));
 
     // Empty list.
@@ -720,17 +720,17 @@ mod tests {
     let v99 = i31_key(&mut store, 99);
 
     let mut result = [Val::I32(0)];
-    find_fn.call(&mut store, &[list.clone(), v10], &mut result).unwrap();
+    find_fn.call(&mut store, &[list, v10], &mut result).unwrap();
     assert_eq!(result[0].unwrap_i32(), 0);
 
-    find_fn.call(&mut store, &[list.clone(), v30], &mut result).unwrap();
+    find_fn.call(&mut store, &[list, v30], &mut result).unwrap();
     assert_eq!(result[0].unwrap_i32(), 2);
 
-    find_fn.call(&mut store, &[list.clone(), v40], &mut result).unwrap();
+    find_fn.call(&mut store, &[list, v40], &mut result).unwrap();
     assert_eq!(result[0].unwrap_i32(), 3);
 
     // Not found.
-    find_fn.call(&mut store, &[list.clone(), v99], &mut result).unwrap();
+    find_fn.call(&mut store, &[list, v99], &mut result).unwrap();
     assert_eq!(result[0].unwrap_i32(), -1);
 
     // Empty list.
@@ -762,40 +762,40 @@ mod tests {
   fn set_new(store: &mut Store<()>, fn_: &Func) -> Val {
     let mut result = [Val::AnyRef(None)];
     fn_.call(store, &[], &mut result).unwrap();
-    result[0].clone()
+    result[0]
   }
 
   fn set_set(store: &mut Store<()>, fn_: &Func, node: &Val, key: u32) -> Val {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None)];
-    fn_.call(store, &[node.clone(), k], &mut result).unwrap();
-    result[0].clone()
+    fn_.call(store, &[*node, k], &mut result).unwrap();
+    result[0]
   }
 
   fn set_has(store: &mut Store<()>, fn_: &Func, node: &Val, key: u32) -> bool {
     let k = i31_key(store, key);
     let mut result = [Val::I32(0)];
-    fn_.call(store, &[node.clone(), k], &mut result).unwrap();
+    fn_.call(store, &[*node, k], &mut result).unwrap();
     result[0].unwrap_i32() != 0
   }
 
   fn set_remove(store: &mut Store<()>, fn_: &Func, node: &Val, key: u32) -> Val {
     let k = i31_key(store, key);
     let mut result = [Val::AnyRef(None)];
-    fn_.call(store, &[node.clone(), k], &mut result).unwrap();
-    result[0].clone()
+    fn_.call(store, &[*node, k], &mut result).unwrap();
+    result[0]
   }
 
   fn set_size(store: &mut Store<()>, fn_: &Func, node: &Val) -> i32 {
     let mut result = [Val::I32(0)];
-    fn_.call(store, &[node.clone()], &mut result).unwrap();
+    fn_.call(store, &[*node], &mut result).unwrap();
     result[0].unwrap_i32()
   }
 
   fn set_op(store: &mut Store<()>, fn_: &Func, a: &Val, b: &Val) -> Val {
     let mut result = [Val::AnyRef(None)];
-    fn_.call(store, &[a.clone(), b.clone()], &mut result).unwrap();
-    result[0].clone()
+    fn_.call(store, &[*a, *b], &mut result).unwrap();
+    result[0]
   }
 
   #[test]
@@ -955,7 +955,7 @@ mod tests {
 
   fn set_i32(store: &mut Store<()>, fn_: &Func, a: &Val, b: &Val) -> i32 {
     let mut result = [Val::I32(0)];
-    fn_.call(store, &[a.clone(), b.clone()], &mut result).unwrap();
+    fn_.call(store, &[*a, *b], &mut result).unwrap();
     result[0].unwrap_i32()
   }
 
@@ -1492,7 +1492,7 @@ mod tests {
     let func = instance.get_func(&mut *store, "make_num").unwrap();
     let mut result = [Val::AnyRef(None)];
     func.call(store, &[Val::F64(val.to_bits())], &mut result).unwrap();
-    result[0].clone()
+    result[0]
   }
 
   fn range_excl(store: &mut Store<()>, instance: &Instance, start: f64, end: f64) -> Val {
@@ -1501,7 +1501,7 @@ mod tests {
     let e = make_num(store, instance, end);
     let mut result = [Val::AnyRef(None)];
     func.call(store, &[s, e], &mut result).unwrap();
-    result[0].clone()
+    result[0]
   }
 
   fn range_incl(store: &mut Store<()>, instance: &Instance, start: f64, end: f64) -> Val {
@@ -1510,14 +1510,14 @@ mod tests {
     let e = make_num(store, instance, end);
     let mut result = [Val::AnyRef(None)];
     func.call(store, &[s, e], &mut result).unwrap();
-    result[0].clone()
+    result[0]
   }
 
   fn range_op_in(store: &mut Store<()>, instance: &Instance, val: f64, range: &Val) -> bool {
     let func = instance.get_func(&mut *store, "range_op_in").unwrap();
     let v = make_num(store, instance, val);
     let mut result = [Val::I32(0)];
-    func.call(store, &[v, range.clone()], &mut result).unwrap();
+    func.call(store, &[v, *range], &mut result).unwrap();
     result[0].unwrap_i32() != 0
   }
 

@@ -250,7 +250,7 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
         NodeKind::Fn { params, body, .. }
           if matches!(&g.node(params).kind, NodeKind::Patterns(ps) if ps.items.is_empty()) =>
         {
-          let body_items: Vec<AstId> = body.items.iter().copied().collect();
+          let body_items: Vec<AstId> = body.items.to_vec();
           lower_iife(g, params, &body_items, o)
         }
         _ => lower(g, inner),
@@ -268,19 +268,19 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
 
     // ---- fn: `fn params: body` ----
     NodeKind::Fn { params, body, .. } => {
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       lower_fn(g, params, &body_items, o)
     }
 
     // ---- apply: `func arg1 arg2` ----
     NodeKind::Apply { func, args } => {
-      let arg_items: Vec<AstId> = args.items.iter().copied().collect();
+      let arg_items: Vec<AstId> = args.items.to_vec();
       lower_apply(g, func, &arg_items, o)
     }
 
     // ---- pipe: `a | b | c` == `c (b a)` ----
     NodeKind::Pipe(stages) => {
-      let stage_items: Vec<AstId> = stages.items.iter().copied().collect();
+      let stage_items: Vec<AstId> = stages.items.to_vec();
       lower_pipe(g, &stage_items, o)
     }
 
@@ -298,45 +298,45 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
 
     // ---- sequence literal ----
     NodeKind::LitSeq { items: elems, .. } => {
-      let items: Vec<AstId> = elems.items.iter().copied().collect();
+      let items: Vec<AstId> = elems.items.to_vec();
       lower_lit_seq(g, &items, o)
     }
 
     // ---- record literal ----
     NodeKind::LitRec { items: fields, .. } => {
-      let items: Vec<AstId> = fields.items.iter().copied().collect();
+      let items: Vec<AstId> = fields.items.to_vec();
       lower_lit_rec(g, &items, o)
     }
 
     // ---- string template ----
     NodeKind::StrTempl { children: parts, .. } => {
-      let parts: Vec<AstId> = parts.iter().copied().collect();
+      let parts: Vec<AstId> = parts.to_vec();
       lower_str_templ(g, &parts, o)
     }
 
     // ---- raw string template (tagged) ----
     NodeKind::StrRawTempl { children: parts, .. } => {
-      let parts: Vec<AstId> = parts.iter().copied().collect();
+      let parts: Vec<AstId> = parts.to_vec();
       lower_str_raw_templ(g, &parts, o)
     }
 
     // ---- match ----
     NodeKind::Match { subjects, arms, .. } => {
-      let subjs: Vec<AstId> = subjects.items.iter().copied().collect();
-      let arm_items: Vec<AstId> = arms.items.iter().copied().collect();
+      let subjs: Vec<AstId> = subjects.items.to_vec();
+      let arm_items: Vec<AstId> = arms.items.to_vec();
       lower_match(g, &subjs, &arm_items, o)
     }
 
     // ---- block: `name params: body` ----
     NodeKind::Block { name, params, body, .. } => {
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       lower_block(g, name, params, &body_items, o)
     }
 
     // ---- module: single expression unwrapped; multiple as zero-param function ----
     NodeKind::Module { exprs, .. } if exprs.items.len() == 1 => lower(g, exprs.items[0]),
     NodeKind::Module { exprs, .. } => {
-      let items: Vec<AstId> = exprs.items.iter().copied().collect();
+      let items: Vec<AstId> = exprs.items.to_vec();
       lower_module_as_fn(g, &items, o)
     }
 
@@ -562,7 +562,7 @@ fn extract_params_with_gen(
   let mut deferred: Vec<Pending> = vec![];
   let params_kind = g.node(params).kind.clone();
   let nodes: Vec<AstId> = match params_kind {
-    NodeKind::Patterns(ps) => ps.items.iter().copied().collect(),
+    NodeKind::Patterns(ps) => ps.items.to_vec(),
     _ => vec![params],
   };
   for p in nodes {
@@ -607,7 +607,7 @@ fn extract_params(g: &mut Gen, params: AstId) -> Vec<Param> {
   let kind = g.node(params).kind.clone();
   match kind {
     NodeKind::Patterns(ps) => {
-      let items: Vec<AstId> = ps.items.iter().copied().collect();
+      let items: Vec<AstId> = ps.items.to_vec();
       items.into_iter().flat_map(|p| extract_param(g, p)).collect()
     }
     _ => extract_param(g, params),
@@ -621,7 +621,7 @@ fn extract_param(g: &mut Gen, param: AstId) -> Vec<Param> {
     NodeKind::Ident(_) | NodeKind::SynthIdent(_) => vec![Param::Name(g.bind_name(param))],
     NodeKind::Wildcard => vec![Param::Name(g.bind(Bind::Synth, origin))],
     NodeKind::Patterns(ps) => {
-      let items: Vec<AstId> = ps.items.iter().copied().collect();
+      let items: Vec<AstId> = ps.items.to_vec();
       items.into_iter().flat_map(|p| extract_param(g, p)).collect()
     }
     // `..rest` varargs param — trailing spread.
@@ -661,7 +661,7 @@ fn lower_apply(
     let inner_kind = g.node(inner).kind.clone();
     if let NodeKind::StrRawTempl { children, .. } = inner_kind {
       let mut acc = lit_val(g, Lit::Seq, origin);
-      let parts: Vec<AstId> = children.iter().copied().collect();
+      let parts: Vec<AstId> = children.to_vec();
       for part in parts.iter().rev() {
         let (pv, pp) = lower_str_part(g, *part);
         pending.extend(pp);
@@ -1157,7 +1157,7 @@ fn lower_match_arm(g: &mut Gen, arm: AstId, _origin: Option<AstId>) -> ArmCps {
       let arm_origin = Some(arm);
       let lhs_kind = g.node(lhs).kind.clone();
       let lhs_ids: Vec<AstId> = match lhs_kind {
-        NodeKind::Patterns(ps) => ps.items.iter().copied().collect(),
+        NodeKind::Patterns(ps) => ps.items.to_vec(),
         _ => vec![lhs],
       };
 
@@ -1187,7 +1187,7 @@ fn lower_match_arm(g: &mut Gen, arm: AstId, _origin: Option<AstId>) -> ArmCps {
       let mb_k_id = mb_k_param.id;
       let prev_cont = g.cont;
       g.cont = mb_k_id;
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       let mb_body_expr = lower_seq(g, &body_items);
       g.cont = prev_cont;
       let mut mb_params: Vec<Param> = vec![Param::Name(mb_k_param)];
@@ -1620,7 +1620,7 @@ fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::B
     // RHS must be `import 'url'`.
     let NodeKind::Apply { func, args } = &ast.nodes.get(rhs).kind else { continue };
     let func = *func;
-    let arg_items: Vec<AstId> = args.items.iter().copied().collect();
+    let arg_items: Vec<AstId> = args.items.to_vec();
     let NodeKind::Ident(name) = &ast.nodes.get(func).kind else { continue };
     if *name != "import" { continue; }
     let url = arg_items.iter().find_map(|&a| {
@@ -1629,7 +1629,7 @@ fn collect_module_imports(ast: &Ast<'_>, exprs: &[AstId]) -> std::collections::B
     let Some(url) = url else { continue };
     // LHS must be a rec pattern `{foo, bar, ...}`.
     let NodeKind::LitRec { items, .. } = &ast.nodes.get(lhs).kind else { continue };
-    let item_ids: Vec<AstId> = items.items.iter().copied().collect();
+    let item_ids: Vec<AstId> = items.items.to_vec();
     let entry: &mut Vec<String> = result.entry(url).or_default();
     for item_id in item_ids {
       if let NodeKind::Ident(field) = &ast.nodes.get(item_id).kind {
@@ -1652,9 +1652,8 @@ fn collect_module_exports(ast: &Ast<'_>, exprs: &[AstId], bind_site_to_cps: &std
     // Exclude imports: `{foo} = import './bar'` — rhs is Apply { func: Ident("import"), .. }
     if let NodeKind::Apply { func, .. } = &ast.nodes.get(rhs).kind {
       let func = *func;
-      if let NodeKind::Ident(name) = &ast.nodes.get(func).kind {
-        if *name == "import" { return None; }
-      }
+      if let NodeKind::Ident(name) = &ast.nodes.get(func).kind
+        && *name == "import" { return None; }
     }
     bind_site_to_cps.get(&lhs.0).copied()
   }).collect()
@@ -1680,9 +1679,8 @@ fn collect_module_locals(
     // Exclude imports: `{foo} = import './bar'`.
     if let NodeKind::Apply { func, .. } = &ast.nodes.get(rhs).kind {
       let func = *func;
-      if let NodeKind::Ident(name) = &ast.nodes.get(func).kind {
-        if *name == "import" { continue; }
-      }
+      if let NodeKind::Ident(name) = &ast.nodes.get(func).kind
+        && *name == "import" { continue; }
     }
     walk_bind_lhs(ast, lhs, bind_site_to_cps, &mut out);
   }
@@ -2855,7 +2853,7 @@ fn lower_pat_lhs(
     // Exactly one arg should be an Ident/Wildcard (the "binding slot"); others are
     // literal/value args. All are assembled in order as arguments to MatchGuard.
     NodeKind::Apply { func, args } => {
-      let arg_ids: Vec<AstId> = args.items.iter().copied().collect();
+      let arg_ids: Vec<AstId> = args.items.to_vec();
       let mut arg_vals: Vec<Val> = vec![];
       for arg in arg_ids {
         let arg_kind = g.node(arg).kind.clone();
@@ -2905,14 +2903,14 @@ fn lower_pat_lhs(
     // Seq pattern: `[] = foo`, `[a, b] = foo`, `[a, []] = foo`, `[head, ..tail] = foo`
     // Emits a single PatternMatch whose matcher body chains SeqPop/Empty calls.
     NodeKind::LitSeq { items: elems, .. } => {
-      let items: Vec<AstId> = elems.items.iter().copied().collect();
+      let items: Vec<AstId> = elems.items.to_vec();
       emit_seq_pattern(g, val, &items, origin, pending)
     }
 
     // Rec pattern: `{} = foo`, `{x, y} = point`, `{bar, ..rest} = foo`, `{bar, ..{}} = foo`
     // Emits a single PatternMatch whose matcher body chains RecPop/Empty calls.
     NodeKind::LitRec { items: fields, .. } => {
-      let items: Vec<AstId> = fields.items.iter().copied().collect();
+      let items: Vec<AstId> = fields.items.to_vec();
       emit_rec_pattern(g, val, &items, origin, pending)
     }
 
@@ -2931,7 +2929,7 @@ fn lower_pat_lhs(
     // Validates exactly one interpolation with at most two literal parts (prefix, suffix).
     // Emits StrMatch(subj, prefix, suffix, fail, succ(capture)).
     NodeKind::StrTempl { children, .. } => {
-      let children: Vec<AstId> = children.iter().copied().collect();
+      let children: Vec<AstId> = children.to_vec();
       emit_str_templ_pattern(g, val, &children, origin, pending)
     }
 

@@ -329,13 +329,13 @@ pub fn analyse<'src>(ast: &Ast<'src>, builtins: &[&str]) -> ScopeResult {
 
   // Phase 1: pre-register all module-level bindings (for mutual recursion).
   if let NodeKind::Module { exprs: items, .. } = &ast.nodes.get(ast.root).kind {
-    let items: Vec<AstId> = items.items.iter().copied().collect();
+    let items: Vec<AstId> = items.items.to_vec();
     pre_register_binds(ast, &items, module_scope, &mut ctx);
   }
 
   // Phase 2: walk the tree and resolve references.
   if let NodeKind::Module { exprs: items, .. } = &ast.nodes.get(ast.root).kind {
-    let items: Vec<AstId> = items.items.iter().copied().collect();
+    let items: Vec<AstId> = items.items.to_vec();
     walk_stmts(ast, &items, module_scope, &mut ctx);
   }
 
@@ -566,14 +566,14 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
 
       // Register params as bindings in the fn scope.
       if let NodeKind::Patterns(pat_items) = &ast.nodes.get(params).kind {
-        let param_ids: Vec<AstId> = pat_items.items.iter().copied().collect();
+        let param_ids: Vec<AstId> = pat_items.items.to_vec();
         for param_id in param_ids {
           register_pattern_binds(ast, param_id, fn_scope, ctx);
         }
       }
 
       // Walk body statements.
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       walk_stmts(ast, &body_items, fn_scope, ctx);
 
       // Pop fn scope bindings.
@@ -588,7 +588,7 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
     }
 
     NodeKind::Module { exprs: items, .. } => {
-      let items: Vec<AstId> = items.items.iter().copied().collect();
+      let items: Vec<AstId> = items.items.to_vec();
       walk_stmts(ast, &items, scope, ctx);
     }
 
@@ -617,7 +617,7 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
       // Walk guard expressions in patterns for reference resolution.
       walk_pattern_refs(ast, lhs, arm_scope, ctx);
       // Walk body in arm scope.
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       walk_stmts(ast, &body_items, arm_scope, ctx);
       ctx.pop_scope_binds(arm_scope);
     }
@@ -652,7 +652,7 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
         match &ast.nodes.get(item_id).kind {
           NodeKind::Arm { lhs: _, body, .. } => {
             // Walk the field value only (not the key — it's a literal key, not a binding).
-            let body_items: Vec<AstId> = body.items.iter().copied().collect();
+            let body_items: Vec<AstId> = body.items.to_vec();
             for stmt_id in body_items {
               walk_node(ast, stmt_id, scope, ctx);
             }
@@ -665,7 +665,7 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
     NodeKind::Block { name, params, body, .. } => {
       walk_node(ast, name, scope, ctx);
       walk_node(ast, params, scope, ctx);
-      let body_items: Vec<AstId> = body.items.iter().copied().collect();
+      let body_items: Vec<AstId> = body.items.to_vec();
       walk_stmts(ast, &body_items, scope, ctx);
     }
 

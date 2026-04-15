@@ -61,7 +61,7 @@ pub trait Transform<'src> {
       NodeKind::StrRawTempl { open, close, children } => self.transform_str_raw_templ(builder, src, open, close, children, loc),
       NodeKind::UnaryOp { op, operand } => self.transform_unary_op(builder, src, op, operand, loc),
       NodeKind::InfixOp { op, lhs, rhs } => self.transform_infix_op(builder, src, op, lhs, rhs, loc),
-      NodeKind::ChainedCmp(parts) => self.transform_chained_cmp(builder, src, parts, loc),
+      NodeKind::ChainedCmp(parts) => self.transform_chained_cmp(builder, src, &parts, loc),
       NodeKind::Spread { op, inner } => self.transform_spread(builder, src, op, inner, loc),
       NodeKind::Member { op, lhs, rhs } => self.transform_member(builder, src, op, lhs, rhs, loc),
       NodeKind::Group { open, close, inner } => self.transform_group(builder, src, open, close, inner, loc),
@@ -177,7 +177,7 @@ pub trait Transform<'src> {
     &mut self,
     builder: &mut AstBuilder<'src>,
     src: &Ast<'src>,
-    parts: Box<[CmpPart<'src>]>,
+    parts: &[CmpPart<'src>],
     loc: Loc,
   ) -> TransformResult {
     let mut new_parts: Vec<CmpPart<'src>> = Vec::with_capacity(parts.len());
@@ -363,6 +363,7 @@ pub trait Transform<'src> {
     Ok(builder.append(NodeKind::Arm { lhs, sep, body }, loc))
   }
 
+  #[allow(clippy::too_many_arguments)]
   fn transform_block(
     &mut self,
     builder: &mut AstBuilder<'src>,

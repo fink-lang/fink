@@ -710,11 +710,10 @@ mod tests {
             // old pre-flatten test expectations (which didn't include
             // the Module wrapper).
             let root = new_ast.nodes.get(new_ast.root);
-            if let NodeKind::Module { exprs, .. } = &root.kind {
-              if exprs.items.len() == 1 {
+            if let NodeKind::Module { exprs, .. } = &root.kind
+              && exprs.items.len() == 1 {
                 return new_ast.print_subtree(exprs.items[0]);
               }
-            }
             after
           }
           Err(e) => format!("ERROR: {}", e.message),
