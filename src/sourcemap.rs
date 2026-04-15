@@ -44,6 +44,12 @@ impl MappedWriter {
     }
   }
 
+  /// Current output line (0-indexed).
+  pub fn line(&self) -> u32 { self.line }
+
+  /// Current output column (0-indexed, UTF-16 code units).
+  pub fn col(&self) -> u32 { self.col }
+
   /// Record a mapping from the current output position to the given source location.
   /// Line 0 is a sentinel meaning "no source origin" — emits an unmapped segment
   /// that stops the previous mapping from bleeding into structural text.

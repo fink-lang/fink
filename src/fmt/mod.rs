@@ -1,24 +1,26 @@
 // Fink formatter — two-stage pipeline:
 //
-//   raw AST  ──[layout]──►  formatted AST + origin map  ──[print]──►  String
+//   raw AST  ──[layout]──►  formatted AST  ──[print]──►  String
 //
 // Stage 1 — layout (layout.rs):
-//   Traverses the input AST and produces a new Ast with canonical locs
+//   Traverses the input AST and produces a new `Ast` with canonical locs
 //   that satisfy the formatting rules (max line width, indentation, etc.).
-//   Also produces a PropGraph<FmtId, Option<AstId>> that maps every node in
-//   the output tree back to the original node it was derived from (None for
-//   synthesized nodes). This origin map is the hook for sourcemap generation.
 //
 // Stage 2 — print (print.rs):
-//   Takes an Ast whose locs are already canonical and materialises the
+//   Takes an `Ast` whose locs are already canonical and materialises the
 //   source string by placing token bytes at their loc positions. No formatting
 //   decisions are made here — it is the identity observer of the loc contract.
+//
+// Origin mapping is not wired. `print` derives source maps from the per-token
+// `Loc.start` values — an identity map of the formatted output. If the
+// formatter ever needs to attribute reflowed spans back to pre-layout source
+// (e.g. to power a fix-it style refactor against the original file), the
+// layout pass would need to carry a `PropGraph<AstId, AstId>` from output
+// node id back to input node id. No current consumer needs that, so it is
+// not built.
 
 pub mod layout;
 pub mod print;
-
-use crate::ast::{Ast, AstId};
-use crate::propgraph::PropGraph;
 
 /// Configuration for the formatter.
 #[derive(Debug, Clone)]
@@ -33,32 +35,4 @@ impl Default for FmtConfig {
     fn default() -> Self {
         Self { max_width: 80, indent: 2 }
     }
-}
-
-/// Opaque identifier for a node in the formatted AST output.
-/// Separate from AstId to prevent accidental cross-indexing.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FmtId(pub u32);
-
-impl std::fmt::Debug for FmtId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "fmt#{}", self.0)
-    }
-}
-
-impl From<FmtId> for usize {
-    fn from(id: FmtId) -> usize { id.0 as usize }
-}
-
-impl From<usize> for FmtId {
-    fn from(n: usize) -> FmtId { FmtId(n as u32) }
-}
-
-/// Output of the layout pass.
-pub struct FmtResult<'src> {
-    /// The formatted AST. All locs are canonical and self-consistent.
-    pub ast: Ast<'src>,
-    /// Maps each output node back to the originating input node, if any.
-    /// Synthesized or structure-only nodes map to None.
-    pub origin: PropGraph<FmtId, Option<AstId>>,
 }

@@ -1,0 +1,306 @@
+{test, expect, equals, print} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+literals
+---
+
+test 'bool true', fn:
+  expect print ƒink:
+    true
+  | equals 'NO-DIFF'
+
+test 'bool false', fn:
+  expect print ƒink:
+    false
+  | equals 'NO-DIFF'
+
+test 'integer', fn:
+  expect print ƒink:
+    1_234_567
+  | equals 'NO-DIFF'
+
+test 'float', fn:
+  expect print ƒink:
+    1.0e100_000
+  | equals 'NO-DIFF'
+
+test 'decimal', fn:
+  expect print ƒink:
+    1.0d-100
+  | equals 'NO-DIFF'
+
+test 'string', fn:
+  expect print ƒink:
+    'hello world'
+  | equals 'NO-DIFF'
+
+test 'string interpolation', fn:
+  expect print ƒink:
+    'hello \${1 + 2}'
+  | equals 'NO-DIFF'
+
+test 'tagged template string', fn:
+  expect print ƒink:
+    fmt'hello \${1 + 2}'
+  | equals 'NO-DIFF'
+
+test 'empty sequence', fn:
+  expect print ƒink:
+    []
+  | equals 'NO-DIFF'
+
+test 'sequence literal', fn:
+  expect print ƒink:
+    [1, 2, 3]
+  | equals 'NO-DIFF'
+
+test 'empty record', fn:
+  expect print ƒink:
+    {}
+  | equals 'NO-DIFF'
+
+test 'record literal', fn:
+  expect print ƒink:
+    {foo: 1, bar: 2}
+  | equals 'NO-DIFF'
+
+test 'multiline record', fn:
+  expect print ƒink:
+    {
+      foo: 1
+      bar: {
+        spam: 3
+      }
+    }
+  | equals 'NO-DIFF'
+
+
+---
+operators
+---
+
+test 'unary minus', fn:
+  expect print ƒink:
+    -a
+  | equals 'NO-DIFF'
+
+test 'unary not', fn:
+  expect print ƒink:
+    not a
+  | equals 'NO-DIFF'
+
+test 'add', fn:
+  expect print ƒink:
+    a + b
+  | equals 'NO-DIFF'
+
+test 'multiply', fn:
+  expect print ƒink:
+    a * b
+  | equals 'NO-DIFF'
+
+test 'and', fn:
+  expect print ƒink:
+    a and b
+  | equals 'NO-DIFF'
+
+test 'chained comparison', fn:
+  expect print ƒink:
+    a > b > c
+  | equals 'NO-DIFF'
+
+test 'member by name', fn:
+  expect print ƒink:
+    foo.bar
+  | equals 'NO-DIFF'
+
+test 'member by expression', fn:
+  expect print ƒink:
+    foo.(expr)
+  | equals 'NO-DIFF'
+
+test 'exclusive range', fn:
+  expect print ƒink:
+    0..10
+  | equals 'NO-DIFF'
+
+test 'inclusive range', fn:
+  expect print ƒink:
+    0...10
+  | equals 'NO-DIFF'
+
+
+---
+spread
+---
+
+test 'spread into sequence', fn:
+  expect print ƒink:
+    [head, ..tail]
+  | equals 'NO-DIFF'
+
+test 'bare spread', fn:
+  expect print ƒink:
+    [..]
+  | equals 'NO-DIFF'
+
+test 'spread into record', fn:
+  expect print ƒink:
+    {foo: bar, ..rest}
+  | equals 'NO-DIFF'
+
+
+---
+grouping
+---
+
+test 'grouped arithmetic', fn:
+  expect print ƒink:
+    (1 + 2) * (2 + 3)
+  | equals 'NO-DIFF'
+
+
+---
+binding
+---
+
+test 'simple binding', fn:
+  expect print ƒink:
+    foo = 1
+  | equals 'NO-DIFF'
+
+test 'sequence destructure', fn:
+  expect print ƒink:
+    [a, b] = [1, 2]
+  | equals 'NO-DIFF'
+
+test 'record destructure', fn:
+  expect print ƒink:
+    {x, y} = point
+  | equals 'NO-DIFF'
+
+test 'right-hand binding', fn:
+  expect print ƒink:
+    123 |= b
+  | equals 'NO-DIFF'
+
+test 'wildcard', fn:
+  expect print ƒink:
+    _
+  | equals 'NO-DIFF'
+
+test 'partial', fn:
+  expect print ƒink:
+    add5 = add 5, ?
+  | equals 'NO-DIFF'
+
+
+---
+application
+---
+
+test 'simple application', fn:
+  expect print ƒink:
+    log 'hello'
+  | equals 'NO-DIFF'
+
+test 'multi-arg application', fn:
+  expect print ƒink:
+    add 1, 2
+  | equals 'NO-DIFF'
+
+test 'multiline args', fn:
+  expect print ƒink:
+    add
+      mul 2, 3
+      mul 3, 4
+  | equals 'NO-DIFF'
+
+test 'simple pipe', fn:
+  expect print ƒink:
+    foo | bar | spam
+  | equals 'NO-DIFF'
+
+test 'multiline pipe', fn:
+  expect print ƒink:
+    'hello'
+    | capitalize
+    | log
+  | equals 'NO-DIFF'
+
+
+---
+functions
+---
+
+test 'multiline function', fn:
+  expect print ƒink:
+    fn a, b:
+      a + b
+  | equals 'NO-DIFF'
+
+test 'single line function', fn:
+  expect print ƒink:
+    fn a, b: a + b
+  | equals 'NO-DIFF'
+
+test 'no-arg function', fn:
+  expect print ƒink:
+    greet = fn: 'hello'
+  | equals 'NO-DIFF'
+
+
+---
+match
+---
+
+test 'match on literal values', fn:
+  expect print ƒink:
+    match foo:
+      1: 'one'
+      2: 'two'
+      _: 'other'
+  | equals 'NO-DIFF'
+
+test 'multiline arm body', fn:
+  expect print ƒink:
+    match n:
+      n > 0:
+        x = n * 2
+        x + 1
+      _: 0
+  | equals 'NO-DIFF'
+
+
+---
+try
+---
+
+test 'try bare', fn:
+  expect print ƒink:
+    try foo
+  | equals 'NO-DIFF'
+
+test 'try with application', fn:
+  expect print ƒink:
+    try foo bar
+  | equals 'NO-DIFF'
+
+
+---
+blocks
+---
+
+test 'block with expression body', fn:
+  expect print ƒink:
+    test_block: 'hello'
+  | equals 'NO-DIFF'
+
+test 'block with params and multiline body', fn:
+  expect print ƒink:
+    test_block a, b:
+      x = a + b
+      x * 2
+  | equals 'NO-DIFF'
