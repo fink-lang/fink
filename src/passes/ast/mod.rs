@@ -985,6 +985,13 @@ mod tests {
 
   #[test]
   fn appended_only_accepts_extend_with_parent_rewrite() {
+    // NOTE (flat-ast-arena): this test uses today's owning-tree NodeKind
+    // shape (`Group.inner: Box<Node>`). After Step B flips `Group.inner`
+    // to `AstId`, the `Box::new(Node::new(...))` construction sites need
+    // to become `builder.append(NodeKind::Ident("x"), loc())` producing
+    // a real arena slot, and `Group.inner` stores that slot's AstId.
+    // Same test intent, cleaner construction. Flag this when Step B hits.
+    //
     // Realistic pass pattern: a pass walks a tree, finds something to change,
     // appends a replacement for the target + an appended copy of the parent
     // pointing at the new child. Old parent + old target survive at their
