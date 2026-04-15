@@ -116,7 +116,6 @@ pub fn run(
                 let writer: &super::IoStream = if tag == 1 { &out } else { &err };
                 let mut w = writer.lock().unwrap();
                 w.write_all(&data[offset..offset + length]).ok();
-                w.write_all(b"\n").ok();
               }
             }
             Ok(())

@@ -34,8 +34,7 @@ test 'stdout multiple messages', fn:
   | equals ":
     0
     stdout == ":
-      hello
-      world
+      helloworld
 
 
 test 'stderr output', fn:
