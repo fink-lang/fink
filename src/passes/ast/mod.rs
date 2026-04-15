@@ -912,6 +912,77 @@ mod tests {
     assert!(super::appended_only(&before, &after).is_ok());
   }
 
+  // A tiny "pass" demonstrating the two-handle rule. Walks the source
+  // Ast, for every `Ident("old")` it finds, appends an `Ident("new")`
+  // to the builder and returns the fresh id. For anything else, returns
+  // the input id unchanged (fast path). This proves the borrow-checker
+  // shape documented in `docs/ast-arena-contract.md` actually compiles
+  // under real Rust rules — the previous in-module tests only exercised
+  // append, not append-while-reading-src.
+  //
+  // The test deliberately works on a flat Ast (every Ident at its own
+  // slot, no owning children) because Step B hasn't happened yet. After
+  // Step B the same pattern extends to recursive rewrites with parent
+  // propagation.
+  fn rewrite_old_to_new<'src>(
+    builder: &mut AstBuilder<'src>,
+    src: &Ast<'src>,
+    id: AstId,
+  ) -> AstId {
+    // Hold an immutable borrow of `src` for the read, then drop it
+    // (the `match` block ends) before touching `builder` mutably.
+    // This is the borrow discipline every pass method must follow.
+    let is_old = matches!(src.nodes.get(id).kind, NodeKind::Ident("old"));
+    if is_old {
+      // `src` borrow is released here; now we can mutably borrow builder.
+      builder.append(NodeKind::Ident("new"), loc())
+    } else {
+      // Fast path: no append, return input id.
+      id
+    }
+  }
+
+  #[test]
+  fn two_handle_rule_compiles_and_works() {
+    // Build source with three idents: "old", "keep", "old".
+    let mut b = AstBuilder::new();
+    let a = b.append(NodeKind::Ident("old"), loc());
+    let keep = b.append(NodeKind::Ident("keep"), loc());
+    let c = b.append(NodeKind::Ident("old"), loc());
+    let src = b.finish(c);
+
+    // Simulate a pass: snapshot src, reopen builder, run the rewrite.
+    let snapshot = src.clone();
+    let (mut builder, _root) = AstBuilder::from_ast(src);
+    let new_a = rewrite_old_to_new(&mut builder, &snapshot, a);
+    let new_keep = rewrite_old_to_new(&mut builder, &snapshot, keep);
+    let new_c = rewrite_old_to_new(&mut builder, &snapshot, c);
+    let output = builder.finish(new_c);
+
+    // Old slots untouched (append-only invariant).
+    assert!(super::appended_only(&snapshot, &output).is_ok());
+
+    // The rewrites produced fresh ids for both "old" slots, same id for "keep".
+    assert_ne!(new_a, a);
+    assert_eq!(new_keep, keep);
+    assert_ne!(new_c, c);
+
+    // Fresh nodes are "new".
+    assert!(matches!(output.nodes.get(new_a).kind, NodeKind::Ident("new")));
+    assert!(matches!(output.nodes.get(new_c).kind, NodeKind::Ident("new")));
+
+    // Old nodes still resolve to "old".
+    assert!(matches!(output.nodes.get(a).kind, NodeKind::Ident("old")));
+    assert!(matches!(output.nodes.get(c).kind, NodeKind::Ident("old")));
+
+    // Keep slot untouched.
+    assert!(matches!(output.nodes.get(keep).kind, NodeKind::Ident("keep")));
+
+    // Arena grew by exactly the number of rewrites.
+    assert_eq!(output.nodes.len(), 5);
+    assert_eq!(snapshot.nodes.len(), 3);
+  }
+
   #[test]
   fn appended_only_accepts_extend_with_parent_rewrite() {
     // Realistic pass pattern: a pass walks a tree, finds something to change,
