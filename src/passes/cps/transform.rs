@@ -2957,20 +2957,33 @@ fn extract_bind_ast_id(g: &Gen, id: AstId) -> AstId {
 // Tests
 // ---------------------------------------------------------------------------
 
-// Gated under not-flat-ast-wip because the test runner depends on
-// `cps::fmt`, which is itself blocked behind `ast::fmt` until the CPS
-// formatter gets its port. Will come back automatically when cps::fmt
-// is unstubbed.
-#[cfg(all(test, not(feature = "flat-ast-wip")))]
+#[cfg(test)]
 mod module_tests {
   use crate::passes::cps::fmt::Ctx;
 
+  #[cfg(not(feature = "flat-ast-wip"))]
   fn cps_module(src: &str) -> String {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => {
         let cps = crate::passes::lower(&desugared);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&cps.result.root);
         let ctx = Ctx { origin: &cps.result.origin, ast_index: &desugared.ast_index, captures: None, param_info: None, bind_kinds: Some(&bk) };
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.result.root, &ctx, "test", src);
+        let json = srcmap.to_json();
+        let b64 = crate::sourcemap::base64_encode(json.as_bytes());
+        format!("{output}\n#sourcemaps:{b64}")
+      }
+      Err(e) => format!("ERROR: {e}"),
+    }
+  }
+
+  #[cfg(feature = "flat-ast-wip")]
+  fn cps_module(src: &str) -> String {
+    match crate::to_desugared(src, "test") {
+      Ok(desugared) => {
+        let cps = crate::passes::lower(&desugared);
+        let bk = crate::passes::cps::ir::collect_bind_kinds(&cps.result.root);
+        let ctx = Ctx { origin: &cps.result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
         let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.result.root, &ctx, "test", src);
         let json = srcmap.to_json();
         let b64 = crate::sourcemap::base64_encode(json.as_bytes());
