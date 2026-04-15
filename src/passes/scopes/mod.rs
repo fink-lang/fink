@@ -772,26 +772,10 @@ fn write_indent(out: &mut String, level: usize) {
 mod tests {
   use super::*;
 
-  #[cfg(not(feature = "flat-ast-wip"))]
   fn scope(src: &str) -> String {
     match crate::to_desugared(src, "test") {
       Ok(desugared) => format_result(&desugared.scope),
       Err(e) => format!("ERROR: {e}"),
-    }
-  }
-
-  /// Under flat-ast-wip `partial::apply` hasn't been ported yet, so we run
-  /// `analyse` directly on the parsed AST. For tests that don't exercise
-  /// partial this is equivalent; once partial lands, this path collapses
-  /// back into the regular `to_desugared` form above.
-  #[cfg(feature = "flat-ast-wip")]
-  fn scope(src: &str) -> String {
-    match crate::parser::parse(src, "test") {
-      Ok(ast) => {
-        let result = super::analyse(&ast, &[]);
-        format_result(&result)
-      }
-      Err(e) => format!("ERROR: {:?}", e.message),
     }
   }
 

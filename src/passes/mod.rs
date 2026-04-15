@@ -9,7 +9,6 @@ pub mod cps;
 #[cfg(not(feature = "flat-ast-wip"))]
 pub mod lifting;
 pub mod modules;
-#[cfg(not(feature = "flat-ast-wip"))]
 pub mod partial;
 pub mod scopes;
 #[cfg(not(feature = "flat-ast-wip"))]
@@ -53,6 +52,15 @@ pub type Ast<'src> = ast::Ast<'src>;
 pub struct DesugaredAst<'src> {
   pub result: Box<ast::ParseResult<'src>>,
   pub ast_index: crate::propgraph::PropGraph<ast::AstId, Option<&'src ast::Node<'src>>>,
+  pub scope: scopes::ScopeResult,
+}
+
+/// Desugared AST under the flat-ast arena. The owning `ast::Ast<'src>`
+/// carries every node at its own AstId slot — no external index needed,
+/// no self-referential Box, no unsafe.
+#[cfg(feature = "flat-ast-wip")]
+pub struct DesugaredAst<'src> {
+  pub ast: ast::Ast<'src>,
   pub scope: scopes::ScopeResult,
 }
 
@@ -103,6 +111,17 @@ pub fn desugar<'src>(parsed: Ast<'src>) -> Result<DesugaredAst<'src>, ast::trans
   let ast_index = ast::build_index(result_ref);
   let scope = scopes::analyse(&result.root, result.node_count as usize, &[]);
   Ok(DesugaredAst { result, ast_index, scope })
+}
+
+/// Desugar under the flat-ast-wip refactor: run partial, then scope analysis.
+/// **This is the Gate 3 payoff — the `unsafe` block that the legacy path
+/// carries above disappears entirely. `ast::Ast` is its own index; no Box
+/// self-reference, no `&'src` reborrow hack.**
+#[cfg(feature = "flat-ast-wip")]
+pub fn desugar<'src>(parsed: Ast<'src>) -> Result<DesugaredAst<'src>, ast::transform::TransformError> {
+  let ast = partial::apply(parsed)?;
+  let scope = scopes::analyse(&ast, &[]);
+  Ok(DesugaredAst { ast, scope })
 }
 
 /// Lower desugared AST to CPS IR.

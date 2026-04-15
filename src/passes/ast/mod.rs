@@ -487,6 +487,15 @@ impl<'src> Ast<'src> {
     print_node(self, self.root, &mut out, 0);
     out
   }
+
+  /// Print an arbitrary subtree rooted at `id` (rather than `self.root`).
+  /// Used by test helpers that want to dump a specific statement inside
+  /// a Module without printing the Module wrapper.
+  pub fn print_subtree(&self, id: AstId) -> String {
+    let mut out = String::new();
+    print_node(self, id, &mut out, 0);
+    out
+  }
 }
 
 fn indent(out: &mut String, depth: usize) {

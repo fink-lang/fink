@@ -41,6 +41,13 @@ pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::Desugared
   passes::desugar(parsed).map_err(|e| format!("{e:?}"))
 }
 
+/// Parse + desugar under the flat-ast-wip refactor.
+#[cfg(feature = "flat-ast-wip")]
+pub fn to_desugared<'src>(src: &'src str, url: &str) -> Result<passes::DesugaredAst<'src>, String> {
+  let parsed = passes::parse(src, url).map_err(|e| e.message)?;
+  passes::desugar(parsed).map_err(|e| format!("{e:?}"))
+}
+
 /// Compile source → CPS IR (+ desugared AST for context).
 #[cfg(not(feature = "flat-ast-wip"))]
 pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::DesugaredAst<'src>), String> {
