@@ -1,11 +1,3 @@
-// `fmt` is the AST pretty-printer (emits Fink source from an AST).
-// During the flat-ast-wip refactor it's gated off because its 750 lines
-// of recursive `&Node` walking need a mechanical port to the arena
-// shape — the same pattern as the parser and Transform trait, just
-// applied to output formatting. Scheduled as a follow-up once the
-// compiler path downstream (partial, scopes, cps, lifting, wasm) has
-// been unstubbed.
-#[cfg(not(feature = "flat-ast-wip"))]
 pub mod fmt;
 pub mod lexer;
 pub mod parser;
