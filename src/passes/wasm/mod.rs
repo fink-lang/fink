@@ -154,9 +154,6 @@ mod tests {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
 
     // Collect + emit WASM binary.
-    #[cfg(not(feature = "flat-ast-wip"))]
-    let ir_ctx = super::collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
-    #[cfg(feature = "flat-ast-wip")]
     let ir_ctx = super::collect::IrCtx::new(&lifted.result.origin, &desugared.ast);
     let module = super::collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());

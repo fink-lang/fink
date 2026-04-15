@@ -12,22 +12,11 @@
 //   [u64 LE offset]            ← 8 bytes
 //   [b"f1nkw4sm"]              ← 8 bytes
 
-// Gated off during the flat-ast-wip refactor — runner module is gated too.
-#[cfg(feature = "flat-ast-wip")]
-fn main() {
-  eprintln!("finkrt: disabled during flat-ast-wip refactor");
-  std::process::exit(1);
-}
-
-#[cfg(not(feature = "flat-ast-wip"))]
 use std::fs;
-#[cfg(not(feature = "flat-ast-wip"))]
 use std::process;
 
-#[cfg(not(feature = "flat-ast-wip"))]
 const MAGIC: &[u8; 8] = b"f1nkw4sm";
 
-#[cfg(not(feature = "flat-ast-wip"))]
 fn main() {
   let wasm = match extract_payload() {
     Ok(payload) => payload,
@@ -59,7 +48,6 @@ fn main() {
   }
 }
 
-#[cfg(not(feature = "flat-ast-wip"))]
 fn extract_payload() -> Result<Vec<u8>, String> {
   let exe = std::env::current_exe()
     .map_err(|e| format!("cannot locate own executable: {e}"))?;

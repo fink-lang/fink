@@ -1,17 +1,5 @@
-// During the flat-ast-wip refactor the CLI is not buildable because it
-// dispatches into every downstream pass. The feature gate here replaces
-// `main` with a tiny stub so the binary target still links while the
-// refactor is in flight. Removed when the refactor lands.
-#[cfg(feature = "flat-ast-wip")]
-fn main() {
-  eprintln!("fink: CLI disabled during flat-ast-wip refactor");
-  std::process::exit(1);
-}
-
-#[cfg(not(feature = "flat-ast-wip"))]
 use std::{env, fs, process};
 
-#[cfg(not(feature = "flat-ast-wip"))]
 fn main() {
   let args: Vec<String> = env::args().collect();
 
@@ -103,10 +91,10 @@ fn main() {
     "ast" => {
       if desugar {
         let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", desugared.result.root.print());
+        println!("{}", desugared.ast.print());
       } else {
         let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", ast.result.root.print());
+        println!("{}", ast.print());
       }
     }
 
@@ -114,30 +102,22 @@ fn main() {
       let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
       if sourcemap {
         let (output, srcmap) = if embed_source {
-          fink::ast::fmt::fmt_mapped_with_content(&ast.result.root, path, &src)
+          fink::ast::fmt::fmt_mapped_with_content(&ast, path, &src)
         } else {
-          fink::ast::fmt::fmt_mapped(&ast.result.root, path)
+          fink::ast::fmt::fmt_mapped(&ast, path)
         };
         print_with_sourcemap(&output, &srcmap);
       } else {
-        println!("{}", fink::ast::fmt::fmt(&ast.result.root));
+        println!("{}", fink::ast::fmt::fmt(&ast));
       }
     }
 
     "fmt2" => {
-      let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
-      let cfg = fink::fmt::FmtConfig::default();
-      let laid_out = fink::fmt::layout::layout(&ast.result.root, &cfg);
-      if sourcemap {
-        let (output, srcmap) = if embed_source {
-          fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
-        } else {
-          fink::fmt::print::print_mapped(&laid_out, path)
-        };
-        print_with_sourcemap(&output, &srcmap);
-      } else {
-        println!("{}", fink::fmt::print::print(&laid_out));
-      }
+      // The Stage-2 source pretty-printer (`fmt::layout` + `fmt::print`)
+      // is not yet ported to the flat AST. Its 1500 lines of `&Node`
+      // walking are queued as a follow-up.
+      eprintln!("error: fmt2 is temporarily disabled — fmt::layout port pending");
+      process::exit(1);
     }
 
     "cps" => {
@@ -153,7 +133,7 @@ fn main() {
       let bk = fink::passes::cps::ir::collect_bind_kinds(&result.root);
       let ctx = fink::passes::cps::fmt::Ctx {
         origin: &result.origin,
-        ast_index: &desugared.ast_index,
+        ast: &desugared.ast,
         captures: None,
         param_info: Some(&result.param_info),
         bind_kinds: Some(&bk),
@@ -273,7 +253,6 @@ fn main() {
   }
 }
 
-#[cfg(not(feature = "flat-ast-wip"))]
 fn die(msg: &str) -> ! {
   eprintln!("error: {msg}");
   process::exit(1);
@@ -281,7 +260,6 @@ fn die(msg: &str) -> ! {
 
 
 
-#[cfg(not(feature = "flat-ast-wip"))]
 fn print_with_sourcemap(output: &str, srcmap: &fink::sourcemap::SourceMap) {
   let json = srcmap.to_json();
   let b64 = fink::sourcemap::base64_encode(json.as_bytes());
