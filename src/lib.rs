@@ -56,8 +56,24 @@ pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::D
   Ok((cps, desugared))
 }
 
+/// Compile source → CPS IR (+ desugared AST for context) — flat-ast-wip variant.
+#[cfg(feature = "flat-ast-wip")]
+pub fn to_cps<'src>(src: &'src str, url: &str) -> Result<(passes::Cps, passes::DesugaredAst<'src>), String> {
+  let desugared = to_desugared(src, url)?;
+  let cps = passes::lower(&desugared);
+  Ok((cps, desugared))
+}
+
 /// Compile source → lifted CPS IR (+ desugared AST for context).
 #[cfg(not(feature = "flat-ast-wip"))]
+pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), String> {
+  let (cps, desugared) = to_cps(src, url)?;
+  let lifted = passes::lift(cps, &desugared);
+  Ok((lifted, desugared))
+}
+
+/// Compile source → lifted CPS IR (+ desugared AST for context) — flat-ast-wip variant.
+#[cfg(feature = "flat-ast-wip")]
 pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, passes::DesugaredAst<'src>), String> {
   let (cps, desugared) = to_cps(src, url)?;
   let lifted = passes::lift(cps, &desugared);

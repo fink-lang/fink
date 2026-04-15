@@ -1,9 +1,3 @@
-// `lifting/fmt` synthesises detached `Node<'static>` trees (its own
-// private flat printer, separate from `ast::fmt`). Gated until ported —
-// see risk investigation: it's a direct-emission candidate (no source
-// map, has its own walker) so the eventual port may delete code rather
-// than threading a builder through.
-#[cfg(not(feature = "flat-ast-wip"))]
 pub mod fmt;
 
 // Unified closure/continuation lifting pass.
@@ -1145,10 +1139,7 @@ fn classify_untagged_params_cont(cont: &Cont, param_info: &mut PropGraph<CpsId, 
 // Tests
 // ---------------------------------------------------------------------------
 
-// Test runner depends on `lifting::fmt::fmt_flat` which is gated until
-// the lifting formatter is ported. Will reopen when `lifting/fmt.rs`
-// gets its port.
-#[cfg(all(test, not(feature = "flat-ast-wip")))]
+#[cfg(test)]
 mod tests {
   use test_macros::include_fink_tests;
 

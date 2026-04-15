@@ -164,6 +164,21 @@ pub fn lift<'src>(
   LiftedCps { result }
 }
 
+/// Closure-lifted CPS — ready for codegen (flat-ast-wip variant).
+#[cfg(feature = "flat-ast-wip")]
+pub struct LiftedCps {
+  pub result: cps::ir::CpsResult,
+}
+
+#[cfg(feature = "flat-ast-wip")]
+pub fn lift<'src>(
+  cps: Cps,
+  desugared: &'src DesugaredAst<'src>,
+) -> LiftedCps {
+  let result = lifting::lift(cps.result, &desugared.ast);
+  LiftedCps { result }
+}
+
 /// WASM binary output.
 #[cfg(not(feature = "flat-ast-wip"))]
 pub struct Wasm {
