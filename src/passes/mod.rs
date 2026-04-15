@@ -4,7 +4,6 @@
 // contract. See docs/cps-transform-contract.md.
 
 pub mod ast;
-#[cfg(not(feature = "flat-ast-wip"))]
 pub mod cps;
 #[cfg(not(feature = "flat-ast-wip"))]
 pub mod lifting;
@@ -134,6 +133,25 @@ pub fn lower<'src>(
     _ => panic!("lower: expected Module root"),
   };
   let result = cps::transform::lower_module(exprs, &desugared.scope);
+  Cps { result }
+}
+
+/// Lower desugared AST to CPS IR (flat-ast-wip variant).
+#[cfg(feature = "flat-ast-wip")]
+pub struct Cps {
+  pub result: cps::ir::CpsResult,
+}
+
+#[cfg(feature = "flat-ast-wip")]
+pub fn lower<'src>(
+  desugared: &'src DesugaredAst<'src>,
+) -> Cps {
+  let root_node = desugared.ast.nodes.get(desugared.ast.root);
+  let exprs: Vec<ast::AstId> = match &root_node.kind {
+    ast::NodeKind::Module { exprs, .. } => exprs.items.iter().copied().collect(),
+    _ => panic!("lower: expected Module root"),
+  };
+  let result = cps::transform::lower_module(&desugared.ast, &exprs, &desugared.scope);
   Cps { result }
 }
 
