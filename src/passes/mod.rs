@@ -5,7 +5,6 @@
 
 pub mod ast;
 pub mod cps;
-#[cfg(not(feature = "flat-ast-wip"))]
 pub mod lifting;
 pub mod modules;
 pub mod partial;

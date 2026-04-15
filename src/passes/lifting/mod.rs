@@ -1,3 +1,9 @@
+// `lifting/fmt` synthesises detached `Node<'static>` trees (its own
+// private flat printer, separate from `ast::fmt`). Gated until ported —
+// see risk investigation: it's a direct-emission candidate (no source
+// map, has its own walker) so the eventual port may delete code rather
+// than threading a builder through.
+#[cfg(not(feature = "flat-ast-wip"))]
 pub mod fmt;
 
 // Unified closure/continuation lifting pass.
@@ -127,7 +133,7 @@ struct HoistedFn {
 /// inside any fn_body. Returns the fully lifted CPS tree.
 pub fn lift<'src>(
   result: CpsResult,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
+  ast: &crate::ast::Ast<'src>,
 ) -> CpsResult {
   const MAX_ROUNDS: usize = 20;
 
@@ -148,7 +154,7 @@ pub fn lift<'src>(
 
     // Extract LetFn from fn_bodies and hoist inline Cont::Expr (one level).
     let mut alloc = Alloc::new(current.origin, current.synth_alias, current.param_info);
-    let new_root = lift_expr(current.root, ast_index, &mut alloc);
+    let new_root = lift_expr(current.root, ast, &mut alloc);
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
@@ -409,19 +415,19 @@ fn is_simple_forward_cont(cont: &Cont) -> bool {
 
 fn lift_expr<'src>(
   expr: Expr,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
+  ast: &crate::ast::Ast<'src>,
   alloc: &mut Alloc,
 ) -> Expr {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       // Recurse into the cont first.
-      let cont = lift_cont(cont, ast_index, alloc);
+      let cont = lift_cont(cont, ast, alloc);
 
       // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
       // Inside the LetFn being processed, fn_body is always a fn scope.
       if contains_letfn_or_inline_cont(&fn_body, true) {
         let mut hoisted: Vec<HoistedFn> = Vec::new();
-        let new_fn_body = extract_from_body(*fn_body, &params, &[], ast_index, alloc, &mut hoisted);
+        let new_fn_body = extract_from_body(*fn_body, &params, &[], ast, alloc, &mut hoisted);
 
         // Build the LetFn with the cleaned fn_body.
         let mut result = Expr {
@@ -453,7 +459,7 @@ fn lift_expr<'src>(
         result
       } else {
         // No nested LetFn — just recurse into fn_body.
-        let fn_body = lift_expr(*fn_body, ast_index, alloc);
+        let fn_body = lift_expr(*fn_body, ast, alloc);
         Expr {
           id: expr.id,
           kind: ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont },
@@ -462,7 +468,7 @@ fn lift_expr<'src>(
     }
 
     ExprKind::LetVal { name, val, cont } => {
-      let cont = lift_cont(cont, ast_index, alloc);
+      let cont = lift_cont(cont, ast, alloc);
       Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
     }
 
@@ -478,7 +484,7 @@ fn lift_expr<'src>(
           Arg::Cont(Cont::Expr { args: cont_args, body }) => {
             {
               let parent_params: Vec<Param> = cont_args.iter().map(|b| Param::Name(b.clone())).collect();
-              let mut new_body = extract_from_body(*body, &parent_params, &[], ast_index, alloc, &mut all_hoisted);
+              let mut new_body = extract_from_body(*body, &parent_params, &[], ast, alloc, &mut all_hoisted);
               // Prepend hoisted fns into the cont body (inside the App).
               for h in all_hoisted.drain(..).rev() {
                 let wrapper_id = alloc.next(None);
@@ -495,7 +501,7 @@ fn lift_expr<'src>(
               }
               // Always recurse into the body to handle fn_body lifting
               // (e.g. LetFns inside module-scope fns that have nested structure).
-              new_body = lift_expr(new_body, ast_index, alloc);
+              new_body = lift_expr(new_body, ast, alloc);
               Arg::Cont(Cont::Expr { args: cont_args, body: Box::new(new_body) })
             }
           }
@@ -505,8 +511,8 @@ fn lift_expr<'src>(
       } else {
         // Regular App: recurse into Arg::Cont and Arg::Expr.
         let args = args.into_iter().map(|a| match a {
-          Arg::Cont(c) => Arg::Cont(lift_cont(c, ast_index, alloc)),
-          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast_index, alloc))),
+          Arg::Cont(c) => Arg::Cont(lift_cont(c, ast, alloc)),
+          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast, alloc))),
           other => other,
         }).collect();
         Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -514,8 +520,8 @@ fn lift_expr<'src>(
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = lift_expr(*then, ast_index, alloc);
-      let else_ = lift_expr(*else_, ast_index, alloc);
+      let then = lift_expr(*then, ast, alloc);
+      let else_ = lift_expr(*else_, ast, alloc);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
   }
@@ -523,13 +529,13 @@ fn lift_expr<'src>(
 
 fn lift_cont<'src>(
   cont: Cont,
-  ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
+  ast: &crate::ast::Ast<'src>,
   alloc: &mut Alloc,
 ) -> Cont {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { args, body } => {
-      let body = lift_expr(*body, ast_index, alloc);
+      let body = lift_expr(*body, ast, alloc);
       Cont::Expr { args, body: Box::new(body) }
     }
   }
@@ -549,7 +555,7 @@ fn extract_from_body<'src>(
   expr: Expr,
   parent_params: &[Param],
   scope_binds: &[(CpsId, Bind)],
-  _ast_index: &PropGraph<AstId, Option<&'src crate::ast::Node<'src>>>,
+  _ast: &crate::ast::Ast<'src>,
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn>,
 ) -> Expr {
@@ -583,7 +589,7 @@ fn extract_from_body<'src>(
             // The cont args bind the fn value — add to scope for the rest.
             // (name is consumed by hoisted, but the wrap_hoisted cont binds a result)
             // Continue with the cont body.
-            extract_from_body(*body, parent_params, scope_binds, _ast_index, alloc, hoisted)
+            extract_from_body(*body, parent_params, scope_binds, _ast, alloc, hoisted)
           }
           Cont::Ref(cont_id) => {
             let name_id = name.id;
@@ -699,7 +705,7 @@ fn extract_from_body<'src>(
           let mut extended_binds: Vec<(CpsId, Bind)> = scope_binds.to_vec();
           extended_binds.push((name.id, name.kind));
           for a in &args { extended_binds.push((a.id, a.kind)); }
-          let body = extract_from_body(*body, parent_params, &extended_binds, _ast_index, alloc, hoisted);
+          let body = extract_from_body(*body, parent_params, &extended_binds, _ast, alloc, hoisted);
           Cont::Expr { args, body: Box::new(body) }
         }
       };
@@ -739,10 +745,10 @@ fn extract_from_body<'src>(
             }).collect();
             let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
             for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
-            let body = extract_from_body(body, parent_params, &inner_scope, _ast_index, alloc, hoisted);
+            let body = extract_from_body(body, parent_params, &inner_scope, _ast, alloc, hoisted);
             args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast, alloc, hoisted))),
               other => other,
             }).collect();
             return Expr { id: expr.id, kind: ExprKind::App { func, args } };
@@ -754,10 +760,10 @@ fn extract_from_body<'src>(
             }).collect();
             let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
             for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
-            let body = extract_from_body(body, parent_params, &inner_scope, _ast_index, alloc, hoisted);
+            let body = extract_from_body(body, parent_params, &inner_scope, _ast, alloc, hoisted);
             args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast, alloc, hoisted))),
               other => other,
             }).collect();
             return Expr { id: expr.id, kind: ExprKind::App { func, args } };
@@ -773,10 +779,10 @@ fn extract_from_body<'src>(
             }).collect();
             let mut inner_scope: Vec<(CpsId, Bind)> = scope_binds.to_vec();
             for a in &cont_args_back { inner_scope.push((a.id, a.kind)); }
-            let body = extract_from_body(body, parent_params, &inner_scope, _ast_index, alloc, hoisted);
+            let body = extract_from_body(body, parent_params, &inner_scope, _ast, alloc, hoisted);
             args.insert(idx, Arg::Cont(Cont::Expr { args: cont_args_back, body: Box::new(body) }));
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast, alloc, hoisted))),
               other => other,
             }).collect();
             return Expr { id: expr.id, kind: ExprKind::App { func, args } };
@@ -798,7 +804,7 @@ fn extract_from_body<'src>(
             args.insert(idx, Arg::Cont(Cont::Ref(cont_name_id)));
             // Recurse on remaining args.
             let args = args.into_iter().map(|a| match a {
-              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
+              Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast, alloc, hoisted))),
               other => other,
             }).collect();
             Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -872,7 +878,7 @@ fn extract_from_body<'src>(
       } else {
         // No inline conts — just recurse into Arg::Expr.
         let args = args.into_iter().map(|a| match a {
-          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast_index, alloc, hoisted))),
+          Arg::Expr(e) => Arg::Expr(Box::new(extract_from_body(*e, parent_params, scope_binds, _ast, alloc, hoisted))),
           other => other,
         }).collect();
         Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -880,8 +886,8 @@ fn extract_from_body<'src>(
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = extract_from_body(*then, parent_params, scope_binds, _ast_index, alloc, hoisted);
-      let else_ = extract_from_body(*else_, parent_params, scope_binds, _ast_index, alloc, hoisted);
+      let then = extract_from_body(*then, parent_params, scope_binds, _ast, alloc, hoisted);
+      let else_ = extract_from_body(*else_, parent_params, scope_binds, _ast, alloc, hoisted);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
   }
@@ -1139,7 +1145,10 @@ fn classify_untagged_params_cont(cont: &Cont, param_info: &mut PropGraph<CpsId, 
 // Tests
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
+// Test runner depends on `lifting::fmt::fmt_flat` which is gated until
+// the lifting formatter is ported. Will reopen when `lifting/fmt.rs`
+// gets its port.
+#[cfg(all(test, not(feature = "flat-ast-wip")))]
 mod tests {
   use test_macros::include_fink_tests;
 
@@ -1170,7 +1179,7 @@ mod tests {
         let bk = crate::passes::cps::ir::collect_bind_kinds(&lifted.result.root);
         let ctx = Ctx {
           origin: &lifted.result.origin,
-          ast_index: &desugared.ast_index,
+          ast: &desugared.ast,
           captures: None,
           param_info: Some(&lifted.result.param_info),
           bind_kinds: Some(&bk),
