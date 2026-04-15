@@ -2172,8 +2172,8 @@ mod tests {
     fn get_func_names(wasm: &[u8]) -> BTreeMap<u32, String> {
         let mut names = BTreeMap::new();
         for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::CustomSection(reader)) = payload {
-                if let wasmparser::KnownCustom::Name(name_reader) =
+            if let Ok(Payload::CustomSection(reader)) = payload
+                && let wasmparser::KnownCustom::Name(name_reader) =
                     reader.as_known()
                 {
                     for name in name_reader.into_iter().flatten() {
@@ -2185,7 +2185,6 @@ mod tests {
                         }
                     }
                 }
-            }
         }
         names
     }
@@ -2237,11 +2236,10 @@ mod tests {
     /// Check if DWARF sections exist in a WASM module.
     fn has_dwarf(wasm: &[u8]) -> bool {
         for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::CustomSection(reader)) = payload {
-                if reader.name().starts_with(".debug_") {
+            if let Ok(Payload::CustomSection(reader)) = payload
+                && reader.name().starts_with(".debug_") {
                     return true;
                 }
-            }
         }
         false
     }

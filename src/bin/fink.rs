@@ -91,10 +91,10 @@ fn main() {
     "ast" => {
       if desugar {
         let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", desugared.result.root.print());
+        println!("{}", desugared.ast.print());
       } else {
         let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", ast.result.root.print());
+        println!("{}", ast.print());
       }
     }
 
@@ -102,20 +102,20 @@ fn main() {
       let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
       if sourcemap {
         let (output, srcmap) = if embed_source {
-          fink::ast::fmt::fmt_mapped_with_content(&ast.result.root, path, &src)
+          fink::ast::fmt::fmt_mapped_with_content(&ast, path, &src)
         } else {
-          fink::ast::fmt::fmt_mapped(&ast.result.root, path)
+          fink::ast::fmt::fmt_mapped(&ast, path)
         };
         print_with_sourcemap(&output, &srcmap);
       } else {
-        println!("{}", fink::ast::fmt::fmt(&ast.result.root));
+        println!("{}", fink::ast::fmt::fmt(&ast));
       }
     }
 
     "fmt2" => {
       let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
       let cfg = fink::fmt::FmtConfig::default();
-      let laid_out = fink::fmt::layout::layout(&ast.result.root, &cfg);
+      let laid_out = fink::fmt::layout::layout(&ast, &cfg);
       if sourcemap {
         let (output, srcmap) = if embed_source {
           fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
@@ -141,7 +141,7 @@ fn main() {
       let bk = fink::passes::cps::ir::collect_bind_kinds(&result.root);
       let ctx = fink::passes::cps::fmt::Ctx {
         origin: &result.origin,
-        ast_index: &desugared.ast_index,
+        ast: &desugared.ast,
         captures: None,
         param_info: Some(&result.param_info),
         bind_kinds: Some(&bk),

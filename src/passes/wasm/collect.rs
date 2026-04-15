@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
-use crate::ast::{AstId, Node as AstNode, NodeKind};
+use crate::ast::{Ast, AstId, Node as AstNode, NodeKind};
 use crate::passes::cps::ir::{
   Arg, BuiltIn, Callable, Cont, CpsFnKind, CpsId, Expr, ExprKind,
   Param, Ref, ValKind,
@@ -14,7 +14,7 @@ use crate::passes::cps::ir::{
 use crate::propgraph::PropGraph;
 
 // ---------------------------------------------------------------------------
-// Context — origin map + AST index for name/loc recovery
+// Context — origin map + AST for name/loc recovery
 // ---------------------------------------------------------------------------
 
 /// Shared IR context for name and location recovery from CPS nodes.
@@ -24,7 +24,9 @@ use crate::propgraph::PropGraph;
 /// writer's own wrapper.
 pub struct IrCtx<'a, 'src> {
   pub origin: &'a PropGraph<CpsId, Option<AstId>>,
-  pub ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
+  /// The flat AST that the CPS lowering was produced from. Used to look
+  /// up source nodes via `origin[cps_id] → ast_id → ast.nodes.get(id)`.
+  pub ast: &'a Ast<'src>,
   /// CpsIds that are module-level fn globals — rendered as global.get, not local.get.
   pub globals: HashSet<CpsId>,
 }
@@ -32,9 +34,9 @@ pub struct IrCtx<'a, 'src> {
 impl<'a, 'src> IrCtx<'a, 'src> {
   pub fn new(
     origin: &'a PropGraph<CpsId, Option<AstId>>,
-    ast_index: &'a PropGraph<AstId, Option<&'src AstNode<'src>>>,
+    ast: &'a Ast<'src>,
   ) -> Self {
-    Self { origin, ast_index, globals: HashSet::new() }
+    Self { origin, ast, globals: HashSet::new() }
   }
 
   pub fn with_globals(mut self, globals: HashSet<CpsId>) -> Self {
@@ -47,11 +49,9 @@ impl<'a, 'src> IrCtx<'a, 'src> {
   }
 
   /// Recover the AST node for a CPS node via the origin map.
-  pub fn ast_node(&self, id: CpsId) -> Option<&'src AstNode<'src>> {
-    self.origin.try_get(id)
-      .and_then(|opt| *opt)
-      .and_then(|ast_id| self.ast_index.try_get(ast_id))
-      .and_then(|opt| *opt)
+  pub fn ast_node(&self, id: CpsId) -> Option<&AstNode<'src>> {
+    let ast_id = self.origin.try_get(id).and_then(|opt| *opt)?;
+    Some(self.ast.nodes.get(ast_id))
   }
 
   /// Recover the source name for a CPS bind/ref, or fall back to a synthetic label.

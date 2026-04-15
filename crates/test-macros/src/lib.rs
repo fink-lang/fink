@@ -25,10 +25,18 @@ struct FinkTest {
 ///
 /// Source and expected bodies are extracted as raw text from ƒink: blocks,
 /// ": block strings, '...' string literals, or tag": tagged templates.
-fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec<FinkTest> {
+///
+/// Ported to the flat AST arena: operates on `(ast, root_id)` pairs and
+/// looks children up via `ast.nodes.get(id)`.
+fn extract_tests<'src>(
+  file_src: &'src str,
+  ast: &fink::ast::Ast<'src>,
+  root: fink::ast::AstId,
+) -> Vec<FinkTest> {
   use fink::ast::NodeKind;
 
-  let stmts = match &node.kind {
+  let root_node = ast.nodes.get(root);
+  let stmts: &fink::ast::Exprs<'src> = match &root_node.kind {
     NodeKind::Module { exprs, .. } => exprs,
     NodeKind::Fn { body, .. } => body,
     _ => return vec![],
@@ -36,43 +44,51 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
 
   let mut out = Vec::new();
 
-  for stmt in &stmts.items {
+  for &stmt_id in stmts.items.iter() {
+    let stmt = ast.nodes.get(stmt_id);
     // test 'name', fn: <body>
-    let (name, fn_body) = match &stmt.kind {
-      NodeKind::Apply { func, args } if matches!(func.kind, NodeKind::Ident("test")) => {
-        let Some(name_node) = args.items.first() else {
+    let (name, fn_body_items) = match &stmt.kind {
+      NodeKind::Apply { func, args }
+        if matches!(ast.nodes.get(*func).kind, NodeKind::Ident("test")) =>
+      {
+        let Some(&name_id) = args.items.first() else {
           panic!("include_fink_tests: `test` at line {} has no name argument", stmt.loc.start.line);
         };
+        let name_node = ast.nodes.get(name_id);
         let NodeKind::LitStr { content: name, .. } = &name_node.kind else {
           panic!("include_fink_tests: `test` at line {} — name is not a string literal", stmt.loc.start.line);
         };
-        let Some(fn_node) = args.items.get(1) else {
+        let Some(&fn_id) = args.items.get(1) else {
           panic!("include_fink_tests: test '{}' at line {} has no fn body", name, stmt.loc.start.line);
         };
+        let fn_node = ast.nodes.get(fn_id);
         let NodeKind::Fn { body, .. } = &fn_node.kind else {
           panic!("include_fink_tests: test '{}' at line {} — second arg is not `fn:`", name, stmt.loc.start.line);
         };
-        (name.clone(), body)
+        (name.clone(), body.items.clone())
       }
       _ => continue,
     };
 
     // fn body is a single Pipe node: [expect_call, equals_call]
-    let pipe_nodes: &[fink::ast::Node<'src>] = match fn_body.items.as_slice() {
-      [single] => match &single.kind {
-        NodeKind::Pipe(parts) => &parts.items,
-        _ => panic!(
-          "include_fink_tests: test '{}' at line {} — fn body is not a pipe expression \
-           (did you leave a blank line before `| equals`?)",
-          name, stmt.loc.start.line
-        ),
-      },
+    let pipe_ids: Vec<fink::ast::AstId> = match fn_body_items.as_ref() {
+      [single] => {
+        let single_node = ast.nodes.get(*single);
+        match &single_node.kind {
+          NodeKind::Pipe(parts) => parts.items.iter().copied().collect(),
+          _ => panic!(
+            "include_fink_tests: test '{}' at line {} — fn body is not a pipe expression \
+             (did you leave a blank line before `| equals`?)",
+            name, stmt.loc.start.line
+          ),
+        }
+      }
       _ => panic!(
         "include_fink_tests: test '{}' at line {} — fn body must have exactly one expression",
         name, stmt.loc.start.line
       ),
     };
-    if pipe_nodes.len() < 2 {
+    if pipe_ids.len() < 2 {
       panic!(
         "include_fink_tests: test '{}' at line {} — pipe must have at least two segments (expect | equals)",
         name, stmt.loc.start.line
@@ -81,21 +97,27 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
 
     // expect <func> [text] fn: <src>
     // Parsed as: Apply(expect, [Apply(func, [body_node])])  (right-to-left application)
-    let (func_name, src_text) = match &pipe_nodes[0].kind {
-      NodeKind::Apply { func, args } if matches!(func.kind, NodeKind::Ident("expect")) => {
-        let Some(inner) = args.items.first() else {
+    let expect_call_node = ast.nodes.get(pipe_ids[0]);
+    let (func_name, src_text) = match &expect_call_node.kind {
+      NodeKind::Apply { func, args }
+        if matches!(ast.nodes.get(*func).kind, NodeKind::Ident("expect")) =>
+      {
+        let Some(&inner_id) = args.items.first() else {
           panic!("include_fink_tests: test '{}' at line {} — `expect` has no arguments", name, stmt.loc.start.line);
         };
+        let inner = ast.nodes.get(inner_id);
         // inner is Apply(func_name, [body_node])
         let NodeKind::Apply { func: fn_ident, args: fn_args } = &inner.kind else {
           panic!("include_fink_tests: test '{}' at line {} — expect argument is not a function call", name, stmt.loc.start.line);
         };
-        let NodeKind::Ident(func_name) = &fn_ident.kind else {
+        let fn_ident_node = ast.nodes.get(*fn_ident);
+        let NodeKind::Ident(func_name) = &fn_ident_node.kind else {
           panic!("include_fink_tests: test '{}' at line {} — expect function name is not an identifier", name, stmt.loc.start.line);
         };
-        let Some(body_node) = fn_args.items.first() else {
+        let Some(&body_id) = fn_args.items.first() else {
           panic!("include_fink_tests: test '{}' at line {} — `expect {}` has no source body", name, stmt.loc.start.line, func_name);
         };
+        let body_node = ast.nodes.get(body_id);
         let text = match &body_node.kind {
           NodeKind::LitStr { content: s, .. } => {
             // TODO: the AST doesn't distinguish 'quoted' LitStr from ":" block LitStr.
@@ -114,7 +136,7 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
             }
           }
           _ => {
-            extract_block_body_text(body_node, file_src).unwrap_or_else(|| {
+            extract_block_body_text(ast, body_id, file_src).unwrap_or_else(|| {
               panic!("include_fink_tests: test '{}' at line {} — cannot extract source body from `expect {}`", name, stmt.loc.start.line, func_name)
             })
           }
@@ -128,22 +150,24 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
     };
 
     // equals[_fink] [text] fn: <exp>   OR   equals '...'   OR   equals fink": ...
-    let equals_node = pipe_nodes.last().unwrap();
+    let equals_id = *pipe_ids.last().unwrap();
+    let equals_node = ast.nodes.get(equals_id);
     let exp_text = match &equals_node.kind {
       NodeKind::Apply { func, args }
-        if matches!(&func.kind, NodeKind::Ident(s) if s.starts_with("equals")) =>
+        if matches!(&ast.nodes.get(*func).kind, NodeKind::Ident(s) if s.starts_with("equals")) =>
       {
-        let Some(body_node) = args.items.first() else {
+        let Some(&body_id) = args.items.first() else {
           panic!("include_fink_tests: test '{}' at line {} — `equals` has no expected body", name, stmt.loc.start.line);
         };
+        let body_node = ast.nodes.get(body_id);
         // Accept a string literal, raw": tagged template, or a fn/text fn body.
         match &body_node.kind {
           NodeKind::LitStr { content: s, .. } => s.clone(),
           _ => {
-            if let Some(text) = extract_raw_templ(body_node) {
+            if let Some(text) = extract_raw_templ(ast, body_id) {
               text
             } else {
-              extract_block_body_text(body_node, file_src).unwrap_or_else(|| {
+              extract_block_body_text(ast, body_id, file_src).unwrap_or_else(|| {
                 panic!("include_fink_tests: test '{}' at line {} — cannot extract expected body from `equals`", name, stmt.loc.start.line)
               })
             }
@@ -172,22 +196,26 @@ fn extract_tests<'src>(file_src: &'src str, node: &fink::ast::Node<'src>) -> Vec
 ///
 /// Matches `Apply { func: Ident(_), args: [LitStr { content: s } | StrRawTempl { children: [LitStr { content: s }] }] }` and
 /// returns `s` verbatim — no unescaping, no trimming. Used for `equals wat":` in wasm tests.
-fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
+fn extract_raw_templ<'src>(ast: &fink::ast::Ast<'src>, id: fink::ast::AstId) -> Option<String> {
   use fink::ast::NodeKind;
+  let node = ast.nodes.get(id);
   let NodeKind::Apply { func, args } = &node.kind else { return None };
-  if !matches!(func.kind, NodeKind::Ident(_)) { return None; }
-  let arg = args.items.first()?;
-  match &arg.kind {
+  let func_node = ast.nodes.get(*func);
+  if !matches!(func_node.kind, NodeKind::Ident(_)) { return None; }
+  let &arg_id = args.items.first()?;
+  let arg_node = ast.nodes.get(arg_id);
+  match &arg_node.kind {
     // No interpolation: raw": collapses to Apply(raw, LitStr) — verbatim, no unescape.
     NodeKind::LitStr { content: s, .. } => Some(s.to_string()),
     // With interpolation: Apply(raw, StrRawTempl([LitStr, ...])).
     // A single plain-text child is fine (e.g. fink": with no ${}).
     // Multiple children means the fink": block contains an unescaped ${...} — use \${ instead.
     NodeKind::StrRawTempl { children, .. } => {
-      if let [child] = children.as_slice()
-        && let NodeKind::LitStr { content: s, .. } = &child.kind
-      {
-        return Some(s.to_string());
+      if let [child_id] = children.as_ref() {
+        let child = ast.nodes.get(*child_id);
+        if let NodeKind::LitStr { content: s, .. } = &child.kind {
+          return Some(s.to_string());
+        }
       }
       panic!(
         "include_fink_tests: tagged template block contains interpolation — \
@@ -204,11 +232,13 @@ fn extract_raw_templ<'src>(node: &fink::ast::Node<'src>) -> Option<String> {
 /// to slice the original source, then dedents and trims.
 /// The block node's loc extends past trailing comments.
 fn extract_block_body_text<'src>(
-  node: &fink::ast::Node<'src>,
+  ast: &fink::ast::Ast<'src>,
+  id: fink::ast::AstId,
   file_src: &'src str,
 ) -> Option<String> {
   use fink::ast::NodeKind;
 
+  let node = ast.nodes.get(id);
   let NodeKind::Block { sep, .. } = &node.kind else { return None };
   let body_start = sep.loc.end.idx as usize;
   let body_end = node.loc.end.idx as usize;
@@ -242,11 +272,11 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
   let src = fs::read_to_string(&abs_path)
     .unwrap_or_else(|_| panic!("include_fink_tests: cannot read {abs_path_str}"));
 
-  let result = fink::parser::parse(&src, &rel_path)
+  let ast = fink::parser::parse(&src, &rel_path)
     .unwrap_or_else(|e| {
       let diag = fink::errors::Diagnostic {
-        message: e.message.clone(),
         loc: e.loc,
+        message: e.message,
         hint: None,
       };
       let opts = fink::errors::FormatOptions {
@@ -258,7 +288,7 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
       panic!("include_fink_tests: parse error\n\n{pretty}\n");
     });
 
-  let tests = extract_tests(&src, &result.root);
+  let tests = extract_tests(&src, &ast, ast.root);
 
   let mut output = proc_macro2::TokenStream::new();
 

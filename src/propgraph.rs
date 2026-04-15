@@ -17,6 +17,15 @@ impl<Id, T> Default for PropGraph<Id, T> {
     }
 }
 
+// Manual Clone impl — `#[derive(Clone)]` would require `Id: Clone` even
+// though `Id` is only used in `PhantomData`. This impl only requires the
+// element type to be clonable.
+impl<Id, T: Clone> Clone for PropGraph<Id, T> {
+    fn clone(&self) -> Self {
+        PropGraph { data: self.data.clone(), _id: PhantomData }
+    }
+}
+
 impl<Id, T> PropGraph<Id, T> {
     pub fn new() -> Self {
         PropGraph { data: Vec::new(), _id: PhantomData }

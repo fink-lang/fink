@@ -302,11 +302,10 @@ mod tests {
       {
         if let Ok(Some(i31)) = any_ref.as_i31(&caller) {
           *result_clone.lock().unwrap() = Some(TestResult::Bool(i31.get_i32() != 0));
-        } else if let Ok(Some(struct_ref)) = any_ref.as_struct(&caller) {
-          if let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0) {
+        } else if let Ok(Some(struct_ref)) = any_ref.as_struct(&caller)
+          && let Ok(Val::F64(bits)) = struct_ref.field(&mut caller, 0) {
             *result_clone.lock().unwrap() = Some(TestResult::Num(f64::from_bits(bits)));
           }
-        }
       }
       Ok(())
     });
