@@ -27,7 +27,7 @@
 // handles indentation and line-breaking. Under the flat-ast refactor this
 // uses an `AstBuilder<'static>` to build a transient arena per render.
 
-use crate::ast::{Ast, AstBuilder, AstId, NodeKind, Exprs};
+use crate::ast::{AstBuilder, AstId, NodeKind, Exprs};
 use crate::lexer::{Loc, Pos, Token, TokenKind};
 use crate::passes::cps::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsId, Expr, ExprKind,

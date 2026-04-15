@@ -1,7 +1,7 @@
 pub mod errors;
 #[cfg(not(feature = "flat-ast-wip"))]
 pub mod fmt;
-#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "compile")]
 pub mod compile;
 #[cfg(all(feature = "run", not(feature = "flat-ast-wip")))]
 pub mod dap;
@@ -88,7 +88,7 @@ pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, 
 /// share the same code path. A single-source program with no imports
 /// works identically to before; a single-source program that tries to
 /// import will get a clean error from the in-memory loader.
-#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "compile")]
 pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
   use passes::modules::InMemorySourceLoader;
   let mut loader = InMemorySourceLoader::single(path, src);
@@ -103,7 +103,7 @@ pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
 ///
 /// For now this is a thin wrapper over the single-source pipeline —
 /// Slices 4+ extend it with the real multi-module behaviour.
-#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "compile")]
 pub fn compile_package(
   entry_path: &std::path::Path,
   loader: &mut dyn passes::modules::SourceLoader,
@@ -120,7 +120,7 @@ pub fn to_wasm_opt(src: &str, path: &str, level: &str) -> Result<passes::Wasm, S
 }
 
 /// Compile source → WAT text.
-#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "compile")]
 pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
   let wasm = to_wasm(src, path)?;
   passes::emit_wat(&wasm)

@@ -9,9 +9,8 @@ pub mod lifting;
 pub mod modules;
 pub mod partial;
 pub mod scopes;
-#[cfg(not(feature = "flat-ast-wip"))]
 pub mod wasm;
-#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "compile")]
 #[path = "wasm-link/mod.rs"]
 pub mod wasm_link;
 
@@ -186,8 +185,15 @@ pub struct Wasm {
   pub mappings: Vec<wasm::sourcemap::WasmMapping>,
 }
 
+/// WASM binary output (flat-ast-wip variant).
+#[cfg(feature = "flat-ast-wip")]
+pub struct Wasm {
+  pub binary: Vec<u8>,
+  pub mappings: Vec<wasm::sourcemap::WasmMapping>,
+}
+
 /// Emit WAT text from a WASM binary.
-#[cfg(all(feature = "compile", not(feature = "flat-ast-wip")))]
+#[cfg(feature = "compile")]
 pub fn emit_wat(wasm: &Wasm) -> Result<String, String> {
   wasmprinter::print_bytes(&wasm.binary).map_err(|e| e.to_string())
 }

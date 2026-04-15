@@ -235,7 +235,10 @@ fn compile_fragment(
 ) -> Vec<u8> {
   use crate::passes::wasm::{collect, dwarf, emit};
 
+  #[cfg(not(feature = "flat-ast-wip"))]
   let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast_index);
+  #[cfg(feature = "flat-ast-wip")]
+  let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast);
   let module = collect::collect(
     &lifted.result.root,
     &ir_ctx,
