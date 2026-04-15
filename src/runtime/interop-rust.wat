@@ -24,7 +24,7 @@
   ;; -- Host imports (provided by Rust runner) --------------------------------
 
   (import "env" "host_exit" (func $host_exit (param i32)))
-  (import "env" "host_channel_send" (func $host_channel_send (param i32 i32 i32)))
+  (import "env" "host_channel_send" (func $host_channel_send (param i32) (param (ref null any))))
   (import "env" "host_read" (func $host_read (param (ref any) (ref any) (ref any))))
   ;; Irrefutable pattern failure — traps the instance with a diagnostic.
   ;; TODO: pass reason / source location (offset+length into linear memory)
@@ -59,13 +59,11 @@
     (param $cont (ref null any))
 
     (local $tag i32)
-    (local $offset i32)
-    (local $length i32)
+    (local $bytes (ref $ByteArray))
 
-    ;; Write string bytes to scratch memory.
-    (call $str_write_to_mem (ref.cast (ref $Str) (local.get $msg)))
-    (local.set $length)
-    (local.set $offset)
+    ;; Extract raw bytes from the $Str (handles all subtypes).
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
 
     ;; Read channel tag (i31ref).
     (local.set $tag
@@ -73,8 +71,8 @@
         (struct.get $Channel $tag
           (ref.cast (ref $Channel) (local.get $ch))))))
 
-    ;; Send to host — host dispatches by tag.
-    (call $host_channel_send (local.get $tag) (local.get $offset) (local.get $length))
+    ;; Send to host — host reads bytes directly from the GC array.
+    (call $host_channel_send (local.get $tag) (local.get $bytes))
 
     ;; Sender continues with unit.
     (call $queue_push

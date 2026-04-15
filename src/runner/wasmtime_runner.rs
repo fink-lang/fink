@@ -100,24 +100,22 @@ pub fn run(
           }).map_err(|e| e.to_string())?;
         }
         "host_channel_send" => {
-          // host_channel_send(tag, offset, length)
-          // Dispatches by tag: 1=stdout, 2=stderr.
+          // host_channel_send(tag, bytes) where bytes is a (ref null any)
+          // pointing at a $ByteArray. Dispatches by tag: 1=stdout, 2=stderr.
           let out = stdout.clone();
           let err = stderr.clone();
           linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
             let tag = params[0].unwrap_i32();
-            let offset = params[1].unwrap_i32() as usize;
-            let length = params[2].unwrap_i32() as usize;
-            if let Some(memory) = caller.get_export("memory")
-              && let Some(mem) = memory.into_memory()
-            {
-              let data = mem.data(&caller);
-              if offset + length <= data.len() {
-                let writer: &super::IoStream = if tag == 1 { &out } else { &err };
-                let mut w = writer.lock().unwrap();
-                w.write_all(&data[offset..offset + length]).ok();
-              }
+            let bytes_any = params[1].unwrap_anyref()
+              .ok_or_else(|| Error::msg("host_channel_send: null bytes ref"))?;
+            let arr = bytes_any.unwrap_array(&mut caller)?;
+            let len = arr.len(&caller)? as usize;
+            let mut buf = Vec::with_capacity(len);
+            for v in arr.elems(&mut caller)? {
+              buf.push(v.unwrap_i32() as u8);
             }
+            let writer: &super::IoStream = if tag == 1 { &out } else { &err };
+            writer.lock().unwrap().write_all(&buf).ok();
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
