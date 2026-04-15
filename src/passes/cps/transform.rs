@@ -663,7 +663,7 @@ fn lower_apply(
       let mut acc = lit_val(g, Lit::Seq, origin);
       let parts: Vec<AstId> = children.to_vec();
       for part in parts.iter().rev() {
-        let (pv, pp) = lower_str_part(g, *part);
+        let (pv, pp) = lower_str_part_raw(g, *part);
         pending.extend(pp);
         let result = g.fresh_result(origin);
         let (result_kind, result_id) = (result.kind, result.id);
@@ -972,9 +972,23 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
 // String template: `'hello ${name}'`
 // ---------------------------------------------------------------------------
 
-/// Lower a string template part: LitStr segments stay raw (escape processing
-/// is handled by str_fmt at runtime), everything else lowers normally.
+/// Lower a cooked string template part: LitStr segments go through
+/// `strings::render` so escape sequences (\n \t \xNN \u{...}) become real
+/// bytes, matching the plain LitStr path. Non-literal segments lower normally.
 fn lower_str_part(g: &mut Gen, part: AstId) -> Lower {
+  let kind = g.node(part).kind.clone();
+  if let NodeKind::LitStr { content: s, .. } = kind {
+    let o = Some(part);
+    (lit_val(g, Lit::Str(crate::strings::render(&s)), o), vec![])
+  } else {
+    lower(g, part)
+  }
+}
+
+/// Lower a raw string template part: LitStr segments stay as raw source
+/// bytes. Used by tagged templates (`foo'...'`), where the tag is
+/// responsible for any escape interpretation.
+fn lower_str_part_raw(g: &mut Gen, part: AstId) -> Lower {
   let kind = g.node(part).kind.clone();
   if let NodeKind::LitStr { content: s, .. } = kind {
     let o = Some(part);
@@ -1010,14 +1024,14 @@ fn lower_str_templ(g: &mut Gen, parts: &[AstId], origin: Option<AstId>) -> Lower
 fn lower_str_raw_templ(g: &mut Gen, parts: &[AstId], origin: Option<AstId>) -> Lower {
   // Single raw segment with no interpolation — return as a plain raw Lit::Str.
   if parts.len() == 1 {
-    let (pv, pp) = lower_str_part(g, parts[0]);
+    let (pv, pp) = lower_str_part_raw(g, parts[0]);
     return (pv, pp);
   }
   // Multiple segments (interpolation in raw template) — call StrFmt with raw parts.
   let mut pending: Vec<Pending> = vec![];
   let mut part_vals: Vec<Arg> = vec![];
   for &part in parts {
-    let (pv, pp) = lower_str_part(g, part);
+    let (pv, pp) = lower_str_part_raw(g, part);
     pending.extend(pp);
     part_vals.push(Arg::Val(pv));
   }

@@ -71,7 +71,7 @@ test 'str templ escape handling', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·str_fmt '␊␍␉␌', ·∅bar, '␈␋＄′⧵é語', ·ƒret_0
-    #sourcemaps:BLESS_ME
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLFNBQUMsQSxDQUFBLEksQyxFQUFVLEssRUFBSSxBLENBQUEsTyxDLEUiCn0=
 
 
 test 'str templ implicit formatting handling', fn:
@@ -81,6 +81,6 @@ test 'str templ implicit formatting handling', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·str_fmt '1␊', ·∅bar, '␊3', ·ƒret_0
-    #sourcemaps:BLESS_ME
+    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJzFcXG4ke2Jhcn1cbiAgMyciXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLFNBQUMsQSxDQUFBLEUsQyxFQUFLLEssRUFBSSxBLENBQUEsRSxDLEUiCn0=
 
 
