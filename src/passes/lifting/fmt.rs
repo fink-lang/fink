@@ -96,8 +96,32 @@ fn lbrace_tok() -> Token<'static> { tok("{",  TokenKind::Sep) }
 fn rbrace_tok() -> Token<'static> { tok("}",  TokenKind::Sep) }
 
 fn b_ident(b: &mut AstBuilder<'static>, s: &str) -> AstId {
+  b_ident_loc(b, s, dummy_loc())
+}
+
+/// Build an Ident node carrying an explicit source location.
+fn b_ident_loc(b: &mut AstBuilder<'static>, s: &str, loc: Loc) -> AstId {
   let s: &'static str = Box::leak(s.to_string().into_boxed_str());
-  b.append(NodeKind::Ident(s), dummy_loc())
+  b.append(NodeKind::Ident(s), loc)
+}
+
+/// Resolve a CpsId's AST origin loc, or `dummy_loc()` if none.
+fn cps_loc(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> Loc {
+  fc.ctx.origin.try_get(cps_id)
+    .and_then(|o| *o)
+    .map(|ast_id| fc.ctx.ast.nodes.get(ast_id).loc)
+    .unwrap_or_else(dummy_loc)
+}
+
+/// Return `cps_loc(id, fc)` iff the bind at `id` is a `SynthName`
+/// (source-level), else `dummy_loc()`. Used at ref/param sites so only
+/// source-bearing idents carry a real mapping.
+fn phase_a_loc(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> Loc {
+  let is_synth_name = fc.ctx.bind_kinds
+    .and_then(|bk| bk.try_get(cps_id))
+    .and_then(|o| *o)
+    .is_some_and(|k| matches!(k, Bind::SynthName));
+  if is_synth_name { cps_loc(cps_id, fc) } else { dummy_loc() }
 }
 
 fn b_bind(b: &mut AstBuilder<'static>, lhs: AstId, rhs: AstId) -> AstId {
@@ -210,11 +234,11 @@ fn render_param_node(b: &mut AstBuilder<'static>, p: &Param, fc: &FmtCtx<'_, '_>
   match p {
     Param::Name(bn) => {
       let name = if use_info { render_param_with_info(bn, fc) } else { render_bind(bn, fc) };
-      b_ident(b, &name)
+      b_ident_loc(b, &name, phase_a_loc(bn.id, fc))
     }
     Param::Spread(bn) => {
       let name = if use_info { render_param_with_info(bn, fc) } else { render_bind(bn, fc) };
-      let inner = b_ident(b, &name);
+      let inner = b_ident_loc(b, &name, phase_a_loc(bn.id, fc));
       b.append(
         NodeKind::Spread { op: spread_tok(), inner: Some(inner) },
         dummy_loc(),
@@ -312,12 +336,13 @@ fn render_val(b: &mut AstBuilder<'static>, val: &Val, fc: &FmtCtx<'_, '_>) -> As
         .and_then(|o| *o)
         .is_some_and(|k| matches!(k, Bind::SynthName));
       if is_synth_name {
-        b_ident(b, &render_synth_name(*bind_id, fc))
+        // Phase A: ref to source bind → loc is the ref's own site (val.id origin).
+        b_ident_loc(b, &render_synth_name(*bind_id, fc), cps_loc(val.id, fc))
       } else {
         b_ident(b, &render_synth_fallback(*bind_id, fc))
       }
     }
-    ValKind::Ref(Ref::Unresolved(_)) => b_ident(b, &render_unresolved_name(val.id, fc)),
+    ValKind::Ref(Ref::Unresolved(_)) => b_ident_loc(b, &render_unresolved_name(val.id, fc), cps_loc(val.id, fc)),
     ValKind::ContRef(id)     => b_ident(b, &render_synth_fallback(*id, fc)),
     ValKind::BuiltIn(op)     => b_ident(b, &render_builtin_flat(op)),
   }
@@ -432,7 +457,7 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let body_stmts = collect_stmts(b, fn_body, fc);
       let fn_rhs = b_fn(b, fn_params, body_stmts);
 
-      let (lhs_id, tail) = chain_lhs(b, &name_str, cont, fc);
+      let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, phase_a_loc(name.id, fc), cont, fc);
       let bound = outermost_name(b, lhs_id).unwrap_or_else(|| name_str.clone());
       let bind_id = b_bind(b, lhs_id, fn_rhs);
       out.push(bind_id);
@@ -442,7 +467,7 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
     ExprKind::LetVal { name, val, cont } => {
       let name_str = render_bind(name, fc);
       let val_id = render_val(b, val, fc);
-      let (lhs_id, tail) = chain_lhs(b, &name_str, cont, fc);
+      let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, phase_a_loc(name.id, fc), cont, fc);
       let bound = outermost_name(b, lhs_id).unwrap_or_else(|| name_str.clone());
       let bind_id = b_bind(b, lhs_id, val_id);
       out.push(bind_id);
@@ -556,15 +581,20 @@ fn outermost_name(b: &AstBuilder<'static>, id: AstId) -> Option<String> {
 // Otherwise return a plain ident lhs and the original body cont.
 // ---------------------------------------------------------------------------
 
-fn chain_lhs<'src>(
+/// Build the lhs of an assignment, possibly chaining aliases
+/// (`alias = name`) when the body's cont re-binds the value under a
+/// different name. Threads an explicit source loc onto the right-most
+/// (user-visible) bind ident — the LetFn/LetVal target name.
+fn chain_lhs_with_loc<'src>(
   b: &mut AstBuilder<'static>,
   name: &str,
+  name_loc: Loc,
   body: &'src Cont,
   fc: &FmtCtx<'_, '_>,
 ) -> (AstId, &'src Cont) {
   let body_expr = match body {
     Cont::Expr { args, body } if args.len() == 1 => body.as_ref(),
-    _ => return (b_ident(b, name), body),
+    _ => return (b_ident_loc(b, name, name_loc), body),
   };
 
   if let ExprKind::LetVal { name: alias, val, cont: inner_body } = &body_expr.kind {
@@ -590,14 +620,15 @@ fn chain_lhs<'src>(
 
     if val_matches {
       let alias_str = render_bind(alias, fc);
-      let alias_id = b_ident(b, &alias_str);
-      let name_id = b_ident(b, name);
+      let alias_loc = phase_a_loc(alias.id, fc);
+      let alias_id = b_ident_loc(b, &alias_str, alias_loc);
+      let name_id = b_ident_loc(b, name, name_loc);
       let chained = b_bind(b, alias_id, name_id);
       return (chained, inner_body);
     }
   }
 
-  (b_ident(b, name), body)
+  (b_ident_loc(b, name, name_loc), body)
 }
 
 /// Split args into `(value_args, trailing_cont)` if the last arg is `Arg::Cont`.
