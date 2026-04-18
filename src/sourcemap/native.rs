@@ -21,6 +21,7 @@ pub struct ByteRange {
 impl ByteRange {
   pub fn new(start: u32, end: u32) -> Self { ByteRange { start, end } }
   pub fn len(self) -> u32 { self.end.saturating_sub(self.start) }
+  pub fn is_empty(self) -> bool { self.end <= self.start }
 }
 
 /// One mapping entry. Both positions are **byte offsets** in their
