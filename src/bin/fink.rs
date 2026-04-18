@@ -8,6 +8,8 @@ fn main() {
     return;
   }
 
+  //TODO: simplify
+  // fink ... --source-map=embed --source-map=embed+source --source-map
   let sourcemap = args.iter().any(|a| a == "--sourcemap");
   let embed_sm = args.iter().any(|a| a == "--embed-sm");
   let embed_source = args.iter().any(|a| a == "--embed-source");
@@ -101,7 +103,10 @@ fn main() {
 
     "fmt" => {
       let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
-      if sourcemap {
+      if embed_sm {
+        let (output, srcmap) = fink::ast::fmt::fmt_mapped_native(&ast);
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
+      } else if sourcemap {
         let (output, srcmap) = if embed_source {
           fink::ast::fmt::fmt_mapped_with_content(&ast, path, &src)
         } else {
@@ -117,7 +122,10 @@ fn main() {
       let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
       let cfg = fink::fmt::FmtConfig::default();
       let laid_out = fink::fmt::layout::layout(&ast, &cfg);
-      if sourcemap {
+      if embed_sm {
+        let (output, srcmap) = fink::fmt::print::print_mapped_native(&laid_out);
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
+      } else if sourcemap {
         let (output, srcmap) = if embed_source {
           fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
         } else {
@@ -147,7 +155,11 @@ fn main() {
         param_info: Some(&result.param_info),
         bind_kinds: Some(&bk),
       };
-      if lifted.as_ref().is_some_and(|v| v.is_none()) {
+      let lifted_flat = lifted.as_ref().is_some_and(|v| v.is_none());
+      if lifted_flat && embed_sm {
+        let (output, srcmap) = fink::passes::lifting::fmt::fmt_flat_mapped_native(&result.root, &ctx);
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
+      } else if lifted_flat {
         println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
       } else if embed_sm {
         let (output, srcmap) = fink::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);

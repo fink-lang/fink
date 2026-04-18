@@ -48,6 +48,14 @@ pub fn print_mapped_with_content(ast: &Ast<'_>, source_name: &str, content: &str
     p.writer.finish_with_content(source_name, content)
 }
 
+/// Render a formatted AST to a String and a native-form source map
+/// (byte offsets in both generated output and source).
+pub fn print_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap_native::SourceMap) {
+    let mut p = Printer::new(ast);
+    p.node(ast.root);
+    p.writer.finish_native()
+}
+
 // ---------------------------------------------------------------------------
 // Printer — walks the flat AST arena and drives the MappedWriter
 // ---------------------------------------------------------------------------

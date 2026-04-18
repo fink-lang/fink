@@ -44,6 +44,17 @@ struct FmtCtx<'a, 'src> {
 // ---------------------------------------------------------------------------
 
 pub fn fmt_flat(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
+  let ast = build_flat_ast(expr, ctx);
+  crate::passes::ast::fmt::fmt_block(&ast)
+}
+
+/// Render lifted CPS to string + native-form source map.
+pub fn fmt_flat_mapped_native(expr: &Expr, ctx: &Ctx<'_, '_>) -> (String, crate::sourcemap_native::SourceMap) {
+  let ast = build_flat_ast(expr, ctx);
+  crate::passes::ast::fmt::fmt_mapped_native_block(&ast)
+}
+
+fn build_flat_ast(expr: &Expr, ctx: &Ctx<'_, '_>) -> crate::ast::Ast<'static> {
   let fc = FmtCtx { ctx };
   let mut b = AstBuilder::new();
   let stmt_ids = collect_stmts(&mut b, expr, &fc);
@@ -56,16 +67,18 @@ pub fn fmt_flat(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
     },
     dummy_loc(),
   );
-  let ast = b.finish(module_id);
-  crate::passes::ast::fmt::fmt_block(&ast)
+  b.finish(module_id)
 }
 
 // ---------------------------------------------------------------------------
 // Loc / token helpers (mirrors cps/fmt.rs)
 // ---------------------------------------------------------------------------
 
+/// Sentinel loc for synthetic nodes with no source origin.
+/// `line: 0` signals `MappedWriter::mark` to emit an unmapped segment
+/// (both SMv3 and native streams skip the source side).
 fn dummy_loc() -> Loc {
-  let p = Pos { idx: 0, line: 1, col: 0 };
+  let p = Pos { idx: 0, line: 0, col: 0 };
   Loc { start: p, end: p }
 }
 

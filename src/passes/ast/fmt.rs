@@ -55,6 +55,17 @@ pub fn fmt_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap_native::Sou
   out.finish_native()
 }
 
+/// Like `fmt_mapped_native` but forces fn bodies onto new lines (mirrors
+/// the `fmt_block` convention used by CPS/lifting formatters).
+pub fn fmt_mapped_native_block(ast: &Ast<'_>) -> (String, crate::sourcemap_native::SourceMap) {
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(true));
+  let mut out = MappedWriter::new();
+  fmt_node(ast, ast.root, &mut out, 0);
+  let result = out.finish_native();
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(false));
+  result
+}
+
 /// Emit a sentinel mark (line 0) to stop the previous mapping from bleeding
 /// into structural text (separators, keywords) that has no source origin.
 fn stop_mark(out: &mut MappedWriter) {
