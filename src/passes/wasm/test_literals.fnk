@@ -21,7 +21,7 @@ test 'literal bool', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOztBIgp9
+    ;; sm:CAAAEABGAHwAqAEANgDUBABiAA
 
 
 test 'literal bool false', fn:
@@ -43,7 +43,7 @@ test 'literal bool false', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDUBABiAA
 
 
 test 'literal int', fn:
@@ -65,7 +65,7 @@ test 'literal int', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDmBABiAA
 
 
 test 'literal neg 0', fn:
@@ -87,7 +87,7 @@ test 'literal neg 0', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDkBABiAA
 
 
 
@@ -110,7 +110,7 @@ test 'literal float', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS4yMzRlKzUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDuBABiAA
 
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct

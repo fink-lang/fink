@@ -20,7 +20,7 @@ test 'add two literals', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiArIDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgCWAwBiAA
 
 
 
@@ -52,7 +52,7 @@ test 'chained arithmetic', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiAqIDMgKyA0Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7O0EiCn0=
+    ;; sm:DgAAEABGAHwAqAEANgA4ADgA7gQAoAEAOAA2AMoEAGIA
 
 
 test 'unary not', fn:
@@ -72,7 +72,7 @@ test 'unary not', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibm90IHRydWUiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgDEAgBiAA
 
 
 test 'comparison eq', fn:
@@ -92,7 +92,7 @@ test 'comparison eq', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiA9PSAzIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBIgp9
+    ;; sm:CAAAEABGAHwAqAEANgCSAwBiAA
 
 
 test 'comparison lt', fn:
@@ -112,7 +112,7 @@ test 'comparison lt', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMiA8IDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgCSAwBiAA
 
 
 test 'logical and', fn:
@@ -132,7 +132,7 @@ test 'logical and', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSBhbmQgZmFsc2UiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgD0AgBiAA
 
 
 test 'logical or', fn:
@@ -152,7 +152,7 @@ test 'logical or', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSBvciBmYWxzZSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDyAgBiAA
 
 
 test 'range exclusive', fn:
@@ -172,7 +172,7 @@ test 'range exclusive', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uMTAiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgCaAwBiAA
 
 
 test 'range inclusive', fn:
@@ -192,7 +192,7 @@ test 'range inclusive', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uLjEwIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOztBIgp9
+    ;; sm:CAAAEABGAHwAqAEANgCaAwBiAA
 
 
 test 'range in', fn:
@@ -223,5 +223,5 @@ test 'range in', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNSBpbiAwLi4xMCJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7OztBOztBO0E7QTs7OztBOztBIgp9
+    ;; sm:DgAAEABGAHwAqAEANgA4ADgA9AQAoAEAOAA2AMYEAGIA
 

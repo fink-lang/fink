@@ -772,34 +772,18 @@ total = left_val + right_val
     let wasm = compile_package(&entry_abs_path, &mut loader)
       .unwrap_or_else(|e| panic!("compile_package failed: {e}"));
 
-    // Format WASM → WAT. Structural locs are not yet plumbed through
-    // compile_package (see the TODO in compile_package about multi-module
-    // source mappings), so we pass an empty slice for now — the WAT is
-    // still correct, just with fewer source map anchors.
-    let (wat_output, wat_srcmap) = crate::passes::wasm::fmt::format_mapped_with_locs(
-      &wasm.binary, &[], "__test_entry.fnk", src,
+    // Format WASM → WAT with native source map. Structural locs are not
+    // yet plumbed through compile_package (see the TODO in
+    // compile_package about multi-module source mappings), so we pass an
+    // empty slice for now — the WAT is still correct, just with fewer
+    // mapping anchors.
+    let _ = src;
+    let (wat_output, wat_srcmap) = crate::passes::wasm::fmt::format_mapped_native(
+      &wasm.binary, &[],
     );
-    let wat_json = wat_srcmap.to_json();
-    let wat_b64 = crate::sourcemap::base64_encode(wat_json.as_bytes());
+    let wat_b64 = wat_srcmap.encode_base64url();
 
-    // Dump files for review — set `DUMP_WAT_DIR=<path>` to enable, unset
-    // to skip. No default path: if the env var is missing the block is a
-    // no-op.
-    if let Some(dir) = std::env::var_os("DUMP_WAT_DIR") {
-      let dir = std::path::PathBuf::from(dir);
-      let name = crate::test_context::name();
-      let slug: String = name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
-        .collect();
-      let _ = std::fs::create_dir_all(&dir);
-      let wat_content = format!(
-        "{}\n//# sourceMappingURL=data:application/json;base64,{wat_b64}",
-        wat_output.trim()
-      );
-      let _ = std::fs::write(dir.join(format!("{slug}.wat.js")), &wat_content);
-    }
-
-    format!("{}\n;;sourcemaps:{wat_b64}", wat_output.trim())
+    format!("{}\n;; sm:{wat_b64}", wat_output.trim())
   }
 
   test_macros::include_fink_tests!("src/passes/wasm-link/test_multi_module.fnk");

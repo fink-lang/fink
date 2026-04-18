@@ -172,28 +172,13 @@ mod tests {
     ];
     let linked = super::link::link(&link_inputs);
 
-    // Format WASM → WAT with source map (including structural locs).
-    let (wat_output, wat_srcmap) = super::fmt::format_mapped_with_locs(
-      &linked.wasm, &result.structural_locs, "test", src,
+    // Format WASM → WAT with native source map (including structural locs).
+    let (wat_output, wat_srcmap) = super::fmt::format_mapped_native(
+      &linked.wasm, &result.structural_locs,
     );
-    let wat_json = wat_srcmap.to_json();
-    let wat_b64 = crate::sourcemap::base64_encode(wat_json.as_bytes());
+    let wat_b64 = wat_srcmap.encode_base64url();
 
-    // Dump files for source map review — set `DUMP_WAT_DIR=<path>` to
-    // enable, unset to skip. No default path: if the env var is missing
-    // the block is a no-op.
-    if let Some(dir) = std::env::var_os("DUMP_WAT_DIR") {
-      let dir = std::path::PathBuf::from(dir);
-      let name = crate::test_context::name();
-      let slug: String = name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
-        .collect();
-      let _ = std::fs::create_dir_all(&dir);
-      let wat_content = format!("{}\n//# sourceMappingURL=data:application/json;base64,{wat_b64}", wat_output.trim());
-      let _ = std::fs::write(dir.join(format!("{slug}.wat.js")), &wat_content);
-    }
-
-    format!("{}\n;;sourcemaps:{wat_b64}", wat_output.trim())
+    format!("{}\n;; sm:{wat_b64}", wat_output.trim())
   }
 
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");

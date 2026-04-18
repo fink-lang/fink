@@ -30,7 +30,7 @@ test 'rec literal', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2E6IDEsIGI6IDJ9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBOzs7O0E7O0E7QTtBOzs7O0E7OztBIgp9
+    ;; sm:DgAAEABGAHwAqAEANgA4ADgApgUAoAEAOAA2AJwFAKwBAA
 
 test 'rec destructure', fn:
   expect gen_wat ƒink:
@@ -171,7 +171,7 @@ test 'rec destructure', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2EsIGI6IGN9ID0ge2E6IDEsIGI6IDJ9XG5hICsgYyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7OztBOztBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTs7O0E7OztBIgp9
+    ;; sm:QgAAEABGAHwAqAEANgA6ADoAOgA6ADgAOAA4APAEAKABADgAOAA4ADYAOAA2ADgAzAcAogEAOgDsAwCiAQA6ADoAOAA4AKoLAKIBADoAOgA4ADgAOgDiCgCiAQA6ADoAOAA6AOIIAKABADgAOAA4ADoAOgDSCgCgAQA4ADgAOACKDACgAQA4ADYAOAD2BgCgAQA4ANADAKwBAA
 
 test 'rec spread', fn:
   expect gen_wat ƒink:
@@ -236,7 +236,7 @@ test 'rec spread', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "cba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiciA9IHthOiAxLCBiOiAyfVxuey4uciwgYzogM30iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7QTs7QTtBO0E7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7QTs7QTtBOzs7QTs7QUFBQTs7O0EiCn0=
+    ;; sm:IAAAEABGAHwAqAEANgA4ADgAOAA4AO4EAKABADgAOACgBQCgAQA4ADYANgA4ADgAogcAoAEAOAA2ADgA9gYAoAEAOADQAwBsAQAB3AEA
 
 test 'rec empty literal', fn:
   expect gen_wat ƒink:
@@ -257,7 +257,7 @@ test 'rec empty literal', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie30iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDIBABiAA
 
 test 'rec single field', fn:
   expect gen_wat ƒink:
@@ -277,7 +277,7 @@ test 'rec single field', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "a")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2E6IDF9Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOzs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDMAwCqAQA
 
 test 'rec nested destructure', fn:
   expect gen_wat ƒink:
@@ -463,7 +463,7 @@ test 'rec nested destructure', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2F9ID0ge2E6IHtiOiA0Mn19XG57Yn0gPSBhXG5iIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7QTtBO0E7OztBOztBO0E7QTtBOzs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7QTtBOzs7OztBOztBO0E7OztBOzs7QSIKfQ==
+    ;; sm:VAAAEABGAHwAqAEANgA6ADoAOgA6ADoAOgA4ADgAOADwBACiAQA6ADgANgDsBgCiAQA6AOwDAKIBADoAOAA4AKIIAKIBADoAOgA4ADoAvAgAoAEAOAA4ADgAOgA6ANIKAKIBADoAOAA2ADgAOgDgDACiAQA6AOwDAKIBADoAOAA4AKIIAKIBADoAOgA4ADoAvAgAoAEAOAA4ADgAOgA6ANIKAKABADgAOAA6AJAMAKABADgANgA4ANoGAKABADgA0gMArAEA
 
 test 'rec spread merge two', fn:
   expect gen_wat ƒink:
@@ -553,7 +553,7 @@ test 'rec spread merge two', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "ba")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicjEgPSB7YTogMX1cbnIyID0ge2I6IDJ9XG57Li5yMSwgLi5yMn0iXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBOzs7O0E7O0E7QTtBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTs7O0E7OztBQUNBO0FBREE7OztBIgp9
+    ;; sm:LQAAEABGAHwAqAEANgA4ADgAOAA4ADgAOADuBACgAQA6ADgAOACKBgCgAQA6ADgAugQAoAEAOgA4ADgAOAA4ADgA3goAoAEAOADQAwCgAQA4ADYAOAA4AIAIAKABADgA0AMA1AEBGAI6ARcC3gEA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -585,7 +585,7 @@ test 'rec format template', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "got: a")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2dvdDogJHt7YTogMX19JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7OztBOztBO0E7QTs7OztBOzs7QSIKfQ==
+    ;; sm:DgAAEABGAHwAqAEANgA4ADgApgUAoAEAOAA2AJYFALQBAA
 
 
 

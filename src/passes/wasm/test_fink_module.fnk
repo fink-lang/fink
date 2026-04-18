@@ -41,7 +41,7 @@ test 'single binding export with trailing expr', fn:
       (export "foo" (global $foo))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMVxuNDIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBOzs7Ozs7O0E7O0FBQUE7O0EiCn0=
+    ;; sm:CgAAEABGAHwAqAEANgA6AKYGAHABAAOYAQA
 
 
 
@@ -97,7 +97,7 @@ test 'minimal module exports', fn:
       (export "bar" (global $bar))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46IDEyM1xuYmFyID0gZm46IDM0NSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7OztBO0E7Ozs7O0E7OztBO0E7Ozs7O0E7OztBQUFBO0FBQ0E7O0EiCn0=
+    ;; sm:FQAAEABGAHwAqAEANgA4ADoAOAA4ADoAvgoA-AEANgDoBAD4AQA4AOwEANgBAQADPgEcA5gBAA
 
 ---
 simple main: module has a $_fink_module function whose body contains
@@ -176,7 +176,7 @@ test 'minimal error calling same local func twice', fn:
       (export "foo" (global $foo))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gZm46XG4gIG5pID0gZm4gYTogYVxuICBuYSA9IG5pIDJcbiAgbmkgbmEiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7O0E7O0E7QTtBOzs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7O0E7QTtBO0E7QTs7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
+    ;; sm:HgAAEABGAHwAqAEANgA4ADgAOAA6APAHAJ4BADYANgDGBgCgAQA6ADgAOAA4ADgA9AkA-AEANgA4ADgAOAC4CQBwAQADmAEA
 
 
 test 'chained fn calls with intermediate bindings', fn:
@@ -292,7 +292,7 @@ test 'chained fn calls with intermediate bindings', fn:
       (export "add" (global $add))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjpcbiAgYSArIGJcblxucyA9IGFkZCAxLCAyXG5cbm11bCA9IGZuIGEsIGI6XG4gIGEgKiBiXG5cbnAgPSBtdWwgcywgMyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTtBO0E7Ozs7O0E7OztBO0E7QTtBOzs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7QTtBOzs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7OztBOzs7OztBQVFBO0FBTEE7QUFFQTtBQUxBOztBIgp9
+    ;; sm:LgAAEABGAHwAqAEANgA4ADgAOAA4ADoAOAA4AL4HAPgBADgANgA2AN4GAKABADgANgA2ANwGAKABADgAOAA2ALIHAKABADgAOAA2ADgAOgA4ADgAig4AoAEAOADGCACgAwF8ATYBSwE2ARwDPgFLA5gBAA
 
 
 test 'chained operator calls with intermediate bindings', fn:
@@ -349,7 +349,7 @@ test 'chained operator calls with intermediate bindings', fn:
       (export "a" (global $a))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDIgKiAzXG5iID0gYSArIDRcbmIiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7OztBOzs7QUFDQTtBQURBOztBIgp9
+    ;; sm:GQAAEABGAHwAqAEANgA4ADgAOADuBACgAQA4ADYANgCuBwCgAQA4ADYANgA4ADgAugcA0AEBFAE2ARMBkAEA
 
 
 # TODO recursive functions
@@ -488,4 +488,4 @@ test 'import two names from module', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "barfoo./lib.fnk")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie2ZvbywgYmFyfSA9IGltcG9ydCAnLi9saWIuZm5rJ1xuYmFyIGZvbyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7OztBOztBO0E7QTtBO0E7QTtBO0E7OztBOztBO0E7QTtBO0E7QTtBO0E7Ozs7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7Ozs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTs7O0E7OztBIgp9
+    ;; sm:PAAAEABGANACAKgBADYAOAA6ADoAOgA4ADgA7gQAoAEAOAA4ADgAOgA8ADoAPAD6CgCgAQA4AOgDAKIBADoAOgA4ADgAqgsAogEAOgA6ADgAOAA6AOIKAKABADgAOAA4ADoA2AgAoAEANgA4ADYAOAA6AMIKAKABADgANgA4AIYMAKABADgAhAYAxgEA
