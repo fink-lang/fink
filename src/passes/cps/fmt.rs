@@ -75,7 +75,7 @@ pub fn fmt_with_mapped_content(expr: &Expr, ctx: &Ctx<'_, '_>, source_name: &str
 }
 
 /// Format with native-form source map emission.
-pub fn fmt_with_mapped_native(expr: &Expr, ctx: &Ctx<'_, '_>) -> (String, crate::sourcemap_native::SourceMap) {
+pub fn fmt_with_mapped_native(expr: &Expr, ctx: &Ctx<'_, '_>) -> (String, crate::sourcemap::native::SourceMap) {
   let ast = build_ast(expr, ctx);
   ast::fmt::fmt_mapped_native(&ast)
 }

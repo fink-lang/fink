@@ -49,7 +49,7 @@ pub fn fmt_mapped_with_content(ast: &Ast<'_>, source_name: &str, content: &str) 
 }
 
 /// Format an AST back to Fink source, returning source + native-form source map.
-pub fn fmt_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap_native::SourceMap) {
+pub fn fmt_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap::native::SourceMap) {
   let mut out = MappedWriter::new();
   fmt_node(ast, ast.root, &mut out, 0);
   out.finish_native()
@@ -57,7 +57,7 @@ pub fn fmt_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap_native::Sou
 
 /// Like `fmt_mapped_native` but forces fn bodies onto new lines (mirrors
 /// the `fmt_block` convention used by CPS/lifting formatters).
-pub fn fmt_mapped_native_block(ast: &Ast<'_>) -> (String, crate::sourcemap_native::SourceMap) {
+pub fn fmt_mapped_native_block(ast: &Ast<'_>) -> (String, crate::sourcemap::native::SourceMap) {
   FORCE_BLOCK_FN_BODIES.with(|f| f.set(true));
   let mut out = MappedWriter::new();
   fmt_node(ast, ast.root, &mut out, 0);

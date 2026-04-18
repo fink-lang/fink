@@ -49,7 +49,7 @@ pub fn fmt_flat(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
 }
 
 /// Render lifted CPS to string + native-form source map.
-pub fn fmt_flat_mapped_native(expr: &Expr, ctx: &Ctx<'_, '_>) -> (String, crate::sourcemap_native::SourceMap) {
+pub fn fmt_flat_mapped_native(expr: &Expr, ctx: &Ctx<'_, '_>) -> (String, crate::sourcemap::native::SourceMap) {
   let ast = build_flat_ast(expr, ctx);
   crate::passes::ast::fmt::fmt_mapped_native_block(&ast)
 }

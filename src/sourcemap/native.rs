@@ -1,12 +1,12 @@
 // Native source-map representation.
 //
-// A flat list of (generated-output byte range, optional source byte range)
+// A flat list of (generated-output byte offset, optional source byte range)
 // entries, one per semantic output token a pass chooses to emit. No SMv3
 // wire constraints: pass formatters emit entries directly in output order
 // as they walk, and downstream tools decode the native form for
 // inspection.
 //
-// On-disk form (used for embedding in test output + `--embed-sm` CLI):
+// On-disk form (used for embedding in test output + `--source-map` CLI):
 // varint-packed, base64url-wrapped. Opaque to humans by design — use
 // `decode_base64url` + `decode_bytes` to inspect, or the `fink decode-sm`
 // subcommand.
@@ -112,7 +112,7 @@ impl SourceMap {
     Ok(SourceMap { mappings })
   }
 
-  /// Encode to base64url-wrapped compact form — suitable for `#sm:<...>`
+  /// Encode to base64url-wrapped compact form — suitable for `# sm:<...>`
   /// embedding in Fink or WAT comments.
   pub fn encode_base64url(&self) -> String {
     base64url_encode(&self.encode_bytes())

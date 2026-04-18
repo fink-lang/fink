@@ -262,7 +262,7 @@ fn main() {
         t.strip_prefix("# sm:").or_else(|| t.strip_prefix(";; sm:"))
       }).unwrap_or_else(|| die("error: no '# sm:' or ';; sm:' line found in input"));
 
-      let sm = fink::sourcemap_native::SourceMap::decode_base64url(blob.trim())
+      let sm = fink::sourcemap::native::SourceMap::decode_base64url(blob.trim())
         .unwrap_or_else(|e| die(&format!("decode: {e}")));
 
       // Strip the blob line from the input so our `out` offsets line up with

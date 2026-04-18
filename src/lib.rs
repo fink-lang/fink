@@ -9,7 +9,6 @@ pub mod runner;
 pub mod passes;
 pub mod propgraph;
 pub mod sourcemap;
-pub mod sourcemap_native;
 pub mod strings;
 
 #[cfg(feature = "run")]
