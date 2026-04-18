@@ -731,6 +731,9 @@ impl<'src> Parser<'src> {
       TokenKind::Sep => match tok.src {
         ".." | "..." => Some((50, 51)),
         "==" | "!=" | "<" | "<=" | ">" | ">=" | "><" => Some((60, 61)),
+        // TODO(chan-op): `<<`/`>>` are overloaded for both bitwise shift
+        // and channel send. Contradictory precedences — see
+        // docs/examples/unresolved.fnk.
         ">>" | "<<" | ">>>" | "<<<" => Some((90, 91)),
         "+" | "-" => Some((100, 101)),
         "*" | "/" | "//" | "%" | "%%" | "/%" => Some((110, 111)),
