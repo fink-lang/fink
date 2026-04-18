@@ -64,6 +64,20 @@ pub fn format_mapped_with_locs(
   w.finish_with_content(source_name, source_content)
 }
 
+/// Format WAT + native-form source map.
+pub fn format_mapped_native(
+  wasm: &[u8],
+  structural_locs: &[super::emit::StructuralLoc],
+) -> (String, crate::sourcemap::native::SourceMap) {
+  let mut module = parse_module(wasm);
+  for sl in structural_locs {
+    module.structural_locs.push(sl.clone());
+  }
+  let mut w = MappedWriter::new();
+  emit_wat(&module, &mut w);
+  w.finish_native()
+}
+
 // ---------------------------------------------------------------------------
 // Parsed module representation
 // ---------------------------------------------------------------------------

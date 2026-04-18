@@ -159,8 +159,17 @@ fn main() {
         if let Some(level) = optimize {
           fink::passes::optimize_wasm(&mut wasm, level).unwrap_or_else(|e| die(&e));
         }
-        let wat = fink::passes::emit_wat(&wasm).unwrap_or_else(|e| die(&e));
-        println!("{wat}");
+        if source_map {
+          // Use the in-tree formatter so the native `# sm` stream is
+          // populated. `structural_locs` aren't threaded through
+          // `compile_package` yet (see the plumbing-design doc Stage 1),
+          // so pass an empty slice — we still get DWARF-derived marks.
+          let (wat, srcmap) = fink::passes::wasm::fmt::format_mapped_native(&wasm.binary, &[]);
+          println!("{wat}\n;; sm:{}", srcmap.encode_base64url());
+        } else {
+          let wat = fink::passes::emit_wat(&wasm).unwrap_or_else(|e| die(&e));
+          println!("{wat}");
+        }
       }
     }
 
