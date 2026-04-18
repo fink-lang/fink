@@ -6,6 +6,13 @@
 	stamp-version build-target package-release release-all
 
 deps-check:
+	@expected=$$(grep '^channel' rust-toolchain.toml | cut -d'"' -f2); \
+	 actual=$$(rustc --version | awk '{print $$2}'); \
+	 if [ "$$expected" != "$$actual" ]; then \
+	   echo "Rust toolchain mismatch: expected $$expected, found $$actual"; \
+	   echo "Run: rustup update"; \
+	   exit 1; \
+	 fi
 	cargo outdated
 
 deps-update:
