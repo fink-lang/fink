@@ -13,7 +13,7 @@
 //       ↓
 //   dwarf.rs    → DWARF .debug_* sections (gimli::write) appended to binary
 //       ↓
-//   fmt.rs      → WAT text + Source Map v3 (wasmparser + gimli::read)
+//   fmt.rs      → WAT text + native source map (wasmparser + gimli::read)
 //
 // The WASM binary contains: WasmGC types, imported builtins, defined
 // functions, globals, exports, name section, and DWARF debug info.

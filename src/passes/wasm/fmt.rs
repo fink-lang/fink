@@ -1,8 +1,8 @@
 // Custom WASM→WAT formatter with source map support.
 //
 // Reads a WASM binary (with name section and DWARF) and produces
-// WAT text + optional Source Map v3. This is the read-side counterpart
-// to wasm/emit.rs (the write side).
+// WAT text + optional native-form source map. This is the read-side
+// counterpart to wasm/emit.rs (the write side).
 //
 // The formatter reconstructs nested WAT s-expressions from the flat
 // WASM stack machine instructions using a stack-based approach: value

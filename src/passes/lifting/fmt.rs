@@ -75,8 +75,8 @@ fn build_flat_ast(expr: &Expr, ctx: &Ctx<'_, '_>) -> crate::ast::Ast<'static> {
 // ---------------------------------------------------------------------------
 
 /// Sentinel loc for synthetic nodes with no source origin.
-/// `line: 0` signals `MappedWriter::mark` to emit an unmapped segment
-/// (both SMv3 and native streams skip the source side).
+/// `line: 0` signals `MappedWriter::mark` to emit an unmapped entry
+/// (the native mapping stream records a no-source entry).
 fn dummy_loc() -> Loc {
   let p = Pos { idx: 0, line: 0, col: 0 };
   Loc { start: p, end: p }
