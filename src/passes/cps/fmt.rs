@@ -63,17 +63,6 @@ pub fn fmt_with(expr: &Expr, ctx: &Ctx<'_, '_>) -> String {
   ast::fmt::fmt_block(&ast)
 }
 
-pub fn fmt_with_mapped(expr: &Expr, ctx: &Ctx<'_, '_>, source_name: &str) -> (String, crate::sourcemap::SourceMap) {
-  // Note: fmt_block flag not applied to mapped variants (used for codegen source maps, not debug output)
-  let ast = build_ast(expr, ctx);
-  ast::fmt::fmt_mapped(&ast, source_name)
-}
-
-pub fn fmt_with_mapped_content(expr: &Expr, ctx: &Ctx<'_, '_>, source_name: &str, content: &str) -> (String, crate::sourcemap::SourceMap) {
-  let ast = build_ast(expr, ctx);
-  ast::fmt::fmt_mapped_with_content(&ast, source_name, content)
-}
-
 /// Format with native-form source map emission.
 pub fn fmt_with_mapped_native(expr: &Expr, ctx: &Ctx<'_, '_>) -> (String, crate::sourcemap::native::SourceMap) {
   let ast = build_ast(expr, ctx);

@@ -24,7 +24,7 @@ use wasmparser::{
 };
 
 use crate::lexer::{Loc, Pos};
-use crate::sourcemap::{MappedWriter, SourceMap};
+use crate::sourcemap::MappedWriter;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -36,32 +36,6 @@ pub fn format(wasm: &[u8]) -> String {
   let mut w = MappedWriter::new();
   emit_wat(&module, &mut w);
   w.finish_string()
-}
-
-/// Format a WASM binary as WAT text with source map.
-pub fn format_mapped(
-  wasm: &[u8],
-  source_name: &str,
-  source_content: &str,
-) -> (String, SourceMap) {
-  format_mapped_with_locs(wasm, &[], source_name, source_content)
-}
-
-/// Format with structural source locations from the emitter.
-pub fn format_mapped_with_locs(
-  wasm: &[u8],
-  structural_locs: &[super::emit::StructuralLoc],
-  source_name: &str,
-  source_content: &str,
-) -> (String, SourceMap) {
-  let mut module = parse_module(wasm);
-  // Inject structural locs into the parsed module.
-  for sl in structural_locs {
-    module.structural_locs.push(sl.clone());
-  }
-  let mut w = MappedWriter::new();
-  emit_wat(&module, &mut w);
-  w.finish_with_content(source_name, source_content)
 }
 
 /// Format WAT + native-form source map.
@@ -1416,13 +1390,4 @@ mod tests {
     assert!(wat.contains("$add_"), "should have add in names");
   }
 
-  #[test]
-  fn t_format_mapped() {
-    let src = "add = fn a, b: a + b";
-    let wasm = crate::to_wasm(src, "test.fnk").unwrap_or_else(|e| panic!("{e}"));
-    let (wat, srcmap) = format_mapped(&wasm.binary, "test.fnk", src);
-    assert!(wat.contains("(module"), "WAT should have module");
-    let json = srcmap.to_json();
-    assert!(json.contains("test.fnk"), "source map should reference test.fnk");
-  }
 }
