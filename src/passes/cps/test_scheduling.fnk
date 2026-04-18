@@ -12,7 +12,7 @@ test 'yield literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·yield 42, ·ƒret_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgNDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE9BQU0sRSxFIgp9
+    # sm:CQABAAgAAQAIJAEACBIACAEACAABAAgQAQwCBAAEAQsI
 
 
 test 'yield ident', fn:
@@ -22,7 +22,7 @@ test 'yield ident', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·yield ·∅foo, ·ƒret_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieWllbGQgZm9vIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxPQUFNLEssRSIKfQ==
+    # sm:CQABAAkAAQAJJAEACRIACAEACQABAAkQAQwDEAAEAQsJ
 
 
 test 'spawn ident', fn:
@@ -32,7 +32,7 @@ test 'spawn ident', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·spawn ·∅task_fn, ·ƒret_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsic3Bhd24gdGFza19mbiJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsT0FBTSxTLEUiCn0=
+    # sm:CQABAA0AAQANJAEADRIACAEADQABAA0QAQwHGAAEAQsN
 
 
 test 'await ident', fn:
@@ -42,7 +42,7 @@ test 'await ident', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·await ·∅fut, ·ƒret_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxPQUFNLEssRSIKfQ==
+    # sm:CQABAAkAAQAJJAEACRIACAEACQABAAkQAQwDEAAEAQsJ
 
 
 test 'spawn bound to name', fn:
@@ -55,7 +55,7 @@ test 'spawn bound to name', fn:
         ·let ·v_5, fn ·future_0:
           ·ƒpub ·future_0, fn:
             ·ƒret_2 ·future_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZnV0dXJlID0gc3Bhd24gdGFzayJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFTLEFBQUEsT0FBTSxNLEtBQU4sSTtJQUFGLEFBQUEsS0FBRSxJLEtBQVQsUztNQUFBLEFBQUEsTUFBQSxTLEk7USxBLFFBQUEiCn0=
+    # sm:GAABABMAAQATJAEAExIACAESCgABAAoQAQwEEgAKAQsKCgAMAQMBAAEAAQwBBAoKAAoBEQYUABABAAYAAQAGEAEABhQACAAUAQAGAAEABhQBAAY
 
 
 test 'await bound to name', fn:
@@ -68,7 +68,7 @@ test 'await bound to name', fn:
         ·let ·v_5, fn ·result_0:
           ·ƒpub ·result_0, fn:
             ·ƒret_2 ·result_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVzdWx0ID0gYXdhaXQgZnV0Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQVMsQUFBQSxPQUFNLEssS0FBTixJO0lBQUYsQUFBQSxLQUFFLEksS0FBVCxTO01BQUEsQUFBQSxNQUFBLFMsSTtRLEEsUUFBQSIKfQ==
+    # sm:GAABABIAAQASJAEAEhIACAESCQABAAkQAQwDEAAKAQsJCgAMAQMBAAEAAQwBBAkKAAoBEQYUABABAAYAAQAGEAEABhQACAAUAQAGAAEABhQBAAY
 
 
 test 'channel creation', fn:
@@ -78,7 +78,7 @@ test 'channel creation', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·channel 0, ·ƒret_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2hhbm5lbCAwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxTQUFRLEMsRSIKfQ==
+    # sm:CQABAAkAAQAJJAEACRIACAEACQABAAkUARABAgAEAQ8J
 
 
 
@@ -89,7 +89,7 @@ test 'receive from channel', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·receive ·∅ch, ·ƒret_1
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsicmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsU0FBUSxJLEUiCn0=
+    # sm:CQABAAoAAQAKJAEAChIACAEACgABAAoUARACDgAEAQ8K
 
 
 test 'channel bound to name', fn:
@@ -102,7 +102,7 @@ test 'channel bound to name', fn:
         ·let ·v_5, fn ·ch_0:
           ·ƒpub ·ch_0, fn:
             ·ƒret_2 ·ch_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiY2ggPSBjaGFubmVsIDAiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBSyxBQUFBLFNBQVEsQyxLQUFSLEk7SUFBRixBQUFBLEtBQUUsSSxLQUFMLEs7TUFBQSxBQUFBLE1BQUEsSyxJO1EsQSxRQUFBIgp9
+    # sm:GAABAA4AAQAOJAEADhIACAEKCQABAAkUARABAgAKAQ8JCgAMAQMBAAEAAQwBBAkKAAoBCQIMABABAAIAAQACEAEAAgwACAAUAQACAAEAAhQBAAI
 
 
 test 'receive bound to name', fn:
@@ -115,4 +115,4 @@ test 'receive bound to name', fn:
         ·let ·v_5, fn ·msg_0:
           ·ƒpub ·msg_0, fn:
             ·ƒret_2 ·msg_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibXNnID0gcmVjZWl2ZSBjaCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFNLEFBQUEsU0FBUSxJLEtBQVIsSTtJQUFGLEFBQUEsS0FBRSxJLEtBQU4sTTtNQUFBLEFBQUEsTUFBQSxNLEk7USxBLFFBQUEiCn0=
+    # sm:GAABABAAAQAQJAEAEBIACAEMCgABAAoUARACDgAKAQ8KCgAMAQMBAAEAAQwBBAoKAAoBCwMOABABAAMAAQADEAEAAw4ACAAUAQADAAEAAxQBAAM

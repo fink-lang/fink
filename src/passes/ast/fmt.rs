@@ -1,14 +1,15 @@
 // AST → Fink source pretty-printer
 //
 // All output goes through MappedWriter so every emitted token is
-// associated with its source location.  The public API offers both
-// `fmt` (string only) and `fmt_mapped` (string + source map).
+// associated with its source location.  The public API offers `fmt`
+// (string only) and `fmt_mapped_native` (string + native byte-offset
+// source map).
 
 use std::cell::Cell;
 
 use crate::ast::{Ast, AstId, CmpPart, Node, NodeKind};
 use crate::lexer::{Loc, Pos, Token};
-use crate::sourcemap::{MappedWriter, SourceMap};
+use crate::sourcemap::MappedWriter;
 
 thread_local! {
   /// When true, fn bodies are never inlined — always rendered as indented blocks.
@@ -33,19 +34,22 @@ pub fn fmt_block(ast: &Ast<'_>) -> String {
   result
 }
 
-/// Format an AST back to Fink source, returning source + source map.
-pub fn fmt_mapped(ast: &Ast<'_>, source_name: &str) -> (String, SourceMap) {
+/// Format an AST back to Fink source, returning source + native-form source map.
+pub fn fmt_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap::native::SourceMap) {
   let mut out = MappedWriter::new();
   fmt_node(ast, ast.root, &mut out, 0);
-  out.finish(source_name)
+  out.finish_native()
 }
 
-/// Format an AST back to Fink source, returning source + source map
-/// with original source content embedded.
-pub fn fmt_mapped_with_content(ast: &Ast<'_>, source_name: &str, content: &str) -> (String, SourceMap) {
+/// Like `fmt_mapped_native` but forces fn bodies onto new lines (mirrors
+/// the `fmt_block` convention used by CPS/lifting formatters).
+pub fn fmt_mapped_native_block(ast: &Ast<'_>) -> (String, crate::sourcemap::native::SourceMap) {
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(true));
   let mut out = MappedWriter::new();
   fmt_node(ast, ast.root, &mut out, 0);
-  out.finish_with_content(source_name, content)
+  let result = out.finish_native();
+  FORCE_BLOCK_FN_BODIES.with(|f| f.set(false));
+  result
 }
 
 /// Emit a sentinel mark (line 0) to stop the previous mapping from bleeding
@@ -656,116 +660,4 @@ mod tests {
     assert_eq!(out, "fn:\n  \":\n    hello ${name}");
   }
 
-  // --- source map tests ---
-
-  use super::fmt_mapped;
-
-  /// Parse source, format with source map, return mappings as (out_line, out_col, src_line, src_col).
-  fn mappings(src: &str) -> Vec<(u32, u32, u32, u32)> {
-    let ast = parse(src, "test.fnk").expect("parse failed");
-    let (_, srcmap) = fmt_mapped(&ast, "test.fnk");
-    srcmap.iter().collect()
-  }
-
-  #[test]
-  fn sourcemap_ident() {
-    // "foo" → single mapping at (0,0) → source (0,0)
-    let m = mappings("foo");
-    assert_eq!(m, vec![(0, 0, 0, 0)]);
-  }
-
-  #[test]
-  fn sourcemap_string_literal() {
-    // "'hello'" → mapping for node start + string content + closing quote
-    let m = mappings("'hello'");
-    assert_eq!(m, vec![
-      (0, 0, 0, 0),  // LitStr node (opening quote)
-      (0, 1, 0, 1),  // string content
-      (0, 6, 0, 6),  // closing quote
-    ]);
-  }
-
-  #[test]
-  fn sourcemap_bind() {
-    // "foo = bar" → Bind, lhs Ident, = operator, rhs Ident
-    let m = mappings("foo = bar");
-    assert_eq!(m, vec![
-      (0, 0, 0, 0),  // Bind node
-      (0, 0, 0, 0),  // Ident 'foo'
-      (0, 4, 0, 4),  // = operator
-      (0, 6, 0, 6),  // Ident 'bar'
-    ]);
-  }
-
-  #[test]
-  fn sourcemap_apply() {
-    // "foo bar" → Apply, func Ident, arg Ident
-    let m = mappings("foo bar");
-    assert_eq!(m, vec![
-      (0, 0, 0, 0),  // Apply node
-      (0, 0, 0, 0),  // Ident 'foo'
-      (0, 4, 0, 4),  // Ident 'bar'
-    ]);
-  }
-
-  #[test]
-  fn sourcemap_apply_multiple_args() {
-    // "foo a, b" → Apply, func, arg, arg
-    let m = mappings("foo a, b");
-    assert_eq!(m, vec![
-      (0, 0, 0, 0),  // Apply node
-      (0, 0, 0, 0),  // Ident 'foo'
-      (0, 4, 0, 4),  // Ident 'a'
-      (0, 7, 0, 7),  // Ident 'b'
-    ]);
-  }
-
-  #[test]
-  fn sourcemap_fn_inline() {
-    // "fn x:\n  foo x" → inlined to "fn x: foo x" (single apply body)
-    let m = mappings("fn x:\n  foo x");
-    assert_eq!(m, vec![
-      (0, 0, 0, 0),   // Fn node
-      (0, 3, 0, 3),   // Patterns → Ident 'x'
-      (0, 4, 0, 4),   // : separator
-      (0, 6, 1, 2),   // Apply 'foo x'
-      (0, 6, 1, 2),   // Ident 'foo'
-      (0, 10, 1, 6),  // Ident 'x'
-    ]);
-  }
-
-  #[test]
-  fn sourcemap_fn_multiline_body() {
-    // Multi-statement body stays multi-line
-    let m = mappings("fn x:\n  foo x\n  bar x");
-    let lines: Vec<u32> = m.iter().map(|&(l, _, _, _)| l).collect();
-    assert!(lines.contains(&0), "should have line 0 mappings");
-    assert!(lines.contains(&1), "should have line 1 mappings");
-    assert!(lines.contains(&2), "should have line 2 mappings");
-  }
-
-  #[test]
-  fn sourcemap_infix() {
-    // "a + b" → InfixOp, lhs, + operator, rhs
-    let m = mappings("a + b");
-    assert_eq!(m, vec![
-      (0, 0, 0, 0),  // InfixOp node
-      (0, 0, 0, 0),  // Ident 'a'
-      (0, 2, 0, 2),  // + operator
-      (0, 4, 0, 4),  // Ident 'b'
-    ]);
-  }
-
-  #[test]
-  fn sourcemap_mapping_count() {
-    // Each node produces one mapping; operators/delimiters add their own
-    let m = mappings("foo");
-    assert_eq!(m.len(), 1);
-
-    let m = mappings("foo bar");
-    assert_eq!(m.len(), 3); // Apply + func + arg
-
-    let m = mappings("foo = bar baz");
-    assert_eq!(m.len(), 6); // Bind + lhs + = + Apply + func + arg
-  }
 }

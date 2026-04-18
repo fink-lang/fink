@@ -362,12 +362,7 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
             }
           }
         }
-        pretty_assertions::assert_eq!(
-          actual,
-          expected,
-          "{}",
-          #path_info
-        );
+        crate::test_support::assert_eq_str(actual, expected, #path_info);
       }
     });
   }

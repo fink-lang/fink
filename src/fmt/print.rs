@@ -22,7 +22,7 @@
 
 use crate::ast::{Ast, AstId, CmpPart, Exprs, NodeKind};
 use crate::passes::ast::lexer::{Loc, Pos, Token, TokenKind};
-use crate::sourcemap::{MappedWriter, SourceMap};
+use crate::sourcemap::MappedWriter;
 
 /// Render a formatted AST to a String.
 /// The input must have been produced by `layout::layout` — locs are used as-is.
@@ -32,20 +32,12 @@ pub fn print(ast: &Ast<'_>) -> String {
     p.writer.finish_string()
 }
 
-/// Render a formatted AST to a String and a Source Map.
-/// Each emitted token is mapped back to its source location stored on the
-/// token's `loc` field (preserved unchanged by `layout::layout`).
-pub fn print_mapped(ast: &Ast<'_>, source_name: &str) -> (String, SourceMap) {
+/// Render a formatted AST to a String and a native-form source map
+/// (byte offsets in both generated output and source).
+pub fn print_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap::native::SourceMap) {
     let mut p = Printer::new(ast);
     p.node(ast.root);
-    p.writer.finish(source_name)
-}
-
-/// Like `print_mapped` but embeds the original source content in the map.
-pub fn print_mapped_with_content(ast: &Ast<'_>, source_name: &str, content: &str) -> (String, SourceMap) {
-    let mut p = Printer::new(ast);
-    p.node(ast.root);
-    p.writer.finish_with_content(source_name, content)
+    p.writer.finish_native()
 }
 
 // ---------------------------------------------------------------------------

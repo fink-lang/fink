@@ -11,7 +11,7 @@ test 'infix add', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_plus ·∅a, ·∅b, ·ƒret_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSArIGIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBRSxBQUFBLFNBQUYsRyxFQUFJLEcsRSIKfQ==
+    # sm:CwABAAUAAQAFJAEABRIACAEEAQABAAEUAQMBDAAEAQgBDAAEAQcF
 
 
 test 'infix literal', fn:
@@ -20,7 +20,7 @@ test 'infix literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_plus ·∅a, 1, ·ƒret_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSArIDEiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBRSxBQUFBLFNBQUYsRyxFQUFJLEMsRSIKfQ==
+    # sm:CwABAAUAAQAFJAEABRIACAEEAQABAAEUAQMBDAAEAQgBAgAEAQcF
 
 
 
@@ -34,7 +34,7 @@ test 'unary not', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_not ·∅x, ·ƒret_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibm90IHgiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLFFBQUksRyxFIgp9
+    # sm:CQABAAUAAQAFJAEABRIACAEAAwABAAMSAQgBDAAEAQcF
 
 
 test 'unary minus', fn:
@@ -43,7 +43,7 @@ test 'unary minus', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_minus ·∅x, ·ƒret_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLXgiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLFVBQUMsRyxFIgp9
+    # sm:CQABAAIAAQACJAEAAhIACAEAAQABAAEWAQIBDAAEAQEC
 
 ---
 chained comparisons
@@ -57,7 +57,7 @@ test 'chained cmp', fn:
       ·op_lt ·∅a, ·∅b, fn ·v_4:
         ·op_lt ·∅b, ·∅c, fn ·v_6:
           ·op_and ·v_4, ·v_6, ·ƒret_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA8IGIgPCBjIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxPQUFBLEcsRUFBSSxHLEtBQUosSTtJQUFBLEFBQUEsT0FBSSxHLEVBQUksRyxLQUFSLEk7TUFBQSxBQUFBLFFBQUEsSSxFQUFBLEksRSIKfQ==
+    # sm:GwABAAkAAQAJJAEACRIACAEACQABAAkQAQABDAAEAQgBDAAKAQcJCgAMAQAJAAEACRABCAEMAAQBCAEMAAoBDwkKABABAAkAAQAJEgEACQoABAEACQoABAEACQ
 
 ---
 range
@@ -69,7 +69,7 @@ test 'range excl', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_rngex 0, 10, ·ƒret_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uMTAiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQyxBQUFBLFVBQUQsQyxFQUFHLEUsRSIKfQ==
+    # sm:CwABAAUAAQAFJAEABRIACAECAgABAAIWAQEBAgAEAQYCBAAEAQUF
 
 
 test 'range incl', fn:
@@ -78,5 +78,5 @@ test 'range incl', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_rngin 0, 10, ·ƒret_0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMC4uLjEwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUMsQUFBQSxVQUFELEMsRUFBSSxFLEUiCn0=
+    # sm:CwABAAYAAQAGJAEABhIACAECAwABAAMWAQEBAgAEAQgCBAAEAQcG
 

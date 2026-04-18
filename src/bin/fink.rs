@@ -8,8 +8,7 @@ fn main() {
     return;
   }
 
-  let sourcemap = args.iter().any(|a| a == "--sourcemap");
-  let embed_source = args.iter().any(|a| a == "--embed-source");
+  let source_map = args.iter().any(|a| a == "--source-map");
   let desugar = args.iter().any(|a| a == "--desugar");
   let optimize = args.iter().find_map(|a| {
     if a == "--optimize" || a == "-O" { return Some("-O") }
@@ -59,8 +58,7 @@ fn main() {
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
-      eprintln!("  fmt/cps [--sourcemap]        emit source map");
-      eprintln!("  fmt/cps [--embed-source]     embed source in source map");
+      eprintln!("  ast/fmt/fmt2/cps [--source-map]  append embedded source map comment");
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wat/wasm [-O|-O1..4|-Os|-Oz]  run wasm-opt (default -O)");
       eprintln!("  compile --target=<wasm|triple> [-o output] <file>");
@@ -100,13 +98,9 @@ fn main() {
 
     "fmt" => {
       let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
-      if sourcemap {
-        let (output, srcmap) = if embed_source {
-          fink::ast::fmt::fmt_mapped_with_content(&ast, path, &src)
-        } else {
-          fink::ast::fmt::fmt_mapped(&ast, path)
-        };
-        print_with_sourcemap(&output, &srcmap);
+      if source_map {
+        let (output, srcmap) = fink::ast::fmt::fmt_mapped_native(&ast);
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
       } else {
         println!("{}", fink::ast::fmt::fmt(&ast));
       }
@@ -116,13 +110,9 @@ fn main() {
       let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
       let cfg = fink::fmt::FmtConfig::default();
       let laid_out = fink::fmt::layout::layout(&ast, &cfg);
-      if sourcemap {
-        let (output, srcmap) = if embed_source {
-          fink::fmt::print::print_mapped_with_content(&laid_out, path, &src)
-        } else {
-          fink::fmt::print::print_mapped(&laid_out, path)
-        };
-        print_with_sourcemap(&output, &srcmap);
+      if source_map {
+        let (output, srcmap) = fink::fmt::print::print_mapped_native(&laid_out);
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
       } else {
         println!("{}", fink::fmt::print::print(&laid_out));
       }
@@ -146,15 +136,15 @@ fn main() {
         param_info: Some(&result.param_info),
         bind_kinds: Some(&bk),
       };
-      if lifted.as_ref().is_some_and(|v| v.is_none()) {
+      let lifted_flat = lifted.as_ref().is_some_and(|v| v.is_none());
+      if lifted_flat && source_map {
+        let (output, srcmap) = fink::passes::lifting::fmt::fmt_flat_mapped_native(&result.root, &ctx);
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
+      } else if lifted_flat {
         println!("{}", fink::passes::lifting::fmt::fmt_flat(&result.root, &ctx));
-      } else if sourcemap {
-        let (output, srcmap) = if embed_source {
-          fink::passes::cps::fmt::fmt_with_mapped_content(&result.root, &ctx, path, &src)
-        } else {
-          fink::passes::cps::fmt::fmt_with_mapped(&result.root, &ctx, path)
-        };
-        print_with_sourcemap(&output, &srcmap);
+      } else if source_map {
+        let (output, srcmap) = fink::passes::cps::fmt::fmt_with_mapped_native(&result.root, &ctx);
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
       } else {
         println!("{}", fink::passes::cps::fmt::fmt_with(&result.root, &ctx));
       }
@@ -169,8 +159,17 @@ fn main() {
         if let Some(level) = optimize {
           fink::passes::optimize_wasm(&mut wasm, level).unwrap_or_else(|e| die(&e));
         }
-        let wat = fink::passes::emit_wat(&wasm).unwrap_or_else(|e| die(&e));
-        println!("{wat}");
+        if source_map {
+          // Use the in-tree formatter so the native `# sm` stream is
+          // populated. `structural_locs` aren't threaded through
+          // `compile_package` yet (see the plumbing-design doc Stage 1),
+          // so pass an empty slice — we still get DWARF-derived marks.
+          let (wat, srcmap) = fink::passes::wasm::fmt::format_mapped_native(&wasm.binary, &[]);
+          println!("{wat}\n;; sm:{}", srcmap.encode_base64url());
+        } else {
+          let wat = fink::passes::emit_wat(&wasm).unwrap_or_else(|e| die(&e));
+          println!("{wat}");
+        }
       }
     }
 
@@ -253,6 +252,52 @@ fn main() {
       fink::debug(path).unwrap_or_else(|e| die(&e));
     }
 
+    "decode-sm" => {
+      // `src` is the input text (from file or stdin). Find the last
+      // `# sm:<b64>` or `;; sm:<b64>` line, decode, and print one row
+      // per mapping: index, output byte offset, a short preview of the
+      // output slice that mapping covers, and the source byte range.
+      //
+      // If a `--source <path>` was supplied (positional: second file after
+      // the main input), also print the source slice. For ad-hoc use on a
+      // blessed test file, pipe `fink cps --embed-sm foo.fnk | fink decode-sm - --source=foo.fnk`.
+      let source_ref = args.iter().find_map(|a| a.strip_prefix("--source=").map(|v| v.to_string()));
+      let source_text: Option<String> = source_ref.as_deref().map(|p| {
+        fs::read_to_string(p).unwrap_or_else(|e| die(&format!("{p}: {e}")))
+      });
+
+      let blob = src.lines().rev().find_map(|l| {
+        let t = l.trim_start();
+        t.strip_prefix("# sm:").or_else(|| t.strip_prefix(";; sm:"))
+      }).unwrap_or_else(|| die("error: no '# sm:' or ';; sm:' line found in input"));
+
+      let sm = fink::sourcemap::native::SourceMap::decode_base64url(blob.trim())
+        .unwrap_or_else(|e| die(&format!("decode: {e}")));
+
+      // Strip the blob line from the input so our `out` offsets line up with
+      // the generated output only.
+      let generated = strip_sm_line(&src);
+
+      for (i, m) in sm.mappings.iter().enumerate() {
+        let next_out = sm.mappings.get(i + 1).map(|n| n.out).unwrap_or(generated.len() as u32);
+        let out_preview = preview(&generated, m.out, next_out);
+        match m.src {
+          None => {
+            println!("{:4}: out@{:>5} {:<30}  | <no src>", i, m.out, out_preview);
+          }
+          Some(src_r) => {
+            let src_preview = source_text.as_deref()
+              .map(|s| preview(s, src_r.start, src_r.end))
+              .unwrap_or_default();
+            println!(
+              "{:4}: out@{:>5} {:<30}  | src[{}..{}] {}",
+              i, m.out, out_preview, src_r.start, src_r.end, src_preview
+            );
+          }
+        }
+      }
+    }
+
     _ => {
       eprintln!("unknown command: {cmd}");
       eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|run|dap> [options] <file>");
@@ -268,9 +313,29 @@ fn die(msg: &str) -> ! {
 
 
 
-fn print_with_sourcemap(output: &str, srcmap: &fink::sourcemap::SourceMap) {
-  let json = srcmap.to_json();
-  let b64 = fink::sourcemap::base64_encode(json.as_bytes());
-  println!("{output}");
-  println!("//# sourceMappingURL=data:application/json;base64,{b64}");
+/// Remove the trailing `# sm:<b64>` or `;; sm:<b64>` line from `s`, so
+/// byte offsets in the sourcemap align with the non-SM part of the
+/// output.
+fn strip_sm_line(s: &str) -> String {
+  let mut lines: Vec<&str> = s.lines().collect();
+  while let Some(last) = lines.last() {
+    let t = last.trim_start();
+    if t.starts_with("# sm:") || t.starts_with(";; sm:") || t.is_empty() {
+      lines.pop();
+    } else {
+      break;
+    }
+  }
+  lines.join("\n")
+}
+
+/// One-line preview of `text[start..end]`, quoted, max ~25 chars.
+fn preview(text: &str, start: u32, end: u32) -> String {
+  let s = start as usize;
+  let e = (end as usize).min(text.len()).max(s);
+  if s > text.len() { return format!("\"<bad range {start}..{end}>\""); }
+  let slice = &text[s..e];
+  let shortened: String = slice.chars().take(25).map(|c| if c == '\n' { '↵' } else { c }).collect();
+  let suffix = if slice.chars().count() > 25 { "…" } else { "" };
+  format!("\"{shortened}{suffix}\"")
 }

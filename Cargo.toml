@@ -46,7 +46,6 @@ wat-crate = { package = "wat", version = "1" }
 
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }
-pretty_assertions = "1"
 tempfile = "3"
 
 # Strip symbols from release binaries. Without this, each finkrt ships

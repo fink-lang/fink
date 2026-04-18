@@ -14,6 +14,7 @@ pub mod strings;
 #[cfg(feature = "run")]
 pub mod runtime;
 pub mod test_context;
+pub mod test_support;
 
 // Re-exports for convenience — short paths for foundational types.
 pub use passes::ast;

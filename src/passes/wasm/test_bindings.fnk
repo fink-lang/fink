@@ -28,7 +28,7 @@ test 'single binding export', fn:
       (export "foo" (global $foo))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vID0gMSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
+    ;; sm:CgAAEABGAHwAqAEANgA6AIoGAHABAAOYAQA
 
 
 
@@ -43,21 +43,21 @@ test 'let binding', fn:
       (memory 1)
 
       (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_1 (ref any))
+        (local $x_1 (ref any))
         (local $x_0 (ref any))
         (local $local_4 (ref any))
-        (local.set $v_1 (call $_list_head_any (local.get $_args)))
+        (local.set $x_1 (call $_list_head_any (local.get $_args)))
         (local.set $x_0 (struct.new $Num (f64.const 42)))
         (global.set $x (local.get $x_0))
         (local.set $local_4 (call $_list_nil))
         (local.set $local_4 (call $_list_prepend_any (local.get $x_0) (local.get $local_4)))
-        (return_call $__apply (local.get $local_4) (local.get $v_1))
+        (return_call $__apply (local.get $local_4) (local.get $x_1))
       )
       (global $x (mut (ref null any)) (ref.null any))
       (export "x" (global $x))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDQyXG54Il0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTs7Ozs7OztBOztBQUFBOztBIgp9
+    ;; sm:CgAAEABGAHwAqAEANgA2APwFAGwBAAGQAQA
 
 
 
@@ -92,7 +92,7 @@ test 'multiple let bindings used', fn:
       (export "y" (global $y))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9IDJcbnkgPSAzXG54ICsgeSJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7Ozs7Ozs7QTs7O0FBQUE7QUFDQTs7QSIKfQ==
+    ;; sm:DgAAEABGAHwAqAEANgA2ADgANgA4AMIFANABAQABNgEMAZABAA
 
 
 
@@ -162,7 +162,7 @@ test 'binding rhs is a call', fn:
       (export "add" (global $add))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkID0gZm4gYSwgYjogYSArIGJcbnggPSBhZGQgMSwgMiJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTtBO0E7QTs7Ozs7QTs7O0E7QTtBO0E7Ozs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7QTs7QTtBOzs7Ozs7O0E7OztBQUNBO0FBREE7O0EiCn0=
+    ;; sm:HAAAEABGAHwAqAEANgA4ADgAOgA4ADgAvAcA-AEANgA2ADYA2gYAoAEAOAA4ADYAsgcAoAEAOADGCADUAQEqATYBKQOYAQA
 
 
 
@@ -290,5 +290,5 @@ test 'top-level rec destructure then fn using binding', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "x")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsie3h9ID0ge3g6IDQyfVxuZm9vID0gZm4gYTogeCArIGEiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBO0E7QTs7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTtBOzs7Ozs7Ozs7O0E7O0E7QTs7OztBOztBO0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7OztBOztBO0E7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7Ozs7OztBOztBO0E7OztBOztBQUNBOzs7QSIKfQ==
+    ;; sm:OQAAEABGAHwAqAEANgA4ADgAOgA6ADgAOADuBACgAQA4ADgANgCwBgCgAQA4ADgANgA4ADgAOgDoCQCgAQA4AOgDAKIBADoAOAA4AKIIAKIBADoAOgA4ADoAvAgAoAEAOAA4ADYAOAA6AMgKAKABADgANgA4AIYMAKABADgA0gMAcAEcA-ABAA
 

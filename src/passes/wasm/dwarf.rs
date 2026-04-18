@@ -6,7 +6,7 @@
 // The DWARF is embedded in the WASM binary as custom sections with standard
 // names (.debug_info, etc.). wasmtime reads these natively for breakpoint
 // resolution and stepping. The custom WASM→WAT formatter reads them to
-// generate Source Map v3 for the playground.
+// emit native-form mappings via `MappedWriter::mark`.
 
 use gimli::write::{
   Address, AttributeValue, DwarfUnit, EndianVec,

@@ -21,7 +21,7 @@ test 'empty string literal', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDKBABiAA
 
 
 
@@ -45,7 +45,7 @@ test 'string literal', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7OztBOzs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgD2BACyAQA
 
 
 test 'string literal dedup', fn:
@@ -80,7 +80,7 @@ test 'string literal dedup', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCA9ICdoZWxsbydcbnkgPSAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7Ozs7Ozs7OztBOzs7QUFBQTtBQUNBOzs7QSIKfQ==
+    ;; sm:DQAAEABGAHwAqAEANgA2ADYANgDSBwDQAQEAATYBGAHgAQA
 
 
 test 'str templ two exprs', fn:
@@ -115,7 +115,7 @@ test 'str templ two exprs', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) " and ")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSA9IDFcbmIgPSAyXG4nJHthfSBhbmQgJHtifSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7Ozs7O0E7OztBQUFBO0FBQ0E7OztBIgp9
+    ;; sm:DgAAEABGAHwAqAEANgA2ADgANgA4AM4GANABAQABNgEMAeABAA
 
 
 test 'str tagged template', fn:
@@ -151,7 +151,7 @@ test 'str tagged template', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "1\n2")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJzFcXG4yJyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBO0E7QTs7OztBOztBO0E7QTs7Ozs7Ozs7QTs7O0EiCn0=
+    ;; sm:DgAAEABGAHwAqAEANgA4ADgA7gQAoAEAOAA2AMYHALABAA
 
 
 test 'str tagged template escape handling', fn:
@@ -215,7 +215,7 @@ test 'str tagged template escape handling', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vJ1xcblxcclxcdFxcZiR7YmFyfVxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTtBO0E7QTtBOzs7QTs7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7Ozs7O0E7O0E7QTtBO0E7Ozs7OztBOztBO0E7OztBOzs7QSIKfQ==
+    ;; sm:HQAAEABGAHwAqAEANgA4ADgAOAA4AO4EAKABADgAOADKBwCgAQA4ADYAOAC-BgCgAQA4ADYAOACMBgCgAQA4AJoDAO4BAA
 
 
 test 'str implicit formatting handling', fn:
@@ -240,7 +240,7 @@ test 'str implicit formatting handling', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "1\0a2\0a3")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiXCI6XG4gIDFcXG4yXG4gIDMiXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgD2BAC6AQA
 
 
 test 'str implicit formatting escapes', fn:
@@ -263,7 +263,7 @@ test 'str implicit formatting escapes', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "\0a\0d\09\0c\08\0b$'\\c3\a9\e8\aa\9e")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ1xcblxcclxcdFxcZlxcYlxcdlxcJFxcJ1xcXFxcXHhDM1xceEE5XFx1ezhBXzlFfSciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7Ozs7QTs7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgD4BADwAQA
 
 
 test 'empty string eq', fn:
@@ -283,7 +283,7 @@ test 'empty string eq', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJycgPT0gJyciXSwKICAibWFwcGluZ3MiOiAiQTtBO0E7O0E7O0E7QTs7O0E7O0EiCn0=
+    ;; sm:CAAAEABGAHwAqAEANgDeAgBiAA
 
 
 # TODO: move to ./test_patterns.fnk
@@ -455,7 +455,7 @@ test 'match empty string', fn:
       (export "main" (global $main))
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsibWFpbiA9IGZuIHg6XG4gIG1hdGNoIHg6XG4gICAgJyc6IDBcbiAgICBfOiAxIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7QTtBO0E7QTtBO0E7QTtBO0E7QTs7Ozs7OztBOztBO0E7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7Ozs7OztBOztBO0E7QTtBO0E7Ozs7Ozs7O0E7O0E7QTtBO0E7QTs7Ozs7Ozs7Ozs7O0E7O0E7QTs7Ozs7QTs7QTtBO0E7QTs7Ozs7Ozs7O0E7O0E7O0E7O0E7QTtBOzs7Ozs7OztBOztBO0E7QTtBOzs7Ozs7Ozs7O0E7OztBO0E7QTs7Ozs7Ozs7QTs7QUFBQTs7QSIKfQ==
+    ;; sm:QQAAEABGAHwAqAEANgA4ADoAOAA4ADgAOgA6ADgAOAA8AIIIAKABADgA6AQAogEAOgD0BQCiAQA6ADoAOADQCQCgAQA4ADgAOAA6AOgIAKABADYANgA2ADoA4A0AoAEAOADoBACgAQA4ADgAOACkCQCiAQCuAQCiAQA6ADoAhgsAoAEAOAA4ADoAjgwA-gEANgA2AM4IAHIBAAScAQA
 
 
 test 'empty string eq template', fn:
@@ -475,7 +475,7 @@ test 'empty string eq template', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJycgPT0gJyR7Jyd9JyJdLAogICJtYXBwaW5ncyI6ICJBO0E7QTs7QTs7QTtBOzs7QTs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgDeAgBiAA
 
 
 test 'str eq', fn:
@@ -496,7 +496,7 @@ test 'str eq', fn:
       (export "fink_module" (func $fink_module))
       (data (offset (i32.const 0)) "hello")
     )
-    ;;sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyA9PSAnaGVsbG8nIl0sCiAgIm1hcHBpbmdzIjogIkE7QTtBOztBOztBO0E7OztBOzs7QSIKfQ==
+    ;; sm:CAAAEABGAHwAqAEANgC2AwCyAQA
 
 
 
