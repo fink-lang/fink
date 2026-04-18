@@ -23,13 +23,17 @@ impl ByteRange {
   pub fn len(self) -> u32 { self.end.saturating_sub(self.start) }
 }
 
-/// One mapping entry.
+/// One mapping entry. Both positions are **byte offsets** in their
+/// respective texts. The mapping is a point event: it runs from `out`
+/// until the next mapping's `out` (or end of generated output).
 /// `src = None` means "this output span has no source origin" — emitted
 /// for synthetic tokens (keywords, wrappers) when the pass chose not to
 /// attribute them to any source location.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mapping {
-  pub out: ByteRange,
+  /// Byte offset in the generated output.
+  pub out: u32,
+  /// Byte range in the source (start/end).
   pub src: Option<ByteRange>,
 }
 
@@ -48,14 +52,13 @@ impl SourceMap {
     let mut out = Vec::with_capacity(self.mappings.len() * 4);
     write_uvarint(&mut out, self.mappings.len() as u64);
 
-    let mut prev_out_start: i64 = 0;
+    let mut prev_out: i64 = 0;
     let mut prev_src_start: i64 = 0;
 
     for m in &self.mappings {
-      let d_out_start = m.out.start as i64 - prev_out_start;
-      write_svarint(&mut out, d_out_start);
-      write_uvarint(&mut out, m.out.len() as u64);
-      prev_out_start = m.out.start as i64;
+      let d_out = m.out as i64 - prev_out;
+      write_svarint(&mut out, d_out);
+      prev_out = m.out as i64;
 
       match m.src {
         None => write_uvarint(&mut out, 0),
@@ -78,14 +81,13 @@ impl SourceMap {
     let n = read_uvarint(&mut r)?;
     let mut mappings = Vec::with_capacity(n as usize);
 
-    let mut prev_out_start: i64 = 0;
+    let mut prev_out: i64 = 0;
     let mut prev_src_start: i64 = 0;
 
     for _ in 0..n {
-      let d_out_start = read_svarint(&mut r)?;
-      let out_len = read_uvarint(&mut r)? as u32;
-      let out_start = (prev_out_start + d_out_start) as u32;
-      prev_out_start = out_start as i64;
+      let d_out = read_svarint(&mut r)?;
+      let out = (prev_out + d_out) as u32;
+      prev_out = out as i64;
 
       let has_src = read_uvarint(&mut r)?;
       let src = match has_src {
@@ -100,7 +102,7 @@ impl SourceMap {
         _ => return Err("invalid has_src tag"),
       };
 
-      mappings.push(Mapping { out: ByteRange::new(out_start, out_start + out_len), src });
+      mappings.push(Mapping { out, src });
     }
 
     if r.pos != r.buf.len() {
@@ -263,7 +265,7 @@ mod tests {
   fn single_mapping_roundtrip() {
     let mut sm = SourceMap::new();
     sm.push(Mapping {
-      out: ByteRange::new(0, 3),
+      out: 0,
       src: Some(ByteRange::new(10, 13)),
     });
     let b64 = sm.encode_base64url();
@@ -274,9 +276,9 @@ mod tests {
   #[test]
   fn unmapped_roundtrip() {
     let mut sm = SourceMap::new();
-    sm.push(Mapping { out: ByteRange::new(0, 4), src: None });
-    sm.push(Mapping { out: ByteRange::new(4, 7), src: Some(ByteRange::new(0, 3)) });
-    sm.push(Mapping { out: ByteRange::new(7, 9), src: None });
+    sm.push(Mapping { out: 0, src: None });
+    sm.push(Mapping { out: 4, src: Some(ByteRange::new(0, 3)) });
+    sm.push(Mapping { out: 7, src: None });
     let b64 = sm.encode_base64url();
     let back = SourceMap::decode_base64url(&b64).unwrap();
     assert_eq!(back, sm);
@@ -287,7 +289,7 @@ mod tests {
     let mut sm = SourceMap::new();
     for i in 0..50u32 {
       sm.push(Mapping {
-        out: ByteRange::new(i * 4, i * 4 + 3),
+        out: i * 4,
         src: if i % 3 == 0 { None } else { Some(ByteRange::new(i * 5, i * 5 + 2)) },
       });
     }
@@ -300,9 +302,9 @@ mod tests {
   fn backwards_src_range_roundtrip() {
     // src spans can go backwards between mappings (e.g. spec listings reorder).
     let mut sm = SourceMap::new();
-    sm.push(Mapping { out: ByteRange::new(0, 2), src: Some(ByteRange::new(100, 103)) });
-    sm.push(Mapping { out: ByteRange::new(2, 4), src: Some(ByteRange::new(10, 12)) });
-    sm.push(Mapping { out: ByteRange::new(4, 6), src: Some(ByteRange::new(50, 55)) });
+    sm.push(Mapping { out: 0, src: Some(ByteRange::new(100, 103)) });
+    sm.push(Mapping { out: 2, src: Some(ByteRange::new(10, 12)) });
+    sm.push(Mapping { out: 4, src: Some(ByteRange::new(50, 55)) });
     let b64 = sm.encode_base64url();
     let back = SourceMap::decode_base64url(&b64).unwrap();
     assert_eq!(back, sm);

@@ -10,6 +10,7 @@
 //   let (output, srcmap) = w.finish("input.fnk");
 
 use crate::lexer::Loc;
+use crate::sourcemap_native::{self, ByteRange};
 
 /// A single mapping entry: output position → optional source position.
 /// `src` is None for unmapped segments (synthetic text with no source origin).
@@ -21,11 +22,17 @@ struct Mapping {
 }
 
 /// Tracks output position and collects source mappings as text is written.
+///
+/// Collects two parallel mapping streams — the classic SMv3 line/col stream
+/// and a native-format byte-offset stream (see `crate::sourcemap_native`).
+/// Callers decide which to serialize.
 pub struct MappedWriter {
   out: String,
   line: u32,
   col: u32,
+  byte_pos: u32,
   mappings: Vec<Mapping>,
+  native_mappings: Vec<sourcemap_native::Mapping>,
 }
 
 impl Default for MappedWriter {
@@ -40,7 +47,9 @@ impl MappedWriter {
       out: String::new(),
       line: 0,
       col: 0,
+      byte_pos: 0,
       mappings: Vec::new(),
+      native_mappings: Vec::new(),
     }
   }
 
@@ -53,9 +62,12 @@ impl MappedWriter {
   /// Record a mapping from the current output position to the given source location.
   /// Line 0 is a sentinel meaning "no source origin" — emits an unmapped segment
   /// that stops the previous mapping from bleeding into structural text.
+  ///
+  /// Updates both the SMv3 and native mapping streams.
   pub fn mark(&mut self, loc: Loc) {
     if loc.start.line == 0 {
       self.mappings.push(Mapping { out_line: self.line, out_col: self.col, src: None });
+      self.native_mappings.push(sourcemap_native::Mapping { out: self.byte_pos, src: None });
       return;
     }
     self.mappings.push(Mapping {
@@ -64,9 +76,13 @@ impl MappedWriter {
       // Loc uses 1-indexed lines, sourcemaps use 0-indexed.
       src: Some((loc.start.line.saturating_sub(1), loc.start.col)),
     });
+    self.native_mappings.push(sourcemap_native::Mapping {
+      out: self.byte_pos,
+      src: Some(ByteRange::new(loc.start.idx, loc.end.idx)),
+    });
   }
 
-  /// Write a string to the output, updating line/col tracking.
+  /// Write a string to the output, updating line/col and byte tracking.
   pub fn push_str(&mut self, s: &str) {
     for ch in s.chars() {
       if ch == '\n' {
@@ -76,10 +92,11 @@ impl MappedWriter {
         self.col += ch.len_utf16() as u32;
       }
     }
+    self.byte_pos += s.len() as u32;
     self.out.push_str(s);
   }
 
-  /// Write a single character to the output, updating line/col tracking.
+  /// Write a single character to the output, updating line/col and byte tracking.
   pub fn push(&mut self, ch: char) {
     if ch == '\n' {
       self.line += 1;
@@ -87,6 +104,7 @@ impl MappedWriter {
     } else {
       self.col += ch.len_utf16() as u32;
     }
+    self.byte_pos += ch.len_utf8() as u32;
     self.out.push(ch);
   }
 
@@ -114,6 +132,14 @@ impl MappedWriter {
   /// Consume the writer and return only the output string, discarding mappings.
   pub fn finish_string(self) -> String {
     self.out
+  }
+
+  /// Consume the writer and produce the output string plus the native-form
+  /// source map. Parallel to `finish` but emits byte-offset mappings,
+  /// not SMv3 line/col.
+  pub fn finish_native(self) -> (String, sourcemap_native::SourceMap) {
+    let sm = sourcemap_native::SourceMap { mappings: self.native_mappings };
+    (self.out, sm)
   }
 }
 

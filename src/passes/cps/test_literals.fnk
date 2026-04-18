@@ -33,7 +33,7 @@ test 'int literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 42
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiNDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEiCn0=
+    # sm:BwAAAAAkABIACAAAABQBAAI
 
 test 'int literal with underscores', fn:
   expect cps_module ƒink:
@@ -41,7 +41,7 @@ test 'int literal with underscores', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 1000000
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMV8wMDBfMDAwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0UsQSxRQUFBIgp9
+    # sm:BwAAAAAkABIACAAAABQBAAk
 
 test 'negative int literal', fn:
   expect cps_module ƒink:
@@ -49,7 +49,7 @@ test 'negative int literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 -1000
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTFfMDAwIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0UsQSxRQUFBIgp9
+    # sm:BwAAAAAkABIACAAAABQBAAY
 
 test 'negative zero literal', fn:
   expect cps_module ƒink:
@@ -57,7 +57,7 @@ test 'negative zero literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 -0
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiLTAiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEiCn0=
+    # sm:BwAAAAAkABIACAAAABQBAAI
 
 test 'hex int literal', fn:
   expect cps_module ƒink:
@@ -65,7 +65,7 @@ test 'hex int literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 65535
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMHhGRl9GRiJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFLEEsUUFBQSIKfQ==
+    # sm:BwAAAAAkABIACAAAABQBAAc
 
 test 'octal int literal', fn:
   expect cps_module ƒink:
@@ -73,7 +73,7 @@ test 'octal int literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 63
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMG83XzciXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RSxBLFFBQUEiCn0=
+    # sm:BwAAAAAkABIACAAAABQBAAU
 
 test 'binary int literal', fn:
   expect cps_module ƒink:
@@ -81,7 +81,7 @@ test 'binary int literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 175
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMGJfMTAxMF8xMTExIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0UsQSxRQUFBIgp9
+    # sm:BwAAAAAkABIACAAAABQBAAw
 
 test 'float literal with exponent', fn:
   expect cps_module ƒink:
@@ -89,7 +89,7 @@ test 'float literal with exponent', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 15000000000
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS41ZTFfMCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFLEEsUUFBQSIKfQ==
+    # sm:BwAAAAAkABIACAAAABQBAAc
 
 test 'decimal literal', fn:
   expect cps_module ƒink:
@@ -97,7 +97,7 @@ test 'decimal literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 1.5d
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMS41XzBkIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0UsQSxRQUFBIgp9
+    # sm:BwAAAAAkABIACAAAABQBAAY
 
 
 test 'bool literal', fn:
@@ -106,7 +106,7 @@ test 'bool literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 true
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ1ZSJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFLEEsUUFBQSIKfQ==
+    # sm:BwAAAAAkABIACAAAABQBAAQ
 
 
 test 'string literal', fn:
@@ -115,5 +115,5 @@ test 'string literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 'hello'
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiJ2hlbGxvJyJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFLEEsUUFBQSxBLENBQUEsSyIKfQ==
+    # sm:CgAAAAAkABIACAAAABQBAAcAAAIBAAcKAA
 

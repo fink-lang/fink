@@ -11,7 +11,7 @@ test '·apply ident to literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, 42
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDQyIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQSxNLE8sRUFBSSIKfQ==
+    # sm:CQAAAAAkABIACAEABgABAAMSABIABAEIAg
 
 
 test '·apply ident to ident', fn:
@@ -20,7 +20,7 @@ test '·apply ident to ident', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅bar
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGJhciJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsTSxPLEVBQUkiCn0=
+    # sm:CQAAAAAkABIACAEABwABAAMSABIABAEIAw
 
 
 
@@ -34,7 +34,7 @@ test 'pipe two stages', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFFLEFBQUUsTSxPLEVBQUoiCn0=
+    # sm:CQAAAAAkABIACAEEAQABBAMSABIABAEHAQ
 
 
 test 'pipe three stages', fn:
@@ -45,7 +45,7 @@ test 'pipe three stages', fn:
       ·∅foo
         fn ·v_3: ·∅bar ·ƒret_0, ·v_3
         ·∅a
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYSB8IGZvbyB8IGJhciJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFFLEFBQUU7T0FBSixJLEVBQVEsQUFBRSxNLE8sRUFBVjtJQUFBIgp9
+    # sm:DgAAAAAkABIACAEEAQABBAMgAQcNCgAEARABAAEEAxIAEgAEARMNFAEAAQ
 
 
 
@@ -59,7 +59,7 @@ test 'try', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 ·∅foo
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsidHJ5IGZvbyJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFLEEsUUFBSSIKfQ==
+    # sm:BwAAAAAkABIACAAAABQBCAM
 
 
 
@@ -73,7 +73,7 @@ test 'simple call', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅add ·ƒret_0, 1, 2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDEsIDIiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE0sTyxFQUFJLEMsRUFBRyIKfQ==
+    # sm:CwAAAAAkABIACAEACAABAAMSABIABAEIAQIABAEGAQ
 
 
 test 'nested call', fn:
@@ -85,7 +85,7 @@ test 'nested call', fn:
         fn ·v_5: ·∅add ·ƒret_0, ·v_5, 1
         2
         3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIChtdWwgMiwgMyksIDEiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBSyxBQUFBO09BQUEsSSxFQUFMLEFBQUEsTSxPLEVBQUssSSxFQUFXO0lBQVA7SUFBRyIKfQ==
+    # sm:EQAAAAAkABIACAEKCAABAAMgAQAICgAEAQkRAAEAAxIAEgAEAQoICgAEARYBDAENAQwBBgE
 
 
 test 'postfix tag', fn:
@@ -96,7 +96,7 @@ test 'postfix tag', fn:
       ·∅foo
         fn ·v_4: ·∅tag ·ƒret_0, ·v_4
         ·∅bar
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiKGZvbyBiYXIpdGFnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUMsQUFBQTtPQUFBLEksRUFBRCxBQUFTLE0sTyxFQUFSO0lBQUkiCn0=
+    # sm:DgAAAAAkABIACAECBwABAAMgAQAHCgAEAQEMAAESAxIAEgAEAQ8HFAEIAw
 
 
 test 'call with spread', fn:
@@ -105,7 +105,7 @@ test 'call with spread', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a, ..·∅rest
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsTSxPLEVBQUksRyxFQUFLLEEsRUFBQSIKfQ==
+    # sm:DQAAAAAkABIACAEADQABAAMSABIABAEIAQwABAEKBAAABAEABA
 
 
 test 'simple pipe', fn:
@@ -114,7 +114,7 @@ test 'simple pipe', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅f ·ƒret_0, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBRSxBQUFFLEksTyxFQUFKIgp9
+    # sm:CQAAAAAkABIACAEEAQABBAEOABIABAEHAQ
 
 
 test 'pipe chain', fn:
@@ -125,7 +125,7 @@ test 'pipe chain', fn:
       ·∅f
         fn ·v_3: ·∅g ·ƒret_0, ·v_3
         ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGYgfCBnIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUUsQUFBRTtPQUFKLEksRUFBTSxBQUFFLEksTyxFQUFSO0lBQUEiCn0=
+    # sm:DgAAAAAkABIACAEEAQABBAEcAQcJCgAEAQwBAAEEAQ4AEgAEAQ8JFAEAAQ
 
 
 test 'partial apply', fn:
@@ -136,7 +136,7 @@ test 'partial apply', fn:
       ·fn
         fn ·ƒret_3, ·v_0: ·∅add ·ƒret_3, 3, ·v_0
         fn ·v_2: ·ƒret_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiYWRkIDMsID8iXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBO09BQUEsU0FBQSxJLEVBQUEsQUFBQSxNQUFBLE8sRUFBSSxDLEVBQUc7T0FBUCxJLEUsQSxRQUFBIgp9
+    # sm:FQAAAAAkABIACAEACAABAAgYAQAIFgEACAoABAEACAABAAMSAQAIEgAEAQgBAgAEAQYBGgENCAoABAAAABQBAAg
 
 
 test 'pipe with lambda — literal head', fn:
@@ -147,7 +147,7 @@ test 'pipe with lambda — literal head', fn:
       ·fn
         fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
         fn ·v_3: ·v_3 ·ƒret_1, 3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUcsSSxFQUFLLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO09BQUEsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
+    # sm:FwAAAAAkABIACAEICwABAAsYAQALFgEGAQoABAEKAQABAAEUAQMBCgAEAQgBAgAEARMLIgEACwoABAEDAQABBAsMABIABAEHAQ
 
 
 test 'pipe with lambda — ident head', fn:
@@ -158,7 +158,7 @@ test 'pipe with lambda — ident head', fn:
       ·fn
         fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGZuIGE6IGEgKyAyIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUcsSSxFQUFLLEFBQUEsU0FBRixJLEVBQUksQyxFQUFWO09BQUEsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
+    # sm:FwAAAAAkABIACAEICwABAAsYAQALFgEGAQoABAEKAQABAAEUAQMBCgAEAQgBAgAEARMLIgEACwoABAEDAQABBAsMABIABAEHAQ
 
 
 test 'pipe with partial', fn:
@@ -169,7 +169,7 @@ test 'pipe with partial', fn:
       ·fn
         fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
         fn ·v_3: ·v_3 ·ƒret_1, 3
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiMyB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUEsSSxFQUFBLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
+    # sm:FwAAAAAkABIACAEICAABAAgYAQAIFgEACAoABAEACAABAAMSAQAIEgAEAQgBAgAEAQYBGgENCAoABAEDAQABBAgMABIABAEHAQ
 
 
 test 'pipe with partial — ident head', fn:
@@ -180,7 +180,7 @@ test 'pipe with partial — ident head', fn:
       ·fn
         fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsieCB8IGFkZCAyLCA/Il0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUksQUFBQTtPQUFBLFNBQUEsSSxFQUFBLEFBQUEsTUFBQSxPLEVBQUksQyxFQUFHO09BQVAsSSxFQUFGLEFBQUUsSyxPLEVBQUoiCn0=
+    # sm:FwAAAAAkABIACAEICAABAAgYAQAIFgEACAoABAEACAABAAMSAQAIEgAEAQgBAgAEAQYBGgENCAoABAEDAQABBAgMABIABAEHAQ
 
 
 
@@ -197,7 +197,7 @@ test 'varargs — call site spreads iterable', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, 1, ..·∅items
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIDEsIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE0sTyxFQUFJLEMsRUFBSyxBLEVBQUEiCn0=
+    # sm:DQAAAAAkABIACAEADgABAAMSABIABAEIAQIABAEKBQAABAEABQ
 
 
 test 'call with spread — trailing iterable', fn:
@@ -206,7 +206,7 @@ test 'call with spread — trailing iterable', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a, ..·∅rest
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIGEsIC4ucmVzdCJdLAogICJtYXBwaW5ncyI6ICJBLEEsZ0IsTztFQUFBLEFBQUEsTSxPLEVBQUksRyxFQUFLLEEsRUFBQSIKfQ==
+    # sm:DQAAAAAkABIACAEADQABAAMSABIABAEIAQwABAEKBAAABAEABA
 
 
 test 'call with spread — spread only', fn:
@@ -215,7 +215,7 @@ test 'call with spread — spread only', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ..·∅items
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm9vIC4uaXRlbXMiXSwKICAibWFwcGluZ3MiOiAiQSxBLGdCLE87RUFBQSxBQUFBLE0sTyxFQUFNLEEsRUFBQSIKfQ==
+    # sm:CwAAAAAkABIACAEACwABAAMSABIABAEMBQAABAEABQ
 
 
 test 'call with spread — passes through from varargs fn', fn:
@@ -226,6 +226,6 @@ test 'call with spread — passes through from varargs fn', fn:
       ·fn
         fn ·ƒret_3, ..·args_0: ·∅foo ·ƒret_3, ..·args_0
         fn ·v_2: ·ƒret_1 ·v_2
-    #sourcemaps:ewogICJ2ZXJzaW9uIjogMywKICAic291cmNlcyI6IFsidGVzdCJdLAogICJzb3VyY2VzQ29udGVudCI6IFsiZm4gLi5hcmdzOiBmb28gLi5hcmdzIl0sCiAgIm1hcHBpbmdzIjogIkEsQSxnQixPO0VBQUEsQUFBQTtPQUFBLFNBQUssQSxFQUFBLE8sRUFBTSxBQUFBLE1BQVgsTyxFQUFpQixBLEVBQUE7T0FBakIsSSxFLEEsUUFBQSIKfQ==
+    # sm:FwAAAAAkABIACAEAFQABABUYAQAVFgEKBAAABAEABBAABAEMCgABAAMSARUVEgAEASIEAAAEAQAEIAEhFQoABAAAABQBABU
 
 

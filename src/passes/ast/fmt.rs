@@ -48,6 +48,13 @@ pub fn fmt_mapped_with_content(ast: &Ast<'_>, source_name: &str, content: &str) 
   out.finish_with_content(source_name, content)
 }
 
+/// Format an AST back to Fink source, returning source + native-form source map.
+pub fn fmt_mapped_native(ast: &Ast<'_>) -> (String, crate::sourcemap_native::SourceMap) {
+  let mut out = MappedWriter::new();
+  fmt_node(ast, ast.root, &mut out, 0);
+  out.finish_native()
+}
+
 /// Emit a sentinel mark (line 0) to stop the previous mapping from bleeding
 /// into structural text (separators, keywords) that has no source origin.
 fn stop_mark(out: &mut MappedWriter) {

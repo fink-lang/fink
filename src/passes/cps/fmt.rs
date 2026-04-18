@@ -74,6 +74,12 @@ pub fn fmt_with_mapped_content(expr: &Expr, ctx: &Ctx<'_, '_>, source_name: &str
   ast::fmt::fmt_mapped_with_content(&ast, source_name, content)
 }
 
+/// Format with native-form source map emission.
+pub fn fmt_with_mapped_native(expr: &Expr, ctx: &Ctx<'_, '_>) -> (String, crate::sourcemap_native::SourceMap) {
+  let ast = build_ast(expr, ctx);
+  ast::fmt::fmt_mapped_native(&ast)
+}
+
 /// Format without origin map — falls back to string-based category detection.
 /// Used by tests that don't yet thread the prop graphs.
 pub fn fmt(expr: &Expr) -> String {

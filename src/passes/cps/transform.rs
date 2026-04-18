@@ -2979,10 +2979,10 @@ mod module_tests {
         let cps = crate::passes::lower(&desugared);
         let bk = crate::passes::cps::ir::collect_bind_kinds(&cps.result.root);
         let ctx = Ctx { origin: &cps.result.origin, ast: &desugared.ast, captures: None, param_info: None, bind_kinds: Some(&bk) };
-        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_content(&cps.result.root, &ctx, "test", src);
-        let json = srcmap.to_json();
-        let b64 = crate::sourcemap::base64_encode(json.as_bytes());
-        format!("{output}\n#sourcemaps:{b64}")
+        let (output, srcmap) = crate::passes::cps::fmt::fmt_with_mapped_native(&cps.result.root, &ctx);
+        let _ = src;
+        let b64 = srcmap.encode_base64url();
+        format!("{output}\n# sm:{b64}")
       }
       Err(e) => format!("ERROR: {e}"),
     }
