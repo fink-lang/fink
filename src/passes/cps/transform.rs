@@ -76,7 +76,15 @@ impl<'scope, 'src> Gen<'scope, 'src> {
     }
 
     // Allocate the module-level cont (·ƒ_halt) — first id after the pre-allocated range.
-    let cont_id: CpsId = origin.push(None);
+    // Anchor it to the module body's last statement: the `·ƒret_N` token
+    // represents "pass this value back to the caller", and the value in
+    // question is whatever the last expression evaluates to. Fall back
+    // to the Module node itself if the body is empty.
+    let ret_origin = match &ast.nodes.get(ast.root).kind {
+      NodeKind::Module { exprs, .. } => exprs.items.last().copied().unwrap_or(ast.root),
+      _ => ast.root,
+    };
+    let cont_id: CpsId = origin.push(Some(ret_origin));
     Gen { ast, origin, bind_to_cps, bind_site_to_cps, resolution: &scope.resolution, binds: &scope.binds, cont: cont_id }
   }
 
@@ -180,16 +188,17 @@ fn lit_val(g: &mut Gen, lit: Lit, origin: Option<AstId>) -> Val {
 
 
 /// Build an explicit tail call: `App(ContRef(cont_id), [val])`.
-/// Replaces the implicit `Cont::Ref` shortcut so the val's origin is preserved in the propgraph.
-fn tail_app(g: &mut Gen, cont_id: CpsId, val: Val, _origin: Option<AstId>) -> Expr {
-  // ContRef val gets no origin — it references the cont param, whose origin
-  // is already in the propgraph under cont_id. The App expr gets no origin
-  // either — it's a synthetic tail call, not a user-written expression.
-  let cont_val = g.val(ValKind::ContRef(cont_id), None);
+///
+/// Both the ContRef val and the App expr are synthesised here; their
+/// origin is the incoming `origin` (the expression whose value is being
+/// returned). That way source maps see the `·ƒret_N val` call anchored
+/// to the returned expression, not to the cont's declaration site.
+fn tail_app(g: &mut Gen, cont_id: CpsId, val: Val, origin: Option<AstId>) -> Expr {
+  let cont_val = g.val(ValKind::ContRef(cont_id), origin);
   g.expr(ExprKind::App {
     func: Callable::Val(cont_val),
     args: vec![Arg::Val(val)],
-  }, None)
+  }, origin)
 }
 
 /// Wrap a bare value as the tail of a function body.
@@ -1771,13 +1780,19 @@ pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeRe
     collect_module_imports(ast, exprs)
   };
 
+  // Origin for module-level synthetic CPS nodes: the Module AST node itself.
+  // Its loc covers the whole source, which is what `·ƒink_module` should
+  // anchor to. Without this the root App is origin-less and renders as
+  // unmapped in source-map output.
+  let module_origin = Some(ast.root);
+
   let body = if exprs.is_empty() {
     // Empty module: call ƒret with no args.
-    let cont_val = g.val(ValKind::ContRef(cont_id), None);
+    let cont_val = g.val(ValKind::ContRef(cont_id), module_origin);
     g.expr(ExprKind::App {
       func: Callable::Val(cont_val),
       args: vec![],
-    }, None)
+    }, module_origin)
   } else {
     // Lower the module body as a sequence — same as any function body.
     let body = lower_seq_with_tail(&mut g, exprs, Cont::Ref(cont_id));
@@ -1795,7 +1810,7 @@ pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeRe
       args: vec![fret_bind],
       body: Box::new(body),
     })],
-  }, None);
+  }, module_origin);
 
   CpsResult { root, origin: g.origin, bind_to_cps: g.bind_to_cps, synth_alias: crate::propgraph::PropGraph::new(), param_info: crate::propgraph::PropGraph::new(), module_locals, module_imports }
 }
@@ -1837,12 +1852,12 @@ fn inject_pub_calls(
           }
           Cont::Ref(cont_id) => {
             // Cont is a direct ref — wrap in ƒpub then forward.
-            let cont_val = g.val(ValKind::ContRef(cont_id), None);
+            let cont_val = g.val(ValKind::ContRef(cont_id), origin);
             let fwd_val = g.val(ValKind::Ref(Ref::Synth(name.id)), origin);
             let forward = g.expr(ExprKind::App {
               func: Callable::Val(cont_val),
               args: vec![Arg::Val(fwd_val)],
-            }, None);
+            }, origin);
             let pub_app = g.expr(ExprKind::App {
               func: Callable::BuiltIn(BuiltIn::Pub),
               args: vec![

@@ -11,7 +11,7 @@ test 'str templ', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·str_fmt 'hello ', ·∅name, ·ƒret_0
-    # sm:DgAAAAAkABIACAEADwABAA8UAQIGAAACAQAGDAACAAQBEAQSAAQA
+    # sm:DgABAA8AAQAPJAEADxIACAEADwABAA8UAQIGAAACAQAGDAACAAQBEAQSAAQBEQ8
 
 
 test 'str templ two exprs', fn:
@@ -20,7 +20,7 @@ test 'str templ two exprs', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·str_fmt ·∅a, ' and ', ·∅b, ·ƒret_0
-    # sm:EAAAAAAkABIACAEADwABAA8UAQYBDAAEAQQFAAACAQAFCgACAAQBDgEMAAQA
+    # sm:EAABAA8AAQAPJAEADxIACAEADwABAA8UAQYBDAAEAQQFAAACAQAFCgACAAQBDgEMAAQBFw8
 
 
 test 'str tagged template', fn:
@@ -31,7 +31,7 @@ test 'str tagged template', fn:
     ·ƒink_module fn ·ƒret_0:
       ·seq_prepend '1⧵n2␊3', [], fn ·v_4:
         ·∅foo ·ƒret_0, ..·v_4
-    # sm:GAAAAAAkABIACAEADQABAA0cAQgIAAACAQAIFAACAAQBBw0AAAIAAgAKAQANCgAMAQANAAEAAxIAEgAEAQANAAAEAQAN
+    # sm:GAABAA0AAQANJAEADRIACAEADQABAA0cAQgIAAACAQAIFAACAAQBBw0AAAIAAgAKAQANCgAMAQANAAEAAxIBAA0SAAQBAA0AAAQBAA0
 
 
 test 'str tagged template escape handling', fn:
@@ -43,7 +43,7 @@ test 'str tagged template escape handling', fn:
         ·seq_prepend ·∅bar, ·v_4, fn ·v_7:
           ·seq_prepend '⧵n⧵r⧵t⧵f', ·v_7, fn ·v_10:
             ·∅foo ·ƒret_0, ..·v_10
-    # sm:KwAAAAAkABIACAEALgABAC4cASQbAAACAQAbYgACAAQBIy4AAAIAAgAKAQAuCgAMAQAuAAEALhwBHAMQAAQBGy4KAAoBAC4KABABAC4AAQAuHAEICAAAAgEACCAAAgAEAQcuCgAKAQAuDAAUAQAuAAEAAxIAEgAEAQAuAAAEAQAu
+    # sm:KwABAC4AAQAuJAEALhIACAEALgABAC4cASQbAAACAQAbYgACAAQBIy4AAAIAAgAKAQAuCgAMAQAuAAEALhwBHAMQAAQBGy4KAAoBAC4KABABAC4AAQAuHAEICAAAAgEACCAAAgAEAQcuCgAKAQAuDAAUAQAuAAEAAxIBAC4SAAQBAC4AAAQBAC4
 
 
 test 'str implicit formatting handling', fn:
@@ -53,7 +53,7 @@ test 'str implicit formatting handling', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 '1␊2␊3'
-    # sm:CgAAAAAkABIACAAAABQBAAoAAAIBAAoSAA
+    # sm:CgABAAoAAQAKJAEAChIACAEACgABAAoUAQAKAAACAQAKEgA
 
 
 test 'str implicit formatting escapes', fn:
@@ -62,7 +62,7 @@ test 'str implicit formatting escapes', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 '␊␍␉␌␈␋＄′⧵é語'
-    # sm:CgAAAAAkABIACAAAABQBACUAAAIBACVAAA
+    # sm:CgABACUAAQAlJAEAJRIACAEAJQABACUUAQAlAAACAQAlQAA
 
 
 test 'str templ escape handling', fn:
@@ -71,7 +71,7 @@ test 'str templ escape handling', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·str_fmt '␊␍␉␌', ·∅bar, '␈␋＄′⧵é語', ·ƒret_0
-    # sm:EwAAAAAkABIACAEAKwABACsUAQIIAAACAQAIGAACAAQBFAMQAAQBCBsAAAIBABsoAAIABAA
+    # sm:EwABACsAAQArJAEAKxIACAEAKwABACsUAQIIAAACAQAIGAACAAQBFAMQAAQBCBsAAAIBABsoAAIABAEdKw
 
 
 test 'str templ implicit formatting handling', fn:
@@ -81,6 +81,6 @@ test 'str templ implicit formatting handling', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·str_fmt '1␊', ·∅bar, '␊3', ·ƒret_0
-    # sm:EwAAAAAkABIACAEADwABAA8UAQIDAAACAQADCAACAAQBCgMQAAQBCAQAAAIBAAQIAAIABAA
+    # sm:EwABAA8AAQAPJAEADxIACAEADwABAA8UAQIDAAACAQADCAACAAQBCgMQAAQBCAQAAAIBAAQIAAIABAETDw
 
 

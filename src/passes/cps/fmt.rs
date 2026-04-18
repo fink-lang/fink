@@ -176,7 +176,7 @@ fn build_val(b: &mut AstBuilder<'static>, v: &Val, ctx: &Ctx<'_, '_>) -> AstId {
     ValKind::Lit(lit) => build_lit(b, lit, loc),
     ValKind::Ref(Ref::Synth(bind_id)) => b_ident(b, &render_synth_name(*bind_id, ctx), loc),
     ValKind::Ref(Ref::Unresolved(_)) => b_ident(b, &render_unresolved_name(v.id, ctx), loc),
-    ValKind::ContRef(id) => b_ident(b, &render_synth_fallback(*id, ctx), ctx_loc(*id, ctx)),
+    ValKind::ContRef(id) => b_ident(b, &render_synth_fallback(*id, ctx), loc),
     ValKind::BuiltIn(op) => {
       // For builtin ops whose origin is an InfixOp, use op.loc (e.g. `>` not `a > 1`).
       let op_loc = ctx.ast_node(v.id)
@@ -376,7 +376,11 @@ fn render_builtin(op: &BuiltIn) -> String {
 /// Render a `Cont` as a result-binding lambda for use in `·apply` / `·match_*` etc.
 /// - `Cont::Expr(bind, body)` → `fn ·v_N: body`  (N from bind.id)
 /// - `Cont::Ref(cont_id)` → `fn ·v_N: ·v_cont ·v_N`  (cosmetic lambda sugar for the tail call)
-fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>) -> AstId {
+///
+/// `site_loc` is the source location of the surrounding call — used as
+/// the anchor for a `Cont::Ref` render (the cont itself is a synthetic
+/// token; its semantic position is the tail of the call being built).
+fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>, site_loc: Loc) -> AstId {
   match cont {
     Cont::Expr { args, body } => {
       // Cont params are synthetic bindings — use their CpsId loc if available.
@@ -391,7 +395,7 @@ fn build_cont(b: &mut AstBuilder<'static>, cont: &Cont, ctx: &Ctx<'_, '_>) -> As
       b_fn(b, pats, vec![body_id], fn_loc)
     }
     Cont::Ref(cont_id) => {
-      b_ident(b, &render_synth_fallback(*cont_id, ctx), ctx_loc(*cont_id, ctx))
+      b_ident(b, &render_synth_fallback(*cont_id, ctx), site_loc)
     }
   }
 }
@@ -509,7 +513,7 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
           let n = build_val(b, v, ctx);
           b_spread(b, n, ctx_loc(v.id, ctx))
         }
-        Arg::Cont(c) => build_cont(b, c, ctx),
+        Arg::Cont(c) => build_cont(b, c, ctx, expr_loc),
         Arg::Expr(e) => build_expr(b, e, ctx),
       }).collect();
       b_apply(b, func_id, arg_ids, call_loc)

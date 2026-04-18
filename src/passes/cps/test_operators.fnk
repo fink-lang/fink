@@ -11,7 +11,7 @@ test 'infix add', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_plus ·∅a, ·∅b, ·ƒret_0
-    # sm:CwAAAAAkABIACAEEAQABAAEUAQMBDAAEAQgBDAAEAA
+    # sm:CwABAAUAAQAFJAEABRIACAEEAQABAAEUAQMBDAAEAQgBDAAEAQcF
 
 
 test 'infix literal', fn:
@@ -20,7 +20,7 @@ test 'infix literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_plus ·∅a, 1, ·ƒret_0
-    # sm:CwAAAAAkABIACAEEAQABAAEUAQMBDAAEAQgBAgAEAA
+    # sm:CwABAAUAAQAFJAEABRIACAEEAQABAAEUAQMBDAAEAQgBAgAEAQcF
 
 
 
@@ -34,7 +34,7 @@ test 'unary not', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_not ·∅x, ·ƒret_0
-    # sm:CQAAAAAkABIACAEAAwABAAMSAQgBDAAEAA
+    # sm:CQABAAUAAQAFJAEABRIACAEAAwABAAMSAQgBDAAEAQcF
 
 
 test 'unary minus', fn:
@@ -43,7 +43,7 @@ test 'unary minus', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_minus ·∅x, ·ƒret_0
-    # sm:CQAAAAAkABIACAEAAQABAAEWAQIBDAAEAA
+    # sm:CQABAAIAAQACJAEAAhIACAEAAQABAAEWAQIBDAAEAQEC
 
 ---
 chained comparisons
@@ -57,7 +57,7 @@ test 'chained cmp', fn:
       ·op_lt ·∅a, ·∅b, fn ·v_4:
         ·op_lt ·∅b, ·∅c, fn ·v_6:
           ·op_and ·v_4, ·v_6, ·ƒret_0
-    # sm:GwAAAAAkABIACAEACQABAAkQAQABDAAEAQgBDAAKAQcJCgAMAQAJAAEACRABCAEMAAQBCAEMAAoBDwkKABABAAkAAQAJEgEACQoABAEACQoABAA
+    # sm:GwABAAkAAQAJJAEACRIACAEACQABAAkQAQABDAAEAQgBDAAKAQcJCgAMAQAJAAEACRABCAEMAAQBCAEMAAoBDwkKABABAAkAAQAJEgEACQoABAEACQoABAEACQ
 
 ---
 range
@@ -69,7 +69,7 @@ test 'range excl', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_rngex 0, 10, ·ƒret_0
-    # sm:CwAAAAAkABIACAECAgABAAIWAQEBAgAEAQYCBAAEAA
+    # sm:CwABAAUAAQAFJAEABRIACAECAgABAAIWAQEBAgAEAQYCBAAEAQUF
 
 
 test 'range incl', fn:
@@ -78,5 +78,5 @@ test 'range incl', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_rngin 0, 10, ·ƒret_0
-    # sm:CwAAAAAkABIACAECAwABAAMWAQEBAgAEAQgCBAAEAA
+    # sm:CwABAAYAAQAGJAEABhIACAECAwABAAMWAQEBAgAEAQgCBAAEAQcG
 
