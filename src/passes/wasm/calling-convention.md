@@ -1,5 +1,33 @@
 # Calling Convention — Captures + Args + Optional Cont
 
+## Background
+
+Fink supports both variadic params (`fn a, ..rest:`) and call-site spread
+(`f a, ..b, c`). The four permutations all have to work — varargs and
+fixed-arity callees, with and without spread at the call site:
+
+```fink
+f = fn a, ..rest:       # varargs callee
+f a, b                  # rest = [b]
+f a, ..b, c             # rest = [..b, c]
+
+g = fn a, b:            # fixed-arity callee
+g a, b                  # normal
+g a, ..b, c             # spread unpacked, must yield exactly 2 total args
+```
+
+Neither the caller nor the callee can know the other's shape at compile
+time in general — closures, higher-order functions, and callbacks all
+defer the resolution. Lifting can wrap any function (including
+continuations and matcher funcs) in a `$Closure` when it captures
+variables, so all functions must share a small, fixed set of WASM
+signatures rather than one signature per arity.
+
+Hence the design below: args travel as a single cons-cell `$List` so
+varargs/spread fall out for free, and the cont (when present) rides
+alongside as a separate WASM param so a closure can be invoked uniformly
+without knowing whether the callee expected a cont or not.
+
 ## Overview
 
 Every function takes `(captures, args)` or `(captures, args, cont)`:
@@ -67,15 +95,38 @@ Two apply functions:
   ...)
 ```
 
-## Why not unified $Fn2?
+## Rejected alternatives
 
-Unified $Fn2 (cont always in args list) was attempted but doesn't work because:
-- The caller doesn't always know whether the callee is CpsFunction or CpsClosure
-- After lifting, CpsFunction closures go through `_apply`/`_apply_cont` dispatch
-- `_apply_cont` needs runtime type checking (`ref.test $Fn3`) to know whether to
-  pass cont as a separate param or prepend it to the args list
-- Without this distinction, CpsClosure callees would see an unexpected cont at
-  the head of their args list
+### Unified `$Fn2` — cont always in args list
+
+Folding the cont into the args list (one signature instead of two) was
+attempted and rejected:
+
+- The caller doesn't always know whether the callee is CpsFunction or CpsClosure.
+- After lifting, CpsFunction closures go through `_apply` / `_apply_cont` dispatch.
+- `_apply_cont` would need runtime type checking (`ref.test $Fn3`) to decide
+  whether to pass cont as a separate param or prepend it to the args list.
+- Without the distinction, CpsClosure callees would see an unexpected cont at
+  the head of their args list.
+
+### Universal `$Fn(ref $VarArgs)` — single signature, everything in an array
+
+A more aggressive variant was sketched: collapse all functions to one
+signature `$Fn(ref $VarArgs)` where `$VarArgs` is a heterogeneous array
+holding captures + value args + cont. Rejected for two reasons:
+
+- Every function call would allocate a fresh `$VarArgs` array, and every
+  function entry would unpack its params via `array.get`. The cons-cell
+  `$List` we use instead is the same data structure as user-level
+  sequences, so it composes for free with spread and varargs.
+- Closure dispatch would have to allocate a *second* array (captures
+  prepended to args). The current `$Closure(funcref, $Captures)` shape
+  keeps captures in a fixed struct accessed by field index, no
+  per-call allocation.
+
+The "no per-call allocation for captures" + "args list is the same type
+users already work with" wins outweighed the appeal of a single
+signature.
 
 ## Call Site (emitter)
 
@@ -109,7 +160,9 @@ For CpsClosure (`$Fn2`), same but no cont param.
 
 ## Spread
 
-`fn ..rest:` → spread takes the whole args list. No cont mixed in.
+### Callee side: `fn ..rest:`
+
+`fn ..rest:` takes the whole args list. No cont mixed in.
 
 ```wat
 ;; fn {k}, [..items], cont:
@@ -118,6 +171,24 @@ For CpsClosure (`$Fn2`), same but no cont param.
   (local.set $items (local.get $args))
   ...)
 ```
+
+For mixed `fn a, ..rest:` the emitter pops the leading fixed params off
+the head of the list and binds `rest` to the tail.
+
+### Call site: `f a, ..b, c`
+
+The emitter builds the args list right-to-left via `list_prepend`. For
+spread arguments (`..b`), it splices in `b`'s elements via `list_concat`
+instead of prepending the value as a single element. The result is a
+single `(ref $List)` regardless of how many spread/normal args appeared.
+
+### Tagged templates
+
+Tagged templates fall out for free. `tag'hello ${x} world'` compiles to
+a call where the args list is `['hello ', x, ' world']` and the tag
+function is itself a `fn ..parts:` — the parts (raw string segments and
+interpolated values, interleaved) arrive as a single sequence the
+function can pattern-match or iterate over.
 
 ## Closure Construction
 
