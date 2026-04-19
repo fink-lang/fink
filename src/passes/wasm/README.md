@@ -149,9 +149,3 @@ The set of `$ClosureN` types to emit is determined by scanning for
 helpers is determined by `Callable::Val` call site arities (already
 tracked by `scan_call_arities`).
 
-## Notes
-
-- `varargs-calling-convention.md` is a sibling holding the rejected
-  unified-array design plus still-load-bearing spread / `$SpreadArgs`
-  content. Phase 1c folds that content into `calling-convention.md` and
-  deletes the standalone file.
