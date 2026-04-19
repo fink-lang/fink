@@ -17,7 +17,8 @@
 
 pub mod fmt;
 
-use crate::passes::cps::ir::CpsId;
+use crate::ast::NodeKind;
+use crate::passes::cps::ir::{Arg, Bind, Callable, Cont, CpsId, Expr, ExprKind, Val, ValKind};
 use crate::propgraph::PropGraph;
 
 /// Output of the debug-marker pass.
@@ -42,31 +43,117 @@ pub struct StopInfo {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StopKind {
-  /// Bootstrap policy — mark every CpsId that has an AST origin.
-  /// Saturated: way too many stops for a real debugger. Serves to
-  /// exercise the harness + extension decoration end-to-end. Real
-  /// policy commits will carve this down by AST node kind.
-  Any,
+  /// The CPS node's AST origin is an "expression-level" construct the
+  /// user would reasonably stop at — binding, call, comparison, branch.
+  Expr,
+  /// The CPS node is an App to a Ret-kind continuation — the moment a
+  /// value flows back to a caller / the host. Used so bare-literal
+  /// returns still get a stop even though the literal itself is skipped.
+  Return,
 }
 
 /// Compute debug marks for a lifted CPS result.
 ///
-/// Bootstrap policy: any CpsId with an AST origin whose `Loc` is
-/// source-bearing (`start.line > 0`) becomes a stop. That's a
-/// deliberately crude starting point so the harness emits visible
-/// output we can review in the extension; later commits replace this
-/// with a real policy keyed on AST node kind.
-pub fn analyse(lifted: &crate::passes::LiftedCps, desugared: &crate::passes::DesugaredAst<'_>) -> DebugMarks {
+/// First policy cut:
+///
+/// 1. CpsIds whose AST origin is an expression-level node (Bind, Apply,
+///    InfixOp, UnaryOp, ChainedCmp, If, Member, Try, Pipe) become
+///    `StopKind::Expr`.
+/// 2. CpsIds whose `ExprKind::App` callable is a `Cont::Ref` (or
+///    equivalent `ValKind::ContRef`) to a `Bind::Cont(ContKind::Ret)`
+///    become `StopKind::Return`. Catches bare-literal statements where
+///    the value flows directly into the enclosing Ret cont.
+///
+/// Rule (2) wins if both apply — "returning with this value" is more
+/// user-meaningful than "this is some expression node."
+///
+/// This is deliberately a starting point; we'll carve further once
+/// we see it in the extension.
+pub fn analyse(
+  lifted: &crate::passes::LiftedCps,
+  desugared: &crate::passes::DesugaredAst<'_>,
+) -> DebugMarks {
   let size = lifted.result.origin.len();
   let mut stops: PropGraph<CpsId, Option<StopInfo>> = PropGraph::with_size(size, None);
+
+  // Rule (1): scan all CpsIds, mark by AST origin kind.
   for i in 0..size {
     let id = CpsId(i as u32);
     let Some(Some(ast_id)) = lifted.result.origin.try_get(id) else { continue };
-    let loc = desugared.ast.nodes.get(*ast_id).loc;
-    if loc.start.line == 0 { continue }
-    stops.set(id, Some(StopInfo { kind: StopKind::Any }));
+    let node = desugared.ast.nodes.get(*ast_id);
+    if node.loc.start.line == 0 { continue }
+    if is_expr_stop_kind(&node.kind) {
+      stops.set(id, Some(StopInfo { kind: StopKind::Expr }));
+    }
   }
+
+  // Rule (2): walk the CPS tree, mark App nodes whose callable is a
+  // Ret-kind cont ref. Overrides rule (1) where both match.
+  let bind_kinds = crate::passes::cps::ir::collect_bind_kinds(&lifted.result.root);
+  let cont_is_ret = |bind_id: CpsId| -> bool {
+    matches!(
+      bind_kinds.try_get(bind_id).and_then(|b| *b),
+      Some(Bind::Cont(crate::passes::cps::ir::ContKind::Ret))
+    )
+  };
+  walk_exprs(&lifted.result.root, &mut |expr| {
+    if let ExprKind::App { func, .. } = &expr.kind
+      && let Callable::Val(Val { kind: ValKind::ContRef(cont_id), .. }) = func
+      && cont_is_ret(*cont_id)
+    {
+      stops.set(expr.id, Some(StopInfo { kind: StopKind::Return }));
+    }
+  });
+
   DebugMarks { stops }
+}
+
+fn is_expr_stop_kind(kind: &NodeKind<'_>) -> bool {
+  matches!(
+    kind,
+    NodeKind::Bind { .. }
+      | NodeKind::Apply { .. }
+      | NodeKind::InfixOp { .. }
+      | NodeKind::UnaryOp { .. }
+      | NodeKind::ChainedCmp(_)
+      | NodeKind::Match { .. }
+      | NodeKind::Member { .. }
+      | NodeKind::Try(_)
+      | NodeKind::Pipe(_)
+  )
+}
+
+/// Walk every `Expr` node in the CPS tree, invoking `visit` on each.
+/// Recurses through LetFn/LetVal conts, If branches, Cont::Expr bodies,
+/// and Arg::Cont / Arg::Expr sub-expressions.
+fn walk_exprs(root: &Expr, visit: &mut impl FnMut(&Expr)) {
+  visit(root);
+  match &root.kind {
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      walk_exprs(fn_body, visit);
+      walk_cont(cont, visit);
+    }
+    ExprKind::LetVal { cont, .. } => walk_cont(cont, visit),
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Cont(c) => walk_cont(c, visit),
+          Arg::Expr(e) => walk_exprs(e, visit),
+          Arg::Val(_) | Arg::Spread(_) => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      walk_exprs(then, visit);
+      walk_exprs(else_, visit);
+    }
+  }
+}
+
+fn walk_cont(cont: &Cont, visit: &mut impl FnMut(&Expr)) {
+  if let Cont::Expr { body, .. } = cont {
+    walk_exprs(body, visit);
+  }
 }
 
 // ---------------------------------------------------------------------------

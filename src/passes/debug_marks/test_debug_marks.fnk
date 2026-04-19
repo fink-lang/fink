@@ -7,25 +7,32 @@ debug-marks pass tests
 # The trailing `# sm:<b64>` maps each ident back to the source range
 # that produced its CpsId.
 #
-# Bootstrap policy (`StopKind::Any`): every CpsId with a source-bearing
-# AST origin becomes a stop. Deliberately over-marks so the extension
-# has something visible to decorate for every construct. Real policy
-# commits will trim this per AST node kind.
+# First policy cut (2026-04-19):
+#   expr_N  — CpsId whose AST origin is an expression-level container
+#             (Bind, Apply, InfixOp, UnaryOp, ChainedCmp, Match,
+#              Member, Try, Pipe).
+#   ret_N   — CpsId is an App to a Ret-kind continuation (the moment a
+#             value flows back to the caller / host). Preserves stops
+#             for bare-literal expression statements.
+#
+# Stops are CPS-node-grained, not source-line-grained. One stop per
+# meaningful evaluation step. Leaning conservative: fewer is better —
+# we can widen when we step through code and see something missing.
 
 {test, expect, equals, marks} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
-test 'int literal — any-origin marks', fn:
+test 'int literal — single return stop', fn:
   expect marks ƒink:
     42
   | equals ƒink:
     marks
-      any_0, any_1, any_2, any_3, any_4
-    # sm:BRABAAIOAQACDgEAAg4BAAIOAQAC
+      ret_3
+    # sm:ARABAAI
 
 
-test 'binding + call — any-origin marks', fn:
+test 'binding + call — expr stops + returns', fn:
   expect marks ƒink:
     add = fn a, b:
       a + b
@@ -33,9 +40,6 @@ test 'binding + call — any-origin marks', fn:
       add 3, 4
   | equals ƒink:
     marks
-      any_0, any_1, any_2, any_3, any_4, any_5, any_6, any_7, any_8, any_9,
-      any_10, any_11, any_12, any_13, any_14, any_15, any_16, any_17,
-      any_18, any_19, any_20, any_21, any_22, any_23, any_24, any_25,
-      any_26, any_27, any_28, any_29, any_30, any_31, any_32, any_33,
-      any_34, any_35, any_36, any_37
-    # sm:JhABAAMOAS4EDgEbAQ4BBgEOARYVDgEhEA4BFgUOAQABDgEIAQ4BBwUSAQAFEAEABRABFRAQATAOEAEMCBABAAMQAQgBEAEGARQBDQgQAQAIEAEACBABCw4QAQ0EEAEAFRABDg4QAQAOFAE7FhABABYQAQwQEAEAEBABIgQQAQAEEAEABBABAAQUAQAEEAEtAxABAAMQAQAs
+      expr_4, expr_6, expr_9, expr_10, expr_11, expr_14, expr_18, expr_19,
+      expr_20, expr_23, expr_26, expr_27, ret_33
+    # sm:DRABLhUQAQsFEAEABRABAAUSAQAFEgEmCBIBAAgSAQAIFgEACBIBGRUSAS0WEgEAFhIBLgQ

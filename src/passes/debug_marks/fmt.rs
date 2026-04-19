@@ -96,6 +96,7 @@ pub fn render_mapped_native(
 
 fn stop_kind_label(kind: StopKind) -> &'static str {
   match kind {
-    StopKind::Any => "any",
+    StopKind::Expr => "expr",
+    StopKind::Return => "ret",
   }
 }
