@@ -1,0 +1,32 @@
+---
+debug-marks pass tests
+---
+
+# The pass output is one line per step-stop CpsId, formatted as
+# `s_<kind>#<cps_id>`. Source positions map back via the trailing
+# `# sm:<b64>` line so the vscode-fink extension can decorate src
+# ranges that produce stops.
+#
+# Skeleton commit: policy marks nothing, so output is empty for
+# every program. Tests still exist so we can bless real marks one
+# fixture at a time as policy lands.
+
+{test, expect, equals, marks} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'int literal — no stops', fn:
+  expect marks ƒink:
+    42
+  | equals ƒink:
+    # sm:AA
+
+
+test 'binding + call — no stops yet', fn:
+  expect marks ƒink:
+    add = fn a, b:
+      a + b
+    main = fn:
+      add 3, 4
+  | equals ƒink:
+    # sm:AA
