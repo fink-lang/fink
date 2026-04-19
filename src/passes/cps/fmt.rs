@@ -109,6 +109,13 @@ fn dummy_tok() -> Token<'static> {
   Token { kind: TokenKind::Sep, loc: dummy_loc(), src: "" }
 }
 
+/// Synthetic token at a specific loc — used so brackets/quotes of
+/// compiler-synthesized literals (`[]`, `{}`, `''`) carry a source
+/// span (the enclosing literal's loc) instead of `<no src>`.
+fn tok_at(loc: Loc) -> Token<'static> {
+  Token { kind: TokenKind::Sep, loc, src: "" }
+}
+
 // ---------------------------------------------------------------------------
 // AST builder helpers — append into the transient arena and return AstIds
 // ---------------------------------------------------------------------------
@@ -119,7 +126,7 @@ fn b_ident(b: &mut AstBuilder<'static>, s: &str, loc: Loc) -> AstId {
 }
 
 fn b_spread(b: &mut AstBuilder<'static>, inner: AstId, loc: Loc) -> AstId {
-  b.append(NodeKind::Spread { op: dummy_tok(), inner: Some(inner) }, loc)
+  b.append(NodeKind::Spread { op: tok_at(loc), inner: Some(inner) }, loc)
 }
 
 fn b_exprs(items: Vec<AstId>) -> Exprs<'static> {
@@ -198,19 +205,19 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
     }
     Lit::Str(s) => b.append(
       NodeKind::LitStr {
-        open: dummy_tok(),
-        close: dummy_tok(),
+        open: tok_at(loc),
+        close: tok_at(loc),
         content: crate::strings::control_pics_bytes(s),
         indent: 0,
       },
       loc,
     ),
     Lit::Seq => b.append(
-      NodeKind::LitSeq { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() },
+      NodeKind::LitSeq { open: tok_at(loc), close: tok_at(loc), items: Exprs::empty() },
       loc,
     ),
     Lit::Rec => b.append(
-      NodeKind::LitRec { open: dummy_tok(), close: dummy_tok(), items: Exprs::empty() },
+      NodeKind::LitRec { open: tok_at(loc), close: tok_at(loc), items: Exprs::empty() },
       loc,
     ),
   }

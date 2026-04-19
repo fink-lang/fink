@@ -883,10 +883,13 @@ fn lower_lit_seq(g: &mut Gen, elems: &[AstId], origin: Option<AstId>) -> Lower {
       // SeqPrepend(val, acc) — cons val onto front
       (BuiltIn::SeqPrepend, args_val(vec![ev, acc]))
     };
-    let result = g.fresh_result(origin);
+    // Per-element origin so each ·seq_prepend / ·seq_concat maps to its
+    // own element / spread node, not the whole literal.
+    let elem_origin = Some(elem);
+    let result = g.fresh_result(elem_origin);
     let (result_kind, result_id) = (result.kind, result.id);
-    pending.push(Pending::App { func: Callable::BuiltIn(op), args, result, origin });
-    acc = ref_val(g, result_kind, result_id, origin);
+    pending.push(Pending::App { func: Callable::BuiltIn(op), args, result, origin: elem_origin });
+    acc = ref_val(g, result_kind, result_id, elem_origin);
   }
   (acc, pending)
 }
@@ -899,36 +902,39 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
   let mut acc = lit_val(g, Lit::Rec, origin);
   let mut pending: Vec<Pending> = vec![];
   for &field in fields {
+    // Per-field origin so each ·rec_put / ·rec_merge maps to its own
+    // field / spread node, not the whole literal.
+    let field_origin = Some(field);
     let field_kind = g.node(field).kind.clone();
     match field_kind {
       NodeKind::Spread { inner: Some(inner_id), .. } => {
         let (sv, sp) = lower(g, inner_id);
         pending.extend(sp);
-        let result = g.fresh_result(origin);
+        let result = g.fresh_result(field_origin);
         let (rk, ri) = (result.kind, result.id);
-        pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args: args_val(vec![acc, sv]), result,  origin });
-        acc = ref_val(g, rk, ri, origin);
+        pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args: args_val(vec![acc, sv]), result, origin: field_origin });
+        acc = ref_val(g, rk, ri, field_origin);
       }
       NodeKind::Bind { lhs, rhs, .. } => {
         let lhs_kind = g.node(lhs).kind.clone();
         if let NodeKind::Ident(key) = lhs_kind {
-          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(field));
+          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(lhs));
           let (fv, fp) = lower(g, rhs);
           pending.extend(fp);
-          let result = g.fresh_result(origin);
+          let result = g.fresh_result(field_origin);
           let (rk, ri) = (result.kind, result.id);
-          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, key_lit, fv]), result,  origin });
-          acc = ref_val(g, rk, ri, origin);
+          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, key_lit, fv]), result, origin: field_origin });
+          acc = ref_val(g, rk, ri, field_origin);
         } else {
           // Computed key.
           let (kv, kp) = lower(g, lhs);
           let (fv, fp) = lower(g, rhs);
           pending.extend(kp);
           pending.extend(fp);
-          let result = g.fresh_result(origin);
+          let result = g.fresh_result(field_origin);
           let (rk, ri) = (result.kind, result.id);
-          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, kv, fv]), result,  origin });
-          acc = ref_val(g, rk, ri, origin);
+          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, kv, fv]), result, origin: field_origin });
+          acc = ref_val(g, rk, ri, field_origin);
         }
       }
       // `{foo: val}` parsed as Arm { lhs: Ident("foo"), body: [val] }
@@ -937,40 +943,40 @@ fn lower_lit_rec(g: &mut Gen, fields: &[AstId], origin: Option<AstId>) -> Lower 
         let val_id = *body.items.last().expect("arm body empty");
         let key_kind = g.node(key_id).kind.clone();
         if let NodeKind::Ident(key) = key_kind {
-          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(field));
+          let key_lit = lit_val(g, Lit::Str(key.as_bytes().to_vec()), Some(key_id));
           let (fv, fp) = lower(g, val_id);
           pending.extend(fp);
-          let result = g.fresh_result(origin);
+          let result = g.fresh_result(field_origin);
           let (rk, ri) = (result.kind, result.id);
-          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, key_lit, fv]), result,  origin });
-          acc = ref_val(g, rk, ri, origin);
+          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, key_lit, fv]), result, origin: field_origin });
+          acc = ref_val(g, rk, ri, field_origin);
         } else {
           let (kv, kp) = lower(g, key_id);
           let (fv, fp) = lower(g, val_id);
           pending.extend(kp);
           pending.extend(fp);
-          let result = g.fresh_result(origin);
+          let result = g.fresh_result(field_origin);
           let (rk, ri) = (result.kind, result.id);
-          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, kv, fv]), result,  origin });
-          acc = ref_val(g, rk, ri, origin);
+          pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, kv, fv]), result, origin: field_origin });
+          acc = ref_val(g, rk, ri, field_origin);
         }
       }
       NodeKind::Ident(name) => {
         // Shorthand `{foo}` == `{foo: foo}`
         let key_lit = lit_val(g, Lit::Str(name.as_bytes().to_vec()), Some(field));
         let id_val = scope_ref_val(g, field);
-        let result = g.fresh_result(origin);
+        let result = g.fresh_result(field_origin);
         let (rk, ri) = (result.kind, result.id);
-        pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, key_lit, id_val]), result,  origin });
-        acc = ref_val(g, rk, ri, origin);
+        pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecPut), args: args_val(vec![acc, key_lit, id_val]), result, origin: field_origin });
+        acc = ref_val(g, rk, ri, field_origin);
       }
       _ => {
         let (fv, fp) = lower(g, field);
         pending.extend(fp);
-        let result = g.fresh_result(origin);
+        let result = g.fresh_result(field_origin);
         let (rk, ri) = (result.kind, result.id);
-        pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args: args_val(vec![acc, fv]), result,  origin });
-        acc = ref_val(g, rk, ri, origin);
+        pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args: args_val(vec![acc, fv]), result, origin: field_origin });
+        acc = ref_val(g, rk, ri, field_origin);
       }
     }
   }

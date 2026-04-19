@@ -105,7 +105,7 @@ test 'call with spread', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a, ..·∅rest
-    # sm:DQABAA0AAQANJAEADRIACAEADQABAAMSAQANEgAEAQgBDAAEAQoEAAAEAQAE
+    # sm:DQABAA0AAQANJAEADRIACAEADQABAAMSAQANEgAEAQgBDAAEAQoEAAEABAQBAAQ
 
 
 test 'simple pipe', fn:
@@ -197,7 +197,7 @@ test 'varargs — call site spreads iterable', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, 1, ..·∅items
-    # sm:DQABAA4AAQAOJAEADhIACAEADgABAAMSAQAOEgAEAQgBAgAEAQoFAAAEAQAF
+    # sm:DQABAA4AAQAOJAEADhIACAEADgABAAMSAQAOEgAEAQgBAgAEAQoFAAEABQQBAAU
 
 
 test 'call with spread — trailing iterable', fn:
@@ -206,7 +206,7 @@ test 'call with spread — trailing iterable', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a, ..·∅rest
-    # sm:DQABAA0AAQANJAEADRIACAEADQABAAMSAQANEgAEAQgBDAAEAQoEAAAEAQAE
+    # sm:DQABAA0AAQANJAEADRIACAEADQABAAMSAQANEgAEAQgBDAAEAQoEAAEABAQBAAQ
 
 
 test 'call with spread — spread only', fn:
@@ -215,7 +215,7 @@ test 'call with spread — spread only', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ..·∅items
-    # sm:CwABAAsAAQALJAEACxIACAEACwABAAMSAQALEgAEAQwFAAAEAQAF
+    # sm:CwABAAsAAQALJAEACxIACAEACwABAAMSAQALEgAEAQwFAAEABQQBAAU
 
 
 test 'call with spread — passes through from varargs fn', fn:
@@ -226,6 +226,9 @@ test 'call with spread — passes through from varargs fn', fn:
       ·fn
         fn ·ƒret_3, ..·args_0: ·∅foo ·ƒret_3, ..·args_0
         fn ·v_2: ·ƒret_1 ·v_2
-    # sm:FwABABUAAQAVJAEAFRIACAEAFQABABUYAQAVFgEKBAAABAEABBAABAEMCgABAAMSAQAKEgAEAQwEAAAEAQAEIAEhFQoABAEAFQABABUUAQAV
+    # sm:FwABABUAAQAVJAEAFRIACAEAFQABABUYAQAVFgEKBAABAAQEAQAEEAAEAQwKAAEAAxIBAAoSAAQBDAQAAQAEBAEABCABIRUKAAQBABUAAQAVFAEAFQ
+
+
+
 
 
