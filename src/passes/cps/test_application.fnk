@@ -147,7 +147,7 @@ test 'pipe with lambda — literal head', fn:
       ·fn
         fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
         fn ·v_3: ·v_3 ·ƒret_1, 3
-    # sm:FwABAA8AAQAPJAEADxIACAEICwABAAsYAQALFgEGAQoABAEKAQABAAEUAQMBCgAEAQgBAgAEAQcFIgELCwoABAEDAQABBAsMAQcPEgAEAQAB
+    # sm:FwABAA8AAQAPJAEADxIACAEICwABAAsYAQALFgEGAQoABAEGBQABAAUUAQABCgAEAQgBAgAEAQcFIgELCwoABAEDAQABBAsMAQcPEgAEAQAB
 
 
 test 'pipe with lambda — ident head', fn:
@@ -158,7 +158,7 @@ test 'pipe with lambda — ident head', fn:
       ·fn
         fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
-    # sm:FwABAA8AAQAPJAEADxIACAEICwABAAsYAQALFgEGAQoABAEKAQABAAEUAQMBCgAEAQgBAgAEAQcFIgELCwoABAEDAQABBAsMAQcPEgAEAQAB
+    # sm:FwABAA8AAQAPJAEADxIACAEICwABAAsYAQALFgEGAQoABAEGBQABAAUUAQABCgAEAQgBAgAEAQcFIgELCwoABAEDAQABBAsMAQcPEgAEAQAB
 
 
 test 'pipe with partial', fn:

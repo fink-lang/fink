@@ -177,16 +177,7 @@ fn build_val(b: &mut AstBuilder<'static>, v: &Val, ctx: &Ctx<'_, '_>) -> AstId {
     ValKind::Ref(Ref::Synth(bind_id)) => b_ident(b, &render_synth_name(*bind_id, ctx), loc),
     ValKind::Ref(Ref::Unresolved(_)) => b_ident(b, &render_unresolved_name(v.id, ctx), loc),
     ValKind::ContRef(id) => b_ident(b, &render_synth_fallback(*id, ctx), loc),
-    ValKind::BuiltIn(op) => {
-      // For builtin ops whose origin is an InfixOp, use op.loc (e.g. `>` not `a > 1`).
-      let op_loc = ctx.ast_node(v.id)
-        .and_then(|n| match &n.kind {
-          NodeKind::InfixOp { op, .. } | NodeKind::UnaryOp { op, .. } => Some(op.loc),
-          _ => None,
-        })
-        .unwrap_or(loc);
-      b_ident(b, &render_builtin(op), op_loc)
-    }
+    ValKind::BuiltIn(op) => b_ident(b, &render_builtin(op), loc),
   }
 }
 
@@ -490,22 +481,15 @@ pub fn build_expr(b: &mut AstBuilder<'static>, expr: &Expr, ctx: &Ctx<'_, '_>) -
         let placeholder = b_ident(b, "_", expr_loc);
         return b_apply(b, func_id, vec![placeholder], expr_loc);
       }
-      // For builtin operators, map to the op token (e.g. `-` in `n - 1`).
-      let builtin_loc = ctx.ast_node(expr.id)
-        .and_then(|n| match (&n.kind, func) {
-          (NodeKind::InfixOp { op, .. }, _) | (NodeKind::UnaryOp { op, .. }, _) => Some(op.loc),
-          _ => None,
-        })
-        .unwrap_or(expr_loc);
       // For pipe-desugared calls, use the `|` sep token loc for the apply wrapper.
       let call_loc = if let Callable::Val(func_val) = func {
         pipe_sep_loc(expr.id, func_val, ctx).unwrap_or(expr_loc)
       } else {
-        builtin_loc
+        expr_loc
       };
       let func_id = match func {
         Callable::Val(func_val) => build_val(b, func_val, ctx),
-        Callable::BuiltIn(op) => b_ident(b, &render_builtin(op), builtin_loc),
+        Callable::BuiltIn(op) => b_ident(b, &render_builtin(op), expr_loc),
       };
       let arg_ids: Vec<AstId> = args.iter().map(|a| match a {
         Arg::Val(v) => build_val(b, v, ctx),
