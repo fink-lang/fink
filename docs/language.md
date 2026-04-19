@@ -530,28 +530,41 @@ match foobar:
 > **Status:** implemented
 
 ```fink
-fn a, b:
+add = fn a, b:
   a + b
 
-# single line
-fn a, b: a + b
-
-# bound to a name
-add = fn a, b:
+# multi-statement body — last expression is the value
+sum_squared = fn a, b:
   result = a + b
-  result
+  result * result
 
-# no args
-greet = fn: 'hello'
+# no args — body fits on one line
+greet = fn:
+  'hello'
 
 # default args
 greet = fn name='world':
   'hello ${name}'
+```
 
-# pattern matching in args follows standard pattern matching
-foo = fn {x, y}: x + y
-bar = fn [head, ..tail]: head
-baz = fn arg, ..rest_args: arg + rest_args
+Pattern matching in args follows the standard pattern-matching rules:
+
+```fink
+midpoint = fn {x, y}:
+  (x + y) / 2
+
+head_of = fn [head, ..tail]:
+  head
+
+variadic = fn arg, ..rest_args:
+  rest_args
+```
+
+The body is a block, so single-line `fn a, b: a + b` is also valid —
+useful for inline call sites:
+
+```fink
+[1, 2, 3] | map (fn x: x * 2)
 ```
 
 ### `fn match` sugar
