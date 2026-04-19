@@ -125,19 +125,31 @@ fn phase_a_loc(cps_id: CpsId, fc: &FmtCtx<'_, '_>) -> Loc {
 }
 
 fn b_bind(b: &mut AstBuilder<'static>, lhs: AstId, rhs: AstId) -> AstId {
-  b.append(NodeKind::Bind { op: eq_tok(), lhs, rhs }, dummy_loc())
+  b_bind_loc(b, lhs, rhs, dummy_loc())
+}
+
+fn b_bind_loc(b: &mut AstBuilder<'static>, lhs: AstId, rhs: AstId, loc: Loc) -> AstId {
+  b.append(NodeKind::Bind { op: eq_tok(), lhs, rhs }, loc)
 }
 
 fn b_apply(b: &mut AstBuilder<'static>, func: AstId, args: Vec<AstId>) -> AstId {
+  b_apply_loc(b, func, args, dummy_loc())
+}
+
+fn b_apply_loc(b: &mut AstBuilder<'static>, func: AstId, args: Vec<AstId>, loc: Loc) -> AstId {
   let n = args.len();
   let seps = (0..n.saturating_sub(1)).map(|_| sep_tok()).collect();
   b.append(
     NodeKind::Apply { func, args: Exprs { items: args.into_boxed_slice(), seps } },
-    dummy_loc(),
+    loc,
   )
 }
 
 fn b_fn(b: &mut AstBuilder<'static>, params: Vec<AstId>, body_stmts: Vec<AstId>) -> AstId {
+  b_fn_loc(b, params, body_stmts, dummy_loc())
+}
+
+fn b_fn_loc(b: &mut AstBuilder<'static>, params: Vec<AstId>, body_stmts: Vec<AstId>, loc: Loc) -> AstId {
   let n = params.len();
   let param_seps = (0..n.saturating_sub(1)).map(|_| sep_tok()).collect();
   let pats = b.append(
@@ -146,7 +158,7 @@ fn b_fn(b: &mut AstBuilder<'static>, params: Vec<AstId>, body_stmts: Vec<AstId>)
   );
   b.append(
     NodeKind::Fn { params: pats, sep: col_tok(), body: Exprs { items: body_stmts.into_boxed_slice(), seps: vec![] } },
-    dummy_loc(),
+    loc,
   )
 }
 
@@ -326,8 +338,9 @@ fn render_param_with_info(bind: &BindNode, fc: &FmtCtx<'_, '_>) -> String {
 }
 
 fn render_val(b: &mut AstBuilder<'static>, val: &Val, fc: &FmtCtx<'_, '_>) -> AstId {
+  let loc = cps_loc(val.id, fc);
   match &val.kind {
-    ValKind::Lit(lit) => lit_node(b, lit),
+    ValKind::Lit(lit) => lit_node(b, lit, loc),
     ValKind::Ref(Ref::Synth(bind_id))      => {
       // Only use AST origin names for SynthName binds (source-level names).
       // Plain Synth binds (compiler temps like op_eq results) render as ·v_N.
@@ -337,48 +350,58 @@ fn render_val(b: &mut AstBuilder<'static>, val: &Val, fc: &FmtCtx<'_, '_>) -> As
         .is_some_and(|k| matches!(k, Bind::SynthName));
       if is_synth_name {
         // Phase A: ref to source bind → loc is the ref's own site (val.id origin).
-        b_ident_loc(b, &render_synth_name(*bind_id, fc), cps_loc(val.id, fc))
+        b_ident_loc(b, &render_synth_name(*bind_id, fc), loc)
       } else {
-        b_ident(b, &render_synth_fallback(*bind_id, fc))
+        b_ident_loc(b, &render_synth_fallback(*bind_id, fc), loc)
       }
     }
-    ValKind::Ref(Ref::Unresolved(_)) => b_ident_loc(b, &render_unresolved_name(val.id, fc), cps_loc(val.id, fc)),
-    ValKind::ContRef(id)     => b_ident(b, &render_synth_fallback(*id, fc)),
-    ValKind::BuiltIn(op)     => b_ident(b, &render_builtin_flat(op)),
+    ValKind::Ref(Ref::Unresolved(_)) => b_ident_loc(b, &render_unresolved_name(val.id, fc), loc),
+    ValKind::ContRef(id)     => b_ident_loc(b, &render_synth_fallback(*id, fc), loc),
+    ValKind::BuiltIn(op)     => b_ident_loc(b, &render_builtin_flat(op), loc),
   }
 }
 
-fn lit_node(b: &mut AstBuilder<'static>, lit: &Lit) -> AstId {
+fn lit_node(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
   match lit {
-    Lit::Bool(v) => b.append(NodeKind::LitBool(*v), dummy_loc()),
+    Lit::Bool(v) => b.append(NodeKind::LitBool(*v), loc),
     Lit::Int(n) => {
       let s: &'static str = Box::leak(n.to_string().into_boxed_str());
-      b.append(NodeKind::LitInt(s), dummy_loc())
+      b.append(NodeKind::LitInt(s), loc)
     }
     Lit::Float(f) => {
       let s: &'static str = Box::leak(f.to_string().into_boxed_str());
-      b.append(NodeKind::LitFloat(s), dummy_loc())
+      b.append(NodeKind::LitFloat(s), loc)
     }
     Lit::Decimal(f) => {
       let s: &'static str = Box::leak(format!("{}d", f).into_boxed_str());
-      b.append(NodeKind::LitDecimal(s), dummy_loc())
+      b.append(NodeKind::LitDecimal(s), loc)
     }
     Lit::Str(s) => b.append(
       NodeKind::LitStr {
-        open: tok("'", TokenKind::StrStart),
-        close: tok("'", TokenKind::StrEnd),
+        // Empty-src synthetic tokens flag this as a compiler-generated
+        // literal; ast::fmt recognises them and maps content to `loc`.
+        open: Token { kind: TokenKind::Sep, loc, src: "" },
+        close: Token { kind: TokenKind::Sep, loc, src: "" },
         content: crate::strings::control_pics_bytes(s),
         indent: 0,
       },
-      dummy_loc(),
+      loc,
     ),
     Lit::Seq => b.append(
-      NodeKind::LitSeq { open: lbrack_tok(), close: rbrack_tok(), items: Exprs::empty() },
-      dummy_loc(),
+      NodeKind::LitSeq {
+        open: Token { kind: TokenKind::Sep, loc, src: "" },
+        close: Token { kind: TokenKind::Sep, loc, src: "" },
+        items: Exprs::empty(),
+      },
+      loc,
     ),
     Lit::Rec => b.append(
-      NodeKind::LitRec { open: lbrace_tok(), close: rbrace_tok(), items: Exprs::empty() },
-      dummy_loc(),
+      NodeKind::LitRec {
+        open: Token { kind: TokenKind::Sep, loc, src: "" },
+        close: Token { kind: TokenKind::Sep, loc, src: "" },
+        items: Exprs::empty(),
+      },
+      loc,
     ),
   }
 }
@@ -408,14 +431,14 @@ fn render_cont_arg(b: &mut AstBuilder<'static>, cont: &Cont, fc: &FmtCtx<'_, '_>
 // App → flat Node (a bare expression statement)
 // ---------------------------------------------------------------------------
 
-fn render_app(b: &mut AstBuilder<'static>, func: &Callable, args: &[Arg], fc: &FmtCtx<'_, '_>) -> AstId {
+fn render_app(b: &mut AstBuilder<'static>, func: &Callable, args: &[Arg], fc: &FmtCtx<'_, '_>, expr_loc: Loc) -> AstId {
   let func_id = match func {
     Callable::Val(v)       => render_val(b, v, fc),
-    Callable::BuiltIn(op)  => b_ident(b, &render_builtin_flat(op)),
+    Callable::BuiltIn(op)  => b_ident_loc(b, &render_builtin_flat(op), expr_loc),
   };
   if args.is_empty() {
     let placeholder = b_ident(b, "_");
-    return b_apply(b, func_id, vec![placeholder]);
+    return b_apply_loc(b, func_id, vec![placeholder], expr_loc);
   }
   let arg_ids: Vec<AstId> = args.iter().map(|a| match a {
     Arg::Val(v)    => render_val(b, v, fc),
@@ -432,7 +455,7 @@ fn render_app(b: &mut AstBuilder<'static>, func: &Callable, args: &[Arg], fc: &F
       b_fn(b, vec![], stmts)
     }
   }).collect();
-  b_apply(b, func_id, arg_ids)
+  b_apply_loc(b, func_id, arg_ids, expr_loc)
 }
 
 // ---------------------------------------------------------------------------
@@ -448,6 +471,7 @@ fn collect_stmts(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>) 
 /// Recursively walk the LetFn/LetVal chain, emitting assignments and then the
 /// tail expression. Consecutive LetFn → LetVal aliases are chained as `b = a = fn ...`.
 fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, out: &mut Vec<AstId>) {
+  let expr_loc = cps_loc(expr.id, fc);
   match &expr.kind {
     ExprKind::LetFn { name, params, fn_body, cont, .. } => {
       let name_str = render_bind(name, fc);
@@ -455,11 +479,11 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let fn_params = render_fn_params_grouped(b, params, fc);
 
       let body_stmts = collect_stmts(b, fn_body, fc);
-      let fn_rhs = b_fn(b, fn_params, body_stmts);
+      let fn_rhs = b_fn_loc(b, fn_params, body_stmts, expr_loc);
 
       let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, phase_a_loc(name.id, fc), cont, fc);
       let bound = outermost_name(b, lhs_id).unwrap_or_else(|| name_str.clone());
-      let bind_id = b_bind(b, lhs_id, fn_rhs);
+      let bind_id = b_bind_loc(b, lhs_id, fn_rhs, expr_loc);
       out.push(bind_id);
       collect_cont_into(b, tail, &bound, fc, out);
     }
@@ -469,7 +493,7 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let val_id = render_val(b, val, fc);
       let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, phase_a_loc(name.id, fc), cont, fc);
       let bound = outermost_name(b, lhs_id).unwrap_or_else(|| name_str.clone());
-      let bind_id = b_bind(b, lhs_id, val_id);
+      let bind_id = b_bind_loc(b, lhs_id, val_id, expr_loc);
       out.push(bind_id);
       collect_cont_into(b, tail, &bound, fc, out);
     }
@@ -479,7 +503,7 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       // (single param: `a = ...`) and recurse into the cont body flat.
       if matches!(func, Callable::BuiltIn(BuiltIn::FnClosure))
         && let Some((value_args, Cont::Expr { args: cont_params, body })) = split_trailing_cont(args) {
-          let func_id = b_ident(b, &render_builtin_flat(&BuiltIn::FnClosure));
+          let func_id = b_ident_loc(b, &render_builtin_flat(&BuiltIn::FnClosure), expr_loc);
           let arg_ids: Vec<AstId> = value_args.iter().map(|a| match a {
             Arg::Val(v) => render_val(b, v, fc),
             Arg::Spread(v) => {
@@ -492,7 +516,7 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
               b_fn(b, vec![], stmts)
             }
           }).collect();
-          let call_id = b_apply(b, func_id, arg_ids);
+          let call_id = b_apply_loc(b, func_id, arg_ids, expr_loc);
           let lhs_id = if cont_params.len() == 1 {
             b_ident(b, &render_bind(&cont_params[0], fc))
           } else {
@@ -509,7 +533,7 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
               dummy_loc(),
             )
           };
-          let bind_id = b_bind(b, lhs_id, call_id);
+          let bind_id = b_bind_loc(b, lhs_id, call_id, expr_loc);
           out.push(bind_id);
           collect_into(b, body.as_ref(), fc, out);
           return;
@@ -518,17 +542,17 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       // continue with the cont body as sequential statements.
       if matches!(func, Callable::BuiltIn(BuiltIn::Pub))
         && let Some((value_args, Cont::Expr { body, .. })) = split_trailing_cont(args) {
-          let func_id = b_ident(b, &render_builtin_flat(&BuiltIn::Pub));
+          let func_id = b_ident_loc(b, &render_builtin_flat(&BuiltIn::Pub), expr_loc);
           let arg_ids: Vec<AstId> = value_args.iter().map(|a| match a {
             Arg::Val(v) => render_val(b, v, fc),
             _ => b_ident(b, "_"),
           }).collect();
-          let app_id = b_apply(b, func_id, arg_ids);
+          let app_id = b_apply_loc(b, func_id, arg_ids, expr_loc);
           out.push(app_id);
           collect_into(b, body.as_ref(), fc, out);
           return;
         }
-      let app_id = render_app(b, func, args, fc);
+      let app_id = render_app(b, func, args, fc, expr_loc);
       out.push(app_id);
     }
 
@@ -538,8 +562,8 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let else_stmts = collect_stmts(b, else_, fc);
       let then_fn = b_fn(b, vec![], then_stmts);
       let else_fn = b_fn(b, vec![], else_stmts);
-      let if_keyword = b_ident(b, "·if");
-      let app_id = b_apply(b, if_keyword, vec![cond_id, then_fn, else_fn]);
+      let if_keyword = b_ident_loc(b, "·if", expr_loc);
+      let app_id = b_apply_loc(b, if_keyword, vec![cond_id, then_fn, else_fn], expr_loc);
       out.push(app_id);
     }
   }
