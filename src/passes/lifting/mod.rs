@@ -85,10 +85,6 @@ impl Alloc {
     BindNode { id, kind }
   }
 
-  fn synth_bind(&mut self) -> BindNode {
-    self.bind(Bind::Synth, None)
-  }
-
   /// Record the semantic role of a function parameter.
   fn set_param_info(&mut self, cps_id: CpsId, info: ParamInfo) {
     self.param_info.set(cps_id, Some(info));
@@ -436,8 +432,13 @@ fn lift_expr<'src>(
         };
 
         // Wrap hoisted fns around the result (they become siblings).
+        // Anchor the wrapper LetFn at the hoisted fn name's origin so the
+        // synth bind declaration carries a loc. Falls back to the hoisted
+        // fn body's origin if the name has none.
         for h in hoisted.into_iter().rev() {
-          let wrapper_id = alloc.next(None);
+          let wrapper_origin = alloc.origin.try_get(h.name.id).and_then(|o| *o)
+            .or_else(|| alloc.origin.try_get(h.fn_body.id).and_then(|o| *o));
+          let wrapper_id = alloc.next(wrapper_origin);
           result = Expr {
             id: wrapper_id,
             kind: ExprKind::LetFn {
@@ -481,7 +482,9 @@ fn lift_expr<'src>(
               let mut new_body = extract_from_body(*body, &parent_params, &[], ast, alloc, &mut all_hoisted);
               // Prepend hoisted fns into the cont body (inside the App).
               for h in all_hoisted.drain(..).rev() {
-                let wrapper_id = alloc.next(None);
+                let wrapper_origin = alloc.origin.try_get(h.name.id).and_then(|o| *o)
+                  .or_else(|| alloc.origin.try_get(h.fn_body.id).and_then(|o| *o));
+                let wrapper_id = alloc.next(wrapper_origin);
                 new_body = Expr {
                   id: wrapper_id,
                   kind: ExprKind::LetFn {
@@ -553,6 +556,10 @@ fn extract_from_body<'src>(
   alloc: &mut Alloc,
   hoisted: &mut Vec<HoistedFn>,
 ) -> Expr {
+  // The original LetFn/LetVal/App's AST origin — carried to synth nodes
+  // the lifter creates (closure refs, cont refs, lifted-fn Apps) so
+  // source maps don't show `<no src>` for hoist artefacts.
+  let expr_origin = alloc.origin.try_get(expr.id).and_then(|o| *o);
   match expr.kind {
     ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       // This LetFn is inside a fn_body — extract it one level.
@@ -592,16 +599,16 @@ fn extract_from_body<'src>(
               params,
               fn_kind,
               fn_body: inner_fn_body,
-              cont_args: vec![alloc.synth_bind()],
+              cont_args: vec![alloc.bind(Bind::Synth, expr_origin)],
             });
             // The original cont was Cont::Ref — a tail pass of the fn value to the cont.
             // Synthesize: cont_id fn_value  (pass the fn value to the continuation)
-            let cont_val = alloc.val(ValKind::ContRef(cont_id), None);
-            let fn_val = alloc.val(ValKind::Ref(Ref::Synth(name_id)), None);
+            let cont_val = alloc.val(ValKind::ContRef(cont_id), expr_origin);
+            let fn_val = alloc.val(ValKind::Ref(Ref::Synth(name_id)), expr_origin);
             alloc.expr(ExprKind::App {
               func: Callable::Val(cont_val),
               args: vec![Arg::Val(fn_val)],
-            }, None)
+            }, expr_origin)
           },
         }
       } else {
@@ -610,8 +617,8 @@ fn extract_from_body<'src>(
         let mut closure_args: Vec<Arg> = Vec::new();
         let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
 
-        // Build the lifted fn ref.
-        let lifted_fn_bind = alloc.synth_bind();
+        // Build the lifted fn ref (anchored at the original LetFn site).
+        let lifted_fn_bind = alloc.bind(Bind::Synth, expr_origin);
         let lifted_fn_id = lifted_fn_bind.id;
 
         // Build capture params and args.
@@ -661,13 +668,13 @@ fn extract_from_body<'src>(
         let name_id = name.id;
         let (cont_args_for_hoist, fn_closure_cont) = match cont {
           Cont::Expr { args: ca, body } => {
-            let new_bind = alloc.synth_bind();
+            let new_bind = alloc.bind(Bind::Synth, expr_origin);
             let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
             rewrite_map.insert(name_id, new_bind.id);
             let body = rewrite_refs(*body, &rewrite_map);
             (ca, Cont::Expr { args: vec![new_bind], body: Box::new(body) })
           }
-          Cont::Ref(_) => (vec![alloc.synth_bind()], cont),
+          Cont::Ref(_) => (vec![alloc.bind(Bind::Synth, expr_origin)], cont),
         };
 
         // Closure targets are always CpsClosure: they're called via dispatch
@@ -681,14 +688,14 @@ fn extract_from_body<'src>(
         });
 
         // At the original site: ·fn_closure lifted_fn, cap_0, cap_1, ..., cont
-        let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
+        let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), expr_origin);
         closure_args.insert(0, Arg::Val(lifted_ref));
         closure_args.push(Arg::Cont(fn_closure_cont));
 
         alloc.expr(ExprKind::App {
           func: Callable::BuiltIn(BuiltIn::FnClosure),
           args: closure_args,
-        }, None)
+        }, expr_origin)
       }
     }
 
@@ -784,7 +791,7 @@ fn extract_from_body<'src>(
 
           if cap_entries.is_empty() {
             // Pure — hoist directly, replace with Cont::Ref.
-            let cont_name = alloc.bind(Bind::Cont(ContKind::Ret), None);
+            let cont_name = alloc.bind(Bind::Cont(ContKind::Ret), expr_origin);
             let cont_name_id = cont_name.id;
             // Inline conts are always CpsClosure — they close over k from enclosing scope.
             let fn_kind = CpsFnKind::CpsClosure;
@@ -793,7 +800,7 @@ fn extract_from_body<'src>(
               params: cont_params,
               fn_kind,
               fn_body: body,
-              cont_args: vec![alloc.synth_bind()],
+              cont_args: vec![alloc.bind(Bind::Synth, expr_origin)],
             });
             args.insert(idx, Arg::Cont(Cont::Ref(cont_name_id)));
             // Recurse on remaining args.
@@ -805,7 +812,7 @@ fn extract_from_body<'src>(
           } else {
             // Has captures — hoist the cont, wrap the App in ·fn_closure.
             let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
-            let lifted_fn_bind = alloc.synth_bind();
+            let lifted_fn_bind = alloc.bind(Bind::Synth, expr_origin);
             let lifted_fn_id = lifted_fn_bind.id;
             let mut lifted_params: Vec<Param> = Vec::new();
             let mut closure_args: Vec<Arg> = Vec::new();
@@ -845,18 +852,16 @@ fn extract_from_body<'src>(
               params: lifted_params,
               fn_kind,
               fn_body: body,
-              cont_args: vec![alloc.synth_bind()],
+              cont_args: vec![alloc.bind(Bind::Synth, expr_origin)],
             });
             // Wrap: ·fn_closure(lifted_fn, caps..., fn closure_val: original_app(..., closure_val))
-            let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), None);
+            let lifted_ref = alloc.val(ValKind::Ref(Ref::Synth(lifted_fn_id)), expr_origin);
             closure_args.insert(0, Arg::Val(lifted_ref));
-            let closure_result = alloc.bind(Bind::Synth, None);
+            let closure_result = alloc.bind(Bind::Synth, expr_origin);
             let closure_result_id = closure_result.id;
             // Rebuild the original App with Cont::Ref(closure_result_id) as the cont.
-            // Preserve the original expr's origin so source maps survive lifting.
-            let original_origin = alloc.origin.try_get(expr.id).and_then(|o| *o);
             args.insert(idx, Arg::Cont(Cont::Ref(closure_result_id)));
-            let inner_app = alloc.expr(ExprKind::App { func, args }, original_origin);
+            let inner_app = alloc.expr(ExprKind::App { func, args }, expr_origin);
             closure_args.push(Arg::Cont(Cont::Expr {
               args: vec![closure_result],
               body: Box::new(inner_app),
@@ -864,7 +869,7 @@ fn extract_from_body<'src>(
             alloc.expr(ExprKind::App {
               func: Callable::BuiltIn(BuiltIn::FnClosure),
               args: closure_args,
-            }, None)
+            }, expr_origin)
           }
         } else {
           unreachable!()
@@ -1144,7 +1149,7 @@ mod tests {
   use test_macros::include_fink_tests;
 
   use crate::passes::cps::fmt::Ctx;
-  use super::fmt::fmt_flat;
+  use super::fmt::fmt_flat_mapped_native;
 
   #[allow(unused)]
   fn lift(src: &str) -> String {
@@ -1175,7 +1180,9 @@ mod tests {
           param_info: Some(&lifted.result.param_info),
           bind_kinds: Some(&bk),
         };
-        fmt_flat(&lifted.result.root, &ctx)
+        let (output, srcmap) = fmt_flat_mapped_native(&lifted.result.root, &ctx);
+        let b64 = srcmap.encode_base64url();
+        format!("{output}\n# sm:{b64}")
       }
       Err(e) => format!("ERROR: {e}"),
     }
