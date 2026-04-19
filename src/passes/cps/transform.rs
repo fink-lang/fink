@@ -2814,6 +2814,11 @@ fn lower_pat_lhs(
       let bind = g.bind_name(bind_ast_id);
       let r = (bind.kind, bind.id);
 
+      // Guard-expression origin: the InfixOp node itself (`a > 0`), not
+      // the outer bind context. Used for the op call and the If node
+      // so hovering/stepping narrows to the condition.
+      let guard_origin = Some(lhs);
+
       // Build matcher: fn(subj, succ, fail): op(subj, rhs, fn result: if result succ(subj) else fail)
       let subj_param = g.fresh_result(origin);
       let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
@@ -2825,8 +2830,8 @@ fn lower_pat_lhs(
 
       // Build the guard test: op(subj, rhs, fn result: if result then succ(subj) else fail())
       let subj_ref = ref_val(g, subj_param.kind, subj_param.id, origin);
-      let result_bind = g.fresh_result(origin);
-      let result_ref = g.val(ValKind::Ref(Ref::Synth(result_bind.id)), origin);
+      let result_bind = g.fresh_result(guard_origin);
+      let result_ref = g.val(ValKind::Ref(Ref::Synth(result_bind.id)), guard_origin);
 
       let succ_ref = g.val(ValKind::ContRef(succ_param.id), origin);
       let succ_call = g.expr(ExprKind::App {
@@ -2844,7 +2849,7 @@ fn lower_pat_lhs(
         cond: Box::new(result_ref),
         then: Box::new(succ_call),
         else_: Box::new(fail_call),
-      }, origin);
+      }, guard_origin);
 
       // Build the op call: op(subj, rhs, fn result: if_expr)
       let op_builtin = BuiltIn::from_builtin_str(op.src);
@@ -2855,7 +2860,7 @@ fn lower_pat_lhs(
           Arg::Val(rv),
           Arg::Cont(Cont::Expr { args: vec![result_bind], body: Box::new(if_expr) }),
         ],
-      }, origin);
+      }, guard_origin);
 
       // If the RHS lowering produced pendings (e.g. function calls), wrap them.
       let matcher_body = if rp.is_empty() {

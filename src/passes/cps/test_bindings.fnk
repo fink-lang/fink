@@ -212,7 +212,7 @@ test 'chained member access', fn:
     ·ƒink_module fn ·ƒret_0:
       ·op_dot ·∅foo, 'bar', fn ·v_3:
         ·op_dot ·v_3, 'baz', ·ƒret_0
-    # sm:FwABAAsAAQALJAEACxIACAEABwABAAcSAQADEAAEAQgDAgEGAAYBBQMCAAoBBwcKAAwBAAsAAQALEgEABwoABAEQAwIBBgAGAQUDAgAEAQ8L
+    # sm:GQABAAsAAQALJAEACxIACAEABwABAAcSAQADEAAEAQgDAAEAAwIBAAMGAQADAgAKAQcHCgAMAQALAAEACxIBAAcKAAQBEAMAAQADAgEAAwYBAAMCAAQBDws
 
 
 

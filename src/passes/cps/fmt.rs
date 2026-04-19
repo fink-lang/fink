@@ -112,6 +112,8 @@ fn dummy_tok() -> Token<'static> {
 /// Synthetic token at a specific loc — used so brackets/quotes of
 /// compiler-synthesized literals (`[]`, `{}`, `''`) carry a source
 /// span (the enclosing literal's loc) instead of `<no src>`.
+/// The `src` is kept empty — downstream formatters (e.g. `ast::fmt`)
+/// use `open.src.is_empty()` to detect synthetic literals.
 fn tok_at(loc: Loc) -> Token<'static> {
   Token { kind: TokenKind::Sep, loc, src: "" }
 }
