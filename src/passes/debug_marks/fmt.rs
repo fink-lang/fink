@@ -19,36 +19,75 @@ use crate::sourcemap::native::SourceMap;
 
 use super::{DebugMarks, StopKind};
 
+/// Render marks as a single `marks <token>, <token>, …` Fink expression
+/// — valid syntax so the extension's parser over `expect` blocks
+/// accepts it without error, and its tokeniser produces one ident per
+/// marker that can be mapped back to source via the companion sm.
+///
+/// Tokens are `<kind>_<cps_id>` (e.g. `any_42`). Leading sigils like
+/// `·` would be valid idents in Fink source but the combination with
+/// the `marks` prefix looks cleaner without them.
 pub fn render_mapped_native(
   marks: &DebugMarks,
   lifted: &LiftedCps,
   desugared: &DesugaredAst<'_>,
 ) -> (String, SourceMap) {
   let mut out = MappedWriter::new();
-  let mut first = true;
 
-  // CpsIds iterate in definition order; stops emitted in the same order
-  // so the test output reflects creation sequence, which roughly tracks
-  // execution order at the CPS level.
+  // Collect the stops in creation order so the output reflects CPS
+  // emission sequence (roughly execution order).
+  let mut rows: Vec<(CpsId, StopKind)> = Vec::new();
   for i in 0..marks.stops.len() {
     let id = CpsId(i as u32);
-    let Some(info) = *marks.stops.get(id) else { continue };
+    if let Some(info) = *marks.stops.get(id) {
+      rows.push((id, info.kind));
+    }
+  }
 
-    // Mark the output position back to the source span that produced
-    // this CpsId. `origin[id] -> ast_id -> node.loc` is the chain.
-    if let Some(Some(ast_id)) = lifted.result.origin.try_get(id) {
+  if rows.is_empty() {
+    return out.finish_native();
+  }
+
+  // One `marks` Apply with all tokens as args. Wrapped at a soft
+  // width so blessed files stay within 80 cols even when nested
+  // inside `expect | equals` (each level is 4 spaces of indent,
+  // e.g. the rendered output itself lives 4 cols in). Still parses
+  // as a single Apply node (`marks a, b, c, \n  d, e, …`).
+  //
+  // Budget of 70 bytes keeps us under 80 cols at 4-level nesting
+  // while staying comfortable for top-level CLI output.
+  const LINE_WIDTH: u32 = 70;
+  const INDENT: &str = "  ";
+
+  out.push_str("marks");
+  out.push('\n');
+  out.push_str(INDENT);
+  let mut line_start = out.byte_pos();
+
+  for (i, (id, kind)) in rows.iter().enumerate() {
+    let token = format!("{}_{}", stop_kind_label(*kind), id.0);
+
+    if i > 0 {
+      out.push(',');
+      // Budget: current-line bytes + ", " + next token.
+      let prospective = out.byte_pos() + 2 + token.len() as u32;
+      if prospective.saturating_sub(line_start) > LINE_WIDTH {
+        out.push('\n');
+        out.push_str(INDENT);
+        line_start = out.byte_pos();
+      } else {
+        out.push(' ');
+      }
+    }
+
+    // Source back-mapping for this marker ident.
+    if let Some(Some(ast_id)) = lifted.result.origin.try_get(*id) {
       let loc = desugared.ast.nodes.get(*ast_id).loc;
       if loc.start.line > 0 {
         out.mark(loc);
       }
     }
 
-    if !first {
-      out.push('\n');
-    }
-    first = false;
-
-    let token = format!("s_{}#{}", stop_kind_label(info.kind), id.0);
     out.push_str(&token);
   }
 
@@ -57,6 +96,6 @@ pub fn render_mapped_native(
 
 fn stop_kind_label(kind: StopKind) -> &'static str {
   match kind {
-    StopKind::Placeholder => "stop",
+    StopKind::Any => "any",
   }
 }

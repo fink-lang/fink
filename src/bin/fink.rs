@@ -158,7 +158,7 @@ fn main() {
       // (empty) sm line. Used by the vscode-fink extension to decorate
       // source ranges that will become stops.
       let (lifted, desugared) = fink::to_lifted(&src, path).unwrap_or_else(|e| die(&e));
-      let debug_marks = fink::passes::debug_marks::analyse(&lifted);
+      let debug_marks = fink::passes::debug_marks::analyse(&lifted, &desugared);
       let (output, srcmap) = fink::passes::debug_marks::fmt::render_mapped_native(
         &debug_marks, &lifted, &desugared,
       );

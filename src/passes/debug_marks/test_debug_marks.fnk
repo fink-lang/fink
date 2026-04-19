@@ -2,31 +2,40 @@
 debug-marks pass tests
 ---
 
-# The pass output is one line per step-stop CpsId, formatted as
-# `s_<kind>#<cps_id>`. Source positions map back via the trailing
-# `# sm:<b64>` line so the vscode-fink extension can decorate src
-# ranges that produce stops.
+# Pass output is a single `marks <token>, <token>, …` Fink apply whose
+# ident args each represent one step-stop. Tokens are `<kind>_<cps_id>`.
+# The trailing `# sm:<b64>` maps each ident back to the source range
+# that produced its CpsId.
 #
-# Skeleton commit: policy marks nothing, so output is empty for
-# every program. Tests still exist so we can bless real marks one
-# fixture at a time as policy lands.
+# Bootstrap policy (`StopKind::Any`): every CpsId with a source-bearing
+# AST origin becomes a stop. Deliberately over-marks so the extension
+# has something visible to decorate for every construct. Real policy
+# commits will trim this per AST node kind.
 
 {test, expect, equals, marks} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
-test 'int literal — no stops', fn:
+test 'int literal — any-origin marks', fn:
   expect marks ƒink:
     42
   | equals ƒink:
-    # sm:AA
+    marks
+      any_0, any_1, any_2, any_3, any_4
+    # sm:BRABAAIOAQACDgEAAg4BAAIOAQAC
 
 
-test 'binding + call — no stops yet', fn:
+test 'binding + call — any-origin marks', fn:
   expect marks ƒink:
     add = fn a, b:
       a + b
     main = fn:
       add 3, 4
   | equals ƒink:
-    # sm:AA
+    marks
+      any_0, any_1, any_2, any_3, any_4, any_5, any_6, any_7, any_8, any_9,
+      any_10, any_11, any_12, any_13, any_14, any_15, any_16, any_17,
+      any_18, any_19, any_20, any_21, any_22, any_23, any_24, any_25,
+      any_26, any_27, any_28, any_29, any_30, any_31, any_32, any_33,
+      any_34, any_35, any_36, any_37
+    # sm:JhABAAMOAS4EDgEbAQ4BBgEOARYVDgEhEA4BFgUOAQABDgEIAQ4BBwUSAQAFEAEABRABFRAQATAOEAEMCBABAAMQAQgBEAEGARQBDQgQAQAIEAEACBABCw4QAQ0EEAEAFRABDg4QAQAOFAE7FhABABYQAQwQEAEAEBABIgQQAQAEEAEABBABAAQUAQAEEAEtAxABAAMQAQAs

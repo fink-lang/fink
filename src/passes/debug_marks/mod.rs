@@ -42,22 +42,30 @@ pub struct StopInfo {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StopKind {
-  // Placeholder — policy isn't implemented yet. First real policy commit
-  // adds variants like Call, Bind, Guard, ArmEntry, Branch, Return.
-  #[allow(dead_code)]
-  Placeholder,
+  /// Bootstrap policy — mark every CpsId that has an AST origin.
+  /// Saturated: way too many stops for a real debugger. Serves to
+  /// exercise the harness + extension decoration end-to-end. Real
+  /// policy commits will carve this down by AST node kind.
+  Any,
 }
 
 /// Compute debug marks for a lifted CPS result.
 ///
-/// Currently returns an empty `DebugMarks` (every CpsId maps to `None`).
-/// The test harness + CLI command exercise the plumbing end-to-end
-/// against this empty output so subsequent policy commits can change
-/// output without re-doing the plumbing.
-pub fn analyse(lifted: &crate::passes::LiftedCps) -> DebugMarks {
-  // PropGraph size matches the origin arena so CpsId lookups are safe.
+/// Bootstrap policy: any CpsId with an AST origin whose `Loc` is
+/// source-bearing (`start.line > 0`) becomes a stop. That's a
+/// deliberately crude starting point so the harness emits visible
+/// output we can review in the extension; later commits replace this
+/// with a real policy keyed on AST node kind.
+pub fn analyse(lifted: &crate::passes::LiftedCps, desugared: &crate::passes::DesugaredAst<'_>) -> DebugMarks {
   let size = lifted.result.origin.len();
-  let stops: PropGraph<CpsId, Option<StopInfo>> = PropGraph::with_size(size, None);
+  let mut stops: PropGraph<CpsId, Option<StopInfo>> = PropGraph::with_size(size, None);
+  for i in 0..size {
+    let id = CpsId(i as u32);
+    let Some(Some(ast_id)) = lifted.result.origin.try_get(id) else { continue };
+    let loc = desugared.ast.nodes.get(*ast_id).loc;
+    if loc.start.line == 0 { continue }
+    stops.set(id, Some(StopInfo { kind: StopKind::Any }));
+  }
   DebugMarks { stops }
 }
 
@@ -90,7 +98,7 @@ mod tests {
   fn marks_inner(src: &str) -> String {
     match crate::to_lifted(src, "test") {
       Ok((lifted, desugared)) => {
-        let debug_marks = super::analyse(&lifted);
+        let debug_marks = super::analyse(&lifted, &desugared);
         let (output, srcmap) = super::fmt::render_mapped_native(&debug_marks, &lifted, &desugared);
         let b64 = srcmap.encode_base64url();
         if output.is_empty() {
