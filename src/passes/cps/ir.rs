@@ -489,7 +489,7 @@ impl Cont {
 /// as regular `Arg::Val` arguments or captures.
 ///
 /// Set once by the CPS transform at creation time. Preserved through lifting.
-/// See `docs/calling-convention-v2.md` for the WASM-level design.
+/// See `../wasm/calling-convention.md` for the WASM-level design.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpsFnKind {
   /// Called with `Arg::Cont` at the call site. Includes user-defined
@@ -526,7 +526,7 @@ pub enum ExprKind {
   ///
   /// `fn_kind` distinguishes functions called with `Arg::Cont` (CpsFunction)
   /// from those that never receive a cont via `Arg::Cont` (CpsClosure).
-  /// Set by the CPS transform at creation time. See `docs/calling-convention-v2.md`.
+  /// Set by the CPS transform at creation time. See `../wasm/calling-convention.md`.
   LetFn {
     name: BindNode,
     params: Vec<Param>,
