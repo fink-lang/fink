@@ -29,8 +29,8 @@ chain.
 | [errors/](errors/) | Diagnostic formatter | — |
 | [fmt/](fmt/) | Canonical Fink-source pretty-printer (Stage-2 layout + print) | — |
 | [passes/](passes/) | Compiler passes — see below | — |
-| [runner/](runner/) | wasmtime-based runner for `fink run` | — |
-| [runtime/](runtime/) | WAT runtime sources, merged at build time | — |
+| [runner/](runner/) | wasmtime-based runner for `fink run` | [README](runner/README.md) |
+| [runtime/](runtime/) | WAT runtime sources, merged at build time | [README](runtime/README.md) |
 | [sourcemap/](sourcemap/) | Native byte-offset source-map format | — |
 | [strings/](strings/) | String rendering and escape handling | — |
 
