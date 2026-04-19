@@ -1144,7 +1144,7 @@ mod tests {
   use test_macros::include_fink_tests;
 
   use crate::passes::cps::fmt::Ctx;
-  use super::fmt::fmt_flat;
+  use super::fmt::fmt_flat_mapped_native;
 
   #[allow(unused)]
   fn lift(src: &str) -> String {
@@ -1175,7 +1175,9 @@ mod tests {
           param_info: Some(&lifted.result.param_info),
           bind_kinds: Some(&bk),
         };
-        fmt_flat(&lifted.result.root, &ctx)
+        let (output, srcmap) = fmt_flat_mapped_native(&lifted.result.root, &ctx);
+        let b64 = srcmap.encode_base64url();
+        format!("{output}\n# sm:{b64}")
       }
       Err(e) => format!("ERROR: {e}"),
     }
