@@ -6,9 +6,6 @@ passes (CPS lowering, lifting) consume to resolve names.
 
 ## Design
 
-- [name-resolution.md](name-resolution.md) — scope graph design. **Status:
-  this file currently describes a superseded CPS-keyed design that lived
-  in the deleted `src/passes/name_res/` module.** Phase 1c rewrites the body
-  against the live `BindOrigin` / `ScopeId` / `BindId` shape implemented in
-  `mod.rs`. Until then, treat the doc as historical and read `mod.rs` for
-  current behaviour.
+- [name-resolution.md](name-resolution.md) — scope graph design: typed
+  IDs, scope kinds, the `ScopeResult` tables, the resolution algorithm,
+  and how downstream passes (CPS, lifting) consume the output.
