@@ -481,7 +481,14 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
       let body_stmts = collect_stmts(b, fn_body, fc);
       let fn_rhs = b_fn_loc(b, fn_params, body_stmts, expr_loc);
 
-      let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, phase_a_loc(name.id, fc), cont, fc);
+      // If `name` is a SynthName (source binding), use its own loc.
+      // For synth temps (e.g. `·v_2` holding a fn value), anchor at the
+      // LetFn's expr_loc so the temp still maps to the fn expression.
+      let name_loc = {
+        let pa = phase_a_loc(name.id, fc);
+        if pa.start.line == 0 { expr_loc } else { pa }
+      };
+      let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, name_loc, cont, fc);
       let bound = outermost_name(b, lhs_id).unwrap_or_else(|| name_str.clone());
       let bind_id = b_bind_loc(b, lhs_id, fn_rhs, expr_loc);
       out.push(bind_id);
@@ -491,7 +498,11 @@ fn collect_into(b: &mut AstBuilder<'static>, expr: &Expr, fc: &FmtCtx<'_, '_>, o
     ExprKind::LetVal { name, val, cont } => {
       let name_str = render_bind(name, fc);
       let val_id = render_val(b, val, fc);
-      let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, phase_a_loc(name.id, fc), cont, fc);
+      let name_loc = {
+        let pa = phase_a_loc(name.id, fc);
+        if pa.start.line == 0 { expr_loc } else { pa }
+      };
+      let (lhs_id, tail) = chain_lhs_with_loc(b, &name_str, name_loc, cont, fc);
       let bound = outermost_name(b, lhs_id).unwrap_or_else(|| name_str.clone());
       let bind_id = b_bind_loc(b, lhs_id, val_id, expr_loc);
       out.push(bind_id);
@@ -644,7 +655,10 @@ fn chain_lhs_with_loc<'src>(
 
     if val_matches {
       let alias_str = render_bind(alias, fc);
-      let alias_loc = phase_a_loc(alias.id, fc);
+      // Synth temp alias (e.g. `·v_2` holding the fn value): its origin
+      // is whatever the val expression was (the fn, literal, etc.).
+      // Use cps_loc over phase_a_loc so synth temps still carry a loc.
+      let alias_loc = cps_loc(alias.id, fc);
       let alias_id = b_ident_loc(b, &alias_str, alias_loc);
       let name_id = b_ident_loc(b, name, name_loc);
       let chained = b_bind(b, alias_id, name_id);
