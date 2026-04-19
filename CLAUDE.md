@@ -49,7 +49,7 @@ block comment
 
 ## Key Syntax Reference
 
-See [docs/examples/lang-features.fnk](docs/examples/lang-features.fnk) for the authoritative syntax reference. WIP areas live in sibling files: [type-system.fnk](docs/examples/type-system.fnk), [protocols.fnk](docs/examples/protocols.fnk), [macros.fnk](docs/examples/macros.fnk), [unresolved.fnk](docs/examples/unresolved.fnk).
+See [docs/language.md](docs/language.md) for the authoritative syntax reference (every construct with a runnable snippet, marked `implemented` / `designed` / `open`). [docs/roadmap.md](docs/roadmap.md) lists features that are designed but not yet implemented plus active design questions. Original `.fnk` syntax sketches still live in [docs/examples/](docs/examples/).
 
 ### Significant topics
 

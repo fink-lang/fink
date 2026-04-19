@@ -45,7 +45,7 @@ echo "main = fn: 'hello, world'" > hello.fnk
 fink run hello.fnk
 ```
 
-See [docs/examples/lang-features.fnk](docs/examples/lang-features.fnk) for a
+See [docs/language.md](docs/language.md) for a
 by-example tour of the language.
 
 ## Documentation
@@ -55,7 +55,7 @@ Two surfaces, two audiences:
 - **For users** writing Fink programs: the language tour, install guide, and
   in-browser playground at **[fink-lang.org](https://fink-lang.org/)**. The
   by-example syntax reference also lives in-repo at
-  [docs/examples/lang-features.fnk](docs/examples/lang-features.fnk) for now;
+  [docs/language.md](docs/language.md) for now;
   upcoming work converts it to [docs/language.md](docs/) and consolidates
   it with deeper sections (formal grammar, evaluation model, terminology).
 - **For contributors** modifying the compiler: start at

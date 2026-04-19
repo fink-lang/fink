@@ -733,7 +733,8 @@ impl<'src> Parser<'src> {
         "==" | "!=" | "<" | "<=" | ">" | ">=" | "><" => Some((60, 61)),
         // TODO(chan-op): `<<`/`>>` are overloaded for both bitwise shift
         // and channel send. Contradictory precedences — see
-        // docs/examples/unresolved.fnk.
+        // docs/roadmap.md#chan-op-precedence for the options being
+        // considered.
         ">>" | "<<" | ">>>" | "<<<" => Some((90, 91)),
         "+" | "-" => Some((100, 101)),
         "*" | "/" | "//" | "%" | "%%" | "/%" => Some((110, 111)),
