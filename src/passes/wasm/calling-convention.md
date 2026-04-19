@@ -1,4 +1,4 @@
-# Calling Convention v2 — Captures + Args + Optional Cont
+# Calling Convention — Captures + Args + Optional Cont
 
 ## Overview
 
@@ -142,17 +142,3 @@ They dispatch results to continuations via `apply_1` → `_apply`:
   (local.get $cont))   ;; the closure
 ```
 
-## Migration from v1
-
-- `$FnN` per-arity types → `$Fn2` + `$Fn3` (two types total)
-- `$Captures` array → per-function struct subtypes
-- `_apply` / `_apply_cont` (trivial dispatch)
-- `$SpreadArgs` wrapper → removed (spread = take whole args list)
-- `$VarArgs` array → still used by `str_fmt` (builtin-internal, unchanged)
-
-## v2.1 changes (CpsFnKind)
-
-- `CpsFnKind` enum on `ExprKind::LetFn`: set by CPS transform at creation time
-- `scan_cont_call_targets` removed — `CpsFnKind` carries the information directly
-- Closure targets set to `CpsClosure` during lifting (they go through dispatch)
-- `has_cont` on `CollectedFn` derived from `CpsFnKind` at collection time
