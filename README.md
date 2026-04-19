@@ -40,8 +40,13 @@ The targets above are the only supported build entry points.
 
 ## Quickstart
 
+```fink
+# hello.fnk
+main = fn:
+  'hello, world'
+```
+
 ```sh
-echo "main = fn: 'hello, world'" > hello.fnk
 fink run hello.fnk
 ```
 
