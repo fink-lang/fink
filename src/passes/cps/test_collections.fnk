@@ -13,7 +13,7 @@ test 'seq literal', fn:
       ·seq_prepend 3, [], fn ·v_3:
         ·seq_prepend 2, ·v_3, fn ·v_6:
           ·seq_prepend 1, ·v_6, ·ƒret_0
-    # sm:HQABAAkAAQAJJAEACRIACAEACQABAAkcAQ4BAgAEAQ0JAAACAAIACgEACQoADAEACQABAAkcAQgBAgAEAQcJCgAKAQAJCgAQAQAJAAEACRwBAgECAAQBAQkKAAQBAAk
+    # sm:HQABAAkAAQAJJAEACRIACAEOAQABAAEcAQABAgAEAQ0JAAEACQIBAAkCAAoBDgEKAAwBBQEAAQABHAEAAQIABAEGAQoACgEFAQoAEAEFAQABAAEcAQABAgAEAQYBCgAEAQUB
 
 
 test 'empty seq literal', fn:
@@ -22,7 +22,7 @@ test 'empty seq literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 []
-    # sm:CQABAAIAAQACJAEAAhIACAEAAgABAAIUAQACAAACAA
+    # sm:CQABAAIAAQACJAEAAhIACAEAAgABAAIUAQACAAEAAgIBAAI
 
 
 test 'rec literal', fn:
@@ -32,7 +32,7 @@ test 'rec literal', fn:
     ·ƒink_module fn ·ƒret_0:
       ·rec_put {}, 'x', 1, fn ·v_4:
         ·rec_put ·v_4, 'y', 2, ·ƒret_0
-    # sm:HwABAAwAAQAMJAEADBIACAEADAABAAwUAQAMAAACAAIABAECBAAAAgEABAIAAgAEAQYBAgAKAQcMCgAMAQAMAAEADBQBAAwKAAQBDgQAAAIBAAQCAAIABAEGAQIABAETDA
+    # sm:HwABAAwAAQAMJAEADBIACAECBAABAAQUAQEMAAEADAIBAAwCAAQBAgEAAQABAgEAAQIBAAECAAQBBgECAAoBBQQKAAwBDAQAAQAEFAELBAoABAEMAQABAAECAQABAgEAAQIABAEGAQIABAEFBA
 
 
 test 'empty rec literal', fn:
@@ -41,7 +41,7 @@ test 'empty rec literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 {}
-    # sm:CQABAAIAAQACJAEAAhIACAEAAgABAAIUAQACAAACAA
+    # sm:CQABAAIAAQACJAEAAhIACAEAAgABAAIUAQACAAEAAgIBAAI
 
 
 test 'rec shorthand', fn:
@@ -50,8 +50,8 @@ test 'rec shorthand', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·rec_put {}, 'x', ·∅x, fn ·v_4:
-        ·rec_put ·v_4, 'y', ·∅y, ·ƒret_0
-    # sm:HwABAAYAAQAGJAEABhIACAEABgABAAYUAQAGAAACAAIABAECAQAAAgEAAQIAAgAEAQABDAAKAQEGCgAMAQAGAAEABhQBAAYKAAQBCAEAAAIBAAECAAIABAEAAQwABAEHBg
+        ·rec_put ·x_4, 'y', ·∅y, ·ƒret_0
+    # sm:HwABAAYAAQAGJAEABhIACAECAQABAAEUAQEGAAEABgIBAAYCAAQBAgEAAQABAgEAAQIBAAECAAQBAAEMAAoBAAEKAAwBBgEAAQABFAEFAQoABAEGAQABAAECAQABAgEAAQIABAEAAQwABAEAAQ
 
 
 
@@ -65,7 +65,7 @@ test 'member static', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_dot ·∅foo, 'bar', ·ƒret_0
-    # sm:DgABAAcAAQAHJAEABxIACAEABwABAAcSAQADEAAEAQgDAAACAQADBgACAAQBBwc
+    # sm:DgABAAcAAQAHJAEABxIACAEABwABAAcSAQADEAAEAQgDAAEAAwIBAAMGAQADAgAEAQcH
 
 
 test 'member dynamic', fn:
@@ -83,7 +83,7 @@ test 'member string key shorthand', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·op_dot ·∅foo, 'bar baz', ·ƒret_0
-    # sm:DgABAA0AAQANJAEADRIACAEADQABAA0SAQADEAAEAQgJAAACAQAJDgACAAQBBw0
+    # sm:DgABAA0AAQANJAEADRIACAEADQABAA0SAQADEAAEAQgJAAEACQIBAAkOAQAJAgAEAQcN
 
 
 
@@ -98,7 +98,7 @@ test 'seq spread', fn:
     ·ƒink_module fn ·ƒret_0:
       ·seq_prepend 1, [], fn ·v_3:
         ·seq_concat ·∅xs, ·v_3, ·ƒret_0
-    # sm:FQABAAkAAQAJJAEACRIACAEACQABAAkcAQ4BAgAEAQ0JAAACAAIACgEACQoADAEACQABAAkaAQYCDgAEAQUJCgAEAQAJ
+    # sm:FQABAAkAAQAJJAEACRIACAEOAQABAAEcAQABAgAEAQ0JAAEACQIBAAkCAAoBDgEKAAwBCwQAAQAEGgEEAg4ABAEIAQoABAELBA
 
 
 test 'rec spread', fn:
@@ -108,7 +108,7 @@ test 'rec spread', fn:
     ·ƒink_module fn ·ƒret_0:
       ·rec_merge {}, ·∅base, fn ·v_3:
         ·rec_put ·v_3, 'x', 1, ·ƒret_0
-    # sm:GgABAA4AAQAOJAEADhIACAEADgABAA4YAQAOAAACAAIABAEGBBIACgEFDgoADAEADgABAA4UAQAOCgAEARIEAAACAQAEAgACAAQBBgECAAQBFw4
+    # sm:GgABAA4AAQAOJAEADhIACAECBgABAAYYAQEOAAEADgIBAA4CAAQBBgQSAAoBAwYKAAwBEAQAAQAEFAEPBgoABAEQAQABAAECAQABAgEAAQIABAEGAQIABAEFBA
 
 
 
@@ -140,7 +140,7 @@ test 'seq literal with spread', fn:
       ·seq_prepend 2, [], fn ·v_3:
         ·seq_concat ·∅a, ·v_3, fn ·v_6:
           ·seq_prepend 1, ·v_6, ·ƒret_0
-    # sm:HQABAAsAAQALJAEACxIACAEACwABAAscARIBAgAEARELAAACAAIACgEACwoADAEACwABAAsaAQwBDAAEAQsLCgAKAQALCgAQAQALAAEACxwBAgECAAQBAQsKAAQBAAs
+    # sm:HQABAAsAAQALJAEACxIACAESAQABAAEcAQABAgAEARELAAEACwIBAAsCAAoBEgEKAAwBCQMAAQADGgEEAQwABAEGAQoACgEJAwoAEAEFAQABAAEcAQABAgAEAQYDCgAEAQUB
 
 test 'seq literal leading spread', fn:
   expect cps_module ƒink:
@@ -149,7 +149,7 @@ test 'seq literal leading spread', fn:
     ·ƒink_module fn ·ƒret_0:
       ·seq_concat ·∅b, [], fn ·v_3:
         ·seq_concat ·∅a, ·v_3, ·ƒret_0
-    # sm:FQABAAoAAQAKJAEAChIACAEACgABAAoaARABDAAEAQ8KAAACAAIACgEACgoADAEACgABAAoaAQYBDAAEAQUKCgAEAQAK
+    # sm:FQABAAoAAQAKJAEAChIACAEMAwABAAMaAQQBDAAEAQ8KAAEACgIBAAoCAAoBDAMKAAwBCQMAAQADGgEEAQwABAEGAwoABAEJAw
 
 test 'rec literal with spread', fn:
   expect cps_module ƒink:
@@ -158,7 +158,7 @@ test 'rec literal with spread', fn:
     ·ƒink_module fn ·ƒret_0:
       ·rec_put {}, 'foo', ·∅a, fn ·v_4:
         ·rec_merge ·v_4, ·∅b, ·ƒret_0
-    # sm:GgABAA0AAQANJAEADRIACAEADQABAA0UAQANAAACAAIABAECBgAAAgEABgYAAgAEAQoBDAAKAQsNCgAMAQANAAEADRgBAA0KAAQBFgEMAAQBFQ0
+    # sm:GgABAA0AAQANJAEADRIACAECBgABAAYUAQENAAEADQIBAA0CAAQBAgMAAQADAgEAAwYBAAMCAAQBCgEMAAoBCQYKAAwBEAMAAQADGAEPBgoABAEUAQwABAEDAw
 
 test 'rec literal leading spread', fn:
   expect cps_module ƒink:
@@ -167,6 +167,6 @@ test 'rec literal leading spread', fn:
     ·ƒink_module fn ·ƒret_0:
       ·rec_merge {}, ·∅a, fn ·v_3:
         ·rec_merge ·v_3, ·∅b, ·ƒret_0
-    # sm:FQABAAoAAQAKJAEAChIACAEACgABAAoYAQAKAAACAAIABAEGAQwACgEFCgoADAEACgABAAoYAQAKCgAEARABDAAEAQ8K
+    # sm:FQABAAoAAQAKJAEAChIACAECAwABAAMYAQEKAAEACgIBAAoCAAQBBgEMAAoBAwMKAAwBCgMAAQADGAEJAwoABAEOAQwABAEDAw
 
 

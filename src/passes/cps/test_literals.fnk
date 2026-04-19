@@ -115,5 +115,5 @@ test 'string literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 'hello'
-    # sm:CgABAAcAAQAHJAEABxIACAEABwABAAcUAQAHAAACAQAHCgA
+    # sm:CgABAAcAAQAHJAEABxIACAEABwABAAcUAQAHAAEABwIBAAcKAQAH
 

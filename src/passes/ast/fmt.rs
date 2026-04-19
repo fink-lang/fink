@@ -127,9 +127,12 @@ fn fmt_node(ast: &Ast<'_>, id: AstId, out: &mut MappedWriter, depth: usize) {
           out.push_str(line);
         }
       } else {
-        if open.loc.start.line == 0 {
-          // Synthetic string (CPS formatter): unmap the quote, map content to node loc.
-          stop_mark(out);
+        // Synthetic literal (CPS formatter) is flagged by empty open.src.
+        // Whether open.loc is dummy (`line == 0`) or a real loc reused
+        // from the CPS origin, we want the quote to carry a useful span
+        // and the content to map to the whole literal.
+        if open.src.is_empty() {
+          out.mark(open.loc);
           out.push('\'');
           out.mark(node_loc);
         } else {
@@ -513,6 +516,9 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
   // Multiple trailing fns/complex args → each on its own indented line
   if !plain.is_empty() { stop_mark(out); out.push(','); }
   for &arg_id in trailing {
+    // Stop the previous mapping from bleeding across the newline/indent
+    // into this trailing arg's preamble.
+    stop_mark(out);
     out.push('\n');
     ind(out, depth + 1);
     let arg_node = ast.nodes.get(arg_id);
