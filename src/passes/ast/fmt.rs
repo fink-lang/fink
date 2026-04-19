@@ -516,6 +516,9 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
   // Multiple trailing fns/complex args → each on its own indented line
   if !plain.is_empty() { stop_mark(out); out.push(','); }
   for &arg_id in trailing {
+    // Stop the previous mapping from bleeding across the newline/indent
+    // into this trailing arg's preamble.
+    stop_mark(out);
     out.push('\n');
     ind(out, depth + 1);
     let arg_node = ast.nodes.get(arg_id);
