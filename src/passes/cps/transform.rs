@@ -504,7 +504,12 @@ fn lower_fn(
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
-  let (cont, prev_cont) = g.push_cont(origin);
+  // The cont represents the return point of the function — semantically
+  // anchored at the expression whose value flows into it (the last body
+  // statement), not the whole fn node. Narrowing here makes hovering a
+  // ·ƒret_N param declaration highlight the body's tail expression.
+  let cont_origin = body.last().copied().map(Some).unwrap_or(origin);
+  let (cont, prev_cont) = g.push_cont(cont_origin);
   let fn_body = {
       let body = lower_seq(g, body);
       prepend_pat_binds(g, deferred, body)
@@ -523,7 +528,8 @@ fn lower_module_as_fn(
 ) -> Lower {
   let fn_name = g.fresh_fn(origin);
   let (fn_name_kind, fn_name_id) = (fn_name.kind, fn_name.id);
-  let (cont, prev_cont) = g.push_cont(origin);
+  let cont_origin = body.last().copied().map(Some).unwrap_or(origin);
+  let (cont, prev_cont) = g.push_cont(cont_origin);
   let fn_body = lower_seq(g, body);
   g.pop_cont(prev_cont);
   let pending = vec![Pending::Fn { name: fn_name, params: vec![Param::Name(cont)], fn_kind: CpsFnKind::CpsFunction, fn_body, origin }];
@@ -540,7 +546,8 @@ fn lower_iife(
 ) -> Lower {
   let fn_name = g.fresh_fn(origin);
   let (mut param_names, deferred) = extract_params_with_gen(g, params);
-  let (cont, prev_cont) = g.push_cont(origin);
+  let cont_origin = body.last().copied().map(Some).unwrap_or(origin);
+  let (cont, prev_cont) = g.push_cont(cont_origin);
   let fn_body = {
       let body = lower_seq(g, body);
       prepend_pat_binds(g, deferred, body)
