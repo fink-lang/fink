@@ -46,18 +46,3 @@ type BindNode   = Node<Bind>;
 Merging would lose the compile-time guarantee that fields like `App.func` or
 `If.cond` can only hold trivial values. The generic `Node<K>` approach
 preserves this guarantee while sharing the ID infrastructure.
-
-## Downstream: name resolution pass
-
-With Vals carrying CpsIds, name resolution becomes:
-
-```
-PropGraph<CpsId, Option<Resolution>>
-```
-
-- Populated for every `Ref::Name` Val node
-- `None` for non-ref nodes (literals, Gen refs, all Expr nodes)
-- Sparse — use `Option<Resolution>` as the PropGraph element type
-
-Resolution is a side table, consistent with the property graph design.
-The CPS tree remains fully immutable after construction.
