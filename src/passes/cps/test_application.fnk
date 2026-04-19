@@ -11,7 +11,7 @@ test '·apply ident to literal', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, 42
-    # sm:CQABAAYAAQAGJAEABhIACAEABgABAAMSAQAGEgAEAQgC
+    # sm:CgABAAYAAQAGJAEABhIAAgAGAQAGAAEAAxIBAAYSAAQBCAI
 
 
 test '·apply ident to ident', fn:
@@ -20,7 +20,7 @@ test '·apply ident to ident', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅bar
-    # sm:CQABAAcAAQAHJAEABxIACAEABwABAAMSAQAHEgAEAQgD
+    # sm:CgABAAcAAQAHJAEABxIAAgAGAQAHAAEAAxIBAAcSAAQBCAM
 
 
 
@@ -34,7 +34,7 @@ test 'pipe two stages', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a
-    # sm:CQABAAcAAQAHJAEABxIACAEEAQABBAMSAQcHEgAEAQAB
+    # sm:CgABAAcAAQAHJAEABxIAAgAGAQQBAAEEAxIBBwcSAAQBAAE
 
 
 test 'pipe three stages', fn:
@@ -45,7 +45,7 @@ test 'pipe three stages', fn:
       ·∅foo
         fn ·v_3: ·∅bar ·ƒret_0, ·v_3
         ·∅a
-    # sm:DgABAA0AAQANJAEADRIACAEEAQABBAMgAQcNCgAEARABAAEEAxIBEw0SAAQBAA0UAQAB
+    # sm:DwABAA0AAQANJAEADRIAAgAGAQQBAAEEAyABBw0KAAQBEAEAAQQDEgETDRIABAEADRQBAAE
 
 
 
@@ -59,7 +59,7 @@ test 'try', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·ƒret_0 ·∅foo
-    # sm:BwABAAcAAQAHJAEABxIACAEABwABAAcUAQgD
+    # sm:CAABAAcAAQAHJAEABxIAAgAGAQAHAAEABxQBCAM
 
 
 
@@ -73,7 +73,7 @@ test 'simple call', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅add ·ƒret_0, 1, 2
-    # sm:CwABAAgAAQAIJAEACBIACAEACAABAAMSAQAIEgAEAQgBAgAEAQYB
+    # sm:DAABAAgAAQAIJAEACBIAAgAGAQAIAAEAAxIBAAgSAAQBCAECAAQBBgE
 
 
 test 'nested call', fn:
@@ -85,7 +85,7 @@ test 'nested call', fn:
         fn ·v_5: ·∅add ·ƒret_0, ·v_5, 1
         2
         3
-    # sm:EQABABEAAQARJAEAERIACAEKCAABAAMgAQAICgAEAQkRAAEAAxIBABESAAQBCggKAAQBFgEMAQ0BDAEGAQ
+    # sm:EgABABEAAQARJAEAERIAAgAGAQoIAAEAAyABAAgKAAQBCREAAQADEgEAERIABAEKCAoABAEWAQwBDQEMAQYB
 
 
 test 'postfix tag', fn:
@@ -96,7 +96,7 @@ test 'postfix tag', fn:
       ·∅foo
         fn ·v_4: ·∅tag ·ƒret_0, ·v_4
         ·∅bar
-    # sm:DgABAAwAAQAMJAEADBIACAECBwABAAMgAQAHCgAEAQEMAAESAxIBEQwSAAQBAgcUAQgD
+    # sm:DwABAAwAAQAMJAEADBIAAgAGAQIHAAEAAyABAAcKAAQBAQwAARIDEgERDBIABAECBxQBCAM
 
 
 test 'call with spread', fn:
@@ -105,7 +105,7 @@ test 'call with spread', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a, ..·∅rest
-    # sm:DQABAA0AAQANJAEADRIACAEADQABAAMSAQANEgAEAQgBDAAEAQoEAAEABAQBAAQ
+    # sm:DgABAA0AAQANJAEADRIAAgAGAQANAAEAAxIBAA0SAAQBCAEMAAQBCgQAAQAEBAEABA
 
 
 test 'simple pipe', fn:
@@ -114,7 +114,7 @@ test 'simple pipe', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅f ·ƒret_0, ·∅x
-    # sm:CQABAAUAAQAFJAEABRIACAEEAQABBAEOAQcFEgAEAQAB
+    # sm:CgABAAUAAQAFJAEABRIAAgAGAQQBAAEEAQ4BBwUSAAQBAAE
 
 
 test 'pipe chain', fn:
@@ -125,7 +125,7 @@ test 'pipe chain', fn:
       ·∅f
         fn ·v_3: ·∅g ·ƒret_0, ·v_3
         ·∅x
-    # sm:DgABAAkAAQAJJAEACRIACAEEAQABBAEcAQcJCgAEAQwBAAEEAQ4BDwkSAAQBAAkUAQAB
+    # sm:DwABAAkAAQAJJAEACRIAAgAGAQQBAAEEARwBBwkKAAQBDAEAAQQBDgEPCRIABAEACRQBAAE
 
 
 test 'partial apply', fn:
@@ -136,7 +136,7 @@ test 'partial apply', fn:
       ·fn
         fn ·ƒret_3, ·v_0: ·∅add ·ƒret_3, 3, ·v_0
         fn ·v_2: ·ƒret_1 ·v_2
-    # sm:FwABAAgAAQAIJAEACBIACAEACAABAAgIABABAAgWAQAICgAEAQAIAAEAAxIBAAgSAAQBCAECAAQBBgEKABABDQgKAAQBAAgAAQAIFAEACA
+    # sm:GAABAAgAAQAIJAEACBIAAgAGAQAIAAEACAgAEAEACBYBAAgKAAQBAAgAAQADEgEACBIABAEIAQIABAEGAQoAEAENCAoABAEACAABAAgUAQAI
 
 
 test 'pipe with lambda — literal head', fn:
@@ -147,7 +147,7 @@ test 'pipe with lambda — literal head', fn:
       ·fn
         fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
         fn ·v_3: ·v_3 ·ƒret_1, 3
-    # sm:GQABAA8AAQAPJAEADxIACAEICwABAAsIABABDAUWAQUBCgAEAQYFAAEABRQBAAEKAAQBCAECAAQBBwUSABABCwsKAAQBAwEAAQQLDAEHDxIABAEAAQ
+    # sm:GgABAA8AAQAPJAEADxIAAgAGAQgLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABAEIAQIABAEHBRIAEAELCwoABAEDAQABBAsMAQcPEgAEAQAB
 
 
 test 'pipe with lambda — ident head', fn:
@@ -158,7 +158,7 @@ test 'pipe with lambda — ident head', fn:
       ·fn
         fn ·ƒret_4, ·a_0: ·op_plus ·a_0, 2, ·ƒret_4
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
-    # sm:GQABAA8AAQAPJAEADxIACAEICwABAAsIABABDAUWAQUBCgAEAQYFAAEABRQBAAEKAAQBCAECAAQBBwUSABABCwsKAAQBAwEAAQQLDAEHDxIABAEAAQ
+    # sm:GgABAA8AAQAPJAEADxIAAgAGAQgLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABAEIAQIABAEHBRIAEAELCwoABAEDAQABBAsMAQcPEgAEAQAB
 
 
 test 'pipe with partial', fn:
@@ -169,7 +169,7 @@ test 'pipe with partial', fn:
       ·fn
         fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
         fn ·v_3: ·v_3 ·ƒret_1, 3
-    # sm:GQABAAwAAQAMJAEADBIACAEICAABAAgIABABAAgWAQAICgAEAQAIAAEAAxIBAAgSAAQBCAECAAQBBgEKABABDQgKAAQBAwEAAQQIDAEHDBIABAEAAQ
+    # sm:GgABAAwAAQAMJAEADBIAAgAGAQgIAAEACAgAEAEACBYBAAgKAAQBAAgAAQADEgEACBIABAEIAQIABAEGAQoAEAENCAoABAEDAQABBAgMAQcMEgAEAQAB
 
 
 test 'pipe with partial — ident head', fn:
@@ -180,7 +180,7 @@ test 'pipe with partial — ident head', fn:
       ·fn
         fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, 2, ·v_0
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
-    # sm:GQABAAwAAQAMJAEADBIACAEICAABAAgIABABAAgWAQAICgAEAQAIAAEAAxIBAAgSAAQBCAECAAQBBgEKABABDQgKAAQBAwEAAQQIDAEHDBIABAEAAQ
+    # sm:GgABAAwAAQAMJAEADBIAAgAGAQgIAAEACAgAEAEACBYBAAgKAAQBAAgAAQADEgEACBIABAEIAQIABAEGAQoAEAENCAoABAEDAQABBAgMAQcMEgAEAQAB
 
 
 
@@ -197,7 +197,7 @@ test 'varargs — call site spreads iterable', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, 1, ..·∅items
-    # sm:DQABAA4AAQAOJAEADhIACAEADgABAAMSAQAOEgAEAQgBAgAEAQoFAAEABQQBAAU
+    # sm:DgABAA4AAQAOJAEADhIAAgAGAQAOAAEAAxIBAA4SAAQBCAECAAQBCgUAAQAFBAEABQ
 
 
 test 'call with spread — trailing iterable', fn:
@@ -206,7 +206,7 @@ test 'call with spread — trailing iterable', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ·∅a, ..·∅rest
-    # sm:DQABAA0AAQANJAEADRIACAEADQABAAMSAQANEgAEAQgBDAAEAQoEAAEABAQBAAQ
+    # sm:DgABAA0AAQANJAEADRIAAgAGAQANAAEAAxIBAA0SAAQBCAEMAAQBCgQAAQAEBAEABA
 
 
 test 'call with spread — spread only', fn:
@@ -215,7 +215,7 @@ test 'call with spread — spread only', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅foo ·ƒret_0, ..·∅items
-    # sm:CwABAAsAAQALJAEACxIACAEACwABAAMSAQALEgAEAQwFAAEABQQBAAU
+    # sm:DAABAAsAAQALJAEACxIAAgAGAQALAAEAAxIBAAsSAAQBDAUAAQAFBAEABQ
 
 
 test 'call with spread — passes through from varargs fn', fn:
@@ -226,7 +226,7 @@ test 'call with spread — passes through from varargs fn', fn:
       ·fn
         fn ·ƒret_3, ..·args_0: ·∅foo ·ƒret_3, ..·args_0
         fn ·v_2: ·ƒret_1 ·v_2
-    # sm:GQABABUAAQAVJAEAFRIACAEAFQABABUIABABFgoWAQsEAAEABAQBAAQQAAQBDAoAAQADEgEAChIABAEMBAABAAQEAQAEEAAQASEVCgAEAQAVAAEAFRQBABU
+    # sm:GgABABUAAQAVJAEAFRIAAgAGAQAVAAEAFQgAEAEWChYBCwQAAQAEBAEABBAABAEMCgABAAMSAQAKEgAEAQwEAAEABAQBAAQQABABIRUKAAQBABUAAQAVFAEAFQ
 
 
 

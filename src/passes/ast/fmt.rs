@@ -604,8 +604,11 @@ fn fmt_body(ast: &Ast<'_>, body: &[AstId], out: &mut MappedWriter, depth: usize,
       return;
     }
   }
-  // Block body: each statement on its own indented line
+  // Block body: each statement on its own indented line.
+  // Stop the previous mapping from bleeding across the newline+indent
+  // into the next statement's preamble.
   for &stmt_id in body {
+    stop_mark(out);
     out.push('\n');
     ind(out, depth + 1);
     fmt_node(ast, stmt_id, out, depth + 1);
