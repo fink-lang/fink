@@ -4,29 +4,23 @@ Fink is a functional programming language and compiler toolchain, built in Rust.
 
 ## Project Structure
 
-```
-fink/
-├── src/
-│   ├── lib.rs              # shared compiler library
-│   ├── propgraph.rs        # PropGraph<Id, T> — typed property graph storage
-│   ├── sourcemap.rs        # Source Map v3 (MappedWriter, VLQ, base64)
-│   ├── errors/             # diagnostic formatter
-│   ├── strings/            # string rendering and escape handling
-│   ├── passes/
-│   │   ├── ast/            # lexer, parser, AST types, formatter, transform
-│   │   ├── cps/            # CPS IR, transform (AST → CPS), formatter
-│   │   ├── partial/        # partial application pass
-│   │   └── name_res/       # name resolution — scope graph, Resolution enum
-│   └── bin/
-│       └── fink.rs         # main compiler driver CLI
-├── crates/
-│   └── test-macros/        # include_fink_tests! proc macro
-├── docs/
-│   └── examples/           # language spec by example (.fnk files)
-└── CLAUDE.md
-```
+See [src/README.md](src/README.md) for a current source map (it's authoritative
+and easy to scan; this top-level CLAUDE.md doesn't try to mirror it).
 
-Source files live in `src/`, specs co-located with source. User docs in `docs/`.
+The repo splits responsibilities like this:
+
+- `src/` — compiler implementation. Per-subsystem READMEs live next to the
+  code they describe (e.g. [src/passes/ast/](src/passes/ast/),
+  [src/passes/wasm/](src/passes/wasm/)). Design contracts that govern one
+  subsystem are sibling `.md` files (e.g.
+  [src/passes/ast/arena-contract.md](src/passes/ast/arena-contract.md),
+  [src/passes/wasm/calling-convention.md](src/passes/wasm/calling-convention.md)).
+- `crates/test-macros/` — `include_fink_tests!` proc macro.
+- `docs/` — language-level docs (spec, examples). These describe Fink, not
+  the current Rust implementation, so they survive the eventual self-hosting
+  port.
+- `CLAUDE.md` (this file) — project conventions + rules.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — short contributor entry point.
 
 ## Language Design Goals
 
@@ -55,7 +49,7 @@ block comment
 
 ## Key Syntax Reference
 
-See `docs/examples/lang features.fnk` for the authoritative syntax reference (excluding types, protocols, macros which are WIP in separate files).
+See [docs/examples/lang-features.fnk](docs/examples/lang-features.fnk) for the authoritative syntax reference. WIP areas live in sibling files: [type-system.fnk](docs/examples/type-system.fnk), [protocols.fnk](docs/examples/protocols.fnk), [macros.fnk](docs/examples/macros.fnk), [unresolved.fnk](docs/examples/unresolved.fnk).
 
 ### Significant topics
 
@@ -78,7 +72,7 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 ## Implementation Notes
 
 - Uses Pratt parser
-- Pipeline: tokenizer → parser → AST → partial → CPS transform → name resolution → closure hoisting → codegen
+- Pipeline: `tokenize → parse → desugar (partial + scopes) → lower (CPS) → lift (unified closure + cont lifting) → compile_package (collect → emit → DWARF → link)`. See [src/passes/mod.rs](src/passes/mod.rs) for the typed stage chain and [src/passes/cps/transform-contract.md](src/passes/cps/transform-contract.md) / [src/passes/ast/arena-contract.md](src/passes/ast/arena-contract.md) for the contracts each pass must uphold.
 - Flag before implementing anything that requires decisions on: protocols vs typeclasses, nominal vs structural typing
 
 ## Rust Conventions
@@ -88,7 +82,7 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 
 ## Testing Conventions
 
-- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `#[test_template]`.
+- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `test_macros::include_fink_tests!("path/to/tests.fnk")` (function-like proc macro from [crates/test-macros](crates/test-macros/) — see existing call sites e.g. [src/runner/mod.rs:543](src/runner/mod.rs#L543)).
 - Never put tests for module A inside module B.
 - **Bug workflow**: when investigating a bug, first write a failing test that reproduces it — don't dive into the code before you have a repro test.
 
