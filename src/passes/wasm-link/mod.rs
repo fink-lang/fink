@@ -141,14 +141,9 @@ pub fn compile_package(
     &entry_url_rewrite,
   );
   let entry_fragment = entry_output.wasm;
-  // Step 3: keep the entry fragment's debug-mark records. PCs are
-  // fragment-local — i.e. absolute byte offsets into `entry_fragment`,
-  // NOT into the linked binary the linker is about to produce. The
-  // linker prepends @fink/runtime's code-section bodies before the
-  // entry's, so `wasm_pc` here is off by `runtime_code_size` (and by
-  // any preceding dep fragments in multi-module). Step 4 / Step 7 wire
-  // a link-time shift parallel to `adjust_dwarf` in link.rs; until
-  // then DAP consumers will see the offset and we refine from there.
+  // Mark PCs are fragment-local at this point (absolute offsets into
+  // `entry_fragment`). The link-time shift is applied below, after
+  // `link()` produces the final code-section layout.
   let entry_mark_records = entry_output.mark_records;
 
   // Walk all transitive deps, keyed on canonical URL so that two
@@ -314,6 +309,12 @@ pub fn compile_package(
     }
   }
 
+  // Snapshot the entry fragment's per-body byte ranges before handing
+  // it to the linker — `shift_marks_to_linked` needs them to map each
+  // mark's intra-body offset to the rewritten body in the linked
+  // binary. We can't borrow `entry_fragment` after the move below.
+  let entry_bodies = body_ranges(&entry_fragment);
+
   // Entry last (so its global imports resolve to deps' already-assigned globals).
   link_inputs.push(LinkInput {
     module_name: "@fink/user".into(),
@@ -341,18 +342,88 @@ pub fn compile_package(
   // are equally affected since `to_wasm` now routes through `compile_package`
   // — there is no longer a parallel "direct emit" path that builds mappings.
   //
-  // TODO(debug_marks): the same coordinate problem applies to `marks`. The
-  // entry fragment's records are returned as-is (fragment-local PCs); for
-  // single-module compiles this happens to coincide with the linked binary
-  // because the linker preserves the entry's code-section layout. Dep
-  // fragments' records are computed by the emitter and discarded above —
-  // wiring them in needs a per-fragment PC shift parallel to the
-  // offset_mappings work above.
+  // TODO(debug_marks): dep-fragment marks are dropped during the BFS walk
+  // above — the link-time shift below only handles the entry fragment.
+  // Multi-module DAP support needs the same per-body shift extended to
+  // every fragment in `compiled`.
+
+  // Shift the entry's mark PCs from fragment-local to linked-binary
+  // coordinates. The linker preserves function order across fragments
+  // and the entry is always last, so the entry's bodies are the last
+  // K bodies in the linked binary (K = `entry_bodies.len()`).
+  // `rewrite_body` may change body byte-lengths (LEB128 of remapped
+  // function indices, string-literal peephole rewrites) so a uniform
+  // shift won't do — each body gets its own.
+  let marks = shift_marks_to_linked(
+    entry_mark_records,
+    &entry_bodies,
+    &linked.wasm,
+  );
+
   Ok(crate::passes::Wasm {
     binary: linked.wasm,
     mappings: vec![],
-    marks: entry_mark_records,
+    marks,
   })
+}
+
+/// Extract every code-section body's absolute byte range from a WASM
+/// binary. Used to map mark PCs between fragment and linked layouts.
+#[cfg(feature = "compile")]
+fn body_ranges(bytes: &[u8]) -> Vec<(u32, u32)> {
+  use wasmparser::{Parser, Payload};
+  let mut out = Vec::new();
+  for p in Parser::new(0).parse_all(bytes) {
+    if let Ok(Payload::CodeSectionEntry(b)) = p {
+      out.push((b.range().start as u32, b.range().end as u32));
+    }
+  }
+  out
+}
+
+/// Translate fragment-local mark PCs into linked-binary PCs by remapping
+/// each mark to its corresponding body in the linked binary.
+///
+/// Assumes the entry fragment's K function bodies are the **last** K
+/// bodies in the linked binary's code section — the linker enforces this
+/// by always placing `@fink/user` last in `link_inputs`.
+///
+/// Marks whose PC doesn't fall inside any entry body (shouldn't happen
+/// in practice — emit only records inside bodies) are dropped.
+///
+/// Within a body, the intra-body offset is preserved. `rewrite_body`
+/// can shift instruction boundaries by a few LEB128 bytes; for
+/// breakpoints this is "near right" — wasmtime fires at the next valid
+/// boundary at or after the requested PC, which still lands the user
+/// on the right source span via the `MarkRecord.source` we report
+/// independently of the PC.
+#[cfg(feature = "compile")]
+fn shift_marks_to_linked(
+  marks: Vec<crate::passes::debug_marks::MarkRecord>,
+  entry_bodies: &[(u32, u32)],
+  linked_wasm: &[u8],
+) -> Vec<crate::passes::debug_marks::MarkRecord> {
+  if marks.is_empty() {
+    return marks;
+  }
+
+  let linked_bodies = body_ranges(linked_wasm);
+
+  if entry_bodies.is_empty() || linked_bodies.len() < entry_bodies.len() {
+    return marks;
+  }
+
+  let entry_in_linked: &[(u32, u32)] = &linked_bodies[linked_bodies.len() - entry_bodies.len()..];
+
+  marks.into_iter().filter_map(|m| {
+    let body_idx = entry_bodies.iter().position(|(s, e)| m.wasm_pc >= *s && m.wasm_pc < *e)?;
+    let intra = m.wasm_pc - entry_bodies[body_idx].0;
+    Some(crate::passes::debug_marks::MarkRecord {
+      wasm_pc: entry_in_linked[body_idx].0 + intra,
+      cps_id: m.cps_id,
+      source: m.source,
+    })
+  }).collect()
 }
 
 /// Compile a single lifted CPS module into raw WASM bytes (without linking).
@@ -657,33 +728,23 @@ mod tests {
     }
   }
 
-  /// Sanity check: how many marks does a tiny program produce, and do
-  /// the fragment-local PCs land inside *some* code-section body in the
-  /// linked binary? The answer should be: a small handful (the policy
-  /// over-marks but we're nowhere near hundreds), and **no** — the PCs
-  /// fall short of the entry's bodies because the linker prepends
-  /// @fink/runtime's code-section bodies first. This test pins the
-  /// expectation so the link-time PC shift in Step 4 has a clear
-  /// before/after.
+  /// Sanity check: every mark PC sits inside a code-section body in
+  /// the **linked** binary (post-shift), and the count stays in single
+  /// digits for a tiny program (catches policy regressions cheaply).
   #[test]
-  fn compile_package_marks_are_fragment_local_not_linked() {
+  fn compile_package_marks_land_inside_linked_bodies() {
     use wasmparser::{Parser, Payload};
     let src = "main = fn: 1 + 2";
     let mut loader = InMemorySourceLoader::single("test.fnk", src);
     let wasm = compile_package(Path::new("test.fnk"), &mut loader).unwrap();
 
-    // Single-digit count for a 1-line program — the policy is known to
-    // over-mark (see debug-marks-end-to-end-plan.md), but emit-time
-    // mapping reduces that to a handful in practice. If this jumps to
-    // 50+, something has gone wrong upstream.
+    assert!(!wasm.marks.is_empty(), "expected at least one mark");
     assert!(
       wasm.marks.len() < 20,
-      "tiny program produced {} marks — policy or emit interaction has regressed",
+      "tiny program produced {} marks — policy has regressed",
       wasm.marks.len(),
     );
 
-    // Walk the linked binary's code section. Collect each function
-    // body's [start, end) absolute byte range.
     let mut bodies: Vec<(u32, u32)> = Vec::new();
     for payload in Parser::new(0).parse_all(&wasm.binary) {
       if let Ok(Payload::CodeSectionEntry(body)) = payload {
@@ -694,26 +755,17 @@ mod tests {
     assert!(!bodies.is_empty(), "linked binary should have code bodies");
 
     let in_a_body = |pc: u32| bodies.iter().any(|(s, e)| pc >= *s && pc < *e);
-    let inside = wasm.marks.iter().filter(|r| in_a_body(r.wasm_pc)).count();
-    let outside = wasm.marks.len() - inside;
-
-    // Today: every mark PC is fragment-local, so it lands BEFORE the
-    // entry's bodies in the linked binary — i.e. either inside a
-    // runtime body (rare, by coincidence) or in the gap before any
-    // body. We expect the majority to be `outside`. When Step 4 wires
-    // the link-time shift, flip this assertion to `outside == 0`.
-    assert!(
-      outside > 0,
-      "marks: {} total, {} inside a linked body, 0 outside — \
-       link-time shift may already be applied; update this test",
-      wasm.marks.len(), inside,
-    );
+    for r in &wasm.marks {
+      assert!(
+        in_a_body(r.wasm_pc),
+        "mark pc={} lands outside any linked code body — link-time shift broken",
+        r.wasm_pc,
+      );
+    }
 
     // Sanity bound on a richer program: a 3-statement function body
-    // produces a single-digit number of marks, with the policy's
-    // duplicate-per-line pattern (~2×) visible but not exploding.
-    // Watching this number catch a future policy regression is
-    // cheap; if it grows much beyond ~10 something has changed.
+    // produces a single-digit number of marks. Catches policy
+    // regressions.
     let bigger = "\
 main = fn:
   a = 1 + 2
