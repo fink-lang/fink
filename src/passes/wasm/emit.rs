@@ -64,6 +64,7 @@ use crate::passes::cps::ir::{
   Arg, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind,
   Lit, Ref, Val, ValKind,
 };
+use crate::passes::debug_marks::{DebugMarks, MarkRecord};
 use super::collect::{
   CollectedFn, IrCtx, Module as CpsModule,
   builtin_name, collect_locals, split_args,
@@ -281,6 +282,11 @@ pub struct EmitResult {
   /// Structural source locations for non-code items (func headers, globals, exports, params).
   /// The formatter uses these to place source marks on WAT structural lines.
   pub structural_locs: Vec<StructuralLoc>,
+  /// Debug-marker records: one entry per CpsId the `debug_marks` pass
+  /// flagged as a step-stop, with its fragment-local absolute WASM byte
+  /// offset and source `Loc`. Empty when the emitter is invoked without
+  /// a `DebugMarks` (e.g. legacy callers / tests).
+  pub mark_records: Vec<MarkRecord>,
   /// Whether the module imports operators from @fink/runtime/operators.
   pub needs_operators: bool,
   /// Whether the module imports list functions from @fink/runtime/list.
@@ -316,8 +322,21 @@ pub enum StructuralKind {
 }
 
 /// Emit a WASM binary from a collected CPS module.
-pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
-  let mut e = Emitter::new(module, ctx);
+///
+/// `debug_marks` is consulted at each `mark()` site (and the operator-mark
+/// site in `emit_builtin`): when the CpsId being mapped has a stop set,
+/// the emitter records a parallel `RawMark` carrying the same byte
+/// position. After `module.finish()` these are converted to fragment-local
+/// absolute byte offsets by the same fixup that handles `OffsetMapping`s.
+///
+/// Pass `None` to opt out — useful for tests and legacy callers that don't
+/// build a `DebugMarks`. The resulting `mark_records` will be empty.
+pub fn emit<'a>(
+  module: &CpsModule<'a>,
+  ctx: &IrCtx<'_, '_>,
+  debug_marks: Option<&DebugMarks>,
+) -> EmitResult {
+  let mut e = Emitter::new(module, ctx, debug_marks);
   // Scan builtins and closure captures. Module imports come from CpsResult
   // (collected before lifting, so names survive the rec_pop chain being hoisted).
   let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
@@ -385,7 +404,22 @@ pub fn emit<'a>(module: &CpsModule<'a>, ctx: &IrCtx<'_, '_>) -> EmitResult {
   // Sort by wasm_offset for monotonic DWARF line table emission.
   mappings.sort_by_key(|m| m.wasm_offset);
 
-  EmitResult { wasm, offset_mappings: mappings, structural_locs: e.structural_locs, needs_operators: e.needs_apply_for_operators, needs_list: e.needs_list, needs_string: has_strings }
+  // Same fixup applied to debug-mark records — they were captured at
+  // emit time using the same (def_idx, func_byte_offset) coordinate
+  // as raw_mappings, so the per-function-body base lookup works
+  // identically.
+  let mut mark_records = fixup_marks(&wasm, e.raw_marks);
+  mark_records.sort_by_key(|m| m.wasm_pc);
+
+  EmitResult {
+    wasm,
+    offset_mappings: mappings,
+    structural_locs: e.structural_locs,
+    mark_records,
+    needs_operators: e.needs_apply_for_operators,
+    needs_list: e.needs_list,
+    needs_string: has_strings,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +492,15 @@ struct Emitter<'a, 'src> {
   /// Raw mappings: (func_index, func_local_byte_offset, loc).
   /// Converted to absolute offsets after module.finish().
   raw_mappings: Vec<RawMapping>,
+  /// Raw debug-marker records, captured in parallel with `raw_mappings`
+  /// at every site where the emitter consults `debug_marks`. Same
+  /// coordinate system as `RawMapping`; converted by `fixup_marks` after
+  /// `module.finish()`.
+  raw_marks: Vec<RawMark>,
+  /// Step-stop policy from the `debug_marks` pass. `None` means the
+  /// caller didn't run the pass — `mark()` falls back to source-mapping
+  /// only and `raw_marks` stays empty.
+  debug_marks: Option<&'a DebugMarks>,
   /// Structural source locations for non-code items.
   structural_locs: Vec<StructuralLoc>,
   /// Closure capture counts found in this module (for _apply dispatch).
@@ -497,13 +540,29 @@ struct RawMapping {
   loc: Loc,
 }
 
+/// Pre-fixup form of a `MarkRecord`. Same coordinate system as
+/// `RawMapping`; the per-function-body absolute offset is filled in by
+/// `fixup_marks` after `module.finish()`.
+struct RawMark {
+  func_def_index: u32,
+  func_byte_offset: u32,
+  cps_id: CpsId,
+  loc: Loc,
+}
+
 impl<'a, 'src> Emitter<'a, 'src> {
-  fn new(cps_mod: &CpsModule<'a>, ctx: &'a IrCtx<'a, 'src>) -> Self {
+  fn new(
+    cps_mod: &CpsModule<'a>,
+    ctx: &'a IrCtx<'a, 'src>,
+    debug_marks: Option<&'a DebugMarks>,
+  ) -> Self {
     Self {
       module: wasm_encoder::Module::new(),
       idx: Indices::new(),
       ctx,
       raw_mappings: Vec::new(),
+      raw_marks: Vec::new(),
+      debug_marks,
       structural_locs: Vec::new(),
       closure_captures: BTreeSet::new(),
       impl_builtins: BTreeMap::new(),
@@ -1404,6 +1463,8 @@ impl<'a, 'src> Emitter<'a, 'src> {
       emitter_idx: &self.idx,
       ctx: self.ctx,
       raw_mappings: &mut self.raw_mappings,
+      raw_marks: &mut self.raw_marks,
+      debug_marks: self.debug_marks,
       def_idx,
       _has_closures: !self.closure_captures.is_empty(),
       string_data: &self.string_data,
@@ -1514,6 +1575,14 @@ struct FuncContext<'a, 'b, 'src> {
   emitter_idx: &'a Indices,
   ctx: &'a IrCtx<'b, 'src>,
   raw_mappings: &'a mut Vec<RawMapping>,
+  /// Parallel sink for debug-marker records, fed by `mark()` and the
+  /// operator-mark site in `emit_builtin` whenever `debug_marks` flags
+  /// the CpsId being mapped.
+  raw_marks: &'a mut Vec<RawMark>,
+  /// Step-stop policy from the `debug_marks` pass. `None` means the
+  /// emitter was invoked without a `DebugMarks`; mark-recording is a
+  /// no-op in that case.
+  debug_marks: Option<&'a DebugMarks>,
   def_idx: u32,
   /// Whether this module has any closures (for future optimisation).
   _has_closures: bool,
@@ -1532,16 +1601,36 @@ struct FuncContext<'a, 'b, 'src> {
 }
 
 impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
-  /// Record a source mapping at the current byte position.
+  /// Record a source mapping at the current byte position. Also records
+  /// a `RawMark` if `debug_marks` flags this CpsId as a step-stop.
   fn mark(&mut self, id: CpsId) {
     if let Some(node) = self.ctx.ast_node(id)
       && node.loc.start.line > 0 {
+        let func_byte_offset = self.func.byte_len() as u32;
         self.raw_mappings.push(RawMapping {
           func_def_index: self.def_idx,
-          func_byte_offset: self.func.byte_len() as u32,
+          func_byte_offset,
           loc: node.loc,
         });
+        self.try_record_mark(id, node.loc, func_byte_offset);
       }
+  }
+
+  /// If `debug_marks` flags `id` as a step-stop, push a `RawMark` at
+  /// `(self.def_idx, func_byte_offset)` with `loc` as its source.
+  /// Called from `mark()` and from the operator-mark site in
+  /// `emit_builtin` (which records its source mapping inline rather
+  /// than going through `mark()`).
+  fn try_record_mark(&mut self, id: CpsId, loc: Loc, func_byte_offset: u32) {
+    let Some(marks) = self.debug_marks else { return };
+    if matches!(marks.stops.try_get(id), Some(Some(_))) {
+      self.raw_marks.push(RawMark {
+        func_def_index: self.def_idx,
+        func_byte_offset,
+        cps_id: id,
+        loc,
+      });
+    }
   }
 
   fn local_idx(&self, label: &str) -> u32 {
@@ -2037,11 +2126,13 @@ fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<
       _ => node.loc,
     };
     if loc.start.line > 0 {
+      let func_byte_offset = fc.func.byte_len() as u32;
       fc.raw_mappings.push(RawMapping {
         func_def_index: fc.def_idx,
-        func_byte_offset: fc.func.byte_len() as u32,
+        func_byte_offset,
         loc,
       });
+      fc.try_record_mark(expr_id, loc, func_byte_offset);
     }
   }
 
@@ -2510,6 +2601,35 @@ fn fixup_offsets(wasm: &[u8], raw: Vec<RawMapping>) -> Vec<OffsetMapping> {
   }).collect()
 }
 
+/// Same shape as `fixup_offsets` but produces `MarkRecord`s — one per
+/// CpsId the `debug_marks` pass flagged as a step-stop, with its
+/// fragment-local absolute WASM byte offset.
+fn fixup_marks(wasm: &[u8], raw: Vec<RawMark>) -> Vec<MarkRecord> {
+  use wasmparser::{Parser, Payload};
+
+  if raw.is_empty() {
+    return vec![];
+  }
+
+  let mut func_body_offsets: Vec<u32> = Vec::new();
+  for payload in Parser::new(0).parse_all(wasm) {
+    if let Ok(Payload::CodeSectionEntry(body)) = payload {
+      func_body_offsets.push(body.range().start as u32);
+    }
+  }
+
+  raw.into_iter().map(|m| {
+    let base = func_body_offsets.get(m.func_def_index as usize)
+      .copied()
+      .unwrap_or(0);
+    MarkRecord {
+      wasm_pc: base + m.func_byte_offset,
+      cps_id: m.cps_id,
+      source: m.loc,
+    }
+  }).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -2525,7 +2645,7 @@ mod tests {
     let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast);
     let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-    emit(&module, &ir_ctx)
+    emit(&module, &ir_ctx, None)
   }
 
   #[test]
@@ -2556,5 +2676,50 @@ mod tests {
       assert!(m.wasm_offset > 0, "offset should be > 0");
       assert!(m.loc.start.line > 0, "source line should be > 0");
     }
+  }
+
+  #[test]
+  fn t_mark_records_present_when_debug_marks_supplied() {
+    // Pass `Some(&debug_marks)` and confirm the emitter records a
+    // `MarkRecord` for every CpsId the policy flagged as a stop, with
+    // monotonic, byte-offset PCs that fall inside a code-section body.
+    let src = "add = fn a, b: a + b";
+    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap();
+    let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast);
+    let module = collect::collect(
+      &lifted.result.root,
+      &ir_ctx,
+      &lifted.result.module_locals,
+      lifted.result.module_imports.clone(),
+    );
+    let ir_ctx = ir_ctx.with_globals(module.globals.clone());
+
+    let debug_marks = crate::passes::debug_marks::analyse(&lifted, &desugared);
+    let result = emit(&module, &ir_ctx, Some(&debug_marks));
+
+    assert!(
+      !result.mark_records.is_empty(),
+      "should record at least one MarkRecord — `add = fn a, b: a + b` has stops",
+    );
+    for r in &result.mark_records {
+      assert!(r.wasm_pc > 0, "wasm_pc should be > 0");
+      assert!(r.source.start.line > 0, "source line should be > 0");
+    }
+    // Sorted by wasm_pc.
+    let pcs: Vec<u32> = result.mark_records.iter().map(|r| r.wasm_pc).collect();
+    let mut sorted = pcs.clone();
+    sorted.sort();
+    assert_eq!(pcs, sorted, "mark records should be sorted by wasm_pc");
+  }
+
+  #[test]
+  fn t_mark_records_empty_without_debug_marks() {
+    // The legacy code path (None) must not record any MarkRecords, so
+    // existing tests that compile without debug_marks stay zero-impact.
+    let result = compile("add = fn a, b: a + b");
+    assert!(
+      result.mark_records.is_empty(),
+      "no debug_marks → no MarkRecords",
+    );
   }
 }

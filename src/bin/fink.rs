@@ -54,10 +54,11 @@ fn main() {
     // the user's main as CLI args — so accept [cmd, path, ..].
     [cmd, path, ..] => (*cmd, *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|compile|run|dap> [options] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap> [options] <file>");
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
+      eprintln!("  marks                        debugger step-stops (per-CpsId markers + source map)");
       eprintln!("  ast/fmt/fmt2/cps [--source-map]  append embedded source map comment");
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wat/wasm [-O|-O1..4|-Os|-Oz]  run wasm-opt (default -O)");
@@ -147,6 +148,24 @@ fn main() {
         println!("{output}\n# sm:{}", srcmap.encode_base64url());
       } else {
         println!("{}", fink::passes::cps::fmt::fmt_with(&result.root, &ctx));
+      }
+    }
+
+    "marks" => {
+      // Debug-marks pass output: one `s_<kind>#<id>` token per CpsId
+      // the pass deems a step-stop, optionally followed by `# sm:<b64>`.
+      // Skeleton commit: policy marks nothing, so output is just the
+      // (empty) sm line. Used by the vscode-fink extension to decorate
+      // source ranges that will become stops.
+      let (lifted, desugared) = fink::to_lifted(&src, path).unwrap_or_else(|e| die(&e));
+      let debug_marks = fink::passes::debug_marks::analyse(&lifted, &desugared);
+      let (output, srcmap) = fink::passes::debug_marks::fmt::render_mapped_native(
+        &debug_marks, &lifted, &desugared,
+      );
+      if output.is_empty() {
+        println!("# sm:{}", srcmap.encode_base64url());
+      } else {
+        println!("{output}\n# sm:{}", srcmap.encode_base64url());
       }
     }
 

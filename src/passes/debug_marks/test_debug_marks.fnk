@@ -1,0 +1,45 @@
+---
+debug-marks pass tests
+---
+
+# Pass output is a single `marks <token>, <token>, …` Fink apply whose
+# ident args each represent one step-stop. Tokens are `<kind>_<cps_id>`.
+# The trailing `# sm:<b64>` maps each ident back to the source range
+# that produced its CpsId.
+#
+# First policy cut (2026-04-19):
+#   expr_N  — CpsId whose AST origin is an expression-level container
+#             (Bind, Apply, InfixOp, UnaryOp, ChainedCmp, Match,
+#              Member, Try, Pipe).
+#   ret_N   — CpsId is an App to a Ret-kind continuation (the moment a
+#             value flows back to the caller / host). Preserves stops
+#             for bare-literal expression statements.
+#
+# Stops are CPS-node-grained, not source-line-grained. One stop per
+# meaningful evaluation step. Leaning conservative: fewer is better —
+# we can widen when we step through code and see something missing.
+
+{test, expect, equals, marks} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'int literal — single return stop', fn:
+  expect marks ƒink:
+    42
+  | equals ƒink:
+    marks
+      ret_3
+    # sm:ARABAAI
+
+
+test 'binding + call — expr stops + returns', fn:
+  expect marks ƒink:
+    add = fn a, b:
+      a + b
+    main = fn:
+      add 3, 4
+  | equals ƒink:
+    marks
+      expr_4, expr_6, expr_9, expr_10, expr_11, expr_14, expr_18, expr_19,
+      expr_20, expr_23, expr_26, expr_27, ret_33
+    # sm:DRABLhUQAQsFEAEABRABAAUSAQAFEgEmCBIBAAgSAQAIFgEACBIBGRUSAS0WEgEAFhIBLgQ

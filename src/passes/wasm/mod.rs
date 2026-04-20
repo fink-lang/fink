@@ -157,7 +157,7 @@ mod tests {
     let ir_ctx = super::collect::IrCtx::new(&lifted.result.origin, &desugared.ast);
     let module = super::collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
     let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-    let mut result = super::emit::emit(&module, &ir_ctx);
+    let mut result = super::emit::emit(&module, &ir_ctx, None);
 
     // Emit DWARF and append to binary.
     let dwarf_sections = super::dwarf::emit_dwarf("test", Some(src), &result.offset_mappings);

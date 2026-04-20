@@ -46,6 +46,32 @@ fn pc_to_source_location(
   best.map(|m| (m.src_line as i64, m.src_col as i64))
 }
 
+/// Look up a `MarkRecord` by linked-binary PC. Wasmtime fires
+/// breakpoints at the exact PC we registered, so an exact-match scan
+/// suffices. Returns the `(line, col)` 1-indexed for DAP. Falls back
+/// to nearest-preceding mark when there's no exact match — guards
+/// against any small drift introduced by `rewrite_body`'s LEB128
+/// changes during link-time PC shifting.
+fn pc_to_mark_source(
+  pc: u32,
+  marks: &[crate::passes::debug_marks::MarkRecord],
+) -> Option<(i64, i64)> {
+  if let Some(m) = marks.iter().find(|m| m.wasm_pc == pc) {
+    return Some((m.source.start.line as i64, m.source.start.col as i64));
+  }
+  // Nearest preceding — same logic as pc_to_source_location.
+  let mut best: Option<&crate::passes::debug_marks::MarkRecord> = None;
+  for m in marks {
+    if m.wasm_pc <= pc {
+      match best {
+        Some(b) if b.wasm_pc > m.wasm_pc => {}
+        _ => best = Some(m),
+      }
+    }
+  }
+  best.map(|m| (m.source.start.line as i64, m.source.start.col as i64))
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 /// Info about a stopped frame, sent from WASM thread → DAP server.
@@ -139,11 +165,11 @@ pub fn run<R: Read, W: Write>(
   let mut server = Server::new(BufReader::new(input), BufWriter::new(output));
 
   // Load or compile the program.
-  let (wasm, source_file, mappings) = if program.ends_with(".fnk") {
+  let (wasm, source_file, mappings, marks) = if program.ends_with(".fnk") {
     // Fink source: compile through the full pipeline (returns WASM binary directly).
     let src = std::fs::read_to_string(program).map_err(|e| e.to_string())?;
     let wasm = crate::to_wasm(&src, program)?;
-    (wasm.binary, program.to_string(), wasm.mappings)
+    (wasm.binary, program.to_string(), wasm.mappings, wasm.marks)
   } else {
     let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
     let wasm = if bytes.starts_with(b"\0asm") {
@@ -154,7 +180,7 @@ pub fn run<R: Read, W: Write>(
     };
     let fnk_path = find_fnk_source(program);
     let source_file = fnk_path.as_deref().unwrap_or(program).to_string();
-    (wasm, source_file, vec![])
+    (wasm, source_file, vec![], vec![])
   };
 
   // Set up Wasmtime with debug support.
@@ -174,9 +200,22 @@ pub fn run<R: Read, W: Write>(
 
   let mut store = wasmtime::Store::new(&engine, DebugState::default());
 
-  // Enable single-step so we break on the first instruction.
+  // Install a breakpoint at every step-stop the debug_marks pass
+  // identified. Replaces the prior single_step(true) bootstrap, which
+  // fired on every WASM instruction. With marks in place the debugger
+  // stops only at user-meaningful CPS nodes.
+  //
+  // If the marks vector is empty (no debug_marks available, e.g. WAT
+  // input or compile failure) fall back to the legacy single_step
+  // behaviour so the debugger at least stops *somewhere*.
   if let Some(mut edit) = store.edit_breakpoints() {
-    edit.single_step(true).ok();
+    if marks.is_empty() {
+      edit.single_step(true).ok();
+    } else {
+      for m in &marks {
+        edit.add_breakpoint(&module, m.wasm_pc).ok();
+      }
+    }
   }
 
   store.set_debug_handler(FinkDebugHandler {
@@ -334,7 +373,14 @@ pub fn run<R: Read, W: Write>(
 
           Command::StackTrace(_) => {
             let (line, col, name) = if let Some(ref frame) = last_frame {
-              let (l, c) = pc_to_source_location(frame.pc, &mappings).unwrap_or((1, 1));
+              // Prefer mark-based source resolution: every breakpoint
+              // we install corresponds to a MarkRecord with an exact
+              // source `Loc`. Fall back to the legacy DWARF-derived
+              // mapping for non-mark stops (e.g. legacy single_step
+              // path when marks is empty).
+              let (l, c) = pc_to_mark_source(frame.pc, &marks)
+                .or_else(|| pc_to_source_location(frame.pc, &mappings))
+                .unwrap_or((1, 1));
               (l, c, frame.func_name.clone())
             } else {
               (1, 1, "?".to_string())
