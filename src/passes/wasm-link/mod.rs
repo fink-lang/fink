@@ -379,7 +379,13 @@ fn compile_fragment(
   module.url_rewrite = url_rewrite.clone();
 
   let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-  let mut result = emit::emit(&module, &ir_ctx);
+
+  // Debug-marker pass — decides which CpsIds the DAP stops at. The
+  // emitter consults this to record fragment-local PCs alongside its
+  // existing source mappings. Step 2 plumbing: marks are produced but
+  // not yet aggregated into `Wasm.marks` (Step 3).
+  let debug_marks = crate::passes::debug_marks::analyse(lifted, desugared);
+  let mut result = emit::emit(&module, &ir_ctx, Some(&debug_marks));
 
   let dwarf_sections = dwarf::emit_dwarf(url, Some(src), &result.offset_mappings);
   dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
