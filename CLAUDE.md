@@ -35,7 +35,7 @@ block comment
 
 ## Key Syntax Reference
 
-The authoritative syntax reference is in flight — until it lands, use the `.fnk` sketches under [docs/examples/](docs/examples/). A user-facing spec (`docs/language.md`) and roadmap (`docs/roadmap.md`) will replace them.
+See [docs/language.md](docs/language.md) for the authoritative user-facing syntax reference and [docs/roadmap.md](docs/roadmap.md) for designed-but-unshipped features.
 
 ### Significant topics
 

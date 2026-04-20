@@ -44,10 +44,26 @@ with db_ctx:
 
 `**` (power) and `/%` (divmod) are designed but not wired through the runtime. The other arithmetic operators all work today.
 
+## Three-way compare (`><`)
+
+Parses and lowers; no `op_cmp` in the runtime yet. Intended as a generic three-way comparison returning an ordering.
+
+## Tagged template strings
+
+`fmt'hello ${1 + 2}'`, `rx'...'`, `sql'...'`, `raw'...'` — a tagging function receives the raw string parts and interpolated values. The AST parses these today; the dispatch machinery isn't wired.
+
+## Set and dict operators
+
+Once sets and dicts have language-level constructors, the operator protocols want implementations for them too: `or` / `xor` / `and` / `-` / `*` for set algebra, `<` / `<=` / `>` / `>=` for subset tests, `in` / `not in` for membership.
+
+## Advanced pattern matchers
+
+A few advanced match forms are parseable but don't lower end-to-end yet:
+
+- Spread guards: `[..(is_odd), ..evens] = [1, 2, 3, 4, 5]`
+- String range patterns as match arms: `'a'..'z'`
+- Pattern-position call guards with spread capture: `[..(is_divisible_by ?, 3) |= divs, ..rest]`
+
 ## Types and protocols
 
 Deferred pending a broader design conversation. Not documented here until the model is settled.
-
-## Historical sketches
-
-Early `.fnk` sketches that shaped the current language — and the features above — live in [examples/](examples/). They are not authoritative; treat them as reference material from the design phase.
