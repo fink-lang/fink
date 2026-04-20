@@ -133,13 +133,23 @@ pub fn compile_package(
   // applies the rewrite map to both `module_imports` keys and the
   // emitter's `url_rewrite` side-channel, so the entry's WASM import
   // section and global labels use canonical URLs throughout.
-  let entry_fragment = compile_fragment(
+  let entry_output = compile_fragment(
     &entry_lifted,
     &entry_desugared,
     &entry_canonical_url,
     &entry_source,
     &entry_url_rewrite,
   );
+  let entry_fragment = entry_output.wasm;
+  // Step 3: keep the entry fragment's debug-mark records. PCs are
+  // fragment-local — i.e. absolute byte offsets into `entry_fragment`,
+  // NOT into the linked binary the linker is about to produce. The
+  // linker prepends @fink/runtime's code-section bodies before the
+  // entry's, so `wasm_pc` here is off by `runtime_code_size` (and by
+  // any preceding dep fragments in multi-module). Step 4 / Step 7 wire
+  // a link-time shift parallel to `adjust_dwarf` in link.rs; until
+  // then DAP consumers will see the offset and we refine from there.
+  let entry_mark_records = entry_output.mark_records;
 
   // Walk all transitive deps, keyed on canonical URL so that two
   // consumers reaching the same file via different relative paths dedup
@@ -207,13 +217,19 @@ pub fn compile_package(
       .collect();
     dep_edges.insert(dep_canonical_url.clone(), dep_direct.clone());
 
-    let dep_wasm = compile_fragment(
+    let dep_output = compile_fragment(
       &dep_lifted,
       &dep_desugared,
       &dep_canonical_url,
       &dep_source,
       &dep_url_rewrite,
     );
+    // Dep fragments produce their own debug-mark records, but Step 3
+    // ships single-module-only — multi-module needs the link-time PC
+    // shift before dep records are usable. Drop them for now; the
+    // emitter still computes them, so wiring the shift later is
+    // additive (see the multi-module TODO at the end of this function).
+    let _ = dep_output.mark_records;
 
     // Enqueue transitive deps by their canonical URLs.
     for transitive_canonical in &dep_direct {
@@ -222,7 +238,7 @@ pub fn compile_package(
       }
     }
 
-    compiled.insert(dep_canonical_url.clone(), dep_wasm);
+    compiled.insert(dep_canonical_url.clone(), dep_output.wasm);
   }
 
   // Topological sort: post-order DFS starting from the entry's direct
@@ -324,7 +340,19 @@ pub fn compile_package(
   // entry code into a dep will not map back to source. Single-module compiles
   // are equally affected since `to_wasm` now routes through `compile_package`
   // — there is no longer a parallel "direct emit" path that builds mappings.
-  Ok(crate::passes::Wasm { binary: linked.wasm, mappings: vec![], marks: vec![] })
+  //
+  // TODO(debug_marks): the same coordinate problem applies to `marks`. The
+  // entry fragment's records are returned as-is (fragment-local PCs); for
+  // single-module compiles this happens to coincide with the linked binary
+  // because the linker preserves the entry's code-section layout. Dep
+  // fragments' records are computed by the emitter and discarded above —
+  // wiring them in needs a per-fragment PC shift parallel to the
+  // offset_mappings work above.
+  Ok(crate::passes::Wasm {
+    binary: linked.wasm,
+    mappings: vec![],
+    marks: entry_mark_records,
+  })
 }
 
 /// Compile a single lifted CPS module into raw WASM bytes (without linking).
@@ -343,6 +371,19 @@ pub fn compile_package(
 /// that skips emitter synthesis of these host helpers when compiling a
 /// dep fragment. This is the "duplicated code signals runtime belonging"
 /// cleanup Jan flagged during Slice 2 planning.
+/// Output of `compile_fragment`: the WASM bytes plus any debug-mark
+/// records produced by the emitter.
+///
+/// The `mark_records` carry **fragment-local** absolute byte offsets —
+/// i.e. offsets into `wasm`, before that fragment is merged into the
+/// linked binary. `compile_package` is responsible for shifting them
+/// to linked-binary coordinates (see the multi-module TODO there).
+#[cfg(feature = "compile")]
+struct FragmentOutput {
+  wasm: Vec<u8>,
+  mark_records: Vec<crate::passes::debug_marks::MarkRecord>,
+}
+
 #[cfg(feature = "compile")]
 fn compile_fragment(
   lifted: &crate::passes::LiftedCps,
@@ -350,7 +391,7 @@ fn compile_fragment(
   url: &str,
   src: &str,
   url_rewrite: &BTreeMap<String, String>,
-) -> Vec<u8> {
+) -> FragmentOutput {
   use crate::passes::wasm::{collect, dwarf, emit};
 
   let ir_ctx = collect::IrCtx::new(&lifted.result.origin, &desugared.ast);
@@ -390,7 +431,7 @@ fn compile_fragment(
   let dwarf_sections = dwarf::emit_dwarf(url, Some(src), &result.offset_mappings);
   dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
 
-  result.wasm
+  FragmentOutput { wasm: result.wasm, mark_records: result.mark_records }
 }
 
 /// Resolve a canonical (entry-relative) URL to an absolute disk path by
@@ -598,6 +639,22 @@ mod tests {
     let wasm = compile_package(Path::new("test.fnk"), &mut loader).unwrap();
     assert!(!wasm.binary.is_empty());
     assert!(wasm.binary.starts_with(b"\0asm"));
+  }
+
+  #[test]
+  fn compile_package_populates_marks() {
+    // Step 3 contract: `Wasm.marks` is non-empty for a program with
+    // step-stops. PCs are fragment-local (linker shift not yet
+    // applied) — this test only asserts the records flow out, not
+    // that they line up with the linked binary.
+    let src = "main = fn: 1 + 2";
+    let mut loader = InMemorySourceLoader::single("test.fnk", src);
+    let wasm = compile_package(Path::new("test.fnk"), &mut loader).unwrap();
+    assert!(!wasm.marks.is_empty(), "expected at least one MarkRecord");
+    for r in &wasm.marks {
+      assert!(r.wasm_pc > 0);
+      assert!(r.source.start.line > 0);
+    }
   }
 
   #[test]
