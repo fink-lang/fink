@@ -696,6 +696,7 @@ Use `;` for a strong inline separator when you need several expressions on one l
 
 ## Further reading
 
+- [debugging.md](debugging.md) — running ƒink under a debugger.
 - [roadmap.md](roadmap.md) — designed features not yet reachable.
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) — build, test, contribute.
 - [../src/README.md](../src/README.md) — how the compiler is organised.

@@ -46,9 +46,14 @@ fink run hello.fnk
 ## Documentation
 
 - [docs/language.md](docs/language.md) — the language reference.
+- [docs/debugging.md](docs/debugging.md) — running ƒink under a debugger.
 - [docs/roadmap.md](docs/roadmap.md) — designed features not yet reachable.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — build, test, contribute.
 - [fink-lang.org](https://fink-lang.org/) — the same docs rendered, with an in-browser playground.
+
+## Editor integration
+
+- [vscode-fink](https://github.com/fink-lang/vscode-fink) — syntax, language features, and a DAP client for `fink dap`.
 
 ## License
 
