@@ -258,6 +258,33 @@ struct DebugState {}
 
 // ── Debug handler ───────────────────────────────────────────────────────────
 
+/// Filter mode controlling which breakpoint fires are exposed to the DAP
+/// loop (and hence to VSCode). Set by the DAP loop before dispatching a
+/// resume command.
+#[derive(Clone, Copy)]
+enum FilterMode {
+  /// Stop at any mark — used by step commands. Every mark fire surfaces
+  /// as a Stopped event.
+  StepAny,
+  /// Run until a mark whose source line is in `user_bps`, or program
+  /// termination. Intermediate marks are silently re-resumed inside the
+  /// handler — the DAP loop (and VSCode) never sees them.
+  ContinueUntilUserBp,
+}
+
+/// State shared between the DAP loop and the wasmtime debug handler.
+/// The handler reads it on every breakpoint fire to decide whether the
+/// stop is user-visible.
+struct HandlerState {
+  /// Current filter mode. Mutated by the DAP loop immediately before
+  /// sending a resume command.
+  mode: FilterMode,
+  /// User-placed breakpoints keyed by (source path, 1-indexed line).
+  /// Path is as received from `setBreakpoints` — VSCode sends its own
+  /// canonicalised path.
+  user_bps: std::collections::HashSet<(String, i64)>,
+}
+
 /// Bridges Wasmtime debug events to the DAP server via channels.
 #[derive(Clone)]
 struct FinkDebugHandler {
@@ -265,6 +292,15 @@ struct FinkDebugHandler {
   stopped_tx: mpsc::SyncSender<StoppedFrame>,
   /// Receive resume commands from the DAP server.
   resume_rx: Arc<Mutex<mpsc::Receiver<ResumeAction>>>,
+  /// Shared filter state (see `HandlerState`).
+  state: Arc<Mutex<HandlerState>>,
+  /// All debug-marks in the linked binary, indexed by the order produced
+  /// by the emitter. Used to look up a firing PC's source line for the
+  /// user-breakpoint filter.
+  marks: Arc<Vec<crate::passes::debug_marks::MarkRecord>>,
+  /// Canonicalised absolute path of the source file, for comparing to
+  /// `setBreakpoints.source.path`. Precomputed once at startup.
+  source_abs: Arc<String>,
 }
 
 impl wasmtime::DebugHandler for FinkDebugHandler {
@@ -292,24 +328,53 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
       None
     };
 
-    // Send frame info and wait for resume — must happen synchronously
-    // while we still have store access.
     if let Some(ref frame) = frame_info {
-      let _ = self.stopped_tx.send(StoppedFrame {
-        func_name: frame.func_name.clone(),
-        pc: frame.pc,
-      });
-      // Block until DAP server tells us to resume. We don't re-toggle
-      // single_step — stepping is mark-granular, not instruction-
-      // granular, so pre-installed mark breakpoints do all the gating.
-      if let Ok(guard) = self.resume_rx.lock() {
-        let _ = guard.recv();
+      // Consult the filter. In ContinueUntilUserBp mode, silently re-
+      // resume stops that don't hit a user breakpoint. The wasm thread
+      // returns from this handler and wasmtime immediately continues
+      // execution to the next installed breakpoint.
+      let expose = {
+        let st = self.state.lock().unwrap();
+        match st.mode {
+          FilterMode::StepAny => true,
+          FilterMode::ContinueUntilUserBp => mark_matches_user_bp(
+            frame.pc, &self.marks, &self.source_abs, &st.user_bps,
+          ),
+        }
+      };
+      if expose {
+        let _ = self.stopped_tx.send(StoppedFrame {
+          func_name: frame.func_name.clone(),
+          pc: frame.pc,
+        });
+        // Block until DAP server tells us to resume. We don't re-toggle
+        // single_step — stepping is mark-granular, not instruction-
+        // granular, so pre-installed mark breakpoints do all the gating.
+        if let Ok(guard) = self.resume_rx.lock() {
+          let _ = guard.recv();
+        }
       }
     }
 
     // Return a no-op future (all work done synchronously above).
     async {}
   }
+}
+
+/// True if the mark at PC `pc` belongs to a line the user has placed a
+/// breakpoint on. Path comparison is literal — VSCode and our recorded
+/// `source_abs` should agree after `fs::canonicalize`.
+fn mark_matches_user_bp(
+  pc: u32,
+  marks: &[crate::passes::debug_marks::MarkRecord],
+  source_abs: &str,
+  user_bps: &std::collections::HashSet<(String, i64)>,
+) -> bool {
+  let Some(m) = marks.iter().find(|m| m.wasm_pc == pc) else {
+    return false;
+  };
+  let line = m.source.start.line as i64;
+  user_bps.contains(&(source_abs.to_string(), line))
 }
 
 // ── DAP server ──────────────────────────────────────────────────────────────
@@ -376,9 +441,29 @@ pub fn run<R: Read, W: Write + Send + 'static>(
     }
   }
 
+  // Shared filter state between DAP loop and debug handler. Default
+  // mode is ContinueUntilUserBp so the program runs without stopping at
+  // every intermediate mark when stopOnEntry is false — but the first
+  // stop we produce is the synthetic entry stop, which is handled by the
+  // ConfigurationDone path below *before* mode filtering applies.
+  let handler_state = Arc::new(Mutex::new(HandlerState {
+    mode: FilterMode::StepAny,
+    user_bps: std::collections::HashSet::new(),
+  }));
+  let marks_arc = Arc::new(marks.clone());
+  // Canonical absolute path for comparing against `setBreakpoints.source.path`.
+  let source_abs_arc = Arc::new(
+    std::fs::canonicalize(&source_file)
+      .map(|p| p.to_string_lossy().to_string())
+      .unwrap_or_else(|_| source_file.clone()),
+  );
+
   store.set_debug_handler(FinkDebugHandler {
     stopped_tx: stopped_tx.clone(),
     resume_rx: Arc::new(Mutex::new(resume_rx)),
+    state: handler_state.clone(),
+    marks: marks_arc.clone(),
+    source_abs: source_abs_arc.clone(),
   });
 
   // Wire env imports. Mirrors `src/runner/wasmtime_runner.rs` — routes the
@@ -532,27 +617,91 @@ pub fn run<R: Read, W: Write + Send + 'static>(
 
           Command::ConfigurationDone => {
             server.respond(req.success(ResponseBody::ConfigurationDone)).ok();
-            // WASM thread is running with single_step enabled.
-            // Wait for the first breakpoint event.
-            if stop_on_entry
-              && let Ok(frame) = stopped_rx.recv()
-            {
-              if frame.pc == u32::MAX {
-                server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
-                server.send_event(Event::Terminated(None)).ok();
-                done = true;
-              } else {
-                last_frame = Some(frame);
-                running = true;
-                server.send_event(Event::Stopped(StoppedEventBody {
-                  reason: StoppedEventReason::Entry,
-                  description: None,
-                  thread_id: Some(1),
-                  preserve_focus_hint: None,
-                  text: None,
-                  all_threads_stopped: Some(true),
-                  hit_breakpoint_ids: None,
-                })).ok();
+            // Configure the filter before the program runs. If
+            // stopOnEntry is set we want the FIRST mark to surface (as
+            // the entry stop), so StepAny. Otherwise we want to skip
+            // every intermediate mark and only stop at user-placed
+            // breakpoints, so ContinueUntilUserBp.
+            handler_state.lock().unwrap().mode = if stop_on_entry {
+              FilterMode::StepAny
+            } else {
+              FilterMode::ContinueUntilUserBp
+            };
+            if stop_on_entry {
+              // Wait for the first breakpoint event (the entry).
+              if let Ok(frame) = stopped_rx.recv() {
+                if frame.pc == u32::MAX {
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
+                  server.send_event(Event::Terminated(None)).ok();
+                  done = true;
+                } else {
+                  last_frame = Some(frame);
+                  running = true;
+                  server.send_event(Event::Stopped(StoppedEventBody {
+                    reason: StoppedEventReason::Entry,
+                    description: None,
+                    thread_id: Some(1),
+                    preserve_focus_hint: None,
+                    text: None,
+                    all_threads_stopped: Some(true),
+                    hit_breakpoint_ids: None,
+                  })).ok();
+                }
+              }
+            } else {
+              // Run-from-start. The handler is currently blocked on the
+              // very first breakpoint it hit (during bootstrap, before
+              // we had a chance to set the mode to ContinueUntilUserBp).
+              // Drain it, silently resume, and then wait for the next
+              // stop — which will be either a user breakpoint or
+              // termination. Subsequent stops the handler auto-filters.
+              running = true;
+              loop {
+                match stopped_rx.recv() {
+                  Ok(frame) if frame.pc == u32::MAX => {
+                    running = false;
+                    server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
+                    server.send_event(Event::Terminated(None)).ok();
+                    done = true;
+                    break;
+                  }
+                  Ok(frame) => {
+                    // In ContinueUntilUserBp mode the handler only
+                    // forwards user-breakpoint stops; but the very
+                    // first stop was captured under the default mode
+                    // before ConfigurationDone could flip it. Check
+                    // the mark's line against user_bps here and skip
+                    // silently if it doesn't match.
+                    let st = handler_state.lock().unwrap();
+                    let is_user_bp = mark_matches_user_bp(
+                      frame.pc, &marks_arc, &source_abs_arc, &st.user_bps,
+                    );
+                    drop(st);
+                    if is_user_bp {
+                      last_frame = Some(frame);
+                      server.send_event(Event::Stopped(StoppedEventBody {
+                        reason: StoppedEventReason::Breakpoint,
+                        description: None,
+                        thread_id: Some(1),
+                        preserve_focus_hint: None,
+                        text: None,
+                        all_threads_stopped: Some(true),
+                        hit_breakpoint_ids: None,
+                      })).ok();
+                      break;
+                    } else {
+                      // Silently resume — don't bother VSCode.
+                      let _ = resume_tx.send(ResumeAction::Continue);
+                    }
+                  }
+                  Err(_) => {
+                    running = false;
+                    server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
+                    server.send_event(Event::Terminated(None)).ok();
+                    done = true;
+                    break;
+                  }
+                }
               }
             }
           }
@@ -613,15 +762,36 @@ pub fn run<R: Read, W: Write + Send + 'static>(
           }
 
           Command::SetBreakpoints(args) => {
+            // VSCode re-sends the full breakpoint set for a source on
+            // every change, so we replace rather than merge the subset
+            // keyed on this file. Mark bps `verified: true` whenever we
+            // can resolve the requested line to an existing debug-mark
+            // line — otherwise leave them unverified so VSCode greys
+            // them out.
+            let file_path = args.source.path.clone().unwrap_or_default();
+            let mark_lines: std::collections::HashSet<i64> = marks
+              .iter()
+              .map(|m| m.source.start.line as i64)
+              .collect();
+            let mut state = handler_state.lock().unwrap();
+            // Drop any previous bps for this file, then reinsert.
+            state.user_bps.retain(|(p, _)| p != &file_path);
             let bps: Vec<Breakpoint> = args.breakpoints.as_ref()
               .map(|bps| {
-                bps.iter().map(|bp| Breakpoint {
-                  verified: true,
-                  line: Some(bp.line),
-                  ..Default::default()
+                bps.iter().map(|bp| {
+                  let verified = mark_lines.contains(&bp.line);
+                  if verified {
+                    state.user_bps.insert((file_path.clone(), bp.line));
+                  }
+                  Breakpoint {
+                    verified,
+                    line: Some(bp.line),
+                    ..Default::default()
+                  }
                 }).collect()
               })
               .unwrap_or_default();
+            drop(state);
             server.respond(req.success(ResponseBody::SetBreakpoints(
               SetBreakpointsResponse { breakpoints: bps },
             ))).ok();
@@ -632,7 +802,10 @@ pub fn run<R: Read, W: Write + Send + 'static>(
               all_threads_continued: Some(true),
             }))).ok();
             if running {
-              // Resume without single-step — run until next breakpoint or end.
+              // Filter out intermediate marks — only stop at user-
+              // placed breakpoints. Reset mode to StepAny at the end so
+              // subsequent Step commands behave correctly.
+              handler_state.lock().unwrap().mode = FilterMode::ContinueUntilUserBp;
               let _ = resume_tx.send(ResumeAction::Continue);
               // Wait for next stop or termination.
               match stopped_rx.recv() {
@@ -672,6 +845,8 @@ pub fn run<R: Read, W: Write + Send + 'static>(
             };
             server.respond(req.success(resp)).ok();
             if running {
+              // Step always stops at the next mark — ignore user_bps.
+              handler_state.lock().unwrap().mode = FilterMode::StepAny;
               // Step at *mark* granularity — resume until the next mark
               // breakpoint fires. Per-WASM-instruction single_step isn't
               // useful to a user: one source expression expands to
@@ -761,22 +936,21 @@ mod tests {
 
   /// Drive a scripted DAP session through `dap::run` and return the raw output.
   ///
-  /// Writes the source to a tempfile, builds a framed input buffer with the
-  /// full launch→continue→disconnect sequence, then runs the DAP server to
-  /// completion on a thread with a timeout so a broken bootstrap can't hang
-  /// the test suite forever.
-  fn drive_session(src: &str) -> String {
+  /// Writes the source to a tempfile, builds a framed input buffer from the
+  /// given JSON request bodies, then runs the DAP server to completion on a
+  /// thread with a timeout so a broken bootstrap can't hang the test suite
+  /// forever. Each entry in `requests` is the bare JSON object — framing is
+  /// added here.
+  fn drive_session(src: &str, requests: &[String]) -> String {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("test.fnk");
     std::fs::write(&path, src).unwrap();
     let path_str = path.to_string_lossy().into_owned();
 
     let mut input = Vec::new();
-    input.extend_from_slice(&frame(r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#));
-    input.extend_from_slice(&frame(r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":true}}"#));
-    input.extend_from_slice(&frame(r#"{"seq":3,"type":"request","command":"configurationDone"}"#));
-    input.extend_from_slice(&frame(r#"{"seq":4,"type":"request","command":"continue","arguments":{"threadId":1}}"#));
-    input.extend_from_slice(&frame(r#"{"seq":5,"type":"request","command":"disconnect"}"#));
+    for req in requests {
+      input.extend_from_slice(&frame(req));
+    }
 
     let output = Arc::new(Mutex::new(Vec::<u8>::new()));
     let output_clone = output.clone();
@@ -817,7 +991,13 @@ mod tests {
     //   1) emit a Stopped event at entry (driven by stopOnEntry),
     //   2) emit a Terminated event after continue,
     //   3) not hang.
-    let out = drive_session("main = fn done: done 42\n");
+    let out = drive_session("main = fn done: done 42\n", &[
+      r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#.to_string(),
+      r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":true}}"#.to_string(),
+      r#"{"seq":3,"type":"request","command":"configurationDone"}"#.to_string(),
+      r#"{"seq":4,"type":"request","command":"continue","arguments":{"threadId":1}}"#.to_string(),
+      r#"{"seq":5,"type":"request","command":"disconnect"}"#.to_string(),
+    ]);
 
     assert!(
       out.contains(r#""event":"stopped""#),
@@ -826,6 +1006,94 @@ mod tests {
     assert!(
       out.contains(r#""event":"terminated""#),
       "expected a 'terminated' event in DAP output, got:\n{out}"
+    );
+  }
+
+  /// Count how many `"event":"stopped"` events appear in the DAP output.
+  fn count_stops(out: &str) -> usize {
+    out.matches(r#""event":"stopped""#).count()
+  }
+
+  #[test]
+  fn continue_stops_only_at_user_breakpoints() {
+    // Two-statement program — without any user breakpoint, stepping / a
+    // blind Continue would stop at each mark in turn. With one user-
+    // placed breakpoint on line 3, a plain Continue from entry should
+    // reach exactly ONE user stop (entry itself, from stopOnEntry =
+    // false — we skip that here) and then stop on line 3, skipping any
+    // intermediate marks on line 2. After a second continue the program
+    // terminates.
+    let src = "main = fn done:\n  x = 1\n  done x\n";
+
+    // setBreakpoints must use the canonicalised path VSCode would send.
+    // We don't know it ahead of time — drive_session writes to a
+    // tempfile whose path we can pass in via the setBreakpoints source.
+    // For the test we wildcard the path: the DAP server should match on
+    // line number alone when the source path matches the program path.
+    // (See user_bps resolution in Command::SetBreakpoints.)
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.fnk");
+    std::fs::write(&path, src).unwrap();
+    let path_str = path.canonicalize().unwrap().to_string_lossy().into_owned();
+    // Minimal JSON-string escaping — tempdir paths on macOS/Linux only
+    // need backslash and double-quote escaping.
+    let path_json = format!(
+      "\"{}\"",
+      path_str.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+
+    let mut input = Vec::new();
+    input.extend_from_slice(&frame(r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":false}}"#));
+    input.extend_from_slice(&frame(&format!(
+      r#"{{"seq":3,"type":"request","command":"setBreakpoints","arguments":{{"source":{{"path":{path_json}}},"breakpoints":[{{"line":3}}]}}}}"#
+    )));
+    input.extend_from_slice(&frame(r#"{"seq":4,"type":"request","command":"configurationDone"}"#));
+    // After configurationDone with stopOnEntry=false, the program should
+    // run and hit the line-3 user breakpoint.
+    // Then we continue to terminate.
+    input.extend_from_slice(&frame(r#"{"seq":5,"type":"request","command":"continue","arguments":{"threadId":1}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":6,"type":"request","command":"disconnect","arguments":{}}"#));
+
+    let output = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let output_clone = output.clone();
+    let path_for_run = path.to_string_lossy().into_owned();
+
+    let handle = std::thread::spawn(move || {
+      struct SharedWrite(Arc<Mutex<Vec<u8>>>);
+      impl std::io::Write for SharedWrite {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+          self.0.lock().unwrap().extend_from_slice(buf);
+          Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+      }
+      let writer = SharedWrite(output_clone);
+      let reader = std::io::Cursor::new(input);
+      super::run(reader, writer, &path_for_run).ok();
+    });
+
+    let start = std::time::Instant::now();
+    while !handle.is_finished() {
+      if start.elapsed() > std::time::Duration::from_secs(10) {
+        panic!("DAP session did not terminate within 10s");
+      }
+      std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    handle.join().unwrap();
+
+    let out = String::from_utf8_lossy(&output.lock().unwrap()).into_owned();
+
+    // Exactly one stopped event: the line-3 user breakpoint. Without
+    // user-bp filtering the program would stop at every mark on the way.
+    assert_eq!(
+      count_stops(&out), 1,
+      "expected exactly 1 stopped event (at user breakpoint), got {}:\n{out}",
+      count_stops(&out),
+    );
+    assert!(
+      out.contains(r#""event":"terminated""#),
+      "expected a 'terminated' event, got:\n{out}"
     );
   }
 }
