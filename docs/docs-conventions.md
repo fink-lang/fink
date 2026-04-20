@@ -129,7 +129,7 @@ The top user audience is a developer who just discovered ƒink and is deciding w
 
 - The repo `README.md` must answer three things within one screen: what ƒink is, how to install it, where to go next.
 - `docs/language.md` must let a reader write a working function within 5 minutes. Quickstart first, reference second.
-- Code examples must be valid, complete ƒink that parses and runs. The website renders every `fink`-tagged code block with an *Open in Playground* button — the example is the input. "Complete" means the top level parses and the playground runs it. Keep the example minimal: no setup code beyond what the snippet actually demonstrates. A single top-level expression, a function definition, or a short module are all fair game. If an example needs substantial scaffolding to run, the example is teaching the wrong thing — rework it.
+- Prefer **simple and useful** over strictly runnable. A short snippet that shows the *one thing* is better than a complete program that makes the reader skim past setup. Where a snippet is naturally runnable (a single expression, a one-line binding, a tiny function) keep it so the playground wires up; where "runnable" would force scaffolding the snippet doesn't exist to teach, leave it as a fragment. The website renders `fink`-tagged code blocks with an *Open in Playground* button when the block parses; fragments that don't are still a useful `fink` code block, just not clickable.
 - No prerequisites before the first example. No "first, understand CPS" anywhere in user-facing docs.
 
 ---
