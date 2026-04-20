@@ -3,9 +3,15 @@
 //! Scoping rules:
 //!
 //! - `?` bubbles up to the nearest enclosing scope boundary.
-//! - Scope boundaries: `Group (...)`, each segment of a `Pipe`, top of statement.
-//! - Everything else is transparent: `Apply`, `InfixOp`, `UnaryOp`, `Member`, `Range`,
-//!   `Spread`, `LitSeq`, `LitRec`, `StrTempl`, `Bind` (RHS only), `BindRight` (LHS only).
+//! - Scope boundaries that stop the bubble:
+//!   - `Group (...)`
+//!   - each segment of a `Pipe`
+//!   - the RHS of a `Bind` (`lhs = rhs`) — the bubble stops at `rhs`; the whole `Bind`
+//!     is never wrapped
+//!   - the LHS of a `BindRight` (`lhs |= rhs`) — symmetric to `Bind`
+//!   - a standalone top-level expression
+//! - Transparent nodes (pass through): `Apply`, `InfixOp`, `UnaryOp`, `Member`, `Range`,
+//!   `Spread`, `LitSeq`, `LitRec`, `StrTempl`.
 //! - All `?` in the same scope become the same single param `$`.
 //! - `?` in pattern position (`Arm` lhs, `Bind` lhs) is a compile error.
 //!

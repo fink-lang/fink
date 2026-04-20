@@ -474,7 +474,14 @@ inc = ? + 1
 inc = fn $: $ + 1
 ```
 
-`?` bubbles up to the nearest scope boundary (a parenthesised group, a pipe segment, or the top of a statement). All `?` in the same scope refer to the same single parameter.
+`?` bubbles up to the nearest scope boundary. The boundaries are:
+
+- a parenthesised group `(...)`,
+- a pipe segment (everything between two `|`s, or from a `|` to the start of the statement),
+- the right-hand side of a binding (`lhs = rhs` — the bubble stops at `rhs`, never engulfs the `=`),
+- a standalone top-level expression.
+
+All `?` in the same scope refer to the same single parameter.
 
 ```fink
 [?, ?]                   # fn $: [$, $]

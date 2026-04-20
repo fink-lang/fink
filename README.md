@@ -15,7 +15,7 @@ brew tap fink-lang/tap
 brew install fink
 ```
 
-This installs the `fink` compiler along with prebuilt `finkrt` runtimes for all tier-1 targets (`aarch64`/`x86_64` on macOS and Linux), so `fink compile --target <triple>` works out of the box.
+This installs the `fink` toolchain. Native cross-compilation — `fink compile --target=<triple>` — works out of the box for all tier-1 targets (`aarch64`/`x86_64` on macOS and Linux).
 
 ### From source
 
