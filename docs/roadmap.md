@@ -40,6 +40,10 @@ with db_ctx:
   result = foo ()
 ```
 
+## Missing arithmetic operators
+
+`**` (power) and `/%` (divmod) are designed but not wired through the runtime. The other arithmetic operators all work today.
+
 ## Types and protocols
 
 Deferred pending a broader design conversation. Not documented here until the model is settled.
