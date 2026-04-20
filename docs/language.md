@@ -56,9 +56,12 @@ Integer types are inferred from the literal's value and sign (the values below s
 +1                     # i8
 -1                     # i8
 0xFF                   # u8
++0xFF                  # i8
+0xFfFf                 # u16
 0xFFFF_FFFF            # u32
-0o755                  # octal
-0b_1010_1010           # binary
+0xFFFF_FFFF_FFFF_FFFF  # u64
+0o_1234_5670           # octal
+0b_0101_1111           # binary
 ```
 
 ### Floats and decimals
@@ -186,8 +189,10 @@ a - b
 a * b
 a / b
 a // b                   # integer divide
+a ** b                   # power
 a % b                    # remainder (sign follows dividend)
 a %% b                   # true modulus (sign follows divisor)
+a /% b                   # divmod — returns [quotient, remainder]
 ```
 
 ### Comparison
@@ -201,6 +206,7 @@ a < b
 a <= b
 a == b
 a != b
+a >< b                   # disjoint — a and b have no element in common
 
 1 < x < 10               # chained
 ```
@@ -239,12 +245,17 @@ a >>> b                  # rotate right
 0...10                   # 0 inclusive, 10 inclusive
 ```
 
-Range literals are first-class values. They support `in` / `not in`:
+Range literals are first-class values.
+
+### Membership
+
+`in` / `not in` test membership across any container that supports it — ranges, sequences, record keys, dict keys:
 
 ```fink
-5 in 0..10               # true
-10 in 0..10              # false
-10 in 0...10             # true
+5  in 0..10              # range
+'x' in {x: 1, y: 2}      # record key
+2  in [1, 2, 3]          # sequence element
+5  not in 0..3           # negated form
 ```
 
 ### Member access
@@ -454,10 +465,12 @@ foo (bar spam)
 
 ### Tagged postfix application
 
-A literal with a function suffix applies the function to the literal:
+A literal followed by a function name applies the function to the literal. Useful for unit-like wrappers and other post-fix conversions:
 
 ```fink
 10sec                    # sec 10
+10.5min                  # min 10.5
+(foo)min                 # min foo
 ```
 
 ### Partial application with `?`

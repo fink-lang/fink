@@ -42,11 +42,11 @@ with db_ctx:
 
 ## Missing arithmetic operators
 
-`**` (power) and `/%` (divmod) are designed but not wired through the runtime. The other arithmetic operators all work today.
+`**` (power) and `/%` (divmod) are documented but not yet wired through the runtime. Calls emit but execution will fail until the runtime ops land. The other arithmetic operators all work today.
 
-## Three-way compare (`><`)
+## Disjoint (`><`)
 
-Parses and lowers; no `op_cmp` in the runtime yet. Intended as a generic three-way comparison returning an ordering.
+Tests whether two collections share no element. Parses and emits an `op_cmp` call, but the runtime op isn't implemented yet.
 
 ## Tagged template strings
 
