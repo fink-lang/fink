@@ -905,7 +905,7 @@ mod tests {
   // Ast, for every `Ident("old")` it finds, appends an `Ident("new")`
   // to the builder and returns the fresh id. For anything else, returns
   // the input id unchanged (fast path). This proves the borrow-checker
-  // shape documented in `docs/ast-arena-contract.md` actually compiles
+  // shape documented in `arena-contract.md` actually compiles
   // under real Rust rules — the previous in-module tests only exercised
   // append, not append-while-reading-src.
   //

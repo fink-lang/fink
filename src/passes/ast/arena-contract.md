@@ -281,7 +281,7 @@ append-only invariant.
 
 ## References
 
-- `src/passes/ast/mod.rs` — `Ast`, `AstBuilder`, `appended_only`
-- `src/propgraph.rs` — the underlying dense storage
-- `docs/cps-ir-design.md` — sibling document for CPS; CPS will adopt the
+- [mod.rs](mod.rs) — `Ast`, `AstBuilder`, `appended_only`
+- [../../propgraph.rs](../../propgraph.rs) — the underlying dense storage
+- [../cps/ir-design.md](../cps/ir-design.md) — sibling document for CPS; CPS will adopt the
   same pattern in a follow-up phase
