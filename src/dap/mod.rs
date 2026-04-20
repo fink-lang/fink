@@ -239,11 +239,15 @@ struct StoppedFrame {
 }
 
 /// Commands sent from DAP server → WASM thread.
+///
+/// Currently only `Continue` — both plain "continue" and DAP step commands
+/// resume until the next mark breakpoint. Per-WASM-instruction stepping
+/// (the old `Step` variant) was removed because marks already give
+/// source-meaningful step granularity; see the Next/StepIn/StepOut
+/// handler for the reasoning.
 enum ResumeAction {
-  /// Continue execution (disable single-step).
+  /// Continue execution until the next breakpoint.
   Continue,
-  /// Step to next instruction (enable single-step).
-  Step,
 }
 
 /// State stored in the Wasmtime Store.
@@ -287,21 +291,17 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
     };
 
     // Send frame info and wait for resume — must happen synchronously
-    // while we still have store access (for single_step toggling).
+    // while we still have store access.
     if let Some(ref frame) = frame_info {
       let _ = self.stopped_tx.send(StoppedFrame {
         func_name: frame.func_name.clone(),
         pc: frame.pc,
       });
-      // Block until DAP server tells us to resume.
-      if let Ok(guard) = self.resume_rx.lock()
-        && let Ok(action) = guard.recv()
-      {
-        // Toggle single-step based on action.
-        let enable_step = matches!(action, ResumeAction::Step);
-        if let Some(mut edit) = store.edit_breakpoints() {
-          edit.single_step(enable_step).ok();
-        }
+      // Block until DAP server tells us to resume. We don't re-toggle
+      // single_step — stepping is mark-granular, not instruction-
+      // granular, so pre-installed mark breakpoints do all the gating.
+      if let Ok(guard) = self.resume_rx.lock() {
+        let _ = guard.recv();
       }
     }
 
@@ -425,10 +425,22 @@ pub fn run<R: Read, W: Write>(
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
+        "host_resume" => {
+          // DAP doesn't yet drive real stdin, so there are never pending
+          // reads to settle. Make host_resume a no-op — "host has nothing
+          // to add to the task queue." The scheduler checks the queue
+          // again after this returns; if still empty, the program ends
+          // cleanly. Trapping here (the previous behaviour) caused the
+          // program to abort on the very first scheduler tick past the
+          // last user mark.
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
         _ => {
-          // host_read/host_resume + any other unknown env imports — trap
-          // for now. DAP sessions don't yet drive real stdin; plumbing
-          // reads through the debug loop is a follow-up.
+          // host_read + any other unknown env imports — trap for now.
+          // DAP sessions don't yet plumb stdin reads through the debug
+          // loop; that's a follow-up.
           let err_name = name.clone();
           linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
             Err(wasmtime::Error::msg(format!("builtin '{}' not yet implemented in DAP", err_name)))
@@ -628,8 +640,17 @@ pub fn run<R: Read, W: Write>(
             };
             server.respond(req.success(resp)).ok();
             if running {
-              // Resume with single-step — break at next instruction.
-              let _ = resume_tx.send(ResumeAction::Step);
+              // Step at *mark* granularity — resume until the next mark
+              // breakpoint fires. Per-WASM-instruction single_step isn't
+              // useful to a user: one source expression expands to
+              // hundreds of ops (closure dispatch, CPS glue, scheduler
+              // yields), so single_step hops through runtime internals
+              // rather than source lines. Treating step as "run to next
+              // mark" makes every step land on a user-meaningful
+              // location. True Next/StepIn/StepOut semantics (call-depth
+              // aware) is a follow-up — today all three do the same
+              // thing.
+              let _ = resume_tx.send(ResumeAction::Continue);
               // Wait for next stop or termination.
               match stopped_rx.recv() {
                 Ok(frame) if frame.pc == u32::MAX => {
