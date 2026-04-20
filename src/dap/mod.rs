@@ -17,7 +17,7 @@
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::sync::{Arc, Mutex, mpsc};
 
-use dap::events::{Event, StoppedEventBody};
+use dap::events::{Event, ExitedEventBody, StoppedEventBody};
 use dap::requests::Command;
 use dap::responses::{
   ContinueResponse, ResponseBody, ScopesResponse, SetBreakpointsResponse,
@@ -74,6 +74,162 @@ fn pc_to_mark_source(
   best.map(|m| (m.source.start.line as i64, m.source.start.col as i64))
 }
 
+// ── Runner bootstrap ────────────────────────────────────────────────────────
+
+/// Drive a compiled fink module through the same bootstrap sequence used by
+/// `src/runner/wasmtime_runner.rs`, but via `.call_async` so it can run
+/// under `guest_debug`. Duplicated from the sync runner on purpose — the
+/// plan is to unify once both work (see
+/// `.brain/.scratch/dap-runner-bootstrap-plan.md`).
+async fn run_module(
+  store: &mut wasmtime::Store<DebugState>,
+  linker: &wasmtime::Linker<DebugState>,
+  module: &wasmtime::Module,
+  program_arg: String,
+) -> Result<(), String> {
+  // Collect dep-init exports before instantiating; order matches linker's
+  // topological sort (providers before consumers).
+  let dep_init_names: Vec<String> = module
+    .exports()
+    .filter_map(|e| {
+      let n = e.name();
+      if n.ends_with(":fink_module") && n != "fink_module" {
+        Some(n.to_string())
+      } else {
+        None
+      }
+    })
+    .collect();
+
+  let instance = linker.instantiate_async(&mut *store, module).await
+    .map_err(|e| format!("instantiation error: {e}"))?;
+
+  let box_func = instance.get_func(&mut *store, "_box_func")
+    .ok_or("no '_box_func' export")?;
+  let apply = instance.get_func(&mut *store, "_apply")
+    .ok_or("no '_apply' export")?;
+  let list_nil = instance.get_func(&mut *store, "_list_nil")
+    .ok_or("no '_list_nil' export")?;
+  let list_prepend = instance.get_func(&mut *store, "_list_prepend")
+    .ok_or("no '_list_prepend' export")?;
+  let fn2_stub = instance.get_func(&mut *store, "_fn2_stub")
+    .ok_or("no '_fn2_stub' export")?;
+  let done_ty = fn2_stub.ty(&*store);
+
+  // Dep init — box each dep's fink_module, apply with a no-op done.
+  for name in &dep_init_names {
+    let dep = instance.get_func(&mut *store, name)
+      .ok_or_else(|| format!("no '{}' export", name))?;
+
+    let mut boxed_dep = [wasmtime::Val::AnyRef(None)];
+    box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(dep))], &mut boxed_dep).await
+      .map_err(|e| format!("_box_func({name}) failed: {e}"))?;
+
+    let noop = wasmtime::Func::new(&mut *store, done_ty.clone(), |_c, _p, _r| Ok(()));
+    let mut boxed_noop = [wasmtime::Val::AnyRef(None)];
+    box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(noop))], &mut boxed_noop).await
+      .map_err(|e| format!("_box_func(done) for {name} failed: {e}"))?;
+
+    let mut nil = [wasmtime::Val::AnyRef(None)];
+    list_nil.call_async(&mut *store, &[], &mut nil).await
+      .map_err(|e| format!("_list_nil failed: {e}"))?;
+    let mut init_args = [wasmtime::Val::AnyRef(None)];
+    list_prepend.call_async(&mut *store, &[boxed_noop[0], nil[0]], &mut init_args).await
+      .map_err(|e| format!("_list_prepend failed: {e}"))?;
+
+    apply.call_async(&mut *store, &[init_args[0], boxed_dep[0]], &mut []).await
+      .map_err(|e| format!("{name} init failed: {e}"))?;
+  }
+
+  // Entry bootstrap — populate export-slot globals (notably `main`).
+  let fink_module = instance.get_func(&mut *store, "fink_module")
+    .ok_or("no 'fink_module' export")?;
+
+  let mut boxed_module = [wasmtime::Val::AnyRef(None)];
+  box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(fink_module))], &mut boxed_module).await
+    .map_err(|e| format!("_box_func(fink_module) failed: {e}"))?;
+
+  let done = wasmtime::Func::new(&mut *store, done_ty, |_c, _p, _r| Ok(()));
+  let mut boxed_done = [wasmtime::Val::AnyRef(None)];
+  box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(done))], &mut boxed_done).await
+    .map_err(|e| format!("_box_func(done) failed: {e}"))?;
+
+  let mut nil = [wasmtime::Val::AnyRef(None)];
+  list_nil.call_async(&mut *store, &[], &mut nil).await
+    .map_err(|e| format!("_list_nil failed: {e}"))?;
+  let mut init_args = [wasmtime::Val::AnyRef(None)];
+  list_prepend.call_async(&mut *store, &[boxed_done[0], nil[0]], &mut init_args).await
+    .map_err(|e| format!("_list_prepend failed: {e}"))?;
+
+  apply.call_async(&mut *store, &[init_args[0], boxed_module[0]], &mut []).await
+    .map_err(|e| format!("fink_module init failed: {e}"))?;
+
+  // Read `main` from the export global — it's a boxed $Closure now.
+  let main_global = instance.get_global(&mut *store, "main")
+    .ok_or("no 'main' global export")?;
+  let boxed_main = main_global.get(&mut *store);
+
+  // Build argv = [program_name] as $List<$Str>. DAP doesn't yet support
+  // user-supplied CLI args — follow-up when we need them.
+  let args_list = build_args_list_async(&mut *store, &instance, &[program_arg.into_bytes()]).await?;
+
+  let run_main = instance.get_func(&mut *store, "_run_main")
+    .ok_or("no '_run_main' export")?;
+  run_main.call_async(&mut *store, &[boxed_main, args_list], &mut []).await
+    .map_err(|e| format!("_run_main failed: {e}"))?;
+
+  Ok(())
+}
+
+/// Build a fink $List<$Str> from raw byte-string args (async variant).
+async fn build_args_list_async(
+  store: &mut wasmtime::Store<DebugState>,
+  instance: &wasmtime::Instance,
+  args: &[Vec<u8>],
+) -> Result<wasmtime::Val, String> {
+  let list_nil = instance.get_func(&mut *store, "_list_nil")
+    .ok_or("no '_list_nil' export")?;
+  let list_prepend = instance.get_func(&mut *store, "_list_prepend")
+    .ok_or("no '_list_prepend' export")?;
+
+  let mut acc = [wasmtime::Val::AnyRef(None)];
+  list_nil.call_async(&mut *store, &[], &mut acc).await
+    .map_err(|e| format!("_list_nil failed: {e}"))?;
+
+  for arg in args.iter().rev() {
+    let s = bytes_to_str_async(&mut *store, instance, arg).await?;
+    let mut next = [wasmtime::Val::AnyRef(None)];
+    list_prepend.call_async(&mut *store, &[s, acc[0]], &mut next).await
+      .map_err(|e| format!("_list_prepend failed: {e}"))?;
+    acc = next;
+  }
+  Ok(acc[0])
+}
+
+/// Allocate a $Str on the GC heap from raw bytes via `_str_wrap_bytes`.
+async fn bytes_to_str_async(
+  store: &mut wasmtime::Store<DebugState>,
+  instance: &wasmtime::Instance,
+  data: &[u8],
+) -> Result<wasmtime::Val, String> {
+  let array_ty = wasmtime::ArrayType::new(
+    store.engine(),
+    wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+  );
+  let alloc = wasmtime::ArrayRefPre::new(&mut *store, array_ty);
+  let elems: Vec<wasmtime::Val> = data.iter().map(|&b| wasmtime::Val::I32(b as i32)).collect();
+  let array = wasmtime::ArrayRef::new_fixed(&mut *store, &alloc, &elems)
+    .map_err(|e| format!("byte array alloc failed: {e}"))?;
+
+  let wrap_fn = instance.get_func(&mut *store, "_str_wrap_bytes")
+    .ok_or("no '_str_wrap_bytes' export")?;
+  let array_any = array.to_anyref();
+  let mut result = [wasmtime::Val::AnyRef(None)];
+  wrap_fn.call_async(&mut *store, &[wasmtime::Val::AnyRef(Some(array_any))], &mut result).await
+    .map_err(|e| format!("_str_wrap_bytes failed: {e}"))?;
+  Ok(result[0])
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 /// Info about a stopped frame, sent from WASM thread → DAP server.
@@ -85,11 +241,15 @@ struct StoppedFrame {
 }
 
 /// Commands sent from DAP server → WASM thread.
+///
+/// Currently only `Continue` — both plain "continue" and DAP step commands
+/// resume until the next mark breakpoint. Per-WASM-instruction stepping
+/// (the old `Step` variant) was removed because marks already give
+/// source-meaningful step granularity; see the Next/StepIn/StepOut
+/// handler for the reasoning.
 enum ResumeAction {
-  /// Continue execution (disable single-step).
+  /// Continue execution until the next breakpoint.
   Continue,
-  /// Step to next instruction (enable single-step).
-  Step,
 }
 
 /// State stored in the Wasmtime Store.
@@ -133,21 +293,17 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
     };
 
     // Send frame info and wait for resume — must happen synchronously
-    // while we still have store access (for single_step toggling).
+    // while we still have store access.
     if let Some(ref frame) = frame_info {
       let _ = self.stopped_tx.send(StoppedFrame {
         func_name: frame.func_name.clone(),
         pc: frame.pc,
       });
-      // Block until DAP server tells us to resume.
-      if let Ok(guard) = self.resume_rx.lock()
-        && let Ok(action) = guard.recv()
-      {
-        // Toggle single-step based on action.
-        let enable_step = matches!(action, ResumeAction::Step);
-        if let Some(mut edit) = store.edit_breakpoints() {
-          edit.single_step(enable_step).ok();
-        }
+      // Block until DAP server tells us to resume. We don't re-toggle
+      // single_step — stepping is mark-granular, not instruction-
+      // granular, so pre-installed mark breakpoints do all the gating.
+      if let Ok(guard) = self.resume_rx.lock() {
+        let _ = guard.recv();
       }
     }
 
@@ -158,7 +314,7 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
 
 // ── DAP server ──────────────────────────────────────────────────────────────
 
-pub fn run<R: Read, W: Write>(
+pub fn run<R: Read, W: Write + Send + 'static>(
   input: R,
   output: W,
   program: &str,
@@ -225,21 +381,100 @@ pub fn run<R: Read, W: Write>(
     resume_rx: Arc::new(Mutex::new(resume_rx)),
   });
 
-  // Wire up all "env" imports as stubs that trap (builtins not yet implemented).
+  // Wire env imports. Mirrors `src/runner/wasmtime_runner.rs` — routes the
+  // full CPS runtime (host_exit/panic/channel_send/read/resume) rather than
+  // trapping everything. DAP inherits the parent process's stdout/stderr so
+  // program output flows through the normal Fink IO channels (tag=1→stdout,
+  // tag=2→stderr) without DAP needing a result-printer of its own.
   let mut linker = wasmtime::Linker::new(&engine);
+  let exit_code: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
   for import in module.imports() {
     if import.module() == "env"
       && let wasmtime::ExternType::Func(ft) = import.ty()
     {
       let name = import.name().to_string();
-      let err_name = name.clone();
-      linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
-        Err(wasmtime::Error::msg(format!("builtin '{}' not yet implemented", err_name)))
-      }).map_err(|e| e.to_string())?;
+      match name.as_str() {
+        "host_exit" => {
+          let code = exit_code.clone();
+          linker.func_new("env", &name, ft.clone(), move |_caller, params, _results| {
+            *code.lock().unwrap() = params[0].unwrap_i32() as i64;
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_panic" => {
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Err(wasmtime::Error::msg("fink panic: irrefutable pattern failed"))
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_channel_send" => {
+          // Route debuggee stdout/stderr into DAP `Output` events so the
+          // bytes surface in VSCode's Debug Console instead of being
+          // lost. Writing to the process's real stdout would corrupt the
+          // DAP JSON stream (VSCode reads DAP framing from our stdout).
+          let out = server.output.clone();
+          linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
+            let tag = params[0].unwrap_i32();
+            let bytes_any = params[1].unwrap_anyref()
+              .ok_or_else(|| wasmtime::Error::msg("host_channel_send: null bytes ref"))?;
+            let arr = bytes_any.unwrap_array(&mut caller)?;
+            let len = arr.len(&caller)? as usize;
+            let mut buf = Vec::with_capacity(len);
+            for v in arr.elems(&mut caller)? {
+              buf.push(v.unwrap_i32() as u8);
+            }
+            let text = String::from_utf8_lossy(&buf).into_owned();
+            let category = if tag == 1 {
+              OutputEventCategory::Stdout
+            } else {
+              OutputEventCategory::Stderr
+            };
+            let event = Event::Output(dap::events::OutputEventBody {
+              category: Some(category),
+              output: text,
+              group: None,
+              variables_reference: None,
+              source: None,
+              line: None,
+              column: None,
+              data: None,
+            });
+            if let Ok(mut o) = out.lock() {
+              let _ = o.send_event(event);
+            }
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        "host_resume" => {
+          // DAP doesn't yet drive real stdin, so there are never pending
+          // reads to settle. Make host_resume a no-op — "host has nothing
+          // to add to the task queue." The scheduler checks the queue
+          // again after this returns; if still empty, the program ends
+          // cleanly. Trapping here (the previous behaviour) caused the
+          // program to abort on the very first scheduler tick past the
+          // last user mark.
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Ok(())
+          }).map_err(|e| e.to_string())?;
+        }
+        _ => {
+          // host_read + any other unknown env imports — trap for now.
+          // DAP sessions don't yet plumb stdin reads through the debug
+          // loop; that's a follow-up.
+          let err_name = name.clone();
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Err(wasmtime::Error::msg(format!("builtin '{}' not yet implemented in DAP", err_name)))
+          }).map_err(|e| e.to_string())?;
+        }
+      }
     }
   }
 
+  // Clone program path for argv (argv[0] = program name, C-style).
+  let program_arg = program.to_string();
+
   // Spawn WASM execution thread with async runtime (required by guest_debug).
+  // Mirrors the runner bootstrap: dep init loop → fink_module init → read
+  // `main` global → _run_main(boxed_main, argv_list). All via `.call_async`.
   let terminated_tx = stopped_tx;
   let wasm_thread = std::thread::spawn(move || {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -247,64 +482,10 @@ pub fn run<R: Read, W: Write>(
       .build()
       .expect("failed to build tokio runtime");
     rt.block_on(async {
-      let inst = match linker.instantiate_async(&mut store, &module).await {
-        Ok(inst) => inst,
-        Err(e) => {
-          eprintln!("[fink dap] instantiation error: {e}");
-          let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
-          return;
-        }
-      };
-
-      // CPS execution: box a host continuation, call main(boxed_cont).
-      let main_fn = match inst.get_func(&mut store, "main") {
-        Some(f) => f,
-        None => {
-          eprintln!("[fink dap] no 'main' export");
-          let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
-          return;
-        }
-      };
-      let box_func = match inst.get_func(&mut store, "_box_func") {
-        Some(f) => f,
-        None => {
-          eprintln!("[fink dap] no '_box_func' export");
-          let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
-          return;
-        }
-      };
-
-      // Create a host "done" continuation that logs the result to stderr.
-      let main_ty = main_fn.ty(&store);
-      let done = wasmtime::Func::new(&mut store, main_ty, |mut caller, params, _results| {
-        if let Some(wasmtime::Val::AnyRef(Some(any_ref))) = params.first()
-          && let Ok(Some(struct_ref)) = any_ref.as_struct(&caller)
-          && let Ok(wasmtime::Val::F64(bits)) = struct_ref.field(&mut caller, 0)
-        {
-          let v = f64::from_bits(bits);
-          if v == v.floor() && v.abs() < 1e15 {
-            eprintln!("[fink dap] result: {}", v as i64);
-          } else {
-            eprintln!("[fink dap] result: {}", v);
-          }
-        }
-        Ok(())
-      });
-
-      // Box it via _box_func.
-      let mut box_result = [wasmtime::Val::AnyRef(None)];
-      if let Err(e) = box_func.call_async(&mut store, &[wasmtime::Val::FuncRef(Some(done))], &mut box_result).await {
-        eprintln!("[fink dap] _box_func error: {e}");
-        let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
-        return;
-      }
-
-      // Call main with the boxed continuation.
-      if let Err(e) = main_fn.call_async(&mut store, &box_result, &mut []).await {
-        eprintln!("[fink dap] wasm error: {e}");
+      if let Err(e) = run_module(&mut store, &linker, &module, program_arg).await {
+        eprintln!("[fink dap] {e}");
       }
     });
-    // Signal termination with a sentinel.
     let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
   });
 
@@ -321,7 +502,14 @@ pub fn run<R: Read, W: Write>(
     .map(|f| f.to_string_lossy().to_string())
     .unwrap_or_default();
 
+  // True if the WASM program has finished and we've announced it to
+  // VSCode — see the terminate-and-break branches below.
+  let mut done = false;
+
   loop {
+    if done {
+      break;
+    }
     match server.poll_request() {
       Ok(Some(req)) => {
         match &req.command {
@@ -350,7 +538,9 @@ pub fn run<R: Read, W: Write>(
               && let Ok(frame) = stopped_rx.recv()
             {
               if frame.pc == u32::MAX {
+                server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                 server.send_event(Event::Terminated(None)).ok();
+                done = true;
               } else {
                 last_frame = Some(frame);
                 running = true;
@@ -448,7 +638,9 @@ pub fn run<R: Read, W: Write>(
               match stopped_rx.recv() {
                 Ok(frame) if frame.pc == u32::MAX => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
                 Ok(frame) => {
                   last_frame = Some(frame);
@@ -464,7 +656,9 @@ pub fn run<R: Read, W: Write>(
                 }
                 Err(_) => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
               }
             }
@@ -478,13 +672,24 @@ pub fn run<R: Read, W: Write>(
             };
             server.respond(req.success(resp)).ok();
             if running {
-              // Resume with single-step — break at next instruction.
-              let _ = resume_tx.send(ResumeAction::Step);
+              // Step at *mark* granularity — resume until the next mark
+              // breakpoint fires. Per-WASM-instruction single_step isn't
+              // useful to a user: one source expression expands to
+              // hundreds of ops (closure dispatch, CPS glue, scheduler
+              // yields), so single_step hops through runtime internals
+              // rather than source lines. Treating step as "run to next
+              // mark" makes every step land on a user-meaningful
+              // location. True Next/StepIn/StepOut semantics (call-depth
+              // aware) is a follow-up — today all three do the same
+              // thing.
+              let _ = resume_tx.send(ResumeAction::Continue);
               // Wait for next stop or termination.
               match stopped_rx.recv() {
                 Ok(frame) if frame.pc == u32::MAX => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
                 Ok(frame) => {
                   last_frame = Some(frame);
@@ -500,7 +705,9 @@ pub fn run<R: Read, W: Write>(
                 }
                 Err(_) => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
               }
             }
@@ -537,5 +744,88 @@ fn find_fnk_source(wat_path: &str) -> Option<String> {
     Some(fnk_path.to_string_lossy().into_owned())
   } else {
     None
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// Build a DAP request as `Content-Length: N\r\n\r\n{json}`.
+  fn frame(json: &str) -> Vec<u8> {
+    use std::io::Write as _;
+    let mut out = Vec::new();
+    write!(out, "Content-Length: {}\r\n\r\n{}", json.len(), json).unwrap();
+    out
+  }
+
+  /// Drive a scripted DAP session through `dap::run` and return the raw output.
+  ///
+  /// Writes the source to a tempfile, builds a framed input buffer with the
+  /// full launch→continue→disconnect sequence, then runs the DAP server to
+  /// completion on a thread with a timeout so a broken bootstrap can't hang
+  /// the test suite forever.
+  fn drive_session(src: &str) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.fnk");
+    std::fs::write(&path, src).unwrap();
+    let path_str = path.to_string_lossy().into_owned();
+
+    let mut input = Vec::new();
+    input.extend_from_slice(&frame(r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":true}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":3,"type":"request","command":"configurationDone"}"#));
+    input.extend_from_slice(&frame(r#"{"seq":4,"type":"request","command":"continue","arguments":{"threadId":1}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":5,"type":"request","command":"disconnect"}"#));
+
+    let output = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let output_clone = output.clone();
+
+    let handle = std::thread::spawn(move || {
+      struct SharedWrite(Arc<Mutex<Vec<u8>>>);
+      impl std::io::Write for SharedWrite {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+          self.0.lock().unwrap().extend_from_slice(buf);
+          Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+      }
+      let writer = SharedWrite(output_clone);
+      let reader = std::io::Cursor::new(input);
+      super::run(reader, writer, &path_str).ok();
+    });
+
+    // Wait up to 10s for the DAP session to finish. If it hangs past that,
+    // the test fails loudly rather than hanging CI.
+    let start = std::time::Instant::now();
+    while !handle.is_finished() {
+      if start.elapsed() > std::time::Duration::from_secs(10) {
+        panic!("DAP session did not terminate within 10s");
+      }
+      std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    handle.join().unwrap();
+
+    String::from_utf8_lossy(&output.lock().unwrap()).into_owned()
+  }
+
+  #[test]
+  fn stop_on_entry_then_continue_terminates_cleanly() {
+    // The simplest CPS program: main calls its done continuation with 42.
+    // The compiler produces at least one debug-marks breakpoint for the
+    // call site, so a correctly-bootstrapped DAP session must:
+    //   1) emit a Stopped event at entry (driven by stopOnEntry),
+    //   2) emit a Terminated event after continue,
+    //   3) not hang.
+    let out = drive_session("main = fn done: done 42\n");
+
+    assert!(
+      out.contains(r#""event":"stopped""#),
+      "expected a 'stopped' event in DAP output, got:\n{out}"
+    );
+    assert!(
+      out.contains(r#""event":"terminated""#),
+      "expected a 'terminated' event in DAP output, got:\n{out}"
+    );
   }
 }
