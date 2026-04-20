@@ -37,24 +37,6 @@ block comment
 
 See [docs/language.md](docs/language.md) for the authoritative user-facing syntax reference and [docs/roadmap.md](docs/roadmap.md) for designed-but-unshipped features.
 
-### Significant topics
-
-- **Literals**: integers (sized by value/sign), floats, decimals (`1.0d`), tagged literals (`10sec == sec 10`), strings (single-quoted, interpolation `${}`), tagged templates (`fmt'...'`), sequences `[]`, records `{}`, dicts `dict {}`, sets `set`
-- **Identifiers**: UTF-8 graphemes, may include `-` and `_`
-- **Operators**: arithmetic, logical (`not`/`and`/`or`/`xor`), comparison (chainable), bitwise, set operators, spread `..`/`...`, ranges `0..10` (exclusive) / `0...10` (inclusive), member access `.`/`.(expr)`, pipe `|`, partial `?`
-- **Binding**: `=` (left-hand), `|=` (right-hand), full pattern matching with guards, spread, string patterns
-- **Functions**: `fn args: body`, `fn match` sugar, default args, closures, higher-order, mutual recursion via forward refs at module level
-- **Application**: prefix `foo bar`, nested right-to-left, multiline indented args, `;` as strong separator, postfix tagged `[1,2,3]foo`, partial `?`
-- **Pipes**: `foo | bar | spam == spam (bar foo)`
-- **Error handling**: `try` (unwrap or propagate), `match Ok/Err`, error chaining
-- **Modules**: `{foo, bar} = import './foobar.fnk'`
-- **Types** (WIP): product, sum/variant, generic, dependent, opaque, union, type spread
-- **Protocols** (WIP): abstract functions, specialization per type
-- **Macros** (WIP): compile-time AST manipulation
-- **Async/concurrency** (WIP): `spawn`, `await_all`, implicit await on access
-- **Context/effects** (WIP): `context`, `with`, `get_ctx`
-- **Patterns as first-class values** (WIP)
-
 ## Implementation Notes
 
 - Uses Pratt parser.
