@@ -105,3 +105,25 @@ test 'varargs mixed fixed and rest', fn:
     head-and-rest 10, ..[20, 30]
   | equals ƒink:
     30
+
+
+# TODO: mutual recursion with match body fails WASM validation —
+# `type mismatch: expected funcref, found anyref` inside a hoisted fn.
+# Culprit: hoisted-fn synth id lands outside collect_chain's traversal,
+# emit_get_raw_funcref falls through to local.get. Passes gen_wat but
+# wasmtime rejects the linked binary. Ping/pong (pure bodies) works.
+skip test 'mutual recursion at module scope', fn:
+  expect run ƒink:
+    is_even = fn n:
+      match n:
+        0: true
+        _: is_odd  n - 1
+
+    is_odd = fn n:
+      match n:
+        0: false
+        _: is_even n - 1
+
+    is_even 4
+  | equals ƒink:
+    true

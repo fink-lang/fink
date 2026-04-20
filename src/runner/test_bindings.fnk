@@ -43,3 +43,15 @@ test 'nested chains', fn:
     y - 1
   | equals ƒink:
     9
+
+
+test 'bind-right at statement top', fn:
+  expect run ƒink:
+    add = fn a, b: a + b
+    add
+      1
+      2
+    |= result
+    result
+  | equals ƒink:
+    3
