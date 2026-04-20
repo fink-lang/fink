@@ -457,6 +457,21 @@ test 'bind-right destructure in seq pattern', fn:
       ref 'bar', 1
       ref 'spam', 2
 
+# TODO
+test 'bind-right at statement top', fn:
+  expect scope ƒink:
+    foo arg1
+      arg2
+    |= result
+    result
+  | equals ƒink:
+    scope 9, 'module',
+      unresolved 'foo'
+      unresolved 'arg1'
+      unresolved 'arg2'
+      bind 6, 'result'
+      ref 'result', 6
+
 
 test 'record destructure with field rename', fn:
   expect scope ƒink:

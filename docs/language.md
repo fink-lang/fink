@@ -578,11 +578,11 @@ match config:
   {..anything}:        'some config'
 ```
 
-String patterns extract the middle of a template:
+String patterns capture holes in a template:
 
 ```fink
 match 'hello world':
-  'hello ${..rest}': rest      # 'world'
+  'hello ${rest}': rest      # 'world'
   _: ''
 ```
 

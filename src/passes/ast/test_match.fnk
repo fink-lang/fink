@@ -99,10 +99,11 @@ test 'match on type', fn:
               Ident 'n'
           LitStr 'its a u8'
 
+
 test 'match string pattern', fn:
   expect ast ƒink:
     match s:
-      'hello ${..rest}': rest
+      'hello ${rest}': rest
       'a'...'z': 'lowercase letter'
   | equals ƒink:
     Module
@@ -112,8 +113,7 @@ test 'match string pattern', fn:
           Patterns
             StrTempl
               LitStr 'hello '
-              Spread '..',
-                Ident 'rest'
+              Ident 'rest'
           Ident 'rest'
         Arm ':',
           Patterns
@@ -121,6 +121,7 @@ test 'match string pattern', fn:
               LitStr 'a'
               LitStr 'z'
           LitStr 'lowercase letter'
+
 
 test 'match sequence patterns', fn:
   expect ast ƒink:

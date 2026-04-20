@@ -355,9 +355,17 @@ pub fn analyse<'src>(ast: &Ast<'src>, builtins: &[&str]) -> ScopeResult {
 
 fn pre_register_binds<'src>(ast: &Ast<'src>, stmts: &[AstId], scope: ScopeId, ctx: &mut Ctx<'src>) {
   for &stmt_id in stmts {
-    if let NodeKind::Bind { lhs, .. } = &ast.nodes.get(stmt_id).kind {
-      let lhs = *lhs;
-      pre_register_pattern_binds(ast, lhs, scope, ctx);
+    match &ast.nodes.get(stmt_id).kind {
+      NodeKind::Bind { lhs, .. } => {
+        let lhs = *lhs;
+        pre_register_pattern_binds(ast, lhs, scope, ctx);
+      }
+      NodeKind::BindRight { rhs, .. } => {
+        // `expr |= pat` at statement top — RHS is the binding pattern.
+        let rhs = *rhs;
+        pre_register_pattern_binds(ast, rhs, scope, ctx);
+      }
+      _ => {}
     }
   }
 }
@@ -681,8 +689,26 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
     | NodeKind::Partial | NodeKind::Wildcard | NodeKind::Token(_) | NodeKind::Patterns(_) => {}
 
     NodeKind::BindRight { lhs, rhs, .. } => {
+      // Statement-level `expr |= pat`: lhs is the value expression, rhs is
+      // the binding pattern. Mirrors the Bind arm with lhs/rhs swapped.
+      let prev_bind = ctx.current_bind_ast_id;
+      if let NodeKind::Ident(_) = &ast.nodes.get(rhs).kind {
+        ctx.current_bind_ast_id = Some(rhs);
+      }
       walk_node(ast, lhs, scope, ctx);
-      walk_node(ast, rhs, scope, ctx);
+      ctx.current_bind_ast_id = prev_bind;
+      if ctx.scopes.get(scope).kind == ScopeKind::Module {
+        let needs_register = match binding_ident(ast, rhs) {
+          Some(ident_id) => !ctx.emit_bind_event(scope, ident_id),
+          None => false,
+        };
+        if needs_register {
+          register_pattern_binds(ast, rhs, scope, ctx);
+        }
+      } else {
+        register_pattern_binds(ast, rhs, scope, ctx);
+      }
+      walk_pattern_refs(ast, rhs, scope, ctx);
     }
   }
 }
