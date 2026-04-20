@@ -657,6 +657,78 @@ mod tests {
     }
   }
 
+  /// Sanity check: how many marks does a tiny program produce, and do
+  /// the fragment-local PCs land inside *some* code-section body in the
+  /// linked binary? The answer should be: a small handful (the policy
+  /// over-marks but we're nowhere near hundreds), and **no** — the PCs
+  /// fall short of the entry's bodies because the linker prepends
+  /// @fink/runtime's code-section bodies first. This test pins the
+  /// expectation so the link-time PC shift in Step 4 has a clear
+  /// before/after.
+  #[test]
+  fn compile_package_marks_are_fragment_local_not_linked() {
+    use wasmparser::{Parser, Payload};
+    let src = "main = fn: 1 + 2";
+    let mut loader = InMemorySourceLoader::single("test.fnk", src);
+    let wasm = compile_package(Path::new("test.fnk"), &mut loader).unwrap();
+
+    // Single-digit count for a 1-line program — the policy is known to
+    // over-mark (see debug-marks-end-to-end-plan.md), but emit-time
+    // mapping reduces that to a handful in practice. If this jumps to
+    // 50+, something has gone wrong upstream.
+    assert!(
+      wasm.marks.len() < 20,
+      "tiny program produced {} marks — policy or emit interaction has regressed",
+      wasm.marks.len(),
+    );
+
+    // Walk the linked binary's code section. Collect each function
+    // body's [start, end) absolute byte range.
+    let mut bodies: Vec<(u32, u32)> = Vec::new();
+    for payload in Parser::new(0).parse_all(&wasm.binary) {
+      if let Ok(Payload::CodeSectionEntry(body)) = payload {
+        let r = body.range();
+        bodies.push((r.start as u32, r.end as u32));
+      }
+    }
+    assert!(!bodies.is_empty(), "linked binary should have code bodies");
+
+    let in_a_body = |pc: u32| bodies.iter().any(|(s, e)| pc >= *s && pc < *e);
+    let inside = wasm.marks.iter().filter(|r| in_a_body(r.wasm_pc)).count();
+    let outside = wasm.marks.len() - inside;
+
+    // Today: every mark PC is fragment-local, so it lands BEFORE the
+    // entry's bodies in the linked binary — i.e. either inside a
+    // runtime body (rare, by coincidence) or in the gap before any
+    // body. We expect the majority to be `outside`. When Step 4 wires
+    // the link-time shift, flip this assertion to `outside == 0`.
+    assert!(
+      outside > 0,
+      "marks: {} total, {} inside a linked body, 0 outside — \
+       link-time shift may already be applied; update this test",
+      wasm.marks.len(), inside,
+    );
+
+    // Sanity bound on a richer program: a 3-statement function body
+    // produces a single-digit number of marks, with the policy's
+    // duplicate-per-line pattern (~2×) visible but not exploding.
+    // Watching this number catch a future policy regression is
+    // cheap; if it grows much beyond ~10 something has changed.
+    let bigger = "\
+main = fn:
+  a = 1 + 2
+  b = a * 3
+  b
+";
+    let mut loader2 = InMemorySourceLoader::single("test.fnk", bigger);
+    let wasm2 = compile_package(Path::new("test.fnk"), &mut loader2).unwrap();
+    assert!(
+      wasm2.marks.len() < 15,
+      "3-stmt fn produced {} marks — policy may have regressed",
+      wasm2.marks.len(),
+    );
+  }
+
   #[test]
   fn compile_package_two_modules() {
     // entry.fnk imports foo from lib.fnk and calls it.
