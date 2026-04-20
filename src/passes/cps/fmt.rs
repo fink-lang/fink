@@ -243,9 +243,12 @@ fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
 // ---------------------------------------------------------------------------
 
 /// Render a CpsId's name: look up origin → AST node kind → pick rendering.
+///
+/// ```text
 ///   Ident("foo")   → ·foo_<id>
 ///   SynthIdent(n)  → ·$_<n>_<id>
 ///   no origin      → ·v_<id>
+/// ```
 fn render_synth_name(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
   match ctx.ast_node(cps_id) {
     Some(node) => match &node.kind {

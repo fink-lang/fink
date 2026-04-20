@@ -1,7 +1,22 @@
-// Compiler passes — each sub-module is one stage of the pipeline.
-//
-// Passes that take and produce CpsResult must uphold the CPS transform
-// contract. See cps/transform-contract.md.
+//! Compiler passes — each sub-module is one stage of the pipeline.
+//!
+//! Pipeline:
+//!
+//! ```text
+//!   parse(src, url)            → Ast
+//!   desugar(Ast)               → DesugaredAst   (partial app + scopes)
+//!   lower(DesugaredAst)        → Cps
+//!   lift(Cps, DesugaredAst)    → LiftedCps
+//!   compile_package(entry, …)  → Wasm           (collect → emit → DWARF → link)
+//! ```
+//!
+//! Typed stage results enforce correct pass ordering — each stage produces
+//! a result that can only be constructed by running that stage's function,
+//! so downstream stages depend on the previous result by type.
+//!
+//! Passes that take and produce `CpsResult` must uphold the CPS transform
+//! contract in `cps/transform-contract.md`. Passes that take and produce
+//! `Ast` must uphold the arena contract in `ast/arena-contract.md`.
 
 pub mod ast;
 pub mod cps;
@@ -13,21 +28,6 @@ pub mod wasm;
 #[cfg(feature = "compile")]
 #[path = "wasm-link/mod.rs"]
 pub mod wasm_link;
-
-// ---------------------------------------------------------------------------
-// Pipeline — typed stage results enforce correct pass ordering.
-//
-// Each stage produces a result that can only be constructed by running that
-// stage's function. Downstream stages take the previous result as input,
-// so the type system prevents skipping or misordering passes.
-//
-//   tokenize(src) → token stream (debug only)
-//   parse(src) → Ast
-//   desugar(Ast) → DesugaredAst  (partial application + scopes)
-//   lower(DesugaredAst) → Cps
-//   lift(Cps, DesugaredAst) → LiftedCps
-//   compile_package(entry, loader) → Wasm  (see wasm_link::compile_package)
-// ---------------------------------------------------------------------------
 
 /// Raw parsed AST — for display/formatting only.
 /// To proceed to CPS or codegen, call `desugar()`.
@@ -59,8 +59,8 @@ pub struct LiftedCps {
 
 /// Parse source into a raw AST.
 ///
-/// `url` is the module's stable identity — file path, "@fink/*" virtual URL,
-/// "<stdin>", "test", etc. It gets stored on the root `NodeKind::Module` so
+/// `url` is the module's stable identity — file path, `"@fink/*"` virtual URL,
+/// `"<stdin>"`, `"test"`, etc. It gets stored on the root `NodeKind::Module` so
 /// downstream passes (emitter in particular) can recover it without threading
 /// a separate parameter.
 pub fn parse<'src>(src: &'src str, url: &str) -> Result<Ast<'src>, ast::parser::ParseError> {

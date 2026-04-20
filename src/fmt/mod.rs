@@ -1,23 +1,22 @@
-// Fink formatter — two-stage pipeline:
-//
-//   raw AST  ──[layout]──►  formatted AST  ──[print]──►  String
-//
-// Stage 1 — layout (layout.rs):
-//   Traverses the input AST and produces a new `Ast` with canonical locs
-//   that satisfy the formatting rules (max line width, indentation, etc.).
-//
-// Stage 2 — print (print.rs):
-//   Takes an `Ast` whose locs are already canonical and materialises the
-//   source string by placing token bytes at their loc positions. No formatting
-//   decisions are made here — it is the identity observer of the loc contract.
-//
-// Origin mapping is not wired. `print` derives source maps from the per-token
-// `Loc.start` values — an identity map of the formatted output. If the
-// formatter ever needs to attribute reflowed spans back to pre-layout source
-// (e.g. to power a fix-it style refactor against the original file), the
-// layout pass would need to carry a `PropGraph<AstId, AstId>` from output
-// node id back to input node id. No current consumer needs that, so it is
-// not built.
+//! ƒink source-code formatter — two-stage pipeline:
+//!
+//! ```text
+//!   raw AST  ──[layout]──►  formatted AST  ──[print]──►  String
+//! ```
+//!
+//! [`layout`] traverses the input AST and produces a new `Ast` with
+//! canonical locs that satisfy the formatting rules (max line width,
+//! indentation). [`print`][mod@print] takes an `Ast` whose locs are
+//! already canonical and materialises the source string by placing token
+//! bytes at their loc positions — no formatting decisions, just the
+//! identity observer of the loc contract.
+//!
+//! Origin mapping is not wired. `print` derives source maps from
+//! per-token `Loc.start` values — an identity map of the formatted
+//! output. Attribution from reflowed spans back to pre-layout source
+//! (for fix-it style refactors) would require the layout pass to carry a
+//! `PropGraph<AstId, AstId>` from output to input; no current consumer
+//! needs that.
 
 pub mod layout;
 pub mod print;

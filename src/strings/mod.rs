@@ -1,22 +1,22 @@
-/// String rendering and escape handling for Fink string values.
-///
-/// Fink strings are **byte sequences**, not UTF-8 validated text (following
-/// the C / Go / Python 2 model). A string literal can hold arbitrary bytes
-/// — `'\xFF'` is a valid 1-byte string even though 0xFF is not valid UTF-8
-/// on its own. A future `utf8` subtype will opt into codepoint-aware
-/// semantics; until then, everything is bytes.
-///
-/// TODO: Review supported escape sequences — `\v` and `\b` are archaic;
-/// consider whether Fink should support them or trim the set down.
-///
-/// `LitStr` nodes in the AST hold raw source bytes — escape sequences are
-/// not yet processed. Functions here convert raw source to the cooked byte
-/// sequence at the appropriate boundary (codegen, eval, test infrastructure).
+//! String rendering and escape handling for ƒink string values.
+//!
+//! ƒink strings are **byte sequences**, not UTF-8 validated text
+//! (following the C / Go / Python 2 model). A string literal can hold
+//! arbitrary bytes — `'\xFF'` is a valid 1-byte string even though 0xFF
+//! is not valid UTF-8 on its own. A future `utf8` subtype will opt into
+//! codepoint-aware semantics; until then, everything is bytes.
+//!
+//! `LitStr` nodes in the AST hold raw source bytes — escape sequences
+//! are not yet processed. Functions here convert raw source to the
+//! cooked byte sequence at the appropriate boundary (codegen, eval, test
+//! infrastructure).
+
 /// Render a `LitStr`'s raw source bytes into the cooked byte sequence by
 /// processing escape sequences. Returns `Vec<u8>` rather than `String`
 /// because the result may contain arbitrary bytes (e.g. from `\xFF`).
 ///
 /// Escape sequences:
+/// ```text
 ///   \n  → newline        \r  → CR          \t  → tab
 ///   \v  → vertical tab  \b  → backspace    \f  → form feed
 ///   \\  → backslash      \'  → single quote
@@ -24,6 +24,7 @@
 ///   \xNN       → raw byte value (2 hex digits; may produce invalid UTF-8)
 ///   \u{NNNNNN} → unicode codepoint (1-6 hex digits, _ separators allowed;
 ///                emitted as its UTF-8 encoding)
+/// ```
 pub fn render(raw: &str) -> Vec<u8> {
   let mut out = Vec::with_capacity(raw.len());
   let bytes = raw.as_bytes();

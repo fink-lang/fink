@@ -1,3 +1,9 @@
+//! Diagnostic formatting for user-facing compile errors.
+//!
+//! A `Diagnostic` carries a message, a source location, and an optional
+//! hint; `format` renders it with a slice of source context (lines
+//! before/after, a caret column) for CLI display.
+
 use crate::lexer::Loc;
 
 pub struct Diagnostic {

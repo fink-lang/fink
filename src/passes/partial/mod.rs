@@ -1,17 +1,18 @@
-// Partial application pass — desugars `?` (Partial nodes) into `Fn` nodes.
-//
-// Scoping rules:
-//   - `?` bubbles up to the nearest enclosing scope boundary
-//   - Scope boundaries: Group (...), each segment of a Pipe, top of statement
-//   - Everything else is transparent: Apply, InfixOp, UnaryOp, Member, Range,
-//     Spread, LitSeq, LitRec, StrTempl, Bind (RHS only), BindRight (LHS only)
-//   - All `?` in the same scope become the same single param `$`
-//   - `?` in pattern position (Arm lhs, Bind lhs) is a compile error
-//
-// Append-only implementation: the flat AST arena grows as partial wraps
-// subtrees in synthetic Fn nodes. `has_partial` is a pure reader.
-// `replace_partial` produces fresh node ids for any subtree that changes;
-// unchanged subtrees return their own id (fast path).
+//! Partial application pass — desugars `?` (Partial nodes) into `Fn` nodes.
+//!
+//! Scoping rules:
+//!
+//! - `?` bubbles up to the nearest enclosing scope boundary.
+//! - Scope boundaries: `Group (...)`, each segment of a `Pipe`, top of statement.
+//! - Everything else is transparent: `Apply`, `InfixOp`, `UnaryOp`, `Member`, `Range`,
+//!   `Spread`, `LitSeq`, `LitRec`, `StrTempl`, `Bind` (RHS only), `BindRight` (LHS only).
+//! - All `?` in the same scope become the same single param `$`.
+//! - `?` in pattern position (`Arm` lhs, `Bind` lhs) is a compile error.
+//!
+//! Append-only implementation: the flat AST arena grows as partial wraps
+//! subtrees in synthetic `Fn` nodes. `has_partial` is a pure reader.
+//! `replace_partial` produces fresh node ids for any subtree that changes;
+//! unchanged subtrees return their own id (fast path).
 
 use crate::ast::{Ast, AstBuilder, AstId, CmpPart, Exprs, NodeKind};
 use crate::lexer::{Loc, Token};

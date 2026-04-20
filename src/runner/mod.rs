@@ -1,4 +1,7 @@
-// Runner: executes compiled WASM in Wasmtime.
+//! Runner — executes compiled WASM binaries under Wasmtime.
+//!
+//! Wires the user program's IO channels (stdin/stdout/stderr) to host
+//! streams, sets up the scheduler, and returns the exit code from `main`.
 
 use std::sync::{Arc, Mutex};
 
@@ -24,7 +27,7 @@ impl Default for RunOptions {
 
 /// Compile source and run it. Returns the exit code from main.
 ///
-/// `args` is the CLI argv passed to `main` — argv[0] is the program name.
+/// `args` is the CLI argv passed to `main` — `argv[0]` is the program name.
 #[cfg(feature = "compile")]
 pub fn run_source(
   mut opts: RunOptions,
@@ -49,7 +52,7 @@ pub fn run_source(
 /// `compile_package` — this is the multi-module path, used by both
 /// `fink run` and any other filesystem-backed invocation.
 ///
-/// `args` is the CLI argv passed to `main` — argv[0] is the program name.
+/// `args` is the CLI argv passed to `main` — `argv[0]` is the program name.
 #[cfg(feature = "compile")]
 pub fn run_file(
   mut opts: RunOptions,
