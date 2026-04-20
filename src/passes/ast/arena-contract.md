@@ -1,13 +1,6 @@
 # AST Arena Contract
 
-The AST is stored in a **flat, append-only arena**. This document spells out
-the contract every pass that touches the AST must honour.
-
-The current implementation is mid-migration (see
-`src/passes/ast/mod.rs` — `Ast`, `AstBuilder`, `appended_only`). Today's
-code still has the owning-tree `Node` shape; the flat arena types exist
-alongside it. The contract described here is the target state and applies
-to the new types as soon as they are used.
+The AST is a **flat, append-only arena**. Every pass that takes or produces an `Ast` upholds this contract.
 
 ---
 
@@ -239,9 +232,8 @@ by three concrete problems:
 - **`unsafe` in `DesugaredAst`:** the struct carried both an owning
   `Box<ParseResult>` and a shadow index `PropGraph<AstId, Option<&Node>>`
   that pointed back into the box. Constructing the two together required
-  an `unsafe` reborrow at `src/passes/mod.rs:78`. The flat arena removes
-  the need for the shadow index — `ast.nodes.get(id)` is the index —
-  and deletes the unsafe.
+  an `unsafe` reborrow. The flat arena removes the need for the shadow
+  index — `ast.nodes.get(id)` is the index — and deletes the unsafe.
 
 - **Pass rewrites are expensive.** Rebuilding an owning tree means
   cloning untouched subtrees. Append-only rewrites clone only the
@@ -252,10 +244,10 @@ by three concrete problems:
   preserves id stability as an invariant of every pass, so side-tables
   compose without remap logic.
 
-The second and third points apply equally to CPS. A follow-up phase of
-this refactor is expected to migrate `CpsResult` to the same
-`{ nodes: PropGraph<CpsId, _>, root: CpsId }` shape with the same
-append-only invariant.
+The second and third points apply equally to CPS. CPS already keys
+metadata through `PropGraph<CpsId, T>`; migrating `CpsResult` itself to
+the same `{ nodes: PropGraph<CpsId, _>, root: CpsId }` shape with an
+append-only invariant is future work.
 
 ---
 
@@ -273,15 +265,10 @@ append-only invariant.
   at different slots are distinct. Hash-consing can be added as an
   optimisation later but is not required for correctness.
 
-- `Node.id` may exist as a field for backwards-compatibility but should
-  eventually be dropped — it's redundant with the slot index and is
-  never consulted except by debug tooling.
-
 ---
 
 ## References
 
 - [mod.rs](mod.rs) — `Ast`, `AstBuilder`, `appended_only`
 - [../../propgraph.rs](../../propgraph.rs) — the underlying dense storage
-- [../cps/ir-design.md](../cps/ir-design.md) — sibling document for CPS; CPS will adopt the
-  same pattern in a follow-up phase
+- [../cps/ir-design.md](../cps/ir-design.md) — sibling document for CPS.

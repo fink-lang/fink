@@ -8,7 +8,7 @@ Name resolution over the AST. Builds the scope graph, resolves every identifier 
 
 ## Design
 
-- [name-resolution-design.md](name-resolution-design.md) — three property graphs (`resolution`, `bind_scope`, `parent_scope`), the `Resolution::Local` / `Captured` / `Recursive` / `Unresolved` classification, and how scope kinds (fn body, match arm body, record field body) differ for visibility vs capture.
+- [name-resolution-design.md](name-resolution-design.md) — scope kinds (`Module`, `Fn`, `Arm`), the `ScopeResult` shape, `RefKind::{Ref, FwdRef, SelfRef, Unresolved}` classification with `depth`, and how mutual recursion works via module-scope pre-registration + `bind_to_cps` handoff to CPS.
 
 ## Entry point
 

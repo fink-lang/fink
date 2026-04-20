@@ -1,99 +1,89 @@
 # Name Resolution — Scope Graph Design
 
-## Overview
+The scopes pass runs over the **AST**, before CPS lowering. It answers "for every identifier reference in the source, which binding does it refer to?" and records the ordering information CPS lowering and lifting need.
 
-Name resolution produces three property graphs, all keyed by `CpsId`:
+Inputs: `&Ast`, plus a slice of builtin names (the prelude).
+Output: `ScopeResult`.
 
-1. **`resolution`** — classifies how each `Ref::Name` resolves
-2. **`bind_scope`** — maps each bind to its owning scope
-3. **`parent_scope`** — maps each scope to its parent scope
+## Identifier spaces
 
-Scopes are not a separate ID space — a scope is identified by the `CpsId`
-of the node that introduces it (a `LetFn`, match arm body, record field body,
-etc.). The module root uses a sentinel CpsId.
+- `ScopeId` — dense index over scopes.
+- `BindId` — dense index over source-level bindings.
+- `AstId` — pre-existing; used as the key for ref-resolution lookups.
 
-## Resolution enum
+All three live in `PropGraph`s.
+
+## Scope kinds
 
 ```rust
-enum Resolution {
-    Local(CpsId),                         // bind is in the same scope
-    Captured { bind: CpsId, depth: u32 }, // bind is across fn boundaries
-    Recursive(CpsId),                     // fn references its own name
-    Unresolved,                           // no binding found
+enum ScopeKind {
+    Module,  // all bindings mutually recursive
+    Fn,      // sequential bindings; fn boundary (captures cross it)
+    Arm,     // match arm or other body that introduces bindings
 }
 ```
 
-- **`depth`** counts the number of `LetFn` boundaries crossed.
-  Only `LetFn` boundaries count — match arms, record field bodies, and other
-  body-introducing nodes are visibility boundaries but not capture boundaries.
+Every indented body that introduces bindings gets its own scope. Record field bodies and similar constructs reuse `Arm`; they are visibility boundaries but not capture boundaries.
 
-## Scope tree
-
-Every indented body creates a new scope:
-
-- `fn` body → new scope (crossing = capture)
-- match arm body → new scope (crossing ≠ capture)
-- record field body → new scope (bindings don't leak)
-- any continuation body → inherits parent scope unless it introduces bindings
-
-```cypher
-// Example: nested fns
-(s0:Scope {kind: "module"})
-(s1:Scope {kind: "fn"}) -[:PARENT_SCOPE]-> (s0)
-(s2:Scope {kind: "fn"}) -[:PARENT_SCOPE]-> (s1)
-(s3:Scope {kind: "fn"}) -[:PARENT_SCOPE]-> (s2)
-```
-
-The scope kind is not stored separately — it's derivable from the CPS node
-at that CpsId (is it a `LetFn` or not?).
-
-## Property graphs
+## Core data
 
 ```rust
-struct ResolveResult {
-    resolution:   PropGraph<CpsId, Option<Resolution>>,
-    bind_scope:   PropGraph<CpsId, Option<CpsId>>,
-    parent_scope: PropGraph<CpsId, Option<CpsId>>,
+struct ScopeResult {
+    scopes:        PropGraph<ScopeId, ScopeInfo>,
+    binds:         PropGraph<BindId, BindInfo>,
+    resolution:    PropGraph<AstId, Option<BindId>>,
+    scope_events:  PropGraph<ScopeId, Vec<ScopeEvent>>,
+}
+
+struct ScopeInfo {
+    kind:   ScopeKind,
+    parent: Option<ScopeId>,
+    ast_id: AstId,         // node that created the scope (Module, Fn, Arm, …)
+}
+
+struct BindInfo {
+    scope:  ScopeId,
+    name:   String,
+    origin: BindOrigin,    // Ast(AstId) for source bindings, Builtin(u32) for prelude
+}
+
+enum RefKind {
+    Ref,           // binding is already in scope at the ref site
+    FwdRef,        // binding comes later in the same module scope (mutual recursion)
+    SelfRef,       // fn references its own name
+    Unresolved,    // no binding found anywhere
+}
+
+struct RefInfo {
+    kind:    RefKind,
+    name:    String,
+    bind_id: BindId,
+    depth:   u32,          // scope levels between ref and bind (0 = same scope)
+    ast_id:  AstId,        // the ref's AST node
+}
+
+enum ScopeEvent {
+    Bind(BindId),
+    Ref(RefInfo),
+    ChildScope(ScopeId),
 }
 ```
 
-All sized to the full CpsId space. Most entries `None`.
+`scope_events` preserves source order per scope — later passes (notably CPS lowering) walk it to emit bindings and refs in the same order they appear in source.
 
-### `resolution`
+## Classification
 
-Populated for every `Ref::Name` node. The variant tells downstream passes
-everything they need — no re-walking required.
+`RefKind` encodes both the classic "captured vs local" question and the forward/self-ref distinctions that matter for mutual recursion:
 
-### `bind_scope`
+| Relationship | `RefKind` | Notes |
+|---|---|---|
+| Ref and bind in same scope, bind already seen | `Ref` | ordinary local |
+| Ref in child scope, bind in ancestor | `Ref` with `depth > 0` | captured — counted in `depth` |
+| Ref in same module scope, bind comes later | `FwdRef` | mutual recursion |
+| Fn body references its own name | `SelfRef` | self-recursion |
+| No binding found | `Unresolved` | diagnostics |
 
-Populated for every `Bind` node. Maps the bind's CpsId to the CpsId of
-the scope-introducing node that owns it.
-
-### `parent_scope`
-
-Populated only for scope-introducing nodes. Maps each scope's CpsId to
-the CpsId of its parent scope (`None` for the module root).
-
-## Classification algorithm
-
-Each bind stores its `fn_depth` (number of LetFn boundaries from root).
-Classification computes the delta between ref's fn_depth and bind's fn_depth:
-
-1. `depth = ref_fn_depth - bind_fn_depth`.
-2. If `depth == 0` → `Local(bind_id)`.
-3. If bind is the fn whose body we're inside (`self_bind`) → `Recursive(bind_id)`.
-4. If `depth > 0` → `Captured { bind: bind_id, depth }`.
-5. If no bind found → `Unresolved`.
-
-Self-recursion detection: the CPS transform separates fn definitions (anonymous
-LetFn with Gen name) from their user-facing bindings (LetVal in the
-continuation). The resolver extracts `self_bind` by inspecting the continuation's
-first bind node and looking it up in the hoisted scope.
-
-Mutual recursion: sibling fn refs classify as `Captured { depth: 1 }`, which is
-correct for closure hoisting — the sibling's value must be threaded in. No
-separate variant needed; mutual-rec groups are detectable from the scope graph
-if a future pass needs them.
+`depth` counts scope levels between ref and bind. Consumers that care about **capture boundaries** (lifting) filter to `Fn`-kind ancestors in the parent chain.
 
 ## Example — nested capture
 
@@ -104,70 +94,33 @@ outer = fn a:
       a + b + c
 ```
 
-```cypher
-// Scopes
-(s_mod) -[:PARENT_SCOPE]-> ()
-(s_outer:LetFn) -[:PARENT_SCOPE]-> (s_mod)
-(s_middle:LetFn) -[:PARENT_SCOPE]-> (s_outer)
-(s_inner:LetFn) -[:PARENT_SCOPE]-> (s_middle)
+| Ref | `RefKind` | `depth` | Bind |
+|---|---|---|---|
+| `a` | `Ref` | 2 | `bind_a` in `s_outer` |
+| `b` | `Ref` | 1 | `bind_b` in `s_middle` |
+| `c` | `Ref` | 0 | `bind_c` in `s_inner` |
 
-// Bind scopes
-(bind_a) -[:BIND_SCOPE]-> (s_outer)
-(bind_b) -[:BIND_SCOPE]-> (s_middle)
-(bind_c) -[:BIND_SCOPE]-> (s_inner)
-
-// Resolutions
-(ref_a) -> Captured { bind: bind_a, depth: 2 }  // crosses inner, middle
-(ref_b) -> Captured { bind: bind_b, depth: 1 }  // crosses inner
-(ref_c) -> Local(bind_c)                         // same scope
-```
-
-## Example — record field body scope
+## Example — module-level mutual recursion
 
 ```fink
-foo = {
-   spam:
-     ni = 3       # ni bound in field body scope, does not leak
-     ni * 2       # spam field receives this value
-}
-# ni is not visible here
+foo = fn: bar 1
+bar = fn x: x + 1
 ```
 
-```cypher
-(s_mod)
-(s_field) -[:PARENT_SCOPE]-> (s_mod)
+`foo`'s ref to `bar` is pre-registered in the module scope before walking bodies, so it resolves as `FwdRef` to `bar`'s `BindId`.
 
-(bind_ni) -[:BIND_SCOPE]-> (s_field)
-(ref_ni)  -> Local(bind_ni)          // same scope, no fn boundary
-```
+## Integration with CPS
 
-## Test output format
+The CPS transform reads `ScopeResult` before lowering:
 
-Tests output one line per resolved `Ref::Name`. Each line shows the
-resolution classification and the bind's scope:
+- Every `BindId` gets its `CpsId` pre-allocated via the identity mapping `CpsId(bind_id.0)`, stored in `CpsResult.bind_to_cps`.
+- Ref resolution goes `ref AstId → ScopeResult.resolution[ast_id] → BindId → bind_to_cps[BindId] → CpsId`.
+- The lowering emits `Ref::Synth(cps_id)` — no string lookup at the CPS level.
 
-```
-(ref ID, name) == (local (bind ID, name)) in scope ID
-(ref ID, name) == (captured DEPTH, (bind ID, name)) in scope ID
-(ref ID, name) == (recursive (bind ID, name)) in scope ID
-(ref ID, name) == unresolved
-```
-
-The `in scope ID` is the CpsId of the scope-introducing node that owns
-the bind (the bind's scope, not the ref's).
-
-Example (nested capture):
-```
-(ref 30, a) == (captured 2, (bind 10, a)) in scope 5
-(ref 31, b) == (captured 1, (bind 20, b)) in scope 15
-(ref 32, c) == (local (bind 28, c)) in scope 25
-```
+This is what makes forward refs and mutual recursion work at arbitrary nesting depth: the ref side of a mutual pair can emit a `Ref::Synth` at lowering time even though the bind side hasn't been constructed yet.
 
 ## Downstream use
 
-- **Closure hoisting / lambda lifting**: read `resolution` to find all
-  `Captured` refs, thread captured values through as extra params.
-  `depth` tells you how many intermediate scopes need threading.
-- **Diagnostics**: `Unresolved` refs are errors.
-- **Scope tree** (`bind_scope` + `parent_scope`): available for any pass
-  that needs to reason about scope ownership.
+- **CPS lowering** — reads `resolution` and `bind_to_cps` to emit resolved refs.
+- **Lifting** — walks the `depth` + scope chain to find captured variables and thread them as extra params.
+- **Diagnostics** — `Unresolved` refs become name-error diagnostics.

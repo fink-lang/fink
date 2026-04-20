@@ -12,9 +12,9 @@
 //! rewrites `@fink/` imports; `fmt` renders back to WAT with the native
 //! source map for the playground and `fink wat`.
 //!
-//! The calling convention (captures, args, cont) and the `$Fn2` / `$Fn3`
-//! split are specified in `calling-convention.md` next to this module;
-//! varargs and spread in `varargs-calling-convention.md`.
+//! The unified `$Fn2(captures, args)` calling convention, single-
+//! `_apply` dispatch, closure layout, and how spread / varargs fit in
+//! are all specified in `calling-convention.md` next to this module.
 //!
 //! Structural source locations (func headers, params, globals, exports)
 //! are carried alongside the binary as `StructuralLoc` — they don't
