@@ -15,7 +15,7 @@
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::sync::{Arc, Mutex, mpsc};
 
-use dap::events::{Event, StoppedEventBody};
+use dap::events::{Event, ExitedEventBody, StoppedEventBody};
 use dap::requests::Command;
 use dap::responses::{
   ContinueResponse, ResponseBody, ScopesResponse, SetBreakpointsResponse,
@@ -312,7 +312,7 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
 
 // ── DAP server ──────────────────────────────────────────────────────────────
 
-pub fn run<R: Read, W: Write>(
+pub fn run<R: Read, W: Write + Send + 'static>(
   input: R,
   output: W,
   program: &str,
@@ -405,6 +405,11 @@ pub fn run<R: Read, W: Write>(
           }).map_err(|e| e.to_string())?;
         }
         "host_channel_send" => {
+          // Route debuggee stdout/stderr into DAP `Output` events so the
+          // bytes surface in VSCode's Debug Console instead of being
+          // lost. Writing to the process's real stdout would corrupt the
+          // DAP JSON stream (VSCode reads DAP framing from our stdout).
+          let out = server.output.clone();
           linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
             let tag = params[0].unwrap_i32();
             let bytes_any = params[1].unwrap_anyref()
@@ -415,12 +420,24 @@ pub fn run<R: Read, W: Write>(
             for v in arr.elems(&mut caller)? {
               buf.push(v.unwrap_i32() as u8);
             }
-            if tag == 1 {
-              use std::io::Write as _;
-              std::io::stdout().write_all(&buf).ok();
+            let text = String::from_utf8_lossy(&buf).into_owned();
+            let category = if tag == 1 {
+              OutputEventCategory::Stdout
             } else {
-              use std::io::Write as _;
-              std::io::stderr().write_all(&buf).ok();
+              OutputEventCategory::Stderr
+            };
+            let event = Event::Output(dap::events::OutputEventBody {
+              category: Some(category),
+              output: text,
+              group: None,
+              variables_reference: None,
+              source: None,
+              line: None,
+              column: None,
+              data: None,
+            });
+            if let Ok(mut o) = out.lock() {
+              let _ = o.send_event(event);
             }
             Ok(())
           }).map_err(|e| e.to_string())?;
@@ -483,7 +500,14 @@ pub fn run<R: Read, W: Write>(
     .map(|f| f.to_string_lossy().to_string())
     .unwrap_or_default();
 
+  // True if the WASM program has finished and we've announced it to
+  // VSCode — see the terminate-and-break branches below.
+  let mut done = false;
+
   loop {
+    if done {
+      break;
+    }
     match server.poll_request() {
       Ok(Some(req)) => {
         match &req.command {
@@ -512,7 +536,9 @@ pub fn run<R: Read, W: Write>(
               && let Ok(frame) = stopped_rx.recv()
             {
               if frame.pc == u32::MAX {
+                server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                 server.send_event(Event::Terminated(None)).ok();
+                done = true;
               } else {
                 last_frame = Some(frame);
                 running = true;
@@ -610,7 +636,9 @@ pub fn run<R: Read, W: Write>(
               match stopped_rx.recv() {
                 Ok(frame) if frame.pc == u32::MAX => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
                 Ok(frame) => {
                   last_frame = Some(frame);
@@ -626,7 +654,9 @@ pub fn run<R: Read, W: Write>(
                 }
                 Err(_) => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
               }
             }
@@ -655,7 +685,9 @@ pub fn run<R: Read, W: Write>(
               match stopped_rx.recv() {
                 Ok(frame) if frame.pc == u32::MAX => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
                 Ok(frame) => {
                   last_frame = Some(frame);
@@ -671,7 +703,9 @@ pub fn run<R: Read, W: Write>(
                 }
                 Err(_) => {
                   running = false;
+                  server.send_event(Event::Exited(ExitedEventBody { exit_code: *exit_code.lock().unwrap() })).ok();
                   server.send_event(Event::Terminated(None)).ok();
+                  done = true;
                 }
               }
             }
