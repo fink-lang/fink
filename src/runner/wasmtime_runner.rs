@@ -391,7 +391,7 @@ fn bytes_to_str_store(
 }
 
 /// Build a fink $List<$Str> from raw byte-string args. Elements are appended
-/// in the order they appear in `args` (i.e. argv[0] is the head).
+/// in the order they appear in `args` (i.e. `argv[0]` is the head).
 fn build_args_list(
   store: &mut Store<()>,
   instance: &Instance,

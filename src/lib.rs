@@ -1,3 +1,23 @@
+//! The ƒink compiler as a library.
+//!
+//! Most consumers want one of the pipeline convenience functions below:
+//!
+//! - [`to_ast`] — parse source into a raw AST.
+//! - [`to_desugared`] — parse + desugar + name resolution.
+//! - [`to_cps`] / [`to_lifted`] — CPS lowering and closure lifting.
+//! - [`to_wasm`] — full pipeline to a WASM binary.
+//! - [`to_wat`] — WASM binary rendered as WAT text.
+//! - [`run`] — compile and execute; returns the exit code from `main`.
+//! - [`debug`] — start a DAP debug server over stdin/stdout.
+//!
+//! For multi-module compiles, call [`compile_package`] with a
+//! [`passes::modules::SourceLoader`].
+//!
+//! The real work lives in [`passes`], which exposes the typed stage chain
+//! (`parse → desugar → lower → lift → compile_package`). The per-stage
+//! docs under `src/passes/**/README.md` explain each pass and link to its
+//! contract.
+
 pub mod errors;
 pub mod fmt;
 #[cfg(feature = "compile")]
@@ -102,7 +122,7 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
 
 /// Compile and run source. Returns the exit code from main.
 ///
-/// `args` is the CLI argv passed to the user's `main` — argv[0] is the
+/// `args` is the CLI argv passed to the user's `main` — `argv[0]` is the
 /// program name, followed by user-supplied CLI arguments.
 #[cfg(feature = "run")]
 pub fn run(

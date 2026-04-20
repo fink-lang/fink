@@ -21,7 +21,7 @@ pub type TransformResult = Result<AstId, TransformError>;
 //
 // Append-only rewrites on a flat AST arena. A pass's read view is the
 // immutable `src: &Ast<'src>` passed alongside `builder: &mut AstBuilder<'src>`
-// — the two-handle rule documented in `docs/ast-arena-contract.md`.
+// — the two-handle rule documented in `arena-contract.md`.
 //
 // Default implementations recurse into children and append a fresh parent
 // node via `builder.append`. Override only the methods you need — leaves

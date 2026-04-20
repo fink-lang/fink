@@ -1380,9 +1380,13 @@ enum Pending {
   /// Used by Apply patterns (predicate guards like `is_even y`, `Ok b`).
   MatchGuard { func: Callable, args: Vec<Val>, origin: Option<AstId> },
   /// Pattern match — matcher function applied to subject.
-  /// Emits: LetFn body = fn(bind_names...): <cont>
-  ///        LetFn matcher = fn(subj, succ, fail): matcher_body
-  ///        matcher(subject, body, panic)
+  ///
+  /// ```text
+  ///   LetFn body = fn(bind_names...): <cont>
+  ///   LetFn matcher = fn(subj, succ, fail): matcher_body
+  ///   matcher(subject, body, panic)
+  /// ```
+  ///
   /// The matcher tests with temps only; succ forwards values to the body.
   PatternMatch {
     subject: Val,

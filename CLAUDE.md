@@ -4,29 +4,9 @@ Fink is a functional programming language and compiler toolchain, built in Rust.
 
 ## Project Structure
 
-```
-fink/
-├── src/
-│   ├── lib.rs              # shared compiler library
-│   ├── propgraph.rs        # PropGraph<Id, T> — typed property graph storage
-│   ├── sourcemap.rs        # Source Map v3 (MappedWriter, VLQ, base64)
-│   ├── errors/             # diagnostic formatter
-│   ├── strings/            # string rendering and escape handling
-│   ├── passes/
-│   │   ├── ast/            # lexer, parser, AST types, formatter, transform
-│   │   ├── cps/            # CPS IR, transform (AST → CPS), formatter
-│   │   ├── partial/        # partial application pass
-│   │   └── name_res/       # name resolution — scope graph, Resolution enum
-│   └── bin/
-│       └── fink.rs         # main compiler driver CLI
-├── crates/
-│   └── test-macros/        # include_fink_tests! proc macro
-├── docs/
-│   └── examples/           # language spec by example (.fnk files)
-└── CLAUDE.md
-```
+See [src/README.md](src/README.md) for the current source map — it's authoritative and easy to scan. This top-level file doesn't mirror it.
 
-Source files live in `src/`, specs co-located with source. User docs in `docs/`.
+High level: compiler implementation lives under [src/](src/) (per-subsystem READMEs next to the code, design contracts as sibling `*.md` files); the `include_fink_tests!` proc macro lives in [crates/test-macros/](crates/test-macros/); language-level docs live under [docs/](docs/); doc-writing conventions at [docs/docs-conventions.md](docs/docs-conventions.md); contributor entry point at [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Language Design Goals
 
@@ -55,31 +35,13 @@ block comment
 
 ## Key Syntax Reference
 
-See `docs/examples/lang features.fnk` for the authoritative syntax reference (excluding types, protocols, macros which are WIP in separate files).
-
-### Significant topics
-
-- **Literals**: integers (sized by value/sign), floats, decimals (`1.0d`), tagged literals (`10sec == sec 10`), strings (single-quoted, interpolation `${}`), tagged templates (`fmt'...'`), sequences `[]`, records `{}`, dicts `dict {}`, sets `set`
-- **Identifiers**: UTF-8 graphemes, may include `-` and `_`
-- **Operators**: arithmetic, logical (`not`/`and`/`or`/`xor`), comparison (chainable), bitwise, set operators, spread `..`/`...`, ranges `0..10` (exclusive) / `0...10` (inclusive), member access `.`/`.(expr)`, pipe `|`, partial `?`
-- **Binding**: `=` (left-hand), `|=` (right-hand), full pattern matching with guards, spread, string patterns
-- **Functions**: `fn args: body`, `fn match` sugar, default args, closures, higher-order, mutual recursion via forward refs at module level
-- **Application**: prefix `foo bar`, nested right-to-left, multiline indented args, `;` as strong separator, postfix tagged `[1,2,3]foo`, partial `?`
-- **Pipes**: `foo | bar | spam == spam (bar foo)`
-- **Error handling**: `try` (unwrap or propagate), `match Ok/Err`, error chaining
-- **Modules**: `{foo, bar} = import './foobar.fnk'`
-- **Types** (WIP): product, sum/variant, generic, dependent, opaque, union, type spread
-- **Protocols** (WIP): abstract functions, specialization per type
-- **Macros** (WIP): compile-time AST manipulation
-- **Async/concurrency** (WIP): `spawn`, `await_all`, implicit await on access
-- **Context/effects** (WIP): `context`, `with`, `get_ctx`
-- **Patterns as first-class values** (WIP)
+See [docs/language.md](docs/language.md) for the authoritative user-facing syntax reference and [docs/roadmap.md](docs/roadmap.md) for designed-but-unshipped features.
 
 ## Implementation Notes
 
-- Uses Pratt parser
-- Pipeline: tokenizer → parser → AST → partial → CPS transform → name resolution → closure hoisting → codegen
-- Flag before implementing anything that requires decisions on: protocols vs typeclasses, nominal vs structural typing
+- Uses Pratt parser.
+- Pipeline: `parse → desugar (partial + scopes) → lower (CPS) → lift (unified closure + cont lifting) → compile_package (collect → emit → DWARF → link)`. See [src/passes/README.md](src/passes/README.md) for the per-stage chain and [src/passes/ast/arena-contract.md](src/passes/ast/arena-contract.md) / [src/passes/cps/transform-contract.md](src/passes/cps/transform-contract.md) for the contracts each pass must uphold.
+- Flag before implementing anything that requires decisions on: protocols vs typeclasses, nominal vs structural typing.
 
 ## Rust Conventions
 
@@ -88,7 +50,7 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 
 ## Testing Conventions
 
-- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `#[test_template]`.
+- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `test_macros::include_fink_tests!("path/to/tests.fnk")`.
 - Never put tests for module A inside module B.
 - **Bug workflow**: when investigating a bug, first write a failing test that reproduces it — don't dive into the code before you have a repro test.
 

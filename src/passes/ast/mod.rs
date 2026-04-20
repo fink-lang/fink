@@ -1,3 +1,15 @@
+//! Flat append-only AST arena: lexer, parser, node types, formatter,
+//! and the `Transform` trait for rewrites.
+//!
+//! `Ast` pairs an arena (`PropGraph<AstId, Node>`) with a `root: AstId`.
+//! `AstBuilder` is the only append-authoritative handle. Passes take an
+//! `Ast` by value, wrap it in `AstBuilder::from_ast`, walk from the
+//! input root, append new or replacement nodes, and finish with a new
+//! root id. Existing slots are never overwritten — any `AstId` remains
+//! valid across every subsequent pass.
+//!
+//! See `arena-contract.md` next to this module for the full contract.
+
 pub mod fmt;
 pub mod lexer;
 pub mod parser;
@@ -905,7 +917,7 @@ mod tests {
   // Ast, for every `Ident("old")` it finds, appends an `Ident("new")`
   // to the builder and returns the fresh id. For anything else, returns
   // the input id unchanged (fast path). This proves the borrow-checker
-  // shape documented in `docs/ast-arena-contract.md` actually compiles
+  // shape documented in `arena-contract.md` actually compiles
   // under real Rust rules — the previous in-module tests only exercised
   // append, not append-while-reading-src.
   //

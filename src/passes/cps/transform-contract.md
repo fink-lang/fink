@@ -50,12 +50,24 @@ let new_expr = gen.expr(ExprKind::LetFn { .. }, input_origin);
 When synthesizing a new node with no AST counterpart:
 
 ```rust
-let synth = gen.bind(Bind::Gen, None);
+let synth = gen.bind(Bind::Synth, None);
 ```
 
 ## Passes
 
-| Pass | Input | Output | Status |
-|------|-------|--------|--------|
-| `cps/transform` | AST | CpsResult | complete |
-| `closure_lifting` | CpsResult + CaptureGraph | CpsResult | in progress |
+| Pass | Input | Output |
+|---|---|---|
+| [cps/transform.rs](transform.rs) — `lower_module` | AST + ScopeResult | CpsResult |
+| [../lifting/mod.rs](../lifting/mod.rs) — `lift` | CpsResult + AST | CpsResult |
+
+Downstream consumers that depend on these invariants: [../wasm/collect.rs](../wasm/collect.rs), [../wasm/emit.rs](../wasm/emit.rs), [fmt.rs](fmt.rs).
+
+## Verifying a CPS pass
+
+There is no runtime equivalent of the AST arena's `appended_only` check for CPS — no tripwire asserts denseness of `origin` or that every node has an entry. When writing a new CPS → CPS pass, add per-pass `debug_assert!`s that:
+
+- `result.origin.len() == node_count` the pass believes it produced.
+- every id in the output tree (`Ref::Synth(id)`, `Param` bindings, `App` callees, etc.) is `< result.origin.len()`.
+- every source node in the input has a carried-forward origin in the output.
+
+A generalised checker is a follow-up.

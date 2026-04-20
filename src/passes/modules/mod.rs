@@ -1,21 +1,21 @@
-// Host-neutral source loading for multi-module compilation.
-//
-// `SourceLoader` is the only abstraction the compiler core uses to read
-// module sources. Hosts provide concrete implementations:
-//
-//   - `FileSourceLoader`: wraps `std::fs`, used by the native CLI and by
-//     tests that point at real files on disk.
-//   - `InMemorySourceLoader`: in-memory map from path to source string,
-//     used by inline-source entry points (`to_wasm(src, path)`, REPL,
-//     ad-hoc test sources).
-//   - A future wasm32/browser host would provide its own callback-backed
-//     impl without pulling `std::fs` into the compiler core.
-//
-// The loader's job is strictly source loading. It does NOT compile, does
-// NOT understand URL schemes, and does NOT know about fink at all. The
-// fink-specific compile orchestration lives in `src/passes/wasm-link/`
-// where the WASM-target import resolver consumes a `SourceLoader` and
-// runs the per-unit compile pipeline over the loaded sources.
+//! Host-neutral source loading for multi-module compilation.
+//!
+//! `SourceLoader` is the only abstraction the compiler core uses to read
+//! module sources. Hosts provide concrete implementations:
+//!
+//! - `FileSourceLoader` — wraps `std::fs`, used by the native CLI and by
+//!   tests that point at real files on disk.
+//! - `InMemorySourceLoader` — in-memory map from path to source string,
+//!   used by inline-source entry points (`to_wasm(src, path)`, REPL,
+//!   ad-hoc test sources).
+//! - A future wasm32/browser host would provide its own callback-backed
+//!   impl without pulling `std::fs` into the compiler core.
+//!
+//! The loader's job is strictly source loading. It does not compile, does
+//! not understand URL schemes, and does not know about ƒink at all. The
+//! fink-specific compile orchestration lives in `src/passes/wasm-link/`,
+//! where the WASM-target import resolver consumes a `SourceLoader` and
+//! runs the per-unit compile pipeline over the loaded sources.
 //
 // TODO(fink-tests): the Rust unit tests below are acceptable temporarily
 // because they cover pure host plumbing (in-memory path lookup). Once the

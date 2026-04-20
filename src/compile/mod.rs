@@ -1,22 +1,23 @@
-// Compile command — produces WASM or standalone native executables.
-//
-// Native executables are created by appending WASM bytes + a magic trailer
-// to a copy of the finkrt binary (Deno-style binary append).
-//
-// Trailer format (last 16 bytes):
-//   [u64 LE offset to payload start] [b"f1nkw4sm" magic]
-//
-// finkrt layout:
-//   In packaged releases, finkrt binaries live under
-//   `<fink_dir>/targets/<triple>/finkrt` — one per supported target, so
-//   `fink compile --target=<any>` works offline for every supported triple.
-//
-//   In the cargo-build dev workflow, `cargo build` puts `fink` and `finkrt`
-//   as siblings in `target/<profile>/` with no `targets/` subdirectory. The
-//   sibling `finkrt` is ONLY valid for the host target — it is the binary
-//   cargo just built for the host machine. Cross-target compilation in the
-//   dev workflow requires running `cargo build --target=<triple>` and
-//   pointing FINK_TARGETS_DIR at the staged output.
+//! `fink compile` command — produces WASM or standalone native executables.
+//!
+//! Native executables are created by appending WASM bytes + a magic
+//! trailer to a copy of the `finkrt` binary (Deno-style binary append).
+//! Trailer format (last 16 bytes): `[u64 LE offset to payload start]`
+//! followed by `b"f1nkw4sm"` magic.
+//!
+//! # finkrt layout
+//!
+//! In packaged releases, `finkrt` binaries live under
+//! `<fink_dir>/targets/<triple>/finkrt` — one per supported target, so
+//! `fink compile --target=<any>` works offline for every supported
+//! triple.
+//!
+//! In the cargo-build dev workflow, `cargo build` puts `fink` and
+//! `finkrt` as siblings in `target/<profile>/` with no `targets/`
+//! subdirectory. The sibling `finkrt` is valid only for the host target
+//! — cross-target compilation in the dev workflow requires running
+//! `cargo build --target=<triple>` and pointing `FINK_TARGETS_DIR` at
+//! the staged output.
 
 use std::path::{Path, PathBuf};
 
