@@ -4,29 +4,9 @@ Fink is a functional programming language and compiler toolchain, built in Rust.
 
 ## Project Structure
 
-```
-fink/
-├── src/
-│   ├── lib.rs              # shared compiler library
-│   ├── propgraph.rs        # PropGraph<Id, T> — typed property graph storage
-│   ├── sourcemap.rs        # Source Map v3 (MappedWriter, VLQ, base64)
-│   ├── errors/             # diagnostic formatter
-│   ├── strings/            # string rendering and escape handling
-│   ├── passes/
-│   │   ├── ast/            # lexer, parser, AST types, formatter, transform
-│   │   ├── cps/            # CPS IR, transform (AST → CPS), formatter
-│   │   ├── partial/        # partial application pass
-│   │   └── name_res/       # name resolution — scope graph, Resolution enum
-│   └── bin/
-│       └── fink.rs         # main compiler driver CLI
-├── crates/
-│   └── test-macros/        # include_fink_tests! proc macro
-├── docs/
-│   └── examples/           # language spec by example (.fnk files)
-└── CLAUDE.md
-```
+See [src/README.md](src/README.md) for the current source map — it's authoritative and easy to scan. This top-level file doesn't mirror it.
 
-Source files live in `src/`, specs co-located with source. User docs in `docs/`.
+High level: compiler implementation lives under [src/](src/) (per-subsystem READMEs next to the code, design contracts as sibling `*.md` files); the `include_fink_tests!` proc macro lives in [crates/test-macros/](crates/test-macros/); language-level docs live under [docs/](docs/); doc-writing conventions at [docs/docs-conventions.md](docs/docs-conventions.md); contributor entry point at [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Language Design Goals
 
@@ -55,7 +35,7 @@ block comment
 
 ## Key Syntax Reference
 
-See `docs/examples/lang features.fnk` for the authoritative syntax reference (excluding types, protocols, macros which are WIP in separate files).
+The authoritative syntax reference is in flight — until it lands, use the `.fnk` sketches under [docs/examples/](docs/examples/). A user-facing spec (`docs/language.md`) and roadmap (`docs/roadmap.md`) will replace them.
 
 ### Significant topics
 
@@ -77,9 +57,9 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 
 ## Implementation Notes
 
-- Uses Pratt parser
-- Pipeline: tokenizer → parser → AST → partial → CPS transform → name resolution → closure hoisting → codegen
-- Flag before implementing anything that requires decisions on: protocols vs typeclasses, nominal vs structural typing
+- Uses Pratt parser.
+- Pipeline: `parse → desugar (partial + scopes) → lower (CPS) → lift (unified closure + cont lifting) → compile_package (collect → emit → DWARF → link)`. See [src/passes/README.md](src/passes/README.md) for the per-stage chain and [src/passes/ast/arena-contract.md](src/passes/ast/arena-contract.md) / [src/passes/cps/transform-contract.md](src/passes/cps/transform-contract.md) for the contracts each pass must uphold.
+- Flag before implementing anything that requires decisions on: protocols vs typeclasses, nominal vs structural typing.
 
 ## Rust Conventions
 
@@ -88,7 +68,7 @@ See `docs/examples/lang features.fnk` for the authoritative syntax reference (ex
 
 ## Testing Conventions
 
-- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `#[test_template]`.
+- Tests live in the file that implements the feature (`#[cfg(test)] mod tests` at the bottom), or in a sibling `.fnk` file loaded via `test_macros::include_fink_tests!("path/to/tests.fnk")`.
 - Never put tests for module A inside module B.
 - **Bug workflow**: when investigating a bug, first write a failing test that reproduces it — don't dive into the code before you have a repro test.
 
