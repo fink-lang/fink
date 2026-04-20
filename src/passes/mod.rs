@@ -102,6 +102,10 @@ pub fn lift<'src>(
 pub struct Wasm {
   pub binary: Vec<u8>,
   pub mappings: Vec<wasm::sourcemap::WasmMapping>,
+  /// Step-stop records emitted by `debug_marks::analyse` and realised by
+  /// the WASM emitter. Empty during Step 1 plumbing — `compile_package`
+  /// returns `vec![]`. Populated once emit is wired up in Step 2/3.
+  pub marks: Vec<debug_marks::MarkRecord>,
 }
 
 /// Emit WAT text from a WASM binary.

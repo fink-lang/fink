@@ -324,7 +324,7 @@ pub fn compile_package(
   // entry code into a dep will not map back to source. Single-module compiles
   // are equally affected since `to_wasm` now routes through `compile_package`
   // — there is no longer a parallel "direct emit" path that builds mappings.
-  Ok(crate::passes::Wasm { binary: linked.wasm, mappings: vec![] })
+  Ok(crate::passes::Wasm { binary: linked.wasm, mappings: vec![], marks: vec![] })
 }
 
 /// Compile a single lifted CPS module into raw WASM bytes (without linking).

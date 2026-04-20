@@ -18,8 +18,24 @@
 pub mod fmt;
 
 use crate::ast::NodeKind;
+use crate::lexer::Loc;
 use crate::passes::cps::ir::{Arg, Bind, Callable, Cont, CpsId, Expr, ExprKind, Val, ValKind};
 use crate::propgraph::PropGraph;
+
+/// One realised step-stop in the linked WASM binary.
+///
+/// Produced downstream of `analyse` once the emitter has placed each
+/// marked CpsId's instruction in the binary. Consumed by the DAP to
+/// install breakpoints and to map a stopped PC back to a source `Loc`.
+///
+/// `wasm_pc` is an absolute byte offset into the linked WASM binary
+/// (Step 1 plumbing only — populated as empty for now).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MarkRecord {
+  pub wasm_pc: u32,
+  pub cps_id: CpsId,
+  pub source: Loc,
+}
 
 /// Output of the debug-marker pass.
 ///
