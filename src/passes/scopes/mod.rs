@@ -1,15 +1,17 @@
-// Scope analysis pass — AST-level name resolution.
-//
-// Walks the AST and builds a scope graph:
-// - Each scope has a parent link, kind, and ordered bindings
-// - Every identifier reference resolves to the AstId of its binding
-// - Module-level bindings are mutually recursive (forward refs allowed)
-// - Fn body bindings are sequential (visible to subsequent siblings only)
-//
-// The scope graph survives as PropGraphs for use by CPS transform, lifting,
-// and codegen. The CPS transform uses it to emit Ref::Synth(target_cps_id)
-// instead of Ref::Name, so that lifting can rearrange the tree without
-// breaking scope resolution.
+//! Scope analysis pass — AST-level name resolution.
+//!
+//! Walks the AST and builds a scope graph:
+//! - Each scope has a parent link, kind, and ordered bindings.
+//! - Every identifier reference resolves to the AstId of its binding.
+//! - Module-level bindings are mutually recursive (forward refs allowed).
+//! - Fn body bindings are sequential (visible to subsequent siblings only).
+//!
+//! The scope graph survives as `PropGraph`s for use by the CPS transform,
+//! lifting, and codegen. The CPS transform uses it to emit
+//! `Ref::Synth(target_cps_id)` instead of `Ref::Name`, so lifting can
+//! rearrange the tree without breaking scope resolution.
+//!
+//! See `name-resolution-design.md` next to this module for the full design.
 
 use crate::ast::{Ast, AstId, NodeKind};
 use crate::propgraph::PropGraph;

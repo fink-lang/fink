@@ -1,8 +1,10 @@
-// Runtime support modules for fink's WASM output.
-//
-// These are standalone WAT modules that implement core data structures
-// (HAMT for records/dicts, cons lists, etc.) using WASM GC types.
-// The compiler's codegen emits calls into these runtime functions.
+//! Runtime support modules for ƒink's WASM output.
+//!
+//! Standalone WAT modules that implement core data structures (HAMT for
+//! records/dicts, cons lists, channels, scheduler, string runtime) using
+//! WASM GC types. `build.rs` merges them into a single runtime module
+//! linked into every user program; codegen emits calls into these runtime
+//! functions.
 
 #[cfg(test)]
 mod tests {

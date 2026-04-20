@@ -1,54 +1,42 @@
-pub mod fmt;
+//! Unified closure/continuation lifting pass.
+//!
+//! Lifts nested fns one level at a time, threading captured bindings as
+//! explicit params. A single iterative pass replaces the older separate
+//! cont_lifting and closure_lifting passes.
+//!
+//! # Core invariant
+//!
+//! Before lifting a fn, answer: "if I move this fn one level up, which of
+//! its free variables would become out of scope?" Only variables bound by
+//! the immediate enclosing scope (siblings in the same `LetFn` / `LetVal`
+//! continuation chain) need to be threaded as params. Variables from
+//! parent scopes remain visible after a one-level lift.
+//!
+//! # Algorithm
+//!
+//! 1. Run name resolution + capture analysis on the current tree.
+//! 2. Walk every `LetFn` body: if it contains a nested `LetFn`, extract it
+//!    and place it as a sibling in the parent's cont chain.
+//!    - If the extracted fn has captures (refs to the enclosing fn's params),
+//!      add those as leading params and emit `·fn_closure` at the call site.
+//!    - If pure, just move it.
+//! 3. Hoist inline `Cont::Expr` bodies into named `LetFn`.
+//! 4. Repeat until no nested `LetFn` remain inside any fn body.
+//!
+//! # Closure allocation strategy
+//!
+//! Cont bodies that close over a local value (e.g. an outer cont param
+//! `·v_N`) are wrapped in `·closure` to bake in that value. Builtins that
+//! drive the cont (`·op_mul`, `·double_0`) have a fixed calling
+//! convention that calls with exactly one argument — there is no way to
+//! thread an extra value through, so the environment is packaged.
+//!
+//! An alternative — threading every captured value as an explicit param
+//! through every intermediate function (first-order CPS, Appel-style) —
+//! trades closure allocation for widespread param plumbing and a more
+//! rigid calling convention. Deferred.
 
-// Unified closure/continuation lifting pass.
-//
-// Replaces the separate cont_lifting and closure_lifting passes with a single
-// iterative pass that lifts nested fns one level at a time, threading captured
-// bindings as explicit params.
-//
-// ## Core invariant
-//
-// Before lifting a fn, answer: "if I move this fn one level up, which of its
-// free variables would become out of scope?"
-//
-// Only variables bound by the immediate enclosing scope (siblings in the same
-// LetFn/LetVal continuation chain) need to be threaded as params. Variables
-// from parent scopes remain visible after a one-level lift.
-//
-// ## Algorithm
-//
-// 1. Run name resolution + capture analysis on the current tree.
-// 2. Walk every LetFn fn_body: if it contains a nested LetFn, extract it
-//    and place it as a sibling in the parent's cont chain.
-//    - If the extracted fn has captures (refs to the enclosing fn's params),
-//      add those as leading params and emit ·fn_closure at the call site.
-//    - If pure, just move it.
-// 3. Also hoist inline Cont::Expr bodies into named LetFn.
-// 4. Repeat until no nested LetFn remain inside any fn_body.
-//
-// ## Closure allocation strategy
-//
-// Cont bodies that close over a local value (e.g. an outer cont param ·v_N)
-// are wrapped in ·closure to bake in that value. This is necessary because
-// the builtin that drives the cont (e.g. ·op_mul, ·double_0) has a fixed
-// calling convention: it calls its cont with exactly one argument (the result).
-// There is no way to thread an extra value through the builtin.
-//
-// Example: `x = double 5; inc x` lowers to a cont ·v_K that captures the
-// outer cont ·v_N. ·closure ·v_K, ·v_N is correct — ·v_N is a param, not a
-// global.
-//
-// ## Future optimisation: closure elimination via param threading
-//
-// An alternative is to eliminate all ·closure allocations by threading every
-// captured value as an extra explicit param through every intermediate
-// function in the call chain. This is the Appel-style first-order CPS approach
-// (no heap-allocated closures; everything is a static function with extra
-// params). The tradeoff:
-//   - Pro: zero allocation for closure environments
-//   - Con: every function in the chain must accept and forward params it does
-//     not use; calling conventions become variadic or must be specialised
-// This is a significant redesign and is deferred for now.
+pub mod fmt;
 
 use crate::ast::AstId;
 use crate::passes::cps::ir::{

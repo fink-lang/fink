@@ -1,14 +1,14 @@
-// Sourcemap infrastructure.
-//
-// `native` is the canonical in-tree source map representation: a flat
-// list of `(output-byte-offset, source-byte-range)` entries with a
-// compact base64url codec for embedding in output.
-//
-// `MappedWriter` is the shared output-tracking writer. `mark` records
-// a `Loc` at the current output byte position; `finish_native` hands
-// back the accumulated mappings. The writer also tracks line/col for
-// consumers (such as `fmt::print`) that need to know where the cursor
-// sits relative to line boundaries.
+//! Sourcemap infrastructure.
+//!
+//! [`native`] is the canonical in-tree source-map representation: a flat
+//! list of `(output-byte-offset, source-byte-range)` entries with a
+//! compact base64url codec for embedding in output.
+//!
+//! [`MappedWriter`] is the shared output-tracking writer. `mark` records
+//! a `Loc` at the current output byte position; `finish_native` hands
+//! back the accumulated mappings. The writer also tracks line/col for
+//! consumers (such as [`crate::fmt::print`]) that need to know where the
+//! cursor sits relative to line boundaries.
 
 pub mod native;
 

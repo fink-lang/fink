@@ -1,16 +1,18 @@
-// DAP (Debug Adapter Protocol) server for Fink.
-//
-// Speaks DAP on stdin/stdout, controls WASM execution via Wasmtime's
-// guest debug API. Maps WASM byte offsets → Fink source locations
-// using the compiler-generated source map.
-//
-// Architecture:
-//   VSCode ←DAP stdin/stdout→ fink dap ←Wasmtime debug API→ WASM
-//
-// The WASM thread runs in Wasmtime with guest_debug enabled. When a
-// breakpoint fires, the DebugHandler sends frame info to the DAP server
-// via a channel, then blocks waiting for a resume command. The DAP server
-// translates the WASM PC to a source location and reports it to VSCode.
+//! Debug Adapter Protocol server for ƒink.
+//!
+//! Speaks DAP on stdin/stdout, controls WASM execution via Wasmtime's
+//! guest debug API, and maps WASM byte offsets back to ƒink source
+//! locations using the compiler-generated source map.
+//!
+//! ```text
+//!   VSCode ←DAP stdin/stdout→ fink dap ←Wasmtime debug API→ WASM
+//! ```
+//!
+//! The WASM thread runs in Wasmtime with `guest_debug` enabled. When a
+//! breakpoint fires, the `DebugHandler` sends frame info to the DAP
+//! server via a channel, then blocks waiting for a resume command. The
+//! DAP server translates the WASM PC to a source location and reports it
+//! to the editor.
 
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::sync::{Arc, Mutex, mpsc};
