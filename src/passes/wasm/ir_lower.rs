@@ -3,18 +3,28 @@
 //! Tracer-phase. Grows by demand — each failing fixture in
 //! `test_ir.fnk` pulls in exactly the CPS construct it needs.
 //!
-//! Current coverage: just enough to lower a module whose body is
-//! `App(ContRef(ƒret), [Lit])` — i.e., a single-expression program
-//! that hands its literal to the module's return continuation.
+//! Current coverage:
+//! * `main = fn: <lit>` — apply-path tail call (user-cont).
+//! * `main = fn: <lit> + <lit>` — direct-style builtin tail call.
 
 use crate::passes::ast::Ast;
-use crate::passes::cps::ir::{Arg, Callable, Cont, CpsResult, Expr, ExprKind, Lit, Val, ValKind, BuiltIn};
+use crate::passes::cps::ir::{Arg, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Lit, ValKind, BuiltIn};
+use crate::sourcemap::native::ByteRange;
 
 use super::ir::*;
-use super::runtime_contract;
+use super::runtime_contract::{self, Runtime};
+
+/// Look up the source byte range for a CPS node via `cps.origin →
+/// ast_id → ast.nodes[id].loc`. Returns `None` when a CPS node has
+/// no AST origin (compiler-synthesised temp or helper).
+fn origin_of(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> Option<ByteRange> {
+  let ast_id = (*cps.origin.try_get(id)?)?;
+  let loc = ast.nodes.get(ast_id).loc;
+  Some(ByteRange::new(loc.start.idx, loc.end.idx))
+}
 
 /// Lower a lifted CPS result to an unlinked wasm IR `Fragment`.
-pub fn lower(cps: &CpsResult, _ast: &Ast<'_>) -> Fragment {
+pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
   // Prepass: enumerate every runtime symbol the program uses, then
   // declare imports up front in a canonical order. After this, the
   // rest of lowering just reads handles from `rt`.
@@ -24,50 +34,72 @@ pub fn lower(cps: &CpsResult, _ast: &Ast<'_>) -> Fragment {
 
   // Walk the lifted CPS root. Expected shape:
   //   App { func: BuiltIn::FinkModule, args: [Cont::Expr { args: [ƒret], body }] }
-  // where `body` is `App { func: Val(ContRef(ƒret)), args: [Lit(42)] }`.
   let Some((_ret_bind, body)) = extract_fink_module_body(&cps.root) else {
     panic!("ir_lower: unsupported CPS root shape (expected App(FinkModule, [Cont::Expr]))");
   };
 
-  let result_lit = extract_ret_lit(body).unwrap_or_else(|| {
-    panic!("ir_lower: unsupported fink_module body shape (expected App(ContRef, [Lit]))");
-  });
+  let fink_module = match &body.kind {
+    // Apply-path: `App(ContRef(ƒret), [Lit])` — hand one value back
+    // to the module's return continuation via `_apply`.
+    ExprKind::App { func: Callable::Val(v), args }
+      if matches!(v.kind, ValKind::ContRef(_)) =>
+    {
+      let (lit, lit_id) = extract_first_lit(args)
+        .unwrap_or_else(|| panic!("ir_lower: unsupported apply-path args (expected [Lit])"));
+      let lit_origin = origin_of(cps, ast, lit_id);
+      build_apply_path_body(&mut frag, &rt, lit, lit_origin)
+    }
 
-  // Build $fink_module body.
-  //   (local.set $v_0 (call $list_head_any (local.get $_args)))
-  //   (local.set $v_1 (struct.new $Num (f64.const <lit>)))
-  //   (local.set $args (call $list_nil))
-  //   (local.set $args (call $list_prepend_any (local.get $v_1) (local.get $args)))
-  //   (return_call $_apply (local.get $args) (local.get $v_0))
-  //
-  // Locals (numeric indices after the two params):
-  //   0: $_caps   1: $_args   2: $v_0   3: $v_1   4: $args
-  let l_caps   = LocalIdx(0);
+    // Direct-style builtin: `App(BuiltIn::Add, [Lit, Lit, Cont::Ref(ƒret)])`.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Add), args } => {
+      let ((a, a_id), (b, b_id)) = extract_two_lits(args)
+        .unwrap_or_else(|| panic!("ir_lower: unsupported op_plus args (expected [Lit, Lit, Cont])"));
+      let a_origin = origin_of(cps, ast, a_id);
+      let b_origin = origin_of(cps, ast, b_id);
+      let app_origin = origin_of(cps, ast, body.id);
+      build_op_plus_body(&mut frag, &rt, a, a_origin, b, b_origin, app_origin)
+    }
+
+    _ => panic!("ir_lower: unsupported fink_module body shape"),
+  };
+
+  // Export fink_module as the module's bring-up entry.
+  frag.funcs[fink_module.0 as usize].export = Some("fink_module".into());
+
+  frag
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Body builders — one per CPS body shape.
+// ──────────────────────────────────────────────────────────────────
+
+/// Apply-path body: pop `done` from args, box the literal, build the
+/// single-element args list, tail-call `_apply`.
+///
+/// Origins: the `struct.new` that boxes the literal maps to the
+/// literal's source range. Everything else (bring-up plumbing) has
+/// no source origin.
+fn build_apply_path_body(
+  frag: &mut Fragment,
+  rt: &Runtime,
+  lit: f64,
+  lit_origin: Option<ByteRange>,
+) -> FuncSym {
   let l_args_p = LocalIdx(1);
   let l_done   = LocalIdx(2);
   let l_val    = LocalIdx(3);
   let l_list   = LocalIdx(4);
 
-  let i_head = push_call(&mut frag, rt.list_head_any(),
-    vec![op_local(l_args_p)], Some(l_done));
-
-  let i_box  = push_struct_new(&mut frag, rt.num(),
-    vec![op_f64(result_lit)], l_val);
-
-  let i_nil  = push_call(&mut frag, rt.list_nil(),
-    vec![], Some(l_list));
-
-  let i_cons = push_call(&mut frag, rt.list_prepend_any(),
+  let i_head = push_call(frag, rt.list_head_any(), vec![op_local(l_args_p)], Some(l_done));
+  let i_box  = push_struct_new(frag, rt.num(), vec![op_f64(lit)], l_val);
+  if let Some(o) = lit_origin { set_origin(frag, i_box, o); }
+  let i_nil  = push_call(frag, rt.list_nil(), vec![], Some(l_list));
+  let i_cons = push_call(frag, rt.list_prepend_any(),
     vec![op_local(l_val), op_local(l_list)], Some(l_list));
-
-  let i_app  = push_return_call(&mut frag, rt.apply(),
+  let i_app  = push_return_call(frag, rt.apply(),
     vec![op_local(l_list), op_local(l_done)]);
 
-  let _ = l_caps; // reserved for future use (captures)
-
-  let fink_module = func(
-    &mut frag,
-    rt.fn2(),
+  func(frag, rt.fn2(),
     vec![
       local(val_anyref(false), "_caps"),
       local(val_anyref(false), "_args"),
@@ -79,11 +111,48 @@ pub fn lower(cps: &CpsResult, _ast: &Ast<'_>) -> Fragment {
     ],
     vec![i_head, i_box, i_nil, i_cons, i_app],
     "fink_module",
-  );
-  // Export fink_module as the module's bring-up entry.
-  frag.funcs[fink_module.0 as usize].export = Some("fink_module".into());
+  )
+}
 
-  frag
+/// Direct-style `op_plus` body: pop `done`, box both operands,
+/// tail-call `op_plus(a, b, done)`.
+///
+/// Origins: each `struct.new` maps to its literal; the `return_call`
+/// maps to the `App` (the whole `a + b` expression).
+fn build_op_plus_body(
+  frag: &mut Fragment,
+  rt: &Runtime,
+  a: f64, a_origin: Option<ByteRange>,
+  b: f64, b_origin: Option<ByteRange>,
+  app_origin: Option<ByteRange>,
+) -> FuncSym {
+  let l_args_p = LocalIdx(1);
+  let l_done   = LocalIdx(2);
+  let l_a      = LocalIdx(3);
+  let l_b      = LocalIdx(4);
+
+  let i_head = push_call(frag, rt.list_head_any(), vec![op_local(l_args_p)], Some(l_done));
+  let i_a    = push_struct_new(frag, rt.num(), vec![op_f64(a)], l_a);
+  if let Some(o) = a_origin { set_origin(frag, i_a, o); }
+  let i_b    = push_struct_new(frag, rt.num(), vec![op_f64(b)], l_b);
+  if let Some(o) = b_origin { set_origin(frag, i_b, o); }
+  let i_app  = push_return_call(frag, rt.op_plus(),
+    vec![op_local(l_a), op_local(l_b), op_local(l_done)]);
+  if let Some(o) = app_origin { set_origin(frag, i_app, o); }
+
+  func(frag, rt.fn2(),
+    vec![
+      local(val_anyref(false), "_caps"),
+      local(val_anyref(false), "_args"),
+    ],
+    vec![
+      local(val_anyref(false), "v_0"),
+      local(val_ref(rt.num(), false), "v_1"),
+      local(val_ref(rt.num(), false), "v_2"),
+    ],
+    vec![i_head, i_a, i_b, i_app],
+    "fink_module",
+  )
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -106,18 +175,28 @@ fn extract_fink_module_body(
   Some((ret_bind.id, body))
 }
 
-/// Match `App { func: Val(ContRef(_)), args: [Val(Lit::Int|Float|Decimal)] }`
-/// and return the literal's f64 value.
-fn extract_ret_lit(body: &Expr) -> Option<f64> {
-  let ExprKind::App { func: Callable::Val(func), args } = &body.kind else { return None };
-  let Val { kind: ValKind::ContRef(_), .. } = func else { return None };
-  let first_arg = args.first()?;
-  let Arg::Val(v) = first_arg else { return None };
+/// Extract the first-arg numeric literal from an `Arg` list, returning
+/// its value plus the CpsId of the Val node.
+fn extract_first_lit(args: &[Arg]) -> Option<(f64, CpsId)> {
+  val_lit(args.first()?)
+}
+
+/// Extract two numeric-literal args in order, ignoring trailing
+/// `Arg::Cont` (continuation). Each return pair is `(f64, CpsId)`.
+fn extract_two_lits(args: &[Arg]) -> Option<((f64, CpsId), (f64, CpsId))> {
+  let a = val_lit(args.first()?)?;
+  let b = val_lit(args.get(1)?)?;
+  Some((a, b))
+}
+
+fn val_lit(arg: &Arg) -> Option<(f64, CpsId)> {
+  let Arg::Val(v) = arg else { return None };
   let ValKind::Lit(lit) = &v.kind else { return None };
-  match lit {
-    Lit::Int(n)     => Some(*n as f64),
-    Lit::Float(f)   => Some(*f),
-    Lit::Decimal(f) => Some(*f),
-    _ => None,
-  }
+  let f = match lit {
+    Lit::Int(n)     => *n as f64,
+    Lit::Float(f)   => *f,
+    Lit::Decimal(f) => *f,
+    _ => return None,
+  };
+  Some((f, v.id))
 }

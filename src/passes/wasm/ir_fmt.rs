@@ -18,17 +18,30 @@
 
 use std::fmt::Write as _;
 
+use crate::sourcemap::native::{Mapping, SourceMap};
+
 use super::ir::*;
 
+/// Render a fragment to WAT text. Convenience wrapper that discards
+/// the sourcemap.
 pub fn fmt_fragment(frag: &Fragment) -> String {
+  fmt_fragment_with_sm(frag).0
+}
+
+/// Render a fragment to WAT text **and** the native sourcemap tying
+/// each instruction's output byte offset back to its source origin.
+/// Instructions without an origin emit a `Mapping { src: None }` so
+/// output consumers know the slot is intentionally unmapped.
+pub fn fmt_fragment_with_sm(frag: &Fragment) -> (String, SourceMap) {
   let mut out = String::new();
+  let mut sm = SourceMap::new();
   out.push_str("(module\n");
 
   for (i, ty) in frag.types.iter().enumerate() {
     fmt_type(&mut out, frag, TypeSym(i as u32), ty);
   }
   for (i, f) in frag.funcs.iter().enumerate() {
-    fmt_func(&mut out, frag, FuncSym(i as u32), f);
+    fmt_func(&mut out, &mut sm, frag, FuncSym(i as u32), f);
   }
   for (i, g) in frag.globals.iter().enumerate() {
     fmt_global(&mut out, frag, GlobalSym(i as u32), g);
@@ -38,7 +51,7 @@ pub fn fmt_fragment(frag: &Fragment) -> String {
   }
 
   out.push(')');
-  out
+  (out, sm)
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -218,7 +231,7 @@ fn fmt_type_body(frag: &Fragment, kind: &TypeKind) -> String {
   }
 }
 
-fn fmt_func(out: &mut String, frag: &Fragment, sym: FuncSym, f: &FuncDecl) {
+fn fmt_func(out: &mut String, sm: &mut SourceMap, frag: &Fragment, sym: FuncSym, f: &FuncDecl) {
   let name = func_name(frag, sym);
 
   if let Some(ImportKey { module, name: field }) = &f.import {
@@ -242,9 +255,18 @@ fn fmt_func(out: &mut String, frag: &Fragment, sym: FuncSym, f: &FuncDecl) {
     writeln!(out, "    (local ${} {})", n, fmt_val(frag, &l.ty)).unwrap();
   }
 
+  let body_indent = 4;
   for id in &f.body {
     let instr = &frag.instrs[id.0 as usize];
-    fmt_instr(out, frag, f, instr, /*indent=*/ 4);
+    // Record a mapping at the byte offset where this instruction's
+    // *meaningful* output starts — past the indent pad, at the `(`
+    // of the statement. Consumers (VSCode extension, etc.) place
+    // decorations at that column.
+    sm.push(Mapping {
+      out: (out.len() + body_indent) as u32,
+      src: instr.origin,
+    });
+    fmt_instr(out, frag, f, instr, body_indent);
   }
 
   out.push_str("  )\n");
@@ -307,52 +329,52 @@ fn escape_bytes(bytes: &[u8]) -> String {
 
 fn fmt_instr(out: &mut String, frag: &Fragment, f: &FuncDecl, instr: &Instr, indent: usize) {
   let pad = " ".repeat(indent);
-  match instr {
-    Instr::LocalSet { idx, src } => {
+  match &instr.kind {
+    InstrKind::LocalSet { idx, src } => {
       writeln!(out, "{}(local.set {} {})", pad, local_name(f, *idx), fmt_operand(frag, f, src)).unwrap();
     }
-    Instr::GlobalSet { sym, src } => {
+    InstrKind::GlobalSet { sym, src } => {
       writeln!(out, "{}(global.set {} {})", pad, global_name(frag, *sym), fmt_operand(frag, f, src)).unwrap();
     }
-    Instr::RefNull { ht, into } => {
+    InstrKind::RefNull { ht, into } => {
       writeln!(out, "{}(local.set {} (ref.null {}))", pad, local_name(f, *into), abs_heap(*ht)).unwrap();
     }
-    Instr::RefNullConcrete { ty, into } => {
+    InstrKind::RefNullConcrete { ty, into } => {
       writeln!(out, "{}(local.set {} (ref.null {}))", pad, local_name(f, *into), type_name(frag, *ty)).unwrap();
     }
-    Instr::RefI31 { src, into } => {
+    InstrKind::RefI31 { src, into } => {
       writeln!(out, "{}(local.set {} (ref.i31 {}))", pad, local_name(f, *into), fmt_operand(frag, f, src)).unwrap();
     }
-    Instr::I31GetS { src, into } => {
+    InstrKind::I31GetS { src, into } => {
       writeln!(out, "{}(local.set {} (i31.get_s {}))", pad, local_name(f, *into), fmt_operand(frag, f, src)).unwrap();
     }
-    Instr::RefFunc { func, into } => {
+    InstrKind::RefFunc { func, into } => {
       writeln!(out, "{}(local.set {} (ref.func {}))", pad, local_name(f, *into), func_name(frag, *func)).unwrap();
     }
-    Instr::StructNew { ty, fields, into } => {
+    InstrKind::StructNew { ty, fields, into } => {
       write!(out, "{}(local.set {} (struct.new {}", pad, local_name(f, *into), type_name(frag, *ty)).unwrap();
       for field in fields { write!(out, " {}", fmt_operand(frag, f, field)).unwrap(); }
       out.push_str("))\n");
     }
-    Instr::RefCastNonNull { ty, src, into } => {
+    InstrKind::RefCastNonNull { ty, src, into } => {
       writeln!(out, "{}(local.set {} (ref.cast (ref {}) {}))",
         pad, local_name(f, *into), type_name(frag, *ty), fmt_operand(frag, f, src)).unwrap();
     }
-    Instr::RefCastNullable { ty, src, into } => {
+    InstrKind::RefCastNullable { ty, src, into } => {
       writeln!(out, "{}(local.set {} (ref.cast (ref null {}) {}))",
         pad, local_name(f, *into), type_name(frag, *ty), fmt_operand(frag, f, src)).unwrap();
     }
-    Instr::Call { target, args, into } => {
+    InstrKind::Call { target, args, into } => {
       let call_sexpr = fmt_call_sexpr(frag, f, "call", *target, args);
       match into {
         Some(local) => writeln!(out, "{}(local.set {} {})", pad, local_name(f, *local), call_sexpr).unwrap(),
         None        => writeln!(out, "{}{}", pad, call_sexpr).unwrap(),
       }
     }
-    Instr::ReturnCall { target, args } => {
+    InstrKind::ReturnCall { target, args } => {
       writeln!(out, "{}{}", pad, fmt_call_sexpr(frag, f, "return_call", *target, args)).unwrap();
     }
-    Instr::If { cond, then_body, else_body } => {
+    InstrKind::If { cond, then_body, else_body } => {
       writeln!(out, "{}(if {}", pad, fmt_operand(frag, f, cond)).unwrap();
       writeln!(out, "{}  (then", pad).unwrap();
       for id in then_body {
@@ -368,8 +390,8 @@ fn fmt_instr(out: &mut String, frag: &Fragment, f: &FuncDecl, instr: &Instr, ind
       }
       writeln!(out, "{})", pad).unwrap();
     }
-    Instr::Unreachable => writeln!(out, "{}unreachable", pad).unwrap(),
-    Instr::Drop { src } => writeln!(out, "{}(drop {})", pad, fmt_operand(frag, f, src)).unwrap(),
+    InstrKind::Unreachable => writeln!(out, "{}unreachable", pad).unwrap(),
+    InstrKind::Drop { src } => writeln!(out, "{}(drop {})", pad, fmt_operand(frag, f, src)).unwrap(),
   }
 }
 

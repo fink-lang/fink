@@ -75,12 +75,16 @@ pub enum Sym {
   FnAnyToAny,
   FnNilToList,
   FnPrependAny,
+  /// `(func (param (ref any) (ref any) (ref any)))` — two operands
+  /// plus a continuation. Used for binary numeric operators.
+  FnBinOp,
 
   // ── functions ──────────────────────────────────────────────────
   ListHeadAny,
   ListNil,
   ListPrependAny,
   Apply,
+  OpPlus,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -112,6 +116,7 @@ impl RuntimeUsage {
 /// framing, not a BuiltIn call).
 fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
   match b {
+    BuiltIn::Add => &[Sym::OpPlus, Sym::Num],
     // TODO: as lowering grows, fill in the actual mappings. For now
     // only the Builtins lowering actually encounters matter.
     BuiltIn::FinkModule => &[],
@@ -134,11 +139,13 @@ pub struct Runtime {
   fn_any_to_any:  Option<TypeSym>,
   fn_nil_to_list: Option<TypeSym>,
   fn_prepend_any: Option<TypeSym>,
+  fn_bin_op:      Option<TypeSym>,
   // functions
   list_head_any:    Option<FuncSym>,
   list_nil:         Option<FuncSym>,
   list_prepend_any: Option<FuncSym>,
   apply:            Option<FuncSym>,
+  op_plus:          Option<FuncSym>,
 }
 
 impl Runtime {
@@ -148,6 +155,7 @@ impl Runtime {
   pub fn list_nil(&self)         -> FuncSym { self.list_nil.expect("rt: list_nil not declared") }
   pub fn list_prepend_any(&self) -> FuncSym { self.list_prepend_any.expect("rt: list_prepend_any not declared") }
   pub fn apply(&self)            -> FuncSym { self.apply.expect("rt: _apply not declared") }
+  pub fn op_plus(&self)          -> FuncSym { self.op_plus.expect("rt: op_plus not declared") }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -180,6 +188,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::ListNil)        { needed.insert(Sym::FnNilToList); }
   if needed.contains(&Sym::ListPrependAny) { needed.insert(Sym::FnPrependAny); }
   if needed.contains(&Sym::Apply)          { needed.insert(Sym::Fn2); }
+  if needed.contains(&Sym::OpPlus)         { needed.insert(Sym::FnBinOp); }
 
   // Types first (BTreeSet iteration is in `Sym` declaration order,
   // so value types come before signature types naturally).
@@ -190,6 +199,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
       Sym::FnAnyToAny   => rt.fn_any_to_any  = Some(ty_import(frag, RUNTIME_MOD, "FnAnyToAny",   AbsHeap::Func)),
       Sym::FnNilToList  => rt.fn_nil_to_list = Some(ty_import(frag, RUNTIME_MOD, "FnNilToList",  AbsHeap::Func)),
       Sym::FnPrependAny => rt.fn_prepend_any = Some(ty_import(frag, RUNTIME_MOD, "FnPrependAny", AbsHeap::Func)),
+      Sym::FnBinOp      => rt.fn_bin_op      = Some(ty_import(frag, RUNTIME_MOD, "FnBinOp",      AbsHeap::Func)),
       _ => {}
     }
   }
@@ -201,6 +211,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
       Sym::ListNil        => rt.list_nil         = Some(import_func(frag, rt.fn_nil_to_list.unwrap(), RUNTIME_MOD, "list_nil")),
       Sym::ListPrependAny => rt.list_prepend_any = Some(import_func(frag, rt.fn_prepend_any.unwrap(), RUNTIME_MOD, "list_prepend_any")),
       Sym::Apply          => rt.apply            = Some(import_func(frag, rt.fn2.unwrap(),            RUNTIME_MOD, "_apply")),
+      Sym::OpPlus         => rt.op_plus          = Some(import_func(frag, rt.fn_bin_op.unwrap(),      RUNTIME_MOD, "op_plus")),
       _ => {}
     }
   }
@@ -226,15 +237,43 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
 pub fn scan(cps: &CpsResult) -> RuntimeUsage {
   let mut usage = RuntimeUsage::default();
 
-  // Bring-up path.
+  // Every well-formed module is a `Fn2`-shaped `fink_module`, so
+  // that type is always needed. `list_head_any` is always needed
+  // because bring-up always pops `done` out of `_args`.
   usage.mark(Sym::Fn2);
   usage.mark(Sym::ListHeadAny);
-  usage.mark(Sym::ListNil);
-  usage.mark(Sym::ListPrependAny);
-  usage.mark(Sym::Apply);
+
+  // Bring-up further uses `_apply` (with `list_nil` + `list_prepend_any`)
+  // only when the tail call is a user value or continuation — i.e.
+  // when the fink_module body's tail is `App(ContRef(_), ...)`. A
+  // direct-style tail call into a builtin (e.g. `op_plus`) skips the
+  // apply mechanism and doesn't need those symbols. Introspect the
+  // body to decide.
+  if tail_uses_apply(&cps.root) {
+    usage.mark(Sym::ListNil);
+    usage.mark(Sym::ListPrependAny);
+    usage.mark(Sym::Apply);
+  }
 
   scan_expr(&cps.root, &mut usage);
   usage
+}
+
+/// True if the fink_module body's tail App calls a user continuation
+/// (requiring the `_apply` + list bring-up path) rather than a direct
+/// builtin (`op_plus` etc.).
+fn tail_uses_apply(root: &Expr) -> bool {
+  // Find the fink_module body — `App(FinkModule, [Cont::Expr { body }])`.
+  let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind else {
+    return true; // unknown shape — assume apply path
+  };
+  let Some(Arg::Cont(Cont::Expr { body, .. })) = args.first() else {
+    return true;
+  };
+  // The tail is body itself (lifted CPS has a single flat expression).
+  matches!(&body.kind,
+    ExprKind::App { func: Callable::Val(_), .. }
+  )
 }
 
 fn scan_expr(expr: &Expr, usage: &mut RuntimeUsage) {

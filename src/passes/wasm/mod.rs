@@ -113,7 +113,9 @@ mod tests {
   fn ir_wat_inner(src: &str) -> String {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
     let frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
-    super::ir_fmt::fmt_fragment(&frag)
+    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&frag);
+    let b64 = sm.encode_base64url();
+    format!("{}\n;; sm:{b64}", wat.trim())
   }
 
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");

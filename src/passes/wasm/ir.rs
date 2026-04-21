@@ -263,7 +263,16 @@ pub struct DataDecl {
 /// Starter set covers `42 + 123` (the tracer target) plus a
 /// smattering of close neighbours likely to appear in early tests.
 #[derive(Clone, Debug)]
-pub enum Instr {
+pub struct Instr {
+  pub kind: InstrKind,
+  /// Source byte range this instruction corresponds to, if known.
+  /// `None` for bring-up plumbing and compiler-synthesised helpers.
+  /// Fed into the native sourcemap by the formatter.
+  pub origin: Option<crate::sourcemap::native::ByteRange>,
+}
+
+#[derive(Clone, Debug)]
+pub enum InstrKind {
   /// local.set — write a local from a leaf operand.
   ///
   /// `i32.const` / `f64.const` don't have dedicated `Instr` variants:
@@ -582,18 +591,26 @@ pub fn op_ref_null(ht: AbsHeap) -> Operand { Operand::RefNull(ht) }
 
 // --- instruction appenders ---------------------------------------
 
-fn push(frag: &mut Fragment, instr: Instr) -> InstrId {
+fn push(frag: &mut Fragment, kind: InstrKind) -> InstrId {
+  push_with_origin(frag, kind, None)
+}
+
+fn push_with_origin(
+  frag: &mut Fragment,
+  kind: InstrKind,
+  origin: Option<crate::sourcemap::native::ByteRange>,
+) -> InstrId {
   let id = InstrId(frag.instrs.len() as u32);
-  frag.instrs.push(instr);
+  frag.instrs.push(Instr { kind, origin });
   id
 }
 
 pub fn push_local_set(frag: &mut Fragment, idx: LocalIdx, src: Operand) -> InstrId {
-  push(frag, Instr::LocalSet { idx, src })
+  push(frag, InstrKind::LocalSet { idx, src })
 }
 
 pub fn push_global_set(frag: &mut Fragment, sym: GlobalSym, src: Operand) -> InstrId {
-  push(frag, Instr::GlobalSet { sym, src })
+  push(frag, InstrKind::GlobalSet { sym, src })
 }
 
 pub fn push_struct_new(
@@ -602,7 +619,7 @@ pub fn push_struct_new(
   fields: Vec<Operand>,
   into: LocalIdx,
 ) -> InstrId {
-  push(frag, Instr::StructNew { ty, fields, into })
+  push(frag, InstrKind::StructNew { ty, fields, into })
 }
 
 pub fn push_ref_cast_non_null(
@@ -611,7 +628,7 @@ pub fn push_ref_cast_non_null(
   src: Operand,
   into: LocalIdx,
 ) -> InstrId {
-  push(frag, Instr::RefCastNonNull { ty, src, into })
+  push(frag, InstrKind::RefCastNonNull { ty, src, into })
 }
 
 pub fn push_call(
@@ -620,7 +637,7 @@ pub fn push_call(
   args: Vec<Operand>,
   into: Option<LocalIdx>,
 ) -> InstrId {
-  push(frag, Instr::Call { target, args, into })
+  push(frag, InstrKind::Call { target, args, into })
 }
 
 pub fn push_return_call(
@@ -628,7 +645,14 @@ pub fn push_return_call(
   target: FuncSym,
   args: Vec<Operand>,
 ) -> InstrId {
-  push(frag, Instr::ReturnCall { target, args })
+  push(frag, InstrKind::ReturnCall { target, args })
+}
+
+/// Attach / overwrite the origin on an already-pushed instruction.
+/// Used by lowering when the CPS origin for a node is known *after*
+/// the helper that created it already ran.
+pub fn set_origin(frag: &mut Fragment, id: InstrId, origin: crate::sourcemap::native::ByteRange) {
+  frag.instrs[id.0 as usize].origin = Some(origin);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -754,8 +778,8 @@ mod tests {
 
     // Last instr is a ReturnCall into num_op_add with three args.
     let last = &frag.instrs[i3.0 as usize];
-    match last {
-      Instr::ReturnCall { target, args } => {
+    match &last.kind {
+      InstrKind::ReturnCall { target, args } => {
         assert_eq!(*target, num_op_add);
         assert_eq!(args.len(), 3);
         assert!(matches!(args[0], Operand::Local(LocalIdx(2))));

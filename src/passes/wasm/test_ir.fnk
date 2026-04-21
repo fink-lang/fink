@@ -41,3 +41,29 @@ test 'ir: int literal', fn:
       )
       (export "fink_module" (func $fink_module))
     )
+    ;; sm:BfoLAIIBAQACcgBUAKoBAA
+
+
+test 'ir: int sum', fn:
+  expect ir_wat ƒink:
+    42 + 123
+  | equals wat":
+    (module
+      (import "rt" "Num" (type $rt.Num (sub any)))
+      (import "rt" "Fn2" (type $rt.Fn2 (sub func)))
+      (import "rt" "FnAnyToAny" (type $rt.FnAnyToAny (sub func)))
+      (import "rt" "FnBinOp" (type $rt.FnBinOp (sub func)))
+      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.FnAnyToAny)))
+      (import "rt" "op_plus" (func $rt.op_plus (type $rt.FnBinOp)))
+      (func $fink_module (type $rt.Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $v_1 (ref $rt.Num))
+        (local $v_2 (ref $rt.Num))
+        (local.set $v_0 (call $rt.list_head_any (local.get $_args)))
+        (local.set $v_1 (struct.new $rt.Num (f64.const 42)))
+        (local.set $v_2 (struct.new $rt.Num (f64.const 123)))
+        (return_call $rt.op_plus (local.get $v_1) (local.get $v_2) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:BL4IAIIBAQACcgEKA3QBCQg
