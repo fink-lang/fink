@@ -1,0 +1,465 @@
+//! Render a `Fragment` (unlinked wasm IR) to WAT text.
+//!
+//! Tracer-phase renderer — walks the fragment arenas and emits WAT.
+//! No wasm-byte parsing. No runtime filtering. The output reads like
+//! something a wasm engineer would have written by hand.
+//!
+//! Unknowns at this point (to decide as we grow the renderer):
+//!
+//! * Whether we render symbolic names or numeric ids for cross-refs.
+//!   Decision: always render the display name if present, fall back
+//!   to a synthesised `$t_N` / `$f_N` / `$g_N` / `$d_N`. The linker
+//!   still resolves by `Sym(u32)` — names here are presentation.
+//!
+//! * Function bodies render as `local.set $a (struct.new $Num
+//!   (f64.const 42.0))` style (s-expr "folded" WAT), not as
+//!   stack-machine form. That matches how humans write WAT and keeps
+//!   the shape close to the IR's expression tree.
+
+use std::fmt::Write as _;
+
+use super::ir::*;
+
+pub fn fmt_fragment(frag: &Fragment) -> String {
+  let mut out = String::new();
+  out.push_str("(module\n");
+
+  for (i, ty) in frag.types.iter().enumerate() {
+    fmt_type(&mut out, frag, TypeSym(i as u32), ty);
+  }
+  for (i, f) in frag.funcs.iter().enumerate() {
+    fmt_func(&mut out, frag, FuncSym(i as u32), f);
+  }
+  for (i, g) in frag.globals.iter().enumerate() {
+    fmt_global(&mut out, frag, GlobalSym(i as u32), g);
+  }
+  for (i, d) in frag.data.iter().enumerate() {
+    fmt_data(&mut out, DataSym(i as u32), d);
+  }
+
+  out.push(')');
+  out
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Names
+// ──────────────────────────────────────────────────────────────────
+
+fn type_name(frag: &Fragment, sym: TypeSym) -> String {
+  let Some(ty) = frag.types.get(sym.0 as usize) else {
+    return format!("$t_{}", sym.0);
+  };
+  let display = ty.display.as_deref().unwrap_or("");
+  match &ty.import {
+    Some(ImportKey { module, .. }) => format!("${}.{}", module, display),
+    None => {
+      if display.is_empty() { format!("$t_{}", sym.0) }
+      else { format!("${}", display) }
+    }
+  }
+}
+
+fn func_name(frag: &Fragment, sym: FuncSym) -> String {
+  let Some(f) = frag.funcs.get(sym.0 as usize) else {
+    return format!("$f_{}", sym.0);
+  };
+  let display = f.display.as_deref().unwrap_or("");
+  match &f.import {
+    Some(ImportKey { module, .. }) => format!("${}.{}", module, display),
+    None => {
+      if display.is_empty() { format!("$f_{}", sym.0) }
+      else { format!("${}", display) }
+    }
+  }
+}
+
+fn global_name(frag: &Fragment, sym: GlobalSym) -> String {
+  let Some(g) = frag.globals.get(sym.0 as usize) else {
+    return format!("$g_{}", sym.0);
+  };
+  let display = g.display.as_deref().unwrap_or("");
+  match &g.import {
+    Some(ImportKey { module, .. }) => format!("${}.{}", module, display),
+    None => {
+      if display.is_empty() { format!("$g_{}", sym.0) }
+      else { format!("${}", display) }
+    }
+  }
+}
+
+fn local_name(f: &FuncDecl, idx: LocalIdx) -> String {
+  let i = idx.0 as usize;
+  let decl = if i < f.params.len() {
+    f.params.get(i)
+  } else {
+    f.locals.get(i - f.params.len())
+  };
+  match decl.and_then(|l| l.display.as_deref()) {
+    Some(n) => format!("${}", n),
+    None => format!("$l_{}", idx.0),
+  }
+}
+
+fn data_name(d: &DataDecl, sym: DataSym) -> String {
+  match d.display.as_deref() {
+    Some(n) => format!("${}", n),
+    None => format!("$d_{}", sym.0),
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Value / heap types
+// ──────────────────────────────────────────────────────────────────
+
+fn abs_heap(ht: AbsHeap) -> &'static str {
+  match ht {
+    AbsHeap::Any  => "any",
+    AbsHeap::Eq   => "eq",
+    AbsHeap::I31  => "i31",
+    AbsHeap::Func => "func",
+  }
+}
+
+fn fmt_val(frag: &Fragment, ty: &ValType) -> String {
+  match ty {
+    ValType::I32 => "i32".into(),
+    ValType::F64 => "f64".into(),
+    ValType::RefConcrete { nullable: true, ty }   => format!("(ref null {})", type_name(frag, *ty)),
+    ValType::RefConcrete { nullable: false, ty }  => format!("(ref {})", type_name(frag, *ty)),
+    ValType::RefAbstract { nullable: true, ht }   => format!("(ref null {})", abs_heap(*ht)),
+    ValType::RefAbstract { nullable: false, ht }  => format!("(ref {})", abs_heap(*ht)),
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Sections
+// ──────────────────────────────────────────────────────────────────
+
+fn fmt_type(out: &mut String, frag: &Fragment, sym: TypeSym, ty: &TypeDecl) {
+  let name = type_name(frag, sym);
+
+  // Imported type — WebAssembly "Type Imports and Exports" notation.
+  if let Some(ImportKey { module, name: field }) = &ty.import {
+    let body = fmt_type_body(frag, &ty.kind);
+    writeln!(out, "  (import \"{}\" \"{}\" (type {} {}))", module, field, name, body).unwrap();
+    return;
+  }
+
+  match &ty.kind {
+    TypeKind::Struct { fields } => {
+      writeln!(out, "  (type {} (struct", name).unwrap();
+      for f in fields {
+        let mutness = if f.mutable { "mut " } else { "" };
+        let fname = f.display.as_deref().unwrap_or("");
+        writeln!(out, "    (field ${} ({}{}))", fname, mutness, fmt_val(frag, &f.ty)).unwrap();
+      }
+      out.push_str("  ))\n");
+    }
+    TypeKind::Array { elem, mutable } => {
+      let mutness = if *mutable { "mut " } else { "" };
+      writeln!(out, "  (type {} (array ({}{})))", name, mutness, fmt_val(frag, elem)).unwrap();
+    }
+    TypeKind::Func { params, results } => {
+      out.push_str("  (type ");
+      out.push_str(&name);
+      out.push_str(" (func");
+      if !params.is_empty() {
+        out.push_str(" (param");
+        for p in params { out.push(' '); out.push_str(&fmt_val(frag, p)); }
+        out.push(')');
+      }
+      if !results.is_empty() {
+        out.push_str(" (result");
+        for r in results { out.push(' '); out.push_str(&fmt_val(frag, r)); }
+        out.push(')');
+      }
+      out.push_str("))\n");
+    }
+    TypeKind::SubBound { ht } => {
+      writeln!(out, "  (type {} (sub {}))", name, abs_heap(*ht)).unwrap();
+    }
+  }
+}
+
+/// Render only the body of a type (the thing inside `(type $name ...)`).
+/// Used by imported-type rendering where the body becomes the import's bound.
+fn fmt_type_body(frag: &Fragment, kind: &TypeKind) -> String {
+  match kind {
+    TypeKind::SubBound { ht } => format!("(sub {})", abs_heap(*ht)),
+    TypeKind::Struct { fields } => {
+      let mut s = String::from("(struct");
+      for f in fields {
+        let mutness = if f.mutable { "mut " } else { "" };
+        let fname = f.display.as_deref().unwrap_or("");
+        s.push_str(&format!(" (field ${} ({}{}))", fname, mutness, fmt_val(frag, &f.ty)));
+      }
+      s.push(')');
+      s
+    }
+    TypeKind::Array { elem, mutable } => {
+      let mutness = if *mutable { "mut " } else { "" };
+      format!("(array ({}{}))", mutness, fmt_val(frag, elem))
+    }
+    TypeKind::Func { params, results } => {
+      let mut s = String::from("(func");
+      if !params.is_empty() {
+        s.push_str(" (param");
+        for p in params { s.push(' '); s.push_str(&fmt_val(frag, p)); }
+        s.push(')');
+      }
+      if !results.is_empty() {
+        s.push_str(" (result");
+        for r in results { s.push(' '); s.push_str(&fmt_val(frag, r)); }
+        s.push(')');
+      }
+      s.push(')');
+      s
+    }
+  }
+}
+
+fn fmt_func(out: &mut String, frag: &Fragment, sym: FuncSym, f: &FuncDecl) {
+  let name = func_name(frag, sym);
+
+  if let Some(ImportKey { module, name: field }) = &f.import {
+    writeln!(out, "  (import \"{}\" \"{}\" (func {} (type {})))",
+      module, field, name, type_name(frag, f.sig)).unwrap();
+    return;
+  }
+
+  out.push_str("  (func ");
+  out.push_str(&name);
+  write!(out, " (type {})", type_name(frag, f.sig)).unwrap();
+
+  for p in &f.params {
+    let n = p.display.as_deref().unwrap_or("");
+    write!(out, " (param ${} {})", n, fmt_val(frag, &p.ty)).unwrap();
+  }
+  out.push('\n');
+
+  for l in &f.locals {
+    let n = l.display.as_deref().unwrap_or("");
+    writeln!(out, "    (local ${} {})", n, fmt_val(frag, &l.ty)).unwrap();
+  }
+
+  for id in &f.body {
+    let instr = &frag.instrs[id.0 as usize];
+    fmt_instr(out, frag, f, instr, /*indent=*/ 4);
+  }
+
+  out.push_str("  )\n");
+
+  if let Some(exp) = &f.export {
+    writeln!(out, "  (export \"{}\" (func {}))", exp, name).unwrap();
+  }
+}
+
+fn fmt_global(out: &mut String, frag: &Fragment, sym: GlobalSym, g: &GlobalDecl) {
+  let name = global_name(frag, sym);
+  let mutness = if g.mutable { "mut " } else { "" };
+
+  if let Some(ImportKey { module, name: field }) = &g.import {
+    writeln!(out, "  (import \"{}\" \"{}\" (global {} ({}{})))",
+      module, field, name, mutness, fmt_val(frag, &g.ty)).unwrap();
+    return;
+  }
+
+  write!(out, "  (global {} ({}{}) ", name, mutness, fmt_val(frag, &g.ty)).unwrap();
+  fmt_global_init(out, frag, &g.init);
+  out.push_str(")\n");
+
+  if let Some(exp) = &g.export {
+    writeln!(out, "  (export \"{}\" (global {}))", exp, name).unwrap();
+  }
+}
+
+fn fmt_global_init(out: &mut String, frag: &Fragment, init: &GlobalInit) {
+  match init {
+    GlobalInit::I32Const(v)       => write!(out, "(i32.const {})", v).unwrap(),
+    GlobalInit::F64Const(v)       => write!(out, "(f64.const {})", v).unwrap(),
+    GlobalInit::RefNull(ht)       => write!(out, "(ref.null {})", abs_heap(*ht)).unwrap(),
+    GlobalInit::RefNullConcrete(t)=> write!(out, "(ref.null {})", type_name(frag, *t)).unwrap(),
+    GlobalInit::RefFunc(f)        => write!(out, "(ref.func {})", func_name(frag, *f)).unwrap(),
+  }
+}
+
+fn fmt_data(out: &mut String, sym: DataSym, d: &DataDecl) {
+  let name = data_name(d, sym);
+  writeln!(out, "  (data {} \"{}\")", name, escape_bytes(&d.bytes)).unwrap();
+}
+
+fn escape_bytes(bytes: &[u8]) -> String {
+  let mut s = String::with_capacity(bytes.len());
+  for &b in bytes {
+    match b {
+      b'\\' => s.push_str("\\\\"),
+      b'"'  => s.push_str("\\\""),
+      0x20..=0x7e => s.push(b as char),
+      _ => { s.push_str(&format!("\\{:02x}", b)); }
+    }
+  }
+  s
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Instructions — folded s-expr form
+// ──────────────────────────────────────────────────────────────────
+
+fn fmt_instr(out: &mut String, frag: &Fragment, f: &FuncDecl, instr: &Instr, indent: usize) {
+  let pad = " ".repeat(indent);
+  match instr {
+    Instr::LocalSet { idx, src } => {
+      writeln!(out, "{}(local.set {} {})", pad, local_name(f, *idx), fmt_operand(frag, f, src)).unwrap();
+    }
+    Instr::GlobalSet { sym, src } => {
+      writeln!(out, "{}(global.set {} {})", pad, global_name(frag, *sym), fmt_operand(frag, f, src)).unwrap();
+    }
+    Instr::RefNull { ht, into } => {
+      writeln!(out, "{}(local.set {} (ref.null {}))", pad, local_name(f, *into), abs_heap(*ht)).unwrap();
+    }
+    Instr::RefNullConcrete { ty, into } => {
+      writeln!(out, "{}(local.set {} (ref.null {}))", pad, local_name(f, *into), type_name(frag, *ty)).unwrap();
+    }
+    Instr::RefI31 { src, into } => {
+      writeln!(out, "{}(local.set {} (ref.i31 {}))", pad, local_name(f, *into), fmt_operand(frag, f, src)).unwrap();
+    }
+    Instr::I31GetS { src, into } => {
+      writeln!(out, "{}(local.set {} (i31.get_s {}))", pad, local_name(f, *into), fmt_operand(frag, f, src)).unwrap();
+    }
+    Instr::RefFunc { func, into } => {
+      writeln!(out, "{}(local.set {} (ref.func {}))", pad, local_name(f, *into), func_name(frag, *func)).unwrap();
+    }
+    Instr::StructNew { ty, fields, into } => {
+      write!(out, "{}(local.set {} (struct.new {}", pad, local_name(f, *into), type_name(frag, *ty)).unwrap();
+      for field in fields { write!(out, " {}", fmt_operand(frag, f, field)).unwrap(); }
+      out.push_str("))\n");
+    }
+    Instr::RefCastNonNull { ty, src, into } => {
+      writeln!(out, "{}(local.set {} (ref.cast (ref {}) {}))",
+        pad, local_name(f, *into), type_name(frag, *ty), fmt_operand(frag, f, src)).unwrap();
+    }
+    Instr::RefCastNullable { ty, src, into } => {
+      writeln!(out, "{}(local.set {} (ref.cast (ref null {}) {}))",
+        pad, local_name(f, *into), type_name(frag, *ty), fmt_operand(frag, f, src)).unwrap();
+    }
+    Instr::Call { target, args, into } => {
+      let call_sexpr = fmt_call_sexpr(frag, f, "call", *target, args);
+      match into {
+        Some(local) => writeln!(out, "{}(local.set {} {})", pad, local_name(f, *local), call_sexpr).unwrap(),
+        None        => writeln!(out, "{}{}", pad, call_sexpr).unwrap(),
+      }
+    }
+    Instr::ReturnCall { target, args } => {
+      writeln!(out, "{}{}", pad, fmt_call_sexpr(frag, f, "return_call", *target, args)).unwrap();
+    }
+    Instr::If { cond, then_body, else_body } => {
+      writeln!(out, "{}(if {}", pad, fmt_operand(frag, f, cond)).unwrap();
+      writeln!(out, "{}  (then", pad).unwrap();
+      for id in then_body {
+        fmt_instr(out, frag, f, &frag.instrs[id.0 as usize], indent + 4);
+      }
+      writeln!(out, "{}  )", pad).unwrap();
+      if !else_body.is_empty() {
+        writeln!(out, "{}  (else", pad).unwrap();
+        for id in else_body {
+          fmt_instr(out, frag, f, &frag.instrs[id.0 as usize], indent + 4);
+        }
+        writeln!(out, "{}  )", pad).unwrap();
+      }
+      writeln!(out, "{})", pad).unwrap();
+    }
+    Instr::Unreachable => writeln!(out, "{}unreachable", pad).unwrap(),
+    Instr::Drop { src } => writeln!(out, "{}(drop {})", pad, fmt_operand(frag, f, src)).unwrap(),
+  }
+}
+
+fn fmt_call_sexpr(frag: &Fragment, f: &FuncDecl, op: &str, target: FuncSym, args: &[Operand]) -> String {
+  let mut s = format!("({} {}", op, func_name(frag, target));
+  for a in args { s.push(' '); s.push_str(&fmt_operand(frag, f, a)); }
+  s.push(')');
+  s
+}
+
+fn fmt_operand(frag: &Fragment, f: &FuncDecl, op: &Operand) -> String {
+  match op {
+    Operand::I32(v)     => format!("(i32.const {})", v),
+    Operand::F64(v)     => format!("(f64.const {})", v),
+    Operand::Local(l)   => format!("(local.get {})", local_name(f, *l)),
+    Operand::Global(g)  => format!("(global.get {})", global_name(frag, *g)),
+    Operand::RefFunc(fs)=> format!("(ref.func {})", func_name(frag, *fs)),
+    Operand::RefNull(h) => format!("(ref.null {})", abs_heap(*h)),
+    Operand::DataRef { sym, len } => {
+      // At link time this becomes (i32.const <resolved_offset>)
+      // followed by (i32.const len). Until then — symbolic marker.
+      format!("(data.ref {} {})", data_name(&frag.data[sym.0 as usize], *sym), len)
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Tests
+// ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn renders_tracer_shape() {
+    let mut frag = Fragment::default();
+
+    let num_ty = ty_struct(&mut frag, vec![field(val_f64(), false, "val")], "Num");
+    let fn2_sig = ty_func(&mut frag,
+      vec![val_anyref(true), val_anyref(true)], vec![], "Fn2");
+    let num_add_sig = ty_func(&mut frag,
+      vec![val_anyref(true), val_anyref(true), val_anyref(true)], vec![], "NumOpAddSig");
+
+    let num_op_add = import_func(&mut frag, num_add_sig,
+      "@fink/runtime", "num_op_add");
+
+    let l_done = LocalIdx(2);
+    let l_a    = LocalIdx(3);
+    let l_b    = LocalIdx(4);
+
+    let i1 = push_struct_new(&mut frag, num_ty, vec![op_f64(42.0)], l_a);
+    let i2 = push_struct_new(&mut frag, num_ty, vec![op_f64(123.0)], l_b);
+    let i3 = push_return_call(&mut frag, num_op_add,
+      vec![op_local(l_done), op_local(l_a), op_local(l_b)]);
+
+    let _main = func(&mut frag, fn2_sig,
+      vec![
+        local(val_anyref(true), "_caps"),
+        local(val_anyref(true), "_args"),
+      ],
+      vec![
+        local(val_anyref(true), "done"),
+        local(val_ref(num_ty, false), "a"),
+        local(val_ref(num_ty, false), "b"),
+      ],
+      vec![i1, i2, i3],
+      "main",
+    );
+
+    let wat = fmt_fragment(&frag);
+    // Print so snapshot diffs are visible in test logs when blessing.
+    eprintln!("{}", wat);
+
+    // Structural assertions — what must be present. We're not asserting
+    // whitespace byte-for-byte; the shape is what we care about.
+    assert!(wat.contains("(module"));
+    assert!(wat.contains("(type $Num (struct"));
+    assert!(wat.contains("(field $val ((ref null any)))") == false, "field 'val' has type f64, not anyref");
+    assert!(wat.contains("(field $val (f64))"));
+    assert!(wat.contains("(type $Fn2 (func (param (ref null any) (ref null any))))"));
+    assert!(wat.contains(
+      "(import \"@fink/runtime\" \"num_op_add\" (func $@fink/runtime.num_op_add (type $NumOpAddSig)))"));
+    assert!(wat.contains("(func $main (type $Fn2) (param $_caps (ref null any)) (param $_args (ref null any))"));
+    assert!(wat.contains("(local $done (ref null any))"));
+    assert!(wat.contains("(local $a (ref $Num))"));
+    assert!(wat.contains("(local $b (ref $Num))"));
+    assert!(wat.contains("(local.set $a (struct.new $Num (f64.const 42)))"));
+    assert!(wat.contains("(local.set $b (struct.new $Num (f64.const 123)))"));
+    assert!(wat.contains(
+      "(return_call $@fink/runtime.num_op_add (local.get $done) (local.get $a) (local.get $b))"));
+  }
+}

@@ -28,7 +28,11 @@ pub mod collect;
 pub mod dwarf;
 pub mod emit;
 pub mod fmt;
+pub mod ir;
+pub mod ir_fmt;
+pub mod ir_lower;
 pub mod link;
+pub mod runtime_contract;
 pub mod sourcemap;
 
 #[cfg(feature = "run")]
@@ -87,6 +91,31 @@ mod tests {
     format!("{}\n;; sm:{wat_b64}", wat_output.trim())
   }
 
+  /// CPS → IR `Fragment` → WAT. No wasm-encoder, no linker, no runtime
+  /// filtering. Drives the tracer-phase tests.
+  fn ir_wat(src: &str) -> String {
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || ir_wat_inner(&src_owned))) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+          (*s).to_string()
+        } else if let Some(s) = e.downcast_ref::<String>() {
+          s.clone()
+        } else {
+          "<unknown panic>".to_string()
+        };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  fn ir_wat_inner(src: &str) -> String {
+    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
+    let frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
+    super::ir_fmt::fmt_fragment(&frag)
+  }
+
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk");
@@ -94,4 +123,5 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_records.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_fink_module.fnk");
+  test_macros::include_fink_tests!("src/passes/wasm/test_ir.fnk");
 }
