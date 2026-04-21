@@ -75,7 +75,7 @@ fn extract_tests<'src>(
       [single] => {
         let single_node = ast.nodes.get(*single);
         match &single_node.kind {
-          NodeKind::Pipe(parts) => parts.items.iter().copied().collect(),
+          NodeKind::Pipe(parts) => parts.items.to_vec(),
           _ => panic!(
             "include_fink_tests: test '{}' at line {} — fn body is not a pipe expression \
              (did you leave a blank line before `| equals`?)",

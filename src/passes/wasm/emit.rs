@@ -2485,12 +2485,8 @@ fn scan_rec_lit(expr: &Expr) -> bool {
     ExprKind::App { args, .. } => {
       for arg in args {
         match arg {
-          Arg::Val(v) | Arg::Spread(v) => {
-            if is_rec_val(v) { return true; }
-          }
-          Arg::Cont(Cont::Expr { body, .. }) => {
-            if scan_rec_lit(body) { return true; }
-          }
+          Arg::Val(v) | Arg::Spread(v) if is_rec_val(v) => return true,
+          Arg::Cont(Cont::Expr { body, .. }) if scan_rec_lit(body) => return true,
           _ => {}
         }
       }

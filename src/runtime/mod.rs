@@ -1685,8 +1685,8 @@ mod tests {
   #[test]
   fn test_hash_i31_num_deterministic() {
     let (mut store, instance) = load_hashing_with("");
-    let k1 = make_num(&mut store, &instance, 3.14);
-    let k2 = make_num(&mut store, &instance, 3.14);
+    let k1 = make_num(&mut store, &instance, 2.5);
+    let k2 = make_num(&mut store, &instance, 2.5);
     let h1 = hash_i31_call(&mut store, &instance, k1);
     let h2 = hash_i31_call(&mut store, &instance, k2);
     assert_eq!(h1, h2);
