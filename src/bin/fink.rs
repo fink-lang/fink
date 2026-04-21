@@ -206,6 +206,30 @@ fn main() {
       }
     }
 
+    "ir-wasm" => {
+      // Tracer-phase output: emit user-fragment WASM bytes via the
+      // new IR pipeline, link against runtime.wasm via the existing
+      // linker, write final bytes to stdout. Pipe through
+      // `wasm-tools print` / `wasm-dis` for inspection.
+      #[cfg(not(feature = "compile"))]
+      { eprintln!("error: 'ir-wasm' command requires the 'compile' feature"); process::exit(1); }
+      #[cfg(feature = "compile")]
+      {
+        use std::io::Write;
+        let (lifted, desugared) = fink::to_lifted(&src, path).unwrap_or_else(|e| die(&e));
+        let user_frag = fink::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast);
+        let linked_frag = fink::passes::wasm::ir_link::link(&[user_frag]);
+        let user_bytes = fink::passes::wasm::ir_emit::emit(&linked_frag);
+        static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
+        let inputs = vec![
+          fink::passes::wasm::link::LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
+          fink::passes::wasm::link::LinkInput { module_name: "@fink/user".into(), wasm: user_bytes },
+        ];
+        let linked = fink::passes::wasm::link::link(&inputs);
+        std::io::stdout().write_all(&linked.wasm).unwrap_or_else(|e| die(&e.to_string()));
+      }
+    }
+
     "compile" => {
       #[cfg(not(feature = "compile"))]
       { eprintln!("error: 'compile' command requires the 'compile' feature"); process::exit(1); }

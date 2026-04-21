@@ -183,9 +183,10 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   let mut rt = Runtime::default();
   let needed = &usage.used;
 
-  // Value-type imports — `rt.Num` / `rt.Fn2`. These are canonical
-  // types declared in runtime/types.wat with shared identity across
-  // fragments; emit resolves them structurally against the runtime.
+  // Value-type imports — `rt.Num` / `rt.Fn2`. These have shared
+  // identity across the ABI: user struct.new instances must match
+  // runtime's concrete type indices. Emit resolves them against
+  // `types.wasm` at emit time.
   if needed.contains(&Sym::Num) || needed.contains(&Sym::OpPlus) {
     rt.num = Some(ty_import(frag, RUNTIME_MOD, "Num", AbsHeap::Any));
   }
@@ -193,45 +194,60 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     rt.fn2 = Some(ty_import(frag, RUNTIME_MOD, "Fn2", AbsHeap::Func));
   }
 
-  // Function imports.
+  // Function-signature types and function imports.
   //
-  // Each `rt.<fn>` function import needs a type handle. Real WASM
-  // doesn't support type imports, but our IR does — we borrow the
-  // Phase 1 proposal notation and synthesise a type-import
-  // `rt.T_<fn>` alongside each function-import. At emit time these
-  // type imports are *dropped* (they're IR-only carriers — the
-  // concrete signature lives on the runtime side). `rt.<fn>`
-  // function imports then resolve to direct calls against runtime
-  // function indices; their referenced `rt.T_<fn>` types dissolve.
-  //
-  // This keeps the IR honest (no hardcoded structural signatures
-  // duplicated from the runtime) and keeps emit's rt-resolution
-  // uniform (all `rt.*` imports are IR-level names the linker
-  // resolves).
-  //
-  // For functions whose signature genuinely is `rt.Fn2` (currently
-  // `_apply`), we reuse the Fn2 import directly — no T_ carrier.
+  // CPS/lower is the owner of the runtime ABI — the emitter
+  // dictates the function signatures, the runtime WAT implements
+  // them. That means signatures are **definitional** at this layer,
+  // not derived from anywhere external. Each signature is declared
+  // as a local type in the fragment with the `rt.` naming prefix
+  // (so the ABI boundary is visible in the rendered WAT) and used
+  // to type each function import. WASM validates by structural
+  // equivalence at link time, so the user fragment's locally-
+  // declared `$rt.FnAnyToAny` matches the runtime's own signature
+  // of `list_head_any` by shape.
+  let anyref_n = val_anyref(true);
+
+  // Name convention: each function gets its own signature type
+  // `$rt.Fn_<fnname>` — monomorphic-first, mirrors how type
+  // inference would start before generalisation. Reusable
+  // calling-convention signatures (currently `rt.Fn2`) stay as
+  // value-type imports.
   if needed.contains(&Sym::ListHeadAny) {
-    let sig = ty_import(frag, RUNTIME_MOD, "T_list_head_any", AbsHeap::Func);
+    let sig = ty_func(frag,
+      vec![anyref_n.clone()],
+      vec![anyref_n.clone()],
+      "rt.Fn_list_head_any");
     rt.fn_any_to_any = Some(sig);
     rt.list_head_any = Some(import_func(frag, sig, RUNTIME_MOD, "list_head_any"));
   }
   if needed.contains(&Sym::ListNil) {
-    let sig = ty_import(frag, RUNTIME_MOD, "T_list_nil", AbsHeap::Func);
+    let sig = ty_func(frag,
+      vec![],
+      vec![anyref_n.clone()],
+      "rt.Fn_list_nil");
     rt.fn_nil_to_list = Some(sig);
     rt.list_nil = Some(import_func(frag, sig, RUNTIME_MOD, "list_nil"));
   }
   if needed.contains(&Sym::ListPrependAny) {
-    let sig = ty_import(frag, RUNTIME_MOD, "T_list_prepend_any", AbsHeap::Func);
+    let sig = ty_func(frag,
+      vec![anyref_n.clone(), anyref_n.clone()],
+      vec![anyref_n.clone()],
+      "rt.Fn_list_prepend_any");
     rt.fn_prepend_any = Some(sig);
     rt.list_prepend_any = Some(import_func(frag, sig, RUNTIME_MOD, "list_prepend_any"));
   }
   if needed.contains(&Sym::Apply) {
-    // `_apply` genuinely has the Fn2 shape — reuse the Fn2 import.
-    rt.apply = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"), RUNTIME_MOD, "_apply"));
+    // `_apply`'s signature is genuinely `rt.Fn2` — reuse the
+    // shared-identity type import directly.
+    rt.apply = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"),
+                                RUNTIME_MOD, "_apply"));
   }
   if needed.contains(&Sym::OpPlus) {
-    let sig = ty_import(frag, RUNTIME_MOD, "T_op_plus", AbsHeap::Func);
+    let sig = ty_func(frag,
+      vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
+      vec![],
+      "rt.Fn_op_plus");
     rt.fn_bin_op = Some(sig);
     rt.op_plus = Some(import_func(frag, sig, RUNTIME_MOD, "op_plus"));
   }

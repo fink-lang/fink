@@ -5,10 +5,16 @@
 ---
 Tracer-phase tests for the new CPS → IR Fragment → WAT pipeline.
 
-Runtime imports live at the reserved module root `rt.*` — the
+Runtime imports live at the reserved module root `rt/*` — the
 compiler-level ABI, distinct from the user-facing `std/*` root.
-Cross-fragment identifiers render as `$<module>:<name>` so local
+Cross-fragment identifiers render as `$<module>.<name>` so local
 and imported names never collide.
+
+Per-function signature types are declared locally in the fragment
+with the naming convention `$rt.Fn_<fnname>` — monomorphic-first,
+mirroring how type inference would start before generalising
+identical signatures into shared types. Reusable calling-
+convention signatures (`rt.Fn2`) stay as value-type imports.
 
 Each fixture grows by demand: re-bless when lowering reaches the
 right shape for a new CPS construct.
@@ -22,17 +28,17 @@ test 'ir: int literal', fn:
     (module
       (import "rt" "Num" (type $rt.Num (sub any)))
       (import "rt" "Fn2" (type $rt.Fn2 (sub func)))
-      (import "rt" "T_list_head_any" (type $rt.T_list_head_any (sub func)))
-      (import "rt" "T_list_nil" (type $rt.T_list_nil (sub func)))
-      (import "rt" "T_list_prepend_any" (type $rt.T_list_prepend_any (sub func)))
-      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.T_list_head_any)))
-      (import "rt" "list_nil" (func $rt.list_nil (type $rt.T_list_nil)))
-      (import "rt" "list_prepend_any" (func $rt.list_prepend_any (type $rt.T_list_prepend_any)))
+      (type $rt.Fn_list_head_any (func (param (ref null any)) (result (ref null any))))
+      (type $rt.Fn_list_nil (func (result (ref null any))))
+      (type $rt.Fn_list_prepend_any (func (param (ref null any) (ref null any)) (result (ref null any))))
+      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.Fn_list_head_any)))
+      (import "rt" "list_nil" (func $rt.list_nil (type $rt.Fn_list_nil)))
+      (import "rt" "list_prepend_any" (func $rt.list_prepend_any (type $rt.Fn_list_prepend_any)))
       (import "rt" "_apply" (func $rt._apply (type $rt.Fn2)))
-      (func $fink_module (type $rt.Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
+      (func $fink_module (type $rt.Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
         (local $v_1 (ref $rt.Num))
-        (local $args (ref any))
+        (local $args (ref null any))
         (local.set $v_0 (call $rt.list_head_any (local.get $_args)))
         (local.set $v_1 (struct.new $rt.Num (f64.const 42)))
         (local.set $args (call $rt.list_nil))
@@ -41,7 +47,7 @@ test 'ir: int literal', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BbYMAIIBAQACcgBUAKoBAA
+    ;; sm:BaANAIIBAQACcgBUAKoBAA
 
 
 test 'ir: int sum', fn:
@@ -51,12 +57,12 @@ test 'ir: int sum', fn:
     (module
       (import "rt" "Num" (type $rt.Num (sub any)))
       (import "rt" "Fn2" (type $rt.Fn2 (sub func)))
-      (import "rt" "T_list_head_any" (type $rt.T_list_head_any (sub func)))
-      (import "rt" "T_op_plus" (type $rt.T_op_plus (sub func)))
-      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.T_list_head_any)))
-      (import "rt" "op_plus" (func $rt.op_plus (type $rt.T_op_plus)))
-      (func $fink_module (type $rt.Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
+      (type $rt.Fn_list_head_any (func (param (ref null any)) (result (ref null any))))
+      (type $rt.Fn_op_plus (func (param (ref null any) (ref null any) (ref null any))))
+      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.Fn_list_head_any)))
+      (import "rt" "op_plus" (func $rt.op_plus (type $rt.Fn_op_plus)))
+      (func $fink_module (type $rt.Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
         (local $v_1 (ref $rt.Num))
         (local $v_2 (ref $rt.Num))
         (local.set $v_0 (call $rt.list_head_any (local.get $_args)))
@@ -66,4 +72,4 @@ test 'ir: int sum', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BOgIAIIBAQACcgEKA3QBCQg
+    ;; sm:BNIJAIIBAQACcgEKA3QBCQg

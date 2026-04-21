@@ -101,13 +101,13 @@ fn build_apply_path_body(
 
   func(frag, rt.fn2(),
     vec![
-      local(val_anyref(false), "_caps"),
-      local(val_anyref(false), "_args"),
+      local(val_anyref(true), "_caps"),
+      local(val_anyref(true), "_args"),
     ],
     vec![
-      local(val_anyref(false), "v_0"),
+      local(val_anyref(true), "v_0"),
       local(val_ref(rt.num(), false), "v_1"),
-      local(val_anyref(false), "args"),
+      local(val_anyref(true), "args"),
     ],
     vec![i_head, i_box, i_nil, i_cons, i_app],
     "fink_module",
@@ -142,11 +142,11 @@ fn build_op_plus_body(
 
   func(frag, rt.fn2(),
     vec![
-      local(val_anyref(false), "_caps"),
-      local(val_anyref(false), "_args"),
+      local(val_anyref(true), "_caps"),
+      local(val_anyref(true), "_args"),
     ],
     vec![
-      local(val_anyref(false), "v_0"),
+      local(val_anyref(true), "v_0"),
       local(val_ref(rt.num(), false), "v_1"),
       local(val_ref(rt.num(), false), "v_2"),
     ],
