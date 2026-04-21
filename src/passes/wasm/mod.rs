@@ -30,6 +30,7 @@ pub mod emit;
 pub mod fmt;
 pub mod ir;
 pub mod ir_fmt;
+pub mod ir_link;
 pub mod ir_lower;
 pub mod link;
 pub mod runtime_contract;
@@ -112,11 +113,16 @@ mod tests {
 
   fn ir_wat_inner(src: &str) -> String {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
-    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&frag);
+    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
+    // Single-module programs today: the link step is a passthrough,
+    // but routing through it keeps the tracer test surface honest
+    // when multi-fragment merge arrives.
+    let linked = super::ir_link::link(&[user_frag]);
+    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&linked);
     let b64 = sm.encode_base64url();
     format!("{}\n;; sm:{b64}", wat.trim())
   }
+
 
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk");

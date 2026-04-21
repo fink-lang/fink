@@ -63,21 +63,19 @@ use super::ir::*;
 // ──────────────────────────────────────────────────────────────────────
 
 /// A runtime-provided symbol the emitter might import. Variants are
-/// in canonical *display* order: value types first, signature types
-/// next, functions last.
+/// in canonical *display* order: value types first, functions last.
+///
+/// **No function-signature types here.** Only value types (with
+/// supertyping relationships that need shared identity across
+/// fragments) cross the ABI as type imports. Function signatures
+/// (e.g. the signature of `list_head_any`) are *local* types
+/// declared by the emitter at fragment level — WASM structural
+/// equivalence handles matching at link time.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Sym {
   // ── value types ────────────────────────────────────────────────
   Num,
-
-  // ── signature types ────────────────────────────────────────────
   Fn2,
-  FnAnyToAny,
-  FnNilToList,
-  FnPrependAny,
-  /// `(func (param (ref any) (ref any) (ref any)))` — two operands
-  /// plus a continuation. Used for binary numeric operators.
-  FnBinOp,
 
   // ── functions ──────────────────────────────────────────────────
   ListHeadAny,
@@ -129,13 +127,15 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
 // ──────────────────────────────────────────────────────────────────────
 
 /// Handles to every declared runtime-contract symbol. Populated by
-/// [`declare`]; read (not re-declared) by lowering.
+/// [`declare`]; read (not re-declared) by lowering. Signature types
+/// (`fn_any_to_any` etc.) are local types declared by `declare`,
+/// not imports — see [`Sym`] for the distinction.
 #[derive(Default)]
 pub struct Runtime {
-  // value types
+  // imported value types
   num: Option<TypeSym>,
-  // signature types
   fn2: Option<TypeSym>,
+  // locally-declared function signature types (structural)
   fn_any_to_any:  Option<TypeSym>,
   fn_nil_to_list: Option<TypeSym>,
   fn_prepend_any: Option<TypeSym>,
@@ -181,42 +181,69 @@ const RUNTIME_MOD: &str = "rt";
 /// imported even if the program doesn't mention it directly).
 pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   let mut rt = Runtime::default();
+  let needed = &usage.used;
 
-  // Expand to include transitive type deps that functions need.
-  let mut needed = usage.used.clone();
-  if needed.contains(&Sym::ListHeadAny)    { needed.insert(Sym::FnAnyToAny); }
-  if needed.contains(&Sym::ListNil)        { needed.insert(Sym::FnNilToList); }
-  if needed.contains(&Sym::ListPrependAny) { needed.insert(Sym::FnPrependAny); }
-  if needed.contains(&Sym::Apply)          { needed.insert(Sym::Fn2); }
-  if needed.contains(&Sym::OpPlus)         { needed.insert(Sym::FnBinOp); }
-
-  // Types first (BTreeSet iteration is in `Sym` declaration order,
-  // so value types come before signature types naturally).
-  for sym in &needed {
-    match sym {
-      Sym::Num          => rt.num           = Some(ty_import(frag, RUNTIME_MOD, "Num",          AbsHeap::Any)),
-      Sym::Fn2          => rt.fn2           = Some(ty_import(frag, RUNTIME_MOD, "Fn2",          AbsHeap::Func)),
-      Sym::FnAnyToAny   => rt.fn_any_to_any  = Some(ty_import(frag, RUNTIME_MOD, "FnAnyToAny",   AbsHeap::Func)),
-      Sym::FnNilToList  => rt.fn_nil_to_list = Some(ty_import(frag, RUNTIME_MOD, "FnNilToList",  AbsHeap::Func)),
-      Sym::FnPrependAny => rt.fn_prepend_any = Some(ty_import(frag, RUNTIME_MOD, "FnPrependAny", AbsHeap::Func)),
-      Sym::FnBinOp      => rt.fn_bin_op      = Some(ty_import(frag, RUNTIME_MOD, "FnBinOp",      AbsHeap::Func)),
-      _ => {}
-    }
+  // Value-type imports — `rt.Num` / `rt.Fn2`. These are canonical
+  // types declared in runtime/types.wat with shared identity across
+  // fragments; emit resolves them structurally against the runtime.
+  if needed.contains(&Sym::Num) || needed.contains(&Sym::OpPlus) {
+    rt.num = Some(ty_import(frag, RUNTIME_MOD, "Num", AbsHeap::Any));
+  }
+  if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
+    rt.fn2 = Some(ty_import(frag, RUNTIME_MOD, "Fn2", AbsHeap::Func));
   }
 
-  // Functions, in canonical order.
-  for sym in &needed {
-    match sym {
-      Sym::ListHeadAny    => rt.list_head_any    = Some(import_func(frag, rt.fn_any_to_any.unwrap(),  RUNTIME_MOD, "list_head_any")),
-      Sym::ListNil        => rt.list_nil         = Some(import_func(frag, rt.fn_nil_to_list.unwrap(), RUNTIME_MOD, "list_nil")),
-      Sym::ListPrependAny => rt.list_prepend_any = Some(import_func(frag, rt.fn_prepend_any.unwrap(), RUNTIME_MOD, "list_prepend_any")),
-      Sym::Apply          => rt.apply            = Some(import_func(frag, rt.fn2.unwrap(),            RUNTIME_MOD, "_apply")),
-      Sym::OpPlus         => rt.op_plus          = Some(import_func(frag, rt.fn_bin_op.unwrap(),      RUNTIME_MOD, "op_plus")),
-      _ => {}
-    }
+  // Function imports.
+  //
+  // Each `rt.<fn>` function import needs a type handle. Real WASM
+  // doesn't support type imports, but our IR does — we borrow the
+  // Phase 1 proposal notation and synthesise a type-import
+  // `rt.T_<fn>` alongside each function-import. At emit time these
+  // type imports are *dropped* (they're IR-only carriers — the
+  // concrete signature lives on the runtime side). `rt.<fn>`
+  // function imports then resolve to direct calls against runtime
+  // function indices; their referenced `rt.T_<fn>` types dissolve.
+  //
+  // This keeps the IR honest (no hardcoded structural signatures
+  // duplicated from the runtime) and keeps emit's rt-resolution
+  // uniform (all `rt.*` imports are IR-level names the linker
+  // resolves).
+  //
+  // For functions whose signature genuinely is `rt.Fn2` (currently
+  // `_apply`), we reuse the Fn2 import directly — no T_ carrier.
+  if needed.contains(&Sym::ListHeadAny) {
+    let sig = ty_import(frag, RUNTIME_MOD, "T_list_head_any", AbsHeap::Func);
+    rt.fn_any_to_any = Some(sig);
+    rt.list_head_any = Some(import_func(frag, sig, RUNTIME_MOD, "list_head_any"));
+  }
+  if needed.contains(&Sym::ListNil) {
+    let sig = ty_import(frag, RUNTIME_MOD, "T_list_nil", AbsHeap::Func);
+    rt.fn_nil_to_list = Some(sig);
+    rt.list_nil = Some(import_func(frag, sig, RUNTIME_MOD, "list_nil"));
+  }
+  if needed.contains(&Sym::ListPrependAny) {
+    let sig = ty_import(frag, RUNTIME_MOD, "T_list_prepend_any", AbsHeap::Func);
+    rt.fn_prepend_any = Some(sig);
+    rt.list_prepend_any = Some(import_func(frag, sig, RUNTIME_MOD, "list_prepend_any"));
+  }
+  if needed.contains(&Sym::Apply) {
+    // `_apply` genuinely has the Fn2 shape — reuse the Fn2 import.
+    rt.apply = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"), RUNTIME_MOD, "_apply"));
+  }
+  if needed.contains(&Sym::OpPlus) {
+    let sig = ty_import(frag, RUNTIME_MOD, "T_op_plus", AbsHeap::Func);
+    rt.fn_bin_op = Some(sig);
+    rt.op_plus = Some(import_func(frag, sig, RUNTIME_MOD, "op_plus"));
   }
 
   rt
+}
+
+/// Fn2 is required by every fink_module definition. Without a
+/// dedicated marker we always declare it when the scan added any
+/// bring-up helpers.
+fn always_need_fn2(usage: &RuntimeUsage) -> bool {
+  usage.has(Sym::ListHeadAny) || usage.has(Sym::Apply)
 }
 
 // ──────────────────────────────────────────────────────────────────────

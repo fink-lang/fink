@@ -22,12 +22,12 @@ test 'ir: int literal', fn:
     (module
       (import "rt" "Num" (type $rt.Num (sub any)))
       (import "rt" "Fn2" (type $rt.Fn2 (sub func)))
-      (import "rt" "FnAnyToAny" (type $rt.FnAnyToAny (sub func)))
-      (import "rt" "FnNilToList" (type $rt.FnNilToList (sub func)))
-      (import "rt" "FnPrependAny" (type $rt.FnPrependAny (sub func)))
-      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.FnAnyToAny)))
-      (import "rt" "list_nil" (func $rt.list_nil (type $rt.FnNilToList)))
-      (import "rt" "list_prepend_any" (func $rt.list_prepend_any (type $rt.FnPrependAny)))
+      (import "rt" "T_list_head_any" (type $rt.T_list_head_any (sub func)))
+      (import "rt" "T_list_nil" (type $rt.T_list_nil (sub func)))
+      (import "rt" "T_list_prepend_any" (type $rt.T_list_prepend_any (sub func)))
+      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.T_list_head_any)))
+      (import "rt" "list_nil" (func $rt.list_nil (type $rt.T_list_nil)))
+      (import "rt" "list_prepend_any" (func $rt.list_prepend_any (type $rt.T_list_prepend_any)))
       (import "rt" "_apply" (func $rt._apply (type $rt.Fn2)))
       (func $fink_module (type $rt.Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_0 (ref any))
@@ -41,7 +41,7 @@ test 'ir: int literal', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BfoLAIIBAQACcgBUAKoBAA
+    ;; sm:BbYMAIIBAQACcgBUAKoBAA
 
 
 test 'ir: int sum', fn:
@@ -51,10 +51,10 @@ test 'ir: int sum', fn:
     (module
       (import "rt" "Num" (type $rt.Num (sub any)))
       (import "rt" "Fn2" (type $rt.Fn2 (sub func)))
-      (import "rt" "FnAnyToAny" (type $rt.FnAnyToAny (sub func)))
-      (import "rt" "FnBinOp" (type $rt.FnBinOp (sub func)))
-      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.FnAnyToAny)))
-      (import "rt" "op_plus" (func $rt.op_plus (type $rt.FnBinOp)))
+      (import "rt" "T_list_head_any" (type $rt.T_list_head_any (sub func)))
+      (import "rt" "T_op_plus" (type $rt.T_op_plus (sub func)))
+      (import "rt" "list_head_any" (func $rt.list_head_any (type $rt.T_list_head_any)))
+      (import "rt" "op_plus" (func $rt.op_plus (type $rt.T_op_plus)))
       (func $fink_module (type $rt.Fn2) (param $_caps (ref any)) (param $_args (ref any))
         (local $v_0 (ref any))
         (local $v_1 (ref $rt.Num))
@@ -66,4 +66,4 @@ test 'ir: int sum', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BL4IAIIBAQACcgEKA3QBCQg
+    ;; sm:BOgIAIIBAQACcgEKA3QBCQg
