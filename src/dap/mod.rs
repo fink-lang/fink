@@ -320,7 +320,7 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
       if let Some(frame) = frames.first()
         && let Ok(Some((func_idx, wasm_pc))) = frame.wasm_function_index_and_pc(&mut store)
       {
-        pc = wasm_pc;
+        pc = wasm_pc.raw();
         func_name = format!("func[{}]", func_idx.as_u32());
       }
       Some(StoppedFrame { func_name, pc })
@@ -436,7 +436,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
       edit.single_step(true).ok();
     } else {
       for m in &marks {
-        edit.add_breakpoint(&module, m.wasm_pc).ok();
+        edit.add_breakpoint(&module, wasmtime::ModulePC::new(m.wasm_pc)).ok();
       }
     }
   }
