@@ -14,7 +14,11 @@ Every time a ƒink module looks "dynamic" — mutual recursion, operator overloa
 
 ## 3. Effects
 
-An **effect context** is a value threaded through execution, carrying registered impls and any other state that changes meaning for downstream computation. It is implicit at the source level — ƒink code never names or passes it; the compiler threads it where needed. Consuming a context — reading from it, resolving a protocol against it, passing it onward unchanged — is pure. Pure computation over immutable values, nothing special.
+An **effect context** is a value threaded through execution, carrying whatever state changes meaning for downstream computation — host capabilities, user-context installations, scheduler state, mutual-rec scopes, lazy-state slots. At the source level it is **entirely invisible**: ƒink code never names it, never declares a parameter for it, never installs it. Code reads as ordinary applicative expressions.
+
+The CPS lowering makes it **entirely explicit**: every effectful function's actual signature takes a context argument and its continuation takes a potentially-new context. `read_file "foo.txt"` at source is really `read_file("foo.txt", ctx, k)` at the impl level, with the continuation invoked as `k(bytes, ctx')`. An iterator whose impl needs state never exposes that state in source code — the iterator's state lives in the context, step operations produce a new context with the advanced state. Same mechanism for file positions, scheduler state, lazy thunks, anything. Consuming a context — reading from it, passing it onward unchanged — is pure.
+
+Registered protocol impls *conceptually* belong in the context, but operationally most of them never appear there. With static information the compiler resolves a protocol use to a direct call; with partial information it compiles to a closed set of statically-enumerated cases; with none it emits a call into a polymorphic dispatcher (like the ones in `operators.wat`). Each of these is a compiled-in dispatch, not a runtime lookup. The runtime context only carries what can't be baked in.
 
 Lexical scope (which names are bound where in the source) is a separate thing. Scope is a compile-time construct about name visibility; the effect context is a runtime value about what impls are registered, what the host has supplied, and similar state that can't be resolved statically. The two meet at mutual recursion: the one place lexical scope itself is effectful, because admitting forward refs requires producing a new context in which both names are resolvable.
 
@@ -62,7 +66,13 @@ reads as a pattern match: `op_plus` is the type-guard, `T1, T2` are types being 
 
 ### 4.2 Dispatch
 
-A protocol use (e.g. `a + b`) resolves against the current context's registered impls. When the compiler can see which impl applies at the use site, resolution happens at compile time and the emitted call is a direct function call — no effect. When it can't (types not known, or impls registered in a narrower context), resolution happens at run time via the threaded effect context.
+A protocol use (e.g. `a + b`) resolves against the impls in scope. The compiler uses whatever information it has:
+
+- **Fully known** — emit a direct call to the specific impl. Pure.
+- **Narrowed to a small closed set** — emit a static switch over those candidates. Pure; the dispatch is compiled in, not looked up.
+- **Unknown** — emit a call into a polymorphic dispatcher (like `op_plus` in `operators.wat`). The dispatcher inspects the value and routes. Still a compiled-in routine, not a runtime context lookup.
+
+None of these materialise a dictionary of impls in the runtime context. Dispatch happens via direct calls, static enumerations, or polymorphic dispatchers — all three are ordinary function calls, not context queries.
 
 ### 4.3 Bindings, mutual recursion, imports
 
@@ -101,14 +111,53 @@ Notable current gaps:
 
 - Type-guards in patterns are not yet implemented. Without them, the registration syntax in 4.1 cannot be written in ƒink source. The compiler hard-codes the currently-possible resolutions (operator dispatch on known types, container ops on known containers, etc.) in WAT instead of consulting a registry populated by ƒink-level registrations. The model is unchanged; the realisation is narrower than the model allows.
 - The module-lifecycle handshake in section 5 is not staged in today's implementation. The host calls a single fixed entry; runtime and stdlib impls are wired in at link time rather than through host-driven registration.
+- User-level contexts (section 7) are designed but syntax and semantics are not settled. Today the only handlers are compiler-internal (impl registration baked into the lowering, the scheduler, the host-root registration).
 
 Each implementation file documents its own deviation from the concept. For the compiler's backend realisation story — how pure vs. effectful computations lower to WASM, how scopes and registries are realised, where compile-time resolution happens — see [src/passes/wasm/](../src/passes/wasm/).
 
-## 7. Glossary
+## 7. Related work
+
+The mechanism described here is **algebraic effects**. At the concept level it's a type-level construct: a function's signature reflects whether its evaluation changes the implicit context, and each protocol its body may use. The current ƒink compiler realises the mechanism via a CPS calling convention with an implicit context argument, but that is an impl choice — a different compiler could lower it differently without changing the language model.
+
+The three defining pieces of algebraic effects are present:
+
+- **Operations.** Protocol uses (`a + b`, `log x`, `yield`) resolve against the current context. They are operations in the Koka/Frank/OCaml-5 sense — their meaning is given by what's registered, not by declaration-site semantics.
+- **Handlers.** Any ƒink construct that produces a new context is a handler: impl registration, mutual-recursive binding, host capability registration, user-defined context blocks (see below), and the scheduler (which parks and resumes continuations at `yield`).
+- **Resumable continuations.** At the concept level, an effectful call receives an explicit rest-of-computation that the handler can resume, run multiple times, or discard. The current compiler represents this directly via CPS: every call site has an explicit continuation value, the scheduler parks and resumes continuations, `yield` is a language-level suspend point. A non-CPS compiler would represent the same continuations differently.
+
+**User contexts** (a planned feature, design not yet settled) will make scoped handler installation source-visible — the only place context scoping shows up in ƒink source. The exact syntax and semantics are open; the sketch below is only to convey the shape, not to specify the feature:
+
+```fink
+# sketch, not final syntax
+foo = context fn ...:
+  ...
+
+spam = fn ...:
+  # does something that requires the foo context
+
+with foo 1, 2:
+  spam 3, 4
+```
+
+Something like `foo` would be declared as a context (a handler). A `with` form would install it for the duration of a block; code inside the block (like `spam`) would have the handler available; outside the block it would not. This is the construct that makes the "scoped override" feature — present in Koka, OCaml 5, Unison — available at the ƒink source level.
+
+**Compared to other languages with algebraic effects:**
+
+- **Koka, OCaml 5, Unison, Frank** — same concept-level semantics; different surface. They have dedicated `effect` declarations, `handler` blocks, and `perform` / `resume` primitives. ƒink unifies these: protocols declared as ordinary typed values play the role of Koka's named effect operations; constructs that produce a new context play the role of handlers; the implicit context threading plays the role of `perform`/`resume`.
+- **Effect-row typing.** Koka and Unison annotate every function with the effects it may perform. ƒink's model has the same type-level notion. The compiler already infers effect information at protocol granularity — every `+` compiles to a call into the operator dispatcher in `operators.wat`, every protocol use routes through its dispatcher, and these routings are known at compile time. What's missing is exposing that information in the source as effect rows on function signatures. An impl gap pending type inference, not a model difference.
+- **Handler syntax.** Koka has `with handler { ... } { ... }` as a dedicated form. ƒink's planned user-context form (the `with foo 1, 2: ...` sketch above) fills the same role; other ƒink handlers (impl registration, mutual-rec binding, host-root setup) are implicit in their constructs.
+
+**Not to be confused with:**
+
+- **Haskell's `IO` / `State` monads or F#'s computation expressions** — those are monadic encodings of effects, not algebraic effects. ƒink's model is operationally closer to Koka than to Haskell.
+- **Typeclass dictionary passing (Haskell, Rust traits).** ƒink does not dictionary-pass at runtime. A protocol use compiles to a direct call (when the impl is fully known), a closed set of statically-enumerated cases (when the impl is narrowed to a few candidates), or a call into a polymorphic dispatcher like the ones in `operators.wat` (when it isn't). None of these materialise a dictionary in the runtime context. Haskell/Rust, by contrast, pass explicit dictionary arguments at every polymorphic call site.
+- **Dynamic scope / implicit parameters (Racket parameters, Common Lisp specials, Scala `given`).** Closer than Haskell, but in those systems the implicit parameter is named at least once at source — declared, installed, or referenced explicitly. ƒink's implicit is *entirely invisible* at source: a `read_file "foo.txt"` has no visible parameter for the file system capability, an iterator has no visible state, a `yield` has no visible scheduler handle. Only the planned user-contexts feature surfaces the implicit. Those systems also typically lack continuation capture; ƒink's CPS-with-handlers makes `yield` + scheduler and other control-flow-shaped handlers first-class.
+
+## 8. Glossary
 
 - **Pure** — a ƒink function whose evaluation does not change the implicit context.
 - **Effect** — a ƒink function whose evaluation produces a new effect context. The mechanism for all context-dependent behaviour.
-- **Effect context** — a runtime value threaded through execution carrying registered impls and other state that affects downstream resolution. Implicit at the source level — ƒink code never names or passes it. Consuming a context is pure; producing a new one is an effect.
+- **Effect context** — a runtime value threaded through execution carrying state that affects downstream computation (host capabilities, scheduler state, user-context installations, mutual-rec scopes, lazy-state slots). Implicit at the source level — ƒink code never names or passes it. Protocol impls conceptually belong in the context but operationally most never appear there; dispatch compiles to direct calls, static enumerations, or polymorphic dispatchers, not runtime context lookups. Consuming a context is pure; producing a new one is an effect.
 - **Lexical scope** — a compile-time construct: the map from names to values visible at a point in source. Static in the common case; only effectful for mutual recursion, where admitting forward refs requires producing a new context.
 - **Protocol** — a typed name, declared as a regular value. Used as the guard in impl-registration patterns.
 - **Impl** — a function registered for a protocol against a pattern of types.
