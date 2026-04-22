@@ -40,6 +40,8 @@ with db_ctx:
   result = foo ()
 ```
 
+Concept: see [execution-model.md](execution-model.md) §7.
+
 ## Missing arithmetic operators
 
 `**` (power) and `/%` (divmod) are documented but not yet wired through the runtime. Calls emit but execution will fail until the runtime ops land. The other arithmetic operators all work today.

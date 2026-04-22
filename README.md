@@ -46,6 +46,7 @@ fink run hello.fnk
 ## Documentation
 
 - [docs/language.md](docs/language.md) — the language reference.
+- [docs/execution-model.md](docs/execution-model.md) — how a ƒink program runs: values, effects, module lifecycle.
 - [docs/debugging.md](docs/debugging.md) — running ƒink under a debugger.
 - [docs/roadmap.md](docs/roadmap.md) — designed features not yet reachable.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — build, test, contribute.

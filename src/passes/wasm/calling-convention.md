@@ -87,3 +87,7 @@ enum CpsFnKind {
 ```
 
 Both compile to the same `$Fn2`. The distinction only affects how continuations are routed at emit time: `CpsFunction` callees expect a continuation appended to their args list; `CpsClosure` callees don't.
+
+## See also
+
+- [../../../docs/execution-model.md](../../../docs/execution-model.md) — why every function takes implicit context and continuation arguments (the language-level model this convention realises).

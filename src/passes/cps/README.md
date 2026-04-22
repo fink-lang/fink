@@ -13,6 +13,7 @@ Lowers the desugared AST into a continuation-passing-style IR. Every intermediat
 - [transform-contract.md](transform-contract.md) — invariants every AST → CPS or CPS → CPS pass must uphold.
 - [ir-design.md](ir-design.md) — IR shape, metadata strategy (property graphs keyed by `CpsId`), name/ref model, pattern-match lowering.
 - [node-unification.md](node-unification.md) — why `Val` and `Expr` share a single `CpsId` space via a generic `Node<K>` shell.
+- [../../../docs/execution-model.md](../../../docs/execution-model.md) — the language-level concept CPS realises (effects, implicit context, continuations as handler resumptions).
 
 ## Entry point
 
