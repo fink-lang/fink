@@ -9,6 +9,7 @@ Name resolution over the AST. Builds the scope graph, resolves every identifier 
 ## Design
 
 - [name-resolution-design.md](name-resolution-design.md) — scope kinds (`Module`, `Fn`, `Arm`), the `ScopeResult` shape, `RefKind::{Ref, FwdRef, SelfRef, Unresolved}` classification with `depth`, and how mutual recursion works via module-scope pre-registration + `bind_to_cps` handoff to CPS.
+- [../../../docs/execution-model.md](../../../docs/execution-model.md) — why mutual recursion is the one case where lexical scope itself is effectful (§3).
 
 ## Entry point
 
