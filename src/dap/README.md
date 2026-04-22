@@ -42,3 +42,4 @@ Every `.fnk` expression that the [debug_marks](../passes/debug_marks/mod.rs) pas
 - [../passes/debug_marks/mod.rs](../passes/debug_marks/mod.rs) — the pass that picks which CPS nodes are step-stops.
 - [../passes/wasm/sourcemap.rs](../passes/wasm/sourcemap.rs) — `WasmMapping`, the legacy PC → source fallback when a stop doesn't match a mark.
 - [../runner/wasmtime_runner.rs](../runner/wasmtime_runner.rs) — the production runner whose bootstrap the DAP mirrors.
+- [../../docs/execution-model.md](../../docs/execution-model.md) — why every ƒink call is a tail call (CPS realisation of effects).

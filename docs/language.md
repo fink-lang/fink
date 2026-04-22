@@ -2,7 +2,7 @@
 
 ƒink is a small, functional, indentation-based language. Values are immutable, types are inferred, IO goes through channels.
 
-Features not yet reachable in the compiler live in [roadmap.md](roadmap.md).
+Features not yet reachable in the compiler live in [roadmap.md](roadmap.md). For the execution model — what effects are, how modules run, how mutual recursion and IO fit — see [execution-model.md](execution-model.md).
 
 ---
 
@@ -696,6 +696,7 @@ Use `;` for a strong inline separator when you need several expressions on one l
 
 ## Further reading
 
+- [execution-model.md](execution-model.md) — how a ƒink program runs.
 - [debugging.md](debugging.md) — running ƒink under a debugger.
 - [roadmap.md](roadmap.md) — designed features not yet reachable.
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) — build, test, contribute.
