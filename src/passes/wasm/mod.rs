@@ -125,6 +125,41 @@ mod tests {
   }
 
 
+  /// Run the IR pipeline end-to-end and validate the emitted module.
+  ///
+  /// This is the tracer bullet for the new pipeline: the output is
+  /// real, spec-valid WASM bytes with runtime-ir.wasm spliced in and
+  /// all user imports resolved to concrete runtime indices.
+  #[test]
+  fn ir_emit_produces_valid_wasm_for_int_literal() {
+    let src = "42";
+    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
+    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
+    let linked = super::ir_link::link(&[user_frag]);
+    let bytes = super::ir_emit::emit(&linked);
+
+    let mut validator = wasmparser::Validator::new_with_features(
+      wasmparser::WasmFeatures::all(),
+    );
+    validator.validate_all(&bytes)
+      .unwrap_or_else(|e| panic!("ir_emit(42) validation failed: {e}"));
+  }
+
+  #[test]
+  fn ir_emit_produces_valid_wasm_for_int_sum() {
+    let src = "42 + 123";
+    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
+    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
+    let linked = super::ir_link::link(&[user_frag]);
+    let bytes = super::ir_emit::emit(&linked);
+
+    let mut validator = wasmparser::Validator::new_with_features(
+      wasmparser::WasmFeatures::all(),
+    );
+    validator.validate_all(&bytes)
+      .unwrap_or_else(|e| panic!("ir_emit(42+123) validation failed: {e}"));
+  }
+
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk");

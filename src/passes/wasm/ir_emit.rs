@@ -1,32 +1,33 @@
-//! IR → WASM bytes.
+//! IR → WASM bytes, with runtime-ir.wasm spliced in.
 //!
-//! Takes a *linked* [`Fragment`] and produces a user-side WASM
-//! module. The result is handed to the existing static linker
-//! (`wasm::link::link`) alongside `runtime.wasm` to produce the
-//! final standalone binary.
+//! Takes a *linked* user [`Fragment`] and produces a final standalone
+//! WASM binary by splicing it onto the merged runtime bundle
+//! (`runtime-ir.wasm`). The runtime provides the complete type
+//! vocabulary, all the rt/std/interop functions, env imports, globals,
+//! data, and element segments. The user fragment contributes its own
+//! function signatures, functions, memory, and exports.
 //!
-//! # The `rt/*` ABI
+//! # Algorithm
 //!
-//! CPS/lower owns the runtime ABI — the emitter **dictates** the
-//! function signatures; the runtime WAT is an *implementation*.
-//! Signatures are defined in `runtime_contract.rs` as locally-
-//! declared function types named `<url>:Fn_<fnname>`
-//! (`$std/list.wat:Fn_head_any`, `$rt/protocols.wat:Fn_op_plus`, …).
-//! WASM structural equivalence matches them against the runtime's
-//! signatures at link time.
-//!
-//! Only **value-type imports** (`rt/types.wat:Num`,
-//! `rt/types.wat:Fn2`) are genuine IR type imports. Their identity
-//! is shared across the ABI — a user `struct.new $rt/types.wat:Num`
-//! must point at runtime's `$Num` type index. Emit resolves them
-//! by looking up `types.wasm` (the build-time canonical-types
-//! artefact).
-//!
-//! Every function import becomes a real WASM import against
-//! `"<fragment-url>"` + bare field name, referencing the
-//! emitter-declared signature type. At link-time the merged
-//! runtime exports qualified names (`<url>:<name>`) which
-//! `ir_emit` looks up.
+//! 1. Parse runtime-ir.wasm with wasmparser. Build a lookup table from
+//!    qualified export name (`<fragment-url>:<name>`, e.g.
+//!    `"std/list.wat:args_head"`) to concrete index + kind.
+//! 2. Walk the user fragment's imports. For each `ImportKey { module,
+//!    name }`, compose the qualified key `"{module}:{name}"` and look
+//!    it up in the runtime's export table. Record `TypeSym → runtime
+//!    type index` and `FuncSym → runtime func index` remaps. Imports
+//!    are resolved: no import entries get emitted for them.
+//! 3. Emit the merged module via wasm-encoder:
+//!    - type section: runtime types + user's locally-declared types
+//!    - import section: runtime's env imports (host-facing) only
+//!    - function section: runtime func sigs + user's local func sigs
+//!    - memory section: user's memory (runtime has none today)
+//!    - global section: runtime globals (passthrough)
+//!    - export section: runtime exports (passthrough) + user exports
+//!    - element section: runtime elements (passthrough)
+//!    - code section: runtime code bodies (raw) + user code bodies
+//!    - data section: user data (runtime has none today)
+//!    - name section: runtime names (passthrough, minus ones shifted)
 //!
 //! # Scope (tracer phase)
 //!
@@ -35,69 +36,193 @@
 //!
 //! # Non-scope
 //!
-//! * DWARF / sourcemap emission into the final binary. The Fragment
-//!   already carries origins; threading them into WASM custom
-//!   sections is follow-up.
-//! * Multi-fragment merge (`ir_link` still single-fragment).
+//! * DWARF / sourcemap emission into the final binary.
+//! * Multi-fragment merge (`ir_link` still single-fragment passthrough).
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use wasm_encoder::{
   AbstractHeapType, CodeSection, CompositeInnerType, CompositeType, ExportKind,
-  ExportSection, FieldType, FuncType, Function, FunctionSection, HeapType,
-  ImportSection, Instruction, MemorySection, MemoryType, Module as WasmModule,
-  RefType, StorageType, SubType, StructType, TypeSection, ValType as WEValType,
+  ExportSection, FieldType, FuncType, Function, FunctionSection,
+  HeapType, ImportSection, Instruction, MemorySection, MemoryType,
+  Module as WasmModule, RefType, StorageType, StructType, SubType, TypeSection,
+  ValType as WEValType,
 };
 
 use super::ir::*;
 
-/// Real WASM module name for the compiler's runtime ABI. The IR
-/// uses `"rt"` for readability; at emit time we translate to
-/// `"@fink/runtime"` to match the existing linker's contract.
-const RT_IR: &str = "rt";
-const RT_WASM: &str = "@fink/runtime";
-
 // ──────────────────────────────────────────────────────────────────
-// Runtime type + function dictionaries — sourced from runtime.wasm
-// and types.wasm at build time.
+// Runtime bundle — compiled at build time, spliced at emit time.
 // ──────────────────────────────────────────────────────────────────
 
-static CANONICAL_TYPES_WASM: &[u8] =
-  include_bytes!(concat!(env!("OUT_DIR"), "/types.wasm"));
+static RUNTIME_IR_WASM: &[u8] =
+  include_bytes!(concat!(env!("OUT_DIR"), "/runtime-ir.wasm"));
 
-/// Parsed canonical value-types rec group, plus a name→idx map for
-/// resolving `rt.<TypeName>` value-type imports.
-struct CanonTypes {
-  rec_group: Vec<SubType>,
-  by_name: HashMap<String, u32>,
+fn runtime() -> &'static Runtime {
+  static CELL: OnceLock<Runtime> = OnceLock::new();
+  CELL.get_or_init(|| parse_runtime(RUNTIME_IR_WASM))
 }
 
-fn canon_types() -> &'static CanonTypes {
-  static CELL: OnceLock<CanonTypes> = OnceLock::new();
-  CELL.get_or_init(parse_canon_types)
+/// Parsed runtime bundle — everything ir_emit needs to splice.
+///
+/// Indices in the vectors mirror the runtime's own WASM indices in
+/// each namespace (types, funcs, ...), so the runtime's exports,
+/// code, and element sections can be forwarded verbatim.
+struct Runtime {
+  /// One entry per rec group in the order they appear in the
+  /// runtime's type section. Singleton types are stored as
+  /// one-element groups too — the encoder emits them as either an
+  /// explicit `(rec ...)` or a standalone type based on `explicit`.
+  type_groups: Vec<TypeGroup>,
+  /// Total number of SubTypes across all groups.
+  type_count: u32,
+  /// Map from the WAT `$name` (from the custom name section's type
+  /// subsection) to the type's module index. Used for resolving user
+  /// type imports via (module, name) → name → index.
+  type_by_name: HashMap<String, u32>,
+  /// Host-facing imports from module `"env"`. Forwarded verbatim.
+  env_imports: Vec<EnvImport>,
+  /// Type indices for each local function (not including imports).
+  /// Indexed by `local_func_idx`, which equals `global_func_idx -
+  /// import_count`.
+  local_func_sigs: Vec<u32>,
+  /// Total function count = imports + local funcs. New user funcs
+  /// get appended after this.
+  func_count_total: u32,
+  /// Map from qualified export name → (kind, index). Key format is
+  /// `"<fragment-url>:<name>"` for cross-fragment exports, bare for
+  /// interop exports. ir_emit composes the same key from
+  /// user fragment `ImportKey` entries.
+  export_by_name: HashMap<String, (ExportKind, u32)>,
+  /// Exports to forward verbatim into the merged module's export
+  /// section.
+  exports_to_forward: Vec<(String, ExportKind, u32)>,
+  /// Raw bytes of the runtime's global section body (including the
+  /// leading count LEB128). `None` if no global section.
+  globals_body: Option<Vec<u8>>,
+  /// Raw bytes of the runtime's element section body (including
+  /// count LEB128). Same shape.
+  elements_body: Option<Vec<u8>>,
+  /// Raw bytes of each local function's body as they appear in the
+  /// code section (ready for `CodeSection::raw`).
+  code_bodies_raw: Vec<Vec<u8>>,
 }
 
-fn parse_canon_types() -> CanonTypes {
-  let mut rec_group = Vec::new();
-  let mut type_names: HashMap<u32, String> = HashMap::new();
+struct TypeGroup {
+  types: Vec<SubType>,
+  explicit: bool,
+}
 
-  for payload in wasmparser::Parser::new(0).parse_all(CANONICAL_TYPES_WASM) {
-    match payload.expect("invalid canonical types WASM") {
+struct EnvImport {
+  module: String,
+  name: String,
+  entity: wasm_encoder::EntityType,
+}
+
+fn parse_runtime(bytes: &[u8]) -> Runtime {
+  let mut type_groups: Vec<TypeGroup> = Vec::new();
+  let mut type_count: u32 = 0;
+  let mut type_by_name: HashMap<String, u32> = HashMap::new();
+  let mut env_imports: Vec<EnvImport> = Vec::new();
+  let mut local_func_sigs: Vec<u32> = Vec::new();
+  let mut import_count: u32 = 0;
+  let mut exports_all: Vec<(String, ExportKind, u32)> = Vec::new();
+  let mut export_by_name: HashMap<String, (ExportKind, u32)> = HashMap::new();
+  let mut globals_body: Option<Vec<u8>> = None;
+  let mut elements_body: Option<Vec<u8>> = None;
+  let mut code_bodies_raw: Vec<Vec<u8>> = Vec::new();
+
+  for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+    let payload = payload.expect("runtime-ir.wasm: parse error");
+    match payload {
       wasmparser::Payload::TypeSection(reader) => {
         for rg in reader.into_iter() {
-          let rg = rg.expect("invalid rec group in canonical types");
-          for st in rg.into_types() {
-            rec_group.push(convert_subtype(&st));
+          let rg = rg.expect("runtime-ir.wasm: invalid rec group");
+          let explicit = rg.is_explicit_rec_group();
+          let types: Vec<SubType> = rg.into_types().map(|st| convert_subtype(&st)).collect();
+          type_count += types.len() as u32;
+          type_groups.push(TypeGroup { types, explicit });
+        }
+      }
+      wasmparser::Payload::ImportSection(reader) => {
+        for group in reader {
+          let group = group.expect("runtime-ir.wasm: invalid import");
+          match group {
+            wasmparser::Imports::Single(_, imp) => {
+              let entity = match imp.ty {
+                wasmparser::TypeRef::Func(idx) => wasm_encoder::EntityType::Function(idx),
+                _ => panic!("runtime-ir.wasm: non-func import not yet supported"),
+              };
+              assert_eq!(imp.module, "env",
+                "runtime-ir.wasm: unexpected non-env import `{}`.`{}`", imp.module, imp.name);
+              env_imports.push(EnvImport {
+                module: imp.module.to_string(),
+                name: imp.name.to_string(),
+                entity,
+              });
+              import_count += 1;
+            }
+            wasmparser::Imports::Compact1 { module: mod_name, items } => {
+              for item in items.into_iter().flatten() {
+                let entity = match item.ty {
+                  wasmparser::TypeRef::Func(idx) => wasm_encoder::EntityType::Function(idx),
+                  _ => panic!("runtime-ir.wasm: non-func import not yet supported"),
+                };
+                assert_eq!(mod_name, "env",
+                  "runtime-ir.wasm: unexpected non-env import `{}`.`{}`", mod_name, item.name);
+                env_imports.push(EnvImport {
+                  module: mod_name.to_string(),
+                  name: item.name.to_string(),
+                  entity,
+                });
+                import_count += 1;
+              }
+            }
+            _ => panic!("runtime-ir.wasm: unsupported import group variant"),
           }
         }
+      }
+      wasmparser::Payload::FunctionSection(reader) => {
+        for sig in reader {
+          local_func_sigs.push(sig.expect("runtime-ir.wasm: invalid func sig"));
+        }
+      }
+      wasmparser::Payload::GlobalSection(reader) => {
+        if reader.count() > 0 {
+          globals_body = Some(bytes[reader.range()].to_vec());
+        }
+      }
+      wasmparser::Payload::ExportSection(reader) => {
+        for exp in reader {
+          let exp = exp.expect("runtime-ir.wasm: invalid export");
+          let kind = match exp.kind {
+            wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => ExportKind::Func,
+            wasmparser::ExternalKind::Table => ExportKind::Table,
+            wasmparser::ExternalKind::Memory => ExportKind::Memory,
+            wasmparser::ExternalKind::Global => ExportKind::Global,
+            wasmparser::ExternalKind::Tag => ExportKind::Tag,
+          };
+          let name = exp.name.to_string();
+          exports_all.push((name.clone(), kind, exp.index));
+          export_by_name.insert(name, (kind, exp.index));
+        }
+      }
+      wasmparser::Payload::ElementSection(reader) => {
+        if reader.count() > 0 {
+          elements_body = Some(bytes[reader.range()].to_vec());
+        }
+      }
+      wasmparser::Payload::CodeSectionEntry(body) => {
+        let range = body.range();
+        code_bodies_raw.push(bytes[range].to_vec());
       }
       wasmparser::Payload::CustomSection(reader) => {
         if let wasmparser::KnownCustom::Name(name_reader) = reader.as_known() {
           for name in name_reader.into_iter().flatten() {
             if let wasmparser::Name::Type(map) = name {
               for n in map.into_iter().flatten() {
-                type_names.insert(n.index, n.name.to_string());
+                type_by_name.insert(n.name.to_string(), n.index);
               }
             }
           }
@@ -107,18 +232,22 @@ fn parse_canon_types() -> CanonTypes {
     }
   }
 
-  let by_name = type_names.into_iter()
-    .map(|(idx, name)| (name, idx))
-    .collect();
-
-  CanonTypes { rec_group, by_name }
+  Runtime {
+    type_groups,
+    type_count,
+    type_by_name,
+    env_imports,
+    local_func_sigs,
+    func_count_total: import_count + code_bodies_raw.len() as u32,
+    export_by_name,
+    exports_to_forward: exports_all,
+    globals_body,
+    elements_body,
+    code_bodies_raw,
+  }
 }
 
-// ── wasmparser → wasm-encoder type converters (local copies) ──────
-//
-// Keeping these local avoids coupling to `emit.rs`'s internals.
-// Only used to parse the build-time canonical-types artefact; once
-// that's read, the rest of emit walks the Fragment directly.
+// ── wasmparser → wasm-encoder type converters ──────────────────────
 
 fn convert_subtype(st: &wasmparser::SubType) -> SubType {
   SubType {
@@ -216,117 +345,111 @@ fn convert_field(f: &wasmparser::FieldType) -> FieldType {
 // Emit
 // ──────────────────────────────────────────────────────────────────
 
-/// Emit a linked user Fragment as WASM bytes, ready to be handed to
-/// the existing static linker alongside `runtime.wasm`.
+/// Emit a linked user Fragment as a final standalone WASM binary,
+/// with runtime-ir.wasm spliced in as the prefix.
 pub fn emit(frag: &Fragment) -> Vec<u8> {
-  let canon = canon_types();
+  let rt = runtime();
 
-  // ── plan type section ─────────────────────────────────────────
+
+  // ── resolve user type imports + plan local-type indices ──────
   //
-  // Start with the canonical rec group from `types.wasm` — the
-  // shared type table that both user and runtime fragments agree
-  // on. Then append any **locally-declared** types from the
-  // fragment (function-signature types with the `rt.` ABI prefix,
-  // plus any future user-declared types).
-
-  let mut type_sec = TypeSection::new();
-  type_sec.ty().rec(canon.rec_group.clone());
-  let canon_count = canon.rec_group.len() as u32;
-
-  // Remap `TypeSym → final wasm type index`.
-  //
-  // * Value-type imports (`rt.Num`, `rt.Fn2`): resolve against
-  //   canonical types by name.
-  // * Locally-declared types (structural): append to the type
-  //   section after the canonical rec group.
+  // Each user `TypeSym` maps to a concrete final type index:
+  // - Imported: resolved against runtime's export table by
+  //   composed key `<module>:<name>`. The runtime's type exports
+  //   (value-types that cross the ABI) are registered in
+  //   `export_by_name` with kind Global/Func/etc — actually types
+  //   aren't directly exportable in stock WASM, so we use the
+  //   type-name custom section for this resolution.
+  // - Local: appended to the type section after runtime's types.
 
   let mut type_remap: Vec<u32> = Vec::with_capacity(frag.types.len());
-  let mut extra_type_count: u32 = 0;
-
-  for ty in &frag.types {
-    let final_idx = match &ty.import {
-      Some(ImportKey { module, name }) if module == RT_IR => {
-        // Value-type import — look up in canonical-types dict.
-        *canon.by_name.get(name).unwrap_or_else(|| {
-          panic!("ir_emit: unknown rt value-type import `{}`", name)
-        })
+  let mut user_local_types: Vec<(TypeSym, &TypeDecl)> = Vec::new();
+  for (i, ty) in frag.types.iter().enumerate() {
+    match &ty.import {
+      Some(ImportKey { module, name }) => {
+        // Compose qualified key and look up as a type by name.
+        let qualified = format!("{module}:{name}");
+        let idx = rt.type_by_name.get(&qualified).copied()
+          .or_else(|| rt.type_by_name.get(name.as_str()).copied())
+          .unwrap_or_else(|| panic!(
+            "ir_emit: unknown runtime type import `{}`. Not found as `{}` or `{}` in type-name table",
+            qualified, qualified, name));
+        type_remap.push(idx);
       }
-      Some(other) => panic!(
-        "ir_emit: non-rt type import not yet supported: {}/{}",
-        other.module, other.name
-      ),
       None => {
-        // Locally-declared type — append structurally.
-        let idx = canon_count + extra_type_count;
-        extra_type_count += 1;
-        match &ty.kind {
-          TypeKind::Func { params, results } => {
-            let we_params: Vec<WEValType> = params.iter().map(|v| val_from_ir(v, &type_remap)).collect();
-            let we_results: Vec<WEValType> = results.iter().map(|v| val_from_ir(v, &type_remap)).collect();
-            type_sec.ty().function(we_params, we_results);
-          }
-          _ => panic!("ir_emit: only locally-declared func types supported so far"),
-        }
-        idx
+        // Placeholder — filled in after we know how many we have.
+        type_remap.push(u32::MAX);
+        user_local_types.push((TypeSym(i as u32), ty));
       }
-    };
-    type_remap.push(final_idx);
+    }
+  }
+  for (seq, (sym, _)) in user_local_types.iter().enumerate() {
+    type_remap[sym.0 as usize] = rt.type_count + seq as u32;
   }
 
-  // ── plan function imports + local funcs ──────────────────────
-  //
-  // Imports come first in WASM's function index space. Walk once
-  // to enumerate imports (assign low indices) and local funcs
-  // (assign indices after the imports).
+  // ── resolve user function imports + plan local-func indices ──
+
+  let mut func_remap: Vec<u32> = Vec::with_capacity(frag.funcs.len());
+  let mut user_local_funcs: Vec<(FuncSym, &FuncDecl)> = Vec::new();
+  for (i, f) in frag.funcs.iter().enumerate() {
+    match &f.import {
+      Some(ImportKey { module, name }) => {
+        let qualified = format!("{module}:{name}");
+        let (kind, idx) = rt.export_by_name.get(&qualified)
+          .or_else(|| rt.export_by_name.get(name.as_str()))
+          .unwrap_or_else(|| panic!(
+            "ir_emit: unknown runtime func import `{}`. Not found in runtime export table",
+            qualified))
+          .clone();
+        assert_eq!(kind, ExportKind::Func,
+          "ir_emit: expected func export for `{}`, got {:?}", qualified, kind);
+        func_remap.push(idx);
+      }
+      None => {
+        func_remap.push(u32::MAX);
+        user_local_funcs.push((FuncSym(i as u32), f));
+      }
+    }
+  }
+  for (seq, (sym, _)) in user_local_funcs.iter().enumerate() {
+    func_remap[sym.0 as usize] = rt.func_count_total + seq as u32;
+  }
+
+  // ── emit sections ─────────────────────────────────────────────
+
+  let mut type_sec = TypeSection::new();
+  for group in &rt.type_groups {
+    if group.explicit || group.types.len() > 1 {
+      type_sec.ty().rec(group.types.iter().cloned());
+    } else {
+      type_sec.ty().subtype(&group.types[0]);
+    }
+  }
+  for (_, ty) in &user_local_types {
+    match &ty.kind {
+      TypeKind::Func { params, results } => {
+        let we_params: Vec<WEValType> = params.iter().map(|v| val_from_ir(v, &type_remap)).collect();
+        let we_results: Vec<WEValType> = results.iter().map(|v| val_from_ir(v, &type_remap)).collect();
+        type_sec.ty().function(we_params, we_results);
+      }
+      _ => panic!("ir_emit: only locally-declared func types supported (got {:?})", ty.kind),
+    }
+  }
 
   let mut import_sec = ImportSection::new();
-  let mut func_remap: Vec<u32> = Vec::with_capacity(frag.funcs.len());
-  let mut import_count: u32 = 0;
-  let mut local_func_sigs: Vec<u32> = Vec::new();
-  let mut local_func_slots: Vec<usize> = Vec::new();
-
-  for (i, f) in frag.funcs.iter().enumerate() {
-    if let Some(ImportKey { module, name }) = &f.import {
-      assert!(module == RT_IR, "ir_emit: non-rt func import not supported yet");
-      let sig_ty = type_remap[f.sig.0 as usize];
-      import_sec.import(RT_WASM, name, wasm_encoder::EntityType::Function(sig_ty));
-      func_remap.push(import_count);
-      import_count += 1;
-      let _ = i;
-    } else {
-      func_remap.push(u32::MAX); // fill in the second pass
-    }
+  for imp in &rt.env_imports {
+    import_sec.import(&imp.module, &imp.name, imp.entity);
   }
 
-  for (i, f) in frag.funcs.iter().enumerate() {
-    if f.import.is_none() {
-      let final_idx = import_count + local_func_sigs.len() as u32;
-      func_remap[i] = final_idx;
-      local_func_sigs.push(type_remap[f.sig.0 as usize]);
-      local_func_slots.push(i);
-    }
-  }
-
-  // ── function section (declares types of local funcs) ──────────
   let mut func_sec = FunctionSection::new();
-  for sig in &local_func_sigs {
-    func_sec.function(*sig);
+  for &sig in &rt.local_func_sigs {
+    func_sec.function(sig);
+  }
+  for (_, f) in &user_local_funcs {
+    func_sec.function(type_remap[f.sig.0 as usize]);
   }
 
-  // ── code section (bodies of local funcs) ──────────────────────
-  let mut code_sec = CodeSection::new();
-  for &slot in &local_func_slots {
-    let f = &frag.funcs[slot];
-    let func = emit_func(frag, f, &type_remap, &func_remap);
-    code_sec.function(&func);
-  }
-
-  // ── memory section ────────────────────────────────────────────
-  //
-  // Runtime.wasm declares no memory of its own — every fink
-  // program's user fragment brings the sole memory. One-page
-  // minimum covers string intern data; wasm-opt / linker will
-  // grow as needed.
+  // Memory: runtime has none; user fragment brings one page.
   let mut mem_sec = MemorySection::new();
   mem_sec.memory(MemoryType {
     minimum: 1,
@@ -336,24 +459,60 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     page_size_log2: None,
   });
 
-  // ── export section ────────────────────────────────────────────
+  // Globals: splice runtime's global section body as-is (it already
+  // includes its count LEB128 prefix). The runtime's global
+  // init_exprs use struct.new / array.new_fixed which aren't
+  // constructible via wasm-encoder's ConstExpr API.
+  let globals_section_body = rt.globals_body.as_deref();
+
+  // Exports: forward runtime's, then append user's (remapped).
   let mut export_sec = ExportSection::new();
+  for (name, kind, idx) in &rt.exports_to_forward {
+    export_sec.export(name, *kind, *idx);
+  }
   for (i, f) in frag.funcs.iter().enumerate() {
     if let Some(name) = &f.export {
       export_sec.export(name, ExportKind::Func, func_remap[i]);
     }
   }
 
-  // ── finalise module ───────────────────────────────────────────
+  // Elements: raw-splice same as globals.
+  let elements_section_body = rt.elements_body.as_deref();
+
+  // Code: runtime's bodies raw, then user's bodies encoded.
+  let mut code_sec = CodeSection::new();
+  for body in &rt.code_bodies_raw {
+    code_sec.raw(body);
+  }
+  for (_, f) in &user_local_funcs {
+    let func = emit_func(frag, f, &type_remap, &func_remap);
+    code_sec.function(&func);
+  }
+
+  // Data: user fragment may have strings; runtime has none today.
+  // (Data sections built from Fragment.data would go here.)
+
+  // ── finalise module ──────────────────────────────────────────
+  // WASM section IDs — from the spec.
+  const SECTION_GLOBAL: u8 = 6;
+  const SECTION_ELEMENT: u8 = 9;
+
   let mut module = WasmModule::new();
   module.section(&type_sec);
   module.section(&import_sec);
   module.section(&func_sec);
   module.section(&mem_sec);
+  if let Some(body) = globals_section_body {
+    module.section(&wasm_encoder::RawSection { id: SECTION_GLOBAL, data: body });
+  }
   module.section(&export_sec);
+  if let Some(body) = elements_section_body {
+    module.section(&wasm_encoder::RawSection { id: SECTION_ELEMENT, data: body });
+  }
   module.section(&code_sec);
   module.finish()
 }
+
 
 // ──────────────────────────────────────────────────────────────────
 // Function body emission
@@ -365,9 +524,6 @@ fn emit_func(
   type_remap: &[u32],
   func_remap: &[u32],
 ) -> Function {
-  // Locals declaration: wasm-encoder wants (count, val_type) groups.
-  // One entry per local — don't coalesce consecutive same-type
-  // locals. wasm-opt will tidy up later if it matters.
   let mut locals: Vec<(u32, WEValType)> = Vec::new();
   for l in &f.locals {
     locals.push((1, val_from_ir(&l.ty, type_remap)));
@@ -394,7 +550,6 @@ fn emit_instr(
     }
     InstrKind::GlobalSet { sym, src } => {
       emit_operand(func, src, type_remap, func_remap);
-      // TODO: global remap. Not needed for tracer programs.
       func.instruction(&Instruction::GlobalSet(sym.0));
     }
     InstrKind::StructNew { ty, fields, into } => {
@@ -419,7 +574,6 @@ fn emit_instr(
       }
       func.instruction(&Instruction::ReturnCall(func_remap[target.0 as usize]));
     }
-    // Grow as fixtures demand:
     InstrKind::RefNull { .. }
     | InstrKind::RefNullConcrete { .. }
     | InstrKind::RefI31 { .. }
@@ -446,7 +600,6 @@ fn emit_operand(
     Operand::F64(v) => { func.instruction(&Instruction::F64Const((*v).into())); }
     Operand::Local(idx) => { func.instruction(&Instruction::LocalGet(idx.0)); }
     Operand::Global(sym) => {
-      // TODO: global remap. Not needed for tracer programs.
       func.instruction(&Instruction::GlobalGet(sym.0));
     }
     Operand::RefFunc(fsym) => {
