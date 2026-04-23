@@ -57,7 +57,7 @@ fn main() {
         "src/runtime/interop-rust.wat",
     ];
 
-    let merged_wat = merge_runtime(&type_defs, &runtime_modules, old_tree_strip);
+    let merged_wat = merge_runtime(&type_defs, &runtime_modules, old_tree_strip, false);
     let runtime_wasm = wat_crate::parse_str(&merged_wat)
         .unwrap_or_else(|e| panic!("failed to compile merged runtime: {e}"));
     std::fs::write(format!("{out_dir}/runtime.wasm"), &runtime_wasm)
@@ -92,7 +92,7 @@ fn main() {
         "src/passes/wasm/interop/rust.wat",
     ];
 
-    let merged_ir_wat = merge_runtime(&type_defs_ir, &runtime_modules_ir, new_tree_strip);
+    let merged_ir_wat = merge_runtime(&type_defs_ir, &runtime_modules_ir, new_tree_strip, true);
     let runtime_ir_wasm = wat_crate::parse_str(&merged_ir_wat)
         .unwrap_or_else(|e| panic!("failed to compile merged runtime-ir: {e}"));
     std::fs::write(format!("{out_dir}/runtime-ir.wasm"), &runtime_ir_wasm)
@@ -103,15 +103,32 @@ fn main() {
 /// (via the `strip` predicate), hoist external imports (`@fink/user` /
 /// `env`), collect bodies. Dedup hoisted imports, prepend type defs,
 /// wrap in `(module ...)`.
-fn merge_runtime(type_defs: &str, paths: &[&str], strip: fn(&str) -> bool) -> String {
+///
+/// When `qualify_exports` is true, every `(export "NAME"` in the body
+/// is rewritten to `(export "<fragment-url>:NAME"`, where the
+/// fragment-url is the path with the `src/passes/wasm/` prefix
+/// stripped (so `src/passes/wasm/rt/protocols.wat` becomes the URL
+/// `rt/protocols.wat`). This produces unique cross-fragment names in
+/// the merged export table and makes `<url>:<name>` lookup from
+/// ir_emit unambiguous. Host-facing interop exports are NOT qualified
+/// (the host side of the ABI expects bare names).
+fn merge_runtime(
+    type_defs: &str,
+    paths: &[&str],
+    strip: fn(&str) -> bool,
+    qualify_exports: bool,
+) -> String {
     let mut imports: Vec<String> = Vec::new();
     let mut merged_body = String::new();
     for path in paths {
         println!("cargo::rerun-if-changed={path}");
         let wat = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
-        let (module_imports, body) = extract_module_parts(&wat, strip);
+        let (module_imports, mut body) = extract_module_parts(&wat, strip);
         imports.extend(module_imports);
+        if qualify_exports {
+            body = qualify_export_names(&body, path);
+        }
         merged_body.push_str(&format!("\n  ;; --- {} ---\n", path));
         merged_body.push_str(&body);
     }
@@ -119,6 +136,23 @@ fn merge_runtime(type_defs: &str, paths: &[&str], strip: fn(&str) -> bool) -> St
     imports.dedup();
     let imports_str = imports.join("\n");
     format!("(module\n{type_defs}\n{imports_str}\n{merged_body})\n")
+}
+
+/// Rewrite every `(export "NAME"` in `body` to `(export "<url>:NAME"`,
+/// where `<url>` is `path` with the `src/passes/wasm/` prefix stripped.
+/// Exception: `interop/*.wat` exports stay bare — they're host-facing
+/// and the host expects unqualified names.
+fn qualify_export_names(body: &str, path: &str) -> String {
+    let url = path.strip_prefix("src/passes/wasm/").unwrap_or(path);
+    if url.starts_with("interop/") {
+        return body.to_string();
+    }
+    // Mechanical string rewrite: every `(export "` becomes
+    // `(export "<url>:`. Assumes no `(export "..."` appears inside
+    // a comment or string literal in the source — holds for our WAT.
+    let from = "(export \"";
+    let to = format!("(export \"{url}:");
+    body.replace(from, &to)
 }
 
 /// Old-tree strip predicate: drop @fink/runtime/* imports (resolved
