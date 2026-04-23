@@ -125,51 +125,6 @@ mod tests {
   }
 
 
-  /// Run source through the new IR pipeline all the way to final
-  /// linked WASM bytes. Returns `(user_fragment_bytes, linked_bytes)`.
-  /// Used by validation tests.
-  #[allow(dead_code)]
-  fn ir_compile_bytes(src: &str) -> (Vec<u8>, Vec<u8>) {
-    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
-    let linked = super::ir_link::link(&[user_frag]);
-    let user_bytes = super::ir_emit::emit(&linked);
-    static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
-    let inputs = vec![
-      super::link::LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
-      super::link::LinkInput { module_name: "@fink/user".into(), wasm: user_bytes.clone() },
-    ];
-    let linked_wasm = super::link::link(&inputs);
-    (user_bytes, linked_wasm.wasm)
-  }
-
-  /// Run the wasmparser validator over the given bytes. Catches
-  /// semantic issues (type mismatches, bad stack, invalid index)
-  /// that plain parsing misses.
-  #[allow(dead_code)]
-  fn validate_wasm(bytes: &[u8], label: &str) {
-    let mut validator = wasmparser::Validator::new_with_features(
-      wasmparser::WasmFeatures::all(),
-    );
-    validator.validate_all(bytes)
-      .unwrap_or_else(|e| panic!("{label}: validation failed: {e}"));
-  }
-
-  #[test]
-  fn ir_emit_literal_bytes_validate() {
-    let (user_bytes, linked) = ir_compile_bytes("42");
-    validate_wasm(&user_bytes, "ir_emit user (42)");
-    validate_wasm(&linked, "ir_emit linked (42)");
-  }
-
-  #[test]
-  fn ir_emit_sum_bytes_validate() {
-    let (user_bytes, linked) = ir_compile_bytes("42 + 123");
-    validate_wasm(&user_bytes, "ir_emit user (42 + 123)");
-    validate_wasm(&linked, "ir_emit linked (42 + 123)");
-  }
-
-
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk");

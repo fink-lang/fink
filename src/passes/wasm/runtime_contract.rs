@@ -162,18 +162,32 @@ impl Runtime {
 // Declare
 // ──────────────────────────────────────────────────────────────────────
 
-/// Reserved module root for the compiler-level runtime ABI.
+/// Per-`Sym` fragment URL + export name.
 ///
-/// Every fink-emitted fragment imports from this module; any runtime
-/// backend (WAT today, WASI-adapter tomorrow, browser tomorrow+1) must
-/// export the set of names the emitter depends on.
+/// The emitter emits `(import "<url>" "<name>" ...)` — after merge
+/// (via build.rs textual splice today, ir_link tomorrow), the runtime
+/// bundle exports every referenced name qualified as `<url>:<name>`
+/// in its export table. `ir_emit` composes the same string to look up
+/// the concrete function/type index in `runtime-ir.wasm` and rewrite
+/// the user fragment's call sites.
 ///
 /// Reserved roots:
-/// * `rt/*`   — compiler-level ABI (this one). Not user-importable.
+/// * `rt/*`   — compiler-level ABI. Not user-importable.
 /// * `std/*`  — user-facing stdlib. Built on top of `rt`.
+/// * `interop/*` — host bridge. Target-selected at link time.
 /// * `./*`    — user's relative imports.
 /// * `https://...`, `reg:*` — future third-party packages.
-const RUNTIME_MOD: &str = "rt";
+fn import_key(sym: Sym) -> (&'static str, &'static str) {
+  match sym {
+    Sym::Num             => ("rt/types.wat",     "Num"),
+    Sym::Fn2             => ("rt/types.wat",     "Fn2"),
+    Sym::Apply           => ("rt/apply.wat",     "_apply"),
+    Sym::OpPlus          => ("rt/protocols.wat", "op_plus"),
+    Sym::ListHeadAny     => ("std/list.wat",     "head_any"),
+    Sym::ListNil         => ("std/list.wat",     "nil"),
+    Sym::ListPrependAny  => ("std/list.wat",     "prepend_any"),
+  }
+}
 
 /// Declare every symbol in `usage` as an import on `frag`, in the
 /// canonical ordering given by `Sym`'s variant order. Pulls in any
@@ -183,15 +197,17 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   let mut rt = Runtime::default();
   let needed = &usage.used;
 
-  // Value-type imports — `rt.Num` / `rt.Fn2`. These have shared
+  // Value-type imports — `rt/types.wat:Num` / `rt/types.wat:Fn2`. Shared
   // identity across the ABI: user struct.new instances must match
   // runtime's concrete type indices. Emit resolves them against
   // `types.wasm` at emit time.
   if needed.contains(&Sym::Num) || needed.contains(&Sym::OpPlus) {
-    rt.num = Some(ty_import(frag, RUNTIME_MOD, "Num", AbsHeap::Any));
+    let (m, n) = import_key(Sym::Num);
+    rt.num = Some(ty_import(frag, m, n, AbsHeap::Any));
   }
   if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
-    rt.fn2 = Some(ty_import(frag, RUNTIME_MOD, "Fn2", AbsHeap::Func));
+    let (m, n) = import_key(Sym::Fn2);
+    rt.fn2 = Some(ty_import(frag, m, n, AbsHeap::Func));
   }
 
   // Function-signature types and function imports.
@@ -200,56 +216,60 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // dictates the function signatures, the runtime WAT implements
   // them. That means signatures are **definitional** at this layer,
   // not derived from anywhere external. Each signature is declared
-  // as a local type in the fragment with the `rt.` naming prefix
+  // as a local type in the fragment with the `<url>:Fn_` prefix
   // (so the ABI boundary is visible in the rendered WAT) and used
   // to type each function import. WASM validates by structural
   // equivalence at link time, so the user fragment's locally-
-  // declared `$rt.FnAnyToAny` matches the runtime's own signature
-  // of `list_head_any` by shape.
+  // declared `$std/list.wat:Fn_head_any` matches the runtime's own
+  // signature of `head_any` by shape.
   let anyref_n = val_anyref(true);
 
   // Name convention: each function gets its own signature type
-  // `$rt.Fn_<fnname>` — monomorphic-first, mirrors how type
+  // `$<url>:Fn_<fnname>` — monomorphic-first, mirrors how type
   // inference would start before generalisation. Reusable
-  // calling-convention signatures (currently `rt.Fn2`) stay as
-  // value-type imports.
+  // calling-convention signatures (currently `rt/types.wat:Fn2`)
+  // stay as value-type imports.
   if needed.contains(&Sym::ListHeadAny) {
     let sig = ty_func(frag,
       vec![anyref_n.clone()],
       vec![anyref_n.clone()],
-      "rt.Fn_list_head_any");
+      "std/list.wat:Fn_head_any");
     rt.fn_any_to_any = Some(sig);
-    rt.list_head_any = Some(import_func(frag, sig, RUNTIME_MOD, "list_head_any"));
+    let (m, n) = import_key(Sym::ListHeadAny);
+    rt.list_head_any = Some(import_func(frag, sig, m, n));
   }
   if needed.contains(&Sym::ListNil) {
     let sig = ty_func(frag,
       vec![],
       vec![anyref_n.clone()],
-      "rt.Fn_list_nil");
+      "std/list.wat:Fn_nil");
     rt.fn_nil_to_list = Some(sig);
-    rt.list_nil = Some(import_func(frag, sig, RUNTIME_MOD, "list_nil"));
+    let (m, n) = import_key(Sym::ListNil);
+    rt.list_nil = Some(import_func(frag, sig, m, n));
   }
   if needed.contains(&Sym::ListPrependAny) {
     let sig = ty_func(frag,
       vec![anyref_n.clone(), anyref_n.clone()],
       vec![anyref_n.clone()],
-      "rt.Fn_list_prepend_any");
+      "std/list.wat:Fn_prepend_any");
     rt.fn_prepend_any = Some(sig);
-    rt.list_prepend_any = Some(import_func(frag, sig, RUNTIME_MOD, "list_prepend_any"));
+    let (m, n) = import_key(Sym::ListPrependAny);
+    rt.list_prepend_any = Some(import_func(frag, sig, m, n));
   }
   if needed.contains(&Sym::Apply) {
-    // `_apply`'s signature is genuinely `rt.Fn2` — reuse the
-    // shared-identity type import directly.
-    rt.apply = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"),
-                                RUNTIME_MOD, "_apply"));
+    // `_apply`'s signature is genuinely `rt/types.wat:Fn2` — reuse
+    // the shared-identity type import directly.
+    let (m, n) = import_key(Sym::Apply);
+    rt.apply = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"), m, n));
   }
   if needed.contains(&Sym::OpPlus) {
     let sig = ty_func(frag,
       vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
       vec![],
-      "rt.Fn_op_plus");
+      "rt/protocols.wat:Fn_op_plus");
     rt.fn_bin_op = Some(sig);
-    rt.op_plus = Some(import_func(frag, sig, RUNTIME_MOD, "op_plus"));
+    let (m, n) = import_key(Sym::OpPlus);
+    rt.op_plus = Some(import_func(frag, sig, m, n));
   }
 
   rt

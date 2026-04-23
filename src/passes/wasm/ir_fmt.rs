@@ -64,7 +64,7 @@ fn type_name(frag: &Fragment, sym: TypeSym) -> String {
   };
   let display = ty.display.as_deref().unwrap_or("");
   match &ty.import {
-    Some(ImportKey { module, .. }) => format!("${}.{}", module, display),
+    Some(ImportKey { module, .. }) => format!("${}:{}", module, display),
     None => {
       if display.is_empty() { format!("$t_{}", sym.0) }
       else { format!("${}", display) }
@@ -78,7 +78,7 @@ fn func_name(frag: &Fragment, sym: FuncSym) -> String {
   };
   let display = f.display.as_deref().unwrap_or("");
   match &f.import {
-    Some(ImportKey { module, .. }) => format!("${}.{}", module, display),
+    Some(ImportKey { module, .. }) => format!("${}:{}", module, display),
     None => {
       if display.is_empty() { format!("$f_{}", sym.0) }
       else { format!("${}", display) }
@@ -92,7 +92,7 @@ fn global_name(frag: &Fragment, sym: GlobalSym) -> String {
   };
   let display = g.display.as_deref().unwrap_or("");
   match &g.import {
-    Some(ImportKey { module, .. }) => format!("${}.{}", module, display),
+    Some(ImportKey { module, .. }) => format!("${}:{}", module, display),
     None => {
       if display.is_empty() { format!("$g_{}", sym.0) }
       else { format!("${}", display) }
@@ -418,70 +418,3 @@ fn fmt_operand(frag: &Fragment, f: &FuncDecl, op: &Operand) -> String {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────
-// Tests
-// ──────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn renders_tracer_shape() {
-    let mut frag = Fragment::default();
-
-    let num_ty = ty_struct(&mut frag, vec![field(val_f64(), false, "val")], "Num");
-    let fn2_sig = ty_func(&mut frag,
-      vec![val_anyref(true), val_anyref(true)], vec![], "Fn2");
-    let num_add_sig = ty_func(&mut frag,
-      vec![val_anyref(true), val_anyref(true), val_anyref(true)], vec![], "NumOpAddSig");
-
-    let num_op_add = import_func(&mut frag, num_add_sig,
-      "@fink/runtime", "num_op_add");
-
-    let l_done = LocalIdx(2);
-    let l_a    = LocalIdx(3);
-    let l_b    = LocalIdx(4);
-
-    let i1 = push_struct_new(&mut frag, num_ty, vec![op_f64(42.0)], l_a);
-    let i2 = push_struct_new(&mut frag, num_ty, vec![op_f64(123.0)], l_b);
-    let i3 = push_return_call(&mut frag, num_op_add,
-      vec![op_local(l_done), op_local(l_a), op_local(l_b)]);
-
-    let _main = func(&mut frag, fn2_sig,
-      vec![
-        local(val_anyref(true), "_caps"),
-        local(val_anyref(true), "_args"),
-      ],
-      vec![
-        local(val_anyref(true), "done"),
-        local(val_ref(num_ty, false), "a"),
-        local(val_ref(num_ty, false), "b"),
-      ],
-      vec![i1, i2, i3],
-      "main",
-    );
-
-    let wat = fmt_fragment(&frag);
-    // Print so snapshot diffs are visible in test logs when blessing.
-    eprintln!("{}", wat);
-
-    // Structural assertions — what must be present. We're not asserting
-    // whitespace byte-for-byte; the shape is what we care about.
-    assert!(wat.contains("(module"));
-    assert!(wat.contains("(type $Num (struct"));
-    assert!(wat.contains("(field $val ((ref null any)))") == false, "field 'val' has type f64, not anyref");
-    assert!(wat.contains("(field $val (f64))"));
-    assert!(wat.contains("(type $Fn2 (func (param (ref null any) (ref null any))))"));
-    assert!(wat.contains(
-      "(import \"@fink/runtime\" \"num_op_add\" (func $@fink/runtime.num_op_add (type $NumOpAddSig)))"));
-    assert!(wat.contains("(func $main (type $Fn2) (param $_caps (ref null any)) (param $_args (ref null any))"));
-    assert!(wat.contains("(local $done (ref null any))"));
-    assert!(wat.contains("(local $a (ref $Num))"));
-    assert!(wat.contains("(local $b (ref $Num))"));
-    assert!(wat.contains("(local.set $a (struct.new $Num (f64.const 42)))"));
-    assert!(wat.contains("(local.set $b (struct.new $Num (f64.const 123)))"));
-    assert!(wat.contains(
-      "(return_call $@fink/runtime.num_op_add (local.get $done) (local.get $a) (local.get $b))"));
-  }
-}

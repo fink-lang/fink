@@ -10,20 +10,23 @@
 //! CPS/lower owns the runtime ABI — the emitter **dictates** the
 //! function signatures; the runtime WAT is an *implementation*.
 //! Signatures are defined in `runtime_contract.rs` as locally-
-//! declared function types with the `rt.` naming prefix
-//! (`$rt.FnAnyToAny`, `$rt.FnBinOp`, …). WASM structural
-//! equivalence matches them against the runtime's signatures at
-//! link time.
+//! declared function types named `<url>:Fn_<fnname>`
+//! (`$std/list.wat:Fn_head_any`, `$rt/protocols.wat:Fn_op_plus`, …).
+//! WASM structural equivalence matches them against the runtime's
+//! signatures at link time.
 //!
-//! Only **value-type imports** (`rt.Num`, `rt.Fn2`) are genuine IR
-//! type imports. Their identity is shared across the ABI — a user
-//! `struct.new $rt.Num` must point at runtime's `$Num` type index.
-//! Emit resolves them by looking up `types.wasm` (the build-time
-//! canonical-types artefact).
+//! Only **value-type imports** (`rt/types.wat:Num`,
+//! `rt/types.wat:Fn2`) are genuine IR type imports. Their identity
+//! is shared across the ABI — a user `struct.new $rt/types.wat:Num`
+//! must point at runtime's `$Num` type index. Emit resolves them
+//! by looking up `types.wasm` (the build-time canonical-types
+//! artefact).
 //!
-//! Every `rt.<fn>` function import becomes a real WASM import
-//! against `"@fink/runtime"`, referencing the emitter-declared
-//! signature type.
+//! Every function import becomes a real WASM import against
+//! `"<fragment-url>"` + bare field name, referencing the
+//! emitter-declared signature type. At link-time the merged
+//! runtime exports qualified names (`<url>:<name>`) which
+//! `ir_emit` looks up.
 //!
 //! # Scope (tracer phase)
 //!
