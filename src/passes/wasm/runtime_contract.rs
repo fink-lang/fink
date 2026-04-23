@@ -68,7 +68,7 @@ use super::ir::*;
 /// **No function-signature types here.** Only value types (with
 /// supertyping relationships that need shared identity across
 /// fragments) cross the ABI as type imports. Function signatures
-/// (e.g. the signature of `list_head_any`) are *local* types
+/// (e.g. the signature of `args_head`) are *local* types
 /// declared by the emitter at fragment level — WASM structural
 /// equivalence handles matching at link time.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -78,9 +78,9 @@ pub enum Sym {
   Fn2,
 
   // ── functions ──────────────────────────────────────────────────
-  ListHeadAny,
-  ListNil,
-  ListPrependAny,
+  ArgsHead,
+  ArgsEmpty,
+  ArgsPrepend,
   Apply,
   OpPlus,
 }
@@ -141,9 +141,9 @@ pub struct Runtime {
   fn_prepend_any: Option<TypeSym>,
   fn_bin_op:      Option<TypeSym>,
   // functions
-  list_head_any:    Option<FuncSym>,
-  list_nil:         Option<FuncSym>,
-  list_prepend_any: Option<FuncSym>,
+  args_head:    Option<FuncSym>,
+  args_empty:         Option<FuncSym>,
+  args_prepend: Option<FuncSym>,
   apply:            Option<FuncSym>,
   op_plus:          Option<FuncSym>,
 }
@@ -151,9 +151,9 @@ pub struct Runtime {
 impl Runtime {
   pub fn num(&self)              -> TypeSym { self.num.expect("rt: Num not declared") }
   pub fn fn2(&self)              -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
-  pub fn list_head_any(&self)    -> FuncSym { self.list_head_any.expect("rt: list_head_any not declared") }
-  pub fn list_nil(&self)         -> FuncSym { self.list_nil.expect("rt: list_nil not declared") }
-  pub fn list_prepend_any(&self) -> FuncSym { self.list_prepend_any.expect("rt: list_prepend_any not declared") }
+  pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
+  pub fn args_empty(&self)         -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
+  pub fn args_prepend(&self) -> FuncSym { self.args_prepend.expect("rt: args_prepend not declared") }
   pub fn apply(&self)            -> FuncSym { self.apply.expect("rt: _apply not declared") }
   pub fn op_plus(&self)          -> FuncSym { self.op_plus.expect("rt: op_plus not declared") }
 }
@@ -183,9 +183,9 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Fn2             => ("rt/types.wat",     "Fn2"),
     Sym::Apply           => ("rt/apply.wat",     "_apply"),
     Sym::OpPlus          => ("rt/protocols.wat", "op_plus"),
-    Sym::ListHeadAny     => ("std/list.wat",     "head_any"),
-    Sym::ListNil         => ("std/list.wat",     "nil"),
-    Sym::ListPrependAny  => ("std/list.wat",     "prepend_any"),
+    Sym::ArgsHead        => ("std/list.wat",     "args_head"),
+    Sym::ArgsEmpty       => ("std/list.wat",     "args_empty"),
+    Sym::ArgsPrepend     => ("std/list.wat",     "args_prepend"),
   }
 }
 
@@ -229,32 +229,32 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // inference would start before generalisation. Reusable
   // calling-convention signatures (currently `rt/types.wat:Fn2`)
   // stay as value-type imports.
-  if needed.contains(&Sym::ListHeadAny) {
+  if needed.contains(&Sym::ArgsHead) {
     let sig = ty_func(frag,
       vec![anyref_n.clone()],
       vec![anyref_n.clone()],
-      "std/list.wat:Fn_head_any");
+      "std/list.wat:Fn_args_head");
     rt.fn_any_to_any = Some(sig);
-    let (m, n) = import_key(Sym::ListHeadAny);
-    rt.list_head_any = Some(import_func(frag, sig, m, n));
+    let (m, n) = import_key(Sym::ArgsHead);
+    rt.args_head = Some(import_func(frag, sig, m, n));
   }
-  if needed.contains(&Sym::ListNil) {
+  if needed.contains(&Sym::ArgsEmpty) {
     let sig = ty_func(frag,
       vec![],
       vec![anyref_n.clone()],
-      "std/list.wat:Fn_nil");
+      "std/list.wat:Fn_args_empty");
     rt.fn_nil_to_list = Some(sig);
-    let (m, n) = import_key(Sym::ListNil);
-    rt.list_nil = Some(import_func(frag, sig, m, n));
+    let (m, n) = import_key(Sym::ArgsEmpty);
+    rt.args_empty = Some(import_func(frag, sig, m, n));
   }
-  if needed.contains(&Sym::ListPrependAny) {
+  if needed.contains(&Sym::ArgsPrepend) {
     let sig = ty_func(frag,
       vec![anyref_n.clone(), anyref_n.clone()],
       vec![anyref_n.clone()],
-      "std/list.wat:Fn_prepend_any");
+      "std/list.wat:Fn_args_prepend");
     rt.fn_prepend_any = Some(sig);
-    let (m, n) = import_key(Sym::ListPrependAny);
-    rt.list_prepend_any = Some(import_func(frag, sig, m, n));
+    let (m, n) = import_key(Sym::ArgsPrepend);
+    rt.args_prepend = Some(import_func(frag, sig, m, n));
   }
   if needed.contains(&Sym::Apply) {
     // `_apply`'s signature is genuinely `rt/types.wat:Fn2` — reuse
@@ -279,7 +279,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
 /// dedicated marker we always declare it when the scan added any
 /// bring-up helpers.
 fn always_need_fn2(usage: &RuntimeUsage) -> bool {
-  usage.has(Sym::ListHeadAny) || usage.has(Sym::Apply)
+  usage.has(Sym::ArgsHead) || usage.has(Sym::Apply)
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -301,20 +301,20 @@ pub fn scan(cps: &CpsResult) -> RuntimeUsage {
   let mut usage = RuntimeUsage::default();
 
   // Every well-formed module is a `Fn2`-shaped `fink_module`, so
-  // that type is always needed. `list_head_any` is always needed
+  // that type is always needed. `args_head` is always needed
   // because bring-up always pops `done` out of `_args`.
   usage.mark(Sym::Fn2);
-  usage.mark(Sym::ListHeadAny);
+  usage.mark(Sym::ArgsHead);
 
-  // Bring-up further uses `_apply` (with `list_nil` + `list_prepend_any`)
+  // Bring-up further uses `_apply` (with `args_empty` + `args_prepend`)
   // only when the tail call is a user value or continuation — i.e.
   // when the fink_module body's tail is `App(ContRef(_), ...)`. A
   // direct-style tail call into a builtin (e.g. `op_plus`) skips the
   // apply mechanism and doesn't need those symbols. Introspect the
   // body to decide.
   if tail_uses_apply(&cps.root) {
-    usage.mark(Sym::ListNil);
-    usage.mark(Sym::ListPrependAny);
+    usage.mark(Sym::ArgsEmpty);
+    usage.mark(Sym::ArgsPrepend);
     usage.mark(Sym::Apply);
   }
 

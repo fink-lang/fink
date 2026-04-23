@@ -59,13 +59,15 @@
 
   ;; -- Empty ----------------------------------------------------------
 
-  ;; Create an empty list.
-  (func $list_nil (export "list_nil") (result (ref $Nil))
+  ;; Create an empty list — args-list constructor (calling convention).
+  ;; Semantic home: rt/apply.wat as args_empty. Lives here for now
+  ;; because the args-list realization is cons-cells; to be moved.
+  (func $list_nil (export "args_empty") (result (ref $Nil))
     (struct.new $Nil)
   )
 
-  ;; Predicate: is this list empty?
-  (func $list_op_empty (export "list_op_empty")
+  ;; Predicate: is this list empty? ($List impl of op_empty protocol.)
+  (func $list_op_empty (export "op_empty")
     (param $val (ref null any)) (result i32)
     (ref.test (ref $Nil) (local.get $val))
   )
@@ -73,8 +75,8 @@
 
   ;; -- Cons -----------------------------------------------------------
 
-  ;; Prepend a value to a list. O(1).
-  (func $list_prepend (export "list_prepend")
+  ;; Prepend a value to a list. O(1). Typed-internal.
+  (func $list_prepend
     (param $head (ref any))
     (param $tail (ref $List))
     (result (ref $Cons))
@@ -85,31 +87,31 @@
 
   ;; -- Head / Tail ----------------------------------------------------
 
-  ;; Get the first element. Traps on empty list.
-  (func $list_head (export "list_head")
+  ;; Get the first element. Traps on empty list. Typed-internal.
+  (func $list_head
     (param $list (ref $Cons))
     (result (ref any))
 
     (struct.get $Cons $head (local.get $list))
   )
 
-  ;; Unboxed wrappers for the emitter — take/return (ref null any), cast internally.
-  ;; The emitter doesn't know about $Cons/$Nil, so these bridge the type gap.
-  (func $list_head_any (export "list_head_any")
+  ;; Args-protocol primitives (calling convention) — unboxed, take/return
+  ;; (ref null any), cast internally. Semantic home: rt/apply.wat.
+  (func $list_head_any (export "args_head")
     (param $list (ref null any))
     (result (ref null any))
 
     (struct.get $Cons $head (ref.cast (ref $Cons) (local.get $list)))
   )
 
-  (func $list_tail_any (export "list_tail_any")
+  (func $list_tail_any (export "args_tail")
     (param $list (ref null any))
     (result (ref null any))
 
     (struct.get $Cons $tail (ref.cast (ref $Cons) (local.get $list)))
   )
 
-  (func $list_prepend_any (export "list_prepend_any")
+  (func $list_prepend_any (export "args_prepend")
     (param $head (ref null any))
     (param $tail (ref null any))
     (result (ref null any))
@@ -119,7 +121,7 @@
       (ref.cast (ref $List) (local.get $tail)))
   )
 
-  (func $list_concat_any (export "list_concat_any")
+  (func $list_concat_any (export "args_concat")
     (param $a (ref null any))
     (param $b (ref null any))
     (result (ref null any))
@@ -129,8 +131,8 @@
       (ref.cast (ref $List) (local.get $b)))
   )
 
-  ;; Get the rest of the list.
-  (func $list_tail (export "list_tail")
+  ;; Get the rest of the list. Typed-internal.
+  (func $list_tail
     (param $list (ref $Cons))
     (result (ref $List))
 
@@ -144,7 +146,7 @@
   ;;   [a, ...rest] = xs  →  (a, rest) = list_pop(xs)
   ;;
   ;; Returns (head, tail) via multi-value. Traps on empty list.
-  (func $list_pop (export "list_pop")
+  (func $list_pop
     (param $list (ref $Cons))
     (result (ref any) (ref $List))
 
@@ -156,7 +158,7 @@
   ;; -- Size -----------------------------------------------------------
 
   ;; Count elements. O(n) walk.
-  (func $list_size (export "list_size")
+  (func $list_size
     (param $list (ref $List))
     (result i32)
 
@@ -183,7 +185,7 @@
 
   ;; Indexed access. O(n) walk to position.
   ;; Returns null if index is out of bounds or negative.
-  (func $list_get (export "list_get")
+  (func $list_get
     (param $list (ref $List))
     (param $index i32)
     (result (ref null any))
@@ -219,7 +221,7 @@
 
   ;; [..a, ..b] — walks a, rebuilds cells pointing to b. O(len(a)).
   ;; If a is empty, returns b. If b is empty, returns a.
-  (func $list_concat (export "list_concat")
+  (func $list_concat
     (param $a (ref $List))
     (param $b (ref $List))
     (result (ref $List))
@@ -270,7 +272,7 @@
 
   ;; Index of first element matching val by ref.eq. Returns -1 if absent.
   ;; O(n) scan.
-  (func $list_find (export "list_find")
+  (func $list_find
     (param $list (ref $List))
     (param $val (ref any))
     (result i32)

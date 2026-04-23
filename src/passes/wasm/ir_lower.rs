@@ -90,11 +90,11 @@ fn build_apply_path_body(
   let l_val    = LocalIdx(3);
   let l_list   = LocalIdx(4);
 
-  let i_head = push_call(frag, rt.list_head_any(), vec![op_local(l_args_p)], Some(l_done));
+  let i_head = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(l_done));
   let i_box  = push_struct_new(frag, rt.num(), vec![op_f64(lit)], l_val);
   if let Some(o) = lit_origin { set_origin(frag, i_box, o); }
-  let i_nil  = push_call(frag, rt.list_nil(), vec![], Some(l_list));
-  let i_cons = push_call(frag, rt.list_prepend_any(),
+  let i_nil  = push_call(frag, rt.args_empty(), vec![], Some(l_list));
+  let i_cons = push_call(frag, rt.args_prepend(),
     vec![op_local(l_val), op_local(l_list)], Some(l_list));
   let i_app  = push_return_call(frag, rt.apply(),
     vec![op_local(l_list), op_local(l_done)]);
@@ -131,7 +131,7 @@ fn build_op_plus_body(
   let l_a      = LocalIdx(3);
   let l_b      = LocalIdx(4);
 
-  let i_head = push_call(frag, rt.list_head_any(), vec![op_local(l_args_p)], Some(l_done));
+  let i_head = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(l_done));
   let i_a    = push_struct_new(frag, rt.num(), vec![op_f64(a)], l_a);
   if let Some(o) = a_origin { set_origin(frag, i_a, o); }
   let i_b    = push_struct_new(frag, rt.num(), vec![op_f64(b)], l_b);
