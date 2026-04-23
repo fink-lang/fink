@@ -130,34 +130,61 @@ mod tests {
   /// This is the tracer bullet for the new pipeline: the output is
   /// real, spec-valid WASM bytes with runtime-ir.wasm spliced in and
   /// all user imports resolved to concrete runtime indices.
-  #[test]
-  fn ir_emit_produces_valid_wasm_for_int_literal() {
-    let src = "42";
+  #[cfg(test)]
+  fn ir_emit_for(src: &str) -> Vec<u8> {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
     let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
     let linked = super::ir_link::link(&[user_frag]);
-    let bytes = super::ir_emit::emit(&linked);
+    super::ir_emit::emit(&linked)
+  }
 
+  #[cfg(test)]
+  fn validate_and_collect_exports(bytes: &[u8]) -> Vec<String> {
     let mut validator = wasmparser::Validator::new_with_features(
       wasmparser::WasmFeatures::all(),
     );
-    validator.validate_all(&bytes)
-      .unwrap_or_else(|e| panic!("ir_emit(42) validation failed: {e}"));
+    validator.validate_all(bytes)
+      .unwrap_or_else(|e| panic!("ir_emit validation failed: {e}"));
+
+    let mut exports = Vec::new();
+    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+      if let wasmparser::Payload::ExportSection(reader) = payload.unwrap() {
+        for exp in reader {
+          exports.push(exp.unwrap().name.to_string());
+        }
+      }
+    }
+    exports
+  }
+
+  #[test]
+  fn ir_emit_produces_valid_wasm_for_int_literal() {
+    let bytes = ir_emit_for("42");
+    let exports = validate_and_collect_exports(&bytes);
+
+    // User's fink_module is exported.
+    assert!(exports.contains(&"fink_module".to_string()),
+      "missing fink_module export. got: {exports:?}");
+
+    // Runtime exports are passed through (with <url>:<name> qualification).
+    assert!(exports.contains(&"rt/apply.wat:_apply".to_string()),
+      "missing rt/apply.wat:_apply passthrough");
+    assert!(exports.contains(&"std/list.wat:args_empty".to_string()),
+      "missing std/list.wat:args_empty passthrough");
+
+    // Interop exports stay bare (host contract).
+    assert!(exports.contains(&"_run_main".to_string()),
+      "missing _run_main passthrough");
   }
 
   #[test]
   fn ir_emit_produces_valid_wasm_for_int_sum() {
-    let src = "42 + 123";
-    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
-    let linked = super::ir_link::link(&[user_frag]);
-    let bytes = super::ir_emit::emit(&linked);
+    let bytes = ir_emit_for("42 + 123");
+    let exports = validate_and_collect_exports(&bytes);
 
-    let mut validator = wasmparser::Validator::new_with_features(
-      wasmparser::WasmFeatures::all(),
-    );
-    validator.validate_all(&bytes)
-      .unwrap_or_else(|e| panic!("ir_emit(42+123) validation failed: {e}"));
+    assert!(exports.contains(&"fink_module".to_string()));
+    assert!(exports.contains(&"rt/protocols.wat:op_plus".to_string()),
+      "missing rt/protocols.wat:op_plus passthrough (needed for a+b)");
   }
 
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
