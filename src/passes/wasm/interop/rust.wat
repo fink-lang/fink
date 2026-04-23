@@ -44,6 +44,35 @@
   )
 
 
+  ;; -- Host callable helpers -------------------------------------------------
+
+  ;; Box a funcref into a $Closure with no captures. Lets the host
+  ;; create a done-continuation from a Rust-side Fn2 callback without
+  ;; needing direct access to the $Closure type constructor.
+  ;;
+  ;; Called as: instance.get_func("_box_func")(funcref) -> anyref
+  (func $_box_func (export "_box_func")
+    (param $f (ref null func))
+    (result (ref null any))
+
+    (struct.new $Closure
+      (ref.as_non_null (local.get $f))
+      (ref.null $Captures))
+  )
+
+  ;; Expose the canonical $Fn2 type as a funcref return so the host
+  ;; can obtain its type via wasmtime's Func::ty() for constructing
+  ;; done continuations with the right signature.
+  ;;
+  ;; This function itself is a $Fn2 — trapping body just anchors the
+  ;; type for the host to read.
+  (func $_fn2_stub (export "_fn2_stub")
+    (param $caps (ref null any))
+    (param $args (ref null any))
+    (unreachable)
+  )
+
+
   ;; -- host_channel_send -----------------------------------------------------
   ;;
   ;; host_channel_send(ch, msg, cont):
