@@ -1,18 +1,29 @@
 // Build script — compiles runtime WAT files to WASM at build time.
 //
-// The runtime modules are merged into a single WASM module so that
-// inter-runtime calls (e.g. operators → str_eq) are plain function
-// calls within one module — no import/export resolution needed.
+// Two parallel merge paths, producing two separate artifacts:
 //
-// This avoids a runtime dependency on the `wat` crate, keeping the
-// compiler wasm32-safe. The compiled WASM bytes are embedded via
-// `include_bytes!` in the emitter.
+// * `runtime.wasm`   — from `src/runtime/*.wat` (legacy tree).
+//                      Consumed by emit.rs + link.rs (old pipeline).
+// * `runtime-ir.wasm`— from `src/passes/wasm/{rt,std,interop}/*.wat`
+//                      (new tree). Consumed by ir_emit when it starts
+//                      targeting the new runtime.
+//
+// Both merges are textual WAT splices: strip internal imports (they
+// resolve flat post-merge), concat bodies, prepend the rec group, wrap
+// in a single `(module ...)`. Old and new trees coexist until the old
+// pipeline is retired (Phase 4 cutover).
+//
+// No runtime dependency on the `wat` crate — keeps the compiler
+// wasm32-safe. Compiled WASM bytes are embedded via `include_bytes!`
+// in the emitter.
 
 fn main() {
     // Expose the host target triple so fink.rs can resolve --target=native.
     println!("cargo::rustc-env=TARGET={}", std::env::var("TARGET").unwrap());
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
+
+    // --- Old-tree artefacts ---------------------------------------------
 
     // types.wat is standalone — compiled separately for the emitter to
     // inject canonical type definitions into user modules.
@@ -46,35 +57,90 @@ fn main() {
         "src/runtime/interop-rust.wat",
     ];
 
-    let mut imports = Vec::new();
-    let mut merged_body = String::new();
-    for path in &runtime_modules {
-        println!("cargo::rerun-if-changed={path}");
-        let wat = std::fs::read_to_string(path)
-            .unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
-        let (module_imports, body) = extract_module_parts(&wat);
-        imports.extend(module_imports);
-        merged_body.push_str(&format!("\n  ;; --- {} ---\n", path));
-        merged_body.push_str(&body);
-    }
-    // Deduplicate imports (e.g. multiple modules importing _apply).
-    imports.sort();
-    imports.dedup();
-
-    let imports_str = imports.join("\n");
-    let merged_wat = format!("(module\n{type_defs}\n{imports_str}\n{merged_body})\n");
+    let merged_wat = merge_runtime(&type_defs, &runtime_modules, old_tree_strip);
     let runtime_wasm = wat_crate::parse_str(&merged_wat)
         .unwrap_or_else(|e| panic!("failed to compile merged runtime: {e}"));
     std::fs::write(format!("{out_dir}/runtime.wasm"), &runtime_wasm)
         .expect("failed to write runtime.wasm");
+
+    // --- New-tree artefacts (runtime-ir.wasm) ---------------------------
+
+    println!("cargo::rerun-if-changed=src/passes/wasm/rt/types.wat");
+    let types_ir_wat = std::fs::read_to_string("src/passes/wasm/rt/types.wat")
+        .expect("failed to read rt/types.wat");
+    let types_ir_wasm = wat_crate::parse_str(&types_ir_wat)
+        .expect("failed to compile rt/types.wat");
+    std::fs::write(format!("{out_dir}/types-ir.wasm"), &types_ir_wasm)
+        .expect("failed to write types-ir.wasm");
+
+    let type_defs_ir = extract_rec_group(&types_ir_wat);
+
+    // New-tree runtime modules. Order: types first (in type_defs_ir),
+    // then all fragments. Layout mirrors the design-doc rt/std/interop
+    // vocabulary.
+    let runtime_modules_ir = [
+        "src/passes/wasm/rt/apply.wat",
+        "src/passes/wasm/rt/protocols.wat",
+        "src/passes/wasm/std/str.wat",
+        "src/passes/wasm/std/hashing.wat",
+        "src/passes/wasm/std/list.wat",
+        "src/passes/wasm/std/rec.wat",
+        "src/passes/wasm/std/int.wat",
+        "src/passes/wasm/std/range.wat",
+        "src/passes/wasm/std/scheduler.wat",
+        "src/passes/wasm/std/channel.wat",
+        "src/passes/wasm/interop/rust.wat",
+    ];
+
+    let merged_ir_wat = merge_runtime(&type_defs_ir, &runtime_modules_ir, new_tree_strip);
+    let runtime_ir_wasm = wat_crate::parse_str(&merged_ir_wat)
+        .unwrap_or_else(|e| panic!("failed to compile merged runtime-ir: {e}"));
+    std::fs::write(format!("{out_dir}/runtime-ir.wasm"), &runtime_ir_wasm)
+        .expect("failed to write runtime-ir.wasm");
 }
 
-/// Extract module parts: returns (@fink/user imports, body without imports).
-/// Strips @fink/runtime/ imports (internal to merged module).
-/// Hoists imports for the caller to deduplicate and place first.
-/// Strips @fink/runtime/ imports (resolved internally in merged module).
+/// Common merge driver. For each fragment: read, strip internal imports
+/// (via the `strip` predicate), hoist external imports (`@fink/user` /
+/// `env`), collect bodies. Dedup hoisted imports, prepend type defs,
+/// wrap in `(module ...)`.
+fn merge_runtime(type_defs: &str, paths: &[&str], strip: fn(&str) -> bool) -> String {
+    let mut imports: Vec<String> = Vec::new();
+    let mut merged_body = String::new();
+    for path in paths {
+        println!("cargo::rerun-if-changed={path}");
+        let wat = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
+        let (module_imports, body) = extract_module_parts(&wat, strip);
+        imports.extend(module_imports);
+        merged_body.push_str(&format!("\n  ;; --- {} ---\n", path));
+        merged_body.push_str(&body);
+    }
+    imports.sort();
+    imports.dedup();
+    let imports_str = imports.join("\n");
+    format!("(module\n{type_defs}\n{imports_str}\n{merged_body})\n")
+}
+
+/// Old-tree strip predicate: drop @fink/runtime/* imports (resolved
+/// internally post-merge).
+fn old_tree_strip(import_line: &str) -> bool {
+    import_line.contains("@fink/runtime/")
+}
+
+/// New-tree strip predicate: drop `rt/*.wat`, `std/*.wat`,
+/// `interop/*.wat` imports (all resolved internally post-merge).
+fn new_tree_strip(import_line: &str) -> bool {
+    import_line.contains("\"rt/") && import_line.contains(".wat\"")
+        || import_line.contains("\"std/") && import_line.contains(".wat\"")
+        || import_line.contains("\"interop/") && import_line.contains(".wat\"")
+}
+
+/// Extract module parts: returns (hoisted imports, body without imports).
+/// `strip` decides which imports to drop (they resolve internally in the
+/// merged module). Non-stripped non-dropped imports are hoisted to the
+/// front of the merged module by the caller.
 /// Hoists @fink/user and "env" imports to appear before function bodies.
-fn extract_module_parts(wat: &str) -> (Vec<String>, String) {
+fn extract_module_parts(wat: &str, strip: fn(&str) -> bool) -> (Vec<String>, String) {
     let mut imports: Vec<String> = Vec::new();
     let mut body_lines: Vec<&str> = Vec::new();
     let mut inside_module = false;
@@ -87,8 +153,8 @@ fn extract_module_parts(wat: &str) -> (Vec<String>, String) {
             continue;
         }
         let trimmed = line.trim_start();
-        // Strip @fink/runtime/ imports — resolved internally.
-        if trimmed.starts_with("(import ") && line.contains("@fink/runtime/") {
+        // Strip internal imports — resolved internally in the merged module.
+        if trimmed.starts_with("(import ") && strip(line) {
             continue;
         }
         // Hoist @fink/user and "env" imports — the caller places them before body.
