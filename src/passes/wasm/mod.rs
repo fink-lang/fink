@@ -187,6 +187,54 @@ mod tests {
       "missing rt/protocols.wat:op_plus passthrough (needed for a+b)");
   }
 
+  /// Instantiate ir_emit's output in wasmtime with trivial host stubs.
+  /// Proves the bytes aren't just spec-valid but also load into the
+  /// real engine we'll run programs in.
+  ///
+  /// Doesn't call fink_module — the CPS entry expects an args list
+  /// containing a done continuation, which needs runtime-exported
+  /// helpers (args_empty + args_prepend) to construct. That full
+  /// execution handshake is deferred to the next milestone.
+  #[cfg(feature = "run")]
+  #[test]
+  fn ir_emit_instantiates_in_wasmtime() {
+    use wasmtime::{Config, Engine, Module, Store, Linker, Error, ExternType};
+
+    let bytes = ir_emit_for("42");
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(&engine, &bytes).unwrap();
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    // Wire every env import as a trap-on-call stub — none get
+    // invoked during instantiation.
+    for imp in module.imports() {
+      if imp.module() == "env"
+        && let ExternType::Func(ft) = imp.ty()
+      {
+        let name = imp.name().to_string();
+        let name_for_msg = name.clone();
+        linker.func_new("env", &name, ft, move |_c, _p, _r| {
+          Err(Error::msg(format!("host stub `{name_for_msg}` called (unexpected for smoke test)")))
+        }).unwrap();
+      }
+    }
+
+    let instance = linker.instantiate(&mut store, &module).unwrap();
+
+    // fink_module is exported and is a func.
+    let fink_module = instance.get_func(&mut store, "fink_module")
+      .expect("fink_module export missing");
+    let ty = fink_module.ty(&store);
+    assert_eq!(ty.params().len(), 2, "fink_module should take (caps, args)");
+    assert_eq!(ty.results().len(), 0, "fink_module should return nothing (CPS tail call)");
+  }
+
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk");
