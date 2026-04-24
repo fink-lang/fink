@@ -44,7 +44,7 @@ test 'chained arithmetic', fn:
       (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "op_mul" (func $rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_12 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:caps_cast (ref null any))
+        (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_13 (ref null any))
         (local $v_3 (ref null any))
         (local $v_5 (ref null any))
@@ -57,7 +57,7 @@ test 'chained arithmetic', fn:
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_17 (ref null any))
-        (local $:caps_arg (ref null any))
+        (local $:caps_arg (ref null $rt/types.wat:Captures))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
@@ -69,7 +69,7 @@ test 'chained arithmetic', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:C74QALoBAL4BAJIBARABhAEBDwn6BQCSAQCuAQDCAQEAAYQBAQgBhAEBBwU
+    ;; sm:C9oQALoBAL4BAJIBARABhAEBDwmgBgCSAQCuAQDCAQEAAYQBAQgBhAEBBwU
 
 
 test 'unary not', fn:
@@ -257,7 +257,7 @@ test 'range in', fn:
       (import "rt/protocols.wat" "op_rngex" (func $rt/protocols.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "op_in" (func $rt/protocols.wat:op_in (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_12 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:caps_cast (ref null any))
+        (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_13 (ref null any))
         (local $v_4 (ref null any))
         (local $v_1 (ref null any))
@@ -270,7 +270,7 @@ test 'range in', fn:
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_17 (ref null any))
-        (local $:caps_arg (ref null any))
+        (local $:caps_arg (ref null $rt/types.wat:Captures))
         (local $v_2 (ref null any))
         (local $v_3 (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
@@ -282,5 +282,5 @@ test 'range in', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:C74QALoBAL4BAJIBAQABhAEBAAr2BQCSAQCuAQDCAQEKAYQBAQYChgEBBQU
+    ;; sm:C9oQALoBAL4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 

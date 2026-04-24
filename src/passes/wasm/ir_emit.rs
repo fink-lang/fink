@@ -43,11 +43,11 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use wasm_encoder::{
-  AbstractHeapType, CodeSection, CompositeInnerType, CompositeType, ExportKind,
-  ExportSection, FieldType, FuncType, Function, FunctionSection,
-  HeapType, ImportSection, Instruction, MemorySection, MemoryType,
-  Module as WasmModule, RefType, StorageType, StructType, SubType, TypeSection,
-  ValType as WEValType,
+  AbstractHeapType, CodeSection, CompositeInnerType, CompositeType, ConstExpr,
+  ElementSection, Elements, Encode, ExportKind, ExportSection, FieldType, FuncType,
+  Function, FunctionSection, GlobalType, HeapType, ImportSection, Instruction,
+  MemorySection, MemoryType, Module as WasmModule, RefType, StorageType, StructType,
+  SubType, TypeSection, ValType as WEValType,
 };
 
 use super::ir::*;
@@ -459,11 +459,43 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     page_size_log2: None,
   });
 
-  // Globals: splice runtime's global section body as-is (it already
-  // includes its count LEB128 prefix). The runtime's global
-  // init_exprs use struct.new / array.new_fixed which aren't
-  // constructible via wasm-encoder's ConstExpr API.
+  // Globals: runtime entries are raw-spliced (init_exprs use struct.new
+  // etc. which wasm-encoder's ConstExpr API can't construct); user
+  // entries are encoded via wasm-encoder. When both are present we
+  // combine by rewriting the leading LEB128 count and concatenating.
   let globals_section_body = rt.globals_body.as_deref();
+  let user_global_count = frag.globals.len() as u32;
+  let (combined_globals_body, user_global_base) = if user_global_count == 0 {
+    (globals_section_body.map(|b| b.to_vec()), 0u32)
+  } else {
+    let (rt_count, rt_body_no_count) = match globals_section_body {
+      Some(raw) => decode_leb_u32_prefix(raw),
+      None => (0u32, &[][..]),
+    };
+    // Encode user globals manually (no count prefix) so we can
+    // concatenate with runtime's body.
+    let mut user_bytes: Vec<u8> = Vec::new();
+    for g in &frag.globals {
+      let ty = val_from_ir(&g.ty, &type_remap);
+      let init = match &g.init {
+        GlobalInit::RefNull(ht) => ConstExpr::ref_null(HeapType::Abstract {
+          shared: false,
+          ty: abs_heap_ir(*ht),
+        }),
+        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(type_remap[ts.0 as usize])),
+        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(func_remap[fs.0 as usize]),
+        GlobalInit::I32Const(v) => ConstExpr::i32_const(*v),
+        GlobalInit::F64Const(v) => ConstExpr::f64_const((*v).into()),
+      };
+      GlobalType { val_type: ty, mutable: g.mutable, shared: false }.encode(&mut user_bytes);
+      init.encode(&mut user_bytes);
+    }
+    let mut body = Vec::with_capacity(5 + rt_body_no_count.len() + user_bytes.len());
+    encode_leb_u32(&mut body, rt_count + user_global_count);
+    body.extend_from_slice(rt_body_no_count);
+    body.extend_from_slice(&user_bytes);
+    (Some(body), rt_count)
+  };
 
   // Exports: forward runtime's, then append user's (remapped).
   let mut export_sec = ExportSection::new();
@@ -475,9 +507,43 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
       export_sec.export(name, ExportKind::Func, func_remap[i]);
     }
   }
+  // User globals are appended after runtime globals; their module
+  // indices start at `user_global_base` (the runtime global count).
+  for (i, g) in frag.globals.iter().enumerate() {
+    if let Some(name) = &g.export {
+      export_sec.export(name, ExportKind::Global, user_global_base + i as u32);
+    }
+  }
 
-  // Elements: raw-splice same as globals.
+  // Elements: runtime entries raw-spliced; user-declared funcref
+  // entries (needed for `ref.func` validation on any user func) are
+  // encoded via wasm-encoder and combined with a rewritten count LEB.
   let elements_section_body = rt.elements_body.as_deref();
+  let user_func_refs: Vec<u32> = user_local_funcs.iter()
+    .map(|(sym, _)| func_remap[sym.0 as usize])
+    .collect();
+  let combined_elements_body = if user_func_refs.is_empty() {
+    elements_section_body.map(|b| b.to_vec())
+  } else {
+    let (rt_elem_count, rt_body_no_count) = match elements_section_body {
+      Some(raw) => decode_leb_u32_prefix(raw),
+      None => (0u32, &[][..]),
+    };
+    let mut user_sec = ElementSection::new();
+    user_sec.declared(Elements::Functions(user_func_refs.into()));
+    // `ElementSection::encode` emits: payload_size_leb + count_leb + entries.
+    // Strip the two LEBs to extract the entries.
+    let mut full_bytes: Vec<u8> = Vec::new();
+    user_sec.encode(&mut full_bytes);
+    let (_payload_size, rest) = decode_leb_u32_prefix(&full_bytes);
+    let (_user_elem_count, user_entries) = decode_leb_u32_prefix(rest);
+    let user_entries = user_entries.to_vec();
+    let mut body = Vec::with_capacity(5 + rt_body_no_count.len() + user_entries.len());
+    encode_leb_u32(&mut body, rt_elem_count + 1);
+    body.extend_from_slice(rt_body_no_count);
+    body.extend_from_slice(&user_entries);
+    Some(body)
+  };
 
   // Code: runtime's bodies raw, then user's bodies encoded.
   let mut code_sec = CodeSection::new();
@@ -485,7 +551,7 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     code_sec.raw(body);
   }
   for (_, f) in &user_local_funcs {
-    let func = emit_func(frag, f, &type_remap, &func_remap);
+    let func = emit_func(frag, f, &type_remap, &func_remap, user_global_base);
     code_sec.function(&func);
   }
 
@@ -502,11 +568,11 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
   module.section(&import_sec);
   module.section(&func_sec);
   module.section(&mem_sec);
-  if let Some(body) = globals_section_body {
+  if let Some(body) = &combined_globals_body {
     module.section(&wasm_encoder::RawSection { id: SECTION_GLOBAL, data: body });
   }
   module.section(&export_sec);
-  if let Some(body) = elements_section_body {
+  if let Some(body) = &combined_elements_body {
     module.section(&wasm_encoder::RawSection { id: SECTION_ELEMENT, data: body });
   }
   module.section(&code_sec);
@@ -523,6 +589,7 @@ fn emit_func(
   f: &FuncDecl,
   type_remap: &[u32],
   func_remap: &[u32],
+  user_global_base: u32,
 ) -> Function {
   let mut locals: Vec<(u32, WEValType)> = Vec::new();
   for l in &f.locals {
@@ -530,7 +597,7 @@ fn emit_func(
   }
   let mut func = Function::new(locals);
   for &id in &f.body {
-    emit_instr(&mut func, frag, &frag.instrs[id.0 as usize], type_remap, func_remap);
+    emit_instr(&mut func, frag, &frag.instrs[id.0 as usize], type_remap, func_remap, user_global_base);
   }
   func.instruction(&Instruction::End);
   func
@@ -542,26 +609,27 @@ fn emit_instr(
   instr: &Instr,
   type_remap: &[u32],
   func_remap: &[u32],
+  user_global_base: u32,
 ) {
   match &instr.kind {
     InstrKind::LocalSet { idx, src } => {
-      emit_operand(func, src, type_remap, func_remap);
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
       func.instruction(&Instruction::LocalSet(idx.0));
     }
     InstrKind::GlobalSet { sym, src } => {
-      emit_operand(func, src, type_remap, func_remap);
-      func.instruction(&Instruction::GlobalSet(sym.0));
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::GlobalSet(user_global_base + sym.0));
     }
     InstrKind::StructNew { ty, fields, into } => {
       for fld in fields {
-        emit_operand(func, fld, type_remap, func_remap);
+        emit_operand(func, fld, type_remap, func_remap, user_global_base);
       }
       func.instruction(&Instruction::StructNew(type_remap[ty.0 as usize]));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::Call { target, args, into } => {
       for a in args {
-        emit_operand(func, a, type_remap, func_remap);
+        emit_operand(func, a, type_remap, func_remap, user_global_base);
       }
       func.instruction(&Instruction::Call(func_remap[target.0 as usize]));
       if let Some(l) = into {
@@ -570,22 +638,46 @@ fn emit_instr(
     }
     InstrKind::ReturnCall { target, args } => {
       for a in args {
-        emit_operand(func, a, type_remap, func_remap);
+        emit_operand(func, a, type_remap, func_remap, user_global_base);
       }
       func.instruction(&Instruction::ReturnCall(func_remap[target.0 as usize]));
     }
     InstrKind::RefI31 { src, into } => {
-      emit_operand(func, src, type_remap, func_remap);
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
       func.instruction(&Instruction::RefI31);
       func.instruction(&Instruction::LocalSet(into.0));
     }
+    InstrKind::RefFunc { func: fsym, into } => {
+      func.instruction(&Instruction::RefFunc(func_remap[fsym.0 as usize]));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefNullConcrete { ty, into } => {
+      func.instruction(&Instruction::RefNull(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefCastNonNull { ty, src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::ArrayNewFixed { ty, size, elems, into } => {
+      for e in elems {
+        emit_operand(func, e, type_remap, func_remap, user_global_base);
+      }
+      func.instruction(&Instruction::ArrayNewFixed {
+        array_type_index: type_remap[ty.0 as usize],
+        array_size: *size,
+      });
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::ArrayGet { ty, arr, idx, into } => {
+      emit_operand(func, arr, type_remap, func_remap, user_global_base);
+      emit_operand(func, idx, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::ArrayGet(type_remap[ty.0 as usize]));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
     InstrKind::RefNull { .. }
-    | InstrKind::RefNullConcrete { .. }
     | InstrKind::I31GetS { .. }
-    | InstrKind::RefFunc { .. }
-    | InstrKind::ArrayNewFixed { .. }
-    | InstrKind::ArrayGet { .. }
-    | InstrKind::RefCastNonNull { .. }
     | InstrKind::RefCastNullable { .. }
     | InstrKind::If { .. }
     | InstrKind::Unreachable
@@ -600,13 +692,14 @@ fn emit_operand(
   op: &Operand,
   _type_remap: &[u32],
   func_remap: &[u32],
+  user_global_base: u32,
 ) {
   match op {
     Operand::I32(v) => { func.instruction(&Instruction::I32Const(*v)); }
     Operand::F64(v) => { func.instruction(&Instruction::F64Const((*v).into())); }
     Operand::Local(idx) => { func.instruction(&Instruction::LocalGet(idx.0)); }
     Operand::Global(sym) => {
-      func.instruction(&Instruction::GlobalGet(sym.0));
+      func.instruction(&Instruction::GlobalGet(user_global_base + sym.0));
     }
     Operand::RefFunc(fsym) => {
       func.instruction(&Instruction::RefFunc(func_remap[fsym.0 as usize]));
@@ -645,4 +738,36 @@ fn val_from_ir(v: &ValType, type_remap: &[u32]) -> WEValType {
       heap_type: HeapType::Concrete(type_remap[ty.0 as usize]),
     }),
   }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// LEB128 helpers (unsigned, u32-range)
+// ──────────────────────────────────────────────────────────────────
+
+fn encode_leb_u32(out: &mut Vec<u8>, mut v: u32) {
+  loop {
+    let byte = (v & 0x7f) as u8;
+    v >>= 7;
+    if v == 0 { out.push(byte); break; }
+    out.push(byte | 0x80);
+  }
+}
+
+/// Decode the leading LEB128 u32 count from a section body and return
+/// `(count, remainder)`. Panics if the input is malformed (we control
+/// the producer).
+fn decode_leb_u32_prefix(raw: &[u8]) -> (u32, &[u8]) {
+  let mut val: u32 = 0;
+  let mut shift = 0u32;
+  for (i, b) in raw.iter().enumerate() {
+    val |= u32::from(b & 0x7f) << shift;
+    if b & 0x80 == 0 {
+      return (val, &raw[i + 1..]);
+    }
+    shift += 7;
+    if shift >= 32 {
+      panic!("ir_emit: LEB128 u32 overflow");
+    }
+  }
+  panic!("ir_emit: truncated LEB128");
 }

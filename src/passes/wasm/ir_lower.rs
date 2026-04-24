@@ -116,7 +116,10 @@ fn lower_fn(
   // then per-capture:
   //   local.set $<cap_name> (array.get $Captures $:caps_cast <i>)
   if !cap_params.is_empty() {
-    let caps_cast = ctx.alloc_local(":caps_cast");
+    let caps_cast = ctx.alloc_local_typed(
+      ":caps_cast",
+      val_ref(rt.captures(), /*nullable*/ false),
+    );
     let i_cast = push_ref_cast_non_null(
       frag, rt.captures(), op_local(l_caps_p), caps_cast,
     );
@@ -201,9 +204,18 @@ impl FnCtx {
   }
 
   fn alloc_local(&mut self, name: &str) -> LocalIdx {
+    self.alloc_local_typed(name, val_anyref(true))
+  }
+
+  /// Allocate a local with a specific value type. Use for synth
+  /// scratch locals whose role is a narrower concrete type than
+  /// anyref (e.g. `$:caps_cast` and `$:caps_arg` are nullable refs
+  /// to `$Captures`). Produces correctly-typed locals so validation
+  /// doesn't reject `struct.new`/`array.get` field/element types.
+  fn alloc_local_typed(&mut self, name: &str, ty: ValType) -> LocalIdx {
     let idx = LocalIdx(self.next_local_idx);
     self.next_local_idx += 1;
-    self.locals.push(local(val_anyref(true), name));
+    self.locals.push(local(ty, name));
     idx
   }
 
@@ -746,8 +758,13 @@ fn emit_closure_construction(
   into: LocalIdx,
 ) {
   // 1. Build the captures operand — either a null ref or a freshly
-  //    allocated array.
-  let caps_local = ctx.alloc_local(":caps_arg");
+  //    allocated array. Local is typed `(ref null $Captures)` so
+  //    `struct.new $Closure` validates against its second field's
+  //    declared type.
+  let caps_local = ctx.alloc_local_typed(
+    ":caps_arg",
+    val_ref(rt.captures(), /*nullable*/ true),
+  );
   let caps_instr = if cap_operands.is_empty() {
     push_ref_null_concrete(frag, rt.captures(), caps_local)
   } else {
