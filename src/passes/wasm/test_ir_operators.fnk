@@ -1,0 +1,227 @@
+{test, skip-ir, expect, equals, ir_wat, wat} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+skip-ir test 'add two literals', fn:
+  expect ir_wat ƒink:
+    2 + 3
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_plus (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgCWAwBiAA
+
+
+
+skip-ir test 'chained arithmetic', fn:
+  expect ir_wat ƒink:
+    2 * 3 + 4
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $v_15 (ref any))
+        (local $v_17 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (local.set $v_17 (struct.new $Closure (ref.func $v_12) (array.new_fixed $Captures 1 (local.get $v_0))))
+        (return_call $_op_mul (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_17))
+      )
+      (func $v_12 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_13 (ref any))
+        (local $v_3 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_13 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_3 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_plus (local.get $v_3) (struct.new $Num (f64.const 4)) (local.get $v_13))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:DgAAEABGAHwAqAEANgA4ADgA7gQAoAEAOAA2AMoEAGIA
+
+
+skip-ir test 'unary not', fn:
+  expect ir_wat ƒink:
+    not true
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_not (ref.i31 (i32.const 1)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgDEAgBiAA
+
+
+skip-ir test 'comparison eq', fn:
+  expect ir_wat ƒink:
+    2 == 3
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_eq (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgCSAwBiAA
+
+
+skip-ir test 'comparison lt', fn:
+  expect ir_wat ƒink:
+    2 < 3
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_lt (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgCSAwBiAA
+
+
+skip-ir test 'logical and', fn:
+  expect ir_wat ƒink:
+    true and false
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_and (ref.i31 (i32.const 1)) (ref.i31 (i32.const 0)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgD0AgBiAA
+
+
+skip-ir test 'logical or', fn:
+  expect ir_wat ƒink:
+    true or false
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_or (ref.i31 (i32.const 1)) (ref.i31 (i32.const 0)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgDyAgBiAA
+
+
+skip-ir test 'range exclusive', fn:
+  expect ir_wat ƒink:
+    0..10
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_rngex (struct.new $Num (f64.const 0)) (struct.new $Num (f64.const 10)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgCaAwBiAA
+
+
+skip-ir test 'range inclusive', fn:
+  expect ir_wat ƒink:
+    0...10
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_rngin (struct.new $Num (f64.const 0)) (struct.new $Num (f64.const 10)) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgCaAwBiAA
+
+
+skip-ir test 'range in', fn:
+  expect ir_wat ƒink:
+    5 in 0..10
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $v_15 (ref any))
+        (local $v_17 (ref any))
+        (local $local_5 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (local.set $v_17 (struct.new $Closure (ref.func $v_12) (array.new_fixed $Captures 1 (local.get $v_0))))
+        (return_call $_op_rngex (struct.new $Num (f64.const 0)) (struct.new $Num (f64.const 10)) (local.get $v_17))
+      )
+      (func $v_12 (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_13 (ref any))
+        (local $v_4 (ref any))
+        (local $local_4 (ref any))
+        (local.set $v_13 (array.get $Captures (ref.cast (ref $Captures) (local.get $_caps)) (i32.const 0)))
+        (local.set $v_4 (call $_list_head_any (local.get $_args)))
+        (return_call $_op_in (struct.new $Num (f64.const 5)) (local.get $v_4) (local.get $v_13))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:DgAAEABGAHwAqAEANgA4ADgA9AQAoAEAOAA2AMYEAGIA
+

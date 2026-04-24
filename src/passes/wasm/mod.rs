@@ -261,5 +261,6 @@ mod tests {
     use super::{ir_wat, gen_wat};
 
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_literals.fnk", skip-ir);
+    test_macros::include_fink_tests!("src/passes/wasm/test_ir_operators.fnk", skip-ir);
   }
 }
