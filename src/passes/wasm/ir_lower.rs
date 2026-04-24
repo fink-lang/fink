@@ -5,14 +5,18 @@
 //!
 //! Current coverage:
 //! * `main = fn: <lit>` — apply-path tail call (user-cont).
-//! * `main = fn: <lit> + <lit>` — direct-style builtin tail call.
+//!   Lit ∈ {Int, Float, Decimal, Bool}.
+//! * `main = fn: <lit> <op> <lit>` — direct-style binary protocol
+//!   operator. Op ∈ {+, -, *, /, //, %%, ==, !=, <, <=, >, >=,
+//!   and, or, xor, <<, >>}.
+//! * `main = fn: not <lit>` — direct-style unary protocol operator.
 
 use crate::passes::ast::Ast;
 use crate::passes::cps::ir::{Arg, Callable, Cont, CpsId, CpsResult, Expr, ExprKind, Lit, ValKind, BuiltIn};
 use crate::sourcemap::native::ByteRange;
 
 use super::ir::*;
-use super::runtime_contract::{self, Runtime};
+use super::runtime_contract::{self, Runtime, Sym};
 
 /// Look up the source byte range for a CPS node via `cps.origin →
 /// ast_id → ast.nodes[id].loc`. Returns `None` when a CPS node has
@@ -50,14 +54,28 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
       build_apply_path_body(&mut frag, &rt, &lit, lit_origin)
     }
 
-    // Direct-style builtin: `App(BuiltIn::Add, [Lit, Lit, Cont::Ref(ƒret)])`.
-    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Add), args } => {
-      let ((a, a_id), (b, b_id)) = extract_two_lits(args)
-        .unwrap_or_else(|| panic!("ir_lower: unsupported op_plus args (expected [Lit, Lit, Cont])"));
+    // Direct-style binary-protocol operator:
+    //   `App(BuiltIn::<BinOp>, [Lit, Lit, Cont::Ref(ƒret)])`
+    // where <BinOp> ∈ {Add, Sub, Mul, ..., Eq, Lt, And, Or, Shl, ...}.
+    ExprKind::App { func: Callable::BuiltIn(b), args } if binary_op_sym(*b).is_some() => {
+      let sym = binary_op_sym(*b).unwrap();
+      let ((a, a_id), (b_v, b_id)) = extract_two_lits(args)
+        .unwrap_or_else(|| panic!(
+          "ir_lower: unsupported {:?} args (expected [Lit, Lit, Cont])", b));
       let a_origin = origin_of(cps, ast, a_id);
       let b_origin = origin_of(cps, ast, b_id);
       let app_origin = origin_of(cps, ast, body.id);
-      build_op_plus_body(&mut frag, &rt, a, a_origin, b, b_origin, app_origin)
+      build_op_binary_body(&mut frag, &rt, sym, a, a_origin, b_v, b_origin, app_origin)
+    }
+
+    // Direct-style unary-protocol operator:
+    //   `App(BuiltIn::Not, [Lit, Cont::Ref(ƒret)])`.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Not), args } => {
+      let (lit, lit_id) = extract_first_lit(args)
+        .unwrap_or_else(|| panic!("ir_lower: unsupported op_not args (expected [Lit, Cont])"));
+      let lit_origin = origin_of(cps, ast, lit_id);
+      let app_origin = origin_of(cps, ast, body.id);
+      build_op_unary_body(&mut frag, &rt, Sym::OpNot, &lit, lit_origin, app_origin)
     }
 
     _ => panic!("ir_lower: unsupported fink_module body shape"),
@@ -132,16 +150,23 @@ fn build_apply_path_body(
   )
 }
 
-/// Direct-style `op_plus` body: pop `done`, box both operands,
-/// tail-call `op_plus(a, b, done)`.
+/// Direct-style binary-protocol operator body (op_plus / op_minus /
+/// op_eq / op_and / ...): pop `done`, box both literal operands,
+/// tail-call the operator's runtime function with (a, b, done).
 ///
-/// Origins: each `struct.new` maps to its literal; the `return_call`
-/// maps to the `App` (the whole `a + b` expression).
-fn build_op_plus_body(
+/// Operands flow through as `anyref` — the runtime's polymorphic
+/// dispatcher handles the actual type (Num, Str, Bool, ...) via
+/// `br_on_cast`. Boxed numeric literals widen from `(ref $Num)` to
+/// `(ref null any)` at the local.set.
+///
+/// Origins: each boxing instr maps to its literal; the `return_call`
+/// maps to the `App` node (the whole expression).
+fn build_op_binary_body(
   frag: &mut Fragment,
   rt: &Runtime,
-  a: f64, a_origin: Option<ByteRange>,
-  b: f64, b_origin: Option<ByteRange>,
+  op: Sym,
+  a: LitVal, a_origin: Option<ByteRange>,
+  b: LitVal, b_origin: Option<ByteRange>,
   app_origin: Option<ByteRange>,
 ) -> FuncSym {
   let l_args_p = LocalIdx(1);
@@ -150,11 +175,11 @@ fn build_op_plus_body(
   let l_b      = LocalIdx(4);
 
   let i_head = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(l_done));
-  let i_a    = push_struct_new(frag, rt.num(), vec![op_f64(a)], l_a);
+  let i_a = box_lit(frag, rt, &a, l_a);
   if let Some(o) = a_origin { set_origin(frag, i_a, o); }
-  let i_b    = push_struct_new(frag, rt.num(), vec![op_f64(b)], l_b);
+  let i_b = box_lit(frag, rt, &b, l_b);
   if let Some(o) = b_origin { set_origin(frag, i_b, o); }
-  let i_app  = push_return_call(frag, rt.op_plus(),
+  let i_app = push_return_call(frag, rt.op(op),
     vec![op_local(l_a), op_local(l_b), op_local(l_done)]);
   if let Some(o) = app_origin { set_origin(frag, i_app, o); }
 
@@ -165,12 +190,83 @@ fn build_op_plus_body(
     ],
     vec![
       local(val_anyref(true), "v_0"),
-      local(val_ref(rt.num(), false), "v_1"),
-      local(val_ref(rt.num(), false), "v_2"),
+      local(val_anyref(true), "v_1"),
+      local(val_anyref(true), "v_2"),
     ],
     vec![i_head, i_a, i_b, i_app],
     "fink_module",
   )
+}
+
+/// Direct-style unary-protocol operator body (op_not today).
+/// Pops `done`, boxes the single literal operand, tail-calls
+/// the operator's runtime function with (val, done).
+fn build_op_unary_body(
+  frag: &mut Fragment,
+  rt: &Runtime,
+  op: Sym,
+  lit: &LitVal, lit_origin: Option<ByteRange>,
+  app_origin: Option<ByteRange>,
+) -> FuncSym {
+  let l_args_p = LocalIdx(1);
+  let l_done   = LocalIdx(2);
+  let l_v      = LocalIdx(3);
+
+  let i_head = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(l_done));
+  let i_box = box_lit(frag, rt, lit, l_v);
+  if let Some(o) = lit_origin { set_origin(frag, i_box, o); }
+  let i_app = push_return_call(frag, rt.op(op),
+    vec![op_local(l_v), op_local(l_done)]);
+  if let Some(o) = app_origin { set_origin(frag, i_app, o); }
+
+  func(frag, rt.fn2(),
+    vec![
+      local(val_anyref(true), "_caps"),
+      local(val_anyref(true), "_args"),
+    ],
+    vec![
+      local(val_anyref(true), "v_0"),
+      local(val_anyref(true), "v_1"),
+    ],
+    vec![i_head, i_box, i_app],
+    "fink_module",
+  )
+}
+
+/// Box a literal into the given local slot. Num → `struct.new $Num`;
+/// Bool → `ref.i31 0/1`. Result fits a `(ref null any)` local.
+fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> InstrId {
+  match lit {
+    LitVal::Num(n) => push_struct_new(frag, rt.num(), vec![op_f64(*n)], into),
+    LitVal::Bool(b) => push_ref_i31(frag, op_i32(if *b { 1 } else { 0 }), into),
+  }
+}
+
+/// Map a CPS `BuiltIn` to the binary-protocol `Sym` it lowers to.
+/// Returns `None` for unary / non-binary ops — those have their own
+/// match arms in `lower`.
+fn binary_op_sym(b: BuiltIn) -> Option<Sym> {
+  Some(match b {
+    BuiltIn::Add    => Sym::OpPlus,
+    BuiltIn::Sub    => Sym::OpMinus,
+    BuiltIn::Mul    => Sym::OpMul,
+    BuiltIn::Div    => Sym::OpDiv,
+    BuiltIn::IntDiv => Sym::OpIntDiv,
+    BuiltIn::Mod    => Sym::OpRem,
+    BuiltIn::IntMod => Sym::OpIntMod,
+    BuiltIn::Eq     => Sym::OpEq,
+    BuiltIn::Neq    => Sym::OpNeq,
+    BuiltIn::Lt     => Sym::OpLt,
+    BuiltIn::Lte    => Sym::OpLte,
+    BuiltIn::Gt     => Sym::OpGt,
+    BuiltIn::Gte    => Sym::OpGte,
+    BuiltIn::And    => Sym::OpAnd,
+    BuiltIn::Or     => Sym::OpOr,
+    BuiltIn::Xor    => Sym::OpXor,
+    BuiltIn::Shl    => Sym::OpShl,
+    BuiltIn::Shr    => Sym::OpShr,
+    _ => return None,
+  })
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -199,13 +295,13 @@ fn extract_first_lit(args: &[Arg]) -> Option<(LitVal, CpsId)> {
   val_lit(args.first()?)
 }
 
-/// Extract two numeric-literal args in order, ignoring trailing
-/// `Arg::Cont` (continuation). Each return pair is `(f64, CpsId)`.
-/// Used by the direct-style `op_plus` path, which requires both
-/// operands to be numeric.
-fn extract_two_lits(args: &[Arg]) -> Option<((f64, CpsId), (f64, CpsId))> {
-  let a = val_lit_num(args.first()?)?;
-  let b = val_lit_num(args.get(1)?)?;
+/// Extract two literal args in order, ignoring trailing `Arg::Cont`
+/// (continuation). Each return pair is `(LitVal, CpsId)`. Supports
+/// mixed kinds — the binary-op body builder handles Num and Bool
+/// uniformly (`box_lit`).
+fn extract_two_lits(args: &[Arg]) -> Option<((LitVal, CpsId), (LitVal, CpsId))> {
+  let a = val_lit(args.first()?)?;
+  let b = val_lit(args.get(1)?)?;
   Some((a, b))
 }
 
@@ -222,9 +318,3 @@ fn val_lit(arg: &Arg) -> Option<(LitVal, CpsId)> {
   Some((lv, v.id))
 }
 
-fn val_lit_num(arg: &Arg) -> Option<(f64, CpsId)> {
-  match val_lit(arg)? {
-    (LitVal::Num(f), id) => Some((f, id)),
-    _ => None,
-  }
-}

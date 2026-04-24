@@ -9,105 +9,105 @@ test 'add two literals', fn:
     5
 
 
-skip-ir test 'subtraction', fn:
+test 'subtraction', fn:
   expect run ƒink:
     10 - 3
   | equals ƒink:
     7
 
 
-skip-ir test 'multiplication', fn:
+test 'multiplication', fn:
   expect run ƒink:
     4 * 5
   | equals ƒink:
     20
 
 
-skip-ir test 'division', fn:
+test 'division', fn:
   expect run ƒink:
     10 / 4
   | equals ƒink:
     2.5
 
 
-skip-ir test 'integer division', fn:
+test 'integer division', fn:
   expect run ƒink:
     7 // 2
   | equals ƒink:
     3
 
 
-skip-ir test 'modulo', fn:
+test 'modulo', fn:
   expect run ƒink:
     10 %% 3
   | equals ƒink:
     1
 
 
-skip-ir test 'equal', fn:
+test 'equal', fn:
   expect run ƒink:
     3 == 3
   | equals ƒink:
     true
 
 
-skip-ir test 'not equal', fn:
+test 'not equal', fn:
   expect run ƒink:
     3 != 4
   | equals ƒink:
     true
 
 
-skip-ir test 'less than', fn:
+test 'less than', fn:
   expect run ƒink:
     3 < 4
   | equals ƒink:
     true
 
 
-skip-ir test 'less than or equal', fn:
+test 'less than or equal', fn:
   expect run ƒink:
     3 <= 3
   | equals ƒink:
     true
 
 
-skip-ir test 'greater than', fn:
+test 'greater than', fn:
   expect run ƒink:
     4 > 3
   | equals ƒink:
     true
 
 
-skip-ir test 'greater than or equal', fn:
+test 'greater than or equal', fn:
   expect run ƒink:
     3 >= 3
   | equals ƒink:
     true
 
 
-skip-ir test 'not', fn:
+test 'not', fn:
   expect run ƒink:
     not true
   | equals ƒink:
     false
 
 
-skip-ir test 'and', fn:
+test 'and', fn:
   expect run ƒink:
     true and false
   | equals ƒink:
     false
 
 
-skip-ir test 'or', fn:
+test 'or', fn:
   expect run ƒink:
     true or false
   | equals ƒink:
     true
 
 
-skip-ir test 'xor', fn:
+test 'xor', fn:
   expect run ƒink:
     true xor true
   | equals ƒink:
@@ -124,37 +124,37 @@ skip-ir test 'chain with bool', fn:
 
 # --- Bitwise operators ---
 
-skip-ir test 'bitwise and', fn:
+test 'bitwise and', fn:
   expect run ƒink:
     0xFF and 0x0F
   | equals ƒink:
     15
 
-skip-ir test 'bitwise or', fn:
+test 'bitwise or', fn:
   expect run ƒink:
     0xFF or 0x0F
   | equals ƒink:
     255
 
-skip-ir test 'bitwise xor', fn:
+test 'bitwise xor', fn:
   expect run ƒink:
     0xFF xor 0x0F
   | equals ƒink:
     240
 
-skip-ir test 'bitwise not', fn:
+test 'bitwise not', fn:
   expect run ƒink:
     not 0
   | equals ƒink:
     -1
 
-skip-ir test 'bitwise shift left', fn:
+test 'bitwise shift left', fn:
   expect run ƒink:
     1 << 8
   | equals ƒink:
     256
 
-skip-ir test 'bitwise shift right', fn:
+test 'bitwise shift right', fn:
   expect run ƒink:
     256 >> 4
   | equals ƒink:

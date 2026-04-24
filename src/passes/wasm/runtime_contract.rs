@@ -77,12 +77,22 @@ pub enum Sym {
   Num,
   Fn2,
 
-  // ── functions ──────────────────────────────────────────────────
+  // ── calling-convention primitives (std/list.wat today) ────────
   ArgsHead,
   ArgsEmpty,
   ArgsPrepend,
+
+  // ── application (rt/apply.wat) ────────────────────────────────
   Apply,
-  OpPlus,
+
+  // ── polymorphic protocol operators (rt/protocols.wat) ─────────
+  // All binary operators share the shape (anyref, anyref, anyref)
+  // → unit (i.e. Fn_op_binary); Not is the only unary today
+  // (anyref, anyref) → unit.
+  OpPlus, OpMinus, OpMul, OpDiv, OpIntDiv, OpRem, OpIntMod,
+  OpEq, OpNeq, OpLt, OpLte, OpGt, OpGte,
+  OpAnd, OpOr, OpXor, OpNot,
+  OpShl, OpShr,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -114,9 +124,35 @@ impl RuntimeUsage {
 /// framing, not a BuiltIn call).
 fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
   match b {
-    BuiltIn::Add => &[Sym::OpPlus, Sym::Num],
-    // TODO: as lowering grows, fill in the actual mappings. For now
-    // only the Builtins lowering actually encounters matter.
+    // Arithmetic — all route through Num boxing.
+    BuiltIn::Add    => &[Sym::OpPlus,   Sym::Num],
+    BuiltIn::Sub    => &[Sym::OpMinus,  Sym::Num],
+    BuiltIn::Mul    => &[Sym::OpMul,    Sym::Num],
+    BuiltIn::Div    => &[Sym::OpDiv,    Sym::Num],
+    BuiltIn::IntDiv => &[Sym::OpIntDiv, Sym::Num],
+    BuiltIn::Mod    => &[Sym::OpRem,    Sym::Num],
+    BuiltIn::IntMod => &[Sym::OpIntMod, Sym::Num],
+    // Comparison — numeric operands (Num), bool result (i31, no
+    // runtime type import needed).
+    BuiltIn::Eq  => &[Sym::OpEq,  Sym::Num],
+    BuiltIn::Neq => &[Sym::OpNeq, Sym::Num],
+    BuiltIn::Lt  => &[Sym::OpLt,  Sym::Num],
+    BuiltIn::Lte => &[Sym::OpLte, Sym::Num],
+    BuiltIn::Gt  => &[Sym::OpGt,  Sym::Num],
+    BuiltIn::Gte => &[Sym::OpGte, Sym::Num],
+    // Logic / bitwise — polymorphic at the runtime (dispatches on
+    // bool vs int). Boolean literals use i31, int literals Num —
+    // mark Num for the shared-boxing path (int-lit lowering is a
+    // follow-up; today both operands appear as bool lits / num lits
+    // and Num-boxing covers the num case).
+    BuiltIn::And => &[Sym::OpAnd, Sym::Num],
+    BuiltIn::Or  => &[Sym::OpOr,  Sym::Num],
+    BuiltIn::Xor => &[Sym::OpXor, Sym::Num],
+    BuiltIn::Not => &[Sym::OpNot, Sym::Num],
+    // Shifts — int operands.
+    BuiltIn::Shl => &[Sym::OpShl, Sym::Num],
+    BuiltIn::Shr => &[Sym::OpShr, Sym::Num],
+    // Not yet lowered — add mappings when lower gains coverage.
     BuiltIn::FinkModule => &[],
     _ => &[],
   }
@@ -128,34 +164,82 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
 
 /// Handles to every declared runtime-contract symbol. Populated by
 /// [`declare`]; read (not re-declared) by lowering. Signature types
-/// (`fn_any_to_any` etc.) are local types declared by `declare`,
-/// not imports — see [`Sym`] for the distinction.
+/// are local types declared by `declare`, not imports — see [`Sym`]
+/// for the distinction.
 #[derive(Default)]
 pub struct Runtime {
   // imported value types
   num: Option<TypeSym>,
   fn2: Option<TypeSym>,
   // locally-declared function signature types (structural)
-  fn_any_to_any:  Option<TypeSym>,
-  fn_nil_to_list: Option<TypeSym>,
-  fn_prepend_any: Option<TypeSym>,
-  fn_bin_op:      Option<TypeSym>,
-  // functions
+  fn_any_to_any:  Option<TypeSym>,  // (anyref) -> anyref          -- args_head
+  fn_nil_to_list: Option<TypeSym>,  // () -> anyref                -- args_empty
+  fn_prepend_any: Option<TypeSym>,  // (anyref, anyref) -> anyref  -- args_prepend
+  fn_op_binary:   Option<TypeSym>,  // (anyref, anyref, anyref)    -- op_plus/eq/...
+  fn_op_unary:    Option<TypeSym>,  // (anyref, anyref)            -- op_not
+  // calling-convention funcs
   args_head:    Option<FuncSym>,
-  args_empty:         Option<FuncSym>,
+  args_empty:   Option<FuncSym>,
   args_prepend: Option<FuncSym>,
-  apply:            Option<FuncSym>,
-  op_plus:          Option<FuncSym>,
+  apply:        Option<FuncSym>,
+  // polymorphic protocol operators
+  op_plus:    Option<FuncSym>,
+  op_minus:   Option<FuncSym>,
+  op_mul:     Option<FuncSym>,
+  op_div:     Option<FuncSym>,
+  op_intdiv:  Option<FuncSym>,
+  op_rem:     Option<FuncSym>,
+  op_intmod:  Option<FuncSym>,
+  op_eq:      Option<FuncSym>,
+  op_neq:     Option<FuncSym>,
+  op_lt:      Option<FuncSym>,
+  op_lte:     Option<FuncSym>,
+  op_gt:      Option<FuncSym>,
+  op_gte:     Option<FuncSym>,
+  op_and:     Option<FuncSym>,
+  op_or:      Option<FuncSym>,
+  op_xor:     Option<FuncSym>,
+  op_not:     Option<FuncSym>,
+  op_shl:     Option<FuncSym>,
+  op_shr:     Option<FuncSym>,
 }
 
 impl Runtime {
-  pub fn num(&self)              -> TypeSym { self.num.expect("rt: Num not declared") }
-  pub fn fn2(&self)              -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
+  pub fn num(&self)          -> TypeSym { self.num.expect("rt: Num not declared") }
+  pub fn fn2(&self)          -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
-  pub fn args_empty(&self)         -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
+  pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
   pub fn args_prepend(&self) -> FuncSym { self.args_prepend.expect("rt: args_prepend not declared") }
-  pub fn apply(&self)            -> FuncSym { self.apply.expect("rt: _apply not declared") }
-  pub fn op_plus(&self)          -> FuncSym { self.op_plus.expect("rt: op_plus not declared") }
+  pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
+
+  /// Look up the runtime func for a protocol operator `Sym`. Panics
+  /// if the Sym wasn't declared — lowering should scan → declare
+  /// every Sym it plans to read.
+  pub fn op(&self, sym: Sym) -> FuncSym {
+    let f = match sym {
+      Sym::OpPlus   => self.op_plus,
+      Sym::OpMinus  => self.op_minus,
+      Sym::OpMul    => self.op_mul,
+      Sym::OpDiv    => self.op_div,
+      Sym::OpIntDiv => self.op_intdiv,
+      Sym::OpRem    => self.op_rem,
+      Sym::OpIntMod => self.op_intmod,
+      Sym::OpEq     => self.op_eq,
+      Sym::OpNeq    => self.op_neq,
+      Sym::OpLt     => self.op_lt,
+      Sym::OpLte    => self.op_lte,
+      Sym::OpGt     => self.op_gt,
+      Sym::OpGte    => self.op_gte,
+      Sym::OpAnd    => self.op_and,
+      Sym::OpOr     => self.op_or,
+      Sym::OpXor    => self.op_xor,
+      Sym::OpNot    => self.op_not,
+      Sym::OpShl    => self.op_shl,
+      Sym::OpShr    => self.op_shr,
+      _ => panic!("rt.op: {:?} is not a protocol-operator Sym", sym),
+    };
+    f.unwrap_or_else(|| panic!("rt: {:?} not declared", sym))
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -182,10 +266,28 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Num             => ("rt/types.wat",     "Num"),
     Sym::Fn2             => ("rt/types.wat",     "Fn2"),
     Sym::Apply           => ("rt/apply.wat",     "_apply"),
-    Sym::OpPlus          => ("rt/protocols.wat", "op_plus"),
     Sym::ArgsHead        => ("std/list.wat",     "args_head"),
     Sym::ArgsEmpty       => ("std/list.wat",     "args_empty"),
     Sym::ArgsPrepend     => ("std/list.wat",     "args_prepend"),
+    Sym::OpPlus          => ("rt/protocols.wat", "op_plus"),
+    Sym::OpMinus         => ("rt/protocols.wat", "op_minus"),
+    Sym::OpMul           => ("rt/protocols.wat", "op_mul"),
+    Sym::OpDiv           => ("rt/protocols.wat", "op_div"),
+    Sym::OpIntDiv        => ("rt/protocols.wat", "op_intdiv"),
+    Sym::OpRem           => ("rt/protocols.wat", "op_rem"),
+    Sym::OpIntMod        => ("rt/protocols.wat", "op_intmod"),
+    Sym::OpEq            => ("rt/protocols.wat", "op_eq"),
+    Sym::OpNeq           => ("rt/protocols.wat", "op_neq"),
+    Sym::OpLt            => ("rt/protocols.wat", "op_lt"),
+    Sym::OpLte           => ("rt/protocols.wat", "op_lte"),
+    Sym::OpGt            => ("rt/protocols.wat", "op_gt"),
+    Sym::OpGte           => ("rt/protocols.wat", "op_gte"),
+    Sym::OpAnd           => ("rt/protocols.wat", "op_and"),
+    Sym::OpOr            => ("rt/protocols.wat", "op_or"),
+    Sym::OpXor           => ("rt/protocols.wat", "op_xor"),
+    Sym::OpNot           => ("rt/protocols.wat", "op_not"),
+    Sym::OpShl           => ("rt/protocols.wat", "op_shl"),
+    Sym::OpShr           => ("rt/protocols.wat", "op_shr"),
   }
 }
 
@@ -201,7 +303,10 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // identity across the ABI: user struct.new instances must match
   // runtime's concrete type indices. Emit resolves them against
   // `types.wasm` at emit time.
-  if needed.contains(&Sym::Num) || needed.contains(&Sym::OpPlus) {
+  //
+  // `Num` is needed whenever a literal number or arithmetic
+  // operator appears — numeric literals box into `struct.new $Num`.
+  if needed.contains(&Sym::Num) || needs_num_literal_type(usage) {
     let (m, n) = import_key(Sym::Num);
     rt.num = Some(ty_import(frag, m, n, AbsHeap::Any));
   }
@@ -262,17 +367,85 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     let (m, n) = import_key(Sym::Apply);
     rt.apply = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"), m, n));
   }
-  if needed.contains(&Sym::OpPlus) {
+  // Polymorphic protocol operators — all share one of two signature
+  // types. Each operand is `anyref`; operand boxing (e.g. `$Num`)
+  // happens at the user call site. Declare the shared signature
+  // types once, then import each operator that the program uses.
+  if any_binary_op_needed(usage) {
     let sig = ty_func(frag,
       vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
       vec![],
-      "rt/protocols.wat:Fn_op_plus");
-    rt.fn_bin_op = Some(sig);
-    let (m, n) = import_key(Sym::OpPlus);
-    rt.op_plus = Some(import_func(frag, sig, m, n));
+      "rt/protocols.wat:Fn_op_binary");
+    rt.fn_op_binary = Some(sig);
+  }
+  if needed.contains(&Sym::OpNot) {
+    let sig = ty_func(frag,
+      vec![anyref_n.clone(), anyref_n.clone()],
+      vec![],
+      "rt/protocols.wat:Fn_op_unary");
+    rt.fn_op_unary = Some(sig);
+  }
+
+  for sym in BINARY_OPS {
+    if needed.contains(sym) {
+      let sig = rt.fn_op_binary.expect("fn_op_binary must be declared");
+      let (m, n) = import_key(*sym);
+      let f = import_func(frag, sig, m, n);
+      set_op(&mut rt, *sym, f);
+    }
+  }
+  if needed.contains(&Sym::OpNot) {
+    let sig = rt.fn_op_unary.expect("fn_op_unary must be declared");
+    let (m, n) = import_key(Sym::OpNot);
+    rt.op_not = Some(import_func(frag, sig, m, n));
   }
 
   rt
+}
+
+/// All binary-protocol Syms — share `Fn_op_binary` signature.
+const BINARY_OPS: &[Sym] = &[
+  Sym::OpPlus, Sym::OpMinus, Sym::OpMul, Sym::OpDiv, Sym::OpIntDiv, Sym::OpRem, Sym::OpIntMod,
+  Sym::OpEq, Sym::OpNeq, Sym::OpLt, Sym::OpLte, Sym::OpGt, Sym::OpGte,
+  Sym::OpAnd, Sym::OpOr, Sym::OpXor,
+  Sym::OpShl, Sym::OpShr,
+];
+
+fn any_binary_op_needed(usage: &RuntimeUsage) -> bool {
+  BINARY_OPS.iter().any(|s| usage.used.contains(s))
+}
+
+fn needs_num_literal_type(usage: &RuntimeUsage) -> bool {
+  // Any numeric-operand operator or explicit Num use means we need
+  // the `$Num` type for boxing numeric literals.
+  BINARY_OPS.iter().any(|s| usage.used.contains(s)) || usage.has(Sym::OpNot)
+}
+
+/// Store the handle for a declared binary-protocol Sym back into the
+/// Runtime's typed slot. Mirrors the enum spread in `Runtime::op`.
+fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
+  let slot = match sym {
+    Sym::OpPlus   => &mut rt.op_plus,
+    Sym::OpMinus  => &mut rt.op_minus,
+    Sym::OpMul    => &mut rt.op_mul,
+    Sym::OpDiv    => &mut rt.op_div,
+    Sym::OpIntDiv => &mut rt.op_intdiv,
+    Sym::OpRem    => &mut rt.op_rem,
+    Sym::OpIntMod => &mut rt.op_intmod,
+    Sym::OpEq     => &mut rt.op_eq,
+    Sym::OpNeq    => &mut rt.op_neq,
+    Sym::OpLt     => &mut rt.op_lt,
+    Sym::OpLte    => &mut rt.op_lte,
+    Sym::OpGt     => &mut rt.op_gt,
+    Sym::OpGte    => &mut rt.op_gte,
+    Sym::OpAnd    => &mut rt.op_and,
+    Sym::OpOr     => &mut rt.op_or,
+    Sym::OpXor    => &mut rt.op_xor,
+    Sym::OpShl    => &mut rt.op_shl,
+    Sym::OpShr    => &mut rt.op_shr,
+    _ => panic!("set_op: {:?} is not a binary-protocol Sym", sym),
+  };
+  *slot = Some(f);
 }
 
 /// Fn2 is required by every fink_module definition. Without a
