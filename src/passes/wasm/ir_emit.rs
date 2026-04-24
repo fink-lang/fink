@@ -574,9 +574,13 @@ fn emit_instr(
       }
       func.instruction(&Instruction::ReturnCall(func_remap[target.0 as usize]));
     }
+    InstrKind::RefI31 { src, into } => {
+      emit_operand(func, src, type_remap, func_remap);
+      func.instruction(&Instruction::RefI31);
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
     InstrKind::RefNull { .. }
     | InstrKind::RefNullConcrete { .. }
-    | InstrKind::RefI31 { .. }
     | InstrKind::I31GetS { .. }
     | InstrKind::RefFunc { .. }
     | InstrKind::RefCastNonNull { .. }

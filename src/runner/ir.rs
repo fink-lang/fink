@@ -24,6 +24,7 @@ mod tests {
 
   enum TestResult {
     Num(f64),
+    Bool(bool),
     None,
   }
 
@@ -39,6 +40,7 @@ mod tests {
           format!("{}", v)
         }
       }
+      Ok(TestResult::Bool(b)) => format!("{}", b),
       Ok(TestResult::None) => String::new(),
       Err(e) => format!("ERROR: {}", e),
     }
@@ -81,6 +83,12 @@ mod tests {
                 Val::AnyRef(Some(r)) => r,
                 _ => return Ok(()),
               };
+              // Bools: i31ref (0 = false, 1 = true).
+              if let Ok(Some(i31)) = head_any.as_i31(&caller) {
+                *captured_clone.lock().unwrap() =
+                  Some(TestResult::Bool(i31.get_i32() != 0));
+                return Ok(());
+              }
               // $Num: struct with f64 in field 0.
               if let Ok(Some(st)) = head_any.as_struct(&caller)
                 && let Ok(Val::F64(bits)) = st.field(&mut caller, 0)

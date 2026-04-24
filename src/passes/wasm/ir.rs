@@ -622,6 +622,10 @@ pub fn push_struct_new(
   push(frag, InstrKind::StructNew { ty, fields, into })
 }
 
+pub fn push_ref_i31(frag: &mut Fragment, src: Operand, into: LocalIdx) -> InstrId {
+  push(frag, InstrKind::RefI31 { src, into })
+}
+
 pub fn push_ref_cast_non_null(
   frag: &mut Fragment,
   ty: TypeSym,

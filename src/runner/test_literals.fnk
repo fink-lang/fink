@@ -16,14 +16,14 @@ test 'float literal', fn:
     3.14
 
 
-skip-ir test 'bool literal true', fn:
+test 'bool literal true', fn:
   expect run ƒink:
     true
   | equals ƒink:
     true
 
 
-skip-ir test 'bool literal false', fn:
+test 'bool literal false', fn:
   expect run ƒink:
     false
   | equals ƒink:
