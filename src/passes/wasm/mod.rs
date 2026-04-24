@@ -260,5 +260,6 @@ mod tests {
 
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_literals.fnk", skip-ir);
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_operators.fnk", skip-ir);
+    test_macros::include_fink_tests!("src/passes/wasm/test_ir_bindings.fnk", skip-ir);
   }
 }

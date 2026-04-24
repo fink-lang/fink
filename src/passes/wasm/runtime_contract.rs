@@ -522,6 +522,9 @@ pub fn scan(cps: &CpsResult) -> RuntimeUsage {
 /// True if the fink_module body's tail App calls a user continuation
 /// (requiring the `_apply` + list bring-up path) rather than a direct
 /// builtin (`op_plus` etc.).
+///
+/// Walks through LetVal / LetFn wrappers and `Pub` App-chains to
+/// find the actual tail expression.
 fn tail_uses_apply(root: &Expr) -> bool {
   // Find the fink_module body — `App(FinkModule, [Cont::Expr { body }])`.
   let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind else {
@@ -530,10 +533,33 @@ fn tail_uses_apply(root: &Expr) -> bool {
   let Some(Arg::Cont(Cont::Expr { body, .. })) = args.first() else {
     return true;
   };
-  // The tail is body itself (lifted CPS has a single flat expression).
-  matches!(&body.kind,
-    ExprKind::App { func: Callable::Val(_), .. }
-  )
+  tail_is_apply_path(body)
+}
+
+fn tail_is_apply_path(expr: &Expr) -> bool {
+  match &expr.kind {
+    // Value bindings / function definitions are transparent — recurse
+    // into the cont body to find the tail.
+    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
+      match cont {
+        Cont::Expr { body, .. } => tail_is_apply_path(body),
+        Cont::Ref(_) => true, // tail is _apply(args, cont_ref)
+      }
+    }
+    // Pub is a no-op wrapper — recurse into its cont body.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
+      if let Some(Arg::Cont(Cont::Expr { body, .. })) = args.get(1) {
+        tail_is_apply_path(body)
+      } else {
+        true
+      }
+    }
+    // Direct tail: App where callee is a Val (user cont) → apply path.
+    // App with BuiltIn (op_plus etc.) → direct, no apply needed.
+    ExprKind::App { func: Callable::Val(_), .. } => true,
+    ExprKind::App { func: Callable::BuiltIn(_), .. } => false,
+    ExprKind::If { .. } => true, // conservative — apply on at least one branch
+  }
 }
 
 fn scan_expr(expr: &Expr, usage: &mut RuntimeUsage) {
