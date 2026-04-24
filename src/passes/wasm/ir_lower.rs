@@ -49,6 +49,24 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
     panic!("ir_lower: unsupported CPS root shape (expected App(FinkModule, [Cont::Expr]))");
   };
 
+  // Scan for ·ƒpub apps and pre-allocate one exported (mut anyref)
+  // global per exported binding. The Pub arm in lower_expr looks these
+  // up by CpsId to emit global.set at the export site.
+  let mut pubs: Vec<(CpsId, String)> = Vec::new();
+  find_pub_apps(module_body, cps, ast, &mut pubs);
+  let mut pub_globals: HashMap<CpsId, GlobalSym> = HashMap::new();
+  for (id, name) in &pubs {
+    let sym = add_global(
+      &mut frag,
+      val_anyref(true),
+      true,
+      GlobalInit::RefNull(AbsHeap::Any),
+      name,
+      Some(name.clone()),
+    );
+    pub_globals.insert(*id, sym);
+  }
+
   // Lower the module body as the `fink_module` function.
   let fink_module = lower_fn(
     &mut frag, &rt, cps, ast,
@@ -56,6 +74,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
     &[ret_bind],   // user param: ƒret
     module_body,
     "fink_module",
+    &pub_globals,
   );
   frag.funcs[fink_module.0 as usize].export = Some("fink_module".into());
 
@@ -82,17 +101,19 @@ fn lower_fn(
   user_params: &[CpsId],
   body: &Expr,
   display: &str,
+  pub_globals: &HashMap<CpsId, GlobalSym>,
 ) -> FuncSym {
-  let mut ctx = FnCtx::new();
+  let mut ctx = FnCtx::new(pub_globals.clone());
 
-  // WASM-level params (always just `$_caps` and `$_args` — the
-  // $Fn2 shape).
-  let _l_caps = ctx.alloc_param("_caps");
-  let l_args_p = ctx.alloc_param("_args");
+  // WASM-level params (always just `$:caps` and `$:params` — the
+  // $Fn2 shape). Colon-prefix is lexer-rejected in Fink source, so
+  // these synth names can never collide with user bindings.
+  let _l_caps = ctx.alloc_param(":caps_param");
+  let l_args_p = ctx.alloc_param(":params");
 
   // Unpack captures from $_caps into locals.
   for (i, cap_id) in cap_params.iter().enumerate() {
-    let name = cps_ident(cps, *cap_id);
+    let name = cps_ident(cps, ast, *cap_id);
     let local = ctx.alloc_local(&name);
     ctx.bind(*cap_id, local);
     // array.get $Captures (ref.cast (ref $Captures) $_caps) <i>
@@ -113,7 +134,7 @@ fn lower_fn(
   // params we'd need `args_tail` calls — a TODO for multi-param
   // functions.
   if let Some(first) = user_params.first() {
-    let name = cps_ident(cps, *first);
+    let name = cps_ident(cps, ast, *first);
     let local = ctx.alloc_local(&name);
     ctx.bind(*first, local);
     let i = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(local));
@@ -150,6 +171,10 @@ struct FnCtx {
   /// InstrKind yet; a placeholder Unreachable gets substituted with
   /// the real unpack once ir.rs grows the capability.
   cap_unpacks: Vec<CapUnpack>,
+  /// Module-level exports: CpsId → pre-allocated GlobalSym. Used by
+  /// the `Pub` arm to emit `global.set` at the export site. Shared
+  /// across all fns in a module (cloned on FnCtx construction).
+  pub_globals: HashMap<CpsId, GlobalSym>,
 }
 
 struct CapUnpack {
@@ -159,7 +184,7 @@ struct CapUnpack {
 }
 
 impl FnCtx {
-  fn new() -> Self {
+  fn new(pub_globals: HashMap<CpsId, GlobalSym>) -> Self {
     Self {
       params: Vec::new(),
       locals: Vec::new(),
@@ -167,6 +192,7 @@ impl FnCtx {
       binds: HashMap::new(),
       next_local_idx: 0,
       cap_unpacks: Vec::new(),
+      pub_globals,
     }
   }
 
@@ -212,7 +238,7 @@ fn lower_expr(
 ) {
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
-      let local = ctx.alloc_local(&cps_ident_for_bind(cps, name));
+      let local = ctx.alloc_local(&cps_ident_for_bind(cps, ast, name));
       ctx.bind(name.id, local);
       let i = emit_val_into(ctx, frag, rt, cps, ast, val, local);
       if let Some(o) = origin_of(cps, ast, name.id) { set_origin(frag, i, o); }
@@ -235,8 +261,8 @@ fn lower_expr(
         }
       }
       // Lift the fn body to a separate Fn2.
-      let display = cps_ident_for_bind(cps, name);
-      let fn_sym = lower_fn(frag, rt, cps, ast, &cap_ids, &user_ids, fn_body, &display);
+      let display = cps_ident_for_bind(cps, ast, name);
+      let fn_sym = lower_fn(frag, rt, cps, ast, &cap_ids, &user_ids, fn_body, &display, &ctx.pub_globals);
       // The LetFn binds `name.id` to a funcref-valued local; we model
       // it as an anyref local holding a `ref.func` funcref. Actual
       // `ref.func` emission happens at the LetVal(FnClosure) site
@@ -247,10 +273,20 @@ fn lower_expr(
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
-      // `·ƒpub val, cont` — val is ignored (pub is a compile-time
-      // marker; the actual export happens via module-level metadata
-      // which this tracer doesn't thread yet). Just emit the cont
-      // body.
+      // `·ƒpub val, cont` — emit `global.set $<name>` into the
+      // pre-allocated export global for this binding, then descend
+      // into the cont body. Globals are pre-allocated in `lower()`
+      // via `find_pub_apps`.
+      let Some(Arg::Val(val)) = args.first() else {
+        panic!("ir_lower: Pub expects [val, cont], missing val");
+      };
+      let id = cps_id_of_ref(val);
+      let sym = *ctx.pub_globals.get(&id)
+        .unwrap_or_else(|| panic!("ir_lower: Pub val CpsId {:?} has no pre-allocated global", id));
+      let local = ctx.lookup(id);
+      let i = push_global_set(frag, sym, op_local(local));
+      ctx.instrs.push(i);
+
       let cont_arg = args.get(1)
         .unwrap_or_else(|| panic!("ir_lower: Pub expects [val, cont]"));
       let Arg::Cont(cont) = cont_arg else {
@@ -302,7 +338,7 @@ fn lower_expr(
         panic!("ir_lower: FnClosure cont is not Expr");
       };
       let bind = cont_args.first().expect("FnClosure cont has no bind");
-      let local = ctx.alloc_local(&cps_ident_for_bind(cps, bind));
+      let local = ctx.alloc_local(&cps_ident_for_bind(cps, ast, bind));
       ctx.bind(bind.id, local);
 
       // Emit: local = struct.new $Closure (ref.func fn_sym, array.new_fixed $Captures N cap_ops).
@@ -324,7 +360,7 @@ fn lower_expr(
       let cont_id = if let ValKind::ContRef(id) = &v.kind { *id } else { unreachable!() };
       let callee = ctx.lookup(cont_id);
 
-      let l_args_list = ctx.alloc_local("args");
+      let l_args_list = ctx.alloc_local(":args");
       let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
       let i_cons = push_call(frag, rt.args_prepend(),
@@ -347,7 +383,7 @@ fn lower_expr(
         .unwrap_or_else(|| panic!("ir_lower: apply-path (Val) expects >=1 arg"));
       let op0 = emit_arg_as_operand(ctx, frag, rt, cps, ast, first);
 
-      let l_args_list = ctx.alloc_local("args");
+      let l_args_list = ctx.alloc_local(":args");
       let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
       let i_cons = push_call(frag, rt.args_prepend(),
@@ -379,7 +415,7 @@ fn lower_cont(
     Cont::Ref(id) => {
       // Tail-call the named cont with an empty args list.
       let callee = ctx.lookup(*id);
-      let l_args_list = ctx.alloc_local("args");
+      let l_args_list = ctx.alloc_local(":args");
       let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
       let i_app = push_return_call(frag, rt.apply(),
@@ -601,15 +637,84 @@ fn ref_cps_id(r: Ref) -> CpsId {
   }
 }
 
-fn cps_ident_for_bind(_cps: &CpsResult, b: &BindNode) -> String {
-  // Match the old pipeline's naming convention (`$v_<cps_id>`) so
-  // test_ir_*.fnk fixtures don't churn on cosmetic local-name diffs
-  // when the walker replaces bespoke builders.
-  format!("v_{}", b.id.0)
+fn cps_ident_for_bind(cps: &CpsResult, ast: &Ast<'_>, b: &BindNode) -> String {
+  cps_ident(cps, ast, b.id)
 }
 
-fn cps_ident(_cps: &CpsResult, id: CpsId) -> String {
-  format!("v_{}", id.0)
+/// Derive a display name for a CPS bind/ref. Uses the source ident
+/// from the origin map (`{ident}_{id}`) when available, otherwise
+/// falls back to `v_<id>`. Mirrors `collect.rs::label`.
+fn cps_ident(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> String {
+  let ast_id = cps.origin.try_get(id).and_then(|o| *o);
+  match ast_id {
+    Some(a) => match &ast.nodes.get(a).kind {
+      crate::ast::NodeKind::Ident(s) => format!("{}_{}", s, id.0),
+      _ => format!("v_{}", id.0),
+    },
+    None => format!("v_{}", id.0),
+  }
+}
+
+/// Recover the user-visible export name for a CpsId via the origin map.
+/// Mirrors `collect.rs::export_name`.
+fn pub_export_name(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> String {
+  let ast_id = cps.origin.try_get(id).and_then(|o| *o);
+  match ast_id {
+    Some(a) => match &ast.nodes.get(a).kind {
+      crate::ast::NodeKind::Ident(s) => s.to_string(),
+      _ => format!("v_{}", id.0),
+    },
+    None => format!("v_{}", id.0),
+  }
+}
+
+/// Scan the CPS tree for every `App(BuiltIn::Pub, [Val, Cont])` and
+/// return `(exported CpsId, source name)` pairs in encounter order.
+/// Mirrors `collect.rs::find_export_app` (the Pub-only branch).
+fn find_pub_apps(
+  expr: &Expr,
+  cps: &CpsResult,
+  ast: &Ast<'_>,
+  out: &mut Vec<(CpsId, String)>,
+) {
+  match &expr.kind {
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
+      for arg in args {
+        if let Arg::Val(v) = arg
+          && let ValKind::Ref(Ref::Synth(id)) = v.kind
+        {
+          out.push((id, pub_export_name(cps, ast, id)));
+        }
+        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
+          find_pub_apps(body, cps, ast, out);
+        }
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for arg in args {
+        match arg {
+          Arg::Cont(Cont::Expr { body, .. }) => find_pub_apps(body, cps, ast, out),
+          Arg::Expr(e) => find_pub_apps(e, cps, ast, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      find_pub_apps(fn_body, cps, ast, out);
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
+    ExprKind::LetVal { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        find_pub_apps(body, cps, ast, out);
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      find_pub_apps(then, cps, ast, out);
+      find_pub_apps(else_, cps, ast, out);
+    }
+  }
 }
 
 fn short_kind(k: &ExprKind) -> &'static str {

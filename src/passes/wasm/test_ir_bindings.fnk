@@ -4,95 +4,104 @@
 
 
 
-skip-ir test 'single binding export', fn:
+test 'single binding export', fn:
   expect ir_wat ƒink:
     foo = 1
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_1 (ref any))
-        (local $foo_0 (ref any))
-        (local $local_4 (ref any))
-        (local.set $v_1 (call $_list_head_any (local.get $_args)))
-        (local.set $foo_0 (struct.new $Num (f64.const 1)))
+      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
+      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "rt/apply.wat" "_apply" (func $rt/apply.wat:_apply (type $rt/types.wat:Fn2)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $v_1 (ref null any))
+        (local $foo_0 (ref null any))
+        (local $:args (ref null any))
+        (local.set $v_1 (call $std/list.wat:args_head (local.get $:params)))
+        (local.set $foo_0 (struct.new $rt/types.wat:Num (f64.const 1)))
         (global.set $foo (local.get $foo_0))
-        (local.set $local_4 (call $_list_nil))
-        (local.set $local_4 (call $_list_prepend_any (local.get $foo_0) (local.get $local_4)))
-        (return_call $__apply (local.get $local_4) (local.get $v_1))
+        (local.set $:args (call $std/list.wat:args_empty))
+        (local.set $:args (call $std/list.wat:args_prepend (local.get $foo_0) (local.get $:args)))
+        (return_call $rt/apply.wat:_apply (local.get $:args) (local.get $v_1))
       )
+      (export "fink_module" (func $fink_module))
       (global $foo (mut (ref null any)) (ref.null any))
       (export "foo" (global $foo))
-      (export "fink_module" (func $fink_module))
     )
-    ;; sm:CgAAEABGAHwAqAEANgA6AIoGAHABAAOYAQA
+    ;; sm:BpgQAJIBAQADiAEAUgBuAL4BAA
 
 
 
-skip-ir test 'let binding', fn:
+test 'let binding', fn:
   expect ir_wat ƒink:
     x = 42
     x
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $x_1 (ref any))
-        (local $x_0 (ref any))
-        (local $local_4 (ref any))
-        (local.set $x_1 (call $_list_head_any (local.get $_args)))
-        (local.set $x_0 (struct.new $Num (f64.const 42)))
+      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
+      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "rt/apply.wat" "_apply" (func $rt/apply.wat:_apply (type $rt/types.wat:Fn2)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $x_1 (ref null any))
+        (local $x_0 (ref null any))
+        (local $:args (ref null any))
+        (local.set $x_1 (call $std/list.wat:args_head (local.get $:params)))
+        (local.set $x_0 (struct.new $rt/types.wat:Num (f64.const 42)))
         (global.set $x (local.get $x_0))
-        (local.set $local_4 (call $_list_nil))
-        (local.set $local_4 (call $_list_prepend_any (local.get $x_0) (local.get $local_4)))
-        (return_call $__apply (local.get $local_4) (local.get $x_1))
+        (local.set $:args (call $std/list.wat:args_empty))
+        (local.set $:args (call $std/list.wat:args_prepend (local.get $x_0) (local.get $:args)))
+        (return_call $rt/apply.wat:_apply (local.get $:args) (local.get $x_1))
       )
+      (export "fink_module" (func $fink_module))
       (global $x (mut (ref null any)) (ref.null any))
       (export "x" (global $x))
-      (export "fink_module" (func $fink_module))
     )
-    ;; sm:CgAAEABGAHwAqAEANgA2APwFAGwBAAGQAQA
+    ;; sm:BpQQAJIBAQABhgEASgBuALoBAA
 
 
 
-skip-ir test 'multiple let bindings used', fn:
+test 'multiple let bindings used', fn:
   expect ir_wat ƒink:
     x = 2
     y = 3
     x + y
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_2 (ref any))
-        (local $x_0 (ref any))
-        (local $v_12 (ref any))
-        (local $y_1 (ref any))
-        (local $v_10 (ref any))
-        (local $local_7 (ref any))
-        (local.set $v_2 (call $_list_head_any (local.get $_args)))
-        (local.set $x_0 (struct.new $Num (f64.const 2)))
+      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $v_2 (ref null any))
+        (local $x_0 (ref null any))
+        (local $y_1 (ref null any))
+        (local.set $v_2 (call $std/list.wat:args_head (local.get $:params)))
+        (local.set $x_0 (struct.new $rt/types.wat:Num (f64.const 2)))
         (global.set $x (local.get $x_0))
-        (local.set $y_1 (struct.new $Num (f64.const 3)))
+        (local.set $y_1 (struct.new $rt/types.wat:Num (f64.const 3)))
         (global.set $y (local.get $y_1))
-        (return_call $_op_plus (local.get $x_0) (local.get $y_1) (local.get $v_2))
+        (return_call $rt/protocols.wat:op_plus (local.get $x_0) (local.get $y_1) (local.get $v_2))
       )
-      (global $x (mut (ref null any)) (ref.null any))
-      (global $y (mut (ref null any)) (ref.null any))
-      (export "x" (global $x))
-      (export "y" (global $y))
       (export "fink_module" (func $fink_module))
+      (global $x (mut (ref null any)) (ref.null any))
+      (export "x" (global $x))
+      (global $y (mut (ref null any)) (ref.null any))
+      (export "y" (global $y))
     )
-    ;; sm:DgAAEABGAHwAqAEANgA2ADgANgA4AMIFANABAQABNgEMAZABAA
+    ;; sm:BvILAJIBAQABhAEASgEMAYQBAEoBDAU
 
 
 

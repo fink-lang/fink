@@ -580,6 +580,27 @@ pub fn import_func(
   sym
 }
 
+/// Append a global declaration.
+pub fn add_global(
+  frag: &mut Fragment,
+  ty: ValType,
+  mutable: bool,
+  init: GlobalInit,
+  display: &str,
+  export: Option<String>,
+) -> GlobalSym {
+  let sym = GlobalSym(frag.globals.len() as u32);
+  frag.globals.push(GlobalDecl {
+    ty,
+    mutable,
+    init,
+    display: Some(display.into()),
+    import: None,
+    export,
+  });
+  sym
+}
+
 // --- operands (leaves) -------------------------------------------
 
 pub fn op_i32(v: i32) -> Operand { Operand::I32(v) }
