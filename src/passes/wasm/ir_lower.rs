@@ -265,6 +265,11 @@ fn binary_op_sym(b: BuiltIn) -> Option<Sym> {
     BuiltIn::Xor    => Sym::OpXor,
     BuiltIn::Shl    => Sym::OpShl,
     BuiltIn::Shr    => Sym::OpShr,
+    BuiltIn::Range     => Sym::OpRngex,
+    BuiltIn::RangeIncl => Sym::OpRngin,
+    BuiltIn::In        => Sym::OpIn,
+    BuiltIn::NotIn     => Sym::OpNotIn,
+    BuiltIn::Get       => Sym::OpDot,
     _ => return None,
   })
 }

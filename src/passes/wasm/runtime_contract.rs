@@ -93,6 +93,7 @@ pub enum Sym {
   OpEq, OpNeq, OpLt, OpLte, OpGt, OpGte,
   OpAnd, OpOr, OpXor, OpNot,
   OpShl, OpShr,
+  OpRngex, OpRngin, OpIn, OpNotIn, OpDot,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -151,6 +152,12 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     // Shifts
     BuiltIn::Shl => &[Sym::OpShl],
     BuiltIn::Shr => &[Sym::OpShr],
+    // Range / membership / field-access (polymorphic)
+    BuiltIn::Range     => &[Sym::OpRngex],
+    BuiltIn::RangeIncl => &[Sym::OpRngin],
+    BuiltIn::In        => &[Sym::OpIn],
+    BuiltIn::NotIn     => &[Sym::OpNotIn],
+    BuiltIn::Get       => &[Sym::OpDot],
     // Not yet lowered — add mappings when lower gains coverage.
     BuiltIn::FinkModule => &[],
     _ => &[],
@@ -201,6 +208,11 @@ pub struct Runtime {
   op_not:     Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
+  op_rngex:   Option<FuncSym>,
+  op_rngin:   Option<FuncSym>,
+  op_in:      Option<FuncSym>,
+  op_notin:   Option<FuncSym>,
+  op_dot:     Option<FuncSym>,
 }
 
 impl Runtime {
@@ -235,6 +247,11 @@ impl Runtime {
       Sym::OpNot    => self.op_not,
       Sym::OpShl    => self.op_shl,
       Sym::OpShr    => self.op_shr,
+      Sym::OpRngex  => self.op_rngex,
+      Sym::OpRngin  => self.op_rngin,
+      Sym::OpIn     => self.op_in,
+      Sym::OpNotIn  => self.op_notin,
+      Sym::OpDot    => self.op_dot,
       _ => panic!("rt.op: {:?} is not a protocol-operator Sym", sym),
     };
     f.unwrap_or_else(|| panic!("rt: {:?} not declared", sym))
@@ -287,6 +304,11 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpNot           => ("rt/protocols.wat", "op_not"),
     Sym::OpShl           => ("rt/protocols.wat", "op_shl"),
     Sym::OpShr           => ("rt/protocols.wat", "op_shr"),
+    Sym::OpRngex         => ("rt/protocols.wat", "op_rngex"),
+    Sym::OpRngin         => ("rt/protocols.wat", "op_rngin"),
+    Sym::OpIn            => ("rt/protocols.wat", "op_in"),
+    Sym::OpNotIn         => ("rt/protocols.wat", "op_notin"),
+    Sym::OpDot           => ("rt/protocols.wat", "op_dot"),
   }
 }
 
@@ -410,6 +432,7 @@ const BINARY_OPS: &[Sym] = &[
   Sym::OpEq, Sym::OpNeq, Sym::OpLt, Sym::OpLte, Sym::OpGt, Sym::OpGte,
   Sym::OpAnd, Sym::OpOr, Sym::OpXor,
   Sym::OpShl, Sym::OpShr,
+  Sym::OpRngex, Sym::OpRngin, Sym::OpIn, Sym::OpNotIn, Sym::OpDot,
 ];
 
 fn any_binary_op_needed(usage: &RuntimeUsage) -> bool {
@@ -439,6 +462,11 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::OpXor    => &mut rt.op_xor,
     Sym::OpShl    => &mut rt.op_shl,
     Sym::OpShr    => &mut rt.op_shr,
+    Sym::OpRngex  => &mut rt.op_rngex,
+    Sym::OpRngin  => &mut rt.op_rngin,
+    Sym::OpIn     => &mut rt.op_in,
+    Sym::OpNotIn  => &mut rt.op_notin,
+    Sym::OpDot    => &mut rt.op_dot,
     _ => panic!("set_op: {:?} is not a binary-protocol Sym", sym),
   };
   *slot = Some(f);
