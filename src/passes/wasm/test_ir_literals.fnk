@@ -74,7 +74,7 @@ test 'literal int', fn:
       (import "rt/apply.wat" "_apply" (func $rt/apply.wat:_apply (type $rt/types.wat:Fn2)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
         (local $v_0 (ref null any))
-        (local $v_1 (ref $rt/types.wat:Num))
+        (local $v_1 (ref null any))
         (local $args (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 42)))
@@ -84,7 +84,7 @@ test 'literal int', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BZQQAI4BAQAChgEAbAC2AQA
+    ;; sm:BYIQAI4BAQAChgEAbAC2AQA
 
 
 test 'literal neg 0', fn:
@@ -103,7 +103,7 @@ test 'literal neg 0', fn:
       (import "rt/apply.wat" "_apply" (func $rt/apply.wat:_apply (type $rt/types.wat:Fn2)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
         (local $v_0 (ref null any))
-        (local $v_1 (ref $rt/types.wat:Num))
+        (local $v_1 (ref null any))
         (local $args (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const -0)))
@@ -113,7 +113,7 @@ test 'literal neg 0', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BZQQAI4BAQAChgEAbAC2AQA
+    ;; sm:BYIQAI4BAQAChgEAbAC2AQA
 
 
 
@@ -133,7 +133,7 @@ test 'literal float', fn:
       (import "rt/apply.wat" "_apply" (func $rt/apply.wat:_apply (type $rt/types.wat:Fn2)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
         (local $v_0 (ref null any))
-        (local $v_1 (ref $rt/types.wat:Num))
+        (local $v_1 (ref null any))
         (local $args (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 123400)))
@@ -143,7 +143,7 @@ test 'literal float', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BZQQAI4BAQAIjgEAbAC2AQA
+    ;; sm:BYIQAI4BAQAIjgEAbAC2AQA
 
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct
