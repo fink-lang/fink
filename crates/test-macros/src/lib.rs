@@ -8,12 +8,22 @@ use syn::{parse_macro_input, LitStr};
 
 /// Extracted test case from a `.fnk` test file.
 /// `src` and `exp` are already dedented, trimmed strings — ready to embed as literals.
+///
+/// `tags` captures any leading idents before the `test` call:
+///   skip test 'foo'            -> tags = ["skip"]
+///   skip-ir test 'foo'         -> tags = ["skip-ir"]
+///   test 'foo'                 -> tags = []
+///
+/// Tagged tests emit `#[ignore = "<tag>"]` when any tag is in the
+/// macro's skip-set. The default skip-set is `{"skip"}`; the macro
+/// accepts additional skip tags as positional idents after the path.
 struct FinkTest {
   name: String,
   func: String,
   src:  String,
   exp:  String,
   line: u32,
+  tags: Vec<String>,
 }
 
 /// Walk the parsed AST of a `.fnk` test file and extract all test cases.
@@ -46,11 +56,35 @@ fn extract_tests<'src>(
 
   for &stmt_id in stmts.items.iter() {
     let stmt = ast.nodes.get(stmt_id);
-    // test 'name', fn: <body>
-    let (name, fn_body_items) = match &stmt.kind {
-      NodeKind::Apply { func, args }
-        if matches!(ast.nodes.get(*func).kind, NodeKind::Ident("test")) =>
-      {
+
+    // Peel off tag wrappers. Each `<tag> test 'name', fn: ...` parses
+    // as `Apply(Ident(<tag>), [Apply(Ident("test"), ...)])`. Multiple
+    // tags stack (`skip-ir skip-wat test` would nest two levels).
+    let mut tags: Vec<String> = Vec::new();
+    let mut inner_id = stmt_id;
+    let test_node = loop {
+      let node = ast.nodes.get(inner_id);
+      match &node.kind {
+        NodeKind::Apply { func, args } => {
+          let func_node = ast.nodes.get(*func);
+          let NodeKind::Ident(name) = &func_node.kind else { break None };
+          if *name == "test" {
+            break Some(node);
+          }
+          // Outer wrapper: must be a single-arg call to another ident,
+          // and that arg must be an Apply itself. Collect the tag and
+          // recurse.
+          if args.items.len() != 1 { break None; }
+          tags.push((*name).to_string());
+          inner_id = args.items[0];
+        }
+        _ => break None,
+      }
+    };
+    let Some(test_node) = test_node else { continue };
+
+    let (name, fn_body_items) = match &test_node.kind {
+      NodeKind::Apply { args, .. } => {
         let Some(&name_id) = args.items.first() else {
           panic!("include_fink_tests: `test` at line {} has no name argument", stmt.loc.start.line);
         };
@@ -67,7 +101,7 @@ fn extract_tests<'src>(
         };
         (name.clone(), body.items.clone())
       }
-      _ => continue,
+      _ => unreachable!("test_node is guaranteed Apply(Ident(\"test\"), ...)"),
     };
 
     // fn body is a single Pipe node: [expect_call, equals_call]
@@ -186,6 +220,7 @@ fn extract_tests<'src>(
       src:  src_text,
       exp:  exp_text,
       line: stmt.loc.start.line,
+      tags,
     });
   }
 
@@ -260,10 +295,52 @@ fn dedent_str(s: &str) -> String {
     .join("\n")
 }
 
+/// Parsed input for `include_fink_tests!(path_lit[, tag, tag, ...])`.
+///
+/// The default skip-set is always `{"skip"}`. Each extra tag arg is
+/// added to the skip-set. Tests tagged with a member of the skip-set
+/// are emitted with `#[ignore = "<tag>"]`; everything else emits a
+/// plain `#[test]`.
+struct IncludeArgs {
+  path: LitStr,
+  extra_skips: Vec<String>,
+}
+
+impl syn::parse::Parse for IncludeArgs {
+  fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+    let path: LitStr = input.parse()?;
+    let mut extra_skips = Vec::new();
+    while input.peek(syn::Token![,]) {
+      let _: syn::Token![,] = input.parse()?;
+      if input.is_empty() { break; }
+      // Accept identifiers or ident-paths with hyphens (which Rust
+      // doesn't parse as single idents). Treat the rest of the
+      // comma-separated segment as a token string and normalise.
+      // Strategy: parse an Ident, then any trailing `- <Ident>`
+      // continuations, stitching them together.
+      let first: proc_macro2::Ident = input.parse()?;
+      let mut name = first.to_string();
+      while input.peek(syn::Token![-]) {
+        let _: syn::Token![-] = input.parse()?;
+        let next: proc_macro2::Ident = input.parse()?;
+        name.push('-');
+        name.push_str(&next.to_string());
+      }
+      extra_skips.push(name);
+    }
+    Ok(IncludeArgs { path, extra_skips })
+  }
+}
+
 #[proc_macro]
 pub fn include_fink_tests(input: TokenStream) -> TokenStream {
-  let path_lit = parse_macro_input!(input as LitStr);
+  let IncludeArgs { path: path_lit, extra_skips } =
+    parse_macro_input!(input as IncludeArgs);
   let rel_path = path_lit.value();
+
+  // Default skip-set is `{"skip"}`; extra args add to it.
+  let mut skip_set: Vec<String> = vec!["skip".into()];
+  skip_set.extend(extra_skips);
 
   let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
   let abs_path = Path::new(&manifest_dir).join(&rel_path);
@@ -310,8 +387,20 @@ pub fn include_fink_tests(input: TokenStream) -> TokenStream {
     let path_info = format!("{}:{}", rel_path, test.line);
     let test_name_str = &test.name;
 
+    // Does this test carry a tag the current call has opted in to skip?
+    let skip_reason: Option<&String> = test.tags.iter()
+      .find(|t| skip_set.iter().any(|s| s == *t));
+
+    let ignore_attr = if let Some(reason) = skip_reason {
+      let reason_lit = reason.as_str();
+      quote! { #[ignore = #reason_lit] }
+    } else {
+      quote! {}
+    };
+
     output.extend(quote! {
       #[test]
+      #ignore_attr
       fn #test_name() {
         crate::test_context::set(#test_name_str, #abs_path_str);
         let actual = #func(std::str::from_utf8(#src_lit).unwrap());

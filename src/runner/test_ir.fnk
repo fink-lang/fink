@@ -3,18 +3,13 @@
 
 
 ---
-Temporary fixture driving the new IR pipeline's `run` harness
-(`src/runner/ir.rs`). Grows as `ir_lower` coverage expands; retires
-when the IR runner can take over the main `test_literals.fnk` /
-`test_operators.fnk` / ... fixture set.
+Scratch fixture for the new IR pipeline's `run` harness
+(`src/runner/ir.rs`). Holds tests that belong in the shared
+`test_operators.fnk` / `test_bindings.fnk` / ... fixture set but
+whose home file isn't `include_fink_tests!`'d into `ir.rs` yet.
+As each shared fixture gets included (with appropriate `skip-ir`
+tags), tests migrate out of here. Retires when empty.
 ---
-
-
-test 'ir: int literal', fn:
-  expect run ƒink:
-    42
-  | equals ƒink:
-    42
 
 
 test 'ir: int sum', fn:
