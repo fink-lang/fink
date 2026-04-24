@@ -18,7 +18,7 @@
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $_done_cont_fn)
+  (elem declare func $_done_cont_fn $_host_cont_adapter)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -30,6 +30,10 @@
   ;; TODO: pass reason / source location (offset+length into linear memory)
   ;; so the host can render a useful message.
   (import "env" "host_panic" (func $host_panic))
+  ;; Host-side callback dispatch: invoke the Rust-registered callback
+  ;; for `id` with the given args list. See `$_host_cont_adapter` and
+  ;; `wrap_host_cont` for how WASM-side callable refs into this.
+  (import "env" "host_invoke_cont" (func $host_invoke_cont (param i32 (ref null any))))
 
 
 
@@ -44,32 +48,55 @@
   )
 
 
-  ;; -- Host callable helpers -------------------------------------------------
-
-  ;; Box a funcref into a $Closure with no captures. Lets the host
-  ;; create a done-continuation from a Rust-side Fn2 callback without
-  ;; needing direct access to the $Closure type constructor.
+  ;; -- Host callable (inbound contract) --------------------------------------
   ;;
-  ;; Called as: instance.get_func("_box_func")(funcref) -> anyref
-  (func $_box_func (export "_box_func")
-    (param $f (ref null func))
+  ;; The host cannot hand WASM a raw funcref and have it pass as a
+  ;; fink $Fn2: a host-built funcref carries a structural function
+  ;; type distinct from the runtime's nominal $Fn2, so
+  ;; `ref.cast (ref $Fn2)` inside `_apply` would always trap.
+  ;;
+  ;; Instead, the host registers its callback under an i32 id on its
+  ;; side, calls `wrap_host_cont(id)` to get an opaque (ref null any),
+  ;; and hands that anyref to WASM wherever a continuation is
+  ;; expected (done, await cont, scheduler trampolines, etc.).
+  ;;
+  ;; When fink-side code eventually fires the continuation via
+  ;; `_apply`, `_apply` casts it to $Closure, pulls the funcref (which
+  ;; is `$_host_cont_adapter` by construction — correct nominal type)
+  ;; and tail-calls it. The adapter reads `id` out of the captures
+  ;; array and forwards to `env.host_invoke_cont(id, args)`.
+  ;;
+  ;; Net: host sees only an opaque anyref; never touches $Closure /
+  ;; $Fn2 / funcref directly. Internals are interop's business.
+
+  ;; $Fn2 adapter body — fires when WASM invokes a host-wrapped cont.
+  (func $_host_cont_adapter (type $Fn2)
+    (param $caps (ref null any))
+    (param $args (ref null any))
+
+    (local $captures (ref $Captures))
+    (local $id_box (ref i31))
+
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $id_box
+      (ref.cast (ref i31)
+        (array.get $Captures (local.get $captures) (i32.const 0))))
+
+    (call $host_invoke_cont
+      (i31.get_s (local.get $id_box))
+      (local.get $args))
+  )
+
+  ;; Factory: host calls this with its callback id; gets back an
+  ;; opaque (ref null any) fit for any CPS continuation slot.
+  (func $wrap_host_cont (export "wrap_host_cont")
+    (param $id i32)
     (result (ref null any))
 
     (struct.new $Closure
-      (ref.as_non_null (local.get $f))
-      (ref.null $Captures))
-  )
-
-  ;; Expose the canonical $Fn2 type as a funcref return so the host
-  ;; can obtain its type via wasmtime's Func::ty() for constructing
-  ;; done continuations with the right signature.
-  ;;
-  ;; This function itself is a $Fn2 — trapping body just anchors the
-  ;; type for the host to read.
-  (func $_fn2_stub (export "_fn2_stub")
-    (param $caps (ref null any))
-    (param $args (ref null any))
-    (unreachable)
+      (ref.func $_host_cont_adapter)
+      (array.new_fixed $Captures 1
+        (ref.i31 (local.get $id))))
   )
 
 
