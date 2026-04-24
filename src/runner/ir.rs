@@ -135,5 +135,6 @@ mod tests {
   // they emit `#[ignore = "skip-ir"]` and stay visible in the test
   // count as a coverage-gap indicator.
   test_macros::include_fink_tests!("src/runner/test_literals.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_operators.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_ir.fnk");
 }

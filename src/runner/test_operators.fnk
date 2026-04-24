@@ -1,4 +1,4 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -9,112 +9,112 @@ test 'add two literals', fn:
     5
 
 
-test 'subtraction', fn:
+skip-ir test 'subtraction', fn:
   expect run ƒink:
     10 - 3
   | equals ƒink:
     7
 
 
-test 'multiplication', fn:
+skip-ir test 'multiplication', fn:
   expect run ƒink:
     4 * 5
   | equals ƒink:
     20
 
 
-test 'division', fn:
+skip-ir test 'division', fn:
   expect run ƒink:
     10 / 4
   | equals ƒink:
     2.5
 
 
-test 'integer division', fn:
+skip-ir test 'integer division', fn:
   expect run ƒink:
     7 // 2
   | equals ƒink:
     3
 
 
-test 'modulo', fn:
+skip-ir test 'modulo', fn:
   expect run ƒink:
     10 %% 3
   | equals ƒink:
     1
 
 
-test 'equal', fn:
+skip-ir test 'equal', fn:
   expect run ƒink:
     3 == 3
   | equals ƒink:
     true
 
 
-test 'not equal', fn:
+skip-ir test 'not equal', fn:
   expect run ƒink:
     3 != 4
   | equals ƒink:
     true
 
 
-test 'less than', fn:
+skip-ir test 'less than', fn:
   expect run ƒink:
     3 < 4
   | equals ƒink:
     true
 
 
-test 'less than or equal', fn:
+skip-ir test 'less than or equal', fn:
   expect run ƒink:
     3 <= 3
   | equals ƒink:
     true
 
 
-test 'greater than', fn:
+skip-ir test 'greater than', fn:
   expect run ƒink:
     4 > 3
   | equals ƒink:
     true
 
 
-test 'greater than or equal', fn:
+skip-ir test 'greater than or equal', fn:
   expect run ƒink:
     3 >= 3
   | equals ƒink:
     true
 
 
-test 'not', fn:
+skip-ir test 'not', fn:
   expect run ƒink:
     not true
   | equals ƒink:
     false
 
 
-test 'and', fn:
+skip-ir test 'and', fn:
   expect run ƒink:
     true and false
   | equals ƒink:
     false
 
 
-test 'or', fn:
+skip-ir test 'or', fn:
   expect run ƒink:
     true or false
   | equals ƒink:
     true
 
 
-test 'xor', fn:
+skip-ir test 'xor', fn:
   expect run ƒink:
     true xor true
   | equals ƒink:
     false
 
 
-test 'chain with bool', fn:
+skip-ir test 'chain with bool', fn:
   expect run ƒink:
     x = 3 > 2
     x and true
@@ -124,37 +124,37 @@ test 'chain with bool', fn:
 
 # --- Bitwise operators ---
 
-test 'bitwise and', fn:
+skip-ir test 'bitwise and', fn:
   expect run ƒink:
     0xFF and 0x0F
   | equals ƒink:
     15
 
-test 'bitwise or', fn:
+skip-ir test 'bitwise or', fn:
   expect run ƒink:
     0xFF or 0x0F
   | equals ƒink:
     255
 
-test 'bitwise xor', fn:
+skip-ir test 'bitwise xor', fn:
   expect run ƒink:
     0xFF xor 0x0F
   | equals ƒink:
     240
 
-test 'bitwise not', fn:
+skip-ir test 'bitwise not', fn:
   expect run ƒink:
     not 0
   | equals ƒink:
     -1
 
-test 'bitwise shift left', fn:
+skip-ir test 'bitwise shift left', fn:
   expect run ƒink:
     1 << 8
   | equals ƒink:
     256
 
-test 'bitwise shift right', fn:
+skip-ir test 'bitwise shift right', fn:
   expect run ƒink:
     256 >> 4
   | equals ƒink:
