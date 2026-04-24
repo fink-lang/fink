@@ -1,0 +1,128 @@
+{skip, skip-ir, test, expect, equals, ir_wat, wat} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+skip-ir test 'literal bool', fn:
+  expect ir_wat ƒink:
+    true
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (ref.i31 (i32.const 1)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgDUBABiAA
+
+
+skip-ir test 'literal bool false', fn:
+  expect ir_wat ƒink:
+    false
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (ref.i31 (i32.const 0)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgDUBABiAA
+
+
+skip-ir test 'literal int', fn:
+  expect ir_wat ƒink:
+    42
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 42)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgDmBABiAA
+
+
+skip-ir test 'literal neg 0', fn:
+  expect ir_wat ƒink:
+    -0
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 0)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgDkBABiAA
+
+
+
+skip-ir test 'literal float', fn:
+  expect ir_wat ƒink:
+    1.234e+5
+  | equals wat":
+    (module
+      (type $Num (struct (field f64)))
+      (type $Fn2 (func (param (ref any) (ref any))))
+      (memory 1)
+
+      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
+        (local $v_0 (ref any))
+        (local $local_3 (ref any))
+        (local.set $v_0 (call $_list_head_any (local.get $_args)))
+        (local.set $local_3 (call $_list_nil))
+        (local.set $local_3 (call $_list_prepend_any (struct.new $Num (f64.const 123400)) (local.get $local_3)))
+        (return_call $__apply (local.get $local_3) (local.get $v_0))
+      )
+      (export "fink_module" (func $fink_module))
+    )
+    ;; sm:CAAAEABGAHwAqAEANgDuBABiAA
+
+
+# skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct
+skip test 'literal decimal', fn:
+  expect ir_wat ƒink:
+    1.0d
+  | equals wat":
+    TODO
+
+
+
+
+
+
+
