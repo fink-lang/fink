@@ -295,6 +295,12 @@ pub enum InstrKind {
   RefFunc { func: FuncSym, into: LocalIdx },
   /// struct.new — all fields are leaves.
   StructNew { ty: TypeSym, fields: Vec<Operand>, into: LocalIdx },
+  /// array.new_fixed — all elements are leaves. `size` must equal
+  /// `elems.len()` (matches the WASM instruction's N).
+  ArrayNewFixed { ty: TypeSym, size: u32, elems: Vec<Operand>, into: LocalIdx },
+  /// array.get — read element `idx` from array `arr`. Element type
+  /// follows the array type's element decl.
+  ArrayGet { ty: TypeSym, arr: Operand, idx: Operand, into: LocalIdx },
   /// ref.cast (non-null concrete).
   RefCastNonNull { ty: TypeSym, src: Operand, into: LocalIdx },
   /// ref.cast (nullable concrete).
@@ -641,6 +647,34 @@ pub fn push_struct_new(
   into: LocalIdx,
 ) -> InstrId {
   push(frag, InstrKind::StructNew { ty, fields, into })
+}
+
+pub fn push_array_new_fixed(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  elems: Vec<Operand>,
+  into: LocalIdx,
+) -> InstrId {
+  let size = elems.len() as u32;
+  push(frag, InstrKind::ArrayNewFixed { ty, size, elems, into })
+}
+
+pub fn push_array_get(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  arr: Operand,
+  idx: Operand,
+  into: LocalIdx,
+) -> InstrId {
+  push(frag, InstrKind::ArrayGet { ty, arr, idx, into })
+}
+
+pub fn push_ref_null_concrete(
+  frag: &mut Fragment,
+  ty: TypeSym,
+  into: LocalIdx,
+) -> InstrId {
+  push(frag, InstrKind::RefNullConcrete { ty, into })
 }
 
 pub fn push_ref_i31(frag: &mut Fragment, src: Operand, into: LocalIdx) -> InstrId {

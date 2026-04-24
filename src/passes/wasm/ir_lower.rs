@@ -105,28 +105,33 @@ fn lower_fn(
 ) -> FuncSym {
   let mut ctx = FnCtx::new(pub_globals.clone());
 
-  // WASM-level params (always just `$:caps` and `$:params` — the
-  // $Fn2 shape). Colon-prefix is lexer-rejected in Fink source, so
-  // these synth names can never collide with user bindings.
-  let _l_caps = ctx.alloc_param(":caps_param");
+  // WASM-level params (always just `$:caps_param` and `$:params` —
+  // the $Fn2 shape). Colon-prefix is lexer-rejected in Fink source,
+  // so these synth names can never collide with user bindings.
+  let l_caps_p = ctx.alloc_param(":caps_param");
   let l_args_p = ctx.alloc_param(":params");
 
-  // Unpack captures from $_caps into locals.
-  for (i, cap_id) in cap_params.iter().enumerate() {
-    let name = cps_ident(cps, ast, *cap_id);
-    let local = ctx.alloc_local(&name);
-    ctx.bind(*cap_id, local);
-    // array.get $Captures (ref.cast (ref $Captures) $_caps) <i>
-    // Emitted as a Call-in-place... actually we don't have array.get
-    // as an InstrKind yet. Sidestep: since today's captures are
-    // always anyref, we can read them via a scratch helper — but
-    // simpler: emit a direct InstrKind::ArrayGet variant.
-    //
-    // Implementation note: the ir.rs InstrKind enum doesn't yet have
-    // ArrayGet. Until that lands, this code path will fail for any
-    // function that actually has captures. LetFn fixtures that need
-    // captures stay skip-ir.
-    ctx.emit_cap_unpack(*cap_id, i as u32, local);
+  // Unpack captures from $:caps_param into locals. Emits once:
+  //   local.set $:caps_cast (ref.cast (ref $Captures) $:caps_param)
+  // then per-capture:
+  //   local.set $<cap_name> (array.get $Captures $:caps_cast <i>)
+  if !cap_params.is_empty() {
+    let caps_cast = ctx.alloc_local(":caps_cast");
+    let i_cast = push_ref_cast_non_null(
+      frag, rt.captures(), op_local(l_caps_p), caps_cast,
+    );
+    ctx.instrs.push(i_cast);
+    for (i, cap_id) in cap_params.iter().enumerate() {
+      let name = cps_ident(cps, ast, *cap_id);
+      let local = ctx.alloc_local(&name);
+      ctx.bind(*cap_id, local);
+      let i_get = push_array_get(
+        frag, rt.captures(),
+        op_local(caps_cast), op_i32(i as i32),
+        local,
+      );
+      ctx.instrs.push(i_get);
+    }
   }
 
   // Unpack user params from $_args by walking `args_head`/`args_tail`.
@@ -166,21 +171,13 @@ struct FnCtx {
   binds: HashMap<CpsId, LocalIdx>,
   /// Next local index (params + locals, in WASM local-numbering order).
   next_local_idx: u32,
-  /// Pending capture unpack instructions — emitted at the top of the
-  /// function body. We collect them here because `ArrayGet` isn't an
-  /// InstrKind yet; a placeholder Unreachable gets substituted with
-  /// the real unpack once ir.rs grows the capability.
-  cap_unpacks: Vec<CapUnpack>,
   /// Module-level exports: CpsId → pre-allocated GlobalSym. Used by
   /// the `Pub` arm to emit `global.set` at the export site. Shared
   /// across all fns in a module (cloned on FnCtx construction).
   pub_globals: HashMap<CpsId, GlobalSym>,
-}
-
-struct CapUnpack {
-  cap_id: CpsId,
-  index: u32,
-  into: LocalIdx,
+  /// LetFn bind id → emitted FuncSym. Populated by `LetFn`; read by
+  /// `FnClosure` when constructing `struct.new $Closure (ref.func ...)`.
+  fn_syms: HashMap<CpsId, FuncSym>,
 }
 
 impl FnCtx {
@@ -191,8 +188,8 @@ impl FnCtx {
       instrs: Vec::new(),
       binds: HashMap::new(),
       next_local_idx: 0,
-      cap_unpacks: Vec::new(),
       pub_globals,
+      fn_syms: HashMap::new(),
     }
   }
 
@@ -217,10 +214,6 @@ impl FnCtx {
   fn lookup(&self, id: CpsId) -> LocalIdx {
     *self.binds.get(&id)
       .unwrap_or_else(|| panic!("ir_lower: unbound CpsId {:?}", id))
-  }
-
-  fn emit_cap_unpack(&mut self, cap_id: CpsId, index: u32, into: LocalIdx) {
-    self.cap_unpacks.push(CapUnpack { cap_id, index, into });
   }
 }
 
@@ -341,11 +334,11 @@ fn lower_expr(
       let local = ctx.alloc_local(&cps_ident_for_bind(cps, ast, bind));
       ctx.bind(bind.id, local);
 
-      // Emit: local = struct.new $Closure (ref.func fn_sym, array.new_fixed $Captures N cap_ops).
-      // For now, captures must be anyref locals already in scope;
-      // we don't yet support inlining complex values.
-      let i = push_struct_new_closure(frag, rt, fn_sym, cap_operands, local);
-      ctx.instrs.push(i);
+      // Emit: local = struct.new $Closure (ref.func fn_sym, <caps>)
+      //   where <caps> is either:
+      //     - `ref.null $Captures` (0 captures), or
+      //     - `array.new_fixed $Captures N cap_ops`.
+      emit_closure_construction(ctx, frag, rt, fn_sym, cap_operands, local);
       lower_expr(ctx, frag, rt, cps, ast, body);
     }
 
@@ -739,31 +732,47 @@ fn short_arg(a: &Arg) -> &'static str {
 // Closure emission
 // ──────────────────────────────────────────────────────────────────
 
-/// `struct.new $Closure (ref.func $fn, array.new_fixed $Captures N caps...)`
-///
-/// Currently not implemented — the IR doesn't have `$Closure` /
-/// `$Captures` types exposed, and doesn't have `ArrayNewFixed` /
-/// `RefFunc-in-struct.new-fields` wired. Emits a placeholder that
-/// panics at emit time.
-fn push_struct_new_closure(
+/// Emit the instructions for building a closure:
+///   `into = struct.new $Closure (ref.func $fn) (<caps-array>)`
+/// where `<caps-array>` is either `ref.null $Captures` (no captures)
+/// or `array.new_fixed $Captures N cap_ops` (N > 0). Pushes the
+/// instructions onto `ctx.instrs` in order.
+fn emit_closure_construction(
+  ctx: &mut FnCtx,
   frag: &mut Fragment,
-  _rt: &Runtime,
-  _fn_sym: FuncSym,
-  _caps: Vec<Operand>,
-  _into: LocalIdx,
-) -> InstrId {
-  let _ = frag;
-  panic!("ir_lower: closure construction not yet wired to IR (needs $Closure/$Captures types + ArrayNewFixed)");
+  rt: &Runtime,
+  fn_sym: FuncSym,
+  cap_operands: Vec<Operand>,
+  into: LocalIdx,
+) {
+  // 1. Build the captures operand — either a null ref or a freshly
+  //    allocated array.
+  let caps_local = ctx.alloc_local(":caps_arg");
+  let caps_instr = if cap_operands.is_empty() {
+    push_ref_null_concrete(frag, rt.captures(), caps_local)
+  } else {
+    push_array_new_fixed(frag, rt.captures(), cap_operands, caps_local)
+  };
+  ctx.instrs.push(caps_instr);
+
+  // 2. struct.new $Closure (ref.func $fn, local.get $:caps_arg).
+  let struct_instr = push_struct_new(
+    frag,
+    rt.closure(),
+    vec![Operand::RefFunc(fn_sym), op_local(caps_local)],
+    into,
+  );
+  ctx.instrs.push(struct_instr);
 }
 
 // FnCtx extension: track LetFn bindings that are used later in
 // `App(FnClosure)` to build a $Closure.
 impl FnCtx {
-  fn fn_sym_for_bind(&mut self, _id: CpsId, _sym: FuncSym) {
-    // Stored in a side-map. For now, panics when consulted since
-    // closure emission isn't wired.
+  fn fn_sym_for_bind(&mut self, id: CpsId, sym: FuncSym) {
+    self.fn_syms.insert(id, sym);
   }
-  fn lookup_fn_sym(&self, _id: CpsId) -> FuncSym {
-    panic!("ir_lower: LetFn binding lookup requires closure emission, not yet wired");
+  fn lookup_fn_sym(&self, id: CpsId) -> FuncSym {
+    *self.fn_syms.get(&id)
+      .unwrap_or_else(|| panic!("ir_lower: FnClosure references CpsId {:?} with no LetFn sym", id))
   }
 }

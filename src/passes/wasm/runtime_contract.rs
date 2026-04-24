@@ -76,6 +76,8 @@ pub enum Sym {
   // ── value types ────────────────────────────────────────────────
   Num,
   Fn2,
+  Closure,
+  Captures,
 
   // ── calling-convention primitives (std/list.wat today) ────────
   ArgsHead,
@@ -158,6 +160,8 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::In        => &[Sym::OpIn],
     BuiltIn::NotIn     => &[Sym::OpNotIn],
     BuiltIn::Get       => &[Sym::OpDot],
+    // Closure construction needs both $Closure struct + $Captures array types.
+    BuiltIn::FnClosure => &[Sym::Closure, Sym::Captures],
     // Not yet lowered — add mappings when lower gains coverage.
     BuiltIn::FinkModule => &[],
     _ => &[],
@@ -177,6 +181,8 @@ pub struct Runtime {
   // imported value types
   num: Option<TypeSym>,
   fn2: Option<TypeSym>,
+  closure: Option<TypeSym>,
+  captures: Option<TypeSym>,
   // locally-declared function signature types (structural)
   fn_any_to_any:  Option<TypeSym>,  // (anyref) -> anyref          -- args_head
   fn_nil_to_list: Option<TypeSym>,  // () -> anyref                -- args_empty
@@ -218,6 +224,8 @@ pub struct Runtime {
 impl Runtime {
   pub fn num(&self)          -> TypeSym { self.num.expect("rt: Num not declared") }
   pub fn fn2(&self)          -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
+  pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
+  pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
   pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
   pub fn args_prepend(&self) -> FuncSym { self.args_prepend.expect("rt: args_prepend not declared") }
@@ -281,6 +289,8 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
   match sym {
     Sym::Num             => ("rt/types.wat",     "Num"),
     Sym::Fn2             => ("rt/types.wat",     "Fn2"),
+    Sym::Closure         => ("rt/types.wat",     "Closure"),
+    Sym::Captures        => ("rt/types.wat",     "Captures"),
     Sym::Apply           => ("rt/apply.wat",     "_apply"),
     Sym::ArgsHead        => ("std/list.wat",     "args_head"),
     Sym::ArgsEmpty       => ("std/list.wat",     "args_empty"),
@@ -336,6 +346,14 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
     let (m, n) = import_key(Sym::Fn2);
     rt.fn2 = Some(ty_import(frag, m, n, AbsHeap::Func));
+  }
+  if needed.contains(&Sym::Captures) {
+    let (m, n) = import_key(Sym::Captures);
+    rt.captures = Some(ty_import(frag, m, n, AbsHeap::Any));
+  }
+  if needed.contains(&Sym::Closure) {
+    let (m, n) = import_key(Sym::Closure);
+    rt.closure = Some(ty_import(frag, m, n, AbsHeap::Any));
   }
 
   // Function-signature types and function imports.

@@ -583,6 +583,8 @@ fn emit_instr(
     | InstrKind::RefNullConcrete { .. }
     | InstrKind::I31GetS { .. }
     | InstrKind::RefFunc { .. }
+    | InstrKind::ArrayNewFixed { .. }
+    | InstrKind::ArrayGet { .. }
     | InstrKind::RefCastNonNull { .. }
     | InstrKind::RefCastNullable { .. }
     | InstrKind::If { .. }

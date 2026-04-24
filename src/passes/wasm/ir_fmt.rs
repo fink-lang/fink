@@ -356,6 +356,17 @@ fn fmt_instr(out: &mut String, frag: &Fragment, f: &FuncDecl, instr: &Instr, ind
       for field in fields { write!(out, " {}", fmt_operand(frag, f, field)).unwrap(); }
       out.push_str("))\n");
     }
+    InstrKind::ArrayNewFixed { ty, size, elems, into } => {
+      write!(out, "{}(local.set {} (array.new_fixed {} {}",
+        pad, local_name(f, *into), type_name(frag, *ty), size).unwrap();
+      for e in elems { write!(out, " {}", fmt_operand(frag, f, e)).unwrap(); }
+      out.push_str("))\n");
+    }
+    InstrKind::ArrayGet { ty, arr, idx, into } => {
+      writeln!(out, "{}(local.set {} (array.get {} {} {}))",
+        pad, local_name(f, *into), type_name(frag, *ty),
+        fmt_operand(frag, f, arr), fmt_operand(frag, f, idx)).unwrap();
+    }
     InstrKind::RefCastNonNull { ty, src, into } => {
       writeln!(out, "{}(local.set {} (ref.cast (ref {}) {}))",
         pad, local_name(f, *into), type_name(frag, *ty), fmt_operand(frag, f, src)).unwrap();
