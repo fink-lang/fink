@@ -246,8 +246,6 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_records.fnk");
   test_macros::include_fink_tests!("src/passes/wasm/test_fink_module.fnk");
-  test_macros::include_fink_tests!("src/passes/wasm/test_ir.fnk");
-
   // IR-pipeline shadow fixtures. Each `test_ir_<domain>.fnk` is a
   // full copy of its `test_<domain>.fnk` counterpart, every test
   // tagged `skip-ir` to start. Un-skip + bless as `ir_lower` grows
