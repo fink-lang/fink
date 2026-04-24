@@ -123,35 +123,34 @@ impl RuntimeUsage {
 /// structurally; e.g. `FinkModule` is handled by the module-root
 /// framing, not a BuiltIn call).
 fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
+  // All polymorphic operators take `(any, any, any)` — operand types
+  // don't appear in the operator import's signature. `Sym::Num` is
+  // marked independently via `scan_val_kind` when a numeric literal
+  // appears, so we don't need to co-mark it here.
   match b {
-    // Arithmetic — all route through Num boxing.
-    BuiltIn::Add    => &[Sym::OpPlus,   Sym::Num],
-    BuiltIn::Sub    => &[Sym::OpMinus,  Sym::Num],
-    BuiltIn::Mul    => &[Sym::OpMul,    Sym::Num],
-    BuiltIn::Div    => &[Sym::OpDiv,    Sym::Num],
-    BuiltIn::IntDiv => &[Sym::OpIntDiv, Sym::Num],
-    BuiltIn::Mod    => &[Sym::OpRem,    Sym::Num],
-    BuiltIn::IntMod => &[Sym::OpIntMod, Sym::Num],
-    // Comparison — numeric operands (Num), bool result (i31, no
-    // runtime type import needed).
-    BuiltIn::Eq  => &[Sym::OpEq,  Sym::Num],
-    BuiltIn::Neq => &[Sym::OpNeq, Sym::Num],
-    BuiltIn::Lt  => &[Sym::OpLt,  Sym::Num],
-    BuiltIn::Lte => &[Sym::OpLte, Sym::Num],
-    BuiltIn::Gt  => &[Sym::OpGt,  Sym::Num],
-    BuiltIn::Gte => &[Sym::OpGte, Sym::Num],
-    // Logic / bitwise — polymorphic at the runtime (dispatches on
-    // bool vs int). Boolean literals use i31, int literals Num —
-    // mark Num for the shared-boxing path (int-lit lowering is a
-    // follow-up; today both operands appear as bool lits / num lits
-    // and Num-boxing covers the num case).
-    BuiltIn::And => &[Sym::OpAnd, Sym::Num],
-    BuiltIn::Or  => &[Sym::OpOr,  Sym::Num],
-    BuiltIn::Xor => &[Sym::OpXor, Sym::Num],
-    BuiltIn::Not => &[Sym::OpNot, Sym::Num],
-    // Shifts — int operands.
-    BuiltIn::Shl => &[Sym::OpShl, Sym::Num],
-    BuiltIn::Shr => &[Sym::OpShr, Sym::Num],
+    // Arithmetic
+    BuiltIn::Add    => &[Sym::OpPlus],
+    BuiltIn::Sub    => &[Sym::OpMinus],
+    BuiltIn::Mul    => &[Sym::OpMul],
+    BuiltIn::Div    => &[Sym::OpDiv],
+    BuiltIn::IntDiv => &[Sym::OpIntDiv],
+    BuiltIn::Mod    => &[Sym::OpRem],
+    BuiltIn::IntMod => &[Sym::OpIntMod],
+    // Comparison
+    BuiltIn::Eq  => &[Sym::OpEq],
+    BuiltIn::Neq => &[Sym::OpNeq],
+    BuiltIn::Lt  => &[Sym::OpLt],
+    BuiltIn::Lte => &[Sym::OpLte],
+    BuiltIn::Gt  => &[Sym::OpGt],
+    BuiltIn::Gte => &[Sym::OpGte],
+    // Logic / bitwise (polymorphic — runtime dispatches on bool vs int)
+    BuiltIn::And => &[Sym::OpAnd],
+    BuiltIn::Or  => &[Sym::OpOr],
+    BuiltIn::Xor => &[Sym::OpXor],
+    BuiltIn::Not => &[Sym::OpNot],
+    // Shifts
+    BuiltIn::Shl => &[Sym::OpShl],
+    BuiltIn::Shr => &[Sym::OpShr],
     // Not yet lowered — add mappings when lower gains coverage.
     BuiltIn::FinkModule => &[],
     _ => &[],
@@ -304,9 +303,11 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // runtime's concrete type indices. Emit resolves them against
   // `types.wasm` at emit time.
   //
-  // `Num` is needed whenever a literal number or arithmetic
-  // operator appears — numeric literals box into `struct.new $Num`.
-  if needed.contains(&Sym::Num) || needs_num_literal_type(usage) {
+  // `Sym::Num` is marked in `scan_val_kind` whenever a numeric
+  // literal appears (which is the only place we construct $Num
+  // values via `struct.new`). Operators take anyref operands — they
+  // don't need `$Num` unless there's a numeric literal in scope.
+  if needed.contains(&Sym::Num) {
     let (m, n) = import_key(Sym::Num);
     rt.num = Some(ty_import(frag, m, n, AbsHeap::Any));
   }
@@ -415,11 +416,6 @@ fn any_binary_op_needed(usage: &RuntimeUsage) -> bool {
   BINARY_OPS.iter().any(|s| usage.used.contains(s))
 }
 
-fn needs_num_literal_type(usage: &RuntimeUsage) -> bool {
-  // Any numeric-operand operator or explicit Num use means we need
-  // the `$Num` type for boxing numeric literals.
-  BINARY_OPS.iter().any(|s| usage.used.contains(s)) || usage.has(Sym::OpNot)
-}
 
 /// Store the handle for a declared binary-protocol Sym back into the
 /// Runtime's typed slot. Mirrors the enum spread in `Runtime::op`.

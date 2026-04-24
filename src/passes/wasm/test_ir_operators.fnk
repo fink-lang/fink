@@ -3,24 +3,29 @@
 
 
 
-skip-ir test 'add two literals', fn:
+test 'add two literals', fn:
   expect ir_wat ƒink:
     2 + 3
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_0 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_plus (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_0))
+      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
+        (local $v_1 (ref null any))
+        (local $v_2 (ref null any))
+        (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
+        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
+        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
+        (return_call $rt/protocols.wat:op_plus (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:CAAAEABGAHwAqAEANgCWAwBiAA
+    ;; sm:BOILAI4BAQABhAEBCAGEAQEHBQ
 
 
 
@@ -55,104 +60,124 @@ skip-ir test 'chained arithmetic', fn:
     ;; sm:DgAAEABGAHwAqAEANgA4ADgA7gQAoAEAOAA2AMoEAGIA
 
 
-skip-ir test 'unary not', fn:
+test 'unary not', fn:
   expect ir_wat ƒink:
     not true
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_0 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_not (ref.i31 (i32.const 1)) (local.get $v_0))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "rt/protocols.wat" "op_not" (func $rt/protocols.wat:op_not (type $rt/protocols.wat:Fn_op_unary)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
+        (local $v_1 (ref null any))
+        (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
+        (local.set $v_1 (ref.i31 (i32.const 1)))
+        (return_call $rt/protocols.wat:op_not (local.get $v_1) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:CAAAEABGAHwAqAEANgDEAgBiAA
+    ;; sm:A_YJAI4BAQgEWgEHCA
 
 
-skip-ir test 'comparison eq', fn:
+test 'comparison eq', fn:
   expect ir_wat ƒink:
     2 == 3
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_0 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_eq (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_0))
+      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "rt/protocols.wat" "op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
+        (local $v_1 (ref null any))
+        (local $v_2 (ref null any))
+        (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
+        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
+        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
+        (return_call $rt/protocols.wat:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:CAAAEABGAHwAqAEANgCSAwBiAA
+    ;; sm:BNoLAI4BAQABhAEBCgGEAQEJBg
 
 
-skip-ir test 'comparison lt', fn:
+test 'comparison lt', fn:
   expect ir_wat ƒink:
     2 < 3
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_0 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_lt (struct.new $Num (f64.const 2)) (struct.new $Num (f64.const 3)) (local.get $v_0))
+      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "rt/protocols.wat" "op_lt" (func $rt/protocols.wat:op_lt (type $rt/protocols.wat:Fn_op_binary)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
+        (local $v_1 (ref null any))
+        (local $v_2 (ref null any))
+        (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
+        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
+        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
+        (return_call $rt/protocols.wat:op_lt (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:CAAAEABGAHwAqAEANgCSAwBiAA
+    ;; sm:BNoLAI4BAQABhAEBCAGEAQEHBQ
 
 
-skip-ir test 'logical and', fn:
+test 'logical and', fn:
   expect ir_wat ƒink:
     true and false
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_0 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_and (ref.i31 (i32.const 1)) (ref.i31 (i32.const 0)) (local.get $v_0))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "rt/protocols.wat" "op_and" (func $rt/protocols.wat:op_and (type $rt/protocols.wat:Fn_op_binary)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
+        (local $v_1 (ref null any))
+        (local $v_2 (ref null any))
+        (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
+        (local.set $v_1 (ref.i31 (i32.const 1)))
+        (local.set $v_2 (ref.i31 (i32.const 0)))
+        (return_call $rt/protocols.wat:op_and (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:CAAAEABGAHwAqAEANgD0AgBiAA
+    ;; sm:BNgKAI4BAQAEWgESBVoBEQ4
 
 
-skip-ir test 'logical or', fn:
+test 'logical or', fn:
   expect ir_wat ƒink:
     true or false
   | equals wat":
     (module
-      (type $Num (struct (field f64)))
-      (type $Fn2 (func (param (ref any) (ref any))))
-      (memory 1)
-
-      (func $fink_module (type $Fn2) (param $_caps (ref any)) (param $_args (ref any))
-        (local $v_0 (ref any))
-        (local $local_3 (ref any))
-        (local.set $v_0 (call $_list_head_any (local.get $_args)))
-        (return_call $_op_or (ref.i31 (i32.const 1)) (ref.i31 (i32.const 0)) (local.get $v_0))
+      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
+      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
+      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
+      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "rt/protocols.wat" "op_or" (func $rt/protocols.wat:op_or (type $rt/protocols.wat:Fn_op_binary)))
+      (func $fink_module (type $rt/types.wat:Fn2) (param $_caps (ref null any)) (param $_args (ref null any))
+        (local $v_0 (ref null any))
+        (local $v_1 (ref null any))
+        (local $v_2 (ref null any))
+        (local.set $v_0 (call $std/list.wat:args_head (local.get $_args)))
+        (local.set $v_1 (ref.i31 (i32.const 1)))
+        (local.set $v_2 (ref.i31 (i32.const 0)))
+        (return_call $rt/protocols.wat:op_or (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:CAAAEABGAHwAqAEANgDyAgBiAA
+    ;; sm:BNQKAI4BAQAEWgEQBVoBDw0
 
 
 skip-ir test 'range exclusive', fn:
