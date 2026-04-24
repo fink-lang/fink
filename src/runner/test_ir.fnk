@@ -1,0 +1,24 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+---
+Temporary fixture driving the new IR pipeline's `run` harness
+(`src/runner/ir.rs`). Grows as `ir_lower` coverage expands; retires
+when the IR runner can take over the main `test_literals.fnk` /
+`test_operators.fnk` / ... fixture set.
+---
+
+
+test 'ir: int literal', fn:
+  expect run ƒink:
+    42
+  | equals ƒink:
+    42
+
+
+test 'ir: int sum', fn:
+  expect run ƒink:
+    42 + 123
+  | equals ƒink:
+    165
