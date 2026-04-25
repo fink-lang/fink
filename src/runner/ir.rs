@@ -25,6 +25,7 @@ mod tests {
   enum TestResult {
     Num(f64),
     Bool(bool),
+    Str(Vec<u8>),
     None,
   }
 
@@ -41,6 +42,7 @@ mod tests {
         }
       }
       Ok(TestResult::Bool(b)) => format!("{}", b),
+      Ok(TestResult::Str(bytes)) => String::from_utf8_lossy(&bytes).into_owned(),
       Ok(TestResult::None) => String::new(),
       Err(e) => format!("ERROR: {}", e),
     }
@@ -89,12 +91,63 @@ mod tests {
                   Some(TestResult::Bool(i31.get_i32() != 0));
                 return Ok(());
               }
-              // $Num: struct with f64 in field 0.
-              if let Ok(Some(st)) = head_any.as_struct(&caller)
-                && let Ok(Val::F64(bits)) = st.field(&mut caller, 0)
-              {
-                *captured_clone.lock().unwrap() =
-                  Some(TestResult::Num(f64::from_bits(bits)));
+              // String types: $Str subtypes are GC structs.
+              //   $StrEmpty:    no fields           — empty string.
+              //   $StrDataImpl: (i32 offset, i32 len) — read from memory 0.
+              //   $StrBytesImpl: (ref $ByteArray)    — read array elements.
+              // Detect by struct field shape.
+              if let Ok(Some(st)) = head_any.as_struct(&caller) {
+                let field0 = st.field(&mut caller, 0);
+                match field0 {
+                  // $Num: f64.
+                  Ok(Val::F64(bits)) => {
+                    *captured_clone.lock().unwrap() =
+                      Some(TestResult::Num(f64::from_bits(bits)));
+                    return Ok(());
+                  }
+                  // $StrDataImpl: i32 offset + i32 length.
+                  Ok(Val::I32(offset)) => {
+                    if let Ok(Val::I32(length)) = st.field(&mut caller, 1) {
+                      let mem = caller.get_export("memory")
+                        .and_then(|e| e.into_memory());
+                      if let Some(mem) = mem {
+                        let data = mem.data(&caller);
+                        let off = offset as usize;
+                        let len = length as usize;
+                        if off + len <= data.len() {
+                          let bytes = data[off..off + len].to_vec();
+                          *captured_clone.lock().unwrap() =
+                            Some(TestResult::Str(bytes));
+                          return Ok(());
+                        }
+                      }
+                    }
+                  }
+                  // $StrBytesImpl: a (ref $ByteArray) — read element-wise.
+                  Ok(Val::AnyRef(Some(_))) => {
+                    if let Ok(Val::AnyRef(Some(ar))) = st.field(&mut caller, 0)
+                      && let Ok(Some(arr)) = ar.as_array(&caller)
+                    {
+                      let len = arr.len(&caller).unwrap_or(0);
+                      let mut bytes = Vec::with_capacity(len as usize);
+                      for i in 0..len {
+                        if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                          bytes.push(b as u8);
+                        }
+                      }
+                      *captured_clone.lock().unwrap() =
+                        Some(TestResult::Str(bytes));
+                      return Ok(());
+                    }
+                  }
+                  // $StrEmpty: no field 0 — index errors. Treat as empty string.
+                  Err(_) => {
+                    *captured_clone.lock().unwrap() =
+                      Some(TestResult::Str(Vec::new()));
+                    return Ok(());
+                  }
+                  _ => {}
+                }
               }
               Ok(())
             }).map_err(|e| e.to_string())?;
@@ -148,5 +201,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_functions.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_ranges.fnk",    skip-ir);
   test_macros::include_fink_tests!("src/runner/test_records.fnk",   skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_strings.fnk",   skip-ir);
   test_macros::include_fink_tests!("src/runner/test_ir.fnk");
 }

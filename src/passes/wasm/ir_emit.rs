@@ -514,6 +514,14 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
       export_sec.export(name, ExportKind::Global, user_global_base + i as u32);
     }
   }
+  // Export the user fragment's memory (memory 0) so the host harness
+  // can read string-literal data segments. Only if the runtime didn't
+  // already export one with this name.
+  let already_has_memory = rt.exports_to_forward.iter()
+    .any(|(name, kind, _)| name == "memory" && matches!(kind, ExportKind::Memory));
+  if !already_has_memory {
+    export_sec.export("memory", ExportKind::Memory, 0);
+  }
 
   // Elements: runtime entries raw-spliced; user-declared funcref
   // entries (needed for `ref.func` validation on any user func) are

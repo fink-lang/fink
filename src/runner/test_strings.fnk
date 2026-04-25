@@ -1,4 +1,4 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -99,7 +99,7 @@ test 'string neq', fn:
     true
 
 
-test 'str template string only', fn:
+skip-ir test 'str template string only', fn:
   expect run ƒink:
     name = 'world'
     'hello ${name}' == 'hello world'
@@ -107,7 +107,7 @@ test 'str template string only', fn:
     true
 
 
-test 'str template with number', fn:
+skip-ir test 'str template with number', fn:
   expect run ƒink:
     x = 42
     'value: ${x}' == 'value: 42'
@@ -115,14 +115,14 @@ test 'str template with number', fn:
     true
 
 
-test 'str template with bool', fn:
+skip-ir test 'str template with bool', fn:
   expect run ƒink:
     'done: ${true}' == 'done: true'
   | equals ƒink:
     true
 
 
-test 'str template multiple segments', fn:
+skip-ir test 'str template multiple segments', fn:
   expect run ƒink:
     a = 1
     b = 2
@@ -131,14 +131,14 @@ test 'str template multiple segments', fn:
     true
 
 
-test 'str template with float', fn:
+skip-ir test 'str template with float', fn:
   expect run ƒink:
     'pi: ${3.14}' == 'pi: 3.14'
   | equals ƒink:
     true
 
 
-test 'str template float arithmetic', fn:
+skip-ir test 'str template float arithmetic', fn:
   expect run ƒink:
     x = 1.5
     y = 2.3
@@ -217,35 +217,35 @@ test 'str slice negative zero end', fn:
 
 # --- String template pattern ---
 
-test 'str templ pattern: capture all', fn:
+skip-ir test 'str templ pattern: capture all', fn:
   expect run ƒink:
     '${foo}' = 'hello'
     foo
   | equals ":
     hello
 
-test 'str templ pattern: prefix and suffix', fn:
+skip-ir test 'str templ pattern: prefix and suffix', fn:
   expect run ƒink:
     'foo${bar}spam' = 'fooBARspam'
     bar
   | equals ":
     BAR
 
-test 'str templ pattern: capture at start', fn:
+skip-ir test 'str templ pattern: capture at start', fn:
   expect run ƒink:
     '${foo}bar' = 'hellobar'
     foo
   | equals ":
     hello
 
-test 'str templ pattern: capture at end', fn:
+skip-ir test 'str templ pattern: capture at end', fn:
   expect run ƒink:
     'foo${bar}' = 'fooworld'
     bar
   | equals ":
     world
 
-test 'str templ pattern: escape in template', fn:
+skip-ir test 'str templ pattern: escape in template', fn:
   expect run ƒink:
     '\n${foo}\n' = '\nstuff\n'
     foo
@@ -256,25 +256,25 @@ test 'str templ pattern: escape in template', fn:
 # arrays, not UTF-8 strings — so \xFF (a lone continuation byte) is a
 # valid 1-byte string. Exercises str template patterns end-to-end with
 # non-UTF-8 literal parts.
-test 'str templ pattern: non-utf8 byte match', fn:
+skip-ir test 'str templ pattern: non-utf8 byte match', fn:
   expect run ƒink:
     '\xFF${foo}\xFF' = '\xFFhello\xFF'
   | equals ":
     hello
 
-test 'str templ pattern: empty capture', fn:
+skip-ir test 'str templ pattern: empty capture', fn:
   expect run ƒink:
     'foo${bar}spam' = 'foospam'
     bar
   | equals ''
 
-test 'str templ pattern: overlapping prefix suffix', fn:
+skip-ir test 'str templ pattern: overlapping prefix suffix', fn:
   expect run ƒink:
     'abc${x}abc' = 'abcabc'
     x
   | equals ''
 
-test 'str templ pattern: input shorter than template', fn:
+skip-ir test 'str templ pattern: input shorter than template', fn:
   expect run ƒink:
     match 'fo':
       'foo${x}bar': x
@@ -282,7 +282,7 @@ test 'str templ pattern: input shorter than template', fn:
   | equals ":
     no match
 
-test 'str templ pattern: match arm', fn:
+skip-ir test 'str templ pattern: match arm', fn:
   expect run ƒink:
     match 'hello world':
       'hello ${name}': name
@@ -290,7 +290,7 @@ test 'str templ pattern: match arm', fn:
   | equals ":
     world
 
-test 'str templ pattern: match arm fallthrough', fn:
+skip-ir test 'str templ pattern: match arm fallthrough', fn:
   expect run ƒink:
     match 'goodbye world':
       'hello ${name}': name
