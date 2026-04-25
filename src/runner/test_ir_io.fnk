@@ -83,7 +83,7 @@ test 'send with <<', fn:
 
 
 
-skip test 'read from stdin', fn:
+test 'read from stdin', fn:
   expect run ƒink:
     {stdin, stdout} = import 'std/io.fnk'
 

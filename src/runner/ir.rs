@@ -30,6 +30,11 @@ mod tests {
   /// `..args`) must match this fixture exactly.
   const TEST_CLI_ARGS: &[&[u8]] = &[b"test", b"alpha", b"beta"];
 
+  /// Hardcoded stdin contents delivered to the program when it does
+  /// `read stdin, N`. Matches the convention of the existing
+  /// `run_main` helper for parity.
+  const TEST_STDIN: &[u8] = b"hello from stdin";
+
   /// Test-side capture of host-channel writes during a run. Keyed by
   /// channel tag (0=stdin, 1=stdout, 2=stderr). Each write appends a
   /// chunk of bytes to the corresponding stream.
@@ -39,6 +44,8 @@ mod tests {
   struct IoCapture {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
+    /// Cursor into TEST_STDIN — advances as `host_read` is called.
+    stdin_cursor: usize,
   }
 
   impl IoCapture {
@@ -48,6 +55,15 @@ mod tests {
         2 => self.stderr.extend_from_slice(bytes),
         _ => {} // Unknown tags ignored for now.
       }
+    }
+
+    /// Pop up to `size` bytes off the stdin buffer, advancing the
+    /// cursor. Returns whatever's available (possibly empty).
+    fn read_stdin(&mut self, size: usize) -> &'static [u8] {
+      let start = self.stdin_cursor;
+      let end = (start + size).min(TEST_STDIN.len());
+      self.stdin_cursor = end;
+      &TEST_STDIN[start..end]
     }
   }
 
@@ -246,6 +262,61 @@ mod tests {
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
+          // host_read(stream, size, future) — fired by the runtime
+          // when ƒink code does `read stream, N`. The runtime parks
+          // the cont on the future, then asks us to fulfil it. We:
+          //   1. Pop up to `size` bytes off TEST_STDIN.
+          //   2. Allocate a $ByteArray, wrap as $Str via _str_wrap_bytes.
+          //   3. Settle the future via _settle_future, which wakes the
+          //      parked cont synchronously inside this callback.
+          //
+          // Synchronous in-place is fine here — tests have a fixed
+          // input buffer; no need for the producer-thread + condvar
+          // model the production runner uses.
+          "host_read" => {
+            let cap = io_capture.clone();
+            linker.func_new("env", &name, ft, move |mut caller, params, _results| {
+              // Extract size from i31 or $Num field 0.
+              let size = {
+                let any = params[1].unwrap_anyref()
+                  .ok_or_else(|| Error::msg("host_read: null size"))?;
+                if let Ok(Some(i31)) = any.as_i31(&caller) {
+                  i31.get_i32()
+                } else if let Ok(Some(s)) = any.as_struct(&caller)
+                  && let Ok(Val::F64(bits)) = s.field(&mut caller, 0)
+                {
+                  f64::from_bits(bits) as i32
+                } else {
+                  return Err(Error::msg("host_read: size is neither i31 nor $Num"));
+                }
+              };
+              let bytes: Vec<u8> = cap.lock().unwrap().read_stdin(size as usize).to_vec();
+
+              // Wrap bytes as $Str via the qualified runtime export.
+              let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+                .and_then(|e| e.into_func())
+                .ok_or_else(|| Error::msg("host_read: no _str_wrap_bytes export"))?;
+              let array_ty = ArrayType::new(
+                caller.engine(),
+                FieldType::new(Mutability::Var, StorageType::I8),
+              );
+              let alloc = ArrayRefPre::new(&mut caller, array_ty);
+              let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
+              let array = ArrayRef::new_fixed(&mut caller, &alloc, &elems)
+                .map_err(|e| Error::msg(format!("host_read byte array: {e}")))?;
+              let mut wrapped = [Val::AnyRef(None)];
+              str_wrap.call(&mut caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
+
+              // Settle the future the runtime gave us.
+              let settle = caller.get_export("std/scheduler.wat:_settle_future")
+                .and_then(|e| e.into_func())
+                .ok_or_else(|| Error::msg("host_read: no _settle_future export"))?;
+              let future_ref = params[2].clone();
+              settle.call(&mut caller, &[future_ref, wrapped[0].clone()], &mut [])?;
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+
           // host_channel_send(tag: i32, bytes: (ref null any)) — fired
           // by the runtime when ƒink code does `'msg' >> stdout` (or
           // `<<`) against a host channel. We read the $ByteArray
