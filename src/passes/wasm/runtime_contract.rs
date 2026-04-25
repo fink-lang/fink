@@ -112,6 +112,9 @@ pub enum Sym {
   // same. RecPop has a different 4-arg shape; not yet wired.
   IsSeqLike, IsRecLike,
   SeqPop,
+  // String construction. `Str` wraps a data-section pointer:
+  //   `str(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
+  Str, StrEmpty,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -240,6 +243,11 @@ pub struct Runtime {
   is_seq_like: Option<FuncSym>,
   is_rec_like: Option<FuncSym>,
   seq_pop:     Option<FuncSym>,
+  // string constructors
+  fn_str:       Option<TypeSym>,   // (i32, i32) -> anyref
+  fn_str_empty: Option<TypeSym>,   // () -> anyref
+  str_:         Option<FuncSym>,
+  str_empty:    Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
   op_rngex:   Option<FuncSym>,
@@ -259,6 +267,8 @@ impl Runtime {
   pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
   pub fn args_prepend(&self) -> FuncSym { self.args_prepend.expect("rt: args_prepend not declared") }
   pub fn args_concat(&self)  -> FuncSym { self.args_concat.expect("rt: args_concat not declared") }
+  pub fn str_(&self)         -> FuncSym { self.str_.expect("rt: str not declared") }
+  pub fn str_empty(&self)    -> FuncSym { self.str_empty.expect("rt: str_empty not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -361,6 +371,8 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::IsSeqLike       => ("rt/protocols.wat", "is_seq_like"),
     Sym::IsRecLike       => ("rt/protocols.wat", "is_rec_like"),
     Sym::SeqPop          => ("std/list.wat",     "seq_pop"),
+    Sym::Str             => ("std/str.wat",      "str"),
+    Sym::StrEmpty        => ("std/str.wat",      "str_empty"),
   }
 }
 
@@ -532,6 +544,25 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     let (m, n) = import_key(*sym);
     let f = import_func(frag, sig, m, n);
     set_ternary_primitive(&mut rt, *sym, f);
+  }
+
+  if needed.contains(&Sym::Str) {
+    let sig = ty_func(frag,
+      vec![val_i32(), val_i32()],
+      vec![anyref_n.clone()],
+      "std/str.wat:Fn_str");
+    rt.fn_str = Some(sig);
+    let (m, n) = import_key(Sym::Str);
+    rt.str_ = Some(import_func(frag, sig, m, n));
+  }
+  if needed.contains(&Sym::StrEmpty) {
+    let sig = ty_func(frag,
+      vec![],
+      vec![anyref_n.clone()],
+      "std/str.wat:Fn_str_empty");
+    rt.fn_str_empty = Some(sig);
+    let (m, n) = import_key(Sym::StrEmpty);
+    rt.str_empty = Some(import_func(frag, sig, m, n));
   }
 
   rt
@@ -825,6 +856,10 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
       // Empty seq `[]` reuses `args_empty` from std/list.wat (exported
       // under both `args_empty` and `list_nil`).
       usage.mark(Sym::ArgsEmpty);
+    }
+    ValKind::Lit(Lit::Str(s)) => {
+      if s.is_empty() { usage.mark(Sym::StrEmpty); }
+      else            { usage.mark(Sym::Str); }
     }
     ValKind::BuiltIn(b) => {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }

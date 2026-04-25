@@ -738,6 +738,25 @@ pub fn push_unreachable(frag: &mut Fragment) -> InstrId {
   push(frag, InstrKind::Unreachable)
 }
 
+/// Intern byte content into `frag.data`, returning a `DataSym` keyed
+/// by the bytes. Reuses an existing entry if the same bytes are
+/// already present (whole-blob match). The linker / emitter lays out
+/// the data section sequentially and resolves each `DataSym` to its
+/// final offset.
+pub fn intern_data(frag: &mut Fragment, bytes: &[u8]) -> DataSym {
+  if let Some((i, _)) = frag.data.iter().enumerate()
+    .find(|(_, d)| d.bytes == bytes)
+  {
+    return DataSym(i as u32);
+  }
+  let sym = DataSym(frag.data.len() as u32);
+  frag.data.push(DataDecl {
+    bytes: bytes.to_vec(),
+    display: None,
+  });
+  sym
+}
+
 /// Attach / overwrite the origin on an already-pushed instruction.
 /// Used by lowering when the CPS origin for a node is known *after*
 /// the helper that created it already ran.

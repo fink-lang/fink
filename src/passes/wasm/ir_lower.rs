@@ -855,6 +855,10 @@ enum LitVal {
   /// Reuses the `args_empty` runtime function (which is exported as
   /// both `args_empty` and `list_nil` from the same impl).
   EmptySeq,
+  /// String literal. Empty strings are special-cased to `str_empty`;
+  /// non-empty strings intern their bytes into `frag.data` and emit
+  /// `call $str (i32.const offset) (i32.const len)`.
+  Str(Vec<u8>),
 }
 
 impl LitVal {
@@ -865,6 +869,7 @@ impl LitVal {
       Lit::Decimal(f) => LitVal::Num(*f),
       Lit::Bool(b)    => LitVal::Bool(*b),
       Lit::Seq        => LitVal::EmptySeq,
+      Lit::Str(s)     => LitVal::Str(s.clone()),
       _ => return None,
     })
   }
@@ -875,6 +880,18 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
     LitVal::Num(n) => push_struct_new(frag, rt.num(), vec![op_f64(*n)], into),
     LitVal::Bool(b) => push_ref_i31(frag, op_i32(if *b { 1 } else { 0 }), into),
     LitVal::EmptySeq => push_call(frag, rt.args_empty(), vec![], Some(into)),
+    LitVal::Str(bytes) => {
+      if bytes.is_empty() {
+        push_call(frag, rt.str_empty(), vec![], Some(into))
+      } else {
+        // Intern the bytes, then emit `call $str (data_ref, len)`.
+        // `Operand::DataRef` expands to two i32 consts at emit time.
+        let sym = intern_data(frag, bytes);
+        let len = bytes.len() as u32;
+        push_call(frag, rt.str_(),
+          vec![Operand::DataRef { sym, len }], Some(into))
+      }
+    }
   }
 }
 

@@ -545,18 +545,39 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     Some(body)
   };
 
+  // Data: lay out user fragment's `frag.data` blobs sequentially in
+  // memory starting at offset 0. Each `DataSym(i)` resolves to the
+  // running offset, used by `Operand::DataRef` at emit time.
+  let mut data_offsets: Vec<u32> = Vec::with_capacity(frag.data.len());
+  let mut data_blob: Vec<u8> = Vec::new();
+  for d in &frag.data {
+    data_offsets.push(data_blob.len() as u32);
+    data_blob.extend_from_slice(&d.bytes);
+  }
+
   // Code: runtime's bodies raw, then user's bodies encoded.
   let mut code_sec = CodeSection::new();
   for body in &rt.code_bodies_raw {
     code_sec.raw(body);
   }
   for (_, f) in &user_local_funcs {
-    let func = emit_func(frag, f, &type_remap, &func_remap, user_global_base);
+    let func = emit_func(frag, f, &type_remap, &func_remap, user_global_base, &data_offsets);
     code_sec.function(&func);
   }
 
-  // Data: user fragment may have strings; runtime has none today.
-  // (Data sections built from Fragment.data would go here.)
+  // Data section: one active segment at offset 0 in memory 0 holding
+  // the concatenated blobs. Skip if there's no data.
+  let data_sec = if data_blob.is_empty() {
+    None
+  } else {
+    let mut sec = wasm_encoder::DataSection::new();
+    sec.active(
+      0,                                 // memory index
+      &ConstExpr::i32_const(0),          // offset
+      data_blob.iter().copied(),         // bytes
+    );
+    Some(sec)
+  };
 
   // ── finalise module ──────────────────────────────────────────
   // WASM section IDs — from the spec.
@@ -576,6 +597,9 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     module.section(&wasm_encoder::RawSection { id: SECTION_ELEMENT, data: body });
   }
   module.section(&code_sec);
+  if let Some(sec) = &data_sec {
+    module.section(sec);
+  }
   module.finish()
 }
 
@@ -590,6 +614,7 @@ fn emit_func(
   type_remap: &[u32],
   func_remap: &[u32],
   user_global_base: u32,
+  data_offsets: &[u32],
 ) -> Function {
   let mut locals: Vec<(u32, WEValType)> = Vec::new();
   for l in &f.locals {
@@ -597,7 +622,7 @@ fn emit_func(
   }
   let mut func = Function::new(locals);
   for &id in &f.body {
-    emit_instr(&mut func, frag, &frag.instrs[id.0 as usize], type_remap, func_remap, user_global_base);
+    emit_instr(&mut func, frag, &frag.instrs[id.0 as usize], type_remap, func_remap, user_global_base, data_offsets);
   }
   func.instruction(&Instruction::End);
   func
@@ -610,26 +635,27 @@ fn emit_instr(
   type_remap: &[u32],
   func_remap: &[u32],
   user_global_base: u32,
+  data_offsets: &[u32],
 ) {
   match &instr.kind {
     InstrKind::LocalSet { idx, src } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::LocalSet(idx.0));
     }
     InstrKind::GlobalSet { sym, src } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::GlobalSet(user_global_base + sym.0));
     }
     InstrKind::StructNew { ty, fields, into } => {
       for fld in fields {
-        emit_operand(func, fld, type_remap, func_remap, user_global_base);
+        emit_operand(func, fld, type_remap, func_remap, user_global_base, data_offsets);
       }
       func.instruction(&Instruction::StructNew(type_remap[ty.0 as usize]));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::Call { target, args, into } => {
       for a in args {
-        emit_operand(func, a, type_remap, func_remap, user_global_base);
+        emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
       func.instruction(&Instruction::Call(func_remap[target.0 as usize]));
       if let Some(l) = into {
@@ -638,12 +664,12 @@ fn emit_instr(
     }
     InstrKind::ReturnCall { target, args } => {
       for a in args {
-        emit_operand(func, a, type_remap, func_remap, user_global_base);
+        emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
       func.instruction(&Instruction::ReturnCall(func_remap[target.0 as usize]));
     }
     InstrKind::RefI31 { src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::RefI31);
       func.instruction(&Instruction::LocalSet(into.0));
     }
@@ -656,13 +682,13 @@ fn emit_instr(
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNull { ty, src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(type_remap[ty.0 as usize])));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::ArrayNewFixed { ty, size, elems, into } => {
       for e in elems {
-        emit_operand(func, e, type_remap, func_remap, user_global_base);
+        emit_operand(func, e, type_remap, func_remap, user_global_base, data_offsets);
       }
       func.instruction(&Instruction::ArrayNewFixed {
         array_type_index: type_remap[ty.0 as usize],
@@ -671,8 +697,8 @@ fn emit_instr(
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::ArrayGet { ty, arr, idx, into } => {
-      emit_operand(func, arr, type_remap, func_remap, user_global_base);
-      emit_operand(func, idx, type_remap, func_remap, user_global_base);
+      emit_operand(func, arr, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(func, idx, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::ArrayGet(type_remap[ty.0 as usize]));
       func.instruction(&Instruction::LocalSet(into.0));
     }
@@ -684,17 +710,17 @@ fn emit_instr(
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::I31GetS { src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::I31GetS);
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNullable { ty, src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(type_remap[ty.0 as usize])));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNullAbs { ht, src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::RefCastNonNull(HeapType::Abstract {
         shared: false,
         ty: abs_heap_ir(*ht),
@@ -703,17 +729,17 @@ fn emit_instr(
     }
     InstrKind::If { cond, then_body, else_body } => {
       // cond is a leaf operand evaluating to i32.
-      emit_operand(func, cond, type_remap, func_remap, user_global_base);
+      emit_operand(func, cond, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
       for id in then_body {
         emit_instr(func, frag, &frag.instrs[id.0 as usize],
-          type_remap, func_remap, user_global_base);
+          type_remap, func_remap, user_global_base, data_offsets);
       }
       if !else_body.is_empty() {
         func.instruction(&Instruction::Else);
         for id in else_body {
           emit_instr(func, frag, &frag.instrs[id.0 as usize],
-            type_remap, func_remap, user_global_base);
+            type_remap, func_remap, user_global_base, data_offsets);
         }
       }
       func.instruction(&Instruction::End);
@@ -722,7 +748,7 @@ fn emit_instr(
       func.instruction(&Instruction::Unreachable);
     }
     InstrKind::Drop { src } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::Drop);
     }
   }
@@ -734,6 +760,7 @@ fn emit_operand(
   _type_remap: &[u32],
   func_remap: &[u32],
   user_global_base: u32,
+  data_offsets: &[u32],
 ) {
   match op {
     Operand::I32(v) => { func.instruction(&Instruction::I32Const(*v)); }
@@ -751,8 +778,12 @@ fn emit_operand(
         ty: abs_heap_ir(*ht),
       }));
     }
-    Operand::DataRef { .. } => {
-      panic!("ir_emit: Operand::DataRef not yet implemented");
+    Operand::DataRef { sym, len } => {
+      // DataRef expands to TWO consts: (offset, len). Used by string
+      // literal lowering — `call $str (i32.const offset) (i32.const len)`.
+      let offset = data_offsets[sym.0 as usize];
+      func.instruction(&Instruction::I32Const(offset as i32));
+      func.instruction(&Instruction::I32Const(*len as i32));
     }
   }
 }

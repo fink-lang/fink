@@ -92,7 +92,7 @@ test 'varargs identity', fn:
     10
 
 
-skip-ir test 'tagged template varargs', fn:
+test 'tagged template varargs', fn:
   expect run ƒink:
     first = fn ..parts:
       match parts:
