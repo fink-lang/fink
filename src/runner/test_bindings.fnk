@@ -45,7 +45,7 @@ skip-ir test 'nested chains', fn:
     9
 
 
-skip-ir test 'bind-right at statement top', fn:
+test 'bind-right at statement top', fn:
   expect run ƒink:
     add = fn a, b: a + b
     add

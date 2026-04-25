@@ -420,20 +420,48 @@ fn lower_expr(
         })
         .collect();
 
-      // Allocate local for the new closure's bind.
-      let Cont::Expr { args: cont_args, body } = cont else {
-        panic!("ir_lower: FnClosure cont is not Expr");
-      };
-      let bind = cont_args.first().expect("FnClosure cont has no bind");
-      let local = ctx.alloc_local(&cps_ident_for_bind(cps, ast, bind));
-      ctx.bind(bind.id, local);
+      // FnClosure has two cont shapes:
+      // * `Cont::Expr { args: [new_bind], body }` — the closure value
+      //   is bound to a local in the parent scope and execution
+      //   continues into `body`.
+      // * `Cont::Ref(id)` — tail-apply the cont with the closure as a
+      //   single arg (`_apply([closure], cont_local)`).
+      match cont {
+        Cont::Expr { args: cont_args, body } => {
+          let bind = cont_args.first().expect("FnClosure cont has no bind");
+          let local = ctx.alloc_local(&cps_ident_for_bind(cps, ast, bind));
+          ctx.bind(bind.id, local);
+          emit_closure_construction(ctx, frag, rt, fn_sym, cap_operands, local);
+          lower_expr(ctx, frag, rt, cps, ast, body);
+        }
+        Cont::Ref(cont_id) => {
+          // Build the closure into a fresh anyref local first.
+          let clo_local = ctx.alloc_local(&format!("v_{}_clo", cont_id.0));
+          emit_closure_construction(ctx, frag, rt, fn_sym, cap_operands, clo_local);
 
-      // Emit: local = struct.new $Closure (ref.func fn_sym, <caps>)
-      //   where <caps> is either:
-      //     - `ref.null $Captures` (0 captures), or
-      //     - `array.new_fixed $Captures N cap_ops`.
-      emit_closure_construction(ctx, frag, rt, fn_sym, cap_operands, local);
-      lower_expr(ctx, frag, rt, cps, ast, body);
+          // Resolve cont; spill if non-local.
+          let callee_op = resolve_id_as_operand(ctx, frag, rt, *cont_id);
+          let callee = match callee_op {
+            Operand::Local(l) => l,
+            other => {
+              let local = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+              let i = push_local_set(frag, local, other);
+              ctx.instrs.push(i);
+              local
+            }
+          };
+
+          let l_args = ctx.alloc_local(":args");
+          let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args));
+          ctx.instrs.push(i_nil);
+          let i_cons = push_call(frag, rt.args_prepend(),
+            vec![op_local(clo_local), op_local(l_args)], Some(l_args));
+          ctx.instrs.push(i_cons);
+          let i_app = push_return_call(frag, rt.apply(),
+            vec![op_local(l_args), op_local(callee)]);
+          ctx.instrs.push(i_app);
+        }
+      }
     }
 
     // Apply-path: callable is a ContRef — tail-call the named cont
