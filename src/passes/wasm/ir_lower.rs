@@ -70,8 +70,8 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
   // Lower the module body as the `fink_module` function.
   let fink_module = lower_fn(
     &mut frag, &rt, cps, ast,
-    &[],           // no cap params at the module level
-    &[ret_bind],   // user param: ƒret
+    &[],                 // no cap params at the module level
+    &[(ret_bind, false)], // user param: ƒret (not a spread)
     module_body,
     "fink_module",
     &pub_globals,
@@ -98,7 +98,7 @@ fn lower_fn(
   cps: &CpsResult,
   ast: &Ast<'_>,
   cap_params: &[CpsId],
-  user_params: &[CpsId],
+  user_params: &[(CpsId, bool)],
   body: &Expr,
   display: &str,
   pub_globals: &HashMap<CpsId, GlobalSym>,
@@ -137,19 +137,38 @@ fn lower_fn(
     }
   }
 
-  // Unpack user params from $_args by walking `args_head`/`args_tail`.
-  // For the first param we only need `args_head`. For subsequent
-  // params we'd need `args_tail` calls — a TODO for multi-param
-  // functions.
-  if let Some(first) = user_params.first() {
-    let name = cps_ident(cps, ast, *first);
+  // Unpack user params from $:params by walking `args_head` / `args_tail`.
+  //
+  // We use $:params itself as the cursor: each peel does
+  //   <local> = args_head($:params)
+  //   $:params = args_tail($:params)        (skipped after the last peel)
+  // overwriting the param slot in place. This mirrors the old emitter's
+  // approach (see `emit.rs:1428-1446`) and avoids needing a separate
+  // cursor local.
+  //
+  // A trailing `Spread` param consumes the remaining tail directly: no
+  // `args_head`/`args_tail` for it — we just bind its local to the
+  // current $:params cursor.
+  let n = user_params.len();
+  for (j, &(pid, is_spread)) in user_params.iter().enumerate() {
+    let name = cps_ident(cps, ast, pid);
     let local = ctx.alloc_local(&name);
-    ctx.bind(*first, local);
-    let i = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(local));
-    ctx.instrs.push(i);
-  }
-  if user_params.len() > 1 {
-    panic!("ir_lower: multi-user-param fns not yet supported (got {})", user_params.len());
+    ctx.bind(pid, local);
+    if is_spread {
+      // Spread takes whatever's left in $:params as-is. No `args_head` —
+      // the spread local *is* the residual list. (Spread must be last,
+      // enforced by the parser/CPS, so no further peeling follows.)
+      let i = push_local_set(frag, local, op_local(l_args_p));
+      ctx.instrs.push(i);
+    } else {
+      let i = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(local));
+      ctx.instrs.push(i);
+      // Advance the cursor unless this is the last entry (no more peels).
+      if j + 1 < n {
+        let i = push_call(frag, rt.args_tail(), vec![op_local(l_args_p)], Some(l_args_p));
+        ctx.instrs.push(i);
+      }
+    }
   }
 
   // Walk the body.
@@ -252,17 +271,20 @@ fn lower_expr(
     }
 
     ExprKind::LetFn { name, params, fn_body, cont, .. } => {
-      // Collect cap + user params by role.
+      // Collect cap + user params by role. User params carry their
+      // spread flag through to lower_fn so the prologue can emit the
+      // right `args_head`/`args_tail`/spread sequence.
       let mut cap_ids: Vec<CpsId> = Vec::new();
-      let mut user_ids: Vec<CpsId> = Vec::new();
+      let mut user_ids: Vec<(CpsId, bool)> = Vec::new();
       for p in params {
-        let pid = match p {
-          Param::Name(b) | Param::Spread(b) => b.id,
+        let (pid, is_spread) = match p {
+          Param::Name(b)   => (b.id, false),
+          Param::Spread(b) => (b.id, true),
         };
         match cps.param_info.try_get(pid).and_then(|o| *o) {
           Some(ParamInfo::Cap(_))  => cap_ids.push(pid),
-          Some(ParamInfo::Param(_)) | Some(ParamInfo::Cont) => user_ids.push(pid),
-          None => user_ids.push(pid),  // ungilded params treated as user
+          Some(ParamInfo::Param(_)) | Some(ParamInfo::Cont) => user_ids.push((pid, is_spread)),
+          None => user_ids.push((pid, is_spread)),  // ungilded params treated as user
         }
       }
       // Lift the fn body to a separate Fn2.
@@ -376,24 +398,34 @@ fn lower_expr(
       ctx.instrs.push(i_app);
     }
 
-    // Apply-path via a bound ref (e.g. a closure local): same as
-    // ContRef but the callee is the value of a local.
+    // Apply-path via a bound ref (e.g. a closure local). The CPS
+    // convention for user-fn calls is `args[0] = cont`, `args[1..] =
+    // values` (cont-first). We build the args list with the cont at
+    // the head by walking args in reverse and `args_prepend`-ing each
+    // onto an initially-empty list.
     ExprKind::App { func: Callable::Val(v), args } => {
       let callee_id = cps_id_of_ref(v);
       let callee = ctx.lookup(callee_id);
 
-      // Args: each element goes through args_prepend. For a single
-      // arg this is the same as apply-path above.
-      let first = args.first()
-        .unwrap_or_else(|| panic!("ir_lower: apply-path (Val) expects >=1 arg"));
-      let op0 = emit_arg_as_operand(ctx, frag, rt, cps, ast, first);
+      // Materialise each arg into an operand first (in source order, so
+      // any boxing/closure-construction instrs are ordered naturally).
+      let arg_ops: Vec<Operand> = args.iter()
+        .map(|a| match a {
+          // The cont arg may be `Cont::Ref(id)` — resolve it as a local.
+          Arg::Cont(Cont::Ref(id)) => op_local(ctx.lookup(*id)),
+          _ => emit_arg_as_operand(ctx, frag, rt, cps, ast, a),
+        })
+        .collect();
 
       let l_args_list = ctx.alloc_local(":args");
       let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
-      let i_cons = push_call(frag, rt.args_prepend(),
-        vec![op0, op_local(l_args_list)], Some(l_args_list));
-      ctx.instrs.push(i_cons);
+      // Prepend in reverse order so head ends up = args[0] (the cont).
+      for op in arg_ops.into_iter().rev() {
+        let i = push_call(frag, rt.args_prepend(),
+          vec![op, op_local(l_args_list)], Some(l_args_list));
+        ctx.instrs.push(i);
+      }
       let i_app = push_return_call(frag, rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
@@ -522,7 +554,32 @@ fn emit_val_into(
       box_lit(frag, rt, &lv, into)
     }
     ValKind::Ref(r) => {
-      let src = ctx.lookup(ref_cps_id(*r));
+      let id = ref_cps_id(*r);
+      // A `Ref` may resolve either to a regular bound local or to a
+      // top-level lifted function (no captures). The lifting pass
+      // emits the latter as a plain `LetVal(name, Ref(fn_id))` rather
+      // than wrapping in `App(FnClosure)` — see lifting/mod.rs. Here
+      // we materialise it as a no-capture `$Closure`, since downstream
+      // call sites (`App(Callable::Val(...))`) dispatch via `_apply`
+      // which requires a `$Closure`-shaped value.
+      //
+      // Closure construction emits two instructions (caps-null + struct.new)
+      // and `emit_val_into` only returns one. Push the first directly and
+      // return the second as the "primary" instr (origin attaches to it).
+      if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
+        let caps_local = ctx.alloc_local_typed(
+          ":caps_arg",
+          val_ref(rt.captures(), /*nullable*/ true),
+        );
+        let i_caps = push_ref_null_concrete(frag, rt.captures(), caps_local);
+        ctx.instrs.push(i_caps);
+        return push_struct_new(
+          frag, rt.closure(),
+          vec![Operand::RefFunc(fn_sym), op_local(caps_local)],
+          into,
+        );
+      }
+      let src = ctx.lookup(id);
       push_local_set(frag, into, op_local(src))
     }
     ValKind::ContRef(id) => {
@@ -791,5 +848,8 @@ impl FnCtx {
   fn lookup_fn_sym(&self, id: CpsId) -> FuncSym {
     *self.fn_syms.get(&id)
       .unwrap_or_else(|| panic!("ir_lower: FnClosure references CpsId {:?} with no LetFn sym", id))
+  }
+  fn try_lookup_fn_sym(&self, id: CpsId) -> Option<FuncSym> {
+    self.fn_syms.get(&id).copied()
   }
 }

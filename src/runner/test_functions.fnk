@@ -1,8 +1,17 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
-test 'pipe with fn call', fn:
+test 'multi-param fn called in same scope', fn:
+  expect run ƒink:
+    add = fn a, b:
+      a + b
+    add 3, 4
+  | equals ƒink:
+    7
+
+
+skip-ir test 'pipe with fn call', fn:
   expect run ƒink:
     add = fn a, b: a + b
     2
@@ -11,7 +20,7 @@ test 'pipe with fn call', fn:
     5
 
 
-test 'match literal first arm', fn:
+skip-ir test 'match literal first arm', fn:
   expect run ƒink:
     match 0:
       0: 42
@@ -20,7 +29,7 @@ test 'match literal first arm', fn:
     42
 
 
-test 'match literal second arm', fn:
+skip-ir test 'match literal second arm', fn:
   expect run ƒink:
     match 1:
       0: 42
@@ -29,7 +38,7 @@ test 'match literal second arm', fn:
     99
 
 
-test 'match wildcard binding', fn:
+skip-ir test 'match wildcard binding', fn:
   expect run ƒink:
     match 5:
       0: 0
@@ -38,7 +47,7 @@ test 'match wildcard binding', fn:
     6
 
 
-test 'factorial', fn:
+skip-ir test 'factorial', fn:
   expect run ƒink:
     fac = fn n:
       match n:
@@ -49,7 +58,7 @@ test 'factorial', fn:
     120
 
 
-test 'add list items', fn:
+skip-ir test 'add list items', fn:
   expect run ƒink:
     sum = fn items, c:
       match items:
@@ -62,7 +71,7 @@ test 'add list items', fn:
     10
 
 
-test 'varargs first', fn:
+skip-ir test 'varargs first', fn:
   expect run ƒink:
     first = fn ..args:
       match args:
@@ -73,7 +82,7 @@ test 'varargs first', fn:
     42
 
 
-test 'varargs identity', fn:
+skip-ir test 'varargs identity', fn:
   expect run ƒink:
     identity = fn ..args: args
 
@@ -83,7 +92,7 @@ test 'varargs identity', fn:
     10
 
 
-test 'tagged template varargs', fn:
+skip-ir test 'tagged template varargs', fn:
   expect run ƒink:
     first = fn ..parts:
       match parts:
@@ -96,7 +105,7 @@ test 'tagged template varargs', fn:
     true
 
 
-test 'varargs mixed fixed and rest', fn:
+skip-ir test 'varargs mixed fixed and rest', fn:
   expect run ƒink:
     head-and-rest = fn a, ..rest:
       match rest:

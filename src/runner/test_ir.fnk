@@ -17,3 +17,13 @@ test 'ir: int sum', fn:
     42 + 123
   | equals ƒink:
     165
+
+
+# TODO - remove once other tests cover ..rest usecase
+test 'ir: spread param', fn:
+  expect run ƒink:
+    first = fn a, ..rest:
+      a
+    first 10, 20, 30
+  | equals ƒink:
+    10

@@ -54,7 +54,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::passes::cps::ir::{Arg, BuiltIn, Callable, Cont, CpsResult, Expr, ExprKind, Lit, ValKind};
+use crate::passes::cps::ir::{Arg, BuiltIn, Callable, Cont, CpsResult, Expr, ExprKind, Lit, Param, ParamInfo, ValKind};
 
 use super::ir::*;
 
@@ -81,6 +81,7 @@ pub enum Sym {
 
   // ── calling-convention primitives (std/list.wat today) ────────
   ArgsHead,
+  ArgsTail,
   ArgsEmpty,
   ArgsPrepend,
 
@@ -191,6 +192,7 @@ pub struct Runtime {
   fn_op_unary:    Option<TypeSym>,  // (anyref, anyref)            -- op_not
   // calling-convention funcs
   args_head:    Option<FuncSym>,
+  args_tail:    Option<FuncSym>,
   args_empty:   Option<FuncSym>,
   args_prepend: Option<FuncSym>,
   apply:        Option<FuncSym>,
@@ -227,6 +229,7 @@ impl Runtime {
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
+  pub fn args_tail(&self)    -> FuncSym { self.args_tail.expect("rt: args_tail not declared") }
   pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
   pub fn args_prepend(&self) -> FuncSym { self.args_prepend.expect("rt: args_prepend not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
@@ -293,6 +296,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Captures        => ("rt/types.wat",     "Captures"),
     Sym::Apply           => ("rt/apply.wat",     "_apply"),
     Sym::ArgsHead        => ("std/list.wat",     "args_head"),
+    Sym::ArgsTail        => ("std/list.wat",     "args_tail"),
     Sym::ArgsEmpty       => ("std/list.wat",     "args_empty"),
     Sym::ArgsPrepend     => ("std/list.wat",     "args_prepend"),
     Sym::OpPlus          => ("rt/protocols.wat", "op_plus"),
@@ -383,6 +387,22 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     rt.fn_any_to_any = Some(sig);
     let (m, n) = import_key(Sym::ArgsHead);
     rt.args_head = Some(import_func(frag, sig, m, n));
+  }
+  if needed.contains(&Sym::ArgsTail) {
+    // Shares signature shape `(anyref) -> anyref` with args_head; declare
+    // the local sig type only if args_head didn't already (i.e. the program
+    // peels but doesn't need a head — unlikely in practice, but keeps the
+    // declarations independent).
+    let sig = if let Some(s) = rt.fn_any_to_any { s } else {
+      let s = ty_func(frag,
+        vec![anyref_n.clone()],
+        vec![anyref_n.clone()],
+        "std/list.wat:Fn_args_tail");
+      rt.fn_any_to_any = Some(s);
+      s
+    };
+    let (m, n) = import_key(Sym::ArgsTail);
+    rt.args_tail = Some(import_func(frag, sig, m, n));
   }
   if needed.contains(&Sym::ArgsEmpty) {
     let sig = ty_func(frag,
@@ -533,16 +553,18 @@ pub fn scan(cps: &CpsResult) -> RuntimeUsage {
     usage.mark(Sym::Apply);
   }
 
-  scan_expr(&cps.root, &mut usage);
+  scan_expr(&cps.root, cps, &mut usage);
   usage
 }
 
-/// True if the fink_module body's tail App calls a user continuation
-/// (requiring the `_apply` + list bring-up path) rather than a direct
-/// builtin (`op_plus` etc.).
+/// True if any function body in the program — module body or any
+/// lifted fn body — has a tail App that lowers via the `_apply`
+/// path (`Callable::Val`) rather than a direct builtin call.
 ///
-/// Walks through LetVal / LetFn wrappers and `Pub` App-chains to
-/// find the actual tail expression.
+/// We scan every `LetFn`'s `fn_body` plus the module-root body. Each
+/// fn_body's tail is the relevant signal — emit will lower at most
+/// one tail per fn, but apply usage in any one of them requires the
+/// full bring-up symbol set.
 fn tail_uses_apply(root: &Expr) -> bool {
   // Find the fink_module body — `App(FinkModule, [Cont::Expr { body }])`.
   let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind else {
@@ -551,7 +573,43 @@ fn tail_uses_apply(root: &Expr) -> bool {
   let Some(Arg::Cont(Cont::Expr { body, .. })) = args.first() else {
     return true;
   };
-  tail_is_apply_path(body)
+  any_fn_uses_apply(body)
+}
+
+/// Recursive: returns true if `body`'s own tail is apply-path, or if
+/// any nested LetFn's `fn_body` does.
+fn any_fn_uses_apply(body: &Expr) -> bool {
+  if tail_is_apply_path(body) { return true; }
+  walk_fn_bodies(body, &mut |fb| tail_is_apply_path(fb))
+}
+
+/// Walk every nested LetFn's `fn_body` (transitively) and return true
+/// if `pred` returns true for any of them.
+fn walk_fn_bodies(expr: &Expr, pred: &mut dyn FnMut(&Expr) -> bool) -> bool {
+  match &expr.kind {
+    ExprKind::LetVal { cont, .. } => walk_cont_fns(cont, pred),
+    ExprKind::LetFn { fn_body, cont, .. } => {
+      if pred(fn_body) { return true; }
+      if walk_fn_bodies(fn_body, pred) { return true; }
+      walk_cont_fns(cont, pred)
+    }
+    ExprKind::App { args, .. } => {
+      args.iter().any(|a| match a {
+        Arg::Cont(c) => walk_cont_fns(c, pred),
+        Arg::Expr(e) => walk_fn_bodies(e, pred),
+        _ => false,
+      })
+    }
+    ExprKind::If { then, else_, .. } => {
+      walk_fn_bodies(then, pred) || walk_fn_bodies(else_, pred)
+    }
+  }
+}
+
+fn walk_cont_fns(cont: &Cont, pred: &mut dyn FnMut(&Expr) -> bool) -> bool {
+  if let Cont::Expr { body, .. } = cont {
+    walk_fn_bodies(body, pred)
+  } else { false }
 }
 
 fn tail_is_apply_path(expr: &Expr) -> bool {
@@ -580,15 +638,45 @@ fn tail_is_apply_path(expr: &Expr) -> bool {
   }
 }
 
-fn scan_expr(expr: &Expr, usage: &mut RuntimeUsage) {
+fn scan_expr(expr: &Expr, cps: &CpsResult, usage: &mut RuntimeUsage) {
   match &expr.kind {
     ExprKind::LetVal { val, cont, .. } => {
       scan_val_kind(&val.kind, usage);
-      scan_cont(cont, usage);
+      scan_cont(cont, cps, usage);
     }
-    ExprKind::LetFn { fn_body, cont, .. } => {
-      scan_expr(fn_body, usage);
-      scan_cont(cont, usage);
+    ExprKind::LetFn { params, fn_body, cont, .. } => {
+      // Mark `args_tail` if the lifted fn's prologue will need to peel
+      // more than one entry from $:params, OR if a spread is present
+      // (where preceding params still need to advance the cursor before
+      // the spread captures the remaining tail). User-param-shaped
+      // entries here are anything that's NOT a `Cap` — `Param`, `Cont`,
+      // and ungilded params all unpack from $:params. See
+      // `ir_lower::lower_fn` for the matching split.
+      let mut unpack_count = 0usize;
+      let mut has_spread = false;
+      for p in params {
+        let (pid, is_spread) = match p {
+          Param::Name(b)   => (b.id, false),
+          Param::Spread(b) => (b.id, true),
+        };
+        let info = cps.param_info.try_get(pid).and_then(|o| *o);
+        let is_cap = matches!(info, Some(ParamInfo::Cap(_)));
+        if !is_cap {
+          unpack_count += 1;
+          if is_spread { has_spread = true; }
+        }
+      }
+      if unpack_count > 1 || has_spread {
+        usage.mark(Sym::ArgsTail);
+      }
+      // Any LetFn in the program means at least one $Closure value will
+      // exist at runtime (either via `App(FnClosure)` or via a no-capture
+      // `Ref→Closure` materialisation in `emit_val_into`). Mark both the
+      // type imports here so lower never finds them missing.
+      usage.mark(Sym::Closure);
+      usage.mark(Sym::Captures);
+      scan_expr(fn_body, cps, usage);
+      scan_cont(cont, cps, usage);
     }
     ExprKind::App { func, args } => {
       match func {
@@ -597,27 +685,27 @@ fn scan_expr(expr: &Expr, usage: &mut RuntimeUsage) {
           for &sym in syms_for_builtin(*b) { usage.mark(sym); }
         }
       }
-      for a in args { scan_arg(a, usage); }
+      for a in args { scan_arg(a, cps, usage); }
     }
     ExprKind::If { cond, then, else_ } => {
       scan_val_kind(&cond.kind, usage);
-      scan_expr(then, usage);
-      scan_expr(else_, usage);
+      scan_expr(then, cps, usage);
+      scan_expr(else_, cps, usage);
     }
   }
 }
 
-fn scan_cont(cont: &Cont, usage: &mut RuntimeUsage) {
+fn scan_cont(cont: &Cont, cps: &CpsResult, usage: &mut RuntimeUsage) {
   if let Cont::Expr { body, .. } = cont {
-    scan_expr(body, usage);
+    scan_expr(body, cps, usage);
   }
 }
 
-fn scan_arg(arg: &Arg, usage: &mut RuntimeUsage) {
+fn scan_arg(arg: &Arg, cps: &CpsResult, usage: &mut RuntimeUsage) {
   match arg {
     Arg::Val(v) | Arg::Spread(v) => scan_val_kind(&v.kind, usage),
-    Arg::Cont(c) => scan_cont(c, usage),
-    Arg::Expr(e) => scan_expr(e, usage),
+    Arg::Cont(c) => scan_cont(c, cps, usage),
+    Arg::Expr(e) => scan_expr(e, cps, usage),
   }
 }
 

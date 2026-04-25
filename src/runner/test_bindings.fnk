@@ -1,4 +1,4 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -36,7 +36,7 @@ test 'multiple let bindings', fn:
     5
 
 
-test 'nested chains', fn:
+skip-ir test 'nested chains', fn:
   expect run ƒink:
     x = 2 + 3
     y = x * 2
@@ -45,7 +45,7 @@ test 'nested chains', fn:
     9
 
 
-test 'bind-right at statement top', fn:
+skip-ir test 'bind-right at statement top', fn:
   expect run ƒink:
     add = fn a, b: a + b
     add
