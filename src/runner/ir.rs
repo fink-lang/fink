@@ -80,7 +80,16 @@ mod tests {
               let args_any = params[1].unwrap_anyref()
                 .ok_or_else(|| Error::msg("host_invoke_cont: null args"))?;
               let cons = args_any.unwrap_struct(&caller)?;
-              let head = cons.field(&mut caller, 0)?;
+              // Args list may be empty (`$Nil` — 0 fields). Treat as
+              // "done called with no result" — capture None and return
+              // cleanly instead of trapping.
+              let head = match cons.field(&mut caller, 0) {
+                Ok(h) => h,
+                Err(_) => {
+                  *captured_clone.lock().unwrap() = Some(TestResult::None);
+                  return Ok(());
+                }
+              };
               let head_any = match head {
                 Val::AnyRef(Some(r)) => r,
                 _ => return Ok(()),
