@@ -20,7 +20,15 @@
 #[cfg(test)]
 mod tests {
   use std::sync::{Arc, Mutex};
-  use wasmtime::{Config, Engine, Module, Store, Linker, Error, ExternType, Val};
+  use wasmtime::{
+    ArrayRef, ArrayRefPre, ArrayType, Config, Engine, Error, ExternType,
+    FieldType, Linker, Module, Mutability, Store, StorageType, Val,
+  };
+
+  /// Hardcoded cli args passed to `main` when the source defines it.
+  /// Tests that exercise cli arg behaviour (e.g. pattern-matching on
+  /// `..args`) must match this fixture exactly.
+  const TEST_CLI_ARGS: &[&[u8]] = &[b"test", b"alpha", b"beta"];
 
   enum TestResult {
     Num(f64),
@@ -174,56 +182,89 @@ mod tests {
     let instance = linker.instantiate(&mut store, &module)
       .map_err(|e| e.to_string())?;
 
-    let wrap_host_cont = instance.get_func(&mut store, "wrap_host_cont")
-      .ok_or("no 'wrap_host_cont' export")?;
-    let args_empty = instance.get_func(&mut store, "std/list.wat:args_empty")
-      .ok_or("no 'std/list.wat:args_empty' export")?;
-    let args_prepend = instance.get_func(&mut store, "std/list.wat:args_prepend")
-      .ok_or("no 'std/list.wat:args_prepend' export")?;
-    let fink_module = instance.get_func(&mut store, "fink_module")
-      .ok_or("no 'fink_module' export")?;
+    let wrap_host_cont = get_func(&instance, &mut store, "wrap_host_cont")?;
+    let args_empty     = get_func(&instance, &mut store, "std/list.wat:args_empty")?;
+    let args_prepend   = get_func(&instance, &mut store, "std/list.wat:args_prepend")?;
+    let fink_module    = get_func(&instance, &mut store, "fink_module")?;
 
-    let mut done_closure = [Val::AnyRef(None)];
-    wrap_host_cont.call(&mut store, &[Val::I32(1)], &mut done_closure)
-      .map_err(|e| format!("wrap_host_cont: {e}"))?;
+    let done_cont = call1(&wrap_host_cont, &mut store, &[Val::I32(1)], "wrap_host_cont")?;
 
-    let mut empty = [Val::AnyRef(None)];
-    args_empty.call(&mut store, &[], &mut empty)
-      .map_err(|e| format!("args_empty: {e}"))?;
-    let mut args_list = [Val::AnyRef(None)];
-    args_prepend.call(&mut store, &[done_closure[0].clone(), empty[0].clone()], &mut args_list)
-      .map_err(|e| format!("args_prepend: {e}"))?;
-
-    fink_module.call(&mut store, &[Val::AnyRef(None), args_list[0].clone()], &mut [])
+    // Run the module body to settle top-level bindings (including `main`
+    // if defined). Done cont fires once with whatever the body evaluates
+    // to; we discard that value if `main` is also defined.
+    let body_args = build_args_list(&args_empty, &args_prepend, &mut store, &[done_cont.clone()])?;
+    fink_module.call(&mut store, &[Val::AnyRef(None), body_args], &mut [])
       .map_err(|e| format!("fink_module: {e}"))?;
 
-    // Entry-module contract: if the source defined a top-level
-    // `main`, invoke it with a fresh done cont and capture its
-    // result instead of the module body's final value. The module
-    // body's done has already fired by now (registering bindings,
-    // settling globals); we discard whatever it captured.
-    //
-    // Currently we only pass `[done]` — works for `main = fn:`. The
-    // optional-args shape (`main = fn args:`) needs cli_args wiring,
-    // not yet implemented.
+    // If the source defined a top-level `main`, invoke it with a fresh
+    // done cont (reuses `done_cont`) and the test cli args. Result of
+    // `main` overrides the module body's result.
     if let Some(main_global) = instance.get_global(&mut store, "main") {
-      // Reset captured to take the *new* done's value.
       *captured.lock().unwrap() = None;
 
-      let main_clo = main_global.get(&mut store);
-      let apply_func = instance.get_func(&mut store, "rt/apply.wat:_apply")
-        .ok_or("no '_apply' export")?;
-      let mut empty2 = [Val::AnyRef(None)];
-      args_empty.call(&mut store, &[], &mut empty2)
-        .map_err(|e| format!("args_empty: {e}"))?;
-      let mut main_args = [Val::AnyRef(None)];
-      args_prepend.call(&mut store, &[done_closure[0].clone(), empty2[0].clone()], &mut main_args)
-        .map_err(|e| format!("args_prepend (main): {e}"))?;
-      apply_func.call(&mut store, &[main_args[0].clone(), main_clo], &mut [])
+      let main_clo  = main_global.get(&mut store);
+      let apply_fn  = get_func(&instance, &mut store, "rt/apply.wat:_apply")?;
+      let str_wrap  = get_func(&instance, &mut store, "std/str.wat:_str_wrap_bytes")?;
+
+      let mut main_args_vals = vec![done_cont];
+      for bytes in TEST_CLI_ARGS {
+        main_args_vals.push(wrap_bytes_as_str(&str_wrap, &mut store, bytes)?);
+      }
+      let main_args = build_args_list(&args_empty, &args_prepend, &mut store, &main_args_vals)?;
+
+      apply_fn.call(&mut store, &[main_args, main_clo], &mut [])
         .map_err(|e| format!("_apply(main): {e}"))?;
     }
 
     Ok(captured.lock().unwrap().take().unwrap_or(TestResult::None))
+  }
+
+  fn get_func(
+    instance: &wasmtime::Instance, store: &mut Store<()>, name: &str,
+  ) -> Result<wasmtime::Func, String> {
+    instance.get_func(store, name).ok_or_else(|| format!("no '{name}' export"))
+  }
+
+  /// Call a WASM func returning a single anyref. Wraps the boilerplate
+  /// of allocating a result buffer and surfacing errors with a label.
+  fn call1(
+    func: &wasmtime::Func, store: &mut Store<()>, params: &[Val], label: &str,
+  ) -> Result<Val, String> {
+    let mut out = [Val::AnyRef(None)];
+    func.call(store, params, &mut out).map_err(|e| format!("{label}: {e}"))?;
+    Ok(out[0].clone())
+  }
+
+  /// Build a fink args list from `vals` by repeated `args_prepend`.
+  /// `vals[0]` ends up at the head (i.e. `args_head` returns it).
+  fn build_args_list(
+    args_empty: &wasmtime::Func,
+    args_prepend: &wasmtime::Func,
+    store: &mut Store<()>,
+    vals: &[Val],
+  ) -> Result<Val, String> {
+    let mut acc = call1(args_empty, store, &[], "args_empty")?;
+    for v in vals.iter().rev() {
+      acc = call1(args_prepend, store, &[v.clone(), acc], "args_prepend")?;
+    }
+    Ok(acc)
+  }
+
+  /// Wrap raw host bytes as a `$Str` via the runtime's `_str_wrap_bytes`.
+  /// Allocates a `$ByteArray` (i8 elements) through the GC API and hands
+  /// it to the wrap function.
+  fn wrap_bytes_as_str(
+    str_wrap: &wasmtime::Func, store: &mut Store<()>, bytes: &[u8],
+  ) -> Result<Val, String> {
+    let array_ty = ArrayType::new(
+      store.engine(),
+      FieldType::new(Mutability::Var, StorageType::I8),
+    );
+    let alloc = ArrayRefPre::new(&mut *store, array_ty);
+    let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
+    let array = ArrayRef::new_fixed(&mut *store, &alloc, &elems)
+      .map_err(|e| format!("byte array alloc: {e}"))?;
+    call1(str_wrap, store, &[Val::AnyRef(Some(array.to_anyref()))], "_str_wrap_bytes")
   }
 
   // Shared fixtures — same .fnk files the main runner uses. Tests
@@ -241,4 +282,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_formatting.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk",     skip-ir);
   test_macros::include_fink_tests!("src/runner/test_ir_main.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_ir_io.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_ir_link.fnk", skip-ir);
 }

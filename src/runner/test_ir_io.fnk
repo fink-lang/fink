@@ -1,0 +1,111 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+skip test 'stdout single message no main', fn:
+  expect run ƒink:
+    {stdout} = import 'std/io.fnk'
+
+    'hello' >> stdout
+  | equals ":
+    stdout == ":
+      hello
+
+
+skip test 'stdout single message', fn:
+  expect run ƒink:
+    {stdout} = import 'std/io.fnk'
+
+    main = fn:
+      'hello' >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      hello
+
+
+skip test 'stdout multiple messages', fn:
+  expect run ƒink:
+    {stdout} = import 'std/io.fnk'
+
+    main = fn:
+      'hello' >> stdout
+      'world' >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      helloworld
+
+
+skip test 'stderr output', fn:
+  expect run ƒink:
+    {stderr} = import 'std/io.fnk'
+
+    main = fn args, stderr:
+      'error' >> stderr
+      1
+  | equals ":
+    1
+    stderr == ":
+      error
+
+
+skip test 'stdout and stderr', fn:
+  expect run ƒink:
+    {stdout, stderr} = import 'std/io.fnk'
+
+    main = fn:
+      'out' >> stdout
+      'err' >> stderr
+      0
+  | equals ":
+    0
+    stdout == ":
+      out
+    stderr == ":
+      err
+
+
+skip test 'send with <<', fn:
+  expect run ƒink:
+    {stdout} = import 'std/io.fnk'
+
+    main = fn:
+      stdout << 'hello'
+      0
+  | equals ":
+    0
+    stdout == ":
+      hello
+
+
+
+skip test 'read from stdin', fn:
+  expect run ƒink:
+    {stdin, stdout} = import 'std/io.fnk'
+
+    main = fn:
+      data = read stdin, 1024
+      data >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      hello from stdin
+
+
+skip test 'cli args printed via stdout', fn:
+  expect run ƒink:
+    {stdout} = import 'std/io.fnk'
+
+    main = fn args:
+      '${args}' >> stdout
+      0
+  | equals ":
+    0
+    stdout == ":
+      ['test', 'alpha', 'beta']
+

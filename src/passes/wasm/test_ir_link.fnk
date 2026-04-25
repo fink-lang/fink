@@ -1,0 +1,26 @@
+{test, skip-ir, expect, equals, ir_wat, wat} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+skip-ir test 'multi module import', fn:
+  expect ir_wat ƒink:
+    {shrub} = import './test_link/simple.fnk'
+    shrub 21
+  | equals wat":
+    TODO
+
+
+---
+Diamond dedup end-to-end: entry → left, right → common AND entry →
+common directly. The three importers reach common.fnk via three
+different raw relative strings (`./sub/common.fnk`, `./common.fnk`,
+`../sub/common.fnk`) which all canonicalise to `./sub/common.fnk`.
+common.fnk must be linked exactly once; both left_val and right_val
+must see the same `base = 10`, and the program must actually execute.
+---
+skip-ir test 'diamond with two paths to same dep', fn:
+  expect ir_wat ƒink:
+    {total} = import './test_link/diamond.fnk'
+    total
+  | equals wat":
+    TODO

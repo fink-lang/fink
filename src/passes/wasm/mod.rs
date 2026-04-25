@@ -173,8 +173,8 @@ mod tests {
       "missing std/list.wat:args_empty passthrough");
 
     // Interop exports stay bare (host contract).
-    assert!(exports.contains(&"_run_main".to_string()),
-      "missing _run_main passthrough");
+    assert!(exports.contains(&"wrap_host_cont".to_string()),
+      "missing wrap_host_cont passthrough");
   }
 
   #[test]
@@ -265,5 +265,6 @@ mod tests {
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_tasks.fnk", skip-ir);
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_records.fnk", skip-ir);
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_strings.fnk", skip-ir);
+    test_macros::include_fink_tests!("src/passes/wasm/test_ir_link.fnk", skip-ir);
   }
 }

@@ -1,29 +1,31 @@
-;; Rust host interop — self-contained main runner.
+;; Rust host interop — host-bridge primitives.
 ;;
-;; Exports _run_main (direct-style) which sets up host IO channels, runs the
-;; user's main to completion, drains the scheduler, and calls sys_exit.
+;; Provides:
+;;   * `wrap_host_cont(id) -> anyref` — opaque WASM-side handle for a
+;;     host-registered callback. Fired via `_apply`, dispatches to
+;;     `env.host_invoke_cont(id, args)`.
+;;   * `interop_channel_send` / `interop_channel_recv` / `interop_op_read` /
+;;     `interop_panic` — host-bridge ops invoked by the runtime
+;;     protocols (rt/protocols.wat) when a value is a $HostChannel
+;;     or a panic is raised.
 ;;
 ;; Owns $HostChannel — a subtype of $Channel for host-managed IO.
 ;; send/recv on host channels delegate to host imports instead of using
-;; the internal message queue. Dispatch is in operators.wat.
+;; the internal message queue.
 ;;
-;; The host provides:
-;;   host_exit(i32)               — terminate with exit code
-;;   host_write_stdout(i32, i32) — write bytes at (offset, length) to stdout
-;;   host_write_stderr(i32, i32) — write bytes at (offset, length) to stderr
-;;
-;; A future interop-wasi.wat can provide the same _run_main export
-;; backed by WASI fd_write / proc_exit instead.
+;; Orchestration of `main` (build args list, apply, drain scheduler,
+;; exit) is the runner's responsibility, not this file's. There is no
+;; `_run_main` here — the test harness inlines the dispatch today; a
+;; future production runner will provide its own entry point.
 
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $_done_cont_fn $_host_cont_adapter)
+  (elem declare func $_host_cont_adapter)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
 
-  (import "env" "host_exit" (func $host_exit (param i32)))
   (import "env" "host_channel_send" (func $host_channel_send (param i32) (param (ref null any))))
   (import "env" "host_read" (func $host_read (param (ref any) (ref any) (ref any))))
   ;; Irrefutable pattern failure — traps the instance with a diagnostic.
@@ -34,18 +36,6 @@
   ;; for `id` with the given args list. See `$_host_cont_adapter` and
   ;; `wrap_host_cont` for how WASM-side callable refs into this.
   (import "env" "host_invoke_cont" (func $host_invoke_cont (param i32 (ref null any))))
-
-
-
-  ;; -- Host channel helpers --------------------------------------------------
-
-  ;; Create a host channel with the given tag.
-  (func $create_host_channel (param $tag (ref any)) (result (ref $HostChannel))
-    (struct.new $HostChannel
-      (struct.new $Nil)
-      (struct.new $Nil)
-      (local.get $tag))
-  )
 
 
   ;; -- Host callable (inbound contract) --------------------------------------
@@ -197,118 +187,6 @@
 
     ;; Resume scheduler — this task is parked on the future.
     (return_call $resume)
-  )
-
-
-  ;; -- Done continuation -----------------------------------------------------
-  ;;
-  ;; CPS function (type $Fn2) passed to main as its continuation.
-  ;; When main "returns", this fires:
-  ;;   1. Extract exit code from args list head
-  ;;   2. Drain remaining scheduler tasks (e.g. pending IO writes)
-  ;;   3. Call sys_exit with the exit code
-
-  (func $_done_cont_fn (type $Fn2)
-    (param $caps (ref null any))
-    (param $args (ref null any))
-
-    (local $code i32)
-    (local $val (ref null any))
-
-    ;; Extract result value from args list head.
-    (local.set $val (call $list_head_any (local.get $args)))
-
-    ;; Decode to i32 exit code.
-    ;; Try i31ref first (small ints / bools).
-    (block $decoded
-      (block $not_i31
-        (block $is_i31 (result (ref i31))
-          (br $not_i31
-            (br_on_cast $is_i31 (ref null any) (ref i31)
-              (local.get $val))))
-        (local.set $code (i31.get_s))
-        (br $decoded))
-
-      ;; Try $Num (f64 field).
-      (block $not_num
-        (block $is_num (result (ref $Num))
-          (br $not_num
-            (br_on_cast $is_num (ref null any) (ref $Num)
-              (local.get $val))))
-        (local.set $code (i32.trunc_f64_s (struct.get $Num $val)))
-        (br $decoded))
-
-      ;; Unknown type — default to 0.
-    )
-
-    ;; Drain remaining scheduler tasks (pending IO writes etc.).
-    (call $resume)
-
-    ;; Terminate.
-    (return_call $host_exit (local.get $code))
-  )
-
-
-  ;; -- _run_main -------------------------------------------------------------
-  ;;
-  ;; Direct-style export. The single entry point for the host.
-  ;;
-  ;; 1. Creates stdin/stdout/stderr host channels
-  ;; 2. Creates done continuation (captures exit code, drains, calls sys_exit)
-  ;; 3. Builds args list [done_cont, cli_args, stdin, stdout, stderr]
-  ;; 4. Calls main — enters CPS, scheduler takes over
-  ;; 5. When scheduler drains, returns here (but sys_exit already called)
-  ;;
-  ;; $cli_args is a fink $List of $Str (byte strings) built by the host —
-  ;; argv[0] is the program name, rest are CLI arguments.
-
-  (func $_run_main (export "_run_main")
-    (param $entry (ref null any))
-    (param $cli_args (ref null any))
-
-    (local $stdin  (ref null any))
-    (local $stdout (ref null any))
-    (local $stderr (ref null any))
-    (local $done   (ref null any))
-    (local $args   (ref null any))
-
-    ;; Create host channels with i31ref tags (0=stdin, 1=stdout, 2=stderr).
-    (local.set $stdin
-      (call $create_host_channel (ref.i31 (i32.const 0))))
-    (local.set $stdout
-      (call $create_host_channel (ref.i31 (i32.const 1))))
-    (local.set $stderr
-      (call $create_host_channel (ref.i31 (i32.const 2))))
-
-    ;; Create done continuation.
-    (local.set $done
-      (struct.new $Closure
-        (ref.func $_done_cont_fn)
-        (ref.null $Captures)))
-
-    ;; Build args list: [done, cli_args, stdin, stdout, stderr]
-    ;; (prepend in reverse).
-    (local.set $args (call $list_nil))
-    (local.set $args
-      (call $list_prepend_any
-        (local.get $stderr) (local.get $args)))
-    (local.set $args
-      (call $list_prepend_any
-        (local.get $stdout) (local.get $args)))
-    (local.set $args
-      (call $list_prepend_any
-        (local.get $stdin) (local.get $args)))
-    (local.set $args
-      (call $list_prepend_any
-        (local.get $cli_args) (local.get $args)))
-    (local.set $args
-      (call $list_prepend_any
-        (local.get $done) (local.get $args)))
-
-    ;; Enter CPS world. Never returns — sys_exit terminates.
-    (call $_apply
-      (local.get $args)
-      (local.get $entry))
   )
 
 

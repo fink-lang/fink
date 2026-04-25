@@ -1,0 +1,5 @@
+# Imports common via importer-local relative path `./common.fnk`.
+# Canonical form (entry-relative): ./sub/common.fnk
+{base} = import './common.fnk'
+
+left_val = base + 1
