@@ -825,6 +825,17 @@ fn tail_is_apply_path(expr: &Expr) -> bool {
         true
       }
     }
+    // FnClosure: the cont can be `Cont::Ref` (tail-apply) or
+    // `Cont::Expr` (continue inline). For Cont::Ref the lowered code
+    // emits `_apply([new_clo], cont)`, which needs the apply-path
+    // bring-up. For Cont::Expr, recurse into the body.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
+      match args.last() {
+        Some(Arg::Cont(Cont::Expr { body, .. })) => tail_is_apply_path(body),
+        Some(Arg::Cont(Cont::Ref(_)))            => true,
+        _ => false,
+      }
+    }
     // Direct tail: App where callee is a Val (user cont) → apply path.
     // App with BuiltIn (op_plus etc.) → direct, no apply needed.
     ExprKind::App { func: Callable::Val(_), .. } => true,

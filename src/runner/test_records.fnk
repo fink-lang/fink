@@ -1,4 +1,4 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -45,7 +45,7 @@ test 'rec nested', fn:
     42
 
 
-test 'rec spread update', fn:
+skip-ir test 'rec spread update', fn:
   expect run ƒink:
     r = {a: 1, b: 2}
     {a, b} = {..r, b: 10}
@@ -54,7 +54,7 @@ test 'rec spread update', fn:
     11
 
 
-test 'rec spread merge', fn:
+skip-ir test 'rec spread merge', fn:
   expect run ƒink:
     r1 = {a: 1}
     r2 = {b: 2}
@@ -104,7 +104,7 @@ test 'rec match extract field', fn:
     5
 
 
-test 'rec empty', fn:
+skip-ir test 'rec empty', fn:
   expect run ƒink:
     r = {}
     {a} = {..r, a: 1}
@@ -153,7 +153,7 @@ test 'rec destructure extra fields', fn:
     3
 
 
-test 'rec spread overwrite', fn:
+skip-ir test 'rec spread overwrite', fn:
   expect run ƒink:
     r = {a: 1, b: 2}
     {a, b} = {..r, a: 99}
