@@ -78,6 +78,7 @@ pub enum Sym {
   Fn2,
   Closure,
   Captures,
+  VarArgs,
 
   // ── calling-convention primitives (std/list.wat today) ────────
   ArgsHead,
@@ -115,6 +116,10 @@ pub enum Sym {
   // String construction. `Str` wraps a data-section pointer:
   //   `str(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
   Str, StrEmpty,
+  // Polymorphic string formatter — `(varargs, cont)` where varargs
+  // is a `$VarArgs` array of segment values. Same shape as
+  // `Fn_op_unary`. Used by `BuiltIn::StrFmt` for `'${...}'` templates.
+  StrFmt,
   // Rec primitives — 4-arg shape `(any, any, any, any) -> ()`. Used
   // for record construction (`rec_set`) and pattern destructure
   // (`rec_pop`).
@@ -191,6 +196,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::NotIn     => &[Sym::OpNotIn],
     BuiltIn::Get       => &[Sym::OpDot],
     BuiltIn::Empty     => &[Sym::OpEmpty],
+    BuiltIn::StrFmt    => &[Sym::StrFmt, Sym::VarArgs],
     BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
     BuiltIn::IsRecLike  => &[Sym::IsRecLike],
@@ -220,6 +226,7 @@ pub struct Runtime {
   fn2: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
+  varargs: Option<TypeSym>,
   // locally-declared function signature types (structural)
   fn_any_to_any:  Option<TypeSym>,  // (anyref) -> anyref          -- args_head
   fn_nil_to_list: Option<TypeSym>,  // () -> anyref                -- args_empty
@@ -268,6 +275,7 @@ pub struct Runtime {
   // Empty-rec singleton — `() -> anyref`.
   rec_empty:    Option<FuncSym>,
   panic:        Option<FuncSym>,
+  str_fmt:      Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
   op_rngex:   Option<FuncSym>,
@@ -282,6 +290,7 @@ impl Runtime {
   pub fn fn2(&self)          -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
+  pub fn varargs(&self)      -> TypeSym { self.varargs.expect("rt: VarArgs not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
   pub fn args_tail(&self)    -> FuncSym { self.args_tail.expect("rt: args_tail not declared") }
   pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
@@ -293,6 +302,7 @@ impl Runtime {
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
   pub fn panic(&self)        -> FuncSym { self.panic.expect("rt: panic not declared") }
+  pub fn str_fmt(&self)      -> FuncSym { self.str_fmt.expect("rt: str_fmt not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -329,6 +339,7 @@ impl Runtime {
       Sym::OpIn     => self.op_in,
       Sym::OpNotIn  => self.op_notin,
       Sym::OpDot    => self.op_dot,
+      Sym::StrFmt   => self.str_fmt,
       _ => panic!("rt.op: {:?} is not a protocol-operator Sym", sym),
     };
     f.unwrap_or_else(|| panic!("rt: {:?} not declared", sym))
@@ -360,6 +371,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Fn2             => ("rt/types.wat",     "Fn2"),
     Sym::Closure         => ("rt/types.wat",     "Closure"),
     Sym::Captures        => ("rt/types.wat",     "Captures"),
+    Sym::VarArgs         => ("rt/types.wat",     "VarArgs"),
     Sym::Apply           => ("rt/apply.wat",     "_apply"),
     Sym::ArgsHead        => ("std/list.wat",     "args_head"),
     Sym::ArgsTail        => ("std/list.wat",     "args_tail"),
@@ -397,6 +409,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::SeqPop          => ("std/list.wat",     "seq_pop"),
     Sym::Str             => ("std/str.wat",      "str"),
     Sym::StrEmpty        => ("std/str.wat",      "str_empty"),
+    Sym::StrFmt          => ("std/str.wat",      "str_fmt"),
     Sym::RecPut          => ("std/rec.wat",      "rec_set"),
     Sym::RecPop          => ("std/rec.wat",      "rec_pop"),
     Sym::RecEmpty        => ("std/rec.wat",      "rec_new"),
@@ -436,6 +449,10 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::Closure) {
     let (m, n) = import_key(Sym::Closure);
     rt.closure = Some(ty_import(frag, m, n, AbsHeap::Any));
+  }
+  if needed.contains(&Sym::VarArgs) {
+    let (m, n) = import_key(Sym::VarArgs);
+    rt.varargs = Some(ty_import(frag, m, n, AbsHeap::Any));
   }
 
   // Function-signature types and function imports.
@@ -591,6 +608,19 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     rt.fn_str_empty = Some(sig);
     let (m, n) = import_key(Sym::StrEmpty);
     rt.str_empty = Some(import_func(frag, sig, m, n));
+  }
+  if needed.contains(&Sym::StrFmt) {
+    // Same `(any, any) -> ()` shape as Fn_op_unary; reuse if present.
+    let sig = if let Some(s) = rt.fn_op_unary { s } else {
+      let s = ty_func(frag,
+        vec![anyref_n.clone(), anyref_n.clone()],
+        vec![],
+        "rt/protocols.wat:Fn_op_unary");
+      rt.fn_op_unary = Some(s);
+      s
+    };
+    let (m, n) = import_key(Sym::StrFmt);
+    rt.str_fmt = Some(import_func(frag, sig, m, n));
   }
 
   // 4-arg rec primitives — share `(any, any, any, any) -> ()` shape.

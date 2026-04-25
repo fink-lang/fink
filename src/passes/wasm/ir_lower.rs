@@ -393,6 +393,25 @@ fn lower_expr(
       emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpEmpty, vec![v_op], cont, expr.id);
     }
 
+    // StrFmt: `(seg_0, seg_1, ..., seg_n, cont)` — build a $VarArgs
+    // array from the segments and tail-call $str_fmt(varargs, cont).
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrFmt), args } => {
+      // Last arg is the cont; the rest are value segments.
+      let (cont, segments) = split_last_cont(args);
+      let seg_ops: Vec<Operand> = segments.iter()
+        .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
+        .collect();
+      // Allocate the $VarArgs array.
+      let varargs_local = ctx.alloc_local_typed(":varargs",
+        val_ref(rt.varargs(), /*nullable*/ true));
+      let i_arr = push_array_new_fixed(frag, rt.varargs(), seg_ops, varargs_local);
+      ctx.instrs.push(i_arr);
+      // Wrap as Arg::Val for emit_op_tail_call's cont handling.
+      emit_op_tail_call(ctx, frag, rt, cps, ast,
+        Sym::StrFmt, vec![op_local(varargs_local)], &Arg::Cont(cont.clone()),
+        expr.id);
+    }
+
     // SeqPrepend: `(item, seq, cont)` — same call shape as a binary
     // protocol op. Lowers to `return_call $seq_prepend item seq cont`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPrepend), args } => {
@@ -926,7 +945,6 @@ impl LitVal {
       Lit::Seq        => LitVal::EmptySeq,
       Lit::Rec        => LitVal::EmptyRec,
       Lit::Str(s)     => LitVal::Str(s.clone()),
-      _ => return None,
     })
   }
 }

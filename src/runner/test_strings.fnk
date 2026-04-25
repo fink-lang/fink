@@ -99,7 +99,7 @@ test 'string neq', fn:
     true
 
 
-skip-ir test 'str template string only', fn:
+test 'str template string only', fn:
   expect run ƒink:
     name = 'world'
     'hello ${name}' == 'hello world'
@@ -107,7 +107,7 @@ skip-ir test 'str template string only', fn:
     true
 
 
-skip-ir test 'str template with number', fn:
+test 'str template with number', fn:
   expect run ƒink:
     x = 42
     'value: ${x}' == 'value: 42'
@@ -115,14 +115,14 @@ skip-ir test 'str template with number', fn:
     true
 
 
-skip-ir test 'str template with bool', fn:
+test 'str template with bool', fn:
   expect run ƒink:
     'done: ${true}' == 'done: true'
   | equals ƒink:
     true
 
 
-skip-ir test 'str template multiple segments', fn:
+test 'str template multiple segments', fn:
   expect run ƒink:
     a = 1
     b = 2
@@ -131,14 +131,14 @@ skip-ir test 'str template multiple segments', fn:
     true
 
 
-skip-ir test 'str template with float', fn:
+test 'str template with float', fn:
   expect run ƒink:
     'pi: ${3.14}' == 'pi: 3.14'
   | equals ƒink:
     true
 
 
-skip-ir test 'str template float arithmetic', fn:
+test 'str template float arithmetic', fn:
   expect run ƒink:
     x = 1.5
     y = 2.3

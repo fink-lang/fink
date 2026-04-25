@@ -2,21 +2,21 @@
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
-skip-ir test 'range exclusive formatting', fn:
+test 'range exclusive formatting', fn:
   expect run ƒink:
     '${0..10}' == '0..10'
   | equals ƒink:
     true
 
 
-skip-ir test 'range inclusive formatting', fn:
+test 'range inclusive formatting', fn:
   expect run ƒink:
     '${0...10}' == '0...10'
   | equals ƒink:
     true
 
 
-skip-ir test 'range exclusive construction', fn:
+test 'range exclusive construction', fn:
   expect run ƒink:
     r = 2..5
     '${r}' == '2..5'
@@ -24,7 +24,7 @@ skip-ir test 'range exclusive construction', fn:
     true
 
 
-skip-ir test 'range inclusive construction', fn:
+test 'range inclusive construction', fn:
   expect run ƒink:
     r = 2...5
     '${r}' == '2...5'
