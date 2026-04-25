@@ -427,23 +427,28 @@ fn lower_expr(
       lower_expr(ctx, frag, rt, cps, ast, body);
     }
 
-    // Apply-path: callable is a ContRef — tail-call via `_apply`.
+    // Apply-path: callable is a ContRef — tail-call the named cont
+    // via `_apply`. Args are pure values (no cont prefix, since the
+    // callee IS the cont). Supports 0..N args; reverse-prepends so
+    // args[0] lands at the head of the list.
     ExprKind::App { func: Callable::Val(v), args }
       if matches!(v.kind, ValKind::ContRef(_)) =>
     {
-      // Pass a single-arg args list [operand] to the ContRef's callee.
-      let first = args.first()
-        .unwrap_or_else(|| panic!("ir_lower: apply-path expects >=1 arg"));
-      let op0 = emit_arg_as_operand(ctx, frag, rt, cps, ast, first);
       let cont_id = if let ValKind::ContRef(id) = &v.kind { *id } else { unreachable!() };
       let callee = ctx.lookup(cont_id);
+
+      let arg_ops: Vec<Operand> = args.iter()
+        .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
+        .collect();
 
       let l_args_list = ctx.alloc_local(":args");
       let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
-      let i_cons = push_call(frag, rt.args_prepend(),
-        vec![op0, op_local(l_args_list)], Some(l_args_list));
-      ctx.instrs.push(i_cons);
+      for op in arg_ops.into_iter().rev() {
+        let i = push_call(frag, rt.args_prepend(),
+          vec![op, op_local(l_args_list)], Some(l_args_list));
+        ctx.instrs.push(i);
+      }
       let i_app = push_return_call(frag, rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
