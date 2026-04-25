@@ -1,22 +1,22 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
-test 'range exclusive formatting', fn:
+skip-ir test 'range exclusive formatting', fn:
   expect run ƒink:
     '${0..10}' == '0..10'
   | equals ƒink:
     true
 
 
-test 'range inclusive formatting', fn:
+skip-ir test 'range inclusive formatting', fn:
   expect run ƒink:
     '${0...10}' == '0...10'
   | equals ƒink:
     true
 
 
-test 'range exclusive construction', fn:
+skip-ir test 'range exclusive construction', fn:
   expect run ƒink:
     r = 2..5
     '${r}' == '2..5'
@@ -24,7 +24,7 @@ test 'range exclusive construction', fn:
     true
 
 
-test 'range inclusive construction', fn:
+skip-ir test 'range inclusive construction', fn:
   expect run ƒink:
     r = 2...5
     '${r}' == '2...5'

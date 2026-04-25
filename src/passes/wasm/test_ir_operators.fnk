@@ -202,7 +202,7 @@ test 'range exclusive', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "op_rngex" (func $rt/protocols.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/range.wat" "op_rngex" (func $std/range.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -210,11 +210,11 @@ test 'range exclusive', fn:
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 0)))
         (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 10)))
-        (return_call $rt/protocols.wat:op_rngex (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $std/range.wat:op_rngex (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BPYLAJIBAQABhAEBBgKGAQEFBQ
+    ;; sm:BOoLAJIBAQABhAEBBgKGAQEFBQ
 
 
 test 'range inclusive', fn:
@@ -227,7 +227,7 @@ test 'range inclusive', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "op_rngin" (func $rt/protocols.wat:op_rngin (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/range.wat" "op_rngin" (func $std/range.wat:op_rngin (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -235,11 +235,11 @@ test 'range inclusive', fn:
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 0)))
         (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 10)))
-        (return_call $rt/protocols.wat:op_rngin (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $std/range.wat:op_rngin (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BPYLAJIBAQABhAEBCAKGAQEHBg
+    ;; sm:BOoLAJIBAQABhAEBCAKGAQEHBg
 
 
 test 'range in', fn:
@@ -254,7 +254,7 @@ test 'range in', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "op_rngex" (func $rt/protocols.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/range.wat" "op_rngex" (func $std/range.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "op_in" (func $rt/protocols.wat:op_in (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_12 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -278,9 +278,9 @@ test 'range in', fn:
         (local.set $v_17 (struct.new $rt/types.wat:Closure (ref.func $v_12) (local.get $:caps_arg)))
         (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 0)))
         (local.set $v_3 (struct.new $rt/types.wat:Num (f64.const 10)))
-        (return_call $rt/protocols.wat:op_rngex (local.get $v_2) (local.get $v_3) (local.get $v_17))
+        (return_call $std/range.wat:op_rngex (local.get $v_2) (local.get $v_3) (local.get $v_17))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:C9oQALoBAL4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
+    ;; sm:C84QALoBAL4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 
