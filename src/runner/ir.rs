@@ -202,5 +202,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_ranges.fnk",    skip-ir);
   test_macros::include_fink_tests!("src/runner/test_records.fnk",   skip-ir);
   test_macros::include_fink_tests!("src/runner/test_strings.fnk",   skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_patterns.fnk",  skip-ir);
   test_macros::include_fink_tests!("src/runner/test_ir.fnk");
 }
