@@ -375,6 +375,10 @@ fn fmt_instr(out: &mut String, frag: &Fragment, f: &FuncDecl, instr: &Instr, ind
       writeln!(out, "{}(local.set {} (ref.cast (ref null {}) {}))",
         pad, local_name(f, *into), type_name(frag, *ty), fmt_operand(frag, f, src)).unwrap();
     }
+    InstrKind::RefCastNonNullAbs { ht, src, into } => {
+      writeln!(out, "{}(local.set {} (ref.cast (ref {}) {}))",
+        pad, local_name(f, *into), abs_heap(*ht), fmt_operand(frag, f, src)).unwrap();
+    }
     InstrKind::Call { target, args, into } => {
       let call_sexpr = fmt_call_sexpr(frag, f, "call", *target, args);
       match into {

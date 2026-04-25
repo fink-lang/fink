@@ -305,6 +305,8 @@ pub enum InstrKind {
   RefCastNonNull { ty: TypeSym, src: Operand, into: LocalIdx },
   /// ref.cast (nullable concrete).
   RefCastNullable { ty: TypeSym, src: Operand, into: LocalIdx },
+  /// ref.cast to a non-null abstract heap type (e.g. `(ref i31)`).
+  RefCastNonNullAbs { ht: AbsHeap, src: Operand, into: LocalIdx },
   /// call — target is a symbol, args are leaves.
   Call { target: FuncSym, args: Vec<Operand>, into: Option<LocalIdx> },
   /// return_call — tail call.
@@ -482,6 +484,9 @@ pub fn val_funcref(nullable: bool) -> ValType {
 }
 pub fn val_ref(ty: TypeSym, nullable: bool) -> ValType {
   ValType::RefConcrete { nullable, ty }
+}
+pub fn val_ref_abs(ht: AbsHeap, nullable: bool) -> ValType {
+  ValType::RefAbstract { nullable, ht }
 }
 
 // --- type section -------------------------------------------------
@@ -690,6 +695,15 @@ pub fn push_ref_cast_non_null(
   push(frag, InstrKind::RefCastNonNull { ty, src, into })
 }
 
+pub fn push_ref_cast_non_null_abs(
+  frag: &mut Fragment,
+  ht: AbsHeap,
+  src: Operand,
+  into: LocalIdx,
+) -> InstrId {
+  push(frag, InstrKind::RefCastNonNullAbs { ht, src, into })
+}
+
 pub fn push_call(
   frag: &mut Fragment,
   target: FuncSym,
@@ -705,6 +719,23 @@ pub fn push_return_call(
   args: Vec<Operand>,
 ) -> InstrId {
   push(frag, InstrKind::ReturnCall { target, args })
+}
+
+pub fn push_i31_get_s(frag: &mut Fragment, src: Operand, into: LocalIdx) -> InstrId {
+  push(frag, InstrKind::I31GetS { src, into })
+}
+
+pub fn push_if(
+  frag: &mut Fragment,
+  cond: Operand,
+  then_body: Vec<InstrId>,
+  else_body: Vec<InstrId>,
+) -> InstrId {
+  push(frag, InstrKind::If { cond, then_body, else_body })
+}
+
+pub fn push_unreachable(frag: &mut Fragment) -> InstrId {
+  push(frag, InstrKind::Unreachable)
 }
 
 /// Attach / overwrite the origin on an already-pushed instruction.

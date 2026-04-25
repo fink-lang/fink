@@ -20,7 +20,7 @@ test 'pipe with fn call', fn:
     5
 
 
-skip-ir test 'match literal first arm', fn:
+test 'match literal first arm', fn:
   expect run ƒink:
     match 0:
       0: 42
@@ -29,7 +29,7 @@ skip-ir test 'match literal first arm', fn:
     42
 
 
-skip-ir test 'match literal second arm', fn:
+test 'match literal second arm', fn:
   expect run ƒink:
     match 1:
       0: 42
@@ -38,7 +38,7 @@ skip-ir test 'match literal second arm', fn:
     99
 
 
-skip-ir test 'match wildcard binding', fn:
+test 'match wildcard binding', fn:
   expect run ƒink:
     match 5:
       0: 0
@@ -47,7 +47,7 @@ skip-ir test 'match wildcard binding', fn:
     6
 
 
-skip-ir test 'factorial', fn:
+test 'factorial', fn:
   expect run ƒink:
     fac = fn n:
       match n:

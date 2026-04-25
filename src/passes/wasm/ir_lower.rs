@@ -387,6 +387,15 @@ fn lower_expr(
       emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpNot, vec![v_op], cont, expr.id);
     }
 
+    // Panic: zero-arg sentinel for irrefutable-pattern failure. We
+    // emit `unreachable` directly — the runtime panic helper isn't
+    // wired through `Sym` yet, and an unreachable trap is acceptable
+    // at this level (matches the old emitter's fallback shape).
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Panic), .. } => {
+      let i = push_unreachable(frag);
+      ctx.instrs.push(i);
+    }
+
     // App(BuiltIn::FnClosure, [fn, caps..., cont]) — appears at the
     // call site where a lifted function is combined with its
     // captures. The cont is always Cont::Expr { args: [new_bind], ... }:
@@ -435,7 +444,19 @@ fn lower_expr(
       if matches!(v.kind, ValKind::ContRef(_)) =>
     {
       let cont_id = if let ValKind::ContRef(id) = &v.kind { *id } else { unreachable!() };
-      let callee = ctx.lookup(cont_id);
+      // Spill via resolver so cross-fn ContRefs (very rare — usually
+      // a `Pub`'d cont, doesn't normally happen, but cheap to support)
+      // resolve correctly. Apply expects a local-shaped operand.
+      let callee_op = resolve_id_as_operand(ctx, frag, rt, cont_id);
+      let callee = match callee_op {
+        Operand::Local(l) => l,
+        other => {
+          let local = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+          let i = push_local_set(frag, local, other);
+          ctx.instrs.push(i);
+          local
+        }
+      };
 
       let arg_ops: Vec<Operand> = args.iter()
         .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
@@ -479,8 +500,10 @@ fn lower_expr(
       // any boxing/closure-construction instrs are ordered naturally).
       let arg_ops: Vec<Operand> = args.iter()
         .map(|a| match a {
-          // The cont arg may be `Cont::Ref(id)` — resolve it as a local.
-          Arg::Cont(Cont::Ref(id)) => op_local(ctx.lookup(*id)),
+          // The cont arg may be `Cont::Ref(id)` — resolve via the
+          // unified id resolver so cross-fn pub'd globals / fn ids
+          // also work.
+          Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
           _ => emit_arg_as_operand(ctx, frag, rt, cps, ast, a),
         })
         .collect();
@@ -497,6 +520,52 @@ fn lower_expr(
       let i_app = push_return_call(frag, rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
+    }
+
+    // If: cond is a Val (bool — i31ref or literal). Unbox to i32 and
+    // branch to one of two recursively-lowered bodies. Match arms
+    // always end in a tail-call (`return_call`), so neither branch
+    // falls through past the `If` in user code.
+    ExprKind::If { cond, then, else_ } => {
+      // Evaluate cond into an i32 leaf. For a bool literal, skip
+      // unboxing entirely; for a ref/contref, the value is anyref —
+      // ref.cast to i31, then i31.get_s.
+      let unbox_anyref = |ctx: &mut FnCtx, frag: &mut Fragment, op: Operand| -> Operand {
+        // Cast anyref → (ref i31) into a scratch local of type i31ref.
+        let i31_local = ctx.alloc_local_typed(":cond_i31",
+          val_ref_abs(AbsHeap::I31, /*nullable*/ false));
+        let i_cast = push_ref_cast_non_null_abs(
+          frag, AbsHeap::I31, op, i31_local);
+        ctx.instrs.push(i_cast);
+        // Unbox: i31.get_s into a typed i32 local.
+        let i32_local = ctx.alloc_local_typed(":cond_i32", val_i32());
+        let i = push_i31_get_s(frag, op_local(i31_local), i32_local);
+        ctx.instrs.push(i);
+        op_local(i32_local)
+      };
+      let cond_leaf = match &cond.kind {
+        ValKind::Lit(Lit::Bool(b)) => op_i32(if *b { 1 } else { 0 }),
+        ValKind::Ref(r) => {
+          let op = resolve_id_as_operand(ctx, frag, rt, ref_cps_id(*r));
+          unbox_anyref(ctx, frag, op)
+        }
+        ValKind::ContRef(id) => {
+          let op = resolve_id_as_operand(ctx, frag, rt, *id);
+          unbox_anyref(ctx, frag, op)
+        }
+        _ => panic!("ir_lower: If cond shape not supported: {:?}", cond.kind),
+      };
+
+      // Recursively lower then/else into separate instruction lists by
+      // swapping `ctx.instrs` to a fresh empty Vec for each branch.
+      let saved = std::mem::take(&mut ctx.instrs);
+      lower_expr(ctx, frag, rt, cps, ast, then);
+      let then_body = std::mem::replace(&mut ctx.instrs, Vec::new());
+      lower_expr(ctx, frag, rt, cps, ast, else_);
+      let else_body = std::mem::replace(&mut ctx.instrs, saved);
+
+      let i_if = push_if(frag, cond_leaf, then_body, else_body);
+      ctx.instrs.push(i_if);
     }
 
     _ => panic!("ir_lower: unsupported expr shape: {:?}", short_kind(&expr.kind)),

@@ -605,7 +605,7 @@ fn emit_func(
 
 fn emit_instr(
   func: &mut Function,
-  _frag: &Fragment,
+  frag: &Fragment,
   instr: &Instr,
   type_remap: &[u32],
   func_remap: &[u32],
@@ -676,13 +676,54 @@ fn emit_instr(
       func.instruction(&Instruction::ArrayGet(type_remap[ty.0 as usize]));
       func.instruction(&Instruction::LocalSet(into.0));
     }
-    InstrKind::RefNull { .. }
-    | InstrKind::I31GetS { .. }
-    | InstrKind::RefCastNullable { .. }
-    | InstrKind::If { .. }
-    | InstrKind::Unreachable
-    | InstrKind::Drop { .. } => {
-      panic!("ir_emit: InstrKind {:?} not yet implemented", instr.kind);
+    InstrKind::RefNull { ht, into } => {
+      func.instruction(&Instruction::RefNull(HeapType::Abstract {
+        shared: false,
+        ty: abs_heap_ir(*ht),
+      }));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::I31GetS { src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::I31GetS);
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefCastNullable { ty, src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefCastNonNullAbs { ht, src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::RefCastNonNull(HeapType::Abstract {
+        shared: false,
+        ty: abs_heap_ir(*ht),
+      }));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::If { cond, then_body, else_body } => {
+      // cond is a leaf operand evaluating to i32.
+      emit_operand(func, cond, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+      for id in then_body {
+        emit_instr(func, frag, &frag.instrs[id.0 as usize],
+          type_remap, func_remap, user_global_base);
+      }
+      if !else_body.is_empty() {
+        func.instruction(&Instruction::Else);
+        for id in else_body {
+          emit_instr(func, frag, &frag.instrs[id.0 as usize],
+            type_remap, func_remap, user_global_base);
+        }
+      }
+      func.instruction(&Instruction::End);
+    }
+    InstrKind::Unreachable => {
+      func.instruction(&Instruction::Unreachable);
+    }
+    InstrKind::Drop { src } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base);
+      func.instruction(&Instruction::Drop);
     }
   }
 }
