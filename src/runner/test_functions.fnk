@@ -58,7 +58,7 @@ test 'factorial', fn:
     120
 
 
-skip-ir test 'add list items', fn:
+test 'add list items', fn:
   expect run ƒink:
     sum = fn items, c:
       match items:
@@ -71,7 +71,7 @@ skip-ir test 'add list items', fn:
     10
 
 
-skip-ir test 'varargs first', fn:
+test 'varargs first', fn:
   expect run ƒink:
     first = fn ..args:
       match args:
@@ -82,7 +82,7 @@ skip-ir test 'varargs first', fn:
     42
 
 
-skip-ir test 'varargs identity', fn:
+test 'varargs identity', fn:
   expect run ƒink:
     identity = fn ..args: args
 
@@ -105,7 +105,7 @@ skip-ir test 'tagged template varargs', fn:
     true
 
 
-skip-ir test 'varargs mixed fixed and rest', fn:
+test 'varargs mixed fixed and rest', fn:
   expect run ƒink:
     head-and-rest = fn a, ..rest:
       match rest:

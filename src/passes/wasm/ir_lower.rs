@@ -387,6 +387,37 @@ fn lower_expr(
       emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpNot, vec![v_op], cont, expr.id);
     }
 
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Empty), args } => {
+      let (v, cont) = split_unary_args(args);
+      let v_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, v);
+      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpEmpty, vec![v_op], cont, expr.id);
+    }
+
+    // SeqPrepend: `(item, seq, cont)` — same call shape as a binary
+    // protocol op. Lowers to `return_call $seq_prepend item seq cont`.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPrepend), args } => {
+      let (a, b, cont) = split_binary_args(args);
+      let a_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, a);
+      let b_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, b);
+      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
+    }
+
+    // IsSeqLike / IsRecLike: `(val, succ, fail)` — type guard. The
+    // succ/fail args are continuations (Cont::Ref or Cont::Expr).
+    // We resolve each as an operand (cont = value-like at WASM level)
+    // and emit `return_call $<sym> val succ fail`.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::IsSeqLike), args } => {
+      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::IsSeqLike, args, expr.id);
+    }
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::IsRecLike), args } => {
+      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::IsRecLike, args, expr.id);
+    }
+    // SeqPop: `(seq, fail, succ)` — destructure. Both fail and succ
+    // are continuations.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPop), args } => {
+      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::SeqPop, args, expr.id);
+    }
+
     // Panic: zero-arg sentinel for irrefutable-pattern failure. We
     // emit `unreachable` directly — the runtime panic helper isn't
     // wired through `Sym` yet, and an unreachable trap is acceptable
@@ -486,18 +517,7 @@ fn lower_expr(
         }
       };
 
-      let arg_ops: Vec<Operand> = args.iter()
-        .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
-        .collect();
-
-      let l_args_list = ctx.alloc_local(":args");
-      let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
-      ctx.instrs.push(i_nil);
-      for op in arg_ops.into_iter().rev() {
-        let i = push_call(frag, rt.args_prepend(),
-          vec![op, op_local(l_args_list)], Some(l_args_list));
-        ctx.instrs.push(i);
-      }
+      let l_args_list = build_args_list(ctx, frag, rt, cps, ast, args);
       let i_app = push_return_call(frag, rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
@@ -524,27 +544,7 @@ fn lower_expr(
         }
       };
 
-      // Materialise each arg into an operand first (in source order, so
-      // any boxing/closure-construction instrs are ordered naturally).
-      let arg_ops: Vec<Operand> = args.iter()
-        .map(|a| match a {
-          // The cont arg may be `Cont::Ref(id)` — resolve via the
-          // unified id resolver so cross-fn pub'd globals / fn ids
-          // also work.
-          Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
-          _ => emit_arg_as_operand(ctx, frag, rt, cps, ast, a),
-        })
-        .collect();
-
-      let l_args_list = ctx.alloc_local(":args");
-      let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
-      ctx.instrs.push(i_nil);
-      // Prepend in reverse order so head ends up = args[0] (the cont).
-      for op in arg_ops.into_iter().rev() {
-        let i = push_call(frag, rt.args_prepend(),
-          vec![op, op_local(l_args_list)], Some(l_args_list));
-        ctx.instrs.push(i);
-      }
+      let l_args_list = build_args_list(ctx, frag, rt, cps, ast, args);
       let i_app = push_return_call(frag, rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
@@ -637,6 +637,79 @@ fn lower_cont(
 /// `done`) or a Cont::Expr (lifted into a closure — not handled here
 /// since the lifting pass already produces that as App(FnClosure)
 /// ahead of the tail call).
+/// Build the `_apply` args list from a heterogeneous arg sequence.
+///
+/// Two-phase to keep the locals/instr order stable across changes:
+/// 1. **Materialise** every arg into a leaf operand in source order
+///    (so any boxing/closure-construction locals appear in their
+///    natural declaration position).
+/// 2. **Build** the list — alloc `:args`, `args_empty`, then walk the
+///    materialised operands in reverse and `args_prepend` (or
+///    `args_concat` for spread) onto the running list.
+///
+/// Returns the local holding the final list.
+fn build_args_list(
+  ctx: &mut FnCtx,
+  frag: &mut Fragment,
+  rt: &Runtime,
+  cps: &CpsResult,
+  ast: &Ast<'_>,
+  args: &[Arg],
+) -> LocalIdx {
+  enum Materialised { Prepend(Operand), Concat(Operand) }
+  let materialised: Vec<Materialised> = args.iter()
+    .map(|a| match a {
+      Arg::Spread(v) => Materialised::Concat(val_as_operand(ctx, frag, rt, v)),
+      Arg::Cont(Cont::Ref(id)) => Materialised::Prepend(resolve_id_as_operand(ctx, frag, rt, *id)),
+      _ => Materialised::Prepend(emit_arg_as_operand(ctx, frag, rt, cps, ast, a)),
+    })
+    .collect();
+
+  let l_args = ctx.alloc_local(":args");
+  let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args));
+  ctx.instrs.push(i_nil);
+  for m in materialised.into_iter().rev() {
+    match m {
+      Materialised::Concat(op) => {
+        let i = push_call(frag, rt.args_concat(),
+          vec![op, op_local(l_args)], Some(l_args));
+        ctx.instrs.push(i);
+      }
+      Materialised::Prepend(op) => {
+        let i = push_call(frag, rt.args_prepend(),
+          vec![op, op_local(l_args)], Some(l_args));
+        ctx.instrs.push(i);
+      }
+    }
+  }
+  l_args
+}
+
+/// Emit a `(value, cont, cont)` ternary primitive (IsSeqLike,
+/// IsRecLike, SeqPop). The runtime function takes 3 anyref params:
+/// the value being tested, plus two continuations resolved as
+/// values at this layer.
+fn emit_ternary_guard(
+  ctx: &mut FnCtx,
+  frag: &mut Fragment,
+  rt: &Runtime,
+  cps: &CpsResult,
+  ast: &Ast<'_>,
+  sym: Sym,
+  args: &[Arg],
+  app_id: CpsId,
+) {
+  if args.len() != 3 {
+    panic!("ir_lower: ternary primitive {:?} expects 3 args, got {}", sym, args.len());
+  }
+  let val_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[0]);
+  let cont1_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[1]);
+  let cont2_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[2]);
+  let i = push_return_call(frag, rt.op(sym), vec![val_op, cont1_op, cont2_op]);
+  if let Some(o) = origin_of(cps, ast, app_id) { set_origin(frag, i, o); }
+  ctx.instrs.push(i);
+}
+
 fn emit_op_tail_call(
   ctx: &mut FnCtx,
   frag: &mut Fragment,
@@ -687,6 +760,11 @@ fn emit_arg_as_operand(
         ValKind::BuiltIn(_) => panic!("ir_lower: BuiltIn val as arg not supported"),
       }
     }
+    // Cont args appear in builtin calls like IsSeqLike(val, succ, fail)
+    // where succ/fail are continuations. Cont::Ref is just an id —
+    // resolve it as a closure operand. Cont::Expr is a not currently
+    // supported here (would need to materialise an inline lambda).
+    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
     _ => panic!("ir_lower: non-Val arg in value position: {:?}", short_arg(arg)),
   }
 }
@@ -773,6 +851,10 @@ fn emit_val_into(
 enum LitVal {
   Num(f64),
   Bool(bool),
+  /// Empty sequence literal `[]` — lowers to `call $args_empty`.
+  /// Reuses the `args_empty` runtime function (which is exported as
+  /// both `args_empty` and `list_nil` from the same impl).
+  EmptySeq,
 }
 
 impl LitVal {
@@ -782,6 +864,7 @@ impl LitVal {
       Lit::Float(f)   => LitVal::Num(*f),
       Lit::Decimal(f) => LitVal::Num(*f),
       Lit::Bool(b)    => LitVal::Bool(*b),
+      Lit::Seq        => LitVal::EmptySeq,
       _ => return None,
     })
   }
@@ -791,6 +874,7 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
   match lit {
     LitVal::Num(n) => push_struct_new(frag, rt.num(), vec![op_f64(*n)], into),
     LitVal::Bool(b) => push_ref_i31(frag, op_i32(if *b { 1 } else { 0 }), into),
+    LitVal::EmptySeq => push_call(frag, rt.args_empty(), vec![], Some(into)),
   }
 }
 

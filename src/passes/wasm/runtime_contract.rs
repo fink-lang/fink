@@ -84,6 +84,7 @@ pub enum Sym {
   ArgsTail,
   ArgsEmpty,
   ArgsPrepend,
+  ArgsConcat,
 
   // ── application (rt/apply.wat) ────────────────────────────────
   Apply,
@@ -97,6 +98,20 @@ pub enum Sym {
   OpAnd, OpOr, OpXor, OpNot,
   OpShl, OpShr,
   OpRngex, OpRngin, OpIn, OpNotIn, OpDot,
+  // Polymorphic predicate — same `(any, cont)` unary CPS shape as
+  // OpNot. Used by `BuiltIn::Empty` and (future) other unary
+  // predicates.
+  OpEmpty,
+  // Seq construction — `(item, seq, cont)` ternary CPS shape (same
+  // as binary protocol ops). Used by `BuiltIn::SeqPrepend` for list
+  // literals and pattern-match recursion.
+  SeqPrepend,
+  // Type guards / destructuring — all share the `(any, any, any) -> ()`
+  // shape with binary protocol ops; the second/third args are
+  // continuations rather than values, but the WASM signature is the
+  // same. RecPop has a different 4-arg shape; not yet wired.
+  IsSeqLike, IsRecLike,
+  SeqPop,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -161,6 +176,11 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::In        => &[Sym::OpIn],
     BuiltIn::NotIn     => &[Sym::OpNotIn],
     BuiltIn::Get       => &[Sym::OpDot],
+    BuiltIn::Empty     => &[Sym::OpEmpty],
+    BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
+    BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
+    BuiltIn::IsRecLike  => &[Sym::IsRecLike],
+    BuiltIn::SeqPop     => &[Sym::SeqPop],
     // Closure construction needs both $Closure struct + $Captures array types.
     BuiltIn::FnClosure => &[Sym::Closure, Sym::Captures],
     // Not yet lowered — add mappings when lower gains coverage.
@@ -195,6 +215,7 @@ pub struct Runtime {
   args_tail:    Option<FuncSym>,
   args_empty:   Option<FuncSym>,
   args_prepend: Option<FuncSym>,
+  args_concat:  Option<FuncSym>,
   apply:        Option<FuncSym>,
   // polymorphic protocol operators
   op_plus:    Option<FuncSym>,
@@ -214,6 +235,11 @@ pub struct Runtime {
   op_or:      Option<FuncSym>,
   op_xor:     Option<FuncSym>,
   op_not:     Option<FuncSym>,
+  op_empty:   Option<FuncSym>,
+  seq_prepend: Option<FuncSym>,
+  is_seq_like: Option<FuncSym>,
+  is_rec_like: Option<FuncSym>,
+  seq_pop:     Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
   op_rngex:   Option<FuncSym>,
@@ -232,6 +258,7 @@ impl Runtime {
   pub fn args_tail(&self)    -> FuncSym { self.args_tail.expect("rt: args_tail not declared") }
   pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
   pub fn args_prepend(&self) -> FuncSym { self.args_prepend.expect("rt: args_prepend not declared") }
+  pub fn args_concat(&self)  -> FuncSym { self.args_concat.expect("rt: args_concat not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -256,6 +283,11 @@ impl Runtime {
       Sym::OpOr     => self.op_or,
       Sym::OpXor    => self.op_xor,
       Sym::OpNot    => self.op_not,
+      Sym::OpEmpty  => self.op_empty,
+      Sym::SeqPrepend => self.seq_prepend,
+      Sym::IsSeqLike  => self.is_seq_like,
+      Sym::IsRecLike  => self.is_rec_like,
+      Sym::SeqPop     => self.seq_pop,
       Sym::OpShl    => self.op_shl,
       Sym::OpShr    => self.op_shr,
       Sym::OpRngex  => self.op_rngex,
@@ -299,6 +331,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::ArgsTail        => ("std/list.wat",     "args_tail"),
     Sym::ArgsEmpty       => ("std/list.wat",     "args_empty"),
     Sym::ArgsPrepend     => ("std/list.wat",     "args_prepend"),
+    Sym::ArgsConcat      => ("std/list.wat",     "args_concat"),
     Sym::OpPlus          => ("rt/protocols.wat", "op_plus"),
     Sym::OpMinus         => ("rt/protocols.wat", "op_minus"),
     Sym::OpMul           => ("rt/protocols.wat", "op_mul"),
@@ -323,6 +356,11 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpIn            => ("rt/protocols.wat", "op_in"),
     Sym::OpNotIn         => ("rt/protocols.wat", "op_notin"),
     Sym::OpDot           => ("rt/protocols.wat", "op_dot"),
+    Sym::OpEmpty         => ("rt/protocols.wat", "op_empty"),
+    Sym::SeqPrepend      => ("std/list.wat",     "seq_prepend"),
+    Sym::IsSeqLike       => ("rt/protocols.wat", "is_seq_like"),
+    Sym::IsRecLike       => ("rt/protocols.wat", "is_rec_like"),
+    Sym::SeqPop          => ("std/list.wat",     "seq_pop"),
   }
 }
 
@@ -422,6 +460,19 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     let (m, n) = import_key(Sym::ArgsPrepend);
     rt.args_prepend = Some(import_func(frag, sig, m, n));
   }
+  if needed.contains(&Sym::ArgsConcat) {
+    // Same `(any, any) -> any` shape as args_prepend.
+    let sig = if let Some(s) = rt.fn_prepend_any { s } else {
+      let s = ty_func(frag,
+        vec![anyref_n.clone(), anyref_n.clone()],
+        vec![anyref_n.clone()],
+        "std/list.wat:Fn_args_concat");
+      rt.fn_prepend_any = Some(s);
+      s
+    };
+    let (m, n) = import_key(Sym::ArgsConcat);
+    rt.args_concat = Some(import_func(frag, sig, m, n));
+  }
   if needed.contains(&Sym::Apply) {
     // `_apply`'s signature is genuinely `rt/types.wat:Fn2` — reuse
     // the shared-identity type import directly.
@@ -439,7 +490,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
       "rt/protocols.wat:Fn_op_binary");
     rt.fn_op_binary = Some(sig);
   }
-  if needed.contains(&Sym::OpNot) {
+  if any_unary_op_needed(usage) {
     let sig = ty_func(frag,
       vec![anyref_n.clone(), anyref_n.clone()],
       vec![],
@@ -455,10 +506,32 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
       set_op(&mut rt, *sym, f);
     }
   }
-  if needed.contains(&Sym::OpNot) {
-    let sig = rt.fn_op_unary.expect("fn_op_unary must be declared");
-    let (m, n) = import_key(Sym::OpNot);
-    rt.op_not = Some(import_func(frag, sig, m, n));
+  for sym in UNARY_OPS {
+    if needed.contains(sym) {
+      let sig = rt.fn_op_unary.expect("fn_op_unary must be declared");
+      let (m, n) = import_key(*sym);
+      let f = import_func(frag, sig, m, n);
+      set_op(&mut rt, *sym, f);
+    }
+  }
+
+  // Seq/rec primitives that share the `Fn_op_binary` signature shape
+  // (`(any, any, any) -> ()`). Declare lazily — `Fn_op_binary` may
+  // already exist from a binary operator declaration; otherwise emit
+  // a fresh signature type the first time we need it.
+  for sym in TERNARY_PRIMITIVES {
+    if !needed.contains(sym) { continue; }
+    let sig = if let Some(s) = rt.fn_op_binary { s } else {
+      let s = ty_func(frag,
+        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
+        vec![],
+        "rt/protocols.wat:Fn_op_binary");
+      rt.fn_op_binary = Some(s);
+      s
+    };
+    let (m, n) = import_key(*sym);
+    let f = import_func(frag, sig, m, n);
+    set_ternary_primitive(&mut rt, *sym, f);
   }
 
   rt
@@ -475,6 +548,32 @@ const BINARY_OPS: &[Sym] = &[
 
 fn any_binary_op_needed(usage: &RuntimeUsage) -> bool {
   BINARY_OPS.iter().any(|s| usage.used.contains(s))
+}
+
+/// All unary-protocol Syms — share `Fn_op_unary` signature.
+const UNARY_OPS: &[Sym] = &[Sym::OpNot, Sym::OpEmpty];
+
+/// Seq/rec primitives that share the `Fn_op_binary` signature shape
+/// (`(any, any, any) -> ()`). Each is a 3-arg CPS function.
+const TERNARY_PRIMITIVES: &[Sym] = &[
+  Sym::SeqPrepend,
+  Sym::IsSeqLike, Sym::IsRecLike,
+  Sym::SeqPop,
+];
+
+fn set_ternary_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
+  let slot = match sym {
+    Sym::SeqPrepend => &mut rt.seq_prepend,
+    Sym::IsSeqLike  => &mut rt.is_seq_like,
+    Sym::IsRecLike  => &mut rt.is_rec_like,
+    Sym::SeqPop     => &mut rt.seq_pop,
+    _ => panic!("set_ternary_primitive: {:?} is not a ternary primitive", sym),
+  };
+  *slot = Some(f);
+}
+
+fn any_unary_op_needed(usage: &RuntimeUsage) -> bool {
+  UNARY_OPS.iter().any(|s| usage.used.contains(s))
 }
 
 
@@ -505,7 +604,9 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::OpIn     => &mut rt.op_in,
     Sym::OpNotIn  => &mut rt.op_notin,
     Sym::OpDot    => &mut rt.op_dot,
-    _ => panic!("set_op: {:?} is not a binary-protocol Sym", sym),
+    Sym::OpNot    => &mut rt.op_not,
+    Sym::OpEmpty  => &mut rt.op_empty,
+    _ => panic!("set_op: {:?} is not a protocol Sym", sym),
   };
   *slot = Some(f);
 }
@@ -703,7 +804,13 @@ fn scan_cont(cont: &Cont, cps: &CpsResult, usage: &mut RuntimeUsage) {
 
 fn scan_arg(arg: &Arg, cps: &CpsResult, usage: &mut RuntimeUsage) {
   match arg {
-    Arg::Val(v) | Arg::Spread(v) => scan_val_kind(&v.kind, usage),
+    Arg::Val(v) => scan_val_kind(&v.kind, usage),
+    Arg::Spread(v) => {
+      // Spread args at call sites are `..rest` — lower via
+      // `args_concat` instead of `args_prepend`.
+      usage.mark(Sym::ArgsConcat);
+      scan_val_kind(&v.kind, usage);
+    }
     Arg::Cont(c) => scan_cont(c, cps, usage),
     Arg::Expr(e) => scan_expr(e, cps, usage),
   }
@@ -713,6 +820,11 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
   match kind {
     ValKind::Lit(Lit::Int(_) | Lit::Float(_) | Lit::Decimal(_)) => {
       usage.mark(Sym::Num);
+    }
+    ValKind::Lit(Lit::Seq) => {
+      // Empty seq `[]` reuses `args_empty` from std/list.wat (exported
+      // under both `args_empty` and `list_nil`).
+      usage.mark(Sym::ArgsEmpty);
     }
     ValKind::BuiltIn(b) => {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }
