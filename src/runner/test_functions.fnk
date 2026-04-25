@@ -11,7 +11,7 @@ test 'multi-param fn called in same scope', fn:
     7
 
 
-skip-ir test 'pipe with fn call', fn:
+test 'pipe with fn call', fn:
   expect run ƒink:
     add = fn a, b: a + b
     2

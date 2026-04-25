@@ -75,6 +75,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
     module_body,
     "fink_module",
     &pub_globals,
+    &HashMap::new(),    // module body: no enclosing fn_syms
   );
   frag.funcs[fink_module.0 as usize].export = Some("fink_module".into());
 
@@ -102,8 +103,9 @@ fn lower_fn(
   body: &Expr,
   display: &str,
   pub_globals: &HashMap<CpsId, GlobalSym>,
+  fn_syms: &HashMap<CpsId, FuncSym>,
 ) -> FuncSym {
-  let mut ctx = FnCtx::new(pub_globals.clone());
+  let mut ctx = FnCtx::new(pub_globals.clone(), fn_syms.clone());
 
   // WASM-level params (always just `$:caps_param` and `$:params` —
   // the $Fn2 shape). Colon-prefix is lexer-rejected in Fink source,
@@ -197,13 +199,21 @@ struct FnCtx {
   /// the `Pub` arm to emit `global.set` at the export site. Shared
   /// across all fns in a module (cloned on FnCtx construction).
   pub_globals: HashMap<CpsId, GlobalSym>,
-  /// LetFn bind id → emitted FuncSym. Populated by `LetFn`; read by
-  /// `FnClosure` when constructing `struct.new $Closure (ref.func ...)`.
+  /// LetFn bind id → emitted FuncSym. Populated by `LetFn` whenever a
+  /// nested fn is lowered; read by `FnClosure` when constructing
+  /// `struct.new $Closure (ref.func ...)` and by `emit_val_into` when
+  /// a `LetVal(name, Ref(fn_id))` materialises a no-capture closure.
+  ///
+  /// Inherited from the parent FnCtx (snapshot at child-lower time) so
+  /// child fn bodies can resolve cross-fn references to siblings or
+  /// ancestors. The lifting pass produces a strict pre-order over
+  /// LetFns, so by the time a child is lowered, all enclosing /
+  /// preceding-sibling LetFn FuncSyms are already known.
   fn_syms: HashMap<CpsId, FuncSym>,
 }
 
 impl FnCtx {
-  fn new(pub_globals: HashMap<CpsId, GlobalSym>) -> Self {
+  fn new(pub_globals: HashMap<CpsId, GlobalSym>, fn_syms: HashMap<CpsId, FuncSym>) -> Self {
     Self {
       params: Vec::new(),
       locals: Vec::new(),
@@ -211,7 +221,7 @@ impl FnCtx {
       binds: HashMap::new(),
       next_local_idx: 0,
       pub_globals,
-      fn_syms: HashMap::new(),
+      fn_syms,
     }
   }
 
@@ -246,6 +256,43 @@ impl FnCtx {
     *self.binds.get(&id)
       .unwrap_or_else(|| panic!("ir_lower: unbound CpsId {:?}", id))
   }
+}
+
+/// Resolve a CpsId to an `Operand`. Three cases, in order:
+/// 1. Locally bound — `local.get` of the bound local.
+/// 2. Pub'd module-export — `global.get` of the export global.
+/// 3. Top-level fn id — materialise a fresh no-capture `$Closure`
+///    in a new local and return that local.
+/// 4. Otherwise: panic via `ctx.lookup` (preserves diagnostic).
+fn resolve_id_as_operand(
+  ctx: &mut FnCtx,
+  frag: &mut Fragment,
+  rt: &Runtime,
+  id: CpsId,
+) -> Operand {
+  if let Some(local) = ctx.binds.get(&id).copied() {
+    return op_local(local);
+  }
+  if let Some(&gsym) = ctx.pub_globals.get(&id) {
+    return op_global(gsym);
+  }
+  if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
+    let local = ctx.alloc_local(&format!("v_{}_fn", id.0));
+    let caps_local = ctx.alloc_local_typed(
+      ":caps_arg",
+      val_ref(rt.captures(), /*nullable*/ true),
+    );
+    let i_caps = push_ref_null_concrete(frag, rt.captures(), caps_local);
+    ctx.instrs.push(i_caps);
+    let i_clo = push_struct_new(
+      frag, rt.closure(),
+      vec![Operand::RefFunc(fn_sym), op_local(caps_local)],
+      local,
+    );
+    ctx.instrs.push(i_clo);
+    return op_local(local);
+  }
+  op_local(ctx.lookup(id))  // panics with `unbound CpsId` diagnostic
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -289,7 +336,11 @@ fn lower_expr(
       }
       // Lift the fn body to a separate Fn2.
       let display = cps_ident_for_bind(cps, ast, name);
-      let fn_sym = lower_fn(frag, rt, cps, ast, &cap_ids, &user_ids, fn_body, &display, &ctx.pub_globals);
+      let fn_sym = lower_fn(
+        frag, rt, cps, ast,
+        &cap_ids, &user_ids, fn_body, &display,
+        &ctx.pub_globals, &ctx.fn_syms,
+      );
       // The LetFn binds `name.id` to a funcref-valued local; we model
       // it as an anyref local holding a `ref.func` funcref. Actual
       // `ref.func` emission happens at the LetVal(FnClosure) site
@@ -356,7 +407,7 @@ fn lower_expr(
             Arg::Val(v) => v,
             _ => panic!("ir_lower: FnClosure capture is not a Val"),
           };
-          val_as_operand(ctx, v)
+          val_as_operand(ctx, frag, rt, v)
         })
         .collect();
 
@@ -405,7 +456,19 @@ fn lower_expr(
     // onto an initially-empty list.
     ExprKind::App { func: Callable::Val(v), args } => {
       let callee_id = cps_id_of_ref(v);
-      let callee = ctx.lookup(callee_id);
+      // Resolve callee. May be a local, a pub'd global, or a sibling
+      // lifted fn (materialised as a no-capture `$Closure`). Apply
+      // expects a local-shaped operand, so spill non-local results.
+      let callee_op = resolve_id_as_operand(ctx, frag, rt, callee_id);
+      let callee = match callee_op {
+        Operand::Local(l) => l,
+        other => {
+          let local = ctx.alloc_local(&format!("v_{}_callee", callee_id.0));
+          let i = push_local_set(frag, local, other);
+          ctx.instrs.push(i);
+          local
+        }
+      };
 
       // Materialise each arg into an operand first (in source order, so
       // any boxing/closure-construction instrs are ordered naturally).
@@ -484,8 +547,8 @@ fn emit_op_tail_call(
   app_id: CpsId,
 ) {
   let cont_op = match cont {
-    Arg::Cont(Cont::Ref(id)) => op_local(ctx.lookup(*id)),
-    Arg::Val(v) => val_as_operand(ctx, v),
+    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
+    Arg::Val(v) => val_as_operand(ctx, frag, rt, v),
     _ => panic!("ir_lower: operator cont is neither Cont::Ref nor Val (got {:?})", short_arg(cont)),
   };
   let mut operands = value_operands;
@@ -517,8 +580,8 @@ fn emit_arg_as_operand(
           ctx.instrs.push(i);
           op_local(local)
         }
-        ValKind::Ref(r) => op_local(ctx.lookup(ref_cps_id(*r))),
-        ValKind::ContRef(id) => op_local(ctx.lookup(*id)),
+        ValKind::Ref(r) => resolve_id_as_operand(ctx, frag, rt, ref_cps_id(*r)),
+        ValKind::ContRef(id) => resolve_id_as_operand(ctx, frag, rt, *id),
         ValKind::BuiltIn(_) => panic!("ir_lower: BuiltIn val as arg not supported"),
       }
     }
@@ -527,11 +590,13 @@ fn emit_arg_as_operand(
 }
 
 /// Convert a `Val` directly to an `Operand` (for cases where we're
-/// sure it's a ref/lit and don't need to emit boxing).
-fn val_as_operand(ctx: &FnCtx, v: &Val) -> Operand {
+/// sure it's a ref/lit and don't need to emit boxing). Routes through
+/// `resolve_id_as_operand` so cross-fn refs to module-level Pub'd
+/// bindings or top-level lifted fns resolve correctly.
+fn val_as_operand(ctx: &mut FnCtx, frag: &mut Fragment, rt: &Runtime, v: &Val) -> Operand {
   match &v.kind {
-    ValKind::Ref(r) => op_local(ctx.lookup(ref_cps_id(*r))),
-    ValKind::ContRef(id) => op_local(ctx.lookup(*id)),
+    ValKind::Ref(r) => resolve_id_as_operand(ctx, frag, rt, ref_cps_id(*r)),
+    ValKind::ContRef(id) => resolve_id_as_operand(ctx, frag, rt, *id),
     ValKind::Lit(_) => panic!("val_as_operand: Lit requires boxing — use emit_arg_as_operand"),
     ValKind::BuiltIn(_) => panic!("val_as_operand: BuiltIn not supported"),
   }
@@ -555,17 +620,17 @@ fn emit_val_into(
     }
     ValKind::Ref(r) => {
       let id = ref_cps_id(*r);
-      // A `Ref` may resolve either to a regular bound local or to a
-      // top-level lifted function (no captures). The lifting pass
-      // emits the latter as a plain `LetVal(name, Ref(fn_id))` rather
-      // than wrapping in `App(FnClosure)` — see lifting/mod.rs. Here
-      // we materialise it as a no-capture `$Closure`, since downstream
-      // call sites (`App(Callable::Val(...))`) dispatch via `_apply`
-      // which requires a `$Closure`-shaped value.
-      //
-      // Closure construction emits two instructions (caps-null + struct.new)
-      // and `emit_val_into` only returns one. Push the first directly and
-      // return the second as the "primary" instr (origin attaches to it).
+      // Three cases for `LetVal(_, Ref(id))`:
+      // 1. Locally bound — copy local-to-local.
+      // 2. Pub'd module global — `local.set into (global.get $g)`.
+      // 3. Top-level fn id (no captures) — emit `$Closure` directly
+      //    into `into` (avoids spilling through a scratch local).
+      if let Some(local) = ctx.binds.get(&id).copied() {
+        return push_local_set(frag, into, op_local(local));
+      }
+      if let Some(&gsym) = ctx.pub_globals.get(&id) {
+        return push_local_set(frag, into, op_global(gsym));
+      }
       if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
         let caps_local = ctx.alloc_local_typed(
           ":caps_arg",
@@ -579,10 +644,18 @@ fn emit_val_into(
           into,
         );
       }
-      let src = ctx.lookup(id);
+      let src = ctx.lookup(id);  // panic with diagnostic
       push_local_set(frag, into, op_local(src))
     }
     ValKind::ContRef(id) => {
+      // Cont refs: same three-way resolution shape, but the no-capture
+      // closure case shouldn't apply (conts are never bare fn ids).
+      if let Some(local) = ctx.binds.get(id).copied() {
+        return push_local_set(frag, into, op_local(local));
+      }
+      if let Some(&gsym) = ctx.pub_globals.get(id) {
+        return push_local_set(frag, into, op_global(gsym));
+      }
       let src = ctx.lookup(*id);
       push_local_set(frag, into, op_local(src))
     }
