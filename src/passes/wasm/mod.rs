@@ -263,7 +263,6 @@ mod tests {
   // the same Rust test names).
   #[cfg(test)]
   mod ir_fmt_tests {
-    use super::*;
     #[allow(unused_imports)]
     use super::{ir_wat, gen_wat};
 

@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use crate::passes::ast::Ast;
 use crate::passes::cps::ir::{
-  Arg, Bind, BindNode, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
+  Arg, BindNode, Callable, Cont, CpsId, CpsResult, Expr, ExprKind,
   Lit, Param, ParamInfo, Ref, Val, ValKind, BuiltIn,
 };
 use crate::sourcemap::native::ByteRange;
@@ -810,8 +810,6 @@ fn lower_import(
   cps: &CpsResult,
   args: &[Arg],
 ) {
-  use crate::passes::cps::ir::Lit;
-
   // Pull URL bytes from args[0] (Val::Lit::Str).
   let url_bytes = args.iter().find_map(|a| match a {
     Arg::Val(v) => match &v.kind {
