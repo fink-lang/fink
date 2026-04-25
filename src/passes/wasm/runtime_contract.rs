@@ -123,6 +123,10 @@ pub enum Sym {
   // is a `$VarArgs` array of segment values. Same shape as
   // `Fn_op_unary`. Used by `BuiltIn::StrFmt` for `'${...}'` templates.
   StrFmt,
+  // Polymorphic string-template pattern matcher —
+  // `(subj, prefix, suffix, fail, succ)`. 5-arg shape; used by
+  // `BuiltIn::StrMatch` for `'foo${x}bar' = 'fooBARbar'` patterns.
+  StrMatch,
   // Rec primitives — 4-arg shape `(any, any, any, any) -> ()`. Used
   // for record construction (`rec_set`) and pattern destructure
   // (`rec_pop`).
@@ -200,6 +204,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Get       => &[Sym::OpDot],
     BuiltIn::Empty     => &[Sym::OpEmpty],
     BuiltIn::StrFmt    => &[Sym::StrFmt, Sym::VarArgs],
+    BuiltIn::StrMatch  => &[Sym::StrMatch],
     BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
     BuiltIn::RecMerge   => &[Sym::RecMerge],
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
@@ -281,6 +286,9 @@ pub struct Runtime {
   rec_empty:    Option<FuncSym>,
   panic:        Option<FuncSym>,
   str_fmt:      Option<FuncSym>,
+  // 5-arg str template matcher — `(any, any, any, any, any) -> ()`.
+  fn_quinary:   Option<TypeSym>,
+  str_match:    Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
   op_rngex:   Option<FuncSym>,
@@ -308,6 +316,7 @@ impl Runtime {
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
   pub fn panic(&self)        -> FuncSym { self.panic.expect("rt: panic not declared") }
   pub fn str_fmt(&self)      -> FuncSym { self.str_fmt.expect("rt: str_fmt not declared") }
+  pub fn str_match(&self)    -> FuncSym { self.str_match.expect("rt: str_match not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -417,6 +426,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Str             => ("std/str.wat",      "str"),
     Sym::StrEmpty        => ("std/str.wat",      "str_empty"),
     Sym::StrFmt          => ("std/str.wat",      "str_fmt"),
+    Sym::StrMatch        => ("std/str.wat",      "str_match"),
     Sym::RecPut          => ("std/rec.wat",      "rec_set"),
     Sym::RecPop          => ("std/rec.wat",      "rec_pop"),
     Sym::RecEmpty        => ("std/rec.wat",      "rec_new"),
@@ -628,6 +638,17 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     };
     let (m, n) = import_key(Sym::StrFmt);
     rt.str_fmt = Some(import_func(frag, sig, m, n));
+  }
+  if needed.contains(&Sym::StrMatch) {
+    // 5-arg `(any, any, any, any, any) -> ()`.
+    let sig = ty_func(frag,
+      vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone(),
+           anyref_n.clone(), anyref_n.clone()],
+      vec![],
+      "std/str.wat:Fn_str_match");
+    rt.fn_quinary = Some(sig);
+    let (m, n) = import_key(Sym::StrMatch);
+    rt.str_match = Some(import_func(frag, sig, m, n));
   }
 
   // 4-arg rec primitives — share `(any, any, any, any) -> ()` shape.

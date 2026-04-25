@@ -393,6 +393,21 @@ fn lower_expr(
       emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpEmpty, vec![v_op], cont, expr.id);
     }
 
+    // StrMatch: `(subj, prefix, suffix, fail, succ)` — 5-arg template
+    // pattern dispatch. All five are anyref operands at the WASM level
+    // (the latter two are continuations resolved as closures).
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrMatch), args } => {
+      if args.len() != 5 {
+        panic!("ir_lower: StrMatch expects 5 args, got {}", args.len());
+      }
+      let ops: Vec<Operand> = args.iter()
+        .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
+        .collect();
+      let i = push_return_call(frag, rt.str_match(), ops);
+      if let Some(o) = origin_of(cps, ast, expr.id) { set_origin(frag, i, o); }
+      ctx.instrs.push(i);
+    }
+
     // StrFmt: `(seg_0, seg_1, ..., seg_n, cont)` — build a $VarArgs
     // array from the segments and tail-call $str_fmt(varargs, cont).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrFmt), args } => {

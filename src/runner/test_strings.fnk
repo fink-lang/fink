@@ -217,35 +217,35 @@ test 'str slice negative zero end', fn:
 
 # --- String template pattern ---
 
-skip-ir test 'str templ pattern: capture all', fn:
+test 'str templ pattern: capture all', fn:
   expect run ƒink:
     '${foo}' = 'hello'
     foo
   | equals ":
     hello
 
-skip-ir test 'str templ pattern: prefix and suffix', fn:
+test 'str templ pattern: prefix and suffix', fn:
   expect run ƒink:
     'foo${bar}spam' = 'fooBARspam'
     bar
   | equals ":
     BAR
 
-skip-ir test 'str templ pattern: capture at start', fn:
+test 'str templ pattern: capture at start', fn:
   expect run ƒink:
     '${foo}bar' = 'hellobar'
     foo
   | equals ":
     hello
 
-skip-ir test 'str templ pattern: capture at end', fn:
+test 'str templ pattern: capture at end', fn:
   expect run ƒink:
     'foo${bar}' = 'fooworld'
     bar
   | equals ":
     world
 
-skip-ir test 'str templ pattern: escape in template', fn:
+test 'str templ pattern: escape in template', fn:
   expect run ƒink:
     '\n${foo}\n' = '\nstuff\n'
     foo
@@ -262,19 +262,19 @@ skip-ir test 'str templ pattern: non-utf8 byte match', fn:
   | equals ":
     hello
 
-skip-ir test 'str templ pattern: empty capture', fn:
+test 'str templ pattern: empty capture', fn:
   expect run ƒink:
     'foo${bar}spam' = 'foospam'
     bar
   | equals ''
 
-skip-ir test 'str templ pattern: overlapping prefix suffix', fn:
+test 'str templ pattern: overlapping prefix suffix', fn:
   expect run ƒink:
     'abc${x}abc' = 'abcabc'
     x
   | equals ''
 
-skip-ir test 'str templ pattern: input shorter than template', fn:
+test 'str templ pattern: input shorter than template', fn:
   expect run ƒink:
     match 'fo':
       'foo${x}bar': x
@@ -282,7 +282,7 @@ skip-ir test 'str templ pattern: input shorter than template', fn:
   | equals ":
     no match
 
-skip-ir test 'str templ pattern: match arm', fn:
+test 'str templ pattern: match arm', fn:
   expect run ƒink:
     match 'hello world':
       'hello ${name}': name
@@ -290,7 +290,7 @@ skip-ir test 'str templ pattern: match arm', fn:
   | equals ":
     world
 
-skip-ir test 'str templ pattern: match arm fallthrough', fn:
+test 'str templ pattern: match arm fallthrough', fn:
   expect run ƒink:
     match 'goodbye world':
       'hello ${name}': name
