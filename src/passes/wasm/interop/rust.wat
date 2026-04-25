@@ -200,4 +200,47 @@
     unreachable
   )
 
+
+  ;; -- stdio channels --------------------------------------------------------
+  ;;
+  ;; Constant-init `$HostChannel` globals — created once at instantiation,
+  ;; never reassigned. Tags (i31ref) follow POSIX fd numbers:
+  ;;   0 = stdin, 1 = stdout, 2 = stderr.
+  ;;
+  ;; `interop_channel_send` reads the tag to dispatch to the right host
+  ;; sink. The tag is also how the test harness keys per-channel capture
+  ;; buffers.
+  ;;
+  ;; The accessor functions are what `rt/protocols.wat` exports as the
+  ;; protocol dispatchers `std/io.fnk:stdout` etc. Keeping the channel
+  ;; values behind accessors preserves the layering invariant: nothing
+  ;; outside `interop/*` reads these globals directly.
+
+  (global $stdout (ref $HostChannel)
+    (struct.new $HostChannel
+      (struct.new $Nil)
+      (struct.new $Nil)
+      (ref.i31 (i32.const 1))))
+
+  (global $stderr (ref $HostChannel)
+    (struct.new $HostChannel
+      (struct.new $Nil)
+      (struct.new $Nil)
+      (ref.i31 (i32.const 2))))
+
+  (global $stdin (ref $HostChannel)
+    (struct.new $HostChannel
+      (struct.new $Nil)
+      (struct.new $Nil)
+      (ref.i31 (i32.const 0))))
+
+  (func $interop_stdout (export "interop_stdout") (result (ref any))
+    (global.get $stdout))
+
+  (func $interop_stderr (export "interop_stderr") (result (ref any))
+    (global.get $stderr))
+
+  (func $interop_stdin (export "interop_stdin") (result (ref any))
+    (global.get $stdin))
+
 )

@@ -3,7 +3,7 @@
 
 
 
-skip test 'stdout single message no main', fn:
+test 'stdout single message no main', fn:
   expect run ƒink:
     {stdout} = import 'std/io.fnk'
 
@@ -13,7 +13,7 @@ skip test 'stdout single message no main', fn:
       hello
 
 
-skip test 'stdout single message', fn:
+test 'stdout single message', fn:
   expect run ƒink:
     {stdout} = import 'std/io.fnk'
 
@@ -26,7 +26,7 @@ skip test 'stdout single message', fn:
       hello
 
 
-skip test 'stdout multiple messages', fn:
+test 'stdout multiple messages', fn:
   expect run ƒink:
     {stdout} = import 'std/io.fnk'
 
@@ -40,11 +40,11 @@ skip test 'stdout multiple messages', fn:
       helloworld
 
 
-skip test 'stderr output', fn:
+test 'stderr output', fn:
   expect run ƒink:
     {stderr} = import 'std/io.fnk'
 
-    main = fn args, stderr:
+    main = fn:
       'error' >> stderr
       1
   | equals ":
@@ -53,7 +53,7 @@ skip test 'stderr output', fn:
       error
 
 
-skip test 'stdout and stderr', fn:
+test 'stdout and stderr', fn:
   expect run ƒink:
     {stdout, stderr} = import 'std/io.fnk'
 
@@ -69,7 +69,7 @@ skip test 'stdout and stderr', fn:
       err
 
 
-skip test 'send with <<', fn:
+test 'send with <<', fn:
   expect run ƒink:
     {stdout} = import 'std/io.fnk'
 
@@ -97,11 +97,11 @@ skip test 'read from stdin', fn:
       hello from stdin
 
 
-skip test 'cli args printed via stdout', fn:
+test 'cli args printed via stdout', fn:
   expect run ƒink:
     {stdout} = import 'std/io.fnk'
 
-    main = fn args:
+    main = fn ..args:
       '${args}' >> stdout
       0
   | equals ":

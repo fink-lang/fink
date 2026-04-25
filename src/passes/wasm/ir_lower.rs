@@ -499,6 +499,22 @@ fn lower_expr(
       ctx.instrs.push(i);
     }
 
+    // Module import — `{names..} = import 'url'`.
+    //
+    // Args: [Val(Lit::Str(url)), Cont(Ref(cont_id))]. The cont takes a
+    // single rec value containing the imported names. We:
+    //   1. Build the rec via `rec_new` + repeated `_rec_set_field`,
+    //      where each value is the result of calling the runtime-side
+    //      protocol dispatcher exported as `<url>:<name>`.
+    //   2. Tail-apply the cont with `[rec]`.
+    //
+    // Phase 1 supports only virtual stdlib namespaces — paths starting
+    // with `std/` and ending in `.fnk`. User-fragment imports (relative
+    // paths, third-party packages) are deferred to multi-module work.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Import), args } => {
+      lower_import(ctx, frag, rt, cps, args);
+    }
+
     // App(BuiltIn::FnClosure, [fn, caps..., cont]) — appears at the
     // call site where a lifted function is combined with its
     // captures. The cont is always Cont::Expr { args: [new_bind], ... }:
@@ -755,6 +771,131 @@ fn build_args_list(
     }
   }
   l_args
+}
+
+/// Emit `BuiltIn::Import` — `{names..} = import 'url'`.
+///
+/// Args layout: `[Val(LitStr(url)), Cont(Ref(cont_id))]`. The cont
+/// takes a single rec value containing the imported names.
+///
+/// Strategy:
+///   1. Extract URL bytes and the cont id.
+///   2. For each name in `cps.module_imports[url]`:
+///        - Declare a function import `<url>:<name>` with signature
+///          `() -> anyref`. Resolved at link time against the runtime
+///          module's exports — for `std/io.fnk:stdout` etc., these are
+///          the protocol dispatchers in `rt/protocols.wat`.
+///        - Call the import to get the value into a fresh local.
+///   3. Build the rec via `rec_new` + `_rec_set_field` per name. The
+///      key is a `$Str` interned from the name bytes.
+///   4. Tail-apply the cont with `[rec]` via `_apply`.
+///
+/// Phase 1 supports virtual stdlib namespaces (`std/*.fnk`). User
+/// fragment imports panic — multi-module support is deferred until
+/// `ir_compile_package` lands.
+fn lower_import(
+  ctx: &mut FnCtx,
+  frag: &mut Fragment,
+  rt: &Runtime,
+  cps: &CpsResult,
+  args: &[Arg],
+) {
+  use crate::passes::cps::ir::Lit;
+
+  // Pull URL bytes from args[0] (Val::Lit::Str).
+  let url_bytes = args.iter().find_map(|a| match a {
+    Arg::Val(v) => match &v.kind {
+      ValKind::Lit(Lit::Str(s)) => Some(s.as_slice()),
+      _ => None,
+    },
+    _ => None,
+  }).unwrap_or_else(|| panic!("ir_lower: BuiltIn::Import missing URL arg"));
+  let url = std::str::from_utf8(url_bytes)
+    .unwrap_or_else(|_| panic!("ir_lower: BuiltIn::Import URL is not valid UTF-8"));
+
+  // Phase 1: only virtual stdlib namespaces are supported.
+  if !is_virtual_stdlib_path(url) {
+    panic!(
+      "ir_lower: BuiltIn::Import for `{url}` is not yet supported in the IR pipeline. \
+       Only virtual stdlib paths (`std/*.fnk`) are wired today; user-fragment imports \
+       require multi-module support (`ir_compile_package`)."
+    );
+  }
+
+  // Pull the destructure cont (Cont::Ref).
+  let cont_id = args.iter().find_map(|a| match a {
+    Arg::Cont(Cont::Ref(id)) => Some(*id),
+    _ => None,
+  }).unwrap_or_else(|| panic!("ir_lower: BuiltIn::Import missing cont"));
+
+  // Names come from the pre-collected module_imports table.
+  let names = cps.module_imports.get(url)
+    .cloned()
+    .unwrap_or_else(|| panic!(
+      "ir_lower: BuiltIn::Import for `{url}` has no entries in module_imports"));
+
+  // 1. Build the rec.
+  let l_rec = ctx.alloc_local(":imp_rec");
+  let i_new = push_call(frag, rt.rec_empty(), vec![], Some(l_rec));
+  ctx.instrs.push(i_new);
+
+  for name in &names {
+    // 1a. Declare the import — `<url>:<name>` with signature `() -> anyref`.
+    //     The IR linker resolves this against the runtime's export table
+    //     at emit time. Reuses the `Fn_rec_new` sig type (`() -> anyref`).
+    let sig = rt.fn_nil_to_list_sig();
+    let target = crate::passes::wasm::ir::import_func(frag, sig, url, name);
+
+    // 1b. Call the import to get the channel/value into a fresh local.
+    let l_val = ctx.alloc_local(&format!(":imp_val_{name}"));
+    let i_call = push_call(frag, target, vec![], Some(l_val));
+    ctx.instrs.push(i_call);
+
+    // 1c. Build the $Str key for the field name.
+    let l_key = ctx.alloc_local(&format!(":imp_key_{name}"));
+    let key_bytes = name.as_bytes();
+    let key_sym = intern_data(frag, key_bytes);
+    let i_key = push_call(frag, rt.str_(),
+      vec![Operand::DataRef { sym: key_sym, len: key_bytes.len() as u32 }],
+      Some(l_key));
+    ctx.instrs.push(i_key);
+
+    // 1d. Set the field on the rec.
+    let i_set = push_call(frag, rt.rec_set_field(),
+      vec![op_local(l_rec), op_local(l_key), op_local(l_val)],
+      Some(l_rec));
+    ctx.instrs.push(i_set);
+  }
+
+  // 2. Tail-apply the cont with [rec].
+  let cont_op = resolve_id_as_operand(ctx, frag, rt, cont_id);
+  let cont_local = match cont_op {
+    Operand::Local(l) => l,
+    other => {
+      let l = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+      let i = push_local_set(frag, l, other);
+      ctx.instrs.push(i);
+      l
+    }
+  };
+
+  let l_args = ctx.alloc_local(":args");
+  let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args));
+  ctx.instrs.push(i_nil);
+  let i_cons = push_call(frag, rt.args_prepend(),
+    vec![op_local(l_rec), op_local(l_args)], Some(l_args));
+  ctx.instrs.push(i_cons);
+  let i_app = push_return_call(frag, rt.apply(),
+    vec![op_local(l_args), op_local(cont_local)]);
+  ctx.instrs.push(i_app);
+}
+
+/// Recognise virtual stdlib namespace paths. Today only `std/*.fnk`,
+/// but the predicate is named generically so future virtual namespaces
+/// (`@fink/meta`, language-version-locked stdlib variants) extend the
+/// same matcher.
+fn is_virtual_stdlib_path(url: &str) -> bool {
+  url.starts_with("std/") && url.ends_with(".fnk")
 }
 
 /// Emit a 4-arg primitive with shape `(any, any, any, any) -> ()`.

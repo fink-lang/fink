@@ -138,6 +138,10 @@ pub enum Sym {
   RecPut, RecPop,
   // Empty rec singleton — `() -> anyref`. Used for `{}`.
   RecEmpty,
+  // Direct-style rec field setter — `(any, any, any) -> any`. Used by
+  // the BuiltIn::Import handler to build the import rec at module-load
+  // time without going through the CPS-style rec_set chain.
+  RecSetField,
   // `panic` runtime function — `Fn2` shape. Used when `BuiltIn::Panic`
   // appears in value position (passed as fail continuation in
   // pattern-match dispatch). Wrapped in a no-capture `$Closure` at
@@ -222,6 +226,9 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::SeqPop     => &[Sym::SeqPop],
     BuiltIn::RecPut     => &[Sym::RecPut],
     BuiltIn::RecPop     => &[Sym::RecPop],
+    // Import builds an inline rec from the imported names; needs the
+    // empty-rec ctor + the direct-style field setter.
+    BuiltIn::Import     => &[Sym::RecEmpty, Sym::RecSetField, Sym::Str],
     // Closure construction needs both $Closure struct + $Captures array types.
     BuiltIn::FnClosure => &[Sym::Closure, Sym::Captures],
     // Not yet lowered — add mappings when lower gains coverage.
@@ -294,6 +301,11 @@ pub struct Runtime {
   rec_pop:      Option<FuncSym>,
   // Empty-rec singleton — `() -> anyref`.
   rec_empty:    Option<FuncSym>,
+  // Direct-style rec field setter — `(any, any, any) -> any`. Shared
+  // signature with op_dot today (same arity/result shape) but kept
+  // separate for clarity.
+  fn_rec_set_field: Option<TypeSym>,
+  rec_set_field: Option<FuncSym>,
   panic:        Option<FuncSym>,
   str_fmt:      Option<FuncSym>,
   // 5-arg str template matcher — `(any, any, any, any, any) -> ()`.
@@ -330,6 +342,12 @@ impl Runtime {
   pub fn rec_put(&self)      -> FuncSym { self.rec_put.expect("rt: rec_put not declared") }
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
+  pub fn rec_set_field(&self) -> FuncSym { self.rec_set_field.expect("rt: rec_set_field not declared") }
+  /// `() -> anyref` signature type. Shared by `args_empty`, `rec_new`,
+  /// and the BuiltIn::Import virtual-stdlib accessors.
+  pub fn fn_nil_to_list_sig(&self) -> TypeSym {
+    self.fn_nil_to_list.expect("rt: fn_nil_to_list sig not declared")
+  }
   pub fn panic(&self)        -> FuncSym { self.panic.expect("rt: panic not declared") }
   pub fn str_fmt(&self)      -> FuncSym { self.str_fmt.expect("rt: str_fmt not declared") }
   pub fn str_match(&self)    -> FuncSym { self.str_match.expect("rt: str_match not declared") }
@@ -461,6 +479,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::RecPut          => ("std/rec.wat",      "rec_set"),
     Sym::RecPop          => ("std/rec.wat",      "rec_pop"),
     Sym::RecEmpty        => ("std/rec.wat",      "rec_new"),
+    Sym::RecSetField     => ("std/rec.wat",      "_rec_set_field"),
     Sym::Panic           => ("rt/protocols.wat", "panic"),
   }
 }
@@ -730,6 +749,21 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     };
     let (m, n) = import_key(Sym::RecEmpty);
     rt.rec_empty = Some(import_func(frag, sig, m, n));
+  }
+
+  if needed.contains(&Sym::RecSetField) {
+    // `_rec_set_field : (any, any, any) -> any` — direct-style helper
+    // used by the BuiltIn::Import handler to build the import rec.
+    let sig = if let Some(s) = rt.fn_rec_set_field { s } else {
+      let s = ty_func(frag,
+        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
+        vec![anyref_n.clone()],
+        "std/rec.wat:Fn_rec_set_field");
+      rt.fn_rec_set_field = Some(s);
+      s
+    };
+    let (m, n) = import_key(Sym::RecSetField);
+    rt.rec_set_field = Some(import_func(frag, sig, m, n));
   }
 
   rt

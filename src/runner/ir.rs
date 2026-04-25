@@ -30,6 +30,27 @@ mod tests {
   /// `..args`) must match this fixture exactly.
   const TEST_CLI_ARGS: &[&[u8]] = &[b"test", b"alpha", b"beta"];
 
+  /// Test-side capture of host-channel writes during a run. Keyed by
+  /// channel tag (0=stdin, 1=stdout, 2=stderr). Each write appends a
+  /// chunk of bytes to the corresponding stream.
+  ///
+  /// Set up before instantiation, drained when formatting results.
+  #[derive(Default)]
+  struct IoCapture {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+  }
+
+  impl IoCapture {
+    fn append(&mut self, tag: i32, bytes: &[u8]) {
+      match tag {
+        1 => self.stdout.extend_from_slice(bytes),
+        2 => self.stderr.extend_from_slice(bytes),
+        _ => {} // Unknown tags ignored for now.
+      }
+    }
+  }
+
   enum TestResult {
     Num(f64),
     Bool(bool),
@@ -39,24 +60,80 @@ mod tests {
 
   /// Run a bare-expression Fink source through the new IR pipeline
   /// and return the value the done continuation receives, stringified.
+  ///
+  /// If the program performed any IO writes (to stdout/stderr via
+  /// `>>` against `import 'std/io.fnk'` channels), the result is
+  /// rendered as a multi-line block:
+  ///
+  /// ```text
+  /// <exit value>
+  /// stdout == ":
+  ///   <line>
+  ///   <line>
+  /// stderr == ":
+  ///   <line>
+  /// ```
+  ///
+  /// Pure-value programs render as a single line (the value's textual
+  /// representation), matching the existing test conventions.
   #[allow(unused)]
   fn run(src: &str) -> String {
-    match exec_ir_module(src) {
+    let io_capture: Arc<Mutex<IoCapture>> = Arc::new(Mutex::new(IoCapture::default()));
+    let result = exec_ir_module(src, io_capture.clone());
+
+    // Format the headline value. Unit-shaped results (the channel-send
+    // success is rendered as Bool(false) by the runtime; module bodies
+    // that end with a side-effect propagate that) are suppressed when
+    // IO blocks follow — the test fixtures expect just the IO content
+    // when there's no meaningful return value.
+    let cap_has_io = {
+      let cap = io_capture.lock().unwrap();
+      !cap.stdout.is_empty() || !cap.stderr.is_empty()
+    };
+    let headline = match result {
       Ok(TestResult::Num(v)) => {
-        if v == v.floor() && v.abs() < 1e15 {
-          format!("{}", v as i64)
-        } else {
-          format!("{}", v)
-        }
+        if v == v.floor() && v.abs() < 1e15 { format!("{}", v as i64) }
+        else { format!("{}", v) }
       }
-      Ok(TestResult::Bool(b)) => format!("{}", b),
+      // Bool(false) when followed by IO is treated as "unit / void" —
+      // the channel-send completion fires the cont with what the
+      // runtime considers a unit value. Tests with explicit boolean
+      // results never have IO blocks following, so this is safe.
+      Ok(TestResult::Bool(b)) => {
+        if cap_has_io && !b { String::new() } else { format!("{}", b) }
+      }
       Ok(TestResult::Str(bytes)) => String::from_utf8_lossy(&bytes).into_owned(),
       Ok(TestResult::None) => String::new(),
       Err(e) => format!("ERROR: {}", e),
+    };
+
+    // If IO occurred, emit the multi-stream block format.
+    let cap = io_capture.lock().unwrap();
+    if cap.stdout.is_empty() && cap.stderr.is_empty() {
+      return headline;
     }
+
+    let mut out = headline;
+    if !cap.stdout.is_empty() {
+      if !out.is_empty() { out.push('\n'); }
+      out.push_str("stdout == \":");
+      let s = String::from_utf8_lossy(&cap.stdout);
+      for line in s.split('\n').filter(|l| !l.is_empty()) {
+        out.push_str(&format!("\n  {line}"));
+      }
+    }
+    if !cap.stderr.is_empty() {
+      out.push('\n');
+      out.push_str("stderr == \":");
+      let s = String::from_utf8_lossy(&cap.stderr);
+      for line in s.split('\n').filter(|l| !l.is_empty()) {
+        out.push_str(&format!("\n  {line}"));
+      }
+    }
+    out
   }
 
-  fn exec_ir_module(src: &str) -> Result<TestResult, String> {
+  fn exec_ir_module(src: &str, io_capture: Arc<Mutex<IoCapture>>) -> Result<TestResult, String> {
     let (lifted, desugared) = crate::to_lifted(src, "test")
       .map_err(|e| format!("compile: {e}"))?;
     let user_frag = crate::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast);
@@ -166,6 +243,33 @@ mod tests {
                   _ => {}
                 }
               }
+              Ok(())
+            }).map_err(|e| e.to_string())?;
+          }
+          // host_channel_send(tag: i32, bytes: (ref null any)) — fired
+          // by the runtime when ƒink code does `'msg' >> stdout` (or
+          // `<<`) against a host channel. We read the $ByteArray
+          // contents and append into the IO capture keyed by tag.
+          // 1=stdout, 2=stderr.
+          "host_channel_send" => {
+            let cap = io_capture.clone();
+            linker.func_new("env", &name, ft, move |mut caller, params, _results| {
+              let tag = params[0].unwrap_i32();
+              let bytes_any = match &params[1] {
+                Val::AnyRef(Some(r)) => *r,
+                _ => return Ok(()),
+              };
+              let arr = bytes_any.as_array(&caller)
+                .map_err(|e| Error::msg(format!("host_channel_send: bytes not an array: {e}")))?
+                .ok_or_else(|| Error::msg("host_channel_send: bytes array null"))?;
+              let len = arr.len(&caller).unwrap_or(0);
+              let mut buf = Vec::with_capacity(len as usize);
+              for i in 0..len {
+                if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
+                  buf.push(b as u8);
+                }
+              }
+              cap.lock().unwrap().append(tag, &buf);
               Ok(())
             }).map_err(|e| e.to_string())?;
           }

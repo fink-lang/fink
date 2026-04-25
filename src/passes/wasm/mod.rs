@@ -175,6 +175,15 @@ mod tests {
     // Interop exports stay bare (host contract).
     assert!(exports.contains(&"wrap_host_cont".to_string()),
       "missing wrap_host_cont passthrough");
+
+    // stdio protocol dispatchers — exposed under the virtual std/io.fnk
+    // namespace. Importing 'std/io.fnk' resolves to these.
+    assert!(exports.contains(&"std/io.fnk:stdout".to_string()),
+      "missing std/io.fnk:stdout dispatcher");
+    assert!(exports.contains(&"std/io.fnk:stderr".to_string()),
+      "missing std/io.fnk:stderr dispatcher");
+    assert!(exports.contains(&"std/io.fnk:stdin".to_string()),
+      "missing std/io.fnk:stdin dispatcher");
   }
 
   #[test]

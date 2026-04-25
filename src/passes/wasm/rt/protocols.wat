@@ -623,4 +623,28 @@
     (param $_args (ref null any))
     (return_call $interop_panic))
 
+
+  ;; =========================================================================
+  ;; stdio protocols — exposed to user code via `import 'std/io.fnk'`
+  ;; =========================================================================
+  ;;
+  ;; The `std/io.fnk` virtual namespace is resolved at compile time to
+  ;; these qualified exports. Each is a no-arg function returning the
+  ;; channel value; `ir_lower`'s BuiltIn::Import handler imports them
+  ;; under those qualified names and binds the result of calling each
+  ;; into the user's destructure rec.
+  ;;
+  ;; This file (rt/protocols.wat) is the centralised dispatcher: it
+  ;; hard-codes the route to the `interop_*` impl in `interop/rust.wat`,
+  ;; keeping `std/*` host-agnostic.
+
+  (func (export "std/io.fnk:stdout") (result (ref any))
+    (return_call $interop_stdout))
+
+  (func (export "std/io.fnk:stderr") (result (ref any))
+    (return_call $interop_stderr))
+
+  (func (export "std/io.fnk:stdin") (result (ref any))
+    (return_call $interop_stdin))
+
 )

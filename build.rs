@@ -140,19 +140,41 @@ fn merge_runtime(
 
 /// Rewrite every `(export "NAME"` in `body` to `(export "<url>:NAME"`,
 /// where `<url>` is `path` with the `src/passes/wasm/` prefix stripped.
-/// Exception: `interop/*.wat` exports stay bare — they're host-facing
-/// and the host expects unqualified names.
+/// Exceptions:
+///  - `interop/*.wat` exports stay bare — they're host-facing and the
+///    host expects unqualified names.
+///  - Exports whose name already contains `:` are left as-is — used to
+///    expose protocol dispatchers under virtual stdlib namespaces (e.g.
+///    `rt/protocols.wat` exporting `std/io.fnk:stdout`).
 fn qualify_export_names(body: &str, path: &str) -> String {
     let url = path.strip_prefix("src/passes/wasm/").unwrap_or(path);
     if url.starts_with("interop/") {
         return body.to_string();
     }
-    // Mechanical string rewrite: every `(export "` becomes
-    // `(export "<url>:`. Assumes no `(export "..."` appears inside
-    // a comment or string literal in the source — holds for our WAT.
-    let from = "(export \"";
-    let to = format!("(export \"{url}:");
-    body.replace(from, &to)
+    // Mechanical pass: walk `(export "<NAME>"` occurrences, qualifying
+    // each unless `<NAME>` already contains `:`.
+    let mut out = String::with_capacity(body.len());
+    let needle = "(export \"";
+    let mut rest = body;
+    while let Some(pos) = rest.find(needle) {
+        out.push_str(&rest[..pos]);
+        let after_needle = &rest[pos + needle.len()..];
+        let close = after_needle.find('"').unwrap_or(after_needle.len());
+        let name = &after_needle[..close];
+        if name.contains(':') {
+            // Already qualified — pass through verbatim.
+            out.push_str(&rest[pos..pos + needle.len() + close + 1]);
+        } else {
+            out.push_str("(export \"");
+            out.push_str(url);
+            out.push(':');
+            out.push_str(name);
+            out.push('"');
+        }
+        rest = &after_needle[close + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Old-tree strip predicate: drop @fink/runtime/* imports (resolved
