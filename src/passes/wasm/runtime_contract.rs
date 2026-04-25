@@ -115,6 +115,17 @@ pub enum Sym {
   // String construction. `Str` wraps a data-section pointer:
   //   `str(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
   Str, StrEmpty,
+  // Rec primitives — 4-arg shape `(any, any, any, any) -> ()`. Used
+  // for record construction (`rec_set`) and pattern destructure
+  // (`rec_pop`).
+  RecPut, RecPop,
+  // Empty rec singleton — `() -> anyref`. Used for `{}`.
+  RecEmpty,
+  // `panic` runtime function — `Fn2` shape. Used when `BuiltIn::Panic`
+  // appears in value position (passed as fail continuation in
+  // pattern-match dispatch). Wrapped in a no-capture `$Closure` at
+  // the call site.
+  Panic,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -184,6 +195,8 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
     BuiltIn::IsRecLike  => &[Sym::IsRecLike],
     BuiltIn::SeqPop     => &[Sym::SeqPop],
+    BuiltIn::RecPut     => &[Sym::RecPut],
+    BuiltIn::RecPop     => &[Sym::RecPop],
     // Closure construction needs both $Closure struct + $Captures array types.
     BuiltIn::FnClosure => &[Sym::Closure, Sym::Captures],
     // Not yet lowered — add mappings when lower gains coverage.
@@ -248,6 +261,13 @@ pub struct Runtime {
   fn_str_empty: Option<TypeSym>,   // () -> anyref
   str_:         Option<FuncSym>,
   str_empty:    Option<FuncSym>,
+  // 4-arg rec primitives (`(any, any, any, any) -> ()`).
+  fn_quaternary: Option<TypeSym>,
+  rec_put:      Option<FuncSym>,
+  rec_pop:      Option<FuncSym>,
+  // Empty-rec singleton — `() -> anyref`.
+  rec_empty:    Option<FuncSym>,
+  panic:        Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
   op_rngex:   Option<FuncSym>,
@@ -269,6 +289,10 @@ impl Runtime {
   pub fn args_concat(&self)  -> FuncSym { self.args_concat.expect("rt: args_concat not declared") }
   pub fn str_(&self)         -> FuncSym { self.str_.expect("rt: str not declared") }
   pub fn str_empty(&self)    -> FuncSym { self.str_empty.expect("rt: str_empty not declared") }
+  pub fn rec_put(&self)      -> FuncSym { self.rec_put.expect("rt: rec_put not declared") }
+  pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
+  pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
+  pub fn panic(&self)        -> FuncSym { self.panic.expect("rt: panic not declared") }
   pub fn apply(&self)        -> FuncSym { self.apply.expect("rt: _apply not declared") }
 
   /// Look up the runtime func for a protocol operator `Sym`. Panics
@@ -373,6 +397,10 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::SeqPop          => ("std/list.wat",     "seq_pop"),
     Sym::Str             => ("std/str.wat",      "str"),
     Sym::StrEmpty        => ("std/str.wat",      "str_empty"),
+    Sym::RecPut          => ("std/rec.wat",      "rec_set"),
+    Sym::RecPop          => ("std/rec.wat",      "rec_pop"),
+    Sym::RecEmpty        => ("std/rec.wat",      "rec_new"),
+    Sym::Panic           => ("rt/protocols.wat", "panic"),
   }
 }
 
@@ -563,6 +591,41 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     rt.fn_str_empty = Some(sig);
     let (m, n) = import_key(Sym::StrEmpty);
     rt.str_empty = Some(import_func(frag, sig, m, n));
+  }
+
+  // 4-arg rec primitives — share `(any, any, any, any) -> ()` shape.
+  if needed.contains(&Sym::RecPut) || needed.contains(&Sym::RecPop) {
+    let sig = ty_func(frag,
+      vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
+      vec![],
+      "rt/protocols.wat:Fn_op_quaternary");
+    rt.fn_quaternary = Some(sig);
+    if needed.contains(&Sym::RecPut) {
+      let (m, n) = import_key(Sym::RecPut);
+      rt.rec_put = Some(import_func(frag, sig, m, n));
+    }
+    if needed.contains(&Sym::RecPop) {
+      let (m, n) = import_key(Sym::RecPop);
+      rt.rec_pop = Some(import_func(frag, sig, m, n));
+    }
+  }
+  if needed.contains(&Sym::Panic) {
+    // `panic` is a `Fn2` — same shape as `_apply` etc.
+    let (m, n) = import_key(Sym::Panic);
+    rt.panic = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"), m, n));
+  }
+  if needed.contains(&Sym::RecEmpty) {
+    // `rec_new : () -> anyref` — same shape as `args_empty`.
+    let sig = if let Some(s) = rt.fn_nil_to_list { s } else {
+      let s = ty_func(frag,
+        vec![],
+        vec![anyref_n.clone()],
+        "std/rec.wat:Fn_rec_new");
+      rt.fn_nil_to_list = Some(s);
+      s
+    };
+    let (m, n) = import_key(Sym::RecEmpty);
+    rt.rec_empty = Some(import_func(frag, sig, m, n));
   }
 
   rt
@@ -861,8 +924,20 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
       if s.is_empty() { usage.mark(Sym::StrEmpty); }
       else            { usage.mark(Sym::Str); }
     }
+    ValKind::Lit(Lit::Rec) => {
+      usage.mark(Sym::RecEmpty);
+    }
     ValKind::BuiltIn(b) => {
       for &sym in syms_for_builtin(*b) { usage.mark(sym); }
+      // When a builtin appears in *value* position (e.g. `panic` as a
+      // fail-cont arg), the lowering also needs the runtime symbol
+      // for the underlying `Fn2`, plus the Closure/Captures types to
+      // wrap it.
+      if matches!(b, BuiltIn::Panic) {
+        usage.mark(Sym::Panic);
+        usage.mark(Sym::Closure);
+        usage.mark(Sym::Captures);
+      }
     }
     _ => {}
   }
