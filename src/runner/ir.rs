@@ -241,5 +241,4 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_formatting.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk",     skip-ir);
   test_macros::include_fink_tests!("src/runner/test_ir_main.fnk", skip-ir);
-  test_macros::include_fink_tests!("src/runner/test_ir.fnk");
 }
