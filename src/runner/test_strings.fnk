@@ -256,9 +256,10 @@ test 'str templ pattern: escape in template', fn:
 # arrays, not UTF-8 strings — so \xFF (a lone continuation byte) is a
 # valid 1-byte string. Exercises str template patterns end-to-end with
 # non-UTF-8 literal parts.
-skip-ir test 'str templ pattern: non-utf8 byte match', fn:
+test 'str templ pattern: non-utf8 byte match', fn:
   expect run ƒink:
     '\xFF${foo}\xFF' = '\xFFhello\xFF'
+    foo
   | equals ":
     hello
 
