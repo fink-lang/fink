@@ -421,6 +421,14 @@ fn lower_expr(
       emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
     }
 
+    // RecMerge: `(dest, src, cont)` — same shape as SeqPrepend.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args } => {
+      let (a, b, cont) = split_binary_args(args);
+      let a_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, a);
+      let b_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, b);
+      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::RecMerge, vec![a_op, b_op], cont, expr.id);
+    }
+
     // IsSeqLike / IsRecLike: `(val, succ, fail)` — type guard. The
     // succ/fail args are continuations (Cont::Ref or Cont::Expr).
     // We resolve each as an operand (cont = value-like at WASM level)

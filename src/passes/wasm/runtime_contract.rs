@@ -107,6 +107,9 @@ pub enum Sym {
   // as binary protocol ops). Used by `BuiltIn::SeqPrepend` for list
   // literals and pattern-match recursion.
   SeqPrepend,
+  // Rec merge — `(dest, src, cont)`. Same ternary CPS shape. Used
+  // for `{..r1, ..r2, k: v}` record spreads.
+  RecMerge,
   // Type guards / destructuring — all share the `(any, any, any) -> ()`
   // shape with binary protocol ops; the second/third args are
   // continuations rather than values, but the WASM signature is the
@@ -198,6 +201,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Empty     => &[Sym::OpEmpty],
     BuiltIn::StrFmt    => &[Sym::StrFmt, Sym::VarArgs],
     BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
+    BuiltIn::RecMerge   => &[Sym::RecMerge],
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
     BuiltIn::IsRecLike  => &[Sym::IsRecLike],
     BuiltIn::SeqPop     => &[Sym::SeqPop],
@@ -260,6 +264,7 @@ pub struct Runtime {
   op_not:     Option<FuncSym>,
   op_empty:   Option<FuncSym>,
   seq_prepend: Option<FuncSym>,
+  rec_merge:   Option<FuncSym>,
   is_seq_like: Option<FuncSym>,
   is_rec_like: Option<FuncSym>,
   seq_pop:     Option<FuncSym>,
@@ -329,6 +334,7 @@ impl Runtime {
       Sym::OpNot    => self.op_not,
       Sym::OpEmpty  => self.op_empty,
       Sym::SeqPrepend => self.seq_prepend,
+      Sym::RecMerge   => self.rec_merge,
       Sym::IsSeqLike  => self.is_seq_like,
       Sym::IsRecLike  => self.is_rec_like,
       Sym::SeqPop     => self.seq_pop,
@@ -404,6 +410,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpDot           => ("rt/protocols.wat", "op_dot"),
     Sym::OpEmpty         => ("rt/protocols.wat", "op_empty"),
     Sym::SeqPrepend      => ("std/list.wat",     "seq_prepend"),
+    Sym::RecMerge        => ("std/rec.wat",      "rec_merge"),
     Sym::IsSeqLike       => ("rt/protocols.wat", "is_seq_like"),
     Sym::IsRecLike       => ("rt/protocols.wat", "is_rec_like"),
     Sym::SeqPop          => ("std/list.wat",     "seq_pop"),
@@ -681,6 +688,7 @@ const UNARY_OPS: &[Sym] = &[Sym::OpNot, Sym::OpEmpty];
 /// (`(any, any, any) -> ()`). Each is a 3-arg CPS function.
 const TERNARY_PRIMITIVES: &[Sym] = &[
   Sym::SeqPrepend,
+  Sym::RecMerge,
   Sym::IsSeqLike, Sym::IsRecLike,
   Sym::SeqPop,
 ];
@@ -688,6 +696,7 @@ const TERNARY_PRIMITIVES: &[Sym] = &[
 fn set_ternary_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
   let slot = match sym {
     Sym::SeqPrepend => &mut rt.seq_prepend,
+    Sym::RecMerge   => &mut rt.rec_merge,
     Sym::IsSeqLike  => &mut rt.is_seq_like,
     Sym::IsRecLike  => &mut rt.is_rec_like,
     Sym::SeqPop     => &mut rt.seq_pop,
