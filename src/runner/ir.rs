@@ -197,6 +197,32 @@ mod tests {
     fink_module.call(&mut store, &[Val::AnyRef(None), args_list[0].clone()], &mut [])
       .map_err(|e| format!("fink_module: {e}"))?;
 
+    // Entry-module contract: if the source defined a top-level
+    // `main`, invoke it with a fresh done cont and capture its
+    // result instead of the module body's final value. The module
+    // body's done has already fired by now (registering bindings,
+    // settling globals); we discard whatever it captured.
+    //
+    // Currently we only pass `[done]` — works for `main = fn:`. The
+    // optional-args shape (`main = fn args:`) needs cli_args wiring,
+    // not yet implemented.
+    if let Some(main_global) = instance.get_global(&mut store, "main") {
+      // Reset captured to take the *new* done's value.
+      *captured.lock().unwrap() = None;
+
+      let main_clo = main_global.get(&mut store);
+      let apply_func = instance.get_func(&mut store, "rt/apply.wat:_apply")
+        .ok_or("no '_apply' export")?;
+      let mut empty2 = [Val::AnyRef(None)];
+      args_empty.call(&mut store, &[], &mut empty2)
+        .map_err(|e| format!("args_empty: {e}"))?;
+      let mut main_args = [Val::AnyRef(None)];
+      args_prepend.call(&mut store, &[done_closure[0].clone(), empty2[0].clone()], &mut main_args)
+        .map_err(|e| format!("args_prepend (main): {e}"))?;
+      apply_func.call(&mut store, &[main_args[0].clone(), main_clo], &mut [])
+        .map_err(|e| format!("_apply(main): {e}"))?;
+    }
+
     Ok(captured.lock().unwrap().take().unwrap_or(TestResult::None))
   }
 
@@ -214,5 +240,6 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_patterns.fnk",  skip-ir);
   test_macros::include_fink_tests!("src/runner/test_formatting.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_tasks.fnk",     skip-ir);
+  test_macros::include_fink_tests!("src/runner/test_ir_main.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_ir.fnk");
 }
