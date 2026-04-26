@@ -84,7 +84,7 @@ fn main() {
         "src/passes/wasm/std/str.wat",
         "src/passes/wasm/std/hashing.wat",
         "src/passes/wasm/std/list.wat",
-        "src/passes/wasm/std/rec.wat",
+        "src/passes/wasm/std/dict.wat",
         "src/passes/wasm/std/int.wat",
         "src/passes/wasm/std/range.wat",
         "src/passes/wasm/std/async.wat",
