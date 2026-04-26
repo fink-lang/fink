@@ -562,28 +562,14 @@
 
 
   ;; =========================================================================
-  ;; receive — polymorphic ($HostChannel → host recv, $Channel → channel recv)
+  ;; receive — drain a runtime channel
   ;; =========================================================================
 
-  ;; receive(ch, cont):
-  ;;   $HostChannel → interop_channel_recv(ch, cont)
-  ;;   $Channel     → channel_receive(ch, cont)
-  ;; NB: $HostChannel check must come before $Channel (subtype).
+  ;; receive(ch, cont): tail-call into channel.wat's receive impl.
+  ;; Host-channel reads no longer reach this path — `read` is the
+  ;; host-coupled alternative (see std/io.fnk:read in interop/rust.wat).
   (func $std/channels.fnk:receive (export "std/channels.fnk:receive")
     (param $ch (ref null any)) (param $cont (ref null any))
-
-    ;; Try $HostChannel → host channel receive
-    (block $not_host_channel
-      (block $is_host_channel (result (ref $HostChannel))
-        (br $not_host_channel
-          (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
-            (local.get $ch))))
-      (drop)
-      (return_call $interop/rust.wat:channel_recv
-        (local.get $ch)
-        (local.get $cont)))
-
-    ;; Fallback: regular channel receive
     (return_call $std/channel.wat:receive
       (local.get $ch)
       (local.get $cont)))

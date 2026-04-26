@@ -4,7 +4,7 @@
 ;;   * `wrap_host_cont(id) -> anyref` — opaque WASM-side handle for a
 ;;     host-registered callback. Fired via `_apply`, dispatches to
 ;;     `env.host_invoke_cont(id, args)`.
-;;   * `interop_channel_send` / `interop_channel_recv` / `interop_op_read` /
+;;   * `interop_channel_send` / `interop_op_read` /
 ;;     `interop_panic` — host-bridge ops invoked by the runtime
 ;;     protocols (rt/protocols.wat) when a value is a $HostChannel
 ;;     or a panic is raised.
@@ -123,34 +123,6 @@
     ;; Sender continues with unit.
     (call $std/async.wat:queue_push
       (call $std/async.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
-
-    (return_call $std/async.wat:resume)
-  )
-
-
-  ;; -- host_channel_recv -----------------------------------------------------
-  ;;
-  ;; host_channel_recv(ch, cont):
-  ;;   Parks cont on the channel's receivers list and resumes.
-  ;;   The host will deliver data during host_resume by calling
-  ;;   channel_deliver, which wakes parked receivers.
-  ;;
-  ;; TODO: signal host to start async read for this channel.
-
-  (func $interop/rust.wat:channel_recv
-    (param $ch (ref null any))
-    (param $cont (ref null any))
-
-    (local $host_ch (ref $HostChannel))
-    (local.set $host_ch (ref.cast (ref $HostChannel) (local.get $ch)))
-
-    ;; Park cont on the channel's receivers list (FIFO).
-    (struct.set $Channel $receivers (local.get $host_ch)
-      (call $std/list.wat:concat
-        (struct.get $Channel $receivers (local.get $host_ch))
-        (struct.new $Cons
-          (ref.as_non_null (local.get $cont))
-          (struct.new $Nil))))
 
     (return_call $std/async.wat:resume)
   )
