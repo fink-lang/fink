@@ -35,10 +35,10 @@ test 'std io import handling', fn:
       (import "rt/protocols.wat" "rt/protocols.wat:is_rec_like" (func $rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (import "std/str.wat" "str_fmt" (func $std/str.wat:str_fmt (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/rec.wat" "rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "rt/protocols.wat" "rt/protocols.wat:panic" (func $rt/protocols.wat:panic (type $rt/types.wat:Fn2)))
-      (import "std/rec.wat" "rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
-      (import "std/rec.wat" "_rec_set_field" (func $std/rec.wat:_rec_set_field (type $std/rec.wat:Fn_rec_set_field)))
+      (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
+      (import "std/rec.wat" "std/rec.wat:_rec_set_field" (func $std/rec.wat:_rec_set_field (type $std/rec.wat:Fn_rec_set_field)))
       (func $v_234 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $stderr_235 (ref null any))
@@ -390,4 +390,4 @@ test 'std io import handling', fn:
       (data $d_4 "stderr")
       (data $d_5 "stdout")
     )
-    ;; sm:rgHQLAC6AQDKAQDAAQCUAQHGARbeCQC6AQDEAQDKAQDAAQCUAQEtFlAA4gEAxgEBMASAAQDWAQEBDIoIALoBAMoBAMQBAMoBAMABAJQBAIwCAMYBAS0W1gYAugEAxAEAlgEBAgSAAQDWAQEBDIgKALoBAMoBAMoBAMABAJQBAS0DUgBSALIBAMYBALgCAM4BAG4AxgEAjAsAugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBZwZYARAGWAEQBVYBDgRUAIoCAMYBAV4EjAEAbgC8AQDCAQC-AQDsBAC6AQDAAQBuALoHALoBAMABAMABAMABAMABAJQBAJoBAJQBAG4AvAEAvgEAvgEAvgEA7ggAugEAwAEAwAEAwAEAwAEAlAEAmgEAlAEAogIAxgEBjQEzgAEBADP0CAC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDGAQEAM4ABAQAzsAgAugEAwAEAwAEAlAEAmgEAlAEA_AEAxgEBADOAAQEAM-4HALoBAMABAMABAJQBANgBAMYBAQAzgAEBADPyBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAM5QKALoBAMABAJIBALIBAMYBAHoAyAEAegD0AQBuALoBAMoBAL4BAOYPAJYBAGwAdgCWAQCaAgB2AJYBAJoCAHIAlAEAlgIAbgCSAQCSAgBuAMQBAIIHAJIBAK4BAM4BAHoAzAEAbgDGAQA
+    ;; sm:rgGYLQC6AQDKAQDAAQCUAQHGARbeCQC6AQDEAQDKAQDAAQCUAQEtFlAA4gEAxgEBMASAAQDWAQEBDIoIALoBAMoBAMQBAMoBAMABAJQBAIwCAMYBAS0W1gYAugEAxAEAlgEBAgSAAQDWAQEBDIgKALoBAMoBAMoBAMABAJQBAS0DUgBSALIBAMYBALgCAM4BAG4AxgEAjAsAugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBZwZYARAGWAEQBVYBDgRUAIoCAMYBAV4EjAEAbgC8AQDCAQC-AQDsBAC6AQDAAQBuALoHALoBAMABAMABAMABAMABAJQBAJoBAJQBAG4AvAEAvgEAvgEAvgEA7ggAugEAwAEAwAEAwAEAwAEAlAEAmgEAlAEAogIAxgEBjQEzgAEBADP0CAC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDGAQEAM4ABAQAzsAgAugEAwAEAwAEAlAEAmgEAlAEA_AEAxgEBADOAAQEAM-4HALoBAMABAMABAJQBANgBAMYBAQAzgAEBADPyBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAM5QKALoBAMABAJIBALIBAMYBAHoAyAEAegD0AQBuALoBAMoBAL4BAOYPAJYBAGwAdgCWAQCaAgB2AJYBAJoCAHIAlAEAlgIAbgCSAQCSAgBuAMQBAIIHAJIBAK4BAM4BAHoAzAEAbgDGAQA

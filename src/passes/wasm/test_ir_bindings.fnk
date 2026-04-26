@@ -223,10 +223,10 @@ test 'top-level rec destructure then fn using binding', fn:
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:is_rec_like" (func $rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/rec.wat" "rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "rt/protocols.wat" "rt/protocols.wat:panic" (func $rt/protocols.wat:panic (type $rt/types.wat:Fn2)))
-      (import "std/rec.wat" "rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
+      (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
       (func $v_81 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $x_82 (ref null any))
@@ -378,7 +378,7 @@ test 'top-level rec destructure then fn using binding', fn:
       (export "foo" (global $foo))
       (data $d_0 "x")
     )
-    ;; sm:SrQmALoBAL4BAJQBAJoBAJIBATQFiggAugEAvgEAlAEBMQFOAK4BAMIBARoDUgBSAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAKQHALoBAMABAMABAJQBALIBAMYBARsNgAEBAA3uBwCUAQCaAQCUAQCaAQCSAQCwAQDCAQDUAQDGAQEADYoKALoBAL4BAJIBALABAMIBAHoAyAEAegD0AQBuALoBAMoBALwBAPwEAJQBAQwHYgECAX4BBgKGAQEFBb4HAJIBAK4BAMoBAHoAyAEAbgDEAQA
+    ;; sm:SvwmALoBAL4BAJQBAJoBAJIBATQFiggAugEAvgEAlAEBMQFOAK4BAMIBARoDUgBSAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAKQHALoBAMABAMABAJQBALIBAMYBARsNgAEBAA3uBwCUAQCaAQCUAQCaAQCSAQCwAQDCAQDUAQDGAQEADYoKALoBAL4BAJIBALABAMIBAHoAyAEAegD0AQBuALoBAMoBALwBAPwEAJQBAQwHYgECAX4BBgKGAQEFBb4HAJIBAK4BAMoBAHoAyAEAbgDEAQA
 
 yAEAbgDEAQA
 

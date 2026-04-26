@@ -2042,7 +2042,7 @@
 
     ;; Count entries for separator sizing.
     (local.set $entry_count
-      (call $_hamt_size_node (local.get $node)))
+      (call $std/rec.wat:_hamt_size_node (local.get $node)))
 
     ;; Empty record: return "{}"
     (if (i32.eqz (local.get $entry_count))
@@ -2328,7 +2328,7 @@
             ;; Simpler: count via _hamt_size_node.
             (local.set $written
               (i32.add (local.get $written)
-                (call $_hamt_size_node
+                (call $std/rec.wat:_hamt_size_node
                   (ref.cast (ref $HamtNode) (local.get $child)))))))
 
         ;; Collision: copy all leaves

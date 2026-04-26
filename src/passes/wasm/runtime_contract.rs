@@ -463,7 +463,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpDot           => ("rt/protocols.wat", "rt/protocols.wat:op_dot"),
     Sym::OpEmpty         => ("rt/protocols.wat", "rt/protocols.wat:op_empty"),
     Sym::SeqPrepend      => ("std/list.wat", "std/list.wat:seq_prepend"),
-    Sym::RecMerge        => ("std/rec.wat",      "rec_merge"),
+    Sym::RecMerge        => ("std/rec.wat", "std/rec.wat:rec_merge"),
     Sym::IsSeqLike       => ("rt/protocols.wat", "rt/protocols.wat:is_seq_like"),
     Sym::IsRecLike       => ("rt/protocols.wat", "rt/protocols.wat:is_rec_like"),
     Sym::SeqPop          => ("std/list.wat", "std/list.wat:seq_pop"),
@@ -476,10 +476,10 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Await           => ("std/scheduler.wat", "await"),
     Sym::Channel         => ("std/channel.wat",  "channel"),
     Sym::Receive         => ("rt/protocols.wat", "rt/protocols.wat:receive"),
-    Sym::RecPut          => ("std/rec.wat",      "rec_set"),
-    Sym::RecPop          => ("std/rec.wat",      "rec_pop"),
-    Sym::RecEmpty        => ("std/rec.wat",      "rec_new"),
-    Sym::RecSetField     => ("std/rec.wat",      "_rec_set_field"),
+    Sym::RecPut          => ("std/rec.wat", "std/rec.wat:rec_set"),
+    Sym::RecPop          => ("std/rec.wat", "std/rec.wat:rec_pop"),
+    Sym::RecEmpty        => ("std/rec.wat", "std/rec.wat:rec_new"),
+    Sym::RecSetField     => ("std/rec.wat", "std/rec.wat:_rec_set_field"),
     Sym::Panic           => ("rt/protocols.wat", "rt/protocols.wat:panic"),
   }
 }
