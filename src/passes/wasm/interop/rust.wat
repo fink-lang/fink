@@ -109,7 +109,7 @@
 
     ;; Extract raw bytes from the $Str (handles all subtypes).
     (local.set $bytes
-      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+      (call $std/str.wat:str_bytes (ref.cast (ref $Str) (local.get $msg))))
 
     ;; Read channel tag (i31ref).
     (local.set $tag

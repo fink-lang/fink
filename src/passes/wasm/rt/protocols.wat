@@ -110,7 +110,7 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $a))))
-      (return (call $str_op_eq
+      (return (call $std/str.wat:str_op_eq
         (ref.cast (ref $Str) (local.get $b)))))
 
     ;; Fallback: ref.eq (i31ref, other GC types)
@@ -143,7 +143,7 @@
             (local.get $a))))
       ;; $a is $Str — cast $b and call str_op_eq
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $str_op_eq
+        (ref.i31 (call $std/str.wat:str_op_eq
           (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
 
@@ -176,7 +176,7 @@
             (local.get $a))))
       ;; $a is $Str — cast $b, call str_op_eq, invert
       (return_call $std/list.wat:apply_1
-        (ref.i31 (i32.eqz (call $str_op_eq
+        (ref.i31 (i32.eqz (call $std/str.wat:str_op_eq
           (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
 
@@ -455,7 +455,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $container))))
       (drop)
-      (return_call $str_op_dot
+      (return_call $std/str.wat:str_op_dot
         (local.get $container)
         (local.get $key)
         (local.get $cont)))

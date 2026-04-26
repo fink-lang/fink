@@ -45,15 +45,15 @@
 
   ;; ---- Singleton empty string ----
 
-  (global $str_empty (ref $StrEmpty) (struct.new $StrEmpty))
-  (func $str_empty (export "str_empty") (result (ref $Str))
-    (global.get $str_empty))
+  (global $std/str.wat:str_empty (ref $StrEmpty) (struct.new $StrEmpty))
+  (func $std/str.wat:str_empty (export "std/str.wat:str_empty") (result (ref $Str))
+    (global.get $std/str.wat:str_empty))
 
   ;; ---- Construction (compiler-emitted) ----
 
   ;; str : (i32, i32) -> (ref $StrDataImpl)
   ;; Wrap a data-section pointer into a string value.
-  (func $str (export "str")
+  (func $std/str.wat:str (export "std/str.wat:str")
     (param $offset i32)
     (param $length i32)
     (result (ref $StrDataImpl))
@@ -68,12 +68,12 @@
   ;; Used by the host to create strings from IO data without
   ;; touching linear memory — the host creates the $ByteArray
   ;; directly via the GC API.
-  (func $_str_wrap_bytes (export "_str_wrap_bytes")
+  (func $std/str.wat:_str_wrap_bytes (export "std/str.wat:_str_wrap_bytes")
     (param $bytes (ref null any))
     (result (ref any))
 
     (if (i32.eqz (array.len (ref.cast (ref $ByteArray) (local.get $bytes))))
-      (then (return (global.get $str_empty))))
+      (then (return (global.get $std/str.wat:str_empty))))
     (struct.new $StrBytesImpl
       (ref.cast (ref $ByteArray) (local.get $bytes)))
   )
@@ -86,8 +86,8 @@
   ;; Dispatches via br_on_cast:
   ;;   $StrDataImpl  → copies bytes from data section into a $ByteArray
   ;;   $StrBytesImpl → returns the existing $ByteArray
-  (func $str_bytes (export "str_bytes")
-    (param $str (ref $Str))
+  (func $std/str.wat:str_bytes (export "std/str.wat:str_bytes")
+    (param $std/str.wat:str (ref $Str))
     (result (ref $ByteArray))
 
     (local $offset i32)
@@ -96,7 +96,7 @@
     (local $i i32)
 
     ;; Empty string — return zero-length array
-    (if (ref.test (ref $StrEmpty) (local.get $str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
       (then (return (array.new_fixed $ByteArray 0))))
 
     ;; Try $StrDataImpl — copy from data section to heap
@@ -104,13 +104,13 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $str))))
+            (local.get $std/str.wat:str))))
       ;; Cast succeeded — $StrDataImpl is on the stack
       (local.set $offset (struct.get $StrDataImpl $offset))
       (local.set $length
         ;; re-read from param since we consumed the ref
         (struct.get $StrDataImpl $length
-          (ref.cast (ref $StrDataImpl) (local.get $str))))
+          (ref.cast (ref $StrDataImpl) (local.get $std/str.wat:str))))
       (local.set $result
         (array.new $ByteArray (i32.const 0) (local.get $length)))
       (local.set $i (i32.const 0))
@@ -127,7 +127,7 @@
 
     ;; Must be $StrBytesImpl — return existing array
     (struct.get $StrBytesImpl $bytes
-      (ref.cast (ref $StrBytesImpl) (local.get $str)))
+      (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str)))
   )
 
   ;; ---- Repr ----
@@ -135,8 +135,8 @@
   ;; str_repr : (ref $Str) -> (ref $Str)
   ;; Produce a quoted, escaped representation of a string: 'hello' → '\'hello\''
   ;; Escapes: \n \r \t \\ \' and non-printable bytes as \xNN.
-  (func $str_repr (export "str_repr")
-    (param $str (ref $Str))
+  (func $std/str.wat:str_repr (export "std/str.wat:str_repr")
+    (param $std/str.wat:str (ref $Str))
     (result (ref $Str))
 
     (local $src (ref $ByteArray))
@@ -147,7 +147,7 @@
     (local $buf (ref $ByteArray))
     (local $pos i32)
 
-    (local.set $src (call $str_bytes (local.get $str)))
+    (local.set $src (call $std/str.wat:str_bytes (local.get $std/str.wat:str)))
     (local.set $len (array.len (local.get $src)))
 
     ;; Pass 1: compute output length.
@@ -257,10 +257,10 @@
             (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x78))  ;; 'x'
             (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
             (array.set $ByteArray (local.get $buf) (local.get $pos)
-              (call $_hex_char (i32.shr_u (local.get $b) (i32.const 4))))
+              (call $std/str.wat:_hex_char (i32.shr_u (local.get $b) (i32.const 4))))
             (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
             (array.set $ByteArray (local.get $buf) (local.get $pos)
-              (call $_hex_char (i32.and (local.get $b) (i32.const 0x0F))))
+              (call $std/str.wat:_hex_char (i32.and (local.get $b) (i32.const 0x0F))))
             (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $write)))
@@ -279,7 +279,7 @@
 
   ;; _hex_char : i32 -> i32
   ;; Convert 0-15 to ASCII hex character ('0'-'9', 'A'-'F').
-  (func $_hex_char (param $v i32) (result i32)
+  (func $std/str.wat:_hex_char (param $v i32) (result i32)
     (if (result i32) (i32.lt_u (local.get $v) (i32.const 10))
       (then (i32.add (local.get $v) (i32.const 0x30)))  ;; '0'
       (else (i32.add (i32.sub (local.get $v) (i32.const 10)) (i32.const 0x41))))  ;; 'A'
@@ -293,7 +293,7 @@
   ;; Fast path: ref.eq (same object → 1).
   ;; Slow path: dispatch on concrete types, compare byte-by-byte.
   ;; Returns 1 if equal, 0 if not.
-  (func $str_op_eq
+  (func $std/str.wat:str_op_eq
     (param $a (ref $Str))
     (param $b (ref $Str))
     (result i32)
@@ -327,17 +327,17 @@
               (local.get $b))))
         (local.set $db)
         ;; Both data
-        (return (call $_str_op_eq_dd
+        (return (call $std/str.wat:_str_op_eq_dd
           (struct.get $StrDataImpl $offset (local.get $da))
           (struct.get $StrDataImpl $length (local.get $da))
           (struct.get $StrDataImpl $offset (local.get $db))
           (struct.get $StrDataImpl $length (local.get $db)))))
 
       ;; $a is data, $b is array
-      (return (call $_str_op_eq_da
+      (return (call $std/str.wat:_str_op_eq_da
         (struct.get $StrDataImpl $offset (local.get $da))
         (struct.get $StrDataImpl $length (local.get $da))
-        (call $_get_byte_array (local.get $b)))))
+        (call $std/str.wat:_get_byte_array (local.get $b)))))
 
     ;; $a is array — dispatch on $b
     (block $b_not_data2
@@ -347,31 +347,31 @@
             (local.get $b))))
       (local.set $db)
       ;; $b is data, $a is array — flip args
-      (return (call $_str_op_eq_da
+      (return (call $std/str.wat:_str_op_eq_da
         (struct.get $StrDataImpl $offset (local.get $db))
         (struct.get $StrDataImpl $length (local.get $db))
-        (call $_get_byte_array (local.get $a)))))
+        (call $std/str.wat:_get_byte_array (local.get $a)))))
 
     ;; Both arrays
-    (call $_str_op_eq_aa
-      (call $_get_byte_array (local.get $a))
-      (call $_get_byte_array (local.get $b)))
+    (call $std/str.wat:_str_op_eq_aa
+      (call $std/str.wat:_get_byte_array (local.get $a))
+      (call $std/str.wat:_get_byte_array (local.get $b)))
   )
 
-  ;; $_get_byte_array : (ref $Str) -> (ref $ByteArray)
+  ;; $std/str.wat:_get_byte_array : (ref $Str) -> (ref $ByteArray)
   ;; Extract the $ByteArray from a $StrBytesImpl.
   ;; Caller must ensure it's not a $StrDataImpl.
-  (func $_get_byte_array
-    (param $str (ref $Str))
+  (func $std/str.wat:_get_byte_array
+    (param $std/str.wat:str (ref $Str))
     (result (ref $ByteArray))
 
     (struct.get $StrBytesImpl $bytes
-      (ref.cast (ref $StrBytesImpl) (local.get $str)))
+      (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str)))
   )
 
-  ;; $_str_op_eq_dd : (i32, i32, i32, i32) -> i32
+  ;; $std/str.wat:_str_op_eq_dd : (i32, i32, i32, i32) -> i32
   ;; Compare two data-section strings by linear memory reads.
-  (func $_str_op_eq_dd
+  (func $std/str.wat:_str_op_eq_dd
     (param $off_a i32) (param $len_a i32)
     (param $off_b i32) (param $len_b i32)
     (result i32)
@@ -396,9 +396,9 @@
     (i32.const 1)
   )
 
-  ;; $_str_op_eq_da : (i32, i32, ref $ByteArray) -> i32
+  ;; $std/str.wat:_str_op_eq_da : (i32, i32, ref $ByteArray) -> i32
   ;; Compare data-section string vs heap array.
-  (func $_str_op_eq_da
+  (func $std/str.wat:_str_op_eq_da
     (param $off i32) (param $len i32)
     (param $arr (ref $ByteArray))
     (result i32)
@@ -423,9 +423,9 @@
     (i32.const 1)
   )
 
-  ;; $_str_op_eq_aa : (ref $ByteArray, ref $ByteArray) -> i32
+  ;; $std/str.wat:_str_op_eq_aa : (ref $ByteArray, ref $ByteArray) -> i32
   ;; Compare two heap arrays byte-by-byte.
-  (func $_str_op_eq_aa
+  (func $std/str.wat:_str_op_eq_aa
     (param $a (ref $ByteArray))
     (param $b (ref $ByteArray))
     (result i32)
@@ -458,9 +458,9 @@
   ;; str_render_escape : (ref $Str) -> (ref $Str)
   ;; Resolve escape sequences in a string's bytes:
   ;; \n, \t, \r, \f, \v, \b, \\, \', \$, \xNN, \u{NNNNNN}
-  ;; Dispatches to $_escape_data (linear memory) or $_escape_array (heap).
+  ;; Dispatches to $std/str.wat:_escape_data (linear memory) or $std/str.wat:_escape_array (heap).
   ;; Pure byte processing — no user code, no CPS needed.
-  (func $str_render_escape
+  (func $std/str.wat:str_render_escape
     (param $raw (ref $Str))
     (result (ref $Str))
 
@@ -476,21 +476,21 @@
             (local.get $raw))))
       ;; Cast succeeded — $StrDataImpl on stack
       (return
-        (call $_escape_data
+        (call $std/str.wat:_escape_data
           (struct.get $StrDataImpl $offset)
           (struct.get $StrDataImpl $length
             (ref.cast (ref $StrDataImpl) (local.get $raw))))))
 
     ;; Must be $StrBytesImpl — read from heap array
-    (call $_escape_array
+    (call $std/str.wat:_escape_array
       (struct.get $StrBytesImpl $bytes
         (ref.cast (ref $StrBytesImpl) (local.get $raw))))
   )
 
-  ;; $_escape_data : (i32, i32) -> (ref $Str)
+  ;; $std/str.wat:_escape_data : (i32, i32) -> (ref $Str)
   ;; Escape processing for $StrDataImpl — reads from linear memory.
   ;; Two-pass: count output bytes, then write.
-  (func $_escape_data
+  (func $std/str.wat:_escape_data
     (param $base i32)
     (param $src_len i32)
     (result (ref $Str))
@@ -558,7 +558,7 @@
                           (i32.add (local.get $k) (i32.const 1)))
                         (br $hex)))
                     (local.set $digit
-                      (call $_hex_digit (local.get $byte)))
+                      (call $std/str.wat:_hex_digit (local.get $byte)))
                     (local.set $hex_val
                       (i32.add
                         (i32.shl (local.get $hex_val) (i32.const 4))
@@ -568,7 +568,7 @@
                     (br $hex)))
                 (local.set $out_len
                   (i32.add (local.get $out_len)
-                    (call $_utf8_len (local.get $hex_val))))
+                    (call $std/str.wat:_utf8_len (local.get $hex_val))))
                 ;; skip past the '}'
                 (local.set $i
                   (i32.add (local.get $k) (i32.const 1)))
@@ -680,11 +680,11 @@
                 (local.set $hex_val
                   (i32.add
                     (i32.shl
-                      (call $_hex_digit
+                      (call $std/str.wat:_hex_digit
                         (i32.load8_u (i32.add (local.get $base)
                           (i32.add (local.get $i) (i32.const 1)))))
                       (i32.const 4))
-                    (call $_hex_digit
+                    (call $std/str.wat:_hex_digit
                       (i32.load8_u (i32.add (local.get $base)
                         (i32.add (local.get $i) (i32.const 2)))))))
                 (array.set $ByteArray (local.get $out) (local.get $j)
@@ -715,7 +715,7 @@
                           (i32.add (local.get $i) (i32.const 1)))
                         (br $hex)))
                     (local.set $digit
-                      (call $_hex_digit (local.get $byte)))
+                      (call $std/str.wat:_hex_digit (local.get $byte)))
                     (local.set $hex_val
                       (i32.add
                         (i32.shl (local.get $hex_val) (i32.const 4))
@@ -727,7 +727,7 @@
                 (local.set $i
                   (i32.add (local.get $i) (i32.const 1)))
                 (local.set $j
-                  (call $_write_utf8
+                  (call $std/str.wat:_write_utf8
                     (local.get $out) (local.get $j) (local.get $hex_val)))
                 (br $write)))
             ;; Unknown escape — emit literally
@@ -747,10 +747,10 @@
     (struct.new $StrBytesImpl (local.get $out))
   )
 
-  ;; $_escape_array : (ref $ByteArray) -> (ref $Str)
+  ;; $std/str.wat:_escape_array : (ref $ByteArray) -> (ref $Str)
   ;; Escape processing for $StrBytesImpl — reads from heap array.
   ;; Two-pass: count output bytes, then write.
-  (func $_escape_array
+  (func $std/str.wat:_escape_array
     (param $src (ref $ByteArray))
     (result (ref $Str))
 
@@ -820,7 +820,7 @@
                           (i32.add (local.get $k) (i32.const 1)))
                         (br $hex)))
                     (local.set $digit
-                      (call $_hex_digit (local.get $byte)))
+                      (call $std/str.wat:_hex_digit (local.get $byte)))
                     (local.set $hex_val
                       (i32.add
                         (i32.shl (local.get $hex_val) (i32.const 4))
@@ -830,7 +830,7 @@
                     (br $hex)))
                 (local.set $out_len
                   (i32.add (local.get $out_len)
-                    (call $_utf8_len (local.get $hex_val))))
+                    (call $std/str.wat:_utf8_len (local.get $hex_val))))
                 ;; skip past '}'
                 (local.set $i
                   (i32.add (local.get $k) (i32.const 1)))
@@ -942,11 +942,11 @@
                 (local.set $hex_val
                   (i32.add
                     (i32.shl
-                      (call $_hex_digit
+                      (call $std/str.wat:_hex_digit
                         (array.get_u $ByteArray (local.get $src)
                           (i32.add (local.get $i) (i32.const 1))))
                       (i32.const 4))
-                    (call $_hex_digit
+                    (call $std/str.wat:_hex_digit
                       (array.get_u $ByteArray (local.get $src)
                         (i32.add (local.get $i) (i32.const 2))))))
                 (array.set $ByteArray (local.get $out) (local.get $j)
@@ -977,7 +977,7 @@
                           (i32.add (local.get $i) (i32.const 1)))
                         (br $hex)))
                     (local.set $digit
-                      (call $_hex_digit (local.get $byte)))
+                      (call $std/str.wat:_hex_digit (local.get $byte)))
                     (local.set $hex_val
                       (i32.add
                         (i32.shl (local.get $hex_val) (i32.const 4))
@@ -989,7 +989,7 @@
                 (local.set $i
                   (i32.add (local.get $i) (i32.const 1)))
                 (local.set $j
-                  (call $_write_utf8
+                  (call $std/str.wat:_write_utf8
                     (local.get $out) (local.get $j) (local.get $hex_val)))
                 (br $write)))
             ;; Unknown escape — emit literally
@@ -1019,8 +1019,8 @@
   ;; For debug output and serialization.
   ;;
   ;; Two-pass: count then write.
-  (func $str_render_unescape
-    (param $str (ref $Str))
+  (func $std/str.wat:str_render_unescape
+    (param $std/str.wat:str (ref $Str))
     (result (ref $Str))
 
     (local $src (ref $ByteArray))
@@ -1032,12 +1032,12 @@
     (local $byte i32)
 
     ;; Empty string — nothing to unescape
-    (if (ref.test (ref $StrEmpty) (local.get $str))
-      (then (return (local.get $str))))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
+      (then (return (local.get $std/str.wat:str))))
 
     (local.set $src
       (struct.get $StrBytesImpl $bytes
-        (ref.cast (ref $StrBytesImpl) (local.get $str))))
+        (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str))))
     (local.set $src_len
       (array.len (local.get $src)))
 
@@ -1052,7 +1052,7 @@
           (array.get_u $ByteArray (local.get $src) (local.get $i)))
 
         ;; Check if this byte needs escaping (produces 2 output bytes)
-        (if (call $_needs_unescape (local.get $byte))
+        (if (call $std/str.wat:_needs_unescape (local.get $byte))
           (then
             (local.set $out_len
               (i32.add (local.get $out_len) (i32.const 2))))
@@ -1200,14 +1200,14 @@
   ;; Content-based hash for any byte-bearing string.
   ;; Dispatches on concrete type to avoid allocating a $ByteArray copy.
   ;; Uses FNV-1a (32-bit), masked to 31 bits for i31ref.
-  (func $str_hash_i31
-    (param $str (ref $Str))
+  (func $std/str.wat:str_hash_i31
+    (param $std/str.wat:str (ref $Str))
     (result i32)
 
     (local $data (ref $StrDataImpl))
 
     ;; Empty string — hash of zero bytes (FNV offset basis).
-    (if (ref.test (ref $StrEmpty) (local.get $str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
       (then (return (i32.const 0x811c9dc5))))
 
     ;; Try $StrDataImpl — hash from linear memory
@@ -1215,9 +1215,9 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $str))))
+            (local.get $std/str.wat:str))))
       (local.set $data)
-      (return (call $_str_hash_data
+      (return (call $std/str.wat:_str_hash_data
         (struct.get $StrDataImpl $offset (local.get $data))
         (struct.get $StrDataImpl $length (local.get $data)))))
 
@@ -1226,17 +1226,17 @@
       (block $is_bytes (result (ref $StrBytesImpl))
         (br $not_bytes
           (br_on_cast $is_bytes (ref $Str) (ref $StrBytesImpl)
-            (local.get $str))))
-      (return (call $_str_hash_array
+            (local.get $std/str.wat:str))))
+      (return (call $std/str.wat:_str_hash_array
         (struct.get $StrBytesImpl $bytes))))
 
     ;; Only two subtypes — unreachable by construction.
     (unreachable)
   )
 
-  ;; $_str_hash_data : (i32, i32) -> i32
+  ;; $std/str.wat:_str_hash_data : (i32, i32) -> i32
   ;; FNV-1a over bytes in linear memory. Result masked to 31 bits.
-  (func $_str_hash_data
+  (func $std/str.wat:_str_hash_data
     (param $offset i32) (param $length i32)
     (result i32)
 
@@ -1265,9 +1265,9 @@
     (i32.and (local.get $h) (i32.const 0x7fffffff))
   )
 
-  ;; $_str_hash_array : (ref $ByteArray) -> i32
+  ;; $std/str.wat:_str_hash_array : (ref $ByteArray) -> i32
   ;; FNV-1a over bytes in a heap array. Result masked to 31 bits.
-  (func $_str_hash_array
+  (func $std/str.wat:_str_hash_array
     (param $arr (ref $ByteArray))
     (result i32)
 
@@ -1297,9 +1297,9 @@
 
   ;; ---- Internal helpers ----
 
-  ;; $_needs_unescape : i32 -> i32
+  ;; $std/str.wat:_needs_unescape : i32 -> i32
   ;; Returns 1 if a byte needs to be escaped in unescape output.
-  (func $_needs_unescape
+  (func $std/str.wat:_needs_unescape
     (param $byte i32)
     (result i32)
 
@@ -1318,9 +1318,9 @@
       (i32.eq (local.get $byte) (i32.const 0x24))))) ;; \$
   )
 
-  ;; $_hex_digit : i32 -> i32
+  ;; $std/str.wat:_hex_digit : i32 -> i32
   ;; Parse a single hex digit (0-9, a-f, A-F) → 0-15. Returns -1 if invalid.
-  (func $_hex_digit
+  (func $std/str.wat:_hex_digit
     (param $byte i32)
     (result i32)
 
@@ -1348,9 +1348,9 @@
     (i32.const -1)
   )
 
-  ;; $_utf8_len : i32 -> i32
+  ;; $std/str.wat:_utf8_len : i32 -> i32
   ;; Number of bytes needed to encode a Unicode codepoint as UTF-8.
-  (func $_utf8_len
+  (func $std/str.wat:_utf8_len
     (param $cp i32)
     (result i32)
 
@@ -1363,10 +1363,10 @@
     (i32.const 4)
   )
 
-  ;; $_write_utf8 : (ref $ByteArray), i32, i32 -> i32
+  ;; $std/str.wat:_write_utf8 : (ref $ByteArray), i32, i32 -> i32
   ;; Write a Unicode codepoint as UTF-8 into dst at offset j.
   ;; Returns the new offset (j + bytes written).
-  (func $_write_utf8
+  (func $std/str.wat:_write_utf8
     (param $dst (ref $ByteArray))
     (param $j i32)
     (param $cp i32)
@@ -1437,10 +1437,10 @@
 
   ;; _str_len : (ref $Str) -> i32
   ;; Byte length of any string subtype.
-  (func $_str_len (param $str (ref $Str)) (result i32)
+  (func $std/str.wat:_str_len (param $std/str.wat:str (ref $Str)) (result i32)
 
     ;; Empty string — length 0.
-    (if (ref.test (ref $StrEmpty) (local.get $str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
       (then (return (i32.const 0))))
 
     ;; Try $StrDataImpl
@@ -1448,19 +1448,19 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $str))))
+            (local.get $std/str.wat:str))))
       (return (struct.get $StrDataImpl $length)))
 
     ;; Must be $StrBytesImpl
     (array.len
       (struct.get $StrBytesImpl $bytes
-        (ref.cast (ref $StrBytesImpl) (local.get $str))))
+        (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str))))
   )
 
   ;; _str_copy_to : (ref $Str, ref $ByteArray, i32) -> i32
   ;; Copy bytes from a string into dst at offset. Returns new offset.
-  (func $_str_copy_to
-    (param $str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32)
+  (func $std/str.wat:_str_copy_to
+    (param $std/str.wat:str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32)
     (result i32)
 
     (local $offset i32)
@@ -1469,7 +1469,7 @@
     (local $i i32)
 
     ;; Empty string — nothing to copy.
-    (if (ref.test (ref $StrEmpty) (local.get $str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
       (then (return (local.get $pos))))
 
     ;; Try $StrDataImpl — copy from linear memory
@@ -1477,11 +1477,11 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $str))))
+            (local.get $std/str.wat:str))))
       (local.set $offset (struct.get $StrDataImpl $offset))
       (local.set $length
         (struct.get $StrDataImpl $length
-          (ref.cast (ref $StrDataImpl) (local.get $str))))
+          (ref.cast (ref $StrDataImpl) (local.get $std/str.wat:str))))
       (local.set $i (i32.const 0))
       (block $done
         (loop $copy
@@ -1497,7 +1497,7 @@
     ;; Must be $StrBytesImpl — copy from heap array
     (local.set $src
       (struct.get $StrBytesImpl $bytes
-        (ref.cast (ref $StrBytesImpl) (local.get $str))))
+        (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str))))
     (local.set $length (array.len (local.get $src)))
     (local.set $i (i32.const 0))
     (block $done
@@ -1516,7 +1516,7 @@
 
   ;; _str_fmt_val : (ref any) -> (ref $Str)
   ;; Format any value as a string. Dispatches on runtime type.
-  (func $_str_fmt_val (param $val (ref any)) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_val (param $val (ref any)) (result (ref $Str))
 
     ;; Try $Str — passthrough
     (block $not_str
@@ -1532,7 +1532,7 @@
         (br $not_num
           (br_on_cast $is_num (ref any) (ref $Num)
             (local.get $val))))
-      (return (call $_str_fmt_num (struct.get $Num $val))))
+      (return (call $std/str.wat:_str_fmt_num (struct.get $Num $val))))
 
     ;; Try i31ref — bool or small int
     (block $not_i31
@@ -1540,7 +1540,7 @@
         (br $not_i31
           (br_on_cast $is_i31 (ref any) (ref i31)
             (local.get $val))))
-      (return (call $_str_fmt_i31 (i31.get_s))))
+      (return (call $std/str.wat:_str_fmt_i31 (i31.get_s))))
 
     ;; Try $Range — format as "start..end" or "start...end"
     (block $not_range
@@ -1548,7 +1548,7 @@
         (br $not_range
           (br_on_cast $is_range (ref any) (ref $Range)
             (local.get $val))))
-      (return (call $_str_fmt_range)))
+      (return (call $std/str.wat:_str_fmt_range)))
 
     ;; Try $Rec — format as "{key: val, ...}"
     (block $not_rec
@@ -1556,7 +1556,7 @@
         (br $not_rec
           (br_on_cast $is_rec (ref any) (ref $Rec)
             (local.get $val))))
-      (return (call $_str_fmt_rec)))
+      (return (call $std/str.wat:_str_fmt_rec)))
 
     ;; Try $List — format as "[a, b, ...]"
     (block $not_list
@@ -1564,7 +1564,7 @@
         (br $not_list
           (br_on_cast $is_list (ref any) (ref $List)
             (local.get $val))))
-      (return (call $_str_fmt_list)))
+      (return (call $std/str.wat:_str_fmt_list)))
 
     ;; Unknown type — unreachable for now.
     (unreachable)
@@ -1573,7 +1573,7 @@
   ;; _str_fmt_val_repr : (ref any) -> (ref $Str)
   ;; Like _str_fmt_val but uses str_repr for strings (quoted + escaped).
   ;; Used by container formatters (list, rec) so strings display as 'hello'.
-  (func $_str_fmt_val_repr (param $val (ref any)) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_val_repr (param $val (ref any)) (result (ref $Str))
 
     ;; Try $Str — repr (quoted + escaped)
     (block $not_str
@@ -1581,17 +1581,17 @@
         (br $not_str
           (br_on_cast $is_str (ref any) (ref $Str)
             (local.get $val))))
-      (return (call $str_repr)))
+      (return (call $std/str.wat:str_repr)))
 
     ;; Everything else delegates to _str_fmt_val.
-    (call $_str_fmt_val (local.get $val))
+    (call $std/str.wat:_str_fmt_val (local.get $val))
   )
 
   ;; _str_fmt_i31 : i32 -> (ref $Str)
   ;; Format an i31ref value as a boolean: 0 → "false", 1 → "true".
   ;; i31ref is currently only used for booleans; integer i31 rendering
   ;; will be added when i31ref is used for small integers.
-  (func $_str_fmt_i31 (param $v i32) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_i31 (param $v i32) (result (ref $Str))
 
     (local $buf (ref $ByteArray))
 
@@ -1617,23 +1617,23 @@
 
   ;; _str_fmt_num : f64 -> (ref $Str)
   ;; Format an f64 as a string. Handles NaN, ±Infinity, integers, and floats.
-  (func $_str_fmt_num (param $v f64) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_num (param $v f64) (result (ref $Str))
 
     (local $i64v i64)
 
     ;; NaN check — f64.ne with itself is true only for NaN.
     (if (f64.ne (local.get $v) (local.get $v))
-      (then (return (call $_str_from_ascii_3 (i32.const 0x4E) (i32.const 0x61) (i32.const 0x4E))))) ;; "NaN"
+      (then (return (call $std/str.wat:_str_from_ascii_3 (i32.const 0x4E) (i32.const 0x61) (i32.const 0x4E))))) ;; "NaN"
 
     ;; +Infinity
     (if (f64.eq (local.get $v) (f64.const inf))
-      (then (return (call $_str_from_ascii_8
+      (then (return (call $std/str.wat:_str_from_ascii_8
         (i32.const 0x49) (i32.const 0x6E) (i32.const 0x66) (i32.const 0x69)
         (i32.const 0x6E) (i32.const 0x69) (i32.const 0x74) (i32.const 0x79))))) ;; "Infinity"
 
     ;; -Infinity
     (if (f64.eq (local.get $v) (f64.const -inf))
-      (then (return (call $_str_from_ascii_9
+      (then (return (call $std/str.wat:_str_from_ascii_9
         (i32.const 0x2D)  ;; "-"
         (i32.const 0x49) (i32.const 0x6E) (i32.const 0x66) (i32.const 0x69)
         (i32.const 0x6E) (i32.const 0x69) (i32.const 0x74) (i32.const 0x79))))) ;; "-Infinity"
@@ -1646,16 +1646,16 @@
               (i64.le_s (local.get $i64v) (i64.const 2147483647))
               (i64.ge_s (local.get $i64v) (i64.const -2147483648)))
           (then
-            (return (call $_str_fmt_int
+            (return (call $std/str.wat:_str_fmt_int
               (i32.wrap_i64 (local.get $i64v))))))))
 
     ;; Non-integer float.
-    (call $_str_fmt_float (local.get $v))
+    (call $std/str.wat:_str_fmt_float (local.get $v))
   )
 
   ;; _str_fmt_int : i32 -> (ref $Str)
   ;; Format a signed i32 as a decimal string.
-  (func $_str_fmt_int (param $v i32) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_int (param $v i32) (result (ref $Str))
 
     (local $neg i32)
     (local $abs i32)
@@ -1717,7 +1717,7 @@
   ;; _str_fmt_float : f64 -> (ref $Str)
   ;; Format a non-integer f64 as "int_part.frac_part" with trailing zeros stripped.
   ;; Simple approach: multiply fractional part by 1e15, render as i64, strip trailing '0's.
-  (func $_str_fmt_float (param $v f64) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_float (param $v f64) (result (ref $Str))
 
     (local $neg i32)
     (local $abs f64)
@@ -1844,7 +1844,7 @@
 
   ;; _str_fmt_range : (ref $Range) -> (ref $Str)
   ;; Format a range as "start..end" (exclusive) or "start...end" (inclusive).
-  (func $_str_fmt_range (param $range (ref $Range)) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_range (param $range (ref $Range)) (result (ref $Str))
     (local $impl (ref $RangeImpl))
     (local $start_str (ref $Str))
     (local $end_str (ref $Str))
@@ -1863,15 +1863,15 @@
 
     ;; Format start and end numbers.
     (local.set $start_str
-      (call $_str_fmt_num (struct.get $Num $val
+      (call $std/str.wat:_str_fmt_num (struct.get $Num $val
         (struct.get $RangeImpl $start (local.get $impl)))))
     (local.set $end_str
-      (call $_str_fmt_num (struct.get $Num $val
+      (call $std/str.wat:_str_fmt_num (struct.get $Num $val
         (struct.get $RangeImpl $end (local.get $impl)))))
 
     ;; Get byte arrays.
-    (local.set $start_bytes (call $str_bytes (local.get $start_str)))
-    (local.set $end_bytes (call $str_bytes (local.get $end_str)))
+    (local.set $start_bytes (call $std/str.wat:str_bytes (local.get $start_str)))
+    (local.set $end_bytes (call $std/str.wat:str_bytes (local.get $end_str)))
     (local.set $start_len (array.len (local.get $start_bytes)))
     (local.set $end_len (array.len (local.get $end_bytes)))
 
@@ -1925,13 +1925,13 @@
   ;; Check if a string is a valid fink identifier.
   ;; Returns 1 if all bytes are identifier chars (a-z, A-Z, 0-9, _, -, $, or >= 0x80).
   ;; Empty string returns 0. First char must not be a digit.
-  (func $_str_is_ident (param $str (ref $Str)) (result i32)
+  (func $std/str.wat:_str_is_ident (param $std/str.wat:str (ref $Str)) (result i32)
     (local $bytes (ref $ByteArray))
     (local $len i32)
     (local $i i32)
     (local $b i32)
 
-    (local.set $bytes (call $str_bytes (local.get $str)))
+    (local.set $bytes (call $std/str.wat:str_bytes (local.get $std/str.wat:str)))
     (local.set $len (array.len (local.get $bytes)))
 
     ;; Empty string is not an identifier.
@@ -2001,8 +2001,8 @@
   ;; _str_fmt_rec_key_len : (ref eq) -> i32
   ;; Byte length of a formatted record key.
   ;; String ident: bare len. String non-ident: str_repr len. Other: repr len + 2 for parens.
-  (func $_str_fmt_rec_key_len (param $key (ref eq)) (result i32)
-    (local $str (ref $Str))
+  (func $std/str.wat:_str_fmt_rec_key_len (param $key (ref eq)) (result i32)
+    (local $std/str.wat:str (ref $Str))
 
     ;; Try $Str
     (block $not_str
@@ -2010,17 +2010,17 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $key))))
-      (local.set $str)
+      (local.set $std/str.wat:str)
       ;; String key — identifier: bare, otherwise: str_repr (quoted + escaped).
       (return
-        (if (result i32) (call $_str_is_ident (local.get $str))
-          (then (call $_str_len (local.get $str)))
-          (else (call $_str_len (call $str_repr (local.get $str)))))))
+        (if (result i32) (call $std/str.wat:_str_is_ident (local.get $std/str.wat:str))
+          (then (call $std/str.wat:_str_len (local.get $std/str.wat:str)))
+          (else (call $std/str.wat:_str_len (call $std/str.wat:str_repr (local.get $std/str.wat:str)))))))
 
     ;; Non-string key — (repr), add 2 for parens.
     (i32.add
-      (call $_str_len
-        (call $_str_fmt_val (ref.cast (ref any) (local.get $key))))
+      (call $std/str.wat:_str_len
+        (call $std/str.wat:_str_fmt_val (ref.cast (ref any) (local.get $key))))
       (i32.const 2))
   )
 
@@ -2028,7 +2028,7 @@
   ;; Format a record as "{key: val, key2: val2}".
   ;; Empty record formats as "{}".
   ;; Two-pass: first compute total byte length, then copy.
-  (func $_str_fmt_rec (param $rec (ref $Rec)) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_rec (param $rec (ref $Rec)) (result (ref $Str))
     (local $node (ref $HamtNode))
     (local $total i32)
     (local $entry_count i32)
@@ -2047,7 +2047,7 @@
     ;; Empty record: return "{}"
     (if (i32.eqz (local.get $entry_count))
       (then
-        (return (call $_str_from_ascii_2
+        (return (call $std/str.wat:_str_from_ascii_2
           (i32.const 0x7B) ;; '{'
           (i32.const 0x7D) ;; '}'
         ))))
@@ -2060,7 +2060,7 @@
       (i32.add
         (i32.const 2) ;; { and }
         (i32.add
-          (call $_str_fmt_rec_size_node (local.get $node))
+          (call $std/str.wat:_str_fmt_rec_size_node (local.get $node))
           (i32.mul
             (i32.sub (local.get $entry_count) (i32.const 1))
             (i32.const 2))))) ;; ", " separators
@@ -2075,7 +2075,7 @@
 
     ;; Pass 2: copy formatted entries.
     (local.set $pos
-      (call $_str_fmt_rec_copy_node
+      (call $std/str.wat:_str_fmt_rec_copy_node
         (local.get $node) (local.get $buf) (local.get $pos)
         (i32.const 0))) ;; is_first = true (0 entries written so far)
 
@@ -2088,7 +2088,7 @@
   ;; _str_fmt_rec_size_node : (ref $HamtNode) -> i32
   ;; Compute total bytes for all entries in a HAMT node (key + ": " + val).
   ;; Does NOT include separators between entries or braces.
-  (func $_str_fmt_rec_size_node
+  (func $std/str.wat:_str_fmt_rec_size_node
     (param $node (ref $HamtNode))
     (result i32)
 
@@ -2125,11 +2125,11 @@
               (i32.add (local.get $total)
                 (i32.add
                   (i32.add
-                    (call $_str_fmt_rec_key_len
+                    (call $std/str.wat:_str_fmt_rec_key_len
                       (struct.get $HamtLeaf $key (local.get $leaf)))
                     (i32.const 2)) ;; ": "
-                  (call $_str_len
-                    (call $_str_fmt_val_repr
+                  (call $std/str.wat:_str_len
+                    (call $std/str.wat:_str_fmt_val_repr
                       (ref.cast (ref any)
                         (struct.get $HamtLeaf $val (local.get $leaf))))))))))
 
@@ -2138,7 +2138,7 @@
           (then
             (local.set $total
               (i32.add (local.get $total)
-                (call $_str_fmt_rec_size_node
+                (call $std/str.wat:_str_fmt_rec_size_node
                   (ref.cast (ref $HamtNode) (local.get $child)))))))
 
         ;; Collision: walk leaves
@@ -2146,7 +2146,7 @@
           (then
             (local.set $total
               (i32.add (local.get $total)
-                (call $_str_fmt_rec_size_collision
+                (call $std/str.wat:_str_fmt_rec_size_collision
                   (struct.get $HamtCollision $col_leaves
                     (ref.cast (ref $HamtCollision) (local.get $child))))))))
 
@@ -2158,7 +2158,7 @@
 
   ;; _str_fmt_rec_size_collision : (ref $HamtChildren) -> i32
   ;; Compute total bytes for all leaves in a collision array.
-  (func $_str_fmt_rec_size_collision
+  (func $std/str.wat:_str_fmt_rec_size_collision
     (param $leaves (ref $HamtChildren))
     (result i32)
 
@@ -2182,11 +2182,11 @@
           (i32.add (local.get $total)
             (i32.add
               (i32.add
-                (call $_str_fmt_rec_key_len
+                (call $std/str.wat:_str_fmt_rec_key_len
                   (struct.get $HamtLeaf $key (local.get $leaf)))
                 (i32.const 2))
-              (call $_str_len
-                (call $_str_fmt_val_repr
+              (call $std/str.wat:_str_len
+                (call $std/str.wat:_str_fmt_val_repr
                   (ref.cast (ref any)
                     (struct.get $HamtLeaf $val (local.get $leaf))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -2198,13 +2198,13 @@
   ;; _str_fmt_rec_copy_key : (key, buf, pos) -> new_pos
   ;; Copy a formatted record key into buf.
   ;; String ident: bare. String non-ident: str_repr. Other: (repr).
-  (func $_str_fmt_rec_copy_key
+  (func $std/str.wat:_str_fmt_rec_copy_key
     (param $key (ref eq))
     (param $buf (ref $ByteArray))
     (param $pos i32)
     (result i32)
 
-    (local $str (ref $Str))
+    (local $std/str.wat:str (ref $Str))
 
     ;; Try $Str
     (block $not_str
@@ -2212,18 +2212,18 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $key))))
-      (local.set $str)
+      (local.set $std/str.wat:str)
 
-      (if (call $_str_is_ident (local.get $str))
+      (if (call $std/str.wat:_str_is_ident (local.get $std/str.wat:str))
         (then
           ;; Identifier — copy as-is.
           (local.set $pos
-            (call $_str_copy_to (local.get $str) (local.get $buf) (local.get $pos))))
+            (call $std/str.wat:_str_copy_to (local.get $std/str.wat:str) (local.get $buf) (local.get $pos))))
         (else
           ;; Non-identifier string — use str_repr (quoted + escaped).
           (local.set $pos
-            (call $_str_copy_to
-              (call $str_repr (local.get $str))
+            (call $std/str.wat:_str_copy_to
+              (call $std/str.wat:str_repr (local.get $std/str.wat:str))
               (local.get $buf)
               (local.get $pos)))))
       (return (local.get $pos)))
@@ -2232,8 +2232,8 @@
     (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x28)) ;; '('
     (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
     (local.set $pos
-      (call $_str_copy_to
-        (call $_str_fmt_val (ref.cast (ref any) (local.get $key)))
+      (call $std/str.wat:_str_copy_to
+        (call $std/str.wat:_str_fmt_val (ref.cast (ref any) (local.get $key)))
         (local.get $buf)
         (local.get $pos)))
     (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x29)) ;; ')'
@@ -2245,7 +2245,7 @@
   ;; _str_fmt_rec_copy_node : (node, buf, pos, written) -> new_pos
   ;; Copy formatted entries into buf. written = entries written so far
   ;; (used to decide whether to prepend ", ").
-  (func $_str_fmt_rec_copy_node
+  (func $std/str.wat:_str_fmt_rec_copy_node
     (param $node (ref $HamtNode))
     (param $buf (ref $ByteArray))
     (param $pos i32)
@@ -2292,7 +2292,7 @@
 
             ;; Copy key (with quotes if not an identifier)
             (local.set $pos
-              (call $_str_fmt_rec_copy_key
+              (call $std/str.wat:_str_fmt_rec_copy_key
                 (struct.get $HamtLeaf $key (local.get $leaf))
                 (local.get $buf) (local.get $pos)))
 
@@ -2306,8 +2306,8 @@
 
             ;; Copy val
             (local.set $pos
-              (call $_str_copy_to
-                (call $_str_fmt_val_repr
+              (call $std/str.wat:_str_copy_to
+                (call $std/str.wat:_str_fmt_val_repr
                   (ref.cast (ref any)
                     (struct.get $HamtLeaf $val (local.get $leaf))))
                 (local.get $buf)
@@ -2320,7 +2320,7 @@
         (if (ref.test (ref $HamtNode) (local.get $child))
           (then
             (local.set $pos
-              (call $_str_fmt_rec_copy_node
+              (call $std/str.wat:_str_fmt_rec_copy_node
                 (ref.cast (ref $HamtNode) (local.get $child))
                 (local.get $buf) (local.get $pos) (local.get $written)))
             ;; Update written count — we don't know exactly how many
@@ -2335,7 +2335,7 @@
         (if (ref.test (ref $HamtCollision) (local.get $child))
           (then
             (local.set $pos
-              (call $_str_fmt_rec_copy_collision
+              (call $std/str.wat:_str_fmt_rec_copy_collision
                 (struct.get $HamtCollision $col_leaves
                   (ref.cast (ref $HamtCollision) (local.get $child)))
                 (local.get $buf) (local.get $pos) (local.get $written)))
@@ -2353,7 +2353,7 @@
 
   ;; _str_fmt_rec_copy_collision : (leaves, buf, pos, written) -> new_pos
   ;; Copy formatted collision entries into buf.
-  (func $_str_fmt_rec_copy_collision
+  (func $std/str.wat:_str_fmt_rec_copy_collision
     (param $leaves (ref $HamtChildren))
     (param $buf (ref $ByteArray))
     (param $pos i32)
@@ -2388,7 +2388,7 @@
 
         ;; Copy key (with quotes if not an identifier)
         (local.set $pos
-          (call $_str_fmt_rec_copy_key
+          (call $std/str.wat:_str_fmt_rec_copy_key
             (struct.get $HamtLeaf $key (local.get $leaf))
             (local.get $buf) (local.get $pos)))
 
@@ -2402,8 +2402,8 @@
 
         ;; Copy val
         (local.set $pos
-          (call $_str_copy_to
-            (call $_str_fmt_val_repr
+          (call $std/str.wat:_str_copy_to
+            (call $std/str.wat:_str_fmt_val_repr
               (ref.cast (ref any)
                 (struct.get $HamtLeaf $val (local.get $leaf))))
             (local.get $buf)
@@ -2418,7 +2418,7 @@
   ;; _str_fmt_list : (ref $List) -> (ref $Str)
   ;; Format a list as "[a, b, c]".
   ;; Uses only the public list API (list_op_empty, list_head_any, list_tail_any).
-  (func $_str_fmt_list (param $list (ref $List)) (result (ref $Str))
+  (func $std/str.wat:_str_fmt_list (param $list (ref $List)) (result (ref $Str))
     (local $cur (ref null any))
     (local $total i32)
     (local $count i32)
@@ -2429,7 +2429,7 @@
     ;; Empty list: return "[]"
     (if (call $std/list.wat:list_op_empty (local.get $list))
       (then
-        (return (call $_str_from_ascii_2
+        (return (call $std/str.wat:_str_from_ascii_2
           (i32.const 0x5B) ;; '['
           (i32.const 0x5D) ;; ']'
         ))))
@@ -2446,8 +2446,8 @@
           (call $std/list.wat:list_op_empty (local.get $cur)))
         (local.set $total
           (i32.add (local.get $total)
-            (call $_str_len
-              (call $_str_fmt_val_repr
+            (call $std/str.wat:_str_len
+              (call $std/str.wat:_str_fmt_val_repr
                 (ref.as_non_null
                   (call $std/list.wat:list_head_any (local.get $cur)))))))
         (local.set $count (i32.add (local.get $count) (i32.const 1)))
@@ -2489,8 +2489,8 @@
 
         ;; Format and copy element.
         (local.set $pos
-          (call $_str_copy_to
-            (call $_str_fmt_val_repr
+          (call $std/str.wat:_str_copy_to
+            (call $std/str.wat:_str_fmt_val_repr
               (ref.as_non_null
                 (call $std/list.wat:list_head_any (local.get $cur))))
             (local.get $buf)
@@ -2509,7 +2509,7 @@
 
   ;; _str_from_ascii_2 : (i32, i32) -> (ref $Str)
   ;; Build a 2-byte string from ASCII code points.
-  (func $_str_from_ascii_2 (param $a i32) (param $b i32) (result (ref $Str))
+  (func $std/str.wat:_str_from_ascii_2 (param $a i32) (param $b i32) (result (ref $Str))
     (local $buf (ref $ByteArray))
     (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 2)))
     (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
@@ -2519,7 +2519,7 @@
 
   ;; _str_from_ascii_3 : (i32, i32, i32) -> (ref $Str)
   ;; Build a 3-byte string from ASCII code points.
-  (func $_str_from_ascii_3 (param $a i32) (param $b i32) (param $c i32) (result (ref $Str))
+  (func $std/str.wat:_str_from_ascii_3 (param $a i32) (param $b i32) (param $c i32) (result (ref $Str))
     (local $buf (ref $ByteArray))
     (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 3)))
     (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
@@ -2529,7 +2529,7 @@
   )
 
   ;; _str_from_ascii_8 : 8 bytes -> (ref $Str)
-  (func $_str_from_ascii_8
+  (func $std/str.wat:_str_from_ascii_8
     (param $a i32) (param $b i32) (param $c i32) (param $d i32)
     (param $e i32) (param $f i32) (param $g i32) (param $h i32)
     (result (ref $Str))
@@ -2547,7 +2547,7 @@
   )
 
   ;; _str_from_ascii_9 : 9 bytes -> (ref $Str)
-  (func $_str_from_ascii_9
+  (func $std/str.wat:_str_from_ascii_9
     (param $a i32) (param $b i32) (param $c i32) (param $d i32)
     (param $e i32) (param $f i32) (param $g i32) (param $h i32)
     (param $i i32)
@@ -2574,7 +2574,7 @@
   ;; second arg is the continuation. Formats each segment via _str_fmt_val,
   ;; concatenates all results into a single $StrBytesImpl, and passes the
   ;; result to the continuation via _apply.
-  (func $str_fmt (export "str_fmt")
+  (func $std/str.wat:str_fmt (export "std/str.wat:str_fmt")
     (param $segments_any (ref null any)) (param $cont (ref null any))
 
     (local $segments (ref $VarArgs))
@@ -2602,8 +2602,8 @@
           (i32.ge_u (local.get $i) (local.get $len)))
         (local.set $total
           (i32.add (local.get $total)
-            (call $_str_len
-              (call $_str_fmt_val
+            (call $std/str.wat:_str_len
+              (call $std/str.wat:_str_fmt_val
                 (ref.as_non_null
                   (array.get $VarArgs (local.get $segments) (local.get $i)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -2621,8 +2621,8 @@
         (br_if $done2
           (i32.ge_u (local.get $i) (local.get $len)))
         (local.set $pos
-          (call $_str_copy_to
-            (call $_str_fmt_val
+          (call $std/str.wat:_str_copy_to
+            (call $std/str.wat:_str_fmt_val
               (ref.as_non_null
                 (array.get $VarArgs (local.get $segments) (local.get $i))))
             (local.get $dst)
@@ -2644,8 +2644,8 @@
   ;; Negative values resolve from end: -1 → len-1, -0.0 → len.
   ;; Returns null on out-of-bounds (after resolution: 0 <= start <= end <= len).
   ;; Returns empty string for empty slice, original for full range.
-  (func $_str_slice
-    (param $str (ref $Str)) (param $start_f f64) (param $end_f f64)
+  (func $std/str.wat:_str_slice
+    (param $std/str.wat:str (ref $Str)) (param $start_f f64) (param $end_f f64)
     (result (ref null $Str))
 
     (local $len i32)
@@ -2656,7 +2656,7 @@
     (local $dst (ref $ByteArray))
     (local $i i32)
 
-    (local.set $len (call $_str_len (local.get $str)))
+    (local.set $len (call $std/str.wat:_str_len (local.get $std/str.wat:str)))
 
     ;; Resolve negative values from end (including -0.0 via copysign check)
     (if (f64.lt
@@ -2692,16 +2692,16 @@
     ;; Empty slice
     (local.set $slice_len (i32.sub (local.get $end) (local.get $start)))
     (if (i32.eqz (local.get $slice_len))
-      (then (return (call $str_empty))))
+      (then (return (call $std/str.wat:str_empty))))
 
     ;; Full string — return original
     (if (i32.and
           (i32.eqz (local.get $start))
           (i32.eq (local.get $end) (local.get $len)))
-      (then (return (local.get $str))))
+      (then (return (local.get $std/str.wat:str))))
 
     ;; Convert to byte array, then copy slice
-    (local.set $src (call $str_bytes (local.get $str)))
+    (local.set $src (call $std/str.wat:str_bytes (local.get $std/str.wat:str)))
     (local.set $dst (array.new $ByteArray (i32.const 0) (local.get $slice_len)))
     (local.set $i (i32.const 0))
     (block $done
@@ -2721,8 +2721,8 @@
   ;; CPS wrapper: extract bytes [start..end) from a string.
   ;;   succ — called with the substring on success
   ;;   fail — called with the original string on out-of-bounds
-  (func $str_slice (export "str_slice")
-    (param $str (ref null any))
+  (func $std/str.wat:str_slice (export "std/str.wat:str_slice")
+    (param $std/str.wat:str (ref null any))
     (param $start (ref null any))
     (param $end (ref null any))
     (param $succ (ref null any))
@@ -2731,8 +2731,8 @@
     (local $s (ref $Str))
     (local $result (ref null $Str))
 
-    (local.set $s (ref.cast (ref $Str) (local.get $str)))
-    (local.set $result (call $_str_slice
+    (local.set $s (ref.cast (ref $Str) (local.get $std/str.wat:str)))
+    (local.set $result (call $std/str.wat:_str_slice
       (local.get $s)
       (struct.get $Num 0 (ref.cast (ref $Num) (local.get $start)))
       (struct.get $Num 0 (ref.cast (ref $Num) (local.get $end)))))
@@ -2740,7 +2740,7 @@
     (if (ref.is_null (local.get $result))
       (then
         (return_call $std/list.wat:apply_1
-          (local.get $str)
+          (local.get $std/str.wat:str)
           (local.get $fail))))
 
     (return_call $std/list.wat:apply_1
@@ -2754,8 +2754,8 @@
   ;;   $Range key → byte slice (start..end or start...end)
   ;;   $Num key   → single byte at index
   ;; Out of bounds → unreachable
-  (func $str_op_dot (export "str_op_dot")
-    (param $str (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+  (func $std/str.wat:str_op_dot (export "std/str.wat:str_op_dot")
+    (param $std/str.wat:str (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     (local $s (ref $Str))
     (local $range (ref $Range))
@@ -2763,7 +2763,7 @@
     (local $end_f f64)
     (local $result (ref null $Str))
 
-    (local.set $s (ref.cast (ref $Str) (local.get $str)))
+    (local.set $s (ref.cast (ref $Str) (local.get $std/str.wat:str)))
 
     ;; Try $Range key
     (block $not_range
@@ -2782,7 +2782,7 @@
           (local.set $end_f (f64.add (local.get $end_f) (f64.const 1)))))
 
       (local.set $result
-        (call $_str_slice (local.get $s) (local.get $start_f) (local.get $end_f)))
+        (call $std/str.wat:_str_slice (local.get $s) (local.get $start_f) (local.get $end_f)))
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $std/list.wat:apply_1
@@ -2798,7 +2798,7 @@
       (local.set $start_f (struct.get $Num 0))
 
       (local.set $result
-        (call $_str_slice
+        (call $std/str.wat:_str_slice
           (local.get $s)
           (local.get $start_f)
           (f64.add (local.get $start_f) (f64.const 1))))
@@ -2816,7 +2816,7 @@
   ;; CPS string template pattern matching.
   ;; Checks subj starts with prefix and ends with suffix (non-overlapping).
   ;; On match: calls succ(middle_slice). On mismatch: calls fail().
-  (func $str_match (export "str_match")
+  (func $std/str.wat:str_match (export "std/str.wat:str_match")
     (param $subj (ref null any))
     (param $prefix (ref null any))
     (param $suffix (ref null any))
@@ -2847,9 +2847,9 @@
     (local.set $x_str (ref.cast (ref $Str) (local.get $suffix)))
 
     ;; Get lengths
-    (local.set $s_len (call $_str_len (local.get $s_str)))
-    (local.set $p_len (call $_str_len (local.get $p_str)))
-    (local.set $x_len (call $_str_len (local.get $x_str)))
+    (local.set $s_len (call $std/str.wat:_str_len (local.get $s_str)))
+    (local.set $p_len (call $std/str.wat:_str_len (local.get $p_str)))
+    (local.set $x_len (call $std/str.wat:_str_len (local.get $x_str)))
 
     ;; Non-overlapping check: subject must be at least prefix + suffix long
     (if (i32.lt_u (local.get $s_len)
@@ -2857,12 +2857,12 @@
       (then (return_call $std/list.wat:apply_0 (local.get $fail))))
 
     ;; Get byte arrays
-    (local.set $s_bytes (call $str_bytes (local.get $s_str)))
+    (local.set $s_bytes (call $std/str.wat:str_bytes (local.get $s_str)))
 
     ;; Check prefix match
     (if (local.get $p_len)
       (then
-        (local.set $p_bytes (call $str_bytes (local.get $p_str)))
+        (local.set $p_bytes (call $std/str.wat:str_bytes (local.get $p_str)))
         (local.set $i (i32.const 0))
         (block $pfx_fail
           (loop $pfx_loop
@@ -2881,7 +2881,7 @@
                           (i32.add (local.get $p_len) (local.get $x_len))))
     (if (local.get $x_len)
       (then
-        (local.set $x_bytes (call $str_bytes (local.get $x_str)))
+        (local.set $x_bytes (call $std/str.wat:str_bytes (local.get $x_str)))
         (local.set $i (i32.const 0))
         (block $sfx_fail
           (loop $sfx_loop
@@ -2899,7 +2899,7 @@
 
     ;; Both matched — slice the middle
     (if (i32.eqz (local.get $mid_len))
-      (then (return_call $std/list.wat:apply_1 (call $str_empty) (local.get $succ))))
+      (then (return_call $std/list.wat:apply_1 (call $std/str.wat:str_empty) (local.get $succ))))
 
     ;; Full string — no prefix or suffix
     (if (i32.eq (local.get $mid_len) (local.get $s_len))
