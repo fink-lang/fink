@@ -83,7 +83,7 @@ test 'multiple let bindings used', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $x_0 (ref null any))
@@ -93,7 +93,7 @@ test 'multiple let bindings used', fn:
         (global.set $x (local.get $x_0))
         (local.set $y_1 (struct.new $rt/types.wat:Num (f64.const 3)))
         (global.set $y (local.get $y_1))
-        (return_call $rt/protocols.wat:op_plus (local.get $x_0) (local.get $y_1) (local.get $v_2))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $x_0) (local.get $y_1) (local.get $v_2))
       )
       (export "fink_module" (func $fink_module))
       (global $x (mut (ref null any)) (ref.null any))
@@ -101,7 +101,7 @@ test 'multiple let bindings used', fn:
       (global $y (mut (ref null any)) (ref.null any))
       (export "y" (global $y))
     )
-    ;; sm:BvILAJIBAQABhAEASgEMAYQBAEoBDAU
+    ;; sm:BrYMAJIBAQABhAEASgEMAYQBAEoBDAU
 
 
 
@@ -125,7 +125,7 @@ test 'binding rhs is a call', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_5 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_6 (ref null any))
         (local $a_2 (ref null any))
@@ -135,7 +135,7 @@ test 'binding rhs is a call', fn:
         (local.set $a_2 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $b_3 (call $std/list.wat:args_head (local.get $:params)))
-        (return_call $rt/protocols.wat:op_plus (local.get $a_2) (local.get $b_3) (local.get $v_6))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $a_2) (local.get $b_3) (local.get $v_6))
       )
       (func $v_34 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -195,7 +195,7 @@ test 'binding rhs is a call', fn:
       (global $add (mut (ref null any)) (ref.null any))
       (export "add" (global $add))
     )
-    ;; sm:ItQXAJIBAJoBAJIBAJoBAJIBAR4FjgYAugEAvgEAlAEBDAFOAEoAbgC6AQDmBQCUAQBcARABhgEBBgGGAQBuALwBALwBALwBANgIAJIBAHoBPwPCAQBSAK4BAMoBAHoAyAEAbgDEAQA
+    ;; sm:IpgYAJIBAJoBAJIBAJoBAJIBAR4FsAYAugEAvgEAlAEBDAFOAEoAbgC6AQDmBQCUAQBcARABhgEBBgGGAQBuALwBALwBALwBANgIAJIBAHoBPwPCAQBSAK4BAMoBAHoAyAEAbgDEAQA
 
 
 
@@ -220,12 +220,12 @@ test 'top-level rec destructure then fn using binding', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "is_rec_like" (func $rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:is_rec_like" (func $rt/protocols.wat:rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (import "std/rec.wat" "rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/rec.wat" "rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "rt/protocols.wat" "panic" (func $rt/protocols.wat:panic (type $rt/types.wat:Fn2)))
+      (import "rt/protocols.wat" "rt/protocols.wat:panic" (func $rt/protocols.wat:rt/protocols.wat:panic (type $rt/types.wat:Fn2)))
       (import "std/rec.wat" "rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
       (func $v_81 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -237,7 +237,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_30 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $a_2 (call $std/list.wat:args_head (local.get $:params)))
-        (return_call $rt/protocols.wat:op_plus (local.get $x_82) (local.get $a_2) (local.get $v_30))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $x_82) (local.get $a_2) (local.get $v_30))
       )
       (func $v_68 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -318,7 +318,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_98 (struct.new $rt/types.wat:Closure (ref.func $v_93) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_11) (local.get $v_10)))
         (local.set $v_115 (struct.new $rt/types.wat:Closure (ref.func $v_108) (local.get $:caps_arg)))
-        (return_call $rt/protocols.wat:is_rec_like (local.get $v_9) (local.get $v_115) (local.get $v_98))
+        (return_call $rt/protocols.wat:rt/protocols.wat:is_rec_like (local.get $v_9) (local.get $v_115) (local.get $v_98))
       )
       (func $v_59 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -339,7 +339,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $v_26_fn (struct.new $rt/types.wat:Closure (ref.func $v_26) (local.get $:caps_arg)))
         (local.set $:caps_arg (ref.null $rt/types.wat:Captures))
-        (local.set $v_panic_clo (struct.new $rt/types.wat:Closure (ref.func $rt/protocols.wat:panic) (local.get $:caps_arg)))
+        (local.set $v_panic_clo (struct.new $rt/types.wat:Closure (ref.func $rt/protocols.wat:rt/protocols.wat:panic) (local.get $:caps_arg)))
         (local.set $:args (call $std/list.wat:args_empty))
         (local.set $:args (call $std/list.wat:args_prepend (local.get $v_7) (local.get $:args)))
         (local.set $:args (call $std/list.wat:args_prepend (local.get $v_panic_clo) (local.get $:args)))
@@ -378,5 +378,5 @@ test 'top-level rec destructure then fn using binding', fn:
       (export "foo" (global $foo))
       (data $d_0 "x")
     )
-    ;; sm:SoAlALoBAL4BAJQBAJoBAJIBATQFiggAugEAvgEAlAEBMQFOAK4BAMIBARoDUgBSAG4AvgEA_gQAugEAvgEAbgCGBgC6AQDAAQCUAQCaAQCUAQBuALwBAL4HALoBAMABAMABAJQBALIBAMYBARsNgAEBAA3uBwCUAQCaAQCUAQCaAQCSAQCwAQDCAQDUAQDGAQEADYoKALoBAL4BAJIBALABAMIBAHoAyAEAegD0AQBuALoBAMoBALwBAJYFAJQBAQwHYgECAX4BBgKGAQEFBb4HAJIBAK4BAMoBAHoAyAEAbgDEAQA
+    ;; sm:SswmALoBAL4BAJQBAJoBAJIBATQFrAgAugEAvgEAlAEBMQFOAK4BAMIBARoDUgBSAG4AvgEA_gQAugEAvgEAbgCGBgC6AQDAAQCUAQCaAQCUAQBuALwBAL4HALoBAMABAMABAJQBALIBAMYBARsNgAEBAA3uBwCUAQCaAQCUAQCaAQCSAQCwAQDCAQDUAQDGAQEADawKALoBAL4BAJIBALABAMIBAHoAyAEAegCWAgBuALoBAMoBALwBAJYFAJQBAQwHYgECAX4BBgKGAQEFBb4HAJIBAK4BAMoBAHoAyAEAbgDEAQA
 

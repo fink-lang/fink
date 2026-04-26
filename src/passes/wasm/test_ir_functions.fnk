@@ -22,7 +22,7 @@ test 'user fn call', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_4 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_5 (ref null any))
         (local $a_1 (ref null any))
@@ -32,7 +32,7 @@ test 'user fn call', fn:
         (local.set $a_1 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $b_2 (call $std/list.wat:args_head (local.get $:params)))
-        (return_call $rt/protocols.wat:op_plus (local.get $a_1) (local.get $b_2) (local.get $v_5))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $a_1) (local.get $b_2) (local.get $v_5))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -57,7 +57,7 @@ test 'user fn call', fn:
       (global $add (mut (ref null any)) (ref.null any))
       (export "add" (global $add))
     )
-    ;; sm:EdQXAJIBAJoBAJIBAJoBAJIBASIF6AYAkgEAegEhA8IBAFIBNgGGAQEGAYYBAG4AvAEAvAEAugEA
+    ;; sm:EZgYAJIBAJoBAJIBAJoBAJIBASIFigcAkgEAegEhA8IBAFIBNgGGAQEGAYYBAG4AvAEAvAEAugEA
 
 
 test 'chained fn calls', fn:
@@ -84,8 +84,8 @@ test 'chained fn calls', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "op_mul" (func $rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_mul" (func $rt/protocols.wat:rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_6 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_7 (ref null any))
         (local $x_3 (ref null any))
@@ -94,7 +94,7 @@ test 'chained fn calls', fn:
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $x_3 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_9 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (return_call $rt/protocols.wat:op_mul (local.get $x_3) (local.get $v_9) (local.get $v_7))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_mul (local.get $x_3) (local.get $v_9) (local.get $v_7))
       )
       (func $v_14 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_15 (ref null any))
@@ -104,7 +104,7 @@ test 'chained fn calls', fn:
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $x_4 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_17 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $rt/protocols.wat:op_plus (local.get $x_4) (local.get $v_17) (local.get $v_15))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $x_4) (local.get $v_17) (local.get $v_15))
       )
       (func $v_50 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -171,7 +171,7 @@ test 'chained fn calls', fn:
       (global $inc (mut (ref null any)) (ref.null any))
       (export "inc" (global $inc))
     )
-    ;; sm:Ka4ZAJIBAJoBAJIBASoBhAEBBwXeBACUAQCaAQCSAQEwAYYBAQcF2AYAugEAwgEAvgEAlAEBDgFOAEoAbgC6AQC8AQCoBQCUAQBiARYBhgEAbgC8AQC8AQCUCgCSAQB6AW0GyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
+    ;; sm:KbYaAJIBAJoBAJIBASoBhAEBBwWABQCUAQCaAQCSAQEwAYYBAQcF-gYAugEAwgEAvgEAlAEBDgFOAEoAbgC6AQC8AQCoBQCUAQBiARYBhgEAbgC8AQC8AQCUCgCSAQB6AW0GyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
 
 
 test 'pipe unary', fn:
@@ -197,8 +197,8 @@ test 'pipe unary', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "op_mul" (func $rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_mul" (func $rt/protocols.wat:rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_5 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_6 (ref null any))
         (local $x_2 (ref null any))
@@ -207,7 +207,7 @@ test 'pipe unary', fn:
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $x_2 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_8 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (return_call $rt/protocols.wat:op_mul (local.get $x_2) (local.get $v_8) (local.get $v_6))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_mul (local.get $x_2) (local.get $v_8) (local.get $v_6))
       )
       (func $v_13 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_14 (ref null any))
@@ -217,7 +217,7 @@ test 'pipe unary', fn:
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $x_3 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_16 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $rt/protocols.wat:op_plus (local.get $x_3) (local.get $v_16) (local.get $v_14))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $x_3) (local.get $v_16) (local.get $v_14))
       )
       (func $v_44 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -279,7 +279,7 @@ test 'pipe unary', fn:
       (global $inc (mut (ref null any)) (ref.null any))
       (export "inc" (global $inc))
     )
-    ;; sm:J64ZAJIBAJoBAJIBASoBhAEBBwXeBACUAQCaAQCSAQEwAYYBAQcFmAYAugEAwgEAvgEAlAEAbgC8AQC8AQCoBQCUAQBiAQ4BhgEAbgC8AQC8AQCUCgCSAQB6AVcGyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
+    ;; sm:J7YaAJIBAJoBAJIBASoBhAEBBwWABQCUAQCaAQCSAQEwAYYBAQcFugYAugEAwgEAvgEAlAEAbgC8AQC8AQCoBQCUAQBiAQ4BhgEAbgC8AQC8AQCUCgCSAQB6AVcGyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
 
 
 test 'match literal first arm', fn:
@@ -302,7 +302,7 @@ test 'match literal first arm', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_25 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_21 (ref null any))
         (local $v_22 (ref null any))
@@ -368,7 +368,7 @@ test 'match literal first arm', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_7) (local.get $v_8)))
         (local.set $v_129 (struct.new $rt/types.wat:Closure (ref.func $v_122) (local.get $:caps_arg)))
         (local.set $v_10 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $rt/protocols.wat:op_eq (local.get $v_6) (local.get $v_10) (local.get $v_129))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_eq (local.get $v_6) (local.get $v_10) (local.get $v_129))
       )
       (func $v_37 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -485,7 +485,7 @@ test 'match literal first arm', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:WtYXAJQBARwCiAEAbgC8AQC4BgC6AQC-AQB6AMgBAG4AvAEAygcAugEAwAEAwAEAlAEAhAEAfACQCwCSAQCaAQCSAQCaAQCSAQDQAQDGAQEFAYYBAQABkAgAkgEAmgEAkgEAmgEAkgEArgEAwgEAegDIAQBuALoBALoBALwBANwEAJQBARYCiAEAbgC8AQDSBgCUAQCaAQCUAQCaAQCUAQB6AMgBAG4AvAEAlgMApgcAugEAvgEAvgEAegDIAQB6AMwBAG4AvAEAxAEAvAEAygcAlAEAmgEAlAEA1AEAwgEAegDIAQBuALwBALwBALwBAKAGAJIBAHoAyAEBHwGEAQBuALoBALoBAA
+    ;; sm:WpoYAJQBARwCiAEAbgC8AQC4BgC6AQC-AQB6AMgBAG4AvAEAygcAugEAwAEAwAEAlAEAhAEAfACQCwCSAQCaAQCSAQCaAQCSAQDQAQDGAQEFAYYBAQABsggAkgEAmgEAkgEAmgEAkgEArgEAwgEAegDIAQBuALoBALoBALwBANwEAJQBARYCiAEAbgC8AQDSBgCUAQCaAQCUAQCaAQCUAQB6AMgBAG4AvAEAlgMApgcAugEAvgEAvgEAegDIAQB6AMwBAG4AvAEAxAEAvAEAygcAlAEAmgEAlAEA1AEAwgEAegDIAQBuALwBALwBALwBAKAGAJIBAHoAyAEBHwGEAQBuALoBALoBAA
 
 
 test 'match with binding', fn:
@@ -509,8 +509,8 @@ test 'match with binding', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_27 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_23 (ref null any))
         (local $v_24 (ref null any))
@@ -576,7 +576,7 @@ test 'match with binding', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_9) (local.get $v_10)))
         (local.set $v_163 (struct.new $rt/types.wat:Closure (ref.func $v_156) (local.get $:caps_arg)))
         (local.set $v_12 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $rt/protocols.wat:op_eq (local.get $v_8) (local.get $v_12) (local.get $v_163))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_eq (local.get $v_8) (local.get $v_12) (local.get $v_163))
       )
       (func $v_39 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_5 (ref null any))
@@ -611,7 +611,7 @@ test 'match with binding', fn:
         (local.set $x_88 (array.get $rt/types.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_44 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_46 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $rt/protocols.wat:op_plus (local.get $x_88) (local.get $v_46) (local.get $v_44))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $x_88) (local.get $v_46) (local.get $v_44))
       )
       (func $v_99 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -725,7 +725,7 @@ test 'match with binding', fn:
       (global $x (mut (ref null any)) (ref.null any))
       (export "x" (global $x))
     )
-    ;; sm:abQZAJQBASgBhgEAbgC8AQC8BgC6AQDAAQB6AMgBAG4AvgEAygcAugEAwAEAwAEAlAEAhAEAfACSCwCSAQCaAQCUAQCaAQCSAQDSAQDGAQEFAYYBAQABkggAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAMQFALoBAL4BAJQBARwBhgEBBwXaBgC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAJIDALYGALoBAMABAMABAMABAHoAzAEAbgC-AQDEAQC-AQD4CAC6AQDAAQCUAQCaAQCUAQD6AQDGAQB6AMgBAG4AvAEAvgEAvAEA-ggAugEAwAEAwAEAlAEAsAEAxAEAsgEAxgEAbgC-AQC-AQDWBwCSAQE1AYQBAEoA0AEAxgEArgEAzAEAbgDGAQA
+    ;; sm:abwaAJQBASgBhgEAbgC8AQC8BgC6AQDAAQB6AMgBAG4AvgEAygcAugEAwAEAwAEAlAEAhAEAfACSCwCSAQCaAQCUAQCaAQCSAQDSAQDGAQEFAYYBAQABtAgAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAMQFALoBAL4BAJQBARwBhgEBBwX8BgC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAJIDALYGALoBAMABAMABAMABAHoAzAEAbgC-AQDEAQC-AQD4CAC6AQDAAQCUAQCaAQCUAQD6AQDGAQB6AMgBAG4AvAEAvgEAvAEA-ggAugEAwAEAwAEAlAEAsAEAxAEAsgEAxgEAbgC-AQC-AQDWBwCSAQE1AYQBAEoA0AEAxgEArgEAzAEAbgDGAQA
 
 
 test 'simple recursion', fn:
@@ -751,8 +751,8 @@ test 'simple recursion', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_minus" (func $rt/protocols.wat:op_minus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_minus" (func $rt/protocols.wat:rt/protocols.wat:op_minus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_29 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_25 (ref null any))
         (local $v_26 (ref null any))
@@ -818,7 +818,7 @@ test 'simple recursion', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_11) (local.get $v_12)))
         (local.set $v_183 (struct.new $rt/types.wat:Closure (ref.func $v_176) (local.get $:caps_arg)))
         (local.set $v_14 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $rt/protocols.wat:op_eq (local.get $v_10) (local.get $v_14) (local.get $v_183))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_eq (local.get $v_10) (local.get $v_14) (local.get $v_183))
       )
       (func $v_41 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_7 (ref null any))
@@ -872,7 +872,7 @@ test 'simple recursion', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_46)))
         (local.set $v_128 (struct.new $rt/types.wat:Closure (ref.func $v_123) (local.get $:caps_arg)))
         (local.set $v_49 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $rt/protocols.wat:op_minus (local.get $n_104) (local.get $v_49) (local.get $v_128))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_minus (local.get $n_104) (local.get $v_49) (local.get $v_128))
       )
       (func $v_116 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -984,7 +984,7 @@ test 'simple recursion', fn:
       (global $recurse (mut (ref null any)) (ref.null any))
       (export "recurse" (global $recurse))
     )
-    ;; sm:c7gZAJQBAUQCiAEAbgC8AQC8BgC6AQDAAQB6AMgBAG4AvgEAygcAugEAwAEAwAEAlAEAhAEAfACWCwCUAQCaAQCUAQCaAQCUAQDUAQDGAQEFAYYBAQABlAgAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAJgGALoBAMABAJQBAGQAbgC8AQC-AQCEBwC6AQDAAQCUAQCwAQDGAQEyAYYBAQcF4gYAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQCSAwC2BgC6AQDAAQDAAQDAAQB6AMwBAG4AvgEAxAEAvgEA-AgAugEAwAEAlAEAmgEAlAEA-gEAxgEAegDIAQBuALwBAL4BALwBAPgIAJIBAJoBAJIBAK4BAMYBALIBAMYBALIBAMYBAG4AugEAugEAogYAkgEAegFnB8oBAGIBhAEBhgEAbgC8AQC6AQA
+    ;; sm:c8AaAJQBAUQCiAEAbgC8AQC8BgC6AQDAAQB6AMgBAG4AvgEAygcAugEAwAEAwAEAlAEAhAEAfACWCwCUAQCaAQCUAQCaAQCUAQDUAQDGAQEFAYYBAQABtggAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAJgGALoBAMABAJQBAGQAbgC8AQC-AQCEBwC6AQDAAQCUAQCwAQDGAQEyAYYBAQcFhAcAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQCSAwC2BgC6AQDAAQDAAQDAAQB6AMwBAG4AvgEAxAEAvgEA-AgAugEAwAEAlAEAmgEAlAEA-gEAxgEAegDIAQBuALwBAL4BALwBAPgIAJIBAJoBAJIBAK4BAMYBALIBAMYBALIBAMYBAG4AugEAugEAogYAkgEAegFnB8oBAGIBhAEBhgEAbgC8AQC6AQA
 
 
 test 'mutual recursion — ping pong', fn:
@@ -1490,7 +1490,7 @@ test 'closure construction and call', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_52 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $x_53 (ref null any))
@@ -1501,7 +1501,7 @@ test 'closure construction and call', fn:
         (local.set $v_8 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $:params (call $std/list.wat:args_tail (local.get $:params)))
         (local.set $y_3 (call $std/list.wat:args_head (local.get $:params)))
-        (return_call $rt/protocols.wat:op_plus (local.get $x_53) (local.get $y_3) (local.get $v_8))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $x_53) (local.get $y_3) (local.get $v_8))
       )
       (func $v_5 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_6 (ref null any))
@@ -1576,7 +1576,7 @@ test 'closure construction and call', fn:
       (global $add (mut (ref null any)) (ref.null any))
       (export "add" (global $add))
     )
-    ;; sm:KsIYALoBAL4BAJIBAJoBAJIBASgFmgYAkgEAmgEAkgEArgEAyAEAbgDCAQDGBgC6AQC-AQCUAQEMBFQAVgEkAYYBAG4AvAEAvAEAqAUAlAEAXAENAYYBAG4AvAEAvAEA2AgAkgEAegFJA8IBAFIArgEAygEAegDIAQBuAMQBAA
+    ;; sm:KoYZALoBAL4BAJIBAJoBAJIBASgFvAYAkgEAmgEAkgEArgEAyAEAbgDCAQDGBgC6AQC-AQCUAQEMBFQAVgEkAYYBAG4AvAEAvAEAqAUAlAEAXAENAYYBAG4AvAEAvAEA2AgAkgEAegFJA8IBAFIArgEAygEAegDIAQBuAMQBAA
 
 
 # TODO, duplicate?
@@ -1604,10 +1604,10 @@ test 'recursive list sum', fn:
       (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "op_empty" (func $rt/protocols.wat:op_empty (type $rt/protocols.wat:Fn_op_unary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_empty" (func $rt/protocols.wat:rt/protocols.wat:op_empty (type $rt/protocols.wat:Fn_op_unary)))
       (import "std/list.wat" "seq_prepend" (func $std/list.wat:seq_prepend (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "is_seq_like" (func $rt/protocols.wat:is_seq_like (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:is_seq_like" (func $rt/protocols.wat:rt/protocols.wat:is_seq_like (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/list.wat" "seq_pop" (func $std/list.wat:seq_pop (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_195 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -1683,7 +1683,7 @@ test 'recursive list sum', fn:
         (local.set $v_18 (local.get $v_26))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_359) (local.get $v_361)))
         (local.set $v_407 (struct.new $rt/types.wat:Closure (ref.func $v_400) (local.get $:caps_arg)))
-        (return_call $rt/protocols.wat:op_empty (local.get $v_18) (local.get $v_407))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_empty (local.get $v_18) (local.get $v_407))
       )
       (func $v_33 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_14 (ref null any))
@@ -1702,7 +1702,7 @@ test 'recursive list sum', fn:
         (local.set $v_324 (struct.new $rt/types.wat:Closure (ref.func $v_319) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_14) (local.get $v_15)))
         (local.set $v_365 (struct.new $rt/types.wat:Closure (ref.func $v_358) (local.get $:caps_arg)))
-        (return_call $rt/protocols.wat:is_seq_like (local.get $v_13) (local.get $v_365) (local.get $v_324))
+        (return_call $rt/protocols.wat:rt/protocols.wat:is_seq_like (local.get $v_13) (local.get $v_365) (local.get $v_324))
       )
       (func $v_218 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -1767,7 +1767,7 @@ test 'recursive list sum', fn:
         (local.set $rest_4 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_80) (local.get $rest_4)))
         (local.set $v_283 (struct.new $rt/types.wat:Closure (ref.func $v_276) (local.get $:caps_arg)))
-        (return_call $rt/protocols.wat:op_plus (local.get $c_244) (local.get $a_3) (local.get $v_283))
+        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $c_244) (local.get $a_3) (local.get $v_283))
       )
       (func $v_310 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -1851,7 +1851,7 @@ test 'recursive list sum', fn:
         (local.set $v_396 (struct.new $rt/types.wat:Closure (ref.func $v_391) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_58) (local.get $v_57)))
         (local.set $v_440 (struct.new $rt/types.wat:Closure (ref.func $v_433) (local.get $:caps_arg)))
-        (return_call $rt/protocols.wat:is_seq_like (local.get $v_56) (local.get $v_440) (local.get $v_396))
+        (return_call $rt/protocols.wat:rt/protocols.wat:is_seq_like (local.get $v_56) (local.get $v_440) (local.get $v_396))
       )
       (func $v_269 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -2065,7 +2065,7 @@ test 'recursive list sum', fn:
       (global $sum (mut (ref null any)) (ref.null any))
       (export "sum" (global $sum))
     )
-    ;; sm:5gHuIAC6AQDAAQCUAQBuAL4BAMYFALoBAMABAMABAG4AvgEAhAUAugEAwAEAbgDGBwC6AQDAAQDAAQCUAQCEAQB8AIYMALoBAMABAMABAJQBAUwCUADYAQDGAQEAArQHAJQBAJoBAJQBAJoBAJQBALABAMYBANQBAMYBAQAC1gkAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEAxgEAegDIAQBuALoBALwBAL4BAOIGALoBAMABAMYBAJQBAFwAbgC8AQDEAQC-AQDIBwC6AQDAAQCUAQCaAQCSAQCaAQCYAQDYAQDGAQFCBeYHALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQCEBQC6AQDAAQBuAMoGALoBAMABAJQBAJoBAJQBAQsLUABuALwBALwBAPwGALoBAMABAMABAJQBALIBAMYBAQAL0AcAlAEAmgEAlAEAmgEAlAEAsAEAxgEA1AEAxgEBAAvYCQC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDGAQB6AMgBAG4AvAEAvAEAvgEAlgMAtgYAugEAwAEAwAEAwAEAegDMAQBuAL4BAMQBAL4BAIYIALoBAMABAMABAJYBAJoBAJYBAP4BAMYBAG4AvgEAvgEAvgEAqAwAkgEAmgEAmgEAmgEAkgEArgEAxgEAsgEAxgEArgEAxgEAsgEAxgEA2AEAxgEAbgDCAQC6AQDUBgC6AQDEAQDAAQCWAQFgAYgBAG4AvgEAvgEAvgEAygcAugEAxAEAwAEAlgEA3AEAxgEBGQGIAQEAAd4HALoBAMQBAMABAJYBANwBAMYBAQYBiAEBAAHeBwC6AQDEAQDAAQCWAQDcAQDGAQEGAYgBAQAB9gQAlgEBBgGIAQETDG4BFAHqCACSAQB6AbcBA8IBAFIA1AEAzgEAegDMAQBuAMYBAA
+    ;; sm:5gG6IgC6AQDAAQCUAQBuAL4BAMYFALoBAMABAMABAG4AvgEAhAUAugEAwAEAbgDGBwC6AQDAAQDAAQCUAQCEAQB8AIYMALoBAMABAMABAJQBAUwCUADYAQDGAQEAAtYHAJQBAJoBAJQBAJoBAJQBALABAMYBANQBAMYBAQAC-AkAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEAxgEAegDIAQBuALoBALwBAL4BAOIGALoBAMABAMYBAJQBAFwAbgC8AQDEAQC-AQDIBwC6AQDAAQCUAQCaAQCSAQCaAQCYAQDYAQDGAQFCBYgIALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQCEBQC6AQDAAQBuAMoGALoBAMABAJQBAJoBAJQBAQsLUABuALwBALwBAPwGALoBAMABAMABAJQBALIBAMYBAQAL0AcAlAEAmgEAlAEAmgEAlAEAsAEAxgEA1AEAxgEBAAv6CQC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDGAQB6AMgBAG4AvAEAvAEAvgEAlgMAtgYAugEAwAEAwAEAwAEAegDMAQBuAL4BAMQBAL4BAIYIALoBAMABAMABAJYBAJoBAJYBAP4BAMYBAG4AvgEAvgEAvgEAqAwAkgEAmgEAmgEAmgEAkgEArgEAxgEAsgEAxgEArgEAxgEAsgEAxgEA2AEAxgEAbgDCAQC6AQDUBgC6AQDEAQDAAQCWAQFgAYgBAG4AvgEAvgEAvgEAygcAugEAxAEAwAEAlgEA3AEAxgEBGQGIAQEAAd4HALoBAMQBAMABAJYBANwBAMYBAQYBiAEBAAHeBwC6AQDEAQDAAQCWAQDcAQDGAQEGAYgBAQAB9gQAlgEBBgGIAQETDG4BFAHqCACSAQB6AbcBA8IBAFIA1AEAzgEAegDMAQBuAMYBAA
 
 
 QDGAQEGAYgBAQAB9gQAlgEBBgGIAQETDG4BFAHqCACSAQB6AbcBA8IBAFIA1AEAzgEAegDMAQBuAMYBAA

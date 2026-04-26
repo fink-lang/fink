@@ -152,7 +152,7 @@
       (loop $scan
         (br_if $not_found
           (i32.ge_u (local.get $i) (local.get $len)))
-        (if (call $deep_eq
+        (if (call $rt/protocols.wat:deep_eq
               (struct.get $HamtLeaf $key
                 (ref.cast (ref $HamtLeaf)
                   (array.get $HamtChildren
@@ -231,7 +231,7 @@
         ;; if child is a leaf, check key equality
         (if (ref.test (ref $HamtLeaf) (local.get $child))
           (then
-            (if (call $deep_eq
+            (if (call $rt/protocols.wat:deep_eq
                   (struct.get $HamtLeaf $key
                     (ref.cast (ref $HamtLeaf) (local.get $child)))
                   (local.get $key))
@@ -473,7 +473,7 @@
     (if (ref.test (ref $HamtLeaf) (local.get $child))
       (then
         ;; same key — replace value
-        (if (call $deep_eq
+        (if (call $rt/protocols.wat:deep_eq
               (struct.get $HamtLeaf $key
                 (ref.cast (ref $HamtLeaf) (local.get $child)))
               (local.get $key))
@@ -756,7 +756,7 @@
       (then
         ;; key mismatch — return unchanged
         (if (i32.eqz
-              (call $deep_eq
+              (call $rt/protocols.wat:deep_eq
                 (struct.get $HamtLeaf $key
                   (ref.cast (ref $HamtLeaf) (local.get $child)))
                 (local.get $key)))
@@ -1035,7 +1035,7 @@
       (then
         ;; key mismatch — absent
         (if (i32.eqz
-              (call $deep_eq
+              (call $rt/protocols.wat:deep_eq
                 (struct.get $HamtLeaf $key
                   (ref.cast (ref $HamtLeaf) (local.get $child)))
                 (local.get $key)))

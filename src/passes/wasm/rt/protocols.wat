@@ -23,7 +23,7 @@
   ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)
   ;; =========================================================================
 
-  (func $op_plus (export "op_plus")
+  (func $rt/protocols.wat:op_plus (export "rt/protocols.wat:op_plus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (struct.new $Num (f64.add
@@ -31,7 +31,7 @@
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_minus (export "op_minus")
+  (func $rt/protocols.wat:op_minus (export "rt/protocols.wat:op_minus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (struct.new $Num (f64.sub
@@ -39,7 +39,7 @@
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_mul (export "op_mul")
+  (func $rt/protocols.wat:op_mul (export "rt/protocols.wat:op_mul")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (struct.new $Num (f64.mul
@@ -47,7 +47,7 @@
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_div (export "op_div")
+  (func $rt/protocols.wat:op_div (export "rt/protocols.wat:op_div")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (struct.new $Num (f64.div
@@ -59,7 +59,7 @@
   ;; Integer arithmetic: unbox $Num → f64 → i64, op, i64 → f64 → box
   ;; =========================================================================
 
-  (func $op_intdiv (export "op_intdiv")
+  (func $rt/protocols.wat:op_intdiv (export "rt/protocols.wat:op_intdiv")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (call $int_op_div
@@ -67,7 +67,7 @@
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
-  (func $op_rem (export "op_rem")
+  (func $rt/protocols.wat:op_rem (export "rt/protocols.wat:op_rem")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (call $int_op_rem
@@ -75,7 +75,7 @@
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
-  (func $op_intmod (export "op_intmod")
+  (func $rt/protocols.wat:op_intmod (export "rt/protocols.wat:op_intmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (call $int_op_mod
@@ -91,7 +91,7 @@
   ;;   i31ref  → ref.eq (identity — fine for small ints and booleans)
   ;;   $Num    → f64.eq
   ;;   $Str → str_op_eq
-  (func $deep_eq
+  (func $rt/protocols.wat:deep_eq
     (param $a (ref eq)) (param $b (ref eq)) (result i32)
 
     ;; Try $Num
@@ -119,7 +119,7 @@
   ;; Polymorphic ==: dispatch on $a's type.
   ;;   $Num    → f64.eq
   ;;   $Str → str_op_eq
-  (func $op_eq (export "op_eq")
+  (func $rt/protocols.wat:op_eq (export "rt/protocols.wat:op_eq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $Num
@@ -152,7 +152,7 @@
   ;; Polymorphic !=: dispatch on $a's type.
   ;;   $Num    → f64.ne
   ;;   $Str → !str_op_eq
-  (func $op_neq (export "op_neq")
+  (func $rt/protocols.wat:op_neq (export "rt/protocols.wat:op_neq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $Num
@@ -182,7 +182,7 @@
 
     (unreachable))
 
-  (func $op_lt (export "op_lt")
+  (func $rt/protocols.wat:op_lt (export "rt/protocols.wat:op_lt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (ref.i31 (f64.lt
@@ -190,7 +190,7 @@
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_lte (export "op_lte")
+  (func $rt/protocols.wat:op_lte (export "rt/protocols.wat:op_lte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (ref.i31 (f64.le
@@ -198,7 +198,7 @@
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_gt (export "op_gt")
+  (func $rt/protocols.wat:op_gt (export "rt/protocols.wat:op_gt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (ref.i31 (f64.gt
@@ -206,7 +206,7 @@
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_gte (export "op_gte")
+  (func $rt/protocols.wat:op_gte (export "rt/protocols.wat:op_gte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $apply_1
       (ref.i31 (f64.ge
@@ -218,7 +218,7 @@
   ;; Logic / bitwise: polymorphic — $Num → integer bitwise, i31ref → boolean
   ;; =========================================================================
 
-  (func $op_not (export "op_not")
+  (func $rt/protocols.wat:op_not (export "rt/protocols.wat:op_not")
     (param $a (ref null any)) (param $cont (ref null any))
 
     ;; Try $Num → delegate to int_op_not
@@ -236,7 +236,7 @@
       (ref.i31 (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $a)))))
       (local.get $cont)))
 
-  (func $op_and (export "op_and")
+  (func $rt/protocols.wat:op_and (export "rt/protocols.wat:op_and")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $Num → delegate to int_op_and
@@ -256,7 +256,7 @@
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_or (export "op_or")
+  (func $rt/protocols.wat:op_or (export "rt/protocols.wat:op_or")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $Num → delegate to int_op_or
@@ -276,7 +276,7 @@
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
       (local.get $cont)))
 
-  (func $op_xor (export "op_xor")
+  (func $rt/protocols.wat:op_xor (export "rt/protocols.wat:op_xor")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $Num → delegate to int_op_xor
@@ -301,7 +301,7 @@
   ;; =========================================================================
 
   ;; is_seq_like(val, succ, fail): succ(val) if $List, else fail()
-  (func $is_seq_like (export "is_seq_like")
+  (func $rt/protocols.wat:is_seq_like (export "rt/protocols.wat:is_seq_like")
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
     (block $not_seq
       (block $is_seq (result (ref $List))
@@ -313,7 +313,7 @@
     (return_call $apply_0 (local.get $fail)))
 
   ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
-  (func $is_rec_like (export "is_rec_like")
+  (func $rt/protocols.wat:is_rec_like (export "rt/protocols.wat:is_rec_like")
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
     (block $not_rec
       (block $is_rec (result (ref $Rec))
@@ -332,7 +332,7 @@
   ;;   null     → true (always empty)
   ;;   $List    → list_op_empty
   ;;   $Rec     → rec_op_empty
-  (func $op_empty (export "op_empty")
+  (func $rt/protocols.wat:op_empty (export "rt/protocols.wat:op_empty")
     (param $val (ref null any)) (param $cont (ref null any))
 
     ;; null = empty
@@ -371,7 +371,7 @@
   ;; =========================================================================
 
   ;; op_in(val, container, cont) → bool
-  (func $op_in (export "op_in")
+  (func $rt/protocols.wat:op_in (export "rt/protocols.wat:op_in")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
@@ -405,7 +405,7 @@
     (unreachable))
 
   ;; op_notin(val, container, cont) → bool
-  (func $op_notin (export "op_notin")
+  (func $rt/protocols.wat:op_notin (export "rt/protocols.wat:op_notin")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
@@ -445,7 +445,7 @@
   ;; op_dot(container, key, cont) → val
   ;;   $Str → str_op_dot
   ;;   $Rec → rec_op_dot
-  (func $op_dot (export "op_dot")
+  (func $rt/protocols.wat:op_dot (export "rt/protocols.wat:op_dot")
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     ;; Try $Str
@@ -483,7 +483,7 @@
   ;;   $Channel on a     → channel_op_shr(a, b, cont)  [ch << msg]
   ;;   otherwise         → int_op_shl(a, b)  [numeric shift]
   ;; NB: $HostChannel check must come before $Channel (subtype).
-  (func $op_shl (export "op_shl")
+  (func $rt/protocols.wat:op_shl (export "rt/protocols.wat:op_shl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $HostChannel on a → host channel send
@@ -526,7 +526,7 @@
   ;;   $Channel on b     → channel_op_shr(b, a, cont)  [msg >> ch]
   ;;   otherwise         → int_op_shr(a, b)  [numeric shift]
   ;; NB: $HostChannel check must come before $Channel (subtype).
-  (func $op_shr (export "op_shr")
+  (func $rt/protocols.wat:op_shr (export "rt/protocols.wat:op_shr")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     ;; Try $HostChannel on b → host channel send
@@ -569,7 +569,7 @@
   ;;   $HostChannel → interop_channel_recv(ch, cont)
   ;;   $Channel     → channel_receive(ch, cont)
   ;; NB: $HostChannel check must come before $Channel (subtype).
-  (func $receive (export "receive")
+  (func $rt/protocols.wat:receive (export "rt/protocols.wat:receive")
     (param $ch (ref null any)) (param $cont (ref null any))
 
     ;; Try $HostChannel → host channel receive
@@ -595,7 +595,7 @@
 
   ;; op_read(stream, size, cont):
   ;;   Dispatches to interop_op_read for host channels.
-  (func $op_read (export "op_read")
+  (func $rt/protocols.wat:op_read (export "rt/protocols.wat:op_read")
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
@@ -618,7 +618,7 @@
   ;; Delegates to $interop_panic, which calls into the host to trap the
   ;; instance with a diagnostic message. Today panic carries no payload —
   ;; future work will pass a reason / source location for better diagnostics.
-  (func $panic (export "panic")
+  (func $rt/protocols.wat:panic (export "rt/protocols.wat:panic")
     (param $_caps (ref null any))
     (param $_args (ref null any))
     (return_call $interop_panic))
