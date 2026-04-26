@@ -361,7 +361,7 @@
             (local.get $val))))
       (drop)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/rec.wat:op_empty (local.get $val)))
+        (ref.i31 (call $std/dict.wat:op_empty (local.get $val)))
         (local.get $cont)))
 
     (unreachable))
@@ -397,7 +397,7 @@
             (local.get $b))))
       (local.set $rec)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/rec.wat:op_in
+        (ref.i31 (call $std/dict.wat:op_in
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
@@ -431,7 +431,7 @@
             (local.get $b))))
       (local.set $rec)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/rec.wat:op_not_in
+        (ref.i31 (call $std/dict.wat:op_not_in
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
@@ -467,7 +467,7 @@
           (br_on_cast $is_rec (ref null any) (ref $RecImpl)
             (local.get $container))))
       (drop)
-      (return_call $std/rec.wat:op_dot
+      (return_call $std/dict.wat:op_dot
         (local.get $container)
         (local.get $key)
         (local.get $cont)))

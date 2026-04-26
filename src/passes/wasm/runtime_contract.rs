@@ -463,7 +463,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpDot           => ("rt/protocols.wat", "std/operators.fnk:op_dot"),
     Sym::OpEmpty         => ("rt/protocols.wat", "std/operators.fnk:op_empty"),
     Sym::SeqPrepend      => ("std/list.wat", "std/seq.fnk:prepend"),
-    Sym::RecMerge        => ("std/rec.wat", "std/rec.wat:merge"),
+    Sym::RecMerge        => ("std/dict.wat", "std/dict.wat:merge"),
     Sym::IsSeqLike       => ("rt/protocols.wat", "std/operators.fnk:is_seq_like"),
     Sym::IsRecLike       => ("rt/protocols.wat", "std/operators.fnk:is_rec_like"),
     Sym::SeqPop          => ("std/list.wat", "std/seq.fnk:pop"),
@@ -476,10 +476,10 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Await           => ("std/async.wat", "std/async.wat:await"),
     Sym::Channel         => ("std/channel.wat", "std/channel.wat:channel"),
     Sym::Receive         => ("rt/protocols.wat", "std/channels.fnk:receive"),
-    Sym::RecPut          => ("std/rec.wat", "std/rec.wat:set"),
-    Sym::RecPop          => ("std/rec.wat", "std/rec.wat:pop"),
-    Sym::RecEmpty        => ("std/rec.wat", "std/rec.wat:rec_new"),
-    Sym::RecSetField     => ("std/rec.wat", "std/rec.wat:_rec_set_field"),
+    Sym::RecPut          => ("std/dict.wat", "std/dict.wat:set"),
+    Sym::RecPop          => ("std/dict.wat", "std/dict.wat:pop"),
+    Sym::RecEmpty        => ("std/dict.wat", "std/dict.wat:rec_new"),
+    Sym::RecSetField     => ("std/dict.wat", "std/dict.wat:_rec_set_field"),
     Sym::Panic           => ("rt/protocols.wat", "std/interop.fnk:panic"),
   }
 }
@@ -743,7 +743,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
       let s = ty_func(frag,
         vec![],
         vec![anyref_n.clone()],
-        "std/rec.wat:Fn_rec_new");
+        "std/dict.wat:Fn_rec_new");
       rt.fn_nil_to_list = Some(s);
       s
     };
@@ -758,7 +758,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
       let s = ty_func(frag,
         vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
         vec![anyref_n.clone()],
-        "std/rec.wat:Fn_rec_set_field");
+        "std/dict.wat:Fn_rec_set_field");
       rt.fn_rec_set_field = Some(s);
       s
     };
