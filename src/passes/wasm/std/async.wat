@@ -24,11 +24,11 @@
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $std/scheduler.wat:_thunk_fn $std/scheduler.wat:_settle_fn $std/scheduler.wat:_spawn_task_fn)
+  (elem declare func $std/async.wat:_thunk_fn $std/async.wat:_settle_fn $std/async.wat:_spawn_task_fn)
 
   ;; -- Host import -------------------------------------------------------
 
-  (import "env" "host_resume" (func $std/scheduler.wat:host_resume))
+  (import "env" "host_resume" (func $std/async.wat:host_resume))
 
   ;; -- Task queue global -------------------------------------------------
 
@@ -38,7 +38,7 @@
   ;; -- Helpers -----------------------------------------------------------
 
   ;; Push a task to the back of the queue.
-  (func $std/scheduler.wat:queue_push (param $task (ref any))
+  (func $std/async.wat:queue_push (param $task (ref any))
     (global.set $task_queue
       (call $std/list.wat:concat
         (global.get $task_queue)
@@ -46,7 +46,7 @@
   )
 
   ;; Pop a task from the front of the queue. Traps if empty.
-  (func $std/scheduler.wat:queue_pop (result (ref any))
+  (func $std/async.wat:queue_pop (result (ref any))
     (local $cons (ref $Cons))
     (local.set $cons (ref.cast (ref $Cons) (global.get $task_queue)))
     (global.set $task_queue (struct.get $Cons $tail (local.get $cons)))
@@ -57,18 +57,18 @@
   ;; enqueuing work. When the queue empties, yields to the host
   ;; (host_resume) so it can process IO / settle host futures.
   ;; If the queue is still empty after host_resume, program is done.
-  (func $std/scheduler.wat:resume
+  (func $std/async.wat:resume
     (if (ref.test (ref $Nil) (global.get $task_queue))
       (then
-        (call $std/scheduler.wat:host_resume)
+        (call $std/async.wat:host_resume)
         (if (ref.test (ref $Nil) (global.get $task_queue))
           (then (return)))))
-    (return_call $rt/apply.wat:apply (struct.new $Nil) (call $std/scheduler.wat:queue_pop))
+    (return_call $rt/apply.wat:apply (struct.new $Nil) (call $std/async.wat:queue_pop))
   )
 
   ;; Make a thunk (zero-arg task closure) that calls cont with a value.
   ;; Captures: [cont, value]. When called: _apply([value], cont).
-  (func $std/scheduler.wat:_thunk_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+  (func $std/async.wat:_thunk_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $cont (ref any))
     (local $value (ref any))
@@ -80,15 +80,15 @@
       (local.get $cont))
   )
 
-  (func $std/scheduler.wat:make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
+  (func $std/async.wat:make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
     (struct.new $Closure
-      (ref.func $std/scheduler.wat:_thunk_fn)
+      (ref.func $std/async.wat:_thunk_fn)
       (array.new_fixed $Captures 2 (local.get $cont) (local.get $value)))
   )
 
   ;; Make a thunk that calls cont with unit (i31 0).
-  (func $std/scheduler.wat:make_unit_thunk (param $cont (ref any)) (result (ref $Closure))
-    (call $std/scheduler.wat:make_thunk (local.get $cont) (ref.i31 (i32.const 0)))
+  (func $std/async.wat:make_unit_thunk (param $cont (ref any)) (result (ref $Closure))
+    (call $std/async.wat:make_thunk (local.get $cont) (ref.i31 (i32.const 0)))
   )
 
 
@@ -98,15 +98,15 @@
   ;;   1. wrap cont as unit thunk, push to back of queue
   ;;   2. run next task
 
-  (func $std/scheduler.wat:yield (export "std/scheduler.wat:yield")
+  (func $std/async.wat:yield (export "std/async.wat:yield")
     (param $value (ref null any))
     (param $cont (ref null any))
 
     ;; Push current continuation as a unit thunk to back of queue.
-    (call $std/scheduler.wat:queue_push (call $std/scheduler.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
+    (call $std/async.wat:queue_push (call $std/async.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
 
     ;; Run next task.
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -121,7 +121,7 @@
 
   ;; The settle continuation — called when a spawned task produces a result.
   ;; Captures: [future]. Called via _apply with args list [result].
-  (func $std/scheduler.wat:_settle_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+  (func $std/async.wat:_settle_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
     (local $future (ref $Future))
     (local $result (ref any))
     (local.set $future (ref.cast (ref $Future)
@@ -131,13 +131,13 @@
     ;; Result is first element of args list.
     (local.set $result (struct.get $Cons $head
       (ref.cast (ref $Cons) (local.get $args))))
-    (call $std/scheduler.wat:settle (local.get $future) (local.get $result))
-    (return_call $std/scheduler.wat:resume)
+    (call $std/async.wat:settle (local.get $future) (local.get $result))
+    (return_call $std/async.wat:resume)
   )
 
   ;; The spawned task body — calls task_fn with the settle continuation.
   ;; Captures: [task_fn, settle_cont]. Called via _apply.
-  (func $std/scheduler.wat:_spawn_task_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+  (func $std/async.wat:_spawn_task_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
     (local $captures (ref $Captures))
     (local $task_fn (ref any))
     (local $settle_cont (ref any))
@@ -152,7 +152,7 @@
       (local.get $task_fn))
   )
 
-  (func $std/scheduler.wat:spawn (export "std/scheduler.wat:spawn")
+  (func $std/async.wat:spawn (export "std/async.wat:spawn")
     (param $task_fn (ref null any))
     (param $cont (ref null any))
 
@@ -168,24 +168,24 @@
 
     ;; Create settle continuation: captures [future].
     (local.set $settle_cont (struct.new $Closure
-      (ref.func $std/scheduler.wat:_settle_fn)
+      (ref.func $std/async.wat:_settle_fn)
       (array.new_fixed $Captures 1 (local.get $future))))
 
     ;; Create task thunk: captures [task_fn, settle_cont].
     (local.set $task (struct.new $Closure
-      (ref.func $std/scheduler.wat:_spawn_task_fn)
+      (ref.func $std/async.wat:_spawn_task_fn)
       (array.new_fixed $Captures 2
         (ref.as_non_null (local.get $task_fn))
         (local.get $settle_cont))))
 
     ;; Push task and current continuation (wrapped with future) to queue.
-    (call $std/scheduler.wat:queue_push (local.get $task))
-    (call $std/scheduler.wat:queue_push (call $std/scheduler.wat:make_thunk
+    (call $std/async.wat:queue_push (local.get $task))
+    (call $std/async.wat:queue_push (call $std/async.wat:make_thunk
       (ref.as_non_null (local.get $cont))
       (local.get $future)))
 
     ;; Run next task.
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -196,7 +196,7 @@
   ;;   if pending: push cont to future.$waiters
   ;;   run next task
 
-  (func $std/scheduler.wat:await (export "std/scheduler.wat:await")
+  (func $std/async.wat:await (export "std/async.wat:await")
     (param $future_val (ref null any))
     (param $cont (ref null any))
 
@@ -215,13 +215,13 @@
             (struct.get $Future $waiters (local.get $future)))))
       (else
         ;; Settled — push thunk(cont, value) to task queue.
-        (call $std/scheduler.wat:queue_push
-          (call $std/scheduler.wat:make_thunk
+        (call $std/async.wat:queue_push
+          (call $std/async.wat:make_thunk
             (ref.as_non_null (local.get $cont))
             (ref.as_non_null (local.get $value))))))
 
     ;; Run next task.
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -232,7 +232,7 @@
   ;;   2. for each waiter in future.$waiters: push thunk(waiter, value)
   ;;   3. clear waiters
 
-  (func $std/scheduler.wat:settle (param $future (ref $Future)) (param $value (ref any))
+  (func $std/async.wat:settle (param $future (ref $Future)) (param $value (ref any))
     (local $waiters (ref $List))
     (local $cons (ref $Cons))
 
@@ -245,8 +245,8 @@
       (loop $loop
         (br_if $done (ref.test (ref $Nil) (local.get $waiters)))
         (local.set $cons (ref.cast (ref $Cons) (local.get $waiters)))
-        (call $std/scheduler.wat:queue_push
-          (call $std/scheduler.wat:make_thunk
+        (call $std/async.wat:queue_push
+          (call $std/async.wat:make_thunk
             (struct.get $Cons $head (local.get $cons))
             (local.get $value)))
         (local.set $waiters (struct.get $Cons $tail (local.get $cons)))
@@ -264,11 +264,11 @@
   ;; Exported for the host to settle futures during host_resume.
   ;; Takes untyped (ref any) params — casts internally.
 
-  (func $std/scheduler.wat:_settle_future (export "std/scheduler.wat:_settle_future")
+  (func $std/async.wat:_settle_future (export "std/async.wat:_settle_future")
     (param $future_ref (ref null any))
     (param $value (ref null any))
 
-    (call $std/scheduler.wat:settle
+    (call $std/async.wat:settle
       (ref.cast (ref $Future) (local.get $future_ref))
       (ref.as_non_null (local.get $value)))
   )

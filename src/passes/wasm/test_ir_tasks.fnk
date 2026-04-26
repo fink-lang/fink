@@ -25,7 +25,7 @@ test 'yield suspends and resumes', fn:
       (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/scheduler.wat" "std/scheduler.wat:yield" (func $std/scheduler.wat:yield (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.wat:yield" (func $std/async.wat:yield (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_14 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_15 (ref null any))
@@ -51,11 +51,11 @@ test 'yield suspends and resumes', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_1)))
         (local.set $v_19 (struct.new $rt/types.wat:Closure (ref.func $v_14) (local.get $:caps_arg)))
         (local.set $v_3 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $std/scheduler.wat:yield (local.get $v_3) (local.get $v_19))
+        (return_call $std/async.wat:yield (local.get $v_3) (local.get $v_19))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:DZIYALoBAL4BAI4BAQAHTAEQAoYBAGoAtgEAtgUAjgEArgEAwgEBAwGEAQELBw
+    ;; sm:DfoXALoBAL4BAI4BAQAHTAEQAoYBAGoAtgEAtgUAjgEArgEAwgEBAwGEAQELBw
 
 
 test 'spawn and await', fn:
@@ -78,8 +78,8 @@ test 'spawn and await', fn:
       (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/scheduler.wat" "std/scheduler.wat:spawn" (func $std/scheduler.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/scheduler.wat" "std/scheduler.wat:await" (func $std/scheduler.wat:await (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.wat:spawn" (func $std/async.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.wat:await" (func $std/async.wat:await (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_6 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_7 (ref null any))
         (local $v_8 (ref null any))
@@ -119,7 +119,7 @@ test 'spawn and await', fn:
         (global.set $fut (local.get $fut_0))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $result_36)))
         (local.set $v_50 (struct.new $rt/types.wat:Closure (ref.func $v_45) (local.get $:caps_arg)))
-        (return_call $std/scheduler.wat:await (local.get $fut_0) (local.get $v_50))
+        (return_call $std/async.wat:await (local.get $fut_0) (local.get $v_50))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $result_4 (ref null any))
@@ -132,7 +132,7 @@ test 'spawn and await', fn:
         (local.set $v_40 (struct.new $rt/types.wat:Closure (ref.func $v_35) (local.get $:caps_arg)))
         (local.set $:caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $v_6_fn (struct.new $rt/types.wat:Closure (ref.func $v_6) (local.get $:caps_arg)))
-        (return_call $std/scheduler.wat:spawn (local.get $v_6_fn) (local.get $v_40))
+        (return_call $std/async.wat:spawn (local.get $v_6_fn) (local.get $v_40))
       )
       (export "fink_module" (func $fink_module))
       (global $result (mut (ref null any)) (ref.null any))
@@ -140,7 +140,7 @@ test 'spawn and await', fn:
       (global $fut (mut (ref null any)) (ref.null any))
       (export "fut" (global $fut))
     )
-    ;; sm:G6AYAI4BASQChgEAagC2AQD4BQC6AQDIAQCQAQEGBlgAXgBqAMABAO4GALoBAMgBAJABASkDUgBSALoBAMIBATwJwgYAmAEAuAEAwgEAegDEAQEvDg
+    ;; sm:G_AXAI4BASQChgEAagC2AQD4BQC6AQDIAQCQAQEGBlgAXgBqAMABAO4GALoBAMgBAJABASkDUgBSALoBAMIBATwJugYAmAEAuAEAwgEAegDEAQEvDg
 
 
 test 'channel send and receive', fn:
@@ -288,7 +288,7 @@ test 'channel with spawned sender', fn:
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "std/operators.fnk:op_shr" (func $std/operators.fnk:op_shr (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/scheduler.wat" "std/scheduler.wat:spawn" (func $std/scheduler.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.wat:spawn" (func $std/async.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
       (import "std/channel.wat" "std/channel.wat:channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
       (import "rt/protocols.wat" "std/channels.fnk:receive" (func $std/channels.fnk:receive (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_56 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -352,7 +352,7 @@ test 'channel with spawned sender', fn:
         (local.set $v_59 (struct.new $rt/types.wat:Closure (ref.func $v_56) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $ch_0) (local.get $msg_48)))
         (local.set $v_75 (struct.new $rt/types.wat:Closure (ref.func $v_68) (local.get $:caps_arg)))
-        (return_call $std/scheduler.wat:spawn (local.get $v_59) (local.get $v_75))
+        (return_call $std/async.wat:spawn (local.get $v_59) (local.get $v_75))
       )
       (func $v_63 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_52 (ref null any))
@@ -383,7 +383,7 @@ test 'channel with spawned sender', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:KtIeALoBAMABAJABATYCiAEBAAieBgC6AQDCAQCQAQESA1IAUgBqALoBAKQHALoBAMABAMIBAJABASkUUAC0AQDCAQE2CpoIALoBAMIBAI4BAVMCTgBOALABAMIBANgBAMIBAR4U_gMAkAEBAwGEAQEPCYYHAJIBALIBAMoBAHoAyAEAagDAAQA
+    ;; sm:KroeALoBAMABAJABATYCiAEBAAieBgC6AQDCAQCQAQESA1IAUgBqALoBAKQHALoBAMABAMIBAJABASkUUAC0AQDCAQE2CpoIALoBAMIBAI4BAVMCTgBOALABAMIBANgBAMIBAR4U9gMAkAEBAwGEAQEPCYYHAJIBALIBAMoBAHoAyAEAagDAAQA
 
 
 test 'channel multiple messages FIFO', fn:
@@ -552,8 +552,8 @@ test 'channel receiver waits for sender', fn:
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "std/operators.fnk:op_shr" (func $std/operators.fnk:op_shr (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/scheduler.wat" "std/scheduler.wat:spawn" (func $std/scheduler.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/scheduler.wat" "std/scheduler.wat:await" (func $std/scheduler.wat:await (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.wat:spawn" (func $std/async.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.wat:await" (func $std/async.wat:await (type $rt/protocols.wat:Fn_op_unary)))
       (import "std/channel.wat" "std/channel.wat:channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
       (import "rt/protocols.wat" "std/channels.fnk:receive" (func $std/channels.fnk:receive (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_68 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -595,7 +595,7 @@ test 'channel receiver waits for sender', fn:
         (local.set $v_27 (local.get $v_25))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $result_98)))
         (local.set $v_119 (struct.new $rt/types.wat:Closure (ref.func $v_114) (local.get $:caps_arg)))
-        (return_call $std/scheduler.wat:await (local.get $fut_96) (local.get $v_119))
+        (return_call $std/async.wat:await (local.get $fut_96) (local.get $v_119))
       )
       (func $v_129 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -651,7 +651,7 @@ test 'channel receiver waits for sender', fn:
         (local.set $v_71 (struct.new $rt/types.wat:Closure (ref.func $v_68) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $ch_0) (local.get $result_60)))
         (local.set $v_87 (struct.new $rt/types.wat:Closure (ref.func $v_80) (local.get $:caps_arg)))
-        (return_call $std/scheduler.wat:spawn (local.get $v_71) (local.get $v_87))
+        (return_call $std/async.wat:spawn (local.get $v_71) (local.get $v_87))
       )
       (func $v_75 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_64 (ref null any))
@@ -684,7 +684,7 @@ test 'channel receiver waits for sender', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:O4wgALoBAMABAJABAUIKigYAugEAygEAkAEBKAZYAF4AagDAAQC2BwC6AQDCAQDIAQCQAQERCFAAugEAxgEBJAm6BQC6AQDCAQCSAQEjAogBAQAI4AkAugEAwAEAyAEAkAEBOQNSAFIAsgEAxgEA4AEAzAEAagDCAQCYCAC6AQDIAQCQAQEdAlAATgCwAQDCAQDeAQDCAQEqFv4DAJABAQ8BhAEBDwmMBwCYAQC4AQDKAQB6AMgBAGoAwAEA
+    ;; sm:O9wfALoBAMABAJABAUIKigYAugEAygEAkAEBKAZYAF4AagDAAQC2BwC6AQDCAQDIAQCQAQERCFAAugEAxgEBJAmyBQC6AQDCAQCSAQEjAogBAQAI4AkAugEAwAEAyAEAkAEBOQNSAFIAsgEAxgEA4AEAzAEAagDCAQCYCAC6AQDIAQCQAQEdAlAATgCwAQDCAQDeAQDCAQEqFvYDAJABAQ8BhAEBDwmMBwCYAQC4AQDKAQB6AMgBAGoAwAEA
 
 
 test 'channel << send and receive', fn:

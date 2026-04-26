@@ -61,11 +61,11 @@
       (struct.new $Nil)
       (ref.as_non_null (local.get $tag))))
 
-    (call $std/scheduler.wat:queue_push
-      (call $std/scheduler.wat:make_thunk
+    (call $std/async.wat:queue_push
+      (call $std/async.wat:make_thunk
         (ref.as_non_null (local.get $cont))
         (local.get $ch)))
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -94,13 +94,13 @@
           (struct.new $Nil))))
 
     ;; Push process_msg_q to drain one pair.
-    (call $std/scheduler.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))
+    (call $std/async.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))
 
     ;; Sender continues with unit (always suspends).
-    (call $std/scheduler.wat:queue_push
-      (call $std/scheduler.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
+    (call $std/async.wat:queue_push
+      (call $std/async.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
 
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -129,9 +129,9 @@
     ;; If messages are buffered, trigger matching.
     (if (ref.test (ref $Cons) (struct.get $Channel $messages (local.get $ch)))
       (then
-        (call $std/scheduler.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
+        (call $std/async.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
 
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -169,7 +169,7 @@
     (if (i32.or
           (ref.test (ref $Nil) (local.get $messages))
           (ref.test (ref $Nil) (local.get $receivers)))
-      (then (return_call $std/scheduler.wat:resume)))
+      (then (return_call $std/async.wat:resume)))
 
     ;; Pop one message.
     (local.set $msg_cons (ref.cast (ref $Cons) (local.get $messages)))
@@ -182,8 +182,8 @@
       (struct.get $Cons $tail (local.get $recv_cons)))
 
     ;; Push thunk(receiver, msg) to task queue.
-    (call $std/scheduler.wat:queue_push
-      (call $std/scheduler.wat:make_thunk
+    (call $std/async.wat:queue_push
+      (call $std/async.wat:make_thunk
         (struct.get $Cons $head (local.get $recv_cons))
         (struct.get $Cons $head (local.get $msg_cons))))
 
@@ -192,9 +192,9 @@
           (ref.test (ref $Cons) (struct.get $Channel $messages (local.get $ch)))
           (ref.test (ref $Cons) (struct.get $Channel $receivers (local.get $ch))))
       (then
-        (call $std/scheduler.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
+        (call $std/async.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
 
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 )

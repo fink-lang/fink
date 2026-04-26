@@ -308,7 +308,7 @@ mod tests {
               str_wrap.call(&mut caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
 
               // Settle the future the runtime gave us.
-              let settle = caller.get_export("std/scheduler.wat:_settle_future")
+              let settle = caller.get_export("std/async.wat:_settle_future")
                 .and_then(|e| e.into_func())
                 .ok_or_else(|| Error::msg("host_read: no _settle_future export"))?;
               let future_ref = params[2].clone();

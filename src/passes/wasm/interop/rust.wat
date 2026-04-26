@@ -121,10 +121,10 @@
     (call $interop/rust.wat:host_channel_send (local.get $tag) (local.get $bytes))
 
     ;; Sender continues with unit.
-    (call $std/scheduler.wat:queue_push
-      (call $std/scheduler.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
+    (call $std/async.wat:queue_push
+      (call $std/async.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
 
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -152,7 +152,7 @@
           (ref.as_non_null (local.get $cont))
           (struct.new $Nil))))
 
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
@@ -186,7 +186,7 @@
       (local.get $future))
 
     ;; Resume scheduler — this task is parked on the future.
-    (return_call $std/scheduler.wat:resume)
+    (return_call $std/async.wat:resume)
   )
 
 
