@@ -12,9 +12,9 @@ test 'empty string literal', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $std/str.wat:Fn_str_empty (func (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "std/str.wat" "str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -29,7 +29,7 @@ test 'empty string literal', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BfARAJIBAQACZgBuALoBAA
+    ;; sm:Bb4SAJIBAQACZgBuALoBAA
 
 
 
@@ -43,9 +43,9 @@ test 'string literal', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -61,7 +61,7 @@ test 'string literal', fn:
       (export "fink_module" (func $fink_module))
       (data $d_0 "hello")
     )
-    ;; sm:BeARAJIBAQAHfgBuALoBAA
+    ;; sm:Ba4SAJIBAQAHfgBuALoBAA
 
 
 test 'string literal dedup', fn:
@@ -75,9 +75,9 @@ test 'string literal dedup', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -101,7 +101,7 @@ test 'string literal dedup', fn:
       (export "y" (global $y))
       (data $d_0 "hello")
     )
-    ;; sm:CKASAJIBAQABfgBKARgBfgBKAG4AugEA
+    ;; sm:CO4SAJIBAQABfgBKARgBfgBKAG4AugEA
 
 
 test 'str templ two exprs', fn:
@@ -117,7 +117,7 @@ test 'str templ two exprs', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (import "std/str.wat" "str_fmt" (func $std/str.wat:str_fmt (type $rt/protocols.wat:Fn_op_unary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -142,7 +142,7 @@ test 'str templ two exprs', fn:
       (export "b" (global $b))
       (data $d_0 " and ")
     )
-    ;; sm:CLwQAJIBAQABhAEASgEMAYQBAEoBFgV-AO4BAQkP
+    ;; sm:CNYQAJIBAQABhAEASgEMAYQBAEoBFgV-AO4BAQkP
 
 
 test 'str tagged template', fn:
@@ -159,13 +159,13 @@ test 'str tagged template', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "std/list.wat" "args_concat" (func $std/list.wat:args_concat (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_concat" (func $std/list.wat:args_concat (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/list.wat" "seq_prepend" (func $std/list.wat:seq_prepend (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/list.wat" "std/list.wat:seq_prepend" (func $std/list.wat:seq_prepend (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (func $v_3 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $parts_4 (ref null any))
@@ -228,7 +228,7 @@ test 'str tagged template', fn:
       (export "foo" (global $foo))
       (data $d_0 "1\\n2")
     )
-    ;; sm:HeAaAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAL4EAJQBATgEgAEBBwlsAQAJ4AgAkgEAegEvA8IBAFIA1AEAygEAegDIAQBuAMQBAA
+    ;; sm:HfwbAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAL4EAJQBATgEgAEBBwlsAQAJ4AgAkgEAegEvA8IBAFIA1AEAygEAegDIAQBuAMQBAA
 
 
 test 'str tagged template escape handling', fn:
@@ -247,13 +247,13 @@ test 'str tagged template escape handling', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "std/list.wat" "args_concat" (func $std/list.wat:args_concat (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_concat" (func $std/list.wat:args_concat (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/list.wat" "seq_prepend" (func $std/list.wat:seq_prepend (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/list.wat" "std/list.wat:seq_prepend" (func $std/list.wat:seq_prepend (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (func $v_4 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $parts_5 (ref null any))
@@ -356,7 +356,7 @@ test 'str tagged template escape handling', fn:
       (data $d_0 "\\n\\r\\t\\f")
       (data $d_1 "\\b\\v\\$\\'\\\\\\xC3\\xA9\\u{8A_9E}")
     )
-    ;; sm:L-YbAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAKIHALoBAMIBAL4BAJQBANgBAMIBAUgIgAEBBy7QBwC6AQDCAQDCAQC-AQCUAQDYAQDCAQEALuwEAJQBASQbggEBIy5sAQAupAkAkgEAegE_A8IBAFIBMAOIAQBSAPoBAMoBAHoAyAEAbgDEAQA
+    ;; sm:L4IdAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAKIHALoBAMIBAL4BAJQBANgBAMIBAUgIgAEBBy7QBwC6AQDCAQDCAQC-AQCUAQDYAQDCAQEALuwEAJQBASQbggEBIy5sAQAupAkAkgEAegE_A8IBAFIBMAOIAQBSAPoBAMoBAHoAyAEAbgDEAQA
 
 
 test 'str implicit formatting handling', fn:
@@ -371,9 +371,9 @@ test 'str implicit formatting handling', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -389,7 +389,7 @@ test 'str implicit formatting handling', fn:
       (export "fink_module" (func $fink_module))
       (data $d_0 "1\0a2\0a3")
     )
-    ;; sm:BeARAJIBAQANfgBuALoBAA
+    ;; sm:Ba4SAJIBAQANfgBuALoBAA
 
 
 test 'str implicit formatting escapes', fn:
@@ -402,9 +402,9 @@ test 'str implicit formatting escapes', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -420,7 +420,7 @@ test 'str implicit formatting escapes', fn:
       (export "fink_module" (func $fink_module))
       (data $d_0 "\0a\0d\09\0c\08\0b$'\\\c3\a9\e8\aa\9e")
     )
-    ;; sm:BeARAJIBAQAlgAEAbgC6AQA
+    ;; sm:Ba4SAJIBAQAlgAEAbgC6AQA
 
 
 test 'empty string eq', fn:
@@ -432,7 +432,7 @@ test 'empty string eq', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $std/str.wat:Fn_str_empty (func (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -446,7 +446,7 @@ test 'empty string eq', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BNINAJIBAQACZgEMAmYBCwg
+    ;; sm:BOwNAJIBAQACZgEMAmYBCwg
 
 
 # TODO: move to ./test_patterns.fnk
@@ -467,10 +467,10 @@ test 'match empty string', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $std/str.wat:Fn_str_empty (func (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
@@ -672,7 +672,7 @@ test 'match empty string', fn:
       (global $main (mut (ref null any)) (ref.null any))
       (export "main" (global $main))
     )
-    ;; sm:YqoaAJQBAUABhgEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADiCgCUAQCaAQCUAQCaAQCUAQDUAQDGAQEHAmgBAAKUCACSAQCaAQCSAQCaAQCSAQCuAQDGAQB6AMgBAG4AugEAugEAvgEAwgQAlAEBGgGGAQBuALwBALgGAJQBAJoBAJQBAJoBAJQBAHoAyAEAbgC8AQD8AgCsBwC6AQDAAQDAAQB6AMgBAHoAzAEAbgC-AQDEAQC-AQCyBwCUAQCaAQCUAQDUAQDGAQB6AMgBAG4AvAEAvgEAvAEA9gUAkgEAmgEAkgEAegDIAQBuALoBALoBAMQFAJIBAHoBUQTEAQBWAG4AwAEA
+    ;; sm:YpIbAJQBAUABhgEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADiCgCUAQCaAQCUAQCaAQCUAQDUAQDGAQEHAmgBAAKUCACSAQCaAQCSAQCaAQCSAQCuAQDGAQB6AMgBAG4AugEAugEAvgEAwgQAlAEBGgGGAQBuALwBALgGAJQBAJoBAJQBAJoBAJQBAHoAyAEAbgC8AQD8AgCsBwC6AQDAAQDAAQB6AMgBAHoAzAEAbgC-AQDEAQC-AQCyBwCUAQCaAQCUAQDUAQDGAQB6AMgBAG4AvAEAvgEAvAEA9gUAkgEAmgEAkgEAegDIAQBuALoBALoBAMQFAJIBAHoBUQTEAQBWAG4AwAEA
 
 
 test 'empty string eq template', fn:
@@ -684,7 +684,7 @@ test 'empty string eq template', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $std/str.wat:Fn_str_empty (func (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -698,7 +698,7 @@ test 'empty string eq template', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BNINAJIBAQACZgEMB2YBCw0
+    ;; sm:BOwNAJIBAQACZgEMB2YBCw0
 
 
 test 'str eq', fn:
@@ -710,7 +710,7 @@ test 'str eq', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -725,7 +725,39 @@ test 'str eq', fn:
       (export "fink_module" (func $fink_module))
       (data $d_0 "hello")
     )
-    ;; sm:BMINAJIBAQAHfgEWB34BFRI
+    ;; sm:BNwNAJIBAQAHfgEWB34BFRI
+
+
+
+
+
+
+
+JIBAQAHfgEWB34BFRI
+
+
+
+
+
+
+
+JIBAQAHfgEWB34BFRI
+
+
+
+
+
+
+
+4BFRI
+
+
+
+
+
+
+
+JIBAQAHfgEWB34BFRI
 
 
 

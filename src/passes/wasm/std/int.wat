@@ -78,7 +78,7 @@
   ;; TODO: should become int_op_rotl and operators.wat have op_rotl to dispatch
   (func $op_rotl (export "op_rotl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.convert_i64_s (i64.rotl
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))
@@ -87,7 +87,7 @@
   ;; TODO: should become int_op_rotr and operators.wat have op_rotr to dispatch
   (func $op_rotr (export "op_rotr")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.convert_i64_s (i64.rotr
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $a))))
         (i64.trunc_f64_s (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))))

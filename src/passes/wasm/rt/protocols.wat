@@ -16,7 +16,7 @@
 
 (module
 
-  ;; Continuation dispatch: $apply_1 (defined in list.wat) wraps a single
+  ;; Continuation dispatch: $std/list.wat:apply_1 (defined in list.wat) wraps a single
   ;; result in a list and tail-calls $_apply (defined in dispatch.wat).
 
   ;; =========================================================================
@@ -25,7 +25,7 @@
 
   (func $rt/protocols.wat:op_plus (export "rt/protocols.wat:op_plus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.add
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -33,7 +33,7 @@
 
   (func $rt/protocols.wat:op_minus (export "rt/protocols.wat:op_minus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.sub
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -41,7 +41,7 @@
 
   (func $rt/protocols.wat:op_mul (export "rt/protocols.wat:op_mul")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.mul
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -49,7 +49,7 @@
 
   (func $rt/protocols.wat:op_div (export "rt/protocols.wat:op_div")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.div
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -61,7 +61,7 @@
 
   (func $rt/protocols.wat:op_intdiv (export "rt/protocols.wat:op_intdiv")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $int_op_div
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -69,7 +69,7 @@
 
   (func $rt/protocols.wat:op_rem (export "rt/protocols.wat:op_rem")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $int_op_rem
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -77,7 +77,7 @@
 
   (func $rt/protocols.wat:op_intmod (export "rt/protocols.wat:op_intmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $int_op_mod
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -129,7 +129,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       ;; $a is $Num — cast $b and compare
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (f64.eq
           (struct.get $Num $val)
           (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -142,7 +142,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
       ;; $a is $Str — cast $b and call str_op_eq
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (call $str_op_eq
           (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
@@ -162,7 +162,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       ;; $a is $Num — cast $b and compare
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (f64.ne
           (struct.get $Num $val)
           (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -175,7 +175,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $a))))
       ;; $a is $Str — cast $b, call str_op_eq, invert
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (i32.eqz (call $str_op_eq
           (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
@@ -184,7 +184,7 @@
 
   (func $rt/protocols.wat:op_lt (export "rt/protocols.wat:op_lt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (f64.lt
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -192,7 +192,7 @@
 
   (func $rt/protocols.wat:op_lte (export "rt/protocols.wat:op_lte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (f64.le
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -200,7 +200,7 @@
 
   (func $rt/protocols.wat:op_gt (export "rt/protocols.wat:op_gt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (f64.gt
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -208,7 +208,7 @@
 
   (func $rt/protocols.wat:op_gte (export "rt/protocols.wat:op_gte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (f64.ge
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
@@ -227,12 +227,12 @@
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (call $int_op_not)
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean not
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (i32.eqz (i31.get_s (ref.cast (ref i31) (local.get $a)))))
       (local.get $cont)))
 
@@ -245,12 +245,12 @@
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (call $int_op_and (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean and
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (i32.and
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
@@ -265,12 +265,12 @@
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (call $int_op_or (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean or
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (i32.or
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
@@ -285,12 +285,12 @@
         (br $not_num
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (call $int_op_xor (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean xor
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.i31 (i32.xor
         (i31.get_s (ref.cast (ref i31) (local.get $a)))
         (i31.get_s (ref.cast (ref i31) (local.get $b)))))
@@ -309,8 +309,8 @@
           (br_on_cast $is_seq (ref null any) (ref $List)
             (local.get $val))))
       (drop)
-      (return_call $apply_1 (local.get $val) (local.get $succ)))
-    (return_call $apply_0 (local.get $fail)))
+      (return_call $std/list.wat:apply_1 (local.get $val) (local.get $succ)))
+    (return_call $std/list.wat:apply_0 (local.get $fail)))
 
   ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
   (func $rt/protocols.wat:is_rec_like (export "rt/protocols.wat:is_rec_like")
@@ -321,8 +321,8 @@
           (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $val))))
       (drop)
-      (return_call $apply_1 (local.get $val) (local.get $succ)))
-    (return_call $apply_0 (local.get $fail)))
+      (return_call $std/list.wat:apply_1 (local.get $val) (local.get $succ)))
+    (return_call $std/list.wat:apply_0 (local.get $fail)))
 
   ;; =========================================================================
   ;; Collection predicates (polymorphic — dispatch on type tag)
@@ -338,7 +338,7 @@
     ;; null = empty
     (if (ref.is_null (local.get $val))
       (then
-        (return_call $apply_1
+        (return_call $std/list.wat:apply_1
           (ref.i31 (i32.const 1))
           (local.get $cont))))
 
@@ -349,8 +349,8 @@
           (br_on_cast $is_list (ref null any) (ref $List)
             (local.get $val))))
       (drop)
-      (return_call $apply_1
-        (ref.i31 (call $list_op_empty (local.get $val)))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/list.wat:list_op_empty (local.get $val)))
         (local.get $cont)))
 
     ;; $Rec → rec_op_empty
@@ -360,7 +360,7 @@
           (br_on_cast $is_rec (ref null any) (ref $Rec)
             (local.get $val))))
       (drop)
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (call $rec_op_empty (local.get $val)))
         (local.get $cont)))
 
@@ -383,7 +383,7 @@
           (br_on_cast $is_range (ref null any) (ref $Range)
             (local.get $b))))
       (local.set $range)
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (call $range_op_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
@@ -396,7 +396,7 @@
           (br_on_cast $is_rec (ref null any) (ref $RecImpl)
             (local.get $b))))
       (local.set $rec)
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (call $rec_op_in
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
@@ -417,7 +417,7 @@
           (br_on_cast $is_range (ref null any) (ref $Range)
             (local.get $b))))
       (local.set $range)
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (call $range_op_not_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
@@ -430,7 +430,7 @@
           (br_on_cast $is_rec (ref null any) (ref $RecImpl)
             (local.get $b))))
       (local.set $rec)
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.i31 (call $rec_op_not_in
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
@@ -511,7 +511,7 @@
         (local.get $cont)))
 
     ;; Fallback: numeric shift left
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $int_op_shl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -554,7 +554,7 @@
         (local.get $cont)))
 
     ;; Fallback: numeric shift right
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $int_op_shr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))

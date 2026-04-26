@@ -146,7 +146,7 @@
 
     ;; Park cont on the channel's receivers list (FIFO).
     (struct.set $Channel $receivers (local.get $host_ch)
-      (call $list_concat
+      (call $std/list.wat:list_concat
         (struct.get $Channel $receivers (local.get $host_ch))
         (struct.new $Cons
           (ref.as_non_null (local.get $cont))
@@ -268,11 +268,11 @@
 
     (local.set $cursor (local.get $args))
     ;; TODO this needs to got through args_* protocol!
-    (local.set $cont (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $stream (call $list_head_any (local.get $cursor)))
-    (local.set $cursor (call $list_tail_any (local.get $cursor)))
-    (local.set $size (call $list_head_any (local.get $cursor)))
+    (local.set $cont (call $std/list.wat:list_head_any (local.get $cursor)))
+    (local.set $cursor (call $std/list.wat:list_tail_any (local.get $cursor)))
+    (local.set $stream (call $std/list.wat:list_head_any (local.get $cursor)))
+    (local.set $cursor (call $std/list.wat:list_tail_any (local.get $cursor)))
+    (local.set $size (call $std/list.wat:list_head_any (local.get $cursor)))
 
     (return_call $interop_op_read
       (local.get $stream)

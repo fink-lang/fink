@@ -45,7 +45,7 @@
 
 (module
 
-  ;; Continuation dispatch: $apply_0/1/2 (defined in list.wat) wrap results
+  ;; Continuation dispatch: $std/list.wat:apply_0/1/2 (defined in list.wat) wrap results
   ;; into lists and tail-call $_apply (defined in dispatch.wat).
 
   ;; -- Type definitions -----------------------------------------------
@@ -1473,7 +1473,7 @@
   (func $rec_set (export "rec_set")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $_rec_set
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key))
@@ -1483,7 +1483,7 @@
   (func $rec_merge (export "rec_merge")
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $_rec_merge
         (ref.cast (ref $RecImpl) (local.get $dest))
         (ref.cast (ref $RecImpl) (local.get $src)))
@@ -1501,16 +1501,16 @@
     (local.set $val)
     ;; null value = key not found → call fail
     (if (ref.is_null (local.get $val))
-      (then (return_call $apply_0 (local.get $fail))))
+      (then (return_call $std/list.wat:apply_0 (local.get $fail))))
     ;; found → pass (value, rest) to succ
-    (return_call $apply_2_vals
+    (return_call $std/list.wat:apply_2_vals
       (local.get $val)
       (local.get $rest)
       (local.get $succ)))
 
   (func $rec_op_dot (export "rec_op_dot")
     (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $rec_get
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key)))

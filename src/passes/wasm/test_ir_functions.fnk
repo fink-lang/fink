@@ -17,10 +17,10 @@ test 'user fn call', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_4 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -57,7 +57,7 @@ test 'user fn call', fn:
       (global $add (mut (ref null any)) (ref.null any))
       (export "add" (global $add))
     )
-    ;; sm:EdwXAJIBAJoBAJIBAJoBAJIBASIF6AYAkgEAegEhA8IBAFIBNgGGAQEGAYYBAG4AvAEAvAEAugEA
+    ;; sm:EcQYAJIBAJoBAJIBAJoBAJIBASIF6AYAkgEAegEhA8IBAFIBNgGGAQEGAYYBAG4AvAEAvAEAugEA
 
 
 test 'chained fn calls', fn:
@@ -79,10 +79,10 @@ test 'chained fn calls', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_mul" (func $rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
@@ -171,7 +171,7 @@ test 'chained fn calls', fn:
       (global $inc (mut (ref null any)) (ref.null any))
       (export "inc" (global $inc))
     )
-    ;; sm:KdgZAJIBAJoBAJIBASoBhAEBBwXeBACUAQCaAQCSAQEwAYYBAQcF2AYAugEAwgEAvgEAlAEBDgFOAEoAbgC6AQC8AQCOBQCUAQBiARYBhgEAbgC8AQC8AQD6CQCSAQB6AW0GyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
+    ;; sm:KcAaAJIBAJoBAJIBASoBhAEBBwXeBACUAQCaAQCSAQEwAYYBAQcF2AYAugEAwgEAvgEAlAEBDgFOAEoAbgC6AQC8AQCOBQCUAQBiARYBhgEAbgC8AQC8AQD6CQCSAQB6AW0GyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
 
 
 test 'pipe unary', fn:
@@ -192,10 +192,10 @@ test 'pipe unary', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_mul" (func $rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
@@ -279,7 +279,7 @@ test 'pipe unary', fn:
       (global $inc (mut (ref null any)) (ref.null any))
       (export "inc" (global $inc))
     )
-    ;; sm:J9gZAJIBAJoBAJIBASoBhAEBBwXeBACUAQCaAQCSAQEwAYYBAQcFmAYAugEAwgEAvgEAlAEAbgC8AQC8AQCOBQCUAQBiAQ4BhgEAbgC8AQC8AQD6CQCSAQB6AVcGyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
+    ;; sm:J8AaAJIBAJoBAJIBASoBhAEBBwXeBACUAQCaAQCSAQEwAYYBAQcFmAYAugEAwgEAvgEAlAEAbgC8AQC8AQCOBQCUAQBiAQ4BhgEAbgC8AQC8AQD6CQCSAQB6AVcGyAEAXgB6AS4DxAEAUgDUAQDKAQB6AMgBAG4AxAEA
 
 
 test 'match literal first arm', fn:
@@ -297,10 +297,10 @@ test 'match literal first arm', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_25 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -485,7 +485,7 @@ test 'match literal first arm', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:Wt4XAJQBARwCiAEAbgC8AQCeBgC6AQC-AQB6AMgBAG4AvAEAsAcAugEAwAEAwAEAlAEAhAEAfADcCgCSAQCaAQCSAQCaAQCSAQDQAQDGAQEFAYYBAQABkAgAkgEAmgEAkgEAmgEAkgEArgEAwgEAegDIAQBuALoBALoBALwBAMIEAJQBARYCiAEAbgC8AQC4BgCUAQCaAQCUAQCaAQCUAQB6AMgBAG4AvAEA_AIApgcAugEAvgEAvgEAegDIAQB6AMwBAG4AvAEAxAEAvAEAsAcAlAEAmgEAlAEA1AEAwgEAegDIAQBuALwBALwBALwBAIYGAJIBAHoAyAEBHwGEAQBuALoBALoBAA
+    ;; sm:WsYYAJQBARwCiAEAbgC8AQCeBgC6AQC-AQB6AMgBAG4AvAEAsAcAugEAwAEAwAEAlAEAhAEAfADcCgCSAQCaAQCSAQCaAQCSAQDQAQDGAQEFAYYBAQABkAgAkgEAmgEAkgEAmgEAkgEArgEAwgEAegDIAQBuALoBALoBALwBAMIEAJQBARYCiAEAbgC8AQC4BgCUAQCaAQCUAQCaAQCUAQB6AMgBAG4AvAEA_AIApgcAugEAvgEAvgEAegDIAQB6AMwBAG4AvAEAxAEAvAEAsAcAlAEAmgEAlAEA1AEAwgEAegDIAQBuALwBALwBALwBAIYGAJIBAHoAyAEBHwGEAQBuALoBALoBAA
 
 
 test 'match with binding', fn:
@@ -504,10 +504,10 @@ test 'match with binding', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
@@ -725,7 +725,7 @@ test 'match with binding', fn:
       (global $x (mut (ref null any)) (ref.null any))
       (export "x" (global $x))
     )
-    ;; sm:ad4ZAJQBASgBhgEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADeCgCSAQCaAQCUAQCaAQCSAQDSAQDGAQEFAYYBAQABkggAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAKoFALoBAL4BAJQBARwBhgEBBwXaBgC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAPgCALYGALoBAMABAMABAMABAHoAzAEAbgC-AQDEAQC-AQDeCAC6AQDAAQCUAQCaAQCUAQD6AQDGAQB6AMgBAG4AvAEAvgEAvAEA4AgAugEAwAEAwAEAlAEAsAEAxAEAsgEAxgEAbgC-AQC-AQC8BwCSAQE1AYQBAEoA0AEAxgEArgEAzAEAbgDGAQA
+    ;; sm:acYaAJQBASgBhgEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADeCgCSAQCaAQCUAQCaAQCSAQDSAQDGAQEFAYYBAQABkggAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAKoFALoBAL4BAJQBARwBhgEBBwXaBgC6AQDAAQCUAQCaAQCUAQCaAQCUAQBuALwBAPgCALYGALoBAMABAMABAMABAHoAzAEAbgC-AQDEAQC-AQDeCAC6AQDAAQCUAQCaAQCUAQD6AQDGAQB6AMgBAG4AvAEAvgEAvAEA4AgAugEAwAEAwAEAlAEAsAEAxAEAsgEAxgEAbgC-AQC-AQC8BwCSAQE1AYQBAEoA0AEAxgEArgEAzAEAbgDGAQA
 
 
 test 'simple recursion', fn:
@@ -746,10 +746,10 @@ test 'simple recursion', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_minus" (func $rt/protocols.wat:op_minus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
@@ -984,7 +984,7 @@ test 'simple recursion', fn:
       (global $recurse (mut (ref null any)) (ref.null any))
       (export "recurse" (global $recurse))
     )
-    ;; sm:c-IZAJQBAUQCiAEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADiCgCUAQCaAQCUAQCaAQCUAQDUAQDGAQEFAYYBAQABlAgAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAP4FALoBAMABAJQBAGQAbgC8AQC-AQDqBgC6AQDAAQCUAQCwAQDGAQEyAYYBAQcF4gYAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD4AgC2BgC6AQDAAQDAAQDAAQB6AMwBAG4AvgEAxAEAvgEA3ggAugEAwAEAlAEAmgEAlAEA-gEAxgEAegDIAQBuALwBAL4BALwBAN4IAJIBAJoBAJIBAK4BAMYBALIBAMYBALIBAMYBAG4AugEAugEAiAYAkgEAegFnB8oBAGIBhAEBhgEAbgC8AQC6AQA
+    ;; sm:c8oaAJQBAUQCiAEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADiCgCUAQCaAQCUAQCaAQCUAQDUAQDGAQEFAYYBAQABlAgAkgEAmgEAkgEAmgEAkgEArgEAxgEAegDIAQBuALoBALoBAL4BAP4FALoBAMABAJQBAGQAbgC8AQC-AQDqBgC6AQDAAQCUAQCwAQDGAQEyAYYBAQcF4gYAugEAwAEAlAEAmgEAlAEAmgEAlAEAbgC8AQD4AgC2BgC6AQDAAQDAAQDAAQB6AMwBAG4AvgEAxAEAvgEA3ggAugEAwAEAlAEAmgEAlAEA-gEAxgEAegDIAQBuALwBAL4BALwBAN4IAJIBAJoBAJIBAK4BAMYBALIBAMYBALIBAMYBAG4AugEAugEAiAYAkgEAegFnB8oBAGIBhAEBhgEAbgC8AQC6AQA
 
 
 test 'mutual recursion — ping pong', fn:
@@ -1001,10 +1001,10 @@ test 'mutual recursion — ping pong', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (func $v_5 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_6 (ref null any))
@@ -1061,7 +1061,7 @@ test 'mutual recursion — ping pong', fn:
       (global $pong (mut (ref null any)) (ref.null any))
       (export "pong" (global $pong))
     )
-    ;; sm:HOYUAJIBAJoBAJIBAF4AbgC6AQC6AQCUBQCUAQCaAQCSAQBeAG4AugEAvAEAxAcAkgEAegEABMQBAFYAegEoBMYBAFYBMgGGAQBuALwBALoBAA
+    ;; sm:HM4VAJIBAJoBAJIBAF4AbgC6AQC6AQCUBQCUAQCaAQCSAQBeAG4AugEAvAEAxAcAkgEAegEABMQBAFYAegEoBMYBAFYBMgGGAQBuALwBALoBAA
 
 
 # TODO: mutual recursion with match body — ir_wat succeeds but the
@@ -1485,10 +1485,10 @@ test 'closure construction and call', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_52 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -1576,7 +1576,7 @@ test 'closure construction and call', fn:
       (global $add (mut (ref null any)) (ref.null any))
       (export "add" (global $add))
     )
-    ;; sm:KsoYALoBAL4BAJIBAJoBAJIBASgFmgYAkgEAmgEAkgEArgEAyAEAbgDCAQCsBgC6AQC-AQCUAQEMBFQAVgEkAYYBAG4AvAEAvAEAjgUAlAEAXAENAYYBAG4AvAEAvAEAvggAkgEAegFJA8IBAFIArgEAygEAegDIAQBuAMQBAA
+    ;; sm:KrIZALoBAL4BAJIBAJoBAJIBASgFmgYAkgEAmgEAkgEArgEAyAEAbgDCAQCsBgC6AQC-AQCUAQEMBFQAVgEkAYYBAG4AvAEAvAEAjgUAlAEAXAENAYYBAG4AvAEAvAEAvggAkgEAegFJA8IBAFIArgEAygEAegDIAQBuAMQBAA
 
 
 # TODO, duplicate?
@@ -1599,16 +1599,16 @@ test 'recursive list sum', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_empty" (func $rt/protocols.wat:op_empty (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/list.wat" "seq_prepend" (func $std/list.wat:seq_prepend (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/list.wat" "std/list.wat:seq_prepend" (func $std/list.wat:seq_prepend (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:is_seq_like" (func $rt/protocols.wat:is_seq_like (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/list.wat" "seq_pop" (func $std/list.wat:seq_pop (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/list.wat" "std/list.wat:seq_pop" (func $std/list.wat:seq_pop (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_195 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $c_196 (ref null any))
@@ -2065,7 +2065,7 @@ test 'recursive list sum', fn:
       (global $sum (mut (ref null any)) (ref.null any))
       (export "sum" (global $sum))
     )
-    ;; sm:5gG6IQC6AQDAAQCUAQBuAL4BAKwFALoBAMABAMABAG4AvgEA6gQAugEAwAEAbgCsBwC6AQDAAQDAAQCUAQCEAQB8ANILALoBAMABAMABAJQBAUwCUADYAQDGAQEAArQHAJQBAJoBAJQBAJoBAJQBALABAMYBANQBAMYBAQAC1gkAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEAxgEAegDIAQBuALoBALwBAL4BAMgGALoBAMABAMYBAJQBAFwAbgC8AQDEAQC-AQCuBwC6AQDAAQCUAQCaAQCSAQCaAQCYAQDYAQDGAQFCBeYHALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQDqBAC6AQDAAQBuALAGALoBAMABAJQBAJoBAJQBAQsLUABuALwBALwBAOIGALoBAMABAMABAJQBALIBAMYBAQAL0AcAlAEAmgEAlAEAmgEAlAEAsAEAxgEA1AEAxgEBAAvYCQC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDGAQB6AMgBAG4AvAEAvAEAvgEA_AIAtgYAugEAwAEAwAEAwAEAegDMAQBuAL4BAMQBAL4BAOwHALoBAMABAMABAJYBAJoBAJYBAP4BAMYBAG4AvgEAvgEAvgEAjgwAkgEAmgEAmgEAmgEAkgEArgEAxgEAsgEAxgEArgEAxgEAsgEAxgEA2AEAxgEAbgDCAQC6AQC6BgC6AQDEAQDAAQCWAQFgAYgBAG4AvgEAvgEAvgEAsAcAugEAxAEAwAEAlgEA3AEAxgEBGQGIAQEAAd4HALoBAMQBAMABAJYBANwBAMYBAQYBiAEBAAHeBwC6AQDEAQDAAQCWAQDcAQDGAQEGAYgBAQAB9gQAlgEBBgGIAQETDG4BFAHqCACSAQB6AbcBA8IBAFIA1AEAzgEAegDMAQBuAMYBAA
+    ;; sm:5gHWIgC6AQDAAQCUAQBuAL4BAKwFALoBAMABAMABAG4AvgEA6gQAugEAwAEAbgCsBwC6AQDAAQDAAQCUAQCEAQB8ANILALoBAMABAMABAJQBAUwCUADYAQDGAQEAArQHAJQBAJoBAJQBAJoBAJQBALABAMYBANQBAMYBAQAC1gkAugEAwAEAlAEAmgEAlAEAmgEAkgEA1gEAxgEAegDIAQBuALoBALwBAL4BAMgGALoBAMABAMYBAJQBAFwAbgC8AQDEAQC-AQCuBwC6AQDAAQCUAQCaAQCSAQCaAQCYAQDYAQDGAQFCBeYHALoBAMABAMABAJQBAJoBAJQBASsBTgEKBFQAbgC8AQC8AQC-AQDqBAC6AQDAAQBuALAGALoBAMABAJQBAJoBAJQBAQsLUABuALwBALwBAOIGALoBAMABAMABAJQBALIBAMYBAQAL0AcAlAEAmgEAlAEAmgEAlAEAsAEAxgEA1AEAxgEBAAvYCQC6AQDAAQCUAQCaAQCUAQCaAQCUAQDWAQDGAQB6AMgBAG4AvAEAvAEAvgEA_AIAtgYAugEAwAEAwAEAwAEAegDMAQBuAL4BAMQBAL4BAOwHALoBAMABAMABAJYBAJoBAJYBAP4BAMYBAG4AvgEAvgEAvgEAjgwAkgEAmgEAmgEAmgEAkgEArgEAxgEAsgEAxgEArgEAxgEAsgEAxgEA2AEAxgEAbgDCAQC6AQC6BgC6AQDEAQDAAQCWAQFgAYgBAG4AvgEAvgEAvgEAsAcAugEAxAEAwAEAlgEA3AEAxgEBGQGIAQEAAd4HALoBAMQBAMABAJYBANwBAMYBAQYBiAEBAAHeBwC6AQDEAQDAAQCWAQDcAQDGAQEGAYgBAQAB9gQAlgEBBgGIAQETDG4BFAHqCACSAQB6AbcBA8IBAFIA1AEAzgEAegDMAQBuAMYBAA
 
 
 QDGAQEGAYgBAQAB9gQAlgEBBgGIAQETDG4BFAHqCACSAQB6AbcBA8IBAFIA1AEAzgEAegDMAQBuAMYBAA

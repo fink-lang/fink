@@ -136,7 +136,7 @@
 
   (func $op_rngex (export "op_rngex")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $range_excl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
@@ -144,7 +144,7 @@
 
   (func $op_rngin (export "op_rngin")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (call $range_incl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))

@@ -21,9 +21,9 @@ test 'yield suspends and resumes', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "std/scheduler.wat" "yield" (func $std/scheduler.wat:yield (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_14 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -55,7 +55,7 @@ test 'yield suspends and resumes', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:DbgXALoBAL4BAJIBAQAHTAEQAoYBAG4AugEAtgUAkgEArgEAwgEBAwGEAQELBw
+    ;; sm:DYYYALoBAL4BAJIBAQAHTAEQAoYBAG4AugEAtgUAkgEArgEAwgEBAwGEAQELBw
 
 
 test 'spawn and await', fn:
@@ -74,9 +74,9 @@ test 'spawn and await', fn:
       (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "std/scheduler.wat" "spawn" (func $std/scheduler.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
       (import "std/scheduler.wat" "await" (func $std/scheduler.wat:await (type $rt/protocols.wat:Fn_op_unary)))
@@ -140,7 +140,7 @@ test 'spawn and await', fn:
       (global $fut (mut (ref null any)) (ref.null any))
       (export "fut" (global $fut))
     )
-    ;; sm:G6IXAJIBASQChgEAbgC6AQD4BQC6AQDIAQCUAQEGBlgAXgBuAMQBAO4GALoBAMgBAJQBASkDUgBSALoBAMIBATwJwgYAnAEAuAEAwgEAegDEAQEvDg
+    ;; sm:G_AXAJIBASQChgEAbgC6AQD4BQC6AQDIAQCUAQEGBlgAXgBuAMQBAO4GALoBAMgBAJQBASkDUgBSALoBAMIBATwJwgYAnAEAuAEAwgEAegDEAQEvDg
 
 
 test 'channel send and receive', fn:
@@ -160,9 +160,9 @@ test 'channel send and receive', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_shr" (func $rt/protocols.wat:op_shr (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/channel.wat" "channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
@@ -262,7 +262,7 @@ test 'channel send and receive', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:LMQcALoBAMIBAJQBATADUgBSAG4AvgEApAcAugEAwAEAwgEAlAEBEQhQALQBAMIBAR4KsAUAugEAwAEAlAEBHQKGAQEACIYJALoBAMIBAJIBAR0CTgBOALABAMIBANgBAMoBAG4AxAEA9gMAlAEBGgGEAQEPCYYHAJYBALIBAMoBAHoAyAEAbgDEAQA
+    ;; sm:LJIdALoBAMIBAJQBATADUgBSAG4AvgEApAcAugEAwAEAwgEAlAEBEQhQALQBAMIBAR4KsAUAugEAwAEAlAEBHQKGAQEACIYJALoBAMIBAJIBAR0CTgBOALABAMIBANgBAMoBAG4AxAEA9gMAlAEBGgGEAQEPCYYHAJYBALIBAMoBAHoAyAEAbgDEAQA
 
 
 test 'channel with spawned sender', fn:
@@ -283,9 +283,9 @@ test 'channel with spawned sender', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_shr" (func $rt/protocols.wat:op_shr (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/scheduler.wat" "spawn" (func $std/scheduler.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
@@ -383,7 +383,7 @@ test 'channel with spawned sender', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:KtQdALoBAMABAJQBATYCiAEBAAicBgC6AQDCAQCUAQESA1IAUgBuAL4BAKQHALoBAMABAMIBAJQBASkUUAC0AQDCAQE2CpoIALoBAMIBAJIBAVMCTgBOALABAMIBANgBAMIBAR4U_gMAlAEBAwGEAQEPCYYHAJYBALIBAMoBAHoAyAEAbgDEAQA
+    ;; sm:KqIeALoBAMABAJQBATYCiAEBAAicBgC6AQDCAQCUAQESA1IAUgBuAL4BAKQHALoBAMABAMIBAJQBASkUUAC0AQDCAQE2CpoIALoBAMIBAJIBAVMCTgBOALABAMIBANgBAMIBAR4U_gMAlAEBAwGEAQEPCYYHAJYBALIBAMoBAHoAyAEAbgDEAQA
 
 
 test 'channel multiple messages FIFO', fn:
@@ -404,9 +404,9 @@ test 'channel multiple messages FIFO', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_shr" (func $rt/protocols.wat:op_shr (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/channel.wat" "channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
@@ -525,7 +525,7 @@ test 'channel multiple messages FIFO', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:NbwcALoBAL4BAJQBAT4BTgBKAG4AugEAngcAugEAwAEAvgEAlAEBDwdQALABAMQBARgK7AcAugEAwAEAvgEAlAEBJwdQANYBAMIBARABhgEBAAfSBQC6AQDAAQCUAQEPAYQBAQAHggkAugEAvgEAkgEBHQJOAE4AsAEAwgEA1AEAygEAbgDEAQD2AwCUAQEaAYQBAQ8JggcAkgEArgEAygEAegDIAQBuAMQBAA
+    ;; sm:NYodALoBAL4BAJQBAT4BTgBKAG4AugEAngcAugEAwAEAvgEAlAEBDwdQALABAMQBARgK7AcAugEAwAEAvgEAlAEBJwdQANYBAMIBARABhgEBAAfSBQC6AQDAAQCUAQEPAYQBAQAHggkAugEAvgEAkgEBHQJOAE4AsAEAwgEA1AEAygEAbgDEAQD2AwCUAQEaAYQBAQ8JggcAkgEArgEAygEAegDIAQBuAMQBAA
 
 
 test 'channel receiver waits for sender', fn:
@@ -547,9 +547,9 @@ test 'channel receiver waits for sender', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_shr" (func $rt/protocols.wat:op_shr (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/scheduler.wat" "spawn" (func $std/scheduler.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
@@ -684,7 +684,7 @@ test 'channel receiver waits for sender', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:O-oeALoBAMABAJQBAUIKigYAugEAygEAlAEBKAZYAF4AbgDEAQC2BwC6AQDCAQDIAQCUAQERCFAAugEAxgEBJAm6BQC6AQDCAQCWAQEjAogBAQAI3gkAugEAwAEAyAEAlAEBOQNSAFIAsgEAxgEA4AEAzAEAbgDGAQCYCAC6AQDIAQCUAQEdAlAATgCwAQDCAQDeAQDCAQEqFv4DAJQBAQ8BhAEBDwmMBwCcAQC4AQDKAQB6AMgBAG4AxAEA
+    ;; sm:O7gfALoBAMABAJQBAUIKigYAugEAygEAlAEBKAZYAF4AbgDEAQC2BwC6AQDCAQDIAQCUAQERCFAAugEAxgEBJAm6BQC6AQDCAQCWAQEjAogBAQAI3gkAugEAwAEAyAEAlAEBOQNSAFIAsgEAxgEA4AEAzAEAbgDGAQCYCAC6AQDIAQCUAQEdAlAATgCwAQDCAQDeAQDCAQEqFv4DAJQBAQ8BhAEBDwmMBwCcAQC4AQDKAQB6AMgBAG4AxAEA
 
 
 test 'channel << send and receive', fn:
@@ -704,9 +704,9 @@ test 'channel << send and receive', fn:
       (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_shl" (func $rt/protocols.wat:op_shl (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/channel.wat" "channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
@@ -806,7 +806,7 @@ test 'channel << send and receive', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:LMQcALoBAMIBAJQBATADUgBSAG4AvgEApAcAugEAwAEAwgEAlAEBEQhQALQBAMIBAR4KsgUAugEAwAEAlAEBEQKIAQELCIgJALoBAMIBAJIBAR0CTgBOALABAMIBANgBAMoBAG4AxAEA9gMAlAEBGgGEAQEPCYYHAJYBALIBAMoBAHoAyAEAbgDEAQA
+    ;; sm:LJIdALoBAMIBAJQBATADUgBSAG4AvgEApAcAugEAwAEAwgEAlAEBEQhQALQBAMIBAR4KsgUAugEAwAEAlAEBEQKIAQELCIgJALoBAMIBAJIBAR0CTgBOALABAMIBANgBAMoBAG4AxAEA9gMAlAEBGgGEAQEPCYYHAJYBALIBAMoBAHoAyAEAbgDEAQA
 BAHoAyAEAbgDEAQA
 AyAEAbgDEAQA
 AyAEAbgDEAQA

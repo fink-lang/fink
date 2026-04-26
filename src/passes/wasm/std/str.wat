@@ -20,7 +20,7 @@
 ;;   $StrBytesImpl — heap-allocated byte array (runtime-constructed, e.g. concat)
 
 (module
-  ;; Continuation dispatch: $apply_1 (defined in list.wat) wraps a single
+  ;; Continuation dispatch: $std/list.wat:apply_1 (defined in list.wat) wraps a single
   ;; result in a list and tail-calls $_apply (defined in dispatch.wat).
 
   ;; ---- Internal types (not visible to user code) ----
@@ -2427,7 +2427,7 @@
     (local $is_first i32)
 
     ;; Empty list: return "[]"
-    (if (call $list_op_empty (local.get $list))
+    (if (call $std/list.wat:list_op_empty (local.get $list))
       (then
         (return (call $_str_from_ascii_2
           (i32.const 0x5B) ;; '['
@@ -2443,16 +2443,16 @@
     (block $done1
       (loop $len_loop
         (br_if $done1
-          (call $list_op_empty (local.get $cur)))
+          (call $std/list.wat:list_op_empty (local.get $cur)))
         (local.set $total
           (i32.add (local.get $total)
             (call $_str_len
               (call $_str_fmt_val_repr
                 (ref.as_non_null
-                  (call $list_head_any (local.get $cur)))))))
+                  (call $std/list.wat:list_head_any (local.get $cur)))))))
         (local.set $count (i32.add (local.get $count) (i32.const 1)))
         (local.set $cur
-          (call $list_tail_any (local.get $cur)))
+          (call $std/list.wat:list_tail_any (local.get $cur)))
         (br $len_loop)))
 
     ;; Add separator bytes: (count - 1) * 2
@@ -2476,7 +2476,7 @@
     (block $done2
       (loop $copy_loop
         (br_if $done2
-          (call $list_op_empty (local.get $cur)))
+          (call $std/list.wat:list_op_empty (local.get $cur)))
 
         ;; Write ", " separator (except before first element).
         (if (i32.eqz (local.get $is_first))
@@ -2492,12 +2492,12 @@
           (call $_str_copy_to
             (call $_str_fmt_val_repr
               (ref.as_non_null
-                (call $list_head_any (local.get $cur))))
+                (call $std/list.wat:list_head_any (local.get $cur))))
             (local.get $buf)
             (local.get $pos)))
 
         (local.set $cur
-          (call $list_tail_any (local.get $cur)))
+          (call $std/list.wat:list_tail_any (local.get $cur)))
         (br $copy_loop)))
 
     ;; Write closing ']'.
@@ -2631,7 +2631,7 @@
         (br $copy_loop)))
 
     ;; Wrap and pass to continuation.
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $StrBytesImpl (local.get $dst))
       (local.get $cont))
   )
@@ -2739,11 +2739,11 @@
 
     (if (ref.is_null (local.get $result))
       (then
-        (return_call $apply_1
+        (return_call $std/list.wat:apply_1
           (local.get $str)
           (local.get $fail))))
 
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (ref.as_non_null (local.get $result))
       (local.get $succ))
   )
@@ -2785,7 +2785,7 @@
         (call $_str_slice (local.get $s) (local.get $start_f) (local.get $end_f)))
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 
@@ -2804,7 +2804,7 @@
           (f64.add (local.get $start_f) (f64.const 1))))
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
-      (return_call $apply_1
+      (return_call $std/list.wat:apply_1
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 
@@ -2839,7 +2839,7 @@
 
     ;; Cast subject to $Str — fail if not a string
     (if (i32.eqz (ref.test (ref $Str) (local.get $subj)))
-      (then (return_call $apply_0 (local.get $fail))))
+      (then (return_call $std/list.wat:apply_0 (local.get $fail))))
     (local.set $s_str (ref.cast (ref $Str) (local.get $subj)))
 
     ;; Cast prefix/suffix
@@ -2854,7 +2854,7 @@
     ;; Non-overlapping check: subject must be at least prefix + suffix long
     (if (i32.lt_u (local.get $s_len)
           (i32.add (local.get $p_len) (local.get $x_len)))
-      (then (return_call $apply_0 (local.get $fail))))
+      (then (return_call $std/list.wat:apply_0 (local.get $fail))))
 
     ;; Get byte arrays
     (local.set $s_bytes (call $str_bytes (local.get $s_str)))
@@ -2873,7 +2873,7 @@
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br_if $pfx_loop (i32.lt_u (local.get $i) (local.get $p_len))))
           (br 1)) ;; skip fail — prefix matched
-        (return_call $apply_0 (local.get $fail))))
+        (return_call $std/list.wat:apply_0 (local.get $fail))))
 
     ;; Check suffix match
     (local.set $mid_start (local.get $p_len))
@@ -2895,15 +2895,15 @@
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br_if $sfx_loop (i32.lt_u (local.get $i) (local.get $x_len))))
           (br 1)) ;; skip fail — suffix matched
-        (return_call $apply_0 (local.get $fail))))
+        (return_call $std/list.wat:apply_0 (local.get $fail))))
 
     ;; Both matched — slice the middle
     (if (i32.eqz (local.get $mid_len))
-      (then (return_call $apply_1 (call $str_empty) (local.get $succ))))
+      (then (return_call $std/list.wat:apply_1 (call $str_empty) (local.get $succ))))
 
     ;; Full string — no prefix or suffix
     (if (i32.eq (local.get $mid_len) (local.get $s_len))
-      (then (return_call $apply_1 (local.get $s_str) (local.get $succ))))
+      (then (return_call $std/list.wat:apply_1 (local.get $s_str) (local.get $succ))))
 
     ;; Copy middle bytes
     (local.set $mid (array.new $ByteArray (i32.const 0) (local.get $mid_len)))
@@ -2917,7 +2917,7 @@
             (i32.add (local.get $mid_start) (local.get $i))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $copy)))
-    (return_call $apply_1
+    (return_call $std/list.wat:apply_1
       (struct.new $StrBytesImpl (local.get $mid))
       (local.get $succ))
   )

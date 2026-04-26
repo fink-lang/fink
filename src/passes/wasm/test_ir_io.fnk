@@ -26,10 +26,10 @@ test 'std io import handling', fn:
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
       (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
       (type $std/rec.wat:Fn_rec_set_field (func (param (ref null any) (ref null any) (ref null any)) (result (ref null any))))
-      (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
+      (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_tail" (func $std/list.wat:args_tail (type $std/list.wat:Fn_args_head)))
+      (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
+      (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_shr" (func $rt/protocols.wat:op_shr (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:is_rec_like" (func $rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
@@ -390,4 +390,4 @@ test 'std io import handling', fn:
       (data $d_4 "stderr")
       (data $d_5 "stdout")
     )
-    ;; sm:rgHoKwC6AQDKAQDAAQCUAQHGARbeCQC6AQDEAQDKAQDAAQCUAQEtFlAA4gEAxgEBMASAAQDWAQEBDIoIALoBAMoBAMQBAMoBAMABAJQBAIwCAMYBAS0W1gYAugEAxAEAlgEBAgSAAQDWAQEBDIgKALoBAMoBAMoBAMABAJQBAS0DUgBSALIBAMYBALgCAM4BAG4AxgEAjAsAugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBZwZYARAGWAEQBVYBDgRUAIoCAMYBAV4EjAEAbgC8AQDCAQC-AQDsBAC6AQDAAQBuALoHALoBAMABAMABAMABAMABAJQBAJoBAJQBAG4AvAEAvgEAvgEAvgEA7ggAugEAwAEAwAEAwAEAwAEAlAEAmgEAlAEAogIAxgEBjQEzgAEBADP0CAC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDGAQEAM4ABAQAzsAgAugEAwAEAwAEAlAEAmgEAlAEA_AEAxgEBADOAAQEAM-4HALoBAMABAMABAJQBANgBAMYBAQAzgAEBADPyBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAM5QKALoBAMABAJIBALIBAMYBAHoAyAEAegD0AQBuALoBAMoBAL4BAOYPAJYBAGwAdgCWAQCaAgB2AJYBAJoCAHIAlAEAlgIAbgCSAQCSAgBuAMQBAIIHAJIBAK4BAM4BAHoAzAEAbgDGAQA
+    ;; sm:rgHQLAC6AQDKAQDAAQCUAQHGARbeCQC6AQDEAQDKAQDAAQCUAQEtFlAA4gEAxgEBMASAAQDWAQEBDIoIALoBAMoBAMQBAMoBAMABAJQBAIwCAMYBAS0W1gYAugEAxAEAlgEBAgSAAQDWAQEBDIgKALoBAMoBAMoBAMABAJQBAS0DUgBSALIBAMYBALgCAM4BAG4AxgEAjAsAugEAwAEAlAEAmgEAlAEAmgEAlAEAmgEAlAEBZwZYARAGWAEQBVYBDgRUAIoCAMYBAV4EjAEAbgC8AQDCAQC-AQDsBAC6AQDAAQBuALoHALoBAMABAMABAMABAMABAJQBAJoBAJQBAG4AvAEAvgEAvgEAvgEA7ggAugEAwAEAwAEAwAEAwAEAlAEAmgEAlAEAogIAxgEBjQEzgAEBADP0CAC6AQDAAQDAAQDAAQCUAQCaAQCUAQCiAgDGAQEAM4ABAQAzsAgAugEAwAEAwAEAlAEAmgEAlAEA_AEAxgEBADOAAQEAM-4HALoBAMABAMABAJQBANgBAMYBAQAzgAEBADPyBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAM5QKALoBAMABAJIBALIBAMYBAHoAyAEAegD0AQBuALoBAMoBAL4BAOYPAJYBAGwAdgCWAQCaAgB2AJYBAJoCAHIAlAEAlgIAbgCSAQCSAgBuAMQBAIIHAJIBAK4BAM4BAHoAzAEAbgDGAQA

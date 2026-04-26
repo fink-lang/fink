@@ -87,7 +87,7 @@
 
     ;; Append msg to messages (FIFO).
     (struct.set $Channel $messages (local.get $ch)
-      (call $list_concat
+      (call $std/list.wat:list_concat
         (struct.get $Channel $messages (local.get $ch))
         (struct.new $Cons
           (ref.as_non_null (local.get $msg))
@@ -120,7 +120,7 @@
 
     ;; Append cont to receivers (FIFO).
     (struct.set $Channel $receivers (local.get $ch)
-      (call $list_concat
+      (call $std/list.wat:list_concat
         (struct.get $Channel $receivers (local.get $ch))
         (struct.new $Cons
           (ref.as_non_null (local.get $cont))
