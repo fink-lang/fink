@@ -630,21 +630,36 @@
   ;;
   ;; The `std/io.fnk` virtual namespace is resolved at compile time to
   ;; these qualified exports. Each is a no-arg function returning the
-  ;; channel value; `ir_lower`'s BuiltIn::Import handler imports them
-  ;; under those qualified names and binds the result of calling each
-  ;; into the user's destructure rec.
+  ;; protocol value; `ir_lower::lower_import` imports them under the
+  ;; qualified names and binds the result of calling each into the
+  ;; user's destructure rec.
   ;;
-  ;; This file (rt/protocols.wat) is the centralised dispatcher: it
-  ;; hard-codes the route to the `interop_*` impl in `interop/rust.wat`,
-  ;; keeping `std/*` host-agnostic.
+  ;; The trampolines below are the **per-target dispatch table**: each
+  ;; routes a user-facing protocol (`std/io.fnk:foo`) to a stable
+  ;; cross-target ABI slot (`interop_io_get_foo`). Whichever
+  ;; `interop/<target>.wat` is linked fills those slots — today only
+  ;; `interop/rust.wat`; a future `interop/wasi.wat` would provide the
+  ;; same slot names with a different impl. ir_lower never sees the
+  ;; target choice — it always emits `std/io.fnk:foo` imports.
+  ;;
+  ;; The pattern generalises beyond stdio. See
+  ;; [project_protocol_dispatch_pattern.md] in the brain memory.
 
   (func (export "std/io.fnk:stdout") (result (ref any))
-    (return_call $interop_stdout))
+    (return_call $interop_io_get_stdout))
 
   (func (export "std/io.fnk:stderr") (result (ref any))
-    (return_call $interop_stderr))
+    (return_call $interop_io_get_stderr))
 
   (func (export "std/io.fnk:stdin") (result (ref any))
-    (return_call $interop_stdin))
+    (return_call $interop_io_get_stdin))
+
+  ;; std/io.fnk:read — host-coupled async read. Returns a `$Closure`
+  ;; (callable via `_apply`) wrapping the host's read primitive. The
+  ;; closure construction + Fn2 adapter live in interop/rust.wat
+  ;; (with the rest of the host-bridge plumbing); this file just
+  ;; routes the protocol export name.
+  (func (export "std/io.fnk:read") (result (ref any))
+    (return_call $interop_io_get_read))
 
 )

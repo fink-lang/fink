@@ -184,6 +184,8 @@ mod tests {
       "missing std/io.fnk:stderr dispatcher");
     assert!(exports.contains(&"std/io.fnk:stdin".to_string()),
       "missing std/io.fnk:stdin dispatcher");
+    assert!(exports.contains(&"std/io.fnk:read".to_string()),
+      "missing std/io.fnk:read dispatcher");
   }
 
   #[test]

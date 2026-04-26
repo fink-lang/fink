@@ -99,10 +99,6 @@ pub enum Sym {
   OpAnd, OpOr, OpXor, OpNot,
   OpShl, OpShr,
   OpRngex, OpRngin, OpIn, OpNotIn, OpDot,
-  // Read effect — `(stream, size, cont)` ternary CPS shape, same as
-  // any binary protocol op. Used by `BuiltIn::Read` for host stream
-  // input (e.g. stdin via `read stdin, 1024`).
-  OpRead,
   // Polymorphic predicate — same `(any, cont)` unary CPS shape as
   // OpNot. Used by `BuiltIn::Empty` and (future) other unary
   // predicates.
@@ -225,7 +221,6 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Receive   => &[Sym::Receive],
     BuiltIn::SeqPrepend => &[Sym::SeqPrepend],
     BuiltIn::RecMerge   => &[Sym::RecMerge],
-    BuiltIn::Read       => &[Sym::OpRead],
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
     BuiltIn::IsRecLike  => &[Sym::IsRecLike],
     BuiltIn::SeqPop     => &[Sym::SeqPop],
@@ -329,7 +324,6 @@ pub struct Runtime {
   op_in:      Option<FuncSym>,
   op_notin:   Option<FuncSym>,
   op_dot:     Option<FuncSym>,
-  op_read:    Option<FuncSym>,
 }
 
 impl Runtime {
@@ -399,7 +393,6 @@ impl Runtime {
       Sym::OpIn     => self.op_in,
       Sym::OpNotIn  => self.op_notin,
       Sym::OpDot    => self.op_dot,
-      Sym::OpRead   => self.op_read,
       Sym::StrFmt   => self.str_fmt,
       Sym::Yield    => self.yield_,
       Sym::Spawn    => self.spawn,
@@ -468,7 +461,6 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpIn            => ("rt/protocols.wat", "op_in"),
     Sym::OpNotIn         => ("rt/protocols.wat", "op_notin"),
     Sym::OpDot           => ("rt/protocols.wat", "op_dot"),
-    Sym::OpRead          => ("rt/protocols.wat", "op_read"),
     Sym::OpEmpty         => ("rt/protocols.wat", "op_empty"),
     Sym::SeqPrepend      => ("std/list.wat",     "seq_prepend"),
     Sym::RecMerge        => ("std/rec.wat",      "rec_merge"),
@@ -784,7 +776,6 @@ const BINARY_OPS: &[Sym] = &[
   Sym::OpAnd, Sym::OpOr, Sym::OpXor,
   Sym::OpShl, Sym::OpShr,
   Sym::OpRngex, Sym::OpRngin, Sym::OpIn, Sym::OpNotIn, Sym::OpDot,
-  Sym::OpRead,
 ];
 
 fn any_binary_op_needed(usage: &RuntimeUsage) -> bool {
@@ -868,7 +859,6 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::OpIn     => &mut rt.op_in,
     Sym::OpNotIn  => &mut rt.op_notin,
     Sym::OpDot    => &mut rt.op_dot,
-    Sym::OpRead   => &mut rt.op_read,
     Sym::OpNot    => &mut rt.op_not,
     Sym::OpEmpty  => &mut rt.op_empty,
     _ => panic!("set_op: {:?} is not a protocol Sym", sym),

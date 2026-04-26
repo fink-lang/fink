@@ -294,8 +294,11 @@ pub enum BuiltIn {
   // Receive(channel, cont) — park receiver; cont receives message when matched.
   // Send is not a builtin — `msg >> ch` dispatches via op_shr to channel.wat's $send.
   Channel, Receive,
-  // IO — host-mediated async read.
-  // Read(stream, size, cont) — read up to `size` bytes from stream; cont receives data.
+  // IO — host-mediated async read. Used by the OLD pipeline only.
+  // The IR pipeline imports `read` from `std/io.fnk` instead; an
+  // ident named `read` resolves to this builtin only when not
+  // shadowed by an import. Plan: remove once the old pipeline goes
+  // away. See [.brain/.scratch/read-as-imported-fn.md].
   Read,
   // Module export — terminal App in a module body. Args are the exported
   // bindings. Replaces anonymous ContRef at module level.
@@ -371,9 +374,9 @@ impl BuiltIn {
       "channel" => BuiltIn::Channel,
       "receive" => BuiltIn::Receive,
       // IO
-      "read" => BuiltIn::Read,
       // Module
       "import" => BuiltIn::Import,
+      "read" => BuiltIn::Read,
       _     => panic!("BuiltIn::from_builtin_str: unknown name {:?}", s),
     }
   }

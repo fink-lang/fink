@@ -85,7 +85,7 @@ test 'send with <<', fn:
 
 test 'read from stdin', fn:
   expect run ƒink:
-    {stdin, stdout} = import 'std/io.fnk'
+    {stdin, stdout, read} = import 'std/io.fnk'
 
     main = fn:
       data = read stdin, 1024

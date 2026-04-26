@@ -457,16 +457,6 @@ fn lower_expr(
       emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
     }
 
-    // Read: `(stream, size, cont)` — host-mediated async read effect.
-    // Same ternary CPS shape as a binary protocol op; the runtime
-    // dispatches `$HostChannel` reads to `interop_op_read`.
-    ExprKind::App { func: Callable::BuiltIn(BuiltIn::Read), args } => {
-      let (a, b, cont) = split_binary_args(args);
-      let a_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, a);
-      let b_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, b);
-      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpRead, vec![a_op, b_op], cont, expr.id);
-    }
-
     // RecMerge: `(dest, src, cont)` — same shape as SeqPrepend.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args } => {
       let (a, b, cont) = split_binary_args(args);

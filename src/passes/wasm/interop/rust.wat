@@ -21,7 +21,7 @@
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $_host_cont_adapter)
+  (elem declare func $_host_cont_adapter $_io_read_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -234,13 +234,56 @@
       (struct.new $Nil)
       (ref.i31 (i32.const 0))))
 
-  (func $interop_stdout (export "interop_stdout") (result (ref any))
+  (func $interop_io_get_stdout (export "interop_io_get_stdout") (result (ref any))
     (global.get $stdout))
 
-  (func $interop_stderr (export "interop_stderr") (result (ref any))
+  (func $interop_io_get_stderr (export "interop_io_get_stderr") (result (ref any))
     (global.get $stderr))
 
-  (func $interop_stdin (export "interop_stdin") (result (ref any))
+  (func $interop_io_get_stdin (export "interop_io_get_stdin") (result (ref any))
     (global.get $stdin))
+
+
+  ;; -- read closure ----------------------------------------------------------
+  ;;
+  ;; `std/io.fnk:read` returns a $Closure value (callable via _apply),
+  ;; not a bare reference. The closure construction lives here because
+  ;; it bridges between two ABIs:
+  ;;   * user calling convention via _apply → args list = [cont, ...user_args]
+  ;;   * interop_op_read fixed-arg ABI       → (stream, size, cont)
+  ;; That translation is host-bridge plumbing, hence belongs alongside
+  ;; the rest of the interop_* primitives.
+  ;;
+  ;; Singleton — same closure instance every access; captures null
+  ;; (nothing per-instance).
+
+  (func $_io_read_apply (type $Fn2)
+    (param $_caps (ref null any))
+    (param $args (ref null any))
+
+    (local $cursor (ref null any))
+    (local $cont (ref null any))
+    (local $stream (ref null any))
+    (local $size (ref null any))
+
+    (local.set $cursor (local.get $args))
+    (local.set $cont (call $list_head_any (local.get $cursor)))
+    (local.set $cursor (call $list_tail_any (local.get $cursor)))
+    (local.set $stream (call $list_head_any (local.get $cursor)))
+    (local.set $cursor (call $list_tail_any (local.get $cursor)))
+    (local.set $size (call $list_head_any (local.get $cursor)))
+
+    (return_call $interop_op_read
+      (local.get $stream)
+      (local.get $size)
+      (local.get $cont)))
+
+  (global $_io_read_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $_io_read_apply)
+      (ref.null $Captures)))
+
+  (func $interop_io_get_read (export "interop_io_get_read") (result (ref any))
+    (global.get $_io_read_closure))
 
 )
