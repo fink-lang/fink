@@ -493,7 +493,7 @@
           (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
             (local.get $a))))
       (drop)
-      (return_call $interop_channel_send
+      (return_call $interop/rust.wat:interop_channel_send
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
@@ -536,7 +536,7 @@
           (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
             (local.get $b))))
       (drop)
-      (return_call $interop_channel_send
+      (return_call $interop/rust.wat:interop_channel_send
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
@@ -579,7 +579,7 @@
           (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
             (local.get $ch))))
       (drop)
-      (return_call $interop_channel_recv
+      (return_call $interop/rust.wat:interop_channel_recv
         (local.get $ch)
         (local.get $cont)))
 
@@ -600,7 +600,7 @@
     (param $size (ref null any))
     (param $cont (ref null any))
 
-    (return_call $interop_op_read
+    (return_call $interop/rust.wat:interop_op_read
       (local.get $stream)
       (local.get $size)
       (local.get $cont)))
@@ -615,13 +615,13 @@
   ;; a direct tail-call (terminal of a fail chain) and as a $Closure value
   ;; passed as a fail continuation to pattern matchers.
   ;;
-  ;; Delegates to $interop_panic, which calls into the host to trap the
+  ;; Delegates to $interop/rust.wat:interop_panic, which calls into the host to trap the
   ;; instance with a diagnostic message. Today panic carries no payload —
   ;; future work will pass a reason / source location for better diagnostics.
   (func $rt/protocols.wat:panic (export "rt/protocols.wat:panic")
     (param $_caps (ref null any))
     (param $_args (ref null any))
-    (return_call $interop_panic))
+    (return_call $interop/rust.wat:interop_panic))
 
 
   ;; =========================================================================
