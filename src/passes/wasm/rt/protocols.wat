@@ -646,13 +646,13 @@
   ;; [project_protocol_dispatch_pattern.md] in the brain memory.
 
   (func (export "std/io.fnk:stdout") (result (ref any))
-    (return_call $interop_io_get_stdout))
+    (return_call $interop/io:get_stdout))
 
   (func (export "std/io.fnk:stderr") (result (ref any))
-    (return_call $interop_io_get_stderr))
+    (return_call $interop/io:get_stderr))
 
   (func (export "std/io.fnk:stdin") (result (ref any))
-    (return_call $interop_io_get_stdin))
+    (return_call $interop/io:get_stdin))
 
   ;; std/io.fnk:read — host-coupled async read. Returns a `$Closure`
   ;; (callable via `_apply`) wrapping the host's read primitive. The
@@ -660,6 +660,6 @@
   ;; (with the rest of the host-bridge plumbing); this file just
   ;; routes the protocol export name.
   (func (export "std/io.fnk:read") (result (ref any))
-    (return_call $interop_io_get_read))
+    (return_call $interop/io:get_read))
 
 )
