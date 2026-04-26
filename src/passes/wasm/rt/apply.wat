@@ -5,7 +5,10 @@
 
 (module
 
-  (func $_apply (export "_apply")
+  ;; Universal closure dispatcher. Host-callable entry point for the
+  ;; runner; also tail-called from every CPS continuation site.
+  ;; Export name `_apply` is the host ABI contract — do not rename.
+  (func $rt/apply.wat:apply (export "rt/apply.wat:apply")
     (param $args (ref null any))
     (param $callee (ref null any))
 

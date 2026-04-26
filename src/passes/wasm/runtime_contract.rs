@@ -431,7 +431,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::Closure         => ("rt/types.wat",     "Closure"),
     Sym::Captures        => ("rt/types.wat",     "Captures"),
     Sym::VarArgs         => ("rt/types.wat",     "VarArgs"),
-    Sym::Apply           => ("rt/apply.wat",     "_apply"),
+    Sym::Apply           => ("rt/apply.wat",     "rt/apply.wat:apply"),
     Sym::ArgsHead        => ("std/list.wat",     "args_head"),
     Sym::ArgsTail        => ("std/list.wat",     "args_tail"),
     Sym::ArgsEmpty       => ("std/list.wat",     "args_empty"),

@@ -63,7 +63,7 @@
         (call $host_resume)
         (if (ref.test (ref $Nil) (global.get $task_queue))
           (then (return)))))
-    (return_call $_apply (struct.new $Nil) (call $queue_pop))
+    (return_call $rt/apply.wat:apply (struct.new $Nil) (call $queue_pop))
   )
 
   ;; Make a thunk (zero-arg task closure) that calls cont with a value.
@@ -75,7 +75,7 @@
     (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
     (local.set $cont (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
     (local.set $value (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 1))))
-    (return_call $_apply
+    (return_call $rt/apply.wat:apply
       (struct.new $Cons (local.get $value) (struct.new $Nil))
       (local.get $cont))
   )
@@ -147,7 +147,7 @@
     (local.set $settle_cont (ref.as_non_null
       (array.get $Captures (local.get $captures) (i32.const 1))))
     ;; Call task_fn with args = [settle_cont]
-    (return_call $_apply
+    (return_call $rt/apply.wat:apply
       (struct.new $Cons (local.get $settle_cont) (struct.new $Nil))
       (local.get $task_fn))
   )

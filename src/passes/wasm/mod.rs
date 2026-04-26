@@ -167,8 +167,8 @@ mod tests {
       "missing fink_module export. got: {exports:?}");
 
     // Runtime exports are passed through (with <url>:<name> qualification).
-    assert!(exports.contains(&"rt/apply.wat:_apply".to_string()),
-      "missing rt/apply.wat:_apply passthrough");
+    assert!(exports.contains(&"rt/apply.wat:apply".to_string()),
+      "missing rt/apply.wat:apply passthrough");
     assert!(exports.contains(&"std/list.wat:args_empty".to_string()),
       "missing std/list.wat:args_empty passthrough");
 
@@ -276,5 +276,6 @@ mod tests {
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_records.fnk", skip-ir);
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_strings.fnk", skip-ir);
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_link.fnk", skip-ir);
+    test_macros::include_fink_tests!("src/passes/wasm/test_ir_io.fnk", skip-ir);
   }
 }

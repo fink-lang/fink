@@ -378,7 +378,7 @@ mod tests {
       *captured.lock().unwrap() = None;
 
       let main_clo  = main_global.get(&mut store);
-      let apply_fn  = get_func(&instance, &mut store, "rt/apply.wat:_apply")?;
+      let apply_fn  = get_func(&instance, &mut store, "rt/apply.wat:apply")?;
       let str_wrap  = get_func(&instance, &mut store, "std/str.wat:_str_wrap_bytes")?;
 
       let mut main_args_vals = vec![done_cont];

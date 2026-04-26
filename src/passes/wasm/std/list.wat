@@ -33,13 +33,13 @@
   ;; (defined in dispatch.wat — all runtime WATs are merged into one module).
   ;; These dispatch to continuations (no cont param → _apply_2).
   (func $apply_0 (param $cont (ref null any))
-    (return_call $_apply (struct.new $Nil) (local.get $cont)))
+    (return_call $rt/apply.wat:apply (struct.new $Nil) (local.get $cont)))
   (func $apply_1 (param $result (ref null any)) (param $cont (ref null any))
-    (return_call $_apply
+    (return_call $rt/apply.wat:apply
       (struct.new $Cons (ref.as_non_null (local.get $result)) (struct.new $Nil))
       (local.get $cont)))
   (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $_apply
+    (return_call $rt/apply.wat:apply
       (struct.new $Cons (ref.as_non_null (local.get $a))
         (struct.new $Cons (ref.as_non_null (local.get $b)) (struct.new $Nil)))
       (local.get $cont)))
