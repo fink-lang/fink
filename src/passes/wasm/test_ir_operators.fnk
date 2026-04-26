@@ -202,7 +202,7 @@ test 'range exclusive', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/range.wat" "op_rngex" (func $std/range.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/range.wat" "std/range.wat:op_rngex" (func $std/range.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -214,7 +214,7 @@ test 'range exclusive', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BIQMAJIBAQABhAEBBgKGAQEFBQ
+    ;; sm:BKAMAJIBAQABhAEBBgKGAQEFBQ
 
 
 test 'range inclusive', fn:
@@ -227,7 +227,7 @@ test 'range inclusive', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/range.wat" "op_rngin" (func $std/range.wat:op_rngin (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/range.wat" "std/range.wat:op_rngin" (func $std/range.wat:op_rngin (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -239,7 +239,7 @@ test 'range inclusive', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BIQMAJIBAQABhAEBCAKGAQEHBg
+    ;; sm:BKAMAJIBAQABhAEBCAKGAQEHBg
 
 
 test 'range in', fn:
@@ -254,7 +254,7 @@ test 'range in', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/range.wat" "op_rngex" (func $std/range.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/range.wat" "std/range.wat:op_rngex" (func $std/range.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_in" (func $rt/protocols.wat:op_in (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_12 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -282,7 +282,7 @@ test 'range in', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:C4oRALoBAL4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
+    ;; sm:C6YRALoBAL4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 
 4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 

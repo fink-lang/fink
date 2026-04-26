@@ -2773,11 +2773,11 @@
             (local.get $key))))
       (local.set $range)
 
-      (local.set $start_f (struct.get $Num 0 (call $range_start (local.get $range))))
-      (local.set $end_f (struct.get $Num 0 (call $range_end (local.get $range))))
+      (local.set $start_f (struct.get $Num 0 (call $std/range.wat:range_start (local.get $range))))
+      (local.set $end_f (struct.get $Num 0 (call $std/range.wat:range_end (local.get $range))))
 
       ;; Adjust end for inclusive range
-      (if (call $range_is_incl (local.get $range))
+      (if (call $std/range.wat:range_is_incl (local.get $range))
         (then
           (local.set $end_f (f64.add (local.get $end_f) (f64.const 1)))))
 

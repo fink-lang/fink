@@ -199,7 +199,7 @@
     (local $col_idx i32)
 
     ;; compute hash once
-    (local.set $h (call $hash_i31(local.get $key)))
+    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
     (local.set $depth (i32.const 0))
 
     (block $not_found
@@ -287,7 +287,7 @@
 
     (local $h i32)
 
-    (local.set $h (call $hash_i31(local.get $key)))
+    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
     (call $std/rec.wat:_hamt_set_inner
       (local.get $current)
       (local.get $key)
@@ -542,7 +542,7 @@
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
                       (struct.get $HamtLeaf $val
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
-                      (call $hash_i31
+                      (call $std/hashing.wat:hash_i31
                         (struct.get $HamtLeaf $key
                           (ref.cast (ref $HamtLeaf) (local.get $child))))
                       (i32.add (local.get $depth) (i32.const 1)))
@@ -589,7 +589,7 @@
     (result (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $hash_i31(local.get $key)))
+    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
     (call $std/rec.wat:_hamt_delete_inner
       (local.get $current)
       (local.get $key)
@@ -861,7 +861,7 @@
     (result (ref null eq) (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $hash_i31(local.get $key)))
+    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
     (call $std/rec.wat:_hamt_pop_inner
       (local.get $current)
       (local.get $key)

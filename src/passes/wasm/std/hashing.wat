@@ -12,7 +12,7 @@
 ;;   - Compiler can shortcut the dispatch when the type is statically known
 ;;
 ;; Exported functions:
-;;   $hash_i31  : (ref eq) -> i32
+;;   $std/hashing.wat:hash_i31  : (ref eq) -> i32
 
 (module
 
@@ -25,7 +25,7 @@
   ;; Unreachable for types that are not valid hash keys (closures,
   ;; collections, templates). The compiler must not emit hash_i31
   ;; calls for those types.
-  (func $hash_i31
+  (func $std/hashing.wat:hash_i31
     (param $key (ref eq))
     (result i32)
 
@@ -43,7 +43,7 @@
         (br $not_num
           (br_on_cast $is_num (ref eq) (ref $Num)
             (local.get $key))))
-      (return (call $_hash_f64
+      (return (call $std/hashing.wat:_hash_f64
         (struct.get $Num $val))))
 
     ;; Try $Str — delegate to string module
@@ -65,7 +65,7 @@
   ;;
   ;; XOR the upper and lower 32-bit halves, then mask to 31 bits
   ;; so the result fits in i31ref without overflow.
-  (func $_hash_f64
+  (func $std/hashing.wat:_hash_f64
     (param $v f64)
     (result i32)
 

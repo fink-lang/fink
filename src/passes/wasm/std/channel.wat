@@ -16,15 +16,15 @@
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $_process_msg_q_fn)
+  (elem declare func $std/channel.wat:_process_msg_q_fn)
 
 
   ;; -- Helpers --------------------------------------------------------------
 
   ;; Create a process_msg_q closure capturing [ch].
-  (func $make_process_msg_q (param $ch (ref $Channel)) (result (ref $Closure))
+  (func $std/channel.wat:make_process_msg_q (param $ch (ref $Channel)) (result (ref $Closure))
     (struct.new $Closure
-      (ref.func $_process_msg_q_fn)
+      (ref.func $std/channel.wat:_process_msg_q_fn)
       (array.new_fixed $Captures 1 (local.get $ch)))
   )
 
@@ -35,7 +35,7 @@
   ;; The host calls this to create channels before entering the CPS world
   ;; (e.g. for stdin/stdout/stderr injection into main).
 
-  (func $_channel_new (export "_channel_new")
+  (func $std/channel.wat:_channel_new (export "std/channel.wat:_channel_new")
     (param $tag (ref null any))
     (result (ref any))
     (struct.new $Channel
@@ -51,7 +51,7 @@
   ;;   2. push thunk(cont, channel) to task queue
   ;;   3. run_next
 
-  (func $channel (export "channel")
+  (func $std/channel.wat:channel (export "std/channel.wat:channel")
     (param $tag (ref null any))
     (param $cont (ref null any))
 
@@ -61,11 +61,11 @@
       (struct.new $Nil)
       (ref.as_non_null (local.get $tag))))
 
-    (call $queue_push
-      (call $make_thunk
+    (call $std/scheduler.wat:queue_push
+      (call $std/scheduler.wat:make_thunk
         (ref.as_non_null (local.get $cont))
         (local.get $ch)))
-    (return_call $resume)
+    (return_call $std/scheduler.wat:resume)
   )
 
 
@@ -77,7 +77,7 @@
   ;;   3. push unit_thunk(cont) to task queue
   ;;   4. run_next
 
-  (func $channel_op_shr
+  (func $std/channel.wat:channel_op_shr
     (param $ch_val (ref null any))
     (param $msg    (ref null any))
     (param $cont   (ref null any))
@@ -94,13 +94,13 @@
           (struct.new $Nil))))
 
     ;; Push process_msg_q to drain one pair.
-    (call $queue_push (call $make_process_msg_q (local.get $ch)))
+    (call $std/scheduler.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))
 
     ;; Sender continues with unit (always suspends).
-    (call $queue_push
-      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+    (call $std/scheduler.wat:queue_push
+      (call $std/scheduler.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
 
-    (return_call $resume)
+    (return_call $std/scheduler.wat:resume)
   )
 
 
@@ -111,7 +111,7 @@
   ;;   2. if ch.$messages non-empty, push process_msg_q(ch) to task queue
   ;;   3. run_next
 
-  (func $channel_receive
+  (func $std/channel.wat:channel_receive
     (param $ch_val (ref null any))
     (param $cont   (ref null any))
 
@@ -129,9 +129,9 @@
     ;; If messages are buffered, trigger matching.
     (if (ref.test (ref $Cons) (struct.get $Channel $messages (local.get $ch)))
       (then
-        (call $queue_push (call $make_process_msg_q (local.get $ch)))))
+        (call $std/scheduler.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
 
-    (return_call $resume)
+    (return_call $std/scheduler.wat:resume)
   )
 
 
@@ -147,7 +147,7 @@
   ;;   4. if both lists still non-empty → push self to task queue
   ;;   5. run_next
 
-  (func $_process_msg_q_fn (type $Fn2)
+  (func $std/channel.wat:_process_msg_q_fn (type $Fn2)
     (param $caps (ref null any))
     (param $args (ref null any))
 
@@ -169,7 +169,7 @@
     (if (i32.or
           (ref.test (ref $Nil) (local.get $messages))
           (ref.test (ref $Nil) (local.get $receivers)))
-      (then (return_call $resume)))
+      (then (return_call $std/scheduler.wat:resume)))
 
     ;; Pop one message.
     (local.set $msg_cons (ref.cast (ref $Cons) (local.get $messages)))
@@ -182,8 +182,8 @@
       (struct.get $Cons $tail (local.get $recv_cons)))
 
     ;; Push thunk(receiver, msg) to task queue.
-    (call $queue_push
-      (call $make_thunk
+    (call $std/scheduler.wat:queue_push
+      (call $std/scheduler.wat:make_thunk
         (struct.get $Cons $head (local.get $recv_cons))
         (struct.get $Cons $head (local.get $msg_cons))))
 
@@ -192,9 +192,9 @@
           (ref.test (ref $Cons) (struct.get $Channel $messages (local.get $ch)))
           (ref.test (ref $Cons) (struct.get $Channel $receivers (local.get $ch))))
       (then
-        (call $queue_push (call $make_process_msg_q (local.get $ch)))))
+        (call $std/scheduler.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
 
-    (return_call $resume)
+    (return_call $std/scheduler.wat:resume)
   )
 
 )

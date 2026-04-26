@@ -121,10 +121,10 @@
     (call $host_channel_send (local.get $tag) (local.get $bytes))
 
     ;; Sender continues with unit.
-    (call $queue_push
-      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+    (call $std/scheduler.wat:queue_push
+      (call $std/scheduler.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
 
-    (return_call $resume)
+    (return_call $std/scheduler.wat:resume)
   )
 
 
@@ -152,7 +152,7 @@
           (ref.as_non_null (local.get $cont))
           (struct.new $Nil))))
 
-    (return_call $resume)
+    (return_call $std/scheduler.wat:resume)
   )
 
 
@@ -186,7 +186,7 @@
       (local.get $future))
 
     ;; Resume scheduler — this task is parked on the future.
-    (return_call $resume)
+    (return_call $std/scheduler.wat:resume)
   )
 
 

@@ -14,10 +14,10 @@
 ;;   └── $RangeImpl     ← start, end, inclusive flag
 ;;
 ;; Exported functions:
-;;   $range_excl  : (ref $Num), (ref $Num) -> (ref $Range)
-;;   $range_incl  : (ref $Num), (ref $Num) -> (ref $Range)
-;;   $range_op_in    : (ref $Num), (ref $Range) -> i32
-;;   $range_op_not_in : (ref $Num), (ref $Range) -> i32
+;;   $std/range.wat:range_excl  : (ref $Num), (ref $Num) -> (ref $Range)
+;;   $std/range.wat:range_incl  : (ref $Num), (ref $Num) -> (ref $Range)
+;;   $std/range.wat:range_op_in    : (ref $Num), (ref $Range) -> i32
+;;   $std/range.wat:range_op_not_in : (ref $Num), (ref $Range) -> i32
 
 (module
 
@@ -34,7 +34,7 @@
   ;; -- Construction ---------------------------------------------------
 
   ;; range_excl(start, end) → exclusive range
-  (func $range_excl (export "range_excl")
+  (func $std/range.wat:range_excl (export "std/range.wat:range_excl")
     (param $start (ref $Num)) (param $end (ref $Num))
     (result (ref $Range))
     (struct.new $RangeImpl
@@ -45,7 +45,7 @@
   )
 
   ;; range_incl(start, end) → inclusive range
-  (func $range_incl (export "range_incl")
+  (func $std/range.wat:range_incl (export "std/range.wat:range_incl")
     (param $start (ref $Num)) (param $end (ref $Num))
     (result (ref $Range))
     (struct.new $RangeImpl
@@ -62,7 +62,7 @@
   ;;
   ;; For exclusive: start <= val < end
   ;; For inclusive: start <= val <= end
-  (func $range_op_in (export "range_op_in")
+  (func $std/range.wat:range_op_in (export "std/range.wat:range_op_in")
     (param $val (ref $Num)) (param $range (ref $Range))
     (result i32)
     (local $impl (ref $RangeImpl))
@@ -101,31 +101,31 @@
   )
 
   ;; range_op_not_in(val, range) → 1 if val is NOT in range, 0 otherwise
-  (func $range_op_not_in (export "range_op_not_in")
+  (func $std/range.wat:range_op_not_in (export "std/range.wat:range_op_not_in")
     (param $val (ref $Num)) (param $range (ref $Range))
     (result i32)
-    (i32.eqz (call $range_op_in (local.get $val) (local.get $range)))
+    (i32.eqz (call $std/range.wat:range_op_in (local.get $val) (local.get $range)))
   )
 
 
   ;; -- Accessors --------------------------------------------------------
 
   ;; range_start(range) → start bound as $Num
-  (func $range_start (export "range_start")
+  (func $std/range.wat:range_start (export "std/range.wat:range_start")
     (param $range (ref $Range))
     (result (ref $Num))
     (struct.get $RangeImpl $start
       (ref.cast (ref $RangeImpl) (local.get $range))))
 
   ;; range_end(range) → end bound as $Num
-  (func $range_end (export "range_end")
+  (func $std/range.wat:range_end (export "std/range.wat:range_end")
     (param $range (ref $Range))
     (result (ref $Num))
     (struct.get $RangeImpl $end
       (ref.cast (ref $RangeImpl) (local.get $range))))
 
   ;; range_is_incl(range) → 1 if inclusive, 0 if exclusive
-  (func $range_is_incl (export "range_is_incl")
+  (func $std/range.wat:range_is_incl (export "std/range.wat:range_is_incl")
     (param $range (ref $Range))
     (result i32)
     (struct.get $RangeImpl $incl
@@ -134,18 +134,18 @@
 
   ;; CPS wrappers — stripped by unit test harness (prepare_wat).
 
-  (func $op_rngex (export "op_rngex")
+  (func $std/range.wat:op_rngex (export "std/range.wat:op_rngex")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $range_excl
+      (call $std/range.wat:range_excl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
-  (func $op_rngin (export "op_rngin")
+  (func $std/range.wat:op_rngin (export "std/range.wat:op_rngin")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $range_incl
+      (call $std/range.wat:range_incl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))

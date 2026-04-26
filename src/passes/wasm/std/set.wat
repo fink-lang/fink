@@ -27,24 +27,24 @@
 ;; Exported functions:
 ;;    TODO: SetNode/SetImpl are internal, public interfaces should use Set.
 ;;      Or these functions should be made private _* .
-;;   $set_new        : () -> (ref $SetNode)
-;;   $set_set        : (ref $SetNode), (ref eq) -> (ref $SetNode)
-;;   $set_has        : (ref $SetNode), (ref eq) -> i32
-;;   $set_remove     : (ref $SetNode), (ref eq) -> (ref $SetNode)
-;;   $set_size       : (ref $SetNode) -> i32
-;;   $set_union      : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
+;;   $std/set.wat:set_new        : () -> (ref $SetNode)
+;;   $std/set.wat:set_set        : (ref $SetNode), (ref eq) -> (ref $SetNode)
+;;   $std/set.wat:set_has        : (ref $SetNode), (ref eq) -> i32
+;;   $std/set.wat:set_remove     : (ref $SetNode), (ref eq) -> (ref $SetNode)
+;;   $std/set.wat:set_size       : (ref $SetNode) -> i32
+;;   $std/set.wat:set_union      : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
 ;;                     a + b — all entries from both
-;;   $set_intersect  : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
+;;   $std/set.wat:set_intersect  : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
 ;;                     a & b — entries in both
-;;   $set_difference : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
+;;   $std/set.wat:set_difference : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
 ;;                     a - b — entries in a not in b
-;;   $set_sym_diff   : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
+;;   $std/set.wat:set_sym_diff   : (ref $SetNode), (ref $SetNode) -> (ref $SetNode)
 ;;                     a ^ b — entries in one but not both
-;;   $set_subset     : (ref $SetNode), (ref $SetNode) -> i32
+;;   $std/set.wat:set_subset     : (ref $SetNode), (ref $SetNode) -> i32
 ;;                     a <= b — 1 if every element of a is in b (short-circuits)
-;;   $set_disjoint   : (ref $SetNode), (ref $SetNode) -> i32
+;;   $std/set.wat:set_disjoint   : (ref $SetNode), (ref $SetNode) -> i32
 ;;                     a >< b — 1 if no common elements (short-circuits)
-;;   $set_eq         : (ref $SetNode), (ref $SetNode) -> i32
+;;   $std/set.wat:set_eq         : (ref $SetNode), (ref $SetNode) -> i32
 ;;                     a == b — same size and a <= b
 
 (module
@@ -86,7 +86,7 @@
 
   ;; -- Helpers --------------------------------------------------------
 
-  (func $_set_hash_fragment (param $hash i32) (param $depth i32) (result i32)
+  (func $std/set.wat:_set_hash_fragment (param $hash i32) (param $depth i32) (result i32)
     local.get $hash
     local.get $depth
     i32.const 5
@@ -96,7 +96,7 @@
     i32.and
   )
 
-  (func $_set_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
+  (func $std/set.wat:_set_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
     local.get $bitmap
     i32.const 1
     local.get $fragment
@@ -107,7 +107,7 @@
     i32.popcnt
   )
 
-  (func $_set_collision_find
+  (func $std/set.wat:_set_collision_find
     (param $entries (ref $SetChildren))
     (param $key (ref eq))
     (result i32)
@@ -143,14 +143,14 @@
     )
   )
 
-  (func $set_new (export "set_new") (result (ref $SetNode))
+  (func $std/set.wat:set_new (export "std/set.wat:set_new") (result (ref $SetNode))
     global.get $empty_node
   )
 
 
   ;; -- Has ------------------------------------------------------------
 
-  (func $set_has (export "set_has")
+  (func $std/set.wat:set_has (export "std/set.wat:set_has")
     (param $current (ref $SetNode))
     (param $key (ref eq))
     (result i32)
@@ -163,13 +163,13 @@
     (local $idx i32)
     (local $child (ref null struct))
 
-    (local.set $h (call $hash_i31(local.get $key)))
+    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
     (local.set $depth (i32.const 0))
 
     (block $not_found
       (loop $descend
         (local.set $fragment
-          (call $_set_hash_fragment (local.get $h) (local.get $depth)))
+          (call $std/set.wat:_set_hash_fragment (local.get $h) (local.get $depth)))
         (local.set $bitmap
           (struct.get $SetNode $bitmap (local.get $current)))
         (local.set $bit
@@ -179,7 +179,7 @@
           (i32.eqz (i32.and (local.get $bitmap) (local.get $bit))))
 
         (local.set $idx
-          (call $_set_bit_index (local.get $bitmap) (local.get $fragment)))
+          (call $std/set.wat:_set_bit_index (local.get $bitmap) (local.get $fragment)))
         (local.set $child
           (array.get $SetChildren
             (struct.get $SetNode $children (local.get $current))
@@ -200,7 +200,7 @@
           (then
             (return
               (i32.ge_s
-                (call $_set_collision_find
+                (call $std/set.wat:_set_collision_find
                   (struct.get $SetCollision $col_entries
                     (ref.cast (ref $SetCollision) (local.get $child)))
                   (local.get $key))
@@ -219,19 +219,19 @@
 
   ;; -- Add ------------------------------------------------------------
 
-  (func $set_set (export "set_set")
+  (func $std/set.wat:set_set (export "std/set.wat:set_set")
     (param $current (ref $SetNode))
     (param $key (ref eq))
     (result (ref $SetNode))
 
-    (call $_set_set_inner
+    (call $std/set.wat:_set_set_inner
       (local.get $current)
       (local.get $key)
-      (call $hash_i31(local.get $key))
+      (call $std/hashing.wat:hash_i31(local.get $key))
       (i32.const 0))
   )
 
-  (func $_set_set_inner
+  (func $std/set.wat:_set_set_inner
     (param $current (ref $SetNode))
     (param $key (ref eq))
     (param $h i32)
@@ -253,13 +253,13 @@
     (local $new_col_entries (ref $SetChildren))
 
     (local.set $fragment
-      (call $_set_hash_fragment (local.get $h) (local.get $depth)))
+      (call $std/set.wat:_set_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
       (struct.get $SetNode $bitmap (local.get $current)))
     (local.set $idx
-      (call $_set_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $std/set.wat:_set_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $old_children
       (struct.get $SetNode $children (local.get $current)))
     (local.set $old_len
@@ -327,7 +327,7 @@
           (struct.get $SetCollision $col_entries
             (ref.cast (ref $SetCollision) (local.get $child))))
         (local.set $col_idx
-          (call $_set_collision_find (local.get $col_entries) (local.get $key)))
+          (call $std/set.wat:_set_collision_find (local.get $col_entries) (local.get $key)))
 
         ;; already present — return unchanged
         (if (i32.ge_s (local.get $col_idx) (i32.const 0))
@@ -410,12 +410,12 @@
                 (array.set $SetChildren
                   (local.get $new_children)
                   (local.get $idx)
-                  (call $_set_set_inner
-                    (call $_set_set_inner
-                      (call $set_new)
+                  (call $std/set.wat:_set_set_inner
+                    (call $std/set.wat:_set_set_inner
+                      (call $std/set.wat:set_new)
                       (struct.get $SetEntry $key
                         (ref.cast (ref $SetEntry) (local.get $child)))
-                      (call $hash_i31
+                      (call $std/hashing.wat:hash_i31
                         (struct.get $SetEntry $key
                           (ref.cast (ref $SetEntry) (local.get $child))))
                       (i32.add (local.get $depth) (i32.const 1)))
@@ -439,7 +439,7 @@
     (array.set $SetChildren
       (local.get $new_children)
       (local.get $idx)
-      (call $_set_set_inner
+      (call $std/set.wat:_set_set_inner
         (ref.cast (ref $SetNode) (local.get $child))
         (local.get $key)
         (local.get $h)
@@ -452,19 +452,19 @@
 
   ;; -- Remove ---------------------------------------------------------
 
-  (func $set_remove (export "set_remove")
+  (func $std/set.wat:set_remove (export "std/set.wat:set_remove")
     (param $current (ref $SetNode))
     (param $key (ref eq))
     (result (ref $SetNode))
 
-    (call $_set_remove_inner
+    (call $std/set.wat:_set_remove_inner
       (local.get $current)
       (local.get $key)
-      (call $hash_i31(local.get $key))
+      (call $std/hashing.wat:hash_i31(local.get $key))
       (i32.const 0))
   )
 
-  (func $_set_remove_inner
+  (func $std/set.wat:_set_remove_inner
     (param $current (ref $SetNode))
     (param $key (ref eq))
     (param $h i32)
@@ -487,7 +487,7 @@
     (local $new_col_entries (ref $SetChildren))
 
     (local.set $fragment
-      (call $_set_hash_fragment (local.get $h) (local.get $depth)))
+      (call $std/set.wat:_set_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -502,7 +502,7 @@
       (then (return (local.get $current))))
 
     (local.set $idx
-      (call $_set_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $std/set.wat:_set_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $SetChildren
         (local.get $old_children)
@@ -517,7 +517,7 @@
         (local.set $col_len
           (array.len (local.get $col_entries)))
         (local.set $col_idx
-          (call $_set_collision_find (local.get $col_entries) (local.get $key)))
+          (call $std/set.wat:_set_collision_find (local.get $col_entries) (local.get $key)))
 
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
           (then (return (local.get $current))))
@@ -622,7 +622,7 @@
           (then (return (local.get $current))))
 
         (if (i32.eq (local.get $old_len) (i32.const 1))
-          (then (return (call $set_new))))
+          (then (return (call $std/set.wat:set_new))))
 
         (local.set $new_children
           (array.new $SetChildren
@@ -669,7 +669,7 @@
 
     ;; sub-node — recurse
     (local.set $sub_result
-      (call $_set_remove_inner
+      (call $std/set.wat:_set_remove_inner
         (ref.cast (ref $SetNode) (local.get $child))
         (local.get $key)
         (local.get $h)
@@ -699,14 +699,14 @@
 
   ;; -- Size -----------------------------------------------------------
 
-  (func $set_size (export "set_size")
+  (func $std/set.wat:set_size (export "std/set.wat:set_size")
     (param $node (ref $SetNode))
     (result i32)
 
-    (call $_set_size_node (local.get $node))
+    (call $std/set.wat:_set_size_node (local.get $node))
   )
 
-  (func $_set_size_node
+  (func $std/set.wat:_set_size_node
     (param $node (ref $SetNode))
     (result i32)
 
@@ -736,7 +736,7 @@
           (then
             (local.set $count
               (i32.add (local.get $count)
-                (call $_set_size_node
+                (call $std/set.wat:_set_size_node
                   (ref.cast (ref $SetNode) (local.get $child)))))))
 
         (if (ref.test (ref $SetCollision) (local.get $child))
@@ -757,15 +757,15 @@
   ;; -- Union ----------------------------------------------------------
 
   ;; a + b — all entries from both.
-  (func $set_union (export "set_union")
+  (func $std/set.wat:set_union (export "std/set.wat:set_union")
     (param $dest (ref $SetNode))
     (param $src (ref $SetNode))
     (result (ref $SetNode))
 
-    (call $_set_union_node (local.get $dest) (local.get $src))
+    (call $std/set.wat:_set_union_node (local.get $dest) (local.get $src))
   )
 
-  (func $_set_union_node
+  (func $std/set.wat:_set_union_node
     (param $dest (ref $SetNode))
     (param $src (ref $SetNode))
     (result (ref $SetNode))
@@ -792,20 +792,20 @@
         (if (ref.test (ref $SetEntry) (local.get $child))
           (then
             (local.set $dest
-              (call $set_set (local.get $dest)
+              (call $std/set.wat:set_set (local.get $dest)
                 (struct.get $SetEntry $key
                   (ref.cast (ref $SetEntry) (local.get $child)))))))
 
         (if (ref.test (ref $SetNode) (local.get $child))
           (then
             (local.set $dest
-              (call $_set_union_node (local.get $dest)
+              (call $std/set.wat:_set_union_node (local.get $dest)
                 (ref.cast (ref $SetNode) (local.get $child))))))
 
         (if (ref.test (ref $SetCollision) (local.get $child))
           (then
             (local.set $dest
-              (call $_set_union_collision (local.get $dest)
+              (call $std/set.wat:_set_union_collision (local.get $dest)
                 (struct.get $SetCollision $col_entries
                   (ref.cast (ref $SetCollision) (local.get $child)))))))
 
@@ -815,7 +815,7 @@
     (local.get $dest)
   )
 
-  (func $_set_union_collision
+  (func $std/set.wat:_set_union_collision
     (param $dest (ref $SetNode))
     (param $entries (ref $SetChildren))
     (result (ref $SetNode))
@@ -829,7 +829,7 @@
       (loop $walk
         (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
         (local.set $dest
-          (call $set_set (local.get $dest)
+          (call $std/set.wat:set_set (local.get $dest)
             (struct.get $SetEntry $key
               (ref.cast (ref $SetEntry)
                 (array.get $SetChildren
@@ -846,18 +846,18 @@
 
   ;; a & b — entries in both.
   ;; Walks a, keeps entries that are also in b.
-  (func $set_intersect (export "set_intersect")
+  (func $std/set.wat:set_intersect (export "std/set.wat:set_intersect")
     (param $a (ref $SetNode))
     (param $b (ref $SetNode))
     (result (ref $SetNode))
 
-    (call $_set_intersect_node
-      (call $set_new)
+    (call $std/set.wat:_set_intersect_node
+      (call $std/set.wat:set_new)
       (local.get $a)
       (local.get $b))
   )
 
-  (func $_set_intersect_node
+  (func $std/set.wat:_set_intersect_node
     (param $result (ref $SetNode))
     (param $src (ref $SetNode))
     (param $other (ref $SetNode))
@@ -881,19 +881,19 @@
 
         (if (ref.test (ref $SetEntry) (local.get $child))
           (then
-            (if (call $set_has (local.get $other)
+            (if (call $std/set.wat:set_has (local.get $other)
                   (struct.get $SetEntry $key
                     (ref.cast (ref $SetEntry) (local.get $child))))
               (then
                 (local.set $result
-                  (call $set_set (local.get $result)
+                  (call $std/set.wat:set_set (local.get $result)
                     (struct.get $SetEntry $key
                       (ref.cast (ref $SetEntry) (local.get $child)))))))))
 
         (if (ref.test (ref $SetNode) (local.get $child))
           (then
             (local.set $result
-              (call $_set_intersect_node
+              (call $std/set.wat:_set_intersect_node
                 (local.get $result)
                 (ref.cast (ref $SetNode) (local.get $child))
                 (local.get $other)))))
@@ -901,7 +901,7 @@
         (if (ref.test (ref $SetCollision) (local.get $child))
           (then
             (local.set $result
-              (call $_set_intersect_collision
+              (call $std/set.wat:_set_intersect_collision
                 (local.get $result)
                 (struct.get $SetCollision $col_entries
                   (ref.cast (ref $SetCollision) (local.get $child)))
@@ -913,7 +913,7 @@
     (local.get $result)
   )
 
-  (func $_set_intersect_collision
+  (func $std/set.wat:_set_intersect_collision
     (param $result (ref $SetNode))
     (param $entries (ref $SetChildren))
     (param $other (ref $SetNode))
@@ -927,7 +927,7 @@
     (block $done
       (loop $walk
         (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
-        (if (call $set_has (local.get $other)
+        (if (call $std/set.wat:set_has (local.get $other)
               (struct.get $SetEntry $key
                 (ref.cast (ref $SetEntry)
                   (array.get $SetChildren
@@ -935,7 +935,7 @@
                     (local.get $i)))))
           (then
             (local.set $result
-              (call $set_set (local.get $result)
+              (call $std/set.wat:set_set (local.get $result)
                 (struct.get $SetEntry $key
                   (ref.cast (ref $SetEntry)
                     (array.get $SetChildren
@@ -951,18 +951,18 @@
   ;; -- Difference -----------------------------------------------------
 
   ;; a - b — entries in a not in b.
-  (func $set_difference (export "set_difference")
+  (func $std/set.wat:set_difference (export "std/set.wat:set_difference")
     (param $a (ref $SetNode))
     (param $b (ref $SetNode))
     (result (ref $SetNode))
 
-    (call $_set_difference_node
-      (call $set_new)
+    (call $std/set.wat:_set_difference_node
+      (call $std/set.wat:set_new)
       (local.get $a)
       (local.get $b))
   )
 
-  (func $_set_difference_node
+  (func $std/set.wat:_set_difference_node
     (param $result (ref $SetNode))
     (param $src (ref $SetNode))
     (param $other (ref $SetNode))
@@ -987,19 +987,19 @@
         (if (ref.test (ref $SetEntry) (local.get $child))
           (then
             (if (i32.eqz
-                  (call $set_has (local.get $other)
+                  (call $std/set.wat:set_has (local.get $other)
                     (struct.get $SetEntry $key
                       (ref.cast (ref $SetEntry) (local.get $child)))))
               (then
                 (local.set $result
-                  (call $set_set (local.get $result)
+                  (call $std/set.wat:set_set (local.get $result)
                     (struct.get $SetEntry $key
                       (ref.cast (ref $SetEntry) (local.get $child)))))))))
 
         (if (ref.test (ref $SetNode) (local.get $child))
           (then
             (local.set $result
-              (call $_set_difference_node
+              (call $std/set.wat:_set_difference_node
                 (local.get $result)
                 (ref.cast (ref $SetNode) (local.get $child))
                 (local.get $other)))))
@@ -1007,7 +1007,7 @@
         (if (ref.test (ref $SetCollision) (local.get $child))
           (then
             (local.set $result
-              (call $_set_difference_collision
+              (call $std/set.wat:_set_difference_collision
                 (local.get $result)
                 (struct.get $SetCollision $col_entries
                   (ref.cast (ref $SetCollision) (local.get $child)))
@@ -1019,7 +1019,7 @@
     (local.get $result)
   )
 
-  (func $_set_difference_collision
+  (func $std/set.wat:_set_difference_collision
     (param $result (ref $SetNode))
     (param $entries (ref $SetChildren))
     (param $other (ref $SetNode))
@@ -1034,7 +1034,7 @@
       (loop $walk
         (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
         (if (i32.eqz
-              (call $set_has (local.get $other)
+              (call $std/set.wat:set_has (local.get $other)
                 (struct.get $SetEntry $key
                   (ref.cast (ref $SetEntry)
                     (array.get $SetChildren
@@ -1042,7 +1042,7 @@
                       (local.get $i))))))
           (then
             (local.set $result
-              (call $set_set (local.get $result)
+              (call $std/set.wat:set_set (local.get $result)
                 (struct.get $SetEntry $key
                   (ref.cast (ref $SetEntry)
                     (array.get $SetChildren
@@ -1059,14 +1059,14 @@
 
   ;; a ^ b — entries in one but not both.
   ;; Thin wrapper: union(difference(a, b), difference(b, a))
-  (func $set_sym_diff (export "set_sym_diff")
+  (func $std/set.wat:set_sym_diff (export "std/set.wat:set_sym_diff")
     (param $a (ref $SetNode))
     (param $b (ref $SetNode))
     (result (ref $SetNode))
 
-    (call $set_union
-      (call $set_difference (local.get $a) (local.get $b))
-      (call $set_difference (local.get $b) (local.get $a)))
+    (call $std/set.wat:set_union
+      (call $std/set.wat:set_difference (local.get $a) (local.get $b))
+      (call $std/set.wat:set_difference (local.get $b) (local.get $a)))
   )
 
 
@@ -1074,16 +1074,16 @@
 
   ;; a <= b — 1 if every element of a is in b.
   ;; Short-circuits on first element of a not found in b.
-  (func $set_subset (export "set_subset")
+  (func $std/set.wat:set_subset (export "std/set.wat:set_subset")
     (param $a (ref $SetNode))
     (param $b (ref $SetNode))
     (result i32)
 
-    (call $_set_subset_node (local.get $a) (local.get $b))
+    (call $std/set.wat:_set_subset_node (local.get $a) (local.get $b))
   )
 
   ;; Returns 1 if all entries in src are in other, 0 on first miss.
-  (func $_set_subset_node
+  (func $std/set.wat:_set_subset_node
     (param $src (ref $SetNode))
     (param $other (ref $SetNode))
     (result i32)
@@ -1107,7 +1107,7 @@
         (if (ref.test (ref $SetEntry) (local.get $child))
           (then
             (if (i32.eqz
-                  (call $set_has (local.get $other)
+                  (call $std/set.wat:set_has (local.get $other)
                     (struct.get $SetEntry $key
                       (ref.cast (ref $SetEntry) (local.get $child)))))
               (then (return (i32.const 0))))))
@@ -1115,7 +1115,7 @@
         (if (ref.test (ref $SetNode) (local.get $child))
           (then
             (if (i32.eqz
-                  (call $_set_subset_node
+                  (call $std/set.wat:_set_subset_node
                     (ref.cast (ref $SetNode) (local.get $child))
                     (local.get $other)))
               (then (return (i32.const 0))))))
@@ -1123,7 +1123,7 @@
         (if (ref.test (ref $SetCollision) (local.get $child))
           (then
             (if (i32.eqz
-                  (call $_set_subset_collision
+                  (call $std/set.wat:_set_subset_collision
                     (struct.get $SetCollision $col_entries
                       (ref.cast (ref $SetCollision) (local.get $child)))
                     (local.get $other)))
@@ -1135,7 +1135,7 @@
     (i32.const 1)
   )
 
-  (func $_set_subset_collision
+  (func $std/set.wat:_set_subset_collision
     (param $entries (ref $SetChildren))
     (param $other (ref $SetNode))
     (result i32)
@@ -1149,7 +1149,7 @@
       (loop $walk
         (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
         (if (i32.eqz
-              (call $set_has (local.get $other)
+              (call $std/set.wat:set_has (local.get $other)
                 (struct.get $SetEntry $key
                   (ref.cast (ref $SetEntry)
                     (array.get $SetChildren
@@ -1167,16 +1167,16 @@
 
   ;; a >< b — 1 if no common elements.
   ;; Short-circuits on first element of a found in b.
-  (func $set_disjoint (export "set_disjoint")
+  (func $std/set.wat:set_disjoint (export "std/set.wat:set_disjoint")
     (param $a (ref $SetNode))
     (param $b (ref $SetNode))
     (result i32)
 
-    (call $_set_disjoint_node (local.get $a) (local.get $b))
+    (call $std/set.wat:_set_disjoint_node (local.get $a) (local.get $b))
   )
 
   ;; Returns 1 if no entry in src is in other, 0 on first hit.
-  (func $_set_disjoint_node
+  (func $std/set.wat:_set_disjoint_node
     (param $src (ref $SetNode))
     (param $other (ref $SetNode))
     (result i32)
@@ -1199,7 +1199,7 @@
 
         (if (ref.test (ref $SetEntry) (local.get $child))
           (then
-            (if (call $set_has (local.get $other)
+            (if (call $std/set.wat:set_has (local.get $other)
                   (struct.get $SetEntry $key
                     (ref.cast (ref $SetEntry) (local.get $child))))
               (then (return (i32.const 0))))))
@@ -1207,7 +1207,7 @@
         (if (ref.test (ref $SetNode) (local.get $child))
           (then
             (if (i32.eqz
-                  (call $_set_disjoint_node
+                  (call $std/set.wat:_set_disjoint_node
                     (ref.cast (ref $SetNode) (local.get $child))
                     (local.get $other)))
               (then (return (i32.const 0))))))
@@ -1215,7 +1215,7 @@
         (if (ref.test (ref $SetCollision) (local.get $child))
           (then
             (if (i32.eqz
-                  (call $_set_disjoint_collision
+                  (call $std/set.wat:_set_disjoint_collision
                     (struct.get $SetCollision $col_entries
                       (ref.cast (ref $SetCollision) (local.get $child)))
                     (local.get $other)))
@@ -1227,7 +1227,7 @@
     (i32.const 1)
   )
 
-  (func $_set_disjoint_collision
+  (func $std/set.wat:_set_disjoint_collision
     (param $entries (ref $SetChildren))
     (param $other (ref $SetNode))
     (result i32)
@@ -1240,7 +1240,7 @@
     (block $done
       (loop $walk
         (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
-        (if (call $set_has (local.get $other)
+        (if (call $std/set.wat:set_has (local.get $other)
               (struct.get $SetEntry $key
                 (ref.cast (ref $SetEntry)
                   (array.get $SetChildren
@@ -1257,108 +1257,108 @@
   ;; -- Equality -------------------------------------------------------
 
   ;; a == b — same size and a is subset of b.
-  (func $set_eq (export "set_eq")
+  (func $std/set.wat:set_eq (export "std/set.wat:set_eq")
     (param $a (ref $SetNode))
     (param $b (ref $SetNode))
     (result i32)
 
     (if (i32.ne
-          (call $set_size (local.get $a))
-          (call $set_size (local.get $b)))
+          (call $std/set.wat:set_size (local.get $a))
+          (call $std/set.wat:set_size (local.get $b)))
       (then (return (i32.const 0))))
 
-    (call $set_subset (local.get $a) (local.get $b))
+    (call $std/set.wat:set_subset (local.get $a) (local.get $b))
   )
 
 
   ;; -- Set wrappers (user-visible API) -----------------------------------
   ;; Wrap/unwrap $SetImpl ↔ $SetNode at the boundary.
 
-  (func $set_impl_empty (export "set_impl_empty") (result (ref $SetImpl))
+  (func $std/set.wat:set_impl_empty (export "std/set.wat:set_impl_empty") (result (ref $SetImpl))
     (struct.new $SetImpl (global.get $empty_node))
   )
 
-  (func $set_impl_has (export "set_impl_has")
+  (func $std/set.wat:set_impl_has (export "std/set.wat:set_impl_has")
     (param $s (ref $SetImpl)) (param $key (ref eq))
     (result i32)
-    (call $set_has (struct.get $SetImpl $node (local.get $s)) (local.get $key))
+    (call $std/set.wat:set_has (struct.get $SetImpl $node (local.get $s)) (local.get $key))
   )
 
-  (func $set_impl_set (export "set_impl_set")
+  (func $std/set.wat:set_impl_set (export "std/set.wat:set_impl_set")
     (param $s (ref $SetImpl)) (param $key (ref eq))
     (result (ref $SetImpl))
     (struct.new $SetImpl
-      (call $set_set (struct.get $SetImpl $node (local.get $s)) (local.get $key)))
+      (call $std/set.wat:set_set (struct.get $SetImpl $node (local.get $s)) (local.get $key)))
   )
 
-  (func $set_impl_remove (export "set_impl_remove")
+  (func $std/set.wat:set_impl_remove (export "std/set.wat:set_impl_remove")
     (param $s (ref $SetImpl)) (param $key (ref eq))
     (result (ref $SetImpl))
     (struct.new $SetImpl
-      (call $set_remove (struct.get $SetImpl $node (local.get $s)) (local.get $key)))
+      (call $std/set.wat:set_remove (struct.get $SetImpl $node (local.get $s)) (local.get $key)))
   )
 
-  (func $set_impl_size (export "set_impl_size")
+  (func $std/set.wat:set_impl_size (export "std/set.wat:set_impl_size")
     (param $s (ref $SetImpl)) (result i32)
-    (call $set_size (struct.get $SetImpl $node (local.get $s)))
+    (call $std/set.wat:set_size (struct.get $SetImpl $node (local.get $s)))
   )
 
-  (func $set_impl_union (export "set_impl_union")
+  (func $std/set.wat:set_impl_union (export "std/set.wat:set_impl_union")
     (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
     (result (ref $SetImpl))
     (struct.new $SetImpl
-      (call $set_union
+      (call $std/set.wat:set_union
         (struct.get $SetImpl $node (local.get $a))
         (struct.get $SetImpl $node (local.get $b))))
   )
 
-  (func $set_impl_intersect (export "set_impl_intersect")
+  (func $std/set.wat:set_impl_intersect (export "std/set.wat:set_impl_intersect")
     (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
     (result (ref $SetImpl))
     (struct.new $SetImpl
-      (call $set_intersect
+      (call $std/set.wat:set_intersect
         (struct.get $SetImpl $node (local.get $a))
         (struct.get $SetImpl $node (local.get $b))))
   )
 
-  (func $set_impl_difference (export "set_impl_difference")
+  (func $std/set.wat:set_impl_difference (export "std/set.wat:set_impl_difference")
     (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
     (result (ref $SetImpl))
     (struct.new $SetImpl
-      (call $set_difference
+      (call $std/set.wat:set_difference
         (struct.get $SetImpl $node (local.get $a))
         (struct.get $SetImpl $node (local.get $b))))
   )
 
-  (func $set_impl_sym_diff (export "set_impl_sym_diff")
+  (func $std/set.wat:set_impl_sym_diff (export "std/set.wat:set_impl_sym_diff")
     (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
     (result (ref $SetImpl))
     (struct.new $SetImpl
-      (call $set_sym_diff
+      (call $std/set.wat:set_sym_diff
         (struct.get $SetImpl $node (local.get $a))
         (struct.get $SetImpl $node (local.get $b))))
   )
 
-  (func $set_impl_subset (export "set_impl_subset")
+  (func $std/set.wat:set_impl_subset (export "std/set.wat:set_impl_subset")
     (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
     (result i32)
-    (call $set_subset
+    (call $std/set.wat:set_subset
       (struct.get $SetImpl $node (local.get $a))
       (struct.get $SetImpl $node (local.get $b)))
   )
 
-  (func $set_impl_disjoint (export "set_impl_disjoint")
+  (func $std/set.wat:set_impl_disjoint (export "std/set.wat:set_impl_disjoint")
     (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
     (result i32)
-    (call $set_disjoint
+    (call $std/set.wat:set_disjoint
       (struct.get $SetImpl $node (local.get $a))
       (struct.get $SetImpl $node (local.get $b)))
   )
 
-  (func $set_impl_eq (export "set_impl_eq")
+  (func $std/set.wat:set_impl_eq (export "std/set.wat:set_impl_eq")
     (param $a (ref $SetImpl)) (param $b (ref $SetImpl))
     (result i32)
-    (call $set_eq
+    (call $std/set.wat:set_eq
       (struct.get $SetImpl $node (local.get $a))
       (struct.get $SetImpl $node (local.get $b)))
   )

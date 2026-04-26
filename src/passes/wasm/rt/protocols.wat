@@ -62,7 +62,7 @@
   (func $rt/protocols.wat:op_intdiv (export "rt/protocols.wat:op_intdiv")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $int_op_div
+      (call $std/int.wat:int_op_div
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -70,7 +70,7 @@
   (func $rt/protocols.wat:op_rem (export "rt/protocols.wat:op_rem")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $int_op_rem
+      (call $std/int.wat:int_op_rem
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -78,7 +78,7 @@
   (func $rt/protocols.wat:op_intmod (export "rt/protocols.wat:op_intmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $int_op_mod
+      (call $std/int.wat:int_op_mod
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -228,7 +228,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $int_op_not)
+        (call $std/int.wat:int_op_not)
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean not
@@ -246,7 +246,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $int_op_and (ref.cast (ref $Num) (local.get $b)))
+        (call $std/int.wat:int_op_and (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean and
@@ -266,7 +266,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $int_op_or (ref.cast (ref $Num) (local.get $b)))
+        (call $std/int.wat:int_op_or (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean or
@@ -286,7 +286,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $int_op_xor (ref.cast (ref $Num) (local.get $b)))
+        (call $std/int.wat:int_op_xor (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean xor
@@ -384,7 +384,7 @@
             (local.get $b))))
       (local.set $range)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $range_op_in
+        (ref.i31 (call $std/range.wat:range_op_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
@@ -418,7 +418,7 @@
             (local.get $b))))
       (local.set $range)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $range_op_not_in
+        (ref.i31 (call $std/range.wat:range_op_not_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
@@ -505,14 +505,14 @@
           (br_on_cast $is_channel (ref null any) (ref $Channel)
             (local.get $a))))
       (drop)
-      (return_call $channel_op_shr
+      (return_call $std/channel.wat:channel_op_shr
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
 
     ;; Fallback: numeric shift left
     (return_call $std/list.wat:apply_1
-      (call $int_op_shl
+      (call $std/int.wat:int_op_shl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -548,14 +548,14 @@
           (br_on_cast $is_channel (ref null any) (ref $Channel)
             (local.get $b))))
       (drop)
-      (return_call $channel_op_shr
+      (return_call $std/channel.wat:channel_op_shr
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
 
     ;; Fallback: numeric shift right
     (return_call $std/list.wat:apply_1
-      (call $int_op_shr
+      (call $std/int.wat:int_op_shr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -584,7 +584,7 @@
         (local.get $cont)))
 
     ;; Fallback: regular channel receive
-    (return_call $channel_receive
+    (return_call $std/channel.wat:channel_receive
       (local.get $ch)
       (local.get $cont)))
 
