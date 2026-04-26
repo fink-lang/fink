@@ -17,7 +17,7 @@ test 'rec literal', fn:
       (type $std/rec.wat:Fn_rec_new (func (result (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/rec.wat:Fn_rec_new)))
       (func $v_14 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -30,7 +30,7 @@ test 'rec literal', fn:
         (local.set $v_4 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_6 (call $std/str.wat:str (data.ref $d_0 1)))
         (local.set $v_7 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (return_call $std/rec.wat:rec_set (local.get $v_4) (local.get $v_6) (local.get $v_7) (local.get $v_15))
+        (return_call $std/rec.wat:set (local.get $v_4) (local.get $v_6) (local.get $v_7) (local.get $v_15))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
@@ -45,13 +45,13 @@ test 'rec literal', fn:
         (local.set $v_1 (call $std/rec.wat:rec_new))
         (local.set $v_2 (call $std/str.wat:str (data.ref $d_1 1)))
         (local.set $v_3 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $std/rec.wat:rec_set (local.get $v_1) (local.get $v_2) (local.get $v_3) (local.get $v_19))
+        (return_call $std/rec.wat:set (local.get $v_1) (local.get $v_2) (local.get $v_3) (local.get $v_19))
       )
       (export "fink_module" (func $fink_module))
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:DbQVALoBAL4BAJIBAQ4BfgEGAYQBAQUE-AYAkgEArgEAwgEBDQxiAQIBfgEGAYQBAQUE
+    ;; sm:DaQVALoBAL4BAJIBAQ4BfgEGAYQBAQUE8AYAkgEArgEAwgEBDQxiAQIBfgEGAYQBAQUE
 
 
 test 'rec destructure', fn:
@@ -78,8 +78,8 @@ test 'rec destructure', fn:
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:is_rec_like" (func $rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/rec.wat" "std/rec.wat:rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:pop" (func $std/rec.wat:pop (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "rt/protocols.wat" "rt/protocols.wat:panic" (func $rt/protocols.wat:panic (type $rt/types.wat:Fn2)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
       (func $v_85 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -143,7 +143,7 @@ test 'rec destructure', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_138) (local.get $v_15)))
         (local.set $v_161 (struct.new $rt/types.wat:Closure (ref.func $v_154) (local.get $:caps_arg)))
         (local.set $v_25 (call $std/str.wat:str (data.ref $d_0 1)))
-        (return_call $std/rec.wat:rec_pop (local.get $v_23) (local.get $v_25) (local.get $v_136) (local.get $v_161))
+        (return_call $std/rec.wat:pop (local.get $v_23) (local.get $v_25) (local.get $v_136) (local.get $v_161))
       )
       (func $v_117 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -160,7 +160,7 @@ test 'rec destructure', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_118) (local.get $v_120)))
         (local.set $v_142 (struct.new $rt/types.wat:Closure (ref.func $v_135) (local.get $:caps_arg)))
         (local.set $v_29 (call $std/str.wat:str (data.ref $d_1 1)))
-        (return_call $std/rec.wat:rec_pop (local.get $v_22) (local.get $v_29) (local.get $v_118) (local.get $v_142))
+        (return_call $std/rec.wat:pop (local.get $v_22) (local.get $v_29) (local.get $v_118) (local.get $v_142))
       )
       (func $v_36 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_13 (ref null any))
@@ -222,7 +222,7 @@ test 'rec destructure', fn:
         (local.set $v_76 (struct.new $rt/types.wat:Closure (ref.func $v_71) (local.get $:caps_arg)))
         (local.set $v_8 (call $std/str.wat:str (data.ref $d_0 1)))
         (local.set $v_9 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (return_call $std/rec.wat:rec_set (local.get $v_6) (local.get $v_8) (local.get $v_9) (local.get $v_76))
+        (return_call $std/rec.wat:set (local.get $v_6) (local.get $v_8) (local.get $v_9) (local.get $v_76))
       )
       (func $v_80 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_67 (ref null any))
@@ -233,7 +233,7 @@ test 'rec destructure', fn:
         (local.set $v_3 (call $std/rec.wat:rec_new))
         (local.set $v_4 (call $std/str.wat:str (data.ref $d_1 1)))
         (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $std/rec.wat:rec_set (local.get $v_3) (local.get $v_4) (local.get $v_5) (local.get $v_67))
+        (return_call $std/rec.wat:set (local.get $v_3) (local.get $v_4) (local.get $v_5) (local.get $v_67))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
@@ -255,7 +255,7 @@ test 'rec destructure', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:VZYoALoBAL4BAJQBAJoBAJQBAQIBTgEMAU4BJAWSBQC6AQDAAQBuALIGALoBAMABAMABAJQBAJoBAJQBAG4AvAEAvgEA5gcAugEAwAEAwAEAlAEAmgEAlAEA1gEAxgEBMRiAAQEAGO4HALoBAMABAMABAJQBANgBAMYBAQAYgAEBABjyBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAGJAKALoBAL4BAJQBALABAMIBAHoAyAEAegD0AQBuALwBAMoBALwBAJoHALoBAL4BAJIBALABAMIBASYBfgEGAYQBAQUEuAUAlAEBDQxiAQIBfgEGAYQBAQUEvgcAkgEArgEAygEAegDIAQBuAMQBAA
+    ;; sm:VfYnALoBAL4BAJQBAJoBAJQBAQIBTgEMAU4BJAWSBQC6AQDAAQBuALIGALoBAMABAMABAJQBAJoBAJQBAG4AvAEAvgEA5gcAugEAwAEAwAEAlAEAmgEAlAEA1gEAxgEBMRiAAQEAGOYHALoBAMABAMABAJQBANgBAMYBAQAYgAEBABjqBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAGJAKALoBAL4BAJQBALABAMIBAHoAyAEAegD0AQBuALwBAMoBALwBAJoHALoBAL4BAJIBALABAMIBASYBfgEGAYQBAQUEsAUAlAEBDQxiAQIBfgEGAYQBAQUEtgcAkgEArgEAygEAegDIAQBuAMQBAA
 
 test 'rec spread', fn:
   expect ir_wat ƒink:
@@ -277,9 +277,9 @@ test 'rec spread', fn:
       (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/rec.wat" "std/rec.wat:rec_merge" (func $std/rec.wat:rec_merge (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/rec.wat" "std/rec.wat:merge" (func $std/rec.wat:merge (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
       (func $v_54 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -292,7 +292,7 @@ test 'rec spread', fn:
         (local.set $v_13 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_15 (call $std/str.wat:str (data.ref $d_0 1)))
         (local.set $v_16 (struct.new $rt/types.wat:Num (f64.const 3)))
-        (return_call $std/rec.wat:rec_set (local.get $v_13) (local.get $v_15) (local.get $v_16) (local.get $v_55))
+        (return_call $std/rec.wat:set (local.get $v_13) (local.get $v_15) (local.get $v_16) (local.get $v_55))
       )
       (func $v_40 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -310,7 +310,7 @@ test 'rec spread', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_41)))
         (local.set $v_59 (struct.new $rt/types.wat:Closure (ref.func $v_54) (local.get $:caps_arg)))
         (local.set $v_11 (call $std/rec.wat:rec_new))
-        (return_call $std/rec.wat:rec_merge (local.get $v_11) (local.get $r_0) (local.get $v_59))
+        (return_call $std/rec.wat:merge (local.get $v_11) (local.get $r_0) (local.get $v_59))
       )
       (func $v_31 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -327,7 +327,7 @@ test 'rec spread', fn:
         (local.set $v_45 (struct.new $rt/types.wat:Closure (ref.func $v_40) (local.get $:caps_arg)))
         (local.set $v_7 (call $std/str.wat:str (data.ref $d_1 1)))
         (local.set $v_8 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (return_call $std/rec.wat:rec_set (local.get $v_5) (local.get $v_7) (local.get $v_8) (local.get $v_45))
+        (return_call $std/rec.wat:set (local.get $v_5) (local.get $v_7) (local.get $v_8) (local.get $v_45))
       )
       (func $v_49 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_36 (ref null any))
@@ -338,7 +338,7 @@ test 'rec spread', fn:
         (local.set $v_2 (call $std/rec.wat:rec_new))
         (local.set $v_3 (call $std/str.wat:str (data.ref $d_2 1)))
         (local.set $v_4 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $std/rec.wat:rec_set (local.get $v_2) (local.get $v_3) (local.get $v_4) (local.get $v_36))
+        (return_call $std/rec.wat:set (local.get $v_2) (local.get $v_3) (local.get $v_4) (local.get $v_36))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_1 (ref null any))
@@ -363,7 +363,7 @@ test 'rec spread', fn:
       (data $d_1 "b")
       (data $d_2 "a")
     )
-    ;; sm:JIIgALoBAL4BAJQBAS4BgAEBBgGGAQEFBN4HALoBAL4BAJIBAS0BTABKALABAMIBASILZAECA7oHALoBAL4BAJIBALABAMIBAQ0BfgEGAYQBAQUEuAUAlAEBDQxiAQIBfgEGAYQBAQUEvgcAkgEArgEAygEAegDIAQBuAMQBAA
+    ;; sm:JOIfALoBAL4BAJQBAS4BgAEBBgGGAQEFBNYHALoBAL4BAJIBAS0BTABKALABAMIBASILZAECA7IHALoBAL4BAJIBALABAMIBAQ0BfgEGAYQBAQUEsAUAlAEBDQxiAQIBfgEGAYQBAQUEtgcAkgEArgEAygEAegDIAQBuAMQBAA
 
 test 'rec empty literal', fn:
   expect ir_wat ƒink:
@@ -406,7 +406,7 @@ test 'rec single field', fn:
       (type $std/rec.wat:Fn_rec_new (func (result (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/rec.wat:Fn_rec_new)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
@@ -417,12 +417,12 @@ test 'rec single field', fn:
         (local.set $v_1 (call $std/rec.wat:rec_new))
         (local.set $v_2 (call $std/str.wat:str (data.ref $d_0 1)))
         (local.set $v_3 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $std/rec.wat:rec_set (local.get $v_1) (local.get $v_2) (local.get $v_3) (local.get $v_0))
+        (return_call $std/rec.wat:set (local.get $v_1) (local.get $v_2) (local.get $v_3) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
       (data $d_0 "a")
     )
-    ;; sm:BaYSAJIBAQAGYgECAX4BBgGEAQEFBA
+    ;; sm:BZYSAJIBAQAGYgECAX4BBgGEAQEFBA
 
 test 'rec nested destructure', fn:
   expect ir_wat ƒink:
@@ -448,8 +448,8 @@ test 'rec nested destructure', fn:
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:is_rec_like" (func $rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/rec.wat" "std/rec.wat:rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:pop" (func $std/rec.wat:pop (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "rt/protocols.wat" "rt/protocols.wat:panic" (func $rt/protocols.wat:panic (type $rt/types.wat:Fn2)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
       (func $v_115 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -505,7 +505,7 @@ test 'rec nested destructure', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_188)))
         (local.set $v_213 (struct.new $rt/types.wat:Closure (ref.func $v_208) (local.get $:caps_arg)))
         (local.set $v_43 (call $std/str.wat:str (data.ref $d_0 1)))
-        (return_call $std/rec.wat:rec_pop (local.get $v_41) (local.get $v_43) (local.get $v_186) (local.get $v_213))
+        (return_call $std/rec.wat:pop (local.get $v_41) (local.get $v_43) (local.get $v_186) (local.get $v_213))
       )
       (func $v_50 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_34 (ref null any))
@@ -593,7 +593,7 @@ test 'rec nested destructure', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_149)))
         (local.set $v_181 (struct.new $rt/types.wat:Closure (ref.func $v_176) (local.get $:caps_arg)))
         (local.set $v_22 (call $std/str.wat:str (data.ref $d_1 1)))
-        (return_call $std/rec.wat:rec_pop (local.get $v_20) (local.get $v_22) (local.get $v_147) (local.get $v_181))
+        (return_call $std/rec.wat:pop (local.get $v_20) (local.get $v_22) (local.get $v_147) (local.get $v_181))
       )
       (func $v_29 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_13 (ref null any))
@@ -655,7 +655,7 @@ test 'rec nested destructure', fn:
         (local.set $v_94 (struct.new $rt/types.wat:Closure (ref.func $v_89) (local.get $:caps_arg)))
         (local.set $v_3 (call $std/rec.wat:rec_new))
         (local.set $v_4 (call $std/str.wat:str (data.ref $d_1 1)))
-        (return_call $std/rec.wat:rec_set (local.get $v_3) (local.get $v_4) (local.get $v_8) (local.get $v_94))
+        (return_call $std/rec.wat:set (local.get $v_3) (local.get $v_4) (local.get $v_8) (local.get $v_94))
       )
       (func $v_98 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_85 (ref null any))
@@ -666,7 +666,7 @@ test 'rec nested destructure', fn:
         (local.set $v_5 (call $std/rec.wat:rec_new))
         (local.set $v_6 (call $std/str.wat:str (data.ref $d_0 1)))
         (local.set $v_7 (struct.new $rt/types.wat:Num (f64.const 42)))
-        (return_call $std/rec.wat:rec_set (local.get $v_5) (local.get $v_6) (local.get $v_7) (local.get $v_85))
+        (return_call $std/rec.wat:set (local.get $v_5) (local.get $v_6) (local.get $v_7) (local.get $v_85))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $b_2 (ref null any))
@@ -688,7 +688,7 @@ test 'rec nested destructure', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:ddwlALoBAMABAJQBASgBTgBuALoBAOoEALoBAMABAG4A7gUAugEAwAEAlAEAmgEAlAEAbgC8AQCkBwC6AQDAAQDAAQCUAQCyAQDGAQEBB4ABAQAH8gcAlAEAmgEAlAEAmgEAlAEAsAEAxgEA1AEAxgEBAAfWCgC6AQDAAQCUAQEjAU4AsgEAxgEAegDIAQB6APQBAG4AugEAygEAvgEA7gQAugEAwAEAbgDuBQC6AQDAAQCUAQCaAQCUAQBuALwBAKQHALoBAMABAMABAJQBALIBAMYBAQESgAEBABLyBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAEpIKALoBAL4BAJQBALABAMYBAHoAyAEAegD0AQBuALwBAMoBAL4BAJoHALoBAL4BAJIBALABAMIBAQwMYgECAX4BAAq4BQCUAQEGB2IBAgF-AQYChgEBBQW-BwCSAQCuAQDKAQB6AMgBAG4AxAEA
+    ;; sm:dbwlALoBAMABAJQBASgBTgBuALoBAOoEALoBAMABAG4A7gUAugEAwAEAlAEAmgEAlAEAbgC8AQCkBwC6AQDAAQDAAQCUAQCyAQDGAQEBB4ABAQAH6gcAlAEAmgEAlAEAmgEAlAEAsAEAxgEA1AEAxgEBAAfWCgC6AQDAAQCUAQEjAU4AsgEAxgEAegDIAQB6APQBAG4AugEAygEAvgEA7gQAugEAwAEAbgDuBQC6AQDAAQCUAQCaAQCUAQBuALwBAKQHALoBAMABAMABAJQBALIBAMYBAQESgAEBABLqBwCUAQCaAQCUAQCaAQCUAQCwAQDGAQDUAQDGAQEAEpIKALoBAL4BAJQBALABAMYBAHoAyAEAegD0AQBuALwBAMoBAL4BAJoHALoBAL4BAJIBALABAMIBAQwMYgECAX4BAAqwBQCUAQEGB2IBAgF-AQYChgEBBQW2BwCSAQCuAQDKAQB6AMgBAG4AxAEA
 
 test 'rec spread merge two', fn:
   expect ir_wat ƒink:
@@ -711,9 +711,9 @@ test 'rec spread merge two', fn:
       (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/rec.wat" "std/rec.wat:rec_merge" (func $std/rec.wat:rec_merge (type $rt/protocols.wat:Fn_op_binary)))
+      (import "std/rec.wat" "std/rec.wat:merge" (func $std/rec.wat:merge (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
       (func $v_64 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -724,7 +724,7 @@ test 'rec spread merge two', fn:
         (local.set $r2_65 (array.get $rt/types.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_67 (array.get $rt/types.wat:Captures (local.get $:caps_cast) (i32.const 1)))
         (local.set $v_15 (call $std/list.wat:args_head (local.get $:params)))
-        (return_call $std/rec.wat:rec_merge (local.get $v_15) (local.get $r2_65) (local.get $v_67))
+        (return_call $std/rec.wat:merge (local.get $v_15) (local.get $r2_65) (local.get $v_67))
       )
       (func $v_88 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -735,7 +735,7 @@ test 'rec spread merge two', fn:
         (local.set $r1_89 (array.get $rt/types.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_71 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_13 (call $std/rec.wat:rec_new))
-        (return_call $std/rec.wat:rec_merge (local.get $v_13) (local.get $r1_89) (local.get $v_71))
+        (return_call $std/rec.wat:merge (local.get $v_13) (local.get $r1_89) (local.get $v_71))
       )
       (func $v_45 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -771,7 +771,7 @@ test 'rec spread merge two', fn:
         (local.set $v_8 (call $std/rec.wat:rec_new))
         (local.set $v_9 (call $std/str.wat:str (data.ref $d_0 1)))
         (local.set $v_10 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (return_call $std/rec.wat:rec_set (local.get $v_8) (local.get $v_9) (local.get $v_10) (local.get $v_52))
+        (return_call $std/rec.wat:set (local.get $v_8) (local.get $v_9) (local.get $v_10) (local.get $v_52))
       )
       (func $v_36 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -805,7 +805,7 @@ test 'rec spread merge two', fn:
         (local.set $v_3 (call $std/rec.wat:rec_new))
         (local.set $v_4 (call $std/str.wat:str (data.ref $d_1 1)))
         (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $std/rec.wat:rec_set (local.get $v_3) (local.get $v_4) (local.get $v_5) (local.get $v_41))
+        (return_call $std/rec.wat:set (local.get $v_3) (local.get $v_4) (local.get $v_5) (local.get $v_41))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
@@ -831,7 +831,7 @@ test 'rec spread merge two', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:NcIfALoBAMABAL4BAJQBAT4E0AUAugEAwAEAlAEBDQxkAQIExgkAugEAwAEAvgEAlAEBGQJQAE4AsgEAwgEA1AEAygEAbgDEAQD4BACUAQEKBmIBAgF-AQYBhgEBBQSgCQC6AQC-AQCSAQEjAk4ATgDUAQDKAQB6AMgBAG4AxAEA_AQAlAEBCgZiAQIBfgEGAYQBAQUEvgcAkgEArgEAygEAegDIAQBuAMQBAA
+    ;; sm:NaIfALoBAMABAL4BAJQBAT4EyAUAugEAwAEAlAEBDQxkAQIEvgkAugEAwAEAvgEAlAEBGQJQAE4AsgEAwgEA1AEAygEAbgDEAQD4BACUAQEKBmIBAgF-AQYBhgEBBQSYCQC6AQC-AQCSAQEjAk4ATgDUAQDKAQB6AMgBAG4AxAEA_AQAlAEBCgZiAQIBfgEGAYQBAQUEtgcAkgEArgEAygEAegDIAQBuAMQBAA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -851,8 +851,8 @@ test 'rec format template', fn:
       (type $std/rec.wat:Fn_rec_new (func (result (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/str.wat" "std/str.wat:str_fmt" (func $std/str.wat:str_fmt (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/str.wat" "std/str.wat:fmt" (func $std/str.wat:fmt (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/rec.wat:Fn_rec_new)))
       (func $v_13 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -865,7 +865,7 @@ test 'rec format template', fn:
         (local.set $v_5 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.wat:str (data.ref $d_0 5)))
         (local.set $:varargs (array.new_fixed $rt/types.wat:VarArgs 2 (local.get $v_1) (local.get $v_5)))
-        (return_call $std/str.wat:str_fmt (local.get $:varargs) (local.get $v_14))
+        (return_call $std/str.wat:fmt (local.get $:varargs) (local.get $v_14))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
@@ -880,13 +880,13 @@ test 'rec format template', fn:
         (local.set $v_2 (call $std/rec.wat:rec_new))
         (local.set $v_3 (call $std/str.wat:str (data.ref $d_1 1)))
         (local.set $v_4 (struct.new $rt/types.wat:Num (f64.const 1)))
-        (return_call $std/rec.wat:rec_set (local.get $v_2) (local.get $v_3) (local.get $v_4) (local.get $v_18))
+        (return_call $std/rec.wat:set (local.get $v_2) (local.get $v_3) (local.get $v_4) (local.get $v_18))
       )
       (export "fink_module" (func $fink_module))
       (data $d_0 "got: ")
       (data $d_1 "a")
     )
-    ;; sm:DYAaALoBAL4BAJIBAQIFfgDMAQEBEL4GAJIBAK4BAMIBARAGYgECAX4BBgGEAQEFBA
+    ;; sm:DeAZALoBAL4BAJIBAQIFfgDMAQEBELYGAJIBAK4BAMIBARAGYgECAX4BBgGEAQEFBA
 
 
 

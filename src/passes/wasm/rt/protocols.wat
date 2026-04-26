@@ -62,7 +62,7 @@
   (func $rt/protocols.wat:op_intdiv (export "rt/protocols.wat:op_intdiv")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $std/int.wat:int_op_div
+      (call $std/int.wat:op_div
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -70,7 +70,7 @@
   (func $rt/protocols.wat:op_rem (export "rt/protocols.wat:op_rem")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $std/int.wat:int_op_rem
+      (call $std/int.wat:op_rem
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -78,7 +78,7 @@
   (func $rt/protocols.wat:op_intmod (export "rt/protocols.wat:op_intmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $std/int.wat:int_op_mod
+      (call $std/int.wat:op_mod
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -110,7 +110,7 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $a))))
-      (return (call $std/str.wat:str_op_eq
+      (return (call $std/str.wat:op_eq
         (ref.cast (ref $Str) (local.get $b)))))
 
     ;; Fallback: ref.eq (i31ref, other GC types)
@@ -143,7 +143,7 @@
             (local.get $a))))
       ;; $a is $Str — cast $b and call str_op_eq
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/str.wat:str_op_eq
+        (ref.i31 (call $std/str.wat:op_eq
           (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
 
@@ -176,7 +176,7 @@
             (local.get $a))))
       ;; $a is $Str — cast $b, call str_op_eq, invert
       (return_call $std/list.wat:apply_1
-        (ref.i31 (i32.eqz (call $std/str.wat:str_op_eq
+        (ref.i31 (i32.eqz (call $std/str.wat:op_eq
           (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
 
@@ -228,7 +228,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $std/int.wat:int_op_not)
+        (call $std/int.wat:op_not)
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean not
@@ -246,7 +246,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $std/int.wat:int_op_and (ref.cast (ref $Num) (local.get $b)))
+        (call $std/int.wat:op_and (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean and
@@ -266,7 +266,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $std/int.wat:int_op_or (ref.cast (ref $Num) (local.get $b)))
+        (call $std/int.wat:op_or (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean or
@@ -286,7 +286,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $std/list.wat:apply_1
-        (call $std/int.wat:int_op_xor (ref.cast (ref $Num) (local.get $b)))
+        (call $std/int.wat:op_xor (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean xor
@@ -350,7 +350,7 @@
             (local.get $val))))
       (drop)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/list.wat:list_op_empty (local.get $val)))
+        (ref.i31 (call $std/list.wat:op_empty (local.get $val)))
         (local.get $cont)))
 
     ;; $Rec → rec_op_empty
@@ -361,7 +361,7 @@
             (local.get $val))))
       (drop)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/rec.wat:rec_op_empty (local.get $val)))
+        (ref.i31 (call $std/rec.wat:op_empty (local.get $val)))
         (local.get $cont)))
 
     (unreachable))
@@ -384,7 +384,7 @@
             (local.get $b))))
       (local.set $range)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/range.wat:range_op_in
+        (ref.i31 (call $std/range.wat:op_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
@@ -397,7 +397,7 @@
             (local.get $b))))
       (local.set $rec)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/rec.wat:rec_op_in
+        (ref.i31 (call $std/rec.wat:op_in
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
@@ -418,7 +418,7 @@
             (local.get $b))))
       (local.set $range)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/range.wat:range_op_not_in
+        (ref.i31 (call $std/range.wat:op_not_in
           (ref.cast (ref $Num) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
@@ -431,7 +431,7 @@
             (local.get $b))))
       (local.set $rec)
       (return_call $std/list.wat:apply_1
-        (ref.i31 (call $std/rec.wat:rec_op_not_in
+        (ref.i31 (call $std/rec.wat:op_not_in
           (local.get $rec)
           (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
@@ -455,7 +455,7 @@
           (br_on_cast $is_str (ref null any) (ref $Str)
             (local.get $container))))
       (drop)
-      (return_call $std/str.wat:str_op_dot
+      (return_call $std/str.wat:op_dot
         (local.get $container)
         (local.get $key)
         (local.get $cont)))
@@ -467,7 +467,7 @@
           (br_on_cast $is_rec (ref null any) (ref $RecImpl)
             (local.get $container))))
       (drop)
-      (return_call $std/rec.wat:rec_op_dot
+      (return_call $std/rec.wat:op_dot
         (local.get $container)
         (local.get $key)
         (local.get $cont)))
@@ -493,7 +493,7 @@
           (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
             (local.get $a))))
       (drop)
-      (return_call $interop/rust.wat:interop_channel_send
+      (return_call $interop/rust.wat:channel_send
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
@@ -505,14 +505,14 @@
           (br_on_cast $is_channel (ref null any) (ref $Channel)
             (local.get $a))))
       (drop)
-      (return_call $std/channel.wat:channel_op_shr
+      (return_call $std/channel.wat:op_shr
         (local.get $a)
         (local.get $b)
         (local.get $cont)))
 
     ;; Fallback: numeric shift left
     (return_call $std/list.wat:apply_1
-      (call $std/int.wat:int_op_shl
+      (call $std/int.wat:op_shl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -536,7 +536,7 @@
           (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
             (local.get $b))))
       (drop)
-      (return_call $interop/rust.wat:interop_channel_send
+      (return_call $interop/rust.wat:channel_send
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
@@ -548,14 +548,14 @@
           (br_on_cast $is_channel (ref null any) (ref $Channel)
             (local.get $b))))
       (drop)
-      (return_call $std/channel.wat:channel_op_shr
+      (return_call $std/channel.wat:op_shr
         (local.get $b)
         (local.get $a)
         (local.get $cont)))
 
     ;; Fallback: numeric shift right
     (return_call $std/list.wat:apply_1
-      (call $std/int.wat:int_op_shr
+      (call $std/int.wat:op_shr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -579,12 +579,12 @@
           (br_on_cast $is_host_channel (ref null any) (ref $HostChannel)
             (local.get $ch))))
       (drop)
-      (return_call $interop/rust.wat:interop_channel_recv
+      (return_call $interop/rust.wat:channel_recv
         (local.get $ch)
         (local.get $cont)))
 
     ;; Fallback: regular channel receive
-    (return_call $std/channel.wat:channel_receive
+    (return_call $std/channel.wat:receive
       (local.get $ch)
       (local.get $cont)))
 
@@ -600,7 +600,7 @@
     (param $size (ref null any))
     (param $cont (ref null any))
 
-    (return_call $interop/rust.wat:interop_op_read
+    (return_call $interop/rust.wat:op_read
       (local.get $stream)
       (local.get $size)
       (local.get $cont)))
@@ -615,13 +615,13 @@
   ;; a direct tail-call (terminal of a fail chain) and as a $Closure value
   ;; passed as a fail continuation to pattern matchers.
   ;;
-  ;; Delegates to $interop/rust.wat:interop_panic, which calls into the host to trap the
+  ;; Delegates to $interop/rust.wat:panic, which calls into the host to trap the
   ;; instance with a diagnostic message. Today panic carries no payload —
   ;; future work will pass a reason / source location for better diagnostics.
   (func $rt/protocols.wat:panic (export "rt/protocols.wat:panic")
     (param $_caps (ref null any))
     (param $_args (ref null any))
-    (return_call $interop/rust.wat:interop_panic))
+    (return_call $interop/rust.wat:panic))
 
 
   ;; =========================================================================

@@ -16,20 +16,20 @@ test 'empty string literal', fn:
       (import "std/list.wat" "std/list.wat:args_empty" (func $std/list.wat:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/str.wat" "std/str.wat:str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
+      (import "std/str.wat" "std/str.wat:empty" (func $std/str.wat:empty (type $std/str.wat:Fn_str_empty)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
-        (local.set $v_1 (call $std/str.wat:str_empty))
+        (local.set $v_1 (call $std/str.wat:empty))
         (local.set $:args (call $std/list.wat:args_empty))
         (local.set $:args (call $std/list.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BdYSAJIBAQACZgBuALoBAA
+    ;; sm:BcYSAJIBAQACXgBuALoBAA
 
 
 
@@ -119,7 +119,7 @@ test 'str templ two exprs', fn:
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/str.wat" "std/str.wat:str_fmt" (func $std/str.wat:str_fmt (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/str.wat" "std/str.wat:fmt" (func $std/str.wat:fmt (type $rt/protocols.wat:Fn_op_unary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $a_0 (ref null any))
@@ -133,7 +133,7 @@ test 'str templ two exprs', fn:
         (global.set $b (local.get $b_1))
         (local.set $v_6 (call $std/str.wat:str (data.ref $d_0 5)))
         (local.set $:varargs (array.new_fixed $rt/types.wat:VarArgs 3 (local.get $a_0) (local.get $v_6) (local.get $b_1)))
-        (return_call $std/str.wat:str_fmt (local.get $:varargs) (local.get $v_2))
+        (return_call $std/str.wat:fmt (local.get $:varargs) (local.get $v_2))
       )
       (export "fink_module" (func $fink_module))
       (global $a (mut (ref null any)) (ref.null any))
@@ -142,7 +142,7 @@ test 'str templ two exprs', fn:
       (export "b" (global $b))
       (data $d_0 " and ")
     )
-    ;; sm:CIYRAJIBAQABhAEASgEMAYQBAEoBFgV-AO4BAQkP
+    ;; sm:CPYQAJIBAQABhAEASgEMAYQBAEoBFgV-AO4BAQkP
 
 
 test 'str tagged template', fn:
@@ -434,19 +434,19 @@ test 'empty string eq', fn:
       (type $std/str.wat:Fn_str_empty (func (result (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.wat:str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
+      (import "std/str.wat" "std/str.wat:empty" (func $std/str.wat:empty (type $std/str.wat:Fn_str_empty)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
-        (local.set $v_1 (call $std/str.wat:str_empty))
-        (local.set $v_2 (call $std/str.wat:str_empty))
+        (local.set $v_1 (call $std/str.wat:empty))
+        (local.set $v_2 (call $std/str.wat:empty))
         (return_call $rt/protocols.wat:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BIQOAJIBAQACZgEMAmYBCwg
+    ;; sm:BPQNAJIBAQACXgEMAl4BCwg
 
 
 # TODO: move to ./test_patterns.fnk
@@ -473,7 +473,7 @@ test 'match empty string', fn:
       (import "std/list.wat" "std/list.wat:args_prepend" (func $std/list.wat:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.wat:str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
+      (import "std/str.wat" "std/str.wat:empty" (func $std/str.wat:empty (type $std/str.wat:Fn_str_empty)))
       (func $v_29 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_25 (ref null any))
         (local $v_26 (ref null any))
@@ -538,7 +538,7 @@ test 'match empty string', fn:
         (local.set $v_10 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $v_11) (local.get $v_12)))
         (local.set $v_152 (struct.new $rt/types.wat:Closure (ref.func $v_145) (local.get $:caps_arg)))
-        (local.set $v_14 (call $std/str.wat:str_empty))
+        (local.set $v_14 (call $std/str.wat:empty))
         (return_call $rt/protocols.wat:op_eq (local.get $v_10) (local.get $v_14) (local.get $v_152))
       )
       (func $v_41 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -672,7 +672,7 @@ test 'match empty string', fn:
       (global $main (mut (ref null any)) (ref.null any))
       (export "main" (global $main))
     )
-    ;; sm:YqobAJQBAUABhgEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADiCgCUAQCaAQCUAQCaAQCUAQDUAQDGAQEHAmgBAAKUCACSAQCaAQCSAQCaAQCSAQCuAQDGAQB6AMgBAG4AugEAugEAvgEAwgQAlAEBGgGGAQBuALwBALgGAJQBAJoBAJQBAJoBAJQBAHoAyAEAbgC8AQD8AgCsBwC6AQDAAQDAAQB6AMgBAHoAzAEAbgC-AQDEAQC-AQCyBwCUAQCaAQCUAQDUAQDGAQB6AMgBAG4AvAEAvgEAvAEA9gUAkgEAmgEAkgEAegDIAQBuALoBALoBAMQFAJIBAHoBUQTEAQBWAG4AwAEA
+    ;; sm:YpobAJQBAUABhgEAbgC8AQCiBgC6AQDAAQB6AMgBAG4AvgEAsAcAugEAwAEAwAEAlAEAhAEAfADiCgCUAQCaAQCUAQCaAQCUAQDUAQDGAQEHAmABAAKUCACSAQCaAQCSAQCaAQCSAQCuAQDGAQB6AMgBAG4AugEAugEAvgEAwgQAlAEBGgGGAQBuALwBALgGAJQBAJoBAJQBAJoBAJQBAHoAyAEAbgC8AQD8AgCsBwC6AQDAAQDAAQB6AMgBAHoAzAEAbgC-AQDEAQC-AQCyBwCUAQCaAQCUAQDUAQDGAQB6AMgBAG4AvAEAvgEAvAEA9gUAkgEAmgEAkgEAegDIAQBuALoBALoBAMQFAJIBAHoBUQTEAQBWAG4AwAEA
 
 
 test 'empty string eq template', fn:
@@ -686,19 +686,19 @@ test 'empty string eq template', fn:
       (type $std/str.wat:Fn_str_empty (func (result (ref null any))))
       (import "std/list.wat" "std/list.wat:args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.wat:str_empty" (func $std/str.wat:str_empty (type $std/str.wat:Fn_str_empty)))
+      (import "std/str.wat" "std/str.wat:empty" (func $std/str.wat:empty (type $std/str.wat:Fn_str_empty)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
-        (local.set $v_1 (call $std/str.wat:str_empty))
-        (local.set $v_2 (call $std/str.wat:str_empty))
+        (local.set $v_1 (call $std/str.wat:empty))
+        (local.set $v_2 (call $std/str.wat:empty))
         (return_call $rt/protocols.wat:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BIQOAJIBAQACZgEMB2YBCw0
+    ;; sm:BPQNAJIBAQACXgEMB14BCw0
 
 
 test 'str eq', fn:
@@ -766,6 +766,10 @@ JIBAQAHfgEWB34BFRI
 
 
 BFRI
+
+
+
+
 
 
 

@@ -10,14 +10,14 @@
 ;; null ambiguity (null is reserved for Option/absence semantics).
 ;;
 ;; Direct-style API (used by other runtime modules + dispatch):
-;;   $std/list.wat:list_nil     : () -> (ref $Nil)
-;;   $std/list.wat:list_prepend : (ref any), (ref $List) -> (ref $Cons)
-;;   $std/list.wat:list_head    : (ref $Cons) -> (ref any)
-;;   $std/list.wat:list_tail    : (ref $Cons) -> (ref $List)
-;;   $std/list.wat:list_pop     : (ref $Cons) -> (ref any), (ref $List)
-;;   $std/list.wat:list_op_empty: (ref $List) -> i32
-;;   $std/list.wat:list_size    : (ref $List) -> i32
-;;   $std/list.wat:list_concat  : (ref $List), (ref $List) -> (ref $List)
+;;   $std/list.wat:nil     : () -> (ref $Nil)
+;;   $std/list.wat:prepend : (ref any), (ref $List) -> (ref $Cons)
+;;   $std/list.wat:head    : (ref $Cons) -> (ref any)
+;;   $std/list.wat:tail    : (ref $Cons) -> (ref $List)
+;;   $std/list.wat:pop     : (ref $Cons) -> (ref any), (ref $List)
+;;   $std/list.wat:op_empty: (ref $List) -> i32
+;;   $std/list.wat:size    : (ref $List) -> i32
+;;   $std/list.wat:concat  : (ref $List), (ref $List) -> (ref $List)
 ;;
 ;; CPS wrappers (compiler-facing):
 ;;   All params/results are (ref null any). Continuation dispatch via _apply.
@@ -62,12 +62,12 @@
   ;; Create an empty list — args-list constructor (calling convention).
   ;; Semantic home: rt/apply.wat as args_empty. Lives here for now
   ;; because the args-list realization is cons-cells; to be moved.
-  (func $std/list.wat:list_nil (export "std/list.wat:args_empty") (result (ref $Nil))
+  (func $std/list.wat:nil (export "std/list.wat:args_empty") (result (ref $Nil))
     (struct.new $Nil)
   )
 
   ;; Predicate: is this list empty? ($List impl of op_empty protocol.)
-  (func $std/list.wat:list_op_empty (export "std/list.wat:op_empty")
+  (func $std/list.wat:op_empty (export "std/list.wat:op_empty")
     (param $val (ref null any)) (result i32)
     (ref.test (ref $Nil) (local.get $val))
   )
@@ -76,7 +76,7 @@
   ;; -- Cons -----------------------------------------------------------
 
   ;; Prepend a value to a list. O(1). Typed-internal.
-  (func $std/list.wat:list_prepend
+  (func $std/list.wat:prepend
     (param $head (ref any))
     (param $tail (ref $List))
     (result (ref $Cons))
@@ -88,7 +88,7 @@
   ;; -- Head / Tail ----------------------------------------------------
 
   ;; Get the first element. Traps on empty list. Typed-internal.
-  (func $std/list.wat:list_head
+  (func $std/list.wat:head
     (param $list (ref $Cons))
     (result (ref any))
 
@@ -97,21 +97,21 @@
 
   ;; Args-protocol primitives (calling convention) — unboxed, take/return
   ;; (ref null any), cast internally. Semantic home: rt/apply.wat.
-  (func $std/list.wat:list_head_any (export "std/list.wat:args_head")
+  (func $std/list.wat:head_any (export "std/list.wat:args_head")
     (param $list (ref null any))
     (result (ref null any))
 
     (struct.get $Cons $head (ref.cast (ref $Cons) (local.get $list)))
   )
 
-  (func $std/list.wat:list_tail_any (export "std/list.wat:args_tail")
+  (func $std/list.wat:tail_any (export "std/list.wat:args_tail")
     (param $list (ref null any))
     (result (ref null any))
 
     (struct.get $Cons $tail (ref.cast (ref $Cons) (local.get $list)))
   )
 
-  (func $std/list.wat:list_prepend_any (export "std/list.wat:args_prepend")
+  (func $std/list.wat:prepend_any (export "std/list.wat:args_prepend")
     (param $head (ref null any))
     (param $tail (ref null any))
     (result (ref null any))
@@ -121,18 +121,18 @@
       (ref.cast (ref $List) (local.get $tail)))
   )
 
-  (func $std/list.wat:list_concat_any (export "std/list.wat:args_concat")
+  (func $std/list.wat:concat_any (export "std/list.wat:args_concat")
     (param $a (ref null any))
     (param $b (ref null any))
     (result (ref null any))
 
-    (call $std/list.wat:list_concat
+    (call $std/list.wat:concat
       (ref.cast (ref $List) (local.get $a))
       (ref.cast (ref $List) (local.get $b)))
   )
 
   ;; Get the rest of the list. Typed-internal.
-  (func $std/list.wat:list_tail
+  (func $std/list.wat:tail
     (param $list (ref $Cons))
     (result (ref $List))
 
@@ -146,7 +146,7 @@
   ;;   [a, ...rest] = xs  →  (a, rest) = list_pop(xs)
   ;;
   ;; Returns (head, tail) via multi-value. Traps on empty list.
-  (func $std/list.wat:list_pop
+  (func $std/list.wat:pop
     (param $list (ref $Cons))
     (result (ref any) (ref $List))
 
@@ -158,7 +158,7 @@
   ;; -- Size -----------------------------------------------------------
 
   ;; Count elements. O(n) walk.
-  (func $std/list.wat:list_size
+  (func $std/list.wat:size
     (param $list (ref $List))
     (result i32)
 
@@ -185,7 +185,7 @@
 
   ;; Indexed access. O(n) walk to position.
   ;; Returns null if index is out of bounds or negative.
-  (func $std/list.wat:list_get
+  (func $std/list.wat:get
     (param $list (ref $List))
     (param $index i32)
     (result (ref null any))
@@ -221,7 +221,7 @@
 
   ;; [..a, ..b] — walks a, rebuilds cells pointing to b. O(len(a)).
   ;; If a is empty, returns b. If b is empty, returns a.
-  (func $std/list.wat:list_concat
+  (func $std/list.wat:concat
     (param $a (ref $List))
     (param $b (ref $List))
     (result (ref $List))
@@ -272,7 +272,7 @@
 
   ;; Index of first element matching val by ref.eq. Returns -1 if absent.
   ;; O(n) scan.
-  (func $std/list.wat:list_find
+  (func $std/list.wat:find
     (param $list (ref $List))
     (param $val (ref any))
     (result i32)
@@ -313,7 +313,7 @@
     (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))
 
     (return_call $std/list.wat:apply_1
-      (call $std/list.wat:list_prepend
+      (call $std/list.wat:prepend
         (ref.cast (ref any) (local.get $val))
         (ref.cast (ref $List) (local.get $list)))
       (local.get $cont))
@@ -324,7 +324,7 @@
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     (return_call $std/list.wat:apply_1
-      (call $std/list.wat:list_concat
+      (call $std/list.wat:concat
         (ref.cast (ref $List) (local.get $a))
         (ref.cast (ref $List) (local.get $b)))
       (local.get $cont))

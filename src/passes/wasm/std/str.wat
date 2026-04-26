@@ -45,9 +45,9 @@
 
   ;; ---- Singleton empty string ----
 
-  (global $std/str.wat:str_empty (ref $StrEmpty) (struct.new $StrEmpty))
-  (func $std/str.wat:str_empty (export "std/str.wat:str_empty") (result (ref $Str))
-    (global.get $std/str.wat:str_empty))
+  (global $std/str.wat:empty (ref $StrEmpty) (struct.new $StrEmpty))
+  (func $std/str.wat:empty (export "std/str.wat:empty") (result (ref $Str))
+    (global.get $std/str.wat:empty))
 
   ;; ---- Construction (compiler-emitted) ----
 
@@ -73,7 +73,7 @@
     (result (ref any))
 
     (if (i32.eqz (array.len (ref.cast (ref $ByteArray) (local.get $bytes))))
-      (then (return (global.get $std/str.wat:str_empty))))
+      (then (return (global.get $std/str.wat:empty))))
     (struct.new $StrBytesImpl
       (ref.cast (ref $ByteArray) (local.get $bytes)))
   )
@@ -86,7 +86,7 @@
   ;; Dispatches via br_on_cast:
   ;;   $StrDataImpl  → copies bytes from data section into a $ByteArray
   ;;   $StrBytesImpl → returns the existing $ByteArray
-  (func $std/str.wat:str_bytes (export "std/str.wat:str_bytes")
+  (func $std/str.wat:bytes (export "std/str.wat:bytes")
     (param $std/str.wat:str (ref $Str))
     (result (ref $ByteArray))
 
@@ -135,7 +135,7 @@
   ;; str_repr : (ref $Str) -> (ref $Str)
   ;; Produce a quoted, escaped representation of a string: 'hello' → '\'hello\''
   ;; Escapes: \n \r \t \\ \' and non-printable bytes as \xNN.
-  (func $std/str.wat:str_repr (export "std/str.wat:str_repr")
+  (func $std/str.wat:repr (export "std/str.wat:repr")
     (param $std/str.wat:str (ref $Str))
     (result (ref $Str))
 
@@ -147,7 +147,7 @@
     (local $buf (ref $ByteArray))
     (local $pos i32)
 
-    (local.set $src (call $std/str.wat:str_bytes (local.get $std/str.wat:str)))
+    (local.set $src (call $std/str.wat:bytes (local.get $std/str.wat:str)))
     (local.set $len (array.len (local.get $src)))
 
     ;; Pass 1: compute output length.
@@ -293,7 +293,7 @@
   ;; Fast path: ref.eq (same object → 1).
   ;; Slow path: dispatch on concrete types, compare byte-by-byte.
   ;; Returns 1 if equal, 0 if not.
-  (func $std/str.wat:str_op_eq
+  (func $std/str.wat:op_eq
     (param $a (ref $Str))
     (param $b (ref $Str))
     (result i32)
@@ -460,7 +460,7 @@
   ;; \n, \t, \r, \f, \v, \b, \\, \', \$, \xNN, \u{NNNNNN}
   ;; Dispatches to $std/str.wat:_escape_data (linear memory) or $std/str.wat:_escape_array (heap).
   ;; Pure byte processing — no user code, no CPS needed.
-  (func $std/str.wat:str_render_escape
+  (func $std/str.wat:render_escape
     (param $raw (ref $Str))
     (result (ref $Str))
 
@@ -1019,7 +1019,7 @@
   ;; For debug output and serialization.
   ;;
   ;; Two-pass: count then write.
-  (func $std/str.wat:str_render_unescape
+  (func $std/str.wat:render_unescape
     (param $std/str.wat:str (ref $Str))
     (result (ref $Str))
 
@@ -1200,7 +1200,7 @@
   ;; Content-based hash for any byte-bearing string.
   ;; Dispatches on concrete type to avoid allocating a $ByteArray copy.
   ;; Uses FNV-1a (32-bit), masked to 31 bits for i31ref.
-  (func $std/str.wat:str_hash_i31
+  (func $std/str.wat:hash_i31
     (param $std/str.wat:str (ref $Str))
     (result i32)
 
@@ -1581,7 +1581,7 @@
         (br $not_str
           (br_on_cast $is_str (ref any) (ref $Str)
             (local.get $val))))
-      (return (call $std/str.wat:str_repr)))
+      (return (call $std/str.wat:repr)))
 
     ;; Everything else delegates to _str_fmt_val.
     (call $std/str.wat:_str_fmt_val (local.get $val))
@@ -1870,8 +1870,8 @@
         (struct.get $RangeImpl $end (local.get $impl)))))
 
     ;; Get byte arrays.
-    (local.set $start_bytes (call $std/str.wat:str_bytes (local.get $start_str)))
-    (local.set $end_bytes (call $std/str.wat:str_bytes (local.get $end_str)))
+    (local.set $start_bytes (call $std/str.wat:bytes (local.get $start_str)))
+    (local.set $end_bytes (call $std/str.wat:bytes (local.get $end_str)))
     (local.set $start_len (array.len (local.get $start_bytes)))
     (local.set $end_len (array.len (local.get $end_bytes)))
 
@@ -1931,7 +1931,7 @@
     (local $i i32)
     (local $b i32)
 
-    (local.set $bytes (call $std/str.wat:str_bytes (local.get $std/str.wat:str)))
+    (local.set $bytes (call $std/str.wat:bytes (local.get $std/str.wat:str)))
     (local.set $len (array.len (local.get $bytes)))
 
     ;; Empty string is not an identifier.
@@ -2015,7 +2015,7 @@
       (return
         (if (result i32) (call $std/str.wat:_str_is_ident (local.get $std/str.wat:str))
           (then (call $std/str.wat:_str_len (local.get $std/str.wat:str)))
-          (else (call $std/str.wat:_str_len (call $std/str.wat:str_repr (local.get $std/str.wat:str)))))))
+          (else (call $std/str.wat:_str_len (call $std/str.wat:repr (local.get $std/str.wat:str)))))))
 
     ;; Non-string key — (repr), add 2 for parens.
     (i32.add
@@ -2223,7 +2223,7 @@
           ;; Non-identifier string — use str_repr (quoted + escaped).
           (local.set $pos
             (call $std/str.wat:_str_copy_to
-              (call $std/str.wat:str_repr (local.get $std/str.wat:str))
+              (call $std/str.wat:repr (local.get $std/str.wat:str))
               (local.get $buf)
               (local.get $pos)))))
       (return (local.get $pos)))
@@ -2427,7 +2427,7 @@
     (local $is_first i32)
 
     ;; Empty list: return "[]"
-    (if (call $std/list.wat:list_op_empty (local.get $list))
+    (if (call $std/list.wat:op_empty (local.get $list))
       (then
         (return (call $std/str.wat:_str_from_ascii_2
           (i32.const 0x5B) ;; '['
@@ -2443,16 +2443,16 @@
     (block $done1
       (loop $len_loop
         (br_if $done1
-          (call $std/list.wat:list_op_empty (local.get $cur)))
+          (call $std/list.wat:op_empty (local.get $cur)))
         (local.set $total
           (i32.add (local.get $total)
             (call $std/str.wat:_str_len
               (call $std/str.wat:_str_fmt_val_repr
                 (ref.as_non_null
-                  (call $std/list.wat:list_head_any (local.get $cur)))))))
+                  (call $std/list.wat:head_any (local.get $cur)))))))
         (local.set $count (i32.add (local.get $count) (i32.const 1)))
         (local.set $cur
-          (call $std/list.wat:list_tail_any (local.get $cur)))
+          (call $std/list.wat:tail_any (local.get $cur)))
         (br $len_loop)))
 
     ;; Add separator bytes: (count - 1) * 2
@@ -2476,7 +2476,7 @@
     (block $done2
       (loop $copy_loop
         (br_if $done2
-          (call $std/list.wat:list_op_empty (local.get $cur)))
+          (call $std/list.wat:op_empty (local.get $cur)))
 
         ;; Write ", " separator (except before first element).
         (if (i32.eqz (local.get $is_first))
@@ -2492,12 +2492,12 @@
           (call $std/str.wat:_str_copy_to
             (call $std/str.wat:_str_fmt_val_repr
               (ref.as_non_null
-                (call $std/list.wat:list_head_any (local.get $cur))))
+                (call $std/list.wat:head_any (local.get $cur))))
             (local.get $buf)
             (local.get $pos)))
 
         (local.set $cur
-          (call $std/list.wat:list_tail_any (local.get $cur)))
+          (call $std/list.wat:tail_any (local.get $cur)))
         (br $copy_loop)))
 
     ;; Write closing ']'.
@@ -2574,7 +2574,7 @@
   ;; second arg is the continuation. Formats each segment via _str_fmt_val,
   ;; concatenates all results into a single $StrBytesImpl, and passes the
   ;; result to the continuation via _apply.
-  (func $std/str.wat:str_fmt (export "std/str.wat:str_fmt")
+  (func $std/str.wat:fmt (export "std/str.wat:fmt")
     (param $segments_any (ref null any)) (param $cont (ref null any))
 
     (local $segments (ref $VarArgs))
@@ -2692,7 +2692,7 @@
     ;; Empty slice
     (local.set $slice_len (i32.sub (local.get $end) (local.get $start)))
     (if (i32.eqz (local.get $slice_len))
-      (then (return (call $std/str.wat:str_empty))))
+      (then (return (call $std/str.wat:empty))))
 
     ;; Full string — return original
     (if (i32.and
@@ -2701,7 +2701,7 @@
       (then (return (local.get $std/str.wat:str))))
 
     ;; Convert to byte array, then copy slice
-    (local.set $src (call $std/str.wat:str_bytes (local.get $std/str.wat:str)))
+    (local.set $src (call $std/str.wat:bytes (local.get $std/str.wat:str)))
     (local.set $dst (array.new $ByteArray (i32.const 0) (local.get $slice_len)))
     (local.set $i (i32.const 0))
     (block $done
@@ -2721,7 +2721,7 @@
   ;; CPS wrapper: extract bytes [start..end) from a string.
   ;;   succ — called with the substring on success
   ;;   fail — called with the original string on out-of-bounds
-  (func $std/str.wat:str_slice (export "std/str.wat:str_slice")
+  (func $std/str.wat:slice (export "std/str.wat:slice")
     (param $std/str.wat:str (ref null any))
     (param $start (ref null any))
     (param $end (ref null any))
@@ -2754,7 +2754,7 @@
   ;;   $Range key → byte slice (start..end or start...end)
   ;;   $Num key   → single byte at index
   ;; Out of bounds → unreachable
-  (func $std/str.wat:str_op_dot (export "std/str.wat:str_op_dot")
+  (func $std/str.wat:op_dot (export "std/str.wat:op_dot")
     (param $std/str.wat:str (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     (local $s (ref $Str))
@@ -2773,11 +2773,11 @@
             (local.get $key))))
       (local.set $range)
 
-      (local.set $start_f (struct.get $Num 0 (call $std/range.wat:range_start (local.get $range))))
-      (local.set $end_f (struct.get $Num 0 (call $std/range.wat:range_end (local.get $range))))
+      (local.set $start_f (struct.get $Num 0 (call $std/range.wat:start (local.get $range))))
+      (local.set $end_f (struct.get $Num 0 (call $std/range.wat:end (local.get $range))))
 
       ;; Adjust end for inclusive range
-      (if (call $std/range.wat:range_is_incl (local.get $range))
+      (if (call $std/range.wat:is_incl (local.get $range))
         (then
           (local.set $end_f (f64.add (local.get $end_f) (f64.const 1)))))
 
@@ -2816,7 +2816,7 @@
   ;; CPS string template pattern matching.
   ;; Checks subj starts with prefix and ends with suffix (non-overlapping).
   ;; On match: calls succ(middle_slice). On mismatch: calls fail().
-  (func $std/str.wat:str_match (export "std/str.wat:str_match")
+  (func $std/str.wat:match (export "std/str.wat:match")
     (param $subj (ref null any))
     (param $prefix (ref null any))
     (param $suffix (ref null any))
@@ -2857,12 +2857,12 @@
       (then (return_call $std/list.wat:apply_0 (local.get $fail))))
 
     ;; Get byte arrays
-    (local.set $s_bytes (call $std/str.wat:str_bytes (local.get $s_str)))
+    (local.set $s_bytes (call $std/str.wat:bytes (local.get $s_str)))
 
     ;; Check prefix match
     (if (local.get $p_len)
       (then
-        (local.set $p_bytes (call $std/str.wat:str_bytes (local.get $p_str)))
+        (local.set $p_bytes (call $std/str.wat:bytes (local.get $p_str)))
         (local.set $i (i32.const 0))
         (block $pfx_fail
           (loop $pfx_loop
@@ -2881,7 +2881,7 @@
                           (i32.add (local.get $p_len) (local.get $x_len))))
     (if (local.get $x_len)
       (then
-        (local.set $x_bytes (call $std/str.wat:str_bytes (local.get $x_str)))
+        (local.set $x_bytes (call $std/str.wat:bytes (local.get $x_str)))
         (local.set $i (i32.const 0))
         (block $sfx_fail
           (loop $sfx_loop
@@ -2899,7 +2899,7 @@
 
     ;; Both matched — slice the middle
     (if (i32.eqz (local.get $mid_len))
-      (then (return_call $std/list.wat:apply_1 (call $std/str.wat:str_empty) (local.get $succ))))
+      (then (return_call $std/list.wat:apply_1 (call $std/str.wat:empty) (local.get $succ))))
 
     ;; Full string — no prefix or suffix
     (if (i32.eq (local.get $mid_len) (local.get $s_len))

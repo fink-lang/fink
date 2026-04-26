@@ -1326,13 +1326,13 @@
     (struct.new $RecImpl (global.get $empty_node))
   )
 
-  (func $std/rec.wat:rec_get (export "std/rec.wat:rec_get")
+  (func $std/rec.wat:get (export "std/rec.wat:get")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref null eq))
     (call $std/rec.wat:hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
   )
 
-  (func $std/rec.wat:rec_op_in (export "std/rec.wat:rec_op_in")
+  (func $std/rec.wat:op_in (export "std/rec.wat:op_in")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result i32)
     (ref.is_null
@@ -1341,10 +1341,10 @@
     (i32.xor)
   )
 
-  (func $std/rec.wat:rec_op_not_in (export "std/rec.wat:rec_op_not_in")
+  (func $std/rec.wat:op_not_in (export "std/rec.wat:op_not_in")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result i32)
-    (i32.eqz (call $std/rec.wat:rec_op_in (local.get $rec) (local.get $key)))
+    (i32.eqz (call $std/rec.wat:op_in (local.get $rec) (local.get $key)))
   )
 
   (func $std/rec.wat:_rec_set
@@ -1355,7 +1355,7 @@
         (local.get $key) (local.get $val)))
   )
 
-  (func $std/rec.wat:rec_delete (export "std/rec.wat:rec_delete")
+  (func $std/rec.wat:delete (export "std/rec.wat:delete")
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref $RecImpl))
     (struct.new $RecImpl
@@ -1384,15 +1384,15 @@
         (struct.get $RecImpl $hamt (local.get $src))))
   )
 
-  (func $std/rec.wat:rec_size (export "std/rec.wat:rec_size")
+  (func $std/rec.wat:size (export "std/rec.wat:size")
     (param $rec (ref $RecImpl)) (result i32)
     (call $std/rec.wat:hamt_size (struct.get $RecImpl $hamt (local.get $rec)))
   )
 
   ;; Predicate: is this record empty?
-  (func $std/rec.wat:rec_op_empty (export "std/rec.wat:rec_op_empty")
+  (func $std/rec.wat:op_empty (export "std/rec.wat:op_empty")
     (param $val (ref null any)) (result i32)
-    (i32.eqz (call $std/rec.wat:rec_size (ref.cast (ref $RecImpl) (local.get $val))))
+    (i32.eqz (call $std/rec.wat:size (ref.cast (ref $RecImpl) (local.get $val))))
   )
 
   ;; -- Dict wrappers (user-visible API) ----------------------------------
@@ -1462,7 +1462,7 @@
   ;; Direct-style rec field setter — used by the emitter for module import rec construction.
   ;; Takes (rec, key, val) as (ref null any) and returns (ref null any).
   ;; Avoids CPS overhead for compile-time-known field sets.
-  (func $std/rec.wat:rec_set_field (export "std/rec.wat:_rec_set_field")
+  (func $std/rec.wat:set_field (export "std/rec.wat:_rec_set_field")
     (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any))
     (result (ref null any))
     (call $std/rec.wat:_rec_set
@@ -1470,7 +1470,7 @@
       (ref.cast (ref eq) (local.get $key))
       (ref.cast (ref eq) (local.get $val))))
 
-  (func $std/rec.wat:rec_set (export "std/rec.wat:rec_set")
+  (func $std/rec.wat:set (export "std/rec.wat:set")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
@@ -1480,7 +1480,7 @@
         (ref.cast (ref eq) (local.get $val)))
       (local.get $cont)))
 
-  (func $std/rec.wat:rec_merge (export "std/rec.wat:rec_merge")
+  (func $std/rec.wat:merge (export "std/rec.wat:merge")
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
@@ -1489,7 +1489,7 @@
         (ref.cast (ref $RecImpl) (local.get $src)))
       (local.get $cont)))
 
-  (func $std/rec.wat:rec_pop (export "std/rec.wat:rec_pop")
+  (func $std/rec.wat:pop (export "std/rec.wat:pop")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))
@@ -1508,10 +1508,10 @@
       (local.get $rest)
       (local.get $succ)))
 
-  (func $std/rec.wat:rec_op_dot (export "std/rec.wat:rec_op_dot")
+  (func $std/rec.wat:op_dot (export "std/rec.wat:op_dot")
     (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
-      (call $std/rec.wat:rec_get
+      (call $std/rec.wat:get
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key)))
       (local.get $cont)))

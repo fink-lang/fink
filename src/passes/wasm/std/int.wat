@@ -11,25 +11,25 @@
   ;; Bitwise: direct-style helpers called from polymorphic operators.wat
   ;; =========================================================================
 
-  (func $std/int.wat:int_op_and (export "std/int.wat:int_op_and")
+  (func $std/int.wat:op_and (export "std/int.wat:op_and")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.and
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:int_op_or (export "std/int.wat:int_op_or")
+  (func $std/int.wat:op_or (export "std/int.wat:op_or")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.or
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:int_op_xor (export "std/int.wat:int_op_xor")
+  (func $std/int.wat:op_xor (export "std/int.wat:op_xor")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.xor
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:int_op_not (export "std/int.wat:int_op_not")
+  (func $std/int.wat:op_not (export "std/int.wat:op_not")
     (param $a (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.xor
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
@@ -39,19 +39,19 @@
   ;; Integer arithmetic: direct-style helpers called from operators.wat
   ;; =========================================================================
 
-  (func $std/int.wat:int_op_div (export "std/int.wat:int_op_div")
+  (func $std/int.wat:op_div (export "std/int.wat:op_div")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.div_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:int_op_rem (export "std/int.wat:int_op_rem")
+  (func $std/int.wat:op_rem (export "std/int.wat:op_rem")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.rem_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:int_op_mod (export "std/int.wat:int_op_mod")
+  (func $std/int.wat:op_mod (export "std/int.wat:op_mod")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.rem_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
@@ -60,13 +60,13 @@
   ;; =========================================================================
   ;; Shifts: unbox $Num → i64, shift, i64 → $Num → apply_1(result, cont)
   ;; =========================================================================
-  (func $std/int.wat:int_op_shl (export "std/int.wat:int_op_shl")
+  (func $std/int.wat:op_shl (export "std/int.wat:op_shl")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.shl
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:int_op_shr (export "std/int.wat:int_op_shr")
+  (func $std/int.wat:op_shr (export "std/int.wat:op_shr")
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.shr_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))

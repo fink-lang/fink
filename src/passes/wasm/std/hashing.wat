@@ -52,7 +52,7 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $key))))
-      (return (call $std/str.wat:str_hash_i31)))
+      (return (call $std/str.wat:hash_i31)))
 
     ;; Unknown type — unreachable for valid keys
     (unreachable)

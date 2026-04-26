@@ -77,7 +77,7 @@
   ;;   3. push unit_thunk(cont) to task queue
   ;;   4. run_next
 
-  (func $std/channel.wat:channel_op_shr
+  (func $std/channel.wat:op_shr
     (param $ch_val (ref null any))
     (param $msg    (ref null any))
     (param $cont   (ref null any))
@@ -87,7 +87,7 @@
 
     ;; Append msg to messages (FIFO).
     (struct.set $Channel $messages (local.get $ch)
-      (call $std/list.wat:list_concat
+      (call $std/list.wat:concat
         (struct.get $Channel $messages (local.get $ch))
         (struct.new $Cons
           (ref.as_non_null (local.get $msg))
@@ -111,7 +111,7 @@
   ;;   2. if ch.$messages non-empty, push process_msg_q(ch) to task queue
   ;;   3. run_next
 
-  (func $std/channel.wat:channel_receive
+  (func $std/channel.wat:receive
     (param $ch_val (ref null any))
     (param $cont   (ref null any))
 
@@ -120,7 +120,7 @@
 
     ;; Append cont to receivers (FIFO).
     (struct.set $Channel $receivers (local.get $ch)
-      (call $std/list.wat:list_concat
+      (call $std/list.wat:concat
         (struct.get $Channel $receivers (local.get $ch))
         (struct.new $Cons
           (ref.as_non_null (local.get $cont))

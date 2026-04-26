@@ -21,7 +21,7 @@
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $interop/rust.wat:interop_rust_host_cont_adapter $interop/rust.wat:interop_rust_read_apply)
+  (elem declare func $interop/rust.wat:host_cont_adapter $interop/rust.wat:read_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -33,7 +33,7 @@
   ;; so the host can render a useful message.
   (import "env" "host_panic" (func $interop/rust.wat:host_panic))
   ;; Host-side callback dispatch: invoke the Rust-registered callback
-  ;; for `id` with the given args list. See `$interop/rust.wat:interop_rust_host_cont_adapter` and
+  ;; for `id` with the given args list. See `$interop/rust.wat:host_cont_adapter` and
   ;; `wrap_host_cont` for how WASM-side callable refs into this.
   (import "env" "host_invoke_cont" (func $interop/rust.wat:host_invoke_cont (param i32 (ref null any))))
 
@@ -52,7 +52,7 @@
   ;;
   ;; When fink-side code eventually fires the continuation via
   ;; `_apply`, `_apply` casts it to $Closure, pulls the funcref (which
-  ;; is `$interop/rust.wat:interop_rust_host_cont_adapter` by construction — correct nominal type)
+  ;; is `$interop/rust.wat:host_cont_adapter` by construction — correct nominal type)
   ;; and tail-calls it. The adapter reads `id` out of the captures
   ;; array and forwards to `env.host_invoke_cont(id, args)`.
   ;;
@@ -60,7 +60,7 @@
   ;; $Fn2 / funcref directly. Internals are interop's business.
 
   ;; $Fn2 adapter body — fires when WASM invokes a host-wrapped cont.
-  (func $interop/rust.wat:interop_rust_host_cont_adapter (type $Fn2)
+  (func $interop/rust.wat:host_cont_adapter (type $Fn2)
     (param $caps (ref null any))
     (param $args (ref null any))
 
@@ -84,7 +84,7 @@
     (result (ref null any))
 
     (struct.new $Closure
-      (ref.func $interop/rust.wat:interop_rust_host_cont_adapter)
+      (ref.func $interop/rust.wat:host_cont_adapter)
       (array.new_fixed $Captures 1
         (ref.i31 (local.get $id))))
   )
@@ -99,7 +99,7 @@
   ;;
   ;; Dispatches stdout vs stderr by channel tag (i31ref: 1=stdout, 2=stderr).
 
-  (func $interop/rust.wat:interop_channel_send
+  (func $interop/rust.wat:channel_send
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
@@ -109,7 +109,7 @@
 
     ;; Extract raw bytes from the $Str (handles all subtypes).
     (local.set $bytes
-      (call $std/str.wat:str_bytes (ref.cast (ref $Str) (local.get $msg))))
+      (call $std/str.wat:bytes (ref.cast (ref $Str) (local.get $msg))))
 
     ;; Read channel tag (i31ref).
     (local.set $tag
@@ -137,7 +137,7 @@
   ;;
   ;; TODO: signal host to start async read for this channel.
 
-  (func $interop/rust.wat:interop_channel_recv
+  (func $interop/rust.wat:channel_recv
     (param $ch (ref null any))
     (param $cont (ref null any))
 
@@ -146,7 +146,7 @@
 
     ;; Park cont on the channel's receivers list (FIFO).
     (struct.set $Channel $receivers (local.get $host_ch)
-      (call $std/list.wat:list_concat
+      (call $std/list.wat:concat
         (struct.get $Channel $receivers (local.get $host_ch))
         (struct.new $Cons
           (ref.as_non_null (local.get $cont))
@@ -165,7 +165,7 @@
   ;;
   ;; The host settles the future during host_resume when data arrives.
 
-  (func $interop/rust.wat:interop_op_read
+  (func $interop/rust.wat:op_read
     (param $stream (ref null any))
     (param $size (ref null any))
     (param $cont (ref null any))
@@ -195,7 +195,7 @@
   ;; Called from runtime `panic` (operators.wat). Delegates to the host which
   ;; traps the instance with a diagnostic. Never returns.
 
-  (func $interop/rust.wat:interop_panic
+  (func $interop/rust.wat:panic
     (call $interop/rust.wat:host_panic)
     unreachable
   )
@@ -216,32 +216,32 @@
   ;; values behind accessors preserves the layering invariant: nothing
   ;; outside `interop/*` reads these globals directly.
 
-  (global $interop/rust.wat:interop_rust_stdout (ref $HostChannel)
+  (global $interop/rust.wat:stdout (ref $HostChannel)
     (struct.new $HostChannel
       (struct.new $Nil)
       (struct.new $Nil)
       (ref.i31 (i32.const 1))))
 
-  (global $interop/rust.wat:interop_rust_stderr (ref $HostChannel)
+  (global $interop/rust.wat:stderr (ref $HostChannel)
     (struct.new $HostChannel
       (struct.new $Nil)
       (struct.new $Nil)
       (ref.i31 (i32.const 2))))
 
-  (global $interop/rust.wat:interop_rust_stdin (ref $HostChannel)
+  (global $interop/rust.wat:stdin (ref $HostChannel)
     (struct.new $HostChannel
       (struct.new $Nil)
       (struct.new $Nil)
       (ref.i31 (i32.const 0))))
 
   (func $interop/io:get_stdout (export "interop/io:get_stdout") (result (ref any))
-    (global.get $interop/rust.wat:interop_rust_stdout))
+    (global.get $interop/rust.wat:stdout))
 
   (func $interop/io:get_stderr (export "interop/io:get_stderr") (result (ref any))
-    (global.get $interop/rust.wat:interop_rust_stderr))
+    (global.get $interop/rust.wat:stderr))
 
   (func $interop/io:get_stdin (export "interop/io:get_stdin") (result (ref any))
-    (global.get $interop/rust.wat:interop_rust_stdin))
+    (global.get $interop/rust.wat:stdin))
 
 
   ;; -- read closure ----------------------------------------------------------
@@ -257,7 +257,7 @@
   ;; Singleton — same closure instance every access; captures null
   ;; (nothing per-instance).
 
-  (func $interop/rust.wat:interop_rust_read_apply (type $Fn2)
+  (func $interop/rust.wat:read_apply (type $Fn2)
     (param $_caps (ref null any))
     (param $args (ref null any))
 
@@ -268,23 +268,23 @@
 
     (local.set $cursor (local.get $args))
     ;; TODO this needs to got through args_* protocol!
-    (local.set $cont (call $std/list.wat:list_head_any (local.get $cursor)))
-    (local.set $cursor (call $std/list.wat:list_tail_any (local.get $cursor)))
-    (local.set $stream (call $std/list.wat:list_head_any (local.get $cursor)))
-    (local.set $cursor (call $std/list.wat:list_tail_any (local.get $cursor)))
-    (local.set $size (call $std/list.wat:list_head_any (local.get $cursor)))
+    (local.set $cont (call $std/list.wat:head_any (local.get $cursor)))
+    (local.set $cursor (call $std/list.wat:tail_any (local.get $cursor)))
+    (local.set $stream (call $std/list.wat:head_any (local.get $cursor)))
+    (local.set $cursor (call $std/list.wat:tail_any (local.get $cursor)))
+    (local.set $size (call $std/list.wat:head_any (local.get $cursor)))
 
-    (return_call $interop/rust.wat:interop_op_read
+    (return_call $interop/rust.wat:op_read
       (local.get $stream)
       (local.get $size)
       (local.get $cont)))
 
-  (global $interop/rust.wat:interop_rust_read_closure (ref $Closure)
+  (global $interop/rust.wat:read_closure (ref $Closure)
     (struct.new $Closure
-      (ref.func $interop/rust.wat:interop_rust_read_apply)
+      (ref.func $interop/rust.wat:read_apply)
       (ref.null $Captures)))
 
   (func $interop/io:get_read (export "interop/io:get_read") (result (ref any))
-    (global.get $interop/rust.wat:interop_rust_read_closure))
+    (global.get $interop/rust.wat:read_closure))
 
 )

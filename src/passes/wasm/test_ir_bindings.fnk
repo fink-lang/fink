@@ -223,8 +223,8 @@ test 'top-level rec destructure then fn using binding', fn:
       (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (import "rt/protocols.wat" "rt/protocols.wat:is_rec_like" (func $rt/protocols.wat:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
       (import "std/str.wat" "std/str.wat:str" (func $std/str.wat:str (type $std/str.wat:Fn_str)))
-      (import "std/rec.wat" "std/rec.wat:rec_set" (func $std/rec.wat:rec_set (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/rec.wat" "std/rec.wat:rec_pop" (func $std/rec.wat:rec_pop (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:set" (func $std/rec.wat:set (type $rt/protocols.wat:Fn_op_quaternary)))
+      (import "std/rec.wat" "std/rec.wat:pop" (func $std/rec.wat:pop (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "rt/protocols.wat" "rt/protocols.wat:panic" (func $rt/protocols.wat:panic (type $rt/types.wat:Fn2)))
       (import "std/rec.wat" "std/rec.wat:rec_new" (func $std/rec.wat:rec_new (type $std/list.wat:Fn_args_empty)))
       (func $v_81 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -299,7 +299,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_111)))
         (local.set $v_131 (struct.new $rt/types.wat:Closure (ref.func $v_126) (local.get $:caps_arg)))
         (local.set $v_19 (call $std/str.wat:str (data.ref $d_0 1)))
-        (return_call $std/rec.wat:rec_pop (local.get $v_17) (local.get $v_19) (local.get $v_109) (local.get $v_131))
+        (return_call $std/rec.wat:pop (local.get $v_17) (local.get $v_19) (local.get $v_109) (local.get $v_131))
       )
       (func $v_26 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_10 (ref null any))
@@ -355,7 +355,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_4 (call $std/rec.wat:rec_new))
         (local.set $v_5 (call $std/str.wat:str (data.ref $d_0 1)))
         (local.set $v_6 (struct.new $rt/types.wat:Num (f64.const 42)))
-        (return_call $std/rec.wat:rec_set (local.get $v_4) (local.get $v_5) (local.get $v_6) (local.get $v_64))
+        (return_call $std/rec.wat:set (local.get $v_4) (local.get $v_5) (local.get $v_6) (local.get $v_64))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
@@ -378,7 +378,7 @@ test 'top-level rec destructure then fn using binding', fn:
       (export "foo" (global $foo))
       (data $d_0 "x")
     )
-    ;; sm:SpQnALoBAL4BAJQBAJoBAJIBATQFiggAugEAvgEAlAEBMQFOAK4BAMIBARoDUgBSAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAKQHALoBAMABAMABAJQBALIBAMYBARsNgAEBAA3uBwCUAQCaAQCUAQCaAQCSAQCwAQDCAQDUAQDGAQEADYoKALoBAL4BAJIBALABAMIBAHoAyAEAegD0AQBuALoBAMoBALwBAPwEAJQBAQwHYgECAX4BBgKGAQEFBb4HAJIBAK4BAMoBAHoAyAEAbgDEAQA
+    ;; sm:SvQmALoBAL4BAJQBAJoBAJIBATQFiggAugEAvgEAlAEBMQFOAK4BAMIBARoDUgBSAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAKQHALoBAMABAMABAJQBALIBAMYBARsNgAEBAA3mBwCUAQCaAQCUAQCaAQCSAQCwAQDCAQDUAQDGAQEADYoKALoBAL4BAJIBALABAMIBAHoAyAEAegD0AQBuALoBAMoBALwBAPwEAJQBAQwHYgECAX4BBgKGAQEFBbYHAJIBAK4BAMoBAHoAyAEAbgDEAQA
 
 yAEAbgDEAQA
 

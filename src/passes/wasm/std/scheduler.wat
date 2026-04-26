@@ -40,7 +40,7 @@
   ;; Push a task to the back of the queue.
   (func $std/scheduler.wat:queue_push (param $task (ref any))
     (global.set $task_queue
-      (call $std/list.wat:list_concat
+      (call $std/list.wat:concat
         (global.get $task_queue)
         (struct.new $Cons (local.get $task) (struct.new $Nil))))
   )
