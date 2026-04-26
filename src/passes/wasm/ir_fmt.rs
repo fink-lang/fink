@@ -58,13 +58,21 @@ pub fn fmt_fragment_with_sm(frag: &Fragment) -> (String, SourceMap) {
 // Names
 // ──────────────────────────────────────────────────────────────────
 
+// If `display` already contains the qualified form (`<module>:<...>`),
+// use it as-is. Once every runtime export follows that convention this
+// idempotency hop becomes unconditional and the prefix branch is dead.
+fn import_alias(module: &str, display: &str) -> String {
+  if display.contains(':') { format!("${}", display) }
+  else { format!("${}:{}", module, display) }
+}
+
 fn type_name(frag: &Fragment, sym: TypeSym) -> String {
   let Some(ty) = frag.types.get(sym.0 as usize) else {
     return format!("$t_{}", sym.0);
   };
   let display = ty.display.as_deref().unwrap_or("");
   match &ty.import {
-    Some(ImportKey { module, .. }) => format!("${}:{}", module, display),
+    Some(ImportKey { module, .. }) => import_alias(module, display),
     None => {
       if display.is_empty() { format!("$t_{}", sym.0) }
       else { format!("${}", display) }
@@ -78,7 +86,7 @@ fn func_name(frag: &Fragment, sym: FuncSym) -> String {
   };
   let display = f.display.as_deref().unwrap_or("");
   match &f.import {
-    Some(ImportKey { module, .. }) => format!("${}:{}", module, display),
+    Some(ImportKey { module, .. }) => import_alias(module, display),
     None => {
       if display.is_empty() { format!("$f_{}", sym.0) }
       else { format!("${}", display) }
@@ -92,7 +100,7 @@ fn global_name(frag: &Fragment, sym: GlobalSym) -> String {
   };
   let display = g.display.as_deref().unwrap_or("");
   match &g.import {
-    Some(ImportKey { module, .. }) => format!("${}:{}", module, display),
+    Some(ImportKey { module, .. }) => import_alias(module, display),
     None => {
       if display.is_empty() { format!("$g_{}", sym.0) }
       else { format!("${}", display) }

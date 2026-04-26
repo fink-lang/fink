@@ -13,7 +13,7 @@ test 'add two literals', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -21,11 +21,11 @@ test 'add two literals', fn:
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
         (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $rt/protocols.wat:op_plus (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BLYMAJIBAQABhAEBCAGEAQEHBQ
+    ;; sm:BJQMAJIBAQABhAEBCAGEAQEHBQ
 
 
 
@@ -41,8 +41,8 @@ test 'chained arithmetic', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_mul" (func $rt/protocols.wat:rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_plus" (func $rt/protocols.wat:op_plus (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_mul" (func $rt/protocols.wat:op_mul (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_12 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_13 (ref null any))
@@ -52,7 +52,7 @@ test 'chained arithmetic', fn:
         (local.set $v_13 (array.get $rt/types.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_3 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 4)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_plus (local.get $v_3) (local.get $v_5) (local.get $v_13))
+        (return_call $rt/protocols.wat:op_plus (local.get $v_3) (local.get $v_5) (local.get $v_13))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
@@ -65,11 +65,11 @@ test 'chained arithmetic', fn:
         (local.set $v_17 (struct.new $rt/types.wat:Closure (ref.func $v_12) (local.get $:caps_arg)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
         (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_mul (local.get $v_1) (local.get $v_2) (local.get $v_17))
+        (return_call $rt/protocols.wat:op_mul (local.get $v_1) (local.get $v_2) (local.get $v_17))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:C-IRALoBAL4BAJIBARABhAEBDwnCBgCSAQCuAQDCAQEAAYQBAQgBhAEBBwU
+    ;; sm:C54RALoBAL4BAJIBARABhAEBDwmgBgCSAQCuAQDCAQEAAYQBAQgBhAEBBwU
 
 
 test 'unary not', fn:
@@ -81,17 +81,17 @@ test 'unary not', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_not" (func $rt/protocols.wat:rt/protocols.wat:op_not (type $rt/protocols.wat:Fn_op_unary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_not" (func $rt/protocols.wat:op_not (type $rt/protocols.wat:Fn_op_unary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (ref.i31 (i32.const 1)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_not (local.get $v_1) (local.get $v_0))
+        (return_call $rt/protocols.wat:op_not (local.get $v_1) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:A8oKAJIBAQgEWgEHCA
+    ;; sm:A6gKAJIBAQgEWgEHCA
 
 
 test 'comparison eq', fn:
@@ -104,7 +104,7 @@ test 'comparison eq', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_eq" (func $rt/protocols.wat:op_eq (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -112,11 +112,11 @@ test 'comparison eq', fn:
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
         (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $rt/protocols.wat:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BK4MAJIBAQABhAEBCgGEAQEJBg
+    ;; sm:BIwMAJIBAQABhAEBCgGEAQEJBg
 
 
 test 'comparison lt', fn:
@@ -129,7 +129,7 @@ test 'comparison lt', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_lt" (func $rt/protocols.wat:rt/protocols.wat:op_lt (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_lt" (func $rt/protocols.wat:op_lt (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -137,11 +137,11 @@ test 'comparison lt', fn:
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
         (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_lt (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $rt/protocols.wat:op_lt (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BK4MAJIBAQABhAEBCAGEAQEHBQ
+    ;; sm:BIwMAJIBAQABhAEBCAGEAQEHBQ
 
 
 test 'logical and', fn:
@@ -153,7 +153,7 @@ test 'logical and', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_and" (func $rt/protocols.wat:rt/protocols.wat:op_and (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_and" (func $rt/protocols.wat:op_and (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -161,11 +161,11 @@ test 'logical and', fn:
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (ref.i31 (i32.const 1)))
         (local.set $v_2 (ref.i31 (i32.const 0)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_and (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $rt/protocols.wat:op_and (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BKwLAJIBAQAEWgESBVoBEQ4
+    ;; sm:BIoLAJIBAQAEWgESBVoBEQ4
 
 
 test 'logical or', fn:
@@ -177,7 +177,7 @@ test 'logical or', fn:
       (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_or" (func $rt/protocols.wat:rt/protocols.wat:op_or (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_or" (func $rt/protocols.wat:op_or (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -185,11 +185,11 @@ test 'logical or', fn:
         (local.set $v_0 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (ref.i31 (i32.const 1)))
         (local.set $v_2 (ref.i31 (i32.const 0)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_or (local.get $v_1) (local.get $v_2) (local.get $v_0))
+        (return_call $rt/protocols.wat:op_or (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BKgLAJIBAQAEWgEQBVoBDw0
+    ;; sm:BIYLAJIBAQAEWgEQBVoBDw0
 
 
 test 'range exclusive', fn:
@@ -255,7 +255,7 @@ test 'range in', fn:
       (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
       (import "std/list.wat" "args_head" (func $std/list.wat:args_head (type $std/list.wat:Fn_args_head)))
       (import "std/range.wat" "op_rngex" (func $std/range.wat:op_rngex (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "rt/protocols.wat:op_in" (func $rt/protocols.wat:rt/protocols.wat:op_in (type $rt/protocols.wat:Fn_op_binary)))
+      (import "rt/protocols.wat" "rt/protocols.wat:op_in" (func $rt/protocols.wat:op_in (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_12 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_13 (ref null any))
@@ -265,7 +265,7 @@ test 'range in', fn:
         (local.set $v_13 (array.get $rt/types.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_4 (call $std/list.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 5)))
-        (return_call $rt/protocols.wat:rt/protocols.wat:op_in (local.get $v_1) (local.get $v_4) (local.get $v_13))
+        (return_call $rt/protocols.wat:op_in (local.get $v_1) (local.get $v_4) (local.get $v_13))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
@@ -282,9 +282,11 @@ test 'range in', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:C5IRALoBAL4BAJIBAQABhAEBAAq-BgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
+    ;; sm:C_AQALoBAL4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 
 4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 
 4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
+
+cBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 
