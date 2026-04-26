@@ -98,7 +98,7 @@
   ;;   1. wrap cont as unit thunk, push to back of queue
   ;;   2. run next task
 
-  (func $std/async.wat:yield (export "std/async.wat:yield")
+  (func $std/async.fnk:yield (export "std/async.fnk:yield")
     (param $value (ref null any))
     (param $cont (ref null any))
 
@@ -152,7 +152,7 @@
       (local.get $task_fn))
   )
 
-  (func $std/async.wat:spawn (export "std/async.wat:spawn")
+  (func $std/async.fnk:spawn (export "std/async.fnk:spawn")
     (param $task_fn (ref null any))
     (param $cont (ref null any))
 
@@ -196,7 +196,7 @@
   ;;   if pending: push cont to future.$waiters
   ;;   run next task
 
-  (func $std/async.wat:await (export "std/async.wat:await")
+  (func $std/async.fnk:await (export "std/async.fnk:await")
     (param $future_val (ref null any))
     (param $cont (ref null any))
 

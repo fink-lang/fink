@@ -51,7 +51,7 @@
   ;;   2. push thunk(cont, channel) to task queue
   ;;   3. run_next
 
-  (func $std/channel.wat:channel (export "std/channel.wat:channel")
+  (func $std/channels.fnk:channel (export "std/channels.fnk:channel")
     (param $tag (ref null any))
     (param $cont (ref null any))
 

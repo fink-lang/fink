@@ -45,15 +45,15 @@
 
   ;; ---- Singleton empty string ----
 
-  (global $std/str.wat:empty (ref $StrEmpty) (struct.new $StrEmpty))
-  (func $std/str.wat:empty (export "std/str.wat:empty") (result (ref $Str))
-    (global.get $std/str.wat:empty))
+  (global $std/str.fnk:str_empty (ref $StrEmpty) (struct.new $StrEmpty))
+  (func $std/str.fnk:str_empty (export "std/str.fnk:str_empty") (result (ref $Str))
+    (global.get $std/str.fnk:str_empty))
 
   ;; ---- Construction (compiler-emitted) ----
 
   ;; str : (i32, i32) -> (ref $StrDataImpl)
   ;; Wrap a data-section pointer into a string value.
-  (func $std/str.wat:str (export "std/str.wat:str")
+  (func $std/str.fnk:str (export "std/str.fnk:str")
     (param $offset i32)
     (param $length i32)
     (result (ref $StrDataImpl))
@@ -73,7 +73,7 @@
     (result (ref any))
 
     (if (i32.eqz (array.len (ref.cast (ref $ByteArray) (local.get $bytes))))
-      (then (return (global.get $std/str.wat:empty))))
+      (then (return (global.get $std/str.fnk:str_empty))))
     (struct.new $StrBytesImpl
       (ref.cast (ref $ByteArray) (local.get $bytes)))
   )
@@ -87,7 +87,7 @@
   ;;   $StrDataImpl  → copies bytes from data section into a $ByteArray
   ;;   $StrBytesImpl → returns the existing $ByteArray
   (func $std/str.wat:bytes (export "std/str.wat:bytes")
-    (param $std/str.wat:str (ref $Str))
+    (param $std/str.fnk:str (ref $Str))
     (result (ref $ByteArray))
 
     (local $offset i32)
@@ -96,7 +96,7 @@
     (local $i i32)
 
     ;; Empty string — return zero-length array
-    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.fnk:str))
       (then (return (array.new_fixed $ByteArray 0))))
 
     ;; Try $StrDataImpl — copy from data section to heap
@@ -104,13 +104,13 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $std/str.wat:str))))
+            (local.get $std/str.fnk:str))))
       ;; Cast succeeded — $StrDataImpl is on the stack
       (local.set $offset (struct.get $StrDataImpl $offset))
       (local.set $length
         ;; re-read from param since we consumed the ref
         (struct.get $StrDataImpl $length
-          (ref.cast (ref $StrDataImpl) (local.get $std/str.wat:str))))
+          (ref.cast (ref $StrDataImpl) (local.get $std/str.fnk:str))))
       (local.set $result
         (array.new $ByteArray (i32.const 0) (local.get $length)))
       (local.set $i (i32.const 0))
@@ -127,7 +127,7 @@
 
     ;; Must be $StrBytesImpl — return existing array
     (struct.get $StrBytesImpl $bytes
-      (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str)))
+      (ref.cast (ref $StrBytesImpl) (local.get $std/str.fnk:str)))
   )
 
   ;; ---- Repr ----
@@ -136,7 +136,7 @@
   ;; Produce a quoted, escaped representation of a string: 'hello' → '\'hello\''
   ;; Escapes: \n \r \t \\ \' and non-printable bytes as \xNN.
   (func $std/str.wat:repr (export "std/str.wat:repr")
-    (param $std/str.wat:str (ref $Str))
+    (param $std/str.fnk:str (ref $Str))
     (result (ref $Str))
 
     (local $src (ref $ByteArray))
@@ -147,7 +147,7 @@
     (local $buf (ref $ByteArray))
     (local $pos i32)
 
-    (local.set $src (call $std/str.wat:bytes (local.get $std/str.wat:str)))
+    (local.set $src (call $std/str.wat:bytes (local.get $std/str.fnk:str)))
     (local.set $len (array.len (local.get $src)))
 
     ;; Pass 1: compute output length.
@@ -362,11 +362,11 @@
   ;; Extract the $ByteArray from a $StrBytesImpl.
   ;; Caller must ensure it's not a $StrDataImpl.
   (func $std/str.wat:_get_byte_array
-    (param $std/str.wat:str (ref $Str))
+    (param $std/str.fnk:str (ref $Str))
     (result (ref $ByteArray))
 
     (struct.get $StrBytesImpl $bytes
-      (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str)))
+      (ref.cast (ref $StrBytesImpl) (local.get $std/str.fnk:str)))
   )
 
   ;; $std/str.wat:_str_op_eq_dd : (i32, i32, i32, i32) -> i32
@@ -1020,7 +1020,7 @@
   ;;
   ;; Two-pass: count then write.
   (func $std/str.wat:render_unescape
-    (param $std/str.wat:str (ref $Str))
+    (param $std/str.fnk:str (ref $Str))
     (result (ref $Str))
 
     (local $src (ref $ByteArray))
@@ -1032,12 +1032,12 @@
     (local $byte i32)
 
     ;; Empty string — nothing to unescape
-    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
-      (then (return (local.get $std/str.wat:str))))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.fnk:str))
+      (then (return (local.get $std/str.fnk:str))))
 
     (local.set $src
       (struct.get $StrBytesImpl $bytes
-        (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str))))
+        (ref.cast (ref $StrBytesImpl) (local.get $std/str.fnk:str))))
     (local.set $src_len
       (array.len (local.get $src)))
 
@@ -1201,13 +1201,13 @@
   ;; Dispatches on concrete type to avoid allocating a $ByteArray copy.
   ;; Uses FNV-1a (32-bit), masked to 31 bits for i31ref.
   (func $std/str.wat:hash_i31
-    (param $std/str.wat:str (ref $Str))
+    (param $std/str.fnk:str (ref $Str))
     (result i32)
 
     (local $data (ref $StrDataImpl))
 
     ;; Empty string — hash of zero bytes (FNV offset basis).
-    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.fnk:str))
       (then (return (i32.const 0x811c9dc5))))
 
     ;; Try $StrDataImpl — hash from linear memory
@@ -1215,7 +1215,7 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $std/str.wat:str))))
+            (local.get $std/str.fnk:str))))
       (local.set $data)
       (return (call $std/str.wat:_str_hash_data
         (struct.get $StrDataImpl $offset (local.get $data))
@@ -1226,7 +1226,7 @@
       (block $is_bytes (result (ref $StrBytesImpl))
         (br $not_bytes
           (br_on_cast $is_bytes (ref $Str) (ref $StrBytesImpl)
-            (local.get $std/str.wat:str))))
+            (local.get $std/str.fnk:str))))
       (return (call $std/str.wat:_str_hash_array
         (struct.get $StrBytesImpl $bytes))))
 
@@ -1437,10 +1437,10 @@
 
   ;; _str_len : (ref $Str) -> i32
   ;; Byte length of any string subtype.
-  (func $std/str.wat:_str_len (param $std/str.wat:str (ref $Str)) (result i32)
+  (func $std/str.wat:_str_len (param $std/str.fnk:str (ref $Str)) (result i32)
 
     ;; Empty string — length 0.
-    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.fnk:str))
       (then (return (i32.const 0))))
 
     ;; Try $StrDataImpl
@@ -1448,19 +1448,19 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $std/str.wat:str))))
+            (local.get $std/str.fnk:str))))
       (return (struct.get $StrDataImpl $length)))
 
     ;; Must be $StrBytesImpl
     (array.len
       (struct.get $StrBytesImpl $bytes
-        (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str))))
+        (ref.cast (ref $StrBytesImpl) (local.get $std/str.fnk:str))))
   )
 
   ;; _str_copy_to : (ref $Str, ref $ByteArray, i32) -> i32
   ;; Copy bytes from a string into dst at offset. Returns new offset.
   (func $std/str.wat:_str_copy_to
-    (param $std/str.wat:str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32)
+    (param $std/str.fnk:str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32)
     (result i32)
 
     (local $offset i32)
@@ -1469,7 +1469,7 @@
     (local $i i32)
 
     ;; Empty string — nothing to copy.
-    (if (ref.test (ref $StrEmpty) (local.get $std/str.wat:str))
+    (if (ref.test (ref $StrEmpty) (local.get $std/str.fnk:str))
       (then (return (local.get $pos))))
 
     ;; Try $StrDataImpl — copy from linear memory
@@ -1477,11 +1477,11 @@
       (block $is_data (result (ref $StrDataImpl))
         (br $not_data
           (br_on_cast $is_data (ref $Str) (ref $StrDataImpl)
-            (local.get $std/str.wat:str))))
+            (local.get $std/str.fnk:str))))
       (local.set $offset (struct.get $StrDataImpl $offset))
       (local.set $length
         (struct.get $StrDataImpl $length
-          (ref.cast (ref $StrDataImpl) (local.get $std/str.wat:str))))
+          (ref.cast (ref $StrDataImpl) (local.get $std/str.fnk:str))))
       (local.set $i (i32.const 0))
       (block $done
         (loop $copy
@@ -1497,7 +1497,7 @@
     ;; Must be $StrBytesImpl — copy from heap array
     (local.set $src
       (struct.get $StrBytesImpl $bytes
-        (ref.cast (ref $StrBytesImpl) (local.get $std/str.wat:str))))
+        (ref.cast (ref $StrBytesImpl) (local.get $std/str.fnk:str))))
     (local.set $length (array.len (local.get $src)))
     (local.set $i (i32.const 0))
     (block $done
@@ -1925,13 +1925,13 @@
   ;; Check if a string is a valid fink identifier.
   ;; Returns 1 if all bytes are identifier chars (a-z, A-Z, 0-9, _, -, $, or >= 0x80).
   ;; Empty string returns 0. First char must not be a digit.
-  (func $std/str.wat:_str_is_ident (param $std/str.wat:str (ref $Str)) (result i32)
+  (func $std/str.wat:_str_is_ident (param $std/str.fnk:str (ref $Str)) (result i32)
     (local $bytes (ref $ByteArray))
     (local $len i32)
     (local $i i32)
     (local $b i32)
 
-    (local.set $bytes (call $std/str.wat:bytes (local.get $std/str.wat:str)))
+    (local.set $bytes (call $std/str.wat:bytes (local.get $std/str.fnk:str)))
     (local.set $len (array.len (local.get $bytes)))
 
     ;; Empty string is not an identifier.
@@ -2002,7 +2002,7 @@
   ;; Byte length of a formatted record key.
   ;; String ident: bare len. String non-ident: str_repr len. Other: repr len + 2 for parens.
   (func $std/str.wat:_str_fmt_rec_key_len (param $key (ref eq)) (result i32)
-    (local $std/str.wat:str (ref $Str))
+    (local $std/str.fnk:str (ref $Str))
 
     ;; Try $Str
     (block $not_str
@@ -2010,12 +2010,12 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $key))))
-      (local.set $std/str.wat:str)
+      (local.set $std/str.fnk:str)
       ;; String key — identifier: bare, otherwise: str_repr (quoted + escaped).
       (return
-        (if (result i32) (call $std/str.wat:_str_is_ident (local.get $std/str.wat:str))
-          (then (call $std/str.wat:_str_len (local.get $std/str.wat:str)))
-          (else (call $std/str.wat:_str_len (call $std/str.wat:repr (local.get $std/str.wat:str)))))))
+        (if (result i32) (call $std/str.wat:_str_is_ident (local.get $std/str.fnk:str))
+          (then (call $std/str.wat:_str_len (local.get $std/str.fnk:str)))
+          (else (call $std/str.wat:_str_len (call $std/str.wat:repr (local.get $std/str.fnk:str)))))))
 
     ;; Non-string key — (repr), add 2 for parens.
     (i32.add
@@ -2204,7 +2204,7 @@
     (param $pos i32)
     (result i32)
 
-    (local $std/str.wat:str (ref $Str))
+    (local $std/str.fnk:str (ref $Str))
 
     ;; Try $Str
     (block $not_str
@@ -2212,18 +2212,18 @@
         (br $not_str
           (br_on_cast $is_str (ref eq) (ref $Str)
             (local.get $key))))
-      (local.set $std/str.wat:str)
+      (local.set $std/str.fnk:str)
 
-      (if (call $std/str.wat:_str_is_ident (local.get $std/str.wat:str))
+      (if (call $std/str.wat:_str_is_ident (local.get $std/str.fnk:str))
         (then
           ;; Identifier — copy as-is.
           (local.set $pos
-            (call $std/str.wat:_str_copy_to (local.get $std/str.wat:str) (local.get $buf) (local.get $pos))))
+            (call $std/str.wat:_str_copy_to (local.get $std/str.fnk:str) (local.get $buf) (local.get $pos))))
         (else
           ;; Non-identifier string — use str_repr (quoted + escaped).
           (local.set $pos
             (call $std/str.wat:_str_copy_to
-              (call $std/str.wat:repr (local.get $std/str.wat:str))
+              (call $std/str.wat:repr (local.get $std/str.fnk:str))
               (local.get $buf)
               (local.get $pos)))))
       (return (local.get $pos)))
@@ -2574,7 +2574,7 @@
   ;; second arg is the continuation. Formats each segment via _str_fmt_val,
   ;; concatenates all results into a single $StrBytesImpl, and passes the
   ;; result to the continuation via _apply.
-  (func $std/str.wat:fmt (export "std/str.wat:fmt")
+  (func $std/str.fnk:fmt (export "std/str.fnk:fmt")
     (param $segments_any (ref null any)) (param $cont (ref null any))
 
     (local $segments (ref $VarArgs))
@@ -2645,7 +2645,7 @@
   ;; Returns null on out-of-bounds (after resolution: 0 <= start <= end <= len).
   ;; Returns empty string for empty slice, original for full range.
   (func $std/str.wat:_str_slice
-    (param $std/str.wat:str (ref $Str)) (param $start_f f64) (param $end_f f64)
+    (param $std/str.fnk:str (ref $Str)) (param $start_f f64) (param $end_f f64)
     (result (ref null $Str))
 
     (local $len i32)
@@ -2656,7 +2656,7 @@
     (local $dst (ref $ByteArray))
     (local $i i32)
 
-    (local.set $len (call $std/str.wat:_str_len (local.get $std/str.wat:str)))
+    (local.set $len (call $std/str.wat:_str_len (local.get $std/str.fnk:str)))
 
     ;; Resolve negative values from end (including -0.0 via copysign check)
     (if (f64.lt
@@ -2692,16 +2692,16 @@
     ;; Empty slice
     (local.set $slice_len (i32.sub (local.get $end) (local.get $start)))
     (if (i32.eqz (local.get $slice_len))
-      (then (return (call $std/str.wat:empty))))
+      (then (return (call $std/str.fnk:str_empty))))
 
     ;; Full string — return original
     (if (i32.and
           (i32.eqz (local.get $start))
           (i32.eq (local.get $end) (local.get $len)))
-      (then (return (local.get $std/str.wat:str))))
+      (then (return (local.get $std/str.fnk:str))))
 
     ;; Convert to byte array, then copy slice
-    (local.set $src (call $std/str.wat:bytes (local.get $std/str.wat:str)))
+    (local.set $src (call $std/str.wat:bytes (local.get $std/str.fnk:str)))
     (local.set $dst (array.new $ByteArray (i32.const 0) (local.get $slice_len)))
     (local.set $i (i32.const 0))
     (block $done
@@ -2722,7 +2722,7 @@
   ;;   succ — called with the substring on success
   ;;   fail — called with the original string on out-of-bounds
   (func $std/str.wat:slice (export "std/str.wat:slice")
-    (param $std/str.wat:str (ref null any))
+    (param $std/str.fnk:str (ref null any))
     (param $start (ref null any))
     (param $end (ref null any))
     (param $succ (ref null any))
@@ -2731,7 +2731,7 @@
     (local $s (ref $Str))
     (local $result (ref null $Str))
 
-    (local.set $s (ref.cast (ref $Str) (local.get $std/str.wat:str)))
+    (local.set $s (ref.cast (ref $Str) (local.get $std/str.fnk:str)))
     (local.set $result (call $std/str.wat:_str_slice
       (local.get $s)
       (struct.get $Num 0 (ref.cast (ref $Num) (local.get $start)))
@@ -2740,7 +2740,7 @@
     (if (ref.is_null (local.get $result))
       (then
         (return_call $std/list.wat:apply_1
-          (local.get $std/str.wat:str)
+          (local.get $std/str.fnk:str)
           (local.get $fail))))
 
     (return_call $std/list.wat:apply_1
@@ -2755,7 +2755,7 @@
   ;;   $Num key   → single byte at index
   ;; Out of bounds → unreachable
   (func $std/str.wat:op_dot (export "std/str.wat:op_dot")
-    (param $std/str.wat:str (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+    (param $std/str.fnk:str (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
     (local $s (ref $Str))
     (local $range (ref $Range))
@@ -2763,7 +2763,7 @@
     (local $end_f f64)
     (local $result (ref null $Str))
 
-    (local.set $s (ref.cast (ref $Str) (local.get $std/str.wat:str)))
+    (local.set $s (ref.cast (ref $Str) (local.get $std/str.fnk:str)))
 
     ;; Try $Range key
     (block $not_range
@@ -2816,7 +2816,7 @@
   ;; CPS string template pattern matching.
   ;; Checks subj starts with prefix and ends with suffix (non-overlapping).
   ;; On match: calls succ(middle_slice). On mismatch: calls fail().
-  (func $std/str.wat:match (export "std/str.wat:match")
+  (func $std/str.fnk:match (export "std/str.fnk:match")
     (param $subj (ref null any))
     (param $prefix (ref null any))
     (param $suffix (ref null any))
@@ -2899,7 +2899,7 @@
 
     ;; Both matched — slice the middle
     (if (i32.eqz (local.get $mid_len))
-      (then (return_call $std/list.wat:apply_1 (call $std/str.wat:empty) (local.get $succ))))
+      (then (return_call $std/list.wat:apply_1 (call $std/str.fnk:str_empty) (local.get $succ))))
 
     ;; Full string — no prefix or suffix
     (if (i32.eq (local.get $mid_len) (local.get $s_len))

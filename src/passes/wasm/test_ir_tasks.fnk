@@ -25,7 +25,7 @@ test 'yield suspends and resumes', fn:
       (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/async.wat" "std/async.wat:yield" (func $std/async.wat:yield (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.fnk:yield" (func $std/async.fnk:yield (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_14 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_15 (ref null any))
@@ -51,7 +51,7 @@ test 'yield suspends and resumes', fn:
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_1)))
         (local.set $v_19 (struct.new $rt/types.wat:Closure (ref.func $v_14) (local.get $:caps_arg)))
         (local.set $v_3 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $std/async.wat:yield (local.get $v_3) (local.get $v_19))
+        (return_call $std/async.fnk:yield (local.get $v_3) (local.get $v_19))
       )
       (export "fink_module" (func $fink_module))
     )
@@ -78,8 +78,8 @@ test 'spawn and await', fn:
       (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/async.wat" "std/async.wat:spawn" (func $std/async.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/async.wat" "std/async.wat:await" (func $std/async.wat:await (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.fnk:spawn" (func $std/async.fnk:spawn (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.fnk:await" (func $std/async.fnk:await (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_6 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_7 (ref null any))
         (local $v_8 (ref null any))
@@ -119,7 +119,7 @@ test 'spawn and await', fn:
         (global.set $fut (local.get $fut_0))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $result_36)))
         (local.set $v_50 (struct.new $rt/types.wat:Closure (ref.func $v_45) (local.get $:caps_arg)))
-        (return_call $std/async.wat:await (local.get $fut_0) (local.get $v_50))
+        (return_call $std/async.fnk:await (local.get $fut_0) (local.get $v_50))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $result_4 (ref null any))
@@ -132,7 +132,7 @@ test 'spawn and await', fn:
         (local.set $v_40 (struct.new $rt/types.wat:Closure (ref.func $v_35) (local.get $:caps_arg)))
         (local.set $:caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $v_6_fn (struct.new $rt/types.wat:Closure (ref.func $v_6) (local.get $:caps_arg)))
-        (return_call $std/async.wat:spawn (local.get $v_6_fn) (local.get $v_40))
+        (return_call $std/async.fnk:spawn (local.get $v_6_fn) (local.get $v_40))
       )
       (export "fink_module" (func $fink_module))
       (global $result (mut (ref null any)) (ref.null any))
@@ -165,7 +165,7 @@ test 'channel send and receive', fn:
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "std/operators.fnk:op_shr" (func $std/operators.fnk:op_shr (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/channel.wat" "std/channel.wat:channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/channel.wat" "std/channels.fnk:channel" (func $std/channels.fnk:channel (type $rt/protocols.wat:Fn_op_unary)))
       (import "rt/protocols.wat" "std/channels.fnk:receive" (func $std/channels.fnk:receive (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_65 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -238,7 +238,7 @@ test 'channel send and receive', fn:
         (local $v_6 (ref null any))
         (local.set $v_42 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_6 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $std/channel.wat:channel (local.get $v_6) (local.get $v_42))
+        (return_call $std/channels.fnk:channel (local.get $v_6) (local.get $v_42))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $msg_4 (ref null any))
@@ -262,7 +262,7 @@ test 'channel send and receive', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:LJ4dALoBAMIBAJABATADUgBSAGoAugEApAcAugEAwAEAwgEAkAEBEQhQALQBAMIBAR4KsAUAugEAwAEAkAEBHQKGAQEACIgJALoBAMIBAI4BAR0CTgBOALABAMIBANgBAMoBAGoAwAEA9gMAkAEBGgGEAQEPCYYHAJIBALIBAMoBAHoAyAEAagDAAQA
+    ;; sm:LKIdALoBAMIBAJABATADUgBSAGoAugEApAcAugEAwAEAwgEAkAEBEQhQALQBAMIBAR4KsAUAugEAwAEAkAEBHQKGAQEACIgJALoBAMIBAI4BAR0CTgBOALABAMIBANgBAMoBAGoAwAEA9gMAkAEBGgGEAQEPCYgHAJIBALIBAMoBAHoAyAEAagDAAQA
 
 
 test 'channel with spawned sender', fn:
@@ -288,8 +288,8 @@ test 'channel with spawned sender', fn:
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "std/operators.fnk:op_shr" (func $std/operators.fnk:op_shr (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/async.wat" "std/async.wat:spawn" (func $std/async.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/channel.wat" "std/channel.wat:channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.fnk:spawn" (func $std/async.fnk:spawn (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/channel.wat" "std/channels.fnk:channel" (func $std/channels.fnk:channel (type $rt/protocols.wat:Fn_op_unary)))
       (import "rt/protocols.wat" "std/channels.fnk:receive" (func $std/channels.fnk:receive (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_56 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -352,14 +352,14 @@ test 'channel with spawned sender', fn:
         (local.set $v_59 (struct.new $rt/types.wat:Closure (ref.func $v_56) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $ch_0) (local.get $msg_48)))
         (local.set $v_75 (struct.new $rt/types.wat:Closure (ref.func $v_68) (local.get $:caps_arg)))
-        (return_call $std/async.wat:spawn (local.get $v_59) (local.get $v_75))
+        (return_call $std/async.fnk:spawn (local.get $v_59) (local.get $v_75))
       )
       (func $v_63 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_52 (ref null any))
         (local $v_7 (ref null any))
         (local.set $v_52 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_7 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $std/channel.wat:channel (local.get $v_7) (local.get $v_52))
+        (return_call $std/channels.fnk:channel (local.get $v_7) (local.get $v_52))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $msg_5 (ref null any))
@@ -383,7 +383,7 @@ test 'channel with spawned sender', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:KroeALoBAMABAJABATYCiAEBAAieBgC6AQDCAQCQAQESA1IAUgBqALoBAKQHALoBAMABAMIBAJABASkUUAC0AQDCAQE2CpoIALoBAMIBAI4BAVMCTgBOALABAMIBANgBAMIBAR4U9gMAkAEBAwGEAQEPCYYHAJIBALIBAMoBAHoAyAEAagDAAQA
+    ;; sm:Kr4eALoBAMABAJABATYCiAEBAAieBgC6AQDCAQCQAQESA1IAUgBqALoBAKQHALoBAMABAMIBAJABASkUUAC0AQDCAQE2CpoIALoBAMIBAI4BAVMCTgBOALABAMIBANgBAMIBAR4U9gMAkAEBAwGEAQEPCYgHAJIBALIBAMoBAHoAyAEAagDAAQA
 
 
 test 'channel multiple messages FIFO', fn:
@@ -409,7 +409,7 @@ test 'channel multiple messages FIFO', fn:
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "std/operators.fnk:op_shr" (func $std/operators.fnk:op_shr (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/channel.wat" "std/channel.wat:channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/channel.wat" "std/channels.fnk:channel" (func $std/channels.fnk:channel (type $rt/protocols.wat:Fn_op_unary)))
       (import "rt/protocols.wat" "std/channels.fnk:receive" (func $std/channels.fnk:receive (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_96 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -501,7 +501,7 @@ test 'channel multiple messages FIFO', fn:
         (local $v_6 (ref null any))
         (local.set $v_51 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_6 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $std/channel.wat:channel (local.get $v_6) (local.get $v_51))
+        (return_call $std/channels.fnk:channel (local.get $v_6) (local.get $v_51))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $a_4 (ref null any))
@@ -525,7 +525,7 @@ test 'channel multiple messages FIFO', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:NZYdALoBAL4BAJABAT4BTgBKAGoAtgEAngcAugEAwAEAvgEAkAEBDwdQALABAMQBARgK7AcAugEAwAEAvgEAkAEBJwdQANYBAMIBARABhgEBAAfUBQC6AQDAAQCQAQEPAYQBAQAHhAkAugEAvgEAjgEBHQJOAE4AsAEAwgEA1AEAygEAagDAAQD2AwCQAQEaAYQBAQ8JggcAjgEArgEAygEAegDIAQBqAMABAA
+    ;; sm:NZodALoBAL4BAJABAT4BTgBKAGoAtgEAngcAugEAwAEAvgEAkAEBDwdQALABAMQBARgK7AcAugEAwAEAvgEAkAEBJwdQANYBAMIBARABhgEBAAfUBQC6AQDAAQCQAQEPAYQBAQAHhAkAugEAvgEAjgEBHQJOAE4AsAEAwgEA1AEAygEAagDAAQD2AwCQAQEaAYQBAQ8JhAcAjgEArgEAygEAegDIAQBqAMABAA
 
 
 test 'channel receiver waits for sender', fn:
@@ -552,9 +552,9 @@ test 'channel receiver waits for sender', fn:
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "std/operators.fnk:op_shr" (func $std/operators.fnk:op_shr (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/async.wat" "std/async.wat:spawn" (func $std/async.wat:spawn (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/async.wat" "std/async.wat:await" (func $std/async.wat:await (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/channel.wat" "std/channel.wat:channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.fnk:spawn" (func $std/async.fnk:spawn (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/async.wat" "std/async.fnk:await" (func $std/async.fnk:await (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/channel.wat" "std/channels.fnk:channel" (func $std/channels.fnk:channel (type $rt/protocols.wat:Fn_op_unary)))
       (import "rt/protocols.wat" "std/channels.fnk:receive" (func $std/channels.fnk:receive (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_68 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -595,7 +595,7 @@ test 'channel receiver waits for sender', fn:
         (local.set $v_27 (local.get $v_25))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $result_98)))
         (local.set $v_119 (struct.new $rt/types.wat:Closure (ref.func $v_114) (local.get $:caps_arg)))
-        (return_call $std/async.wat:await (local.get $fut_96) (local.get $v_119))
+        (return_call $std/async.fnk:await (local.get $fut_96) (local.get $v_119))
       )
       (func $v_129 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -651,14 +651,14 @@ test 'channel receiver waits for sender', fn:
         (local.set $v_71 (struct.new $rt/types.wat:Closure (ref.func $v_68) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $ch_0) (local.get $result_60)))
         (local.set $v_87 (struct.new $rt/types.wat:Closure (ref.func $v_80) (local.get $:caps_arg)))
-        (return_call $std/async.wat:spawn (local.get $v_71) (local.get $v_87))
+        (return_call $std/async.fnk:spawn (local.get $v_71) (local.get $v_87))
       )
       (func $v_75 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_64 (ref null any))
         (local $v_9 (ref null any))
         (local.set $v_64 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_9 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $std/channel.wat:channel (local.get $v_9) (local.get $v_64))
+        (return_call $std/channels.fnk:channel (local.get $v_9) (local.get $v_64))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $result_7 (ref null any))
@@ -684,7 +684,7 @@ test 'channel receiver waits for sender', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:O9wfALoBAMABAJABAUIKigYAugEAygEAkAEBKAZYAF4AagDAAQC2BwC6AQDCAQDIAQCQAQERCFAAugEAxgEBJAmyBQC6AQDCAQCSAQEjAogBAQAI4AkAugEAwAEAyAEAkAEBOQNSAFIAsgEAxgEA4AEAzAEAagDCAQCYCAC6AQDIAQCQAQEdAlAATgCwAQDCAQDeAQDCAQEqFvYDAJABAQ8BhAEBDwmMBwCYAQC4AQDKAQB6AMgBAGoAwAEA
+    ;; sm:O-AfALoBAMABAJABAUIKigYAugEAygEAkAEBKAZYAF4AagDAAQC2BwC6AQDCAQDIAQCQAQERCFAAugEAxgEBJAmyBQC6AQDCAQCSAQEjAogBAQAI4AkAugEAwAEAyAEAkAEBOQNSAFIAsgEAxgEA4AEAzAEAagDCAQCYCAC6AQDIAQCQAQEdAlAATgCwAQDCAQDeAQDCAQEqFvYDAJABAQ8BhAEBDwmOBwCYAQC4AQDKAQB6AMgBAGoAwAEA
 
 
 test 'channel << send and receive', fn:
@@ -709,7 +709,7 @@ test 'channel << send and receive', fn:
       (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
       (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
       (import "rt/protocols.wat" "std/operators.fnk:op_shl" (func $std/operators.fnk:op_shl (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/channel.wat" "std/channel.wat:channel" (func $std/channel.wat:channel (type $rt/protocols.wat:Fn_op_unary)))
+      (import "std/channel.wat" "std/channels.fnk:channel" (func $std/channels.fnk:channel (type $rt/protocols.wat:Fn_op_unary)))
       (import "rt/protocols.wat" "std/channels.fnk:receive" (func $std/channels.fnk:receive (type $rt/protocols.wat:Fn_op_unary)))
       (func $v_65 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
@@ -782,7 +782,7 @@ test 'channel << send and receive', fn:
         (local $v_6 (ref null any))
         (local.set $v_42 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_6 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (return_call $std/channel.wat:channel (local.get $v_6) (local.get $v_42))
+        (return_call $std/channels.fnk:channel (local.get $v_6) (local.get $v_42))
       )
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $msg_4 (ref null any))
@@ -806,7 +806,7 @@ test 'channel << send and receive', fn:
       (global $ch (mut (ref null any)) (ref.null any))
       (export "ch" (global $ch))
     )
-    ;; sm:LJ4dALoBAMIBAJABATADUgBSAGoAugEApAcAugEAwAEAwgEAkAEBEQhQALQBAMIBAR4KsgUAugEAwAEAkAEBEQKIAQELCIoJALoBAMIBAI4BAR0CTgBOALABAMIBANgBAMoBAGoAwAEA9gMAkAEBGgGEAQEPCYYHAJIBALIBAMoBAHoAyAEAagDAAQA
+    ;; sm:LKIdALoBAMIBAJABATADUgBSAGoAugEApAcAugEAwAEAwgEAkAEBEQhQALQBAMIBAR4KsgUAugEAwAEAkAEBEQKIAQELCIoJALoBAMIBAI4BAR0CTgBOALABAMIBANgBAMoBAGoAwAEA9gMAkAEBGgGEAQEPCYgHAJIBALIBAMoBAHoAyAEAagDAAQA
 BAHoAyAEAbgDEAQA
 AyAEAbgDEAQA
 AyAEAbgDEAQA

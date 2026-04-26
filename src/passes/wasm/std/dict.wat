@@ -1322,7 +1322,7 @@
   ;; -- Record: direct-style API ------------------------------------------
   ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
-  (func $std/dict.wat:_rec_new (export "std/dict.wat:rec_new") (result (ref $RecImpl))
+  (func $std/dict.wat:_rec_new (export "std/rec.fnk:new") (result (ref $RecImpl))
     (struct.new $RecImpl (global.get $empty_node))
   )
 
@@ -1462,7 +1462,7 @@
   ;; Direct-style rec field setter — used by the emitter for module import rec construction.
   ;; Takes (rec, key, val) as (ref null any) and returns (ref null any).
   ;; Avoids CPS overhead for compile-time-known field sets.
-  (func $std/dict.wat:set_field (export "std/dict.wat:_rec_set_field")
+  (func $std/rec.fnk:put_field (export "std/rec.fnk:_set_field")
     (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any))
     (result (ref null any))
     (call $std/dict.wat:_rec_set
@@ -1470,7 +1470,7 @@
       (ref.cast (ref eq) (local.get $key))
       (ref.cast (ref eq) (local.get $val))))
 
-  (func $std/dict.wat:set (export "std/dict.wat:set")
+  (func $std/rec.fnk:put (export "std/rec.fnk:put")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
@@ -1480,7 +1480,7 @@
         (ref.cast (ref eq) (local.get $val)))
       (local.get $cont)))
 
-  (func $std/dict.wat:merge (export "std/dict.wat:merge")
+  (func $std/rec.fnk:merge (export "std/rec.fnk:merge")
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
@@ -1489,7 +1489,7 @@
         (ref.cast (ref $RecImpl) (local.get $src)))
       (local.get $cont)))
 
-  (func $std/dict.wat:pop (export "std/dict.wat:pop")
+  (func $std/rec.fnk:pop (export "std/rec.fnk:pop")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))

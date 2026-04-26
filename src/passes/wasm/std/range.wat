@@ -134,7 +134,7 @@
 
   ;; CPS wrappers — stripped by unit test harness (prepare_wat).
 
-  (func $std/range.wat:op_rngex (export "std/range.wat:op_rngex")
+  (func $std/range.fnk:excl (export "std/range.fnk:excl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
       (call $std/range.wat:excl
@@ -142,7 +142,7 @@
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
-  (func $std/range.wat:op_rngin (export "std/range.wat:op_rngin")
+  (func $std/range.fnk:incl (export "std/range.fnk:incl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $std/list.wat:apply_1
       (call $std/range.wat:incl
