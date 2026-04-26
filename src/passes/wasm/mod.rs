@@ -169,8 +169,8 @@ mod tests {
     // Runtime exports are passed through (with <url>:<name> qualification).
     assert!(exports.contains(&"rt/apply.wat:apply".to_string()),
       "missing rt/apply.wat:apply passthrough");
-    assert!(exports.contains(&"std/list.wat:args_empty".to_string()),
-      "missing std/list.wat:args_empty passthrough");
+    assert!(exports.contains(&"std/fn.fnk:args_empty".to_string()),
+      "missing std/fn.fnk:args_empty passthrough");
 
     // Interop exports stay bare (host contract).
     assert!(exports.contains(&"wrap_host_cont".to_string()),
@@ -194,8 +194,8 @@ mod tests {
     let exports = validate_and_collect_exports(&bytes);
 
     assert!(exports.contains(&"fink_module".to_string()));
-    assert!(exports.contains(&"rt/protocols.wat:op_plus".to_string()),
-      "missing rt/protocols.wat:op_plus passthrough (needed for a+b)");
+    assert!(exports.contains(&"std/operators.fnk:op_plus".to_string()),
+      "missing std/operators.fnk:op_plus passthrough (needed for a+b)");
   }
 
   /// Instantiate ir_emit's output in wasmtime with trivial host stubs.

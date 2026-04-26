@@ -62,7 +62,7 @@
   ;; Create an empty list — args-list constructor (calling convention).
   ;; Semantic home: rt/apply.wat as args_empty. Lives here for now
   ;; because the args-list realization is cons-cells; to be moved.
-  (func $std/list.wat:nil (export "std/list.wat:args_empty") (result (ref $Nil))
+  (func $std/list.wat:nil (export "std/fn.fnk:args_empty") (result (ref $Nil))
     (struct.new $Nil)
   )
 
@@ -97,21 +97,21 @@
 
   ;; Args-protocol primitives (calling convention) — unboxed, take/return
   ;; (ref null any), cast internally. Semantic home: rt/apply.wat.
-  (func $std/list.wat:head_any (export "std/list.wat:args_head")
+  (func $std/list.wat:head_any (export "std/fn.fnk:args_head")
     (param $list (ref null any))
     (result (ref null any))
 
     (struct.get $Cons $head (ref.cast (ref $Cons) (local.get $list)))
   )
 
-  (func $std/list.wat:tail_any (export "std/list.wat:args_tail")
+  (func $std/list.wat:tail_any (export "std/fn.fnk:args_tail")
     (param $list (ref null any))
     (result (ref null any))
 
     (struct.get $Cons $tail (ref.cast (ref $Cons) (local.get $list)))
   )
 
-  (func $std/list.wat:prepend_any (export "std/list.wat:args_prepend")
+  (func $std/list.wat:prepend_any (export "std/fn.fnk:args_prepend")
     (param $head (ref null any))
     (param $tail (ref null any))
     (result (ref null any))
@@ -121,7 +121,7 @@
       (ref.cast (ref $List) (local.get $tail)))
   )
 
-  (func $std/list.wat:concat_any (export "std/list.wat:args_concat")
+  (func $std/list.wat:concat_any (export "std/fn.fnk:args_concat")
     (param $a (ref null any))
     (param $b (ref null any))
     (result (ref null any))
@@ -309,7 +309,7 @@
 
   ;; seq_prepend(val, list, cont) — prepend val to front of list, pass result to cont.
   ;; O(1) — single cons cell allocation.
-  (func $std/list.wat:seq_prepend (export "std/list.wat:seq_prepend")
+  (func $std/list.wat:seq_prepend (export "std/seq.fnk:prepend")
     (param $val (ref null any)) (param $list (ref null any)) (param $cont (ref null any))
 
     (return_call $std/list.wat:apply_1
@@ -320,7 +320,7 @@
   )
 
   ;; seq_concat(list_a, list_b, cont) — concatenate two lists, pass result to cont.
-  (func $std/list.wat:seq_concat (export "std/list.wat:seq_concat")
+  (func $std/list.wat:seq_concat (export "std/seq.fnk:concat")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
     (return_call $std/list.wat:apply_1
@@ -333,7 +333,7 @@
   ;; seq_pop(cursor, fail, succ) — destructure [head, ..tail].
   ;; If empty ($Nil): tail-call fail continuation with 0 args.
   ;; If non-empty ($Cons): extract head + tail, tail-call succ with 2 args.
-  (func $std/list.wat:seq_pop (export "std/list.wat:seq_pop")
+  (func $std/list.wat:seq_pop (export "std/seq.fnk:pop")
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (local $cons (ref $Cons))

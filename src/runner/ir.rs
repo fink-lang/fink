@@ -358,8 +358,8 @@ mod tests {
       .map_err(|e| e.to_string())?;
 
     let wrap_host_cont = get_func(&instance, &mut store, "wrap_host_cont")?;
-    let args_empty     = get_func(&instance, &mut store, "std/list.wat:args_empty")?;
-    let args_prepend   = get_func(&instance, &mut store, "std/list.wat:args_prepend")?;
+    let args_empty     = get_func(&instance, &mut store, "std/fn.fnk:args_empty")?;
+    let args_prepend   = get_func(&instance, &mut store, "std/fn.fnk:args_prepend")?;
     let fink_module    = get_func(&instance, &mut store, "fink_module")?;
 
     let done_cont = call1(&wrap_host_cont, &mut store, &[Val::I32(1)], "wrap_host_cont")?;
