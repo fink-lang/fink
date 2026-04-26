@@ -1,0 +1,14 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+test 'set construct returns without trap', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    main = fn:
+      s = set 1, 2, 3
+      42
+  | equals ":
+    42

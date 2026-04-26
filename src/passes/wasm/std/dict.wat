@@ -169,7 +169,7 @@
   ;; -- Empty node -----------------------------------------------------
 
   ;; The canonical empty node — bitmap 0, zero-length children array.
-  (global $empty_node (ref $HamtNode)
+  (global $std/dict.wat:empty_node (ref $HamtNode)
     (struct.new $HamtNode
       (i32.const 0)
       (array.new_fixed $HamtChildren 0)
@@ -177,7 +177,7 @@
   )
 
   (func $std/dict.wat:hamt_empty (result (ref $HamtNode))
-    global.get $empty_node
+    global.get $std/dict.wat:empty_node
   )
 
 
@@ -1323,7 +1323,7 @@
   ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
   (func $std/dict.wat:_rec_new (export "std/rec.fnk:new") (result (ref $RecImpl))
-    (struct.new $RecImpl (global.get $empty_node))
+    (struct.new $RecImpl (global.get $std/dict.wat:empty_node))
   )
 
   (func $std/dict.wat:get (export "std/dict.wat:get")
@@ -1399,7 +1399,7 @@
   ;; Same as record wrappers but for $DictImpl ↔ $HamtNode.
 
   (func $std/dict.wat:dict_empty (export "std/dict.wat:dict_empty") (result (ref $DictImpl))
-    (struct.new $DictImpl (global.get $empty_node))
+    (struct.new $DictImpl (global.get $std/dict.wat:empty_node))
   )
 
   (func $std/dict.wat:dict_get (export "std/dict.wat:dict_get")

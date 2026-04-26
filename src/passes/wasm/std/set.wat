@@ -136,7 +136,7 @@
 
   ;; -- Empty ----------------------------------------------------------
 
-  (global $empty_node (ref $SetNode)
+  (global $std/set.wat:empty_node (ref $SetNode)
     (struct.new $SetNode
       (i32.const 0)
       (array.new_fixed $SetChildren 0)
@@ -144,7 +144,7 @@
   )
 
   (func $std/set.wat:new (export "std/set.wat:new") (result (ref $SetNode))
-    global.get $empty_node
+    global.get $std/set.wat:empty_node
   )
 
 
@@ -1275,7 +1275,7 @@
   ;; Wrap/unwrap $SetImpl ↔ $SetNode at the boundary.
 
   (func $std/set.wat:impl_empty (export "std/set.wat:impl_empty") (result (ref $SetImpl))
-    (struct.new $SetImpl (global.get $empty_node))
+    (struct.new $SetImpl (global.get $std/set.wat:empty_node))
   )
 
   (func $std/set.wat:impl_has (export "std/set.wat:impl_has")
@@ -1362,5 +1362,60 @@
       (struct.get $SetImpl $node (local.get $a))
       (struct.get $SetImpl $node (local.get $b)))
   )
+
+
+  ;; -- std/set.fnk:set — user-importable constructor closure -----------------
+  ;;
+  ;; `{set} = import 'std/set.fnk'` resolves to the accessor below; the
+  ;; user's `set 1, 2, 3` then calls the closure via `_apply` with
+  ;; args = [cont, 1, 2, 3]. The Fn2 adapter peels cont off the head,
+  ;; folds remaining items into a $SetImpl, and tail-calls cont with
+  ;; the result.
+  ;;
+  ;; Same shape as interop/rust.wat:read for std/io.fnk:read.
+
+  (elem declare func $std/set.wat:_set_apply)
+
+  (func $std/set.wat:_set_apply (type $Fn2)
+    (param $_caps (ref null any))
+    (param $args (ref null any))
+
+    (local $cursor (ref null any))
+    (local $cont (ref null any))
+    (local $node (ref $SetNode))
+    (local $key (ref eq))
+
+    ;; Peel cont off args[0].
+    (local.set $cursor (local.get $args))
+    (local.set $cont (call $std/list.wat:head_any (local.get $cursor)))
+    (local.set $cursor (call $std/list.wat:tail_any (local.get $cursor)))
+
+    ;; Start with empty SetNode.
+    (local.set $node (call $std/set.wat:new))
+
+    ;; Walk remaining args, accumulating each key into the set.
+    (block $done
+      (loop $walk
+        (br_if $done (ref.test (ref $Nil) (local.get $cursor)))
+        (local.set $key
+          (ref.cast (ref eq) (call $std/list.wat:head_any (local.get $cursor))))
+        (local.set $node
+          (call $std/set.wat:set (local.get $node) (local.get $key)))
+        (local.set $cursor (call $std/list.wat:tail_any (local.get $cursor)))
+        (br $walk)))
+
+    ;; Tail-call cont with [SetImpl(node)].
+    (return_call $std/list.wat:apply_1
+      (struct.new $SetImpl (local.get $node))
+      (local.get $cont))
+  )
+
+  (global $std/set.wat:_set_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $std/set.wat:_set_apply)
+      (ref.null $Captures)))
+
+  (func (export "std/set.fnk:set") (result (ref any))
+    (global.get $std/set.wat:_set_closure))
 
 )

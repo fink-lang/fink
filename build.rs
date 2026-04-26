@@ -89,6 +89,7 @@ fn main() {
         "src/passes/wasm/std/range.wat",
         "src/passes/wasm/std/async.wat",
         "src/passes/wasm/std/channel.wat",
+        "src/passes/wasm/std/set.wat",
         "src/passes/wasm/interop/rust.wat",
     ];
 
