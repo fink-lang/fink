@@ -29,6 +29,7 @@ pub mod dwarf;
 pub mod emit;
 pub mod fmt;
 pub mod ir;
+pub mod ir_compile_package;
 pub mod ir_emit;
 pub mod ir_fmt;
 pub mod ir_link;
@@ -160,13 +161,42 @@ mod tests {
   #[cfg(test)]
   const IR_WAT_PKG_ENTRY_URL: &str = "./test.fnk";
 
+  /// Inline-entry hybrid loader for `ir_wat_pkg`. The entry source is
+  /// registered at a synthetic disk path (the test fixtures dir,
+  /// `src/passes/wasm/`) so dep imports from it can resolve to real
+  /// fixture files like `test_link/simple.fnk` via FileSourceLoader.
+  #[cfg(test)]
+  struct PkgTestLoader {
+    entry_abs_path: std::path::PathBuf,
+    entry_source: String,
+    disk: crate::passes::modules::FileSourceLoader,
+  }
+
+  #[cfg(test)]
+  impl crate::passes::modules::SourceLoader for PkgTestLoader {
+    fn load(&mut self, path: &std::path::Path) -> Result<String, String> {
+      if path == self.entry_abs_path {
+        Ok(self.entry_source.clone())
+      } else {
+        crate::passes::modules::SourceLoader::load(&mut self.disk, path)
+      }
+    }
+  }
+
   fn ir_wat_pkg_inner(src: &str) -> String {
-    let (lifted, desugared) = crate::to_lifted(src, IR_WAT_PKG_ENTRY_URL)
-      .unwrap_or_else(|e| panic!("{e}"));
-    let prefix = format!("{IR_WAT_PKG_ENTRY_URL}:");
-    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast, &prefix);
-    let linked = super::ir_link::link(&[user_frag]);
-    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&linked);
+    // Anchor the entry at `src/passes/wasm/test.fnk` so relative
+    // imports like `./test_link/simple.fnk` reach the real fixture
+    // tree on disk.
+    let entry_abs_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("src/passes/wasm/test.fnk");
+    let mut loader = PkgTestLoader {
+      entry_abs_path: entry_abs_path.clone(),
+      entry_source: src.to_string(),
+      disk: crate::passes::modules::FileSourceLoader::new(),
+    };
+    let pkg = super::ir_compile_package::compile_package(&entry_abs_path, &mut loader)
+      .unwrap_or_else(|e| panic!("ir_compile_package: {e}"));
+    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&pkg.fragment);
     let b64 = sm.encode_base64url();
     format!("{}\n;; sm:{b64}", wat.trim())
   }

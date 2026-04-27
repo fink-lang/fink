@@ -72,8 +72,25 @@
 
 /// Identifies a function within a fragment. Linker resolves to a
 /// global function index at link time.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FuncSym(pub u32);
+
+/// Identifies a Fink module (entry or dep) within a package compile.
+///
+/// Allocated by `ir_compile_package` during URL canonicalisation /
+/// dedup. Used as a stable, opaque identity for cross-module
+/// references in IR — `pub` registers into `registry[mod_id]`, `import`
+/// reads from it, both via i31-typed runtime ABI args. URL strings
+/// only enter the picture in two places:
+///
+/// * The package compiler / linker holds the (ModuleId → URL) map for
+///   formatter consumption.
+/// * Producer-side `pub` calls still take a `$Str` binding name — the
+///   consumer's destructure cont uses string-keyed rec-pop.
+///
+/// Single-fragment compiles use `ModuleId(0)` by default.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+pub struct ModuleId(pub u32);
 
 /// Identifies a type (struct / array / func-signature) within a
 /// fragment.
@@ -374,6 +391,17 @@ pub enum Operand {
 /// / DWARF data — wire in when lower starts producing origins.
 #[derive(Clone, Debug, Default)]
 pub struct Fragment {
+  /// This fragment's stable module identity. Single-fragment compiles
+  /// default to `ModuleId(0)`. Multi-fragment package compiles assign
+  /// each fragment a unique id during BFS.
+  pub module_id: ModuleId,
+  /// Imports declared by this fragment, in canonical-URL form. Maps
+  /// the source URL string (as written in `import './...'`) to the
+  /// ModuleId of the target fragment. Populated by
+  /// `ir_compile_package` after URL canonicalisation + dedup. Used
+  /// by `ir_lower`'s import-call lowering to convert source URLs
+  /// into ModuleId i31 args.
+  pub module_imports: std::collections::BTreeMap<String, ModuleId>,
   pub types:   Vec<TypeDecl>,
   pub funcs:   Vec<FuncDecl>,
   pub globals: Vec<GlobalDecl>,
