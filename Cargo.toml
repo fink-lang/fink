@@ -2,6 +2,7 @@
 members = [
   ".",
   "crates/test-macros",
+  "crates/wat-linker",
 ]
 resolver = "2"
 
