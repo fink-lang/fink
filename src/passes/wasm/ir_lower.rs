@@ -39,7 +39,18 @@ fn origin_of(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> Option<ByteRange> {
 }
 
 /// Lower a lifted CPS result to an unlinked wasm IR `Fragment`.
-pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
+///
+/// `fqn_prefix` is the module's fully-qualified URL prefix (e.g.
+/// `"./sub/foo.fnk:"` — including the trailing colon) used to
+/// namespace every emitted symbol's display name. Pass `""` for
+/// single-fragment compiles (current default; no namespacing).
+/// Multi-fragment package compiles pass each fragment its own prefix
+/// so cross-fragment merges are collision-free by construction.
+///
+/// Phase-4A: prefix is purely a cosmetic / naming concern. The entry
+/// function's export name still stays `"fink_module"`; rewiring the
+/// body to the `import_module` init-guard shape lands in 4D.
+pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let usage = runtime_contract::scan(cps);
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
@@ -56,26 +67,29 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>) -> Fragment {
   find_pub_apps(module_body, cps, ast, &mut pubs);
   let mut pub_globals: HashMap<CpsId, GlobalSym> = HashMap::new();
   for (id, name) in &pubs {
+    let qualified = format!("{fqn_prefix}{name}");
     let sym = add_global(
       &mut frag,
       val_anyref(true),
       true,
       GlobalInit::RefNull(AbsHeap::Any),
-      name,
-      Some(name.clone()),
+      &qualified,
+      Some(qualified.clone()),
     );
     pub_globals.insert(*id, sym);
   }
 
   // Lower the module body as the `fink_module` function.
+  let module_display = format!("{fqn_prefix}fink_module");
   let fink_module = lower_fn(
     &mut frag, &rt, cps, ast,
     &[],                 // no cap params at the module level
     &[(ret_bind, false)], // user param: ƒret (not a spread)
     module_body,
-    "fink_module",
+    &module_display,
     &pub_globals,
     &HashMap::new(),    // module body: no enclosing fn_syms
+    fqn_prefix,         // namespacing prefix for nested LetFn displays
   );
   frag.funcs[fink_module.0 as usize].export = Some("fink_module".into());
 
@@ -104,8 +118,9 @@ fn lower_fn(
   display: &str,
   pub_globals: &HashMap<CpsId, GlobalSym>,
   fn_syms: &HashMap<CpsId, FuncSym>,
+  fqn_prefix: &str,
 ) -> FuncSym {
-  let mut ctx = FnCtx::new(pub_globals.clone(), fn_syms.clone());
+  let mut ctx = FnCtx::new(pub_globals.clone(), fn_syms.clone(), fqn_prefix.to_string());
 
   // WASM-level params (always just `$:caps_param` and `$:params` —
   // the $Fn2 shape). Colon-prefix is lexer-rejected in Fink source,
@@ -210,10 +225,18 @@ struct FnCtx {
   /// LetFns, so by the time a child is lowered, all enclosing /
   /// preceding-sibling LetFn FuncSyms are already known.
   fn_syms: HashMap<CpsId, FuncSym>,
+  /// FQN prefix for emitted symbol display names. Empty for single-
+  /// fragment compiles; `"<canonical_url>:"` for multi-fragment package
+  /// compiles. See `lower()` doc.
+  fqn_prefix: String,
 }
 
 impl FnCtx {
-  fn new(pub_globals: HashMap<CpsId, GlobalSym>, fn_syms: HashMap<CpsId, FuncSym>) -> Self {
+  fn new(
+    pub_globals: HashMap<CpsId, GlobalSym>,
+    fn_syms: HashMap<CpsId, FuncSym>,
+    fqn_prefix: String,
+  ) -> Self {
     Self {
       params: Vec::new(),
       locals: Vec::new(),
@@ -222,6 +245,7 @@ impl FnCtx {
       next_local_idx: 0,
       pub_globals,
       fn_syms,
+      fqn_prefix,
     }
   }
 
@@ -334,12 +358,15 @@ fn lower_expr(
           None => user_ids.push((pid, is_spread)),  // ungilded params treated as user
         }
       }
-      // Lift the fn body to a separate Fn2.
-      let display = cps_ident_for_bind(cps, ast, name);
+      // Lift the fn body to a separate Fn2. Display name carries the
+      // module's FQN prefix so cross-fragment merges stay collision-free.
+      let raw_display = cps_ident_for_bind(cps, ast, name);
+      let display = format!("{}{}", ctx.fqn_prefix, raw_display);
       let fn_sym = lower_fn(
         frag, rt, cps, ast,
         &cap_ids, &user_ids, fn_body, &display,
         &ctx.pub_globals, &ctx.fn_syms,
+        &ctx.fqn_prefix,
       );
       // The LetFn binds `name.id` to a funcref-valued local; we model
       // it as an anyref local holding a `ref.func` funcref. Actual

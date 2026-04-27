@@ -216,7 +216,7 @@ fn main() {
       {
         use std::io::Write;
         let (lifted, desugared) = fink::to_lifted(&src, path).unwrap_or_else(|e| die(&e));
-        let user_frag = fink::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast);
+        let user_frag = fink::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast, "");
         let linked_frag = fink::passes::wasm::ir_link::link(&[user_frag]);
         let bytes = fink::passes::wasm::ir_emit::emit(&linked_frag);
         std::io::stdout().write_all(&bytes).unwrap_or_else(|e| die(&e.to_string()));

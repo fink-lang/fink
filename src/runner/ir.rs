@@ -152,7 +152,7 @@ mod tests {
   fn exec_ir_module(src: &str, io_capture: Arc<Mutex<IoCapture>>) -> Result<TestResult, String> {
     let (lifted, desugared) = crate::to_lifted(src, "test")
       .map_err(|e| format!("compile: {e}"))?;
-    let user_frag = crate::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast);
+    let user_frag = crate::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast, "");
     let linked = crate::passes::wasm::ir_link::link(&[user_frag]);
     let bytes = crate::passes::wasm::ir_emit::emit(&linked);
 

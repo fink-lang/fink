@@ -80,6 +80,7 @@ fn main() {
     // vocabulary.
     let runtime_modules_ir = [
         "src/passes/wasm/rt/apply.wat",
+        "src/passes/wasm/rt/modules.wat",
         "src/passes/wasm/rt/protocols.wat",
         "src/passes/wasm/std/str.wat",
         "src/passes/wasm/std/hashing.wat",

@@ -114,7 +114,7 @@ mod tests {
 
   fn ir_wat_inner(src: &str) -> String {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
+    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast, "");
     // Single-module programs today: the link step is a passthrough,
     // but routing through it keeps the tracer test surface honest
     // when multi-fragment merge arrives.
@@ -133,7 +133,7 @@ mod tests {
   #[cfg(test)]
   fn ir_emit_for(src: &str) -> Vec<u8> {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast);
+    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast, "");
     let linked = super::ir_link::link(&[user_frag]);
     super::ir_emit::emit(&linked)
   }
