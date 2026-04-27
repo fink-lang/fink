@@ -224,6 +224,41 @@ test 'set non-disjoint via ><', fn:
     false
 
 
+test 'list destructure empty (sanity)', fn:
+  expect run ƒink:
+    s = []
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ":
+    empty
+
+
+test 'list destructure with import (sanity)', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    s = []
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ":
+    empty
+
+
+skip-ir test 'set match non-empty (probe)', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    s = set 1, 2
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ":
+    non-empty
+
+
 skip-ir test 'set destructure empty', fn:
   expect run ƒink:
     {set} = import 'std/set.fnk'
@@ -233,8 +268,8 @@ skip-ir test 'set destructure empty', fn:
       []: 'empty'
       _: 'non-empty'
 
-  | equals ƒink:
-    'empty'
+  | equals ":
+    empty
 
 
 skip-ir test 'set destructure non-empty', fn:

@@ -1434,6 +1434,93 @@
       (struct.get $SetImpl $node (ref.cast (ref $SetImpl) (local.get $b))))
   )
 
+  ;; op_empty : (ref $Set) -> i32
+  ;; True iff the set has no entries.
+  (func $std/set.wat:op_empty (export "std/set.wat:op_empty")
+    (param $s (ref $Set)) (result i32)
+    (i32.eqz
+      (call $std/set.wat:_set_size_node
+        (struct.get $SetImpl $node (ref.cast (ref $SetImpl) (local.get $s)))))
+  )
+
+  ;; seq_pop(set, fail, succ) — peel one element off a set.
+  ;; If empty: tail-call fail() with no args.
+  ;; Else: tail-call succ(head, rest) where head is the picked key
+  ;; and rest is a $Set without that key. HAMT walk order is
+  ;; deterministic (hash-bucket), not insertion order, but stable
+  ;; for a given set.
+  (func $std/set.wat:seq_pop (export "std/set.wat:seq_pop")
+    (param $s (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
+
+    (local $node (ref $SetNode))
+    (local $key (ref eq))
+    (local $rest_node (ref $SetNode))
+
+    (local.set $node
+      (struct.get $SetImpl $node (ref.cast (ref $SetImpl) (local.get $s))))
+
+    (if (i32.eqz (call $std/set.wat:_set_size_node (local.get $node)))
+      (then (return_call $std/list.wat:apply_0 (local.get $fail))))
+
+    (local.set $key (call $std/set.wat:_pick_first_key (local.get $node)))
+    (local.set $rest_node (call $std/set.wat:remove (local.get $node) (local.get $key)))
+
+    (return_call $std/list.wat:apply_2_vals
+      (local.get $key)
+      (struct.new $SetImpl (local.get $rest_node))
+      (local.get $succ))
+  )
+
+  ;; _pick_first_key — walk HAMT and return the first key encountered
+  ;; in iteration order. Used by seq_pop. Trap if empty (caller must
+  ;; check size first).
+  (func $std/set.wat:_pick_first_key
+    (param $node (ref $SetNode)) (result (ref eq))
+
+    (local $children (ref $SetChildren))
+    (local $len i32)
+    (local $i i32)
+    (local $child (ref null struct))
+
+    (local.set $children (struct.get $SetNode $children (local.get $node)))
+    (local.set $len (array.len (local.get $children)))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
+
+        (local.set $child
+          (array.get $SetChildren (local.get $children) (local.get $i)))
+
+        (if (ref.test (ref $SetEntry) (local.get $child))
+          (then
+            (return
+              (struct.get $SetEntry $key
+                (ref.cast (ref $SetEntry) (local.get $child))))))
+
+        (if (ref.test (ref $SetNode) (local.get $child))
+          (then
+            (return
+              (call $std/set.wat:_pick_first_key
+                (ref.cast (ref $SetNode) (local.get $child))))))
+
+        (if (ref.test (ref $SetCollision) (local.get $child))
+          (then
+            (return
+              (struct.get $SetEntry $key
+                (ref.cast (ref $SetEntry)
+                  (array.get $SetChildren
+                    (struct.get $SetCollision $col_entries
+                      (ref.cast (ref $SetCollision) (local.get $child)))
+                    (i32.const 0)))))))
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (unreachable)
+  )
+
 
   ;; -- Repr -----------------------------------------------------------
   ;;

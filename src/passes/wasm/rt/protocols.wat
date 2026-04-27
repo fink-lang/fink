@@ -451,16 +451,28 @@
   ;; Type guards — is_seq_like / is_rec_like
   ;; =========================================================================
 
-  ;; is_seq_like(val, succ, fail): succ(val) if $List, else fail()
+  ;; is_seq_like(val, succ, fail): succ(val) if $List or $Set, else fail()
   (func $std/operators.fnk:is_seq_like (export "std/operators.fnk:is_seq_like")
     (param $val (ref null any)) (param $succ (ref null any)) (param $fail (ref null any))
-    (block $not_seq
-      (block $is_seq (result (ref $List))
-        (br $not_seq
-          (br_on_cast $is_seq (ref null any) (ref $List)
+
+    ;; $List
+    (block $not_list
+      (block $is_list (result (ref $List))
+        (br $not_list
+          (br_on_cast $is_list (ref null any) (ref $List)
             (local.get $val))))
       (drop)
       (return_call $std/list.wat:apply_1 (local.get $val) (local.get $succ)))
+
+    ;; $Set
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $val))))
+      (drop)
+      (return_call $std/list.wat:apply_1 (local.get $val) (local.get $succ)))
+
     (return_call $std/list.wat:apply_0 (local.get $fail)))
 
   ;; is_rec_like(val, succ, fail): succ(val) if $Rec, else fail()
@@ -515,7 +527,44 @@
         (ref.i31 (call $std/dict.wat:op_empty (local.get $val)))
         (local.get $cont)))
 
+    ;; $Set → set:op_empty
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $val))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_empty))
+        (local.get $cont)))
+
     (unreachable))
+
+  ;; =========================================================================
+  ;; Sequence destructure: `[head, ..tail]` patterns
+  ;; =========================================================================
+
+  ;; seq_pop(cursor, fail, succ): peel one element off any seq-like
+  ;; container.
+  ;;   $List → list:seq_pop
+  ;;   $Set  → set:seq_pop
+  ;; If empty: tail-call fail() with no args.
+  ;; Else: tail-call succ(head, tail) with two args.
+  (func $std/seq.fnk:pop (export "std/seq.fnk:pop")
+    (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
+
+    ;; $Set → set:seq_pop
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $cursor))))
+      (drop)
+      (return_call $std/set.wat:seq_pop
+        (local.get $cursor) (local.get $fail) (local.get $succ)))
+
+    ;; Default: list (or $Nil)
+    (return_call $std/list.wat:seq_pop
+      (local.get $cursor) (local.get $fail) (local.get $succ)))
 
   ;; =========================================================================
   ;; Membership: `in` / `not in` — dispatch on container type

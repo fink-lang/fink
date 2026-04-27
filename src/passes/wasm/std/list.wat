@@ -333,7 +333,7 @@
   ;; seq_pop(cursor, fail, succ) — destructure [head, ..tail].
   ;; If empty ($Nil): tail-call fail continuation with 0 args.
   ;; If non-empty ($Cons): extract head + tail, tail-call succ with 2 args.
-  (func $std/list.wat:seq_pop (export "std/seq.fnk:pop")
+  (func $std/list.wat:seq_pop (export "std/list.wat:seq_pop")
     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
 
     (local $cons (ref $Cons))

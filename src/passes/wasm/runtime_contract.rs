@@ -470,7 +470,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::RecMerge        => ("std/dict.wat", "std/rec.fnk:merge"),
     Sym::IsSeqLike       => ("rt/protocols.wat", "std/operators.fnk:is_seq_like"),
     Sym::IsRecLike       => ("rt/protocols.wat", "std/operators.fnk:is_rec_like"),
-    Sym::SeqPop          => ("std/list.wat", "std/seq.fnk:pop"),
+    Sym::SeqPop          => ("rt/protocols.wat", "std/seq.fnk:pop"),
     Sym::Str             => ("std/str.wat", "std/str.fnk:str"),
     Sym::StrEmpty        => ("std/str.wat", "std/str.fnk:str_empty"),
     Sym::StrFmt          => ("std/str.wat", "std/str.fnk:fmt"),
