@@ -125,6 +125,53 @@ mod tests {
   }
 
 
+  /// Multi-module variant of `ir_wat` for the new package-compile
+  /// pipeline. Lowers `src` as the entry module under a fixed test
+  /// canonical URL (`./test.fnk`) so every emitted symbol carries
+  /// a real FQN prefix, exercising the same code paths a real
+  /// `ir_compile_package` invocation would drive.
+  ///
+  /// Today: single-fragment only — no actual import resolution, just
+  /// the FQN-prefix half of the multi-module pipeline. Once
+  /// `ir_compile_package` lands, this helper grows a `SourceLoader`
+  /// and walks dep imports for real.
+  #[allow(dead_code)]
+  fn ir_wat_pkg(src: &str) -> String {
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || ir_wat_pkg_inner(&src_owned))) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+          (*s).to_string()
+        } else if let Some(s) = e.downcast_ref::<String>() {
+          s.clone()
+        } else {
+          "<unknown panic>".to_string()
+        };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  /// Canonical URL the `ir_wat_pkg` helper compiles its entry source
+  /// under. Tests that snapshot multi-module WAT see this name in
+  /// every emitted symbol's prefix and in data-segment string
+  /// constants.
+  #[cfg(test)]
+  const IR_WAT_PKG_ENTRY_URL: &str = "./test.fnk";
+
+  fn ir_wat_pkg_inner(src: &str) -> String {
+    let (lifted, desugared) = crate::to_lifted(src, IR_WAT_PKG_ENTRY_URL)
+      .unwrap_or_else(|e| panic!("{e}"));
+    let prefix = format!("{IR_WAT_PKG_ENTRY_URL}:");
+    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast, &prefix);
+    let linked = super::ir_link::link(&[user_frag]);
+    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&linked);
+    let b64 = sm.encode_base64url();
+    format!("{}\n;; sm:{b64}", wat.trim())
+  }
+
+
   /// Run the IR pipeline end-to-end and validate the emitted module.
   ///
   /// This is the tracer bullet for the new pipeline: the output is
@@ -266,7 +313,7 @@ mod tests {
   #[cfg(test)]
   mod ir_fmt_tests {
     #[allow(unused_imports)]
-    use super::{ir_wat, gen_wat};
+    use super::{ir_wat, ir_wat_pkg, gen_wat};
 
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_literals.fnk", skip-ir);
     test_macros::include_fink_tests!("src/passes/wasm/test_ir_operators.fnk", skip-ir);

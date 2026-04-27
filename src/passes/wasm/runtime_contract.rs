@@ -147,6 +147,18 @@ pub enum Sym {
   // pattern-match dispatch). Wrapped in a no-capture `$Closure` at
   // the call site.
   Panic,
+  // `std/modules.fnk:pub` — direct call, `(mod_url, name, val) -> ()`.
+  // Emitted at every `·ƒpub` site to register the binding into the
+  // module's exports rec in the runtime registry. No return value;
+  // CPS continues inline after the call.
+  ModulesPub,
+  // `std/modules.fnk:import` — CPS, `(url, mod_clos, cont) -> ()`.
+  // Emitted at every user-fragment `import 'url'` site. mod_clos is
+  // a no-capture `$Closure` over the producer's `<url>:fink_module`
+  // funcref, built inline at the call site so we don't need to
+  // pass funcrefs through the anyref-typed call ABI (funcrefs and
+  // anyrefs are disjoint hierarchies in WasmGC).
+  ModulesImport,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -227,9 +239,28 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::SeqPop     => &[Sym::SeqPop],
     BuiltIn::RecPut     => &[Sym::RecPut],
     BuiltIn::RecPop     => &[Sym::RecPop],
-    // Import builds an inline rec from the imported names; needs the
-    // empty-rec ctor + the direct-style field setter.
-    BuiltIn::Import     => &[Sym::RecEmpty, Sym::RecSetField, Sym::Str],
+    // `·ƒpub name, val, cont` lowers inline to `global.set $<fqn>:<name>`
+    // plus a direct call to `std/modules.fnk:pub (<fqn>, <name>, val)`
+    // plus the cont continuation. The url + name strings are interned
+    // at lowering time, so `Sym::Str` is needed to materialise them.
+    BuiltIn::Pub        => &[Sym::ModulesPub, Sym::Str],
+    // Import has two lowering paths:
+    //
+    //   - Virtual stdlib (`std/io.fnk` etc.): per-name `<url>:<name>`
+    //     accessor calls + inline rec build. Needs `RecEmpty`,
+    //     `RecSetField`, `Str`.
+    //   - User fragment (`./foo.fnk`): tail-call `std/modules.fnk:import`
+    //     with [url_str, mod_clos, cont]. The mod_clos is a no-capture
+    //     `$Closure` over the producer's `<url>:fink_module`, built
+    //     inline at the call site — needs `Closure` + `Captures` types.
+    //
+    // We mark the union since `scan` can't tell which path will fire
+    // (the URL string is a Lit::Str arg, not a Sym). Unused imports
+    // are harmless — the runtime side is small.
+    BuiltIn::Import     => &[
+      Sym::RecEmpty, Sym::RecSetField, Sym::Str,
+      Sym::ModulesImport, Sym::Closure, Sym::Captures,
+    ],
     // Closure construction needs both $Closure struct + $Captures array types.
     BuiltIn::FnClosure => &[Sym::Closure, Sym::Captures],
     // Not yet lowered — add mappings when lower gains coverage.
@@ -326,6 +357,11 @@ pub struct Runtime {
   op_in:      Option<FuncSym>,
   op_notin:   Option<FuncSym>,
   op_dot:     Option<FuncSym>,
+  // std/modules.fnk: protocol — direct-call primitives (no CPS cont).
+  // `pub` shares the `Fn_op_binary` signature shape (3 anyref params,
+  // no result).
+  modules_pub:    Option<FuncSym>,
+  modules_import: Option<FuncSym>,
 }
 
 impl Runtime {
@@ -342,6 +378,8 @@ impl Runtime {
   pub fn str_(&self)         -> FuncSym { self.str_.expect("rt: str not declared") }
   pub fn str_empty(&self)    -> FuncSym { self.str_empty.expect("rt: str_empty not declared") }
   pub fn rec_put(&self)      -> FuncSym { self.rec_put.expect("rt: rec_put not declared") }
+  pub fn modules_pub(&self)    -> FuncSym { self.modules_pub.expect("rt: modules_pub not declared") }
+  pub fn modules_import(&self) -> FuncSym { self.modules_import.expect("rt: modules_import not declared") }
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
   pub fn rec_set_field(&self) -> FuncSym { self.rec_set_field.expect("rt: rec_set_field not declared") }
@@ -485,6 +523,8 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::RecEmpty        => ("std/dict.wat", "std/rec.fnk:new"),
     Sym::RecSetField     => ("std/dict.wat", "std/rec.fnk:_set_field"),
     Sym::Panic           => ("rt/protocols.wat", "std/interop.fnk:panic"),
+    Sym::ModulesPub      => ("rt/modules.wat",   "std/modules.fnk:pub"),
+    Sym::ModulesImport   => ("rt/modules.wat",   "std/modules.fnk:import"),
   }
 }
 
@@ -768,6 +808,37 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     };
     let (m, n) = import_key(Sym::RecSetField);
     rt.rec_set_field = Some(import_func(frag, sig, m, n));
+  }
+
+  if needed.contains(&Sym::ModulesPub) {
+    // `pub : (mod_url, name, val) -> ()` — same `Fn_op_binary` shape.
+    // Direct call (no CPS cont); registers the binding in the module's
+    // exports rec in the runtime registry.
+    let sig = if let Some(s) = rt.fn_op_binary { s } else {
+      let s = ty_func(frag,
+        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
+        vec![],
+        "rt/protocols.wat:Fn_op_binary");
+      rt.fn_op_binary = Some(s);
+      s
+    };
+    let (m, n) = import_key(Sym::ModulesPub);
+    rt.modules_pub = Some(import_func(frag, sig, m, n));
+  }
+
+  if needed.contains(&Sym::ModulesImport) {
+    // `import : (url, mod_clos, cont) -> ()` — same `Fn_op_binary`
+    // shape. CPS — tail-applies cont with the producer's exports rec.
+    let sig = if let Some(s) = rt.fn_op_binary { s } else {
+      let s = ty_func(frag,
+        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
+        vec![],
+        "rt/protocols.wat:Fn_op_binary");
+      rt.fn_op_binary = Some(s);
+      s
+    };
+    let (m, n) = import_key(Sym::ModulesImport);
+    rt.modules_import = Some(import_func(frag, sig, m, n));
   }
 
   rt

@@ -65,7 +65,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // up by CpsId to emit global.set at the export site.
   let mut pubs: Vec<(CpsId, String)> = Vec::new();
   find_pub_apps(module_body, cps, ast, &mut pubs);
-  let mut pub_globals: HashMap<CpsId, GlobalSym> = HashMap::new();
+  let mut pub_globals: HashMap<CpsId, (GlobalSym, String)> = HashMap::new();
   for (id, name) in &pubs {
     let qualified = format!("{fqn_prefix}{name}");
     let sym = add_global(
@@ -76,7 +76,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
       &qualified,
       Some(qualified.clone()),
     );
-    pub_globals.insert(*id, sym);
+    pub_globals.insert(*id, (sym, name.clone()));
   }
 
   // Lower the module body as the `fink_module` function.
@@ -116,7 +116,7 @@ fn lower_fn(
   user_params: &[(CpsId, bool)],
   body: &Expr,
   display: &str,
-  pub_globals: &HashMap<CpsId, GlobalSym>,
+  pub_globals: &HashMap<CpsId, (GlobalSym, String)>,
   fn_syms: &HashMap<CpsId, FuncSym>,
   fqn_prefix: &str,
 ) -> FuncSym {
@@ -210,10 +210,12 @@ struct FnCtx {
   binds: HashMap<CpsId, LocalIdx>,
   /// Next local index (params + locals, in WASM local-numbering order).
   next_local_idx: u32,
-  /// Module-level exports: CpsId → pre-allocated GlobalSym. Used by
-  /// the `Pub` arm to emit `global.set` at the export site. Shared
-  /// across all fns in a module (cloned on FnCtx construction).
-  pub_globals: HashMap<CpsId, GlobalSym>,
+  /// Module-level exports: CpsId → (pre-allocated GlobalSym, source
+  /// binding name). Used by the `Pub` arm to emit `global.set` at the
+  /// export site, plus the `std/modules.fnk:pub` runtime call which
+  /// takes the binding name as a `$Str` arg. Shared across all fns
+  /// in a module (cloned on FnCtx construction).
+  pub_globals: HashMap<CpsId, (GlobalSym, String)>,
   /// LetFn bind id → emitted FuncSym. Populated by `LetFn` whenever a
   /// nested fn is lowered; read by `FnClosure` when constructing
   /// `struct.new $Closure (ref.func ...)` and by `emit_val_into` when
@@ -233,7 +235,7 @@ struct FnCtx {
 
 impl FnCtx {
   fn new(
-    pub_globals: HashMap<CpsId, GlobalSym>,
+    pub_globals: HashMap<CpsId, (GlobalSym, String)>,
     fn_syms: HashMap<CpsId, FuncSym>,
     fqn_prefix: String,
   ) -> Self {
@@ -297,7 +299,7 @@ fn resolve_id_as_operand(
   if let Some(local) = ctx.binds.get(&id).copied() {
     return op_local(local);
   }
-  if let Some(&gsym) = ctx.pub_globals.get(&id) {
+  if let Some(&(gsym, _)) = ctx.pub_globals.get(&id) {
     return op_global(gsym);
   }
   if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
@@ -378,19 +380,39 @@ fn lower_expr(
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
-      // `·ƒpub val, cont` — emit `global.set $<name>` into the
-      // pre-allocated export global for this binding, then descend
-      // into the cont body. Globals are pre-allocated in `lower()`
-      // via `find_pub_apps`.
+      // `·ƒpub val, cont` — register `val` as a module-level export.
+      //
+      // Two side effects, both inline (no CPS hop):
+      //   1. `global.set $<fqn>:<name> val` — addressable storage.
+      //   2. `call $std/modules.fnk:pub (<fqn>, <name>, val)` — registers
+      //      the binding into the module's exports rec in the runtime
+      //      registry, where `import` will read it from.
+      //
+      // Then descend into the cont body inline.
+      //
+      // The fqn url is `ctx.fqn_prefix` minus the trailing `:` separator;
+      // the source name comes from `pub_globals` alongside the global.
       let Some(Arg::Val(val)) = args.first() else {
         panic!("ir_lower: Pub expects [val, cont], missing val");
       };
       let id = cps_id_of_ref(val);
-      let sym = *ctx.pub_globals.get(&id)
+      let (gsym, src_name) = ctx.pub_globals.get(&id)
+        .cloned()
         .unwrap_or_else(|| panic!("ir_lower: Pub val CpsId {:?} has no pre-allocated global", id));
-      let local = ctx.lookup(id);
-      let i = push_global_set(frag, sym, op_local(local));
-      ctx.instrs.push(i);
+      let val_local = ctx.lookup(id);
+
+      // 1. Addressable storage.
+      let i_set = push_global_set(frag, gsym, op_local(val_local));
+      ctx.instrs.push(i_set);
+
+      // 2. Registry mutation.
+      let url_bytes: Vec<u8> = ctx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
+      let url_local = emit_str_const(ctx, frag, rt, &url_bytes, ":pub_url");
+      let name_local = emit_str_const(ctx, frag, rt, src_name.as_bytes(), ":pub_name");
+      let i_pub = push_call(frag, rt.modules_pub(),
+        vec![op_local(url_local), op_local(name_local), op_local(val_local)],
+        None);
+      ctx.instrs.push(i_pub);
 
       let cont_arg = args.get(1)
         .unwrap_or_else(|| panic!("ir_lower: Pub expects [val, cont]"));
@@ -805,21 +827,21 @@ fn build_args_list(
 /// Args layout: `[Val(LitStr(url)), Cont(Ref(cont_id))]`. The cont
 /// takes a single rec value containing the imported names.
 ///
-/// Strategy:
-///   1. Extract URL bytes and the cont id.
-///   2. For each name in `cps.module_imports[url]`:
-///        - Declare a function import `<url>:<name>` with signature
-///          `() -> anyref`. Resolved at link time against the runtime
-///          module's exports — for `std/io.fnk:stdout` etc., these are
-///          the protocol dispatchers in `rt/protocols.wat`.
-///        - Call the import to get the value into a fresh local.
-///   3. Build the rec via `rec_new` + `_rec_set_field` per name. The
-///      key is a `$Str` interned from the name bytes.
-///   4. Tail-apply the cont with `[rec]` via `_apply`.
+/// Two lowering paths depending on the URL kind:
 ///
-/// Phase 1 supports virtual stdlib namespaces (`std/*.fnk`). User
-/// fragment imports panic — multi-module support is deferred until
-/// `ir_compile_package` lands.
+///   - **Virtual stdlib** (`std/io.fnk` etc.). Each imported name maps
+///     to its own per-name accessor in the runtime (`std/io.fnk:stdout`
+///     → `interop_io_get_stdout`). Lowering: per-name
+///     `<url>:<name>` import-call, build a rec inline, tail-apply
+///     destructure cont with the rec.
+///
+///   - **User fragment** (`./foo.fnk`, `../bar.fnk`, etc.). The whole
+///     module is one `<url>:fink_module` function. Lowering: build a
+///     no-capture `$Closure` over the producer's `<url>:fink_module`
+///     funcref, tail-call `std/modules.fnk:import` with
+///     `[url_str, mod_clos, destructure_cont]`. The runtime helper
+///     handles init-once + populates the destructure cont with the
+///     producer's exports rec.
 fn lower_import(
   ctx: &mut FnCtx,
   frag: &mut Fragment,
@@ -838,21 +860,30 @@ fn lower_import(
   let url = std::str::from_utf8(url_bytes)
     .unwrap_or_else(|_| panic!("ir_lower: BuiltIn::Import URL is not valid UTF-8"));
 
-  // Phase 1: only virtual stdlib namespaces are supported.
-  if !is_virtual_stdlib_path(url) {
-    panic!(
-      "ir_lower: BuiltIn::Import for `{url}` is not yet supported in the IR pipeline. \
-       Only virtual stdlib paths (`std/*.fnk`) are wired today; user-fragment imports \
-       require multi-module support (`ir_compile_package`)."
-    );
-  }
-
   // Pull the destructure cont (Cont::Ref).
   let cont_id = args.iter().find_map(|a| match a {
     Arg::Cont(Cont::Ref(id)) => Some(*id),
     _ => None,
   }).unwrap_or_else(|| panic!("ir_lower: BuiltIn::Import missing cont"));
 
+  if is_virtual_stdlib_path(url) {
+    lower_import_virtual_stdlib(ctx, frag, rt, cps, url, cont_id);
+  } else {
+    lower_import_user_fragment(ctx, frag, rt, url, cont_id);
+  }
+}
+
+/// Virtual stdlib path: `import 'std/io.fnk'` etc. Each imported name
+/// maps to its own runtime accessor. Build a rec from per-name calls,
+/// tail-apply destructure cont.
+fn lower_import_virtual_stdlib(
+  ctx: &mut FnCtx,
+  frag: &mut Fragment,
+  rt: &Runtime,
+  cps: &CpsResult,
+  url: &str,
+  cont_id: CpsId,
+) {
   // Names come from the pre-collected module_imports table.
   let names = cps.module_imports.get(url)
     .cloned()
@@ -913,6 +944,66 @@ fn lower_import(
   let i_app = push_return_call(frag, rt.apply(),
     vec![op_local(l_args), op_local(cont_local)]);
   ctx.instrs.push(i_app);
+}
+
+/// User-fragment path: `import './foo.fnk'`. Tail-call
+/// `std/modules.fnk:import` with the URL, a no-capture closure over
+/// the producer's `<url>:fink_module`, and the destructure cont.
+fn lower_import_user_fragment(
+  ctx: &mut FnCtx,
+  frag: &mut Fragment,
+  rt: &Runtime,
+  url: &str,
+  cont_id: CpsId,
+) {
+  // 1. Materialise the URL as a `$Str` constant.
+  let url_local = emit_str_const(ctx, frag, rt, url.as_bytes(), ":imp_url");
+
+  // 2. Declare a func import of the producer's `<url>:fink_module`,
+  //    typed as `$Fn2`. Resolved at ir_emit time by name lookup against
+  //    the merged runtime's export table; once `ir_link` grows multi-
+  //    fragment merge, the linker will resolve this to the producer's
+  //    local FuncSym.
+  let mod_fn_sym = crate::passes::wasm::ir::import_func(
+    frag, rt.fn2(), url, "fink_module");
+
+  // 3. Build a no-capture `$Closure` over that funcref. funcrefs are
+  //    not anyref-compatible (disjoint typing hierarchies in WasmGC),
+  //    so we wrap to satisfy the std/modules.fnk:import signature
+  //    which takes everything as anyref.
+  let caps_local = ctx.alloc_local_typed(
+    ":imp_caps_arg",
+    val_ref(rt.captures(), /*nullable*/ true),
+  );
+  let i_caps = push_ref_null_concrete(frag, rt.captures(), caps_local);
+  ctx.instrs.push(i_caps);
+
+  let mod_clos_local = ctx.alloc_local(":imp_mod_clos");
+  let i_clos = push_struct_new(
+    frag, rt.closure(),
+    vec![Operand::RefFunc(mod_fn_sym), op_local(caps_local)],
+    mod_clos_local,
+  );
+  ctx.instrs.push(i_clos);
+
+  // 4. Resolve the destructure cont.
+  let cont_op = resolve_id_as_operand(ctx, frag, rt, cont_id);
+  let cont_local = match cont_op {
+    Operand::Local(l) => l,
+    other => {
+      let l = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
+      let i = push_local_set(frag, l, other);
+      ctx.instrs.push(i);
+      l
+    }
+  };
+
+  // 5. Tail-call `std/modules.fnk:import (url, mod_clos, cont)`. The
+  //    runtime helper handles init-once + delivers the producer's
+  //    exports rec to the destructure cont.
+  let i_imp = push_return_call(frag, rt.modules_import(),
+    vec![op_local(url_local), op_local(mod_clos_local), op_local(cont_local)]);
+  ctx.instrs.push(i_imp);
 }
 
 /// Recognise virtual stdlib namespace paths. Today only `std/*.fnk`,
@@ -1090,7 +1181,7 @@ fn emit_val_into(
       if let Some(local) = ctx.binds.get(&id).copied() {
         return push_local_set(frag, into, op_local(local));
       }
-      if let Some(&gsym) = ctx.pub_globals.get(&id) {
+      if let Some(&(gsym, _)) = ctx.pub_globals.get(&id) {
         return push_local_set(frag, into, op_global(gsym));
       }
       if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
@@ -1115,7 +1206,7 @@ fn emit_val_into(
       if let Some(local) = ctx.binds.get(id).copied() {
         return push_local_set(frag, into, op_local(local));
       }
-      if let Some(&gsym) = ctx.pub_globals.get(id) {
+      if let Some(&(gsym, _)) = ctx.pub_globals.get(id) {
         return push_local_set(frag, into, op_global(gsym));
       }
       let src = ctx.lookup(*id);
@@ -1157,6 +1248,30 @@ impl LitVal {
       Lit::Str(s)     => LitVal::Str(s.clone()),
     })
   }
+}
+
+/// Emit a `$Str` constant from raw bytes into a fresh local. Used by
+/// the Pub arm to materialise the `<fqn>` and `<name>` arguments to
+/// `std/modules.fnk:pub` at every export site.
+///
+/// Uses `rt.str_()` unconditionally — even for empty bytes — so we
+/// don't need `Sym::StrEmpty` declared just for the empty-FQN case.
+/// `intern_data(frag, &[])` produces a zero-length data symbol; the
+/// resulting `$Str` has len 0 and reads as the empty string.
+fn emit_str_const(
+  ctx: &mut FnCtx,
+  frag: &mut Fragment,
+  rt: &Runtime,
+  bytes: &[u8],
+  display_hint: &str,
+) -> LocalIdx {
+  let local = ctx.alloc_local(display_hint);
+  let sym = intern_data(frag, bytes);
+  let len = bytes.len() as u32;
+  let i = push_call(frag, rt.str_(),
+    vec![Operand::DataRef { sym, len }], Some(local));
+  ctx.instrs.push(i);
+  local
 }
 
 fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> InstrId {

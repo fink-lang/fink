@@ -156,9 +156,18 @@
               (local.get $existing)
               (local.get $cont))))))
 
-    ;; Not inited — synthesise wrap_cont and tail-call the producer's
-    ;; module-closure via _apply. captures = [url, cont] so wrap_cont
-    ;; can look up the rec and continue with cont.
+    ;; Not inited — register the empty rec for this URL, then invoke
+    ;; the producer's module-closure to populate it.
+    ;;
+    ;; init creates `registry[url] = empty_rec`, so subsequent `pub`
+    ;; calls inside the producer body have a rec to mutate. Calling
+    ;; init here (rather than wrapping it around every producer body
+    ;; in lowering) keeps the producer body dumb — it's a regular
+    ;; CPS fn that doesn't know about the registry.
+    (drop (call $std/modules.fnk:init (local.get $url)))
+
+    ;; Synthesise wrap_cont, capturing (url, cont) so it can read
+    ;; registry[url] after the producer finishes and continue with cont.
     (local.set $caps
       (array.new_fixed $Captures 2 (local.get $url) (local.get $cont)))
 
