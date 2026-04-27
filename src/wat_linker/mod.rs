@@ -1059,7 +1059,7 @@ mod tests {
         let got = link(modules);
 
         let expected_path =
-            concat!(env!("CARGO_MANIFEST_DIR"), "/src/test-wats/foo.expected.wat");
+            concat!(env!("CARGO_MANIFEST_DIR"), "/src/wat_linker/test-wats/foo.expected.wat");
         if std::env::var("BLESS").is_ok() {
             std::fs::write(expected_path, &got).expect("BLESS write failed");
             return;
@@ -1099,7 +1099,7 @@ mod tests {
         let got = link(modules);
         let expected_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/test-wats/diamond/expected.wat"
+            "/src/wat_linker/test-wats/diamond/expected.wat"
         );
         if std::env::var("BLESS").is_ok() {
             std::fs::write(expected_path, &got).expect("BLESS write failed");
@@ -1120,7 +1120,7 @@ mod tests {
         let got = link(modules);
         let expected_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/test-wats/cycle/expected.wat"
+            "/src/wat_linker/test-wats/cycle/expected.wat"
         );
         if std::env::var("BLESS").is_ok() {
             std::fs::write(expected_path, &got).expect("BLESS write failed");
@@ -1140,7 +1140,7 @@ mod tests {
             ("test-wats/diamond/d.wat", include_str!("test-wats/diamond/d.wat")),
         ];
         let got = link(modules);
-        if let Err(e) = wat::parse_str(&got) {
+        if let Err(e) = wat_crate::parse_str(&got) {
             panic!("merged diamond failed to parse: {e}\n\noutput:\n{got}");
         }
     }
@@ -1153,13 +1153,13 @@ mod tests {
             ("test-wats/cycle/f.wat", include_str!("test-wats/cycle/f.wat")),
         ];
         let got = link(modules);
-        if let Err(e) = wat::parse_str(&got) {
+        if let Err(e) = wat_crate::parse_str(&got) {
             panic!("merged cycle failed to parse: {e}\n\noutput:\n{got}");
         }
     }
 
     /// Merged output of foo+bar must be valid WAT — i.e. round-trip
-    /// through `wat::parse_str` without errors. Catches structural
+    /// through `wat_crate::parse_str` without errors. Catches structural
     /// damage the text-equality test wouldn't (orphan parens, broken
     /// rec group, etc.).
     #[test]
@@ -1169,7 +1169,7 @@ mod tests {
             ("test-wats/bar.wat", include_str!("test-wats/bar.wat")),
         ];
         let got = link(modules);
-        if let Err(e) = wat::parse_str(&got) {
+        if let Err(e) = wat_crate::parse_str(&got) {
             panic!("merged output failed to parse: {e}\n\noutput:\n{got}");
         }
     }

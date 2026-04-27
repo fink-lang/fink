@@ -426,6 +426,7 @@ dependencies = [
  "wasmparser 0.247.0",
  "wasmprinter 0.247.0",
  "wasmtime",
+ "wast",
  "wat",
 ]
 
@@ -1707,14 +1708,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3f4091c56437e86f2b57fa2fac72c4f528957a605b3f44f7c0b3b19a17ac5ee"
 dependencies = [
  "wast",
-]
-
-[[package]]
-name = "wat-linker"
-version = "0.0.0"
-dependencies = [
- "wast",
- "wat",
 ]
 
 [[package]]
