@@ -1,4 +1,4 @@
-{test, skip, expect, equals, ir_wat, wat} = import '!fake'
+{test, skip, skip-ir, expect, equals, ir_wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -399,3 +399,40 @@ test 'set spread', fn:
       (data $d_0 "set")
     )
     ;; sm:XfgqALoBAMQBAMABAJABAGoAtgEAugEArAcAugEAxAEAwAEAkAEA3AEAxgEBSAGGAQEAAcYHALoBAMIBAL4BAJABANgBAMYBAQYBhgEBAAGECAC6AQC-AQCQAQFLA1IA1gEAwgEBUgGGAQENCWgBDgGIBQC6AQC-AQBqAOwFALoBAMABAJABAJYBAJABAGoAuAEApAcAugEAwAEAwAEAkAEAsgEAxgEBUxyAAQEAHOQHAI4BAJYBAI4BAJYBAI4BAK4BAMQBANABAMYBAQAcjgoAugEAvgEAjgEAsAEAwgEAegDIAQB6APIBAGoAtgEAxgEAuAEAogcAkAEAZABsAJABAIYCAGoAwAEA_AYAjgEArgEAygEAegDIAQBqAMABAA
+
+
+skip-ir test 'set destructure empty', fn:
+  expect ir_wat ƒink:
+    {set} = import 'std/set.fnk'
+    s = set _
+    match s:
+      []: 1
+      _: 0
+
+  | equals wat":
+    TODO
+
+
+skip-ir test 'set destructure non-empty', fn:
+  expect ir_wat ƒink:
+    {set} = import 'std/set.fnk'
+    s = set 1, 2, 3
+    match s:
+      []: 1
+      _: 0
+
+  | equals wat":
+    TODO
+
+
+skip-ir test 'set destructure peel one', fn:
+  expect ir_wat ƒink:
+    {set} = import 'std/set.fnk'
+    s = set 1, 2, 3
+    match s:
+      []: 0
+      [a, ..]: a + 100
+
+  | equals wat":
+    TODO
+

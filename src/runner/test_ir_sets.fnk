@@ -1,4 +1,4 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -222,3 +222,42 @@ test 'set non-disjoint via ><', fn:
 
   | equals ƒink:
     false
+
+
+skip-ir test 'set destructure empty', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set _
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ƒink:
+    'empty'
+
+
+skip-ir test 'set destructure non-empty', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set 1, 2, 3
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ƒink:
+    'non-empty'
+
+
+skip-ir test 'set destructure peel one', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set 1, 2, 3
+    match s:
+      []: 0
+      [a, ..]: a + 100
+
+  | equals ƒink:
+    102
