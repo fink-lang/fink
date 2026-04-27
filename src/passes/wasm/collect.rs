@@ -734,7 +734,7 @@ pub fn builtin_name(op: BuiltIn) -> &'static str {
     BuiltIn::Lte      => "op_lte",
     BuiltIn::Gt       => "op_gt",
     BuiltIn::Gte      => "op_gte",
-    BuiltIn::Cmp      => "op_cmp",
+    BuiltIn::Disjoint => "op_disjoint",
     BuiltIn::And      => "op_and",
     BuiltIn::Or       => "op_or",
     BuiltIn::Xor      => "op_xor",

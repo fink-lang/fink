@@ -95,7 +95,7 @@ pub enum Sym {
   // → unit (i.e. Fn_op_binary); Not is the only unary today
   // (anyref, anyref) → unit.
   OpPlus, OpMinus, OpMul, OpDiv, OpIntDiv, OpRem, OpIntMod,
-  OpEq, OpNeq, OpLt, OpLte, OpGt, OpGte,
+  OpEq, OpNeq, OpLt, OpLte, OpGt, OpGte, OpDisjoint,
   OpAnd, OpOr, OpXor, OpNot,
   OpShl, OpShr,
   OpRngex, OpRngin, OpIn, OpNotIn, OpDot,
@@ -197,6 +197,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Lte => &[Sym::OpLte],
     BuiltIn::Gt  => &[Sym::OpGt],
     BuiltIn::Gte => &[Sym::OpGte],
+    BuiltIn::Disjoint => &[Sym::OpDisjoint],
     // Logic / bitwise (polymorphic — runtime dispatches on bool vs int)
     BuiltIn::And => &[Sym::OpAnd],
     BuiltIn::Or  => &[Sym::OpOr],
@@ -280,6 +281,7 @@ pub struct Runtime {
   op_lte:     Option<FuncSym>,
   op_gt:      Option<FuncSym>,
   op_gte:     Option<FuncSym>,
+  op_disjoint: Option<FuncSym>,
   op_and:     Option<FuncSym>,
   op_or:      Option<FuncSym>,
   op_xor:     Option<FuncSym>,
@@ -376,6 +378,7 @@ impl Runtime {
       Sym::OpLte    => self.op_lte,
       Sym::OpGt     => self.op_gt,
       Sym::OpGte    => self.op_gte,
+      Sym::OpDisjoint => self.op_disjoint,
       Sym::OpAnd    => self.op_and,
       Sym::OpOr     => self.op_or,
       Sym::OpXor    => self.op_xor,
@@ -450,6 +453,7 @@ fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpLte           => ("rt/protocols.wat", "std/operators.fnk:op_lte"),
     Sym::OpGt            => ("rt/protocols.wat", "std/operators.fnk:op_gt"),
     Sym::OpGte           => ("rt/protocols.wat", "std/operators.fnk:op_gte"),
+    Sym::OpDisjoint      => ("rt/protocols.wat", "std/operators.fnk:op_disjoint"),
     Sym::OpAnd           => ("rt/protocols.wat", "std/operators.fnk:op_and"),
     Sym::OpOr            => ("rt/protocols.wat", "std/operators.fnk:op_or"),
     Sym::OpXor           => ("rt/protocols.wat", "std/operators.fnk:op_xor"),
@@ -772,7 +776,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
 /// All binary-protocol Syms — share `Fn_op_binary` signature.
 const BINARY_OPS: &[Sym] = &[
   Sym::OpPlus, Sym::OpMinus, Sym::OpMul, Sym::OpDiv, Sym::OpIntDiv, Sym::OpRem, Sym::OpIntMod,
-  Sym::OpEq, Sym::OpNeq, Sym::OpLt, Sym::OpLte, Sym::OpGt, Sym::OpGte,
+  Sym::OpEq, Sym::OpNeq, Sym::OpLt, Sym::OpLte, Sym::OpGt, Sym::OpGte, Sym::OpDisjoint,
   Sym::OpAnd, Sym::OpOr, Sym::OpXor,
   Sym::OpShl, Sym::OpShr,
   Sym::OpRngex, Sym::OpRngin, Sym::OpIn, Sym::OpNotIn, Sym::OpDot,
@@ -849,6 +853,7 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::OpLte    => &mut rt.op_lte,
     Sym::OpGt     => &mut rt.op_gt,
     Sym::OpGte    => &mut rt.op_gte,
+    Sym::OpDisjoint => &mut rt.op_disjoint,
     Sym::OpAnd    => &mut rt.op_and,
     Sym::OpOr     => &mut rt.op_or,
     Sym::OpXor    => &mut rt.op_xor,

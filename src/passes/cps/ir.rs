@@ -258,7 +258,7 @@ pub enum BuiltIn {
   // Arithmetic
   Add, Sub, Mul, Div, IntDiv, Mod, IntMod, DivMod, Pow,
   // Comparison
-  Eq, Neq, Lt, Lte, Gt, Gte, Cmp,
+  Eq, Neq, Lt, Lte, Gt, Gte, Disjoint,
   // Logical
   And, Or, Xor, Not,
   // Shifts / rotations
@@ -348,7 +348,7 @@ impl BuiltIn {
       "<="  => BuiltIn::Lte,
       ">"   => BuiltIn::Gt,
       ">="  => BuiltIn::Gte,
-      "><"  => BuiltIn::Cmp,
+      "><"  => BuiltIn::Disjoint,
       // Logical
       "and" => BuiltIn::And,
       "or"  => BuiltIn::Or,

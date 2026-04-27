@@ -1566,6 +1566,14 @@
             (local.get $val))))
       (return (call $std/str.wat:_str_fmt_list)))
 
+    ;; Try $Set — format as "set v1, v2, ..." (or "set _" for empty)
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref any) (ref $Set)
+            (local.get $val))))
+      (return (call $std/set.wat:repr)))
+
     ;; Unknown type — unreachable for now.
     (unreachable)
   )

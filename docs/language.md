@@ -206,10 +206,19 @@ a < b
 a <= b
 a == b
 a != b
-a >< b                   # disjoint — a and b have no element in common
+a >< b         # disjoint — a and b have no element in common
 
-1 < x < 10               # chained
+1 < x < 10     # chained
 ```
+
+### Ordering
+
+Shorthand for comparsion.
+
+```fink
+a <=> b  # returns LT, EQ, GT
+```
+
 
 ### Logical
 

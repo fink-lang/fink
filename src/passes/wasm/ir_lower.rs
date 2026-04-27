@@ -1168,6 +1168,7 @@ fn binary_op_sym(b: BuiltIn) -> Option<Sym> {
     BuiltIn::Lte    => Sym::OpLte,
     BuiltIn::Gt     => Sym::OpGt,
     BuiltIn::Gte    => Sym::OpGte,
+    BuiltIn::Disjoint => Sym::OpDisjoint,
     BuiltIn::And    => Sym::OpAnd,
     BuiltIn::Or     => Sym::OpOr,
     BuiltIn::Xor    => Sym::OpXor,

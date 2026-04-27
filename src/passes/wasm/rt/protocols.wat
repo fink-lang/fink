@@ -25,6 +25,19 @@
 
   (func $std/operators.fnk:op_plus (export "std/operators.fnk:op_plus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set — union
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (call $std/set.wat:op_plus
+          (ref.cast (ref $Set) (local.get $b)))
+        (local.get $cont)))
+
+    ;; Default: $Num add
     (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.add
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
@@ -33,6 +46,19 @@
 
   (func $std/operators.fnk:op_minus (export "std/operators.fnk:op_minus")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set — difference
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (call $std/set.wat:op_minus
+          (ref.cast (ref $Set) (local.get $b)))
+        (local.get $cont)))
+
+    ;; Default: $Num sub
     (return_call $std/list.wat:apply_1
       (struct.new $Num (f64.sub
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
@@ -118,7 +144,8 @@
 
   ;; Polymorphic ==: dispatch on $a's type.
   ;;   $Num    → f64.eq
-  ;;   $Str → str_op_eq
+  ;;   $Str    → str_op_eq
+  ;;   $Set    → set:op_eq
   (func $std/operators.fnk:op_eq (export "std/operators.fnk:op_eq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
@@ -147,11 +174,23 @@
           (ref.cast (ref $Str) (local.get $b))))
         (local.get $cont)))
 
+    ;; Try $Set
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_eq
+          (ref.cast (ref $Set) (local.get $b))))
+        (local.get $cont)))
+
     (unreachable))
 
   ;; Polymorphic !=: dispatch on $a's type.
   ;;   $Num    → f64.ne
-  ;;   $Str → !str_op_eq
+  ;;   $Str    → !str_op_eq
+  ;;   $Set    → !set:op_eq
   (func $std/operators.fnk:op_neq (export "std/operators.fnk:op_neq")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
@@ -180,10 +219,53 @@
           (ref.cast (ref $Str) (local.get $b)))))
         (local.get $cont)))
 
+    ;; Try $Set
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (i32.eqz (call $std/set.wat:op_eq
+          (ref.cast (ref $Set) (local.get $b)))))
+        (local.get $cont)))
+
+    (unreachable))
+
+  ;; Disjoint predicate: true iff a and b have no common elements.
+  ;; Partial-order escape hatch — for sets where the standard ordering
+  ;; relations don't apply.
+  ;;   $Set    → set:op_disjoint
+  (func $std/operators.fnk:op_disjoint (export "std/operators.fnk:op_disjoint")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_disjoint
+          (ref.cast (ref $Set) (local.get $b))))
+        (local.get $cont)))
+
     (unreachable))
 
   (func $std/operators.fnk:op_lt (export "std/operators.fnk:op_lt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set — strict subset
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_lt
+          (ref.cast (ref $Set) (local.get $b))))
+        (local.get $cont)))
+
     (return_call $std/list.wat:apply_1
       (ref.i31 (f64.lt
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
@@ -192,6 +274,18 @@
 
   (func $std/operators.fnk:op_lte (export "std/operators.fnk:op_lte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set — subset
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_lte
+          (ref.cast (ref $Set) (local.get $b))))
+        (local.get $cont)))
+
     (return_call $std/list.wat:apply_1
       (ref.i31 (f64.le
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
@@ -200,6 +294,18 @@
 
   (func $std/operators.fnk:op_gt (export "std/operators.fnk:op_gt")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set — strict superset
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_gt
+          (ref.cast (ref $Set) (local.get $b))))
+        (local.get $cont)))
+
     (return_call $std/list.wat:apply_1
       (ref.i31 (f64.gt
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
@@ -208,6 +314,18 @@
 
   (func $std/operators.fnk:op_gte (export "std/operators.fnk:op_gte")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set — superset
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_gte
+          (ref.cast (ref $Set) (local.get $b))))
+        (local.get $cont)))
+
     (return_call $std/list.wat:apply_1
       (ref.i31 (f64.ge
         (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
@@ -239,6 +357,17 @@
   (func $std/operators.fnk:op_and (export "std/operators.fnk:op_and")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
+    ;; Try $Set — intersect
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (call $std/set.wat:op_and
+          (ref.cast (ref $Set) (local.get $b)))
+        (local.get $cont)))
+
     ;; Try $Num → delegate to int_op_and
     (block $not_num
       (block $is_num (result (ref $Num))
@@ -259,6 +388,17 @@
   (func $std/operators.fnk:op_or (export "std/operators.fnk:op_or")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
 
+    ;; Try $Set — union
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (call $std/set.wat:op_or
+          (ref.cast (ref $Set) (local.get $b)))
+        (local.get $cont)))
+
     ;; Try $Num → delegate to int_op_or
     (block $not_num
       (block $is_num (result (ref $Num))
@@ -278,6 +418,17 @@
 
   (func $std/operators.fnk:op_xor (export "std/operators.fnk:op_xor")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+
+    ;; Try $Set — symmetric difference
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $a))))
+      (return_call $std/list.wat:apply_1
+        (call $std/set.wat:op_xor
+          (ref.cast (ref $Set) (local.get $b)))
+        (local.get $cont)))
 
     ;; Try $Num → delegate to int_op_xor
     (block $not_num
@@ -375,6 +526,7 @@
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
+    (local $set (ref $Set))
 
     ;; Try $Range
     (block $not_range
@@ -402,6 +554,19 @@
           (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
 
+    ;; Try $Set
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $b))))
+      (local.set $set)
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_in
+          (local.get $set)
+          (ref.cast (ref eq) (local.get $a))))
+        (local.get $cont)))
+
     (unreachable))
 
   ;; op_notin(val, container, cont) → bool
@@ -409,6 +574,7 @@
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (local $range (ref $Range))
     (local $rec (ref $RecImpl))
+    (local $set (ref $Set))
 
     ;; Try $Range
     (block $not_range
@@ -433,6 +599,19 @@
       (return_call $std/list.wat:apply_1
         (ref.i31 (call $std/dict.wat:op_not_in
           (local.get $rec)
+          (ref.cast (ref eq) (local.get $a))))
+        (local.get $cont)))
+
+    ;; Try $Set
+    (block $not_set
+      (block $is_set (result (ref $Set))
+        (br $not_set
+          (br_on_cast $is_set (ref null any) (ref $Set)
+            (local.get $b))))
+      (local.set $set)
+      (return_call $std/list.wat:apply_1
+        (ref.i31 (call $std/set.wat:op_notin
+          (local.get $set)
           (ref.cast (ref eq) (local.get $a))))
         (local.get $cont)))
 
