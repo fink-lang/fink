@@ -73,6 +73,11 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let mut pub_globals: HashMap<CpsId, (GlobalSym, String)> = HashMap::new();
   for (id, name) in &pubs {
     let qualified = format!("{fqn_prefix}{name}");
+    // TODO: drop the WASM-level export once the runner stops
+    // consuming user globals via `instance.get_global(name)`. The
+    // export is currently the only path for the host to fetch
+    // `<entry>:main`. Plan: route via `interop/rust.wat` (host-side
+    // registry lookup) — see scratch plan.
     let sym = add_global(
       &mut frag,
       val_anyref(true),

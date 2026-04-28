@@ -9,19 +9,6 @@ test 'single binding export', fn:
     foo = 1
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_1 (ref null any))
         (local $foo_0 (ref null any))
@@ -44,7 +31,7 @@ test 'single binding export', fn:
       (data $d_0 "")
       (data $d_1 "foo")
     )
-    ;; sm:Cf4XAI4BAQADiAEAUgCIAQCKAQDAAQBqALoBAA
+    ;; sm:CdoEAI4BAQADiAEAUgCIAQCKAQDAAQBqALoBAA
 
 
 
@@ -54,19 +41,6 @@ test 'let binding', fn:
     x
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $x_1 (ref null any))
         (local $x_0 (ref null any))
@@ -89,7 +63,7 @@ test 'let binding', fn:
       (data $d_0 "")
       (data $d_1 "x")
     )
-    ;; sm:CfoXAI4BAQABhgEASgCIAQCKAQC8AQBqALYBAA
+    ;; sm:CdYEAI4BAQABhgEASgCIAQCKAQC8AQBqALYBAA
 
 
 
@@ -100,15 +74,6 @@ test 'multiple let bindings used', fn:
     x + y
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "rt/protocols.wat" "std/operators.fnk:op_plus" (func $std/operators.fnk:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $x_0 (ref null any))
@@ -139,7 +104,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:DJITAI4BAQABhAEASgCIAQCKAQC8AQEMAYQBAEoAiAEAigEAvAEBDAU
+    ;; sm:DOgFAI4BAQABhAEASgCIAQCKAQC8AQEMAYQBAEoAiAEAigEAvAEBDAU
 
 
 
@@ -150,23 +115,6 @@ test 'binding rhs is a call', fn:
     x = add 1, 2
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_tail" (func $std/fn.fnk:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "std/operators.fnk:op_plus" (func $std/operators.fnk:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_5 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_6 (ref null any))
         (local $a_2 (ref null any))
@@ -249,7 +197,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:KOQcAI4BAJYBAI4BAJYBAI4BAR4FpgcAugEAvgEAkAEBDAFOAEoAiAEAigEAvAEAagC2AQDMBQCQAQBcARABhgEBBgGGAQBqALgBALgBALgBANQJAI4BAHoBPwPCAQBSAIgBAIoBAMABAK4BAMoBAHoAyAEAagDAAQA
+    ;; sm:KKwDAI4BAJYBAI4BAJYBAI4BAR4FpgcAugEAvgEAkAEBDAFOAEoAiAEAigEAvAEAagC2AQDMBQCQAQBcARABhgEBBgGGAQBqALgBALgBALgBANQJAI4BAHoBPwPCAQBSAIgBAIoBAMABAK4BAMoBAHoAyAEAagDAAQA
 
 
 
@@ -259,29 +207,7 @@ test 'top-level rec destructure then fn using binding', fn:
     foo = fn a: x + a
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_tail" (func $std/fn.fnk:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "std/operators.fnk:op_plus" (func $std/operators.fnk:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "std/operators.fnk:is_rec_like" (func $std/operators.fnk:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:pop" (func $std/rec.fnk:pop (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "rt/protocols.wat" "std/interop.fnk:panic" (func $std/interop.fnk:panic (type $rt/types.wat:Fn2)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
-      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
+      (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
       (func $v_81 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $x_82 (ref null any))
@@ -440,6 +366,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:TbYoALoBAL4BAJABAJYBAI4BATQFogkAugEAvgEAkAEBMQFOAK4BAMIBARoDUgBSAIgBAIoBAMABAGoAugEA5AQAugEAvgEAagDsBQC6AQDAAQCQAQCWAQCQAQBqALgBAKQHALoBAMABAMABAJABALIBAMYBARsNgAEBAA3mBwCQAQCWAQCQAQCWAQCOAQCwAQDCAQDUAQDGAQEADYwKALoBAL4BAI4BALABAMIBAHoAyAEAegDyAQBqALYBAMYBALgBAPwEAJABAQwHWgECAX4BBgKGAQEFBbYHAI4BAK4BAMoBAHoAyAEAagDAAQA
+    ;; sm:TZ4FALoBAL4BAJABAJYBAI4BATQFogkAugEAvgEAkAEBMQFOAK4BAMIBARoDUgBSAIgBAIoBAMABAGoAugEA5AQAugEAvgEAagDsBQC6AQDAAQCQAQCWAQCQAQBqALgBAKQHALoBAMABAMABAJABALIBAMYBARsNgAEBAA3mBwCQAQCWAQCQAQCWAQCOAQCwAQDCAQDUAQDGAQEADYwKALoBAL4BAI4BALABAMIBAHoAyAEAegDyAQBqALYBAMYBALgBAPwEAJABAQwHWgECAX4BBgKGAQEFBbYHAI4BAK4BAMoBAHoAyAEAagDAAQA
 
 

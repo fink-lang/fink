@@ -285,12 +285,12 @@ pub struct Runtime {
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
   varargs: Option<TypeSym>,
-  // locally-declared function signature types (structural)
-  fn_any_to_any:  Option<TypeSym>,  // (anyref) -> anyref          -- args_head
-  fn_nil_to_list: Option<TypeSym>,  // () -> anyref                -- args_empty
-  fn_prepend_any: Option<TypeSym>,  // (anyref, anyref) -> anyref  -- args_prepend
-  fn_op_binary:   Option<TypeSym>,  // (anyref, anyref, anyref)    -- op_plus/eq/...
-  fn_op_unary:    Option<TypeSym>,  // (anyref, anyref)            -- op_not
+  // Locally-declared function signature type used by the
+  // virtual-stdlib import codegen path in lower (still allocates
+  // `import_func` placeholders for source-named accessors). To be
+  // removed when those accessors get promoted to first-class Sym
+  // variants.
+  fn_nil_to_list: Option<TypeSym>,  // () -> anyref
   // calling-convention funcs
   args_head:    Option<FuncSym>,
   args_tail:    Option<FuncSym>,
@@ -324,25 +324,15 @@ pub struct Runtime {
   is_rec_like: Option<FuncSym>,
   seq_pop:     Option<FuncSym>,
   // string constructors
-  fn_str:       Option<TypeSym>,   // (i32, i32) -> anyref
-  fn_str_empty: Option<TypeSym>,   // () -> anyref
   str_:         Option<FuncSym>,
   str_empty:    Option<FuncSym>,
-  // 4-arg rec primitives (`(any, any, any, any) -> ()`).
-  fn_quaternary: Option<TypeSym>,
+  // 4-arg rec primitives.
   rec_put:      Option<FuncSym>,
   rec_pop:      Option<FuncSym>,
-  // Empty-rec singleton — `() -> anyref`.
   rec_empty:    Option<FuncSym>,
-  // Direct-style rec field setter — `(any, any, any) -> any`. Shared
-  // signature with op_dot today (same arity/result shape) but kept
-  // separate for clarity.
-  fn_rec_set_field: Option<TypeSym>,
   rec_set_field: Option<FuncSym>,
   panic:        Option<FuncSym>,
   str_fmt:      Option<FuncSym>,
-  // 5-arg str template matcher — `(any, any, any, any, any) -> ()`.
-  fn_quinary:   Option<TypeSym>,
   str_match:    Option<FuncSym>,
   // Scheduling — all `(any, any) -> ()` (Fn_op_unary shape).
   yield_:       Option<FuncSym>,
@@ -465,7 +455,7 @@ impl Runtime {
 /// * `interop/*` — host bridge. Target-selected at link time.
 /// * `./*`    — user's relative imports.
 /// * `https://...`, `reg:*` — future third-party packages.
-fn import_key(sym: Sym) -> (&'static str, &'static str) {
+pub(super) fn import_key(sym: Sym) -> (&'static str, &'static str) {
   match sym {
     Sym::Num             => ("rt/types.wat",     "Num"),
     Sym::Fn2             => ("rt/types.wat",     "Fn2"),
@@ -545,25 +535,23 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // literal appears (which is the only place we construct $Num
   // values via `struct.new`). Operators take anyref operands — they
   // don't need `$Num` unless there's a numeric literal in scope.
+  // Runtime value types — referenced via `TypeSym::Runtime(sym)`,
+  // resolved by emit at byte time. No fragment-level placeholder
+  // allocation; the Sym variant is the reference.
   if needed.contains(&Sym::Num) {
-    let (m, n) = import_key(Sym::Num);
-    rt.num = Some(ty_import(frag, m, n, AbsHeap::Any));
+    rt.num = Some(TypeSym::Runtime(Sym::Num));
   }
   if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
-    let (m, n) = import_key(Sym::Fn2);
-    rt.fn2 = Some(ty_import(frag, m, n, AbsHeap::Func));
+    rt.fn2 = Some(TypeSym::Runtime(Sym::Fn2));
   }
   if needed.contains(&Sym::Captures) {
-    let (m, n) = import_key(Sym::Captures);
-    rt.captures = Some(ty_import(frag, m, n, AbsHeap::Any));
+    rt.captures = Some(TypeSym::Runtime(Sym::Captures));
   }
   if needed.contains(&Sym::Closure) {
-    let (m, n) = import_key(Sym::Closure);
-    rt.closure = Some(ty_import(frag, m, n, AbsHeap::Any));
+    rt.closure = Some(TypeSym::Runtime(Sym::Closure));
   }
   if needed.contains(&Sym::VarArgs) {
-    let (m, n) = import_key(Sym::VarArgs);
-    rt.varargs = Some(ty_import(frag, m, n, AbsHeap::Any));
+    rt.varargs = Some(TypeSym::Runtime(Sym::VarArgs));
   }
 
   // Function-signature types and function imports.
@@ -580,265 +568,84 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // signature of `head_any` by shape.
   let anyref_n = val_anyref(true);
 
-  // Name convention: each function gets its own signature type
-  // `$<url>:Fn_<fnname>` — monomorphic-first, mirrors how type
-  // inference would start before generalisation. Reusable
-  // calling-convention signatures (currently `rt/types.wat:Fn2`)
-  // stay as value-type imports.
-  if needed.contains(&Sym::ArgsHead) {
-    let sig = ty_func(frag,
-      vec![anyref_n.clone()],
-      vec![anyref_n.clone()],
-      "std/list.wat:Fn_args_head");
-    rt.fn_any_to_any = Some(sig);
-    let (m, n) = import_key(Sym::ArgsHead);
-    rt.args_head = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::ArgsTail) {
-    // Shares signature shape `(anyref) -> anyref` with args_head; declare
-    // the local sig type only if args_head didn't already (i.e. the program
-    // peels but doesn't need a head — unlikely in practice, but keeps the
-    // declarations independent).
-    let sig = if let Some(s) = rt.fn_any_to_any { s } else {
-      let s = ty_func(frag,
-        vec![anyref_n.clone()],
-        vec![anyref_n.clone()],
-        "std/list.wat:Fn_args_tail");
-      rt.fn_any_to_any = Some(s);
-      s
-    };
-    let (m, n) = import_key(Sym::ArgsTail);
-    rt.args_tail = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::ArgsEmpty) {
-    let sig = ty_func(frag,
-      vec![],
-      vec![anyref_n.clone()],
-      "std/list.wat:Fn_args_empty");
-    rt.fn_nil_to_list = Some(sig);
-    let (m, n) = import_key(Sym::ArgsEmpty);
-    rt.args_empty = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::ArgsPrepend) {
-    let sig = ty_func(frag,
-      vec![anyref_n.clone(), anyref_n.clone()],
-      vec![anyref_n.clone()],
-      "std/list.wat:Fn_args_prepend");
-    rt.fn_prepend_any = Some(sig);
-    let (m, n) = import_key(Sym::ArgsPrepend);
-    rt.args_prepend = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::ArgsConcat) {
-    // Same `(any, any) -> any` shape as args_prepend.
-    let sig = if let Some(s) = rt.fn_prepend_any { s } else {
-      let s = ty_func(frag,
-        vec![anyref_n.clone(), anyref_n.clone()],
-        vec![anyref_n.clone()],
-        "std/list.wat:Fn_args_concat");
-      rt.fn_prepend_any = Some(s);
-      s
-    };
-    let (m, n) = import_key(Sym::ArgsConcat);
-    rt.args_concat = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::Apply) {
-    // `_apply`'s signature is genuinely `rt/types.wat:Fn2` — reuse
-    // the shared-identity type import directly.
-    let (m, n) = import_key(Sym::Apply);
-    rt.apply = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"), m, n));
-  }
-  // Polymorphic protocol operators — all share one of two signature
-  // types. Each operand is `anyref`; operand boxing (e.g. `$Num`)
-  // happens at the user call site. Declare the shared signature
-  // types once, then import each operator that the program uses.
-  if any_binary_op_needed(usage) {
-    let sig = ty_func(frag,
-      vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
-      vec![],
-      "rt/protocols.wat:Fn_op_binary");
-    rt.fn_op_binary = Some(sig);
-  }
-  if any_unary_op_needed(usage) {
-    let sig = ty_func(frag,
-      vec![anyref_n.clone(), anyref_n.clone()],
-      vec![],
-      "rt/protocols.wat:Fn_op_unary");
-    rt.fn_op_unary = Some(sig);
-  }
+  // Runtime functions — referenced via `FuncSym::Runtime(sym)`. No
+  // local function-signature type declaration needed: emit resolves
+  // each Sym to its merged-binary func index, which already carries
+  // the correct signature in the runtime's type section.
+  //
+  // The sole remaining local-sig allocation is `fn_nil_to_list`,
+  // consumed by the virtual-stdlib `import` codegen path in lower —
+  // that path still uses the placeholder mechanism for accessor
+  // functions whose names come from source. To be removed when those
+  // accessors get promoted to first-class `Sym` variants.
+  if needed.contains(&Sym::ArgsHead)    { rt.args_head    = Some(FuncSym::Runtime(Sym::ArgsHead)); }
+  if needed.contains(&Sym::ArgsTail)    { rt.args_tail    = Some(FuncSym::Runtime(Sym::ArgsTail)); }
+  if needed.contains(&Sym::ArgsEmpty)   { rt.args_empty   = Some(FuncSym::Runtime(Sym::ArgsEmpty)); }
+  if needed.contains(&Sym::ArgsPrepend) { rt.args_prepend = Some(FuncSym::Runtime(Sym::ArgsPrepend)); }
+  if needed.contains(&Sym::ArgsConcat)  { rt.args_concat  = Some(FuncSym::Runtime(Sym::ArgsConcat)); }
+  if needed.contains(&Sym::Apply)       { rt.apply        = Some(FuncSym::Runtime(Sym::Apply)); }
 
   for sym in BINARY_OPS {
     if needed.contains(sym) {
-      let sig = rt.fn_op_binary.expect("fn_op_binary must be declared");
-      let (m, n) = import_key(*sym);
-      let f = import_func(frag, sig, m, n);
-      set_op(&mut rt, *sym, f);
+      set_op(&mut rt, *sym, FuncSym::Runtime(*sym));
     }
   }
   for sym in UNARY_OPS {
     if needed.contains(sym) {
-      let sig = rt.fn_op_unary.expect("fn_op_unary must be declared");
-      let (m, n) = import_key(*sym);
-      let f = import_func(frag, sig, m, n);
-      set_op(&mut rt, *sym, f);
+      set_op(&mut rt, *sym, FuncSym::Runtime(*sym));
     }
   }
-
-  // Seq/rec primitives that share the `Fn_op_binary` signature shape
-  // (`(any, any, any) -> ()`). Declare lazily — `Fn_op_binary` may
-  // already exist from a binary operator declaration; otherwise emit
-  // a fresh signature type the first time we need it.
   for sym in TERNARY_PRIMITIVES {
-    if !needed.contains(sym) { continue; }
-    let sig = if let Some(s) = rt.fn_op_binary { s } else {
-      let s = ty_func(frag,
-        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
-        vec![],
-        "rt/protocols.wat:Fn_op_binary");
-      rt.fn_op_binary = Some(s);
-      s
-    };
-    let (m, n) = import_key(*sym);
-    let f = import_func(frag, sig, m, n);
-    set_ternary_primitive(&mut rt, *sym, f);
+    if needed.contains(sym) {
+      set_ternary_primitive(&mut rt, *sym, FuncSym::Runtime(*sym));
+    }
   }
 
-  if needed.contains(&Sym::Str) {
-    let sig = ty_func(frag,
-      vec![val_i32(), val_i32()],
-      vec![anyref_n.clone()],
-      "std/str.wat:Fn_str");
-    rt.fn_str = Some(sig);
-    let (m, n) = import_key(Sym::Str);
-    rt.str_ = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::StrEmpty) {
-    let sig = ty_func(frag,
-      vec![],
-      vec![anyref_n.clone()],
-      "std/str.wat:Fn_str_empty");
-    rt.fn_str_empty = Some(sig);
-    let (m, n) = import_key(Sym::StrEmpty);
-    rt.str_empty = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::StrFmt) {
-    // Same `(any, any) -> ()` shape as Fn_op_unary; reuse if present.
-    let sig = if let Some(s) = rt.fn_op_unary { s } else {
-      let s = ty_func(frag,
-        vec![anyref_n.clone(), anyref_n.clone()],
-        vec![],
-        "rt/protocols.wat:Fn_op_unary");
-      rt.fn_op_unary = Some(s);
-      s
-    };
-    let (m, n) = import_key(Sym::StrFmt);
-    rt.str_fmt = Some(import_func(frag, sig, m, n));
-  }
-  if needed.contains(&Sym::StrMatch) {
-    // 5-arg `(any, any, any, any, any) -> ()`.
-    let sig = ty_func(frag,
-      vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone(),
-           anyref_n.clone(), anyref_n.clone()],
-      vec![],
-      "std/str.wat:Fn_str_match");
-    rt.fn_quinary = Some(sig);
-    let (m, n) = import_key(Sym::StrMatch);
-    rt.str_match = Some(import_func(frag, sig, m, n));
-  }
-  // Scheduling / channel primitives — all share `Fn_op_unary` shape.
+  if needed.contains(&Sym::Str)      { rt.str_      = Some(FuncSym::Runtime(Sym::Str)); }
+  if needed.contains(&Sym::StrEmpty) { rt.str_empty = Some(FuncSym::Runtime(Sym::StrEmpty)); }
+  if needed.contains(&Sym::StrFmt)   { rt.str_fmt   = Some(FuncSym::Runtime(Sym::StrFmt)); }
+  if needed.contains(&Sym::StrMatch) { rt.str_match = Some(FuncSym::Runtime(Sym::StrMatch)); }
+
   for sym in SCHED_PRIMITIVES {
-    if !needed.contains(sym) { continue; }
-    let sig = if let Some(s) = rt.fn_op_unary { s } else {
-      let s = ty_func(frag,
-        vec![anyref_n.clone(), anyref_n.clone()],
-        vec![],
-        "rt/protocols.wat:Fn_op_unary");
-      rt.fn_op_unary = Some(s);
-      s
-    };
-    let (m, n) = import_key(*sym);
-    let f = import_func(frag, sig, m, n);
-    set_sched_primitive(&mut rt, *sym, f);
+    if needed.contains(sym) {
+      set_sched_primitive(&mut rt, *sym, FuncSym::Runtime(*sym));
+    }
   }
 
-  // 4-arg rec primitives — share `(any, any, any, any) -> ()` shape.
-  if needed.contains(&Sym::RecPut) || needed.contains(&Sym::RecPop) {
-    let sig = ty_func(frag,
-      vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
-      vec![],
-      "rt/protocols.wat:Fn_op_quaternary");
-    rt.fn_quaternary = Some(sig);
-    if needed.contains(&Sym::RecPut) {
-      let (m, n) = import_key(Sym::RecPut);
-      rt.rec_put = Some(import_func(frag, sig, m, n));
-    }
-    if needed.contains(&Sym::RecPop) {
-      let (m, n) = import_key(Sym::RecPop);
-      rt.rec_pop = Some(import_func(frag, sig, m, n));
-    }
-  }
-  if needed.contains(&Sym::Panic) {
-    // `panic` is a `Fn2` — same shape as `_apply` etc.
-    let (m, n) = import_key(Sym::Panic);
-    rt.panic = Some(import_func(frag, rt.fn2.expect("Fn2 must be declared"), m, n));
-  }
+  if needed.contains(&Sym::RecPut)  { rt.rec_put = Some(FuncSym::Runtime(Sym::RecPut)); }
+  if needed.contains(&Sym::RecPop)  { rt.rec_pop = Some(FuncSym::Runtime(Sym::RecPop)); }
+  if needed.contains(&Sym::Panic)   { rt.panic   = Some(FuncSym::Runtime(Sym::Panic)); }
+
   if needed.contains(&Sym::RecEmpty) {
-    // `rec_new : () -> anyref` — same shape as `args_empty`.
-    let sig = if let Some(s) = rt.fn_nil_to_list { s } else {
+    // `rec_new : () -> anyref` — virtual-stdlib `import` codegen
+    // path needs this signature in the user fragment to type the
+    // accessor placeholder funcs (lower.rs `import_func` site).
+    if rt.fn_nil_to_list.is_none() {
       let s = ty_func(frag,
         vec![],
         vec![anyref_n.clone()],
         "std/dict.wat:Fn_rec_new");
       rt.fn_nil_to_list = Some(s);
-      s
-    };
-    let (m, n) = import_key(Sym::RecEmpty);
-    rt.rec_empty = Some(import_func(frag, sig, m, n));
+    }
+    rt.rec_empty = Some(FuncSym::Runtime(Sym::RecEmpty));
   }
 
-  if needed.contains(&Sym::RecSetField) {
-    // `_rec_set_field : (any, any, any) -> any` — direct-style helper
-    // used by the BuiltIn::Import handler to build the import rec.
-    let sig = if let Some(s) = rt.fn_rec_set_field { s } else {
-      let s = ty_func(frag,
-        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
-        vec![anyref_n.clone()],
-        "std/dict.wat:Fn_rec_set_field");
-      rt.fn_rec_set_field = Some(s);
-      s
-    };
-    let (m, n) = import_key(Sym::RecSetField);
-    rt.rec_set_field = Some(import_func(frag, sig, m, n));
-  }
-
-  if needed.contains(&Sym::ModulesPub) {
-    // `pub : (mod_url, name, val) -> ()` — same `Fn_op_binary` shape.
-    // Direct call (no CPS cont); registers the binding in the module's
-    // exports rec in the runtime registry.
-    let sig = if let Some(s) = rt.fn_op_binary { s } else {
-      let s = ty_func(frag,
-        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
-        vec![],
-        "rt/protocols.wat:Fn_op_binary");
-      rt.fn_op_binary = Some(s);
-      s
-    };
-    let (m, n) = import_key(Sym::ModulesPub);
-    rt.modules_pub = Some(import_func(frag, sig, m, n));
-  }
-
+  if needed.contains(&Sym::RecSetField) { rt.rec_set_field  = Some(FuncSym::Runtime(Sym::RecSetField)); }
+  if needed.contains(&Sym::ModulesPub)  { rt.modules_pub    = Some(FuncSym::Runtime(Sym::ModulesPub)); }
   if needed.contains(&Sym::ModulesImport) {
-    // `import : (url, mod_clos, cont) -> ()` — same `Fn_op_binary`
-    // shape. CPS — tail-applies cont with the producer's exports rec.
-    let sig = if let Some(s) = rt.fn_op_binary { s } else {
+    rt.modules_import = Some(FuncSym::Runtime(Sym::ModulesImport));
+    // Virtual-stdlib `import` codegen path in lower allocates
+    // `import_func` placeholders for accessor functions (their names
+    // come from source, not a Sym variant), so the user fragment
+    // needs the `() -> anyref` signature locally to type them.
+    // Remove when accessors get promoted to first-class Sym variants.
+    if rt.fn_nil_to_list.is_none() {
       let s = ty_func(frag,
-        vec![anyref_n.clone(), anyref_n.clone(), anyref_n.clone()],
         vec![],
-        "rt/protocols.wat:Fn_op_binary");
-      rt.fn_op_binary = Some(s);
-      s
-    };
-    let (m, n) = import_key(Sym::ModulesImport);
-    rt.modules_import = Some(import_func(frag, sig, m, n));
+        vec![anyref_n.clone()],
+        "std/dict.wat:Fn_rec_new");
+      rt.fn_nil_to_list = Some(s);
+    }
   }
 
   rt
@@ -852,10 +659,6 @@ const BINARY_OPS: &[Sym] = &[
   Sym::OpShl, Sym::OpShr,
   Sym::OpRngex, Sym::OpRngin, Sym::OpIn, Sym::OpNotIn, Sym::OpDot,
 ];
-
-fn any_binary_op_needed(usage: &RuntimeUsage) -> bool {
-  BINARY_OPS.iter().any(|s| usage.used.contains(s))
-}
 
 /// All unary-protocol Syms — share `Fn_op_unary` signature.
 const UNARY_OPS: &[Sym] = &[Sym::OpNot, Sym::OpEmpty];
@@ -901,11 +704,6 @@ fn set_ternary_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
   };
   *slot = Some(f);
 }
-
-fn any_unary_op_needed(usage: &RuntimeUsage) -> bool {
-  UNARY_OPS.iter().any(|s| usage.used.contains(s))
-}
-
 
 /// Store the handle for a declared binary-protocol Sym back into the
 /// Runtime's typed slot. Mirrors the enum spread in `Runtime::op`.

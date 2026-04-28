@@ -51,23 +51,50 @@ use wasm_encoder::{
 };
 
 use super::ir::*;
+use super::runtime_contract::import_key;
 
-/// Extract the Local index from a `TypeSym`. Runtime variants are
-/// not yet supported in emit's per-fragment remap arrays — the
-/// transition to runtime-via-Sym is incomplete; until then, every
-/// IR-emitted TypeSym is a Local.
-fn type_local_idx(sym: TypeSym) -> u32 {
+/// Resolve a `TypeSym` to its final merged-binary type index.
+///
+/// `Local(i)` consults the per-fragment `type_remap` (built at the
+/// top of `emit_fragment`). `Runtime(sym)` consults the runtime's
+/// type-name table — runtime types live at fixed indices in the
+/// merged binary, no per-fragment remap needed.
+fn resolve_type(sym: TypeSym, type_remap: &[u32]) -> u32 {
   match sym {
-    TypeSym::Local(i) => i,
-    TypeSym::Runtime(s) => panic!("emit: TypeSym::Runtime({:?}) not yet handled", s),
+    TypeSym::Local(i) => type_remap[i as usize],
+    TypeSym::Runtime(s) => {
+      let rt = runtime();
+      let (m, n) = import_key(s);
+      let qualified = format!("{m}:{n}");
+      rt.type_by_name.get(&qualified).copied()
+        .or_else(|| rt.type_by_name.get(n).copied())
+        .unwrap_or_else(|| panic!(
+          "emit: runtime type `{:?}` ({}) not found in runtime type-name table",
+          s, qualified))
+    }
   }
 }
 
-/// Extract the Local index from a `FuncSym`. See `type_local_idx`.
-fn func_local_idx(sym: FuncSym) -> u32 {
+/// Resolve a `FuncSym` to its final merged-binary func index.
+///
+/// `Local(i)` consults the per-fragment `func_remap`. `Runtime(sym)`
+/// consults the runtime's export-by-name table.
+fn resolve_func(sym: FuncSym, func_remap: &[u32]) -> u32 {
   match sym {
-    FuncSym::Local(i) => i,
-    FuncSym::Runtime(s) => panic!("emit: FuncSym::Runtime({:?}) not yet handled", s),
+    FuncSym::Local(i) => func_remap[i as usize],
+    FuncSym::Runtime(s) => {
+      let rt = runtime();
+      let (m, n) = import_key(s);
+      let qualified = format!("{m}:{n}");
+      let (kind, idx) = *rt.export_by_name.get(&qualified)
+        .or_else(|| rt.export_by_name.get(n))
+        .unwrap_or_else(|| panic!(
+          "emit: runtime func `{:?}` ({}) not found in runtime export table",
+          s, qualified));
+      assert_eq!(kind, ExportKind::Func,
+        "emit: expected func export for `{:?}`, got {:?}", s, kind);
+      idx
+    }
   }
 }
 
@@ -462,7 +489,7 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     func_sec.function(sig);
   }
   for (_, f) in &user_local_funcs {
-    func_sec.function(type_remap[type_local_idx(f.sig) as usize]);
+    func_sec.function(resolve_type(f.sig, &type_remap));
   }
 
   // Memory: runtime has none; user fragment brings one page.
@@ -498,8 +525,8 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
           shared: false,
           ty: abs_heap_ir(*ht),
         }),
-        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(type_remap[type_local_idx(*ts) as usize])),
-        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(func_remap[func_local_idx(*fs) as usize]),
+        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(resolve_type(*ts, &type_remap))),
+        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(resolve_func(*fs, &func_remap)),
         GlobalInit::I32Const(v) => ConstExpr::i32_const(*v),
         GlobalInit::F64Const(v) => ConstExpr::f64_const((*v).into()),
       };
@@ -674,14 +701,14 @@ fn emit_instr(
       for fld in fields {
         emit_operand(func, fld, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::StructNew(type_remap[type_local_idx(*ty) as usize]));
+      func.instruction(&Instruction::StructNew(resolve_type(*ty, type_remap)));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::Call { target, args, into } => {
       for a in args {
         emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::Call(func_remap[func_local_idx(*target) as usize]));
+      func.instruction(&Instruction::Call(resolve_func(*target, func_remap)));
       if let Some(l) = into {
         func.instruction(&Instruction::LocalSet(l.0));
       }
@@ -690,7 +717,7 @@ fn emit_instr(
       for a in args {
         emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::ReturnCall(func_remap[func_local_idx(*target) as usize]));
+      func.instruction(&Instruction::ReturnCall(resolve_func(*target, func_remap)));
     }
     InstrKind::RefI31 { src, into } => {
       emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
@@ -698,16 +725,16 @@ fn emit_instr(
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefFunc { func: fsym, into } => {
-      func.instruction(&Instruction::RefFunc(func_remap[func_local_idx(*fsym) as usize]));
+      func.instruction(&Instruction::RefFunc(resolve_func(*fsym, func_remap)));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefNullConcrete { ty, into } => {
-      func.instruction(&Instruction::RefNull(HeapType::Concrete(type_remap[type_local_idx(*ty) as usize])));
+      func.instruction(&Instruction::RefNull(HeapType::Concrete(resolve_type(*ty, type_remap))));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNull { ty, src, into } => {
       emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(type_remap[type_local_idx(*ty) as usize])));
+      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(resolve_type(*ty, type_remap))));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::ArrayNewFixed { ty, size, elems, into } => {
@@ -715,7 +742,7 @@ fn emit_instr(
         emit_operand(func, e, type_remap, func_remap, user_global_base, data_offsets);
       }
       func.instruction(&Instruction::ArrayNewFixed {
-        array_type_index: type_remap[type_local_idx(*ty) as usize],
+        array_type_index: resolve_type(*ty, type_remap),
         array_size: *size,
       });
       func.instruction(&Instruction::LocalSet(into.0));
@@ -723,7 +750,7 @@ fn emit_instr(
     InstrKind::ArrayGet { ty, arr, idx, into } => {
       emit_operand(func, arr, type_remap, func_remap, user_global_base, data_offsets);
       emit_operand(func, idx, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::ArrayGet(type_remap[type_local_idx(*ty) as usize]));
+      func.instruction(&Instruction::ArrayGet(resolve_type(*ty, type_remap)));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefNull { ht, into } => {
@@ -740,7 +767,7 @@ fn emit_instr(
     }
     InstrKind::RefCastNullable { ty, src, into } => {
       emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(type_remap[type_local_idx(*ty) as usize])));
+      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(resolve_type(*ty, type_remap))));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNullAbs { ht, src, into } => {
@@ -794,7 +821,7 @@ fn emit_operand(
       func.instruction(&Instruction::GlobalGet(user_global_base + sym.0));
     }
     Operand::RefFunc(fsym) => {
-      func.instruction(&Instruction::RefFunc(func_remap[func_local_idx(*fsym) as usize]));
+      func.instruction(&Instruction::RefFunc(resolve_func(*fsym, func_remap)));
     }
     Operand::RefNull(ht) => {
       func.instruction(&Instruction::RefNull(HeapType::Abstract {
@@ -831,7 +858,7 @@ fn val_from_ir(v: &ValType, type_remap: &[u32]) -> WEValType {
     }),
     ValType::RefConcrete { nullable, ty } => WEValType::Ref(RefType {
       nullable: *nullable,
-      heap_type: HeapType::Concrete(type_remap[type_local_idx(*ty) as usize]),
+      heap_type: HeapType::Concrete(resolve_type(*ty, type_remap)),
     }),
   }
 }

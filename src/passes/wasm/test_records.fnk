@@ -7,18 +7,7 @@ test 'rec literal', fn:
     {a: 1, b: 2}
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
       (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/dict.wat:Fn_rec_new)))
       (func $v_14 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_15 (ref null any))
@@ -51,7 +40,7 @@ test 'rec literal', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:DZQVALoBAL4BAI4BAQ4BfgEGAYQBAQUE8AYAjgEArgEAwgEBDQxaAQIBfgEGAYQBAQUE
+    ;; sm:DdwFALoBAL4BAI4BAQ4BfgEGAYQBAQUE8AYAjgEArgEAwgEBDQxaAQIBfgEGAYQBAQUE
 
 
 test 'rec destructure', fn:
@@ -60,28 +49,7 @@ test 'rec destructure', fn:
     a + c
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_tail" (func $std/fn.fnk:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "std/operators.fnk:op_plus" (func $std/operators.fnk:op_plus (type $rt/protocols.wat:Fn_op_binary)))
-      (import "rt/protocols.wat" "std/operators.fnk:is_rec_like" (func $std/operators.fnk:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:pop" (func $std/rec.fnk:pop (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "rt/protocols.wat" "std/interop.fnk:panic" (func $std/interop.fnk:panic (type $rt/types.wat:Fn2)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
+      (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
       (func $v_85 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_86 (ref null any))
@@ -255,7 +223,7 @@ test 'rec destructure', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:VdAnALoBAL4BAJABAJYBAJABAQIBTgEMAU4BJAWUBQC6AQDAAQBqALIGALoBAMABAMABAJABAJYBAJABAGoAuAEAugEA5gcAugEAwAEAwAEAkAEAlgEAkAEA1gEAxgEBMRiAAQEAGOYHALoBAMABAMABAJABANgBAMYBAQAYgAEBABjqBwCQAQCWAQCQAQCWAQCQAQCwAQDGAQDUAQDGAQEAGJIKALoBAL4BAJABALABAMIBAHoAyAEAegDyAQBqALgBAMYBALgBAJoHALoBAL4BAI4BALABAMIBASYBfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
+    ;; sm:VaAGALoBAL4BAJABAJYBAJABAQIBTgEMAU4BJAWUBQC6AQDAAQBqALIGALoBAMABAMABAJABAJYBAJABAGoAuAEAugEA5gcAugEAwAEAwAEAkAEAlgEAkAEA1gEAxgEBMRiAAQEAGOYHALoBAMABAMABAJABANgBAMYBAQAYgAEBABjqBwCQAQCWAQCQAQCWAQCQAQCwAQDGAQDUAQDGAQEAGJIKALoBAL4BAJABALABAMIBAHoAyAEAegDyAQBqALgBAMYBALgBAJoHALoBAL4BAI4BALABAMIBASYBfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
 
 test 'rec spread', fn:
   expect wat ƒink:
@@ -263,25 +231,7 @@ test 'rec spread', fn:
     {..r, c: 3}
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/dict.wat" "std/rec.fnk:merge" (func $std/rec.fnk:merge (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
-      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
+      (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
       (func $v_54 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_55 (ref null any))
@@ -371,22 +321,14 @@ test 'rec spread', fn:
       (data $d_3 "b")
       (data $d_4 "a")
     )
-    ;; sm:J6ghALoBAL4BAJABAS4BgAEBBgGGAQEFBOwIALoBAL4BAI4BAS0BTABKAIgBAIoBALwBALABAMIBASILXAECA7IHALoBAL4BAI4BALABAMIBAQ0BfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
+    ;; sm:J-IFALoBAL4BAJABAS4BgAEBBgGGAQEFBOwIALoBAL4BAI4BAS0BTABKAIgBAIoBALwBALABAMIBASILXAECA7IHALoBAL4BAI4BALABAMIBAQ0BfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
 
 test 'rec empty literal', fn:
   expect wat ƒink:
     {}
   | equals wat":
     (module
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
+      (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -399,23 +341,14 @@ test 'rec empty literal', fn:
       )
       (export "fink_module" (func $fink_module))
     )
-    ;; sm:BagRAI4BAQACWgBqALYBAA
+    ;; sm:BcIEAI4BAQACWgBqALYBAA
 
 test 'rec single field', fn:
   expect wat ƒink:
     {a: 1}
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
       (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/dict.wat:Fn_rec_new)))
       (func $fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -430,7 +363,7 @@ test 'rec single field', fn:
       (export "fink_module" (func $fink_module))
       (data $d_0 "a")
     )
-    ;; sm:BYYSAI4BAQAGWgECAX4BBgGEAQEFBA
+    ;; sm:Bf4EAI4BAQAGWgECAX4BBgGEAQEFBA
 
 test 'rec nested destructure', fn:
   expect wat ƒink:
@@ -439,27 +372,7 @@ test 'rec nested destructure', fn:
     b
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_tail" (func $std/fn.fnk:args_tail (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "rt/protocols.wat" "std/operators.fnk:is_rec_like" (func $std/operators.fnk:is_rec_like (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:pop" (func $std/rec.fnk:pop (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "rt/protocols.wat" "std/interop.fnk:panic" (func $std/interop.fnk:panic (type $rt/types.wat:Fn2)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
+      (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
       (func $v_115 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $b_116 (ref null any))
@@ -696,7 +609,7 @@ test 'rec nested destructure', fn:
       (data $d_0 "b")
       (data $d_1 "a")
     )
-    ;; sm:dZIlALoBAMABAJABASgBTgBqALYBAOoEALoBAMABAGoA7gUAugEAwAEAkAEAlgEAkAEAagC4AQCkBwC6AQDAAQDAAQCQAQCyAQDGAQEBB4ABAQAH6gcAkAEAlgEAkAEAlgEAkAEAsAEAxgEA1AEAxgEBAAfYCgC6AQDAAQCQAQEjAU4AsgEAxgEAegDIAQB6APIBAGoAtgEAxgEAugEA7gQAugEAwAEAagDuBQC6AQDAAQCQAQCWAQCQAQBqALgBAKQHALoBAMABAMABAJABALIBAMYBAQESgAEBABLqBwCQAQCWAQCQAQCWAQCQAQCwAQDGAQDUAQDGAQEAEpQKALoBAL4BAJABALABAMYBAHoAyAEAegDyAQBqALgBAMYBALoBAJoHALoBAL4BAI4BALABAMIBAQwMWgECAX4BAAqwBQCQAQEGB1oBAgF-AQYChgEBBQW2BwCOAQCuAQDKAQB6AMgBAGoAwAEA
+    ;; sm:deYFALoBAMABAJABASgBTgBqALYBAOoEALoBAMABAGoA7gUAugEAwAEAkAEAlgEAkAEAagC4AQCkBwC6AQDAAQDAAQCQAQCyAQDGAQEBB4ABAQAH6gcAkAEAlgEAkAEAlgEAkAEAsAEAxgEA1AEAxgEBAAfYCgC6AQDAAQCQAQEjAU4AsgEAxgEAegDIAQB6APIBAGoAtgEAxgEAugEA7gQAugEAwAEAagDuBQC6AQDAAQCQAQCWAQCQAQBqALgBAKQHALoBAMABAMABAJABALIBAMYBAQESgAEBABLqBwCQAQCWAQCQAQCWAQCQAQCwAQDGAQDUAQDGAQEAEpQKALoBAL4BAJABALABAMYBAHoAyAEAegDyAQBqALgBAMYBALoBAJoHALoBAL4BAI4BALABAMIBAQwMWgECAX4BAAqwBQCQAQEGB1oBAgF-AQYChgEBBQW2BwCOAQCuAQDKAQB6AMgBAGoAwAEA
 
 test 'rec spread merge two', fn:
   expect wat ƒink:
@@ -705,25 +618,7 @@ test 'rec spread merge two', fn:
     {..r1, ..r2}
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/list.wat:Fn_args_empty (func (result (ref null any))))
-      (type $std/list.wat:Fn_args_prepend (func (param (ref null any) (ref null any)) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_binary (func (param (ref null any) (ref null any) (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/list.wat" "std/fn.fnk:args_empty" (func $std/fn.fnk:args_empty (type $std/list.wat:Fn_args_empty)))
-      (import "std/list.wat" "std/fn.fnk:args_prepend" (func $std/fn.fnk:args_prepend (type $std/list.wat:Fn_args_prepend)))
-      (import "rt/apply.wat" "rt/apply.wat:apply" (func $rt/apply.wat:apply (type $rt/types.wat:Fn2)))
-      (import "std/dict.wat" "std/rec.fnk:merge" (func $std/rec.fnk:merge (type $rt/protocols.wat:Fn_op_binary)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
-      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
+      (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
       (func $v_64 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $r2_65 (ref null any))
@@ -853,7 +748,7 @@ test 'rec spread merge two', fn:
       (data $d_3 "r1")
       (data $d_4 "a")
     )
-    ;; sm:O-ggALoBAMABAL4BAJABAT4EyAUAugEAwAEAkAEBDQxcAQIE1AoAugEAwAEAvgEAkAEBGQJQAE4AiAEAigEAvgEAsgEAwgEA1AEAygEAagDAAQD4BACQAQEKBloBAgF-AQYBhgEBBQSuCgC6AQC-AQCOAQEjAk4ATgCIAQCKAQC-AQDUAQDKAQB6AMgBAGoAwAEA_AQAkAEBCgZaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
+    ;; sm:O6IFALoBAMABAL4BAJABAT4EyAUAugEAwAEAkAEBDQxcAQIE1AoAugEAwAEAvgEAkAEBGQJQAE4AiAEAigEAvgEAsgEAwgEA1AEAygEAagDAAQD4BACQAQEKBloBAgF-AQYBhgEBBQSuCgC6AQC-AQCOAQEjAk4ATgCIAQCKAQC-AQDUAQDKAQB6AMgBAGoAwAEA_AQAkAEBCgZaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -861,21 +756,7 @@ test 'rec format template', fn:
     'got: ${{a: 1}}'
   | equals wat":
     (module
-      (import "rt/types.wat" "Num" (type $rt/types.wat:Num (sub any)))
-      (import "rt/types.wat" "Fn2" (type $rt/types.wat:Fn2 (sub func)))
-      (import "rt/types.wat" "Captures" (type $rt/types.wat:Captures (sub any)))
-      (import "rt/types.wat" "Closure" (type $rt/types.wat:Closure (sub any)))
-      (import "rt/types.wat" "VarArgs" (type $rt/types.wat:VarArgs (sub any)))
-      (type $std/list.wat:Fn_args_head (func (param (ref null any)) (result (ref null any))))
-      (type $std/str.wat:Fn_str (func (param i32 i32) (result (ref null any))))
-      (type $rt/protocols.wat:Fn_op_unary (func (param (ref null any) (ref null any))))
-      (type $rt/protocols.wat:Fn_op_quaternary (func (param (ref null any) (ref null any) (ref null any) (ref null any))))
       (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
-      (import "std/list.wat" "std/fn.fnk:args_head" (func $std/fn.fnk:args_head (type $std/list.wat:Fn_args_head)))
-      (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
-      (import "std/str.wat" "std/str.fnk:fmt" (func $std/str.fnk:fmt (type $rt/protocols.wat:Fn_op_unary)))
-      (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
-      (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/dict.wat:Fn_rec_new)))
       (func $v_13 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_14 (ref null any))
@@ -908,7 +789,7 @@ test 'rec format template', fn:
       (data $d_0 "got: ")
       (data $d_1 "a")
     )
-    ;; sm:DdAZALoBAL4BAI4BAQIFfgDMAQEBELYGAI4BAK4BAMIBARAGWgECAX4BBgGEAQEFBA
+    ;; sm:DYoGALoBAL4BAI4BAQIFfgDMAQEBELYGAI4BAK4BAMIBARAGWgECAX4BBgGEAQEFBA
 
 
 
