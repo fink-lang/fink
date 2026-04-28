@@ -186,7 +186,6 @@ mod tests {
     ).map_err(|e| format!("compile_package: {e}"))?;
     let bytes = crate::passes::wasm::ir_emit::emit(&pkg.fragment);
 
-
     let mut config = Config::new();
     config.wasm_gc(true);
     config.wasm_function_references(true);

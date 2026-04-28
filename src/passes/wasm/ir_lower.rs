@@ -956,16 +956,30 @@ fn lower_import_user_fragment(
   url: &str,
   cont_id: CpsId,
 ) {
-  // 1. Materialise the URL as a `$Str` constant.
-  let url_local = emit_str_const(ctx, frag, rt, url.as_bytes(), ":imp_url");
+  // Canonicalise the URL relative to the importing module's URL so
+  // the runtime call's `mod_url` arg matches what the producer
+  // fragment's `pub` calls write to in the registry. Without this,
+  // a nested import like `import './foo.fnk'` from
+  // `./test_modules/needs_tiny.fnk` would pass `./foo.fnk` to the
+  // runtime, but the producer of `./foo.fnk` was compiled under
+  // canonical URL `./test_modules/foo.fnk` and pubs to that key.
+  // The two URLs must agree; canonicalising here ensures it.
+  let importer_canonical = ctx.fqn_prefix.trim_end_matches(':').to_string();
+  let canonical_url = super::ir_compile_package::canonicalise_url(
+    &importer_canonical, url,
+  );
 
-  // 2. Declare a func import of the producer's `<url>:fink_module`,
+  // 1. Materialise the canonicalised URL as a `$Str` constant.
+  let url_local = emit_str_const(ctx, frag, rt, canonical_url.as_bytes(), ":imp_url");
+
+  // 2. Declare a func import of the producer's `<canonical_url>:fink_module`,
   //    typed as `$Fn2`. Resolved at ir_emit time by name lookup against
-  //    the merged runtime's export table; once `ir_link` grows multi-
-  //    fragment merge, the linker will resolve this to the producer's
-  //    local FuncSym.
+  //    the merged runtime's export table; ir_link::link rewrites it to
+  //    the producer's local FuncSym during multi-fragment merge by
+  //    matching the canonical URL against producer fragments' display
+  //    names.
   let mod_fn_sym = crate::passes::wasm::ir::import_func(
-    frag, rt.fn2(), url, "fink_module");
+    frag, rt.fn2(), &canonical_url, "fink_module");
 
   // 3. Build a no-capture `$Closure` over that funcref. funcrefs are
   //    not anyref-compatible (disjoint typing hierarchies in WasmGC),

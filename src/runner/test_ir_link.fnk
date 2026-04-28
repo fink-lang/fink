@@ -5,7 +5,7 @@
 # Probe: user-fragment import only, no stdio. Isolates whether the
 # trap is in the user-fragment import chain or in the chained
 # stdio + user import case.
-skip test 'user fragment import only', fn:
+test 'user fragment import only', fn:
   expect run ƒink:
     {shrub} = import './test_modules/entry.fnk'
 
@@ -51,7 +51,7 @@ test 'two pubs import second', fn:
 # imports tiny.fnk. The "result" binding in needs_tiny depends on
 # the imported `val`. Tests that the producer's own import chain
 # correctly threads through.
-skip test 'nested import minimal', fn:
+test 'nested import minimal', fn:
   expect run ƒink:
     {result} = import './test_modules/needs_tiny.fnk'
 
@@ -60,7 +60,7 @@ skip test 'nested import minimal', fn:
     42
 
 
-skip test 'multi module import', fn:
+test 'multi module import', fn:
   expect run ƒink:
     {stdout} = import 'std/io.fnk'
     {shrub} = import './test_modules/entry.fnk'
@@ -79,7 +79,7 @@ different raw relative strings (`./sub/common.fnk`, `./common.fnk`,
 common.fnk must be linked exactly once; both left_val and right_val
 must see the same `base = 10`, and the program must actually execute.
 ---
-skip test 'diamond with two paths to same dep', fn:
+test 'diamond with two paths to same dep', fn:
   expect run ƒink:
     {stdout} = import 'std/io.fnk'
     {total} = import './test_modules/diamond/entry.fnk'

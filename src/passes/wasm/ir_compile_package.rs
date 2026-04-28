@@ -144,18 +144,12 @@ pub fn compile_package(
   for id in 0..(next_id) {
     let url = id_to_url.get(&ModuleId(id))
       .ok_or_else(|| format!("ir_compile_package: ModuleId {id} has no URL"))?;
-    let mut frag = compiled.remove(url)
+    let frag = compiled.remove(url)
       .ok_or_else(|| format!("ir_compile_package: ModuleId {id} ({url}) was not compiled"))?;
-
-    // Canonicalise cross-fragment user-import declarations on this
-    // fragment's FuncDecls. ir_lower writes them with the raw URL
-    // string as written in the source (importer-relative, e.g.
-    // `./foobar/spam.fnk` from inside `./test_link/simple.fnk`). The
-    // linker resolves cross-fragment refs by matching against
-    // producer fragments' canonical URLs (`./test_link/foobar/spam.fnk`),
-    // so canonicalise here so the keys match.
-    canonicalise_fragment_imports(&mut frag, url);
-
+    // Note: ir_lower already canonicalises import URLs at lower time
+    // (via `canonicalise_url(importer_canonical_url, raw_url)` from
+    // this module). FuncDecl `import.module` keys are already in
+    // canonical form when fragments arrive here.
     ordered.push(frag);
   }
 
@@ -176,28 +170,6 @@ pub struct CompiledPackage {
   pub fragment: Fragment,
   pub url_to_id: BTreeMap<String, ModuleId>,
   pub entry_canonical_url: String,
-}
-
-/// Rewrite this fragment's cross-fragment user-import URLs from
-/// importer-relative (as written in source) to entry-relative
-/// canonical form, so the linker's display-name match works.
-///
-/// Only applies to FuncDecls with `import: Some(ImportKey { module:
-/// <relative_url>, name: "fink_module" })` — i.e. the placeholder
-/// imports that `ir_lower::lower_import_user_fragment` emits at every
-/// `import './foo.fnk'` site. Runtime imports (`rt/*`, `std/*`,
-/// `interop/*`) and virtual stdlib imports (`std/io.fnk:stdout`)
-/// pass through unchanged.
-#[cfg(feature = "compile")]
-fn canonicalise_fragment_imports(frag: &mut Fragment, importer_canonical_url: &str) {
-  for f in &mut frag.funcs {
-    if let Some(key) = &mut f.import
-      && key.name == "fink_module"
-      && is_relative_url(&key.module)
-    {
-      key.module = canonicalise_url(importer_canonical_url, &key.module);
-    }
-  }
 }
 
 /// Compile one source file as a Fragment under the given canonical URL.
@@ -270,7 +242,15 @@ fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
   entry_dir.join(rest)
 }
 
-fn canonicalise_url(importer_canonical_url: &str, raw_url: &str) -> String {
+/// Canonicalise an import URL relative to the importer's canonical
+/// URL. Pure string manipulation: no filesystem access. Identity for
+/// non-relative URLs (`std/io.fnk`, `@fink/...`, etc.).
+///
+/// Used by `ir_compile_package` for BFS dedup AND by `ir_lower` to
+/// stamp the canonical URL into the runtime call's `mod_url` arg —
+/// without this, the producer's `pub` writes to a different registry
+/// key than the consumer's `import` reads from.
+pub fn canonicalise_url(importer_canonical_url: &str, raw_url: &str) -> String {
   if !is_relative_url(raw_url) {
     return raw_url.to_string();
   }
