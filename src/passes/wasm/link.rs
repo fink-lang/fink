@@ -82,7 +82,7 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
       if let Some(display) = &f.display
         && let Some(stripped) = display.strip_suffix(":fink_module")
       {
-        let sym = FuncSym(off + local_idx as u32);
+        let sym = FuncSym::Local(off + local_idx as u32);
         producer_fink_module.insert(stripped.to_string(), sym);
       }
     }
@@ -133,7 +133,7 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
         && import_key.name == "fink_module"
         && let Some(&real_sym) = producer_fink_module.get(&import_key.module)
       {
-        let placeholder_sym = FuncSym(off.funcs + local_idx as u32);
+        let placeholder_sym = FuncSym::Local(off.funcs + local_idx as u32);
         func_redirect.insert(placeholder_sym, real_sym);
         // Drop the import marker — placeholder is now "shadowed" by
         // the redirect. The FuncDecl stays (it's still in funcs[]),
@@ -281,11 +281,17 @@ fn remap_val_type(vt: &ValType, off: &Offsets) -> ValType {
 }
 
 fn remap_type_sym(sym: TypeSym, off: &Offsets) -> TypeSym {
-  TypeSym(sym.0 + off.types)
+  match sym {
+    TypeSym::Local(i) => TypeSym::Local(i + off.types),
+    TypeSym::Runtime(s) => TypeSym::Runtime(s),
+  }
 }
 
 fn remap_func_sym(sym: FuncSym, off: &Offsets) -> FuncSym {
-  FuncSym(sym.0 + off.funcs)
+  match sym {
+    FuncSym::Local(i) => FuncSym::Local(i + off.funcs),
+    FuncSym::Runtime(s) => FuncSym::Runtime(s),
+  }
 }
 
 fn remap_global_sym(sym: GlobalSym, off: &Offsets) -> GlobalSym {

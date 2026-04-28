@@ -38,10 +38,10 @@ pub fn fmt_fragment_with_sm(frag: &Fragment) -> (String, SourceMap) {
   out.push_str("(module\n");
 
   for (i, ty) in frag.types.iter().enumerate() {
-    fmt_type(&mut out, frag, TypeSym(i as u32), ty);
+    fmt_type(&mut out, frag, TypeSym::Local(i as u32), ty);
   }
   for (i, f) in frag.funcs.iter().enumerate() {
-    fmt_func(&mut out, &mut sm, frag, FuncSym(i as u32), f);
+    fmt_func(&mut out, &mut sm, frag, FuncSym::Local(i as u32), f);
   }
   for (i, g) in frag.globals.iter().enumerate() {
     fmt_global(&mut out, frag, GlobalSym(i as u32), g);
@@ -67,28 +67,36 @@ fn import_alias(module: &str, display: &str) -> String {
 }
 
 fn type_name(frag: &Fragment, sym: TypeSym) -> String {
-  let Some(ty) = frag.types.get(sym.0 as usize) else {
-    return format!("$t_{}", sym.0);
+  let i = match sym {
+    TypeSym::Local(i) => i,
+    TypeSym::Runtime(s) => return format!("${:?}", s),
+  };
+  let Some(ty) = frag.types.get(i as usize) else {
+    return format!("$t_{}", i);
   };
   let display = ty.display.as_deref().unwrap_or("");
   match &ty.import {
     Some(ImportKey { module, .. }) => import_alias(module, display),
     None => {
-      if display.is_empty() { format!("$t_{}", sym.0) }
+      if display.is_empty() { format!("$t_{}", i) }
       else { format!("${}", display) }
     }
   }
 }
 
 fn func_name(frag: &Fragment, sym: FuncSym) -> String {
-  let Some(f) = frag.funcs.get(sym.0 as usize) else {
-    return format!("$f_{}", sym.0);
+  let i = match sym {
+    FuncSym::Local(i) => i,
+    FuncSym::Runtime(s) => return format!("${:?}", s),
+  };
+  let Some(f) = frag.funcs.get(i as usize) else {
+    return format!("$f_{}", i);
   };
   let display = f.display.as_deref().unwrap_or("");
   match &f.import {
     Some(ImportKey { module, .. }) => import_alias(module, display),
     None => {
-      if display.is_empty() { format!("$f_{}", sym.0) }
+      if display.is_empty() { format!("$f_{}", i) }
       else { format!("${}", display) }
     }
   }

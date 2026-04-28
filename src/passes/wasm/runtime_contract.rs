@@ -71,7 +71,7 @@ use super::ir::*;
 /// (e.g. the signature of `args_head`) are *local* types
 /// declared by the emitter at fragment level — WASM structural
 /// equivalence handles matching at link time.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Sym {
   // ── value types ────────────────────────────────────────────────
   Num,

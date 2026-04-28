@@ -52,6 +52,25 @@ use wasm_encoder::{
 
 use super::ir::*;
 
+/// Extract the Local index from a `TypeSym`. Runtime variants are
+/// not yet supported in emit's per-fragment remap arrays — the
+/// transition to runtime-via-Sym is incomplete; until then, every
+/// IR-emitted TypeSym is a Local.
+fn type_local_idx(sym: TypeSym) -> u32 {
+  match sym {
+    TypeSym::Local(i) => i,
+    TypeSym::Runtime(s) => panic!("emit: TypeSym::Runtime({:?}) not yet handled", s),
+  }
+}
+
+/// Extract the Local index from a `FuncSym`. See `type_local_idx`.
+fn func_local_idx(sym: FuncSym) -> u32 {
+  match sym {
+    FuncSym::Local(i) => i,
+    FuncSym::Runtime(s) => panic!("emit: FuncSym::Runtime({:?}) not yet handled", s),
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────
 // Runtime bundle — compiled at build time, spliced at emit time.
 // ──────────────────────────────────────────────────────────────────
@@ -361,7 +380,7 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
   // - Local: appended to the type section after runtime's types.
 
   let mut type_remap: Vec<u32> = Vec::with_capacity(frag.types.len());
-  let mut user_local_types: Vec<(TypeSym, &TypeDecl)> = Vec::new();
+  let mut user_local_types: Vec<(u32, &TypeDecl)> = Vec::new();
   for (i, ty) in frag.types.iter().enumerate() {
     match &ty.import {
       Some(ImportKey { module, name }) => {
@@ -377,18 +396,18 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
       None => {
         // Placeholder — filled in after we know how many we have.
         type_remap.push(u32::MAX);
-        user_local_types.push((TypeSym(i as u32), ty));
+        user_local_types.push((i as u32, ty));
       }
     }
   }
-  for (seq, (sym, _)) in user_local_types.iter().enumerate() {
-    type_remap[sym.0 as usize] = rt.type_count + seq as u32;
+  for (seq, (idx, _)) in user_local_types.iter().enumerate() {
+    type_remap[*idx as usize] = rt.type_count + seq as u32;
   }
 
   // ── resolve user function imports + plan local-func indices ──
 
   let mut func_remap: Vec<u32> = Vec::with_capacity(frag.funcs.len());
-  let mut user_local_funcs: Vec<(FuncSym, &FuncDecl)> = Vec::new();
+  let mut user_local_funcs: Vec<(u32, &FuncDecl)> = Vec::new();
   for (i, f) in frag.funcs.iter().enumerate() {
     match &f.import {
       Some(ImportKey { module, name }) => {
@@ -404,12 +423,12 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
       }
       None => {
         func_remap.push(u32::MAX);
-        user_local_funcs.push((FuncSym(i as u32), f));
+        user_local_funcs.push((i as u32, f));
       }
     }
   }
-  for (seq, (sym, _)) in user_local_funcs.iter().enumerate() {
-    func_remap[sym.0 as usize] = rt.func_count_total + seq as u32;
+  for (seq, (idx, _)) in user_local_funcs.iter().enumerate() {
+    func_remap[*idx as usize] = rt.func_count_total + seq as u32;
   }
 
   // ── emit sections ─────────────────────────────────────────────
@@ -443,7 +462,7 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     func_sec.function(sig);
   }
   for (_, f) in &user_local_funcs {
-    func_sec.function(type_remap[f.sig.0 as usize]);
+    func_sec.function(type_remap[type_local_idx(f.sig) as usize]);
   }
 
   // Memory: runtime has none; user fragment brings one page.
@@ -479,8 +498,8 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
           shared: false,
           ty: abs_heap_ir(*ht),
         }),
-        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(type_remap[ts.0 as usize])),
-        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(func_remap[fs.0 as usize]),
+        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(type_remap[type_local_idx(*ts) as usize])),
+        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(func_remap[func_local_idx(*fs) as usize]),
         GlobalInit::I32Const(v) => ConstExpr::i32_const(*v),
         GlobalInit::F64Const(v) => ConstExpr::f64_const((*v).into()),
       };
@@ -525,7 +544,7 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
   // encoded via wasm-encoder and combined with a rewritten count LEB.
   let elements_section_body = rt.elements_body.as_deref();
   let user_func_refs: Vec<u32> = user_local_funcs.iter()
-    .map(|(sym, _)| func_remap[sym.0 as usize])
+    .map(|(idx, _)| func_remap[*idx as usize])
     .collect();
   let combined_elements_body = if user_func_refs.is_empty() {
     elements_section_body.map(|b| b.to_vec())
@@ -655,14 +674,14 @@ fn emit_instr(
       for fld in fields {
         emit_operand(func, fld, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::StructNew(type_remap[ty.0 as usize]));
+      func.instruction(&Instruction::StructNew(type_remap[type_local_idx(*ty) as usize]));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::Call { target, args, into } => {
       for a in args {
         emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::Call(func_remap[target.0 as usize]));
+      func.instruction(&Instruction::Call(func_remap[func_local_idx(*target) as usize]));
       if let Some(l) = into {
         func.instruction(&Instruction::LocalSet(l.0));
       }
@@ -671,7 +690,7 @@ fn emit_instr(
       for a in args {
         emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::ReturnCall(func_remap[target.0 as usize]));
+      func.instruction(&Instruction::ReturnCall(func_remap[func_local_idx(*target) as usize]));
     }
     InstrKind::RefI31 { src, into } => {
       emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
@@ -679,16 +698,16 @@ fn emit_instr(
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefFunc { func: fsym, into } => {
-      func.instruction(&Instruction::RefFunc(func_remap[fsym.0 as usize]));
+      func.instruction(&Instruction::RefFunc(func_remap[func_local_idx(*fsym) as usize]));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefNullConcrete { ty, into } => {
-      func.instruction(&Instruction::RefNull(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::RefNull(HeapType::Concrete(type_remap[type_local_idx(*ty) as usize])));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNull { ty, src, into } => {
       emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(type_remap[type_local_idx(*ty) as usize])));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::ArrayNewFixed { ty, size, elems, into } => {
@@ -696,7 +715,7 @@ fn emit_instr(
         emit_operand(func, e, type_remap, func_remap, user_global_base, data_offsets);
       }
       func.instruction(&Instruction::ArrayNewFixed {
-        array_type_index: type_remap[ty.0 as usize],
+        array_type_index: type_remap[type_local_idx(*ty) as usize],
         array_size: *size,
       });
       func.instruction(&Instruction::LocalSet(into.0));
@@ -704,7 +723,7 @@ fn emit_instr(
     InstrKind::ArrayGet { ty, arr, idx, into } => {
       emit_operand(func, arr, type_remap, func_remap, user_global_base, data_offsets);
       emit_operand(func, idx, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::ArrayGet(type_remap[ty.0 as usize]));
+      func.instruction(&Instruction::ArrayGet(type_remap[type_local_idx(*ty) as usize]));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefNull { ht, into } => {
@@ -721,7 +740,7 @@ fn emit_instr(
     }
     InstrKind::RefCastNullable { ty, src, into } => {
       emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(type_remap[type_local_idx(*ty) as usize])));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNullAbs { ht, src, into } => {
@@ -775,7 +794,7 @@ fn emit_operand(
       func.instruction(&Instruction::GlobalGet(user_global_base + sym.0));
     }
     Operand::RefFunc(fsym) => {
-      func.instruction(&Instruction::RefFunc(func_remap[fsym.0 as usize]));
+      func.instruction(&Instruction::RefFunc(func_remap[func_local_idx(*fsym) as usize]));
     }
     Operand::RefNull(ht) => {
       func.instruction(&Instruction::RefNull(HeapType::Abstract {
@@ -812,7 +831,7 @@ fn val_from_ir(v: &ValType, type_remap: &[u32]) -> WEValType {
     }),
     ValType::RefConcrete { nullable, ty } => WEValType::Ref(RefType {
       nullable: *nullable,
-      heap_type: HeapType::Concrete(type_remap[ty.0 as usize]),
+      heap_type: HeapType::Concrete(type_remap[type_local_idx(*ty) as usize]),
     }),
   }
 }

@@ -96,7 +96,8 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
     &HashMap::new(),    // module body: no enclosing fn_syms
     fqn_prefix,         // namespacing prefix for nested LetFn displays
   );
-  frag.funcs[fink_module.0 as usize].export = Some("fink_module".into());
+  let FuncSym::Local(i) = fink_module else { panic!("lower: fink_module must be Local"); };
+  frag.funcs[i as usize].export = Some("fink_module".into());
 
   frag
 }
