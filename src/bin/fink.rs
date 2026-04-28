@@ -207,18 +207,21 @@ fn main() {
     }
 
     "ir-wasm" => {
-      // New IR pipeline: ir_lower → ir_link → ir_emit produces final
-      // linked WASM bytes directly (ir_emit internally splices
-      // runtime-ir.wasm). No separate linker step.
+      // New IR pipeline: ir_compile_package → ir_emit produces a final
+      // linked WASM binary. Supports multi-module sources via BFS over
+      // imports starting from the entry path on disk.
       #[cfg(not(feature = "compile"))]
       { eprintln!("error: 'ir-wasm' command requires the 'compile' feature"); process::exit(1); }
       #[cfg(feature = "compile")]
       {
         use std::io::Write;
-        let (lifted, desugared) = fink::to_lifted(&src, path).unwrap_or_else(|e| die(&e));
-        let user_frag = fink::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast, "");
-        let linked_frag = fink::passes::wasm::ir_link::link(&[user_frag]);
-        let bytes = fink::passes::wasm::ir_emit::emit(&linked_frag);
+        let entry_abs = std::path::Path::new(path).canonicalize()
+          .unwrap_or_else(|e| die(&format!("canonicalize {path}: {e}")));
+        let mut loader = fink::passes::modules::FileSourceLoader::new();
+        let pkg = fink::passes::wasm::ir_compile_package::compile_package(
+          &entry_abs, &mut loader,
+        ).unwrap_or_else(|e| die(&e));
+        let bytes = fink::passes::wasm::ir_emit::emit(&pkg.fragment);
         std::io::stdout().write_all(&bytes).unwrap_or_else(|e| die(&e.to_string()));
       }
     }
