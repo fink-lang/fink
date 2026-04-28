@@ -144,8 +144,18 @@ pub fn compile_package(
   for id in 0..(next_id) {
     let url = id_to_url.get(&ModuleId(id))
       .ok_or_else(|| format!("ir_compile_package: ModuleId {id} has no URL"))?;
-    let frag = compiled.remove(url)
+    let mut frag = compiled.remove(url)
       .ok_or_else(|| format!("ir_compile_package: ModuleId {id} ({url}) was not compiled"))?;
+
+    // Canonicalise cross-fragment user-import declarations on this
+    // fragment's FuncDecls. ir_lower writes them with the raw URL
+    // string as written in the source (importer-relative, e.g.
+    // `./foobar/spam.fnk` from inside `./test_link/simple.fnk`). The
+    // linker resolves cross-fragment refs by matching against
+    // producer fragments' canonical URLs (`./test_link/foobar/spam.fnk`),
+    // so canonicalise here so the keys match.
+    canonicalise_fragment_imports(&mut frag, url);
+
     ordered.push(frag);
   }
 
@@ -166,6 +176,28 @@ pub struct CompiledPackage {
   pub fragment: Fragment,
   pub url_to_id: BTreeMap<String, ModuleId>,
   pub entry_canonical_url: String,
+}
+
+/// Rewrite this fragment's cross-fragment user-import URLs from
+/// importer-relative (as written in source) to entry-relative
+/// canonical form, so the linker's display-name match works.
+///
+/// Only applies to FuncDecls with `import: Some(ImportKey { module:
+/// <relative_url>, name: "fink_module" })` — i.e. the placeholder
+/// imports that `ir_lower::lower_import_user_fragment` emits at every
+/// `import './foo.fnk'` site. Runtime imports (`rt/*`, `std/*`,
+/// `interop/*`) and virtual stdlib imports (`std/io.fnk:stdout`)
+/// pass through unchanged.
+#[cfg(feature = "compile")]
+fn canonicalise_fragment_imports(frag: &mut Fragment, importer_canonical_url: &str) {
+  for f in &mut frag.funcs {
+    if let Some(key) = &mut f.import
+      && key.name == "fink_module"
+      && is_relative_url(&key.module)
+    {
+      key.module = canonicalise_url(importer_canonical_url, &key.module);
+    }
+  }
 }
 
 /// Compile one source file as a Fragment under the given canonical URL.

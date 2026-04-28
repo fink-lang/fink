@@ -149,12 +149,51 @@ mod tests {
     out
   }
 
+  /// Hybrid loader for IR runner tests — entry source is registered at
+  /// a synthetic disk path inside `src/runner/`, dep imports resolve
+  /// against the real fixture tree (`src/runner/test_modules/...`).
+  /// Mirrors the OLD `runner::run`'s loader shape so test fixtures
+  /// can be shared across pipelines.
+  struct PkgRunnerLoader {
+    entry_abs_path: std::path::PathBuf,
+    entry_source: String,
+    disk: crate::passes::modules::FileSourceLoader,
+  }
+
+  impl crate::passes::modules::SourceLoader for PkgRunnerLoader {
+    fn load(&mut self, path: &std::path::Path) -> Result<String, String> {
+      if path == self.entry_abs_path {
+        Ok(self.entry_source.clone())
+      } else {
+        crate::passes::modules::SourceLoader::load(&mut self.disk, path)
+      }
+    }
+  }
+
   fn exec_ir_module(src: &str, io_capture: Arc<Mutex<IoCapture>>) -> Result<TestResult, String> {
-    let (lifted, desugared) = crate::to_lifted(src, "test")
-      .map_err(|e| format!("compile: {e}"))?;
-    let user_frag = crate::passes::wasm::ir_lower::lower(&lifted.result, &desugared.ast, "");
-    let linked = crate::passes::wasm::ir_link::link(&[user_frag]);
-    let bytes = crate::passes::wasm::ir_emit::emit(&linked);
+    // Anchor the entry at `src/runner/test.fnk` so relative imports
+    // like `./test_modules/entry.fnk` reach the real fixture tree on
+    // disk.
+    let entry_abs_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("src/runner/test.fnk");
+    let mut loader = PkgRunnerLoader {
+      entry_abs_path: entry_abs_path.clone(),
+      entry_source: src.to_string(),
+      disk: crate::passes::modules::FileSourceLoader::new(),
+    };
+    let pkg = crate::passes::wasm::ir_compile_package::compile_package(
+      &entry_abs_path, &mut loader,
+    ).map_err(|e| format!("compile_package: {e}"))?;
+    let bytes = crate::passes::wasm::ir_emit::emit(&pkg.fragment);
+
+    if std::env::var("DUMP_WAT").is_ok() {
+      eprintln!("--- compiled wat ---");
+      match wasmprinter::print_bytes(&bytes) {
+        Ok(wat) => eprintln!("{wat}"),
+        Err(e) => eprintln!("(print_bytes failed: {e})"),
+      }
+      eprintln!("--- end ---");
+    }
 
     let mut config = Config::new();
     config.wasm_gc(true);
@@ -374,7 +413,9 @@ mod tests {
     // If the source defined a top-level `main`, invoke it with a fresh
     // done cont (reuses `done_cont`) and the test cli args. Result of
     // `main` overrides the module body's result.
-    if let Some(main_global) = instance.get_global(&mut store, "main") {
+    // Globals are FQN-prefixed by ir_compile_package. Entry compiles
+    // under `./test.fnk:`, so `main` lives at `./test.fnk:main`.
+    if let Some(main_global) = instance.get_global(&mut store, "./test.fnk:main") {
       *captured.lock().unwrap() = None;
 
       let main_clo  = main_global.get(&mut store);

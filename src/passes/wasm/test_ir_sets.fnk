@@ -32,6 +32,7 @@ test 'set import + construction', fn:
       (import "rt/protocols.wat" "std/interop.fnk:panic" (func $std/interop.fnk:panic (type $rt/types.wat:Fn2)))
       (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
       (import "std/dict.wat" "std/rec.fnk:_set_field" (func $std/rec.fnk:_set_field (type $std/dict.wat:Fn_rec_set_field)))
+      (import "rt/modules.wat" "std/modules.fnk:import" (func $std/modules.fnk:import (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_56 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_57 (ref null any))
@@ -176,7 +177,7 @@ test 'set import + construction', fn:
       (export "fink_module" (func $fink_module))
       (data $d_0 "set")
     )
-    ;; sm:SeQoALoBAL4BAJABAQIDUgFAAYYBAQYBhgEBBgGGAQBqALgBALgBALgBALgBAOYEALoBAL4BAGoA7AUAugEAwAEAkAEAlgEAkAEAagC4AQCeBwC6AQC-AQC-AQCQAQCwAQDGAQFNHIABAQAc3gcAjgEAlgEAjgEAlgEAjgEArgEAwgEA0AEAwgEBAByKCgC6AQC-AQCOAQCwAQDCAQB6AMgBAHoA8gEAagC2AQDGAQC4AQCiBwCQAQBkAGwAkAEAhgIAagDAAQD8BgCOAQCuAQDKAQB6AMgBAGoAwAEA
+    ;; sm:SdgqALoBAL4BAJABAQIDUgFAAYYBAQYBhgEBBgGGAQBqALgBALgBALgBALgBAOYEALoBAL4BAGoA7AUAugEAwAEAkAEAlgEAkAEAagC4AQCeBwC6AQC-AQC-AQCQAQCwAQDGAQFNHIABAQAc3gcAjgEAlgEAjgEAlgEAjgEArgEAwgEA0AEAwgEBAByKCgC6AQC-AQCOAQCwAQDCAQB6AMgBAHoA8gEAagC2AQDGAQC4AQCiBwCQAQBkAGwAkAEAhgIAagDAAQD8BgCOAQCuAQDKAQB6AMgBAGoAwAEA
 
 
 test 'set spread', fn:
@@ -209,6 +210,7 @@ test 'set spread', fn:
       (import "rt/protocols.wat" "std/interop.fnk:panic" (func $std/interop.fnk:panic (type $rt/types.wat:Fn2)))
       (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
       (import "std/dict.wat" "std/rec.fnk:_set_field" (func $std/rec.fnk:_set_field (type $std/dict.wat:Fn_rec_set_field)))
+      (import "rt/modules.wat" "std/modules.fnk:import" (func $std/modules.fnk:import (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_136 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $set_137 (ref null any))
@@ -398,7 +400,7 @@ test 'set spread', fn:
       (export "fink_module" (func $fink_module))
       (data $d_0 "set")
     )
-    ;; sm:XfgqALoBAMQBAMABAJABAGoAtgEAugEArAcAugEAxAEAwAEAkAEA3AEAxgEBSAGGAQEAAcYHALoBAMIBAL4BAJABANgBAMYBAQYBhgEBAAGECAC6AQC-AQCQAQFLA1IA1gEAwgEBUgGGAQENCWgBDgGIBQC6AQC-AQBqAOwFALoBAMABAJABAJYBAJABAGoAuAEApAcAugEAwAEAwAEAkAEAsgEAxgEBUxyAAQEAHOQHAI4BAJYBAI4BAJYBAI4BAK4BAMQBANABAMYBAQAcjgoAugEAvgEAjgEAsAEAwgEAegDIAQB6APIBAGoAtgEAxgEAuAEAogcAkAEAZABsAJABAIYCAGoAwAEA_AYAjgEArgEAygEAegDIAQBqAMABAA
+    ;; sm:XewsALoBAMQBAMABAJABAGoAtgEAugEArAcAugEAxAEAwAEAkAEA3AEAxgEBSAGGAQEAAcYHALoBAMIBAL4BAJABANgBAMYBAQYBhgEBAAGECAC6AQC-AQCQAQFLA1IA1gEAwgEBUgGGAQENCWgBDgGIBQC6AQC-AQBqAOwFALoBAMABAJABAJYBAJABAGoAuAEApAcAugEAwAEAwAEAkAEAsgEAxgEBUxyAAQEAHOQHAI4BAJYBAI4BAJYBAI4BAK4BAMQBANABAMYBAQAcjgoAugEAvgEAjgEAsAEAwgEAegDIAQB6APIBAGoAtgEAxgEAuAEAogcAkAEAZABsAJABAIYCAGoAwAEA_AYAjgEArgEAygEAegDIAQBqAMABAA
 
 
 skip-ir test 'set destructure empty', fn:

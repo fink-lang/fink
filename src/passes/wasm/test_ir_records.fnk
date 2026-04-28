@@ -281,6 +281,7 @@ test 'rec spread', fn:
       (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
       (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
+      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_54 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $v_55 (ref null any))
@@ -299,6 +300,8 @@ test 'rec spread', fn:
         (local $v_41 (ref null any))
         (local $v_9 (ref null any))
         (local $r_0 (ref null any))
+        (local $:pub_url (ref null any))
+        (local $:pub_name (ref null any))
         (local $v_59 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
         (local $v_11 (ref null any))
@@ -307,6 +310,9 @@ test 'rec spread', fn:
         (local.set $v_9 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $r_0 (local.get $v_9))
         (global.set $r (local.get $r_0))
+        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_1 0)))
+        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_2 1)))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $r_0))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_41)))
         (local.set $v_59 (struct.new $rt/types.wat:Closure (ref.func $v_54) (local.get $:caps_arg)))
         (local.set $v_11 (call $std/rec.fnk:new))
@@ -325,7 +331,7 @@ test 'rec spread', fn:
         (local.set $v_5 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_32)))
         (local.set $v_45 (struct.new $rt/types.wat:Closure (ref.func $v_40) (local.get $:caps_arg)))
-        (local.set $v_7 (call $std/str.fnk:str (data.ref $d_1 1)))
+        (local.set $v_7 (call $std/str.fnk:str (data.ref $d_3 1)))
         (local.set $v_8 (struct.new $rt/types.wat:Num (f64.const 2)))
         (return_call $std/rec.fnk:put (local.get $v_5) (local.get $v_7) (local.get $v_8) (local.get $v_45))
       )
@@ -336,7 +342,7 @@ test 'rec spread', fn:
         (local $v_4 (ref null any))
         (local.set $v_36 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_2 (call $std/rec.fnk:new))
-        (local.set $v_3 (call $std/str.fnk:str (data.ref $d_2 1)))
+        (local.set $v_3 (call $std/str.fnk:str (data.ref $d_4 1)))
         (local.set $v_4 (struct.new $rt/types.wat:Num (f64.const 1)))
         (return_call $std/rec.fnk:put (local.get $v_2) (local.get $v_3) (local.get $v_4) (local.get $v_36))
       )
@@ -360,10 +366,12 @@ test 'rec spread', fn:
       (global $r (mut (ref null any)) (ref.null any))
       (export "r" (global $r))
       (data $d_0 "c")
-      (data $d_1 "b")
-      (data $d_2 "a")
+      (data $d_1 "")
+      (data $d_2 "r")
+      (data $d_3 "b")
+      (data $d_4 "a")
     )
-    ;; sm:JMAfALoBAL4BAJABAS4BgAEBBgGGAQEFBNYHALoBAL4BAI4BAS0BTABKALABAMIBASILXAECA7IHALoBAL4BAI4BALABAMIBAQ0BfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
+    ;; sm:J6ghALoBAL4BAJABAS4BgAEBBgGGAQEFBOwIALoBAL4BAI4BAS0BTABKAIgBAIoBALwBALABAMIBASILXAECA7IHALoBAL4BAI4BALABAMIBAQ0BfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
 
 test 'rec empty literal', fn:
   expect ir_wat ƒink:
@@ -715,6 +723,7 @@ test 'rec spread merge two', fn:
       (import "std/str.wat" "std/str.fnk:str" (func $std/str.fnk:str (type $std/str.wat:Fn_str)))
       (import "std/dict.wat" "std/rec.fnk:put" (func $std/rec.fnk:put (type $rt/protocols.wat:Fn_op_quaternary)))
       (import "std/dict.wat" "std/rec.fnk:new" (func $std/rec.fnk:new (type $std/list.wat:Fn_args_empty)))
+      (import "rt/modules.wat" "std/modules.fnk:pub" (func $std/modules.fnk:pub (type $rt/protocols.wat:Fn_op_binary)))
       (func $v_64 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/types.wat:Captures))
         (local $r2_65 (ref null any))
@@ -743,6 +752,8 @@ test 'rec spread merge two', fn:
         (local $v_48 (ref null any))
         (local $v_11 (ref null any))
         (local $r2_1 (ref null any))
+        (local $:pub_url (ref null any))
+        (local $:pub_name (ref null any))
         (local $v_91 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
         (local $v_91_clo (ref null any))
@@ -754,6 +765,9 @@ test 'rec spread merge two', fn:
         (local.set $v_11 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $r2_1 (local.get $v_11))
         (global.set $r2 (local.get $r2_1))
+        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 2)))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $r2_1))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $r1_46)))
         (local.set $v_91 (struct.new $rt/types.wat:Closure (ref.func $v_88) (local.get $:caps_arg)))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $r2_1) (local.get $v_48)))
@@ -769,7 +783,7 @@ test 'rec spread merge two', fn:
         (local $v_10 (ref null any))
         (local.set $v_52 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_8 (call $std/rec.fnk:new))
-        (local.set $v_9 (call $std/str.fnk:str (data.ref $d_0 1)))
+        (local.set $v_9 (call $std/str.fnk:str (data.ref $d_2 1)))
         (local.set $v_10 (struct.new $rt/types.wat:Num (f64.const 2)))
         (return_call $std/rec.fnk:put (local.get $v_8) (local.get $v_9) (local.get $v_10) (local.get $v_52))
       )
@@ -778,6 +792,8 @@ test 'rec spread merge two', fn:
         (local $v_37 (ref null any))
         (local $v_6 (ref null any))
         (local $r1_0 (ref null any))
+        (local $:pub_url (ref null any))
+        (local $:pub_name (ref null any))
         (local $v_61_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
         (local $v_61_fn (ref null any))
@@ -788,6 +804,9 @@ test 'rec spread merge two', fn:
         (local.set $v_6 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $r1_0 (local.get $v_6))
         (global.set $r1 (local.get $r1_0))
+        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_3 2)))
+        (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $r1_0))
         (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 2 (local.get $r1_0) (local.get $v_37)))
         (local.set $v_61_clo (struct.new $rt/types.wat:Closure (ref.func $v_45) (local.get $:caps_arg)))
         (local.set $:caps_arg (ref.null $rt/types.wat:Captures))
@@ -803,7 +822,7 @@ test 'rec spread merge two', fn:
         (local $v_5 (ref null any))
         (local.set $v_41 (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $v_3 (call $std/rec.fnk:new))
-        (local.set $v_4 (call $std/str.fnk:str (data.ref $d_1 1)))
+        (local.set $v_4 (call $std/str.fnk:str (data.ref $d_4 1)))
         (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 1)))
         (return_call $std/rec.fnk:put (local.get $v_3) (local.get $v_4) (local.get $v_5) (local.get $v_41))
       )
@@ -828,10 +847,13 @@ test 'rec spread merge two', fn:
       (export "r2" (global $r2))
       (global $r1 (mut (ref null any)) (ref.null any))
       (export "r1" (global $r1))
-      (data $d_0 "b")
-      (data $d_1 "a")
+      (data $d_0 "")
+      (data $d_1 "r2")
+      (data $d_2 "b")
+      (data $d_3 "r1")
+      (data $d_4 "a")
     )
-    ;; sm:NYAfALoBAMABAL4BAJABAT4EyAUAugEAwAEAkAEBDQxcAQIEvgkAugEAwAEAvgEAkAEBGQJQAE4AsgEAwgEA1AEAygEAagDAAQD4BACQAQEKBloBAgF-AQYBhgEBBQSYCQC6AQC-AQCOAQEjAk4ATgDUAQDKAQB6AMgBAGoAwAEA_AQAkAEBCgZaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
+    ;; sm:O-ggALoBAMABAL4BAJABAT4EyAUAugEAwAEAkAEBDQxcAQIE1AoAugEAwAEAvgEAkAEBGQJQAE4AiAEAigEAvgEAsgEAwgEA1AEAygEAagDAAQD4BACQAQEKBloBAgF-AQYBhgEBBQSuCgC6AQC-AQCOAQEjAk4ATgCIAQCKAQC-AQDUAQDKAQB6AMgBAGoAwAEA_AQAkAEBCgZaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -887,24 +909,6 @@ test 'rec format template', fn:
       (data $d_1 "a")
     )
     ;; sm:DdAZALoBAL4BAI4BAQIFfgDMAQEBELYGAI4BAK4BAMIBARAGWgECAX4BBgGEAQEFBA
-
-
-
-AGYgECAX4BBgGEAQEFBA
-
-
-
-A
-
-
-
-
-
-
-
-
-
-
 
 
 

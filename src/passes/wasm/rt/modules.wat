@@ -85,9 +85,10 @@
   ;; rec with name → val. The old rec is dropped — HAMT-persistent
   ;; semantics, the new dict entry replaces the old binding.
   ;;
-  ;; Invariant: `init` has run for `mod_url` first. Lowering enforces
-  ;; this by emitting `pub` calls only inside the just-inited branch
-  ;; of an `import_module` body.
+  ;; Idempotent — calls `init` first to ensure the registry slot
+  ;; exists. This makes single-fragment compiles (entry never called
+  ;; via `import`) safe: their body's `pub` calls auto-create the
+  ;; registry slot on first hit.
   (func $std/modules.fnk:pub (export "std/modules.fnk:pub")
     (param $mod_url (ref null any))
     (param $name    (ref null any))
@@ -97,6 +98,9 @@
     (local $key (ref eq))
     (local $rec (ref $RecImpl))
     (local $new_rec (ref $RecImpl))
+
+    ;; Ensure registry[mod_url] exists (init is a no-op if already there).
+    (drop (call $std/modules.fnk:init (local.get $mod_url)))
 
     (local.set $reg (ref.as_non_null (global.get $std/modules.fnk:registry)))
     (local.set $key (ref.cast (ref eq) (local.get $mod_url)))
