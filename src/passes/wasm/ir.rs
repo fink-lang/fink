@@ -77,7 +77,7 @@ pub struct FuncSym(pub u32);
 
 /// Identifies a Fink module (entry or dep) within a package compile.
 ///
-/// Allocated by `ir_compile_package` during URL canonicalisation /
+/// Allocated by `compile_package` during URL canonicalisation /
 /// dedup. Used as a stable, opaque identity for cross-module
 /// references in IR — `pub` registers into `registry[mod_id]`, `import`
 /// reads from it, both via i31-typed runtime ABI args. URL strings
@@ -398,8 +398,8 @@ pub struct Fragment {
   /// Imports declared by this fragment, in canonical-URL form. Maps
   /// the source URL string (as written in `import './...'`) to the
   /// ModuleId of the target fragment. Populated by
-  /// `ir_compile_package` after URL canonicalisation + dedup. Used
-  /// by `ir_lower`'s import-call lowering to convert source URLs
+  /// `compile_package` after URL canonicalisation + dedup. Used
+  /// by `lower`'s import-call lowering to convert source URLs
   /// into ModuleId i31 args.
   pub module_imports: std::collections::BTreeMap<String, ModuleId>,
   pub types:   Vec<TypeDecl>,

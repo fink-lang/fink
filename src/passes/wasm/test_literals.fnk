@@ -1,9 +1,9 @@
-{skip, skip-ir, test, expect, equals, ir_wat, wat} = import '!fake'
+{skip, skip-ir, test, expect, equals, wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 test 'literal bool', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     true
   | equals wat":
     (module
@@ -31,7 +31,7 @@ test 'literal bool', fn:
 
 
 test 'literal bool false', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     false
   | equals wat":
     (module
@@ -59,7 +59,7 @@ test 'literal bool false', fn:
 
 
 test 'literal int', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     42
   | equals wat":
     (module
@@ -88,7 +88,7 @@ test 'literal int', fn:
 
 
 test 'literal neg 0', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     -0
   | equals wat":
     (module
@@ -118,7 +118,7 @@ test 'literal neg 0', fn:
 
 
 test 'literal float', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     1.234e+5
   | equals wat":
     (module
@@ -148,7 +148,7 @@ test 'literal float', fn:
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct
 skip test 'literal decimal', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     1.0d
   | equals wat":
     TODO

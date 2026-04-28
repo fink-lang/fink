@@ -844,7 +844,7 @@
   ;;
   ;; The `std/io.fnk` virtual namespace is resolved at compile time to
   ;; these qualified exports. Each is a no-arg function returning the
-  ;; protocol value; `ir_lower::lower_import` imports them under the
+  ;; protocol value; `lower::lower_import` imports them under the
   ;; qualified names and binds the result of calling each into the
   ;; user's destructure rec.
   ;;
@@ -853,7 +853,7 @@
   ;; cross-target ABI slot (`interop_io_get_foo`). Whichever
   ;; `interop/<target>.wat` is linked fills those slots — today only
   ;; `interop/rust.wat`; a future `interop/wasi.wat` would provide the
-  ;; same slot names with a different impl. ir_lower never sees the
+  ;; same slot names with a different impl. lower never sees the
   ;; target choice — it always emits `std/io.fnk:foo` imports.
   ;;
   ;; The pattern generalises beyond stdio. See

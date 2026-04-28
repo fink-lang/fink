@@ -60,8 +60,9 @@ fn main() {
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
       eprintln!("  marks                        debugger step-stops (per-CpsId markers + source map)");
       eprintln!("  ast/fmt/fmt2/cps [--source-map]  append embedded source map comment");
+      eprintln!("  wat                          emit WAT text from IR fragment to stdout");
       eprintln!("  wasm                         emit WASM binary to stdout");
-      eprintln!("  wat/wasm [-O|-O1..4|-Os|-Oz]  run wasm-opt (default -O)");
+      eprintln!("  wasm [-O|-O1..4|-Os|-Oz]     run wasm-opt (default -O)");
       eprintln!("  compile --target=<wasm|triple> [-o output] <file>");
       process::exit(1);
     }
@@ -174,19 +175,17 @@ fn main() {
       { eprintln!("error: 'wat' command requires the 'compile' feature"); process::exit(1); }
       #[cfg(feature = "compile")]
       {
-        let mut wasm = fink::to_wasm(&src, path).unwrap_or_else(|e| die(&e));
-        if let Some(level) = optimize {
-          fink::passes::optimize_wasm(&mut wasm, level).unwrap_or_else(|e| die(&e));
-        }
+        let entry_abs = std::path::Path::new(path).canonicalize()
+          .unwrap_or_else(|e| die(&format!("canonicalize {path}: {e}")));
+        let mut loader = fink::passes::modules::FileSourceLoader::new();
+        let pkg = fink::passes::wasm::compile_package::compile_package(
+          &entry_abs, &mut loader,
+        ).unwrap_or_else(|e| die(&e));
         if source_map {
-          // Use the in-tree formatter so the native `# sm` stream is
-          // populated. `structural_locs` aren't threaded through
-          // `compile_package` yet (see the plumbing-design doc Stage 1),
-          // so pass an empty slice — we still get DWARF-derived marks.
-          let (wat, srcmap) = fink::passes::wasm::fmt::format_mapped_native(&wasm.binary, &[]);
+          let (wat, srcmap) = fink::passes::wasm::fmt::fmt_fragment_with_sm(&pkg.fragment);
           println!("{wat}\n;; sm:{}", srcmap.encode_base64url());
         } else {
-          let wat = fink::passes::emit_wat(&wasm).unwrap_or_else(|e| die(&e));
+          let wat = fink::passes::wasm::fmt::fmt_fragment(&pkg.fragment);
           println!("{wat}");
         }
       }
@@ -203,26 +202,6 @@ fn main() {
           fink::passes::optimize_wasm(&mut wasm, level).unwrap_or_else(|e| die(&e));
         }
         std::io::stdout().write_all(&wasm.binary).unwrap_or_else(|e| die(&e.to_string()));
-      }
-    }
-
-    "ir-wasm" => {
-      // New IR pipeline: ir_compile_package → ir_emit produces a final
-      // linked WASM binary. Supports multi-module sources via BFS over
-      // imports starting from the entry path on disk.
-      #[cfg(not(feature = "compile"))]
-      { eprintln!("error: 'ir-wasm' command requires the 'compile' feature"); process::exit(1); }
-      #[cfg(feature = "compile")]
-      {
-        use std::io::Write;
-        let entry_abs = std::path::Path::new(path).canonicalize()
-          .unwrap_or_else(|e| die(&format!("canonicalize {path}: {e}")));
-        let mut loader = fink::passes::modules::FileSourceLoader::new();
-        let pkg = fink::passes::wasm::ir_compile_package::compile_package(
-          &entry_abs, &mut loader,
-        ).unwrap_or_else(|e| die(&e));
-        let bytes = fink::passes::wasm::ir_emit::emit(&pkg.fragment);
-        std::io::stdout().write_all(&bytes).unwrap_or_else(|e| die(&e.to_string()));
       }
     }
 
@@ -339,7 +318,7 @@ fn main() {
 
     _ => {
       eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|run|dap> [options] <file>");
+      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|compile|run|dap> [options] <file>");
       process::exit(1);
     }
   }

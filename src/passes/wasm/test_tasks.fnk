@@ -1,4 +1,4 @@
-{test, skip, skip-ir, expect, equals, ir_wat, wat} = import '!fake'
+{test, skip, skip-ir, expect, equals, wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -8,7 +8,7 @@ Mirrors src/runner/test_tasks.fnk; verifies the lowered shape.
 ---
 
 test 'yield suspends and resumes', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     yield 0
     42
   | equals wat":
@@ -59,7 +59,7 @@ test 'yield suspends and resumes', fn:
 
 
 test 'spawn and await', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     fut = spawn fn:
       42
     result = await fut
@@ -161,7 +161,7 @@ test 'spawn and await', fn:
 
 
 test 'channel send and receive', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     ch = channel 0
     42 >> ch
     msg = receive ch
@@ -299,7 +299,7 @@ test 'channel send and receive', fn:
 
 
 test 'channel with spawned sender', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     ch = channel 0
     spawn fn:
       99 >> ch
@@ -436,7 +436,7 @@ test 'channel with spawned sender', fn:
 
 
 test 'channel multiple messages FIFO', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     ch = channel 0
     1 >> ch
     2 >> ch
@@ -594,7 +594,7 @@ test 'channel multiple messages FIFO', fn:
 
 
 test 'channel receiver waits for sender', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     ch = channel 0
     fut = spawn fn:
       receive ch
@@ -775,7 +775,7 @@ test 'channel receiver waits for sender', fn:
 
 
 test 'channel << send and receive', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     ch = channel 0
     ch << 42
     msg = receive ch

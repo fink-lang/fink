@@ -88,7 +88,7 @@ pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, 
 pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
   use passes::modules::InMemorySourceLoader;
   let mut loader = InMemorySourceLoader::single(path, src);
-  passes::wasm_link::compile_package(std::path::Path::new(path), &mut loader)
+  compile_package(std::path::Path::new(path), &mut loader)
 }
 
 /// Compile a package rooted at `entry_path` to a linked WASM binary.
@@ -97,14 +97,21 @@ pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
 /// implementation — typically `FileSourceLoader` for filesystem-backed
 /// compiles or `InMemorySourceLoader` for REPL/test scenarios.
 ///
-/// For now this is a thin wrapper over the single-source pipeline —
-/// Slices 4+ extend it with the real multi-module behaviour.
+/// DWARF / sourcemap / debug-marks plumbing is currently absent on the
+/// IR pipeline — `mappings` and `marks` come back empty. To be re-
+/// plumbed in a follow-up.
 #[cfg(feature = "compile")]
 pub fn compile_package(
   entry_path: &std::path::Path,
   loader: &mut dyn passes::modules::SourceLoader,
 ) -> Result<passes::Wasm, String> {
-  passes::wasm_link::compile_package(entry_path, loader)
+  let pkg = passes::wasm::compile_package::compile_package(entry_path, loader)?;
+  let binary = passes::wasm::emit::emit(&pkg.fragment);
+  Ok(passes::Wasm {
+    binary,
+    mappings: vec![],
+    marks: vec![],
+  })
 }
 
 /// Compile source → optimized WASM binary.

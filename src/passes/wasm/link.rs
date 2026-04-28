@@ -6,7 +6,7 @@
 //! * **Input:** a list of user-level Fragments. Index 0 is the entry
 //!   module; the rest are deps in any deterministic order. Each
 //!   fragment carries its `module_id` and a `module_imports` map of
-//!   raw-URL → ModuleId (populated by `ir_compile_package` after
+//!   raw-URL → ModuleId (populated by `compile_package` after
 //!   BFS resolution).
 //! * **Output:** one linked Fragment. Per-fragment symbol indices
 //!   (FuncSym, TypeSym, GlobalSym, DataSym, InstrId) get remapped
@@ -15,7 +15,7 @@
 //!   module: "<canonical_url>", name: "fink_module" })` resolve to
 //!   the producer fragment's local FuncSym. Runtime imports
 //!   (`rt/*`, `std/*`, `interop/*`) pass through **unchanged**;
-//!   resolving those is `ir_emit`'s job at byte time.
+//!   resolving those is `emit`'s job at byte time.
 //!
 //! The linker is pure IR → IR. It does not touch `wasm-encoder`,
 //! does not parse `runtime.wasm`, does not emit bytes.
@@ -49,7 +49,7 @@ struct Offsets {
 ///      drop the import marker.
 pub fn link(fragments: &[Fragment]) -> Fragment {
   match fragments {
-    [] => panic!("ir_link: empty fragment list"),
+    [] => panic!("link: empty fragment list"),
     [only] => only.clone(),
     _ => link_multi(fragments),
   }
@@ -323,14 +323,14 @@ fn remap_func_decl(
   // BUT: we can't change the FuncSym of an existing FuncDecl — the
   // FuncSym IS the index into `frag.funcs`. So instead, we keep the
   // FuncDecl in place (it stays as an unused import slot in the
-  // merged fragment) and accept the redundancy. ir_emit's existing
+  // merged fragment) and accept the redundancy. emit's existing
   // ImportKey resolution handles it (looks up by name; cross-frag
   // refs to `<canonical_url>:fink_module` won't be in the runtime
   // export table — so this approach only works if we ALSO export
   // each fragment's `fink_module` under its qualified name in the
   // merged binary).
   //
-  // Actually the cleanest approach: ir_lower's call sites use
+  // Actually the cleanest approach: lower's call sites use
   // FuncSym pointing at the placeholder import-only FuncDecl. The
   // linker rewrites those Call instrs to point at the producer's
   // real FuncSym. The placeholder FuncDecl can stay (it's just an

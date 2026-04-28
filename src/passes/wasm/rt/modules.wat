@@ -6,7 +6,7 @@
 ;;   std/modules.fnk:pub    mod_url, name, val           (direct call)
 ;;   std/modules.fnk:import url, mod_ref, cont           (CPS — tail-applies cont)
 ;;
-;; They are emitted inline by `ir_lower` — `pub` and `import` are not
+;; They are emitted inline by `lower` — `pub` and `import` are not
 ;; runtime-dispatched; lowering knows the FQN of the importing module
 ;; at compile time and synthesises the call sites directly.
 ;;

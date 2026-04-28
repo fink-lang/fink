@@ -1,9 +1,9 @@
-{test, skip-ir, expect, equals, ir_wat, wat} = import '!fake'
+{test, skip-ir, expect, equals, wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 test 'user fn call', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     add = fn a, b:
       a + b
     add 3, 4
@@ -71,7 +71,7 @@ test 'user fn call', fn:
 
 
 test 'chained fn calls', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     double = fn x:
       x * 2
     inc = fn x:
@@ -207,7 +207,7 @@ test 'chained fn calls', fn:
 
 
 test 'pipe unary', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     double = fn x:
       x * 2
     inc = fn x:
@@ -331,7 +331,7 @@ test 'pipe unary', fn:
 
 
 test 'match literal first arm', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     match 0:
       0: 42
       _: 99
@@ -537,7 +537,7 @@ test 'match literal first arm', fn:
 
 
 test 'match with binding', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     x = 5
     match x:
       0: 0
@@ -787,7 +787,7 @@ test 'match with binding', fn:
 
 
 test 'simple recursion', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     recurse = fn n:
       match n:
         0: 42
@@ -1056,7 +1056,7 @@ test 'simple recursion', fn:
 
 
 test 'mutual recursion — ping pong', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     ping = fn x: pong x
     pong = fn x: ping x
     ping 1
@@ -1149,7 +1149,7 @@ test 'mutual recursion — ping pong', fn:
     ;; sm:IrIbAI4BAJYBAI4BAF4AagC2AQC2AQCUBQCQAQCWAQCOAQBeAGoAtgEAuAEA8AkAjgEAegEABMQBAFYAiAEAigEAwgEAegEoBMYBAFYAiAEAigEAwgEBMgGGAQBqALgBALYBAA
 
 
-# TODO: mutual recursion with match body — ir_wat succeeds but the
+# TODO: mutual recursion with match body — wat succeeds but the
 # output fails wasmtime validation at link time:
 #   `type mismatch: expected funcref, found anyref`
 # inside one of the hoisted fns (the struct.new $Closure is given an
@@ -1159,7 +1159,7 @@ test 'mutual recursion — ping pong', fn:
 # works. Snapshot here is the current (broken) output, blessed to
 # make the regression visible when the fix lands.
 skip test 'mutual recursion — is_even / is_odd', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     is_even = fn n:
       match n:
         0: true
@@ -1555,7 +1555,7 @@ skip test 'mutual recursion — is_even / is_odd', fn:
 
 
 test 'closure construction and call', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     add = fn x:
       fn y: x + y
     add1 = add 1
@@ -1682,7 +1682,7 @@ test 'closure construction and call', fn:
 
 # TODO, duplicate?
 test 'recursive list sum', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     sum = fn items, c:
       match items:
         []: c

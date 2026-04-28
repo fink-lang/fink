@@ -1,10 +1,10 @@
-{test, skip-ir, expect, equals, ir_wat, wat} = import '!fake'
+{test, skip-ir, expect, equals, wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 
 test 'add two literals', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     2 + 3
   | equals wat":
     (module
@@ -30,7 +30,7 @@ test 'add two literals', fn:
 
 
 test 'chained arithmetic', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     2 * 3 + 4
   | equals wat":
     (module
@@ -73,7 +73,7 @@ test 'chained arithmetic', fn:
 
 
 test 'unary not', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     not true
   | equals wat":
     (module
@@ -95,7 +95,7 @@ test 'unary not', fn:
 
 
 test 'comparison eq', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     2 == 3
   | equals wat":
     (module
@@ -120,7 +120,7 @@ test 'comparison eq', fn:
 
 
 test 'comparison lt', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     2 < 3
   | equals wat":
     (module
@@ -145,7 +145,7 @@ test 'comparison lt', fn:
 
 
 test 'logical and', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     true and false
   | equals wat":
     (module
@@ -169,7 +169,7 @@ test 'logical and', fn:
 
 
 test 'logical or', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     true or false
   | equals wat":
     (module
@@ -193,7 +193,7 @@ test 'logical or', fn:
 
 
 test 'range exclusive', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     0..10
   | equals wat":
     (module
@@ -218,7 +218,7 @@ test 'range exclusive', fn:
 
 
 test 'range inclusive', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     0...10
   | equals wat":
     (module
@@ -243,7 +243,7 @@ test 'range inclusive', fn:
 
 
 test 'range in', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     5 in 0..10
   | equals wat":
     (module

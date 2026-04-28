@@ -1,9 +1,9 @@
-{test, skip-ir, expect, equals, ir_wat, ir_wat_pkg, wat} = import '!fake'
+{test, skip-ir, expect, equals, wat, wat_pkg, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 test 'multi module import', fn:
-  expect ir_wat_pkg ƒink:
+  expect wat_pkg ƒink:
     {shrub} = import './test_link/simple.fnk'
     shrub 21
   | equals wat":
@@ -414,7 +414,7 @@ common.fnk must be linked exactly once; both left_val and right_val
 must see the same `base = 10`, and the program must actually execute.
 ---
 test 'diamond with two paths to same dep', fn:
-  expect ir_wat_pkg ƒink:
+  expect wat_pkg ƒink:
     {total} = import './test_link/diamond.fnk'
     total
   | equals wat":

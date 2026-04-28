@@ -1,10 +1,10 @@
-{test, skip, expect, equals, ir_wat} = import '!fake'
+{test, skip, expect, equals, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 
 test 'std io import handling', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {stdout, stderr, stdin, read} = import 'std/io.fnk'
 
     ham = read stdin, 1024

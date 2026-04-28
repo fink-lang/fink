@@ -3,15 +3,15 @@
 // Two parallel merge paths, producing two separate artifacts:
 //
 // * `runtime.wasm`   — from `src/runtime/*.wat` (legacy tree).
-//                      Consumed by emit.rs + link.rs (old pipeline).
+//                      Currently unused after OLD emitter retirement;
+//                      kept around for the runtime tests that load it.
 // * `runtime-ir.wasm`— from `src/passes/wasm/{rt,std,interop}/*.wat`
-//                      (new tree). Consumed by ir_emit when it starts
-//                      targeting the new runtime.
+//                      (new tree). Consumed by `emit::emit` and the
+//                      WAT formatter for canonical type rendering.
 //
 // Both merges are textual WAT splices: strip internal imports (they
 // resolve flat post-merge), concat bodies, prepend the rec group, wrap
-// in a single `(module ...)`. Old and new trees coexist until the old
-// pipeline is retired (Phase 4 cutover).
+// in a single `(module ...)`.
 //
 // No runtime dependency on the `wat` crate — keeps the compiler
 // wasm32-safe. Compiled WASM bytes are embedded via `include_bytes!`
@@ -112,7 +112,7 @@ fn main() {
 /// stripped (so `src/passes/wasm/rt/protocols.wat` becomes the URL
 /// `rt/protocols.wat`). This produces unique cross-fragment names in
 /// the merged export table and makes `<url>:<name>` lookup from
-/// ir_emit unambiguous. Host-facing interop exports are NOT qualified
+/// `emit` unambiguous. Host-facing interop exports are NOT qualified
 /// (the host side of the ABI expects bare names).
 fn merge_runtime(
     type_defs: &str,

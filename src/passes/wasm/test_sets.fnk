@@ -1,10 +1,10 @@
-{test, skip, skip-ir, expect, equals, ir_wat, wat} = import '!fake'
+{test, skip, skip-ir, expect, equals, wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 
 test 'set import + construction', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {set} = import 'std/set.fnk'
     set 1, 2, 3
 
@@ -181,7 +181,7 @@ test 'set import + construction', fn:
 
 
 test 'set spread', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {set} = import 'std/set.fnk'
     set ..[1, 2, 2]
   | equals wat":
@@ -404,7 +404,7 @@ test 'set spread', fn:
 
 
 skip-ir test 'set destructure empty', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {set} = import 'std/set.fnk'
     s = set _
     match s:
@@ -416,7 +416,7 @@ skip-ir test 'set destructure empty', fn:
 
 
 skip-ir test 'set destructure non-empty', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {set} = import 'std/set.fnk'
     s = set 1, 2, 3
     match s:
@@ -428,7 +428,7 @@ skip-ir test 'set destructure non-empty', fn:
 
 
 skip-ir test 'set destructure peel one', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {set} = import 'std/set.fnk'
     s = set 1, 2, 3
     match s:

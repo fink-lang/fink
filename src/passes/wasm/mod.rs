@@ -3,102 +3,32 @@
 //! Stage order:
 //!
 //! ```text
-//!   collect → emit → dwarf → link → fmt
+//!   lower → link → emit (or fmt for WAT text)
 //! ```
 //!
-//! `collect` walks the lifted CPS and builds `Module` / `CollectedFn`;
-//! `emit` produces the binary via `wasm-encoder` plus byte-offset
-//! mappings; `dwarf` appends line tables; `link` merges the runtime and
-//! rewrites `@fink/` imports; `fmt` renders back to WAT with the native
-//! source map for the playground and `fink wat`.
-//!
-//! The unified `$Fn2(captures, args)` calling convention, single-
-//! `_apply` dispatch, closure layout, and how spread / varargs fit in
-//! are all specified in `calling-convention.md` next to this module.
-//!
-//! Structural source locations (func headers, params, globals, exports)
-//! are carried alongside the binary as `StructuralLoc` — they don't
-//! correspond to code-section byte offsets and can't live in DWARF.
-//!
-//! Compiler-generated helpers use the `$_` prefix; the WAT formatter
-//! hides them from test output.
+//! `lower` walks the lifted CPS and builds an IR `Fragment`; `link`
+//! merges per-fragment IR into a single linked Fragment; `emit`
+//! produces a final standalone WASM binary with `runtime-ir.wasm`
+//! spliced in; `fmt` renders the linked Fragment back to WAT for the
+//! playground and `fink wat`. `compile_package` orchestrates BFS over
+//! imports and drives `lower` per dep before linking.
 
-pub mod builtins;
-pub mod collect;
-pub mod dwarf;
+pub mod compile_package;
 pub mod emit;
 pub mod fmt;
 pub mod ir;
-pub mod ir_compile_package;
-pub mod ir_emit;
-pub mod ir_fmt;
-pub mod ir_link;
-pub mod ir_lower;
 pub mod link;
+pub mod lower;
 pub mod runtime_contract;
 pub mod sourcemap;
 
-#[cfg(feature = "run")]
-pub mod compile;
-
 #[cfg(test)]
 mod tests {
-  /// Round-trip gen_wat: CPS → emit (WASM binary) → format (WAT text + source map).
-  fn gen_wat(src: &str) -> String {
-    // Catch panics from emit/link/format so failing tests can still produce a
-    // blessable string showing the panic message.
-    let src_owned = src.to_string();
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || gen_wat_inner(&src_owned))) {
-      Ok(s) => s,
-      Err(e) => {
-        let msg = if let Some(s) = e.downcast_ref::<&str>() {
-          (*s).to_string()
-        } else if let Some(s) = e.downcast_ref::<String>() {
-          s.clone()
-        } else {
-          "<unknown panic>".to_string()
-        };
-        format!("PANIC: {msg}")
-      }
-    }
-  }
-
-  fn gen_wat_inner(src: &str) -> String {
-    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-
-    // Collect + emit WASM binary.
-    let ir_ctx = super::collect::IrCtx::new(&lifted.result.origin, &desugared.ast);
-    let module = super::collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
-    let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-    let mut result = super::emit::emit(&module, &ir_ctx, None);
-
-    // Emit DWARF and append to binary.
-    let dwarf_sections = super::dwarf::emit_dwarf("test", Some(src), &result.offset_mappings);
-    super::dwarf::append_dwarf_sections(&mut result.wasm, &dwarf_sections);
-
-    // Link: merge core runtime + user code into a standalone binary.
-    static RUNTIME_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime.wasm"));
-
-    let link_inputs = vec![
-      super::link::LinkInput { module_name: "@fink/runtime".into(), wasm: RUNTIME_WASM.to_vec() },
-      super::link::LinkInput { module_name: "@fink/user".into(), wasm: result.wasm },
-    ];
-    let linked = super::link::link(&link_inputs);
-
-    // Format WASM → WAT with native source map (including structural locs).
-    let (wat_output, wat_srcmap) = super::fmt::format_mapped_native(
-      &linked.wasm, &result.structural_locs,
-    );
-    let wat_b64 = wat_srcmap.encode_base64url();
-
-    format!("{}\n;; sm:{wat_b64}", wat_output.trim())
-  }
-
   /// CPS → IR `Fragment` → WAT. No wasm-encoder, no linker, no runtime
   /// filtering. Drives the tracer-phase tests.
-  fn ir_wat(src: &str) -> String {
+  fn wat(src: &str) -> String {
     let src_owned = src.to_string();
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || ir_wat_inner(&src_owned))) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || wat_inner(&src_owned))) {
       Ok(s) => s,
       Err(e) => {
         let msg = if let Some(s) = e.downcast_ref::<&str>() {
@@ -113,33 +43,33 @@ mod tests {
     }
   }
 
-  fn ir_wat_inner(src: &str) -> String {
+  fn wat_inner(src: &str) -> String {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast, "");
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "");
     // Single-module programs today: the link step is a passthrough,
     // but routing through it keeps the tracer test surface honest
     // when multi-fragment merge arrives.
-    let linked = super::ir_link::link(&[user_frag]);
-    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&linked);
+    let linked = super::link::link(&[user_frag]);
+    let (wat, sm) = super::fmt::fmt_fragment_with_sm(&linked);
     let b64 = sm.encode_base64url();
     format!("{}\n;; sm:{b64}", wat.trim())
   }
 
 
-  /// Multi-module variant of `ir_wat` for the new package-compile
+  /// Multi-module variant of `wat` for the new package-compile
   /// pipeline. Lowers `src` as the entry module under a fixed test
   /// canonical URL (`./test.fnk`) so every emitted symbol carries
   /// a real FQN prefix, exercising the same code paths a real
-  /// `ir_compile_package` invocation would drive.
+  /// `compile_package` invocation would drive.
   ///
   /// Today: single-fragment only — no actual import resolution, just
   /// the FQN-prefix half of the multi-module pipeline. Once
-  /// `ir_compile_package` lands, this helper grows a `SourceLoader`
+  /// `compile_package` lands, this helper grows a `SourceLoader`
   /// and walks dep imports for real.
   #[allow(dead_code)]
-  fn ir_wat_pkg(src: &str) -> String {
+  fn wat_pkg(src: &str) -> String {
     let src_owned = src.to_string();
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || ir_wat_pkg_inner(&src_owned))) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || wat_pkg_inner(&src_owned))) {
       Ok(s) => s,
       Err(e) => {
         let msg = if let Some(s) = e.downcast_ref::<&str>() {
@@ -154,14 +84,14 @@ mod tests {
     }
   }
 
-  /// Canonical URL the `ir_wat_pkg` helper compiles its entry source
+  /// Canonical URL the `wat_pkg` helper compiles its entry source
   /// under. Tests that snapshot multi-module WAT see this name in
   /// every emitted symbol's prefix and in data-segment string
   /// constants.
   #[cfg(test)]
-  const IR_WAT_PKG_ENTRY_URL: &str = "./test.fnk";
+  const WAT_PKG_ENTRY_URL: &str = "./test.fnk";
 
-  /// Inline-entry hybrid loader for `ir_wat_pkg`. The entry source is
+  /// Inline-entry hybrid loader for `wat_pkg`. The entry source is
   /// registered at a synthetic disk path (the test fixtures dir,
   /// `src/passes/wasm/`) so dep imports from it can resolve to real
   /// fixture files like `test_link/simple.fnk` via FileSourceLoader.
@@ -183,7 +113,7 @@ mod tests {
     }
   }
 
-  fn ir_wat_pkg_inner(src: &str) -> String {
+  fn wat_pkg_inner(src: &str) -> String {
     // Anchor the entry at `src/passes/wasm/test.fnk` so relative
     // imports like `./test_link/simple.fnk` reach the real fixture
     // tree on disk.
@@ -194,9 +124,9 @@ mod tests {
       entry_source: src.to_string(),
       disk: crate::passes::modules::FileSourceLoader::new(),
     };
-    let pkg = super::ir_compile_package::compile_package(&entry_abs_path, &mut loader)
-      .unwrap_or_else(|e| panic!("ir_compile_package: {e}"));
-    let (wat, sm) = super::ir_fmt::fmt_fragment_with_sm(&pkg.fragment);
+    let pkg = super::compile_package::compile_package(&entry_abs_path, &mut loader)
+      .unwrap_or_else(|e| panic!("compile_package: {e}"));
+    let (wat, sm) = super::fmt::fmt_fragment_with_sm(&pkg.fragment);
     let b64 = sm.encode_base64url();
     format!("{}\n;; sm:{b64}", wat.trim())
   }
@@ -208,11 +138,11 @@ mod tests {
   /// real, spec-valid WASM bytes with runtime-ir.wasm spliced in and
   /// all user imports resolved to concrete runtime indices.
   #[cfg(test)]
-  fn ir_emit_for(src: &str) -> Vec<u8> {
+  fn emit_for(src: &str) -> Vec<u8> {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::ir_lower::lower(&lifted.result, &desugared.ast, "");
-    let linked = super::ir_link::link(&[user_frag]);
-    super::ir_emit::emit(&linked)
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "");
+    let linked = super::link::link(&[user_frag]);
+    super::emit::emit(&linked)
   }
 
   #[cfg(test)]
@@ -221,7 +151,7 @@ mod tests {
       wasmparser::WasmFeatures::all(),
     );
     validator.validate_all(bytes)
-      .unwrap_or_else(|e| panic!("ir_emit validation failed: {e}"));
+      .unwrap_or_else(|e| panic!("emit validation failed: {e}"));
 
     let mut exports = Vec::new();
     for payload in wasmparser::Parser::new(0).parse_all(bytes) {
@@ -235,8 +165,8 @@ mod tests {
   }
 
   #[test]
-  fn ir_emit_produces_valid_wasm_for_int_literal() {
-    let bytes = ir_emit_for("42");
+  fn emit_produces_valid_wasm_for_int_literal() {
+    let bytes = emit_for("42");
     let exports = validate_and_collect_exports(&bytes);
 
     // User's fink_module is exported.
@@ -266,8 +196,8 @@ mod tests {
   }
 
   #[test]
-  fn ir_emit_produces_valid_wasm_for_int_sum() {
-    let bytes = ir_emit_for("42 + 123");
+  fn emit_produces_valid_wasm_for_int_sum() {
+    let bytes = emit_for("42 + 123");
     let exports = validate_and_collect_exports(&bytes);
 
     assert!(exports.contains(&"fink_module".to_string()));
@@ -275,20 +205,20 @@ mod tests {
       "missing std/operators.fnk:op_plus passthrough (needed for a+b)");
   }
 
-  /// Instantiate ir_emit's output in wasmtime with trivial host stubs.
+  /// Instantiate emit's output in wasmtime with trivial host stubs.
   /// Proves the bytes aren't just spec-valid but also load into the
   /// real engine we'll run programs in.
   ///
   /// Doesn't call fink_module — the CPS entry expects an args list
   /// containing a done continuation, which needs runtime-exported
   /// helpers (args_empty + args_prepend) to construct. That full
-  /// execution handshake is exercised by ir_emit_executes_42 below.
+  /// execution handshake is exercised by emit_executes_42 below.
   #[cfg(feature = "run")]
   #[test]
-  fn ir_emit_instantiates_in_wasmtime() {
+  fn emit_instantiates_in_wasmtime() {
     use wasmtime::{Config, Engine, Module, Store, Linker, Error, ExternType};
 
-    let bytes = ir_emit_for("42");
+    let bytes = emit_for("42");
 
     let mut config = Config::new();
     config.wasm_gc(true);
@@ -323,37 +253,17 @@ mod tests {
     assert_eq!(ty.results().len(), 0, "fink_module should return nothing (CPS tail call)");
   }
 
-  // End-to-end execution tests live in `src/runner/ir.rs` +
-  // `src/runner/test_ir.fnk`, mirroring the shape of the existing
-  // runner fixture harness.
+  // End-to-end execution tests live in `src/runner/mod.rs` test
+  // module, driven by `test_*.fnk` fixtures.
 
-  test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk");
-  test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk");
-  test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk");
-  test_macros::include_fink_tests!("src/passes/wasm/test_functions.fnk");
-  test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk");
-  test_macros::include_fink_tests!("src/passes/wasm/test_records.fnk");
-  test_macros::include_fink_tests!("src/passes/wasm/test_fink_module.fnk");
-  // IR-pipeline shadow fixtures. Each `test_ir_<domain>.fnk` is a
-  // full copy of its `test_<domain>.fnk` counterpart, every test
-  // tagged `skip-ir` to start. Un-skip + bless as `ir_lower` grows
-  // coverage. Lives in a nested module so test names can stay 1:1
-  // with the shadowed fixture (both files would otherwise define
-  // the same Rust test names).
-  #[cfg(test)]
-  mod ir_fmt_tests {
-    #[allow(unused_imports)]
-    use super::{ir_wat, ir_wat_pkg, gen_wat};
-
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_literals.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_operators.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_bindings.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_functions.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_tasks.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_records.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_strings.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_link.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_io.fnk", skip-ir);
-    test_macros::include_fink_tests!("src/passes/wasm/test_ir_sets.fnk", skip-ir);
-  }
+  test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_functions.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_tasks.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_records.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_strings.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_linking.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_io.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_sets.fnk", skip-ir);
 }

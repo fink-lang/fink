@@ -1,9 +1,9 @@
-{test, expect, equals, ir_wat, wat} = import '!fake'
+{test, expect, equals, wat, wat} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
 test 'rec literal', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {a: 1, b: 2}
   | equals wat":
     (module
@@ -55,7 +55,7 @@ test 'rec literal', fn:
 
 
 test 'rec destructure', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {a, b: c} = {a: 1, b: 2}
     a + c
   | equals wat":
@@ -258,7 +258,7 @@ test 'rec destructure', fn:
     ;; sm:VdAnALoBAL4BAJABAJYBAJABAQIBTgEMAU4BJAWUBQC6AQDAAQBqALIGALoBAMABAMABAJABAJYBAJABAGoAuAEAugEA5gcAugEAwAEAwAEAkAEAlgEAkAEA1gEAxgEBMRiAAQEAGOYHALoBAMABAMABAJABANgBAMYBAQAYgAEBABjqBwCQAQCWAQCQAQCWAQCQAQCwAQDGAQDUAQDGAQEAGJIKALoBAL4BAJABALABAMIBAHoAyAEAegDyAQBqALgBAMYBALgBAJoHALoBAL4BAI4BALABAMIBASYBfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
 
 test 'rec spread', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     r = {a: 1, b: 2}
     {..r, c: 3}
   | equals wat":
@@ -374,7 +374,7 @@ test 'rec spread', fn:
     ;; sm:J6ghALoBAL4BAJABAS4BgAEBBgGGAQEFBOwIALoBAL4BAI4BAS0BTABKAIgBAIoBALwBALABAMIBASILXAECA7IHALoBAL4BAI4BALABAMIBAQ0BfgEGAYQBAQUEsAUAkAEBDQxaAQIBfgEGAYQBAQUEtgcAjgEArgEAygEAegDIAQBqAMABAA
 
 test 'rec empty literal', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {}
   | equals wat":
     (module
@@ -402,7 +402,7 @@ test 'rec empty literal', fn:
     ;; sm:BagRAI4BAQACWgBqALYBAA
 
 test 'rec single field', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {a: 1}
   | equals wat":
     (module
@@ -433,7 +433,7 @@ test 'rec single field', fn:
     ;; sm:BYYSAI4BAQAGWgECAX4BBgGEAQEFBA
 
 test 'rec nested destructure', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     {a} = {a: {b: 42}}
     {b} = a
     b
@@ -699,7 +699,7 @@ test 'rec nested destructure', fn:
     ;; sm:dZIlALoBAMABAJABASgBTgBqALYBAOoEALoBAMABAGoA7gUAugEAwAEAkAEAlgEAkAEAagC4AQCkBwC6AQDAAQDAAQCQAQCyAQDGAQEBB4ABAQAH6gcAkAEAlgEAkAEAlgEAkAEAsAEAxgEA1AEAxgEBAAfYCgC6AQDAAQCQAQEjAU4AsgEAxgEAegDIAQB6APIBAGoAtgEAxgEAugEA7gQAugEAwAEAagDuBQC6AQDAAQCQAQCWAQCQAQBqALgBAKQHALoBAMABAMABAJABALIBAMYBAQESgAEBABLqBwCQAQCWAQCQAQCWAQCQAQCwAQDGAQDUAQDGAQEAEpQKALoBAL4BAJABALABAMYBAHoAyAEAegDyAQBqALgBAMYBALoBAJoHALoBAL4BAI4BALABAMIBAQwMWgECAX4BAAqwBQCQAQEGB1oBAgF-AQYChgEBBQW2BwCOAQCuAQDKAQB6AMgBAGoAwAEA
 
 test 'rec spread merge two', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     r1 = {a: 1}
     r2 = {b: 2}
     {..r1, ..r2}
@@ -857,7 +857,7 @@ test 'rec spread merge two', fn:
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
-  expect ir_wat ƒink:
+  expect wat ƒink:
     'got: ${{a: 1}}'
   | equals wat":
     (module

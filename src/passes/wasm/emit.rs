@@ -31,13 +31,13 @@
 //!
 //! # Scope (tracer phase)
 //!
-//! Only the IR constructs `ir_lower` currently produces need to be
+//! Only the IR constructs `lower` currently produces need to be
 //! emitted. Grow by demand.
 //!
 //! # Non-scope
 //!
 //! * DWARF / sourcemap emission into the final binary.
-//! * Multi-fragment merge (`ir_link` still single-fragment passthrough).
+//! * Multi-fragment merge (`link` still single-fragment passthrough).
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -64,7 +64,7 @@ fn runtime() -> &'static Runtime {
   CELL.get_or_init(|| parse_runtime(RUNTIME_IR_WASM))
 }
 
-/// Parsed runtime bundle — everything ir_emit needs to splice.
+/// Parsed runtime bundle — everything emit needs to splice.
 ///
 /// Indices in the vectors mirror the runtime's own WASM indices in
 /// each namespace (types, funcs, ...), so the runtime's exports,
@@ -92,7 +92,7 @@ struct Runtime {
   func_count_total: u32,
   /// Map from qualified export name → (kind, index). Key format is
   /// `"<fragment-url>:<name>"` for cross-fragment exports, bare for
-  /// interop exports. ir_emit composes the same key from
+  /// interop exports. emit composes the same key from
   /// user fragment `ImportKey` entries.
   export_by_name: HashMap<String, (ExportKind, u32)>,
   /// Exports to forward verbatim into the merged module's export
@@ -275,7 +275,7 @@ fn convert_composite(ct: &wasmparser::CompositeType) -> CompositeType {
         CompositeInnerType::Array(wasm_encoder::ArrayType(convert_field(&a.0)))
       }
       wasmparser::CompositeInnerType::Cont(_) => {
-        panic!("ir_emit: continuation types not supported")
+        panic!("emit: continuation types not supported")
       }
     },
     shared: ct.shared,
@@ -372,7 +372,7 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
         let idx = rt.type_by_name.get(&qualified).copied()
           .or_else(|| rt.type_by_name.get(name.as_str()).copied())
           .unwrap_or_else(|| panic!(
-            "ir_emit: unknown runtime type import `{}`. Not found as `{}` or `{}` in type-name table",
+            "emit: unknown runtime type import `{}`. Not found as `{}` or `{}` in type-name table",
             qualified, qualified, name));
         type_remap.push(idx);
       }
@@ -398,11 +398,11 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
         let (kind, idx) = rt.export_by_name.get(&qualified)
           .or_else(|| rt.export_by_name.get(name.as_str()))
           .unwrap_or_else(|| panic!(
-            "ir_emit: unknown runtime func import `{}`. Not found in runtime export table",
+            "emit: unknown runtime func import `{}`. Not found in runtime export table",
             qualified))
           .clone();
         assert_eq!(kind, ExportKind::Func,
-          "ir_emit: expected func export for `{}`, got {:?}", qualified, kind);
+          "emit: expected func export for `{}`, got {:?}", qualified, kind);
         func_remap.push(idx);
       }
       None => {
@@ -432,7 +432,7 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
         let we_results: Vec<WEValType> = results.iter().map(|v| val_from_ir(v, &type_remap)).collect();
         type_sec.ty().function(we_params, we_results);
       }
-      _ => panic!("ir_emit: only locally-declared func types supported (got {:?})", ty.kind),
+      _ => panic!("emit: only locally-declared func types supported (got {:?})", ty.kind),
     }
   }
 
@@ -846,8 +846,8 @@ fn decode_leb_u32_prefix(raw: &[u8]) -> (u32, &[u8]) {
     }
     shift += 7;
     if shift >= 32 {
-      panic!("ir_emit: LEB128 u32 overflow");
+      panic!("emit: LEB128 u32 overflow");
     }
   }
-  panic!("ir_emit: truncated LEB128");
+  panic!("emit: truncated LEB128");
 }

@@ -57,7 +57,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
 
   // CPS root shape: App(FinkModule, [Cont::Expr { args: [ƒret], body }]).
   let Some((ret_bind, module_body)) = extract_fink_module_body(&cps.root) else {
-    panic!("ir_lower: unsupported CPS root shape (expected App(FinkModule, [Cont::Expr]))");
+    panic!("lower: unsupported CPS root shape (expected App(FinkModule, [Cont::Expr]))");
   };
 
   // Scan for ·ƒpub apps and pre-allocate one exported (mut anyref)
@@ -280,7 +280,7 @@ impl FnCtx {
 
   fn lookup(&self, id: CpsId) -> LocalIdx {
     *self.binds.get(&id)
-      .unwrap_or_else(|| panic!("ir_lower: unbound CpsId {:?}", id))
+      .unwrap_or_else(|| panic!("lower: unbound CpsId {:?}", id))
   }
 }
 
@@ -393,12 +393,12 @@ fn lower_expr(
       // The fqn url is `ctx.fqn_prefix` minus the trailing `:` separator;
       // the source name comes from `pub_globals` alongside the global.
       let Some(Arg::Val(val)) = args.first() else {
-        panic!("ir_lower: Pub expects [val, cont], missing val");
+        panic!("lower: Pub expects [val, cont], missing val");
       };
       let id = cps_id_of_ref(val);
       let (gsym, src_name) = ctx.pub_globals.get(&id)
         .cloned()
-        .unwrap_or_else(|| panic!("ir_lower: Pub val CpsId {:?} has no pre-allocated global", id));
+        .unwrap_or_else(|| panic!("lower: Pub val CpsId {:?} has no pre-allocated global", id));
       let val_local = ctx.lookup(id);
 
       // 1. Addressable storage.
@@ -415,9 +415,9 @@ fn lower_expr(
       ctx.instrs.push(i_pub);
 
       let cont_arg = args.get(1)
-        .unwrap_or_else(|| panic!("ir_lower: Pub expects [val, cont]"));
+        .unwrap_or_else(|| panic!("lower: Pub expects [val, cont]"));
       let Arg::Cont(cont) = cont_arg else {
-        panic!("ir_lower: Pub cont arg is not a Cont");
+        panic!("lower: Pub cont arg is not a Cont");
       };
       lower_cont(ctx, frag, rt, cps, ast, cont);
     }
@@ -468,7 +468,7 @@ fn lower_expr(
     // (the latter two are continuations resolved as closures).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::StrMatch), args } => {
       if args.len() != 5 {
-        panic!("ir_lower: StrMatch expects 5 args, got {}", args.len());
+        panic!("lower: StrMatch expects 5 args, got {}", args.len());
       }
       let ops: Vec<Operand> = args.iter()
         .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
@@ -574,7 +574,7 @@ fn lower_expr(
       let (cont, non_cont) = split_last_cont(args);
       // First non-cont arg is the lifted fn reference.
       let Some(Arg::Val(fn_val)) = non_cont.first() else {
-        panic!("ir_lower: FnClosure missing fn arg");
+        panic!("lower: FnClosure missing fn arg");
       };
       let fn_sym = ctx.lookup_fn_sym(cps_id_of_ref(fn_val));
       // Remaining non-cont args are the captures.
@@ -582,7 +582,7 @@ fn lower_expr(
         .map(|a| {
           let v = match a {
             Arg::Val(v) => v,
-            _ => panic!("ir_lower: FnClosure capture is not a Val"),
+            _ => panic!("lower: FnClosure capture is not a Val"),
           };
           val_as_operand(ctx, frag, rt, v)
         })
@@ -718,7 +718,7 @@ fn lower_expr(
           let op = resolve_id_as_operand(ctx, frag, rt, *id);
           unbox_anyref(ctx, frag, op)
         }
-        _ => panic!("ir_lower: If cond shape not supported: {:?}", cond.kind),
+        _ => panic!("lower: If cond shape not supported: {:?}", cond.kind),
       };
 
       // Recursively lower then/else into separate instruction lists by
@@ -733,7 +733,7 @@ fn lower_expr(
       ctx.instrs.push(i_if);
     }
 
-    _ => panic!("ir_lower: unsupported expr shape: {:?}", short_kind(&expr.kind)),
+    _ => panic!("lower: unsupported expr shape: {:?}", short_kind(&expr.kind)),
   }
 }
 
@@ -856,15 +856,15 @@ fn lower_import(
       _ => None,
     },
     _ => None,
-  }).unwrap_or_else(|| panic!("ir_lower: BuiltIn::Import missing URL arg"));
+  }).unwrap_or_else(|| panic!("lower: BuiltIn::Import missing URL arg"));
   let url = std::str::from_utf8(url_bytes)
-    .unwrap_or_else(|_| panic!("ir_lower: BuiltIn::Import URL is not valid UTF-8"));
+    .unwrap_or_else(|_| panic!("lower: BuiltIn::Import URL is not valid UTF-8"));
 
   // Pull the destructure cont (Cont::Ref).
   let cont_id = args.iter().find_map(|a| match a {
     Arg::Cont(Cont::Ref(id)) => Some(*id),
     _ => None,
-  }).unwrap_or_else(|| panic!("ir_lower: BuiltIn::Import missing cont"));
+  }).unwrap_or_else(|| panic!("lower: BuiltIn::Import missing cont"));
 
   if is_virtual_stdlib_path(url) {
     lower_import_virtual_stdlib(ctx, frag, rt, cps, url, cont_id);
@@ -888,7 +888,7 @@ fn lower_import_virtual_stdlib(
   let names = cps.module_imports.get(url)
     .cloned()
     .unwrap_or_else(|| panic!(
-      "ir_lower: BuiltIn::Import for `{url}` has no entries in module_imports"));
+      "lower: BuiltIn::Import for `{url}` has no entries in module_imports"));
 
   // 1. Build the rec.
   let l_rec = ctx.alloc_local(":imp_rec");
@@ -965,7 +965,7 @@ fn lower_import_user_fragment(
   // canonical URL `./test_modules/foo.fnk` and pubs to that key.
   // The two URLs must agree; canonicalising here ensures it.
   let importer_canonical = ctx.fqn_prefix.trim_end_matches(':').to_string();
-  let canonical_url = super::ir_compile_package::canonicalise_url(
+  let canonical_url = super::compile_package::canonicalise_url(
     &importer_canonical, url,
   );
 
@@ -973,8 +973,8 @@ fn lower_import_user_fragment(
   let url_local = emit_str_const(ctx, frag, rt, canonical_url.as_bytes(), ":imp_url");
 
   // 2. Declare a func import of the producer's `<canonical_url>:fink_module`,
-  //    typed as `$Fn2`. Resolved at ir_emit time by name lookup against
-  //    the merged runtime's export table; ir_link::link rewrites it to
+  //    typed as `$Fn2`. Resolved at emit time by name lookup against
+  //    the merged runtime's export table; link::link rewrites it to
   //    the producer's local FuncSym during multi-fragment merge by
   //    matching the canonical URL against producer fragments' display
   //    names.
@@ -1043,7 +1043,7 @@ fn emit_quaternary(
   app_id: CpsId,
 ) {
   if args.len() != 4 {
-    panic!("ir_lower: 4-arg primitive expects 4 args, got {}", args.len());
+    panic!("lower: 4-arg primitive expects 4 args, got {}", args.len());
   }
   let ops: Vec<Operand> = args.iter()
     .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
@@ -1068,7 +1068,7 @@ fn emit_ternary_guard(
   app_id: CpsId,
 ) {
   if args.len() != 3 {
-    panic!("ir_lower: ternary primitive {:?} expects 3 args, got {}", sym, args.len());
+    panic!("lower: ternary primitive {:?} expects 3 args, got {}", sym, args.len());
   }
   let val_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[0]);
   let cont1_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[1]);
@@ -1092,7 +1092,7 @@ fn emit_op_tail_call(
   let cont_op = match cont {
     Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
     Arg::Val(v) => val_as_operand(ctx, frag, rt, v),
-    _ => panic!("ir_lower: operator cont is neither Cont::Ref nor Val (got {:?})", short_arg(cont)),
+    _ => panic!("lower: operator cont is neither Cont::Ref nor Val (got {:?})", short_arg(cont)),
   };
   let mut operands = value_operands;
   operands.push(cont_op);
@@ -1116,7 +1116,7 @@ fn emit_arg_as_operand(
       match &v.kind {
         ValKind::Lit(lit) => {
           let lv = LitVal::from_lit(lit)
-            .unwrap_or_else(|| panic!("ir_lower: unsupported lit {:?}", lit));
+            .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
           let local = ctx.alloc_local(&format!("v_{}", v.id.0));
           let i = box_lit(frag, rt, &lv, local);
           if let Some(o) = origin_of(cps, ast, v.id) { set_origin(frag, i, o); }
@@ -1126,7 +1126,7 @@ fn emit_arg_as_operand(
         ValKind::Ref(r) => resolve_id_as_operand(ctx, frag, rt, ref_cps_id(*r)),
         ValKind::ContRef(id) => resolve_id_as_operand(ctx, frag, rt, *id),
         ValKind::BuiltIn(BuiltIn::Panic) => panic_closure_operand(ctx, frag, rt),
-        ValKind::BuiltIn(b) => panic!("ir_lower: BuiltIn {:?} as arg not supported", b),
+        ValKind::BuiltIn(b) => panic!("lower: BuiltIn {:?} as arg not supported", b),
       }
     }
     // Cont args appear in builtin calls like IsSeqLike(val, succ, fail)
@@ -1134,7 +1134,7 @@ fn emit_arg_as_operand(
     // resolve it as a closure operand. Cont::Expr is a not currently
     // supported here (would need to materialise an inline lambda).
     Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
-    _ => panic!("ir_lower: non-Val arg in value position: {:?}", short_arg(arg)),
+    _ => panic!("lower: non-Val arg in value position: {:?}", short_arg(arg)),
   }
 }
 
@@ -1182,7 +1182,7 @@ fn emit_val_into(
   match &val.kind {
     ValKind::Lit(lit) => {
       let lv = LitVal::from_lit(lit)
-        .unwrap_or_else(|| panic!("ir_lower: unsupported lit {:?}", lit));
+        .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
       box_lit(frag, rt, &lv, into)
     }
     ValKind::Ref(r) => {
@@ -1226,7 +1226,7 @@ fn emit_val_into(
       let src = ctx.lookup(*id);
       push_local_set(frag, into, op_local(src))
     }
-    ValKind::BuiltIn(_) => panic!("ir_lower: BuiltIn as LetVal rhs not supported"),
+    ValKind::BuiltIn(_) => panic!("lower: BuiltIn as LetVal rhs not supported"),
   }
 }
 
@@ -1538,7 +1538,7 @@ impl FnCtx {
   }
   fn lookup_fn_sym(&self, id: CpsId) -> FuncSym {
     *self.fn_syms.get(&id)
-      .unwrap_or_else(|| panic!("ir_lower: FnClosure references CpsId {:?} with no LetFn sym", id))
+      .unwrap_or_else(|| panic!("lower: FnClosure references CpsId {:?} with no LetFn sym", id))
   }
   fn try_lookup_fn_sym(&self, id: CpsId) -> Option<FuncSym> {
     self.fn_syms.get(&id).copied()

@@ -3,9 +3,9 @@
 //! Mirror of the OLD `wasm-link::compile_package` shape, redirected
 //! at the IR pipeline. Walks the import graph from the entry source,
 //! canonicalises raw import URLs into entry-relative form, dedups by
-//! canonical URL, compiles each fragment via `ir_lower` under its
-//! own FQN prefix, hands all fragments to `ir_link::link`, then
-//! `ir_emit::emit`s the result.
+//! canonical URL, compiles each fragment via `lower` under its
+//! own FQN prefix, hands all fragments to `link::link`, then
+//! `emit::emit`s the result.
 //!
 //! Shape:
 //!
@@ -15,8 +15,8 @@
 //!     2. compile entry under `./<basename>` canonical URL
 //!     3. walk module_imports — canonicalise + dedup
 //!     4. compile each dep under its canonical URL
-//!     5. ir_link::link(&[entry, deps...]) → merged fragment
-//!     6. ir_emit::emit(merged) → wasm bytes
+//!     5. link::link(&[entry, deps...]) → merged fragment
+//!     6. emit::emit(merged) → wasm bytes
 //! ```
 //!
 //! `module_imports` field on each Fragment is populated post-compile
@@ -29,7 +29,7 @@
 //!
 //! Today this only supports user-fragment imports of the form
 //! `import './foo.fnk'`. Virtual stdlib namespaces (`std/io.fnk`)
-//! pass through `ir_lower::lower_import`'s existing per-name
+//! pass through `lower::lower_import`'s existing per-name
 //! accessor path unchanged — they don't need fragment compilation.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -40,7 +40,7 @@ use super::ir::{Fragment, ModuleId};
 
 /// Compile a package rooted at `entry_path` into a single linked
 /// `Fragment`. Caller is expected to pass the result to
-/// `ir_emit::emit` for byte serialisation.
+/// `emit::emit` for byte serialisation.
 ///
 /// Returns the merged fragment plus a (canonical_url → ModuleId) map
 /// that callers (e.g. the runner) can use to look up the entry's
@@ -53,7 +53,7 @@ pub fn compile_package(
   // The entry's canonical URL is `./<basename>`. Single string used
   // throughout: passed to `to_lifted` as identity, used as the
   // importer key when canonicalising the entry's own imports, and
-  // as the prefix for ir_lower's symbol namespacing.
+  // as the prefix for lower's symbol namespacing.
   let entry_dir = entry_path
     .parent()
     .ok_or_else(|| format!("entry path has no parent directory: {}", entry_path.display()))?
@@ -143,17 +143,17 @@ pub fn compile_package(
   }
   for id in 0..(next_id) {
     let url = id_to_url.get(&ModuleId(id))
-      .ok_or_else(|| format!("ir_compile_package: ModuleId {id} has no URL"))?;
+      .ok_or_else(|| format!("compile_package: ModuleId {id} has no URL"))?;
     let frag = compiled.remove(url)
-      .ok_or_else(|| format!("ir_compile_package: ModuleId {id} ({url}) was not compiled"))?;
-    // Note: ir_lower already canonicalises import URLs at lower time
+      .ok_or_else(|| format!("compile_package: ModuleId {id} ({url}) was not compiled"))?;
+    // Note: lower already canonicalises import URLs at lower time
     // (via `canonicalise_url(importer_canonical_url, raw_url)` from
     // this module). FuncDecl `import.module` keys are already in
     // canonical form when fragments arrive here.
     ordered.push(frag);
   }
 
-  let merged = super::ir_link::link(&ordered);
+  let merged = super::link::link(&ordered);
 
   Ok(CompiledPackage {
     fragment: merged,
@@ -163,7 +163,7 @@ pub fn compile_package(
 }
 
 /// Output of `compile_package`. The merged fragment is ready to feed
-/// to `ir_emit::emit`; the URL→ModuleId map lets callers identify
+/// to `emit::emit`; the URL→ModuleId map lets callers identify
 /// the entry's ModuleId for host-side invocation.
 #[cfg(feature = "compile")]
 pub struct CompiledPackage {
@@ -183,7 +183,7 @@ fn compile_one(
   let source = loader.load(disk_path)?;
   let (lifted, desugared) = crate::to_lifted(&source, canonical_url)?;
   let fqn_prefix = format!("{canonical_url}:");
-  let mut frag = super::ir_lower::lower(&lifted.result, &desugared.ast, &fqn_prefix);
+  let mut frag = super::lower::lower(&lifted.result, &desugared.ast, &fqn_prefix);
   frag.module_id = module_id;
   // module_imports stays as raw-URL → ModuleId. The package compiler
   // resolves URLs at the call site; the lower pass populates this
@@ -246,7 +246,7 @@ fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
 /// URL. Pure string manipulation: no filesystem access. Identity for
 /// non-relative URLs (`std/io.fnk`, `@fink/...`, etc.).
 ///
-/// Used by `ir_compile_package` for BFS dedup AND by `ir_lower` to
+/// Used by `compile_package` for BFS dedup AND by `lower` to
 /// stamp the canonical URL into the runtime call's `mod_url` arg —
 /// without this, the producer's `pub` writes to a different registry
 /// key than the consumer's `import` reads from.

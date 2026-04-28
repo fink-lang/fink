@@ -453,9 +453,9 @@ impl Runtime {
 /// Per-`Sym` fragment URL + export name.
 ///
 /// The emitter emits `(import "<url>" "<name>" ...)` — after merge
-/// (via build.rs textual splice today, ir_link tomorrow), the runtime
+/// (via build.rs textual splice today, link tomorrow), the runtime
 /// bundle exports every referenced name qualified as `<url>:<name>`
-/// in its export table. `ir_emit` composes the same string to look up
+/// in its export table. `emit` composes the same string to look up
 /// the concrete function/type index in `runtime-ir.wasm` and rewrite
 /// the user fragment's call sites.
 ///
@@ -1094,7 +1094,7 @@ fn scan_expr(expr: &Expr, cps: &CpsResult, usage: &mut RuntimeUsage) {
       // the spread captures the remaining tail). User-param-shaped
       // entries here are anything that's NOT a `Cap` — `Param`, `Cont`,
       // and ungilded params all unpack from $:params. See
-      // `ir_lower::lower_fn` for the matching split.
+      // `lower::lower_fn` for the matching split.
       let mut unpack_count = 0usize;
       let mut has_spread = false;
       for p in params {
