@@ -1,3 +1,8 @@
+// Lower-pass functions thread a lot of context (FnCtx, Fragment, Runtime,
+// args, conts, ids) — the >7-arg shape is intentional for inlining and
+// cache locality.
+#![allow(clippy::too_many_arguments)]
+
 //! CPS → unlinked wasm IR `Fragment`.
 //!
 //! Tracer-phase walker. Handles the *lifted* CPS shape — all
@@ -725,7 +730,7 @@ fn lower_expr(
       // swapping `ctx.instrs` to a fresh empty Vec for each branch.
       let saved = std::mem::take(&mut ctx.instrs);
       lower_expr(ctx, frag, rt, cps, ast, then);
-      let then_body = std::mem::replace(&mut ctx.instrs, Vec::new());
+      let then_body = std::mem::take(&mut ctx.instrs);
       lower_expr(ctx, frag, rt, cps, ast, else_);
       let else_body = std::mem::replace(&mut ctx.instrs, saved);
 

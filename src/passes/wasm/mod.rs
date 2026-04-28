@@ -84,13 +84,6 @@ mod tests {
     }
   }
 
-  /// Canonical URL the `wat_pkg` helper compiles its entry source
-  /// under. Tests that snapshot multi-module WAT see this name in
-  /// every emitted symbol's prefix and in data-segment string
-  /// constants.
-  #[cfg(test)]
-  const WAT_PKG_ENTRY_URL: &str = "./test.fnk";
-
   /// Inline-entry hybrid loader for `wat_pkg`. The entry source is
   /// registered at a synthetic disk path (the test fixtures dir,
   /// `src/passes/wasm/`) so dep imports from it can resolve to real

@@ -188,11 +188,10 @@ fn parse_runtime(bytes: &[u8]) -> Runtime {
           local_func_sigs.push(sig.expect("runtime-ir.wasm: invalid func sig"));
         }
       }
-      wasmparser::Payload::GlobalSection(reader) => {
-        if reader.count() > 0 {
+      wasmparser::Payload::GlobalSection(reader)
+        if reader.count() > 0 => {
           globals_body = Some(bytes[reader.range()].to_vec());
         }
-      }
       wasmparser::Payload::ExportSection(reader) => {
         for exp in reader {
           let exp = exp.expect("runtime-ir.wasm: invalid export");
@@ -208,11 +207,10 @@ fn parse_runtime(bytes: &[u8]) -> Runtime {
           export_by_name.insert(name, (kind, exp.index));
         }
       }
-      wasmparser::Payload::ElementSection(reader) => {
-        if reader.count() > 0 {
+      wasmparser::Payload::ElementSection(reader)
+        if reader.count() > 0 => {
           elements_body = Some(bytes[reader.range()].to_vec());
         }
-      }
       wasmparser::Payload::CodeSectionEntry(body) => {
         let range = body.range();
         code_bodies_raw.push(bytes[range].to_vec());
@@ -395,12 +393,11 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
     match &f.import {
       Some(ImportKey { module, name }) => {
         let qualified = format!("{module}:{name}");
-        let (kind, idx) = rt.export_by_name.get(&qualified)
+        let (kind, idx) = *rt.export_by_name.get(&qualified)
           .or_else(|| rt.export_by_name.get(name.as_str()))
           .unwrap_or_else(|| panic!(
             "emit: unknown runtime func import `{}`. Not found in runtime export table",
-            qualified))
-          .clone();
+            qualified));
         assert_eq!(kind, ExportKind::Func,
           "emit: expected func export for `{}`, got {:?}", qualified, kind);
         func_remap.push(idx);

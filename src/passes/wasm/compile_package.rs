@@ -32,10 +32,14 @@
 //! pass through `lower::lower_import`'s existing per-name
 //! accessor path unchanged — they don't need fragment compilation.
 
+#[cfg(feature = "compile")]
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+#[cfg(feature = "compile")]
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "compile")]
 use crate::passes::modules::SourceLoader;
+#[cfg(feature = "compile")]
 use super::ir::{Fragment, ModuleId};
 
 /// Compile a package rooted at `entry_path` into a single linked
@@ -237,6 +241,7 @@ fn enqueue_dep(
 // URL canonicalisation — string-only, lifted from wasm-link/mod.rs.
 // ──────────────────────────────────────────────────────────────────
 
+#[cfg(feature = "compile")]
 fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
   let rest = canonical_url.strip_prefix("./").unwrap_or(canonical_url);
   entry_dir.join(rest)

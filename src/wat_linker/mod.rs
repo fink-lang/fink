@@ -272,7 +272,7 @@ where
 {
     // Note: this consumes the module-string token. Caller must rely
     // on `naive_form_end` afterwards to walk to the form's close.
-    while let Some(tok) = tokens.next() {
+    for tok in tokens.by_ref() {
         match tok.kind {
             TokenKind::String => {
                 let raw = slice(src, &tok);
@@ -287,27 +287,6 @@ where
         }
     }
     false
-}
-
-/// Walk to the end of the current top-level form; return the byte
-/// offset of the closing `)`.
-fn naive_form_end<I>(tokens: &mut I, depth: &mut usize) -> Option<usize>
-where
-    I: Iterator<Item = wast::lexer::Token>,
-{
-    let mut last_close = None;
-    while *depth >= 2 {
-        let tok = tokens.next()?;
-        match tok.kind {
-            TokenKind::LParen => *depth += 1,
-            TokenKind::RParen => {
-                last_close = Some(tok.offset);
-                *depth -= 1;
-            }
-            _ => {}
-        }
-    }
-    last_close
 }
 
 /// From a renamed module body + its spans, extract:
@@ -429,12 +408,11 @@ fn collapse_blank_runs(text: &str) -> String {
 fn dedupe_contained_spans(sorted: Vec<Span>) -> Vec<Span> {
     let mut out: Vec<Span> = Vec::with_capacity(sorted.len());
     for span in sorted {
-        if let Some(last) = out.last() {
-            if span.start >= last.start && span.end <= last.end {
+        if let Some(last) = out.last()
+            && span.start >= last.start && span.end <= last.end {
                 // Fully contained: skip.
                 continue;
             }
-        }
         out.push(span);
     }
     out
@@ -579,8 +557,8 @@ fn collect_plan(path: &str, src: &str) -> Plan {
                 depth += 1;
                 if depth == 2 {
                     let form_start = tok.offset;
-                    if let Some(head) = tokens.next() {
-                        if head.kind == TokenKind::Keyword {
+                    if let Some(head) = tokens.next()
+                        && head.kind == TokenKind::Keyword {
                             let kw = slice(src, &head);
                             handle_top_form(
                                 kw,
@@ -592,7 +570,6 @@ fn collect_plan(path: &str, src: &str) -> Plan {
                                 &mut plan,
                             );
                         }
-                    }
                 }
             }
             TokenKind::RParen => {
@@ -750,13 +727,11 @@ fn inspect_subform_for_export<I>(
         Some(t) => t,
         None => return,
     };
-    if kw_tok.kind == TokenKind::Keyword && slice(src, &kw_tok) == "export" {
-        if let Some(str_tok) = tokens.next() {
-            if str_tok.kind == TokenKind::String {
+    if kw_tok.kind == TokenKind::Keyword && slice(src, &kw_tok) == "export"
+        && let Some(str_tok) = tokens.next()
+            && str_tok.kind == TokenKind::String {
                 queue_export_rewrite(path, src, &str_tok, plan);
             }
-        }
-    }
     // Skip to end of this sub-form.
     let target = *depth - 1;
     while *depth > target {
@@ -893,7 +868,7 @@ fn expect_string<I>(src: &str, tokens: &mut I, depth: &mut usize) -> Option<Stri
 where
     I: Iterator<Item = wast::lexer::Token>,
 {
-    while let Some(tok) = tokens.next() {
+    for tok in tokens.by_ref() {
         match tok.kind {
             TokenKind::String => {
                 let raw = slice(src, &tok);
@@ -919,44 +894,15 @@ where
             TokenKind::LParen => {
                 *depth += 1;
                 let _ = tokens.next(); // keyword
-                if let Some(id_tok) = tokens.next() {
-                    if id_tok.kind == TokenKind::Id {
+                if let Some(id_tok) = tokens.next()
+                    && id_tok.kind == TokenKind::Id {
                         return Some(strip_dollar(slice(src, &id_tok)));
                     }
-                }
                 return None;
             }
             TokenKind::RParen => {
                 *depth -= 1;
                 return None;
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-fn next_top_id_at<I>(
-    src: &str,
-    tokens: &mut I,
-    depth: &mut usize,
-    form_depth: usize,
-) -> Option<String>
-where
-    I: Iterator<Item = wast::lexer::Token>,
-{
-    while let Some(tok) = tokens.next() {
-        match tok.kind {
-            TokenKind::Id if *depth == form_depth => {
-                return Some(strip_dollar(slice(src, &tok)));
-            }
-            TokenKind::LParen => *depth += 1,
-            TokenKind::RParen => {
-                if *depth == form_depth {
-                    *depth -= 1;
-                    return None;
-                }
-                *depth -= 1;
             }
             _ => {}
         }
