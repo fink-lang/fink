@@ -832,7 +832,7 @@
   ;; Delegates to $interop/rust.wat:panic, which calls into the host to trap the
   ;; instance with a diagnostic message. Today panic carries no payload —
   ;; future work will pass a reason / source location for better diagnostics.
-  (func $std/interop.fnk:panic (export "std/interop.fnk:panic")
+  (func $std/interop.fnk:panic (export "std/interop.fnk:panic") (type $Fn2)
     (param $_caps (ref null any))
     (param $_args (ref null any))
     (return_call $interop/rust.wat:panic))

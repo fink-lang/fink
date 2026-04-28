@@ -186,14 +186,6 @@ mod tests {
     ).map_err(|e| format!("compile_package: {e}"))?;
     let bytes = crate::passes::wasm::ir_emit::emit(&pkg.fragment);
 
-    if std::env::var("DUMP_WAT").is_ok() {
-      eprintln!("--- compiled wat ---");
-      match wasmprinter::print_bytes(&bytes) {
-        Ok(wat) => eprintln!("{wat}"),
-        Err(e) => eprintln!("(print_bytes failed: {e})"),
-      }
-      eprintln!("--- end ---");
-    }
 
     let mut config = Config::new();
     config.wasm_gc(true);

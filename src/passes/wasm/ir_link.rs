@@ -82,10 +82,8 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
       if let Some(display) = &f.display
         && let Some(stripped) = display.strip_suffix(":fink_module")
       {
-        producer_fink_module.insert(
-          stripped.to_string(),
-          FuncSym(off + local_idx as u32),
-        );
+        let sym = FuncSym(off + local_idx as u32);
+        producer_fink_module.insert(stripped.to_string(), sym);
       }
     }
   }

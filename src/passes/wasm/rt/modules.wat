@@ -199,7 +199,7 @@
   ;; Declared with `elem declare` so `ref.func` is valid.
   (elem declare func $std/modules.fnk:_import_wrap_step)
 
-  (func $std/modules.fnk:_import_wrap_step
+  (func $std/modules.fnk:_import_wrap_step (type $Fn2)
     (param $caps (ref null any))
     (param $_args (ref null any))
 
