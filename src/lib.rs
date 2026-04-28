@@ -33,8 +33,6 @@ pub mod propgraph;
 pub mod sourcemap;
 pub mod strings;
 
-#[cfg(feature = "run")]
-pub mod runtime;
 pub mod test_context;
 pub mod test_support;
 

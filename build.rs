@@ -1,15 +1,10 @@
 // Build script — compiles runtime WAT files to WASM at build time.
 //
-// Two parallel merge paths, producing two separate artifacts:
+// Produces `runtime-ir.wasm` from `src/passes/wasm/{rt,std,interop}/*.wat`.
+// Consumed by `emit::emit` and the WAT formatter for canonical type
+// rendering.
 //
-// * `runtime.wasm`   — from `src/runtime/*.wat` (legacy tree).
-//                      Currently unused after OLD emitter retirement;
-//                      kept around for the runtime tests that load it.
-// * `runtime-ir.wasm`— from `src/passes/wasm/{rt,std,interop}/*.wat`
-//                      (new tree). Consumed by `emit::emit` and the
-//                      WAT formatter for canonical type rendering.
-//
-// Both merges are textual WAT splices: strip internal imports (they
+// The merge is a textual WAT splice: strip internal imports (they
 // resolve flat post-merge), concat bodies, prepend the rec group, wrap
 // in a single `(module ...)`.
 //
@@ -23,48 +18,6 @@ fn main() {
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
 
-    // --- Old-tree artefacts ---------------------------------------------
-
-    // types.wat is standalone — compiled separately for the emitter to
-    // inject canonical type definitions into user modules.
-    println!("cargo::rerun-if-changed=src/runtime/types.wat");
-    let types_wat = std::fs::read_to_string("src/runtime/types.wat")
-        .expect("failed to read types.wat");
-    let types_wasm = wat_crate::parse_str(&types_wat)
-        .expect("failed to compile types.wat");
-    std::fs::write(format!("{out_dir}/types.wasm"), &types_wasm)
-        .expect("failed to write types.wasm");
-
-    // Extract the rec group from types.wat for injection into the merged module.
-    let type_defs = extract_rec_group(&types_wat);
-
-    // Runtime modules — merged into a single WASM module.
-    // Order doesn't matter for function bodies (WAT allows forward refs),
-    // but types (rec group) must come first.
-    // Modules wired into the compiler pipeline.
-    // set is not yet used — added when integrated.
-    let runtime_modules = [
-        "src/runtime/str.wat",
-        "src/runtime/hashing.wat",
-        "src/runtime/operators.wat",
-        "src/runtime/list.wat",
-        "src/runtime/rec.wat",
-        "src/runtime/int.wat",
-        "src/runtime/range.wat",
-        "src/runtime/scheduler.wat",
-        "src/runtime/channel.wat",
-        "src/runtime/dispatch.wat",
-        "src/runtime/interop-rust.wat",
-    ];
-
-    let merged_wat = merge_runtime(&type_defs, &runtime_modules, old_tree_strip, false);
-    let runtime_wasm = wat_crate::parse_str(&merged_wat)
-        .unwrap_or_else(|e| panic!("failed to compile merged runtime: {e}"));
-    std::fs::write(format!("{out_dir}/runtime.wasm"), &runtime_wasm)
-        .expect("failed to write runtime.wasm");
-
-    // --- New-tree artefacts (runtime-ir.wasm) ---------------------------
-
     println!("cargo::rerun-if-changed=src/passes/wasm/rt/types.wat");
     let types_ir_wat = std::fs::read_to_string("src/passes/wasm/rt/types.wat")
         .expect("failed to read rt/types.wat");
@@ -75,9 +28,8 @@ fn main() {
 
     let type_defs_ir = extract_rec_group(&types_ir_wat);
 
-    // New-tree runtime modules. Order: types first (in type_defs_ir),
-    // then all fragments. Layout mirrors the design-doc rt/std/interop
-    // vocabulary.
+    // Runtime modules. Order: types first (in type_defs_ir), then all
+    // fragments. Layout mirrors the design-doc rt/std/interop vocabulary.
     let runtime_modules_ir = [
         "src/passes/wasm/rt/apply.wat",
         "src/passes/wasm/rt/modules.wat",
@@ -94,7 +46,7 @@ fn main() {
         "src/passes/wasm/interop/rust.wat",
     ];
 
-    let merged_ir_wat = merge_runtime(&type_defs_ir, &runtime_modules_ir, new_tree_strip, true);
+    let merged_ir_wat = merge_runtime(&type_defs_ir, &runtime_modules_ir, runtime_strip, true);
     let runtime_ir_wasm = wat_crate::parse_str(&merged_ir_wat)
         .unwrap_or_else(|e| panic!("failed to compile merged runtime-ir: {e}"));
     std::fs::write(format!("{out_dir}/runtime-ir.wasm"), &runtime_ir_wasm)
@@ -179,15 +131,9 @@ fn qualify_export_names(body: &str, path: &str) -> String {
     out
 }
 
-/// Old-tree strip predicate: drop @fink/runtime/* imports (resolved
-/// internally post-merge).
-fn old_tree_strip(import_line: &str) -> bool {
-    import_line.contains("@fink/runtime/")
-}
-
-/// New-tree strip predicate: drop `rt/*.wat`, `std/*.wat`,
-/// `interop/*.wat` imports (all resolved internally post-merge).
-fn new_tree_strip(import_line: &str) -> bool {
+/// Strip predicate: drop `rt/*.wat`, `std/*.wat`, `interop/*.wat`
+/// imports (all resolved internally post-merge).
+fn runtime_strip(import_line: &str) -> bool {
     import_line.contains("\"rt/") && import_line.contains(".wat\"")
         || import_line.contains("\"std/") && import_line.contains(".wat\"")
         || import_line.contains("\"interop/") && import_line.contains(".wat\"")

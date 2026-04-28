@@ -539,7 +539,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // Value-type imports — `rt/types.wat:Num` / `rt/types.wat:Fn2`. Shared
   // identity across the ABI: user struct.new instances must match
   // runtime's concrete type indices. Emit resolves them against
-  // `types.wasm` at emit time.
+  // `types-ir.wasm` at emit time.
   //
   // `Sym::Num` is marked in `scan_val_kind` whenever a numeric
   // literal appears (which is the only place we construct $Num

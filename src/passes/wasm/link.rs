@@ -18,7 +18,7 @@
 //!   resolving those is `emit`'s job at byte time.
 //!
 //! The linker is pure IR → IR. It does not touch `wasm-encoder`,
-//! does not parse `runtime.wasm`, does not emit bytes.
+//! does not parse `runtime-ir.wasm`, does not emit bytes.
 
 use std::collections::BTreeMap;
 
