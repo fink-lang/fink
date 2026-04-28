@@ -1,162 +1,226 @@
-// WASM binary emitter — encodes lifted CPS IR to WASM via wasm-encoder.
-//
-// Produces a WASM binary with:
-//   - WasmGC types ($Num, $Closure, $Captures, $FnN per arity)
-//   - Imported builtins as functions
-//   - Defined functions from collected CPS IR
-//   - Globals for module-level fn aliases
-//   - Exports
-//   - Name section (function, local, global names)
-//   - Byte offset mappings for DWARF / DAP source maps
-//
-// The emitter tracks byte offsets during code emission so that each
-// source-mapped instruction can be correlated with the original .fnk
-// source location. These offsets are later used to build DWARF line
-// tables and WasmMapping entries for the DAP debugger.
-//
-// ## Source map marking rules
-//
-// Each WASM instruction gets at most one DWARF line entry (one source
-// location per byte offset). The rules for what maps where:
-//
-// - **call instructions** (`return_call`, `return_call_ref`, `call`)
-//   → point to the callee: operator token for builtins (e.g. `+`),
-//     call site for user function calls.
-//   For builtins, the operator mark is emitted *after* args (at the
-//   return_call instruction offset) to avoid colliding with the first
-//   arg's value mark at the same byte offset.
-//
-// - **local.set** → point to the binding name (e.g. `x` in `x = 42`).
-//   The mark is placed just before the local.set instruction.
-//
-// - **literals** (struct.new $Num wrapping f64.const, or ref.i31 wrapping
-//   i32.const for booleans) → point to the literal value in source.
-//   Each value gets a mark from emit_val.
-//
-// - **structural items** (func headers, params, globals, exports) are
-//   recorded as StructuralLoc entries, not DWARF, since they don't
-//   correspond to code section byte offsets.
-//
-// DWARF line tables have one entry per byte offset. When two marks
-// collide (same offset), the last one wins. The formatter reconstructs
-// WAT text source maps by looking up DWARF entries for each instruction
-// and structural locs for non-code items.
+//! IR → WASM bytes, with runtime-ir.wasm spliced in.
+//!
+//! Takes a *linked* user [`Fragment`] and produces a final standalone
+//! WASM binary by splicing it onto the merged runtime bundle
+//! (`runtime-ir.wasm`). The runtime provides the complete type
+//! vocabulary, all the rt/std/interop functions, env imports, globals,
+//! data, and element segments. The user fragment contributes its own
+//! function signatures, functions, memory, and exports.
+//!
+//! # Algorithm
+//!
+//! 1. Parse runtime-ir.wasm with wasmparser. Build a lookup table from
+//!    qualified export name (`<fragment-url>:<name>`, e.g.
+//!    `"std/list.wat:args_head"`) to concrete index + kind.
+//! 2. Walk the user fragment's imports. For each `ImportKey { module,
+//!    name }`, compose the qualified key `"{module}:{name}"` and look
+//!    it up in the runtime's export table. Record `TypeSym → runtime
+//!    type index` and `FuncSym → runtime func index` remaps. Imports
+//!    are resolved: no import entries get emitted for them.
+//! 3. Emit the merged module via wasm-encoder:
+//!    - type section: runtime types + user's locally-declared types
+//!    - import section: runtime's env imports (host-facing) only
+//!    - function section: runtime func sigs + user's local func sigs
+//!    - memory section: user's memory (runtime has none today)
+//!    - global section: runtime globals (passthrough)
+//!    - export section: runtime exports (passthrough) + user exports
+//!    - element section: runtime elements (passthrough)
+//!    - code section: runtime code bodies (raw) + user code bodies
+//!    - data section: user data (runtime has none today)
+//!    - name section: runtime names (passthrough, minus ones shifted)
+//!
+//! # Scope (tracer phase)
+//!
+//! Only the IR constructs `lower` currently produces need to be
+//! emitted. Grow by demand.
+//!
+//! # Non-scope
+//!
+//! * DWARF / sourcemap emission into the final binary.
+//! * Multi-fragment merge (`link` still single-fragment passthrough).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use wasm_encoder::{
-  AbstractHeapType, CodeSection, CompositeInnerType, CompositeType,
-  ConstExpr, DataSection, ElementSection, Elements, ExportKind, ExportSection,
-  FieldType, FuncType, Function, FunctionSection, GlobalSection, GlobalType,
-  HeapType, ImportSection, IndirectNameMap, Instruction, MemorySection,
-  MemoryType, NameMap, NameSection, RefType, StorageType, SubType,
-  StructType, TypeSection, ValType,
+  AbstractHeapType, CodeSection, CompositeInnerType, CompositeType, ConstExpr,
+  ElementSection, Elements, Encode, ExportKind, ExportSection, FieldType, FuncType,
+  Function, FunctionSection, GlobalType, HeapType, ImportSection, Instruction,
+  MemorySection, MemoryType, Module as WasmModule, RefType, StorageType, StructType,
+  SubType, TypeSection, ValType as WEValType,
 };
 
-// Pre-compiled canonical type definitions from src/runtime/types.wat.
-// Compiled at build time by build.rs; see that file for details.
-static CANONICAL_TYPES_WASM: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/types.wasm"));
+use super::ir::*;
 
-use wasmparser;
+// ──────────────────────────────────────────────────────────────────
+// Runtime bundle — compiled at build time, spliced at emit time.
+// ──────────────────────────────────────────────────────────────────
 
-use crate::lexer::Loc;
-use crate::passes::cps::ir::{
-  Arg, BuiltIn, Callable, Cont, CpsId, Expr, ExprKind,
-  Lit, Ref, Val, ValKind,
-};
-use crate::passes::debug_marks::{DebugMarks, MarkRecord};
-use super::collect::{
-  CollectedFn, IrCtx, Module as CpsModule,
-  builtin_name, collect_locals, split_args,
-};
+static RUNTIME_IR_WASM: &[u8] =
+  include_bytes!(concat!(env!("OUT_DIR"), "/runtime-ir.wasm"));
 
-// ---------------------------------------------------------------------------
-// String intern table — deduplicates string literals in a flat data blob.
-// ---------------------------------------------------------------------------
-
-/// Interned string data: a flat byte blob where each unique literal is stored
-/// once. The intern ID is the byte offset into the blob; the length is stored
-/// alongside. Substring overlap is exploited: if `"hello"` already exists
-/// anywhere in the blob, a new reference to `"hello"` reuses that offset.
-struct StringData {
-  /// Accumulated data section bytes.
-  bytes: Vec<u8>,
+fn runtime() -> &'static Runtime {
+  static CELL: OnceLock<Runtime> = OnceLock::new();
+  CELL.get_or_init(|| parse_runtime(RUNTIME_IR_WASM))
 }
 
-impl StringData {
-  fn new() -> Self {
-    Self { bytes: Vec::new() }
-  }
-
-  /// Intern a string literal. Returns `(offset, length)` into the data blob.
-  /// If the byte sequence already exists as a substring, reuses that offset.
-  fn intern(&mut self, s: &[u8]) -> (u32, u32) {
-    let len = s.len() as u32;
-    // Search for existing substring.
-    if let Some(pos) = find_bytes(&self.bytes, s) {
-      return (pos as u32, len);
-    }
-    // Not found — append.
-    let offset = self.bytes.len() as u32;
-    self.bytes.extend_from_slice(s);
-    (offset, len)
-  }
-
-  fn is_empty(&self) -> bool {
-    self.bytes.is_empty()
-  }
-
-  /// Size in WASM pages (64 KiB each), rounded up.
-  fn pages(&self) -> u64 {
-    let size = self.bytes.len() as u64;
-    size.div_ceil(65536)
-  }
+/// Parsed runtime bundle — everything emit needs to splice.
+///
+/// Indices in the vectors mirror the runtime's own WASM indices in
+/// each namespace (types, funcs, ...), so the runtime's exports,
+/// code, and element sections can be forwarded verbatim.
+struct Runtime {
+  /// One entry per rec group in the order they appear in the
+  /// runtime's type section. Singleton types are stored as
+  /// one-element groups too — the encoder emits them as either an
+  /// explicit `(rec ...)` or a standalone type based on `explicit`.
+  type_groups: Vec<TypeGroup>,
+  /// Total number of SubTypes across all groups.
+  type_count: u32,
+  /// Map from the WAT `$name` (from the custom name section's type
+  /// subsection) to the type's module index. Used for resolving user
+  /// type imports via (module, name) → name → index.
+  type_by_name: HashMap<String, u32>,
+  /// Host-facing imports from module `"env"`. Forwarded verbatim.
+  env_imports: Vec<EnvImport>,
+  /// Type indices for each local function (not including imports).
+  /// Indexed by `local_func_idx`, which equals `global_func_idx -
+  /// import_count`.
+  local_func_sigs: Vec<u32>,
+  /// Total function count = imports + local funcs. New user funcs
+  /// get appended after this.
+  func_count_total: u32,
+  /// Map from qualified export name → (kind, index). Key format is
+  /// `"<fragment-url>:<name>"` for cross-fragment exports, bare for
+  /// interop exports. emit composes the same key from
+  /// user fragment `ImportKey` entries.
+  export_by_name: HashMap<String, (ExportKind, u32)>,
+  /// Exports to forward verbatim into the merged module's export
+  /// section.
+  exports_to_forward: Vec<(String, ExportKind, u32)>,
+  /// Raw bytes of the runtime's global section body (including the
+  /// leading count LEB128). `None` if no global section.
+  globals_body: Option<Vec<u8>>,
+  /// Raw bytes of the runtime's element section body (including
+  /// count LEB128). Same shape.
+  elements_body: Option<Vec<u8>>,
+  /// Raw bytes of each local function's body as they appear in the
+  /// code section (ready for `CodeSection::raw`).
+  code_bodies_raw: Vec<Vec<u8>>,
 }
 
-/// Find `needle` as a contiguous subsequence in `haystack`.
-fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-  if needle.is_empty() {
-    return Some(0);
-  }
-  haystack.windows(needle.len()).position(|w| w == needle)
+struct TypeGroup {
+  types: Vec<SubType>,
+  explicit: bool,
 }
 
-// ---------------------------------------------------------------------------
-// Canonical types from types.wat
-// ---------------------------------------------------------------------------
-
-/// Parsed canonical type definitions from the pre-compiled types.wasm.
-struct CanonicalTypes {
-  /// The rec group subtypes, ready to inject via TypeSection::rec().
-  rec_group: Vec<SubType>,
-  /// Type name → index within the rec group (e.g. "$Num" → 0, "$Closure" → 9).
-  names: BTreeMap<String, u32>,
-  /// Total number of canonical types.
-  count: u32,
+struct EnvImport {
+  module: String,
+  name: String,
+  entity: wasm_encoder::EntityType,
 }
 
-/// Parse the pre-compiled canonical types WASM and extract the rec group.
-fn parse_canonical_types() -> CanonicalTypes {
-  let wasm = CANONICAL_TYPES_WASM;
-  let mut rec_group = Vec::new();
-  let mut type_names: BTreeMap<u32, String> = BTreeMap::new();
+fn parse_runtime(bytes: &[u8]) -> Runtime {
+  let mut type_groups: Vec<TypeGroup> = Vec::new();
+  let mut type_count: u32 = 0;
+  let mut type_by_name: HashMap<String, u32> = HashMap::new();
+  let mut env_imports: Vec<EnvImport> = Vec::new();
+  let mut local_func_sigs: Vec<u32> = Vec::new();
+  let mut import_count: u32 = 0;
+  let mut exports_all: Vec<(String, ExportKind, u32)> = Vec::new();
+  let mut export_by_name: HashMap<String, (ExportKind, u32)> = HashMap::new();
+  let mut globals_body: Option<Vec<u8>> = None;
+  let mut elements_body: Option<Vec<u8>> = None;
+  let mut code_bodies_raw: Vec<Vec<u8>> = Vec::new();
 
-  for payload in wasmparser::Parser::new(0).parse_all(wasm) {
-    match payload.expect("invalid canonical types WASM") {
+  for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+    let payload = payload.expect("runtime-ir.wasm: parse error");
+    match payload {
       wasmparser::Payload::TypeSection(reader) => {
         for rg in reader.into_iter() {
-          let rg = rg.expect("invalid rec group in canonical types");
-          for st in rg.into_types() {
-            rec_group.push(convert_wasmparser_subtype(&st));
+          let rg = rg.expect("runtime-ir.wasm: invalid rec group");
+          let explicit = rg.is_explicit_rec_group();
+          let types: Vec<SubType> = rg.into_types().map(|st| convert_subtype(&st)).collect();
+          type_count += types.len() as u32;
+          type_groups.push(TypeGroup { types, explicit });
+        }
+      }
+      wasmparser::Payload::ImportSection(reader) => {
+        for group in reader {
+          let group = group.expect("runtime-ir.wasm: invalid import");
+          match group {
+            wasmparser::Imports::Single(_, imp) => {
+              let entity = match imp.ty {
+                wasmparser::TypeRef::Func(idx) => wasm_encoder::EntityType::Function(idx),
+                _ => panic!("runtime-ir.wasm: non-func import not yet supported"),
+              };
+              assert_eq!(imp.module, "env",
+                "runtime-ir.wasm: unexpected non-env import `{}`.`{}`", imp.module, imp.name);
+              env_imports.push(EnvImport {
+                module: imp.module.to_string(),
+                name: imp.name.to_string(),
+                entity,
+              });
+              import_count += 1;
+            }
+            wasmparser::Imports::Compact1 { module: mod_name, items } => {
+              for item in items.into_iter().flatten() {
+                let entity = match item.ty {
+                  wasmparser::TypeRef::Func(idx) => wasm_encoder::EntityType::Function(idx),
+                  _ => panic!("runtime-ir.wasm: non-func import not yet supported"),
+                };
+                assert_eq!(mod_name, "env",
+                  "runtime-ir.wasm: unexpected non-env import `{}`.`{}`", mod_name, item.name);
+                env_imports.push(EnvImport {
+                  module: mod_name.to_string(),
+                  name: item.name.to_string(),
+                  entity,
+                });
+                import_count += 1;
+              }
+            }
+            _ => panic!("runtime-ir.wasm: unsupported import group variant"),
           }
         }
+      }
+      wasmparser::Payload::FunctionSection(reader) => {
+        for sig in reader {
+          local_func_sigs.push(sig.expect("runtime-ir.wasm: invalid func sig"));
+        }
+      }
+      wasmparser::Payload::GlobalSection(reader)
+        if reader.count() > 0 => {
+          globals_body = Some(bytes[reader.range()].to_vec());
+        }
+      wasmparser::Payload::ExportSection(reader) => {
+        for exp in reader {
+          let exp = exp.expect("runtime-ir.wasm: invalid export");
+          let kind = match exp.kind {
+            wasmparser::ExternalKind::Func | wasmparser::ExternalKind::FuncExact => ExportKind::Func,
+            wasmparser::ExternalKind::Table => ExportKind::Table,
+            wasmparser::ExternalKind::Memory => ExportKind::Memory,
+            wasmparser::ExternalKind::Global => ExportKind::Global,
+            wasmparser::ExternalKind::Tag => ExportKind::Tag,
+          };
+          let name = exp.name.to_string();
+          exports_all.push((name.clone(), kind, exp.index));
+          export_by_name.insert(name, (kind, exp.index));
+        }
+      }
+      wasmparser::Payload::ElementSection(reader)
+        if reader.count() > 0 => {
+          elements_body = Some(bytes[reader.range()].to_vec());
+        }
+      wasmparser::Payload::CodeSectionEntry(body) => {
+        let range = body.range();
+        code_bodies_raw.push(bytes[range].to_vec());
       }
       wasmparser::Payload::CustomSection(reader) => {
         if let wasmparser::KnownCustom::Name(name_reader) = reader.as_known() {
           for name in name_reader.into_iter().flatten() {
             if let wasmparser::Name::Type(map) = name {
               for n in map.into_iter().flatten() {
-                type_names.insert(n.index, n.name.to_string());
+                type_by_name.insert(n.name.to_string(), n.index);
               }
             }
           }
@@ -166,44 +230,50 @@ fn parse_canonical_types() -> CanonicalTypes {
     }
   }
 
-  let count = rec_group.len() as u32;
-  let names: BTreeMap<String, u32> = type_names.into_iter()
-    .map(|(idx, name)| (format!("${name}"), idx))
-    .collect();
-
-  CanonicalTypes { rec_group, names, count }
-}
-
-// -- wasmparser → wasm-encoder type conversion (no index remapping) ----------
-
-fn convert_wasmparser_subtype(st: &wasmparser::SubType) -> SubType {
-  SubType {
-    is_final: st.is_final,
-    supertype_idx: st.supertype_idx
-      .map(|idx| idx.as_module_index().unwrap_or(0)),
-    composite_type: convert_wasmparser_composite(&st.composite_type),
+  Runtime {
+    type_groups,
+    type_count,
+    type_by_name,
+    env_imports,
+    local_func_sigs,
+    func_count_total: import_count + code_bodies_raw.len() as u32,
+    export_by_name,
+    exports_to_forward: exports_all,
+    globals_body,
+    elements_body,
+    code_bodies_raw,
   }
 }
 
-fn convert_wasmparser_composite(ct: &wasmparser::CompositeType) -> CompositeType {
+// ── wasmparser → wasm-encoder type converters ──────────────────────
+
+fn convert_subtype(st: &wasmparser::SubType) -> SubType {
+  SubType {
+    is_final: st.is_final,
+    supertype_idx: st.supertype_idx.map(|i| i.as_module_index().unwrap_or(0)),
+    composite_type: convert_composite(&st.composite_type),
+  }
+}
+
+fn convert_composite(ct: &wasmparser::CompositeType) -> CompositeType {
   CompositeType {
     inner: match &ct.inner {
       wasmparser::CompositeInnerType::Func(f) => {
         CompositeInnerType::Func(FuncType::new(
-          f.params().iter().map(|vt| convert_wasmparser_val(*vt)).collect::<Vec<_>>(),
-          f.results().iter().map(|vt| convert_wasmparser_val(*vt)).collect::<Vec<_>>(),
+          f.params().iter().map(|vt| convert_val(*vt)).collect::<Vec<_>>(),
+          f.results().iter().map(|vt| convert_val(*vt)).collect::<Vec<_>>(),
         ))
       }
       wasmparser::CompositeInnerType::Struct(s) => {
         CompositeInnerType::Struct(StructType {
-          fields: s.fields.iter().map(convert_wasmparser_field).collect(),
+          fields: s.fields.iter().map(convert_field).collect(),
         })
       }
       wasmparser::CompositeInnerType::Array(a) => {
-        CompositeInnerType::Array(wasm_encoder::ArrayType(convert_wasmparser_field(&a.0)))
+        CompositeInnerType::Array(wasm_encoder::ArrayType(convert_field(&a.0)))
       }
       wasmparser::CompositeInnerType::Cont(_) => {
-        panic!("canonical types: continuation types not supported")
+        panic!("emit: continuation types not supported")
       }
     },
     shared: ct.shared,
@@ -212,36 +282,34 @@ fn convert_wasmparser_composite(ct: &wasmparser::CompositeType) -> CompositeType
   }
 }
 
-fn convert_wasmparser_val(vt: wasmparser::ValType) -> ValType {
+fn convert_val(vt: wasmparser::ValType) -> WEValType {
   match vt {
-    wasmparser::ValType::I32 => ValType::I32,
-    wasmparser::ValType::I64 => ValType::I64,
-    wasmparser::ValType::F32 => ValType::F32,
-    wasmparser::ValType::F64 => ValType::F64,
-    wasmparser::ValType::V128 => ValType::V128,
-    wasmparser::ValType::Ref(rt) => ValType::Ref(convert_wasmparser_ref(rt)),
+    wasmparser::ValType::I32 => WEValType::I32,
+    wasmparser::ValType::I64 => WEValType::I64,
+    wasmparser::ValType::F32 => WEValType::F32,
+    wasmparser::ValType::F64 => WEValType::F64,
+    wasmparser::ValType::V128 => WEValType::V128,
+    wasmparser::ValType::Ref(rt) => WEValType::Ref(convert_ref(rt)),
   }
 }
 
-fn convert_wasmparser_ref(rt: wasmparser::RefType) -> RefType {
+fn convert_ref(rt: wasmparser::RefType) -> RefType {
   RefType {
     nullable: rt.is_nullable(),
     heap_type: match rt.heap_type() {
       wasmparser::HeapType::Abstract { shared, ty } => HeapType::Abstract {
         shared,
-        ty: convert_wasmparser_abstract_heap(ty),
+        ty: convert_abs_heap(ty),
       },
-      wasmparser::HeapType::Concrete(idx) => {
-        HeapType::Concrete(idx.as_module_index().unwrap_or(0))
-      }
-      wasmparser::HeapType::Exact(idx) => {
-        HeapType::Concrete(idx.as_module_index().unwrap_or(0))
-      }
+      wasmparser::HeapType::Concrete(idx) =>
+        HeapType::Concrete(idx.as_module_index().unwrap_or(0)),
+      wasmparser::HeapType::Exact(idx) =>
+        HeapType::Concrete(idx.as_module_index().unwrap_or(0)),
     },
   }
 }
 
-fn convert_wasmparser_abstract_heap(ty: wasmparser::AbstractHeapType) -> AbstractHeapType {
+fn convert_abs_heap(ty: wasmparser::AbstractHeapType) -> AbstractHeapType {
   match ty {
     wasmparser::AbstractHeapType::Func => AbstractHeapType::Func,
     wasmparser::AbstractHeapType::Extern => AbstractHeapType::Extern,
@@ -260,2462 +328,523 @@ fn convert_wasmparser_abstract_heap(ty: wasmparser::AbstractHeapType) -> Abstrac
   }
 }
 
-fn convert_wasmparser_field(f: &wasmparser::FieldType) -> FieldType {
+fn convert_field(f: &wasmparser::FieldType) -> FieldType {
   FieldType {
     element_type: match f.element_type {
       wasmparser::StorageType::I8 => StorageType::I8,
       wasmparser::StorageType::I16 => StorageType::I16,
-      wasmparser::StorageType::Val(vt) => StorageType::Val(convert_wasmparser_val(vt)),
+      wasmparser::StorageType::Val(vt) => StorageType::Val(convert_val(vt)),
     },
     mutable: f.mutable,
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/// Result of WASM binary emission.
-pub struct EmitResult {
-  pub wasm: Vec<u8>,
-  pub offset_mappings: Vec<OffsetMapping>,
-  /// Structural source locations for non-code items (func headers, globals, exports, params).
-  /// The formatter uses these to place source marks on WAT structural lines.
-  pub structural_locs: Vec<StructuralLoc>,
-  /// Debug-marker records: one entry per CpsId the `debug_marks` pass
-  /// flagged as a step-stop, with its fragment-local absolute WASM byte
-  /// offset and source `Loc`. Empty when the emitter is invoked without
-  /// a `DebugMarks` (e.g. legacy callers / tests).
-  pub mark_records: Vec<MarkRecord>,
-  /// Whether the module imports operators from @fink/runtime/operators.
-  pub needs_operators: bool,
-  /// Whether the module imports list functions from @fink/runtime/list.
-  pub needs_list: bool,
-  /// Whether the module uses string literals (needs @fink/runtime/string).
-  pub needs_string: bool,
-}
-
-/// A single source-map entry: WASM byte offset → .fnk source location.
-pub struct OffsetMapping {
-  pub wasm_offset: u32,
-  pub loc: Loc,
-}
-
-/// Source location for a structural (non-code) WASM item.
-#[derive(Debug, Clone)]
-pub struct StructuralLoc {
-  pub kind: StructuralKind,
-  pub loc: Loc,
-}
-
-/// Kind of structural item.
-#[derive(Debug, Clone)]
-pub enum StructuralKind {
-  /// Function header: (func $name ...)
-  FuncHeader { func_idx: u32 },
-  /// Function parameter: (param $name ...)
-  FuncParam { func_idx: u32, param_idx: u32 },
-  /// Global alias: (global $name ...)
-  Global { global_idx: u32 },
-  /// Export: (export "name" ...)
-  Export { name: String },
-}
-
-/// Emit a WASM binary from a collected CPS module.
-///
-/// `debug_marks` is consulted at each `mark()` site (and the operator-mark
-/// site in `emit_builtin`): when the CpsId being mapped has a stop set,
-/// the emitter records a parallel `RawMark` carrying the same byte
-/// position. After `module.finish()` these are converted to fragment-local
-/// absolute byte offsets by the same fixup that handles `OffsetMapping`s.
-///
-/// Pass `None` to opt out — useful for tests and legacy callers that don't
-/// build a `DebugMarks`. The resulting `mark_records` will be empty.
-pub fn emit<'a>(
-  module: &CpsModule<'a>,
-  ctx: &IrCtx<'_, '_>,
-  debug_marks: Option<&DebugMarks>,
-) -> EmitResult {
-  let mut e = Emitter::new(module, ctx, debug_marks);
-  // Scan builtins and closure captures. Module imports come from CpsResult
-  // (collected before lifting, so names survive the rec_pop chain being hoisted).
-  let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
-  let mut closure_captures: BTreeSet<usize> = BTreeSet::new();
-  for func in &module.funcs {
-    scan_builtins(func.body, &mut builtins);
-    scan_closure_captures(func.body, &mut closure_captures);
-  }
-  e.module_imports = module.module_imports.clone();
-  e.url_rewrite = module.url_rewrite.clone();
-  // Split builtins: implemented ones become defined functions, rest stay as imports.
-  let (impl_builtins, import_builtins): (BTreeMap<String, usize>, BTreeMap<String, usize>) =
-    builtins.into_iter().partition(|(name, _)| super::builtins::is_implemented(name));
-  let has_operator_imports = import_builtins.keys().any(|n| n.starts_with("op_"));
-  let has_list_imports = import_builtins.keys().any(|n| n.starts_with("seq_"));
-  let has_rec_imports = import_builtins.keys().any(|n| n.starts_with("rec_"))
-    || module.funcs.iter().any(|f| scan_rec_lit(f.body));
-  // Scan string literals and intern into the data blob.
-  let mut has_str_empty = false;
-  for func in &module.funcs {
-    has_str_empty |= scan_strings(func.body, &mut e.string_data);
-  }
-  // Also intern the module import field names so the BuiltIn::Import emitter
-  // can look them up by offset/length at emit time (same as other string lits).
-  for names in e.module_imports.values() {
-    for name in names {
-      e.string_data.intern(name.as_bytes());
-    }
-  }
-  let has_strings = !e.string_data.is_empty();
-
-  // $Fn2(caps, args) — unified calling convention for all functions.
-  let mut extra_arities: BTreeSet<usize> = BTreeSet::new();
-  extra_arities.insert(1); // $Fn1 — (reserved)
-  extra_arities.insert(2); // $Fn2 — all functions + _apply(args, callee)
-
-  // Module imports construct a rec from globals — needs rec_new + str + _rec_set_field.
-  let has_module_imports = !e.module_imports.is_empty();
-
-  e.closure_captures = closure_captures.clone();
-  e.needs_apply_for_operators = has_operator_imports;
-  e.needs_list = has_list_imports;
-  e.needs_rec = has_rec_imports || has_module_imports;
-  e.needs_string = has_strings || has_module_imports;
-  e.needs_str_empty = has_str_empty;
-  // Type section needs arities from both imported and implemented builtins.
-  let mut all_builtins = import_builtins.clone();
-  all_builtins.extend(impl_builtins.iter().map(|(k, v)| (k.clone(), *v)));
-  e.emit_types(module, &all_builtins, &extra_arities, &closure_captures);
-  let module_imports = e.module_imports.clone();
-  e.emit_imports_from(module, &import_builtins, &module_imports);
-  e.impl_builtins = impl_builtins.clone();
-  e.emit_functions(module, &closure_captures);
-  e.emit_memory();
-  e.emit_globals(module);
-  e.emit_exports(module);
-  e.emit_elements();
-  e.emit_code(module, &closure_captures);
-  e.emit_data();
-  e.emit_names(module, &closure_captures);
-  let wasm = e.module.finish();
-
-  // Fixup: convert func-local offsets to absolute offsets.
-  let mut mappings = fixup_offsets(&wasm, e.raw_mappings);
-  // Sort by wasm_offset for monotonic DWARF line table emission.
-  mappings.sort_by_key(|m| m.wasm_offset);
-
-  // Same fixup applied to debug-mark records — they were captured at
-  // emit time using the same (def_idx, func_byte_offset) coordinate
-  // as raw_mappings, so the per-function-body base lookup works
-  // identically.
-  let mut mark_records = fixup_marks(&wasm, e.raw_marks);
-  mark_records.sort_by_key(|m| m.wasm_pc);
-
-  EmitResult {
-    wasm,
-    offset_mappings: mappings,
-    structural_locs: e.structural_locs,
-    mark_records,
-    needs_operators: e.needs_apply_for_operators,
-    needs_list: e.needs_list,
-    needs_string: has_strings,
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Index management
-// ---------------------------------------------------------------------------
-
-/// Maps labels and builtins to WASM index spaces.
-struct Indices {
-  /// Type name → type index (e.g. "$Num" → 0, "$Fn2" → 2).
-  types: BTreeMap<String, u32>,
-  /// Builtin import name → function index.
-  imports: BTreeMap<String, u32>,
-  /// Defined function label → function index (offset by import count).
-  funcs: BTreeMap<String, u32>,
-  /// Global alias label → global index.
-  globals: BTreeMap<String, u32>,
-  /// Number of imported functions.
-  import_count: u32,
-  /// Number of imported globals (module imports). Defined globals are offset by this.
-  imported_global_count: u32,
-}
-
-impl Indices {
-  fn new() -> Self {
-    Self {
-      types: BTreeMap::new(),
-      imports: BTreeMap::new(),
-      funcs: BTreeMap::new(),
-      globals: BTreeMap::new(),
-      import_count: 0,
-      imported_global_count: 0,
-    }
-  }
-
-  /// Resolve a function index — import or defined.
-  fn func_idx(&self, label: &str) -> u32 {
-    if let Some(&idx) = self.imports.get(label) {
-      idx
-    } else if let Some(&idx) = self.funcs.get(label) {
-      idx
-    } else {
-      panic!("unknown function: {}", label)
-    }
-  }
-
-  /// Resolve a global index.
-  fn global_idx(&self, label: &str) -> u32 {
-    *self.globals.get(label).unwrap_or_else(|| panic!("unknown global: {}", label))
-  }
-
-  /// Resolve a type index.
-  fn type_idx(&self, name: &str) -> u32 {
-    *self.types.get(name).unwrap_or_else(|| panic!("unknown type: {}", name))
-  }
-
-  /// Get the $FnN type index for a given arity.
-  fn fn_type_idx(&self, arity: usize) -> u32 {
-    self.type_idx(&format!("$Fn{}", arity))
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Emitter state
-// ---------------------------------------------------------------------------
-
-struct Emitter<'a, 'src> {
-  module: wasm_encoder::Module,
-  idx: Indices,
-  ctx: &'a IrCtx<'a, 'src>,
-  /// Raw mappings: (func_index, func_local_byte_offset, loc).
-  /// Converted to absolute offsets after module.finish().
-  raw_mappings: Vec<RawMapping>,
-  /// Raw debug-marker records, captured in parallel with `raw_mappings`
-  /// at every site where the emitter consults `debug_marks`. Same
-  /// coordinate system as `RawMapping`; converted by `fixup_marks` after
-  /// `module.finish()`.
-  raw_marks: Vec<RawMark>,
-  /// Step-stop policy from the `debug_marks` pass. `None` means the
-  /// caller didn't run the pass — `mark()` falls back to source-mapping
-  /// only and `raw_marks` stays empty.
-  debug_marks: Option<&'a DebugMarks>,
-  /// Structural source locations for non-code items.
-  structural_locs: Vec<StructuralLoc>,
-  /// Closure capture counts found in this module (for _apply dispatch).
-  closure_captures: BTreeSet<usize>,
-  /// Builtins with known implementations (emitted as defined functions).
-  impl_builtins: BTreeMap<String, usize>,
-  /// Whether _apply is needed for imported operators (even without user closures).
-  needs_apply_for_operators: bool,
-  /// Whether list runtime imports are present (seq_prepend, seq_concat, seq_pop).
-  needs_list: bool,
-  /// Whether record runtime imports are present (rec_set, rec_pop, rec_merge).
-  needs_rec: bool,
-  /// Whether non-empty string literals are present (needs memory + data section + str import).
-  needs_string: bool,
-  /// Whether empty string literals are present (needs str_empty import).
-  needs_str_empty: bool,
-  /// Interned string literal data.
-  string_data: StringData,
-  /// Labels of module-level value globals (non-fn-alias LetVals).
-  value_globals: HashSet<String>,
-  /// Module imports: url → [name, ...]. Populated during pre-scan, used during emit.
-  module_imports: BTreeMap<String, Vec<String>>,
-  /// Raw source URL → canonical URL mapping. Used at `BuiltIn::Import`
-  /// emit sites to translate the raw Lit::Str URL (as written in source)
-  /// to the canonical form used as `module_imports` keys and in WASM
-  /// import/global labels. Empty in single-module builds (the emitter
-  /// falls back to identity lookup).
-  url_rewrite: BTreeMap<String, String>,
-}
-
-struct RawMapping {
-  /// Index of the defined function (0-based within defined funcs, not imports).
-  func_def_index: u32,
-  /// Byte offset within the function body (from Function::byte_len()).
-  func_byte_offset: u32,
-  /// Source location.
-  loc: Loc,
-}
-
-/// Pre-fixup form of a `MarkRecord`. Same coordinate system as
-/// `RawMapping`; the per-function-body absolute offset is filled in by
-/// `fixup_marks` after `module.finish()`.
-struct RawMark {
-  func_def_index: u32,
-  func_byte_offset: u32,
-  cps_id: CpsId,
-  loc: Loc,
-}
-
-impl<'a, 'src> Emitter<'a, 'src> {
-  fn new(
-    cps_mod: &CpsModule<'a>,
-    ctx: &'a IrCtx<'a, 'src>,
-    debug_marks: Option<&'a DebugMarks>,
-  ) -> Self {
-    Self {
-      module: wasm_encoder::Module::new(),
-      idx: Indices::new(),
-      ctx,
-      raw_mappings: Vec::new(),
-      raw_marks: Vec::new(),
-      debug_marks,
-      structural_locs: Vec::new(),
-      closure_captures: BTreeSet::new(),
-      impl_builtins: BTreeMap::new(),
-      needs_apply_for_operators: false,
-      needs_list: false,
-      needs_rec: false,
-      needs_string: false,
-      needs_str_empty: false,
-      string_data: StringData::new(),
-      value_globals: cps_mod.value_globals.clone(),
-      module_imports: BTreeMap::new(),
-      url_rewrite: BTreeMap::new(),
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Type section
-  // -------------------------------------------------------------------------
-
-  fn emit_types(&mut self, _cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>, extra_arities: &BTreeSet<usize>, _closure_captures: &BTreeSet<usize>) {
-    let mut types = TypeSection::new();
-
-    // 1. Canonical runtime types from types.wat — injected as a rec group.
-    //    These define the shared type vocabulary ($Num, $Str, $List, etc.)
-    //    that all modules and runtime fragments share after linking.
-    let canonical = parse_canonical_types();
-    types.ty().rec(canonical.rec_group);
-    for (name, &idx) in &canonical.names {
-      self.idx.types.insert(name.clone(), idx);
-    }
-    let mut next_idx = canonical.count;
-
-    // 2. Module-specific types — appended after the canonical rec group.
-
-    // $BoxFuncTy = (func (param funcref) (result (ref null any)))
-    // Type for the _box_func helper exported for the host.
-    let func_ref = ValType::Ref(RefType {
-      nullable: true,
-      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Func },
-    });
-    let any_ref = ValType::Ref(RefType {
-      nullable: true,
-      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
-    });
-    types.ty().subtype(&SubType {
-      is_final: true,
-      supertype_idx: None,
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Func(FuncType::new(
-          vec![func_ref],
-          vec![any_ref],
-        )),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$BoxFuncTy".into(), next_idx);
-    next_idx += 1;
-
-    // $TmpImport0 = (func (param i32 i32) (result (ref $Str)))
-    // Temporary type for the str import — only exists pre-link.
-    // The linker unifies this with str.wat's actual function type.
-    if self.needs_string {
-      let str_idx = self.idx.type_idx("$Str");
-      let str_ref = ValType::Ref(RefType {
-        nullable: false,
-        heap_type: HeapType::Concrete(str_idx),
-      });
-      types.ty().subtype(&SubType {
-        is_final: true,
-        supertype_idx: None,
-        composite_type: CompositeType {
-          inner: CompositeInnerType::Func(FuncType::new(
-            vec![ValType::I32, ValType::I32],
-            vec![str_ref],
-          )),
-          shared: false,
-          descriptor: None,
-          describes: None,
-        },
-      });
-      self.idx.types.insert("$TmpImport0".into(), next_idx);
-      next_idx += 1;
-    }
-
-    // $TmpImportThunk = (func (result (ref null any)))
-    // Used for list_nil and rec_new imports (both return a single value).
-    types.ty().subtype(&SubType {
-      is_final: true,
-      supertype_idx: None,
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Func(FuncType::new(
-          vec![],
-          vec![any_ref],
-        )),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$TmpImportThunk".into(), next_idx);
-    next_idx += 1;
-
-    // $TmpImportListOp = (func (param (ref null any)) (result (ref null any)))
-    // Temporary type for list_head / list_tail imports — used for param unpacking.
-    types.ty().subtype(&SubType {
-      is_final: true,
-      supertype_idx: None,
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Func(FuncType::new(
-          vec![any_ref],
-          vec![any_ref],
-        )),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$TmpImportListOp".into(), next_idx);
-    next_idx += 1;
-
-    // $TmpImportListPrepend = (func (param (ref null any) (ref null any)) (result (ref null any)))
-    // Temporary type for list_prepend import — used to build args lists at call sites.
-    types.ty().subtype(&SubType {
-      is_final: true,
-      supertype_idx: None,
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Func(FuncType::new(
-          vec![any_ref, any_ref],
-          vec![any_ref],
-        )),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$TmpImportListPrepend".into(), next_idx);
-    next_idx += 1;
-
-    // $TmpImportChannelNew = (func (param (ref null any)) (result (ref null any)))
-    // Temporary type for _channel_new import — host creates channels before CPS.
-    types.ty().subtype(&SubType {
-      is_final: true,
-      supertype_idx: None,
-      composite_type: CompositeType {
-        inner: CompositeInnerType::Func(FuncType::new(
-          vec![any_ref],
-          vec![any_ref],
-        )),
-        shared: false,
-        descriptor: None,
-        describes: None,
-      },
-    });
-    self.idx.types.insert("$TmpImportChannelNew".into(), next_idx);
-    next_idx += 1;
-
-    // $TmpImportRecSetField = (func (param (ref null any) (ref null any) (ref null any)) (result (ref null any)))
-    // Direct-style rec field setter: _rec_set_field(rec, key, val) -> rec.
-    // Only emitted when there are module imports that need rec construction.
-    if !self.module_imports.is_empty() {
-      types.ty().subtype(&SubType {
-        is_final: true,
-        supertype_idx: None,
-        composite_type: CompositeType {
-          inner: CompositeInnerType::Func(FuncType::new(
-            vec![any_ref, any_ref, any_ref],
-            vec![any_ref],
-          )),
-          shared: false,
-          descriptor: None,
-          describes: None,
-        },
-      });
-      self.idx.types.insert("$TmpImportRecSetField".into(), next_idx);
-      next_idx += 1;
-    }
-
-    // $FnN for all needed arities.
-    // $Fn2: all functions (caps, args) AND _apply(args, callee)
-    // Plus builtin arities.
-    let mut all_arities: BTreeSet<usize> = BTreeSet::new();
-    for &arity in builtins.values() {
-      all_arities.insert(arity);
-    }
-    for &arity in extra_arities {
-      all_arities.insert(arity);
-    }
-    for &arity in &all_arities {
-      let name = format!("$Fn{}", arity);
-      // Skip if already defined in canonical types (e.g. $Fn2 from types.wat).
-      if self.idx.types.contains_key(&name) { continue; }
-      let params: Vec<ValType> = vec![any_ref; arity];
-      types.ty().subtype(&SubType {
-        is_final: true,
-        supertype_idx: None,
-        composite_type: CompositeType {
-          inner: CompositeInnerType::Func(FuncType::new(params, vec![])),
-          shared: false,
-          descriptor: None,
-          describes: None,
-        },
-      });
-      self.idx.types.insert(name, next_idx);
-      next_idx += 1;
-    }
-
-    self.module.section(&types);
-  }
-
-  // -------------------------------------------------------------------------
-  // Import section — builtins as imported functions
-  // -------------------------------------------------------------------------
-
-  fn emit_imports_from(&mut self, _cps_mod: &CpsModule<'a>, builtins: &BTreeMap<String, usize>, module_imports: &BTreeMap<String, Vec<String>>) {
-    let mut imports = ImportSection::new();
-    let mut next_func_idx = 0u32;
-
-    for (name, arity) in builtins {
-      let type_idx = self.idx.fn_type_idx(*arity);
-      imports.import("@fink/runtime", name, wasm_encoder::EntityType::Function(type_idx));
-      self.idx.imports.insert(name.clone(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // str: (i32, i32) -> (ref $Str) — wraps data-section pointer.
-    if self.needs_string {
-      let type_idx = self.idx.type_idx("$TmpImport0");
-      imports.import("@fink/runtime", "str", wasm_encoder::EntityType::Function(type_idx));
-      self.idx.imports.insert("str".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // str_empty: () -> (ref $Str) — singleton empty string.
-    if self.needs_str_empty {
-      let type_idx = self.idx.type_idx("$TmpImportThunk");
-      imports.import("@fink/runtime", "str_empty", wasm_encoder::EntityType::Function(type_idx));
-      self.idx.imports.insert("str_empty".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // rec_empty: () -> (ref $RecImpl) — creates empty record.
-    if self.needs_rec {
-      let type_idx = self.idx.type_idx("$TmpImportThunk");
-      imports.import("@fink/runtime", "rec_new", wasm_encoder::EntityType::Function(type_idx));
-      self.idx.imports.insert("rec_new".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // List operations for the universal calling convention.
-    // These are the _any wrappers (defined in list.wat) that take/return
-    // (ref null any), bridging the emitter's type system with $Cons internals.
-    {
-      let list_op_idx = self.idx.type_idx("$TmpImportListOp");
-      imports.import("@fink/runtime", "list_head_any", wasm_encoder::EntityType::Function(list_op_idx));
-      self.idx.imports.insert("list_head".into(), next_func_idx);
-      next_func_idx += 1;
-
-      imports.import("@fink/runtime", "list_tail_any", wasm_encoder::EntityType::Function(list_op_idx));
-      self.idx.imports.insert("list_tail".into(), next_func_idx);
-      next_func_idx += 1;
-
-      let list_prepend_idx = self.idx.type_idx("$TmpImportListPrepend");
-      imports.import("@fink/runtime", "list_prepend_any", wasm_encoder::EntityType::Function(list_prepend_idx));
-      self.idx.imports.insert("list_prepend".into(), next_func_idx);
-      next_func_idx += 1;
-
-      imports.import("@fink/runtime", "list_concat_any", wasm_encoder::EntityType::Function(list_prepend_idx));
-      self.idx.imports.insert("list_concat".into(), next_func_idx);
-      next_func_idx += 1;
-
-      let list_nil_idx = self.idx.type_idx("$TmpImportThunk");
-      imports.import("@fink/runtime", "list_nil", wasm_encoder::EntityType::Function(list_nil_idx));
-      self.idx.imports.insert("list_nil".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // _channel_new: direct-style channel constructor for host use.
-    {
-      let ch_new_idx = self.idx.type_idx("$TmpImportChannelNew");
-      imports.import("@fink/runtime", "_channel_new", wasm_encoder::EntityType::Function(ch_new_idx));
-      self.idx.imports.insert("_channel_new".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // _run_main: main runner from interop-rust.wat.
-    // Type: (ref null any, ref null any) -> () — takes (entry, cli_args).
-    {
-      let run_main_idx = self.idx.fn_type_idx(2);
-      imports.import("@fink/runtime", "_run_main", wasm_encoder::EntityType::Function(run_main_idx));
-      self.idx.imports.insert("_run_main".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // _settle_future: settle a host future (called by host during host_resume).
-    // Type: $Fn2 (param (ref null any) (ref null any)) — future, value.
-    {
-      let fn2_idx = self.idx.fn_type_idx(2);
-      imports.import("@fink/runtime", "_settle_future", wasm_encoder::EntityType::Function(fn2_idx));
-      self.idx.imports.insert("_settle_future".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // _str_wrap_bytes: wrap a GC byte array into a $Str.
-    // Type: same as _channel_new — (param (ref null any)) (result (ref null any)).
-    {
-      let wrap_idx = self.idx.type_idx("$TmpImportChannelNew");
-      imports.import("@fink/runtime", "_str_wrap_bytes", wasm_encoder::EntityType::Function(wrap_idx));
-      self.idx.imports.insert("_str_wrap_bytes".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // _apply: closure dispatch (defined in dispatch.wat).
-    {
-      let fn2_idx = self.idx.fn_type_idx(2);
-      imports.import("@fink/runtime", "_apply", wasm_encoder::EntityType::Function(fn2_idx));
-      self.idx.imports.insert("_apply".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // _rec_set_field: direct-style rec field setter for module import rec construction.
-    // Only imported when there are module imports to handle.
-    if !module_imports.is_empty() {
-      let rec_set_field_idx = self.idx.type_idx("$TmpImportRecSetField");
-      imports.import("@fink/runtime", "_rec_set_field", wasm_encoder::EntityType::Function(rec_set_field_idx));
-      self.idx.imports.insert("_rec_set_field".into(), next_func_idx);
-      next_func_idx += 1;
-    }
-
-    self.idx.import_count = next_func_idx;
-
-    // Module global imports — one (ref null any) global per imported name.
-    // Imported globals occupy indices 0..N in the global index space;
-    // defined globals (fn aliases, value globals, export slots) follow after.
-    let any_ref = RefType {
-      nullable: true,
-      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
-    };
-    let mut next_global_idx = 0u32;
-    for (url, names) in module_imports {
-      for name in names {
-        let label = format!("{url}#{name}");
-        imports.import(
-          url,
-          name,
-          wasm_encoder::EntityType::Global(GlobalType {
-            val_type: ValType::Ref(any_ref),
-            mutable: false,
-            shared: false,
-          }),
-        );
-        self.idx.globals.insert(label, next_global_idx);
-        next_global_idx += 1;
-      }
-    }
-    self.idx.imported_global_count = next_global_idx;
-
-    if next_func_idx > 0 || next_global_idx > 0 {
-      self.module.section(&imports);
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Function section — declares function signatures
-  // -------------------------------------------------------------------------
-
-  fn emit_functions(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>) {
-    let mut functions = FunctionSection::new();
-
-    // CPS-defined functions — all $Fn2(caps, args).
-    let fn2_type = self.idx.fn_type_idx(2);
-    for (i, func) in cps_mod.funcs.iter().enumerate() {
-      let type_idx = fn2_type;
-      functions.function(type_idx);
-      let func_idx = self.idx.import_count + i as u32;
-      self.idx.funcs.insert(func.label.clone(), func_idx);
-
-      // Record structural loc for func header.
-      if let Some(node) = self.ctx.ast_node(func.fn_id) {
-        self.structural_locs.push(StructuralLoc {
-          kind: StructuralKind::FuncHeader { func_idx },
-          loc: node.loc,
-        });
-      }
-
-      // Record structural locs for params.
-      for (p_idx, (p_id, _, _)) in func.params.iter().enumerate() {
-        if let Some(node) = self.ctx.ast_node(*p_id) {
-          self.structural_locs.push(StructuralLoc {
-            kind: StructuralKind::FuncParam { func_idx, param_idx: p_idx as u32 },
-            loc: node.loc,
-          });
-        }
-      }
-    }
-
-    // Helper functions are appended after CPS-defined functions.
-    let mut next_func_idx = self.idx.import_count + cps_mod.funcs.len() as u32;
-
-    // Implemented builtins as defined functions.
-    for (name, arity) in &self.impl_builtins {
-      let type_idx = self.idx.fn_type_idx(*arity);
-      functions.function(type_idx);
-      let internal_name = format!("_{}", name);
-      self.idx.funcs.insert(internal_name, next_func_idx);
-      next_func_idx += 1;
-    }
-
-    // _box_func helper: (func (param funcref) (result (ref null any)))
-    let box_func_type_idx = self.idx.type_idx("$BoxFuncTy");
-    functions.function(box_func_type_idx);
-    self.idx.funcs.insert("_box_func".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _list_nil helper: wraps list_nil for the runner.
-    // Type: (func (result (ref null any)))
-    let list_nil_type = self.idx.type_idx("$TmpImportThunk");
-    functions.function(list_nil_type);
-    self.idx.funcs.insert("_list_nil".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _list_prepend helper: wraps list_prepend for the runner to build args lists.
-    // Type: (func (param (ref null any) (ref null any)) (result (ref null any)))
-    let list_prepend_type = self.idx.type_idx("$TmpImportListPrepend");
-    functions.function(list_prepend_type);
-    self.idx.funcs.insert("_list_prepend".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _fn2_stub: exported so the runner can get the $Fn2 type for host callbacks.
-    let fn2_type = self.idx.fn_type_idx(2);
-    functions.function(fn2_type);
-    self.idx.funcs.insert("_fn2_stub".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _channel_new helper: wraps _channel_new import for the runner.
-    // Type: (func (param (ref null any)) (result (ref null any)))
-    let channel_new_type = self.idx.type_idx("$TmpImportChannelNew");
-    functions.function(channel_new_type);
-    self.idx.funcs.insert("_channel_new_export".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _run_main helper: wraps _run_main import for the runner.
-    let run_main_type = self.idx.fn_type_idx(2);
-    functions.function(run_main_type);
-    self.idx.funcs.insert("_run_main_export".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _settle_future helper: wraps _settle_future import for the host.
-    // Type: $Fn2 (param (ref null any) (ref null any)) — future, value.
-    let settle_type = self.idx.fn_type_idx(2);
-    functions.function(settle_type);
-    self.idx.funcs.insert("_settle_future_export".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _str_wrap_bytes helper: wraps _str_wrap_bytes import for the host.
-    // Type: same as _channel_new — (param (ref null any)) (result (ref null any)).
-    let wrap_bytes_type = self.idx.type_idx("$TmpImportChannelNew");
-    functions.function(wrap_bytes_type);
-    self.idx.funcs.insert("_str_wrap_bytes_export".into(), next_func_idx);
-    next_func_idx += 1;
-
-    // _apply_export: re-exports _apply for the runner to drive module init.
-    // Type: $Fn2 (param (ref null any) (ref null any)).
-    let apply_export_type = self.idx.fn_type_idx(2);
-    functions.function(apply_export_type);
-    self.idx.funcs.insert("_apply_export".into(), next_func_idx);
-    next_func_idx += 1;
-
-    let _ = next_func_idx;
-    self.module.section(&functions);
-  }
-
-  // -------------------------------------------------------------------------
-  // Memory section — linear memory (required by string runtime)
-  // -------------------------------------------------------------------------
-
-  fn emit_memory(&mut self) {
-    let mut memories = MemorySection::new();
-    memories.memory(MemoryType {
-      minimum: self.string_data.pages().max(1),
-      maximum: None,
-      memory64: false,
-      shared: false,
-      page_size_log2: None,
-    });
-    self.module.section(&memories);
-  }
-
-  // -------------------------------------------------------------------------
-  // Global section — module-level fn aliases
-  // -------------------------------------------------------------------------
-
-  fn emit_globals(&mut self, cps_mod: &CpsModule<'a>) {
-    let mut globals = GlobalSection::new();
-    // Imported globals (module imports) occupy indices 0..imported_global_count.
-    // Defined globals start after them.
-    let mut next_global_idx = self.idx.imported_global_count;
-
-    let fn2_type = self.idx.fn_type_idx(2);
-    for func in &cps_mod.funcs {
-      if let Some((alias_id, alias_label)) = &func.alias {
-        let fn_type_idx = fn2_type;
-        let func_idx = self.idx.func_idx(&func.label);
-
-        // Record structural loc for global alias.
-        if let Some(node) = self.ctx.ast_node(*alias_id) {
-          self.structural_locs.push(StructuralLoc {
-            kind: StructuralKind::Global { global_idx: next_global_idx },
-            loc: node.loc,
-          });
-        }
-
-        globals.global(
-          GlobalType {
-            val_type: ValType::Ref(RefType {
-              nullable: true,
-              heap_type: HeapType::Concrete(fn_type_idx),
-            }),
-            mutable: false,
-            shared: false,
-          },
-          &ConstExpr::ref_func(func_idx),
-        );
-        self.idx.globals.insert(alias_label.clone(), next_global_idx);
-        next_global_idx += 1;
-      }
-    }
-
-    // Module-level value globals — non-fn-alias LetVals that sibling functions
-    // may reference. Mutable `(mut (ref null any))`, set during fink_module init.
-    let any_heap = HeapType::Abstract { shared: false, ty: AbstractHeapType::Any };
-    for label in &cps_mod.value_globals {
-      globals.global(
-        GlobalType {
-          val_type: ValType::Ref(RefType {
-            nullable: true,
-            heap_type: any_heap,
-          }),
-          mutable: true,
-          shared: false,
-        },
-        &ConstExpr::ref_null(any_heap),
-      );
-      self.idx.globals.insert(label.clone(), next_global_idx);
-      next_global_idx += 1;
-    }
-
-    // Export slots — one mutable `(mut (ref null any))` per ·ƒpub export,
-    // initialised to null. Populated by `·ƒpub` slot-writes inside
-    // fink_module at init time. Exported directly as globals.
-    for (_cps_id, export_name) in &cps_mod.exports {
-      let slot_label = export_name.clone();
-      globals.global(
-        GlobalType {
-          val_type: ValType::Ref(RefType {
-            nullable: true,
-            heap_type: any_heap,
-          }),
-          mutable: true,
-          shared: false,
-        },
-        &ConstExpr::ref_null(any_heap),
-      );
-      self.idx.globals.insert(slot_label, next_global_idx);
-      next_global_idx += 1;
-    }
-
-    if next_global_idx > 0 {
-      self.module.section(&globals);
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Export section
-  // -------------------------------------------------------------------------
-
-  fn emit_exports(&mut self, cps_mod: &CpsModule<'a>) {
-    let mut exports = ExportSection::new();
-
-    // Legacy: `export_as` on CollectedFn was the old direct-export model
-    // where the module-level fn was itself exported under its user name.
-    // The new export model (below) routes user exports through per-name
-    // slot globals and wrapper fns — avoid emitting the same name twice.
-    let new_export_names: std::collections::HashSet<&str> = cps_mod.exports
-      .iter().map(|(_, n)| n.as_str()).collect();
-
-    for func in &cps_mod.funcs {
-      if let Some(name) = &func.export_as {
-        if new_export_names.contains(name.as_str()) { continue; }
-        let func_idx = self.idx.func_idx(&func.label);
-        exports.export(name, ExportKind::Func, func_idx);
-
-        // Record structural loc for export.
-        if let Some(bind_id) = func.export_bind_id
-          && let Some(node) = self.ctx.ast_node(bind_id) {
-            self.structural_locs.push(StructuralLoc {
-              kind: StructuralKind::Export { name: name.clone() },
-              loc: node.loc,
-            });
-          }
-      }
-    }
-
-    // User exports — each `·ƒpub` export is a global holding (ref null any).
-    // Exported directly as a global; the host reads the value.
-    for (cps_id, export_name) in &cps_mod.exports {
-      if let Some(&global_idx) = self.idx.globals.get(export_name) {
-        exports.export(export_name, ExportKind::Global, global_idx);
-        if let Some(node) = self.ctx.ast_node(*cps_id) {
-          self.structural_locs.push(StructuralLoc {
-            kind: StructuralKind::Export { name: export_name.clone() },
-            loc: node.loc,
-          });
-        }
-      }
-    }
-
-    // Always export __box_func for the host to create boxed continuations.
-    let box_func_idx = self.idx.func_idx("_box_func");
-    exports.export("_box_func", ExportKind::Func, box_func_idx);
-
-    // fink_module: the module's CPS entry point. The runner boxes it and
-    // calls _apply([done], fink_module_closure) to drive init.
-    let fink_module_idx = self.idx.func_idx("fink_module");
-    exports.export("fink_module", ExportKind::Func, fink_module_idx);
-
-    // _apply: exported for the runner to drive module init / call closures.
-    let apply_export_idx = self.idx.func_idx("_apply_export");
-    exports.export("_apply", ExportKind::Func, apply_export_idx);
-
-    // _list_nil / _list_prepend: exported for the runner to build args lists.
-    let list_nil_idx = self.idx.func_idx("_list_nil");
-    exports.export("_list_nil", ExportKind::Func, list_nil_idx);
-    let list_prepend_idx = self.idx.func_idx("_list_prepend");
-    exports.export("_list_prepend", ExportKind::Func, list_prepend_idx);
-
-    // _fn2_stub: exported so the runner can get the canonical $Fn2 type.
-    let fn2_stub_idx = self.idx.func_idx("_fn2_stub");
-    exports.export("_fn2_stub", ExportKind::Func, fn2_stub_idx);
-
-    // _channel_new: exported for the runner to create channels for main.
-    let channel_new_idx = self.idx.func_idx("_channel_new_export");
-    exports.export("_channel_new", ExportKind::Func, channel_new_idx);
-
-    // _run_main: exported for the runner to execute main with IO.
-    let run_main_idx = self.idx.func_idx("_run_main_export");
-    exports.export("_run_main", ExportKind::Func, run_main_idx);
-
-    // _settle_future: exported for the host to settle futures during host_resume.
-    let settle_idx = self.idx.func_idx("_settle_future_export");
-    exports.export("_settle_future", ExportKind::Func, settle_idx);
-
-    // _str_wrap_bytes: exported for the host to create $Str from GC byte arrays.
-    let wrap_bytes_idx = self.idx.func_idx("_str_wrap_bytes_export");
-    exports.export("_str_wrap_bytes", ExportKind::Func, wrap_bytes_idx);
-
-    // TODO: memory should not be exported in production builds — only
-    // needed for the runner to read string data during testing.
-    exports.export("memory", ExportKind::Memory, 0);
-
-    self.module.section(&exports);
-  }
-
-  // -------------------------------------------------------------------------
-  // Element section — declarative segment for ref.func validation
-  // -------------------------------------------------------------------------
-
-  /// Emit a declarative element segment listing all defined functions.
-  /// WASM requires functions referenced by ref.func (in code or global
-  /// initialisers) to appear in an element segment.
-  ///
-  /// This also includes the imported runtime `panic` function if it's been
-  /// registered as an import — panic is the only runtime import referenced
-  /// as a value (via `ref.func`) rather than called, so WASM validation
-  /// requires it appears here.
-  fn emit_elements(&mut self) {
-    let mut func_indices: Vec<u32> = self.idx.funcs.values().copied().collect();
-    if let Some(&panic_idx) = self.idx.imports.get("panic") {
-      func_indices.push(panic_idx);
-    }
-    func_indices.sort();
-    let mut elements = ElementSection::new();
-    elements.declared(Elements::Functions(func_indices.into()));
-    self.module.section(&elements);
-  }
-
-  // -------------------------------------------------------------------------
-  // Code section — function bodies with byte offset tracking
-  // -------------------------------------------------------------------------
-
-  fn emit_code(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>) {
-    let mut code = CodeSection::new();
-
-    for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
-      let wasm_func = self.emit_func_body(func, def_idx as u32);
-      code.function(&wasm_func);
-    }
-
-    // Implemented builtin bodies.
-    {
-      let type_indices = super::builtins::TypeIndices {
-        num: self.idx.type_idx("$Num"),
-        closure: self.idx.type_idx("$Closure"),
-        captures: self.idx.type_idx("$Captures"),
-        fn1: self.idx.fn_type_idx(2), // $Fn2 — continuations
-        apply2: self.idx.funcs.get("_apply_2").copied(),
-      };
-      let names: Vec<String> = self.impl_builtins.keys().cloned().collect();
-      for name in names {
-        let f = super::builtins::emit_builtin(&name, &type_indices);
-        code.function(&f);
-      }
-    }
-
-    // _box_func body: struct.new $Closure (funcref, ref.null $Captures)
-    {
-      let mut f = Function::new(vec![]);
-      let closure_idx = self.idx.type_idx("$Closure");
-      let captures_idx = self.idx.type_idx("$Captures");
-      f.instruction(&Instruction::LocalGet(0));
-      f.instruction(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
-      f.instruction(&Instruction::StructNew(closure_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _list_nil body: delegates to imported list_nil.
-    {
-      let mut f = Function::new(vec![]);
-      let list_nil_idx = self.idx.func_idx("list_nil");
-      f.instruction(&Instruction::Call(list_nil_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _list_prepend body: delegates to imported list_prepend.
-    {
-      let mut f = Function::new(vec![]);
-      let list_prepend_idx = self.idx.func_idx("list_prepend");
-      f.instruction(&Instruction::LocalGet(0));
-      f.instruction(&Instruction::LocalGet(1));
-      f.instruction(&Instruction::Call(list_prepend_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _fn2_stub body: unreachable (only exists for its type).
-    {
-      let mut f = Function::new(vec![]);
-      f.instruction(&Instruction::Unreachable);
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _channel_new body: delegates to imported _channel_new.
-    {
-      let mut f = Function::new(vec![]);
-      let channel_new_idx = self.idx.func_idx("_channel_new");
-      f.instruction(&Instruction::LocalGet(0));
-      f.instruction(&Instruction::Call(channel_new_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _run_main body: forwards (entry, cli_args) to imported _run_main.
-    {
-      let mut f = Function::new(vec![]);
-      let run_main_idx = self.idx.func_idx("_run_main");
-      f.instruction(&Instruction::LocalGet(0)); // entry function
-      f.instruction(&Instruction::LocalGet(1)); // cli args list
-      f.instruction(&Instruction::Call(run_main_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _settle_future body: forwards (future, value) to imported _settle_future.
-    {
-      let mut f = Function::new(vec![]);
-      let settle_idx = self.idx.func_idx("_settle_future");
-      f.instruction(&Instruction::LocalGet(0)); // future ref
-      f.instruction(&Instruction::LocalGet(1)); // value ref
-      f.instruction(&Instruction::Call(settle_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _str_wrap_bytes body: forwards byte array to imported _str_wrap_bytes.
-    {
-      let mut f = Function::new(vec![]);
-      let wrap_idx = self.idx.func_idx("_str_wrap_bytes");
-      f.instruction(&Instruction::LocalGet(0)); // byte array ref
-      f.instruction(&Instruction::Call(wrap_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    // _apply_export body: forwards (args, callee) to imported _apply.
-    {
-      let mut f = Function::new(vec![]);
-      let apply_idx = self.idx.func_idx("_apply");
-      f.instruction(&Instruction::LocalGet(0)); // args
-      f.instruction(&Instruction::LocalGet(1)); // callee
-      f.instruction(&Instruction::Call(apply_idx));
-      f.instruction(&Instruction::End);
-      code.function(&f);
-    }
-
-    self.module.section(&code);
-  }
-
-  fn emit_func_body(&mut self, func: &CollectedFn<'a>, def_idx: u32) -> Function {
-    let any_ref = ValType::Ref(RefType {
-      nullable: true,
-      heap_type: HeapType::Abstract { shared: false, ty: AbstractHeapType::Any },
-    });
-
-    // Unified $Fn2 calling convention:
-    //   $Fn2(captures, args) — all functions
-    //
-    // WASM params:
-    //   local 0 = captures (ref null any — cast to $Captures array)
-    //   local 1 = args list (ref null any)
-    //
-    // CPS params split into:
-    //   [0..n_captures)              → from captures array (array.get)
-    //   [n_captures..N)              → from args list (list_head/list_tail)
-    let wasm_param_count: u32 = 2;
-
-    let mut local_map: HashMap<String, u32> = HashMap::new();
-    let param_count = func.params.len() as u32;
-    for (i, (_id, label, _is_spread)) in func.params.iter().enumerate() {
-      local_map.insert(label.clone(), wasm_param_count + i as u32);
-    }
-
-    let locals_list = collect_locals(func.body, self.ctx);
-    for (i, label) in locals_list.iter().enumerate() {
-      local_map.insert(label.clone(), wasm_param_count + param_count + i as u32);
-    }
-
-    // Declare locals: CPS params + body locals + 1 scratch (all (ref null any)).
-    let scratch_local = wasm_param_count + param_count + locals_list.len() as u32;
-    let total_locals = param_count + locals_list.len() as u32 + 1;
-    let locals: Vec<(u32, ValType)> = vec![(total_locals, any_ref)];
-    let mut wasm_func = Function::new(locals);
-
-    let captures_idx = self.idx.type_idx("$Captures");
-    let list_head_idx = self.idx.func_idx("list_head");
-    let list_tail_idx = self.idx.func_idx("list_tail");
-
-    // Unpack capture params from the $Captures array (local 0).
-    for i in 0..func.n_captures {
-      wasm_func.instruction(&Instruction::LocalGet(0));  // captures
-      wasm_func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(captures_idx)));
-      wasm_func.instruction(&Instruction::I32Const(i as i32));
-      wasm_func.instruction(&Instruction::ArrayGet(captures_idx));
-      wasm_func.instruction(&Instruction::LocalSet(wasm_param_count + i as u32));
-    }
-
-    // Unpack value params from the args list (local 1).
-    // All params (including conts) come from captures or args list.
-    let val_params = &func.params[func.n_captures..];
-    for (j, (_id, _label, is_spread)) in val_params.iter().enumerate() {
-      let local_idx = wasm_param_count + (func.n_captures + j) as u32;
-      if *is_spread {
-        // Spread param gets the remaining args list as-is.
-        wasm_func.instruction(&Instruction::LocalGet(1));  // args
-        wasm_func.instruction(&Instruction::LocalSet(local_idx));
-      } else {
-        // Head → param local.
-        wasm_func.instruction(&Instruction::LocalGet(1));  // args
-        wasm_func.instruction(&Instruction::Call(list_head_idx));
-        wasm_func.instruction(&Instruction::LocalSet(local_idx));
-        // Tail → advance args cursor (unless this is the last val param).
-        if j + 1 < val_params.len() {
-          wasm_func.instruction(&Instruction::LocalGet(1));
-          wasm_func.instruction(&Instruction::Call(list_tail_idx));
-          wasm_func.instruction(&Instruction::LocalSet(1));
-        }
-      }
-    }
-
-    // Copy fink_module params that are value globals: local → global.
-    // Sibling functions read these via global.get.
-    for (_id, label, _) in &func.params {
-      if self.value_globals.contains(label)
-        && let Some(&local) = local_map.get(label) {
-          let global = self.idx.global_idx(label);
-          wasm_func.instruction(&Instruction::LocalGet(local));
-          wasm_func.instruction(&Instruction::GlobalSet(global));
-      }
-    }
-
-    // Emit body instructions.
-    let mut fc = FuncContext {
-      func: &mut wasm_func,
-      local_map: &local_map,
-      emitter_idx: &self.idx,
-      ctx: self.ctx,
-      raw_mappings: &mut self.raw_mappings,
-      raw_marks: &mut self.raw_marks,
-      debug_marks: self.debug_marks,
-      def_idx,
-      _has_closures: !self.closure_captures.is_empty(),
-      string_data: &self.string_data,
-      scratch_local,
-      value_globals: &self.value_globals,
-      module_imports: &self.module_imports,
-      url_rewrite: &self.url_rewrite,
-    };
-    emit_body(func.body, &mut fc);
-
-    // Every function body must end with `end`.
-    wasm_func.instruction(&Instruction::End);
-
-    wasm_func
-  }
-
-  // -------------------------------------------------------------------------
-  // Data section — interned string literals
-  // -------------------------------------------------------------------------
-
-  fn emit_data(&mut self) {
-    if self.string_data.is_empty() {
-      return;
-    }
-    let mut data = DataSection::new();
-    let offset = ConstExpr::i32_const(0);
-    data.active(0, &offset, self.string_data.bytes.iter().copied());
-    self.module.section(&data);
-  }
-
-  // -------------------------------------------------------------------------
-  // Name section
-  // -------------------------------------------------------------------------
-
-  fn emit_names(&mut self, cps_mod: &CpsModule<'a>, _closure_captures: &BTreeSet<usize>) {
-    let mut names = NameSection::new();
-
-    // Function names (imports + defined + helpers).
-    let mut func_names = NameMap::new();
-    for (name, &idx) in &self.idx.imports {
-      func_names.append(idx, name);
-    }
-    for func in &cps_mod.funcs {
-      let idx = self.idx.func_idx(&func.label);
-      func_names.append(idx, &func.label);
-    }
-    // _apply is now in the runtime (dispatch.wat), not emitted.
-    // Implemented builtin names.
-    for name in self.impl_builtins.keys() {
-      let internal_name = format!("_{}", name);
-      let idx = self.idx.func_idx(&internal_name);
-      func_names.append(idx, &internal_name);
-    }
-    // Internal helpers.
-    for name in &["_box_func", "_list_nil", "_list_prepend", "_fn2_stub", "_channel_new_export", "_run_main_export", "_settle_future_export", "_str_wrap_bytes_export", "_apply_export"] {
-      if let Some(&idx) = self.idx.funcs.get(*name) {
-        func_names.append(idx, name);
-      }
-    }
-    // Export wrapper fns (`$<name>` Fn2 per user export).
-    for (_cps_id, export_name) in &cps_mod.exports {
-      if let Some(&idx) = self.idx.funcs.get(export_name) {
-        func_names.append(idx, export_name);
-      }
-    }
-    names.functions(&func_names);
-
-    // Local names per defined function.
-    // Layout: WASM params (caps, args), then CPS params, body locals, scratch.
-    let mut all_locals = IndirectNameMap::new();
-    for (def_idx, func) in cps_mod.funcs.iter().enumerate() {
-      let func_idx = self.idx.import_count + def_idx as u32;
-      let wasm_param_count: u32 = 2;
-      let mut local_names = NameMap::new();
-      local_names.append(0, "_caps");
-      local_names.append(1, "_args");
-      // CPS params.
-      for (i, (_id, label, _)) in func.params.iter().enumerate() {
-        local_names.append(wasm_param_count + i as u32, label);
-      }
-      let locals_list = collect_locals(func.body, self.ctx);
-      let param_count = func.params.len() as u32;
-      for (i, label) in locals_list.iter().enumerate() {
-        local_names.append(wasm_param_count + param_count + i as u32, label);
-      }
-      all_locals.append(func_idx, &local_names);
-    }
-    names.locals(&all_locals);
-
-    // Global names.
-    let mut global_names = NameMap::new();
-    for (label, &idx) in &self.idx.globals {
-      global_names.append(idx, label);
-    }
-    names.globals(&global_names);
-
-    self.module.section(&names);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Function body emission context
-// ---------------------------------------------------------------------------
-
-struct FuncContext<'a, 'b, 'src> {
-  func: &'a mut Function,
-  local_map: &'a HashMap<String, u32>,
-  emitter_idx: &'a Indices,
-  ctx: &'a IrCtx<'b, 'src>,
-  raw_mappings: &'a mut Vec<RawMapping>,
-  /// Parallel sink for debug-marker records, fed by `mark()` and the
-  /// operator-mark site in `emit_builtin` whenever `debug_marks` flags
-  /// the CpsId being mapped.
-  raw_marks: &'a mut Vec<RawMark>,
-  /// Step-stop policy from the `debug_marks` pass. `None` means the
-  /// emitter was invoked without a `DebugMarks`; mark-recording is a
-  /// no-op in that case.
-  debug_marks: Option<&'a DebugMarks>,
-  def_idx: u32,
-  /// Whether this module has any closures (for future optimisation).
-  _has_closures: bool,
-  /// Interned string data for looking up literal offsets.
-  string_data: &'a StringData,
-  /// Scratch local for building args lists at call sites.
-  scratch_local: u32,
-  /// Labels of module-level value globals (for emit_get to skip $Closure wrapping).
-  value_globals: &'a HashSet<String>,
-  /// Module imports: url → [name, ...]. Used by emit_builtin for BuiltIn::Import.
-  module_imports: &'a BTreeMap<String, Vec<String>>,
-  /// Raw source URL → canonical URL mapping. Consulted at BuiltIn::Import
-  /// emit sites to translate a CPS Lit::Str URL into the canonical form
-  /// used as the `module_imports` key and in WASM global labels.
-  url_rewrite: &'a BTreeMap<String, String>,
-}
-
-impl<'a, 'b, 'src> FuncContext<'a, 'b, 'src> {
-  /// Record a source mapping at the current byte position. Also records
-  /// a `RawMark` if `debug_marks` flags this CpsId as a step-stop.
-  fn mark(&mut self, id: CpsId) {
-    if let Some(node) = self.ctx.ast_node(id)
-      && node.loc.start.line > 0 {
-        let func_byte_offset = self.func.byte_len() as u32;
-        self.raw_mappings.push(RawMapping {
-          func_def_index: self.def_idx,
-          func_byte_offset,
-          loc: node.loc,
-        });
-        self.try_record_mark(id, node.loc, func_byte_offset);
-      }
-  }
-
-  /// If `debug_marks` flags `id` as a step-stop, push a `RawMark` at
-  /// `(self.def_idx, func_byte_offset)` with `loc` as its source.
-  /// Called from `mark()` and from the operator-mark site in
-  /// `emit_builtin` (which records its source mapping inline rather
-  /// than going through `mark()`).
-  fn try_record_mark(&mut self, id: CpsId, loc: Loc, func_byte_offset: u32) {
-    let Some(marks) = self.debug_marks else { return };
-    if matches!(marks.stops.try_get(id), Some(Some(_))) {
-      self.raw_marks.push(RawMark {
-        func_def_index: self.def_idx,
-        func_byte_offset,
-        cps_id: id,
-        loc,
-      });
-    }
-  }
-
-  fn local_idx(&self, label: &str) -> u32 {
-    *self.local_map.get(label).unwrap_or_else(|| panic!("unknown local: {}", label))
-  }
-
-  fn instr(&mut self, instruction: &Instruction<'_>) {
-    self.func.instruction(instruction);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Body emission — mirrors wat/writer.rs emit_body logic
-// ---------------------------------------------------------------------------
-
-fn emit_body(expr: &Expr, fc: &mut FuncContext<'_, '_, '_>) {
-  match &expr.kind {
-    ExprKind::LetVal { name, val, cont } => {
-      // Emit value with its own source mark (e.g. 42 → "42").
-      emit_val(val, fc);
-      // Mark the set instruction with the binding loc (e.g. x).
-      fc.mark(name.id);
-      let local_label = fc.ctx.label(name.id);
-      if fc.value_globals.contains(&local_label) {
-        // Module-level value binding — store in global.
-        let idx = fc.emitter_idx.global_idx(&local_label);
-        fc.instr(&Instruction::GlobalSet(idx));
-      } else {
-        let idx = fc.local_idx(&local_label);
-        fc.instr(&Instruction::LocalSet(idx));
-      }
-
-      match cont {
-        Cont::Expr { body, .. } => emit_body(body, fc),
-        Cont::Ref(id) => {
-          // Tail call to continuation: cont(bound_val) via the user calling
-          // convention — `_apply(list_of_[bound_val], cont)`.
-          // `$Fn2 = (caps, args)` takes 2 params; we must pack the single
-          // value into a cons-cell list and dispatch through `_apply` which
-          // unboxes the cont closure and calls it with the right shape.
-          //
-          // Stack transitions:
-          //   []                                    — start
-          //   [bound_val]                           — local.get name
-          //   [bound_val, nil]                      — call list_nil
-          //   [list_of_[bound_val]]                 — call list_prepend
-          //   [list_of_[bound_val], cont_closure]   — emit cont ref
-          //   return_call $_apply(list, callee)
-          let local_label = fc.ctx.label(name.id);
-          if fc.value_globals.contains(&local_label) {
-            let idx = fc.emitter_idx.global_idx(&local_label);
-            fc.instr(&Instruction::GlobalGet(idx));
-          } else {
-            let local_idx = fc.local_idx(&local_label);
-            fc.instr(&Instruction::LocalGet(local_idx));
-          }
-
-          let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
-          let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
-          fc.instr(&Instruction::Call(list_nil_idx));
-          fc.instr(&Instruction::Call(list_prepend_idx));
-
-          let cont_label = fc.ctx.label(*id);
-          emit_get(fc, &cont_label);
-
-          fc.mark(val.id);
-
-          let apply_idx = fc.emitter_idx.func_idx("_apply");
-          fc.instr(&Instruction::ReturnCall(apply_idx));
-        }
-      }
-    }
-
-    ExprKind::App { func, args } => {
-      // Source mapping: detect cont calls vs user calls vs builtins.
-      match func {
-        Callable::BuiltIn(_) => {
-          // Operator mark is emitted inside emit_builtin, after args,
-          // to avoid DWARF collision with the first arg's value mark.
-        }
-        Callable::Val(_) => {
-          // Source mark is placed inside emit_call, at the call instruction.
-        }
-      }
-      emit_app(func, args, expr.id, fc);
-    }
-
-    ExprKind::If { cond, then, else_ } => {
-      fc.mark(expr.id);
-      // Unbox cond: ref.cast i31, i31.get_s → i32 (0 or 1).
-      emit_val(cond, fc);
-      fc.instr(&Instruction::RefCastNonNull(HeapType::Abstract {
-        shared: false,
-        ty: AbstractHeapType::I31,
-      }));
-      fc.instr(&Instruction::I31GetS);
-
-      fc.instr(&Instruction::If(wasm_encoder::BlockType::Empty));
-      emit_body(then, fc);
-      fc.instr(&Instruction::Else);
-      emit_body(else_, fc);
-      fc.instr(&Instruction::End);
-    }
-
-    ExprKind::LetFn { cont, .. } => {
-      // LetFn inside a fn body shouldn't appear post-lifting.
-      if let Cont::Expr { body, .. } = cont {
-        emit_body(body, fc);
-      }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Application emission
-// ---------------------------------------------------------------------------
-
-fn emit_app(func: &Callable, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
-  match func {
-    Callable::BuiltIn(op) => emit_builtin(*op, args, expr_id, fc),
-    // Scope-resolved builtins (yield, spawn, await) arrive as Callable::Val
-    // wrapping ValKind::BuiltIn. Args are in cont-first order (user call
-    // convention). Emit val args then cont, call the builtin directly.
-    Callable::Val(val) if matches!(val.kind, ValKind::BuiltIn(_)) => {
-      if let ValKind::BuiltIn(op) = val.kind {
-        // Args are [cont, val_args...]. Emit val_args first, cont last.
-        for arg in &args[1..] { emit_arg(arg, fc); }
-        emit_arg(&args[0], fc);
-        fc.mark(expr_id);
-        let name = builtin_name(op);
-        let idx = fc.emitter_idx.func_idx(name);
-        fc.instr(&Instruction::ReturnCall(idx));
-      }
-    }
-    Callable::Val(val) => emit_call(val, args, expr_id, fc),
-  }
-}
-
-/// Emit a call to a user function or continuation.
-///
-/// Universal calling convention: all args (values + continuation) are packed
-/// into a cons-cell list and passed as a single (ref null any) argument.
-/// Dispatch goes through `_apply` which handles both plain funcrefs and closures.
-fn emit_call(func_val: &Val, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
-  let (val_args, cont_arg) = split_args(args);
-
-  // Determine the source mark id: for cont calls, mark the result value;
-  // for user calls, mark the call expression itself.
-  let is_cont_call = match &func_val.kind {
-    ValKind::ContRef(_) => true,
-    ValKind::Ref(Ref::Synth(id)) => matches!(
-      fc.ctx.ast_node(*id).map(|n| &n.kind),
-      None | Some(crate::ast::NodeKind::Fn { .. })
-    ),
-    _ => false,
-  };
-  let mark_id = if is_cont_call {
-    args.iter()
-      .find_map(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
-      .unwrap_or(expr_id)
-  } else {
-    expr_id
-  };
-
-  let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
-  let list_concat_idx = fc.emitter_idx.func_idx("list_concat");
-  let scratch = fc.scratch_local;
-
-  // Build args list. Start with nil, then prepend in reverse order.
-  // Cont (if present) is prepended first so it ends up as the first
-  // element after val_args are prepended on top (conts-first convention).
-  let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
-  fc.instr(&Instruction::Call(list_nil_idx));
-  fc.instr(&Instruction::LocalSet(scratch));
-
-  // Cont goes at the end of the prepend sequence (= first in final list).
-  if let Some(cont) = cont_arg {
-    emit_cont(cont, fc);
-    fc.instr(&Instruction::LocalGet(scratch));
-    fc.instr(&Instruction::Call(list_prepend_idx));
-    fc.instr(&Instruction::LocalSet(scratch));
-  }
-
-  for arg in val_args.iter().rev() {
-    match arg {
-      Arg::Spread(v) => {
-        emit_val(v, fc);
-        fc.instr(&Instruction::LocalGet(scratch));
-        fc.instr(&Instruction::Call(list_concat_idx));
-        fc.instr(&Instruction::LocalSet(scratch));
-      }
-      _ => {
-        emit_arg(arg, fc);
-        fc.instr(&Instruction::LocalGet(scratch));
-        fc.instr(&Instruction::Call(list_prepend_idx));
-        fc.instr(&Instruction::LocalSet(scratch));
-      }
-    }
-  }
-
-  // Dispatch: always _apply(args, callee).
-  fc.instr(&Instruction::LocalGet(scratch));  // args list
-  emit_val_ref(func_val, fc);                 // callee
-  fc.mark(mark_id);
-  let idx = fc.emitter_idx.func_idx("_apply");
-  fc.instr(&Instruction::ReturnCall(idx));
-}
-
-/// Emit a builtin operation call.
-fn emit_builtin(op: BuiltIn, args: &[Arg], expr_id: CpsId, fc: &mut FuncContext<'_, '_, '_>) {
-  if op == BuiltIn::Panic {
-    // Terminal fail-chain call: `App(Panic, [])`. The CPS carries no args
-    // because panic never returns — it traps via the runtime host bridge.
-    // Runtime `panic` is imported as $Fn2(caps, args); emit null placeholders
-    // so the WASM validator is happy, then tail-call into it.
-    let _ = (args, expr_id);
-    let any_ht = HeapType::Abstract { shared: false, ty: AbstractHeapType::Any };
-    fc.instr(&Instruction::RefNull(any_ht));
-    fc.instr(&Instruction::RefNull(any_ht));
-    let panic_idx = fc.emitter_idx.func_idx("panic");
-    fc.instr(&Instruction::ReturnCall(panic_idx));
-    return;
-  }
-  if op == BuiltIn::Export {
-    // `·export <names>` writes each exported closure into its per-export
-    // slot global `<name>_closure`. Wrapper fns (emitted elsewhere) read
-    // those slots when the host calls the exported name.
-    //
-    // Locals are typed as (ref any), but the slot globals are typed as
-    // (mut (ref null $Closure)). Insert a ref.cast to downcast before
-    // the global.set so WASM validation accepts the store.
-    let _ = expr_id;
-    let closure_idx = fc.emitter_idx.type_idx("$Closure");
-    for arg in args {
-      if let Arg::Val(v) = arg {
-        if let ValKind::Ref(Ref::Synth(id)) = &v.kind {
-          let export_name = super::collect::export_name(fc.ctx, *id);
-          let slot_label = format!("{}_closure", export_name);
-          if let Some(&slot_idx) = fc.emitter_idx.globals.get(&slot_label) {
-            emit_val(v, fc);
-            fc.instr(&Instruction::RefCastNullable(HeapType::Concrete(closure_idx)));
-            fc.instr(&Instruction::GlobalSet(slot_idx));
-            continue;
-          }
-        }
-        // Fallback: unknown export shape, drop the val so the body
-        // remains syntactically valid.
-        emit_val(v, fc);
-        fc.instr(&Instruction::Drop);
-      }
-    }
-    return;
-  }
-  if op == BuiltIn::Pub {
-    // `·ƒpub val, fn: <rest>` — per-binding export side effect.
-    // Write the exported value into its slot global, then emit the cont body.
-    for arg in args {
-      if let Arg::Val(v) = arg
-        && let ValKind::Ref(Ref::Synth(id)) = &v.kind {
-          let name = super::collect::export_name(fc.ctx, *id);
-          if let Some(&slot_idx) = fc.emitter_idx.globals.get(&name) {
-            emit_val(v, fc);
-            fc.instr(&Instruction::GlobalSet(slot_idx));
-          }
-      }
-      if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-        emit_body(body, fc);
-      }
-    }
-    return;
-  }
-  if op == BuiltIn::FnClosure {
-    let (val_args, cont) = split_args(args);
-    let n_captures = val_args.len().saturating_sub(1); // first arg is funcref
-
-    // Build $Closure inline: funcref + array.new_fixed $Captures N (caps...)
-    // First arg is the raw funcref (not boxed).
-    if let Some(first) = val_args.first() {
-      emit_arg_raw_funcref(first, fc);
-    }
-
-    let closure_idx = fc.emitter_idx.type_idx("$Closure");
-    let captures_idx = fc.emitter_idx.type_idx("$Captures");
-
-    if n_captures == 0 {
-      // No captures — null captures array.
-      fc.instr(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
-    } else {
-      // Push captures onto stack, then array.new_fixed.
-      for arg in val_args.iter().skip(1) {
-        emit_arg(arg, fc);
-      }
-      fc.instr(&Instruction::ArrayNewFixed { array_type_index: captures_idx, array_size: n_captures as u32 });
-    }
-
-    // struct.new $Closure (funcref, captures_array_or_null)
-    fc.instr(&Instruction::StructNew(closure_idx));
-
-    match cont {
-      Some(Cont::Expr { args: bind_args, body }) => {
-        if let Some(bind) = bind_args.first() {
-          let label = fc.ctx.label(bind.id);
-          if fc.value_globals.contains(&label) {
-            let idx = fc.emitter_idx.global_idx(&label);
-            fc.instr(&Instruction::GlobalSet(idx));
-          } else {
-            let idx = fc.local_idx(&label);
-            fc.instr(&Instruction::LocalSet(idx));
-          }
-        }
-        emit_body(body, fc);
-      }
-      Some(Cont::Ref(id)) => {
-        // Stack has: [body_closure] (from struct.new $Closure above).
-        // We need to call cont(body_closure) via the user calling convention:
-        //   _apply(list_of_[body_closure], cont)
-        // The `$Fn2 = (caps, args)` calling convention requires packing the
-        // single closure argument into a cons-cell list and going through
-        // `_apply` which handles both plain funcrefs and closures.
-        //
-        // Stack transitions:
-        //   [closure]                                     — from struct.new $Closure
-        //   [closure, nil]                                — call list_nil
-        //   [list_of_[closure]]                           — call list_prepend_any
-        //   [list_of_[closure], cont_closure]             — emit cont ref
-        //   return_call $_apply(list, callee)
-
-        let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
-        let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
-
-        fc.instr(&Instruction::Call(list_nil_idx));
-        fc.instr(&Instruction::Call(list_prepend_idx));
-
-        let cont_label = fc.ctx.label(*id);
-        emit_get(fc, &cont_label);
-
-        // Mark with the first val arg (the funcref to the lifted fn).
-        let mark_id = val_args.first()
-          .and_then(|a| if let Arg::Val(v) = a { Some(v.id) } else { None })
-          .unwrap_or(expr_id);
-        fc.mark(mark_id);
-
-        let apply_idx = fc.emitter_idx.func_idx("_apply");
-        fc.instr(&Instruction::ReturnCall(apply_idx));
+// ──────────────────────────────────────────────────────────────────
+// Emit
+// ──────────────────────────────────────────────────────────────────
+
+/// Emit a linked user Fragment as a final standalone WASM binary,
+/// with runtime-ir.wasm spliced in as the prefix.
+pub fn emit(frag: &Fragment) -> Vec<u8> {
+  let rt = runtime();
+
+
+  // ── resolve user type imports + plan local-type indices ──────
+  //
+  // Each user `TypeSym` maps to a concrete final type index:
+  // - Imported: resolved against runtime's export table by
+  //   composed key `<module>:<name>`. The runtime's type exports
+  //   (value-types that cross the ABI) are registered in
+  //   `export_by_name` with kind Global/Func/etc — actually types
+  //   aren't directly exportable in stock WASM, so we use the
+  //   type-name custom section for this resolution.
+  // - Local: appended to the type section after runtime's types.
+
+  let mut type_remap: Vec<u32> = Vec::with_capacity(frag.types.len());
+  let mut user_local_types: Vec<(TypeSym, &TypeDecl)> = Vec::new();
+  for (i, ty) in frag.types.iter().enumerate() {
+    match &ty.import {
+      Some(ImportKey { module, name }) => {
+        // Compose qualified key and look up as a type by name.
+        let qualified = format!("{module}:{name}");
+        let idx = rt.type_by_name.get(&qualified).copied()
+          .or_else(|| rt.type_by_name.get(name.as_str()).copied())
+          .unwrap_or_else(|| panic!(
+            "emit: unknown runtime type import `{}`. Not found as `{}` or `{}` in type-name table",
+            qualified, qualified, name));
+        type_remap.push(idx);
       }
       None => {
-        // Standalone call — result stays on stack (dropped by end).
+        // Placeholder — filled in after we know how many we have.
+        type_remap.push(u32::MAX);
+        user_local_types.push((TypeSym(i as u32), ty));
       }
     }
-    return;
+  }
+  for (seq, (sym, _)) in user_local_types.iter().enumerate() {
+    type_remap[sym.0 as usize] = rt.type_count + seq as u32;
   }
 
-  if op == BuiltIn::Import {
-    // `·import './foo.fnk', fn ·v: <body>`
-    //
-    // The imported module's exports arrive as WASM global imports
-    // `(import "./foo.fnk" "name" (global (ref null any)))` — one per name.
-    // Here we construct a rec from those globals and bind it to the
-    // continuation param, then inline the continuation body.
-    //
-    // args[0] = Val(LitStr url), args[1] = Cont::Expr { params: [v], body }
-    let url_bytes = args.iter().find_map(|a| {
-      if let Arg::Val(v) = a
-        && let ValKind::Lit(Lit::Str(s)) = &v.kind
-      { Some(s.as_slice()) } else { None }
-    }).expect("BuiltIn::Import: missing URL arg");
-    let raw_url = std::str::from_utf8(url_bytes).expect("import URL is not valid UTF-8");
-    // Translate the raw source URL to its canonical form. In single-module
-    // builds (and for non-relative URLs) there's no mapping and we fall
-    // back to identity lookup. In multi-module builds `compile_package`
-    // populates `url_rewrite` so the emitter writes canonical strings
-    // into the global labels — matching what `emit_imports_from` wrote
-    // into the import section when iterating `module_imports`.
-    let url = fc.url_rewrite.get(raw_url).map(String::as_str).unwrap_or(raw_url);
+  // ── resolve user function imports + plan local-func indices ──
 
-    let names = fc.module_imports.get(url).cloned().unwrap_or_default();
-
-    // Build rec: rec_new → for each name: rec_set_field(rec, key_str, global_val)
-    // Stack discipline: [rec] in, [rec] out after each _rec_set_field call.
-    let rec_new_idx = fc.emitter_idx.func_idx("rec_new");
-    let str_raw_idx = fc.emitter_idx.func_idx("str");
-    let rec_set_field_idx = fc.emitter_idx.func_idx("_rec_set_field");
-    fc.instr(&Instruction::Call(rec_new_idx));
-
-    for name in &names {
-      // Stack: [rec]
-      // Intern key name bytes and emit as $Str.
-      let name_bytes = name.as_bytes();
-      let (offset, len) = find_bytes(&fc.string_data.bytes, name_bytes)
-        .map(|pos| (pos as u32, name_bytes.len() as u32))
-        .expect("import field name not interned");
-      fc.instr(&Instruction::I32Const(offset as i32));
-      fc.instr(&Instruction::I32Const(len as i32));
-      fc.instr(&Instruction::Call(str_raw_idx));
-      // Stack: [rec, key_str]
-      // Read the imported global value.
-      let global_label = format!("{url}#{name}");
-      let global_idx = fc.emitter_idx.global_idx(&global_label);
-      fc.instr(&Instruction::GlobalGet(global_idx));
-      // Stack: [rec, key_str, val]
-      fc.instr(&Instruction::Call(rec_set_field_idx));
-      // Stack: [rec]  (the updated rec returned by _rec_set_field)
-    }
-
-    // Pass the constructed rec to the continuation.
-    //
-    // After lifting, the continuation is a Cont::Ref (lifted function).
-    // We dispatch through _apply: pack the rec into a list, then return_call _apply.
-    //
-    // Pre-lifting (Cont::Expr), we inline: store the rec in the bind param and
-    // emit the continuation body directly.
-    for arg in args {
-      match arg {
-        Arg::Cont(Cont::Ref(cont_id)) => {
-          // rec is on the stack — wrap in a list and tail-call the cont closure.
-          let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
-          let list_prepend_idx = fc.emitter_idx.func_idx("list_prepend");
-          fc.instr(&Instruction::Call(list_nil_idx));
-          fc.instr(&Instruction::Call(list_prepend_idx));
-          let cont_label = fc.ctx.label(*cont_id);
-          emit_get(fc, &cont_label);
-          let apply_idx = fc.emitter_idx.func_idx("_apply");
-          fc.instr(&Instruction::ReturnCall(apply_idx));
-        }
-        Arg::Cont(Cont::Expr { args: bind_args, body }) => {
-          if let Some(bind) = bind_args.first() {
-            let label = fc.ctx.label(bind.id);
-            if fc.value_globals.contains(&label) {
-              let idx = fc.emitter_idx.global_idx(&label);
-              fc.instr(&Instruction::GlobalSet(idx));
-            } else {
-              let idx = fc.local_idx(&label);
-              fc.instr(&Instruction::LocalSet(idx));
-            }
-          }
-          emit_body(body, fc);
-        }
-        _ => {}
+  let mut func_remap: Vec<u32> = Vec::with_capacity(frag.funcs.len());
+  let mut user_local_funcs: Vec<(FuncSym, &FuncDecl)> = Vec::new();
+  for (i, f) in frag.funcs.iter().enumerate() {
+    match &f.import {
+      Some(ImportKey { module, name }) => {
+        let qualified = format!("{module}:{name}");
+        let (kind, idx) = *rt.export_by_name.get(&qualified)
+          .or_else(|| rt.export_by_name.get(name.as_str()))
+          .unwrap_or_else(|| panic!(
+            "emit: unknown runtime func import `{}`. Not found in runtime export table",
+            qualified));
+        assert_eq!(kind, ExportKind::Func,
+          "emit: expected func export for `{}`, got {:?}", qualified, kind);
+        func_remap.push(idx);
+      }
+      None => {
+        func_remap.push(u32::MAX);
+        user_local_funcs.push((FuncSym(i as u32), f));
       }
     }
-    return;
+  }
+  for (seq, (sym, _)) in user_local_funcs.iter().enumerate() {
+    func_remap[sym.0 as usize] = rt.func_count_total + seq as u32;
   }
 
-  if op == BuiltIn::StrFmt {
-    let (val_args, cont_arg) = split_args(args);
+  // ── emit sections ─────────────────────────────────────────────
 
-    // Build $VarArgs array inline from value args.
-    let varargs_idx = fc.emitter_idx.type_idx("$VarArgs");
-    for arg in val_args {
-      emit_arg(arg, fc);
-    }
-    fc.instr(&Instruction::ArrayNewFixed { array_type_index: varargs_idx, array_size: val_args.len() as u32 });
-
-    // Push continuation.
-    if let Some(cont) = cont_arg {
-      emit_cont(cont, fc);
-    }
-
-    // return_call $str_fmt (segments_array, cont)
-    let internal_name = format!("_{}", builtin_name(op));
-    let func_idx = if fc.emitter_idx.funcs.contains_key(&internal_name) {
-      fc.emitter_idx.func_idx(&internal_name)
+  let mut type_sec = TypeSection::new();
+  for group in &rt.type_groups {
+    if group.explicit || group.types.len() > 1 {
+      type_sec.ty().rec(group.types.iter().cloned());
     } else {
-      fc.emitter_idx.func_idx(builtin_name(op))
-    };
-    fc.instr(&Instruction::ReturnCall(func_idx));
-    return;
-  }
-
-  // Regular builtin: return_call $builtin_name args...
-  // All args get their own source mark. The operator mark is placed after
-  // args (at the return_call instruction), so no collision.
-  let fn_name = builtin_name(op);
-  let (val_args, cont_arg) = split_args(args);
-
-  for arg in val_args {
-    match arg {
-      Arg::Val(v) | Arg::Spread(v) => emit_val(v, fc),
-      Arg::Cont(cont) => emit_cont(cont, fc),
-      _ => fc.instr(&Instruction::Unreachable),
+      type_sec.ty().subtype(&group.types[0]);
     }
   }
-  if let Some(cont) = cont_arg {
-    emit_cont(cont, fc);
-  }
-
-  // Place operator mark right before return_call — after all args, so it
-  // doesn't collide with the first arg's value mark at the same byte offset.
-  if let Some(node) = fc.ctx.ast_node(expr_id) {
-    let loc = match &node.kind {
-      crate::ast::NodeKind::InfixOp { op, .. }
-      | crate::ast::NodeKind::UnaryOp { op, .. } => op.loc,
-      _ => node.loc,
-    };
-    if loc.start.line > 0 {
-      let func_byte_offset = fc.func.byte_len() as u32;
-      fc.raw_mappings.push(RawMapping {
-        func_def_index: fc.def_idx,
-        func_byte_offset,
-        loc,
-      });
-      fc.try_record_mark(expr_id, loc, func_byte_offset);
+  for (_, ty) in &user_local_types {
+    match &ty.kind {
+      TypeKind::Func { params, results } => {
+        let we_params: Vec<WEValType> = params.iter().map(|v| val_from_ir(v, &type_remap)).collect();
+        let we_results: Vec<WEValType> = results.iter().map(|v| val_from_ir(v, &type_remap)).collect();
+        type_sec.ty().function(we_params, we_results);
+      }
+      _ => panic!("emit: only locally-declared func types supported (got {:?})", ty.kind),
     }
   }
 
-  // Implemented builtins are registered with _ prefix; imported ones keep original name.
-  let internal_name = format!("_{}", fn_name);
-  let func_idx = if fc.emitter_idx.funcs.contains_key(&internal_name) {
-    fc.emitter_idx.func_idx(&internal_name)
+  let mut import_sec = ImportSection::new();
+  for imp in &rt.env_imports {
+    import_sec.import(&imp.module, &imp.name, imp.entity);
+  }
+
+  let mut func_sec = FunctionSection::new();
+  for &sig in &rt.local_func_sigs {
+    func_sec.function(sig);
+  }
+  for (_, f) in &user_local_funcs {
+    func_sec.function(type_remap[f.sig.0 as usize]);
+  }
+
+  // Memory: runtime has none; user fragment brings one page.
+  let mut mem_sec = MemorySection::new();
+  mem_sec.memory(MemoryType {
+    minimum: 1,
+    maximum: None,
+    memory64: false,
+    shared: false,
+    page_size_log2: None,
+  });
+
+  // Globals: runtime entries are raw-spliced (init_exprs use struct.new
+  // etc. which wasm-encoder's ConstExpr API can't construct); user
+  // entries are encoded via wasm-encoder. When both are present we
+  // combine by rewriting the leading LEB128 count and concatenating.
+  let globals_section_body = rt.globals_body.as_deref();
+  let user_global_count = frag.globals.len() as u32;
+  let (combined_globals_body, user_global_base) = if user_global_count == 0 {
+    (globals_section_body.map(|b| b.to_vec()), 0u32)
   } else {
-    fc.emitter_idx.func_idx(fn_name)
+    let (rt_count, rt_body_no_count) = match globals_section_body {
+      Some(raw) => decode_leb_u32_prefix(raw),
+      None => (0u32, &[][..]),
+    };
+    // Encode user globals manually (no count prefix) so we can
+    // concatenate with runtime's body.
+    let mut user_bytes: Vec<u8> = Vec::new();
+    for g in &frag.globals {
+      let ty = val_from_ir(&g.ty, &type_remap);
+      let init = match &g.init {
+        GlobalInit::RefNull(ht) => ConstExpr::ref_null(HeapType::Abstract {
+          shared: false,
+          ty: abs_heap_ir(*ht),
+        }),
+        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(type_remap[ts.0 as usize])),
+        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(func_remap[fs.0 as usize]),
+        GlobalInit::I32Const(v) => ConstExpr::i32_const(*v),
+        GlobalInit::F64Const(v) => ConstExpr::f64_const((*v).into()),
+      };
+      GlobalType { val_type: ty, mutable: g.mutable, shared: false }.encode(&mut user_bytes);
+      init.encode(&mut user_bytes);
+    }
+    let mut body = Vec::with_capacity(5 + rt_body_no_count.len() + user_bytes.len());
+    encode_leb_u32(&mut body, rt_count + user_global_count);
+    body.extend_from_slice(rt_body_no_count);
+    body.extend_from_slice(&user_bytes);
+    (Some(body), rt_count)
   };
-  fc.instr(&Instruction::ReturnCall(func_idx));
-}
 
-// ---------------------------------------------------------------------------
-// Value emission
-// ---------------------------------------------------------------------------
-
-/// Emit a value onto the stack (for inline use in expressions).
-/// Marks the value's source location before emitting its instructions.
-fn emit_val(val: &Val, fc: &mut FuncContext<'_, '_, '_>) {
-  fc.mark(val.id);
-  emit_val_inner(val, fc);
-}
-
-fn emit_val_inner(val: &Val, fc: &mut FuncContext<'_, '_, '_>) {
-  match &val.kind {
-    ValKind::Lit(lit) => emit_lit(lit, fc),
-    ValKind::Ref(Ref::Synth(id)) => {
-      let label = fc.ctx.label(*id);
-      emit_get(fc, &label);
-    }
-    ValKind::Ref(Ref::Unresolved(_)) => {
-      fc.instr(&Instruction::Unreachable);
-    }
-    ValKind::ContRef(id) => {
-      let label = fc.ctx.label(*id);
-      let idx = fc.local_idx(&label);
-      fc.instr(&Instruction::LocalGet(idx));
-    }
-    ValKind::BuiltIn(BuiltIn::Panic) => {
-      // Panic used as a value — wrap the imported runtime `panic` funcref in
-      // a $Closure so it can flow through (ref null any) slots and be
-      // dispatched via _apply like any other continuation closure.
-      // Runtime `panic` lives in operators.wat and tail-calls $interop_panic,
-      // which calls host_panic to trap the WASM instance.
-      let panic_idx = fc.emitter_idx.func_idx("panic");
-      let closure_idx = fc.emitter_idx.type_idx("$Closure");
-      let captures_idx = fc.emitter_idx.type_idx("$Captures");
-      fc.instr(&Instruction::RefFunc(panic_idx));
-      fc.instr(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
-      fc.instr(&Instruction::StructNew(closure_idx));
-    }
-    ValKind::BuiltIn(_) => {
-      fc.instr(&Instruction::Unreachable);
+  // Exports: forward runtime's, then append user's (remapped).
+  let mut export_sec = ExportSection::new();
+  for (name, kind, idx) in &rt.exports_to_forward {
+    export_sec.export(name, *kind, *idx);
+  }
+  for (i, f) in frag.funcs.iter().enumerate() {
+    if let Some(name) = &f.export {
+      export_sec.export(name, ExportKind::Func, func_remap[i]);
     }
   }
-}
-
-/// Emit a value reference — same as emit_val but used for callee position.
-fn emit_val_ref(val: &Val, fc: &mut FuncContext<'_, '_, '_>) {
-  emit_val(val, fc);
-}
-
-/// Emit a literal value.
-fn emit_lit(lit: &Lit, fc: &mut FuncContext<'_, '_, '_>) {
-  let num_idx = fc.emitter_idx.type_idx("$Num");
-  match lit {
-    Lit::Int(n) => {
-      fc.instr(&Instruction::F64Const((*n as f64).into()));
-      fc.instr(&Instruction::StructNew(num_idx));
-    }
-    Lit::Float(f) | Lit::Decimal(f) => {
-      fc.instr(&Instruction::F64Const((*f).into()));
-      fc.instr(&Instruction::StructNew(num_idx));
-    }
-    Lit::Bool(b) => {
-      let v = if *b { 1i32 } else { 0i32 };
-      fc.instr(&Instruction::I32Const(v));
-      fc.instr(&Instruction::RefI31);
-    }
-    Lit::Str(s) => {
-      if s.is_empty() {
-        // Empty string — use singleton from runtime.
-        let str_empty_idx = fc.emitter_idx.func_idx("str_empty");
-        fc.instr(&Instruction::Call(str_empty_idx));
-      } else {
-        // Look up the interned offset — string was pre-scanned, so this
-        // always finds a match in the data blob.
-        let (offset, len) = find_bytes(&fc.string_data.bytes, s)
-          .map(|pos| (pos as u32, s.len() as u32))
-          .expect("string literal not interned");
-        let str_raw_idx = fc.emitter_idx.func_idx("str");
-        fc.instr(&Instruction::I32Const(offset as i32));
-        fc.instr(&Instruction::I32Const(len as i32));
-        fc.instr(&Instruction::Call(str_raw_idx));
-      }
-    }
-    Lit::Seq => {
-      // Empty list via list_nil (returns $Nil).
-      let list_nil_idx = fc.emitter_idx.func_idx("list_nil");
-      fc.instr(&Instruction::Call(list_nil_idx));
-    }
-    Lit::Rec => {
-      // Empty record via rec_empty().
-      let rec_empty_idx = fc.emitter_idx.func_idx("rec_new");
-      fc.instr(&Instruction::Call(rec_empty_idx));
+  // User globals are appended after runtime globals; their module
+  // indices start at `user_global_base` (the runtime global count).
+  for (i, g) in frag.globals.iter().enumerate() {
+    if let Some(name) = &g.export {
+      export_sec.export(name, ExportKind::Global, user_global_base + i as u32);
     }
   }
-}
-
-/// Emit a funcref argument without $FuncBox boxing.
-/// Used for closure constructor's first arg which expects a raw funcref.
-fn emit_arg_raw_funcref(arg: &Arg, fc: &mut FuncContext<'_, '_, '_>) {
-  match arg {
-    Arg::Val(v) | Arg::Spread(v) => {
-      fc.mark(v.id);
-      emit_get_raw_funcref(fc, v);
-    }
-    _ => emit_arg(arg, fc),
+  // Export the user fragment's memory (memory 0) so the host harness
+  // can read string-literal data segments. Only if the runtime didn't
+  // already export one with this name.
+  let already_has_memory = rt.exports_to_forward.iter()
+    .any(|(name, kind, _)| name == "memory" && matches!(kind, ExportKind::Memory));
+  if !already_has_memory {
+    export_sec.export("memory", ExportKind::Memory, 0);
   }
-}
 
-/// Emit a raw funcref (ref.func or global.get) without $FuncBox wrapping.
-fn emit_get_raw_funcref(fc: &mut FuncContext<'_, '_, '_>, val: &Val) {
-  match &val.kind {
-    ValKind::Ref(Ref::Synth(id)) => {
-      let label = fc.ctx.label(*id);
-      if fc.emitter_idx.globals.contains_key(&label) {
-        let idx = fc.emitter_idx.global_idx(&label);
-        fc.instr(&Instruction::GlobalGet(idx));
-      } else if fc.emitter_idx.funcs.contains_key(&label) {
-        let idx = fc.emitter_idx.func_idx(&label);
-        fc.instr(&Instruction::RefFunc(idx));
-      } else {
-        // Local — should already be a funcref from closure struct extraction.
-        let idx = fc.local_idx(&label);
-        fc.instr(&Instruction::LocalGet(idx));
-      }
-    }
-    _ => emit_val_inner(val, fc),
-  }
-}
-
-/// Emit a call argument.
-fn emit_arg(arg: &Arg, fc: &mut FuncContext<'_, '_, '_>) {
-  match arg {
-    Arg::Val(v) => emit_val(v, fc),
-    Arg::Spread(v) => {
-      // Wrap spread value in $SpreadArgs struct for runtime detection.
-      emit_val(v, fc);
-      let spread_idx = fc.emitter_idx.type_idx("$SpreadArgs");
-      fc.instr(&Instruction::RefCastNonNull(HeapType::Concrete(
-        fc.emitter_idx.type_idx("$List"),
-      )));
-      fc.instr(&Instruction::StructNew(spread_idx));
-    }
-    Arg::Cont(cont) => emit_cont(cont, fc),
-    Arg::Expr(_) => {
-      fc.instr(&Instruction::Unreachable);
-    }
-  }
-}
-
-/// Emit a continuation reference onto the stack.
-fn emit_cont(cont: &Cont, fc: &mut FuncContext<'_, '_, '_>) {
-  match cont {
-    Cont::Ref(id) => {
-      let label = fc.ctx.label(*id);
-      emit_get(fc, &label);
-    }
-    Cont::Expr { .. } => {
-      // Inline cont-as-arg should not appear post-lifting.
-      fc.instr(&Instruction::Unreachable);
-    }
-  }
-}
-
-/// Emit global.get, ref.func, or local.get depending on what the label refers to.
-/// Function references (global.get for fn aliases, ref.func for lifted fns) are
-/// boxed in $Closure (funcref, null captures) so they can flow through (ref null any) slots.
-fn emit_get(fc: &mut FuncContext<'_, '_, '_>, label: &str) {
-  let closure_idx = fc.emitter_idx.type_idx("$Closure");
-  let captures_idx = fc.emitter_idx.type_idx("$Captures");
-  if fc.emitter_idx.globals.contains_key(label) {
-    let idx = fc.emitter_idx.global_idx(label);
-    fc.instr(&Instruction::GlobalGet(idx));
-    if !fc.value_globals.contains(label) {
-      // Fn-alias global is a funcref — box in $Closure for (ref any) compatibility.
-      fc.instr(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
-      fc.instr(&Instruction::StructNew(closure_idx));
-    }
-  } else if fc.emitter_idx.funcs.contains_key(label) {
-    // Non-global function reference (e.g. lifted continuation) — use ref.func.
-    let idx = fc.emitter_idx.func_idx(label);
-    fc.instr(&Instruction::RefFunc(idx));
-    // Box in $Closure for (ref any) compatibility.
-    fc.instr(&Instruction::RefNull(HeapType::Concrete(captures_idx)));
-    fc.instr(&Instruction::StructNew(closure_idx));
+  // Elements: runtime entries raw-spliced; user-declared funcref
+  // entries (needed for `ref.func` validation on any user func) are
+  // encoded via wasm-encoder and combined with a rewritten count LEB.
+  let elements_section_body = rt.elements_body.as_deref();
+  let user_func_refs: Vec<u32> = user_local_funcs.iter()
+    .map(|(sym, _)| func_remap[sym.0 as usize])
+    .collect();
+  let combined_elements_body = if user_func_refs.is_empty() {
+    elements_section_body.map(|b| b.to_vec())
   } else {
-    let idx = fc.local_idx(label);
-    fc.instr(&Instruction::LocalGet(idx));
-  }
-}
+    let (rt_elem_count, rt_body_no_count) = match elements_section_body {
+      Some(raw) => decode_leb_u32_prefix(raw),
+      None => (0u32, &[][..]),
+    };
+    let mut user_sec = ElementSection::new();
+    user_sec.declared(Elements::Functions(user_func_refs.into()));
+    // `ElementSection::encode` emits: payload_size_leb + count_leb + entries.
+    // Strip the two LEBs to extract the entries.
+    let mut full_bytes: Vec<u8> = Vec::new();
+    user_sec.encode(&mut full_bytes);
+    let (_payload_size, rest) = decode_leb_u32_prefix(&full_bytes);
+    let (_user_elem_count, user_entries) = decode_leb_u32_prefix(rest);
+    let user_entries = user_entries.to_vec();
+    let mut body = Vec::with_capacity(5 + rt_body_no_count.len() + user_entries.len());
+    encode_leb_u32(&mut body, rt_elem_count + 1);
+    body.extend_from_slice(rt_body_no_count);
+    body.extend_from_slice(&user_entries);
+    Some(body)
+  };
 
-// ---------------------------------------------------------------------------
-// Builtin scanning — collect all builtins referenced in function bodies
-// ---------------------------------------------------------------------------
-
-fn scan_builtins(expr: &Expr, builtins: &mut BTreeMap<String, usize>) {
-  match &expr.kind {
-    ExprKind::App { func: Callable::BuiltIn(op), args } => {
-      if *op == BuiltIn::FnClosure {
-        // FnClosure is inlined (no function call) — just scan continuation bodies.
-        for arg in args {
-          if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-            scan_builtins(body, builtins);
-          }
-        }
-      } else if *op == BuiltIn::Import {
-        // Import is a compile-time marker, not a runtime call. It must not
-        // be registered as a runtime builtin import. Multi-module handling
-        // lives in the wasm-link pass; here we just walk continuation bodies.
-        for arg in args {
-          if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-            scan_builtins(body, builtins);
-          }
-        }
-      } else if *op == BuiltIn::Export || *op == BuiltIn::Pub || *op == BuiltIn::FinkModule {
-        // Module-shape markers, not runtime calls. Walk cont bodies.
-        for arg in args {
-          if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-            scan_builtins(body, builtins);
-          }
-        }
-      } else if *op == BuiltIn::Panic {
-        // Runtime panic is always imported as $Fn2 (caps, args) regardless of
-        // how many CPS args the call has — at the direct-call site the emitter
-        // passes null caps and null args list to satisfy the signature.
-        builtins.entry(builtin_name(*op).to_string()).or_insert(2);
-      } else {
-        let name = builtin_name(*op).to_string();
-        // Builtin arity = total args (values + cont).
-        let (val_args, cont_arg) = split_args(args);
-        let arity = val_args.len() + if cont_arg.is_some() { 1 } else { 0 };
-        builtins.entry(name).or_insert(arity);
-      }
-      // Walk arg values for builtin refs (e.g. Panic used as a fail-cont value).
-      for arg in args {
-        if let Arg::Val(v) = arg { scan_val_for_builtin(v, builtins); }
-      }
-    }
-    ExprKind::App { func: Callable::Val(val), args } => {
-      // Scope-resolved builtins (yield, spawn, await) arrive as Callable::Val
-      // wrapping ValKind::BuiltIn — register them as imports.
-      if let ValKind::BuiltIn(op) = val.kind {
-        let name = builtin_name(op).to_string();
-        // Arity: val args (excl. cont) + 1 for cont. Cont is first in args
-        // (user call convention), so subtract 1 for cont, add 1 back = total.
-        builtins.entry(name).or_insert(args.len());
-      }
-      // Walk arg values for builtin refs (e.g. Panic used as a fail-cont value).
-      for arg in args {
-        if let Arg::Val(v) = arg { scan_val_for_builtin(v, builtins); }
-      }
-      // Scan cont bodies for nested builtins.
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-          scan_builtins(body, builtins);
-        }
-      }
-    }
-    ExprKind::LetVal { cont, val, .. } => {
-      scan_val_for_builtin(val, builtins);
-      if let Cont::Expr { body, .. } = cont { scan_builtins(body, builtins); }
-    }
-    ExprKind::LetFn { cont, .. } => {
-      if let Cont::Expr { body, .. } = cont { scan_builtins(body, builtins); }
-    }
-    ExprKind::If { then, else_, .. } => {
-      scan_builtins(then, builtins);
-      scan_builtins(else_, builtins);
-    }
-  }
-  // Also scan fn bodies in LetFn.
-  if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
-    scan_builtins(fn_body, builtins);
-  }
-}
-
-/// If the value is a `BuiltIn::Panic` reference, register it so the import
-/// gets emitted. Other `ValKind::BuiltIn(_)` variants are call-site only for
-/// now (emit_val_inner's catch-all emits `unreachable` if they reach value
-/// position), so we don't register them here.
-fn scan_val_for_builtin(val: &Val, builtins: &mut BTreeMap<String, usize>) {
-  if let ValKind::BuiltIn(BuiltIn::Panic) = val.kind {
-    builtins.entry("panic".to_string()).or_insert(2);
-  }
-}
-
-/// Scan for ·fn_closure call sites and collect the capture count for each.
-/// The capture count is val_args.len() - 1 (first val arg is the funcref).
-/// Returns the set of distinct capture counts, used for _apply dispatch branches.
-fn scan_closure_captures(expr: &Expr, captures: &mut BTreeSet<usize>) {
-  match &expr.kind {
-    ExprKind::App { func: Callable::BuiltIn(BuiltIn::FnClosure), args } => {
-      let (val_args, _) = split_args(args);
-      // val_args = [funcref, cap_0, cap_1, ...], so captures = len - 1.
-      let n_captures = val_args.len().saturating_sub(1);
-      captures.insert(n_captures);
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-          scan_closure_captures(body, captures);
-        }
-      }
-    }
-    ExprKind::App { args, .. } => {
-      for arg in args {
-        if let Arg::Cont(Cont::Expr { body, .. }) = arg {
-          scan_closure_captures(body, captures);
-        }
-      }
-    }
-    ExprKind::LetVal { cont, .. } | ExprKind::LetFn { cont, .. } => {
-      match cont {
-        Cont::Expr { body, .. } => scan_closure_captures(body, captures),
-        Cont::Ref(_) => {}
-      }
-    }
-    ExprKind::If { then, else_, .. } => {
-      scan_closure_captures(then, captures);
-      scan_closure_captures(else_, captures);
-    }
-  }
-  if let ExprKind::LetFn { fn_body, .. } = &expr.kind {
-    scan_closure_captures(fn_body, captures);
-  }
-}
-
-/// Check whether any value in the expression tree is a Lit::Rec.
-fn scan_rec_lit(expr: &Expr) -> bool {
-  fn is_rec_val(val: &Val) -> bool {
-    matches!(val.kind, ValKind::Lit(Lit::Rec))
-  }
-  match &expr.kind {
-    ExprKind::LetVal { val, cont, .. } => {
-      if is_rec_val(val) { return true; }
-      if let Cont::Expr { body, .. } = cont
-        && scan_rec_lit(body) { return true; }
-    }
-    ExprKind::App { args, .. } => {
-      for arg in args {
-        match arg {
-          Arg::Val(v) | Arg::Spread(v) if is_rec_val(v) => return true,
-          Arg::Cont(Cont::Expr { body, .. }) if scan_rec_lit(body) => return true,
-          _ => {}
-        }
-      }
-    }
-    ExprKind::LetFn { cont, .. } => {
-      if let Cont::Expr { body, .. } = cont
-        && scan_rec_lit(body) { return true; }
-    }
-    ExprKind::If { then, else_, .. } => {
-      if scan_rec_lit(then) || scan_rec_lit(else_) { return true; }
-    }
-  }
-  if let ExprKind::LetFn { fn_body, .. } = &expr.kind
-    && scan_rec_lit(fn_body) { return true; }
-  false
-}
-
-/// Intern any string literal found in a Val. Returns true if an empty string was found.
-fn scan_val_strings(val: &Val, data: &mut StringData) -> bool {
-  if let ValKind::Lit(Lit::Str(s)) = &val.kind {
-    if s.is_empty() {
-      return true;
-    }
-    data.intern(s);
-  }
-  false
-}
-
-/// Scan for string literals and intern them into the StringData blob.
-/// Returns true if any empty string literal was found.
-fn scan_strings(expr: &Expr, data: &mut StringData) -> bool {
-  match &expr.kind {
-    ExprKind::LetVal { val, cont, .. } => {
-      let mut found = scan_val_strings(val, data);
-      match cont {
-        Cont::Expr { body, .. } => found |= scan_strings(body, data),
-        Cont::Ref(_) => {}
-      }
-      found
-    }
-    ExprKind::LetFn { fn_body, cont, .. } => {
-      let mut found = scan_strings(fn_body, data);
-      match cont {
-        Cont::Expr { body, .. } => found |= scan_strings(body, data),
-        Cont::Ref(_) => {}
-      }
-      found
-    }
-    ExprKind::App { args, .. } => {
-      let mut found = false;
-      for arg in args {
-        match arg {
-          Arg::Val(v) | Arg::Spread(v) => found |= scan_val_strings(v, data),
-          Arg::Cont(Cont::Expr { body, .. }) => found |= scan_strings(body, data),
-          Arg::Cont(Cont::Ref(_)) => {}
-          Arg::Expr(e) => found |= scan_strings(e, data),
-        }
-      }
-      found
-    }
-    ExprKind::If { cond, then, else_, .. } => {
-      let mut found = scan_val_strings(cond, data);
-      found |= scan_strings(then, data);
-      found |= scan_strings(else_, data);
-      found
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Offset fixup — convert func-local offsets to absolute WASM byte offsets
-// ---------------------------------------------------------------------------
-
-fn fixup_offsets(wasm: &[u8], raw: Vec<RawMapping>) -> Vec<OffsetMapping> {
-  use wasmparser::{Parser, Payload};
-
-  if raw.is_empty() {
-    return vec![];
+  // Data: lay out user fragment's `frag.data` blobs sequentially in
+  // memory starting at offset 0. Each `DataSym(i)` resolves to the
+  // running offset, used by `Operand::DataRef` at emit time.
+  let mut data_offsets: Vec<u32> = Vec::with_capacity(frag.data.len());
+  let mut data_blob: Vec<u8> = Vec::new();
+  for d in &frag.data {
+    data_offsets.push(data_blob.len() as u32);
+    data_blob.extend_from_slice(&d.bytes);
   }
 
-  // Find the code section and each function body's absolute offset.
-  let mut func_body_offsets: Vec<u32> = Vec::new();
-
-  for payload in Parser::new(0).parse_all(wasm) {
-    match payload {
-      Ok(Payload::CodeSectionStart { range, count, .. }) => {
-        // Parse individual function bodies to get their offsets.
-        let _ = (range, count);
-      }
-      Ok(Payload::CodeSectionEntry(body)) => {
-        // Function::byte_len() counts from the start of the encoded function
-        // body (including the locals declaration). body.range().start is the
-        // absolute offset of the body's first byte (after the LEB128 size prefix).
-        func_body_offsets.push(body.range().start as u32);
-      }
-      _ => {}
-    }
+  // Code: runtime's bodies raw, then user's bodies encoded.
+  let mut code_sec = CodeSection::new();
+  for body in &rt.code_bodies_raw {
+    code_sec.raw(body);
+  }
+  for (_, f) in &user_local_funcs {
+    let func = emit_func(frag, f, &type_remap, &func_remap, user_global_base, &data_offsets);
+    code_sec.function(&func);
   }
 
-  raw.into_iter().map(|m| {
-    let base = func_body_offsets.get(m.func_def_index as usize)
-      .copied()
-      .unwrap_or(0);
-    OffsetMapping {
-      wasm_offset: base + m.func_byte_offset,
-      loc: m.loc,
-    }
-  }).collect()
-}
-
-/// Same shape as `fixup_offsets` but produces `MarkRecord`s — one per
-/// CpsId the `debug_marks` pass flagged as a step-stop, with its
-/// fragment-local absolute WASM byte offset.
-fn fixup_marks(wasm: &[u8], raw: Vec<RawMark>) -> Vec<MarkRecord> {
-  use wasmparser::{Parser, Payload};
-
-  if raw.is_empty() {
-    return vec![];
-  }
-
-  let mut func_body_offsets: Vec<u32> = Vec::new();
-  for payload in Parser::new(0).parse_all(wasm) {
-    if let Ok(Payload::CodeSectionEntry(body)) = payload {
-      func_body_offsets.push(body.range().start as u32);
-    }
-  }
-
-  raw.into_iter().map(|m| {
-    let base = func_body_offsets.get(m.func_def_index as usize)
-      .copied()
-      .unwrap_or(0);
-    MarkRecord {
-      wasm_pc: base + m.func_byte_offset,
-      cps_id: m.cps_id,
-      source: m.loc,
-    }
-  }).collect()
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use crate::passes::wasm::collect;
-
-  fn compile(src: &str) -> EmitResult {
-    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-
-    let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast);
-    let module = collect::collect(&lifted.result.root, &ir_ctx, &lifted.result.module_locals, lifted.result.module_imports.clone());
-    let ir_ctx = ir_ctx.with_globals(module.globals.clone());
-    emit(&module, &ir_ctx, None)
-  }
-
-  #[test]
-  fn t_simple_emit_parses() {
-    // Verify the emitted binary is valid WASM.
-    let result = compile("add = fn a, b: a + b");
-    assert!(!result.wasm.is_empty(), "WASM output should not be empty");
-
-    // Validate with wasmparser.
-    use wasmparser::{Parser, Payload};
-    let mut found_code = false;
-    for payload in Parser::new(0).parse_all(&result.wasm) {
-      match payload {
-        Ok(Payload::CodeSectionEntry(_)) => { found_code = true; }
-        Err(e) => panic!("invalid WASM: {}", e),
-        _ => {}
-      }
-    }
-    assert!(found_code, "should have a code section");
-  }
-
-  #[test]
-  fn t_offset_mappings_present() {
-    let result = compile("add = fn a, b: a + b");
-    assert!(!result.offset_mappings.is_empty(), "should have offset mappings");
-    // All offsets should be non-zero (after WASM header).
-    for m in &result.offset_mappings {
-      assert!(m.wasm_offset > 0, "offset should be > 0");
-      assert!(m.loc.start.line > 0, "source line should be > 0");
-    }
-  }
-
-  #[test]
-  fn t_mark_records_present_when_debug_marks_supplied() {
-    // Pass `Some(&debug_marks)` and confirm the emitter records a
-    // `MarkRecord` for every CpsId the policy flagged as a stop, with
-    // monotonic, byte-offset PCs that fall inside a code-section body.
-    let src = "add = fn a, b: a + b";
-    let (lifted, desugared) = crate::to_lifted(src, "test").unwrap();
-    let ir_ctx = IrCtx::new(&lifted.result.origin, &desugared.ast);
-    let module = collect::collect(
-      &lifted.result.root,
-      &ir_ctx,
-      &lifted.result.module_locals,
-      lifted.result.module_imports.clone(),
+  // Data section: one active segment at offset 0 in memory 0 holding
+  // the concatenated blobs. Skip if there's no data.
+  let data_sec = if data_blob.is_empty() {
+    None
+  } else {
+    let mut sec = wasm_encoder::DataSection::new();
+    sec.active(
+      0,                                 // memory index
+      &ConstExpr::i32_const(0),          // offset
+      data_blob.iter().copied(),         // bytes
     );
-    let ir_ctx = ir_ctx.with_globals(module.globals.clone());
+    Some(sec)
+  };
 
-    let debug_marks = crate::passes::debug_marks::analyse(&lifted, &desugared);
-    let result = emit(&module, &ir_ctx, Some(&debug_marks));
+  // ── finalise module ──────────────────────────────────────────
+  // WASM section IDs — from the spec.
+  const SECTION_GLOBAL: u8 = 6;
+  const SECTION_ELEMENT: u8 = 9;
 
-    assert!(
-      !result.mark_records.is_empty(),
-      "should record at least one MarkRecord — `add = fn a, b: a + b` has stops",
-    );
-    for r in &result.mark_records {
-      assert!(r.wasm_pc > 0, "wasm_pc should be > 0");
-      assert!(r.source.start.line > 0, "source line should be > 0");
+  let mut module = WasmModule::new();
+  module.section(&type_sec);
+  module.section(&import_sec);
+  module.section(&func_sec);
+  module.section(&mem_sec);
+  if let Some(body) = &combined_globals_body {
+    module.section(&wasm_encoder::RawSection { id: SECTION_GLOBAL, data: body });
+  }
+  module.section(&export_sec);
+  if let Some(body) = &combined_elements_body {
+    module.section(&wasm_encoder::RawSection { id: SECTION_ELEMENT, data: body });
+  }
+  module.section(&code_sec);
+  if let Some(sec) = &data_sec {
+    module.section(sec);
+  }
+  module.finish()
+}
+
+
+// ──────────────────────────────────────────────────────────────────
+// Function body emission
+// ──────────────────────────────────────────────────────────────────
+
+fn emit_func(
+  frag: &Fragment,
+  f: &FuncDecl,
+  type_remap: &[u32],
+  func_remap: &[u32],
+  user_global_base: u32,
+  data_offsets: &[u32],
+) -> Function {
+  let mut locals: Vec<(u32, WEValType)> = Vec::new();
+  for l in &f.locals {
+    locals.push((1, val_from_ir(&l.ty, type_remap)));
+  }
+  let mut func = Function::new(locals);
+  for &id in &f.body {
+    emit_instr(&mut func, frag, &frag.instrs[id.0 as usize], type_remap, func_remap, user_global_base, data_offsets);
+  }
+  func.instruction(&Instruction::End);
+  func
+}
+
+fn emit_instr(
+  func: &mut Function,
+  frag: &Fragment,
+  instr: &Instr,
+  type_remap: &[u32],
+  func_remap: &[u32],
+  user_global_base: u32,
+  data_offsets: &[u32],
+) {
+  match &instr.kind {
+    InstrKind::LocalSet { idx, src } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::LocalSet(idx.0));
     }
-    // Sorted by wasm_pc.
-    let pcs: Vec<u32> = result.mark_records.iter().map(|r| r.wasm_pc).collect();
-    let mut sorted = pcs.clone();
-    sorted.sort();
-    assert_eq!(pcs, sorted, "mark records should be sorted by wasm_pc");
+    InstrKind::GlobalSet { sym, src } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::GlobalSet(user_global_base + sym.0));
+    }
+    InstrKind::StructNew { ty, fields, into } => {
+      for fld in fields {
+        emit_operand(func, fld, type_remap, func_remap, user_global_base, data_offsets);
+      }
+      func.instruction(&Instruction::StructNew(type_remap[ty.0 as usize]));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::Call { target, args, into } => {
+      for a in args {
+        emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
+      }
+      func.instruction(&Instruction::Call(func_remap[target.0 as usize]));
+      if let Some(l) = into {
+        func.instruction(&Instruction::LocalSet(l.0));
+      }
+    }
+    InstrKind::ReturnCall { target, args } => {
+      for a in args {
+        emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
+      }
+      func.instruction(&Instruction::ReturnCall(func_remap[target.0 as usize]));
+    }
+    InstrKind::RefI31 { src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::RefI31);
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefFunc { func: fsym, into } => {
+      func.instruction(&Instruction::RefFunc(func_remap[fsym.0 as usize]));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefNullConcrete { ty, into } => {
+      func.instruction(&Instruction::RefNull(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefCastNonNull { ty, src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::ArrayNewFixed { ty, size, elems, into } => {
+      for e in elems {
+        emit_operand(func, e, type_remap, func_remap, user_global_base, data_offsets);
+      }
+      func.instruction(&Instruction::ArrayNewFixed {
+        array_type_index: type_remap[ty.0 as usize],
+        array_size: *size,
+      });
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::ArrayGet { ty, arr, idx, into } => {
+      emit_operand(func, arr, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(func, idx, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::ArrayGet(type_remap[ty.0 as usize]));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefNull { ht, into } => {
+      func.instruction(&Instruction::RefNull(HeapType::Abstract {
+        shared: false,
+        ty: abs_heap_ir(*ht),
+      }));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::I31GetS { src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::I31GetS);
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefCastNullable { ty, src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(type_remap[ty.0 as usize])));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::RefCastNonNullAbs { ht, src, into } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::RefCastNonNull(HeapType::Abstract {
+        shared: false,
+        ty: abs_heap_ir(*ht),
+      }));
+      func.instruction(&Instruction::LocalSet(into.0));
+    }
+    InstrKind::If { cond, then_body, else_body } => {
+      // cond is a leaf operand evaluating to i32.
+      emit_operand(func, cond, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+      for id in then_body {
+        emit_instr(func, frag, &frag.instrs[id.0 as usize],
+          type_remap, func_remap, user_global_base, data_offsets);
+      }
+      if !else_body.is_empty() {
+        func.instruction(&Instruction::Else);
+        for id in else_body {
+          emit_instr(func, frag, &frag.instrs[id.0 as usize],
+            type_remap, func_remap, user_global_base, data_offsets);
+        }
+      }
+      func.instruction(&Instruction::End);
+    }
+    InstrKind::Unreachable => {
+      func.instruction(&Instruction::Unreachable);
+    }
+    InstrKind::Drop { src } => {
+      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::Drop);
+    }
   }
+}
 
-  #[test]
-  fn t_mark_records_empty_without_debug_marks() {
-    // The legacy code path (None) must not record any MarkRecords, so
-    // existing tests that compile without debug_marks stay zero-impact.
-    let result = compile("add = fn a, b: a + b");
-    assert!(
-      result.mark_records.is_empty(),
-      "no debug_marks → no MarkRecords",
-    );
+fn emit_operand(
+  func: &mut Function,
+  op: &Operand,
+  _type_remap: &[u32],
+  func_remap: &[u32],
+  user_global_base: u32,
+  data_offsets: &[u32],
+) {
+  match op {
+    Operand::I32(v) => { func.instruction(&Instruction::I32Const(*v)); }
+    Operand::F64(v) => { func.instruction(&Instruction::F64Const((*v).into())); }
+    Operand::Local(idx) => { func.instruction(&Instruction::LocalGet(idx.0)); }
+    Operand::Global(sym) => {
+      func.instruction(&Instruction::GlobalGet(user_global_base + sym.0));
+    }
+    Operand::RefFunc(fsym) => {
+      func.instruction(&Instruction::RefFunc(func_remap[fsym.0 as usize]));
+    }
+    Operand::RefNull(ht) => {
+      func.instruction(&Instruction::RefNull(HeapType::Abstract {
+        shared: false,
+        ty: abs_heap_ir(*ht),
+      }));
+    }
+    Operand::DataRef { sym, len } => {
+      // DataRef expands to TWO consts: (offset, len). Used by string
+      // literal lowering — `call $str (i32.const offset) (i32.const len)`.
+      let offset = data_offsets[sym.0 as usize];
+      func.instruction(&Instruction::I32Const(offset as i32));
+      func.instruction(&Instruction::I32Const(*len as i32));
+    }
   }
+}
+
+fn abs_heap_ir(h: AbsHeap) -> AbstractHeapType {
+  match h {
+    AbsHeap::Any  => AbstractHeapType::Any,
+    AbsHeap::Eq   => AbstractHeapType::Eq,
+    AbsHeap::I31  => AbstractHeapType::I31,
+    AbsHeap::Func => AbstractHeapType::Func,
+  }
+}
+
+fn val_from_ir(v: &ValType, type_remap: &[u32]) -> WEValType {
+  match v {
+    ValType::I32 => WEValType::I32,
+    ValType::F64 => WEValType::F64,
+    ValType::RefAbstract { nullable, ht } => WEValType::Ref(RefType {
+      nullable: *nullable,
+      heap_type: HeapType::Abstract { shared: false, ty: abs_heap_ir(*ht) },
+    }),
+    ValType::RefConcrete { nullable, ty } => WEValType::Ref(RefType {
+      nullable: *nullable,
+      heap_type: HeapType::Concrete(type_remap[ty.0 as usize]),
+    }),
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// LEB128 helpers (unsigned, u32-range)
+// ──────────────────────────────────────────────────────────────────
+
+fn encode_leb_u32(out: &mut Vec<u8>, mut v: u32) {
+  loop {
+    let byte = (v & 0x7f) as u8;
+    v >>= 7;
+    if v == 0 { out.push(byte); break; }
+    out.push(byte | 0x80);
+  }
+}
+
+/// Decode the leading LEB128 u32 count from a section body and return
+/// `(count, remainder)`. Panics if the input is malformed (we control
+/// the producer).
+fn decode_leb_u32_prefix(raw: &[u8]) -> (u32, &[u8]) {
+  let mut val: u32 = 0;
+  let mut shift = 0u32;
+  for (i, b) in raw.iter().enumerate() {
+    val |= u32::from(b & 0x7f) << shift;
+    if b & 0x80 == 0 {
+      return (val, &raw[i + 1..]);
+    }
+    shift += 7;
+    if shift >= 32 {
+      panic!("emit: LEB128 u32 overflow");
+    }
+  }
+  panic!("emit: truncated LEB128");
 }

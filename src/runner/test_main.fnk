@@ -1,0 +1,31 @@
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+test 'main returns exit code', fn:
+  expect run ƒink:
+    main = fn:
+      0
+  | equals ƒink:
+    0
+
+
+test 'main receives cli args', fn:
+  expect run ƒink:
+    main = fn a1, a2, a3:
+      '${a1} ${a2} ${a3}' == 'test alpha beta'
+  | equals ƒink:
+    true
+
+
+
+test 'main receives cli args of any length', fn:
+  expect run ƒink:
+    main = fn ..args:
+      match args:
+        ['test', 'alpha', 'beta']: 123
+        _: 0
+  | equals ƒink:
+    123
+

@@ -323,7 +323,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::Lte    => "·op_lte".into(),
     BuiltIn::Gt     => "·op_gt".into(),
     BuiltIn::Gte    => "·op_gte".into(),
-    BuiltIn::Cmp    => "·op_cmp".into(),
+    BuiltIn::Disjoint => "·op_disjoint".into(),
     // Logical
     BuiltIn::And    => "·op_and".into(),
     BuiltIn::Or     => "·op_or".into(),
@@ -365,8 +365,8 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Channels
     BuiltIn::Channel      => "·channel".into(),
     BuiltIn::Receive      => "·receive".into(),
-    // IO
     BuiltIn::Read         => "·read".into(),
+    // IO
     // Module
     BuiltIn::Export       => "·export".into(),
     BuiltIn::Import       => "·import".into(),

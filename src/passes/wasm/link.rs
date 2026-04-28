@@ -1,2807 +1,458 @@
-// Static linker — merges pre-compiled runtime WASM fragments into the
-// compiler's emitted WASM output, producing a single standalone module.
-//
-// ## Design
-//
-// The fink compiler emits a WASM fragment for user code (via emit.rs).
-// Runtime data structures (list, hamt, set, strings) are implemented as
-// standalone WAT files compiled to WASM once. The linker merges these
-// fragments into one self-contained WASM binary — no runtime imports,
-// no component model, runs on any current WASM engine.
-//
-// ## Pipeline position
-//
-//   CPS → lift → collect → emit → **link** → DWARF → CompileResult
-//                                    ↑
-//                            runtime .wasm fragments
-//                            (pre-compiled from WAT)
-//
-// ## Type unification
-//
-// WASM GC uses nominal typing within rec groups — structurally identical
-// types from different modules are distinct. All shared types are defined
-// in `runtime/types.wat` as the single canonical source.
-//
-// The universal value type is `(ref any)` — WASM GC's built-in top type.
-// No custom $Any supertype. See `runtime/types.wat` for the full hierarchy.
-//
-// Each runtime WAT module and the compiler's emitted fragment reference
-// shared types by name. The linker:
-//   1. Emits canonical types (from types.wat) once in the output type section
-//   2. Assigns each module's internal types with namespaced names (no clashes)
-//   3. Remaps all type index references in merged code
-//
-// ## Import convention
-//
-// Dependencies between fragments are declared as WASM imports using
-// the `@fink/` module namespace:
-//
-//   ;; "I depend on the entire list module"
-//   (import "@fink/runtime/list" "*" (func (param anyref)))
-//
-//   ;; "I depend on a specific function from hamt"
-//   (import "@fink/runtime/hamt" "rec_pop" (func (param anyref)))
-//
-// The `(func (param anyref))` descriptor is a dummy — cheapest valid
-// import to keep the WASM validator happy. The linker strips all `@fink/`
-// imports and resolves them from the link set.
-//
-// Granular imports (naming specific functions) enable selective linking:
-// if user code only uses `seq_pop`, only `list.wasm` is pulled in, not
-// `rec.wasm` or `set.wasm`. For now the linker pulls the entire module
-// for any import from it. Future: trace internal call graph for finer
-// tree shaking, or defer to the WASM runtime's optimizer.
-//
-// ## Linking steps
-//
-//   1. Parse all WASM fragments (wasmparser)
-//   2. Scan imports — identify `@fink/` dependencies, build link set
-//   3. Unify type sections:
-//      - Canonical types (from types.wat) → emitted once
-//      - Module-internal types → namespaced (e.g. `@fink/runtime/list:Cons`)
-//      - Build old-index → new-index remap tables per fragment
-//   4. Merge function sections:
-//      - Resolve import references → defined function indices
-//      - Namespace internal function names per module
-//      - Build function index remap tables per fragment
-//   5. Merge code sections:
-//      - Rewrite type and function index references in instructions
-//   6. Merge name sections:
-//      - Combine debug names from all fragments, preserving namespaces
-//      - Name format: `@fink/runtime/list:list_prepend` (free-form UTF-8)
-//   7. Adjust DWARF:
-//      - Runtime fragments (hand-written WAT) carry no DWARF
-//      - User code DWARF offsets adjusted by prepended runtime code size
-//   8. Emit single WASM binary (wasm-encoder)
-//
-// ## Name section conventions
-//
-// WASM name section entries are free-form UTF-8 strings. The linker uses
-// module-qualified names for all merged items:
-//
-//   @fink/runtime/types:Num        — shared type
-//   @fink/runtime/list:list_prepend — runtime function
-//   @fink/runtime/hamt:_hash       — runtime internal function
-//
-// These names appear in WAT disassembly and debug tools. User-defined
-// functions keep their original names without a module prefix.
+//! IR-level linker — merges user-level `Fragment`s into a single
+//! linked `Fragment`.
+//!
+//! # Scope
+//!
+//! * **Input:** a list of user-level Fragments. Index 0 is the entry
+//!   module; the rest are deps in any deterministic order. Each
+//!   fragment carries its `module_id` and a `module_imports` map of
+//!   raw-URL → ModuleId (populated by `compile_package` after
+//!   BFS resolution).
+//! * **Output:** one linked Fragment. Per-fragment symbol indices
+//!   (FuncSym, TypeSym, GlobalSym, DataSym, InstrId) get remapped
+//!   to the merged fragment's index space. Cross-fragment user
+//!   imports declared via `FuncDecl.import = Some(ImportKey {
+//!   module: "<canonical_url>", name: "fink_module" })` resolve to
+//!   the producer fragment's local FuncSym. Runtime imports
+//!   (`rt/*`, `std/*`, `interop/*`) pass through **unchanged**;
+//!   resolving those is `emit`'s job at byte time.
+//!
+//! The linker is pure IR → IR. It does not touch `wasm-encoder`,
+//! does not parse `runtime-ir.wasm`, does not emit bytes.
 
 use std::collections::BTreeMap;
 
-use gimli::LittleEndian;
-use wasmparser::{Payload, Parser};
+use super::ir::*;
 
-// -- Public API ---------------------------------------------------------------
-
-/// A WASM fragment to be linked.
-pub struct LinkInput {
-    /// Module name for namespacing (e.g. `"@fink/runtime/list"`).
-    /// Empty string for user code (no prefix applied).
-    pub module_name: String,
-    /// Raw WASM bytes.
-    pub wasm: Vec<u8>,
+/// Per-fragment offset accumulators for symbol remapping.
+#[derive(Default, Clone, Copy, Debug)]
+struct Offsets {
+  types:   u32,
+  funcs:   u32,
+  globals: u32,
+  data:    u32,
+  instrs:  u32,
 }
 
-/// Result of linking.
-pub struct LinkResult {
-    /// The merged WASM binary.
-    pub wasm: Vec<u8>,
-}
-
-/// Link a set of WASM fragments into a single standalone module.
+/// Link a set of user-level Fragments into a single linked Fragment.
 ///
-/// Fragments are processed in order: earlier fragments' types and functions
-/// get lower indices. The convention is types.wat first, then runtime modules,
-/// then user code last (so DWARF adjustment is straightforward).
-pub fn link(inputs: &[LinkInput]) -> LinkResult {
-    let fragments: Vec<ParsedFragment> = inputs
-        .iter()
-        .map(|input| parse_fragment(&input.module_name, &input.wasm))
-        .collect();
-
-    // Compute per-fragment string-data base offsets.
-    //
-    // Every fragment emits its own string intern table as an active data
-    // segment starting at linear memory offset 0. When N fragments are
-    // linked into one binary, they'd all claim offset 0 and overlap, so
-    // earlier fragments' string literals get clobbered by later ones.
-    //
-    // To fix this, each fragment's data segment gets shifted to its own
-    // base offset — the running sum of preceding fragments' data sizes —
-    // and every `(i32.const offset)` argument to `call $str` in that
-    // fragment's code body gets rewritten to `(i32.const (offset + base))`.
-    //
-    // The assumption: each fragment has at most one active data segment
-    // targeting memory 0. That's the current emitter invariant; if a
-    // fragment ever emits multiple data segments this logic needs to
-    // grow per-segment offsets instead of per-fragment.
-    let data_base_offsets: Vec<u32> = {
-        let mut offsets = Vec::with_capacity(fragments.len());
-        let mut running: u32 = 0;
-        for frag in &fragments {
-            offsets.push(running);
-            for (_mem, _off, data) in &frag.data_segments {
-                running = running.saturating_add(data.len() as u32);
-            }
-        }
-        offsets
-    };
-
-    // Find each fragment's local function index for the `@fink/runtime.str`
-    // import, if present. This is what the peephole rewriter in `rewrite_body`
-    // uses to identify `call $str` sites — only `I32Const` arguments to such
-    // calls get shifted by the fragment's base offset.
-    let str_import_indices: Vec<Option<u32>> = fragments.iter().map(|frag| {
-        let mut func_import_idx: u32 = 0;
-        let mut found = None;
-        for import in &frag.imports {
-            if import.func_type_idx.is_some() {
-                if import.module == "@fink/runtime" && import.name == "str" {
-                    found = Some(func_import_idx);
-                    break;
-                }
-                func_import_idx += 1;
-            }
-        }
-        found
-    }).collect();
-
-    let mut ctx = LinkContext::new();
-    ctx.data_base_offsets = data_base_offsets;
-    ctx.str_import_indices = str_import_indices;
-
-    // Step 1: Merge types from all fragments.
-    merge_types(&mut ctx, &fragments);
-
-    // Step 2a: Assign output global indices to dependency fragments eagerly.
-    // This must happen before merge_global_imports so that cross-fragment
-    // global imports (e.g. `(import "./foo.fnk" "bar" (global ...))`) can
-    // be resolved to the dependency's already-assigned global indices rather
-    // than being left as external (unresolved) imports in the output.
-    assign_dep_globals(&mut ctx, &fragments);
-
-    // Step 2b: Collect external global imports — for each non-@fink/ global
-    // import, check if it resolves to a dep fragment's exported global. If so,
-    // remap directly (no external import emitted). Otherwise, preserve as an
-    // external import in the output.
-    merge_global_imports(&mut ctx, &fragments);
-
-    // Step 3: Merge functions — resolve @fink/ imports, assign indices.
-    merge_functions(&mut ctx, &fragments);
-
-    // Step 4: Merge code — rewrite index references.
-    merge_code(&mut ctx, &fragments);
-
-    // Step 5: Merge defined globals (skips dep fragments already processed in step 2a).
-    merge_globals(&mut ctx, &fragments);
-
-    // Step 6: Merge exports (strip @fink/ internal imports from output).
-    merge_exports(&mut ctx, &fragments);
-
-    // Step 7: Collect memory and data sections from fragments.
-    // Each fragment's data segment gets placed at its computed base offset
-    // so that the intern tables don't overlap in linear memory. We synthesise
-    // a new `(i32.const <base>)` offset expression for each segment.
-    for (i, frag) in fragments.iter().enumerate() {
-        if let Some(mem) = &frag.memory {
-            ctx.memory = Some(*mem);
-        }
-        let base = ctx.data_base_offsets[i];
-        for (mem_idx, _old_offset_bytes, data) in &frag.data_segments {
-            let new_offset_bytes = encode_i32_const_offset(base);
-            ctx.data_segments.push((*mem_idx, new_offset_bytes, data.clone()));
-        }
-    }
-
-    // Step 8: Emit final module.
-    emit_module(&ctx)
-}
-
-/// Encode an `(i32.const N) end` const-expression for a data segment offset.
-/// Uses signed LEB128 for the value.
-fn encode_i32_const_offset(value: u32) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(6);
-    bytes.push(0x41); // i32.const opcode
-    leb128_signed(value as i64, &mut bytes);
-    bytes.push(0x0b); // end opcode
-    bytes
-}
-
-/// Encode a signed value as LEB128.
-fn leb128_signed(mut value: i64, out: &mut Vec<u8>) {
-    loop {
-        let mut byte = (value & 0x7f) as u8;
-        value >>= 7;
-        let sign_bit_set = byte & 0x40 != 0;
-        let done = (value == 0 && !sign_bit_set) || (value == -1 && sign_bit_set);
-        if !done {
-            byte |= 0x80;
-        }
-        out.push(byte);
-        if done { break; }
-    }
-}
-
-
-/// Whether a module is the entry user code fragment (not a runtime library module).
-/// User code keeps original names (no namespace prefix) and owns DWARF info.
-fn is_user_module(module_name: &str) -> bool {
-    module_name.is_empty() || module_name == "@fink/user"
-}
-
-/// Whether a module is a fink dependency fragment (compiled fink module that
-/// provides exports to the entry module). These are non-runtime, non-entry
-/// fink modules — their `module_name` is a URL like `"./foo.fnk"`.
-fn is_dep_module(module_name: &str) -> bool {
-    !module_name.is_empty()
-        && module_name != "@fink/user"
-        && !module_name.starts_with("@fink/")
-}
-
-// -- Parsed representation ----------------------------------------------------
-
-/// Import entry from a fragment.
-struct ParsedImport {
-    module: String,
-    name: String,
-    /// True if module starts with `@fink/` — resolved by linker, not kept.
-    is_fink: bool,
-    /// For func imports: the type index in the fragment's type space.
-    /// Used to re-emit non-@fink/ imports in the linked output.
-    func_type_idx: Option<u32>,
-    /// True if this is a global import (not a function import).
-    is_global: bool,
-}
-
-/// Exported item from a fragment.
-struct ParsedExport {
-    name: String,
-    kind: wasmparser::ExternalKind,
-    /// Index in the fragment's local index space.
-    index: u32,
-}
-
-/// A parsed global from a fragment.
-struct ParsedGlobal {
-    ty: wasmparser::GlobalType,
-    /// Raw init expression bytes (includes trailing `end` opcode).
-    init_bytes: Vec<u8>,
-}
-
-/// Parsed name section data.
-struct ParsedNames {
-    func_names: BTreeMap<u32, String>,
-    local_names: BTreeMap<u32, BTreeMap<u32, String>>,
-    global_names: BTreeMap<u32, String>,
-    type_names: BTreeMap<u32, String>,
-}
-
-/// A fully parsed WASM fragment ready for linking.
-struct ParsedFragment {
-    module_name: String,
-    /// The original WASM bytes (needed for code body re-parsing).
-    wasm: Vec<u8>,
-    /// Total type count across all rec groups.
-    type_count: u32,
-    /// Number of types in the first rec group (canonical types from types.wat).
-    /// These are shared across all fragments and should not be duplicated.
-    canonical_type_count: u32,
-    /// Raw type section bytes for re-encoding via RawSection.
-    type_section_bytes: Option<Vec<u8>>,
-    /// Imports (both @fink/ and external).
-    imports: Vec<ParsedImport>,
-    /// Number of imported functions (offsets defined function indices).
-    import_func_count: u32,
-    /// Number of imported globals (offsets defined global indices).
-    import_global_count: u32,
-    /// Function declarations: type index per defined function.
-    func_type_indices: Vec<u32>,
-    /// Code body ranges into `wasm` — (start, end) per defined function.
-    code_body_ranges: Vec<(usize, usize)>,
-    /// Exports.
-    exports: Vec<ParsedExport>,
-    /// Globals.
-    globals: Vec<ParsedGlobal>,
-    /// Name section data.
-    names: ParsedNames,
-    /// DWARF custom sections: (section_name, data).
-    dwarf_sections: Vec<(String, Vec<u8>)>,
-    /// Element section entries (declarative ref.func indices).
-    elem_func_indices: Vec<u32>,
-    /// Memory type (if declared by this fragment).
-    memory: Option<wasmparser::MemoryType>,
-    /// Active data segments: (memory_index, offset_bytes, data).
-    data_segments: Vec<(u32, Vec<u8>, Vec<u8>)>,
-}
-
-
-// -- Parsing ------------------------------------------------------------------
-
-fn parse_fragment(module_name: &str, wasm: &[u8]) -> ParsedFragment {
-    let mut frag = ParsedFragment {
-        module_name: module_name.to_string(),
-        wasm: wasm.to_vec(),
-        type_count: 0,
-        canonical_type_count: 0,
-        type_section_bytes: None,
-        imports: Vec::new(),
-        import_func_count: 0,
-        import_global_count: 0,
-        func_type_indices: Vec::new(),
-        code_body_ranges: Vec::new(),
-        exports: Vec::new(),
-        globals: Vec::new(),
-        names: ParsedNames {
-            func_names: BTreeMap::new(),
-            local_names: BTreeMap::new(),
-            global_names: BTreeMap::new(),
-            type_names: BTreeMap::new(),
-        },
-        dwarf_sections: Vec::new(),
-        elem_func_indices: Vec::new(),
-        memory: None,
-        data_segments: Vec::new(),
-    };
-
-    for payload in Parser::new(0).parse_all(wasm) {
-        let payload = match payload {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-        match payload {
-            Payload::TypeSection(reader) => {
-                // Count types and store raw section bytes for re-encoding.
-                let range = reader.range();
-                frag.type_section_bytes =
-                    Some(wasm[range.start..range.end].to_vec());
-
-                let mut count = 0u32;
-                let mut first_rg = true;
-                for rg in reader.into_iter().flatten() {
-                    let mut rg_count = 0u32;
-                    for _ in rg.into_types() {
-                        count += 1;
-                        rg_count += 1;
-                    }
-                    if first_rg {
-                        frag.canonical_type_count = rg_count;
-                        first_rg = false;
-                    }
-                }
-                frag.type_count = count;
-            }
-
-            Payload::ImportSection(reader) => {
-                for imports_group in reader {
-                    let imports_group = match imports_group {
-                        Ok(g) => g,
-                        Err(_) => continue,
-                    };
-                    match imports_group {
-                        wasmparser::Imports::Single(_, import) => {
-                            let is_fink =
-                                import.module.starts_with("@fink/");
-                            let is_global = matches!(import.ty, wasmparser::TypeRef::Global(_));
-                            let func_type_idx = if let wasmparser::TypeRef::Func(idx) = import.ty {
-                                frag.import_func_count += 1;
-                                Some(idx)
-                            } else {
-                                if is_global { frag.import_global_count += 1; }
-                                None
-                            };
-                            frag.imports.push(ParsedImport {
-                                module: import.module.to_string(),
-                                name: import.name.to_string(),
-                                is_fink,
-                                func_type_idx,
-                                is_global,
-                            });
-                        }
-                        wasmparser::Imports::Compact1 {
-                            module: mod_name,
-                            items,
-                        } => {
-                            for item in items.into_iter().flatten() {
-                                let is_fink =
-                                    mod_name.starts_with("@fink/");
-                                let is_global = matches!(item.ty, wasmparser::TypeRef::Global(_));
-                                let func_type_idx = if let wasmparser::TypeRef::Func(idx) = item.ty {
-                                    frag.import_func_count += 1;
-                                    Some(idx)
-                                } else {
-                                    if is_global { frag.import_global_count += 1; }
-                                    None
-                                };
-                                frag.imports.push(ParsedImport {
-                                    module: mod_name.to_string(),
-                                    name: item.name.to_string(),
-                                    is_fink,
-                                    func_type_idx,
-                                    is_global,
-                                });
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            Payload::FunctionSection(reader) => {
-                for type_idx in reader.into_iter().flatten() {
-                    frag.func_type_indices.push(type_idx);
-                }
-            }
-
-            Payload::CodeSectionEntry(body) => {
-                // Store the range into the original WASM bytes.
-                let range = body.range();
-                frag.code_body_ranges.push((range.start, range.end));
-            }
-
-            Payload::ExportSection(reader) => {
-                for export in reader.into_iter().flatten() {
-                    frag.exports.push(ParsedExport {
-                        name: export.name.to_string(),
-                        kind: export.kind,
-                        index: export.index,
-                    });
-                }
-            }
-
-            Payload::GlobalSection(reader) => {
-                for global in reader.into_iter().flatten() {
-                    let mut reader = global.init_expr.get_binary_reader();
-                    let len = reader.bytes_remaining();
-                    let init_bytes = reader.read_bytes(len)
-                        .expect("invalid init expr").to_vec();
-                    frag.globals.push(ParsedGlobal {
-                        ty: global.ty,
-                        init_bytes,
-                    });
-                }
-            }
-
-            Payload::ElementSection(reader) => {
-                for elem in reader.into_iter().flatten() {
-                    if let wasmparser::ElementItems::Functions(funcs) = elem.items {
-                        for func_idx in funcs.into_iter().flatten() {
-                            frag.elem_func_indices.push(func_idx);
-                        }
-                    }
-                }
-            }
-
-            Payload::MemorySection(reader) => {
-                for mem in reader.into_iter().flatten() {
-                    frag.memory = Some(mem);
-                }
-            }
-
-            Payload::DataSection(reader) => {
-                for seg in reader.into_iter().flatten() {
-                    if let wasmparser::DataKind::Active { memory_index, offset_expr } = seg.kind {
-                        let mut r = offset_expr.get_binary_reader();
-                        let len = r.bytes_remaining();
-                        let offset_bytes = r.read_bytes(len)
-                            .expect("invalid data offset expr").to_vec();
-                        frag.data_segments.push((memory_index, offset_bytes, seg.data.to_vec()));
-                    }
-                }
-            }
-
-            Payload::CustomSection(reader) => {
-                let name = reader.name();
-                if let wasmparser::KnownCustom::Name(name_reader) =
-                    reader.as_known()
-                {
-                    parse_name_section(&mut frag.names, name_reader);
-                } else if name.starts_with(".debug_") {
-                    frag.dwarf_sections
-                        .push((name.to_string(), reader.data().to_vec()));
-                }
-            }
-
-            _ => {}
-        }
-    }
-
-    frag
-}
-
-fn parse_name_section(
-    names: &mut ParsedNames,
-    reader: wasmparser::NameSectionReader,
-) {
-    for name in reader.into_iter().flatten() {
-        match name {
-            wasmparser::Name::Function(map) => {
-                for n in map.into_iter().flatten() {
-                    names.func_names.insert(n.index, n.name.to_string());
-                }
-            }
-            wasmparser::Name::Local(indirect) => {
-                for ind in indirect.into_iter().flatten() {
-                    let locals: BTreeMap<u32, String> = ind
-                        .names
-                        .into_iter()
-                        .flatten()
-                        .map(|n| (n.index, n.name.to_string()))
-                        .collect();
-                    names.local_names.insert(ind.index, locals);
-                }
-            }
-            wasmparser::Name::Global(map) => {
-                for n in map.into_iter().flatten() {
-                    names.global_names.insert(n.index, n.name.to_string());
-                }
-            }
-            wasmparser::Name::Type(map) => {
-                for n in map.into_iter().flatten() {
-                    names.type_names.insert(n.index, n.name.to_string());
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-
-// -- Link context -------------------------------------------------------------
-
-/// Per-fragment index remap table.
-struct RemapTable {
-    types: BTreeMap<u32, u32>,
-    funcs: BTreeMap<u32, u32>,
-    globals: BTreeMap<u32, u32>,
-}
-
-/// Accumulates merged output during linking.
-struct LinkContext {
-    /// Remap tables, one per input fragment (same order as inputs).
-    remaps: Vec<RemapTable>,
-
-    // Counters for assigning new indices.
-    next_type_idx: u32,
-    next_func_idx: u32,
-    next_global_idx: u32,
-
-    // Accumulated type section bytes with fragment index (for remap lookup).
-    type_sections: Vec<(usize, Vec<u8>)>,
-
-    // External (non-@fink/) func imports to preserve in output.
-    // (module_name, import_name, remapped_type_idx)
-    external_imports: Vec<(String, String, u32)>,
-
-    // External (non-@fink/) global imports to preserve in output.
-    // (module_name, import_name) — all typed as (ref null any).
-    external_global_imports: Vec<(String, String)>,
-
-    // Accumulated function declarations: new_type_idx per defined function.
-    func_decls: Vec<u32>,
-
-    // Accumulated code bodies (raw, to be rewritten).
-    // (fragment_index, is_user_code, raw_body)
-    code_bodies: Vec<(usize, bool, Vec<u8>)>,
-
-    // Merged exports.
-    exports: Vec<(String, wasmparser::ExternalKind, u32)>,
-
-    // Merged globals: (type, raw_init_expr, fragment_index).
-    globals: Vec<(wasmparser::GlobalType, Vec<u8>, usize)>,
-
-    // Merged element section func indices.
-    elem_func_indices: Vec<u32>,
-
-    // Merged name maps.
-    func_names: BTreeMap<u32, String>,
-    local_names: BTreeMap<u32, BTreeMap<u32, String>>,
-    global_names: BTreeMap<u32, String>,
-    type_names: BTreeMap<u32, String>,
-
-    // DWARF sections from user code fragment (adjusted before emit).
-    dwarf_sections: Vec<(String, Vec<u8>)>,
-
-    // Build an export lookup: module_name → export_name → new_func_idx.
-    // Populated during merge_functions for import resolution.
-    export_map: BTreeMap<String, BTreeMap<String, u32>>,
-
-    // Cross-fragment global export map: (module_name, export_name) → new_global_idx.
-    // Populated by assign_dep_globals for dep fragments, so that merge_global_imports
-    // can resolve cross-module global imports without adding them as external imports.
-    dep_global_exports: BTreeMap<(String, String), u32>,
-
-    // Fragment indices whose globals were pre-assigned in assign_dep_globals.
-    // merge_globals skips these to avoid double-processing.
-    globals_pre_assigned: std::collections::HashSet<usize>,
-
-    // Per-fragment base offset for string literal data (one entry per input
-    // fragment). Each fragment's string intern table is laid out starting at
-    // this offset in linear memory; `(i32.const N)` operands of `call $str`
-    // in that fragment's code are shifted by this amount.
-    data_base_offsets: Vec<u32>,
-
-    // Per-fragment local function index for the `@fink/runtime.str` import,
-    // if present. Used by the peephole rewriter in `rewrite_body` to detect
-    // string-literal construction sites.
-    str_import_indices: Vec<Option<u32>>,
-
-    // Memory type (from the fragment that declares it).
-    memory: Option<wasmparser::MemoryType>,
-
-    // Data segments: (memory_index, offset_expr_bytes, data).
-    data_segments: Vec<(u32, Vec<u8>, Vec<u8>)>,
-}
-
-impl LinkContext {
-    fn new() -> Self {
-        Self {
-            remaps: Vec::new(),
-            next_type_idx: 0,
-            next_func_idx: 0,
-            next_global_idx: 0,
-            type_sections: Vec::new(),
-            external_imports: Vec::new(),
-            external_global_imports: Vec::new(),
-            func_decls: Vec::new(),
-            code_bodies: Vec::new(),
-            exports: Vec::new(),
-            globals: Vec::new(),
-            elem_func_indices: Vec::new(),
-            func_names: BTreeMap::new(),
-            local_names: BTreeMap::new(),
-            global_names: BTreeMap::new(),
-            type_names: BTreeMap::new(),
-            dwarf_sections: Vec::new(),
-            export_map: BTreeMap::new(),
-            dep_global_exports: BTreeMap::new(),
-            globals_pre_assigned: std::collections::HashSet::new(),
-            data_base_offsets: Vec::new(),
-            str_import_indices: Vec::new(),
-            memory: None,
-            data_segments: Vec::new(),
-        }
-    }
-}
-
-
-// -- Merge steps --------------------------------------------------------------
-
-fn merge_types(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
-    // Fragments that share the same canonical rec group (from types.wat) have
-    // matching canonical_type_count. The first fragment establishes canonical
-    // type indices 0..N. Subsequent fragments with the same count remap their
-    // canonical types to those same indices.
-    let canonical_count = fragments.first().map_or(0, |f| f.canonical_type_count);
-
-    for (i, frag) in fragments.iter().enumerate() {
-        while ctx.remaps.len() <= i {
-            ctx.remaps.push(RemapTable {
-                types: BTreeMap::new(),
-                funcs: BTreeMap::new(),
-                globals: BTreeMap::new(),
-            });
-        }
-
-        if i == 0 {
-            // First fragment: emit all types. Canonical indices = 0..N.
-            let base = ctx.next_type_idx;
-            for old_idx in 0..frag.type_count {
-                ctx.remaps[i].types.insert(old_idx, base + old_idx);
-            }
-            ctx.next_type_idx += frag.type_count;
-            if let Some(ref bytes) = frag.type_section_bytes {
-                ctx.type_sections.push((i, bytes.clone()));
-            }
-        } else {
-            // Subsequent fragments: if canonical type count matches, share
-            // canonical indices. Otherwise, treat all types as unique.
-            // Only dedup if both fragments share the canonical rec group from types.wat.
-            // The canonical rec group has 11+ types ($Num through $Closure + $Fn2).
-            // Small rec groups (from tests or standalone modules) are not canonical.
-            let frag_canonical = if canonical_count >= 11 && frag.canonical_type_count == canonical_count {
-                canonical_count
-            } else {
-                0
-            };
-            for old_idx in 0..frag_canonical {
-                ctx.remaps[i].types.insert(old_idx, old_idx);
-            }
-            let base = ctx.next_type_idx;
-            for old_idx in frag_canonical..frag.type_count {
-                ctx.remaps[i].types.insert(old_idx, base + (old_idx - frag_canonical));
-            }
-            let non_canonical_count = frag.type_count.saturating_sub(frag_canonical);
-            ctx.next_type_idx += non_canonical_count;
-
-            // Emit the full type section. Canonical types are duplicated in the
-            // binary but all references are remapped to the first copy's indices.
-            // The duplicate definitions are harmless — WASM allows independent
-            // type definitions, and the remap ensures correct references.
-            if let Some(ref bytes) = frag.type_section_bytes {
-                ctx.type_sections.push((i, bytes.clone()));
-            }
-        }
-
-        // Merge type names with namespace prefix.
-        for (&old_idx, name) in &frag.names.type_names {
-            let new_idx = ctx.remaps[i].types[&old_idx];
-            let prefixed = if is_user_module(&frag.module_name) {
-                name.clone()
-            } else {
-                format!("{}:{}", frag.module_name, name)
-            };
-            ctx.type_names.insert(new_idx, prefixed);
-        }
-    }
-}
-
-/// Pre-assign output global indices to dependency (non-runtime, non-entry) fink
-/// module fragments. Dependency globals occupy output global indices 0..N,
-/// before any external imports and before entry module globals.
+/// Single-fragment inputs are passed through unchanged (other than a
+/// `clone()`).
 ///
-/// After this pass, `ctx.dep_global_exports` maps `(module_name, export_name)`
-/// to the output global index, so that `merge_global_imports` can resolve
-/// cross-fragment global imports without leaving them as unresolved external imports.
-///
-/// `ctx.globals_pre_assigned` records which fragment indices were processed here,
-/// so `merge_globals` can skip them to avoid double-processing.
-fn assign_dep_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
-    for (i, frag) in fragments.iter().enumerate() {
-        if !is_dep_module(&frag.module_name) { continue; }
-
-        // Build a map from local defined-global index → export name for this fragment.
-        // A dep fragment may export multiple globals (one per top-level binding).
-        let mut local_global_to_export: BTreeMap<u32, String> = BTreeMap::new();
-        for export in &frag.exports {
-            if matches!(export.kind, wasmparser::ExternalKind::Global) {
-                // export.index is in the fragment's global index space (imported + defined).
-                // Defined globals start at frag.import_global_count.
-                if export.index >= frag.import_global_count {
-                    let local_defined_idx = export.index - frag.import_global_count;
-                    local_global_to_export.insert(local_defined_idx, export.name.clone());
-                }
-            }
-        }
-
-        // Assign output indices for each defined global in this dep fragment.
-        for (local_idx, global) in frag.globals.iter().enumerate() {
-            let old_idx = frag.import_global_count + local_idx as u32;
-            let new_idx = ctx.next_global_idx;
-            ctx.remaps[i].globals.insert(old_idx, new_idx);
-            ctx.next_global_idx += 1;
-
-            ctx.globals.push((global.ty, global.init_bytes.clone(), i));
-
-            // Register in dep_global_exports for each export name.
-            if let Some(export_name) = local_global_to_export.get(&(local_idx as u32)) {
-                ctx.dep_global_exports.insert(
-                    (frag.module_name.clone(), export_name.clone()),
-                    new_idx,
-                );
-            }
-
-            // Merge global names.
-            if let Some(name) = frag.names.global_names.get(&old_idx) {
-                let prefixed = format!("{}:{}", frag.module_name, name);
-                ctx.global_names.insert(new_idx, prefixed);
-            }
-        }
-
-        ctx.globals_pre_assigned.insert(i);
-    }
+/// Multi-fragment inputs:
+///   1. Compute per-fragment symbol-index offsets.
+///   2. Walk each fragment's items, append into merged with all
+///      symbol references rewritten through the offsets.
+///   3. Resolve cross-fragment user imports: `FuncDecl.import =
+///      Some(ImportKey { module: "<canonical_url>", name:
+///      "fink_module" })` → rewrite to producer's local FuncSym +
+///      drop the import marker.
+pub fn link(fragments: &[Fragment]) -> Fragment {
+  match fragments {
+    [] => panic!("link: empty fragment list"),
+    [only] => only.clone(),
+    _ => link_multi(fragments),
+  }
 }
 
-/// Collect external (non-@fink/) global imports from user code fragments,
-/// dedup them, and assign output global indices. These occupy global indices
-/// 0..N in the output module, before all defined globals.
-///
-/// Only user code fragments can carry external global imports (runtime
-/// fragments only import from @fink/ namespaces). We remap each imported
-/// global's old index (its position in the fragment's global index space,
-/// which starts at 0) to the new output index.
-fn merge_global_imports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
-    // `seen` tracks external imports that couldn't be resolved to a dep fragment.
-    // These remain as external imports in the output (e.g. host-provided globals).
-    let mut seen: BTreeMap<(String, String), u32> = BTreeMap::new();
-    for (i, frag) in fragments.iter().enumerate() {
-        // Only user and dep fragments can have global imports that need resolution.
-        // Runtime (@fink/) fragments never import user-defined globals.
-        if !is_user_module(&frag.module_name) && !is_dep_module(&frag.module_name) {
-            continue;
-        }
+fn link_multi(fragments: &[Fragment]) -> Fragment {
+  // Step 1: compute per-fragment offsets.
+  let mut offsets: Vec<Offsets> = vec![Offsets::default(); fragments.len()];
+  let mut acc = Offsets::default();
+  for (i, frag) in fragments.iter().enumerate() {
+    offsets[i] = acc;
+    acc.types   += frag.types.len()   as u32;
+    acc.funcs   += frag.funcs.len()   as u32;
+    acc.globals += frag.globals.len() as u32;
+    acc.data    += frag.data.len()    as u32;
+    acc.instrs  += frag.instrs.len()  as u32;
+  }
 
-        // Track which import-index (in the global index space) we're assigning.
-        // Global indices in WASM: imported globals come first (0..import_global_count),
-        // then defined globals (import_global_count..).
-        let mut import_global_idx: u32 = 0;
-        for import in &frag.imports {
-            if !import.is_global { continue; }
-            let key = (import.module.clone(), import.name.clone());
-
-            let new_global_idx = if let Some(&idx) = ctx.dep_global_exports.get(&key) {
-                // Resolved to a dependency fragment's exported global — remap directly,
-                // no external import emitted.
-                idx
-            } else if let Some(&idx) = seen.get(&key) {
-                // Already registered as an external import (from a previous fragment).
-                idx
-            } else {
-                // Unknown — preserve as an external import in the output.
-                let idx = ctx.next_global_idx;
-                ctx.external_global_imports.push((import.module.clone(), import.name.clone()));
-                // Give imported globals a unique name in the output name section
-                // so the WAT formatter can distinguish them from defined globals.
-                let name = format!("{}#{}", import.module, import.name);
-                ctx.global_names.insert(idx, name);
-                seen.insert(key, idx);
-                ctx.next_global_idx += 1;
-                idx
-            };
-            ctx.remaps[i].globals.insert(import_global_idx, new_global_idx);
-            import_global_idx += 1;
-        }
+  // Step 2: build a (canonical_url → producer's merged FuncSym for
+  // its `fink_module`) lookup so cross-fragment user imports can be
+  // rewritten.
+  //
+  // The producer's `fink_module` is the function whose display name
+  // is `"<canonical_url>:fink_module"`. We find it by scanning each
+  // fragment's funcs and matching the display.
+  let mut producer_fink_module: BTreeMap<String, FuncSym> = BTreeMap::new();
+  for (frag_idx, frag) in fragments.iter().enumerate() {
+    let off = offsets[frag_idx].funcs;
+    for (local_idx, f) in frag.funcs.iter().enumerate() {
+      if let Some(display) = &f.display
+        && let Some(stripped) = display.strip_suffix(":fink_module")
+      {
+        let sym = FuncSym(off + local_idx as u32);
+        producer_fink_module.insert(stripped.to_string(), sym);
+      }
     }
+  }
+
+  // Step 3: pre-allocate the merged fragment's vectors.
+  let mut merged = Fragment {
+    module_id: fragments[0].module_id,
+    module_imports: BTreeMap::new(),
+    types:   Vec::with_capacity(acc.types as usize),
+    funcs:   Vec::with_capacity(acc.funcs as usize),
+    globals: Vec::with_capacity(acc.globals as usize),
+    data:    Vec::with_capacity(acc.data as usize),
+    instrs:  Vec::with_capacity(acc.instrs as usize),
+  };
+
+  // Step 4: walk each fragment, append items with remapping.
+  // Build a redirect table for cross-fragment user-import resolution.
+  // After remap, a placeholder FuncDecl `(import "<canonical_url>"
+  // "fink_module" ...)` sits at some merged FuncSym; that FuncSym
+  // gets redirected to the producer's actual `<canonical_url>:fink_module`.
+  let mut func_redirect: BTreeMap<FuncSym, FuncSym> = BTreeMap::new();
+
+  for (frag_idx, frag) in fragments.iter().enumerate() {
+    let off = offsets[frag_idx];
+    let is_entry = frag_idx == 0;
+
+    for ty in &frag.types {
+      merged.types.push(remap_type_decl(ty, &off));
+    }
+
+    for (local_idx, f) in frag.funcs.iter().enumerate() {
+      let mut decl = remap_func_decl(f, &off, &producer_fink_module);
+      // Only the entry fragment exports `fink_module` under the
+      // unqualified name — that's the host's call entry point.
+      // Dep fragments' `fink_module`s stay unexported (they're
+      // invoked via `std/modules.fnk:import`, not by name from the
+      // host).
+      if !is_entry && decl.export.as_deref() == Some("fink_module") {
+        decl.export = None;
+      }
+      // Cross-fragment user-import resolution: if this is a
+      // placeholder `(import "<canonical_url>" "fink_module" ...)`
+      // and the URL matches a producer fragment in the merge set,
+      // record the redirect so all FuncSym refs to this slot get
+      // rewritten to the producer's real FuncSym below.
+      if let Some(import_key) = &decl.import
+        && import_key.name == "fink_module"
+        && let Some(&real_sym) = producer_fink_module.get(&import_key.module)
+      {
+        let placeholder_sym = FuncSym(off.funcs + local_idx as u32);
+        func_redirect.insert(placeholder_sym, real_sym);
+        // Drop the import marker — placeholder is now "shadowed" by
+        // the redirect. The FuncDecl stays (it's still in funcs[]),
+        // but nothing references it after the redirect pass.
+        decl.import = None;
+      }
+      merged.funcs.push(decl);
+    }
+
+    for g in &frag.globals {
+      merged.globals.push(remap_global_decl(g, &off));
+    }
+
+    for d in &frag.data {
+      merged.data.push(d.clone());
+    }
+
+    for instr in &frag.instrs {
+      merged.instrs.push(Instr {
+        kind: remap_instr_kind(&instr.kind, &off),
+        origin: instr.origin,
+      });
+    }
+  }
+
+  // Step 5: apply the func-redirect table — walk all funcs + instrs +
+  // globals and rewrite FuncSym refs through the redirect.
+  if !func_redirect.is_empty() {
+    apply_func_redirect(&mut merged, &func_redirect);
+  }
+
+  merged
 }
 
-fn merge_functions(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
-    // Pass 0: collect external (non-@fink/) func imports, dedup, assign indices.
-    // These occupy function indices 0..N in the output module.
-    let mut seen_externals: BTreeMap<(String, String), u32> = BTreeMap::new();
-    for (i, frag) in fragments.iter().enumerate() {
-        for (import_idx, import) in frag.imports.iter().enumerate() {
-            if import.is_fink || import.func_type_idx.is_none() {
-                continue;
-            }
-            let key = (import.module.clone(), import.name.clone());
-            let new_func_idx = if let Some(&idx) = seen_externals.get(&key) {
-                idx
-            } else {
-                let idx = ctx.next_func_idx;
-                let type_idx = import.func_type_idx.unwrap();
-                let new_type_idx = ctx.remaps[i].types[&type_idx];
-                ctx.external_imports.push((
-                    import.module.clone(),
-                    import.name.clone(),
-                    new_type_idx,
-                ));
-                seen_externals.insert(key, idx);
-                ctx.next_func_idx += 1;
-                idx
-            };
-            ctx.remaps[i].funcs.insert(import_idx as u32, new_func_idx);
-        }
+/// Walk every FuncSym reference in the merged Fragment and apply the
+/// redirect table. Used after multi-fragment merge to rewrite
+/// cross-fragment user-import placeholders to point at the producer's
+/// actual FuncSym.
+fn apply_func_redirect(frag: &mut Fragment, redirect: &BTreeMap<FuncSym, FuncSym>) {
+  let lookup = |s: FuncSym| redirect.get(&s).copied().unwrap_or(s);
+
+  for f in &mut frag.funcs {
+    f.body = f.body.clone();  // body is Vec<InstrId>, no FuncSym refs
+  }
+
+  for g in &mut frag.globals {
+    if let GlobalInit::RefFunc(fs) = &mut g.init {
+      *fs = lookup(*fs);
     }
+  }
 
-    // First pass: assign indices to all defined functions and build export map.
-    for (i, frag) in fragments.iter().enumerate() {
-        let base = ctx.next_func_idx;
-
-        for (local_idx, &type_idx) in frag.func_type_indices.iter().enumerate() {
-            let old_func_idx = frag.import_func_count + local_idx as u32;
-            let new_func_idx = base + local_idx as u32;
-            let new_type_idx = ctx.remaps[i].types[&type_idx];
-
-            ctx.remaps[i].funcs.insert(old_func_idx, new_func_idx);
-            ctx.func_decls.push(new_type_idx);
-
-            // Merge function names.
-            // User code (@fink/user) keeps original names; runtime modules get prefixed.
-            if let Some(name) = frag.names.func_names.get(&old_func_idx) {
-                let prefixed = if is_user_module(&frag.module_name) {
-                    name.clone()
-                } else {
-                    format!("{}:{}", frag.module_name, name)
-                };
-                ctx.func_names.insert(new_func_idx, prefixed);
-            }
-
-            // Merge local names.
-            if let Some(locals) = frag.names.local_names.get(&old_func_idx) {
-                ctx.local_names.insert(new_func_idx, locals.clone());
-            }
-        }
-
-        ctx.next_func_idx += frag.func_type_indices.len() as u32;
-
-        // Build export map for this fragment (for import resolution).
-        let mut module_exports = BTreeMap::new();
-        for export in &frag.exports {
-            if matches!(export.kind, wasmparser::ExternalKind::Func) {
-                let new_idx = ctx.remaps[i].funcs[&export.index];
-                module_exports.insert(export.name.clone(), new_idx);
-            }
-        }
-        if !frag.module_name.is_empty() {
-            ctx.export_map
-                .insert(frag.module_name.clone(), module_exports);
-        }
-    }
-
-    // Second pass: resolve @fink/ imports.
-    for (i, frag) in fragments.iter().enumerate() {
-        for (import_idx, import) in frag.imports.iter().enumerate() {
-            if !import.is_fink {
-                continue;
-            }
-            // Look up the target module's exports.
-            if let Some(module_exports) = ctx.export_map.get(&import.module) {
-                // Wildcard import ("*") — skip resolution, the import was
-                // just a dependency marker. Specific imports resolve by name.
-                if import.name != "*"
-                    && let Some(&new_func_idx) =
-                        module_exports.get(&import.name)
-                {
-                    let old_import_idx = import_idx as u32;
-                    ctx.remaps[i]
-                        .funcs
-                        .insert(old_import_idx, new_func_idx);
-                }
-            }
-        }
-    }
+  for instr in &mut frag.instrs {
+    redirect_instr(&mut instr.kind, &lookup);
+  }
 }
 
-fn merge_code(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
-    for (i, frag) in fragments.iter().enumerate() {
-        let is_user = is_user_module(&frag.module_name);
-        for &(start, end) in &frag.code_body_ranges {
-            ctx.code_bodies
-                .push((i, is_user, frag.wasm[start..end].to_vec()));
-        }
+fn redirect_instr(kind: &mut InstrKind, lookup: &impl Fn(FuncSym) -> FuncSym) {
+  match kind {
+    InstrKind::RefFunc { func, .. } => *func = lookup(*func),
+    InstrKind::Call { target, args, .. } => {
+      *target = lookup(*target);
+      for a in args { redirect_operand(a, lookup); }
     }
+    InstrKind::ReturnCall { target, args } => {
+      *target = lookup(*target);
+      for a in args { redirect_operand(a, lookup); }
+    }
+    InstrKind::LocalSet { src, .. }
+    | InstrKind::GlobalSet { src, .. }
+    | InstrKind::RefI31 { src, .. }
+    | InstrKind::I31GetS { src, .. }
+    | InstrKind::Drop { src }
+    | InstrKind::RefCastNonNull { src, .. }
+    | InstrKind::RefCastNullable { src, .. }
+    | InstrKind::RefCastNonNullAbs { src, .. } =>
+      redirect_operand(src, lookup),
+    InstrKind::StructNew { fields, .. } => {
+      for f in fields { redirect_operand(f, lookup); }
+    }
+    InstrKind::ArrayNewFixed { elems, .. } => {
+      for e in elems { redirect_operand(e, lookup); }
+    }
+    InstrKind::ArrayGet { arr, idx, .. } => {
+      redirect_operand(arr, lookup);
+      redirect_operand(idx, lookup);
+    }
+    InstrKind::If { cond, .. } => redirect_operand(cond, lookup),
+    InstrKind::RefNull { .. }
+    | InstrKind::RefNullConcrete { .. }
+    | InstrKind::Unreachable => {}
+  }
 }
 
-fn merge_globals(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
-    for (i, frag) in fragments.iter().enumerate() {
-        // Dep fragments had their globals pre-assigned in assign_dep_globals.
-        // Only process globals for non-dep fragments here.
-        if !ctx.globals_pre_assigned.contains(&i) {
-            for (local_idx, global) in frag.globals.iter().enumerate() {
-                // In WASM, defined globals start after imported globals in the index space.
-                // Imported globals were already remapped in merge_global_imports.
-                let old_idx = frag.import_global_count + local_idx as u32;
-                let new_idx = ctx.next_global_idx;
-                ctx.remaps[i].globals.insert(old_idx, new_idx);
-                ctx.next_global_idx += 1;
-
-                ctx.globals.push((global.ty, global.init_bytes.clone(), i));
-
-                // Merge global names.
-                if let Some(name) = frag.names.global_names.get(&old_idx) {
-                    let prefixed = if is_user_module(&frag.module_name) {
-                        name.clone()
-                    } else {
-                        format!("{}:{}", frag.module_name, name)
-                    };
-                    ctx.global_names.insert(new_idx, prefixed);
-                }
-            }
-        }
-
-        // Merge element indices — done here for all fragments because function
-        // indices are not assigned until merge_functions (which runs before this).
-        for &func_idx in &frag.elem_func_indices {
-            if let Some(&new_idx) = ctx.remaps[i].funcs.get(&func_idx) {
-                ctx.elem_func_indices.push(new_idx);
-            }
-        }
-
-        // Collect DWARF from user code fragment.
-        if is_user_module(&frag.module_name) {
-            ctx.dwarf_sections.extend(frag.dwarf_sections.clone());
-        }
-    }
+fn redirect_operand(op: &mut Operand, lookup: &impl Fn(FuncSym) -> FuncSym) {
+  if let Operand::RefFunc(s) = op {
+    *s = lookup(*s);
+  }
 }
 
-fn merge_exports(ctx: &mut LinkContext, fragments: &[ParsedFragment]) {
-    for (i, frag) in fragments.iter().enumerate() {
-        let is_user = is_user_module(&frag.module_name);
-        let is_dep = is_dep_module(&frag.module_name);
+// ──────────────────────────────────────────────────────────────────
+// Per-item remappers.
+// ──────────────────────────────────────────────────────────────────
 
-        // Export from user code and dep fragments.
-        // Runtime (@fink/) module exports are internal — used for import resolution only.
-        if !is_user && !is_dep { continue; }
-
-        for export in &frag.exports {
-            // Dep fragments contribute exactly one public export to the linked
-            // binary: their `fink_module` init function, renamed to
-            // `<url>:fink_module` so the runner can call each dep's initializer
-            // in topological order before running the entry's `fink_module`.
-            //
-            // Everything else a dep "exports" is internal linkage:
-            //   - dep user-named globals/funcs (e.g. `./foo.fnk:bar`) are
-            //     already wired into consumers via the linker's
-            //     `dep_global_exports` map — the consumer references them
-            //     directly by global index, no export entry needed.
-            //   - runtime helper re-exports (`_apply`, `_list_nil`, `_box_func`,
-            //     `memory`, etc.) are already provided once by the entry
-            //     fragment.
-            //
-            // So for deps we keep only the `fink_module` func export and drop
-            // everything else. Exports from the entry (is_user) pass through
-            // verbatim — that's where the user-facing API lives.
-            if is_dep {
-                let is_fink_module =
-                    matches!(export.kind, wasmparser::ExternalKind::Func)
-                    && export.name == "fink_module";
-                if !is_fink_module { continue; }
-            }
-
-            let new_idx = match export.kind {
-                wasmparser::ExternalKind::Func => {
-                    ctx.remaps[i].funcs.get(&export.index).copied()
-                }
-                wasmparser::ExternalKind::Global => {
-                    ctx.remaps[i].globals.get(&export.index).copied()
-                }
-                _ => Some(export.index),
-            };
-            if let Some(idx) = new_idx {
-                // Dep `fink_module` gets the URL-qualified name so the runner
-                // can look up each dep's initializer by its canonical URL.
-                let export_name = if is_dep {
-                    format!("{}:{}", frag.module_name, export.name)
-                } else {
-                    export.name.clone()
-                };
-                ctx.exports.push((export_name, export.kind, idx));
-            }
-        }
-    }
+fn remap_type_decl(ty: &TypeDecl, off: &Offsets) -> TypeDecl {
+  TypeDecl {
+    kind: remap_type_kind(&ty.kind, off),
+    display: ty.display.clone(),
+    import: ty.import.clone(),
+  }
 }
 
-
-// -- Code rewriting -----------------------------------------------------------
-
-/// Rewrite a single function body, remapping type and function indices.
-///
-/// Strategy: use wasmparser's offset tracking to identify instruction
-/// boundaries. For operators that carry indices, parse and re-encode
-/// with remapped values. For all others, copy raw bytes verbatim.
-/// This handles any WASM instruction without needing an exhaustive match.
-fn rewrite_body(
-    raw: &[u8],
-    remap: &RemapTable,
-    data_base_offset: u32,
-    str_import_idx: Option<u32>,
-) -> Vec<u8> {
-    use wasmparser::{BinaryReader, FunctionBody, Operator};
-
-    let reader = BinaryReader::new(raw, 0);
-    let body = FunctionBody::new(reader);
-
-    let locals: Vec<wasm_encoder::ValType> = parse_locals(&body)
-        .into_iter()
-        .map(|vt| convert_val_type_remapped(vt, remap))
-        .collect();
-    let mut func = wasm_encoder::Function::new_with_locals_types(locals);
-
-    let ops = body.get_operators_reader().unwrap();
-    let mut prev_pos = ops.original_position();
-    let mut ops_iter = ops;
-
-    // Peephole state for string-literal offset shifting.
-    //
-    // The emitter produces every string literal as the three-instruction
-    // sequence `i32.const <offset>; i32.const <length>; call $str`. We
-    // buffer up to two pending `I32Const`s and, when the next operator is a
-    // `call` to the fragment's str import, rewrite the first buffered const
-    // by adding the fragment's data base offset. Any other operator flushes
-    // the buffer unchanged.
-    //
-    // Only active when the fragment actually imports `str` — otherwise the
-    // peephole is inert and every I32Const goes through the raw path.
-    let mut pending: Vec<i32> = Vec::new();
-
-    // Flush any buffered I32Consts verbatim.
-    // Used when the sliding window doesn't match the string-literal idiom.
-    let flush_pending = |pending: &mut Vec<i32>, func: &mut wasm_encoder::Function| {
-        for val in pending.drain(..) {
-            func.instruction(&wasm_encoder::Instruction::I32Const(val));
-        }
-    };
-
-    while !ops_iter.eof() {
-        let op = match ops_iter.read() {
-            Ok(op) => op,
-            Err(_) => break,
-        };
-        let cur_pos = ops_iter.original_position();
-        let instr_start = prev_pos;
-        let instr_end = cur_pos;
-
-        // Peephole: match `i32.const a; i32.const b; call str_import_idx`
-        // and rewrite `a` to `a + data_base_offset`.
-        if let Some(str_idx) = str_import_idx {
-            match &op {
-                Operator::I32Const { value } => {
-                    if pending.len() == 2 {
-                        // Sliding window overflow — flush oldest verbatim,
-                        // keep the last two for the next window.
-                        let first = pending.remove(0);
-                        func.instruction(&wasm_encoder::Instruction::I32Const(first));
-                    }
-                    pending.push(*value);
-                    prev_pos = cur_pos;
-                    continue;
-                }
-                Operator::Call { function_index } if *function_index == str_idx => {
-                    // Matched the idiom. Rewrite the first buffered const.
-                    if pending.len() == 2 {
-                        let offset = pending[0].wrapping_add(data_base_offset as i32);
-                        let length = pending[1];
-                        func.instruction(&wasm_encoder::Instruction::I32Const(offset));
-                        func.instruction(&wasm_encoder::Instruction::I32Const(length));
-                        pending.clear();
-                        // Emit the remapped call below.
-                    } else {
-                        // Unexpected — flush whatever we have verbatim.
-                        flush_pending(&mut pending, &mut func);
-                    }
-                }
-                _ => {
-                    flush_pending(&mut pending, &mut func);
-                }
-            }
-        }
-
-        let needs_rewrite = matches!(
-            op,
-            // Function index
-            Operator::Call { .. }
-            | Operator::ReturnCall { .. }
-            | Operator::RefFunc { .. }
-            // Type index
-            | Operator::ReturnCallRef { .. }
-            | Operator::CallRef { .. }
-            | Operator::StructNew { .. }
-            | Operator::StructNewDefault { .. }
-            | Operator::StructGet { .. }
-            | Operator::StructSet { .. }
-            | Operator::ArrayNew { .. }
-            | Operator::ArrayNewDefault { .. }
-            | Operator::ArrayNewFixed { .. }
-            | Operator::ArrayGet { .. }
-            | Operator::ArrayGetS { .. }
-            | Operator::ArrayGetU { .. }
-            | Operator::ArraySet { .. }
-            | Operator::ArrayCopy { .. }
-            // Heap type
-            | Operator::RefNull { .. }
-            | Operator::RefCastNonNull { .. }
-            | Operator::RefCastNullable { .. }
-            | Operator::RefTestNonNull { .. }
-            | Operator::RefTestNullable { .. }
-            // Cast with ref types
-            | Operator::BrOnCast { .. }
-            | Operator::BrOnCastFail { .. }
-            // Global index
-            | Operator::GlobalGet { .. }
-            | Operator::GlobalSet { .. }
-            // Block types (may reference type indices)
-            | Operator::Block { .. }
-            | Operator::Loop { .. }
-            | Operator::If { .. }
-            // Call indirect
-            | Operator::CallIndirect { .. }
-            | Operator::ReturnCallIndirect { .. }
-        );
-
-        if !needs_rewrite {
-            // Copy raw bytes verbatim — no index references to remap.
-            func.raw(raw[instr_start..instr_end].iter().copied());
-        } else {
-            rewrite_indexed_op(&mut func, op, remap);
-        }
-
-        prev_pos = cur_pos;
-    }
-
-    // Flush any remaining I32Consts at end-of-body (degenerate case).
-    flush_pending(&mut pending, &mut func);
-
-    func.into_raw_body()
-}
-
-/// Re-encode a single operator that carries index references.
-fn rewrite_indexed_op(
-    func: &mut wasm_encoder::Function,
-    op: wasmparser::Operator,
-    remap: &RemapTable,
-) {
-    use wasm_encoder::Instruction as I;
-    use wasmparser::Operator as O;
-
-    match op {
-        // -- Function index --
-        O::Call { function_index } => {
-            func.instruction(&I::Call(remap_func(remap, function_index)));
-        }
-        O::ReturnCall { function_index } => {
-            func.instruction(&I::ReturnCall(remap_func(remap, function_index)));
-        }
-        O::RefFunc { function_index } => {
-            func.instruction(&I::RefFunc(remap_func(remap, function_index)));
-        }
-
-        // -- Type index --
-        O::ReturnCallRef { type_index } => {
-            func.instruction(&I::ReturnCallRef(remap_type(remap, type_index)));
-        }
-        O::CallRef { type_index } => {
-            func.instruction(&I::CallRef(remap_type(remap, type_index)));
-        }
-        O::StructNew { struct_type_index } => {
-            func.instruction(&I::StructNew(remap_type(remap, struct_type_index)));
-        }
-        O::StructNewDefault { struct_type_index } => {
-            func.instruction(&I::StructNewDefault(remap_type(remap, struct_type_index)));
-        }
-        O::StructGet { struct_type_index, field_index } => {
-            func.instruction(&I::StructGet {
-                struct_type_index: remap_type(remap, struct_type_index),
-                field_index,
-            });
-        }
-        O::StructSet { struct_type_index, field_index } => {
-            func.instruction(&I::StructSet {
-                struct_type_index: remap_type(remap, struct_type_index),
-                field_index,
-            });
-        }
-        O::ArrayNew { array_type_index } => {
-            func.instruction(&I::ArrayNew(remap_type(remap, array_type_index)));
-        }
-        O::ArrayNewDefault { array_type_index } => {
-            func.instruction(&I::ArrayNewDefault(remap_type(remap, array_type_index)));
-        }
-        O::ArrayNewFixed { array_type_index, array_size } => {
-            func.instruction(&I::ArrayNewFixed {
-                array_type_index: remap_type(remap, array_type_index),
-                array_size,
-            });
-        }
-        O::ArrayGet { array_type_index } => {
-            func.instruction(&I::ArrayGet(remap_type(remap, array_type_index)));
-        }
-        O::ArrayGetS { array_type_index } => {
-            func.instruction(&I::ArrayGetS(remap_type(remap, array_type_index)));
-        }
-        O::ArrayGetU { array_type_index } => {
-            func.instruction(&I::ArrayGetU(remap_type(remap, array_type_index)));
-        }
-        O::ArraySet { array_type_index } => {
-            func.instruction(&I::ArraySet(remap_type(remap, array_type_index)));
-        }
-        O::ArrayCopy { array_type_index_dst, array_type_index_src } => {
-            func.instruction(&I::ArrayCopy {
-                array_type_index_dst: remap_type(remap, array_type_index_dst),
-                array_type_index_src: remap_type(remap, array_type_index_src),
-            });
-        }
-
-        // -- Heap type --
-        O::RefNull { hty } => {
-            func.instruction(&I::RefNull(remap_heap_type(remap, hty)));
-        }
-        O::RefCastNonNull { hty } => {
-            func.instruction(&I::RefCastNonNull(remap_heap_type(remap, hty)));
-        }
-        O::RefCastNullable { hty } => {
-            func.instruction(&I::RefCastNullable(remap_heap_type(remap, hty)));
-        }
-        O::RefTestNonNull { hty } => {
-            func.instruction(&I::RefTestNonNull(remap_heap_type(remap, hty)));
-        }
-        O::RefTestNullable { hty } => {
-            func.instruction(&I::RefTestNullable(remap_heap_type(remap, hty)));
-        }
-
-        // -- Cast with ref types --
-        O::BrOnCast { relative_depth, from_ref_type, to_ref_type } => {
-            func.instruction(&I::BrOnCast {
-                relative_depth,
-                from_ref_type: remap_ref_type(remap, from_ref_type),
-                to_ref_type: remap_ref_type(remap, to_ref_type),
-            });
-        }
-        O::BrOnCastFail { relative_depth, from_ref_type, to_ref_type } => {
-            func.instruction(&I::BrOnCastFail {
-                relative_depth,
-                from_ref_type: remap_ref_type(remap, from_ref_type),
-                to_ref_type: remap_ref_type(remap, to_ref_type),
-            });
-        }
-
-        // -- Global index --
-        O::GlobalGet { global_index } => {
-            func.instruction(&I::GlobalGet(remap_global(remap, global_index)));
-        }
-        O::GlobalSet { global_index } => {
-            func.instruction(&I::GlobalSet(remap_global(remap, global_index)));
-        }
-
-        // -- Block types --
-        O::Block { blockty } => {
-            func.instruction(&I::Block(remap_block_type(remap, blockty)));
-        }
-        O::Loop { blockty } => {
-            func.instruction(&I::Loop(remap_block_type(remap, blockty)));
-        }
-        O::If { blockty } => {
-            func.instruction(&I::If(remap_block_type(remap, blockty)));
-        }
-
-        // -- Call indirect --
-        O::CallIndirect { type_index, table_index, .. } => {
-            func.instruction(&I::CallIndirect {
-                type_index: remap_type(remap, type_index),
-                table_index,
-            });
-        }
-        O::ReturnCallIndirect { type_index, table_index } => {
-            func.instruction(&I::ReturnCallIndirect {
-                type_index: remap_type(remap, type_index),
-                table_index,
-            });
-        }
-
-        _ => unreachable!("needs_rewrite guard should prevent this"),
-    };
-}
-
-fn parse_locals(body: &wasmparser::FunctionBody) -> Vec<wasmparser::ValType> {
-    let mut locals = Vec::new();
-    if let Ok(reader) = body.get_locals_reader() {
-        for local in reader.into_iter().flatten() {
-            let (count, ty) = local;
-            for _ in 0..count {
-                locals.push(ty);
-            }
-        }
-    }
-    locals
-}
-
-
-// -- Index remapping helpers --------------------------------------------------
-
-fn remap_type(remap: &RemapTable, old: u32) -> u32 {
-    remap.types.get(&old).copied().unwrap_or(old)
-}
-
-fn remap_func(remap: &RemapTable, old: u32) -> u32 {
-    remap.funcs.get(&old).copied().unwrap_or(old)
-}
-
-fn remap_global(remap: &RemapTable, old: u32) -> u32 {
-    remap.globals.get(&old).copied().unwrap_or(old)
-}
-
-fn remap_heap_type(
-    remap: &RemapTable,
-    hty: wasmparser::HeapType,
-) -> wasm_encoder::HeapType {
-    match hty {
-        wasmparser::HeapType::Concrete(idx) | wasmparser::HeapType::Exact(idx) => {
-            let old = idx.as_module_index().unwrap_or(0);
-            wasm_encoder::HeapType::Concrete(remap_type(remap, old))
-        }
-        wasmparser::HeapType::Abstract { shared, ty } => {
-            wasm_encoder::HeapType::Abstract {
-                shared,
-                ty: convert_abstract_heap_type(ty),
-            }
-        }
-    }
-}
-
-fn remap_ref_type(
-    remap: &RemapTable,
-    rt: wasmparser::RefType,
-) -> wasm_encoder::RefType {
-    wasm_encoder::RefType {
-        nullable: rt.is_nullable(),
-        heap_type: remap_heap_type(remap, rt.heap_type()),
-    }
-}
-
-fn remap_block_type(
-    remap: &RemapTable,
-    bt: wasmparser::BlockType,
-) -> wasm_encoder::BlockType {
-    match bt {
-        wasmparser::BlockType::Empty => wasm_encoder::BlockType::Empty,
-        wasmparser::BlockType::Type(vt) => {
-            wasm_encoder::BlockType::Result(convert_val_type(vt))
-        }
-        wasmparser::BlockType::FuncType(idx) => {
-            wasm_encoder::BlockType::FunctionType(remap_type(remap, idx))
-        }
-    }
-}
-
-fn convert_val_type(vt: wasmparser::ValType) -> wasm_encoder::ValType {
-    match vt {
-        wasmparser::ValType::I32 => wasm_encoder::ValType::I32,
-        wasmparser::ValType::I64 => wasm_encoder::ValType::I64,
-        wasmparser::ValType::F32 => wasm_encoder::ValType::F32,
-        wasmparser::ValType::F64 => wasm_encoder::ValType::F64,
-        wasmparser::ValType::V128 => wasm_encoder::ValType::V128,
-        wasmparser::ValType::Ref(rt) => {
-            wasm_encoder::ValType::Ref(wasm_encoder::RefType {
-                nullable: rt.is_nullable(),
-                heap_type: match rt.heap_type() {
-                    wasmparser::HeapType::Abstract { shared, ty } => {
-                        wasm_encoder::HeapType::Abstract {
-                            shared,
-                            ty: convert_abstract_heap_type(ty),
-                        }
-                    }
-                    wasmparser::HeapType::Concrete(idx)
-                    | wasmparser::HeapType::Exact(idx) => {
-                        wasm_encoder::HeapType::Concrete(
-                            idx.as_module_index().unwrap_or(0),
-                        )
-                    }
-                },
-            })
-        }
-    }
-}
-
-/// Like convert_val_type but applies remap to concrete type indices.
-fn convert_val_type_remapped(
-    vt: wasmparser::ValType,
-    remap: &RemapTable,
-) -> wasm_encoder::ValType {
-    match vt {
-        wasmparser::ValType::Ref(rt) => {
-            wasm_encoder::ValType::Ref(remap_ref_type(remap, rt))
-        }
-        other => convert_val_type(other),
-    }
-}
-
-fn convert_abstract_heap_type(
-    ty: wasmparser::AbstractHeapType,
-) -> wasm_encoder::AbstractHeapType {
-    match ty {
-        wasmparser::AbstractHeapType::Func => {
-            wasm_encoder::AbstractHeapType::Func
-        }
-        wasmparser::AbstractHeapType::Extern => {
-            wasm_encoder::AbstractHeapType::Extern
-        }
-        wasmparser::AbstractHeapType::Any => {
-            wasm_encoder::AbstractHeapType::Any
-        }
-        wasmparser::AbstractHeapType::None => {
-            wasm_encoder::AbstractHeapType::None
-        }
-        wasmparser::AbstractHeapType::NoExtern => {
-            wasm_encoder::AbstractHeapType::NoExtern
-        }
-        wasmparser::AbstractHeapType::NoFunc => {
-            wasm_encoder::AbstractHeapType::NoFunc
-        }
-        wasmparser::AbstractHeapType::Eq => {
-            wasm_encoder::AbstractHeapType::Eq
-        }
-        wasmparser::AbstractHeapType::Struct => {
-            wasm_encoder::AbstractHeapType::Struct
-        }
-        wasmparser::AbstractHeapType::Array => {
-            wasm_encoder::AbstractHeapType::Array
-        }
-        wasmparser::AbstractHeapType::I31 => {
-            wasm_encoder::AbstractHeapType::I31
-        }
-        wasmparser::AbstractHeapType::Exn => {
-            wasm_encoder::AbstractHeapType::Exn
-        }
-        wasmparser::AbstractHeapType::NoExn => {
-            wasm_encoder::AbstractHeapType::NoExn
-        }
-        wasmparser::AbstractHeapType::Cont => {
-            wasm_encoder::AbstractHeapType::Cont
-        }
-        wasmparser::AbstractHeapType::NoCont => {
-            wasm_encoder::AbstractHeapType::NoCont
-        }
-    }
-}
-
-
-// -- Emit final module --------------------------------------------------------
-
-fn emit_module(ctx: &LinkContext) -> LinkResult {
-    let mut module = wasm_encoder::Module::new();
-
-    // 1. Type section — re-encode all collected type sections.
-    //    We use RawSection to pass through the already-encoded type bytes.
-    //    Each fragment's type section is valid WASM encoding; we concatenate
-    //    the type entries by re-parsing and re-encoding with remapped
-    //    supertype indices.
-    //
-    //    For now, we use a simpler approach: emit each fragment's type section
-    //    as a raw section. This works when there are no cross-fragment
-    //    supertype references (which is our current case — subtypes reference
-    //    types within their own fragment's rec group).
-    if !ctx.type_sections.is_empty() {
-        let mut combined = wasm_encoder::TypeSection::new();
-        for (idx, (frag_idx, raw_bytes)) in ctx.type_sections.iter().enumerate() {
-            let br = wasmparser::BinaryReader::new(raw_bytes, 0);
-            let reader =
-                wasmparser::TypeSectionReader::new(br).unwrap();
-            let remap = &ctx.remaps[*frag_idx];
-            // Skip the canonical rec group for non-first fragments when canonical
-            // types are shared (deduped). Check: if the fragment's first type maps
-            // to itself (0 → 0), it shares canonical types.
-            let shares_canonical = idx > 0
-                && remap.types.get(&0) == Some(&0);
-            reencode_type_section(&mut combined, reader, remap, shares_canonical);
-        }
-        module.section(&combined);
-    }
-
-    // 1b. Import section — external (non-@fink/) imports preserved from input.
-    // Global imports must come before func imports so that global index 0..N
-    // is occupied by imported globals before any defined globals.
-    let has_external_imports = !ctx.external_global_imports.is_empty()
-        || !ctx.external_imports.is_empty();
-    if has_external_imports {
-        let mut imports = wasm_encoder::ImportSection::new();
-        for (mod_name, imp_name) in &ctx.external_global_imports {
-            imports.import(
-                mod_name,
-                imp_name,
-                wasm_encoder::EntityType::Global(wasm_encoder::GlobalType {
-                    val_type: wasm_encoder::ValType::Ref(wasm_encoder::RefType {
-                        nullable: true,
-                        heap_type: wasm_encoder::HeapType::Abstract {
-                            shared: false,
-                            ty: wasm_encoder::AbstractHeapType::Any,
-                        },
-                    }),
-                    mutable: false,
-                    shared: false,
-                }),
-            );
-        }
-        for (mod_name, imp_name, type_idx) in &ctx.external_imports {
-            imports.import(
-                mod_name,
-                imp_name,
-                wasm_encoder::EntityType::Function(*type_idx),
-            );
-        }
-        module.section(&imports);
-    }
-
-    // 2. Function section.
-    if !ctx.func_decls.is_empty() {
-        let mut funcs = wasm_encoder::FunctionSection::new();
-        for &type_idx in &ctx.func_decls {
-            funcs.function(type_idx);
-        }
-        module.section(&funcs);
-    }
-
-    // 2b. Memory section.
-    if let Some(mem) = &ctx.memory {
-        let mut memories = wasm_encoder::MemorySection::new();
-        memories.memory(wasm_encoder::MemoryType {
-            minimum: mem.initial,
-            maximum: mem.maximum,
-            memory64: mem.memory64,
-            shared: mem.shared,
-            page_size_log2: None,
-        });
-        module.section(&memories);
-    }
-
-    // 3. Global section — re-emit with remapped init expressions.
-    if !ctx.globals.is_empty() {
-        let mut globals = wasm_encoder::GlobalSection::new();
-        for (ty, init_bytes, frag_idx) in &ctx.globals {
-            let remap = &ctx.remaps[*frag_idx];
-            let enc_ty = convert_global_type(ty, remap);
-            let init = remap_const_expr(init_bytes, remap);
-            globals.global(enc_ty, &init);
-        }
-        module.section(&globals);
-    }
-
-    // 4. Export section.
-    if !ctx.exports.is_empty() {
-        let mut exports = wasm_encoder::ExportSection::new();
-        for (name, kind, idx) in &ctx.exports {
-            let ek = match kind {
-                wasmparser::ExternalKind::Func => {
-                    wasm_encoder::ExportKind::Func
-                }
-                wasmparser::ExternalKind::Global => {
-                    wasm_encoder::ExportKind::Global
-                }
-                wasmparser::ExternalKind::Table => {
-                    wasm_encoder::ExportKind::Table
-                }
-                wasmparser::ExternalKind::Memory => {
-                    wasm_encoder::ExportKind::Memory
-                }
-                wasmparser::ExternalKind::Tag => {
-                    wasm_encoder::ExportKind::Tag
-                }
-                wasmparser::ExternalKind::FuncExact => {
-                    wasm_encoder::ExportKind::Func
-                }
-            };
-            exports.export(name, ek, *idx);
-        }
-        module.section(&exports);
-    }
-
-    // 5. Element section (declarative, for ref.func).
-    if !ctx.elem_func_indices.is_empty() {
-        let mut elems = wasm_encoder::ElementSection::new();
-        let indices: Vec<u32> = ctx.elem_func_indices.clone();
-        elems.declared(wasm_encoder::Elements::Functions(
-            indices.into(),
-        ));
-        module.section(&elems);
-    }
-
-    // 6. Code section — rewrite bodies with remapped indices + string-offset shifts.
-    // Track runtime code byte size for DWARF offset adjustment.
-    let mut runtime_code_size = 0u32;
-    if !ctx.code_bodies.is_empty() {
-        let mut code = wasm_encoder::CodeSection::new();
-        for (frag_idx, is_user, raw_body) in &ctx.code_bodies {
-            let remap = &ctx.remaps[*frag_idx];
-            let base = ctx.data_base_offsets.get(*frag_idx).copied().unwrap_or(0);
-            let str_idx = ctx.str_import_indices.get(*frag_idx).copied().flatten();
-            let rewritten = rewrite_body(raw_body, remap, base, str_idx);
-            if !is_user {
-                runtime_code_size += rewritten.len() as u32;
-            }
-            code.raw(&rewritten);
-        }
-        module.section(&code);
-    }
-
-    // 6b. Data section — pass through active data segments.
-    if !ctx.data_segments.is_empty() {
-        let mut data = wasm_encoder::DataSection::new();
-        for (mem_idx, offset_bytes, seg_data) in &ctx.data_segments {
-            let offset = remap_const_expr(offset_bytes, &ctx.remaps[0]);
-            data.active(*mem_idx, &offset, seg_data.iter().copied());
-        }
-        module.section(&data);
-    }
-
-    // 7. Name section.
-    let has_names = !ctx.func_names.is_empty()
-        || !ctx.local_names.is_empty()
-        || !ctx.global_names.is_empty()
-        || !ctx.type_names.is_empty();
-    if has_names {
-        let mut names = wasm_encoder::NameSection::new();
-
-        if !ctx.func_names.is_empty() {
-            let mut map = wasm_encoder::NameMap::new();
-            for (&idx, name) in &ctx.func_names {
-                map.append(idx, name);
-            }
-            names.functions(&map);
-        }
-
-        if !ctx.local_names.is_empty() {
-            let mut indirect = wasm_encoder::IndirectNameMap::new();
-            for (&func_idx, locals) in &ctx.local_names {
-                let mut map = wasm_encoder::NameMap::new();
-                for (&local_idx, name) in locals {
-                    map.append(local_idx, name);
-                }
-                indirect.append(func_idx, &map);
-            }
-            names.locals(&indirect);
-        }
-
-        if !ctx.global_names.is_empty() {
-            let mut map = wasm_encoder::NameMap::new();
-            for (&idx, name) in &ctx.global_names {
-                map.append(idx, name);
-            }
-            names.globals(&map);
-        }
-
-        if !ctx.type_names.is_empty() {
-            let mut map = wasm_encoder::NameMap::new();
-            for (&idx, name) in &ctx.type_names {
-                map.append(idx, name);
-            }
-            names.types(&map);
-        }
-
-        module.section(&names);
-    }
-
-    // 8. DWARF custom sections — adjust addresses by runtime code offset.
-    if runtime_code_size > 0 && !ctx.dwarf_sections.is_empty() {
-        let adjusted = adjust_dwarf(&ctx.dwarf_sections, runtime_code_size);
-        for (name, data) in &adjusted {
-            module.section(&wasm_encoder::CustomSection {
-                name: std::borrow::Cow::Borrowed(name),
-                data: std::borrow::Cow::Borrowed(data),
-            });
-        }
-    } else {
-        // No offset needed — pass through unchanged.
-        for (name, data) in &ctx.dwarf_sections {
-            module.section(&wasm_encoder::CustomSection {
-                name: std::borrow::Cow::Borrowed(name),
-                data: std::borrow::Cow::Borrowed(data),
-            });
-        }
-    }
-
-    LinkResult {
-        wasm: module.finish(),
-    }
-}
-
-
-/// Adjust DWARF section addresses by a byte offset.
-///
-/// Reads the user code's DWARF line program, adds `offset` to every
-/// address, and re-serializes all DWARF sections. Non-line sections
-/// (.debug_info, .debug_abbrev, .debug_str) are rebuilt from scratch
-/// since gimli::write produces a self-consistent set.
-fn adjust_dwarf(
-    sections: &[(String, Vec<u8>)],
-    offset: u32,
-) -> Vec<(String, Vec<u8>)> {
-    use gimli::EndianSlice;
-
-    // Collect raw section data by name.
-    let mut debug_info_data = &[][..];
-    let mut debug_abbrev_data = &[][..];
-    let mut debug_line_data = &[][..];
-    let mut debug_str_data = &[][..];
-
-    for (name, data) in sections {
-        match name.as_str() {
-            ".debug_info" => debug_info_data = data,
-            ".debug_abbrev" => debug_abbrev_data = data,
-            ".debug_line" => debug_line_data = data,
-            ".debug_str" => debug_str_data = data,
-            _ => {}
-        }
-    }
-
-    // If no line data, just pass through.
-    if debug_line_data.is_empty() || debug_info_data.is_empty() {
-        return sections.to_vec();
-    }
-
-    // Parse DWARF to extract line program rows.
-    let debug_info = gimli::DebugInfo::new(debug_info_data, LittleEndian);
-    let debug_abbrev =
-        gimli::DebugAbbrev::new(debug_abbrev_data, LittleEndian);
-    let debug_line = gimli::DebugLine::new(debug_line_data, LittleEndian);
-    let _debug_str = gimli::DebugStr::new(debug_str_data, LittleEndian);
-
-    let mut units = debug_info.units();
-    let unit_header = match units.next() {
-        Ok(Some(h)) => h,
-        _ => return sections.to_vec(),
-    };
-    let abbrevs = match debug_abbrev
-        .abbreviations(unit_header.debug_abbrev_offset())
-    {
-        Ok(a) => a,
-        Err(_) => return sections.to_vec(),
-    };
-
-    // Extract source file name and producer from root DIE.
-    let mut cursor = unit_header.entries(&abbrevs);
-    if cursor.next_dfs().is_err() {
-        return sections.to_vec();
-    }
-    let root = match cursor.current() {
-        Some(e) => e,
-        None => return sections.to_vec(),
-    };
-
-    let source_name = root
-        .attr_value(gimli::DW_AT_name)
-        .and_then(|v| {
-            if let gimli::AttributeValue::String(s) = v {
-                Some(s.to_string_lossy().to_string())
-            } else {
-                None
-            }
-        })
-        .unwrap_or_default();
-
-    let stmt_list = match root.attr_value(gimli::DW_AT_stmt_list) {
-        Some(gimli::AttributeValue::DebugLineRef(o)) => o,
-        _ => return sections.to_vec(),
-    };
-
-    let line_program = match debug_line.program(
-        stmt_list,
-        unit_header.address_size(),
-        None::<EndianSlice<'_, LittleEndian>>,
-        None::<EndianSlice<'_, LittleEndian>>,
-    ) {
-        Ok(p) => p,
-        Err(_) => return sections.to_vec(),
-    };
-
-    // Execute line program, collecting rows with adjusted addresses.
-    struct Row {
-        address: u64,
-        line: u64,
-        col: u64,
-    }
-
-    let mut rows_data = Vec::new();
-    let mut rows = line_program.rows();
-    while let Ok(Some((_header, row))) = rows.next_row() {
-        if row.end_sequence() {
-            continue;
-        }
-        let line = row.line().map(|l| l.get()).unwrap_or(0);
-        if line == 0 {
-            continue;
-        }
-        let col = match row.column() {
-            gimli::ColumnType::LeftEdge => 0,
-            gimli::ColumnType::Column(c) => c.get(),
-        };
-        rows_data.push(Row {
-            address: row.address() + offset as u64,
-            line,
-            col,
-        });
-    }
-
-    // Re-emit DWARF with adjusted addresses using gimli::write.
-    let encoding = gimli::Encoding {
-        format: gimli::Format::Dwarf32,
-        version: 4,
-        address_size: 4,
-    };
-
-    let line_program_w = gimli::write::LineProgram::new(
-        encoding,
-        Default::default(),
-        gimli::write::LineString::String(b".".to_vec()),
-        None,
-        gimli::write::LineString::String(source_name.as_bytes().to_vec()),
-        None,
-    );
-
-    let mut dwarf = gimli::write::DwarfUnit::new(encoding);
-    let root_id = dwarf.unit.root();
-    dwarf.unit.get_mut(root_id).set(
-        gimli::DW_AT_name,
-        gimli::write::AttributeValue::String(
-            source_name.as_bytes().to_vec(),
-        ),
-    );
-    dwarf.unit.get_mut(root_id).set(
-        gimli::DW_AT_producer,
-        gimli::write::AttributeValue::String(b"fink".to_vec()),
-    );
-    dwarf.unit.get_mut(root_id).set(
-        gimli::DW_AT_language,
-        gimli::write::AttributeValue::Udata(0x0001),
-    );
-    dwarf.unit.get_mut(root_id).set(
-        gimli::DW_AT_stmt_list,
-        gimli::write::AttributeValue::LineProgramRef,
-    );
-
-    dwarf.unit.line_program = line_program_w;
-    let dir_id = dwarf.unit.line_program.default_directory();
-    let file_id = dwarf.unit.line_program.add_file(
-        gimli::write::LineString::String(
-            source_name.as_bytes().to_vec(),
-        ),
-        dir_id,
-        None,
-    );
-
-    if !rows_data.is_empty() {
-        let lp = &mut dwarf.unit.line_program;
-        lp.begin_sequence(Some(gimli::write::Address::Constant(0)));
-
-        for r in &rows_data {
-            let row = lp.row();
-            row.address_offset = r.address;
-            row.file = file_id;
-            row.line = r.line;
-            row.column = r.col;
-            row.is_statement = true;
-            lp.generate_row();
-        }
-
-        let last_addr = rows_data.last().map(|r| r.address + 1).unwrap_or(1);
-        lp.end_sequence(last_addr);
-    }
-
-    // Serialize.
-    let mut out_sections =
-        gimli::write::Sections::new(gimli::write::EndianVec::new(LittleEndian));
-    if dwarf.write(&mut out_sections).is_err() {
-        return sections.to_vec();
-    }
-
-    let mut result = Vec::new();
-    let _: Result<(), ()> =
-        out_sections.for_each(|section_id, writer| {
-            let data = writer.slice();
-            if !data.is_empty() {
-                result.push((section_id.name().to_string(), data.to_vec()));
-            }
-            Ok(())
-        });
-
-    result
-}
-
-/// Re-encode a type section from wasmparser types into wasm-encoder,
-/// applying the remap table to all concrete type index references.
-fn reencode_type_section(
-    types: &mut wasm_encoder::TypeSection,
-    reader: wasmparser::TypeSectionReader,
-    remap: &RemapTable,
-    skip_first_rec_group: bool,
-) {
-    let mut first = true;
-    for rec_group in reader.into_iter().flatten() {
-        if first && skip_first_rec_group {
-            first = false;
-            // Consume the rec group to advance the reader, but don't emit.
-            let _ = rec_group.into_types().count();
-            continue;
-        }
-        first = false;
-        let sub_types: Vec<_> = rec_group.into_types().collect();
-        if sub_types.len() == 1 {
-            let st = &sub_types[0];
-            types.ty().subtype(&convert_sub_type(st, remap));
-        } else {
-            let converted: Vec<_> =
-                sub_types.iter().map(|st| convert_sub_type(st, remap)).collect();
-            types.ty().rec(converted);
-        }
-    }
-}
-
-fn convert_sub_type(
-    st: &wasmparser::SubType,
-    remap: &RemapTable,
-) -> wasm_encoder::SubType {
-    wasm_encoder::SubType {
-        is_final: st.is_final,
-        supertype_idx: st
-            .supertype_idx
-            .map(|idx| remap_type(remap, idx.as_module_index().unwrap_or(0))),
-        composite_type: convert_composite_type(&st.composite_type, remap),
-    }
-}
-
-fn convert_composite_type(
-    ct: &wasmparser::CompositeType,
-    remap: &RemapTable,
-) -> wasm_encoder::CompositeType {
-    wasm_encoder::CompositeType {
-        inner: match &ct.inner {
-            wasmparser::CompositeInnerType::Func(f) => {
-                wasm_encoder::CompositeInnerType::Func(
-                    wasm_encoder::FuncType::new(
-                        f.params()
-                            .iter()
-                            .map(|vt| convert_val_type_remapped(*vt, remap))
-                            .collect::<Vec<_>>(),
-                        f.results()
-                            .iter()
-                            .map(|vt| convert_val_type_remapped(*vt, remap))
-                            .collect::<Vec<_>>(),
-                    ),
-                )
-            }
-            wasmparser::CompositeInnerType::Struct(s) => {
-                wasm_encoder::CompositeInnerType::Struct(
-                    wasm_encoder::StructType {
-                        fields: s
-                            .fields
-                            .iter()
-                            .map(|f| convert_field_type(f, remap))
-                            .collect(),
-                    },
-                )
-            }
-            wasmparser::CompositeInnerType::Array(a) => {
-                wasm_encoder::CompositeInnerType::Array(
-                    wasm_encoder::ArrayType(convert_field_type(&a.0, remap)),
-                )
-            }
-            wasmparser::CompositeInnerType::Cont(_) => {
-                panic!("link: continuation types not supported");
-            }
-        },
-        shared: ct.shared,
-        descriptor: None,
-        describes: None,
-    }
-}
-
-fn convert_field_type(
-    f: &wasmparser::FieldType,
-    remap: &RemapTable,
-) -> wasm_encoder::FieldType {
-    wasm_encoder::FieldType {
-        element_type: match f.element_type {
-            wasmparser::StorageType::I8 => wasm_encoder::StorageType::I8,
-            wasmparser::StorageType::I16 => wasm_encoder::StorageType::I16,
-            wasmparser::StorageType::Val(vt) => {
-                wasm_encoder::StorageType::Val(
-                    convert_val_type_remapped(vt, remap),
-                )
-            }
-        },
+fn remap_type_kind(kind: &TypeKind, off: &Offsets) -> TypeKind {
+  match kind {
+    TypeKind::Struct { fields } => TypeKind::Struct {
+      fields: fields.iter().map(|f| StructField {
+        ty: remap_val_type(&f.ty, off),
         mutable: f.mutable,
-    }
+        display: f.display.clone(),
+      }).collect(),
+    },
+    TypeKind::Array { elem, mutable } => TypeKind::Array {
+      elem: remap_val_type(elem, off),
+      mutable: *mutable,
+    },
+    TypeKind::Func { params, results } => TypeKind::Func {
+      params: params.iter().map(|v| remap_val_type(v, off)).collect(),
+      results: results.iter().map(|v| remap_val_type(v, off)).collect(),
+    },
+    TypeKind::SubBound { ht } => TypeKind::SubBound { ht: *ht },
+  }
 }
 
-
-// -- Global section helpers ---------------------------------------------------
-
-/// Convert a wasmparser GlobalType to wasm-encoder GlobalType with remapped type refs.
-fn convert_global_type(
-    ty: &wasmparser::GlobalType,
-    remap: &RemapTable,
-) -> wasm_encoder::GlobalType {
-    wasm_encoder::GlobalType {
-        val_type: convert_val_type_remapped(ty.content_type, remap),
-        mutable: ty.mutable,
-        shared: ty.shared,
-    }
+fn remap_val_type(vt: &ValType, off: &Offsets) -> ValType {
+  match vt {
+    ValType::I32 | ValType::F64 => vt.clone(),
+    ValType::RefConcrete { nullable, ty } => ValType::RefConcrete {
+      nullable: *nullable,
+      ty: remap_type_sym(*ty, off),
+    },
+    ValType::RefAbstract { nullable, ht } => ValType::RefAbstract {
+      nullable: *nullable,
+      ht: *ht,
+    },
+  }
 }
 
-/// Remap a constant init expression, rewriting type/func indices.
-///
-/// Handles multi-instruction const exprs (e.g. struct.new, array.new_fixed).
-fn remap_const_expr(
-    bytes: &[u8],
-    remap: &RemapTable,
-) -> wasm_encoder::ConstExpr {
-    use wasm_encoder::Instruction as I;
-
-    let reader = wasmparser::BinaryReader::new(bytes, 0);
-    let const_expr = wasmparser::ConstExpr::new(reader);
-    let mut instrs: Vec<I<'static>> = Vec::new();
-
-    for op in const_expr.get_operators_reader().into_iter().flatten() {
-        match op {
-            wasmparser::Operator::RefFunc { function_index } => {
-                instrs.push(I::RefFunc(remap_func(remap, function_index)));
-            }
-            wasmparser::Operator::I32Const { value } => {
-                instrs.push(I::I32Const(value));
-            }
-            wasmparser::Operator::I64Const { value } => {
-                instrs.push(I::I64Const(value));
-            }
-            wasmparser::Operator::F32Const { value } => {
-                instrs.push(I::F32Const(f32::from_bits(value.bits()).into()));
-            }
-            wasmparser::Operator::F64Const { value } => {
-                instrs.push(I::F64Const(f64::from_bits(value.bits()).into()));
-            }
-            wasmparser::Operator::RefNull { hty } => {
-                instrs.push(I::RefNull(remap_heap_type(remap, hty)));
-            }
-            wasmparser::Operator::StructNew { struct_type_index } => {
-                instrs.push(I::StructNew(remap_type(remap, struct_type_index)));
-            }
-            wasmparser::Operator::ArrayNewFixed { array_type_index, array_size } => {
-                instrs.push(I::ArrayNewFixed {
-                    array_type_index: remap_type(remap, array_type_index),
-                    array_size,
-                });
-            }
-            wasmparser::Operator::GlobalGet { global_index } => {
-                instrs.push(I::GlobalGet(remap_global(remap, global_index)));
-            }
-            wasmparser::Operator::End => {}
-            _ => panic!("link: unsupported const expr operator: {:?}", op),
-        }
-    }
-
-    wasm_encoder::ConstExpr::extended(instrs)
+fn remap_type_sym(sym: TypeSym, off: &Offsets) -> TypeSym {
+  TypeSym(sym.0 + off.types)
 }
 
-// -- Tests --------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Compile WAT text to WASM bytes.
-    fn wat(source: &str) -> Vec<u8> {
-        wat_crate::parse_str(source).expect("WAT parse failed")
-    }
-
-    /// Validate that WASM bytes are a valid module.
-    fn validate(wasm: &[u8]) {
-        let mut validator = wasmparser::Validator::new_with_features(
-            wasmparser::WasmFeatures::all(),
-        );
-        validator
-            .validate_all(wasm)
-            .expect("validation failed");
-    }
-
-    /// Extract function names from a WASM module's name section.
-    fn get_func_names(wasm: &[u8]) -> BTreeMap<u32, String> {
-        let mut names = BTreeMap::new();
-        for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::CustomSection(reader)) = payload
-                && let wasmparser::KnownCustom::Name(name_reader) =
-                    reader.as_known()
-                {
-                    for name in name_reader.into_iter().flatten() {
-                        if let wasmparser::Name::Function(map) = name {
-                            for n in map.into_iter().flatten() {
-                                names
-                                    .insert(n.index, n.name.to_string());
-                            }
-                        }
-                    }
-                }
-        }
-        names
-    }
-
-    /// Extract exports from a WASM module.
-    fn get_exports(wasm: &[u8]) -> Vec<(String, u32)> {
-        let mut exports = Vec::new();
-        for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::ExportSection(reader)) = payload {
-                for export in reader.into_iter().flatten() {
-                    exports.push((
-                        export.name.to_string(),
-                        export.index,
-                    ));
-                }
-            }
-        }
-        exports
-    }
-
-    /// Count types in a WASM module.
-    fn count_types(wasm: &[u8]) -> u32 {
-        let mut count = 0;
-        for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::TypeSection(reader)) = payload {
-                for rg in reader.into_iter().flatten() {
-                    for _ in rg.into_types() {
-                        count += 1;
-                    }
-                }
-            }
-        }
-        count
-    }
-
-    /// Count functions in a WASM module.
-    fn count_funcs(wasm: &[u8]) -> u32 {
-        let mut count = 0;
-        for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::FunctionSection(reader)) = payload {
-                for _ in reader.into_iter().flatten() {
-                    count += 1;
-                }
-            }
-        }
-        count
-    }
-
-    /// Check if DWARF sections exist in a WASM module.
-    fn has_dwarf(wasm: &[u8]) -> bool {
-        for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::CustomSection(reader)) = payload
-                && reader.name().starts_with(".debug_") {
-                    return true;
-                }
-        }
-        false
-    }
-
-    // -- Test cases -----------------------------------------------------------
-
-    #[test]
-    fn t_link_single_module_passthrough() {
-        // A single module with no imports — output should be valid and
-        // functionally identical.
-        let wasm_a = wat(
-            r#"(module
-                (type $f (func (param i32) (result i32)))
-                (func $identity (type $f) (param i32) (result i32)
-                    local.get 0)
-                (export "identity" (func $identity))
-            )"#,
-        );
-
-        let result = link(&[LinkInput {
-            module_name: String::new(),
-            wasm: wasm_a,
-        }]);
-
-        validate(&result.wasm);
-        assert_eq!(count_types(&result.wasm), 1);
-        assert_eq!(count_funcs(&result.wasm), 1);
-
-        let exports = get_exports(&result.wasm);
-        assert_eq!(exports.len(), 1);
-        assert_eq!(exports[0].0, "identity");
-    }
-
-    #[test]
-    fn t_link_two_modules_type_merge() {
-        // Two modules each define their own types. After linking, all
-        // types should be present and indices should be remapped.
-        let wasm_a = wat(
-            r#"(module
-                (type $T0 (func (param i32) (result i32)))
-                (func $f (type $T0) (param i32) (result i32) local.get 0)
-                (export "f" (func $f))
-            )"#,
-        );
-        let wasm_b = wat(
-            r#"(module
-                (type $U0 (func (param i32 i32) (result i32)))
-                (func $g (type $U0) (param i32) (param i32) (result i32)
-                    local.get 0
-                    local.get 1
-                    i32.add)
-                (export "g" (func $g))
-            )"#,
-        );
-
-        let result = link(&[
-            LinkInput {
-                module_name: "@fink/runtime/a".into(),
-                wasm: wasm_a,
-            },
-            LinkInput {
-                module_name: String::new(),
-                wasm: wasm_b,
-            },
-        ]);
-
-        validate(&result.wasm);
-        assert_eq!(count_types(&result.wasm), 2);
-        assert_eq!(count_funcs(&result.wasm), 2);
-
-        // Only user module exports are kept; runtime module exports are internal.
-        let exports = get_exports(&result.wasm);
-        assert_eq!(exports.len(), 1);
-    }
-
-    #[test]
-    fn t_link_name_section_preserved() {
-        // Function names should survive linking with module prefixes.
-        let wasm_a = wat(
-            r#"(module
-                (func $helper (result i32) i32.const 42)
-                (export "helper" (func $helper))
-            )"#,
-        );
-        let wasm_b = wat(
-            r#"(module
-                (func $main (result i32) i32.const 1)
-                (export "main" (func $main))
-            )"#,
-        );
-
-        let result = link(&[
-            LinkInput {
-                module_name: "@fink/runtime/lib".into(),
-                wasm: wasm_a,
-            },
-            LinkInput {
-                module_name: String::new(),
-                wasm: wasm_b,
-            },
-        ]);
-
-        validate(&result.wasm);
-        let names = get_func_names(&result.wasm);
-
-        // Runtime function should be prefixed.
-        assert_eq!(
-            names.get(&0),
-            Some(&"@fink/runtime/lib:helper".to_string())
-        );
-        // User function should keep its original name.
-        assert_eq!(names.get(&1), Some(&"main".to_string()));
-    }
-
-    #[test]
-    fn t_link_import_resolution() {
-        // Module B imports a function from module A via @fink/ convention.
-        // The linker should resolve the import and produce a valid module
-        // with no imports.
-        let wasm_a = wat(
-            r#"(module
-                (func $add (param i32) (param i32) (result i32)
-                    local.get 0
-                    local.get 1
-                    i32.add)
-                (export "add" (func $add))
-            )"#,
-        );
-        let wasm_b = wat(
-            r#"(module
-                (import "@fink/runtime/math" "add"
-                    (func $add (param i32) (param i32) (result i32)))
-                (func $main (result i32)
-                    i32.const 3
-                    i32.const 4
-                    call $add)
-                (export "main" (func $main))
-            )"#,
-        );
-
-        let result = link(&[
-            LinkInput {
-                module_name: "@fink/runtime/math".into(),
-                wasm: wasm_a,
-            },
-            LinkInput {
-                module_name: String::new(),
-                wasm: wasm_b,
-            },
-        ]);
-
-        validate(&result.wasm);
-
-        // No imports should remain.
-        let mut has_imports = false;
-        for payload in Parser::new(0).parse_all(&result.wasm) {
-            if let Ok(Payload::ImportSection(_)) = payload {
-                has_imports = true;
-            }
-        }
-        assert!(!has_imports, "linked module should have no imports");
-
-        // Should have 2 functions: add + main.
-        assert_eq!(count_funcs(&result.wasm), 2);
-    }
-
-    #[test]
-    fn t_link_gc_types_merged() {
-        // Two modules using WasmGC struct types. After linking, types from
-        // both should be present and struct.new indices should be correct.
-        let wasm_a = wat(
-            r#"(module
-                (type $Num (struct (field f64)))
-                (func $make_num (param f64) (result (ref $Num))
-                    local.get 0
-                    struct.new $Num)
-                (export "make_num" (func $make_num))
-            )"#,
-        );
-        let wasm_b = wat(
-            r#"(module
-                (type $Pair (struct (field i32) (field i32)))
-                (func $make_pair (param i32) (param i32) (result (ref $Pair))
-                    local.get 0
-                    local.get 1
-                    struct.new $Pair)
-                (export "make_pair" (func $make_pair))
-            )"#,
-        );
-
-        let result = link(&[
-            LinkInput {
-                module_name: "@fink/runtime/types".into(),
-                wasm: wasm_a,
-            },
-            LinkInput {
-                module_name: String::new(),
-                wasm: wasm_b,
-            },
-        ]);
-
-        validate(&result.wasm);
-        assert_eq!(count_types(&result.wasm), 4); // $Num, make_num_type, $Pair, make_pair_type
-        assert_eq!(count_funcs(&result.wasm), 2);
-    }
-
-    #[test]
-    fn t_link_dwarf_preserved() {
-        // DWARF sections from user code should survive linking.
-        // We create a module with a fake .debug_info section and verify
-        // it appears in the output.
-        let wasm_rt = wat(
-            r#"(module
-                (func $helper (result i32) i32.const 1)
-                (export "helper" (func $helper))
-            )"#,
-        );
-
-        // Build user module with an embedded DWARF section.
-        let mut user_wasm = wat(
-            r#"(module
-                (func $main (result i32) i32.const 42)
-                (export "main" (func $main))
-            )"#,
-        );
-        // Manually append a .debug_info custom section.
-        append_custom_section(&mut user_wasm, ".debug_info", b"fake_dwarf");
-
-        let result = link(&[
-            LinkInput {
-                module_name: "@fink/runtime/lib".into(),
-                wasm: wasm_rt,
-            },
-            LinkInput {
-                module_name: String::new(),
-                wasm: user_wasm,
-            },
-        ]);
-
-        validate(&result.wasm);
-        assert!(has_dwarf(&result.wasm), "DWARF should survive linking");
-    }
-
-    #[test]
-    fn t_link_element_section_merged() {
-        // ref.func requires a declarative element segment. After linking,
-        // element indices should be remapped.
-        let wasm_a = wat(
-            r#"(module
-                (type $fn0 (func (result i32)))
-                (func $target (type $fn0) (result i32) i32.const 99)
-                (func $get_ref (result funcref)
-                    ref.func $target)
-                (elem declare func $target)
-                (export "get_ref" (func $get_ref))
-            )"#,
-        );
-
-        let result = link(&[LinkInput {
-            module_name: String::new(),
-            wasm: wasm_a,
-        }]);
-
-        validate(&result.wasm);
-    }
-
-    /// Append a custom section to WASM bytes.
-    fn append_custom_section(wasm: &mut Vec<u8>, name: &str, data: &[u8]) {
-        let name_bytes = name.as_bytes();
-        let payload_size =
-            leb128_size(name_bytes.len() as u32)
-            + name_bytes.len()
-            + data.len();
-
-        wasm.push(0x00); // custom section id
-        leb128_encode(wasm, payload_size as u32);
-        leb128_encode(wasm, name_bytes.len() as u32);
-        wasm.extend_from_slice(name_bytes);
-        wasm.extend_from_slice(data);
-    }
-
-    fn leb128_encode(out: &mut Vec<u8>, mut val: u32) {
-        loop {
-            let byte = (val & 0x7f) as u8;
-            val >>= 7;
-            if val == 0 {
-                out.push(byte);
-                break;
-            }
-            out.push(byte | 0x80);
-        }
-    }
-
-    fn leb128_size(mut val: u32) -> usize {
-        let mut size = 0;
-        loop {
-            val >>= 7;
-            size += 1;
-            if val == 0 {
-                break;
-            }
-        }
-        size
-    }
-
-    /// Extract DWARF line program addresses from a WASM module.
-    fn get_dwarf_addresses(wasm: &[u8]) -> Vec<u32> {
-        use gimli::EndianSlice;
-
-        let mut debug_info_data = &[][..];
-        let mut debug_abbrev_data = &[][..];
-        let mut debug_line_data = &[][..];
-
-        for payload in Parser::new(0).parse_all(wasm) {
-            if let Ok(Payload::CustomSection(reader)) = payload {
-                match reader.name() {
-                    ".debug_info" => debug_info_data = reader.data(),
-                    ".debug_abbrev" => debug_abbrev_data = reader.data(),
-                    ".debug_line" => debug_line_data = reader.data(),
-                    _ => {}
-                }
-            }
-        }
-
-        if debug_info_data.is_empty() || debug_line_data.is_empty() {
-            return Vec::new();
-        }
-
-        let debug_info =
-            gimli::DebugInfo::new(debug_info_data, LittleEndian);
-        let debug_abbrev =
-            gimli::DebugAbbrev::new(debug_abbrev_data, LittleEndian);
-        let debug_line =
-            gimli::DebugLine::new(debug_line_data, LittleEndian);
-
-        let mut units = debug_info.units();
-        let unit_header = match units.next() {
-            Ok(Some(h)) => h,
-            _ => return Vec::new(),
-        };
-        let abbrevs = match debug_abbrev
-            .abbreviations(unit_header.debug_abbrev_offset())
-        {
-            Ok(a) => a,
-            Err(_) => return Vec::new(),
-        };
-
-        let mut cursor = unit_header.entries(&abbrevs);
-        if cursor.next_dfs().is_err() {
-            return Vec::new();
-        }
-        let root = match cursor.current() {
-            Some(e) => e,
-            None => return Vec::new(),
-        };
-
-        let stmt_list = match root.attr_value(gimli::DW_AT_stmt_list) {
-            Some(gimli::AttributeValue::DebugLineRef(o)) => o,
-            _ => return Vec::new(),
-        };
-
-        let line_program = match debug_line.program(
-            stmt_list,
-            unit_header.address_size(),
-            None::<EndianSlice<'_, LittleEndian>>,
-            None::<EndianSlice<'_, LittleEndian>>,
-        ) {
-            Ok(p) => p,
-            Err(_) => return Vec::new(),
-        };
-
-        let mut addrs = Vec::new();
-        let mut rows = line_program.rows();
-        while let Ok(Some((_header, row))) = rows.next_row() {
-            if !row.end_sequence() {
-                addrs.push(row.address() as u32);
-            }
-        }
-        addrs
-    }
-
-    #[test]
-    fn t_link_preserves_external_imports() {
-        // Module with an "env" import should survive linking.
-        // The linker must preserve non-@fink/ imports in the output.
-        let wasm_rt = wat(
-            r#"(module
-                (import "env" "host_write" (func $host_write (param i32 i32)))
-                (func $helper (param i32 i32)
-                    local.get 0
-                    local.get 1
-                    call $host_write)
-                (export "helper" (func $helper))
-            )"#,
-        );
-        let wasm_user = wat(
-            r#"(module
-                (import "@fink/runtime/io" "helper"
-                    (func $helper (param i32 i32)))
-                (func $main
-                    i32.const 0
-                    i32.const 5
-                    call $helper)
-                (export "main" (func $main))
-            )"#,
-        );
-
-        let result = link(&[
-            LinkInput {
-                module_name: "@fink/runtime/io".into(),
-                wasm: wasm_rt,
-            },
-            LinkInput {
-                module_name: String::new(),
-                wasm: wasm_user,
-            },
-        ]);
-
-        validate(&result.wasm);
-
-        // "env" import should survive.
-        let mut env_imports = Vec::new();
-        for payload in Parser::new(0).parse_all(&result.wasm) {
-            if let Ok(Payload::ImportSection(reader)) = payload {
-                for group in reader {
-                    match group.unwrap() {
-                        wasmparser::Imports::Single(_, import) => {
-                            env_imports.push((
-                                import.module.to_string(),
-                                import.name.to_string(),
-                            ));
-                        }
-                        wasmparser::Imports::Compact1 { module, items } => {
-                            for item in items.into_iter().flatten() {
-                                env_imports.push((
-                                    module.to_string(),
-                                    item.name.to_string(),
-                                ));
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        assert_eq!(
-            env_imports,
-            vec![("env".to_string(), "host_write".to_string())],
-            "env imports should be preserved in linked output"
-        );
-
-        // Should have 2 defined functions + 1 import = 3 total in function index space.
-        assert_eq!(count_funcs(&result.wasm), 2);
-    }
-
-    #[test]
-    fn t_link_dwarf_offset_adjusted() {
-        // DWARF addresses should be shifted by the size of prepended
-        // runtime code bodies.
-        use crate::passes::wasm::dwarf;
-        use crate::passes::wasm::emit::OffsetMapping;
-        use crate::passes::ast::lexer::{Loc, Pos};
-
-        let wasm_rt = wat(
-            r#"(module
-                (func $helper (result i32) i32.const 1)
-                (func $helper2 (result i32) i32.const 2)
-                (export "helper" (func $helper))
-            )"#,
-        );
-
-        // Build user module with real DWARF.
-        let mut user_wasm = wat(
-            r#"(module
-                (func $main (result i32) i32.const 42)
-                (export "main" (func $main))
-            )"#,
-        );
-
-        // Create DWARF with known addresses.
-        let mappings = vec![
-            OffsetMapping {
-                wasm_offset: 10,
-                loc: Loc {
-                    start: Pos {
-                        idx: 0,
-                        line: 1,
-                        col: 1,
-                    },
-                    end: Pos {
-                        idx: 0,
-                        line: 1,
-                        col: 5,
-                    },
-                },
-            },
-            OffsetMapping {
-                wasm_offset: 20,
-                loc: Loc {
-                    start: Pos {
-                        idx: 0,
-                        line: 2,
-                        col: 1,
-                    },
-                    end: Pos {
-                        idx: 0,
-                        line: 2,
-                        col: 10,
-                    },
-                },
-            },
-        ];
-
-        let dwarf_sections = dwarf::emit_dwarf("test.fnk", None, &mappings);
-        for section in &dwarf_sections {
-            append_custom_section(
-                &mut user_wasm,
-                &section.name,
-                &section.data,
-            );
-        }
-
-        // Get original addresses.
-        let original_addrs = get_dwarf_addresses(&user_wasm);
-        assert_eq!(original_addrs, vec![10, 20]);
-
-        // Link with runtime prepended.
-        let result = link(&[
-            LinkInput {
-                module_name: "@fink/runtime/lib".into(),
-                wasm: wasm_rt,
-            },
-            LinkInput {
-                module_name: String::new(),
-                wasm: user_wasm,
-            },
-        ]);
-
-        validate(&result.wasm);
-
-        // DWARF addresses should be shifted by runtime code size.
-        let adjusted_addrs = get_dwarf_addresses(&result.wasm);
-        assert!(
-            !adjusted_addrs.is_empty(),
-            "should have DWARF addresses"
-        );
-        // All addresses should be greater than originals.
-        assert!(
-            adjusted_addrs[0] > 10,
-            "first address {} should be shifted past 10",
-            adjusted_addrs[0]
-        );
-        assert!(
-            adjusted_addrs[1] > 20,
-            "second address {} should be shifted past 20",
-            adjusted_addrs[1]
-        );
-        // The offset between the two should be preserved.
-        assert_eq!(
-            adjusted_addrs[1] - adjusted_addrs[0],
-            10,
-            "relative offset between addresses should be preserved"
-        );
-    }
+fn remap_func_sym(sym: FuncSym, off: &Offsets) -> FuncSym {
+  FuncSym(sym.0 + off.funcs)
+}
+
+fn remap_global_sym(sym: GlobalSym, off: &Offsets) -> GlobalSym {
+  GlobalSym(sym.0 + off.globals)
+}
+
+fn remap_data_sym(sym: DataSym, off: &Offsets) -> DataSym {
+  DataSym(sym.0 + off.data)
+}
+
+fn remap_instr_id(id: InstrId, off: &Offsets) -> InstrId {
+  InstrId(id.0 + off.instrs)
+}
+
+fn remap_local_decl(l: &LocalDecl, off: &Offsets) -> LocalDecl {
+  LocalDecl {
+    ty: remap_val_type(&l.ty, off),
+    display: l.display.clone(),
+  }
+}
+
+fn remap_func_decl(
+  f: &FuncDecl,
+  off: &Offsets,
+  producer_fink_module: &BTreeMap<String, FuncSym>,
+) -> FuncDecl {
+  // Cross-fragment user import resolution: a FuncDecl marked with
+  // `import: Some(ImportKey { module: "<canonical_url>", name:
+  // "fink_module" })` where `module` matches a producer fragment's
+  // canonical URL is rewritten:
+  //   - Drop the import marker.
+  //   - Mark the FuncDecl as a stub re-export pointing at the
+  //     producer's already-merged FuncSym.
+  //
+  // BUT: we can't change the FuncSym of an existing FuncDecl — the
+  // FuncSym IS the index into `frag.funcs`. So instead, we keep the
+  // FuncDecl in place (it stays as an unused import slot in the
+  // merged fragment) and accept the redundancy. emit's existing
+  // ImportKey resolution handles it (looks up by name; cross-frag
+  // refs to `<canonical_url>:fink_module` won't be in the runtime
+  // export table — so this approach only works if we ALSO export
+  // each fragment's `fink_module` under its qualified name in the
+  // merged binary).
+  //
+  // Actually the cleanest approach: lower's call sites use
+  // FuncSym pointing at the placeholder import-only FuncDecl. The
+  // linker rewrites those Call instrs to point at the producer's
+  // real FuncSym. The placeholder FuncDecl can stay (it's just an
+  // unused entry in frag.funcs) or get pruned.
+  //
+  // For simplicity, leave the placeholder in. It serialises as an
+  // unused import line. Next pass (post-link cleanup) can prune.
+  //
+  // The Instr-level rewrite happens in `remap_instr_kind` below,
+  // which sees Call/ReturnCall targets and consults
+  // `producer_fink_module` to redirect them.
+  //
+  // For this function we just remap symbols.
+  let _ = producer_fink_module; // used at instr level
+
+  FuncDecl {
+    sig: remap_type_sym(f.sig, off),
+    params: f.params.iter().map(|l| remap_local_decl(l, off)).collect(),
+    locals: f.locals.iter().map(|l| remap_local_decl(l, off)).collect(),
+    body: f.body.iter().map(|id| remap_instr_id(*id, off)).collect(),
+    display: f.display.clone(),
+    import: f.import.clone(),
+    export: f.export.clone(),
+  }
+}
+
+fn remap_global_decl(g: &GlobalDecl, off: &Offsets) -> GlobalDecl {
+  GlobalDecl {
+    ty: remap_val_type(&g.ty, off),
+    mutable: g.mutable,
+    init: remap_global_init(&g.init, off),
+    display: g.display.clone(),
+    import: g.import.clone(),
+    export: g.export.clone(),
+  }
+}
+
+fn remap_global_init(init: &GlobalInit, off: &Offsets) -> GlobalInit {
+  match init {
+    GlobalInit::I32Const(v) => GlobalInit::I32Const(*v),
+    GlobalInit::F64Const(v) => GlobalInit::F64Const(*v),
+    GlobalInit::RefNull(ht) => GlobalInit::RefNull(*ht),
+    GlobalInit::RefNullConcrete(ts) => GlobalInit::RefNullConcrete(remap_type_sym(*ts, off)),
+    GlobalInit::RefFunc(fs) => GlobalInit::RefFunc(remap_func_sym(*fs, off)),
+  }
+}
+
+fn remap_instr_kind(kind: &InstrKind, off: &Offsets) -> InstrKind {
+  match kind {
+    InstrKind::LocalSet { idx, src } =>
+      InstrKind::LocalSet { idx: *idx, src: remap_operand(src, off) },
+    InstrKind::GlobalSet { sym, src } =>
+      InstrKind::GlobalSet { sym: remap_global_sym(*sym, off), src: remap_operand(src, off) },
+    InstrKind::RefNull { ht, into } =>
+      InstrKind::RefNull { ht: *ht, into: *into },
+    InstrKind::RefNullConcrete { ty, into } =>
+      InstrKind::RefNullConcrete { ty: remap_type_sym(*ty, off), into: *into },
+    InstrKind::RefI31 { src, into } =>
+      InstrKind::RefI31 { src: remap_operand(src, off), into: *into },
+    InstrKind::I31GetS { src, into } =>
+      InstrKind::I31GetS { src: remap_operand(src, off), into: *into },
+    InstrKind::RefFunc { func, into } =>
+      InstrKind::RefFunc { func: remap_func_sym(*func, off), into: *into },
+    InstrKind::StructNew { ty, fields, into } =>
+      InstrKind::StructNew {
+        ty: remap_type_sym(*ty, off),
+        fields: fields.iter().map(|f| remap_operand(f, off)).collect(),
+        into: *into,
+      },
+    InstrKind::ArrayNewFixed { ty, size, elems, into } =>
+      InstrKind::ArrayNewFixed {
+        ty: remap_type_sym(*ty, off),
+        size: *size,
+        elems: elems.iter().map(|f| remap_operand(f, off)).collect(),
+        into: *into,
+      },
+    InstrKind::ArrayGet { ty, arr, idx, into } =>
+      InstrKind::ArrayGet {
+        ty: remap_type_sym(*ty, off),
+        arr: remap_operand(arr, off),
+        idx: remap_operand(idx, off),
+        into: *into,
+      },
+    InstrKind::RefCastNonNull { ty, src, into } =>
+      InstrKind::RefCastNonNull { ty: remap_type_sym(*ty, off), src: remap_operand(src, off), into: *into },
+    InstrKind::RefCastNullable { ty, src, into } =>
+      InstrKind::RefCastNullable { ty: remap_type_sym(*ty, off), src: remap_operand(src, off), into: *into },
+    InstrKind::RefCastNonNullAbs { ht, src, into } =>
+      InstrKind::RefCastNonNullAbs { ht: *ht, src: remap_operand(src, off), into: *into },
+    InstrKind::Call { target, args, into } =>
+      InstrKind::Call {
+        target: remap_func_sym(*target, off),
+        args: args.iter().map(|a| remap_operand(a, off)).collect(),
+        into: *into,
+      },
+    InstrKind::ReturnCall { target, args } =>
+      InstrKind::ReturnCall {
+        target: remap_func_sym(*target, off),
+        args: args.iter().map(|a| remap_operand(a, off)).collect(),
+      },
+    InstrKind::If { cond, then_body, else_body } =>
+      InstrKind::If {
+        cond: remap_operand(cond, off),
+        then_body: then_body.iter().map(|id| remap_instr_id(*id, off)).collect(),
+        else_body: else_body.iter().map(|id| remap_instr_id(*id, off)).collect(),
+      },
+    InstrKind::Unreachable => InstrKind::Unreachable,
+    InstrKind::Drop { src } => InstrKind::Drop { src: remap_operand(src, off) },
+  }
+}
+
+fn remap_operand(op: &Operand, off: &Offsets) -> Operand {
+  match op {
+    Operand::I32(v) => Operand::I32(*v),
+    Operand::F64(v) => Operand::F64(*v),
+    Operand::Local(idx) => Operand::Local(*idx),
+    Operand::Global(sym) => Operand::Global(remap_global_sym(*sym, off)),
+    Operand::RefFunc(sym) => Operand::RefFunc(remap_func_sym(*sym, off)),
+    Operand::RefNull(ht) => Operand::RefNull(*ht),
+    Operand::DataRef { sym, len } => Operand::DataRef {
+      sym: remap_data_sym(*sym, off),
+      len: *len,
+    },
+  }
 }

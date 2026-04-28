@@ -1,12 +1,16 @@
 // Build script — compiles runtime WAT files to WASM at build time.
 //
-// The runtime modules are merged into a single WASM module so that
-// inter-runtime calls (e.g. operators → str_eq) are plain function
-// calls within one module — no import/export resolution needed.
+// Produces `runtime-ir.wasm` from `src/passes/wasm/{rt,std,interop}/*.wat`.
+// Consumed by `emit::emit` and the WAT formatter for canonical type
+// rendering.
 //
-// This avoids a runtime dependency on the `wat` crate, keeping the
-// compiler wasm32-safe. The compiled WASM bytes are embedded via
-// `include_bytes!` in the emitter.
+// The merge is a textual WAT splice: strip internal imports (they
+// resolve flat post-merge), concat bodies, prepend the rec group, wrap
+// in a single `(module ...)`.
+//
+// No runtime dependency on the `wat` crate — keeps the compiler
+// wasm32-safe. Compiled WASM bytes are embedded via `include_bytes!`
+// in the emitter.
 
 fn main() {
     // Expose the host target triple so fink.rs can resolve --target=native.
@@ -14,67 +18,133 @@ fn main() {
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
 
-    // types.wat is standalone — compiled separately for the emitter to
-    // inject canonical type definitions into user modules.
-    println!("cargo::rerun-if-changed=src/runtime/types.wat");
-    let types_wat = std::fs::read_to_string("src/runtime/types.wat")
-        .expect("failed to read types.wat");
-    let types_wasm = wat_crate::parse_str(&types_wat)
-        .expect("failed to compile types.wat");
-    std::fs::write(format!("{out_dir}/types.wasm"), &types_wasm)
-        .expect("failed to write types.wasm");
+    println!("cargo::rerun-if-changed=src/passes/wasm/rt/types.wat");
+    let types_ir_wat = std::fs::read_to_string("src/passes/wasm/rt/types.wat")
+        .expect("failed to read rt/types.wat");
+    let types_ir_wasm = wat_crate::parse_str(&types_ir_wat)
+        .expect("failed to compile rt/types.wat");
+    std::fs::write(format!("{out_dir}/types-ir.wasm"), &types_ir_wasm)
+        .expect("failed to write types-ir.wasm");
 
-    // Extract the rec group from types.wat for injection into the merged module.
-    let type_defs = extract_rec_group(&types_wat);
+    let type_defs_ir = extract_rec_group(&types_ir_wat);
 
-    // Runtime modules — merged into a single WASM module.
-    // Order doesn't matter for function bodies (WAT allows forward refs),
-    // but types (rec group) must come first.
-    // Modules wired into the compiler pipeline.
-    // set is not yet used — added when integrated.
-    let runtime_modules = [
-        "src/runtime/str.wat",
-        "src/runtime/hashing.wat",
-        "src/runtime/operators.wat",
-        "src/runtime/list.wat",
-        "src/runtime/rec.wat",
-        "src/runtime/int.wat",
-        "src/runtime/range.wat",
-        "src/runtime/scheduler.wat",
-        "src/runtime/channel.wat",
-        "src/runtime/dispatch.wat",
-        "src/runtime/interop-rust.wat",
+    // Runtime modules. Order: types first (in type_defs_ir), then all
+    // fragments. Layout mirrors the design-doc rt/std/interop vocabulary.
+    let runtime_modules_ir = [
+        "src/passes/wasm/rt/apply.wat",
+        "src/passes/wasm/rt/modules.wat",
+        "src/passes/wasm/rt/protocols.wat",
+        "src/passes/wasm/std/str.wat",
+        "src/passes/wasm/std/hashing.wat",
+        "src/passes/wasm/std/list.wat",
+        "src/passes/wasm/std/dict.wat",
+        "src/passes/wasm/std/int.wat",
+        "src/passes/wasm/std/range.wat",
+        "src/passes/wasm/std/async.wat",
+        "src/passes/wasm/std/channel.wat",
+        "src/passes/wasm/std/set.wat",
+        "src/passes/wasm/interop/rust.wat",
     ];
 
-    let mut imports = Vec::new();
+    let merged_ir_wat = merge_runtime(&type_defs_ir, &runtime_modules_ir, runtime_strip, true);
+    let runtime_ir_wasm = wat_crate::parse_str(&merged_ir_wat)
+        .unwrap_or_else(|e| panic!("failed to compile merged runtime-ir: {e}"));
+    std::fs::write(format!("{out_dir}/runtime-ir.wasm"), &runtime_ir_wasm)
+        .expect("failed to write runtime-ir.wasm");
+}
+
+/// Common merge driver. For each fragment: read, strip internal imports
+/// (via the `strip` predicate), hoist external imports (`@fink/user` /
+/// `env`), collect bodies. Dedup hoisted imports, prepend type defs,
+/// wrap in `(module ...)`.
+///
+/// When `qualify_exports` is true, every `(export "NAME"` in the body
+/// is rewritten to `(export "<fragment-url>:NAME"`, where the
+/// fragment-url is the path with the `src/passes/wasm/` prefix
+/// stripped (so `src/passes/wasm/rt/protocols.wat` becomes the URL
+/// `rt/protocols.wat`). This produces unique cross-fragment names in
+/// the merged export table and makes `<url>:<name>` lookup from
+/// `emit` unambiguous. Host-facing interop exports are NOT qualified
+/// (the host side of the ABI expects bare names).
+fn merge_runtime(
+    type_defs: &str,
+    paths: &[&str],
+    strip: fn(&str) -> bool,
+    qualify_exports: bool,
+) -> String {
+    let mut imports: Vec<String> = Vec::new();
     let mut merged_body = String::new();
-    for path in &runtime_modules {
+    for path in paths {
         println!("cargo::rerun-if-changed={path}");
         let wat = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
-        let (module_imports, body) = extract_module_parts(&wat);
+        let (module_imports, mut body) = extract_module_parts(&wat, strip);
         imports.extend(module_imports);
+        if qualify_exports {
+            body = qualify_export_names(&body, path);
+        }
         merged_body.push_str(&format!("\n  ;; --- {} ---\n", path));
         merged_body.push_str(&body);
     }
-    // Deduplicate imports (e.g. multiple modules importing _apply).
     imports.sort();
     imports.dedup();
-
     let imports_str = imports.join("\n");
-    let merged_wat = format!("(module\n{type_defs}\n{imports_str}\n{merged_body})\n");
-    let runtime_wasm = wat_crate::parse_str(&merged_wat)
-        .unwrap_or_else(|e| panic!("failed to compile merged runtime: {e}"));
-    std::fs::write(format!("{out_dir}/runtime.wasm"), &runtime_wasm)
-        .expect("failed to write runtime.wasm");
+    format!("(module\n{type_defs}\n{imports_str}\n{merged_body})\n")
 }
 
-/// Extract module parts: returns (@fink/user imports, body without imports).
-/// Strips @fink/runtime/ imports (internal to merged module).
-/// Hoists imports for the caller to deduplicate and place first.
-/// Strips @fink/runtime/ imports (resolved internally in merged module).
+/// Rewrite every `(export "NAME"` in `body` to `(export "<url>:NAME"`,
+/// where `<url>` is `path` with the `src/passes/wasm/` prefix stripped.
+/// Exceptions:
+///  - `interop/*.wat` exports stay bare — they're host-facing and the
+///    host expects unqualified names.
+///  - Exports whose name already contains `:` are left as-is — used to
+///    expose protocol dispatchers under virtual stdlib namespaces (e.g.
+///    `rt/protocols.wat` exporting `std/io.fnk:stdout`).
+fn qualify_export_names(body: &str, path: &str) -> String {
+    let url = path.strip_prefix("src/passes/wasm/").unwrap_or(path);
+    if url.starts_with("interop/") {
+        return body.to_string();
+    }
+    // Mechanical pass: walk `(export "<NAME>"` occurrences, qualifying
+    // each unless `<NAME>` already contains `:`.
+    let mut out = String::with_capacity(body.len());
+    let needle = "(export \"";
+    let mut rest = body;
+    while let Some(pos) = rest.find(needle) {
+        out.push_str(&rest[..pos]);
+        let after_needle = &rest[pos + needle.len()..];
+        let close = after_needle.find('"').unwrap_or(after_needle.len());
+        let name = &after_needle[..close];
+        if name.contains(':') {
+            // Already qualified — pass through verbatim.
+            out.push_str(&rest[pos..pos + needle.len() + close + 1]);
+        } else {
+            out.push_str("(export \"");
+            out.push_str(url);
+            out.push(':');
+            out.push_str(name);
+            out.push('"');
+        }
+        rest = &after_needle[close + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Strip predicate: drop `rt/*.wat`, `std/*.wat`, `interop/*.wat`
+/// imports (all resolved internally post-merge).
+fn runtime_strip(import_line: &str) -> bool {
+    import_line.contains("\"rt/") && import_line.contains(".wat\"")
+        || import_line.contains("\"std/") && import_line.contains(".wat\"")
+        || import_line.contains("\"interop/") && import_line.contains(".wat\"")
+}
+
+/// Extract module parts: returns (hoisted imports, body without imports).
+/// `strip` decides which imports to drop (they resolve internally in the
+/// merged module). Non-stripped non-dropped imports are hoisted to the
+/// front of the merged module by the caller.
 /// Hoists @fink/user and "env" imports to appear before function bodies.
-fn extract_module_parts(wat: &str) -> (Vec<String>, String) {
+fn extract_module_parts(wat: &str, strip: fn(&str) -> bool) -> (Vec<String>, String) {
     let mut imports: Vec<String> = Vec::new();
     let mut body_lines: Vec<&str> = Vec::new();
     let mut inside_module = false;
@@ -87,8 +157,8 @@ fn extract_module_parts(wat: &str) -> (Vec<String>, String) {
             continue;
         }
         let trimmed = line.trim_start();
-        // Strip @fink/runtime/ imports — resolved internally.
-        if trimmed.starts_with("(import ") && line.contains("@fink/runtime/") {
+        // Strip internal imports — resolved internally in the merged module.
+        if trimmed.starts_with("(import ") && strip(line) {
             continue;
         }
         // Hoist @fink/user and "env" imports — the caller places them before body.

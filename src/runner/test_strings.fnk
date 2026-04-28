@@ -1,4 +1,4 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -259,6 +259,7 @@ test 'str templ pattern: escape in template', fn:
 test 'str templ pattern: non-utf8 byte match', fn:
   expect run ƒink:
     '\xFF${foo}\xFF' = '\xFFhello\xFF'
+    foo
   | equals ":
     hello
 

@@ -19,7 +19,7 @@ readme = "README.md"
 [features]
 # compile: WASM codegen — collect, emit, DWARF, link, WAT disassembly.
 # Safe for wasm32 targets. Gates compiler.rs and wasm passes.
-compile = ["dep:wasmprinter"]
+compile = ["dep:wasmprinter", "dep:wast", "dep:wat-crate"]
 # runtime: wasmtime runner only — no compiler. Used by finkrt standalone binary.
 runtime = ["dep:wasmtime"]
 # run: native execution (wasmtime) + DAP debugger. Implies compile + runtime. Native only.
@@ -31,6 +31,7 @@ gimli = { version = "0.33", default-features = false, features = ["write", "read
 wasm-encoder = "0.247"
 wasmparser = "0.247"
 wasmprinter = { version = "0.247", optional = true }
+wast = { version = "247", optional = true }
 wat-crate = { package = "wat", version = "1", features = ["dwarf"], optional = true }
 wasmtime = { version = "44", features = ["debug"], optional = true }
 dap = { version = "0.4.1-alpha1", optional = true }

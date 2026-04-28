@@ -1,0 +1,90 @@
+{test, skip, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+# Probe: user-fragment import only, no stdio. Isolates whether the
+# trap is in the user-fragment import chain or in the chained
+# stdio + user import case.
+test 'user fragment import only', fn:
+  expect run ƒink:
+    {shrub} = import './test_modules/entry.fnk'
+
+    shrub 21
+  | equals ":
+    42
+
+# Probe: import a producer that does NOT itself import anything.
+# Isolates whether the bug is in nested imports vs single-level.
+test 'shallow import only', fn:
+  expect run ƒink:
+    {foo} = import './test_modules/foobar/spam.fnk'
+
+    foo 21
+  | equals ":
+    42
+
+
+# Probe: simplest possible cross-fragment value import — producer just
+# binds a value, consumer reads it back through destructure.
+test 'tiny import value', fn:
+  expect run ƒink:
+    {val} = import './test_modules/tiny.fnk'
+
+    val
+  | equals ƒink:
+    42
+
+
+# Probe: producer with TWO pubs. Tests rec_pop "b" on a rec that has
+# both "a" and "b". If rec_pop fails on a present key, we have a
+# registry-write bug.
+test 'two pubs import second', fn:
+  expect run ƒink:
+    {b} = import './test_modules/two_pubs.fnk'
+
+    b
+  | equals ƒink:
+    2
+
+
+# Probe: nested import. Entry imports needs_tiny.fnk which itself
+# imports tiny.fnk. The "result" binding in needs_tiny depends on
+# the imported `val`. Tests that the producer's own import chain
+# correctly threads through.
+test 'nested import minimal', fn:
+  expect run ƒink:
+    {result} = import './test_modules/needs_tiny.fnk'
+
+    result
+  | equals ƒink:
+    42
+
+
+test 'multi module import', fn:
+  expect run ƒink:
+    {stdout} = import 'std/io.fnk'
+    {shrub} = import './test_modules/entry.fnk'
+
+    stdout << '${shrub 21}'
+  | equals ":
+    stdout == ":
+      42
+
+
+---
+Diamond dedup end-to-end: entry → left, right → common AND entry →
+common directly. The three importers reach common.fnk via three
+different raw relative strings (`./sub/common.fnk`, `./common.fnk`,
+`../sub/common.fnk`) which all canonicalise to `./sub/common.fnk`.
+common.fnk must be linked exactly once; both left_val and right_val
+must see the same `base = 10`, and the program must actually execute.
+---
+test 'diamond with two paths to same dep', fn:
+  expect run ƒink:
+    {stdout} = import 'std/io.fnk'
+    {total} = import './test_modules/diamond/entry.fnk'
+
+    stdout << '${total}'
+  | equals ":
+    stdout == ":
+      33

@@ -26,9 +26,6 @@ pub mod modules;
 pub mod partial;
 pub mod scopes;
 pub mod wasm;
-#[cfg(feature = "compile")]
-#[path = "wasm-link/mod.rs"]
-pub mod wasm_link;
 
 /// Raw parsed AST — for display/formatting only.
 /// To proceed to CPS or codegen, call `desugar()`.

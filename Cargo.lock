@@ -426,6 +426,7 @@ dependencies = [
  "wasmparser 0.247.0",
  "wasmprinter 0.247.0",
  "wasmtime",
+ "wast",
  "wat",
 ]
 

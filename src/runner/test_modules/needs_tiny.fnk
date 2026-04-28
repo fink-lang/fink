@@ -1,0 +1,3 @@
+{val} = import './tiny.fnk'
+
+result = val

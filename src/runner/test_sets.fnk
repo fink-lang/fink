@@ -1,0 +1,298 @@
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+test 'set construct returns without trap', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    '${set 1, 2, 3, 2}'
+
+  | equals ƒink:
+    set 2, 1, 3
+
+
+test 'set construct with spread args', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    '${set ..[1, 2, 2]}'
+
+  | equals ƒink:
+    set 2, 1
+
+
+test 'set union via +', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 2, 3
+    '${s1 + s2}'
+
+  | equals ƒink:
+    set 2, 1, 3
+
+
+test 'set union via or', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 2, 3
+    '${s1 or s2}'
+
+  | equals ƒink:
+    set 2, 1, 3
+
+
+test 'set intersect via and', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2, 3
+    s2 = set 2, 3, 4
+    '${s1 and s2}'
+
+  | equals ƒink:
+    set 2, 3
+
+
+test 'set difference via -', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2, 3
+    s2 = set 2, 3
+    '${s1 - s2}'
+
+  | equals ƒink:
+    set 1
+
+
+test 'set sym diff via xor', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2, 3
+    s2 = set 2, 3, 4
+    '${s1 xor s2}'
+
+  | equals ƒink:
+    set 4, 1
+
+
+test 'set eq via ==', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2, 3
+    s2 = set 3, 1, 2
+    s1 == s2
+
+  | equals ƒink:
+    true
+
+
+test 'set neq via !=', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 1, 2, 3
+    s1 != s2
+
+  | equals ƒink:
+    true
+
+
+test 'set subset via <=', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 1, 2, 3
+    s1 <= s2
+
+  | equals ƒink:
+    true
+
+
+test 'set superset via >=', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2, 3
+    s2 = set 1, 2
+    s1 >= s2
+
+  | equals ƒink:
+    true
+
+
+test 'set strict subset via <', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 1, 2, 3
+    s1 < s2
+
+  | equals ƒink:
+    true
+
+
+test 'set strict subset equal is false', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 1, 2
+    s1 < s2
+
+  | equals ƒink:
+    false
+
+
+test 'set strict superset via >', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2, 3
+    s2 = set 1, 2
+    s1 > s2
+
+  | equals ƒink:
+    true
+
+
+test 'set membership via in', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set 1, 2, 3
+    2 in s
+
+  | equals ƒink:
+    true
+
+
+test 'set non-membership via in', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set 1, 2, 3
+    4 in s
+
+  | equals ƒink:
+    false
+
+
+test 'set non-membership via not in', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set 1, 2, 3
+    4 not in s
+
+  | equals ƒink:
+    true
+
+
+test 'set disjoint via ><', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 3, 4
+    s1 >< s2
+
+  | equals ƒink:
+    true
+
+
+test 'set non-disjoint via ><', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s1 = set 1, 2
+    s2 = set 2, 3
+    s1 >< s2
+
+  | equals ƒink:
+    false
+
+
+test 'list destructure empty (sanity)', fn:
+  expect run ƒink:
+    s = []
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ":
+    empty
+
+
+test 'list destructure with import (sanity)', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    s = []
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ":
+    empty
+
+
+skip-ir test 'set match non-empty (probe)', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    s = set 1, 2
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ":
+    non-empty
+
+
+skip-ir test 'set destructure empty', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set _
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ":
+    empty
+
+
+skip-ir test 'set destructure non-empty', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set 1, 2, 3
+    match s:
+      []: 'empty'
+      _: 'non-empty'
+
+  | equals ƒink:
+    'non-empty'
+
+
+skip-ir test 'set destructure peel one', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    s = set 1, 2, 3
+    match s:
+      []: 0
+      [a, ..]: a + 100
+
+  | equals ƒink:
+    102

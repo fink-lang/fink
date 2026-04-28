@@ -1,4 +1,0 @@
-{ni} = import './ni.fnk'
-
-spam = fn a:
-  ni a, 21

@@ -1,5 +1,14 @@
-{test, skip, expect, equals, run} = import '!fake'
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
+
+
+test 'multi-param fn called in same scope', fn:
+  expect run ƒink:
+    add = fn a, b:
+      a + b
+    add 3, 4
+  | equals ƒink:
+    7
 
 
 test 'pipe with fn call', fn:
