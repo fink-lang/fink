@@ -146,7 +146,8 @@ pub fn lift<'src>(
     let mut alloc = Alloc::new(
       current.origin, current.synth_alias, current.param_info, letfn_names,
     );
-    let new_root = lift_expr(current.root, ast, &mut alloc);
+    // Module entry has no outer scope — pass empty.
+    let new_root = lift_expr(current.root, ast, &mut alloc, &[]);
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
@@ -230,7 +231,8 @@ pub fn lift_each_round<'src>(
     let mut alloc = Alloc::new(
       current.origin, current.synth_alias, current.param_info, letfn_names,
     );
-    let new_root = lift_expr(current.root, ast, &mut alloc);
+    // Module entry has no outer scope — pass empty.
+    let new_root = lift_expr(current.root, ast, &mut alloc, &[]);
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
@@ -494,11 +496,12 @@ fn lift_expr<'src>(
   expr: Expr,
   ast: &crate::ast::Ast<'src>,
   alloc: &mut Alloc,
+  outer_params: &[Param],
 ) -> Expr {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       // Recurse into the cont first.
-      let cont = lift_cont(cont, ast, alloc);
+      let cont = lift_cont(cont, ast, alloc, outer_params);
 
       // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
       // Inside the LetFn being processed, fn_body is always a fn scope.
@@ -541,7 +544,8 @@ fn lift_expr<'src>(
         result
       } else {
         // No nested LetFn — just recurse into fn_body.
-        let fn_body = lift_expr(*fn_body, ast, alloc);
+        // The fn_body is a fresh fn scope; outer is just the LetFn's own params.
+        let fn_body = lift_expr(*fn_body, ast, alloc, &params);
         Expr {
           id: expr.id,
           kind: ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont },
@@ -550,7 +554,7 @@ fn lift_expr<'src>(
     }
 
     ExprKind::LetVal { name, val, cont } => {
-      let cont = lift_cont(cont, ast, alloc);
+      let cont = lift_cont(cont, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
     }
 
@@ -565,8 +569,14 @@ fn lift_expr<'src>(
         let args: Vec<Arg> = args.into_iter().map(|a| match a {
           Arg::Cont(Cont::Expr { args: cont_args, body }) => {
             {
-              let parent_params: Vec<Param> = cont_args.iter().map(|b| Param::Name(b.clone())).collect();
-              let mut new_body = extract_from_body(*body, &parent_params, &[], ast, alloc, &mut all_hoisted);
+              // Accumulate outer_params + this cont's args. Module-scope Apps
+              // don't introduce a new fn scope — bindings from the outer
+              // FinkModule cont remain in scope inside Pub conts etc.
+              let mut accum: Vec<Param> = outer_params.to_vec();
+              for b in cont_args.iter() {
+                accum.push(Param::Name(b.clone()));
+              }
+              let mut new_body = extract_from_body(*body, &accum, &[], ast, alloc, &mut all_hoisted);
               // Prepend hoisted fns into the cont body (inside the App).
               for h in all_hoisted.drain(..).rev() {
                 let wrapper_origin = alloc.origin.try_get(h.name.id).and_then(|o| *o)
@@ -585,7 +595,7 @@ fn lift_expr<'src>(
               }
               // Always recurse into the body to handle fn_body lifting
               // (e.g. LetFns inside module-scope fns that have nested structure).
-              new_body = lift_expr(new_body, ast, alloc);
+              new_body = lift_expr(new_body, ast, alloc, &accum);
               Arg::Cont(Cont::Expr { args: cont_args, body: Box::new(new_body) })
             }
           }
@@ -595,8 +605,8 @@ fn lift_expr<'src>(
       } else {
         // Regular App: recurse into Arg::Cont and Arg::Expr.
         let args = args.into_iter().map(|a| match a {
-          Arg::Cont(c) => Arg::Cont(lift_cont(c, ast, alloc)),
-          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast, alloc))),
+          Arg::Cont(c) => Arg::Cont(lift_cont(c, ast, alloc, outer_params)),
+          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast, alloc, outer_params))),
           other => other,
         }).collect();
         Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -604,8 +614,8 @@ fn lift_expr<'src>(
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = lift_expr(*then, ast, alloc);
-      let else_ = lift_expr(*else_, ast, alloc);
+      let then = lift_expr(*then, ast, alloc, outer_params);
+      let else_ = lift_expr(*else_, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
   }
@@ -615,11 +625,12 @@ fn lift_cont<'src>(
   cont: Cont,
   ast: &crate::ast::Ast<'src>,
   alloc: &mut Alloc,
+  outer_params: &[Param],
 ) -> Cont {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { args, body } => {
-      let body = lift_expr(*body, ast, alloc);
+      let body = lift_expr(*body, ast, alloc, outer_params);
       Cont::Expr { args, body: Box::new(body) }
     }
   }
