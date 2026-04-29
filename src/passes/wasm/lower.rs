@@ -179,7 +179,7 @@ fn synth_host_wrapper(
   // local copy.
   let sig = lcx.rt.fn_host_wrapper();
 
-  let mut ctx = FnCtx::new(HashMap::new(), HashMap::new(), lcx.fqn_prefix.to_string());
+  let mut ctx = FnCtx::new(HashMap::new(), lcx.fqn_prefix.to_string());
   let l_key_p     = ctx.alloc_param(":wrap_key_bytes");
   let l_cont_id_p = ctx.alloc_param_typed(":wrap_cont_id", val_i32());
 
@@ -250,10 +250,17 @@ struct LowerCtx<'a> {
   ast: &'a Ast<'a>,
   rt: &'a Runtime,
   frag: &'a mut Fragment,
-  // Used in a later step when FnCtx is collapsed onto LowerCtx.
-  #[allow(dead_code)]
+  /// Module-level exports: CpsId → (pre-allocated GlobalSym, source
+  /// binding name). Read by the `Pub` arm in `lower_expr` (to emit
+  /// `global.set` and the `std/modules.fnk:pub` registry call) and
+  /// by `resolve_id_as_operand` / `emit_val_into` to materialise a
+  /// `global.get` operand for cross-fn references to a pub'd
+  /// binding. Built once in `lower()` before any FnCtx is created.
   pub_globals: &'a HashMap<CpsId, (GlobalSym, String)>,
-  // Same — reachable through ctx.fqn_prefix today, will move here.
+  /// FQN prefix for emitted symbol display names. Empty for single-
+  /// fragment compiles; `"<canonical_url>:"` for multi-fragment
+  /// package compiles. See `lower()` doc.
+  // Reachable today via ctx.fqn_prefix as well; not yet pruned.
   #[allow(dead_code)]
   fqn_prefix: &'a str,
 }
@@ -284,7 +291,6 @@ fn lower_fn(
   // visible to subsequent siblings of the parent — observable through
   // resolution order in `App(FnClosure)`. Keep the clone literal.
   let mut ctx = FnCtx::new(
-    lcx.pub_globals.clone(),
     fn_syms.clone(),
     lcx.fqn_prefix.to_string(),
   );
@@ -377,12 +383,6 @@ struct FnCtx {
   binds: HashMap<CpsId, LocalIdx>,
   /// Next local index (params + locals, in WASM local-numbering order).
   next_local_idx: u32,
-  /// Module-level exports: CpsId → (pre-allocated GlobalSym, source
-  /// binding name). Used by the `Pub` arm to emit `global.set` at the
-  /// export site, plus the `std/modules.fnk:pub` runtime call which
-  /// takes the binding name as a `$Str` arg. Shared across all fns
-  /// in a module (cloned on FnCtx construction).
-  pub_globals: HashMap<CpsId, (GlobalSym, String)>,
   /// LetFn bind id → emitted FuncSym. Populated by `LetFn` whenever a
   /// nested fn is lowered; read by `FnClosure` when constructing
   /// `struct.new $Closure (ref.func ...)` and by `emit_val_into` when
@@ -402,7 +402,6 @@ struct FnCtx {
 
 impl FnCtx {
   fn new(
-    pub_globals: HashMap<CpsId, (GlobalSym, String)>,
     fn_syms: HashMap<CpsId, FuncSym>,
     fqn_prefix: String,
   ) -> Self {
@@ -412,7 +411,6 @@ impl FnCtx {
       instrs: Vec::new(),
       binds: HashMap::new(),
       next_local_idx: 0,
-      pub_globals,
       fn_syms,
       fqn_prefix,
     }
@@ -469,7 +467,7 @@ fn resolve_id_as_operand(
   if let Some(local) = ctx.binds.get(&id).copied() {
     return op_local(local);
   }
-  if let Some(&(gsym, _)) = ctx.pub_globals.get(&id) {
+  if let Some(&(gsym, _)) = lcx.pub_globals.get(&id) {
     return op_global(gsym);
   }
   if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
@@ -562,7 +560,7 @@ fn lower_expr(
         panic!("lower: Pub expects [val, cont], missing val");
       };
       let id = cps_id_of_ref(val);
-      let (gsym, src_name) = ctx.pub_globals.get(&id)
+      let (gsym, src_name) = lcx.pub_globals.get(&id)
         .cloned()
         .unwrap_or_else(|| panic!("lower: Pub val CpsId {:?} has no pre-allocated global", id));
       let val_local = ctx.lookup(id);
@@ -1344,7 +1342,7 @@ fn emit_val_into(
       if let Some(local) = ctx.binds.get(&id).copied() {
         return push_local_set(lcx.frag, into, op_local(local));
       }
-      if let Some(&(gsym, _)) = ctx.pub_globals.get(&id) {
+      if let Some(&(gsym, _)) = lcx.pub_globals.get(&id) {
         return push_local_set(lcx.frag, into, op_global(gsym));
       }
       if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
@@ -1369,7 +1367,7 @@ fn emit_val_into(
       if let Some(local) = ctx.binds.get(id).copied() {
         return push_local_set(lcx.frag, into, op_local(local));
       }
-      if let Some(&(gsym, _)) = ctx.pub_globals.get(id) {
+      if let Some(&(gsym, _)) = lcx.pub_globals.get(id) {
         return push_local_set(lcx.frag, into, op_global(gsym));
       }
       let src = ctx.lookup(*id);
