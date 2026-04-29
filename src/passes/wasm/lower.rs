@@ -181,8 +181,18 @@ fn synth_host_wrapper(
   let l_key_p     = ctx.alloc_param(":wrap_key_bytes");
   let l_cont_id_p = ctx.alloc_param_typed(":wrap_cont_id", val_i32());
 
-  // URL constant — the registry key.
-  let l_url = emit_str_const(&mut ctx, frag, rt, canonical_url.as_bytes(), ":wrap_url");
+  // URL constant — the registry key. Inlined `emit_str_const` shape
+  // because synth_host_wrapper does not have a CPS/AST and so cannot
+  // build a `LowerCtx` until the top-level `lower()` is converted.
+  let l_url = ctx.alloc_local(":wrap_url");
+  {
+    let bytes = canonical_url.as_bytes();
+    let sym = intern_data(frag, bytes);
+    let i = push_call(frag, rt.str_(),
+      vec![Operand::DataRef { sym, len: bytes.len() as u32 }],
+      Some(l_url));
+    ctx.instrs.push(i);
+  }
 
   // Wrap the cont id into a fink anyref via `wrap_host_cont(i32) ->
   // anyref`. Runtime-resolved via the runtime contract.
@@ -243,13 +253,16 @@ fn synth_host_wrapper(
 /// `FnCtx` (the per-function state — locals, instrs, binds) stays
 /// separate. The two are passed alongside each other to walker
 /// helpers as `(&mut LowerCtx, &mut FnCtx, ...)`.
-#[allow(dead_code)]
 struct LowerCtx<'a> {
   cps: &'a CpsResult,
   ast: &'a Ast<'a>,
   rt: &'a Runtime,
   frag: &'a mut Fragment,
+  // Used in a later step when FnCtx is collapsed onto LowerCtx.
+  #[allow(dead_code)]
   pub_globals: &'a HashMap<CpsId, (GlobalSym, String)>,
+  // Same — reachable through ctx.fqn_prefix today, will move here.
+  #[allow(dead_code)]
   fqn_prefix: &'a str,
 }
 
@@ -345,8 +358,16 @@ fn lower_fn(
     }
   }
 
-  // Walk the body.
-  lower_expr(&mut ctx, frag, rt, cps, ast, body);
+  // Walk the body. Bundle the read-mostly args into `LowerCtx` for
+  // the walker's call sites. (`lower_fn`'s own arg list is paid down
+  // in a later step.) Scope `lcx` so its `&mut frag` ends before
+  // `func()` reborrows.
+  {
+    let mut lcx = LowerCtx {
+      cps, ast, rt, frag, pub_globals, fqn_prefix,
+    };
+    lower_expr(&mut lcx, &mut ctx, body);
+  }
 
   // Build the function.
   func(frag, rt.fn2(),
@@ -452,9 +473,8 @@ impl FnCtx {
 ///    in a new local and return that local.
 /// 4. Otherwise: panic via `ctx.lookup` (preserves diagnostic).
 fn resolve_id_as_operand(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
   id: CpsId,
 ) -> Operand {
   if let Some(local) = ctx.binds.get(&id).copied() {
@@ -467,12 +487,12 @@ fn resolve_id_as_operand(
     let local = ctx.alloc_local(&format!("v_{}_fn", id.0));
     let caps_local = ctx.alloc_local_typed(
       ":caps_arg",
-      val_ref(rt.captures(), /*nullable*/ true),
+      val_ref(lcx.rt.captures(), /*nullable*/ true),
     );
-    let i_caps = push_ref_null_concrete(frag, rt.captures(), caps_local);
+    let i_caps = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local);
     ctx.instrs.push(i_caps);
     let i_clo = push_struct_new(
-      frag, rt.closure(),
+      lcx.frag, lcx.rt.closure(),
       vec![Operand::RefFunc(fn_sym), op_local(caps_local)],
       local,
     );
@@ -487,21 +507,18 @@ fn resolve_id_as_operand(
 // ──────────────────────────────────────────────────────────────────
 
 fn lower_expr(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  ast: &Ast<'_>,
   expr: &Expr,
 ) {
   match &expr.kind {
     ExprKind::LetVal { name, val, cont } => {
-      let local = ctx.alloc_local(&cps_ident_for_bind(cps, ast, name));
+      let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, name));
       ctx.bind(name.id, local);
-      let i = emit_val_into(ctx, frag, rt, cps, ast, val, local);
-      if let Some(o) = origin_of(cps, ast, name.id) { set_origin(frag, i, o); }
+      let i = emit_val_into(lcx, ctx, val, local);
+      if let Some(o) = origin_of(lcx.cps, lcx.ast, name.id) { set_origin(lcx.frag, i, o); }
       ctx.instrs.push(i);
-      lower_cont(ctx, frag, rt, cps, ast, cont);
+      lower_cont(lcx, ctx, cont);
     }
 
     ExprKind::LetFn { name, params, fn_body, cont, .. } => {
@@ -515,7 +532,7 @@ fn lower_expr(
           Param::Name(b)   => (b.id, false),
           Param::Spread(b) => (b.id, true),
         };
-        match cps.param_info.try_get(pid).and_then(|o| *o) {
+        match lcx.cps.param_info.try_get(pid).and_then(|o| *o) {
           Some(ParamInfo::Cap(_))  => cap_ids.push(pid),
           Some(ParamInfo::Param(_)) | Some(ParamInfo::Cont) => user_ids.push((pid, is_spread)),
           None => user_ids.push((pid, is_spread)),  // ungilded params treated as user
@@ -523,10 +540,10 @@ fn lower_expr(
       }
       // Lift the fn body to a separate Fn2. Display name carries the
       // module's FQN prefix so cross-fragment merges stay collision-free.
-      let raw_display = cps_ident_for_bind(cps, ast, name);
+      let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
       let display = format!("{}{}", ctx.fqn_prefix, raw_display);
       let fn_sym = lower_fn(
-        frag, rt, cps, ast,
+        lcx.frag, lcx.rt, lcx.cps, lcx.ast,
         &cap_ids, &user_ids, fn_body, &display,
         &ctx.pub_globals, &ctx.fn_syms,
         &ctx.fqn_prefix,
@@ -537,7 +554,7 @@ fn lower_expr(
       // where this funcref is used as the first arg. So we just
       // remember the FuncSym here.
       ctx.fn_sym_for_bind(name.id, fn_sym);
-      lower_cont(ctx, frag, rt, cps, ast, cont);
+      lower_cont(lcx, ctx, cont);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Pub), args } => {
@@ -563,14 +580,14 @@ fn lower_expr(
       let val_local = ctx.lookup(id);
 
       // 1. Addressable storage.
-      let i_set = push_global_set(frag, gsym, op_local(val_local));
+      let i_set = push_global_set(lcx.frag, gsym, op_local(val_local));
       ctx.instrs.push(i_set);
 
       // 2. Registry mutation.
       let url_bytes: Vec<u8> = ctx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
-      let url_local = emit_str_const(ctx, frag, rt, &url_bytes, ":pub_url");
-      let name_local = emit_str_const(ctx, frag, rt, src_name.as_bytes(), ":pub_name");
-      let i_pub = push_call(frag, rt.modules_pub(),
+      let url_local = emit_str_const(lcx, ctx, &url_bytes, ":pub_url");
+      let name_local = emit_str_const(lcx, ctx, src_name.as_bytes(), ":pub_name");
+      let i_pub = push_call(lcx.frag, lcx.rt.modules_pub(),
         vec![op_local(url_local), op_local(name_local), op_local(val_local)],
         None);
       ctx.instrs.push(i_pub);
@@ -580,27 +597,27 @@ fn lower_expr(
       let Arg::Cont(cont) = cont_arg else {
         panic!("lower: Pub cont arg is not a Cont");
       };
-      lower_cont(ctx, frag, rt, cps, ast, cont);
+      lower_cont(lcx, ctx, cont);
     }
 
     ExprKind::App { func: Callable::BuiltIn(b), args } if binary_op_sym(*b).is_some() => {
       let sym = binary_op_sym(*b).unwrap();
       let (a, b_v, cont) = split_binary_args(args);
-      let a_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, a);
-      let b_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, b_v);
-      emit_op_tail_call(ctx, frag, rt, cps, ast, sym, vec![a_op, b_op], cont, expr.id);
+      let a_op = emit_arg_as_operand(lcx, ctx, a);
+      let b_op = emit_arg_as_operand(lcx, ctx, b_v);
+      emit_op_tail_call(lcx, ctx, sym, vec![a_op, b_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Not), args } => {
       let (v, cont) = split_unary_args(args);
-      let v_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, v);
-      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpNot, vec![v_op], cont, expr.id);
+      let v_op = emit_arg_as_operand(lcx, ctx, v);
+      emit_op_tail_call(lcx, ctx, Sym::OpNot, vec![v_op], cont, expr.id);
     }
 
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Empty), args } => {
       let (v, cont) = split_unary_args(args);
-      let v_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, v);
-      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::OpEmpty, vec![v_op], cont, expr.id);
+      let v_op = emit_arg_as_operand(lcx, ctx, v);
+      emit_op_tail_call(lcx, ctx, Sym::OpEmpty, vec![v_op], cont, expr.id);
     }
 
     // Cooperative-multitasking + channels — all `(value, cont)` shape,
@@ -620,8 +637,8 @@ fn lower_expr(
         _ => unreachable!(),
       };
       let (v, cont) = split_unary_args(args);
-      let v_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, v);
-      emit_op_tail_call(ctx, frag, rt, cps, ast, sym, vec![v_op], cont, expr.id);
+      let v_op = emit_arg_as_operand(lcx, ctx, v);
+      emit_op_tail_call(lcx, ctx, sym, vec![v_op], cont, expr.id);
     }
 
     // StrMatch: `(subj, prefix, suffix, fail, succ)` — 5-arg template
@@ -632,10 +649,10 @@ fn lower_expr(
         panic!("lower: StrMatch expects 5 args, got {}", args.len());
       }
       let ops: Vec<Operand> = args.iter()
-        .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
+        .map(|a| emit_arg_as_operand(lcx, ctx, a))
         .collect();
-      let i = push_return_call(frag, rt.str_match(), ops);
-      if let Some(o) = origin_of(cps, ast, expr.id) { set_origin(frag, i, o); }
+      let i = push_return_call(lcx.frag, lcx.rt.str_match(), ops);
+      if let Some(o) = origin_of(lcx.cps, lcx.ast, expr.id) { set_origin(lcx.frag, i, o); }
       ctx.instrs.push(i);
     }
 
@@ -645,15 +662,15 @@ fn lower_expr(
       // Last arg is the cont; the rest are value segments.
       let (cont, segments) = split_last_cont(args);
       let seg_ops: Vec<Operand> = segments.iter()
-        .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
+        .map(|a| emit_arg_as_operand(lcx, ctx, a))
         .collect();
       // Allocate the $VarArgs array.
       let varargs_local = ctx.alloc_local_typed(":varargs",
-        val_ref(rt.varargs(), /*nullable*/ true));
-      let i_arr = push_array_new_fixed(frag, rt.varargs(), seg_ops, varargs_local);
+        val_ref(lcx.rt.varargs(), /*nullable*/ true));
+      let i_arr = push_array_new_fixed(lcx.frag, lcx.rt.varargs(), seg_ops, varargs_local);
       ctx.instrs.push(i_arr);
       // Wrap as Arg::Val for emit_op_tail_call's cont handling.
-      emit_op_tail_call(ctx, frag, rt, cps, ast,
+      emit_op_tail_call(lcx, ctx,
         Sym::StrFmt, vec![op_local(varargs_local)], &Arg::Cont(cont.clone()),
         expr.id);
     }
@@ -662,17 +679,17 @@ fn lower_expr(
     // protocol op. Lowers to `return_call $seq_prepend item seq cont`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPrepend), args } => {
       let (a, b, cont) = split_binary_args(args);
-      let a_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, a);
-      let b_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, b);
-      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
+      let a_op = emit_arg_as_operand(lcx, ctx, a);
+      let b_op = emit_arg_as_operand(lcx, ctx, b);
+      emit_op_tail_call(lcx, ctx, Sym::SeqPrepend, vec![a_op, b_op], cont, expr.id);
     }
 
     // RecMerge: `(dest, src, cont)` — same shape as SeqPrepend.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecMerge), args } => {
       let (a, b, cont) = split_binary_args(args);
-      let a_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, a);
-      let b_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, b);
-      emit_op_tail_call(ctx, frag, rt, cps, ast, Sym::RecMerge, vec![a_op, b_op], cont, expr.id);
+      let a_op = emit_arg_as_operand(lcx, ctx, a);
+      let b_op = emit_arg_as_operand(lcx, ctx, b);
+      emit_op_tail_call(lcx, ctx, Sym::RecMerge, vec![a_op, b_op], cont, expr.id);
     }
 
     // IsSeqLike / IsRecLike: `(val, succ, fail)` — type guard. The
@@ -680,29 +697,31 @@ fn lower_expr(
     // We resolve each as an operand (cont = value-like at WASM level)
     // and emit `return_call $<sym> val succ fail`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::IsSeqLike), args } => {
-      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::IsSeqLike, args, expr.id);
+      emit_ternary_guard(lcx, ctx, Sym::IsSeqLike, args, expr.id);
     }
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::IsRecLike), args } => {
-      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::IsRecLike, args, expr.id);
+      emit_ternary_guard(lcx, ctx, Sym::IsRecLike, args, expr.id);
     }
     // SeqPop: `(seq, fail, succ)` — destructure. Both fail and succ
     // are continuations.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPop), args } => {
-      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::SeqPop, args, expr.id);
+      emit_ternary_guard(lcx, ctx, Sym::SeqPop, args, expr.id);
     }
     // SeqPopBack: `(seq, fail, succ)` — destructure from end. Same shape
     // as SeqPop; succ receives `(init, last)` instead of `(head, tail)`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPopBack), args } => {
-      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::SeqPopBack, args, expr.id);
+      emit_ternary_guard(lcx, ctx, Sym::SeqPopBack, args, expr.id);
     }
     // RecPut: `(rec, key, val, cont)` — record extension.
     // RecPop: `(rec, key, fail, succ)` — record destructure.
     // Both 4-arg, lowered as `return_call $sym arg0 arg1 arg2 arg3`.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecPut), args } => {
-      emit_quaternary(ctx, frag, rt, cps, ast, rt.rec_put(), args, expr.id);
+      let target = lcx.rt.rec_put();
+      emit_quaternary(lcx, ctx, target, args, expr.id);
     }
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::RecPop), args } => {
-      emit_quaternary(ctx, frag, rt, cps, ast, rt.rec_pop(), args, expr.id);
+      let target = lcx.rt.rec_pop();
+      emit_quaternary(lcx, ctx, target, args, expr.id);
     }
 
     // Panic: zero-arg sentinel for irrefutable-pattern failure. We
@@ -710,7 +729,7 @@ fn lower_expr(
     // wired through `Sym` yet, and an unreachable trap is acceptable
     // at this level (matches the old emitter's fallback shape).
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Panic), .. } => {
-      let i = push_unreachable(frag);
+      let i = push_unreachable(lcx.frag);
       ctx.instrs.push(i);
     }
 
@@ -727,7 +746,7 @@ fn lower_expr(
     // with `std/` and ending in `.fnk`. User-fragment imports (relative
     // paths, third-party packages) are deferred to multi-module work.
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::Import), args } => {
-      lower_import(ctx, frag, rt, cps, args);
+      lower_import(lcx, ctx, args);
     }
 
     // App(BuiltIn::FnClosure, [fn, caps..., cont]) — appears at the
@@ -750,7 +769,7 @@ fn lower_expr(
             Arg::Val(v) => v,
             _ => panic!("lower: FnClosure capture is not a Val"),
           };
-          val_as_operand(ctx, frag, rt, v)
+          val_as_operand(lcx, ctx, v)
         })
         .collect();
 
@@ -763,35 +782,35 @@ fn lower_expr(
       match cont {
         Cont::Expr { args: cont_args, body } => {
           let bind = cont_args.first().expect("FnClosure cont has no bind");
-          let local = ctx.alloc_local(&cps_ident_for_bind(cps, ast, bind));
+          let local = ctx.alloc_local(&cps_ident_for_bind(lcx.cps, lcx.ast, bind));
           ctx.bind(bind.id, local);
-          emit_closure_construction(ctx, frag, rt, fn_sym, cap_operands, local);
-          lower_expr(ctx, frag, rt, cps, ast, body);
+          emit_closure_construction(lcx, ctx, fn_sym, cap_operands, local);
+          lower_expr(lcx, ctx, body);
         }
         Cont::Ref(cont_id) => {
           // Build the closure into a fresh anyref local first.
           let clo_local = ctx.alloc_local(&format!("v_{}_clo", cont_id.0));
-          emit_closure_construction(ctx, frag, rt, fn_sym, cap_operands, clo_local);
+          emit_closure_construction(lcx, ctx, fn_sym, cap_operands, clo_local);
 
           // Resolve cont; spill if non-local.
-          let callee_op = resolve_id_as_operand(ctx, frag, rt, *cont_id);
+          let callee_op = resolve_id_as_operand(lcx, ctx, *cont_id);
           let callee = match callee_op {
             Operand::Local(l) => l,
             other => {
               let local = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
-              let i = push_local_set(frag, local, other);
+              let i = push_local_set(lcx.frag, local, other);
               ctx.instrs.push(i);
               local
             }
           };
 
           let l_args = ctx.alloc_local(":args");
-          let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args));
+          let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
           ctx.instrs.push(i_nil);
-          let i_cons = push_call(frag, rt.args_prepend(),
+          let i_cons = push_call(lcx.frag, lcx.rt.args_prepend(),
             vec![op_local(clo_local), op_local(l_args)], Some(l_args));
           ctx.instrs.push(i_cons);
-          let i_app = push_return_call(frag, rt.apply(),
+          let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
             vec![op_local(l_args), op_local(callee)]);
           ctx.instrs.push(i_app);
         }
@@ -809,19 +828,19 @@ fn lower_expr(
       // Spill via resolver so cross-fn ContRefs (very rare — usually
       // a `Pub`'d cont, doesn't normally happen, but cheap to support)
       // resolve correctly. Apply expects a local-shaped operand.
-      let callee_op = resolve_id_as_operand(ctx, frag, rt, cont_id);
+      let callee_op = resolve_id_as_operand(lcx, ctx, cont_id);
       let callee = match callee_op {
         Operand::Local(l) => l,
         other => {
           let local = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
-          let i = push_local_set(frag, local, other);
+          let i = push_local_set(lcx.frag, local, other);
           ctx.instrs.push(i);
           local
         }
       };
 
-      let l_args_list = build_args_list(ctx, frag, rt, cps, ast, args);
-      let i_app = push_return_call(frag, rt.apply(),
+      let l_args_list = build_args_list(lcx, ctx, args);
+      let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
     }
@@ -836,19 +855,19 @@ fn lower_expr(
       // Resolve callee. May be a local, a pub'd global, or a sibling
       // lifted fn (materialised as a no-capture `$Closure`). Apply
       // expects a local-shaped operand, so spill non-local results.
-      let callee_op = resolve_id_as_operand(ctx, frag, rt, callee_id);
+      let callee_op = resolve_id_as_operand(lcx, ctx, callee_id);
       let callee = match callee_op {
         Operand::Local(l) => l,
         other => {
           let local = ctx.alloc_local(&format!("v_{}_callee", callee_id.0));
-          let i = push_local_set(frag, local, other);
+          let i = push_local_set(lcx.frag, local, other);
           ctx.instrs.push(i);
           local
         }
       };
 
-      let l_args_list = build_args_list(ctx, frag, rt, cps, ast, args);
-      let i_app = push_return_call(frag, rt.apply(),
+      let l_args_list = build_args_list(lcx, ctx, args);
+      let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
     }
@@ -858,31 +877,15 @@ fn lower_expr(
     // always end in a tail-call (`return_call`), so neither branch
     // falls through past the `If` in user code.
     ExprKind::If { cond, then, else_ } => {
-      // Evaluate cond into an i32 leaf. For a bool literal, skip
-      // unboxing entirely; for a ref/contref, the value is anyref —
-      // ref.cast to i31, then i31.get_s.
-      let unbox_anyref = |ctx: &mut FnCtx, frag: &mut Fragment, op: Operand| -> Operand {
-        // Cast anyref → (ref i31) into a scratch local of type i31ref.
-        let i31_local = ctx.alloc_local_typed(":cond_i31",
-          val_ref_abs(AbsHeap::I31, /*nullable*/ false));
-        let i_cast = push_ref_cast_non_null_abs(
-          frag, AbsHeap::I31, op, i31_local);
-        ctx.instrs.push(i_cast);
-        // Unbox: i31.get_s into a typed i32 local.
-        let i32_local = ctx.alloc_local_typed(":cond_i32", val_i32());
-        let i = push_i31_get_s(frag, op_local(i31_local), i32_local);
-        ctx.instrs.push(i);
-        op_local(i32_local)
-      };
       let cond_leaf = match &cond.kind {
         ValKind::Lit(Lit::Bool(b)) => op_i32(if *b { 1 } else { 0 }),
         ValKind::Ref(r) => {
-          let op = resolve_id_as_operand(ctx, frag, rt, ref_cps_id(*r));
-          unbox_anyref(ctx, frag, op)
+          let op = resolve_id_as_operand(lcx, ctx, ref_cps_id(*r));
+          unbox_anyref(lcx, ctx, op)
         }
         ValKind::ContRef(id) => {
-          let op = resolve_id_as_operand(ctx, frag, rt, *id);
-          unbox_anyref(ctx, frag, op)
+          let op = resolve_id_as_operand(lcx, ctx, *id);
+          unbox_anyref(lcx, ctx, op)
         }
         _ => panic!("lower: If cond shape not supported: {:?}", cond.kind),
       };
@@ -890,12 +893,12 @@ fn lower_expr(
       // Recursively lower then/else into separate instruction lists by
       // swapping `ctx.instrs` to a fresh empty Vec for each branch.
       let saved = std::mem::take(&mut ctx.instrs);
-      lower_expr(ctx, frag, rt, cps, ast, then);
+      lower_expr(lcx, ctx, then);
       let then_body = std::mem::take(&mut ctx.instrs);
-      lower_expr(ctx, frag, rt, cps, ast, else_);
+      lower_expr(lcx, ctx, else_);
       let else_body = std::mem::replace(&mut ctx.instrs, saved);
 
-      let i_if = push_if(frag, cond_leaf, then_body, else_body);
+      let i_if = push_if(lcx.frag, cond_leaf, then_body, else_body);
       ctx.instrs.push(i_if);
     }
 
@@ -906,28 +909,43 @@ fn lower_expr(
 /// Emit a continuation. `Cont::Expr` is emitted inline (body + recurse);
 /// `Cont::Ref` closes out the function with an apply-dispatch call.
 fn lower_cont(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  ast: &Ast<'_>,
   cont: &Cont,
 ) {
   match cont {
     Cont::Expr { body, .. } => {
-      lower_expr(ctx, frag, rt, cps, ast, body);
+      lower_expr(lcx, ctx, body);
     }
     Cont::Ref(id) => {
       // Tail-call the named cont with an empty args list.
       let callee = ctx.lookup(*id);
       let l_args_list = ctx.alloc_local(":args");
-      let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args_list));
+      let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
-      let i_app = push_return_call(frag, rt.apply(),
+      let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
       ctx.instrs.push(i_app);
     }
   }
+}
+
+/// Unbox an anyref into an `i32` operand for `If` cond evaluation.
+/// Cast anyref → (ref i31), then `i31.get_s` into an i32 local.
+fn unbox_anyref(
+  lcx: &mut LowerCtx<'_>,
+  ctx: &mut FnCtx,
+  op: Operand,
+) -> Operand {
+  let i31_local = ctx.alloc_local_typed(":cond_i31",
+    val_ref_abs(AbsHeap::I31, /*nullable*/ false));
+  let i_cast = push_ref_cast_non_null_abs(
+    lcx.frag, AbsHeap::I31, op, i31_local);
+  ctx.instrs.push(i_cast);
+  let i32_local = ctx.alloc_local_typed(":cond_i32", val_i32());
+  let i = push_i31_get_s(lcx.frag, op_local(i31_local), i32_local);
+  ctx.instrs.push(i);
+  op_local(i32_local)
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -952,34 +970,31 @@ fn lower_cont(
 ///
 /// Returns the local holding the final list.
 fn build_args_list(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  ast: &Ast<'_>,
   args: &[Arg],
 ) -> LocalIdx {
   enum Materialised { Prepend(Operand), Concat(Operand) }
   let materialised: Vec<Materialised> = args.iter()
     .map(|a| match a {
-      Arg::Spread(v) => Materialised::Concat(val_as_operand(ctx, frag, rt, v)),
-      Arg::Cont(Cont::Ref(id)) => Materialised::Prepend(resolve_id_as_operand(ctx, frag, rt, *id)),
-      _ => Materialised::Prepend(emit_arg_as_operand(ctx, frag, rt, cps, ast, a)),
+      Arg::Spread(v) => Materialised::Concat(val_as_operand(lcx, ctx, v)),
+      Arg::Cont(Cont::Ref(id)) => Materialised::Prepend(resolve_id_as_operand(lcx, ctx, *id)),
+      _ => Materialised::Prepend(emit_arg_as_operand(lcx, ctx, a)),
     })
     .collect();
 
   let l_args = ctx.alloc_local(":args");
-  let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args));
+  let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
   ctx.instrs.push(i_nil);
   for m in materialised.into_iter().rev() {
     match m {
       Materialised::Concat(op) => {
-        let i = push_call(frag, rt.args_concat(),
+        let i = push_call(lcx.frag, lcx.rt.args_concat(),
           vec![op, op_local(l_args)], Some(l_args));
         ctx.instrs.push(i);
       }
       Materialised::Prepend(op) => {
-        let i = push_call(frag, rt.args_prepend(),
+        let i = push_call(lcx.frag, lcx.rt.args_prepend(),
           vec![op, op_local(l_args)], Some(l_args));
         ctx.instrs.push(i);
       }
@@ -1009,10 +1024,8 @@ fn build_args_list(
 ///     handles init-once + populates the destructure cont with the
 ///     producer's exports rec.
 fn lower_import(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
   args: &[Arg],
 ) {
   // Pull URL bytes from args[0] (Val::Lit::Str).
@@ -1033,9 +1046,9 @@ fn lower_import(
   }).unwrap_or_else(|| panic!("lower: BuiltIn::Import missing cont"));
 
   if is_virtual_stdlib_path(url) {
-    lower_import_virtual_stdlib(ctx, frag, rt, cps, url, cont_id);
+    lower_import_virtual_stdlib(lcx, ctx, url, cont_id);
   } else {
-    lower_import_user_fragment(ctx, frag, rt, url, cont_id);
+    lower_import_user_fragment(lcx, ctx, url, cont_id);
   }
 }
 
@@ -1043,71 +1056,69 @@ fn lower_import(
 /// maps to its own runtime accessor. Build a rec from per-name calls,
 /// tail-apply destructure cont.
 fn lower_import_virtual_stdlib(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
   url: &str,
   cont_id: CpsId,
 ) {
   // Names come from the pre-collected module_imports table.
-  let names = cps.module_imports.get(url)
+  let names = lcx.cps.module_imports.get(url)
     .cloned()
     .unwrap_or_else(|| panic!(
       "lower: BuiltIn::Import for `{url}` has no entries in module_imports"));
 
   // 1. Build the rec.
   let l_rec = ctx.alloc_local(":imp_rec");
-  let i_new = push_call(frag, rt.rec_empty(), vec![], Some(l_rec));
+  let i_new = push_call(lcx.frag, lcx.rt.rec_empty(), vec![], Some(l_rec));
   ctx.instrs.push(i_new);
 
   for name in &names {
     // 1a. Declare the import — `<url>:<name>` with signature `() -> anyref`.
     //     The IR linker resolves this against the runtime's export table
     //     at emit time. Reuses the `Fn_rec_new` sig type (`() -> anyref`).
-    let sig = rt.fn_nil_to_list_sig();
-    let target = crate::passes::wasm::ir::import_func(frag, sig, url, name);
+    let sig = lcx.rt.fn_nil_to_list_sig();
+    let target = crate::passes::wasm::ir::import_func(lcx.frag, sig, url, name);
 
     // 1b. Call the import to get the channel/value into a fresh local.
     let l_val = ctx.alloc_local(&format!(":imp_val_{name}"));
-    let i_call = push_call(frag, target, vec![], Some(l_val));
+    let i_call = push_call(lcx.frag, target, vec![], Some(l_val));
     ctx.instrs.push(i_call);
 
     // 1c. Build the $Str key for the field name.
     let l_key = ctx.alloc_local(&format!(":imp_key_{name}"));
     let key_bytes = name.as_bytes();
-    let key_sym = intern_data(frag, key_bytes);
-    let i_key = push_call(frag, rt.str_(),
+    let key_sym = intern_data(lcx.frag, key_bytes);
+    let i_key = push_call(lcx.frag, lcx.rt.str_(),
       vec![Operand::DataRef { sym: key_sym, len: key_bytes.len() as u32 }],
       Some(l_key));
     ctx.instrs.push(i_key);
 
     // 1d. Set the field on the rec.
-    let i_set = push_call(frag, rt.rec_set_field(),
+    let i_set = push_call(lcx.frag, lcx.rt.rec_set_field(),
       vec![op_local(l_rec), op_local(l_key), op_local(l_val)],
       Some(l_rec));
     ctx.instrs.push(i_set);
   }
 
   // 2. Tail-apply the cont with [rec].
-  let cont_op = resolve_id_as_operand(ctx, frag, rt, cont_id);
+  let cont_op = resolve_id_as_operand(lcx, ctx, cont_id);
   let cont_local = match cont_op {
     Operand::Local(l) => l,
     other => {
       let l = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
-      let i = push_local_set(frag, l, other);
+      let i = push_local_set(lcx.frag, l, other);
       ctx.instrs.push(i);
       l
     }
   };
 
   let l_args = ctx.alloc_local(":args");
-  let i_nil = push_call(frag, rt.args_empty(), vec![], Some(l_args));
+  let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
   ctx.instrs.push(i_nil);
-  let i_cons = push_call(frag, rt.args_prepend(),
+  let i_cons = push_call(lcx.frag, lcx.rt.args_prepend(),
     vec![op_local(l_rec), op_local(l_args)], Some(l_args));
   ctx.instrs.push(i_cons);
-  let i_app = push_return_call(frag, rt.apply(),
+  let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
     vec![op_local(l_args), op_local(cont_local)]);
   ctx.instrs.push(i_app);
 }
@@ -1116,9 +1127,8 @@ fn lower_import_virtual_stdlib(
 /// `std/modules.fnk:import` with the URL, a no-capture closure over
 /// the producer's `<url>:fink_module`, and the destructure cont.
 fn lower_import_user_fragment(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
   url: &str,
   cont_id: CpsId,
 ) {
@@ -1136,7 +1146,7 @@ fn lower_import_user_fragment(
   );
 
   // 1. Materialise the canonicalised URL as a `$Str` constant.
-  let url_local = emit_str_const(ctx, frag, rt, canonical_url.as_bytes(), ":imp_url");
+  let url_local = emit_str_const(lcx, ctx, canonical_url.as_bytes(), ":imp_url");
 
   // 2. Declare a func import of the producer's `<canonical_url>:fink_module`,
   //    typed as `$Fn2`. Resolved at emit time by name lookup against
@@ -1145,7 +1155,7 @@ fn lower_import_user_fragment(
   //    matching the canonical URL against producer fragments' display
   //    names.
   let mod_fn_sym = crate::passes::wasm::ir::import_func(
-    frag, rt.fn2(), &canonical_url, "fink_module");
+    lcx.frag, lcx.rt.fn2(), &canonical_url, "fink_module");
 
   // 3. Build a no-capture `$Closure` over that funcref. funcrefs are
   //    not anyref-compatible (disjoint typing hierarchies in WasmGC),
@@ -1153,26 +1163,26 @@ fn lower_import_user_fragment(
   //    which takes everything as anyref.
   let caps_local = ctx.alloc_local_typed(
     ":imp_caps_arg",
-    val_ref(rt.captures(), /*nullable*/ true),
+    val_ref(lcx.rt.captures(), /*nullable*/ true),
   );
-  let i_caps = push_ref_null_concrete(frag, rt.captures(), caps_local);
+  let i_caps = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local);
   ctx.instrs.push(i_caps);
 
   let mod_clos_local = ctx.alloc_local(":imp_mod_clos");
   let i_clos = push_struct_new(
-    frag, rt.closure(),
+    lcx.frag, lcx.rt.closure(),
     vec![Operand::RefFunc(mod_fn_sym), op_local(caps_local)],
     mod_clos_local,
   );
   ctx.instrs.push(i_clos);
 
   // 4. Resolve the destructure cont.
-  let cont_op = resolve_id_as_operand(ctx, frag, rt, cont_id);
+  let cont_op = resolve_id_as_operand(lcx, ctx, cont_id);
   let cont_local = match cont_op {
     Operand::Local(l) => l,
     other => {
       let l = ctx.alloc_local(&format!("v_{}_callee", cont_id.0));
-      let i = push_local_set(frag, l, other);
+      let i = push_local_set(lcx.frag, l, other);
       ctx.instrs.push(i);
       l
     }
@@ -1181,7 +1191,7 @@ fn lower_import_user_fragment(
   // 5. Tail-call `std/modules.fnk:import (url, mod_clos, cont)`. The
   //    runtime helper handles init-once + delivers the producer's
   //    exports rec to the destructure cont.
-  let i_imp = push_return_call(frag, rt.modules_import(),
+  let i_imp = push_return_call(lcx.frag, lcx.rt.modules_import(),
     vec![op_local(url_local), op_local(mod_clos_local), op_local(cont_local)]);
   ctx.instrs.push(i_imp);
 }
@@ -1199,11 +1209,8 @@ fn is_virtual_stdlib_path(url: &str) -> bool {
 /// `RecPop(rec, key, fail, succ)`. Each arg is an anyref value; conts
 /// among them get resolved through the unified id resolver.
 fn emit_quaternary(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  ast: &Ast<'_>,
   target: FuncSym,
   args: &[Arg],
   app_id: CpsId,
@@ -1212,10 +1219,10 @@ fn emit_quaternary(
     panic!("lower: 4-arg primitive expects 4 args, got {}", args.len());
   }
   let ops: Vec<Operand> = args.iter()
-    .map(|a| emit_arg_as_operand(ctx, frag, rt, cps, ast, a))
+    .map(|a| emit_arg_as_operand(lcx, ctx, a))
     .collect();
-  let i = push_return_call(frag, target, ops);
-  if let Some(o) = origin_of(cps, ast, app_id) { set_origin(frag, i, o); }
+  let i = push_return_call(lcx.frag, target, ops);
+  if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   ctx.instrs.push(i);
 }
 
@@ -1224,11 +1231,8 @@ fn emit_quaternary(
 /// the value being tested, plus two continuations resolved as
 /// values at this layer.
 fn emit_ternary_guard(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  ast: &Ast<'_>,
   sym: Sym,
   args: &[Arg],
   app_id: CpsId,
@@ -1236,45 +1240,39 @@ fn emit_ternary_guard(
   if args.len() != 3 {
     panic!("lower: ternary primitive {:?} expects 3 args, got {}", sym, args.len());
   }
-  let val_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[0]);
-  let cont1_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[1]);
-  let cont2_op = emit_arg_as_operand(ctx, frag, rt, cps, ast, &args[2]);
-  let i = push_return_call(frag, rt.op(sym), vec![val_op, cont1_op, cont2_op]);
-  if let Some(o) = origin_of(cps, ast, app_id) { set_origin(frag, i, o); }
+  let val_op = emit_arg_as_operand(lcx, ctx, &args[0]);
+  let cont1_op = emit_arg_as_operand(lcx, ctx, &args[1]);
+  let cont2_op = emit_arg_as_operand(lcx, ctx, &args[2]);
+  let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![val_op, cont1_op, cont2_op]);
+  if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   ctx.instrs.push(i);
 }
 
 fn emit_op_tail_call(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  _ast: &Ast<'_>,
   sym: Sym,
   value_operands: Vec<Operand>,
   cont: &Arg,
   app_id: CpsId,
 ) {
   let cont_op = match cont {
-    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
-    Arg::Val(v) => val_as_operand(ctx, frag, rt, v),
+    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(lcx, ctx, *id),
+    Arg::Val(v) => val_as_operand(lcx, ctx, v),
     _ => panic!("lower: operator cont is neither Cont::Ref nor Val (got {:?})", short_arg(cont)),
   };
   let mut operands = value_operands;
   operands.push(cont_op);
-  let i = push_return_call(frag, rt.op(sym), operands);
-  if let Some(o) = origin_of(cps, _ast, app_id) { set_origin(frag, i, o); }
+  let i = push_return_call(lcx.frag, lcx.rt.op(sym), operands);
+  if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
   ctx.instrs.push(i);
 }
 
 /// Convert an `Arg` to a leaf `Operand`, allocating locals for
 /// non-trivial values (literals get boxed into a fresh local).
 fn emit_arg_as_operand(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  ast: &Ast<'_>,
   arg: &Arg,
 ) -> Operand {
   match arg {
@@ -1284,14 +1282,14 @@ fn emit_arg_as_operand(
           let lv = LitVal::from_lit(lit)
             .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
           let local = ctx.alloc_local(&format!("v_{}", v.id.0));
-          let i = box_lit(frag, rt, &lv, local);
-          if let Some(o) = origin_of(cps, ast, v.id) { set_origin(frag, i, o); }
+          let i = box_lit(lcx.frag, lcx.rt, &lv, local);
+          if let Some(o) = origin_of(lcx.cps, lcx.ast, v.id) { set_origin(lcx.frag, i, o); }
           ctx.instrs.push(i);
           op_local(local)
         }
-        ValKind::Ref(r) => resolve_id_as_operand(ctx, frag, rt, ref_cps_id(*r)),
-        ValKind::ContRef(id) => resolve_id_as_operand(ctx, frag, rt, *id),
-        ValKind::BuiltIn(BuiltIn::Panic) => panic_closure_operand(ctx, frag, rt),
+        ValKind::Ref(r) => resolve_id_as_operand(lcx, ctx, ref_cps_id(*r)),
+        ValKind::ContRef(id) => resolve_id_as_operand(lcx, ctx, *id),
+        ValKind::BuiltIn(BuiltIn::Panic) => panic_closure_operand(lcx, ctx),
         ValKind::BuiltIn(b) => panic!("lower: BuiltIn {:?} as arg not supported", b),
       }
     }
@@ -1299,7 +1297,7 @@ fn emit_arg_as_operand(
     // where succ/fail are continuations. Cont::Ref is just an id —
     // resolve it as a closure operand. Cont::Expr is a not currently
     // supported here (would need to materialise an inline lambda).
-    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(ctx, frag, rt, *id),
+    Arg::Cont(Cont::Ref(id)) => resolve_id_as_operand(lcx, ctx, *id),
     _ => panic!("lower: non-Val arg in value position: {:?}", short_arg(arg)),
   }
 }
@@ -1308,14 +1306,14 @@ fn emit_arg_as_operand(
 /// function. Used when `BuiltIn::Panic` appears in value position
 /// (typically as the fail continuation in pattern-match dispatch
 /// generated by the lifting pass).
-fn panic_closure_operand(ctx: &mut FnCtx, frag: &mut Fragment, rt: &Runtime) -> Operand {
+fn panic_closure_operand(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx) -> Operand {
   let local = ctx.alloc_local("v_panic_clo");
   let caps_local = ctx.alloc_local_typed(":caps_arg",
-    val_ref(rt.captures(), /*nullable*/ true));
-  let i_caps = push_ref_null_concrete(frag, rt.captures(), caps_local);
+    val_ref(lcx.rt.captures(), /*nullable*/ true));
+  let i_caps = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local);
   ctx.instrs.push(i_caps);
-  let i_clo = push_struct_new(frag, rt.closure(),
-    vec![Operand::RefFunc(rt.panic()), op_local(caps_local)],
+  let i_clo = push_struct_new(lcx.frag, lcx.rt.closure(),
+    vec![Operand::RefFunc(lcx.rt.panic()), op_local(caps_local)],
     local);
   ctx.instrs.push(i_clo);
   op_local(local)
@@ -1325,11 +1323,11 @@ fn panic_closure_operand(ctx: &mut FnCtx, frag: &mut Fragment, rt: &Runtime) -> 
 /// sure it's a ref/lit and don't need to emit boxing). Routes through
 /// `resolve_id_as_operand` so cross-fn refs to module-level Pub'd
 /// bindings or top-level lifted fns resolve correctly.
-fn val_as_operand(ctx: &mut FnCtx, frag: &mut Fragment, rt: &Runtime, v: &Val) -> Operand {
+fn val_as_operand(lcx: &mut LowerCtx<'_>, ctx: &mut FnCtx, v: &Val) -> Operand {
   match &v.kind {
-    ValKind::Ref(r) => resolve_id_as_operand(ctx, frag, rt, ref_cps_id(*r)),
-    ValKind::ContRef(id) => resolve_id_as_operand(ctx, frag, rt, *id),
-    ValKind::BuiltIn(BuiltIn::Panic) => panic_closure_operand(ctx, frag, rt),
+    ValKind::Ref(r) => resolve_id_as_operand(lcx, ctx, ref_cps_id(*r)),
+    ValKind::ContRef(id) => resolve_id_as_operand(lcx, ctx, *id),
+    ValKind::BuiltIn(BuiltIn::Panic) => panic_closure_operand(lcx, ctx),
     ValKind::Lit(_) => panic!("val_as_operand: Lit requires boxing — use emit_arg_as_operand"),
     ValKind::BuiltIn(b) => panic!("val_as_operand: BuiltIn {:?} not supported", b),
   }
@@ -1337,11 +1335,8 @@ fn val_as_operand(ctx: &mut FnCtx, frag: &mut Fragment, rt: &Runtime, v: &Val) -
 
 /// Emit a value into a specific local. Used by LetVal.
 fn emit_val_into(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
-  _cps: &CpsResult,
-  _ast: &Ast<'_>,
   val: &Val,
   into: LocalIdx,
 ) -> InstrId {
@@ -1349,7 +1344,7 @@ fn emit_val_into(
     ValKind::Lit(lit) => {
       let lv = LitVal::from_lit(lit)
         .unwrap_or_else(|| panic!("lower: unsupported lit {:?}", lit));
-      box_lit(frag, rt, &lv, into)
+      box_lit(lcx.frag, lcx.rt, &lv, into)
     }
     ValKind::Ref(r) => {
       let id = ref_cps_id(*r);
@@ -1359,38 +1354,38 @@ fn emit_val_into(
       // 3. Top-level fn id (no captures) — emit `$Closure` directly
       //    into `into` (avoids spilling through a scratch local).
       if let Some(local) = ctx.binds.get(&id).copied() {
-        return push_local_set(frag, into, op_local(local));
+        return push_local_set(lcx.frag, into, op_local(local));
       }
       if let Some(&(gsym, _)) = ctx.pub_globals.get(&id) {
-        return push_local_set(frag, into, op_global(gsym));
+        return push_local_set(lcx.frag, into, op_global(gsym));
       }
       if let Some(fn_sym) = ctx.try_lookup_fn_sym(id) {
         let caps_local = ctx.alloc_local_typed(
           ":caps_arg",
-          val_ref(rt.captures(), /*nullable*/ true),
+          val_ref(lcx.rt.captures(), /*nullable*/ true),
         );
-        let i_caps = push_ref_null_concrete(frag, rt.captures(), caps_local);
+        let i_caps = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local);
         ctx.instrs.push(i_caps);
         return push_struct_new(
-          frag, rt.closure(),
+          lcx.frag, lcx.rt.closure(),
           vec![Operand::RefFunc(fn_sym), op_local(caps_local)],
           into,
         );
       }
       let src = ctx.lookup(id);  // panic with diagnostic
-      push_local_set(frag, into, op_local(src))
+      push_local_set(lcx.frag, into, op_local(src))
     }
     ValKind::ContRef(id) => {
       // Cont refs: same three-way resolution shape, but the no-capture
       // closure case shouldn't apply (conts are never bare fn ids).
       if let Some(local) = ctx.binds.get(id).copied() {
-        return push_local_set(frag, into, op_local(local));
+        return push_local_set(lcx.frag, into, op_local(local));
       }
       if let Some(&(gsym, _)) = ctx.pub_globals.get(id) {
-        return push_local_set(frag, into, op_global(gsym));
+        return push_local_set(lcx.frag, into, op_global(gsym));
       }
       let src = ctx.lookup(*id);
-      push_local_set(frag, into, op_local(src))
+      push_local_set(lcx.frag, into, op_local(src))
     }
     ValKind::BuiltIn(_) => panic!("lower: BuiltIn as LetVal rhs not supported"),
   }
@@ -1439,16 +1434,15 @@ impl LitVal {
 /// `intern_data(frag, &[])` produces a zero-length data symbol; the
 /// resulting `$Str` has len 0 and reads as the empty string.
 fn emit_str_const(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
   bytes: &[u8],
   display_hint: &str,
 ) -> LocalIdx {
   let local = ctx.alloc_local(display_hint);
-  let sym = intern_data(frag, bytes);
+  let sym = intern_data(lcx.frag, bytes);
   let len = bytes.len() as u32;
-  let i = push_call(frag, rt.str_(),
+  let i = push_call(lcx.frag, lcx.rt.str_(),
     vec![Operand::DataRef { sym, len }], Some(local));
   ctx.instrs.push(i);
   local
@@ -1664,9 +1658,8 @@ fn short_arg(a: &Arg) -> &'static str {
 /// or `array.new_fixed $Captures N cap_ops` (N > 0). Pushes the
 /// instructions onto `ctx.instrs` in order.
 fn emit_closure_construction(
+  lcx: &mut LowerCtx<'_>,
   ctx: &mut FnCtx,
-  frag: &mut Fragment,
-  rt: &Runtime,
   fn_sym: FuncSym,
   cap_operands: Vec<Operand>,
   into: LocalIdx,
@@ -1677,19 +1670,19 @@ fn emit_closure_construction(
   //    declared type.
   let caps_local = ctx.alloc_local_typed(
     ":caps_arg",
-    val_ref(rt.captures(), /*nullable*/ true),
+    val_ref(lcx.rt.captures(), /*nullable*/ true),
   );
   let caps_instr = if cap_operands.is_empty() {
-    push_ref_null_concrete(frag, rt.captures(), caps_local)
+    push_ref_null_concrete(lcx.frag, lcx.rt.captures(), caps_local)
   } else {
-    push_array_new_fixed(frag, rt.captures(), cap_operands, caps_local)
+    push_array_new_fixed(lcx.frag, lcx.rt.captures(), cap_operands, caps_local)
   };
   ctx.instrs.push(caps_instr);
 
   // 2. struct.new $Closure (ref.func $fn, local.get $:caps_arg).
   let struct_instr = push_struct_new(
-    frag,
-    rt.closure(),
+    lcx.frag,
+    lcx.rt.closure(),
     vec![Operand::RefFunc(fn_sym), op_local(caps_local)],
     into,
   );
