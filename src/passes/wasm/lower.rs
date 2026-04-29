@@ -4,7 +4,19 @@
 //! closures are already materialised as `LetFn` + `App(FnClosure)`,
 //! so this pass doesn't do free-var analysis.
 //!
-//! Current coverage:
+//! ## Threading model
+//!
+//! Walker helpers take two contexts side-by-side:
+//!
+//! * `LowerCtx` — module-scoped. Bundles `cps`, `ast`, `rt`, `frag`,
+//!   `pub_globals`, `fqn_prefix`. Constructed once in `lower()` and
+//!   threaded as `&mut LowerCtx` through every helper.
+//! * `FnCtx` — per-function state (params, locals, instrs, binds,
+//!   `fn_syms`). A fresh `FnCtx` is built per `lower_fn` call;
+//!   nested fns clone parent `fn_syms` so siblings/ancestors stay
+//!   visible while child mutations don't leak back.
+//!
+//! ## Current coverage:
 //! * `main = fn: <lit>` — apply-path via `_apply` (Lit ∈ {Int, Float,
 //!   Decimal, Bool}).
 //! * Binary + unary protocol operators (Add..Shr, Rngex/Rngin, In,
