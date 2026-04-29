@@ -53,6 +53,13 @@ struct Alloc {
   origin: PropGraph<CpsId, Option<AstId>>,
   synth_alias: PropGraph<CpsId, Option<CpsId>>,
   param_info: PropGraph<CpsId, Option<ParamInfo>>,
+  /// Names of all LetFn bindings reachable in the current round's input
+  /// tree. Refs to these MUST NOT become closure captures: the lower
+  /// pass resolves LetFn names statically via `fn_syms`, not at runtime.
+  /// Without this guard, a sibling fn-id could be threaded through a
+  /// closure capture and end up dangling after the sibling itself is
+  /// re-hoisted to a fresh id.
+  letfn_names: std::collections::HashSet<CpsId>,
 }
 
 impl Alloc {
@@ -60,8 +67,9 @@ impl Alloc {
     origin: PropGraph<CpsId, Option<AstId>>,
     synth_alias: PropGraph<CpsId, Option<CpsId>>,
     param_info: PropGraph<CpsId, Option<ParamInfo>>,
+    letfn_names: std::collections::HashSet<CpsId>,
   ) -> Self {
-    Alloc { origin, synth_alias, param_info }
+    Alloc { origin, synth_alias, param_info, letfn_names }
   }
 
   fn next(&mut self, ast_origin: Option<AstId>) -> CpsId {
@@ -130,8 +138,14 @@ pub fn lift<'src>(
     }
 
 
+    // Collect all LetFn names visible in this round's tree. Capture
+    // analysis must skip these — refs to LetFn names are resolved
+    // statically by the lower pass, not threaded as runtime captures.
+    let letfn_names = collect_letfn_names(&current.root);
     // Extract LetFn from fn_bodies and hoist inline Cont::Expr (one level).
-    let mut alloc = Alloc::new(current.origin, current.synth_alias, current.param_info);
+    let mut alloc = Alloc::new(
+      current.origin, current.synth_alias, current.param_info, letfn_names,
+    );
     let new_root = lift_expr(current.root, ast, &mut alloc);
     current = CpsResult {
       root: new_root,
@@ -142,6 +156,91 @@ pub fn lift<'src>(
       module_locals: current.module_locals,
       module_imports: current.module_imports,
     };
+  }
+  unreachable!()
+}
+
+/// Walk the tree and collect names of every `LetFn`, regardless of
+/// position. The lower pass resolves these names statically via
+/// `fn_syms`, so refs to them must remain direct fn-id refs and never
+/// become closure captures.
+fn collect_letfn_names(expr: &Expr) -> std::collections::HashSet<CpsId> {
+  let mut names = std::collections::HashSet::new();
+  walk_letfn_names(expr, &mut names);
+  names
+}
+
+fn walk_letfn_names(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetFn { name, fn_body, cont, .. } => {
+      out.insert(name.id);
+      walk_letfn_names(fn_body, out);
+      if let Cont::Expr { body, .. } = cont {
+        walk_letfn_names(body, out);
+      }
+    }
+    ExprKind::LetVal { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        walk_letfn_names(body, out);
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for a in args {
+        match a {
+          Arg::Cont(Cont::Expr { body, .. }) => walk_letfn_names(body, out),
+          Arg::Expr(e) => walk_letfn_names(e, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      walk_letfn_names(then, out);
+      walk_letfn_names(else_, out);
+    }
+  }
+}
+
+/// Run `lift` round-by-round, returning each round's CPS state.
+///
+/// The first element is the input (round 0 / pre-lift). Subsequent
+/// elements are the IR after each iteration. The last element is the
+/// final result. Used by the `lift_plain` test directive to dump
+/// per-round PLAIN-form CPS for debugging — flat-form would hide
+/// `Cont::Ref` vs `Val(Ref::Synth)` distinctions.
+#[cfg(test)]
+pub fn lift_each_round<'src>(
+  result: CpsResult,
+  ast: &crate::ast::Ast<'src>,
+) -> Vec<CpsResult> {
+  const MAX_ROUNDS: usize = 20;
+  let mut rounds = Vec::new();
+  let mut current = result;
+  rounds.push(current.clone());
+  for round in 0..MAX_ROUNDS {
+    if !needs_lifting(&current.root, false) {
+      classify_untagged_params(&current.root, &mut current.param_info);
+      // Replace the last snapshot with the classified-final version.
+      *rounds.last_mut().unwrap() = current;
+      return rounds;
+    }
+    if round == MAX_ROUNDS - 1 {
+      panic!("lift_each_round: did not converge after {MAX_ROUNDS} rounds");
+    }
+    let letfn_names = collect_letfn_names(&current.root);
+    let mut alloc = Alloc::new(
+      current.origin, current.synth_alias, current.param_info, letfn_names,
+    );
+    let new_root = lift_expr(current.root, ast, &mut alloc);
+    current = CpsResult {
+      root: new_root,
+      origin: alloc.origin,
+      bind_to_cps: current.bind_to_cps,
+      synth_alias: alloc.synth_alias,
+      param_info: alloc.param_info,
+      module_locals: current.module_locals,
+      module_imports: current.module_imports,
+    };
+    rounds.push(current.clone());
   }
   unreachable!()
 }
@@ -557,9 +656,18 @@ fn extract_from_body<'src>(
 
       // Determine captures: refs in inner_fn_body that resolve to parent's params.
       // Exclude refs to already-hoisted fns — they'll be siblings at the parent scope.
+      // Also exclude refs to ANY LetFn name in the tree — the lower pass resolves
+      // those statically via fn_syms; threading them through closure captures
+      // dangles after the sibling itself is re-hoisted to a fresh id.
+      // Determine captures: refs in inner_fn_body that resolve to parent's params.
+      // Exclude refs to already-hoisted fns — they'll be siblings at the parent scope.
+      // Also exclude refs to ANY LetFn name in the tree — the lower pass resolves
+      // those statically via fn_syms; threading them through closure captures
+      // dangles after the sibling itself is re-hoisted to a fresh id.
       let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, alloc)
         .into_iter()
         .filter(|(cap_id, _)| !is_hoisted_fn_ref(*cap_id, hoisted, alloc))
+        .filter(|(cap_id, _)| !alloc.letfn_names.contains(cap_id))
         .collect();
 
       if cap_entries.is_empty() {
@@ -657,9 +765,18 @@ fn extract_from_body<'src>(
         let (cont_args_for_hoist, fn_closure_cont) = match cont {
           Cont::Expr { args: ca, body } => {
             let new_bind = alloc.bind(Bind::Synth, expr_origin);
-            let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
-            rewrite_map.insert(name_id, new_bind.id);
-            let body = rewrite_refs(*body, &rewrite_map);
+            // Two senses of `name_id` (the original LetFn name) need
+            // different replacements after this fn becomes a closure:
+            // * as a runtime closure-instance value (calls, captures) →
+            //   the local cont bind that holds the just-built closure.
+            // * as a fn-id in `App(FnClosure, [Val(name_id), ...])` →
+            //   the hoisted fn's new name (`lifted_fn_id`), so the
+            //   lower pass still finds a `fn_syms` entry.
+            let mut value_rewrite: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
+            value_rewrite.insert(name_id, new_bind.id);
+            let mut fn_id_rewrite: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
+            fn_id_rewrite.insert(name_id, lifted_fn_id);
+            let body = rewrite_refs_split(*body, &value_rewrite, &fn_id_rewrite);
             (ca, Cont::Expr { args: vec![new_bind], body: Box::new(body) })
           }
           Cont::Ref(_) => (vec![alloc.bind(Bind::Synth, expr_origin)], cont),
@@ -718,7 +835,11 @@ fn extract_from_body<'src>(
           // Don't recurse into the cont body — extract one level at a time.
           let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
-          let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, alloc);
+          // Filter out LetFn-name refs — those are resolved statically by lower.
+          let cap_entries: Vec<_> = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, alloc)
+            .into_iter()
+            .filter(|(cap_id, _)| !alloc.letfn_names.contains(cap_id))
+            .collect();
 
           // ·closure result conts with captures would create infinite chains.
           // ·ƒpub / ·ƒink_module conts are module-scope side effects — leave
@@ -883,6 +1004,79 @@ fn extract_from_body<'src>(
 // ---------------------------------------------------------------------------
 // Rewrite refs in an expression tree using a CpsId → CpsId map
 // ---------------------------------------------------------------------------
+
+/// Rewrite refs with two maps:
+/// * `value_map` — applied to most `Val(Ref::Synth)` and Cont refs:
+///   redirects runtime-value uses (calls, captures, return).
+/// * `fn_id_map` — applied ONLY to arg[0] of `App(BuiltIn::FnClosure)`:
+///   redirects fn-id references that the lower pass resolves
+///   statically via `fn_syms`.
+///
+/// Used when a LetFn `name` is hoisted to a closure: the original name
+/// represented both a fn-id (for FnClosure construction) and the
+/// resulting closure-instance value (for everything else). After
+/// hoisting these split into two distinct ids, and cont-body refs need
+/// to be redirected accordingly.
+fn rewrite_refs_split(
+  expr: Expr,
+  value_map: &std::collections::HashMap<CpsId, CpsId>,
+  fn_id_map: &std::collections::HashMap<CpsId, CpsId>,
+) -> Expr {
+  match expr.kind {
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+      let fn_body = rewrite_refs_split(*fn_body, value_map, fn_id_map);
+      let cont = rewrite_refs_cont_split(cont, value_map, fn_id_map);
+      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont } }
+    }
+    ExprKind::LetVal { name, val, cont } => {
+      let val = rewrite_refs_val(*val, value_map);
+      let cont = rewrite_refs_cont_split(cont, value_map, fn_id_map);
+      Expr { id: expr.id, kind: ExprKind::LetVal { name, val: Box::new(val), cont } }
+    }
+    ExprKind::App { func, args } => {
+      let is_fn_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
+      let func = match func {
+        Callable::Val(v) => Callable::Val(rewrite_refs_val(v, value_map)),
+        other => other,
+      };
+      let args: Vec<Arg> = args.into_iter().enumerate().map(|(i, a)| match a {
+        // FnClosure arg[0] is a fn-id — use fn_id_map.
+        Arg::Val(v) if is_fn_closure && i == 0 => Arg::Val(rewrite_refs_val(v, fn_id_map)),
+        Arg::Val(v) => Arg::Val(rewrite_refs_val(v, value_map)),
+        Arg::Spread(v) => Arg::Spread(rewrite_refs_val(v, value_map)),
+        Arg::Cont(c) => Arg::Cont(rewrite_refs_cont_split(c, value_map, fn_id_map)),
+        Arg::Expr(e) => Arg::Expr(Box::new(rewrite_refs_split(*e, value_map, fn_id_map))),
+      }).collect();
+      Expr { id: expr.id, kind: ExprKind::App { func, args } }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let cond = rewrite_refs_val(*cond, value_map);
+      let then = rewrite_refs_split(*then, value_map, fn_id_map);
+      let else_ = rewrite_refs_split(*else_, value_map, fn_id_map);
+      Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
+    }
+  }
+}
+
+fn rewrite_refs_cont_split(
+  cont: Cont,
+  value_map: &std::collections::HashMap<CpsId, CpsId>,
+  fn_id_map: &std::collections::HashMap<CpsId, CpsId>,
+) -> Cont {
+  match cont {
+    Cont::Ref(id) => {
+      if let Some(&new_id) = value_map.get(&id) {
+        Cont::Ref(new_id)
+      } else {
+        Cont::Ref(id)
+      }
+    }
+    Cont::Expr { args, body } => {
+      let body = rewrite_refs_split(*body, value_map, fn_id_map);
+      Cont::Expr { args, body: Box::new(body) }
+    }
+  }
+}
 
 fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr {
   match expr.kind {
@@ -1173,6 +1367,139 @@ mod tests {
         format!("{output}\n# sm:{b64}")
       }
       Err(e) => format!("ERROR: {e}"),
+    }
+  }
+
+  /// Test directive: `expect lift_plain ƒink: ...`
+  ///
+  /// Runs lift round-by-round and dumps each round in PLAIN-form CPS
+  /// (via `cps::fmt::fmt_with`, the un-flattened nested form).
+  /// Use when investigating IR-shape bugs — flat form renders
+  /// `Cont::Ref(N)` and `Val(Ref::Synth(N))` identically as `·v_N`,
+  /// which hides exactly the kind of distinction needed to debug
+  /// lifting bugs. Plain form makes them visually distinct.
+  #[allow(unused)]
+  fn lift_plain(src: &str) -> String {
+    let src_owned = src.to_string();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || lift_plain_inner(&src_owned))) {
+      Ok(s) => s,
+      Err(e) => {
+        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+          (*s).to_string()
+        } else if let Some(s) = e.downcast_ref::<String>() {
+          s.clone()
+        } else {
+          "<unknown panic>".to_string()
+        };
+        format!("PANIC: {msg}")
+      }
+    }
+  }
+
+  fn lift_plain_inner(src: &str) -> String {
+    let desugared = match crate::to_desugared(src, "test") {
+      Ok(d) => d,
+      Err(e) => return format!("ERROR: {e}"),
+    };
+    let cps = crate::passes::lower(&desugared);
+    let rounds = super::lift_each_round(cps.result, &desugared.ast);
+    let mut out = String::new();
+    for (i, r) in rounds.iter().enumerate() {
+      if !out.is_empty() { out.push('\n'); }
+      out.push_str(&format!("=== round {i} ===\n"));
+      dump_raw_expr(&r.root, 0, &mut out);
+    }
+    // Side-effect: also dump to a stable scratch path so inspecting the
+    // raw form survives test-fixture bless quirks. The fixture only
+    // needs to match a marker.
+    if let Some(dir) = std::env::var("CARGO_MANIFEST_DIR").ok() {
+      let path = format!("{dir}/.brain/.scratch/mut-rec-repros/lift-rounds-raw.txt");
+      let _ = std::fs::write(&path, &out);
+    }
+    format!("dumped {} rounds", rounds.len())
+  }
+
+  /// Raw structural dump of a CPS Expr that distinguishes Cont::Ref vs
+  /// Val(Ref::Synth) vs Cont::Expr — the ambiguity of plain/flat
+  /// formatters that hides lifting bugs. Format:
+  ///   Cont::Ref(N)       → `cont(v_N)`
+  ///   Cont::Expr         → `cont fn args: body`
+  ///   Val(Ref::Synth(N)) → `val(v_N)`
+  ///   App, LetFn, LetVal each on its own line, indented.
+  fn dump_raw_expr(expr: &super::Expr, indent: usize, out: &mut String) {
+    use super::{Arg, Callable, ExprKind, Ref, ValKind};
+    let pad = "  ".repeat(indent);
+    match &expr.kind {
+      ExprKind::LetFn { name, params, fn_body, cont, .. } => {
+        out.push_str(&format!("{pad}LetFn {} params=[", name.id.0));
+        for p in params {
+          let b = match p { super::Param::Name(b) | super::Param::Spread(b) => b };
+          out.push_str(&format!("v_{} ", b.id.0));
+        }
+        out.push_str("]\n");
+        out.push_str(&format!("{pad}  fn_body:\n"));
+        dump_raw_expr(fn_body, indent + 2, out);
+        out.push_str(&format!("{pad}  cont:\n"));
+        dump_raw_cont(cont, indent + 2, out);
+      }
+      ExprKind::LetVal { name, val, cont } => {
+        out.push_str(&format!("{pad}LetVal {} val={}\n", name.id.0, dump_val_short(val)));
+        out.push_str(&format!("{pad}  cont:\n"));
+        dump_raw_cont(cont, indent + 2, out);
+      }
+      ExprKind::App { func, args } => {
+        let fname = match func {
+          Callable::Val(v) => dump_val_short(v),
+          Callable::BuiltIn(b) => format!("BuiltIn::{b:?}"),
+        };
+        out.push_str(&format!("{pad}App {fname}\n"));
+        for (i, a) in args.iter().enumerate() {
+          match a {
+            Arg::Val(v) => out.push_str(&format!("{pad}  arg[{i}] Val({})\n", dump_val_short(v))),
+            Arg::Spread(v) => out.push_str(&format!("{pad}  arg[{i}] Spread({})\n", dump_val_short(v))),
+            Arg::Cont(c) => {
+              out.push_str(&format!("{pad}  arg[{i}] Cont:\n"));
+              dump_raw_cont(c, indent + 2, out);
+            }
+            Arg::Expr(e) => {
+              out.push_str(&format!("{pad}  arg[{i}] Expr:\n"));
+              dump_raw_expr(e, indent + 2, out);
+            }
+          }
+        }
+      }
+      ExprKind::If { cond, then, else_ } => {
+        out.push_str(&format!("{pad}If cond={}\n", dump_val_short(cond)));
+        out.push_str(&format!("{pad}  then:\n"));
+        dump_raw_expr(then, indent + 2, out);
+        out.push_str(&format!("{pad}  else:\n"));
+        dump_raw_expr(else_, indent + 2, out);
+      }
+    }
+
+    fn dump_val_short(val: &super::Val) -> String {
+      match &val.kind {
+        ValKind::Ref(Ref::Synth(id)) => format!("Synth(v_{})", id.0),
+        ValKind::Ref(Ref::Unresolved(id)) => format!("Unresolved(v_{})", id.0),
+        ValKind::ContRef(id) => format!("ContRef(v_{})", id.0),
+        ValKind::BuiltIn(b) => format!("BuiltIn::{b:?}"),
+        ValKind::Lit(l) => format!("Lit({l:?})"),
+      }
+    }
+  }
+
+  fn dump_raw_cont(cont: &super::Cont, indent: usize, out: &mut String) {
+    use super::Cont;
+    let pad = "  ".repeat(indent);
+    match cont {
+      Cont::Ref(id) => out.push_str(&format!("{pad}Cont::Ref(v_{})\n", id.0)),
+      Cont::Expr { args, body } => {
+        out.push_str(&format!("{pad}Cont::Expr args=["));
+        for a in args { out.push_str(&format!("v_{} ", a.id.0)); }
+        out.push_str("]\n");
+        out.push_str(&format!("{pad}  body:\n"));
+        dump_raw_expr(body, indent + 2, out);
+      }
     }
   }
 

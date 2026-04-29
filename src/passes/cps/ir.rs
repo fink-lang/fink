@@ -93,6 +93,7 @@ impl From<usize> for CpsId {
 }
 
 /// Output of the CPS transform — the IR tree plus metadata.
+#[derive(Clone)]
 pub struct CpsResult {
   pub root: Expr,
   /// Maps each CPS node back to the AST expression it was synthesized from.
