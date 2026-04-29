@@ -612,3 +612,67 @@ mod tests {
   test_macros::include_fink_tests!("src/runner/test_linking.fnk", skip-ir);
   test_macros::include_fink_tests!("src/runner/test_sets.fnk", skip-ir);
 }
+
+/// End-to-end tests for `run_source` — exercise `wasmtime_runner::run`
+/// through the public CLI entry point. The internal `tests` module
+/// above bypasses `wasmtime_runner::run` (it has its own custom flow),
+/// so these tests are the only thing keeping the CLI runner from
+/// rotting silently.
+#[cfg(all(test, feature = "compile"))]
+mod cli_runner_tests {
+  use std::sync::{Arc, Mutex};
+
+  use super::{IoReadStream, IoStream, RunOptions, run_source};
+
+  /// Set up empty stdin and capture stdout/stderr into byte buffers.
+  /// Returns the exit code plus the captured streams as UTF-8 strings.
+  fn run(src: &str, args: &[&str]) -> Result<(i64, String, String), String> {
+    let stdin: IoReadStream = Arc::new(Mutex::new(std::io::empty()));
+    let stdout_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stderr_buf: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let stdout: IoStream = stdout_buf.clone();
+    let stderr: IoStream = stderr_buf.clone();
+
+    let argv: Vec<Vec<u8>> = args.iter().map(|a| a.as_bytes().to_vec()).collect();
+    let exit = run_source(
+      RunOptions::default(), src, "test.fnk", argv, stdin, stdout, stderr,
+    )?;
+
+    let out = String::from_utf8(stdout_buf.lock().unwrap().clone()).unwrap();
+    let err = String::from_utf8(stderr_buf.lock().unwrap().clone()).unwrap();
+    Ok((exit, out, err))
+  }
+
+  #[test]
+  fn main_returns_zero() {
+    let src = "main = fn ..args: 0\n";
+    let (exit, out, err) = run(src, &["test"]).expect("run_source");
+    assert_eq!(exit, 0);
+    assert_eq!(out, "");
+    assert_eq!(err, "");
+  }
+
+  #[test]
+  fn main_returns_nonzero_exit_code() {
+    let src = "main = fn ..args: 42\n";
+    let (exit, out, err) = run(src, &["test"]).expect("run_source");
+    assert_eq!(exit, 42);
+    assert_eq!(out, "");
+    assert_eq!(err, "");
+  }
+
+  #[test]
+  fn main_writes_to_stdout() {
+    let src = "\
+{stdout} = import 'std/io.fnk'
+
+main = fn ..args:
+  'hello' >> stdout
+  0
+";
+    let (exit, out, err) = run(src, &["test"]).expect("run_source");
+    assert_eq!(exit, 0);
+    assert_eq!(out, "hello");
+    assert_eq!(err, "");
+  }
+}
