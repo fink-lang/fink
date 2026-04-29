@@ -73,14 +73,16 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
   // rewritten.
   //
   // The producer's `fink_module` is the function whose display name
-  // is `"<canonical_url>:fink_module"`. We find it by scanning each
-  // fragment's funcs and matching the display.
+  // is `"<canonical_url>::fink_module"` (double-colon = compiler-
+  // synth marker, can't collide with a user `pub fink_module`). We
+  // find it by scanning each fragment's funcs and matching the
+  // display suffix.
   let mut producer_fink_module: BTreeMap<String, FuncSym> = BTreeMap::new();
   for (frag_idx, frag) in fragments.iter().enumerate() {
     let off = offsets[frag_idx].funcs;
     for (local_idx, f) in frag.funcs.iter().enumerate() {
       if let Some(display) = &f.display
-        && let Some(stripped) = display.strip_suffix(":fink_module")
+        && let Some(stripped) = display.strip_suffix("::fink_module")
       {
         let sym = FuncSym::Local(off + local_idx as u32);
         producer_fink_module.insert(stripped.to_string(), sym);

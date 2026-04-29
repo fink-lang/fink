@@ -99,8 +99,11 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
     pub_globals.insert(*id, (sym, name.clone()));
   }
 
-  // Lower the module body as the `fink_module` function.
-  let module_display = format!("{fqn_prefix}fink_module");
+  // Lower the module body as the `fink_module` function. Double-colon
+  // marks compiler-synth so it can't collide with a user `pub
+  // fink_module` in source: `:` is lexer-rejected at the source
+  // level, making `<fqn>::fink_module` collision-safe.
+  let module_display = format!("{fqn_prefix}:fink_module");
   let fink_module = lower_fn(
     &mut frag, &rt, cps, ast,
     &[],                 // no cap params at the module level
@@ -149,11 +152,15 @@ fn synth_host_wrapper(
   fqn_prefix: &str,
 ) {
   let canonical_url = fqn_prefix.trim_end_matches(':').to_string();
-  let display = if canonical_url.is_empty() {
-    "_host_wrapper".to_string()
-  } else {
-    format!("{canonical_url}:_host_wrapper")
-  };
+  assert!(
+    !canonical_url.is_empty(),
+    "synth_host_wrapper: fqn_prefix must be non-empty — every \
+     fragment needs a real FQN (canonical url for package compiles, \
+     `test:` for tests, `repl:` for REPL). The wrapper is exported \
+     under canonical FQN so the host can address it.",
+  );
+  // Double-colon marks compiler-synth (see `:fink_module` above).
+  let display = format!("{canonical_url}::host_wrapper");
 
   let mut ctx = FnCtx::new(HashMap::new(), HashMap::new(), fqn_prefix.to_string());
   let l_caps_p = ctx.alloc_param(":caps_param");
@@ -207,14 +214,10 @@ fn synth_host_wrapper(
   let sym = func(frag, sig, ctx.params, ctx.locals, ctx.instrs, &display);
   let FuncSym::Local(i) = sym else { panic!("synth_host_wrapper: func must be Local") };
 
-  // Export under canonical URL. For empty-prefix fragments (legacy
-  // tests, REPL today), use the fallback name "_host_wrapper".
-  let export_name = if canonical_url.is_empty() {
-    "_host_wrapper".to_string()
-  } else {
-    canonical_url
-  };
-  frag.funcs[i as usize].export = Some(export_name);
+  // Exported under the module's canonical URL (the FQN). That's
+  // the host's addressing convention: `instance.get_func(url)`
+  // returns this wrapper.
+  frag.funcs[i as usize].export = Some(canonical_url);
 }
 
 // ──────────────────────────────────────────────────────────────────

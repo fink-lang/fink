@@ -264,6 +264,9 @@ fn fmt_func(out: &mut String, sm: &mut SourceMap, frag: &Fragment, sym: FuncSym,
 
   out.push_str("  (func ");
   out.push_str(&name);
+  if let Some(exp) = &f.export {
+    write!(out, " (export \"{}\")", exp).unwrap();
+  }
   write!(out, " (type {})", type_name(frag, f.sig)).unwrap();
 
   for p in &f.params {
@@ -292,10 +295,6 @@ fn fmt_func(out: &mut String, sm: &mut SourceMap, frag: &Fragment, sym: FuncSym,
   }
 
   out.push_str("  )\n");
-
-  if let Some(exp) = &f.export {
-    writeln!(out, "  (export \"{}\" (func {}))", exp, name).unwrap();
-  }
 }
 
 fn fmt_global(out: &mut String, frag: &Fragment, sym: GlobalSym, g: &GlobalDecl) {
@@ -308,13 +307,13 @@ fn fmt_global(out: &mut String, frag: &Fragment, sym: GlobalSym, g: &GlobalDecl)
     return;
   }
 
-  write!(out, "  (global {} ({}{}) ", name, mutness, fmt_val(frag, &g.ty)).unwrap();
+  write!(out, "  (global {}", name).unwrap();
+  if let Some(exp) = &g.export {
+    write!(out, " (export \"{}\")", exp).unwrap();
+  }
+  write!(out, " ({}{}) ", mutness, fmt_val(frag, &g.ty)).unwrap();
   fmt_global_init(out, frag, &g.init);
   out.push_str(")\n");
-
-  if let Some(exp) = &g.export {
-    writeln!(out, "  (export \"{}\" (global {}))", exp, name).unwrap();
-  }
 }
 
 fn fmt_global_init(out: &mut String, frag: &Fragment, init: &GlobalInit) {

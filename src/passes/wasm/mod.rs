@@ -45,7 +45,10 @@ mod tests {
 
   fn wat_inner(src: &str) -> String {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "");
+    // Generic synthetic FQN — every fragment in the IR must have a
+    // non-empty fqn_prefix; tests use `test:` so emitted exports
+    // (per-module wrapper, etc.) are addressable by a stable name.
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
     // Single-module programs today: the link step is a passthrough,
     // but routing through it keeps the tracer test surface honest
     // when multi-fragment merge arrives.
@@ -133,7 +136,7 @@ mod tests {
   #[cfg(test)]
   fn emit_for(src: &str) -> Vec<u8> {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "");
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
     let linked = super::link::link(&[user_frag]);
     super::emit::emit(&linked)
   }
