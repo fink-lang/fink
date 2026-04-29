@@ -230,6 +230,30 @@ fn synth_host_wrapper(
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Lowering context
+// ──────────────────────────────────────────────────────────────────
+
+/// Module-scoped context threaded through the lowering walker.
+///
+/// Bundles the read-mostly references that every helper in this file
+/// otherwise has to take as separate args. `frag` is mutable; the
+/// other fields are immutable references valid for the whole lower
+/// pass.
+///
+/// `FnCtx` (the per-function state — locals, instrs, binds) stays
+/// separate. The two are passed alongside each other to walker
+/// helpers as `(&mut LowerCtx, &mut FnCtx, ...)`.
+#[allow(dead_code)]
+struct LowerCtx<'a> {
+  cps: &'a CpsResult,
+  ast: &'a Ast<'a>,
+  rt: &'a Runtime,
+  frag: &'a mut Fragment,
+  pub_globals: &'a HashMap<CpsId, (GlobalSym, String)>,
+  fqn_prefix: &'a str,
+}
+
+// ──────────────────────────────────────────────────────────────────
 // Function lowering
 // ──────────────────────────────────────────────────────────────────
 
