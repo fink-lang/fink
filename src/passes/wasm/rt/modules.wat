@@ -189,6 +189,159 @@
       (local.get $mod_ref)))
 
 
+  ;; Internal: like `std/list.wat:apply_2_vals` but allows null
+  ;; values. Substitutes `$Nil` for null since `$Cons.head` is
+  ;; `(ref any)` (non-null).
+  (func $std/modules.fnk:_apply_2_nullable
+    (param $a (ref null any))
+    (param $b (ref null any))
+    (param $cont (ref null any))
+
+    (return_call $rt/apply.wat:apply
+      (struct.new $Cons
+        (call $std/modules.fnk:_or_nil (local.get $a))
+        (struct.new $Cons
+          (call $std/modules.fnk:_or_nil (local.get $b))
+          (struct.new $Nil)))
+      (local.get $cont)))
+
+  ;; If `v` is null, returns a fresh `$Nil` (a non-null sentinel
+  ;; usable as `(ref any)`). Otherwise returns `v` cast to non-null.
+  (func $std/modules.fnk:_or_nil
+    (param $v (ref null any))
+    (result (ref any))
+    (if (result (ref any))
+      (ref.is_null (local.get $v))
+      (then (struct.new $Nil))
+      (else (ref.as_non_null (local.get $v)))))
+
+
+  ;; -- init_module ----------------------------------------------------
+  ;;
+  ;; Host-facing module init. CPS — tail-applies cont with two values:
+  ;; (last_expr, val) where:
+  ;;   - last_expr = the value the module's block evaluated to (or null
+  ;;     if the module was already initialised in a prior call).
+  ;;   - val = if key is null: the full exports rec
+  ;;          else: registry[mod_url][key] (a single named export).
+  ;;
+  ;; Each module's lower-synthesised wrapper export tail-calls this with
+  ;; the canonical url, the no-capture closure over the module's
+  ;; fink_module funcref, an optional key, and the host cont.
+  ;;
+  ;; The host calls a module's wrapper export (named by canonical URL).
+  ;; The wrapper passes through to here. Result: a single API by which
+  ;; any host can both run-a-module and fetch-an-export.
+  (func $std/modules.fnk:init_module (export "std/modules.fnk:init_module")
+    (param $mod_url  (ref null any))
+    (param $mod_clos (ref null any))
+    (param $key      (ref null any))
+    (param $cont     (ref null any))
+
+    (local $reg (ref null $DictImpl))
+    (local $key_eq (ref eq))
+    (local $existing (ref null eq))
+    (local $exports (ref null any))
+    (local $val (ref null any))
+    (local $caps (ref $Captures))
+    (local $intermediate (ref $Closure))
+
+    (local.set $reg (global.get $std/modules.fnk:registry))
+    (local.set $key_eq (ref.cast (ref eq) (local.get $mod_url)))
+
+    ;; Already inited? Return null last_expr + lookup result.
+    (if (i32.eqz (ref.is_null (local.get $reg)))
+      (then
+        (local.set $existing
+          (call $std/dict.wat:dict_get
+            (ref.as_non_null (local.get $reg))
+            (local.get $key_eq)))
+        (if (i32.eqz (ref.is_null (local.get $existing)))
+          (then
+            (local.set $exports (local.get $existing))
+            (if (ref.is_null (local.get $key))
+              (then (local.set $val (local.get $exports)))
+              (else
+                (local.set $val
+                  (call $std/dict.wat:get
+                    (ref.cast (ref $RecImpl) (local.get $exports))
+                    (ref.cast (ref eq) (local.get $key))))))
+            (return_call $std/modules.fnk:_apply_2_nullable
+              (ref.null any)
+              (local.get $val)
+              (local.get $cont))))))
+
+    ;; Not inited — ensure registry[mod_url] exists, then invoke the
+    ;; module closure with an intermediate cont that captures
+    ;; (mod_url, key, cont) and packages the result.
+    (drop (call $std/modules.fnk:init (local.get $mod_url)))
+
+    (local.set $caps
+      (array.new_fixed $Captures 3
+        (local.get $mod_url)
+        (local.get $key)
+        (local.get $cont)))
+
+    (local.set $intermediate
+      (struct.new $Closure
+        (ref.func $std/modules.fnk:_init_module_step)
+        (local.get $caps)))
+
+    ;; Tail-apply the module closure with [intermediate_cont] as args.
+    (return_call $rt/apply.wat:apply
+      (struct.new $Cons (local.get $intermediate) (struct.new $Nil))
+      (local.get $mod_clos)))
+
+
+  ;; _init_module_step: backs intermediate_cont. Called when the
+  ;; module's fink_module finishes evaluation. Captures hold
+  ;; (mod_url, key, cont). Reads registry[mod_url] (now populated),
+  ;; extracts key field if non-null, tail-applies cont with
+  ;; (last_expr, val).
+  (elem declare func $std/modules.fnk:_init_module_step)
+
+  (func $std/modules.fnk:_init_module_step (type $Fn2)
+    (param $caps (ref null any))
+    (param $args (ref null any))
+
+    (local $cap_arr (ref $Captures))
+    (local $mod_url (ref null any))
+    (local $key (ref null any))
+    (local $user_cont (ref null any))
+    (local $last_expr (ref null any))
+    (local $exports (ref null any))
+    (local $val (ref null any))
+
+    (local.set $cap_arr (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $mod_url   (array.get $Captures (local.get $cap_arr) (i32.const 0)))
+    (local.set $key       (array.get $Captures (local.get $cap_arr) (i32.const 1)))
+    (local.set $user_cont (array.get $Captures (local.get $cap_arr) (i32.const 2)))
+
+    ;; Pull last_expr off the args list — it's the head.
+    (local.set $last_expr
+      (call $std/list.wat:head_any (local.get $args)))
+
+    ;; Read the now-populated exports rec.
+    (local.set $exports
+      (call $std/dict.wat:dict_get
+        (ref.as_non_null (global.get $std/modules.fnk:registry))
+        (ref.cast (ref eq) (local.get $mod_url))))
+
+    ;; Extract key if non-null.
+    (if (ref.is_null (local.get $key))
+      (then (local.set $val (local.get $exports)))
+      (else
+        (local.set $val
+          (call $std/dict.wat:get
+            (ref.cast (ref $RecImpl) (local.get $exports))
+            (ref.cast (ref eq) (local.get $key))))))
+
+    (return_call $std/modules.fnk:_apply_2_nullable
+      (local.get $last_expr)
+      (local.get $val)
+      (local.get $user_cont)))
+
+
   ;; -- _import_wrap_step ---------------------------------------------
   ;;
   ;; The Fn2-shaped function that backs wrap_cont. Captures hold

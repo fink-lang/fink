@@ -70,10 +70,18 @@
 // Symbol ids (typed indices into per-fragment symbol tables)
 // ──────────────────────────────────────────────────────────────────────
 
-/// Identifies a function within a fragment. Linker resolves to a
-/// global function index at link time.
+/// Identifies a function the IR can reference.
+///
+/// `Local(idx)` is an index into the fragment's `funcs` Vec — a
+/// user-defined function (including `fink_module` and lifted lambdas).
+/// `Runtime(sym)` is a reference to a runtime ABI symbol; emit
+/// resolves it to a merged-binary index at byte time via the runtime
+/// symbol table. Runtime references never appear in `frag.funcs`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct FuncSym(pub u32);
+pub enum FuncSym {
+  Local(u32),
+  Runtime(super::runtime_contract::Sym),
+}
 
 /// Identifies a Fink module (entry or dep) within a package compile.
 ///
@@ -92,10 +100,19 @@ pub struct FuncSym(pub u32);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct ModuleId(pub u32);
 
-/// Identifies a type (struct / array / func-signature) within a
-/// fragment.
+/// Identifies a type the IR can reference.
+///
+/// `Local(idx)` is an index into the fragment's `types` Vec — a
+/// user-declared type (typically a function-signature type for a
+/// user fn). `Runtime(sym)` is a reference to a runtime ABI value
+/// type (e.g. `$Num`, `$Closure`); emit resolves it to a
+/// merged-binary index at byte time. Runtime references never
+/// appear in `frag.types`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TypeSym(pub u32);
+pub enum TypeSym {
+  Local(u32),
+  Runtime(super::runtime_contract::Sym),
+}
 
 /// Identifies a global within a fragment.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -528,7 +545,7 @@ pub fn ty_struct(
   fields: Vec<StructField>,
   display: &str,
 ) -> TypeSym {
-  let sym = TypeSym(frag.types.len() as u32);
+  let sym = TypeSym::Local(frag.types.len() as u32);
   frag.types.push(TypeDecl {
     kind: TypeKind::Struct { fields },
     display: Some(display.into()),
@@ -543,7 +560,7 @@ pub fn ty_func(
   results: Vec<ValType>,
   display: &str,
 ) -> TypeSym {
-  let sym = TypeSym(frag.types.len() as u32);
+  let sym = TypeSym::Local(frag.types.len() as u32);
   frag.types.push(TypeDecl {
     kind: TypeKind::Func { params, results },
     display: Some(display.into()),
@@ -552,16 +569,21 @@ pub fn ty_func(
   sym
 }
 
-/// Declare an imported type — cross-fragment reference resolved by the
-/// linker. `bound` is the abstract heap bound (typically `AbsHeap::Any`
-/// for struct/array types, `AbsHeap::Func` for function-signature types).
+/// Declare an imported type — cross-user-fragment reference resolved
+/// by the linker (e.g. `fink_module` from another `.fnk` file).
+/// `bound` is the abstract heap bound (typically `AbsHeap::Any` for
+/// struct/array types, `AbsHeap::Func` for function-signature types).
+///
+/// NOTE: This is for cross-user-fragment imports only. References to
+/// runtime ABI symbols (Num, Fn2, etc.) use `TypeSym::Runtime(sym)`
+/// and never allocate a placeholder TypeDecl.
 pub fn ty_import(
   frag: &mut Fragment,
   module: &str,
   name: &str,
   bound: AbsHeap,
 ) -> TypeSym {
-  let sym = TypeSym(frag.types.len() as u32);
+  let sym = TypeSym::Local(frag.types.len() as u32);
   frag.types.push(TypeDecl {
     kind: TypeKind::SubBound { ht: bound },
     display: Some(name.into()),
@@ -586,7 +608,7 @@ pub fn func(
   body: Vec<InstrId>,
   display: &str,
 ) -> FuncSym {
-  let sym = FuncSym(frag.funcs.len() as u32);
+  let sym = FuncSym::Local(frag.funcs.len() as u32);
   frag.funcs.push(FuncDecl {
     sig,
     params,
@@ -600,13 +622,17 @@ pub fn func(
 }
 
 /// Append an imported function (no body).
+///
+/// NOTE: For cross-user-fragment imports only. References to runtime
+/// ABI funcs use `FuncSym::Runtime(sym)` and never allocate a
+/// placeholder FuncDecl.
 pub fn import_func(
   frag: &mut Fragment,
   sig: TypeSym,
   module: &str,
   name: &str,
 ) -> FuncSym {
-  let sym = FuncSym(frag.funcs.len() as u32);
+  let sym = FuncSym::Local(frag.funcs.len() as u32);
   frag.funcs.push(FuncDecl {
     sig,
     params: Vec::new(),
@@ -901,14 +927,17 @@ mod tests {
     assert_eq!(frag.types.len(), 3, "three types: Num, Fn2, NumOpAddSig");
     assert_eq!(frag.funcs.len(), 2, "one import + one user func");
     assert_eq!(frag.instrs.len(), 3, "three statement-level instrs");
-    assert_eq!(main_fn, FuncSym(1), "main is second func (after import)");
+    assert_eq!(main_fn, FuncSym::Local(1), "main is second func (after import)");
+
+    let FuncSym::Local(num_add_idx) = num_op_add else { panic!("import_func should return Local") };
+    let FuncSym::Local(main_idx) = main_fn else { panic!("func should return Local") };
 
     // num_op_add is an import.
-    assert!(frag.funcs[num_op_add.0 as usize].import.is_some());
-    assert!(frag.funcs[main_fn.0 as usize].import.is_none());
+    assert!(frag.funcs[num_add_idx as usize].import.is_some());
+    assert!(frag.funcs[main_idx as usize].import.is_none());
 
     // main's body references the three instrs in order.
-    let main = &frag.funcs[main_fn.0 as usize];
+    let main = &frag.funcs[main_idx as usize];
     assert_eq!(main.body, vec![i1, i2, i3]);
     assert_eq!(main.params.len(), 2);
     assert_eq!(main.locals.len(), 3);

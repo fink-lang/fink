@@ -38,10 +38,10 @@ pub fn fmt_fragment_with_sm(frag: &Fragment) -> (String, SourceMap) {
   out.push_str("(module\n");
 
   for (i, ty) in frag.types.iter().enumerate() {
-    fmt_type(&mut out, frag, TypeSym(i as u32), ty);
+    fmt_type(&mut out, frag, TypeSym::Local(i as u32), ty);
   }
   for (i, f) in frag.funcs.iter().enumerate() {
-    fmt_func(&mut out, &mut sm, frag, FuncSym(i as u32), f);
+    fmt_func(&mut out, &mut sm, frag, FuncSym::Local(i as u32), f);
   }
   for (i, g) in frag.globals.iter().enumerate() {
     fmt_global(&mut out, frag, GlobalSym(i as u32), g);
@@ -67,28 +67,42 @@ fn import_alias(module: &str, display: &str) -> String {
 }
 
 fn type_name(frag: &Fragment, sym: TypeSym) -> String {
-  let Some(ty) = frag.types.get(sym.0 as usize) else {
-    return format!("$t_{}", sym.0);
+  let i = match sym {
+    TypeSym::Local(i) => i,
+    TypeSym::Runtime(s) => {
+      let (m, n) = super::runtime_contract::import_key(s);
+      return import_alias(m, n);
+    }
+  };
+  let Some(ty) = frag.types.get(i as usize) else {
+    return format!("$t_{}", i);
   };
   let display = ty.display.as_deref().unwrap_or("");
   match &ty.import {
     Some(ImportKey { module, .. }) => import_alias(module, display),
     None => {
-      if display.is_empty() { format!("$t_{}", sym.0) }
+      if display.is_empty() { format!("$t_{}", i) }
       else { format!("${}", display) }
     }
   }
 }
 
 fn func_name(frag: &Fragment, sym: FuncSym) -> String {
-  let Some(f) = frag.funcs.get(sym.0 as usize) else {
-    return format!("$f_{}", sym.0);
+  let i = match sym {
+    FuncSym::Local(i) => i,
+    FuncSym::Runtime(s) => {
+      let (m, n) = super::runtime_contract::import_key(s);
+      return import_alias(m, n);
+    }
+  };
+  let Some(f) = frag.funcs.get(i as usize) else {
+    return format!("$f_{}", i);
   };
   let display = f.display.as_deref().unwrap_or("");
   match &f.import {
     Some(ImportKey { module, .. }) => import_alias(module, display),
     None => {
-      if display.is_empty() { format!("$f_{}", sym.0) }
+      if display.is_empty() { format!("$f_{}", i) }
       else { format!("${}", display) }
     }
   }
@@ -248,8 +262,19 @@ fn fmt_func(out: &mut String, sm: &mut SourceMap, frag: &Fragment, sym: FuncSym,
     return;
   }
 
+  // Cross-fragment import placeholder that the linker has redirected
+  // away from: import marker dropped, body empty, no params, no
+  // export. It still occupies a FuncSym slot (removing would shift
+  // every later index) but nothing references it. Skip rendering.
+  if f.body.is_empty() && f.params.is_empty() && f.export.is_none() {
+    return;
+  }
+
   out.push_str("  (func ");
   out.push_str(&name);
+  if let Some(exp) = &f.export {
+    write!(out, " (export \"{}\")", exp).unwrap();
+  }
   write!(out, " (type {})", type_name(frag, f.sig)).unwrap();
 
   for p in &f.params {
@@ -278,10 +303,6 @@ fn fmt_func(out: &mut String, sm: &mut SourceMap, frag: &Fragment, sym: FuncSym,
   }
 
   out.push_str("  )\n");
-
-  if let Some(exp) = &f.export {
-    writeln!(out, "  (export \"{}\" (func {}))", exp, name).unwrap();
-  }
 }
 
 fn fmt_global(out: &mut String, frag: &Fragment, sym: GlobalSym, g: &GlobalDecl) {
@@ -294,13 +315,13 @@ fn fmt_global(out: &mut String, frag: &Fragment, sym: GlobalSym, g: &GlobalDecl)
     return;
   }
 
-  write!(out, "  (global {} ({}{}) ", name, mutness, fmt_val(frag, &g.ty)).unwrap();
+  write!(out, "  (global {}", name).unwrap();
+  if let Some(exp) = &g.export {
+    write!(out, " (export \"{}\")", exp).unwrap();
+  }
+  write!(out, " ({}{}) ", mutness, fmt_val(frag, &g.ty)).unwrap();
   fmt_global_init(out, frag, &g.init);
   out.push_str(")\n");
-
-  if let Some(exp) = &g.export {
-    writeln!(out, "  (export \"{}\" (global {}))", exp, name).unwrap();
-  }
 }
 
 fn fmt_global_init(out: &mut String, frag: &Fragment, init: &GlobalInit) {

@@ -45,7 +45,10 @@ mod tests {
 
   fn wat_inner(src: &str) -> String {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "");
+    // Generic synthetic FQN — every fragment in the IR must have a
+    // non-empty fqn_prefix; tests use `test:` so emitted exports
+    // (per-module wrapper, etc.) are addressable by a stable name.
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
     // Single-module programs today: the link step is a passthrough,
     // but routing through it keeps the tracer test surface honest
     // when multi-fragment merge arrives.
@@ -133,7 +136,7 @@ mod tests {
   #[cfg(test)]
   fn emit_for(src: &str) -> Vec<u8> {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
-    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "");
+    let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
     let linked = super::link::link(&[user_frag]);
     super::emit::emit(&linked)
   }
@@ -162,9 +165,11 @@ mod tests {
     let bytes = emit_for("42");
     let exports = validate_and_collect_exports(&bytes);
 
-    // User's fink_module is exported.
-    assert!(exports.contains(&"fink_module".to_string()),
-      "missing fink_module export. got: {exports:?}");
+    // The per-module host wrapper is exported under the canonical
+    // FQN — `test:` for the test driver. This is the host's entry
+    // point; `fink_module` itself is no longer host-visible.
+    assert!(exports.contains(&"test".to_string()),
+      "missing per-module host wrapper export 'test'. got: {exports:?}");
 
     // Runtime exports are passed through (with <url>:<name> qualification).
     assert!(exports.contains(&"rt/apply.wat:apply".to_string()),
@@ -193,7 +198,8 @@ mod tests {
     let bytes = emit_for("42 + 123");
     let exports = validate_and_collect_exports(&bytes);
 
-    assert!(exports.contains(&"fink_module".to_string()));
+    assert!(exports.contains(&"test".to_string()),
+      "missing per-module host wrapper export 'test'. got: {exports:?}");
     assert!(exports.contains(&"std/operators.fnk:op_plus".to_string()),
       "missing std/operators.fnk:op_plus passthrough (needed for a+b)");
   }
@@ -238,12 +244,14 @@ mod tests {
 
     let instance = linker.instantiate(&mut store, &module).unwrap();
 
-    // fink_module is exported and is a func.
-    let fink_module = instance.get_func(&mut store, "fink_module")
-      .expect("fink_module export missing");
-    let ty = fink_module.ty(&store);
-    assert_eq!(ty.params().len(), 2, "fink_module should take (caps, args)");
-    assert_eq!(ty.results().len(), 0, "fink_module should return nothing (CPS tail call)");
+    // The per-module wrapper is exported under the canonical FQN
+    // (`test:` for the test driver) and has the host-friendly
+    // signature `(key_bytes: anyref, cont_id: i32) -> ()`.
+    let wrapper = instance.get_func(&mut store, "test")
+      .expect("'test' wrapper export missing");
+    let ty = wrapper.ty(&store);
+    assert_eq!(ty.params().len(), 2, "wrapper should take (key_bytes, cont_id)");
+    assert_eq!(ty.results().len(), 0, "wrapper should return nothing (CPS tail call)");
   }
 
   // End-to-end execution tests live in `src/runner/mod.rs` test

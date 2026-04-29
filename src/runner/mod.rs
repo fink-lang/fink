@@ -84,8 +84,8 @@ pub fn run_file(
 mod tests {
   use std::sync::{Arc, Mutex};
   use wasmtime::{
-    ArrayRef, ArrayRefPre, ArrayType, Config, Engine, Error, ExternType,
-    FieldType, Linker, Module, Mutability, Store, StorageType, Val,
+    AnyRef, ArrayRef, ArrayRefPre, ArrayType, Config, Engine, Error, ExternType,
+    FieldType, Linker, Module, Mutability, Rooted, Store, StorageType, Val,
   };
 
   /// Hardcoded cli args passed to `main` when the source defines it.
@@ -267,9 +267,22 @@ mod tests {
           "host_invoke_cont" => {
             let captured_clone = captured.clone();
             linker.func_new("env", &name, ft, move |mut caller, params, _results| {
+              let cont_id = params[0].unwrap_i32();
               let args_any = params[1].unwrap_anyref()
                 .ok_or_else(|| Error::msg("host_invoke_cont: null args"))?;
               let cons = args_any.unwrap_struct(&caller)?;
+
+              // Cont id 1: wrapper's cont — args = [last_expr, main_clo].
+              // Cont id 2: main's cont — args = [main_result].
+              //
+              // For id=1: capture last_expr as the test result, then if
+              // main_clo is a usable closure (non-null, non-Nil), tail-
+              // call apply(main_args, main_clo) from inside this
+              // callback so the anyrefs stay live (no cross-call rooting
+              // needed). The id=2 callback overwrites captured with
+              // main's actual result.
+
+              // Extract args[0] = last_expr (or main_result for id=2).
               let head = match cons.field(&mut caller, 0) {
                 Ok(h) => h,
                 Err(_) => {
@@ -277,64 +290,50 @@ mod tests {
                   return Ok(());
                 }
               };
-              let head_any = match head {
-                Val::AnyRef(Some(r)) => r,
-                _ => return Ok(()),
-              };
-              if let Ok(Some(i31)) = head_any.as_i31(&caller) {
-                *captured_clone.lock().unwrap() =
-                  Some(TestResult::Bool(i31.get_i32() != 0));
+
+              // Capture the head as a TestResult — this is either
+              // last_expr (id=1, may be overwritten if main runs) or
+              // main's result (id=2, final answer).
+              capture_test_result(&mut caller, &head, &captured_clone)?;
+
+              // Only id=1 (wrapper cont) carries a second arg (main_clo).
+              if cont_id != 1 {
                 return Ok(());
               }
-              if let Ok(Some(st)) = head_any.as_struct(&caller) {
-                let field0 = st.field(&mut caller, 0);
-                match field0 {
-                  Ok(Val::F64(bits)) => {
-                    *captured_clone.lock().unwrap() =
-                      Some(TestResult::Num(f64::from_bits(bits)));
-                    return Ok(());
+
+              // Walk the cons tail to get args[1] = main_clo.
+              let tail_val = cons.field(&mut caller, 1).ok();
+              let main_clo_val = match tail_val {
+                Some(Val::AnyRef(Some(tail_ref))) => {
+                  match tail_ref.as_struct(&caller) {
+                    Ok(Some(tail_st)) => tail_st.field(&mut caller, 0).ok(),
+                    _ => None,
                   }
-                  Ok(Val::I32(offset)) => {
-                    if let Ok(Val::I32(length)) = st.field(&mut caller, 1) {
-                      let mem = caller.get_export("memory")
-                        .and_then(|e| e.into_memory());
-                      if let Some(mem) = mem {
-                        let data = mem.data(&caller);
-                        let off = offset as usize;
-                        let len = length as usize;
-                        if off + len <= data.len() {
-                          let bytes = data[off..off + len].to_vec();
-                          *captured_clone.lock().unwrap() =
-                            Some(TestResult::Str(bytes));
-                          return Ok(());
-                        }
-                      }
-                    }
-                  }
-                  Ok(Val::AnyRef(Some(_))) => {
-                    if let Ok(Val::AnyRef(Some(ar))) = st.field(&mut caller, 0)
-                      && let Ok(Some(arr)) = ar.as_array(&caller)
-                    {
-                      let len = arr.len(&caller).unwrap_or(0);
-                      let mut bytes = Vec::with_capacity(len as usize);
-                      for i in 0..len {
-                        if let Ok(Val::I32(b)) = arr.get(&mut caller, i) {
-                          bytes.push(b as u8);
-                        }
-                      }
-                      *captured_clone.lock().unwrap() =
-                        Some(TestResult::Str(bytes));
-                      return Ok(());
-                    }
-                  }
-                  Err(_) => {
-                    *captured_clone.lock().unwrap() =
-                      Some(TestResult::Str(Vec::new()));
-                    return Ok(());
-                  }
-                  _ => {}
                 }
+                _ => None,
+              };
+
+              // No main, or main_clo is Nil/null — we're done.
+              let main_clo = match main_clo_val {
+                Some(Val::AnyRef(Some(r))) => r,
+                _ => return Ok(()),
+              };
+              // If main_clo points at a $Nil (no key matched in the
+              // exports rec), it's a struct with zero fields — skip.
+              // A real $Closure has 2 fields (funcref + captures).
+              if let Ok(Some(st)) = main_clo.as_struct(&caller)
+                && st.field(&mut caller, 1).is_err()
+              {
+                return Ok(());
               }
+
+              // Main exists. Reset captured (last_expr was provisional)
+              // and apply main with the cli args. The host_invoke_cont
+              // callback for cont_id=2 will capture main's actual result.
+              *captured_clone.lock().unwrap() = None;
+
+              run_main_in_callback(&mut caller, main_clo)?;
+
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
@@ -413,71 +412,42 @@ mod tests {
     let instance = linker.instantiate(&mut store, &module)
       .map_err(|e| e.to_string())?;
 
-    let wrap_host_cont = get_func(&instance, &mut store, "wrap_host_cont")?;
-    let args_empty     = get_func(&instance, &mut store, "std/fn.fnk:args_empty")?;
-    let args_prepend   = get_func(&instance, &mut store, "std/fn.fnk:args_prepend")?;
-    let fink_module    = get_func(&instance, &mut store, "fink_module")?;
+    // Call the entry's host wrapper with key=b"main" + cont id 1.
+    // The wrapper drives `init_module`, which runs the module body
+    // and tail-applies cont id 1 with `(last_expr, main_clo)`.
+    //
+    // The host_invoke_cont callback for cont id 1 captures last_expr
+    // as a TestResult, then — if main_clo is a usable closure —
+    // immediately applies main with cli args and cont id 2 from
+    // inside the same callback (avoiding cross-call rooting of
+    // the captured anyref).
+    //
+    // Entry compiles under `./test.fnk:`, so the wrapper is exported
+    // as `"./test.fnk"`.
+    let entry_wrapper = get_func(&instance, &mut store, "./test.fnk")?;
+    let str_wrap      = get_func(&instance, &mut store, "std/str.wat:_str_wrap_bytes")?;
 
-    let done_cont = call1(&wrap_host_cont, &mut store, &[Val::I32(1)], "wrap_host_cont")?;
+    let main_key_bytes = wrap_bytes_to_array_ref(&mut store, b"main")?;
 
-    let body_args = build_args_list(&args_empty, &args_prepend, &mut store, &[done_cont.clone()])?;
-    fink_module.call(&mut store, &[Val::AnyRef(None), body_args], &mut [])
-      .map_err(|e| format!("fink_module: {e}"))?;
-
-    // If the source defined a top-level `main`, invoke it with a fresh
-    // done cont and the test cli args. Result of `main` overrides the
-    // module body's result. Globals are FQN-prefixed by compile_package.
-    // Entry compiles under `./test.fnk:`, so `main` lives at `./test.fnk:main`.
-    if let Some(main_global) = instance.get_global(&mut store, "./test.fnk:main") {
-      *captured.lock().unwrap() = None;
-
-      let main_clo  = main_global.get(&mut store);
-      let apply_fn  = get_func(&instance, &mut store, "rt/apply.wat:apply")?;
-      let str_wrap  = get_func(&instance, &mut store, "std/str.wat:_str_wrap_bytes")?;
-
-      let mut main_args_vals = vec![done_cont];
-      for bytes in TEST_CLI_ARGS {
-        main_args_vals.push(wrap_bytes_as_str(&str_wrap, &mut store, bytes)?);
-      }
-      let main_args = build_args_list(&args_empty, &args_prepend, &mut store, &main_args_vals)?;
-
-      apply_fn.call(&mut store, &[main_args, main_clo], &mut [])
-        .map_err(|e| format!("_apply(main): {e}"))?;
-    }
+    entry_wrapper
+      .call(&mut store,
+        &[Val::AnyRef(Some(main_key_bytes)), Val::I32(1)],
+        &mut [])
+      .map_err(|e| format!("entry wrapper: {e}"))?;
+    // str_wrap is captured into the closure via `caller.get_export`
+    // inside run_main_in_callback; the binding here is just to
+    // ensure the runtime exports it (caught at host setup time).
+    let _ = str_wrap;
 
     Ok(captured.lock().unwrap().take().unwrap_or(TestResult::None))
   }
 
-  fn get_func(
-    instance: &wasmtime::Instance, store: &mut Store<()>, name: &str,
-  ) -> Result<wasmtime::Func, String> {
-    instance.get_func(store, name).ok_or_else(|| format!("no '{name}' export"))
-  }
-
-  fn call1(
-    func: &wasmtime::Func, store: &mut Store<()>, params: &[Val], label: &str,
-  ) -> Result<Val, String> {
-    let mut out = [Val::AnyRef(None)];
-    func.call(store, params, &mut out).map_err(|e| format!("{label}: {e}"))?;
-    Ok(out[0].clone())
-  }
-
-  fn build_args_list(
-    args_empty: &wasmtime::Func,
-    args_prepend: &wasmtime::Func,
-    store: &mut Store<()>,
-    vals: &[Val],
-  ) -> Result<Val, String> {
-    let mut acc = call1(args_empty, store, &[], "args_empty")?;
-    for v in vals.iter().rev() {
-      acc = call1(args_prepend, store, &[v.clone(), acc], "args_prepend")?;
-    }
-    Ok(acc)
-  }
-
-  fn wrap_bytes_as_str(
-    str_wrap: &wasmtime::Func, store: &mut Store<()>, bytes: &[u8],
-  ) -> Result<Val, String> {
+  /// Allocate a fink `$ByteArray` from raw bytes. Used to hand the
+  /// host-facing wrapper its `key` arg (raw GC bytes — the wrapper
+  /// internally calls `_str_wrap_bytes` to wrap into a `$Str`).
+  fn wrap_bytes_to_array_ref(
+    store: &mut Store<()>, bytes: &[u8],
+  ) -> Result<Rooted<AnyRef>, String> {
     let array_ty = ArrayType::new(
       store.engine(),
       FieldType::new(Mutability::Var, StorageType::I8),
@@ -486,7 +456,145 @@ mod tests {
     let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
     let array = ArrayRef::new_fixed(&mut *store, &alloc, &elems)
       .map_err(|e| format!("byte array alloc: {e}"))?;
-    call1(str_wrap, store, &[Val::AnyRef(Some(array.to_anyref()))], "_str_wrap_bytes")
+    Ok(array.to_anyref())
+  }
+
+  fn get_func(
+    instance: &wasmtime::Instance, store: &mut Store<()>, name: &str,
+  ) -> Result<wasmtime::Func, String> {
+    instance.get_func(store, name).ok_or_else(|| format!("no '{name}' export"))
+  }
+
+  /// Inspect a fink anyref and capture it as a `TestResult`. Used from
+  /// inside the `host_invoke_cont` callback. The TestResult variants
+  /// mirror the value types our wasm tests can produce: i31 booleans,
+  /// `$Num` (struct of f64), `$StrDataImpl` (offset+length into linear
+  /// memory), or `$StrBytesImpl` (a `$ByteArray`).
+  fn capture_test_result(
+    caller: &mut wasmtime::Caller<'_, ()>,
+    val: &Val,
+    captured: &Arc<Mutex<Option<TestResult>>>,
+  ) -> Result<(), Error> {
+    let head_any = match val {
+      Val::AnyRef(Some(r)) => *r,
+      _ => return Ok(()),
+    };
+    if let Ok(Some(i31)) = head_any.as_i31(&*caller) {
+      *captured.lock().unwrap() =
+        Some(TestResult::Bool(i31.get_i32() != 0));
+      return Ok(());
+    }
+    if let Ok(Some(st)) = head_any.as_struct(&*caller) {
+      let field0 = st.field(&mut *caller, 0);
+      match field0 {
+        Ok(Val::F64(bits)) => {
+          *captured.lock().unwrap() =
+            Some(TestResult::Num(f64::from_bits(bits)));
+          return Ok(());
+        }
+        Ok(Val::I32(offset)) => {
+          if let Ok(Val::I32(length)) = st.field(&mut *caller, 1) {
+            let mem = caller.get_export("memory")
+              .and_then(|e| e.into_memory());
+            if let Some(mem) = mem {
+              let data = mem.data(&*caller);
+              let off = offset as usize;
+              let len = length as usize;
+              if off + len <= data.len() {
+                let bytes = data[off..off + len].to_vec();
+                *captured.lock().unwrap() =
+                  Some(TestResult::Str(bytes));
+                return Ok(());
+              }
+            }
+          }
+        }
+        Ok(Val::AnyRef(Some(_))) => {
+          if let Ok(Val::AnyRef(Some(ar))) = st.field(&mut *caller, 0)
+            && let Ok(Some(arr)) = ar.as_array(&*caller)
+          {
+            let len = arr.len(&*caller).unwrap_or(0);
+            let mut bytes = Vec::with_capacity(len as usize);
+            for i in 0..len {
+              if let Ok(Val::I32(b)) = arr.get(&mut *caller, i) {
+                bytes.push(b as u8);
+              }
+            }
+            *captured.lock().unwrap() =
+              Some(TestResult::Str(bytes));
+            return Ok(());
+          }
+        }
+        Err(_) => {
+          *captured.lock().unwrap() =
+            Some(TestResult::Str(Vec::new()));
+          return Ok(());
+        }
+        _ => {}
+      }
+    }
+    Ok(())
+  }
+
+  /// Apply `main_clo` with the test cli args + a fresh done cont
+  /// (cont id 2). Called from inside `host_invoke_cont` so the
+  /// `main_clo` anyref stays rooted on the wasm stack — no
+  /// cross-call rooting needed.
+  fn run_main_in_callback(
+    caller: &mut wasmtime::Caller<'_, ()>,
+    main_clo: Rooted<AnyRef>,
+  ) -> Result<(), Error> {
+    let wrap_host_cont = caller.get_export("wrap_host_cont")
+      .and_then(|e| e.into_func())
+      .ok_or_else(|| Error::msg("no wrap_host_cont export"))?;
+    let args_empty = caller.get_export("std/fn.fnk:args_empty")
+      .and_then(|e| e.into_func())
+      .ok_or_else(|| Error::msg("no args_empty export"))?;
+    let args_prepend = caller.get_export("std/fn.fnk:args_prepend")
+      .and_then(|e| e.into_func())
+      .ok_or_else(|| Error::msg("no args_prepend export"))?;
+    let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+      .and_then(|e| e.into_func())
+      .ok_or_else(|| Error::msg("no _str_wrap_bytes export"))?;
+    let apply_fn = caller.get_export("rt/apply.wat:apply")
+      .and_then(|e| e.into_func())
+      .ok_or_else(|| Error::msg("no apply export"))?;
+
+    // done_cont = wrap_host_cont(2) — id 2 routes back here for main's result.
+    let mut done_out = [Val::AnyRef(None)];
+    wrap_host_cont.call(&mut *caller, &[Val::I32(2)], &mut done_out)?;
+    let done_cont = done_out[0].clone();
+
+    // Build cli arg strings.
+    let mut main_args_vals: Vec<Val> = vec![done_cont];
+    let array_ty = ArrayType::new(
+      caller.engine(),
+      FieldType::new(Mutability::Var, StorageType::I8),
+    );
+    let alloc = ArrayRefPre::new(&mut *caller, array_ty);
+    for bytes in TEST_CLI_ARGS {
+      let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
+      let array = ArrayRef::new_fixed(&mut *caller, &alloc, &elems)
+        .map_err(|e| Error::msg(format!("byte array alloc: {e}")))?;
+      let mut wrapped = [Val::AnyRef(None)];
+      str_wrap.call(&mut *caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
+      main_args_vals.push(wrapped[0].clone());
+    }
+
+    // Build the args list (Cons-chain).
+    let mut acc_out = [Val::AnyRef(None)];
+    args_empty.call(&mut *caller, &[], &mut acc_out)?;
+    let mut acc = acc_out[0].clone();
+    for v in main_args_vals.iter().rev() {
+      let mut next = [Val::AnyRef(None)];
+      args_prepend.call(&mut *caller, &[v.clone(), acc], &mut next)?;
+      acc = next[0].clone();
+    }
+    let main_args = acc;
+
+    // apply(main_args, main_clo).
+    apply_fn.call(&mut *caller, &[main_args, Val::AnyRef(Some(main_clo))], &mut [])?;
+    Ok(())
   }
 
   test_macros::include_fink_tests!("src/runner/test_literals.fnk", skip-ir);

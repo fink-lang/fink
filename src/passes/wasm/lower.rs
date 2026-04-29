@@ -56,7 +56,18 @@ fn origin_of(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> Option<ByteRange> {
 /// function's export name still stays `"fink_module"`; rewiring the
 /// body to the `import_module` init-guard shape lands in 4D.
 pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
-  let usage = runtime_contract::scan(cps);
+  let mut usage = runtime_contract::scan(cps);
+  // Per-module wrapper synthesised below uses init_module and the
+  // closure/captures/str/args primitives. Mark them so declare()
+  // returns Runtime handles for them even if the source code
+  // doesn't otherwise need them (e.g. a module with no `pub` calls).
+  usage.mark(runtime_contract::Sym::ModulesInitModule);
+  usage.mark(runtime_contract::Sym::WrapHostCont);
+  usage.mark(runtime_contract::Sym::StrWrapBytes);
+  usage.mark(runtime_contract::Sym::FnHostWrapper);
+  usage.mark(runtime_contract::Sym::Closure);
+  usage.mark(runtime_contract::Sym::Captures);
+  usage.mark(runtime_contract::Sym::Str);
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
 
@@ -73,19 +84,28 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let mut pub_globals: HashMap<CpsId, (GlobalSym, String)> = HashMap::new();
   for (id, name) in &pubs {
     let qualified = format!("{fqn_prefix}{name}");
+    // No WASM-level export. User-binding globals are addressable
+    // storage for the registry (`std/modules.fnk:pub`); the host
+    // accesses bindings exclusively through the per-module host
+    // wrapper export, which routes via `init_module` + the
+    // registry. The bare globals stay because lifted closures read
+    // them at module-init time (forward-reference machinery).
     let sym = add_global(
       &mut frag,
       val_anyref(true),
       true,
       GlobalInit::RefNull(AbsHeap::Any),
       &qualified,
-      Some(qualified.clone()),
+      None,
     );
     pub_globals.insert(*id, (sym, name.clone()));
   }
 
-  // Lower the module body as the `fink_module` function.
-  let module_display = format!("{fqn_prefix}fink_module");
+  // Lower the module body as the `fink_module` function. Double-colon
+  // marks compiler-synth so it can't collide with a user `pub
+  // fink_module` in source: `:` is lexer-rejected at the source
+  // level, making `<fqn>::fink_module` collision-safe.
+  let module_display = format!("{fqn_prefix}:fink_module");
   let fink_module = lower_fn(
     &mut frag, &rt, cps, ast,
     &[],                 // no cap params at the module level
@@ -96,9 +116,117 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
     &HashMap::new(),    // module body: no enclosing fn_syms
     fqn_prefix,         // namespacing prefix for nested LetFn displays
   );
-  frag.funcs[fink_module.0 as usize].export = Some("fink_module".into());
+  let FuncSym::Local(_) = fink_module else { panic!("lower: fink_module must be Local"); };
+  // No WASM-level export for fink_module — host accesses the module
+  // exclusively through the per-module wrapper exported under the
+  // canonical FQN. fink_module stays as a bare internal func; the
+  // wrapper holds a no-capture closure over it.
+
+  // Per-module host-facing wrapper. Exported under the module's
+  // canonical FQN so the host can call any module by URL string
+  // (`instance.get_func(canonical_url)`). The wrapper composes the
+  // module's fink_module with `std/modules.fnk:init_module` —
+  // run-once + optional named-export extraction in one call.
+  synth_host_wrapper(&mut frag, &rt, fink_module, fqn_prefix);
 
   frag
+}
+
+/// Synthesise the per-module host-facing wrapper export.
+///
+/// Each module's wrapper is a Fn2-shaped function exported under the
+/// module's canonical FQN (or `"fink_module"` for a fragment with
+/// empty `fqn_prefix`, matching the pre-wrapper convention so
+/// existing runners keep working). When called by a host, it:
+///
+/// 1. Unpacks `[cont, key]` from `:params` — `key` may be a fink
+///    `$Str` (for "give me one named export") or null (for "give me
+///    the whole exports rec").
+/// 2. Builds a no-capture `$Closure` over the module's `fink_module`
+///    funcref (funcrefs aren't anyref-compatible; the closure
+///    bridges).
+/// 3. Materialises the canonical URL as a `$Str` constant — used by
+///    `init_module` to key the runtime registry.
+/// 4. Tail-calls `std/modules.fnk:init_module(url, mod_clos, key,
+///    cont)` which handles run-once init plus optional key
+///    extraction, then tail-applies cont with `(last_expr, val)`.
+fn synth_host_wrapper(
+  frag: &mut Fragment,
+  rt: &Runtime,
+  fink_module: FuncSym,
+  fqn_prefix: &str,
+) {
+  let canonical_url = fqn_prefix.trim_end_matches(':').to_string();
+  assert!(
+    !canonical_url.is_empty(),
+    "synth_host_wrapper: fqn_prefix must be non-empty — every \
+     fragment needs a real FQN (canonical url for package compiles, \
+     `test:` for tests, `repl:` for REPL). The wrapper is exported \
+     under canonical FQN so the host can address it.",
+  );
+  let display = format!("{canonical_url}::host_wrapper");
+
+  // Host-friendly signature: `(key: anyref-or-null, cont_id: i32)
+  // -> ()`. Key arrives as a raw GC `$ByteArray` (or null for
+  // "whole exports rec"); cont_id is a plain i32 the host
+  // pre-registered. The wrapper does the fink-side wrapping
+  // (`_str_wrap_bytes` for the key, `wrap_host_cont` for the
+  // cont) before tail-calling `init_module`.
+  // Uses the runtime-shared `Fn_host_wrapper` type so all modules
+  // reference one nominal signature instead of a per-fragment
+  // local copy.
+  let sig = rt.fn_host_wrapper();
+
+  let mut ctx = FnCtx::new(HashMap::new(), HashMap::new(), fqn_prefix.to_string());
+  let l_key_p     = ctx.alloc_param(":wrap_key_bytes");
+  let l_cont_id_p = ctx.alloc_param_typed(":wrap_cont_id", val_i32());
+
+  // URL constant — the registry key.
+  let l_url = emit_str_const(&mut ctx, frag, rt, canonical_url.as_bytes(), ":wrap_url");
+
+  // Wrap the cont id into a fink anyref via `wrap_host_cont(i32) ->
+  // anyref`. Runtime-resolved via the runtime contract.
+  let l_cont = ctx.alloc_local(":wrap_cont");
+  let i_wrap_cont = push_call(frag, rt.wrap_host_cont(),
+    vec![op_local(l_cont_id_p)], Some(l_cont));
+  ctx.instrs.push(i_wrap_cont);
+
+  // Wrap the byte-array key into a `$Str` via `_str_wrap_bytes`.
+  // CONTRACT: host must pass a non-null `$ByteArray`. To request
+  // "whole exports rec" (no specific key), pass an empty byte
+  // array — yields the empty-string singleton, which init_module
+  // looks up in the rec (not found → null val). Null-key support
+  // requires ref.is_null in the IR surface; that arrives
+  // separately.
+  let l_key_str = ctx.alloc_local(":wrap_key_str");
+  let i_wrap_key = push_call(frag, rt.str_wrap_bytes(),
+    vec![op_local(l_key_p)], Some(l_key_str));
+  ctx.instrs.push(i_wrap_key);
+
+  // Build no-capture closure over fink_module funcref.
+  let l_caps_arg = ctx.alloc_local_typed(
+    ":wrap_caps_arg",
+    val_ref(rt.captures(), /*nullable*/ true),
+  );
+  let i_caps_null = push_ref_null_concrete(frag, rt.captures(), l_caps_arg);
+  ctx.instrs.push(i_caps_null);
+
+  let l_mod_clos = ctx.alloc_local(":wrap_mod_clos");
+  let i_clos = push_struct_new(
+    frag, rt.closure(),
+    vec![Operand::RefFunc(fink_module), op_local(l_caps_arg)],
+    l_mod_clos,
+  );
+  ctx.instrs.push(i_clos);
+
+  // Tail-call init_module(url, mod_clos, key, cont).
+  let i_init = push_return_call(frag, rt.modules_init_module(),
+    vec![op_local(l_url), op_local(l_mod_clos), op_local(l_key_str), op_local(l_cont)]);
+  ctx.instrs.push(i_init);
+
+  let sym = func(frag, sig, ctx.params, ctx.locals, ctx.instrs, &display);
+  let FuncSym::Local(i) = sym else { panic!("synth_host_wrapper: func must be Local") };
+  frag.funcs[i as usize].export = Some(canonical_url);
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -257,9 +385,13 @@ impl FnCtx {
   }
 
   fn alloc_param(&mut self, name: &str) -> LocalIdx {
+    self.alloc_param_typed(name, val_anyref(true))
+  }
+
+  fn alloc_param_typed(&mut self, name: &str, ty: ValType) -> LocalIdx {
     let idx = LocalIdx(self.next_local_idx);
     self.next_local_idx += 1;
-    self.params.push(local(val_anyref(true), name));
+    self.params.push(local(ty, name));
     idx
   }
 
