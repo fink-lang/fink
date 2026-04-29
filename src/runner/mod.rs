@@ -465,41 +465,6 @@ mod tests {
     instance.get_func(store, name).ok_or_else(|| format!("no '{name}' export"))
   }
 
-  fn call1(
-    func: &wasmtime::Func, store: &mut Store<()>, params: &[Val], label: &str,
-  ) -> Result<Val, String> {
-    let mut out = [Val::AnyRef(None)];
-    func.call(store, params, &mut out).map_err(|e| format!("{label}: {e}"))?;
-    Ok(out[0].clone())
-  }
-
-  fn build_args_list(
-    args_empty: &wasmtime::Func,
-    args_prepend: &wasmtime::Func,
-    store: &mut Store<()>,
-    vals: &[Val],
-  ) -> Result<Val, String> {
-    let mut acc = call1(args_empty, store, &[], "args_empty")?;
-    for v in vals.iter().rev() {
-      acc = call1(args_prepend, store, &[v.clone(), acc], "args_prepend")?;
-    }
-    Ok(acc)
-  }
-
-  fn wrap_bytes_as_str(
-    str_wrap: &wasmtime::Func, store: &mut Store<()>, bytes: &[u8],
-  ) -> Result<Val, String> {
-    let array_ty = ArrayType::new(
-      store.engine(),
-      FieldType::new(Mutability::Var, StorageType::I8),
-    );
-    let alloc = ArrayRefPre::new(&mut *store, array_ty);
-    let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
-    let array = ArrayRef::new_fixed(&mut *store, &alloc, &elems)
-      .map_err(|e| format!("byte array alloc: {e}"))?;
-    call1(str_wrap, store, &[Val::AnyRef(Some(array.to_anyref()))], "_str_wrap_bytes")
-  }
-
   /// Inspect a fink anyref and capture it as a `TestResult`. Used from
   /// inside the `host_invoke_cont` callback. The TestResult variants
   /// mirror the value types our wasm tests can produce: i31 booleans,
