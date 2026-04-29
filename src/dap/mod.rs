@@ -75,158 +75,149 @@ fn pc_to_mark_source(
 
 // ── Runner bootstrap ────────────────────────────────────────────────────────
 
-/// Drive a compiled fink module through the same bootstrap sequence used by
-/// `src/runner/wasmtime_runner.rs`, but via `.call_async` so it can run
-/// under `guest_debug`. Duplicated from the sync runner on purpose — the
-/// plan is to unify once both work (see
-/// `.brain/.scratch/dap-runner-bootstrap-plan.md`).
+/// Drive a compiled fink module through the host-wrapper protocol via
+/// `.call_async` so it can run under `guest_debug`. Same shape as
+/// `src/runner/wasmtime_runner.rs::run` (find entry wrapper, call with
+/// key=b"main" + cont id 1, dispatch main from inside `host_invoke_cont`),
+/// just async. The host_invoke_cont callback that drives main lives in
+/// the linker setup at the call site — here we only need to call the
+/// wrapper.
 async fn run_module(
   store: &mut wasmtime::Store<DebugState>,
   linker: &wasmtime::Linker<DebugState>,
   module: &wasmtime::Module,
-  program_arg: String,
 ) -> Result<(), String> {
-  // Collect dep-init exports before instantiating; order matches linker's
-  // topological sort (providers before consumers).
-  let dep_init_names: Vec<String> = module
-    .exports()
-    .filter_map(|e| {
-      let n = e.name();
-      if n.ends_with(":fink_module") && n != "fink_module" {
-        Some(n.to_string())
-      } else {
-        None
-      }
-    })
-    .collect();
-
   let instance = linker.instantiate_async(&mut *store, module).await
     .map_err(|e| format!("instantiation error: {e}"))?;
 
-  let box_func = instance.get_func(&mut *store, "_box_func")
-    .ok_or("no '_box_func' export")?;
-  let apply = instance.get_func(&mut *store, "_apply")
-    .ok_or("no '_apply' export")?;
-  let list_nil = instance.get_func(&mut *store, "_list_nil")
-    .ok_or("no '_list_nil' export")?;
-  let list_prepend = instance.get_func(&mut *store, "_list_prepend")
-    .ok_or("no '_list_prepend' export")?;
-  let fn2_stub = instance.get_func(&mut *store, "_fn2_stub")
-    .ok_or("no '_fn2_stub' export")?;
-  let done_ty = fn2_stub.ty(&*store);
+  let entry_wrapper_name = find_entry_wrapper(module)?;
+  let entry_wrapper = instance.get_func(&mut *store, &entry_wrapper_name)
+    .ok_or_else(|| format!("no '{entry_wrapper_name}' export"))?;
 
-  // Dep init — box each dep's fink_module, apply with a no-op done.
-  for name in &dep_init_names {
-    let dep = instance.get_func(&mut *store, name)
-      .ok_or_else(|| format!("no '{}' export", name))?;
+  let main_key = wrap_bytes_to_byte_array_async(&mut *store, b"main")?;
 
-    let mut boxed_dep = [wasmtime::Val::AnyRef(None)];
-    box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(dep))], &mut boxed_dep).await
-      .map_err(|e| format!("_box_func({name}) failed: {e}"))?;
-
-    let noop = wasmtime::Func::new(&mut *store, done_ty.clone(), |_c, _p, _r| Ok(()));
-    let mut boxed_noop = [wasmtime::Val::AnyRef(None)];
-    box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(noop))], &mut boxed_noop).await
-      .map_err(|e| format!("_box_func(done) for {name} failed: {e}"))?;
-
-    let mut nil = [wasmtime::Val::AnyRef(None)];
-    list_nil.call_async(&mut *store, &[], &mut nil).await
-      .map_err(|e| format!("_list_nil failed: {e}"))?;
-    let mut init_args = [wasmtime::Val::AnyRef(None)];
-    list_prepend.call_async(&mut *store, &[boxed_noop[0], nil[0]], &mut init_args).await
-      .map_err(|e| format!("_list_prepend failed: {e}"))?;
-
-    apply.call_async(&mut *store, &[init_args[0], boxed_dep[0]], &mut []).await
-      .map_err(|e| format!("{name} init failed: {e}"))?;
-  }
-
-  // Entry bootstrap — populate export-slot globals (notably `main`).
-  let fink_module = instance.get_func(&mut *store, "fink_module")
-    .ok_or("no 'fink_module' export")?;
-
-  let mut boxed_module = [wasmtime::Val::AnyRef(None)];
-  box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(fink_module))], &mut boxed_module).await
-    .map_err(|e| format!("_box_func(fink_module) failed: {e}"))?;
-
-  let done = wasmtime::Func::new(&mut *store, done_ty, |_c, _p, _r| Ok(()));
-  let mut boxed_done = [wasmtime::Val::AnyRef(None)];
-  box_func.call_async(&mut *store, &[wasmtime::Val::FuncRef(Some(done))], &mut boxed_done).await
-    .map_err(|e| format!("_box_func(done) failed: {e}"))?;
-
-  let mut nil = [wasmtime::Val::AnyRef(None)];
-  list_nil.call_async(&mut *store, &[], &mut nil).await
-    .map_err(|e| format!("_list_nil failed: {e}"))?;
-  let mut init_args = [wasmtime::Val::AnyRef(None)];
-  list_prepend.call_async(&mut *store, &[boxed_done[0], nil[0]], &mut init_args).await
-    .map_err(|e| format!("_list_prepend failed: {e}"))?;
-
-  apply.call_async(&mut *store, &[init_args[0], boxed_module[0]], &mut []).await
-    .map_err(|e| format!("fink_module init failed: {e}"))?;
-
-  // Read `main` from the export global — it's a boxed $Closure now.
-  let main_global = instance.get_global(&mut *store, "main")
-    .ok_or("no 'main' global export")?;
-  let boxed_main = main_global.get(&mut *store);
-
-  // Build argv = [program_name] as $List<$Str>. DAP doesn't yet support
-  // user-supplied CLI args — follow-up when we need them.
-  let args_list = build_args_list_async(&mut *store, &instance, &[program_arg.into_bytes()]).await?;
-
-  let run_main = instance.get_func(&mut *store, "_run_main")
-    .ok_or("no '_run_main' export")?;
-  run_main.call_async(&mut *store, &[boxed_main, args_list], &mut []).await
-    .map_err(|e| format!("_run_main failed: {e}"))?;
-
+  entry_wrapper
+    .call_async(&mut *store,
+      &[wasmtime::Val::AnyRef(Some(main_key)), wasmtime::Val::I32(CONT_WRAPPER_DONE)],
+      &mut [])
+    .await
+    .map_err(|e| format!("entry wrapper: {e}"))?;
   Ok(())
 }
 
-/// Build a fink $List<$Str> from raw byte-string args (async variant).
-async fn build_args_list_async(
-  store: &mut wasmtime::Store<DebugState>,
-  instance: &wasmtime::Instance,
-  args: &[Vec<u8>],
-) -> Result<wasmtime::Val, String> {
-  let list_nil = instance.get_func(&mut *store, "_list_nil")
-    .ok_or("no '_list_nil' export")?;
-  let list_prepend = instance.get_func(&mut *store, "_list_prepend")
-    .ok_or("no '_list_prepend' export")?;
+/// Cont id used for the wrapper's done continuation in DAP runs.
+/// Matches the constant in `wasmtime_runner.rs`.
+const CONT_WRAPPER_DONE: i32 = 1;
 
-  let mut acc = [wasmtime::Val::AnyRef(None)];
-  list_nil.call_async(&mut *store, &[], &mut acc).await
-    .map_err(|e| format!("_list_nil failed: {e}"))?;
+/// Cont id used for `main`'s done continuation in DAP runs.
+const CONT_MAIN_DONE: i32 = 2;
 
-  for arg in args.iter().rev() {
-    let s = bytes_to_str_async(&mut *store, instance, arg).await?;
-    let mut next = [wasmtime::Val::AnyRef(None)];
-    list_prepend.call_async(&mut *store, &[s, acc[0]], &mut next).await
-      .map_err(|e| format!("_list_prepend failed: {e}"))?;
-    acc = next;
+/// Scan module exports for the entry wrapper, exported under the
+/// canonical URL `./<basename>`.
+fn find_entry_wrapper(module: &wasmtime::Module) -> Result<String, String> {
+  for export in module.exports() {
+    let name = export.name();
+    if name.starts_with("./")
+      && let wasmtime::ExternType::Func(_) = export.ty()
+    {
+      return Ok(name.to_string());
+    }
   }
-  Ok(acc[0])
+  Err("no entry wrapper export (expected one starting with './')".into())
 }
 
-/// Allocate a $Str on the GC heap from raw bytes via `_str_wrap_bytes`.
-async fn bytes_to_str_async(
+/// Allocate a `$ByteArray` on the GC heap from raw bytes (DAP store flavour).
+fn wrap_bytes_to_byte_array_async(
   store: &mut wasmtime::Store<DebugState>,
-  instance: &wasmtime::Instance,
-  data: &[u8],
-) -> Result<wasmtime::Val, String> {
+  bytes: &[u8],
+) -> Result<wasmtime::Rooted<wasmtime::AnyRef>, String> {
   let array_ty = wasmtime::ArrayType::new(
     store.engine(),
     wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
   );
   let alloc = wasmtime::ArrayRefPre::new(&mut *store, array_ty);
-  let elems: Vec<wasmtime::Val> = data.iter().map(|&b| wasmtime::Val::I32(b as i32)).collect();
+  let elems: Vec<wasmtime::Val> =
+    bytes.iter().map(|&b| wasmtime::Val::I32(b as i32)).collect();
   let array = wasmtime::ArrayRef::new_fixed(&mut *store, &alloc, &elems)
-    .map_err(|e| format!("byte array alloc failed: {e}"))?;
+    .map_err(|e| format!("byte array alloc: {e}"))?;
+  Ok(array.to_anyref())
+}
 
-  let wrap_fn = instance.get_func(&mut *store, "_str_wrap_bytes")
-    .ok_or("no '_str_wrap_bytes' export")?;
-  let array_any = array.to_anyref();
-  let mut result = [wasmtime::Val::AnyRef(None)];
-  wrap_fn.call_async(&mut *store, &[wasmtime::Val::AnyRef(Some(array_any))], &mut result).await
-    .map_err(|e| format!("_str_wrap_bytes failed: {e}"))?;
-  Ok(result[0])
+/// Capture an exit code into the DAP exit-code slot. Mirrors
+/// `capture_exit_code` in `wasmtime_runner.rs`.
+fn capture_dap_exit_code(
+  caller: &mut wasmtime::Caller<'_, DebugState>,
+  val: Option<&wasmtime::Val>,
+  exit: &Arc<Mutex<i64>>,
+) {
+  let Some(wasmtime::Val::AnyRef(Some(r))) = val else { return; };
+  if let Ok(Some(i31)) = r.as_i31(&*caller) {
+    *exit.lock().unwrap() = i31.get_i32() as i64;
+    return;
+  }
+  if let Ok(Some(st)) = r.as_struct(&*caller)
+    && let Ok(wasmtime::Val::F64(bits)) = st.field(&mut *caller, 0)
+  {
+    *exit.lock().unwrap() = f64::from_bits(bits) as i64;
+  }
+}
+
+/// Apply `main_clo` with cli args + cont id 2 from inside `host_invoke_cont`.
+/// Same shape as `apply_main` in the sync runner — just typed for the
+/// DAP store.
+fn apply_main_dap(
+  caller: &mut wasmtime::Caller<'_, DebugState>,
+  main_clo: wasmtime::Rooted<wasmtime::AnyRef>,
+  argv: &[Vec<u8>],
+) -> Result<(), wasmtime::Error> {
+  let wrap_host_cont = caller.get_export("wrap_host_cont")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| wasmtime::Error::msg("no wrap_host_cont export"))?;
+  let args_empty = caller.get_export("std/fn.fnk:args_empty")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| wasmtime::Error::msg("no args_empty export"))?;
+  let args_prepend = caller.get_export("std/fn.fnk:args_prepend")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| wasmtime::Error::msg("no args_prepend export"))?;
+  let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| wasmtime::Error::msg("no _str_wrap_bytes export"))?;
+  let apply_fn = caller.get_export("rt/apply.wat:apply")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| wasmtime::Error::msg("no apply export"))?;
+
+  let mut done_out = [wasmtime::Val::AnyRef(None)];
+  wrap_host_cont.call(&mut *caller, &[wasmtime::Val::I32(CONT_MAIN_DONE)], &mut done_out)?;
+  let done_cont = done_out[0];
+
+  let array_ty = wasmtime::ArrayType::new(
+    caller.engine(),
+    wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
+  );
+  let alloc = wasmtime::ArrayRefPre::new(&mut *caller, array_ty);
+  let mut main_args_vals: Vec<wasmtime::Val> = vec![done_cont];
+  for bytes in argv {
+    let elems: Vec<wasmtime::Val> =
+      bytes.iter().map(|&b| wasmtime::Val::I32(b as i32)).collect();
+    let array = wasmtime::ArrayRef::new_fixed(&mut *caller, &alloc, &elems)
+      .map_err(|e| wasmtime::Error::msg(format!("byte array alloc: {e}")))?;
+    let mut wrapped = [wasmtime::Val::AnyRef(None)];
+    str_wrap.call(&mut *caller,
+      &[wasmtime::Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
+    main_args_vals.push(wrapped[0]);
+  }
+
+  let mut acc_out = [wasmtime::Val::AnyRef(None)];
+  args_empty.call(&mut *caller, &[], &mut acc_out)?;
+  let mut acc = acc_out[0];
+  for v in main_args_vals.iter().rev() {
+    let mut next = [wasmtime::Val::AnyRef(None)];
+    args_prepend.call(&mut *caller, &[*v, acc], &mut next)?;
+    acc = next[0];
+  }
+
+  apply_fn.call(&mut *caller, &[acc, wasmtime::Val::AnyRef(Some(main_clo))], &mut [])?;
+  Ok(())
 }
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -462,36 +453,33 @@ pub fn run<R: Read, W: Write + Send + 'static>(
     source_abs: source_abs_arc.clone(),
   });
 
-  // Wire env imports. Mirrors `src/runner/wasmtime_runner.rs` — routes the
-  // full CPS runtime (host_exit/panic/channel_send/read/resume) rather than
-  // trapping everything. DAP inherits the parent process's stdout/stderr so
-  // program output flows through the normal Fink IO channels (tag=1→stdout,
-  // tag=2→stderr) without DAP needing a result-printer of its own.
+  // Wire env imports for the host-wrapper API. The wrapper protocol uses:
+  //   - `host_invoke_cont(cont_id, args)` — fired by the wrapper with cont
+  //     id 1 (`(last_expr, main_clo)`) and by main's done with cont id 2
+  //     (`(main_result)`).
+  //   - `host_panic`, `host_channel_send`. `host_read` not wired yet —
+  //     DAP doesn't plumb stdin through the debug loop.
+  //
+  // host_channel_send routes debuggee stdout/stderr into DAP `Output`
+  // events so the bytes surface in VSCode's Debug Console rather than
+  // corrupting the DAP JSON stream on real stdout.
   let mut linker = wasmtime::Linker::new(&engine);
   let exit_code: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
+  // `argv[0]` for the user's `main`. DAP runs are parameterised only by
+  // the program path today; user-supplied CLI args are a follow-up.
+  let cli_args: Arc<Vec<Vec<u8>>> = Arc::new(vec![program.to_string().into_bytes()]);
   for import in module.imports() {
     if import.module() == "env"
       && let wasmtime::ExternType::Func(ft) = import.ty()
     {
       let name = import.name().to_string();
       match name.as_str() {
-        "host_exit" => {
-          let code = exit_code.clone();
-          linker.func_new("env", &name, ft.clone(), move |_caller, params, _results| {
-            *code.lock().unwrap() = params[0].unwrap_i32() as i64;
-            Ok(())
-          }).map_err(|e| e.to_string())?;
-        }
         "host_panic" => {
           linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
             Err(wasmtime::Error::msg("fink panic: irrefutable pattern failed"))
           }).map_err(|e| e.to_string())?;
         }
         "host_channel_send" => {
-          // Route debuggee stdout/stderr into DAP `Output` events so the
-          // bytes surface in VSCode's Debug Console instead of being
-          // lost. Writing to the process's real stdout would corrupt the
-          // DAP JSON stream (VSCode reads DAP framing from our stdout).
           let out = server.output.clone();
           linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
             let tag = params[0].unwrap_i32();
@@ -525,15 +513,43 @@ pub fn run<R: Read, W: Write + Send + 'static>(
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
-        "host_resume" => {
-          // DAP doesn't yet drive real stdin, so there are never pending
-          // reads to settle. Make host_resume a no-op — "host has nothing
-          // to add to the task queue." The scheduler checks the queue
-          // again after this returns; if still empty, the program ends
-          // cleanly. Trapping here (the previous behaviour) caused the
-          // program to abort on the very first scheduler tick past the
-          // last user mark.
-          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+        "host_invoke_cont" => {
+          let exit = exit_code.clone();
+          let argv = cli_args.clone();
+          linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
+            let cont_id = params[0].unwrap_i32();
+            let args_any = params[1].unwrap_anyref()
+              .ok_or_else(|| wasmtime::Error::msg("host_invoke_cont: null args"))?;
+            let cons = args_any.unwrap_struct(&caller)?;
+
+            let head = cons.field(&mut caller, 0).ok();
+            capture_dap_exit_code(&mut caller, head.as_ref(), &exit);
+
+            if cont_id != CONT_WRAPPER_DONE {
+              return Ok(());
+            }
+
+            let main_clo_val = match cons.field(&mut caller, 1).ok() {
+              Some(wasmtime::Val::AnyRef(Some(tail_ref))) => {
+                match tail_ref.as_struct(&caller) {
+                  Ok(Some(tail_st)) => tail_st.field(&mut caller, 0).ok(),
+                  _ => None,
+                }
+              }
+              _ => None,
+            };
+            let main_clo = match main_clo_val {
+              Some(wasmtime::Val::AnyRef(Some(r))) => r,
+              _ => return Ok(()),
+            };
+            if let Ok(Some(st)) = main_clo.as_struct(&caller)
+              && st.field(&mut caller, 1).is_err()
+            {
+              return Ok(());
+            }
+
+            *exit.lock().unwrap() = 0;
+            apply_main_dap(&mut caller, main_clo, &argv)?;
             Ok(())
           }).map_err(|e| e.to_string())?;
         }
@@ -550,12 +566,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
     }
   }
 
-  // Clone program path for argv (argv[0] = program name, C-style).
-  let program_arg = program.to_string();
-
   // Spawn WASM execution thread with async runtime (required by guest_debug).
-  // Mirrors the runner bootstrap: dep init loop → fink_module init → read
-  // `main` global → _run_main(boxed_main, argv_list). All via `.call_async`.
   let terminated_tx = stopped_tx;
   let wasm_thread = std::thread::spawn(move || {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -563,7 +574,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
       .build()
       .expect("failed to build tokio runtime");
     rt.block_on(async {
-      if let Err(e) = run_module(&mut store, &linker, &module, program_arg).await {
+      if let Err(e) = run_module(&mut store, &linker, &module).await {
         eprintln!("[fink dap] {e}");
       }
     });

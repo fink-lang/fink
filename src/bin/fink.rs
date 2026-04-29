@@ -49,12 +49,23 @@ fn main() {
     .filter(|a| !args.iter().zip(args.iter().skip(1)).any(|(f, v)| f == "-o" && v.as_str() == a.as_str()))
     .map(|s| s.as_str()).collect();
 
+  // Subcommand keywords; anything else in the first positional slot is
+  // treated as a file path with the implicit `run` command.
+  const COMMANDS: &[&str] = &[
+    "tokens", "ast", "fmt", "fmt2", "cps", "marks",
+    "wat", "wasm", "compile", "run", "dap", "decode-sm",
+  ];
+
   let (cmd, path) = match positional.as_slice() {
-    // For `run`, extra positionals after the source file are forwarded to
-    // the user's main as CLI args — so accept [cmd, path, ..].
-    [cmd, path, ..] => (*cmd, *path),
+    // `fink <cmd> <path> [..]` — explicit subcommand. Extra positionals
+    // after the source are forwarded to the user's main by `run`.
+    [cmd, path, ..] if COMMANDS.contains(cmd) => (*cmd, *path),
+    // `fink <path> [..]` — implicit `run`. The first positional is the
+    // source file; the rest become argv for the user's main.
+    [path, ..] => ("run", *path),
     _ => {
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap> [options] <file>");
+      eprintln!("usage: fink [<tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap>] [options] <file>");
+      eprintln!("       fink <file> [args..]    (implicit `run`)");
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
       eprintln!("  cps [--lifted[=plain]]       CPS transform (optionally lifted)");
