@@ -351,7 +351,7 @@ test 'rec spread', fn:
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
-      (global $test:r (export "test:r") (mut (ref null any)) (ref.null any))
+      (global $test:r (mut (ref null any)) (ref.null any))
       (data $d_0 "c")
       (data $d_1 "test")
       (data $d_2 "r")
@@ -826,8 +826,8 @@ test 'rec spread merge two', fn:
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
-      (global $test:r2 (export "test:r2") (mut (ref null any)) (ref.null any))
-      (global $test:r1 (export "test:r1") (mut (ref null any)) (ref.null any))
+      (global $test:r2 (mut (ref null any)) (ref.null any))
+      (global $test:r1 (mut (ref null any)) (ref.null any))
       (data $d_0 "test")
       (data $d_1 "r2")
       (data $d_2 "b")
@@ -889,6 +889,26 @@ test 'rec format template', fn:
       (data $d_2 "test")
     )
     ;; sm:E5QGALoBAL4BAI4BAQIFfgDMAQEBEPAGAI4BAK4BAMwBARAGWgECAX4BBgGEAQEFBMAHAIoBAL4BAMABAIQBAPoBAA
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

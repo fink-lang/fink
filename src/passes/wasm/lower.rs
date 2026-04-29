@@ -84,18 +84,19 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let mut pub_globals: HashMap<CpsId, (GlobalSym, String)> = HashMap::new();
   for (id, name) in &pubs {
     let qualified = format!("{fqn_prefix}{name}");
-    // TODO: drop the WASM-level export once the runner stops
-    // consuming user globals via `instance.get_global(name)`. The
-    // export is currently the only path for the host to fetch
-    // `<entry>:main`. Plan: route via `interop/rust.wat` (host-side
-    // registry lookup) — see scratch plan.
+    // No WASM-level export. User-binding globals are addressable
+    // storage for the registry (`std/modules.fnk:pub`); the host
+    // accesses bindings exclusively through the per-module host
+    // wrapper export, which routes via `init_module` + the
+    // registry. The bare globals stay because lifted closures read
+    // them at module-init time (forward-reference machinery).
     let sym = add_global(
       &mut frag,
       val_anyref(true),
       true,
       GlobalInit::RefNull(AbsHeap::Any),
       &qualified,
-      Some(qualified.clone()),
+      None,
     );
     pub_globals.insert(*id, (sym, name.clone()));
   }

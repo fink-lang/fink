@@ -373,7 +373,7 @@ test 'std io import handling', fn:
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
-      (global $test:ham (export "test:ham") (mut (ref null any)) (ref.null any))
+      (global $test:ham (mut (ref null any)) (ref.null any))
       (data $d_0 "bar ")
       (data $d_1 "foo ")
       (data $d_2 "test")
