@@ -174,7 +174,7 @@ fn synth_host_wrapper(
   // local copy.
   let sig = lcx.rt.fn_host_wrapper();
 
-  let mut ctx = FnCtx::new(HashMap::new(), lcx.fqn_prefix.to_string());
+  let mut ctx = FnCtx::new(HashMap::new());
   let l_key_p     = ctx.alloc_param(":wrap_key_bytes");
   let l_cont_id_p = ctx.alloc_param_typed(":wrap_cont_id", val_i32());
 
@@ -255,8 +255,6 @@ struct LowerCtx<'a> {
   /// FQN prefix for emitted symbol display names. Empty for single-
   /// fragment compiles; `"<canonical_url>:"` for multi-fragment
   /// package compiles. See `lower()` doc.
-  // Reachable today via ctx.fqn_prefix as well; not yet pruned.
-  #[allow(dead_code)]
   fqn_prefix: &'a str,
 }
 
@@ -285,10 +283,7 @@ fn lower_fn(
   // parent. Sharing the map here would make child-of-child helpers
   // visible to subsequent siblings of the parent — observable through
   // resolution order in `App(FnClosure)`. Keep the clone literal.
-  let mut ctx = FnCtx::new(
-    fn_syms.clone(),
-    lcx.fqn_prefix.to_string(),
-  );
+  let mut ctx = FnCtx::new(fn_syms.clone());
 
   // WASM-level params (always just `$:caps_param` and `$:params` —
   // the $Fn2 shape). Colon-prefix is lexer-rejected in Fink source,
@@ -389,17 +384,10 @@ struct FnCtx {
   /// LetFns, so by the time a child is lowered, all enclosing /
   /// preceding-sibling LetFn FuncSyms are already known.
   fn_syms: HashMap<CpsId, FuncSym>,
-  /// FQN prefix for emitted symbol display names. Empty for single-
-  /// fragment compiles; `"<canonical_url>:"` for multi-fragment package
-  /// compiles. See `lower()` doc.
-  fqn_prefix: String,
 }
 
 impl FnCtx {
-  fn new(
-    fn_syms: HashMap<CpsId, FuncSym>,
-    fqn_prefix: String,
-  ) -> Self {
+  fn new(fn_syms: HashMap<CpsId, FuncSym>) -> Self {
     Self {
       params: Vec::new(),
       locals: Vec::new(),
@@ -407,7 +395,6 @@ impl FnCtx {
       binds: HashMap::new(),
       next_local_idx: 0,
       fn_syms,
-      fqn_prefix,
     }
   }
 
@@ -523,7 +510,7 @@ fn lower_expr(
       // Lift the fn body to a separate Fn2. Display name carries the
       // module's FQN prefix so cross-fragment merges stay collision-free.
       let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
-      let display = format!("{}{}", ctx.fqn_prefix, raw_display);
+      let display = format!("{}{}", lcx.fqn_prefix, raw_display);
       let fn_sym = lower_fn(
         lcx,
         &cap_ids, &user_ids, fn_body, &display,
@@ -549,7 +536,7 @@ fn lower_expr(
       //
       // Then descend into the cont body inline.
       //
-      // The fqn url is `ctx.fqn_prefix` minus the trailing `:` separator;
+      // The fqn url is `lcx.fqn_prefix` minus the trailing `:` separator;
       // the source name comes from `pub_globals` alongside the global.
       let Some(Arg::Val(val)) = args.first() else {
         panic!("lower: Pub expects [val, cont], missing val");
@@ -565,7 +552,7 @@ fn lower_expr(
       ctx.instrs.push(i_set);
 
       // 2. Registry mutation.
-      let url_bytes: Vec<u8> = ctx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
+      let url_bytes: Vec<u8> = lcx.fqn_prefix.trim_end_matches(':').as_bytes().to_vec();
       let url_local = emit_str_const(lcx, ctx, &url_bytes, ":pub_url");
       let name_local = emit_str_const(lcx, ctx, src_name.as_bytes(), ":pub_name");
       let i_pub = push_call(lcx.frag, lcx.rt.modules_pub(),
@@ -1121,7 +1108,7 @@ fn lower_import_user_fragment(
   // runtime, but the producer of `./foo.fnk` was compiled under
   // canonical URL `./test_modules/foo.fnk` and pubs to that key.
   // The two URLs must agree; canonicalising here ensures it.
-  let importer_canonical = ctx.fqn_prefix.trim_end_matches(':').to_string();
+  let importer_canonical = lcx.fqn_prefix.trim_end_matches(':').to_string();
   let canonical_url = super::compile_package::canonicalise_url(
     &importer_canonical, url,
   );
