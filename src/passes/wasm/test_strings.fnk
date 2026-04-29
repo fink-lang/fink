@@ -7,7 +7,7 @@ test 'empty string literal', fn:
     ''
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -32,7 +32,7 @@ test 'empty string literal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C_oDAI4BAQACZgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8wDAI4BAQACZgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -41,7 +41,7 @@ test 'string literal', fn:
     'hello'
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -67,7 +67,7 @@ test 'string literal', fn:
       (data $d_0 "hello")
       (data $d_1 "test")
     )
-    ;; sm:C_oDAI4BAQAHfgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8wDAI4BAQAHfgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'string literal dedup', fn:
@@ -76,7 +76,7 @@ test 'string literal dedup', fn:
     y = 'hello'
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $x_0 (ref null any))
         (local $:pub_url (ref null any))
@@ -120,7 +120,7 @@ test 'string literal dedup', fn:
       (data $d_2 "x")
       (data $d_3 "y")
     )
-    ;; sm:FOYGAI4BAQABfgBUAIgBAIoBALwBARgBfgBUAIgBAIoBALwBAGoAtgEAhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:FLgGAI4BAQABfgBUAIgBAIoBALwBARgBfgBUAIgBAIoBALwBAGoAtgEAhAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'str templ two exprs', fn:
@@ -130,7 +130,7 @@ test 'str templ two exprs', fn:
     '${a} and ${b}'
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $a_0 (ref null any))
         (local $:pub_url (ref null any))
@@ -175,7 +175,7 @@ test 'str templ two exprs', fn:
       (data $d_2 "b")
       (data $d_3 " and ")
     )
-    ;; sm:FNAHAI4BAQABhAEAVACIAQCKAQC8AQEMAYQBAFQAiAEAigEAvAEBFgV-AO4BAQkPhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:FKIHAI4BAQABhAEAVACIAQCKAQC8AQEMAYQBAFQAiAEAigEAvAEBFgV-AO4BAQkPhAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'str tagged template', fn:
@@ -219,7 +219,7 @@ test 'str tagged template', fn:
         (local.set $v_10 (call $std/fn.fnk:args_empty))
         (return_call $std/seq.fnk:prepend (local.get $v_11) (local.get $v_10) (local.get $v_33))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $foo_0 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -263,7 +263,7 @@ test 'str tagged template', fn:
       (data $d_1 "foo")
       (data $d_2 "1\\n2")
     )
-    ;; sm:JsoDAJYBAJYBAFwAagC-AQD8BQC6AQDCAQC-AQCQAQBqALYBALgBAMgEAJABATgEgAEBBwloAQAJpgoAjgEAegEvA8wBAFwAiAEAigEAwAEA1AEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:JsoDAJYBAJYBAFwAagC-AQD8BQC6AQDCAQC-AQCQAQBqALYBALgBAMgEAJABATgEgAEBBwloAQAJ-AkAjgEAegEvA8wBAFwAiAEAigEAwAEA1AEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'str tagged template escape handling', fn:
@@ -342,7 +342,7 @@ test 'str tagged template escape handling', fn:
         (local.set $v_12 (call $std/fn.fnk:args_empty))
         (return_call $std/seq.fnk:prepend (local.get $v_13) (local.get $v_12) (local.get $v_51))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
         (local $foo_0 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -397,7 +397,7 @@ test 'str tagged template escape handling', fn:
       (data $d_3 "foo")
       (data $d_4 "bar")
     )
-    ;; sm:O8oDAJYBAJYBAFwAagC-AQD8BQC6AQDCAQC-AQCQAQBqALYBALgBAKwHALoBAMIBAL4BAJABANgBAMwBAUgIgAEBBy7QBwC6AQDCAQDCAQC-AQCQAQDYAQDMAQEALuwEAJABASQbggEBIy5oAQAugAwAjgEAegE_A8wBAFwAiAEAigEAwAEBMAOIAQBcAIgBAIoBAMABAPoBANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:O8oDAJYBAJYBAFwAagC-AQD8BQC6AQDCAQC-AQCQAQBqALYBALgBAKwHALoBAMIBAL4BAJABANgBAMwBAUgIgAEBBy7QBwC6AQDCAQDCAQC-AQCQAQDYAQDMAQEALuwEAJABASQbggEBIy5oAQAu0gsAjgEAegE_A8wBAFwAiAEAigEAwAEBMAOIAQBcAIgBAIoBAMABAPoBANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'str implicit formatting handling', fn:
@@ -407,7 +407,7 @@ test 'str implicit formatting handling', fn:
       3
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -433,7 +433,7 @@ test 'str implicit formatting handling', fn:
       (data $d_0 "1\0a2\0a3")
       (data $d_1 "test")
     )
-    ;; sm:C_oDAI4BAQANfgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8wDAI4BAQANfgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'str implicit formatting escapes', fn:
@@ -441,7 +441,7 @@ test 'str implicit formatting escapes', fn:
     '\n\r\t\f\b\v\$\'\\\xC3\xA9\u{8A_9E}'
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -467,7 +467,7 @@ test 'str implicit formatting escapes', fn:
       (data $d_0 "\0a\0d\09\0c\08\0b$'\\\c3\a9\e8\aa\9e")
       (data $d_1 "test")
     )
-    ;; sm:C_oDAI4BAQAlgAEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8wDAI4BAQAlgAEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'empty string eq', fn:
@@ -475,7 +475,7 @@ test 'empty string eq', fn:
     '' == ''
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -499,7 +499,7 @@ test 'empty string eq', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQACZgEMAmYBCwisBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAI4BAQACZgEMAmYBCwisBwCKAQC-AQDAAQCEAQD6AQA
 
 
 # TODO: move to ./test_patterns.fnk
@@ -692,7 +692,7 @@ test 'match empty string', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $v_4) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_67_fn))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $main_0 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -727,7 +727,7 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:a8ADAJABAUABhgEAagC4AQCsBgC6AQDAAQB6ANIBAGoAugEAugcAugEAwAEAwAEAkAEAhAEAfADkCgCQAQCWAQCQAQCWAQCQAQDUAQDQAQEHAmgBAAKgCACOAQCWAQCOAQCWAQCOAQCuAQDQAQB6ANIBAGoAtgEAtgEAugEAzAQAkAEBGgGGAQBqALgBAMIGAJABAJYBAJABAJYBAJABAHoA0gEAagC4AQCGAwC2BwC6AQDAAQDAAQB6ANIBAHoA1gEAagC6AQDAAQC6AQC8BwCQAQCWAQCQAQDUAQDQAQB6ANIBAGoAuAEAugEAuAEAgAYAjgEAlgEAjgEAegDSAQBqALYBALYBAJQHAI4BAHoBUQTOAQBgAIgBAIoBAMIBAGoAvAEAhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:a8ADAJABAUABhgEAagC4AQCsBgC6AQDAAQB6ANIBAGoAugEAugcAugEAwAEAwAEAkAEAhAEAfADkCgCQAQCWAQCQAQCWAQCQAQDUAQDQAQEHAmgBAAKgCACOAQCWAQCOAQCWAQCOAQCuAQDQAQB6ANIBAGoAtgEAtgEAugEAzAQAkAEBGgGGAQBqALgBAMIGAJABAJYBAJABAJYBAJABAHoA0gEAagC4AQCGAwC2BwC6AQDAAQDAAQB6ANIBAHoA1gEAagC6AQDAAQC6AQC8BwCQAQCWAQCQAQDUAQDQAQB6ANIBAGoAuAEAugEAuAEAgAYAjgEAlgEAjgEAegDSAQBqALYBALYBAOYGAI4BAHoBUQTOAQBgAIgBAIoBAMIBAGoAvAEAhAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'empty string eq template', fn:
@@ -735,7 +735,7 @@ test 'empty string eq template', fn:
     '' == '${''}'
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -759,7 +759,7 @@ test 'empty string eq template', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQACZgEMB2YBCw2sBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAI4BAQACZgEMB2YBCw2sBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'str eq', fn:
@@ -767,7 +767,7 @@ test 'str eq', fn:
     'hello' == 'hello'
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -792,7 +792,7 @@ test 'str eq', fn:
       (data $d_0 "hello")
       (data $d_1 "test")
     )
-    ;; sm:CvYDAI4BAQAHfgEWB34BFRKsBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAI4BAQAHfgEWB34BFRKsBwCKAQC-AQDAAQCEAQD6AQA
 
 
 

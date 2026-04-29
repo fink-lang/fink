@@ -8,7 +8,7 @@ test 'add two literals', fn:
     2 + 3
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -32,7 +32,7 @@ test 'add two literals', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQABhAEBCAGEAQEHBbAHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAI4BAQABhAEBCAGEAQEHBbAHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -52,7 +52,7 @@ test 'chained arithmetic', fn:
         (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 4)))
         (return_call $std/operators.fnk:op_plus (local.get $v_3) (local.get $v_5) (local.get $v_13))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_17 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -80,7 +80,7 @@ test 'chained arithmetic', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:EaQEALoBAL4BAI4BARABhAEBDwncBgCOAQCuAQDMAQEAAYQBAQgBhAEBBwWwBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EaQEALoBAL4BAI4BARABhAEBDwmuBgCOAQCuAQDMAQEAAYQBAQgBhAEBBwWwBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'unary not', fn:
@@ -88,7 +88,7 @@ test 'unary not', fn:
     not true
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local.set $v_0 (call $std/fn.fnk:args_head (local.get $:params)))
@@ -110,7 +110,7 @@ test 'unary not', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CbYDAI4BAQgEWgEHCIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CYgDAI4BAQgEWgEHCIwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'comparison eq', fn:
@@ -118,7 +118,7 @@ test 'comparison eq', fn:
     2 == 3
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -142,7 +142,7 @@ test 'comparison eq', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQABhAEBCgGEAQEJBqwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAI4BAQABhAEBCgGEAQEJBqwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'comparison lt', fn:
@@ -150,7 +150,7 @@ test 'comparison lt', fn:
     2 < 3
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -174,7 +174,7 @@ test 'comparison lt', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQABhAEBCAGEAQEHBawHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAI4BAQABhAEBCAGEAQEHBawHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'logical and', fn:
@@ -182,7 +182,7 @@ test 'logical and', fn:
     true and false
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -206,7 +206,7 @@ test 'logical and', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQAEWgESBVoBEQ6uBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAI4BAQAEWgESBVoBEQ6uBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'logical or', fn:
@@ -214,7 +214,7 @@ test 'logical or', fn:
     true or false
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -238,7 +238,7 @@ test 'logical or', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQAEWgEQBVoBDw2sBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAI4BAQAEWgEQBVoBDw2sBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'range exclusive', fn:
@@ -246,7 +246,7 @@ test 'range exclusive', fn:
     0..10
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -270,7 +270,7 @@ test 'range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQABhAEBBgKGAQEFBaIHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAI4BAQABhAEBBgKGAQEFBaIHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'range inclusive', fn:
@@ -278,7 +278,7 @@ test 'range inclusive', fn:
     0...10
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -302,7 +302,7 @@ test 'range inclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CvYDAI4BAQABhAEBCAKGAQEHBqIHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAI4BAQABhAEBCAKGAQEHBqIHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'range in', fn:
@@ -321,7 +321,7 @@ test 'range in', fn:
         (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 5)))
         (return_call $std/operators.fnk:op_in (local.get $v_1) (local.get $v_4) (local.get $v_13))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_17 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -349,7 +349,7 @@ test 'range in', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:EaQEALoBAL4BAI4BAQABhAEBAArYBgCOAQCuAQDMAQEKAYQBAQYChgEBBQWkBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EaQEALoBAL4BAI4BAQABhAEBAAqqBgCOAQCuAQDMAQEKAYQBAQYChgEBBQWkBwCKAQC-AQDAAQCEAQD6AQA
 
 4BAJIBAQABhAEBAAqcBgCSAQCuAQDCAQEKAYQBAQYChgEBBQU
 

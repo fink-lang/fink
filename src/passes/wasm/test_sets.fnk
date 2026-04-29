@@ -136,7 +136,7 @@ test 'set import + construction', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $:imp_rec) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_52))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $v_63_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -168,7 +168,7 @@ test 'set import + construction', fn:
       (data $d_0 "set")
       (data $d_1 "test")
     )
-    ;; sm:T7YHALoBAL4BAJABAQIDUgFAAYYBAQYBhgEBBgGGAQBqALgBALgBALgBALgBAPAEALoBAL4BAGoA9gUAugEAwAEAkAEAlgEAkAEAagC4AQCoBwC6AQC-AQC-AQCQAQCwAQDQAQFNHIABAQAc6AcAjgEAlgEAjgEAlgEAjgEArgEAzAEA0AEAzAEBAByUCgC6AQC-AQCOAQCwAQDMAQB6ANIBAHoA8gEAagC2AQDGAQC4AQCmBwCQAQBkAGwAkAEAhgIAagDAAQC2BwCOAQCuAQDUAQB6ANIBAGoAwAEAjAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:T7YHALoBAL4BAJABAQIDUgFAAYYBAQYBhgEBBgGGAQBqALgBALgBALgBALgBAPAEALoBAL4BAGoA9gUAugEAwAEAkAEAlgEAkAEAagC4AQCoBwC6AQC-AQC-AQCQAQCwAQDQAQFNHIABAQAc6AcAjgEAlgEAjgEAlgEAjgEArgEAzAEA0AEAzAEBAByUCgC6AQC-AQCOAQCwAQDMAQB6ANIBAHoA8gEAagC2AQDGAQC4AQCmBwCQAQBkAGwAkAEAhgIAagDAAQCIBwCOAQCuAQDUAQB6ANIBAGoAwAEAjAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'set spread', fn:
@@ -348,7 +348,7 @@ test 'set spread', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $:imp_rec) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_65))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $v_76_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -380,7 +380,7 @@ test 'set spread', fn:
       (data $d_0 "set")
       (data $d_1 "test")
     )
-    ;; sm:Y_gFALoBAMQBAMABAJABAGoAtgEAugEAtgcAugEAxAEAwAEAkAEA3AEA0AEBSAGGAQEAAdAHALoBAMIBAL4BAJABANgBANABAQYBhgEBAAGOCAC6AQC-AQCQAQFLA1IA1gEAzAEBUgGGAQENCWgBDgGSBQC6AQC-AQBqAPYFALoBAMABAJABAJYBAJABAGoAuAEArgcAugEAwAEAwAEAkAEAsgEA0AEBUxyAAQEAHO4HAI4BAJYBAI4BAJYBAI4BAK4BAM4BANABANABAQAcmAoAugEAvgEAjgEAsAEAzAEAegDSAQB6APIBAGoAtgEAxgEAuAEApgcAkAEAZABsAJABAIYCAGoAwAEAtgcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:Y_gFALoBAMQBAMABAJABAGoAtgEAugEAtgcAugEAxAEAwAEAkAEA3AEA0AEBSAGGAQEAAdAHALoBAMIBAL4BAJABANgBANABAQYBhgEBAAGOCAC6AQC-AQCQAQFLA1IA1gEAzAEBUgGGAQENCWgBDgGSBQC6AQC-AQBqAPYFALoBAMABAJABAJYBAJABAGoAuAEArgcAugEAwAEAwAEAkAEAsgEA0AEBUxyAAQEAHO4HAI4BAJYBAI4BAJYBAI4BAK4BAM4BANABANABAQAcmAoAugEAvgEAjgEAsAEAzAEAegDSAQB6APIBAGoAtgEAxgEAuAEApgcAkAEAZABsAJABAIYCAGoAwAEAiAcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
 
 
 skip-ir test 'set destructure empty', fn:

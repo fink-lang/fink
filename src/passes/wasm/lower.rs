@@ -116,8 +116,11 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
     &HashMap::new(),    // module body: no enclosing fn_syms
     fqn_prefix,         // namespacing prefix for nested LetFn displays
   );
-  let FuncSym::Local(i) = fink_module else { panic!("lower: fink_module must be Local"); };
-  frag.funcs[i as usize].export = Some("fink_module".into());
+  let FuncSym::Local(_) = fink_module else { panic!("lower: fink_module must be Local"); };
+  // No WASM-level export for fink_module — host accesses the module
+  // exclusively through the per-module wrapper exported under the
+  // canonical FQN. fink_module stays as a bare internal func; the
+  // wrapper holds a no-capture closure over it.
 
   // Per-module host-facing wrapper. Exported under the module's
   // canonical FQN so the host can call any module by URL string

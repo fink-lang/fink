@@ -21,7 +21,7 @@ test 'rec literal', fn:
         (local.set $v_7 (struct.new $rt/types.wat:Num (f64.const 2)))
         (return_call $std/rec.fnk:put (local.get $v_4) (local.get $v_6) (local.get $v_7) (local.get $v_15))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_19 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -53,7 +53,7 @@ test 'rec literal', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:E-YFALoBAL4BAI4BAQ4BfgEGAYQBAQUEqgcAjgEArgEAzAEBDQxaAQIBfgEGAYQBAQUEwAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:E-YFALoBAL4BAI4BAQ4BfgEGAYQBAQUE_AYAjgEArgEAzAEBDQxaAQIBfgEGAYQBAQUEwAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'rec destructure', fn:
@@ -216,7 +216,7 @@ test 'rec destructure', fn:
         (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 1)))
         (return_call $std/rec.fnk:put (local.get $v_3) (local.get $v_4) (local.get $v_5) (local.get $v_67))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $v_80_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -249,7 +249,7 @@ test 'rec destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:W6oGALoBAL4BAJABAJYBAJABAQIBTgEMAU4BJAWeBQC6AQDAAQBqALwGALoBAMABAMABAJABAJYBAJABAGoAuAEAugEA8AcAugEAwAEAwAEAkAEAlgEAkAEA1gEA0AEBMRiAAQEAGPAHALoBAMABAMABAJABANgBANABAQAYgAEBABj0BwCQAQCWAQCQAQCWAQCQAQCwAQDQAQDUAQDQAQEAGJwKALoBAL4BAJABALABAMwBAHoA0gEAegDyAQBqALgBAMYBALgBAKQHALoBAL4BAI4BALABAMwBASYBfgEGAYQBAQUEugUAkAEBDQxaAQIBfgEGAYQBAQUE8AcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:W6oGALoBAL4BAJABAJYBAJABAQIBTgEMAU4BJAWeBQC6AQDAAQBqALwGALoBAMABAMABAJABAJYBAJABAGoAuAEAugEA8AcAugEAwAEAwAEAkAEAlgEAkAEA1gEA0AEBMRiAAQEAGPAHALoBAMABAMABAJABANgBANABAQAYgAEBABj0BwCQAQCWAQCQAQCWAQCQAQCwAQDQAQDUAQDQAQEAGJwKALoBAL4BAJABALABAMwBAHoA0gEAegDyAQBqALgBAMYBALgBAKQHALoBAL4BAI4BALABAMwBASYBfgEGAYQBAQUEugUAkAEBDQxaAQIBfgEGAYQBAQUEwgcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
 
 test 'rec spread', fn:
   expect wat ƒink:
@@ -322,7 +322,7 @@ test 'rec spread', fn:
         (local.set $v_4 (struct.new $rt/types.wat:Num (f64.const 1)))
         (return_call $std/rec.fnk:put (local.get $v_2) (local.get $v_3) (local.get $v_4) (local.get $v_36))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_1 (ref null any))
         (local $v_49_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -358,7 +358,7 @@ test 'rec spread', fn:
       (data $d_3 "b")
       (data $d_4 "a")
     )
-    ;; sm:LewFALoBAL4BAJABAS4BgAEBBgGGAQEFBPYIALoBAL4BAI4BAS0BTABUAIgBAIoBALwBALABAMwBASILXAECA7wHALoBAL4BAI4BALABAMwBAQ0BfgEGAYQBAQUEugUAkAEBDQxaAQIBfgEGAYQBAQUE8AcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:LewFALoBAL4BAJABAS4BgAEBBgGGAQEFBPYIALoBAL4BAI4BAS0BTABUAIgBAIoBALwBALABAMwBASILXAECA7wHALoBAL4BAI4BALABAMwBAQ0BfgEGAYQBAQUEugUAkAEBDQxaAQIBfgEGAYQBAQUEwgcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
 
 test 'rec empty literal', fn:
   expect wat ƒink:
@@ -366,7 +366,7 @@ test 'rec empty literal', fn:
   | equals wat":
     (module
       (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -391,7 +391,7 @@ test 'rec empty literal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C_wEAI4BAQACWgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C84EAI4BAQACWgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 test 'rec single field', fn:
   expect wat ƒink:
@@ -399,7 +399,7 @@ test 'rec single field', fn:
   | equals wat":
     (module
       (type $std/dict.wat:Fn_rec_new (func (result (ref null any))))
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
@@ -426,7 +426,7 @@ test 'rec single field', fn:
       (data $d_0 "a")
       (data $d_1 "test")
     )
-    ;; sm:C7gFAI4BAQAGWgECAX4BBgGEAQEFBL4HAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C4oFAI4BAQAGWgECAX4BBgGEAQEFBL4HAIoBAL4BAMABAIQBAPoBAA
 
 test 'rec nested destructure', fn:
   expect wat ƒink:
@@ -652,7 +652,7 @@ test 'rec nested destructure', fn:
         (local.set $v_7 (struct.new $rt/types.wat:Num (f64.const 42)))
         (return_call $std/rec.fnk:put (local.get $v_5) (local.get $v_6) (local.get $v_7) (local.get $v_85))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $b_2 (ref null any))
         (local $v_98_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -685,7 +685,7 @@ test 'rec nested destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:e_AFALoBAMABAJABASgBTgBqALYBAPQEALoBAMABAGoA-AUAugEAwAEAkAEAlgEAkAEAagC4AQCuBwC6AQDAAQDAAQCQAQCyAQDQAQEBB4ABAQAH9AcAkAEAlgEAkAEAlgEAkAEAsAEA0AEA1AEA0AEBAAfiCgC6AQDAAQCQAQEjAU4AsgEA0AEAegDSAQB6APIBAGoAtgEAxgEAugEA-AQAugEAwAEAagD4BQC6AQDAAQCQAQCWAQCQAQBqALgBAK4HALoBAMABAMABAJABALIBANABAQESgAEBABL0BwCQAQCWAQCQAQCWAQCQAQCwAQDQAQDUAQDQAQEAEp4KALoBAL4BAJABALABANABAHoA0gEAegDyAQBqALgBAMYBALoBAKQHALoBAL4BAI4BALABAMwBAQwMWgECAX4BAAq6BQCQAQEGB1oBAgF-AQYChgEBBQXwBwCOAQCuAQDUAQB6ANIBAGoAwAEAjAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:e_AFALoBAMABAJABASgBTgBqALYBAPQEALoBAMABAGoA-AUAugEAwAEAkAEAlgEAkAEAagC4AQCuBwC6AQDAAQDAAQCQAQCyAQDQAQEBB4ABAQAH9AcAkAEAlgEAkAEAlgEAkAEAsAEA0AEA1AEA0AEBAAfiCgC6AQDAAQCQAQEjAU4AsgEA0AEAegDSAQB6APIBAGoAtgEAxgEAugEA-AQAugEAwAEAagD4BQC6AQDAAQCQAQCWAQCQAQBqALgBAK4HALoBAMABAMABAJABALIBANABAQESgAEBABL0BwCQAQCWAQCQAQCWAQCQAQCwAQDQAQDUAQDQAQEAEp4KALoBAL4BAJABALABANABAHoA0gEAegDyAQBqALgBAMYBALoBAKQHALoBAL4BAI4BALABAMwBAQwMWgECAX4BAAq6BQCQAQEGB1oBAgF-AQYChgEBBQXCBwCOAQCuAQDUAQB6ANIBAGoAwAEAjAcAigEAvgEAwAEAhAEA-gEA
 
 test 'rec spread merge two', fn:
   expect wat ƒink:
@@ -797,7 +797,7 @@ test 'rec spread merge two', fn:
         (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 1)))
         (return_call $std/rec.fnk:put (local.get $v_3) (local.get $v_4) (local.get $v_5) (local.get $v_41))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $v_56_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -834,7 +834,7 @@ test 'rec spread merge two', fn:
       (data $d_3 "r1")
       (data $d_4 "a")
     )
-    ;; sm:QawFALoBAMABAL4BAJABAT4E0gUAugEAwAEAkAEBDQxcAQIE3goAugEAwAEAvgEAkAEBGQJQAFgAiAEAigEAvgEAsgEAzAEA1AEA1AEAagDAAQCCBQCQAQEKBloBAgF-AQYBhgEBBQS4CgC6AQC-AQCOAQEjAk4AWACIAQCKAQC-AQDUAQDUAQB6ANIBAGoAwAEAhgUAkAEBCgZaAQIBfgEGAYQBAQUE8AcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:QawFALoBAMABAL4BAJABAT4E0gUAugEAwAEAkAEBDQxcAQIE3goAugEAwAEAvgEAkAEBGQJQAFgAiAEAigEAvgEAsgEAzAEA1AEA1AEAagDAAQCCBQCQAQEKBloBAgF-AQYBhgEBBQS4CgC6AQC-AQCOAQEjAk4AWACIAQCKAQC-AQDUAQDUAQB6ANIBAGoAwAEAhgUAkAEBCgZaAQIBfgEGAYQBAQUEwgcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -856,7 +856,7 @@ test 'rec format template', fn:
         (local.set $:varargs (array.new_fixed $rt/types.wat:VarArgs 2 (local.get $v_1) (local.get $v_5)))
         (return_call $std/str.fnk:fmt (local.get $:varargs) (local.get $v_14))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_18 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -888,7 +888,7 @@ test 'rec format template', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:E5QGALoBAL4BAI4BAQIFfgDMAQEBEPAGAI4BAK4BAMwBARAGWgECAX4BBgGEAQEFBMAHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:E5QGALoBAL4BAI4BAQIFfgDMAQEBEMIGAI4BAK4BAMwBARAGWgECAX4BBgGEAQEFBMAHAIoBAL4BAMABAIQBAPoBAA
 
 
 

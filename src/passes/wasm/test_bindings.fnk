@@ -9,7 +9,7 @@ test 'single binding export', fn:
     foo = 1
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_1 (ref null any))
         (local $foo_0 (ref null any))
         (local $:pub_url (ref null any))
@@ -42,7 +42,7 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:D5QFAI4BAQADiAEAXACIAQCKAQDAAQBqALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D-YEAI4BAQADiAEAXACIAQCKAQDAAQBqALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -52,7 +52,7 @@ test 'let binding', fn:
     x
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $x_1 (ref null any))
         (local $x_0 (ref null any))
         (local $:pub_url (ref null any))
@@ -85,7 +85,7 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:D5AFAI4BAQABhgEAVACIAQCKAQC8AQBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D-IEAI4BAQABhgEAVACIAQCKAQC8AQBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -96,7 +96,7 @@ test 'multiple let bindings used', fn:
     x + y
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_2 (ref null any))
         (local $x_0 (ref null any))
         (local $:pub_url (ref null any))
@@ -136,7 +136,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:EqIGAI4BAQABhAEAVACIAQCKAQC8AQEMAYQBAFQAiAEAigEAvAEBDAWwBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EvQFAI4BAQABhAEAVACIAQCKAQC8AQEMAYQBAFQAiAEAigEAvAEBDAWwBwCKAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -194,7 +194,7 @@ test 'binding rhs is a call', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $v_39) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0_callee))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_4 (ref null any))
         (local $add_0 (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -239,7 +239,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:LrYDAI4BAJYBAI4BAJYBAI4BAR4FsAcAugEAvgEAkAEBDAFOAFQAiAEAigEAvAEAagC2AQDWBQCQAQBmARABhgEBBgGGAQBqALgBALgBALgBAI4KAI4BAHoBPwPMAQBcAIgBAIoBAMABAK4BANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:LrYDAI4BAJYBAI4BAJYBAI4BAR4FsAcAugEAvgEAkAEBDAFOAFQAiAEAigEAvAEAagC2AQDWBQCQAQBmARABhgEBBgGGAQBqALgBALgBALgBAOAJAI4BAHoBPwPMAQBcAIgBAIoBAMABAK4BANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -385,7 +385,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_6 (struct.new $rt/types.wat:Num (f64.const 42)))
         (return_call $std/rec.fnk:put (local.get $v_4) (local.get $v_5) (local.get $v_6) (local.get $v_64))
       )
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_3 (ref null any))
         (local $v_75_clo (ref null any))
         (local $:caps_arg (ref null $rt/types.wat:Captures))
@@ -419,6 +419,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:U6gFALoBAL4BAJABAJYBAI4BATQFrAkAugEAvgEAkAEBMQFOAK4BAMwBARoDUgBcAIgBAIoBAMABAGoAugEA7gQAugEAvgEAagD2BQC6AQDAAQCQAQCWAQCQAQBqALgBAK4HALoBAMABAMABAJABALIBANABARsNgAEBAA3wBwCQAQCWAQCQAQCWAQCOAQCwAQDMAQDUAQDQAQEADZYKALoBAL4BAI4BALABAMwBAHoA0gEAegDyAQBqALYBAMYBALgBAIYFAJABAQwHWgECAX4BBgKGAQEFBfAHAI4BAK4BANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:U6gFALoBAL4BAJABAJYBAI4BATQFrAkAugEAvgEAkAEBMQFOAK4BAMwBARoDUgBcAIgBAIoBAMABAGoAugEA7gQAugEAvgEAagD2BQC6AQDAAQCQAQCWAQCQAQBqALgBAK4HALoBAMABAMABAJABALIBANABARsNgAEBAA3wBwCQAQCWAQCQAQCWAQCOAQCwAQDMAQDUAQDQAQEADZYKALoBAL4BAI4BALABAMwBAHoA0gEAegDyAQBqALYBAMYBALgBAIYFAJABAQwHWgECAX4BBgKGAQEFBcIHAI4BAK4BANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 

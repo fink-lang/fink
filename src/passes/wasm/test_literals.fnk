@@ -7,7 +7,7 @@ test 'literal bool', fn:
     true
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -32,7 +32,7 @@ test 'literal bool', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C_oDAI4BAQAEWgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8wDAI4BAQAEWgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'literal bool false', fn:
@@ -40,7 +40,7 @@ test 'literal bool false', fn:
     false
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -65,7 +65,7 @@ test 'literal bool false', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C_oDAI4BAQAFWgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8wDAI4BAQAFWgBqALYBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'literal int', fn:
@@ -73,7 +73,7 @@ test 'literal int', fn:
     42
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -98,7 +98,7 @@ test 'literal int', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C_oDAI4BAQAChgEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8wDAI4BAQAChgEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'literal neg 0', fn:
@@ -106,7 +106,7 @@ test 'literal neg 0', fn:
     -0
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -131,7 +131,7 @@ test 'literal neg 0', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C_oDAI4BAQAChgEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8wDAI4BAQAChgEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -140,7 +140,7 @@ test 'literal float', fn:
     1.234e+5
   | equals wat":
     (module
-      (func $test::fink_module (export "fink_module") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $:args (ref null any))
@@ -165,7 +165,7 @@ test 'literal float', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C_oDAI4BAQAIjgEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8wDAI4BAQAIjgEAagC2AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct

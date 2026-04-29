@@ -110,7 +110,6 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
 
   for (frag_idx, frag) in fragments.iter().enumerate() {
     let off = offsets[frag_idx];
-    let is_entry = frag_idx == 0;
 
     for ty in &frag.types {
       merged.types.push(remap_type_decl(ty, &off));
@@ -118,14 +117,6 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
 
     for (local_idx, f) in frag.funcs.iter().enumerate() {
       let mut decl = remap_func_decl(f, &off, &producer_fink_module);
-      // Only the entry fragment exports `fink_module` under the
-      // unqualified name — that's the host's call entry point.
-      // Dep fragments' `fink_module`s stay unexported (they're
-      // invoked via `std/modules.fnk:import`, not by name from the
-      // host).
-      if !is_entry && decl.export.as_deref() == Some("fink_module") {
-        decl.export = None;
-      }
       // Cross-fragment user-import resolution: if this is a
       // placeholder `(import "<canonical_url>" "fink_module" ...)`
       // and the URL matches a producer fragment in the merge set,
