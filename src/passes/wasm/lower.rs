@@ -666,6 +666,11 @@ fn lower_expr(
     ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPop), args } => {
       emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::SeqPop, args, expr.id);
     }
+    // SeqPopBack: `(seq, fail, succ)` — destructure from end. Same shape
+    // as SeqPop; succ receives `(init, last)` instead of `(head, tail)`.
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::SeqPopBack), args } => {
+      emit_ternary_guard(ctx, frag, rt, cps, ast, Sym::SeqPopBack, args, expr.id);
+    }
     // RecPut: `(rec, key, val, cont)` — record extension.
     // RecPop: `(rec, key, fail, succ)` — record destructure.
     // Both 4-arg, lowered as `return_call $sym arg0 arg1 arg2 arg3`.

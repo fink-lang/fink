@@ -566,6 +566,17 @@
     (return_call $std/list.wat:seq_pop
       (local.get $cursor) (local.get $fail) (local.get $succ)))
 
+  ;; seq_pop_back(cursor, fail, succ): peel one element off the END of a
+  ;; seq-like container. Currently only $List is supported (sets have no
+  ;; defined ordering, so "last" isn't meaningful).
+  ;; If empty: tail-call fail() with no args.
+  ;; Else: tail-call succ(init, last) with two args.
+  (func $std/seq.fnk:pop_back (export "std/seq.fnk:pop_back")
+    (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
+
+    (return_call $std/list.wat:seq_pop_back
+      (local.get $cursor) (local.get $fail) (local.get $succ)))
+
   ;; =========================================================================
   ;; Membership: `in` / `not in` — dispatch on container type
   ;; =========================================================================

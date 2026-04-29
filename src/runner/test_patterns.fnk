@@ -20,12 +20,89 @@ test 'seq guard second arm', fn:
   | equals ƒink:
     110
 
-skip test 'list rest in middle', fn:
+test 'list rest in middle', fn:
   expect run ƒink:
     match [1, 2, 3, 4]:
       [first, ..mid, last]: first + last
   | equals ƒink:
     5
+
+
+test 'list trailing only — bare spread plus tail', fn:
+  expect run ƒink:
+    match [1, 2, 3, 4]:
+      [.., last]: last
+  | equals ƒink:
+    4
+
+
+test 'list trailing only — multiple back elements', fn:
+  expect run ƒink:
+    match [1, 2, 3, 4, 5]:
+      [..rest, x, y, z]: x + y + z
+  | equals ƒink:
+    12
+
+
+test 'list front + trailing with named rest', fn:
+  expect run ƒink:
+    match [1, 2, 3, 4, 5, 6]:
+      [a, b, ..mid, x, y]: a + b + x + y
+  | equals ƒink:
+    14
+
+
+test 'list rest in middle — empty mid', fn:
+  expect run ƒink:
+    match [1, 2]:
+      [a, ..mid, last]: a + last
+      _: 99
+  | equals ƒink:
+    3
+
+
+test 'list rest in middle — too few elements', fn:
+  expect run ƒink:
+    match [1]:
+      [a, ..mid, last]: a + last
+      _: 99
+  | equals ƒink:
+    99
+
+
+test 'list rest in middle — empty list', fn:
+  expect run ƒink:
+    match []:
+      [a, ..mid, last]: a + last
+      _: 99
+  | equals ƒink:
+    99
+
+
+test 'list rest in middle — literal trailing', fn:
+  expect run ƒink:
+    match [1, 2, 3, 4]:
+      [a, ..mid, 4]: a
+      _: 99
+  | equals ƒink:
+    1
+
+
+test 'list rest in middle — literal trailing fails', fn:
+  expect run ƒink:
+    match [1, 2, 3, 4]:
+      [a, ..mid, 5]: a
+      _: 99
+  | equals ƒink:
+    99
+
+
+test 'list rest in middle — nested seq pattern in trailing', fn:
+  expect run ƒink:
+    match [1, [10, 20], [30, 40]]:
+      [first, ..mid, [a, b]]: first + a + b
+  | equals ƒink:
+    71
 
 
 test 'rec empty check', fn:

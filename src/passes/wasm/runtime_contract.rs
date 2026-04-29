@@ -120,7 +120,7 @@ pub enum Sym {
   // continuations rather than values, but the WASM signature is the
   // same. RecPop has a different 4-arg shape; not yet wired.
   IsSeqLike, IsRecLike,
-  SeqPop,
+  SeqPop, SeqPopBack,
   // String construction. `Str` wraps a data-section pointer:
   //   `str(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
   Str, StrEmpty,
@@ -261,6 +261,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::IsSeqLike  => &[Sym::IsSeqLike],
     BuiltIn::IsRecLike  => &[Sym::IsRecLike],
     BuiltIn::SeqPop     => &[Sym::SeqPop],
+    BuiltIn::SeqPopBack => &[Sym::SeqPopBack],
     BuiltIn::RecPut     => &[Sym::RecPut],
     BuiltIn::RecPop     => &[Sym::RecPop],
     // `·ƒpub name, val, cont` lowers inline to `global.set $<fqn>:<name>`
@@ -348,6 +349,7 @@ pub struct Runtime {
   is_seq_like: Option<FuncSym>,
   is_rec_like: Option<FuncSym>,
   seq_pop:     Option<FuncSym>,
+  seq_pop_back: Option<FuncSym>,
   // string constructors
   str_:         Option<FuncSym>,
   str_empty:    Option<FuncSym>,
@@ -449,6 +451,7 @@ impl Runtime {
       Sym::IsSeqLike  => self.is_seq_like,
       Sym::IsRecLike  => self.is_rec_like,
       Sym::SeqPop     => self.seq_pop,
+      Sym::SeqPopBack => self.seq_pop_back,
       Sym::OpShl    => self.op_shl,
       Sym::OpShr    => self.op_shr,
       Sym::OpRngex  => self.op_rngex,
@@ -532,6 +535,7 @@ pub(super) fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::IsSeqLike       => ("rt/protocols.wat", "std/operators.fnk:is_seq_like"),
     Sym::IsRecLike       => ("rt/protocols.wat", "std/operators.fnk:is_rec_like"),
     Sym::SeqPop          => ("rt/protocols.wat", "std/seq.fnk:pop"),
+    Sym::SeqPopBack      => ("rt/protocols.wat", "std/seq.fnk:pop_back"),
     Sym::Str             => ("std/str.wat", "std/str.fnk:str"),
     Sym::StrEmpty        => ("std/str.wat", "std/str.fnk:str_empty"),
     Sym::StrFmt          => ("std/str.wat", "std/str.fnk:fmt"),
@@ -732,7 +736,7 @@ const TERNARY_PRIMITIVES: &[Sym] = &[
   Sym::SeqPrepend,
   Sym::RecMerge,
   Sym::IsSeqLike, Sym::IsRecLike,
-  Sym::SeqPop,
+  Sym::SeqPop, Sym::SeqPopBack,
 ];
 
 fn set_ternary_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
@@ -742,6 +746,7 @@ fn set_ternary_primitive(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::IsSeqLike  => &mut rt.is_seq_like,
     Sym::IsRecLike  => &mut rt.is_rec_like,
     Sym::SeqPop     => &mut rt.seq_pop,
+    Sym::SeqPopBack => &mut rt.seq_pop_back,
     _ => panic!("set_ternary_primitive: {:?} is not a ternary primitive", sym),
   };
   *slot = Some(f);
