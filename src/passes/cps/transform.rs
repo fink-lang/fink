@@ -2149,8 +2149,13 @@ fn emit_seq_pattern(
   // Step 1: build the terminal expression (innermost).
   // This is either an Empty check (no spread), a SeqPop assert (bare spread),
   // or a plain succ call (bound spread).
+  let binds = SeqBinds {
+    head_temps: &head_temps,
+    rest_temp: &rest_temp,
+    tail_temps: &tail_temps,
+  };
   let terminal = build_seq_terminal(
-    g, &head_temps, &rest_temp, &tail_temps, spread,
+    g, &binds, spread,
     succ_param.id, fail_param.id, origin,
   );
   // Note: terminal.0 is the wrapped expression (Empty/SeqPop/LetVal).
@@ -2240,18 +2245,27 @@ fn emit_seq_pattern(
   (r.kind, r.id)
 }
 
+/// Bind groups carried by a seq pattern: front, optional spread bind,
+/// trailing. Determines what `succ` is called with at the terminal.
+struct SeqBinds<'a> {
+  head_temps: &'a [BindNode],
+  rest_temp: &'a Option<BindNode>,
+  tail_temps: &'a [BindNode],
+}
+
 /// Build the terminal expression for a seq pattern matcher.
 /// This is the innermost CPS expression before the SeqPop chain wraps it.
 fn build_seq_terminal(
   g: &mut Gen,
-  head_temps: &[BindNode],
-  rest_temp: &Option<BindNode>,
-  tail_temps: &[BindNode],
+  binds: &SeqBinds<'_>,
   spread: Option<Option<AstId>>,
   succ_id: CpsId,
   fail_id: CpsId,
   origin: Option<AstId>,
 ) -> (Expr, BindNode) {
+  let head_temps = binds.head_temps;
+  let rest_temp = binds.rest_temp;
+  let tail_temps = binds.tail_temps;
   // Build succ(temps...) call. Order matches `bind_names`:
   // head_temps, rest_temp (if any), tail_temps.
   let succ_ref = g.val(ValKind::ContRef(succ_id), origin);
