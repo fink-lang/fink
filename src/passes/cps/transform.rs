@@ -2108,20 +2108,28 @@ fn emit_seq_pattern(
   let succ_param = g.bind(Bind::Cont(ContKind::Succ), None);
   let fail_param = g.bind(Bind::Cont(ContKind::Fail), None);
 
-  // Separate regular elements from the trailing spread (if any).
+  // Separate front, spread, trailing.
+  // Pattern shape: [front..., (..spread)?, trailing...]
+  // Trailing elements only exist if there's a spread before them.
   // The spread's inner is `Option<AstId>` — None for bare `..`, Some for `..rest`.
   let mut regular: Vec<AstId> = vec![];
   let mut spread: Option<Option<AstId>> = None;
+  let mut trailing: Vec<AstId> = vec![];
   for &elem in elems.iter() {
     if let NodeKind::Spread { inner, .. } = &g.node(elem).kind {
       spread = Some(*inner);
-      break;
+      continue;
     }
-    regular.push(elem);
+    if spread.is_some() {
+      trailing.push(elem);
+    } else {
+      regular.push(elem);
+    }
   }
 
-  // Pre-allocate temp binds: one per regular element.
+  // Pre-allocate temp binds.
   let head_temps: Vec<BindNode> = regular.iter().map(|_| g.fresh_result(origin)).collect();
+  let tail_temps: Vec<BindNode> = trailing.iter().map(|_| g.fresh_result(origin)).collect();
 
   // Pre-allocate a rest temp only for bound spread (`[..rest]`), not bare spread (`[..]`).
   let rest_temp: Option<BindNode> = match spread {
@@ -2134,22 +2142,55 @@ fn emit_seq_pattern(
   if let Some(rt) = &rest_temp {
     bind_names.push(rt.clone());
   }
+  bind_names.extend(tail_temps.clone());
 
   // --- Build matcher body inside-out ---
 
   // Step 1: build the terminal expression (innermost).
   // This is either an Empty check (no spread), a SeqPop assert (bare spread),
   // or a plain succ call (bound spread).
-  let terminal = build_seq_terminal(g, &head_temps, &rest_temp, spread, succ_param.id, fail_param.id, origin);
+  let binds = SeqBinds {
+    head_temps: &head_temps,
+    rest_temp: &rest_temp,
+    tail_temps: &tail_temps,
+  };
+  let terminal = build_seq_terminal(
+    g, &binds, spread,
+    succ_param.id, fail_param.id, origin,
+  );
+  // Note: terminal.0 is the wrapped expression (Empty/SeqPop/LetVal).
+  //       terminal.1 is the cursor_bind that the wrapped expression reads.
+  //       When trailing exists, the cursor for the terminal is the LAST
+  //       SeqPopBack's `init` output. When no trailing exists, it's the
+  //       cursor produced by the front SeqPop fold (or the checked
+  //       cursor when there are no front pops).
 
-  // Step 2: fold right — wrap each regular element's SeqPop around the body.
+  // Step 2: if trailing patterns exist, wrap the terminal with a
+  // SeqPopBack chain. Each SeqPopBack peels one element off the END of
+  // the cursor; the LAST trailing pattern is popped first (it's at the
+  // back of the list); the FIRST trailing pattern is popped last.
+  // The final init (after all back-pops) is bound to rest_temp when the
+  // spread is bound.
+  let (inner_body_after_trailing, body_outer_cursor) = if !trailing.is_empty() {
+    let outer_cursor = g.fresh_result(origin);
+    let wrapped = fold_seq_pop_backs(
+      g, &tail_temps, terminal.0, terminal.1, fail_param.id,
+      outer_cursor.clone(), origin,
+    );
+    (wrapped, outer_cursor)
+  } else {
+    (terminal.0, terminal.1)
+  };
+
+  // Step 3: fold front pops over `head_temps`.
   // The IsSeqLike guard provides a checked cursor; SeqPops use that.
   let checked_param = g.fresh_result(origin);
-  let inner_body = fold_seq_pops(
-    g, &head_temps, terminal, fail_param.id, checked_param.clone(), origin,
+  let inner_body = fold_seq_pops_to(
+    g, &head_temps, inner_body_after_trailing, body_outer_cursor, fail_param.id,
+    checked_param.clone(), origin,
   );
 
-  // Step 3: wrap with IsSeqLike type guard.
+  // Step 4: wrap with IsSeqLike type guard.
   let subj_ref = g.val(ValKind::Ref(Ref::Synth(subj_param.id)), origin);
   let fail_ref = g.val(ValKind::ContRef(fail_param.id), origin);
   let fail_call = g.expr(ExprKind::App {
@@ -2178,10 +2219,14 @@ fn emit_seq_pattern(
     origin,
   });
 
-  // Step 4: push sub-pattern pendings for each element.
+  // Step 5: push sub-pattern pendings for each element (front + trailing).
   // The body fn receives the temps. For each regular element, lower_pat_lhs against the temp.
   for (i, &elem_id) in regular.iter().enumerate() {
     let temp_val = ref_val(g, head_temps[i].kind, head_temps[i].id, origin);
+    lower_pat_lhs(g, elem_id, temp_val, Some(elem_id), pending);
+  }
+  for (i, &elem_id) in trailing.iter().enumerate() {
+    let temp_val = ref_val(g, tail_temps[i].kind, tail_temps[i].id, origin);
     lower_pat_lhs(g, elem_id, temp_val, Some(elem_id), pending);
   }
 
@@ -2200,24 +2245,38 @@ fn emit_seq_pattern(
   (r.kind, r.id)
 }
 
+/// Bind groups carried by a seq pattern: front, optional spread bind,
+/// trailing. Determines what `succ` is called with at the terminal.
+struct SeqBinds<'a> {
+  head_temps: &'a [BindNode],
+  rest_temp: &'a Option<BindNode>,
+  tail_temps: &'a [BindNode],
+}
+
 /// Build the terminal expression for a seq pattern matcher.
 /// This is the innermost CPS expression before the SeqPop chain wraps it.
 fn build_seq_terminal(
   g: &mut Gen,
-  head_temps: &[BindNode],
-  rest_temp: &Option<BindNode>,
+  binds: &SeqBinds<'_>,
   spread: Option<Option<AstId>>,
   succ_id: CpsId,
   fail_id: CpsId,
   origin: Option<AstId>,
 ) -> (Expr, BindNode) {
-  // Build succ(temps...) call.
+  let head_temps = binds.head_temps;
+  let rest_temp = binds.rest_temp;
+  let tail_temps = binds.tail_temps;
+  // Build succ(temps...) call. Order matches `bind_names`:
+  // head_temps, rest_temp (if any), tail_temps.
   let succ_ref = g.val(ValKind::ContRef(succ_id), origin);
   let mut succ_args: Vec<Arg> = head_temps.iter()
     .map(|t| Arg::Val(g.val(ValKind::Ref(Ref::Synth(t.id)), origin)))
     .collect();
   if let Some(rt) = rest_temp {
     succ_args.push(Arg::Val(g.val(ValKind::Ref(Ref::Synth(rt.id)), origin)));
+  }
+  for tt in tail_temps {
+    succ_args.push(Arg::Val(g.val(ValKind::Ref(Ref::Synth(tt.id)), origin)));
   }
   let succ_call = g.expr(ExprKind::App {
     func: Callable::Val(succ_ref),
@@ -2287,19 +2346,23 @@ fn build_seq_terminal(
 
 /// Fold right over head_temps, wrapping each SeqPop around the body.
 /// `first_cursor` is used as the outermost cursor (typically subj_param).
+/// `body` is the inner expression that consumes the cursor at
+/// `inner_cursor` (the last SeqPop's tail) and runs after all front pops.
 /// Returns the fully wrapped body.
-fn fold_seq_pops(
+fn fold_seq_pops_to(
   g: &mut Gen,
   head_temps: &[BindNode],
-  terminal: (Expr, BindNode),
+  body: Expr,
+  inner_cursor: BindNode,
   fail_id: CpsId,
   first_cursor: BindNode,
   origin: Option<AstId>,
 ) -> Expr {
-  let (mut body, mut next_tail_bind) = terminal;
+  let mut body = body;
+  let mut next_tail_bind = inner_cursor;
 
   if head_temps.is_empty() {
-    // No elements — terminal's cursor_bind needs to be wired to first_cursor.
+    // No elements — body's inner cursor needs to be wired to first_cursor.
     // Emit a LetVal alias only in this case.
     let cursor_ref = g.val(ValKind::Ref(Ref::Synth(first_cursor.id)), origin);
     return g.expr(ExprKind::LetVal {
@@ -2330,6 +2393,69 @@ fn fold_seq_pops(
 
     body = pop;
     next_tail_bind = cursor_bind;
+  }
+
+  body
+}
+
+/// Fold over tail_temps from LAST to FIRST, wrapping each SeqPopBack
+/// around the terminal body. The outermost (first to run) SeqPopBack
+/// reads from `outer_cursor` (the cursor produced by the front fold).
+/// The innermost SeqPopBack writes its init to `inner_cursor` (the bind
+/// the terminal_body references — typically allocated by
+/// `build_seq_terminal`).
+///
+/// Pop order: the LAST trailing pattern is at the back of the list and
+/// is popped FIRST; the FIRST trailing pattern is popped LAST.
+///
+/// Tree shape (for trailing = [a, b, c]):
+///   SeqPopBack(outer_cursor, fail, fn (init1, c_val):   # OUTERMOST pops c
+///     SeqPopBack(init1, fail, fn (init2, b_val):         # pops b
+///       SeqPopBack(init2, fail, fn (inner_cursor, a_val): # INNERMOST pops a
+///         <terminal_body, references inner_cursor>
+///       )))
+fn fold_seq_pop_backs(
+  g: &mut Gen,
+  tail_temps: &[BindNode],
+  terminal_body: Expr,
+  inner_cursor: BindNode,
+  fail_id: CpsId,
+  outer_cursor: BindNode,
+  origin: Option<AstId>,
+) -> Expr {
+  assert!(!tail_temps.is_empty(), "fold_seq_pop_backs: empty tail_temps");
+  let k = tail_temps.len();
+
+  let mut body = terminal_body;
+  // next_init_bind is the init that the CURRENT body expects as input.
+  // For the innermost wrapping iteration, this is `inner_cursor`.
+  let mut next_init_bind = inner_cursor;
+
+  // Build from innermost (i = k-1, pops tail_temps[0]) outward
+  // (i = 0, pops tail_temps[k-1]).
+  for i in (0..k).rev() {
+    // Trailing pattern bound by this pop: tail_temps[k-1-i].
+    let last_temp = tail_temps[k - 1 - i].clone();
+
+    // Cursor for this pop. Outermost (i == 0) uses outer_cursor.
+    let cursor_bind = if i == 0 { outer_cursor.clone() } else { g.fresh_result(origin) };
+    let cursor_ref = g.val(ValKind::Ref(Ref::Synth(cursor_bind.id)), origin);
+    let fail_ref = g.val(ValKind::ContRef(fail_id), origin);
+
+    let pop = g.expr(ExprKind::App {
+      func: Callable::BuiltIn(BuiltIn::SeqPopBack),
+      args: vec![
+        Arg::Val(cursor_ref),
+        Arg::Val(fail_ref),
+        Arg::Cont(Cont::Expr {
+          args: vec![next_init_bind, last_temp],
+          body: Box::new(body),
+        }),
+      ],
+    }, origin);
+
+    body = pop;
+    next_init_bind = cursor_bind;
   }
 
   body

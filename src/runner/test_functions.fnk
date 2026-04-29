@@ -121,7 +121,7 @@ test 'varargs mixed fixed and rest', fn:
 # Culprit: hoisted-fn synth id lands outside collect_chain's traversal,
 # emit_get_raw_funcref falls through to local.get. Passes gen_wat but
 # wasmtime rejects the linked binary. Ping/pong (pure bodies) works.
-skip test 'mutual recursion at module scope', fn:
+test 'mutual recursion at module scope', fn:
   expect run ƒink:
     is_even = fn n:
       match n:

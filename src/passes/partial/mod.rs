@@ -32,11 +32,268 @@ use crate::ast::transform::{Transform, TransformError, TransformResult};
 /// Module. All old slots remain reachable at their original ids; any
 /// rewrites appear as fresh appended nodes.
 pub fn apply(ast: Ast<'_>) -> Result<Ast<'_>, TransformError> {
-  let src = ast.clone();
-  let (mut builder, root) = AstBuilder::from_ast(ast);
+  // Pre-pass: rewrite `Apply(f, [Wildcard])` -> `Apply(f, [])`.
+  let src0 = ast.clone();
+  let (mut builder0, root0) = AstBuilder::from_ast(ast);
+  let pre_root = rewrite_wildcard_call(&mut builder0, &src0, root0);
+  let pre_ast = builder0.finish(pre_root);
+
+  // Main partial-application desugaring.
+  let src = pre_ast.clone();
+  let (mut builder, root) = AstBuilder::from_ast(pre_ast);
   let mut pass = PartialPass { synth_counter: 0 };
   let new_root = pass.transform_stmt(&mut builder, &src, root)?;
   Ok(builder.finish(new_root))
+}
+
+/// Pre-pass: rewrite `Apply(f, [Wildcard])` -> `Apply(f, [])`.
+/// `_` as the sole argument means "call with no args".
+fn rewrite_wildcard_call<'src>(
+  builder: &mut AstBuilder<'src>,
+  src: &Ast<'src>,
+  id: AstId,
+) -> AstId {
+  let node = src.nodes.get(id);
+  let loc = node.loc;
+  let kind = node.kind.clone();
+  match kind {
+    NodeKind::Apply { func, args } => {
+      let new_func = rewrite_wildcard_call(builder, src, func);
+      let is_sole_wildcard = args.items.len() == 1
+        && matches!(src.nodes.get(args.items[0]).kind, NodeKind::Wildcard);
+      let new_args = if is_sole_wildcard {
+        Exprs::empty()
+      } else {
+        let new_items: Vec<AstId> = args.items.iter()
+          .map(|&i| rewrite_wildcard_call(builder, src, i))
+          .collect();
+        if new_func == func && new_items.iter().zip(args.items.iter()).all(|(a, b)| a == b) {
+          return id;
+        }
+        Exprs { items: new_items.into_boxed_slice(), seps: args.seps.clone() }
+      };
+      builder.append(NodeKind::Apply { func: new_func, args: new_args }, loc)
+    }
+    NodeKind::Module { exprs, url } => {
+      let new_items: Vec<AstId> = exprs.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_items.iter().zip(exprs.items.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::Module {
+          exprs: Exprs { items: new_items.into_boxed_slice(), seps: exprs.seps.clone() },
+          url,
+        },
+        loc,
+      )
+    }
+    NodeKind::Bind { op, lhs, rhs } => {
+      let new_rhs = rewrite_wildcard_call(builder, src, rhs);
+      if new_rhs == rhs { id } else {
+        builder.append(NodeKind::Bind { op, lhs, rhs: new_rhs }, loc)
+      }
+    }
+    NodeKind::BindRight { op, lhs, rhs } => {
+      let new_lhs = rewrite_wildcard_call(builder, src, lhs);
+      if new_lhs == lhs { id } else {
+        builder.append(NodeKind::BindRight { op, lhs: new_lhs, rhs }, loc)
+      }
+    }
+    NodeKind::Group { open, close, inner } => {
+      let new_inner = rewrite_wildcard_call(builder, src, inner);
+      if new_inner == inner { id } else {
+        builder.append(NodeKind::Group { open, close, inner: new_inner }, loc)
+      }
+    }
+    NodeKind::Pipe(exprs) => {
+      let new_items: Vec<AstId> = exprs.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_items.iter().zip(exprs.items.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::Pipe(Exprs {
+          items: new_items.into_boxed_slice(),
+          seps: exprs.seps.clone(),
+        }),
+        loc,
+      )
+    }
+    NodeKind::Fn { sep, params, body } => {
+      let new_items: Vec<AstId> = body.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_items.iter().zip(body.items.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::Fn {
+          sep,
+          params,
+          body: Exprs { items: new_items.into_boxed_slice(), seps: body.seps.clone() },
+        },
+        loc,
+      )
+    }
+    NodeKind::Arm { lhs, sep, body } => {
+      let new_items: Vec<AstId> = body.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_items.iter().zip(body.items.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::Arm {
+          lhs,
+          sep,
+          body: Exprs { items: new_items.into_boxed_slice(), seps: body.seps.clone() },
+        },
+        loc,
+      )
+    }
+    NodeKind::InfixOp { op, lhs, rhs } => {
+      let new_lhs = rewrite_wildcard_call(builder, src, lhs);
+      let new_rhs = rewrite_wildcard_call(builder, src, rhs);
+      if new_lhs == lhs && new_rhs == rhs { id } else {
+        builder.append(NodeKind::InfixOp { op, lhs: new_lhs, rhs: new_rhs }, loc)
+      }
+    }
+    NodeKind::UnaryOp { op, operand } => {
+      let new_operand = rewrite_wildcard_call(builder, src, operand);
+      if new_operand == operand { id } else {
+        builder.append(NodeKind::UnaryOp { op, operand: new_operand }, loc)
+      }
+    }
+    NodeKind::Member { op, lhs, rhs } => {
+      let new_lhs = rewrite_wildcard_call(builder, src, lhs);
+      let new_rhs = rewrite_wildcard_call(builder, src, rhs);
+      if new_lhs == lhs && new_rhs == rhs { id } else {
+        builder.append(NodeKind::Member { op, lhs: new_lhs, rhs: new_rhs }, loc)
+      }
+    }
+    NodeKind::LitSeq { open, close, items } => {
+      let new_items: Vec<AstId> = items.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_items.iter().zip(items.items.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::LitSeq {
+          open,
+          close,
+          items: Exprs { items: new_items.into_boxed_slice(), seps: items.seps.clone() },
+        },
+        loc,
+      )
+    }
+    NodeKind::LitRec { open, close, items } => {
+      let new_items: Vec<AstId> = items.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_items.iter().zip(items.items.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::LitRec {
+          open,
+          close,
+          items: Exprs { items: new_items.into_boxed_slice(), seps: items.seps.clone() },
+        },
+        loc,
+      )
+    }
+    NodeKind::StrTempl { open, close, children } => {
+      let new_children: Vec<AstId> = children.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_children.iter().zip(children.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::StrTempl { open, close, children: new_children.into_boxed_slice() },
+        loc,
+      )
+    }
+    NodeKind::StrRawTempl { open, close, children } => {
+      let new_children: Vec<AstId> = children.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_children.iter().zip(children.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::StrRawTempl { open, close, children: new_children.into_boxed_slice() },
+        loc,
+      )
+    }
+    NodeKind::Spread { op, inner } => {
+      let new_inner = inner.map(|i| rewrite_wildcard_call(builder, src, i));
+      if new_inner == inner { id } else {
+        builder.append(NodeKind::Spread { op, inner: new_inner }, loc)
+      }
+    }
+    NodeKind::Match { subjects, sep, arms } => {
+      let new_subjects: Vec<AstId> = subjects.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      let new_arms: Vec<AstId> = arms.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      let subjects_unchanged = new_subjects.iter().zip(subjects.items.iter()).all(|(a, b)| a == b);
+      let arms_unchanged = new_arms.iter().zip(arms.items.iter()).all(|(a, b)| a == b);
+      if subjects_unchanged && arms_unchanged { return id; }
+      builder.append(
+        NodeKind::Match {
+          subjects: Exprs { items: new_subjects.into_boxed_slice(), seps: subjects.seps.clone() },
+          sep,
+          arms: Exprs { items: new_arms.into_boxed_slice(), seps: arms.seps.clone() },
+        },
+        loc,
+      )
+    }
+    NodeKind::Try(inner) => {
+      let new_inner = rewrite_wildcard_call(builder, src, inner);
+      if new_inner == inner { id } else {
+        builder.append(NodeKind::Try(new_inner), loc)
+      }
+    }
+    NodeKind::Block { name, params, sep, body } => {
+      let new_items: Vec<AstId> = body.items.iter()
+        .map(|&i| rewrite_wildcard_call(builder, src, i))
+        .collect();
+      if new_items.iter().zip(body.items.iter()).all(|(a, b)| a == b) {
+        return id;
+      }
+      builder.append(
+        NodeKind::Block {
+          name,
+          params,
+          sep,
+          body: Exprs { items: new_items.into_boxed_slice(), seps: body.seps.clone() },
+        },
+        loc,
+      )
+    }
+    NodeKind::ChainedCmp(parts) => {
+      let mut any_changed = false;
+      let new_parts: Vec<CmpPart<'src>> = parts.iter().map(|p| match p {
+        CmpPart::Operand(n) => {
+          let new_n = rewrite_wildcard_call(builder, src, *n);
+          if new_n != *n { any_changed = true; }
+          CmpPart::Operand(new_n)
+        }
+        CmpPart::Op(op) => CmpPart::Op(*op),
+      }).collect();
+      if !any_changed { id } else {
+        builder.append(NodeKind::ChainedCmp(new_parts.into_boxed_slice()), loc)
+      }
+    }
+    _ => id,
+  }
 }
 
 // --- helpers ---

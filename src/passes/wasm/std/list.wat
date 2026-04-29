@@ -349,4 +349,66 @@
       (local.get $succ))
   )
 
+
+  ;; -- Pop-back -------------------------------------------------------
+
+  ;; pop_back direct-style: peel one element off the END of a list.
+  ;; Returns (init, last) via multi-value. Traps on empty list.
+  ;; init is a freshly built list of length n-1 (no spine sharing — cons
+  ;; cells are forward-linked). last is the original last head.
+  ;; O(n).
+  (func $std/list.wat:pop_back
+    (param $list (ref $Cons))
+    (result (ref $List) (ref any))
+
+    (local $tail (ref $List))
+    (local $rest_init (ref $List))
+    (local $rest_last (ref any))
+
+    (local.set $tail
+      (struct.get $Cons $tail (local.get $list)))
+
+    ;; If $list is the last cell, init is empty and we are done.
+    (if (ref.test (ref $Nil) (local.get $tail))
+      (then
+        (return
+          (struct.new $Nil)
+          (struct.get $Cons $head (local.get $list)))))
+
+    ;; Recurse on the tail; prepend head onto the resulting init.
+    (call $std/list.wat:pop_back
+      (ref.cast (ref $Cons) (local.get $tail)))
+    (local.set $rest_last)
+    (local.set $rest_init)
+
+    (struct.new $Cons
+      (struct.get $Cons $head (local.get $list))
+      (local.get $rest_init))
+    (local.get $rest_last)
+  )
+
+  ;; seq_pop_back(cursor, fail, succ) — destructure [..init, last].
+  ;; If empty ($Nil): tail-call fail continuation with 0 args.
+  ;; If non-empty ($Cons): walk to end, extract (init, last), tail-call
+  ;; succ with 2 args. O(n).
+  (func $std/list.wat:seq_pop_back (export "std/list.wat:seq_pop_back")
+    (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))
+
+    (local $init (ref $List))
+    (local $last (ref any))
+
+    (if (ref.test (ref $Nil) (local.get $cursor))
+      (then (return_call $std/list.wat:apply_0 (local.get $fail))))
+
+    (call $std/list.wat:pop_back
+      (ref.cast (ref $Cons) (local.get $cursor)))
+    (local.set $last)
+    (local.set $init)
+
+    (return_call $std/list.wat:apply_2_vals
+      (local.get $init)
+      (local.get $last)
+      (local.get $succ))
+  )
+
 )

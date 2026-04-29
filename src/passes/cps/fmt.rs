@@ -355,6 +355,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     BuiltIn::IsRecLike    => "·is_rec_like".into(),
     // Collection primitives
     BuiltIn::SeqPop       => "·seq_pop".into(),
+    BuiltIn::SeqPopBack   => "·seq_pop_back".into(),
     BuiltIn::RecPop       => "·rec_pop".into(),
     BuiltIn::Empty        => "·empty".into(),
     BuiltIn::StrMatch     => "·str_match".into(),

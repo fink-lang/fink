@@ -179,15 +179,29 @@ test 'seq — head then spread bound', fn:
     # sm:VgABABQAAQAUJAEAFBIAAgAGAQAUAAEAFAgAEAEAFA4BABQKAAIADgECBAABAAQMAQEUCgAKAQIEEAACABIBHAEAAQABDAEdFAoACgESBBAAAgAWAREUAAEAFBQBEgQQABABERQMAAIADgEAFAABABQIABgAGAAYAQAUCgACABYBABQAAQAUHAEAFAoAAgAgAQAUDAACAB4BABQAAQAUFAEAFAwABAEAFBQACgEAFA4BABQMAAIAIgEeAQABAAEMAR0UDAAKAQAUCgACACYBABQAAQAUFgEAFAoABAEAFAoAHgAEAQAUAAEAFBYBABQCABgBABQMAAQBABQAAQAUDgEAFAwABAEAFA4ABAEiAw
 
 
---- test 'seq — rest in middle' deferred: needs ·match_reverse ---
-# test 'seq — rest in middle', fn:
-#   expect cps_module ƒink:
-#     [head, ..middle, end] = foo
-#
-#   | equals ƒink:
-#     # TODO: decomposes as [head, ..rest1] then reverse rest1, pop last as end,
-#     # reverse remainder as middle. Needs ·match_reverse. Deferred — does not
-#     # affect the core primitive set.
+test 'seq — rest in middle', fn:
+  expect cps_module ƒink:
+    [head, ..middle, end] = foo
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_3:
+      ·fn
+        fn ·v_8, ·v_10, ·v_9:
+          ·let ·v_8, fn ·head_0:
+            ·let ·v_9, fn ·end_2:
+              ·let ·v_10, fn ·middle_1:
+                ·ƒret_3 ·middle_1
+        fn ·v_43:
+          ·fn
+            fn ·ƒsucc_6, ·ƒfail_7, ·v_5:
+              ·is_seq_like ·v_5,
+                fn ·v_23:
+                  ·seq_pop ·v_23, ·ƒfail_7, fn ·v_8, ·v_19:
+                    ·seq_pop_back ·v_19, ·ƒfail_7, fn ·v_16, ·v_9:
+                      ·let ·v_16, fn ·v_10:
+                        ·ƒsucc_6 ·v_8, ·v_10, ·v_9
+                fn: ·ƒfail_7 _
+            fn ·v_31: ·v_31 ·v_43, ·panic, ·∅foo
+    # sm:agABABsAAQAbJAEAGxIAAgAGAQAbAAEAGwgAEAEAGw4BABsQAQAbCgACAA4BAgQAAQAEDAEBGwoACgECBBAAAgASASADAAEAAwwBIRsKAAoBIgMOAAIAFgEKAQABAAEMASsbDAAKARIGFAACABoBERsAAQAbFAESBhQAEAERGwwAAgAOAQAbAAEAGwgAGAAYABgBABsKAAIAFgEAGwABABscAQAbCgACACABABsMAAIAHgEAGwABABsUAQAbDAAEAQAbFAAKAQAbDgEAGwwAAgAiAQAbAAEAGx4BABsMAAQBABsUAAoBABsQAQAbCgACACYBLAEAAQABDAErGwwACgEAGwwAAgAqAQAbAAEAGxYBABsKAAQBABsMAAQBABsKAB4ABAEAGwABABsWAQAbAgAYAQAbDAAEAQAbAAEAGw4BABsMAAQBABsOAAQBMAM
 
 
 test 'seq — literal element', fn:

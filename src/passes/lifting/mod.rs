@@ -53,6 +53,13 @@ struct Alloc {
   origin: PropGraph<CpsId, Option<AstId>>,
   synth_alias: PropGraph<CpsId, Option<CpsId>>,
   param_info: PropGraph<CpsId, Option<ParamInfo>>,
+  /// Names of all LetFn bindings reachable in the current round's input
+  /// tree. Refs to these MUST NOT become closure captures: the lower
+  /// pass resolves LetFn names statically via `fn_syms`, not at runtime.
+  /// Without this guard, a sibling fn-id could be threaded through a
+  /// closure capture and end up dangling after the sibling itself is
+  /// re-hoisted to a fresh id.
+  letfn_names: std::collections::HashSet<CpsId>,
 }
 
 impl Alloc {
@@ -60,8 +67,9 @@ impl Alloc {
     origin: PropGraph<CpsId, Option<AstId>>,
     synth_alias: PropGraph<CpsId, Option<CpsId>>,
     param_info: PropGraph<CpsId, Option<ParamInfo>>,
+    letfn_names: std::collections::HashSet<CpsId>,
   ) -> Self {
-    Alloc { origin, synth_alias, param_info }
+    Alloc { origin, synth_alias, param_info, letfn_names }
   }
 
   fn next(&mut self, ast_origin: Option<AstId>) -> CpsId {
@@ -130,9 +138,16 @@ pub fn lift<'src>(
     }
 
 
+    // Collect all LetFn names visible in this round's tree. Capture
+    // analysis must skip these — refs to LetFn names are resolved
+    // statically by the lower pass, not threaded as runtime captures.
+    let letfn_names = collect_letfn_names(&current.root);
     // Extract LetFn from fn_bodies and hoist inline Cont::Expr (one level).
-    let mut alloc = Alloc::new(current.origin, current.synth_alias, current.param_info);
-    let new_root = lift_expr(current.root, ast, &mut alloc);
+    let mut alloc = Alloc::new(
+      current.origin, current.synth_alias, current.param_info, letfn_names,
+    );
+    // Module entry has no outer scope — pass empty.
+    let new_root = lift_expr(current.root, ast, &mut alloc, &[]);
     current = CpsResult {
       root: new_root,
       origin: alloc.origin,
@@ -144,6 +159,46 @@ pub fn lift<'src>(
     };
   }
   unreachable!()
+}
+
+/// Walk the tree and collect names of every `LetFn`, regardless of
+/// position. The lower pass resolves these names statically via
+/// `fn_syms`, so refs to them must remain direct fn-id refs and never
+/// become closure captures.
+fn collect_letfn_names(expr: &Expr) -> std::collections::HashSet<CpsId> {
+  let mut names = std::collections::HashSet::new();
+  walk_letfn_names(expr, &mut names);
+  names
+}
+
+fn walk_letfn_names(expr: &Expr, out: &mut std::collections::HashSet<CpsId>) {
+  match &expr.kind {
+    ExprKind::LetFn { name, fn_body, cont, .. } => {
+      out.insert(name.id);
+      walk_letfn_names(fn_body, out);
+      if let Cont::Expr { body, .. } = cont {
+        walk_letfn_names(body, out);
+      }
+    }
+    ExprKind::LetVal { cont, .. } => {
+      if let Cont::Expr { body, .. } = cont {
+        walk_letfn_names(body, out);
+      }
+    }
+    ExprKind::App { args, .. } => {
+      for a in args {
+        match a {
+          Arg::Cont(Cont::Expr { body, .. }) => walk_letfn_names(body, out),
+          Arg::Expr(e) => walk_letfn_names(e, out),
+          _ => {}
+        }
+      }
+    }
+    ExprKind::If { then, else_, .. } => {
+      walk_letfn_names(then, out);
+      walk_letfn_names(else_, out);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -395,11 +450,12 @@ fn lift_expr<'src>(
   expr: Expr,
   ast: &crate::ast::Ast<'src>,
   alloc: &mut Alloc,
+  outer_params: &[Param],
 ) -> Expr {
   match expr.kind {
     ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
       // Recurse into the cont first.
-      let cont = lift_cont(cont, ast, alloc);
+      let cont = lift_cont(cont, ast, alloc, outer_params);
 
       // If fn_body contains nested LetFn or inline Cont::Expr, extract them.
       // Inside the LetFn being processed, fn_body is always a fn scope.
@@ -442,7 +498,8 @@ fn lift_expr<'src>(
         result
       } else {
         // No nested LetFn — just recurse into fn_body.
-        let fn_body = lift_expr(*fn_body, ast, alloc);
+        // The fn_body is a fresh fn scope; outer is just the LetFn's own params.
+        let fn_body = lift_expr(*fn_body, ast, alloc, &params);
         Expr {
           id: expr.id,
           kind: ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont },
@@ -451,7 +508,7 @@ fn lift_expr<'src>(
     }
 
     ExprKind::LetVal { name, val, cont } => {
-      let cont = lift_cont(cont, ast, alloc);
+      let cont = lift_cont(cont, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::LetVal { name, val, cont } }
     }
 
@@ -466,8 +523,14 @@ fn lift_expr<'src>(
         let args: Vec<Arg> = args.into_iter().map(|a| match a {
           Arg::Cont(Cont::Expr { args: cont_args, body }) => {
             {
-              let parent_params: Vec<Param> = cont_args.iter().map(|b| Param::Name(b.clone())).collect();
-              let mut new_body = extract_from_body(*body, &parent_params, &[], ast, alloc, &mut all_hoisted);
+              // Accumulate outer_params + this cont's args. Module-scope Apps
+              // don't introduce a new fn scope — bindings from the outer
+              // FinkModule cont remain in scope inside Pub conts etc.
+              let mut accum: Vec<Param> = outer_params.to_vec();
+              for b in cont_args.iter() {
+                accum.push(Param::Name(b.clone()));
+              }
+              let mut new_body = extract_from_body(*body, &accum, &[], ast, alloc, &mut all_hoisted);
               // Prepend hoisted fns into the cont body (inside the App).
               for h in all_hoisted.drain(..).rev() {
                 let wrapper_origin = alloc.origin.try_get(h.name.id).and_then(|o| *o)
@@ -486,7 +549,7 @@ fn lift_expr<'src>(
               }
               // Always recurse into the body to handle fn_body lifting
               // (e.g. LetFns inside module-scope fns that have nested structure).
-              new_body = lift_expr(new_body, ast, alloc);
+              new_body = lift_expr(new_body, ast, alloc, &accum);
               Arg::Cont(Cont::Expr { args: cont_args, body: Box::new(new_body) })
             }
           }
@@ -496,8 +559,8 @@ fn lift_expr<'src>(
       } else {
         // Regular App: recurse into Arg::Cont and Arg::Expr.
         let args = args.into_iter().map(|a| match a {
-          Arg::Cont(c) => Arg::Cont(lift_cont(c, ast, alloc)),
-          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast, alloc))),
+          Arg::Cont(c) => Arg::Cont(lift_cont(c, ast, alloc, outer_params)),
+          Arg::Expr(e) => Arg::Expr(Box::new(lift_expr(*e, ast, alloc, outer_params))),
           other => other,
         }).collect();
         Expr { id: expr.id, kind: ExprKind::App { func, args } }
@@ -505,8 +568,8 @@ fn lift_expr<'src>(
     }
 
     ExprKind::If { cond, then, else_ } => {
-      let then = lift_expr(*then, ast, alloc);
-      let else_ = lift_expr(*else_, ast, alloc);
+      let then = lift_expr(*then, ast, alloc, outer_params);
+      let else_ = lift_expr(*else_, ast, alloc, outer_params);
       Expr { id: expr.id, kind: ExprKind::If { cond, then: Box::new(then), else_: Box::new(else_) } }
     }
   }
@@ -516,11 +579,12 @@ fn lift_cont<'src>(
   cont: Cont,
   ast: &crate::ast::Ast<'src>,
   alloc: &mut Alloc,
+  outer_params: &[Param],
 ) -> Cont {
   match cont {
     Cont::Ref(_) => cont,
     Cont::Expr { args, body } => {
-      let body = lift_expr(*body, ast, alloc);
+      let body = lift_expr(*body, ast, alloc, outer_params);
       Cont::Expr { args, body: Box::new(body) }
     }
   }
@@ -557,9 +621,18 @@ fn extract_from_body<'src>(
 
       // Determine captures: refs in inner_fn_body that resolve to parent's params.
       // Exclude refs to already-hoisted fns — they'll be siblings at the parent scope.
+      // Also exclude refs to ANY LetFn name in the tree — the lower pass resolves
+      // those statically via fn_syms; threading them through closure captures
+      // dangles after the sibling itself is re-hoisted to a fresh id.
+      // Determine captures: refs in inner_fn_body that resolve to parent's params.
+      // Exclude refs to already-hoisted fns — they'll be siblings at the parent scope.
+      // Also exclude refs to ANY LetFn name in the tree — the lower pass resolves
+      // those statically via fn_syms; threading them through closure captures
+      // dangles after the sibling itself is re-hoisted to a fresh id.
       let cap_entries: Vec<_> = compute_captures_for_lift(&inner_fn_body, &params, parent_params, scope_binds, alloc)
         .into_iter()
         .filter(|(cap_id, _)| !is_hoisted_fn_ref(*cap_id, hoisted, alloc))
+        .filter(|(cap_id, _)| !alloc.letfn_names.contains(cap_id))
         .collect();
 
       if cap_entries.is_empty() {
@@ -657,9 +730,18 @@ fn extract_from_body<'src>(
         let (cont_args_for_hoist, fn_closure_cont) = match cont {
           Cont::Expr { args: ca, body } => {
             let new_bind = alloc.bind(Bind::Synth, expr_origin);
-            let mut rewrite_map: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
-            rewrite_map.insert(name_id, new_bind.id);
-            let body = rewrite_refs(*body, &rewrite_map);
+            // Two senses of `name_id` (the original LetFn name) need
+            // different replacements after this fn becomes a closure:
+            // * as a runtime closure-instance value (calls, captures) →
+            //   the local cont bind that holds the just-built closure.
+            // * as a fn-id in `App(FnClosure, [Val(name_id), ...])` →
+            //   the hoisted fn's new name (`lifted_fn_id`), so the
+            //   lower pass still finds a `fn_syms` entry.
+            let mut value_rewrite: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
+            value_rewrite.insert(name_id, new_bind.id);
+            let mut fn_id_rewrite: std::collections::HashMap<CpsId, CpsId> = std::collections::HashMap::new();
+            fn_id_rewrite.insert(name_id, lifted_fn_id);
+            let body = rewrite_refs_split(*body, &value_rewrite, &fn_id_rewrite);
             (ca, Cont::Expr { args: vec![new_bind], body: Box::new(body) })
           }
           Cont::Ref(_) => (vec![alloc.bind(Bind::Synth, expr_origin)], cont),
@@ -718,7 +800,11 @@ fn extract_from_body<'src>(
           // Don't recurse into the cont body — extract one level at a time.
           let body = *body;
           let cont_params: Vec<Param> = cont_args.into_iter().map(Param::Name).collect();
-          let cap_entries = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, alloc);
+          // Filter out LetFn-name refs — those are resolved statically by lower.
+          let cap_entries: Vec<_> = compute_captures_for_lift(&body, &cont_params, parent_params, scope_binds, alloc)
+            .into_iter()
+            .filter(|(cap_id, _)| !alloc.letfn_names.contains(cap_id))
+            .collect();
 
           // ·closure result conts with captures would create infinite chains.
           // ·ƒpub / ·ƒink_module conts are module-scope side effects — leave
@@ -883,6 +969,79 @@ fn extract_from_body<'src>(
 // ---------------------------------------------------------------------------
 // Rewrite refs in an expression tree using a CpsId → CpsId map
 // ---------------------------------------------------------------------------
+
+/// Rewrite refs with two maps:
+/// * `value_map` — applied to most `Val(Ref::Synth)` and Cont refs:
+///   redirects runtime-value uses (calls, captures, return).
+/// * `fn_id_map` — applied ONLY to arg[0] of `App(BuiltIn::FnClosure)`:
+///   redirects fn-id references that the lower pass resolves
+///   statically via `fn_syms`.
+///
+/// Used when a LetFn `name` is hoisted to a closure: the original name
+/// represented both a fn-id (for FnClosure construction) and the
+/// resulting closure-instance value (for everything else). After
+/// hoisting these split into two distinct ids, and cont-body refs need
+/// to be redirected accordingly.
+fn rewrite_refs_split(
+  expr: Expr,
+  value_map: &std::collections::HashMap<CpsId, CpsId>,
+  fn_id_map: &std::collections::HashMap<CpsId, CpsId>,
+) -> Expr {
+  match expr.kind {
+    ExprKind::LetFn { name, params, fn_kind, fn_body, cont } => {
+      let fn_body = rewrite_refs_split(*fn_body, value_map, fn_id_map);
+      let cont = rewrite_refs_cont_split(cont, value_map, fn_id_map);
+      Expr { id: expr.id, kind: ExprKind::LetFn { name, params, fn_kind, fn_body: Box::new(fn_body), cont } }
+    }
+    ExprKind::LetVal { name, val, cont } => {
+      let val = rewrite_refs_val(*val, value_map);
+      let cont = rewrite_refs_cont_split(cont, value_map, fn_id_map);
+      Expr { id: expr.id, kind: ExprKind::LetVal { name, val: Box::new(val), cont } }
+    }
+    ExprKind::App { func, args } => {
+      let is_fn_closure = matches!(func, Callable::BuiltIn(BuiltIn::FnClosure));
+      let func = match func {
+        Callable::Val(v) => Callable::Val(rewrite_refs_val(v, value_map)),
+        other => other,
+      };
+      let args: Vec<Arg> = args.into_iter().enumerate().map(|(i, a)| match a {
+        // FnClosure arg[0] is a fn-id — use fn_id_map.
+        Arg::Val(v) if is_fn_closure && i == 0 => Arg::Val(rewrite_refs_val(v, fn_id_map)),
+        Arg::Val(v) => Arg::Val(rewrite_refs_val(v, value_map)),
+        Arg::Spread(v) => Arg::Spread(rewrite_refs_val(v, value_map)),
+        Arg::Cont(c) => Arg::Cont(rewrite_refs_cont_split(c, value_map, fn_id_map)),
+        Arg::Expr(e) => Arg::Expr(Box::new(rewrite_refs_split(*e, value_map, fn_id_map))),
+      }).collect();
+      Expr { id: expr.id, kind: ExprKind::App { func, args } }
+    }
+    ExprKind::If { cond, then, else_ } => {
+      let cond = rewrite_refs_val(*cond, value_map);
+      let then = rewrite_refs_split(*then, value_map, fn_id_map);
+      let else_ = rewrite_refs_split(*else_, value_map, fn_id_map);
+      Expr { id: expr.id, kind: ExprKind::If { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) } }
+    }
+  }
+}
+
+fn rewrite_refs_cont_split(
+  cont: Cont,
+  value_map: &std::collections::HashMap<CpsId, CpsId>,
+  fn_id_map: &std::collections::HashMap<CpsId, CpsId>,
+) -> Cont {
+  match cont {
+    Cont::Ref(id) => {
+      if let Some(&new_id) = value_map.get(&id) {
+        Cont::Ref(new_id)
+      } else {
+        Cont::Ref(id)
+      }
+    }
+    Cont::Expr { args, body } => {
+      let body = rewrite_refs_split(*body, value_map, fn_id_map);
+      Cont::Expr { args, body: Box::new(body) }
+    }
+  }
+}
 
 fn rewrite_refs(expr: Expr, map: &std::collections::HashMap<CpsId, CpsId>) -> Expr {
   match expr.kind {

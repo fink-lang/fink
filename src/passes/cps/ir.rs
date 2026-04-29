@@ -278,9 +278,10 @@ pub enum BuiltIn {
   // IsSeqLike(value, succ(value), fail()) — type guard; succ if seq-like (list)
   // IsRecLike(value, succ(value), fail()) — type guard; succ if rec-like (rec, dict)
   // SeqPop(seq, fail, cont(head, tail)) — pop head element; fail if empty
+  // SeqPopBack(seq, fail, cont(init, last)) — pop tail element; fail if empty
   // RecPop(rec, name, fail, cont(value, rest)) — extract named field; fail if missing
   // Empty(collection, cont(bool)) — predicate; caller branches with If
-  IsSeqLike, IsRecLike, SeqPop, RecPop, Empty,
+  IsSeqLike, IsRecLike, SeqPop, SeqPopBack, RecPop, Empty,
   // StrMatch(subj, prefix, suffix, fail(), succ(capture)) — string template pattern matching.
   // Checks subj starts with prefix, ends with suffix (non-overlapping), binds the middle slice.
   StrMatch,
