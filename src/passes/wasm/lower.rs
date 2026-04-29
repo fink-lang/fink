@@ -1,8 +1,3 @@
-// Lower-pass functions thread a lot of context (FnCtx, Fragment, Runtime,
-// args, conts, ids) — the >7-arg shape is intentional for inlining and
-// cache locality.
-#![allow(clippy::too_many_arguments)]
-
 //! CPS → unlinked wasm IR `Fragment`.
 //!
 //! Tracer-phase walker. Handles the *lifted* CPS shape — all
