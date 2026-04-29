@@ -11,7 +11,9 @@ Features not yet reachable in the compiler live in [roadmap.md](roadmap.md). For
 Save as `hello.fnk`:
 
 ```fink
-main = fn args, stdin, stdout, stderr:
+{stdin, stdout, stderr} = import 'std/io.fnk'
+
+main = fn ..args:
   'Hello, ƒink!' >> stdout
   0
 ```
@@ -19,8 +21,10 @@ main = fn args, stdin, stdout, stderr:
 Run it:
 
 ```bash
-fink run hello.fnk
+fink hello.fnk
 ```
+
+`fink <file>` is shorthand for `fink run <file>` — `run` is the default subcommand.
 
 You'll see `Hello, ƒink!` on stdout. `main` returns an exit code — `0` for success.
 
@@ -619,7 +623,9 @@ Names bound at the top level of a module are exported by default; destructuring 
 The runner calls `main` with `args, stdin, stdout, stderr` — CLI argv followed by the three IO channels. `main` returns an exit code.
 
 ```fink
-main = fn args, stdin, stdout, stderr:
+{stdin, stdout, stderr} = import 'std/io.fnk'
+
+main = fn ..args:
   'Hello, world' >> stdout
   0
 ```

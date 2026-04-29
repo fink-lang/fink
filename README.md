@@ -32,7 +32,9 @@ make test
 Save as `hello.fnk`:
 
 ```fink
-main = fn args, stdin, stdout, stderr:
+{stdin, stdout, stderr} = import 'std/io.fnk'
+
+main = fn ..args:
   'Hello, ƒink!' >> stdout
   0
 ```
@@ -40,7 +42,7 @@ main = fn args, stdin, stdout, stderr:
 Run it:
 
 ```sh
-fink run hello.fnk
+fink hello.fnk
 ```
 
 ## Documentation
