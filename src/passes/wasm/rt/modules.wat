@@ -189,6 +189,33 @@
       (local.get $mod_ref)))
 
 
+  ;; Internal: like `std/list.wat:apply_2_vals` but allows null
+  ;; values. Substitutes `$Nil` for null since `$Cons.head` is
+  ;; `(ref any)` (non-null).
+  (func $std/modules.fnk:_apply_2_nullable
+    (param $a (ref null any))
+    (param $b (ref null any))
+    (param $cont (ref null any))
+
+    (return_call $rt/apply.wat:apply
+      (struct.new $Cons
+        (call $std/modules.fnk:_or_nil (local.get $a))
+        (struct.new $Cons
+          (call $std/modules.fnk:_or_nil (local.get $b))
+          (struct.new $Nil)))
+      (local.get $cont)))
+
+  ;; If `v` is null, returns a fresh `$Nil` (a non-null sentinel
+  ;; usable as `(ref any)`). Otherwise returns `v` cast to non-null.
+  (func $std/modules.fnk:_or_nil
+    (param $v (ref null any))
+    (result (ref any))
+    (if (result (ref any))
+      (ref.is_null (local.get $v))
+      (then (struct.new $Nil))
+      (else (ref.as_non_null (local.get $v)))))
+
+
   ;; -- init_module ----------------------------------------------------
   ;;
   ;; Host-facing module init. CPS — tail-applies cont with two values:
@@ -239,7 +266,7 @@
                   (call $std/dict.wat:get
                     (ref.cast (ref $RecImpl) (local.get $exports))
                     (ref.cast (ref eq) (local.get $key))))))
-            (return_call $std/list.wat:apply_2_vals
+            (return_call $std/modules.fnk:_apply_2_nullable
               (ref.null any)
               (local.get $val)
               (local.get $cont))))))
@@ -309,7 +336,7 @@
             (ref.cast (ref $RecImpl) (local.get $exports))
             (ref.cast (ref eq) (local.get $key))))))
 
-    (return_call $std/list.wat:apply_2_vals
+    (return_call $std/modules.fnk:_apply_2_nullable
       (local.get $last_expr)
       (local.get $val)
       (local.get $user_cont)))
