@@ -40,23 +40,22 @@ test 'yield suspends and resumes', fn:
         (local.set $v_3 (struct.new $rt/types.wat:Num (f64.const 0)))
         (return_call $std/async.fnk:yield (local.get $v_3) (local.get $v_19))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:wrap_cont (ref null any))
-        (local $:wrap_key (ref null any))
+      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
-        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
+        (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:FKgFALoBAL4BAI4BAQAHTAEQAoYBAGoAtgEA8AUAjgEArgEAzAEBAwGEAQELB-YGAJwBAJYBAJoBAIoBAIQBAPoBAA
+    ;; sm:E6gFALoBAL4BAI4BAQAHTAEQAoYBAGoAtgEA8AUAjgEArgEAzAEBAwGEAQELB4QHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'spawn and await', fn:
@@ -131,19 +130,18 @@ test 'spawn and await', fn:
         (local.set $v_6_fn (struct.new $rt/types.wat:Closure (ref.func $test:v_6) (local.get $:caps_arg)))
         (return_call $std/async.fnk:spawn (local.get $v_6_fn) (local.get $v_40))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:wrap_cont (ref null any))
-        (local $:wrap_key (ref null any))
+      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
-        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
+        (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (global $test:result (export "test:result") (mut (ref null any)) (ref.null any))
       (global $test:fut (export "test:fut") (mut (ref null any)) (ref.null any))
@@ -151,7 +149,7 @@ test 'spawn and await', fn:
       (data $d_1 "result")
       (data $d_2 "fut")
     )
-    ;; sm:KLoDAI4BASQChgEAagC2AQCYBwC6AQDIAQCQAQEGBlgAaACIAQCKAQDGAQBqAMABAI4IALoBAMgBAJABASkDUgBcAIgBAIoBAMABALoBAMwBATwJ9AYAmAEAuAEAzAEAegDOAQEvDuwGAJwBAJYBAJoBAIoBAIQBAPoBAA
+    ;; sm:J7oDAI4BASQChgEAagC2AQCYBwC6AQDIAQCQAQEGBlgAaACIAQCKAQDGAQBqAMABAI4IALoBAMgBAJABASkDUgBcAIgBAIoBAMABALoBAMwBATwJ9AYAmAEAuAEAzAEAegDOAQEvDooHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'channel send and receive', fn:
@@ -261,19 +259,18 @@ test 'channel send and receive', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $v_57_clo) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_57_fn))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:wrap_cont (ref null any))
-        (local $:wrap_key (ref null any))
+      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
-        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
+        (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (global $test:msg (export "test:msg") (mut (ref null any)) (ref.null any))
       (global $test:ch (export "test:ch") (mut (ref null any)) (ref.null any))
@@ -281,7 +278,7 @@ test 'channel send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:OYgGALoBAMIBAJABATADUgBcAIgBAIoBAMABAGoAugEArgcAugEAwAEAwgEAkAEBEQhQALQBAMwBAR4KugUAugEAwAEAkAEBHQKGAQEACKgKALoBAMIBAI4BAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAGoAwAEAgAQAkAEBGgGEAQEPCcIHAJIBALIBANQBAHoA0gEAagDAAQDuBgCcAQCWAQCaAQCKAQCEAQD6AQA
+    ;; sm:OIgGALoBAMIBAJABATADUgBcAIgBAIoBAMABAGoAugEArgcAugEAwAEAwgEAkAEBEQhQALQBAMwBAR4KugUAugEAwAEAkAEBHQKGAQEACKgKALoBAMIBAI4BAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAGoAwAEAgAQAkAEBGgGEAQEPCcIHAJIBALIBANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'channel with spawned sender', fn:
@@ -389,19 +386,18 @@ test 'channel with spawned sender', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $v_63_clo) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_63_fn))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:wrap_cont (ref null any))
-        (local $:wrap_key (ref null any))
+      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
-        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
+        (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (global $test:msg (export "test:msg") (mut (ref null any)) (ref.null any))
       (global $test:ch (export "test:ch") (mut (ref null any)) (ref.null any))
@@ -409,7 +405,7 @@ test 'channel with spawned sender', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:N6oEALoBAMABAJABATYCiAEBAAi-BwC6AQDCAQCQAQESA1IAXACIAQCKAQDAAQBqALoBAK4HALoBAMABAMIBAJABASkUUAC0AQDMAQE2CroJALoBAMIBAI4BAVMCTgBYAIgBAIoBAL4BALABAMwBANgBAMwBAR4UgAQAkAEBAwGEAQEPCcIHAJIBALIBANQBAHoA0gEAagDAAQDuBgCcAQCWAQCaAQCKAQCEAQD6AQA
+    ;; sm:NqoEALoBAMABAJABATYCiAEBAAi-BwC6AQDCAQCQAQESA1IAXACIAQCKAQDAAQBqALoBAK4HALoBAMABAMIBAJABASkUUAC0AQDMAQE2CroJALoBAMIBAI4BAVMCTgBYAIgBAIoBAL4BALABAMwBANgBAMwBAR4UgAQAkAEBAwGEAQEPCcIHAJIBALIBANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'channel multiple messages FIFO', fn:
@@ -539,19 +535,18 @@ test 'channel multiple messages FIFO', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $v_66_clo) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_66_fn))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:wrap_cont (ref null any))
-        (local $:wrap_key (ref null any))
+      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
-        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
+        (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (global $test:a (export "test:a") (mut (ref null any)) (ref.null any))
       (global $test:ch (export "test:ch") (mut (ref null any)) (ref.null any))
@@ -559,7 +554,7 @@ test 'channel multiple messages FIFO', fn:
       (data $d_1 "a")
       (data $d_2 "ch")
     )
-    ;; sm:QoAGALoBAL4BAJABAT4BTgBUAIgBAIoBALwBAGoAtgEAqAcAugEAwAEAvgEAkAEBDwdQALABAM4BARgK9gcAugEAwAEAvgEAkAEBJwdQANYBAMwBARABhgEBAAfeBQC6AQDAAQCQAQEPAYQBAQAHpAoAugEAvgEAjgEBHQJOAFgAiAEAigEAvgEAsAEAzAEA1AEA1AEAagDAAQCABACQAQEaAYQBAQ8JvgcAjgEArgEA1AEAegDSAQBqAMABAO4GAJwBAJYBAJoBAIoBAIQBAPoBAA
+    ;; sm:QYAGALoBAL4BAJABAT4BTgBUAIgBAIoBALwBAGoAtgEAqAcAugEAwAEAvgEAkAEBDwdQALABAM4BARgK9gcAugEAwAEAvgEAkAEBJwdQANYBAMwBARABhgEBAAfeBQC6AQDAAQCQAQEPAYQBAQAHpAoAugEAvgEAjgEBHQJOAFgAiAEAigEAvgEAsAEAzAEA1AEA1AEAagDAAQCABACQAQEaAYQBAQ8JvgcAjgEArgEA1AEAegDSAQBqAMABAIwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'channel receiver waits for sender', fn:
@@ -707,19 +702,18 @@ test 'channel receiver waits for sender', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $v_75_clo) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_75_fn))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:wrap_cont (ref null any))
-        (local $:wrap_key (ref null any))
+      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
-        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
+        (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (global $test:result (export "test:result") (mut (ref null any)) (ref.null any))
       (global $test:fut (export "test:fut") (mut (ref null any)) (ref.null any))
@@ -729,7 +723,7 @@ test 'channel receiver waits for sender', fn:
       (data $d_2 "fut")
       (data $d_3 "ch")
     )
-    ;; sm:S-gDALoBAMABAJABAUIKqgcAugEAygEAkAEBKAZYAGgAiAEAigEAxgEAagDAAQDABwC6AQDCAQDIAQCQAQERCFAAugEA0AEBJAm8BQC6AQDCAQCSAQEjAogBAQAIgAsAugEAwAEAyAEAkAEBOQNSAFwAiAEAigEAwAEAsgEA0AEA4AEA1gEAagDCAQC4CQC6AQDIAQCQAQEdAlAAWACIAQCKAQC-AQCwAQDMAQDeAQDMAQEqFoAEAJABAQ8BhAEBDwnIBwCYAQC4AQDUAQB6ANIBAGoAwAEA7gYAnAEAlgEAmgEAigEAhAEA-gEA
+    ;; sm:SugDALoBAMABAJABAUIKqgcAugEAygEAkAEBKAZYAGgAiAEAigEAxgEAagDAAQDABwC6AQDCAQDIAQCQAQERCFAAugEA0AEBJAm8BQC6AQDCAQCSAQEjAogBAQAIgAsAugEAwAEAyAEAkAEBOQNSAFwAiAEAigEAwAEAsgEA0AEA4AEA1gEAagDCAQC4CQC6AQDIAQCQAQEdAlAAWACIAQCKAQC-AQCwAQDMAQDeAQDMAQEqFoAEAJABAQ8BhAEBDwnIBwCYAQC4AQDUAQB6ANIBAGoAwAEAjAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'channel << send and receive', fn:
@@ -839,19 +833,18 @@ test 'channel << send and receive', fn:
         (local.set $:args (call $std/fn.fnk:args_prepend (local.get $v_57_clo) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_57_fn))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:wrap_cont (ref null any))
-        (local $:wrap_key (ref null any))
+      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
-        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
+        (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
         (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (global $test:msg (export "test:msg") (mut (ref null any)) (ref.null any))
       (global $test:ch (export "test:ch") (mut (ref null any)) (ref.null any))
@@ -859,7 +852,7 @@ test 'channel << send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:OYgGALoBAMIBAJABATADUgBcAIgBAIoBAMABAGoAugEArgcAugEAwAEAwgEAkAEBEQhQALQBAMwBAR4KvAUAugEAwAEAkAEBEQKIAQELCKoKALoBAMIBAI4BAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAGoAwAEAgAQAkAEBGgGEAQEPCcIHAJIBALIBANQBAHoA0gEAagDAAQDuBgCcAQCWAQCaAQCKAQCEAQD6AQA
+    ;; sm:OIgGALoBAMIBAJABATADUgBcAIgBAIoBAMABAGoAugEArgcAugEAwAEAwgEAkAEBEQhQALQBAMwBAR4KvAUAugEAwAEAkAEBEQKIAQELCKoKALoBAMIBAI4BAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAGoAwAEAgAQAkAEBGgGEAQEPCcIHAJIBALIBANQBAHoA0gEAagDAAQCMBwCKAQC-AQDAAQCEAQD6AQA
 BAHoAyAEAbgDEAQA
 AyAEAbgDEAQA
 AyAEAbgDEAQA

@@ -62,11 +62,12 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // returns Runtime handles for them even if the source code
   // doesn't otherwise need them (e.g. a module with no `pub` calls).
   usage.mark(runtime_contract::Sym::ModulesInitModule);
+  usage.mark(runtime_contract::Sym::WrapHostCont);
+  usage.mark(runtime_contract::Sym::StrWrapBytes);
+  usage.mark(runtime_contract::Sym::FnHostWrapper);
   usage.mark(runtime_contract::Sym::Closure);
   usage.mark(runtime_contract::Sym::Captures);
   usage.mark(runtime_contract::Sym::Str);
-  usage.mark(runtime_contract::Sym::ArgsHead);
-  usage.mark(runtime_contract::Sym::ArgsTail);
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
 
@@ -159,34 +160,44 @@ fn synth_host_wrapper(
      `test:` for tests, `repl:` for REPL). The wrapper is exported \
      under canonical FQN so the host can address it.",
   );
-  // Double-colon marks compiler-synth (see `:fink_module` above).
   let display = format!("{canonical_url}::host_wrapper");
 
+  // Host-friendly signature: `(key: anyref-or-null, cont_id: i32)
+  // -> ()`. Key arrives as a raw GC `$ByteArray` (or null for
+  // "whole exports rec"); cont_id is a plain i32 the host
+  // pre-registered. The wrapper does the fink-side wrapping
+  // (`_str_wrap_bytes` for the key, `wrap_host_cont` for the
+  // cont) before tail-calling `init_module`.
+  // Uses the runtime-shared `Fn_host_wrapper` type so all modules
+  // reference one nominal signature instead of a per-fragment
+  // local copy.
+  let sig = rt.fn_host_wrapper();
+
   let mut ctx = FnCtx::new(HashMap::new(), HashMap::new(), fqn_prefix.to_string());
-  let l_caps_p = ctx.alloc_param(":caps_param");
-  let _ = l_caps_p;
-  let l_args_p = ctx.alloc_param(":params");
-
-  // Unpack [cont, key] from $:params.
-  //   cont = args_head($:params)
-  //   $:params = args_tail($:params)
-  //   key = args_head($:params)   ;; may be null if list is short
-  let l_cont = ctx.alloc_local(":wrap_cont");
-  let i_cont = push_call(frag, rt.args_head(),
-    vec![op_local(l_args_p)], Some(l_cont));
-  ctx.instrs.push(i_cont);
-
-  let i_tail = push_call(frag, rt.args_tail(),
-    vec![op_local(l_args_p)], Some(l_args_p));
-  ctx.instrs.push(i_tail);
-
-  let l_key = ctx.alloc_local(":wrap_key");
-  let i_key = push_call(frag, rt.args_head(),
-    vec![op_local(l_args_p)], Some(l_key));
-  ctx.instrs.push(i_key);
+  let l_key_p     = ctx.alloc_param(":wrap_key_bytes");
+  let l_cont_id_p = ctx.alloc_param_typed(":wrap_cont_id", val_i32());
 
   // URL constant — the registry key.
   let l_url = emit_str_const(&mut ctx, frag, rt, canonical_url.as_bytes(), ":wrap_url");
+
+  // Wrap the cont id into a fink anyref via `wrap_host_cont(i32) ->
+  // anyref`. Runtime-resolved via the runtime contract.
+  let l_cont = ctx.alloc_local(":wrap_cont");
+  let i_wrap_cont = push_call(frag, rt.wrap_host_cont(),
+    vec![op_local(l_cont_id_p)], Some(l_cont));
+  ctx.instrs.push(i_wrap_cont);
+
+  // Wrap the byte-array key into a `$Str` via `_str_wrap_bytes`.
+  // CONTRACT: host must pass a non-null `$ByteArray`. To request
+  // "whole exports rec" (no specific key), pass an empty byte
+  // array — yields the empty-string singleton, which init_module
+  // looks up in the rec (not found → null val). Null-key support
+  // requires ref.is_null in the IR surface; that arrives
+  // separately.
+  let l_key_str = ctx.alloc_local(":wrap_key_str");
+  let i_wrap_key = push_call(frag, rt.str_wrap_bytes(),
+    vec![op_local(l_key_p)], Some(l_key_str));
+  ctx.instrs.push(i_wrap_key);
 
   // Build no-capture closure over fink_module funcref.
   let l_caps_arg = ctx.alloc_local_typed(
@@ -206,17 +217,11 @@ fn synth_host_wrapper(
 
   // Tail-call init_module(url, mod_clos, key, cont).
   let i_init = push_return_call(frag, rt.modules_init_module(),
-    vec![op_local(l_url), op_local(l_mod_clos), op_local(l_key), op_local(l_cont)]);
+    vec![op_local(l_url), op_local(l_mod_clos), op_local(l_key_str), op_local(l_cont)]);
   ctx.instrs.push(i_init);
 
-  // Build the func decl + register it.
-  let sig = rt.fn2();
   let sym = func(frag, sig, ctx.params, ctx.locals, ctx.instrs, &display);
   let FuncSym::Local(i) = sym else { panic!("synth_host_wrapper: func must be Local") };
-
-  // Exported under the module's canonical URL (the FQN). That's
-  // the host's addressing convention: `instance.get_func(url)`
-  // returns this wrapper.
   frag.funcs[i as usize].export = Some(canonical_url);
 }
 
@@ -376,9 +381,13 @@ impl FnCtx {
   }
 
   fn alloc_param(&mut self, name: &str) -> LocalIdx {
+    self.alloc_param_typed(name, val_anyref(true))
+  }
+
+  fn alloc_param_typed(&mut self, name: &str, ty: ValType) -> LocalIdx {
     let idx = LocalIdx(self.next_local_idx);
     self.next_local_idx += 1;
-    self.params.push(local(val_anyref(true), name));
+    self.params.push(local(ty, name));
     idx
   }
 

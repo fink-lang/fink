@@ -218,6 +218,14 @@
     ;; Function signature for the unified calling convention.
     ;; $Fn2(captures, args) — all functions (conts are in captures or args).
     (type $Fn2 (func (param (ref null any) (ref null any))))
+
+    ;; $Fn_host_wrapper — host-facing per-module wrapper signature.
+    ;; (key_bytes: ref null any, cont_id: i32) -> ()
+    ;; Each fragment's lower-synthesised wrapper export has this
+    ;; type; declared once here so all modules share it instead of
+    ;; emitting a per-fragment local copy.
+    ;; TODO: move to interop/rust.wat once we use the WAT linker.
+    (type $Fn_host_wrapper (func (param (ref null any)) (param i32)))
   )
 
 )

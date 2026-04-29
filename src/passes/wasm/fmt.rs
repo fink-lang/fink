@@ -262,6 +262,14 @@ fn fmt_func(out: &mut String, sm: &mut SourceMap, frag: &Fragment, sym: FuncSym,
     return;
   }
 
+  // Cross-fragment import placeholder that the linker has redirected
+  // away from: import marker dropped, body empty, no params, no
+  // export. It still occupies a FuncSym slot (removing would shift
+  // every later index) but nothing references it. Skip rendering.
+  if f.body.is_empty() && f.params.is_empty() && f.export.is_none() {
+    return;
+  }
+
   out.push_str("  (func ");
   out.push_str(&name);
   if let Some(exp) = &f.export {
