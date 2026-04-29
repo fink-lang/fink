@@ -45,12 +45,27 @@ test 'user fn call', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $add_0))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $add (mut (ref null any)) (ref.null any))
       (export "add" (global $add))
       (data $d_0 "")
       (data $d_1 "add")
     )
-    ;; sm:FKwDAI4BAJYBAI4BAJYBAI4BASIFgAgAjgEAegEhA8IBAFIAiAEAigEAwAEBNgGGAQEGAYYBAGoAuAEAuAEAtgEA
+    ;; sm:G6wDAI4BAJYBAI4BAJYBAI4BASIFgAgAjgEAegEhA8IBAFIAiAEAigEAwAEBNgGGAQEGAYYBAGoAuAEAuAEAtgEAmgcAnAEAlgEAmgEAigEAhAEA7gEA
 
 
 test 'chained fn calls', fn:
@@ -157,6 +172,21 @@ test 'chained fn calls', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_63_fn))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $x (mut (ref null any)) (ref.null any))
       (export "x" (global $x))
       (global $double (mut (ref null any)) (ref.null any))
@@ -168,7 +198,7 @@ test 'chained fn calls', fn:
       (data $d_2 "double")
       (data $d_3 "inc")
     )
-    ;; sm:MqwDAI4BAJYBAI4BASoBhAEBBwXgBACQAQCWAQCOAQEwAYYBAQcF8AcAugEAwgEAvgEAkAEBDgFOAEoAiAEAigEAvAEAagC2AQC4AQCOBQCQAQBiARYBhgEAagC4AQC4AQCmDACOAQB6AW0GyAEAXgCIAQCKAQDGAQB6AS4DxAEAUgCIAQCKAQDAAQDUAQDKAQB6AMgBAGoAwAEA
+    ;; sm:OawDAI4BAJYBAI4BASoBhAEBBwXgBACQAQCWAQCOAQEwAYYBAQcF8AcAugEAwgEAvgEAkAEBDgFOAEoAiAEAigEAvAEAagC2AQC4AQCOBQCQAQBiARYBhgEAagC4AQC4AQCmDACOAQB6AW0GyAEAXgCIAQCKAQDGAQB6AS4DxAEAUgCIAQCKAQDAAQDUAQDKAQB6AMgBAGoAwAEAngcAnAEAlgEAmgEAigEAhAEA7gEA
 
 
 test 'pipe unary', fn:
@@ -266,6 +296,21 @@ test 'pipe unary', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_57_fn))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $double (mut (ref null any)) (ref.null any))
       (export "double" (global $double))
       (global $inc (mut (ref null any)) (ref.null any))
@@ -274,7 +319,7 @@ test 'pipe unary', fn:
       (data $d_1 "double")
       (data $d_2 "inc")
     )
-    ;; sm:LawDAI4BAJYBAI4BASoBhAEBBwXgBACQAQCWAQCOAQEwAYYBAQcFmgYAugEAwgEAvgEAkAEAagC4AQC4AQCOBQCQAQBiAQ4BhgEAagC4AQC4AQCmDACOAQB6AVcGyAEAXgCIAQCKAQDGAQB6AS4DxAEAUgCIAQCKAQDAAQDUAQDKAQB6AMgBAGoAwAEA
+    ;; sm:NKwDAI4BAJYBAI4BASoBhAEBBwXgBACQAQCWAQCOAQEwAYYBAQcFmgYAugEAwgEAvgEAkAEAagC4AQC4AQCOBQCQAQBiAQ4BhgEAagC4AQC4AQCmDACOAQB6AVcGyAEAXgCIAQCKAQDGAQB6AS4DxAEAUgCIAQCKAQDAAQDUAQDKAQB6AMgBAGoAwAEAngcAnAEAlgEAmgEAigEAhAEA7gEA
 
 
 test 'match literal first arm', fn:
@@ -465,8 +510,24 @@ test 'match literal first arm', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_63_fn))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
+      (data $d_0 "")
     )
-    ;; sm:WrYDAJABARwCiAEAagC4AQCeBgC6AQC-AQB6AMgBAGoAuAEAsAcAugEAwAEAwAEAkAEAhAEAfADUCgCOAQCWAQCOAQCWAQCOAQDQAQDGAQEFAYYBAQABkggAjgEAlgEAjgEAlgEAjgEArgEAwgEAegDIAQBqALYBALYBALgBAMIEAJABARYCiAEAagC4AQC4BgCQAQCWAQCQAQCWAQCQAQB6AMgBAGoAuAEA_AIApgcAugEAvgEAvgEAegDIAQB6AMwBAGoAuAEAwAEAuAEAsAcAkAEAlgEAkAEA1AEAwgEAegDIAQBqALgBALgBALgBAIYGAI4BAHoAyAEBHwGEAQBqALYBALYBAA
+    ;; sm:YbYDAJABARwCiAEAagC4AQCeBgC6AQC-AQB6AMgBAGoAuAEAsAcAugEAwAEAwAEAkAEAhAEAfADUCgCOAQCWAQCOAQCWAQCOAQDQAQDGAQEFAYYBAQABkggAjgEAlgEAjgEAlgEAjgEArgEAwgEAegDIAQBqALYBALYBALgBAMIEAJABARYCiAEAagC4AQC4BgCQAQCWAQCQAQCWAQCQAQB6AMgBAGoAuAEA_AIApgcAugEAvgEAvgEAegDIAQB6AMwBAGoAuAEAwAEAuAEAsAcAkAEAlgEAkAEA1AEAwgEAegDIAQBqALgBALgBALgBAIYGAI4BAHoAyAEBHwGEAQBqALYBALYBAJ4HAJwBAJYBAJoBAIoBAIQBAO4BAA
 
 
 test 'match with binding', fn:
@@ -693,12 +754,27 @@ test 'match with binding', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_118))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $x (mut (ref null any)) (ref.null any))
       (export "x" (global $x))
       (data $d_0 "")
       (data $d_1 "x")
     )
-    ;; sm:bLYDAJABASgBhgEAagC4AQCiBgC6AQDAAQB6AMgBAGoAugEAsAcAugEAwAEAwAEAkAEAhAEAfADWCgCOAQCWAQCQAQCWAQCOAQDSAQDGAQEFAYYBAQABlAgAjgEAlgEAjgEAlgEAjgEArgEAxgEAegDIAQBqALYBALYBALoBAKoFALoBAL4BAJABARwBhgEBBwXcBgC6AQDAAQCQAQCWAQCQAQCWAQCQAQBqALgBAPgCALYGALoBAMABAMABAMABAHoAzAEAagC6AQDAAQC6AQDeCAC6AQDAAQCQAQCWAQCQAQD6AQDGAQB6AMgBAGoAuAEAugEAuAEA4AgAugEAwAEAwAEAkAEAsAEAxAEAsgEAxgEAagC6AQC6AQDSCACOAQE1AYQBAEoAiAEAigEAvAEA0AEAxgEArgEAzAEAagDCAQA
+    ;; sm:c7YDAJABASgBhgEAagC4AQCiBgC6AQDAAQB6AMgBAGoAugEAsAcAugEAwAEAwAEAkAEAhAEAfADWCgCOAQCWAQCQAQCWAQCOAQDSAQDGAQEFAYYBAQABlAgAjgEAlgEAjgEAlgEAjgEArgEAxgEAegDIAQBqALYBALYBALoBAKoFALoBAL4BAJABARwBhgEBBwXcBgC6AQDAAQCQAQCWAQCQAQCWAQCQAQBqALgBAPgCALYGALoBAMABAMABAMABAHoAzAEAagC6AQDAAQC6AQDeCAC6AQDAAQCQAQCWAQCQAQD6AQDGAQB6AMgBAGoAuAEAugEAuAEA4AgAugEAwAEAwAEAkAEAsAEAxAEAsgEAxgEAagC6AQC6AQDSCACOAQE1AYQBAEoAiAEAigEAvAEA0AEAxgEArgEAzAEAagDCAQCaBwCcAQCWAQCaAQCKAQCEAQDuAQA
 
 
 test 'simple recursion', fn:
@@ -944,12 +1020,27 @@ test 'simple recursion', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $recurse_0))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $recurse (mut (ref null any)) (ref.null any))
       (export "recurse" (global $recurse))
       (data $d_0 "")
       (data $d_1 "recurse")
     )
-    ;; sm:drYDAJABAUQCiAEAagC4AQCiBgC6AQDAAQB6AMgBAGoAugEAsAcAugEAwAEAwAEAkAEAhAEAfADaCgCQAQCWAQCQAQCWAQCQAQDUAQDGAQEFAYYBAQABlggAjgEAlgEAjgEAlgEAjgEArgEAxgEAegDIAQBqALYBALYBALoBAP4FALoBAMABAJABAGQAagC4AQC6AQDqBgC6AQDAAQCQAQCwAQDGAQEyAYYBAQcF5AYAugEAwAEAkAEAlgEAkAEAlgEAkAEAagC4AQD4AgC2BgC6AQDAAQDAAQDAAQB6AMwBAGoAugEAwAEAugEA3ggAugEAwAEAkAEAlgEAkAEA-gEAxgEAegDIAQBqALgBALoBALgBAN4IAI4BAJYBAI4BAK4BAMYBALIBAMYBALIBAMYBAGoAtgEAtgEAngcAjgEAegFnB8oBAGIAiAEAigEAyAEBhAEBhgEAagC4AQC2AQA
+    ;; sm:fbYDAJABAUQCiAEAagC4AQCiBgC6AQDAAQB6AMgBAGoAugEAsAcAugEAwAEAwAEAkAEAhAEAfADaCgCQAQCWAQCQAQCWAQCQAQDUAQDGAQEFAYYBAQABlggAjgEAlgEAjgEAlgEAjgEArgEAxgEAegDIAQBqALYBALYBALoBAP4FALoBAMABAJABAGQAagC4AQC6AQDqBgC6AQDAAQCQAQCwAQDGAQEyAYYBAQcF5AYAugEAwAEAkAEAlgEAkAEAlgEAkAEAagC4AQD4AgC2BgC6AQDAAQDAAQDAAQB6AMwBAGoAugEAwAEAugEA3ggAugEAwAEAkAEAlgEAkAEA-gEAxgEAegDIAQBqALgBALoBALgBAN4IAI4BAJYBAI4BAK4BAMYBALIBAMYBALIBAMYBAGoAtgEAtgEAngcAjgEAegFnB8oBAGIAiAEAigEAyAEBhAEBhgEAagC4AQC2AQCiBwCcAQCWAQCaAQCKAQCEAQDuAQA
 
 
 test 'mutual recursion — ping pong', fn:
@@ -1019,6 +1110,21 @@ test 'mutual recursion — ping pong', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $ping_0))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $ping (mut (ref null any)) (ref.null any))
       (export "ping" (global $ping))
       (global $pong (mut (ref null any)) (ref.null any))
@@ -1027,7 +1133,7 @@ test 'mutual recursion — ping pong', fn:
       (data $d_1 "ping")
       (data $d_2 "pong")
     )
-    ;; sm:Iv4DAI4BAJYBAI4BAF4AagC2AQC2AQCUBQCQAQCWAQCOAQBeAGoAtgEAuAEA8AkAjgEAegEABMQBAFYAiAEAigEAwgEAegEoBMYBAFYAiAEAigEAwgEBMgGGAQBqALgBALYBAA
+    ;; sm:Kf4DAI4BAJYBAI4BAF4AagC2AQC2AQCUBQCQAQCWAQCOAQBeAGoAtgEAuAEA8AkAjgEAegEABMQBAFYAiAEAigEAwgEAegEoBMYBAFYAiAEAigEAwgEBMgGGAQBqALgBALYBAJwHAJwBAJYBAJoBAIoBAIQBAO4BAA
 
 
 # TODO: mutual recursion with match body — wat succeeds but the
@@ -1533,6 +1639,21 @@ test 'closure construction and call', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_49_fn))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $add1 (mut (ref null any)) (ref.null any))
       (export "add1" (global $add1))
       (global $add (mut (ref null any)) (ref.null any))
@@ -1541,7 +1662,7 @@ test 'closure construction and call', fn:
       (data $d_1 "add1")
       (data $d_2 "add")
     )
-    ;; sm:MJoEALoBAL4BAI4BAJYBAI4BASgFnAYAjgEAlgEAjgEArgEAyAEAagC-AQDCBwC6AQC-AQCQAQEMBFQAVgCIAQCKAQDCAQEkAYYBAGoAuAEAuAEAjgUAkAEAXAENAYYBAGoAuAEAuAEA1AkAjgEAegFJA8IBAFIAiAEAigEAwAEArgEAygEAegDIAQBqAMABAA
+    ;; sm:N5oEALoBAL4BAI4BAJYBAI4BASgFnAYAjgEAlgEAjgEArgEAyAEAagC-AQDCBwC6AQC-AQCQAQEMBFQAVgCIAQCKAQDCAQEkAYYBAGoAuAEAuAEAjgUAkAEAXAENAYYBAGoAuAEAuAEA1AkAjgEAegFJA8IBAFIAiAEAigEAwAEArgEAygEAegDIAQBqAMABAJ4HAJwBAJYBAJoBAIoBAIQBAO4BAA
 
 
 # TODO, duplicate?
@@ -2013,12 +2134,27 @@ test 'recursive list sum', fn:
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_181_fn))
       )
       (export "fink_module" (func $fink_module))
+      (func $_host_wrapper (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:wrap_cont (ref null any))
+        (local $:wrap_key (ref null any))
+        (local $:wrap_url (ref null any))
+        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_mod_clos (ref null any))
+        (local.set $:wrap_cont (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:params (call $std/fn.fnk:args_tail (local.get $:params)))
+        (local.set $:wrap_key (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 0)))
+        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $fink_module) (local.get $:wrap_caps_arg)))
+        (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key) (local.get $:wrap_cont))
+      )
+      (export "_host_wrapper" (func $_host_wrapper))
       (global $sum (mut (ref null any)) (ref.null any))
       (export "sum" (global $sum))
       (data $d_0 "")
       (data $d_1 "sum")
     )
-    ;; sm:6QGkBAC6AQDAAQCQAQBqALoBAKwFALoBAMABAMABAGoAugEA6gQAugEAwAEAagCsBwC6AQDAAQDAAQCQAQCEAQB8AMoLALoBAMABAMABAJABAUwCUADYAQDGAQEAArYHAJABAJYBAJABAJYBAJABALABAMYBANQBAMYBAQAC2AkAugEAwAEAkAEAlgEAkAEAlgEAjgEA1gEAxgEAegDIAQBqALYBALgBALoBAMgGALoBAMABAMYBAJABAFwAagC4AQDAAQC6AQCuBwC6AQDAAQCQAQCWAQCOAQCWAQCUAQDYAQDGAQFCBegHALoBAMABAMABAJABAJYBAJABASsBTgEKBFQAagC4AQC4AQC6AQDqBAC6AQDAAQBqALAGALoBAMABAJABAJYBAJABAQsLUABqALgBALgBAOIGALoBAMABAMABAJABALIBAMYBAQALxgcAkAEAlgEAkAEAlgEAkAEAsAEAxgEA1AEAxgEBAAvaCQC6AQDAAQCQAQCWAQCQAQCWAQCQAQDWAQDGAQB6AMgBAGoAuAEAuAEAugEA_AIAtgYAugEAwAEAwAEAwAEAegDMAQBqALoBAMABALoBAOwHALoBAMABAMABAJIBAJYBAJIBAP4BAMYBAGoAugEAugEAugEAjgwAjgEAlgEAlgEAlgEAjgEArgEAxgEAsgEAxgEArgEAxgEAsgEAxgEA2AEAxgEAagC-AQC2AQC6BgC6AQDEAQDAAQCSAQFgAYgBAGoAugEAugEAugEAsAcAugEAxAEAwAEAkgEA3AEAxgEBGQGIAQEAAdQHALoBAMQBAMABAJIBANwBAMYBAQYBiAEBAAHUBwC6AQDEAQDAAQCSAQDcAQDGAQEGAYgBAQAB7AQAkgEBBgGIAQETDGoBFAH2CQCOAQB6AbcBA8IBAFIAiAEAigEAwAEA1AEAzgEAegDMAQBqAMIBAA
+    ;; sm:8AGkBAC6AQDAAQCQAQBqALoBAKwFALoBAMABAMABAGoAugEA6gQAugEAwAEAagCsBwC6AQDAAQDAAQCQAQCEAQB8AMoLALoBAMABAMABAJABAUwCUADYAQDGAQEAArYHAJABAJYBAJABAJYBAJABALABAMYBANQBAMYBAQAC2AkAugEAwAEAkAEAlgEAkAEAlgEAjgEA1gEAxgEAegDIAQBqALYBALgBALoBAMgGALoBAMABAMYBAJABAFwAagC4AQDAAQC6AQCuBwC6AQDAAQCQAQCWAQCOAQCWAQCUAQDYAQDGAQFCBegHALoBAMABAMABAJABAJYBAJABASsBTgEKBFQAagC4AQC4AQC6AQDqBAC6AQDAAQBqALAGALoBAMABAJABAJYBAJABAQsLUABqALgBALgBAOIGALoBAMABAMABAJABALIBAMYBAQALxgcAkAEAlgEAkAEAlgEAkAEAsAEAxgEA1AEAxgEBAAvaCQC6AQDAAQCQAQCWAQCQAQCWAQCQAQDWAQDGAQB6AMgBAGoAuAEAuAEAugEA_AIAtgYAugEAwAEAwAEAwAEAegDMAQBqALoBAMABALoBAOwHALoBAMABAMABAJIBAJYBAJIBAP4BAMYBAGoAugEAugEAugEAjgwAjgEAlgEAlgEAlgEAjgEArgEAxgEAsgEAxgEArgEAxgEAsgEAxgEA2AEAxgEAagC-AQC2AQC6BgC6AQDEAQDAAQCSAQFgAYgBAGoAugEAugEAugEAsAcAugEAxAEAwAEAkgEA3AEAxgEBGQGIAQEAAdQHALoBAMQBAMABAJIBANwBAMYBAQYBiAEBAAHUBwC6AQDEAQDAAQCSAQDcAQDGAQEGAYgBAQAB7AQAkgEBBgGIAQETDGoBFAH2CQCOAQB6AbcBA8IBAFIAiAEAigEAwAEA1AEAzgEAegDMAQBqAMIBAKAHAJwBAJYBAJoBAIoBAIQBAO4BAA
 
 
 

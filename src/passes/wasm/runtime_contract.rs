@@ -159,6 +159,14 @@ pub enum Sym {
   // pass funcrefs through the anyref-typed call ABI (funcrefs and
   // anyrefs are disjoint hierarchies in WasmGC).
   ModulesImport,
+  // `std/modules.fnk:init_module` — CPS, host-facing module init.
+  // `(mod_url, mod_clos, key, cont) -> ()`. Idempotent run-then-
+  // lookup. Tail-applies cont with `(last_expr, val)` where val is
+  // the full exports rec or `rec[key]` if key is non-null. Emitted
+  // by the per-module wrapper that lower synthesises for each
+  // fragment; the wrapper is exported under the module's canonical
+  // FQN so any host can call it as the unified module-init API.
+  ModulesInitModule,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -352,6 +360,7 @@ pub struct Runtime {
   // no result).
   modules_pub:    Option<FuncSym>,
   modules_import: Option<FuncSym>,
+  modules_init_module: Option<FuncSym>,
 }
 
 impl Runtime {
@@ -370,6 +379,7 @@ impl Runtime {
   pub fn rec_put(&self)      -> FuncSym { self.rec_put.expect("rt: rec_put not declared") }
   pub fn modules_pub(&self)    -> FuncSym { self.modules_pub.expect("rt: modules_pub not declared") }
   pub fn modules_import(&self) -> FuncSym { self.modules_import.expect("rt: modules_import not declared") }
+  pub fn modules_init_module(&self) -> FuncSym { self.modules_init_module.expect("rt: modules_init_module not declared") }
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
   pub fn rec_set_field(&self) -> FuncSym { self.rec_set_field.expect("rt: rec_set_field not declared") }
@@ -513,8 +523,9 @@ pub(super) fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::RecEmpty        => ("std/dict.wat", "std/rec.fnk:new"),
     Sym::RecSetField     => ("std/dict.wat", "std/rec.fnk:_set_field"),
     Sym::Panic           => ("rt/protocols.wat", "std/interop.fnk:panic"),
-    Sym::ModulesPub      => ("rt/modules.wat",   "std/modules.fnk:pub"),
-    Sym::ModulesImport   => ("rt/modules.wat",   "std/modules.fnk:import"),
+    Sym::ModulesPub        => ("rt/modules.wat",   "std/modules.fnk:pub"),
+    Sym::ModulesImport     => ("rt/modules.wat",   "std/modules.fnk:import"),
+    Sym::ModulesInitModule => ("rt/modules.wat",   "std/modules.fnk:init_module"),
   }
 }
 
@@ -632,6 +643,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
 
   if needed.contains(&Sym::RecSetField) { rt.rec_set_field  = Some(FuncSym::Runtime(Sym::RecSetField)); }
   if needed.contains(&Sym::ModulesPub)  { rt.modules_pub    = Some(FuncSym::Runtime(Sym::ModulesPub)); }
+  if needed.contains(&Sym::ModulesInitModule) { rt.modules_init_module = Some(FuncSym::Runtime(Sym::ModulesInitModule)); }
   if needed.contains(&Sym::ModulesImport) {
     rt.modules_import = Some(FuncSym::Runtime(Sym::ModulesImport));
     // Virtual-stdlib `import` codegen path in lower allocates
