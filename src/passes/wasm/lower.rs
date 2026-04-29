@@ -106,16 +106,20 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // fink_module` in source: `:` is lexer-rejected at the source
   // level, making `<fqn>::fink_module` collision-safe.
   let module_display = format!("{fqn_prefix}:fink_module");
-  let fink_module = lower_fn(
-    &mut frag, &rt, cps, ast,
-    &[],                 // no cap params at the module level
-    &[(ret_bind, false)], // user param: ƒret (not a spread)
-    module_body,
-    &module_display,
-    &pub_globals,
-    &HashMap::new(),    // module body: no enclosing fn_syms
-    fqn_prefix,         // namespacing prefix for nested LetFn displays
-  );
+  let fink_module = {
+    let mut lcx = LowerCtx {
+      cps, ast, rt: &rt, frag: &mut frag,
+      pub_globals: &pub_globals, fqn_prefix,
+    };
+    lower_fn(
+      &mut lcx,
+      &[],                 // no cap params at the module level
+      &[(ret_bind, false)], // user param: ƒret (not a spread)
+      module_body,
+      &module_display,
+      &HashMap::new(),    // module body: no enclosing fn_syms
+    )
+  };
   let FuncSym::Local(_) = fink_module else { panic!("lower: fink_module must be Local"); };
   // No WASM-level export for fink_module — host accesses the module
   // exclusively through the per-module wrapper exported under the
@@ -278,19 +282,24 @@ struct LowerCtx<'a> {
 ///
 /// Returns the `FuncSym` of the emitted function.
 fn lower_fn(
-  frag: &mut Fragment,
-  rt: &Runtime,
-  cps: &CpsResult,
-  ast: &Ast<'_>,
+  lcx: &mut LowerCtx<'_>,
   cap_params: &[CpsId],
   user_params: &[(CpsId, bool)],
   body: &Expr,
   display: &str,
-  pub_globals: &HashMap<CpsId, (GlobalSym, String)>,
   fn_syms: &HashMap<CpsId, FuncSym>,
-  fqn_prefix: &str,
 ) -> FuncSym {
-  let mut ctx = FnCtx::new(pub_globals.clone(), fn_syms.clone(), fqn_prefix.to_string());
+  // CRITICAL: `fn_syms` is cloned (not shared) into the child FnCtx.
+  // Sibling and ancestor LetFn FuncSyms must be visible to this fn's
+  // body, but mutations *inside* this body must not leak back to the
+  // parent. Sharing the map here would make child-of-child helpers
+  // visible to subsequent siblings of the parent — observable through
+  // resolution order in `App(FnClosure)`. Keep the clone literal.
+  let mut ctx = FnCtx::new(
+    lcx.pub_globals.clone(),
+    fn_syms.clone(),
+    lcx.fqn_prefix.to_string(),
+  );
 
   // WASM-level params (always just `$:caps_param` and `$:params` —
   // the $Fn2 shape). Colon-prefix is lexer-rejected in Fink source,
@@ -305,18 +314,18 @@ fn lower_fn(
   if !cap_params.is_empty() {
     let caps_cast = ctx.alloc_local_typed(
       ":caps_cast",
-      val_ref(rt.captures(), /*nullable*/ false),
+      val_ref(lcx.rt.captures(), /*nullable*/ false),
     );
     let i_cast = push_ref_cast_non_null(
-      frag, rt.captures(), op_local(l_caps_p), caps_cast,
+      lcx.frag, lcx.rt.captures(), op_local(l_caps_p), caps_cast,
     );
     ctx.instrs.push(i_cast);
     for (i, cap_id) in cap_params.iter().enumerate() {
-      let name = cps_ident(cps, ast, *cap_id);
+      let name = cps_ident(lcx.cps, lcx.ast, *cap_id);
       let local = ctx.alloc_local(&name);
       ctx.bind(*cap_id, local);
       let i_get = push_array_get(
-        frag, rt.captures(),
+        lcx.frag, lcx.rt.captures(),
         op_local(caps_cast), op_i32(i as i32),
         local,
       );
@@ -338,39 +347,31 @@ fn lower_fn(
   // current $:params cursor.
   let n = user_params.len();
   for (j, &(pid, is_spread)) in user_params.iter().enumerate() {
-    let name = cps_ident(cps, ast, pid);
+    let name = cps_ident(lcx.cps, lcx.ast, pid);
     let local = ctx.alloc_local(&name);
     ctx.bind(pid, local);
     if is_spread {
       // Spread takes whatever's left in $:params as-is. No `args_head` —
       // the spread local *is* the residual list. (Spread must be last,
       // enforced by the parser/CPS, so no further peeling follows.)
-      let i = push_local_set(frag, local, op_local(l_args_p));
+      let i = push_local_set(lcx.frag, local, op_local(l_args_p));
       ctx.instrs.push(i);
     } else {
-      let i = push_call(frag, rt.args_head(), vec![op_local(l_args_p)], Some(local));
+      let i = push_call(lcx.frag, lcx.rt.args_head(), vec![op_local(l_args_p)], Some(local));
       ctx.instrs.push(i);
       // Advance the cursor unless this is the last entry (no more peels).
       if j + 1 < n {
-        let i = push_call(frag, rt.args_tail(), vec![op_local(l_args_p)], Some(l_args_p));
+        let i = push_call(lcx.frag, lcx.rt.args_tail(), vec![op_local(l_args_p)], Some(l_args_p));
         ctx.instrs.push(i);
       }
     }
   }
 
-  // Walk the body. Bundle the read-mostly args into `LowerCtx` for
-  // the walker's call sites. (`lower_fn`'s own arg list is paid down
-  // in a later step.) Scope `lcx` so its `&mut frag` ends before
-  // `func()` reborrows.
-  {
-    let mut lcx = LowerCtx {
-      cps, ast, rt, frag, pub_globals, fqn_prefix,
-    };
-    lower_expr(&mut lcx, &mut ctx, body);
-  }
+  // Walk the body.
+  lower_expr(lcx, &mut ctx, body);
 
   // Build the function.
-  func(frag, rt.fn2(),
+  func(lcx.frag, lcx.rt.fn2(),
     ctx.params,
     ctx.locals,
     ctx.instrs,
@@ -543,10 +544,9 @@ fn lower_expr(
       let raw_display = cps_ident_for_bind(lcx.cps, lcx.ast, name);
       let display = format!("{}{}", ctx.fqn_prefix, raw_display);
       let fn_sym = lower_fn(
-        lcx.frag, lcx.rt, lcx.cps, lcx.ast,
+        lcx,
         &cap_ids, &user_ids, fn_body, &display,
-        &ctx.pub_globals, &ctx.fn_syms,
-        &ctx.fqn_prefix,
+        &ctx.fn_syms,
       );
       // The LetFn binds `name.id` to a funcref-valued local; we model
       // it as an anyref local holding a `ref.func` funcref. Actual
