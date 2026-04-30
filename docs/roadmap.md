@@ -13,18 +13,15 @@ content = try read_file 'config.toml'
 # on Ok: content bound; on Err: propagate out of this fn
 ```
 
-## Sets
-
-The runtime has a HAMT-based set type (`src/runtime/set.wat`), but there's no language-level constructor yet — `set { 1, 2, 3 }` doesn't parse as a set. Runtime's ready; the front-end builtin is missing.
-
-```fink
-uniq = set { 1, 2, 3 }
-1 in uniq
-```
-
 ## Dicts
 
-Records today are structurally dicts at runtime — they share the same HAMT implementation and records aren't enforced as a distinct kind. The language-level `dict { 'a': 1, 'b': 2 }` form with dynamic string keys (vs records' compile-time-known identifier keys) isn't parsed yet. The split is about surface syntax and enforcement, not runtime shape.
+The runtime has a HAMT-based dict type and most operations are wired (get / set / delete / size / merge / equality), but there's no user-facing constructor exposed under `std/dict.fnk` yet. Records today are structurally dicts at runtime — they share the same HAMT implementation — but the language-level `dict {...}` form with dynamic string keys (as opposed to records' compile-time-known identifier keys) isn't reachable from source.
+
+```fink
+{dict} = import 'std/dict.fnk'
+
+scores = dict 'alice': 1, 'bob': 2
+```
 
 ## Macros
 
@@ -44,19 +41,11 @@ Concept: see [execution-model.md](execution-model.md) §7.
 
 ## Missing arithmetic operators
 
-`**` (power) and `/%` (divmod) are documented but not yet wired through the runtime. Calls emit but execution will fail until the runtime ops land. The other arithmetic operators all work today.
+`**` (power) and `/%` (divmod) parse but aren't lowered yet — using them today panics in the lowering pass. The other arithmetic operators all work end-to-end.
 
-## Disjoint (`><`)
+## Ordering operator (`<=>`)
 
-Tests whether two collections share no element. Parses and emits an `op_cmp` call, but the runtime op isn't implemented yet.
-
-## Tagged template strings
-
-`fmt'hello ${1 + 2}'`, `rx'...'`, `sql'...'`, `raw'...'` — a tagging function receives the raw string parts and interpolated values. The AST parses these today; the dispatch machinery isn't wired.
-
-## Set and dict operators
-
-Once sets and dicts have language-level constructors, the operator protocols want implementations for them too: `or` / `xor` / `and` / `-` / `*` for set algebra, `<` / `<=` / `>` / `>=` for subset tests, `in` / `not in` for membership.
+A three-way comparison returning `LT` / `EQ` / `GT` was designed but isn't shipped — `<=>` doesn't lex, and `LT`/`EQ`/`GT` aren't defined. The pairwise `<` / `<=` / `>` / `>=` / `==` / `!=` operators cover most needs today.
 
 ## Advanced pattern matchers
 

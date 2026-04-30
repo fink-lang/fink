@@ -1,0 +1,44 @@
+{test, skip, skip-ir, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+
+test 'list construct returns without trap', fn:
+  expect run ƒink:
+    {list} = import 'std/list.fnk'
+
+    '${list 1, 2, 3}'
+
+  | equals ƒink:
+    [1, 2, 3]
+
+
+test 'list construct empty', fn:
+  expect run ƒink:
+    {list} = import 'std/list.fnk'
+
+    '${list _}'
+
+  | equals ƒink:
+    []
+
+
+test 'list construct with spread args', fn:
+  expect run ƒink:
+    {list} = import 'std/list.fnk'
+
+    '${list ..[1, 2, 3]}'
+
+  | equals ƒink:
+    [1, 2, 3]
+
+
+test 'list construct destructures via head/tail', fn:
+  expect run ƒink:
+    {list} = import 'std/list.fnk'
+
+    [h, ..t] = list 10, 20, 30
+    '${h} ${t}'
+
+  | equals ƒink:
+    10 [20, 30]

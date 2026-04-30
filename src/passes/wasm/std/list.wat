@@ -411,4 +411,44 @@
       (local.get $succ))
   )
 
+
+  ;; -- std/list.fnk:list — user-importable constructor closure ----------------
+  ;;
+  ;; `{list} = import 'std/list.fnk'` resolves to the accessor below; the
+  ;; user's `list 1, 2, 3` then calls the closure via `_apply` with
+  ;; args = [cont, 1, 2, 3]. The Fn2 adapter peels cont off the head;
+  ;; the remaining args list is itself a $List so we hand it back to
+  ;; the cont directly via apply_1 (no walking needed).
+  ;;
+  ;; Same shape as $std/set.wat:_set_apply, but trivial because the
+  ;; runtime args list and the user-facing $List type coincide.
+
+  (elem declare func $std/list.wat:_list_apply)
+
+  (func $std/list.wat:_list_apply (type $Fn2)
+    (param $_caps (ref null any))
+    (param $args (ref null any))
+
+    (local $cont (ref null any))
+    (local $rest (ref $List))
+
+    ;; Peel cont off args[0]. Remainder is the user's list.
+    (local.set $cont (call $std/list.wat:head_any (local.get $args)))
+    (local.set $rest
+      (ref.cast (ref $List) (call $std/list.wat:tail_any (local.get $args))))
+
+    ;; Tail-call cont with [list].
+    (return_call $std/list.wat:apply_1
+      (local.get $rest)
+      (local.get $cont))
+  )
+
+  (global $std/list.wat:_list_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $std/list.wat:_list_apply)
+      (ref.null $Captures)))
+
+  (func (export "std/list.fnk:list") (result (ref any))
+    (global.get $std/list.wat:_list_closure))
+
 )
