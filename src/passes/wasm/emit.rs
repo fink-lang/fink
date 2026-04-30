@@ -53,6 +53,17 @@ use wasm_encoder::{
 use super::ir::*;
 use super::runtime_contract::import_key;
 
+/// Output of `emit::emit`. The binary plus a per-InstrId map of absolute
+/// byte offsets in the binary. Only InstrIds that were tagged with a
+/// `cps_id` in lower (and thus need to participate in mark finalisation)
+/// are present in the map. Used by Section 5's finalize step to join
+/// `DebugMarks` (keyed by CpsId) with the actual emitted PCs.
+#[derive(Default)]
+pub struct EmitOutput {
+  pub binary: Vec<u8>,
+  pub instr_offsets: std::collections::BTreeMap<InstrId, u32>,
+}
+
 /// Resolve a `TypeSym` to its final merged-binary type index.
 ///
 /// `Local(i)` consults the per-fragment `type_remap` (built at the
@@ -392,6 +403,12 @@ fn convert_field(f: &wasmparser::FieldType) -> FieldType {
 /// Emit a linked user Fragment as a final standalone WASM binary,
 /// with runtime-ir.wasm spliced in as the prefix.
 pub fn emit(frag: &Fragment) -> Vec<u8> {
+  emit_with_offsets(frag).binary
+}
+
+/// Variant of [`emit`] that also returns the per-InstrId absolute byte
+/// offset table. Used by Section 5's finalize step.
+pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
   let rt = runtime();
 
 
@@ -611,9 +628,15 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
   for body in &rt.code_bodies_raw {
     code_sec.raw(body);
   }
-  for (_, f) in &user_local_funcs {
-    let func = emit_func(frag, f, &type_remap, &func_remap, user_global_base, &data_offsets);
+  // Per-user-function body-relative offset tables, plus the func's
+  // final binary index. Resolved to absolute offsets after the module
+  // is finalised.
+  let mut user_body_offsets: Vec<(u32, Vec<(InstrId, u32)>)> = Vec::new();
+  for (orig_idx, f) in &user_local_funcs {
+    let final_idx = func_remap[*orig_idx as usize];
+    let (func, body_offsets) = emit_func(frag, f, &type_remap, &func_remap, user_global_base, &data_offsets);
     code_sec.function(&func);
+    user_body_offsets.push((final_idx, body_offsets));
   }
 
   // Data section: one active segment at offset 0 in memory 0 holding
@@ -651,9 +674,81 @@ pub fn emit(frag: &Fragment) -> Vec<u8> {
   if let Some(sec) = &data_sec {
     module.section(sec);
   }
-  module.finish()
+  let binary = module.finish();
+
+  // Resolve per-function body-relative offsets to absolute binary
+  // offsets. Re-parse the binary with wasmparser; the code section
+  // exposes per-function `range()` values whose `start` is the byte
+  // offset of the function body's locals-count LEB. The instructions
+  // that emit_func tracked are body-relative starting after the
+  // locals declarations, so we offset by the locals length too.
+  let instr_offsets = resolve_abs_offsets(&binary, &user_body_offsets);
+
+  EmitOutput { binary, instr_offsets }
 }
 
+
+/// Translate per-function body-relative offsets into absolute binary
+/// offsets. Re-parses the binary with wasmparser to find each
+/// function body's absolute start (`FunctionBody::range().start`) —
+/// `wasm_encoder::Function::byte_len()` (used in emit_func) returns
+/// counts from that same anchor (locals-count LEB onward), so absolute
+/// = body_start + body_relative.
+fn resolve_abs_offsets(
+  binary: &[u8],
+  user_body_offsets: &[(u32, Vec<(InstrId, u32)>)],
+) -> std::collections::BTreeMap<InstrId, u32> {
+  use std::collections::BTreeMap;
+
+  // Walk the binary's payloads to find the code section. Per
+  // wasmparser, FunctionBody yields one entry per function body in
+  // declaration order; the i-th entry corresponds to func index
+  // `imported_func_count + i` in the final binary's func index space.
+  let mut imported_funcs = 0u32;
+  let mut func_starts: Vec<u32> = Vec::new();
+  let mut parser = wasmparser::Parser::new(0);
+  let mut data = binary;
+  loop {
+    use wasmparser::Payload;
+    match parser.parse(data, true) {
+      Ok(wasmparser::Chunk::NeedMoreData(_)) => break,
+      Ok(wasmparser::Chunk::Parsed { payload, consumed }) => {
+        match payload {
+          Payload::ImportSection(reader) => {
+            for imp in reader.into_imports() {
+              let imp = imp.expect("emit: malformed import in own output");
+              if matches!(imp.ty, wasmparser::TypeRef::Func(_)) {
+                imported_funcs += 1;
+              }
+            }
+          }
+          Payload::CodeSectionEntry(body) => {
+            func_starts.push(body.range().start as u32);
+          }
+          Payload::End(_) => break,
+          _ => {}
+        }
+        data = &data[consumed..];
+      }
+      Err(e) => panic!("emit: failed to re-parse own binary: {e}"),
+    }
+  }
+
+  let mut out: BTreeMap<InstrId, u32> = BTreeMap::new();
+  for (final_func_idx, body_offsets) in user_body_offsets {
+    // user-fragment funcs land after imports + runtime funcs in the
+    // final func index space. The code-section entry index is
+    // `final_func_idx - imported_funcs`. (Runtime funcs are not
+    // imports — they're emitted as code-section entries before user
+    // funcs, so the index space is contiguous.)
+    let code_idx = (final_func_idx - imported_funcs) as usize;
+    let body_start = func_starts[code_idx];
+    for (instr_id, body_rel) in body_offsets {
+      out.insert(*instr_id, body_start + body_rel);
+    }
+  }
+  out
+}
 
 // ──────────────────────────────────────────────────────────────────
 // Function body emission
@@ -666,17 +761,27 @@ fn emit_func(
   func_remap: &[u32],
   user_global_base: u32,
   data_offsets: &[u32],
-) -> Function {
+) -> (Function, Vec<(InstrId, u32)>) {
   let mut locals: Vec<(u32, WEValType)> = Vec::new();
   for l in &f.locals {
     locals.push((1, val_from_ir(&l.ty, type_remap)));
   }
   let mut func = Function::new(locals);
+  // Body-relative offset per InstrId — only recorded for instructions
+  // that were tagged with a `cps_id` in lower. The body-relative offset
+  // is `func.byte_len()` immediately before the instruction is emitted;
+  // it does not include the variable-width body-length prefix that
+  // `code.function(&func)` will write before the body bytes.
+  let mut body_offsets: Vec<(InstrId, u32)> = Vec::new();
   for &id in &f.body {
-    emit_instr(&mut func, frag, &frag.instrs[id.0 as usize], type_remap, func_remap, user_global_base, data_offsets);
+    let instr = &frag.instrs[id.0 as usize];
+    if instr.cps_id.is_some() {
+      body_offsets.push((id, func.byte_len() as u32));
+    }
+    emit_instr(&mut func, frag, instr, type_remap, func_remap, user_global_base, data_offsets);
   }
   func.instruction(&Instruction::End);
-  func
+  (func, body_offsets)
 }
 
 fn emit_instr(

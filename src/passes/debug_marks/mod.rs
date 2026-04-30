@@ -52,9 +52,14 @@ pub struct DebugMarks {
 /// `kind` classifies *why* this CpsId is a stop — useful for test output
 /// (so reviewers can see "stop because guard, stop because call, …") and
 /// potentially for DAP to distinguish e.g. step-in eligibility.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `source` is the Fink-source location resolved at analyse time (via
+/// the AST origin graph) so downstream consumers don't need to keep the
+/// AST around to materialise marks.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StopInfo {
   pub kind: StopKind,
+  pub source: Loc,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,7 +104,7 @@ pub fn analyse(
     let node = desugared.ast.nodes.get(*ast_id);
     if node.loc.start.line == 0 { continue }
     if is_expr_stop_kind(&node.kind) {
-      stops.set(id, Some(StopInfo { kind: StopKind::Expr }));
+      stops.set(id, Some(StopInfo { kind: StopKind::Expr, source: node.loc }));
     }
   }
 
@@ -117,7 +122,15 @@ pub fn analyse(
       && let Callable::Val(Val { kind: ValKind::ContRef(cont_id), .. }) = func
       && cont_is_ret(*cont_id)
     {
-      stops.set(expr.id, Some(StopInfo { kind: StopKind::Return }));
+      // Resolve loc via the AST origin graph for this App's CpsId.
+      // Falls back to a synth Loc if the App has no origin (compiler-
+      // synthesised App with no source position).
+      let loc = lifted.result.origin.try_get(expr.id)
+        .and_then(|o| *o)
+        .map(|ast_id| desugared.ast.nodes.get(ast_id).loc)
+        .unwrap_or(Loc { start: crate::passes::ast::lexer::Pos { idx: 0, line: 0, col: 0 },
+                         end: crate::passes::ast::lexer::Pos { idx: 0, line: 0, col: 0 } });
+      stops.set(expr.id, Some(StopInfo { kind: StopKind::Return, source: loc }));
     }
   });
 

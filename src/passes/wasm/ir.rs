@@ -126,7 +126,7 @@ pub struct DataSym(pub u32);
 
 /// Identifies an instruction node within a fragment's instruction
 /// arena. Used for attaching sourcemap origins and the like.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct InstrId(pub u32);
 
 /// Local variable index within a function. Numeric like CPS locals —
@@ -303,6 +303,14 @@ pub struct Instr {
   /// `None` for bring-up plumbing and compiler-synthesised helpers.
   /// Fed into the native sourcemap by the formatter.
   pub origin: Option<crate::sourcemap::native::ByteRange>,
+  /// CPS node id this instruction is the head of, if known. Populated
+  /// selectively by lower for instructions that correspond to a
+  /// stoppable CPS node (App, LetVal, If condition). Used by Section 5
+  /// of the debug-replumb to join `DebugMarks` (keyed by CpsId) with
+  /// `instr_offsets` (keyed by InstrId) and produce `MarkRecord`s.
+  /// `None` for compiler-synthesised helpers and instructions that
+  /// don't map back to a stop-eligible CPS node.
+  pub cps_id: Option<crate::passes::cps::ir::CpsId>,
 }
 
 #[derive(Clone, Debug)]
@@ -687,7 +695,7 @@ fn push_with_origin(
   origin: Option<crate::sourcemap::native::ByteRange>,
 ) -> InstrId {
   let id = InstrId(frag.instrs.len() as u32);
-  frag.instrs.push(Instr { kind, origin });
+  frag.instrs.push(Instr { kind, origin, cps_id: None });
   id
 }
 
@@ -816,6 +824,15 @@ pub fn intern_data(frag: &mut Fragment, bytes: &[u8]) -> DataSym {
 /// the helper that created it already ran.
 pub fn set_origin(frag: &mut Fragment, id: InstrId, origin: crate::sourcemap::native::ByteRange) {
   frag.instrs[id.0 as usize].origin = Some(origin);
+}
+
+/// Attach / overwrite the CpsId tag on an already-pushed instruction.
+/// Mirrors `set_origin` — called selectively by lower at sites where
+/// the instruction is the head of a stoppable CPS node (App, LetVal,
+/// If). Section 5's finalize-marks step joins these tags with
+/// `DebugMarks` keyed by CpsId to produce `MarkRecord`s.
+pub fn set_cps_id(frag: &mut Fragment, id: InstrId, cps_id: crate::passes::cps::ir::CpsId) {
+  frag.instrs[id.0 as usize].cps_id = Some(cps_id);
 }
 
 // ──────────────────────────────────────────────────────────────────────

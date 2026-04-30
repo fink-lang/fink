@@ -163,9 +163,9 @@ fn capture_dap_exit_code(
 }
 
 /// Apply `main_clo` with cli args + cont id 2 from inside `host_invoke_cont`.
-/// Same shape as `apply_main` in the sync runner — just typed for the
-/// DAP store.
-fn apply_main_dap(
+/// Same shape as `apply_main` in the sync runner, but uses `call_async`
+/// because the DAP store is async-configured (required by `guest_debug`).
+async fn apply_main_dap(
   caller: &mut wasmtime::Caller<'_, DebugState>,
   main_clo: wasmtime::Rooted<wasmtime::AnyRef>,
   argv: &[Vec<u8>],
@@ -187,7 +187,9 @@ fn apply_main_dap(
     .ok_or_else(|| wasmtime::Error::msg("no apply export"))?;
 
   let mut done_out = [wasmtime::Val::AnyRef(None)];
-  wrap_host_cont.call(&mut *caller, &[wasmtime::Val::I32(CONT_MAIN_DONE)], &mut done_out)?;
+  wrap_host_cont
+    .call_async(&mut *caller, &[wasmtime::Val::I32(CONT_MAIN_DONE)], &mut done_out)
+    .await?;
   let done_cont = done_out[0];
 
   let array_ty = wasmtime::ArrayType::new(
@@ -202,21 +204,27 @@ fn apply_main_dap(
     let array = wasmtime::ArrayRef::new_fixed(&mut *caller, &alloc, &elems)
       .map_err(|e| wasmtime::Error::msg(format!("byte array alloc: {e}")))?;
     let mut wrapped = [wasmtime::Val::AnyRef(None)];
-    str_wrap.call(&mut *caller,
-      &[wasmtime::Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
+    str_wrap
+      .call_async(&mut *caller,
+        &[wasmtime::Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)
+      .await?;
     main_args_vals.push(wrapped[0]);
   }
 
   let mut acc_out = [wasmtime::Val::AnyRef(None)];
-  args_empty.call(&mut *caller, &[], &mut acc_out)?;
+  args_empty.call_async(&mut *caller, &[], &mut acc_out).await?;
   let mut acc = acc_out[0];
   for v in main_args_vals.iter().rev() {
     let mut next = [wasmtime::Val::AnyRef(None)];
-    args_prepend.call(&mut *caller, &[*v, acc], &mut next)?;
+    args_prepend
+      .call_async(&mut *caller, &[*v, acc], &mut next)
+      .await?;
     acc = next[0];
   }
 
-  apply_fn.call(&mut *caller, &[acc, wasmtime::Val::AnyRef(Some(main_clo))], &mut [])?;
+  apply_fn
+    .call_async(&mut *caller, &[acc, wasmtime::Val::AnyRef(Some(main_clo))], &mut [])
+    .await?;
   Ok(())
 }
 
@@ -516,41 +524,45 @@ pub fn run<R: Read, W: Write + Send + 'static>(
         "host_invoke_cont" => {
           let exit = exit_code.clone();
           let argv = cli_args.clone();
-          linker.func_new("env", &name, ft.clone(), move |mut caller, params, _results| {
-            let cont_id = params[0].unwrap_i32();
-            let args_any = params[1].unwrap_anyref()
-              .ok_or_else(|| wasmtime::Error::msg("host_invoke_cont: null args"))?;
-            let cons = args_any.unwrap_struct(&caller)?;
+          linker.func_new_async("env", &name, ft.clone(), move |mut caller, params, _results| {
+            let exit = exit.clone();
+            let argv = argv.clone();
+            Box::new(async move {
+              let cont_id = params[0].unwrap_i32();
+              let args_any = params[1].unwrap_anyref()
+                .ok_or_else(|| wasmtime::Error::msg("host_invoke_cont: null args"))?;
+              let cons = args_any.unwrap_struct(&caller)?;
 
-            let head = cons.field(&mut caller, 0).ok();
-            capture_dap_exit_code(&mut caller, head.as_ref(), &exit);
+              let head = cons.field(&mut caller, 0).ok();
+              capture_dap_exit_code(&mut caller, head.as_ref(), &exit);
 
-            if cont_id != CONT_WRAPPER_DONE {
-              return Ok(());
-            }
-
-            let main_clo_val = match cons.field(&mut caller, 1).ok() {
-              Some(wasmtime::Val::AnyRef(Some(tail_ref))) => {
-                match tail_ref.as_struct(&caller) {
-                  Ok(Some(tail_st)) => tail_st.field(&mut caller, 0).ok(),
-                  _ => None,
-                }
+              if cont_id != CONT_WRAPPER_DONE {
+                return Ok(());
               }
-              _ => None,
-            };
-            let main_clo = match main_clo_val {
-              Some(wasmtime::Val::AnyRef(Some(r))) => r,
-              _ => return Ok(()),
-            };
-            if let Ok(Some(st)) = main_clo.as_struct(&caller)
-              && st.field(&mut caller, 1).is_err()
-            {
-              return Ok(());
-            }
 
-            *exit.lock().unwrap() = 0;
-            apply_main_dap(&mut caller, main_clo, &argv)?;
-            Ok(())
+              let main_clo_val = match cons.field(&mut caller, 1).ok() {
+                Some(wasmtime::Val::AnyRef(Some(tail_ref))) => {
+                  match tail_ref.as_struct(&caller) {
+                    Ok(Some(tail_st)) => tail_st.field(&mut caller, 0).ok(),
+                    _ => None,
+                  }
+                }
+                _ => None,
+              };
+              let main_clo = match main_clo_val {
+                Some(wasmtime::Val::AnyRef(Some(r))) => r,
+                _ => return Ok(()),
+              };
+              if let Ok(Some(st)) = main_clo.as_struct(&caller)
+                && st.field(&mut caller, 1).is_err()
+              {
+                return Ok(());
+              }
+
+              *exit.lock().unwrap() = 0;
+              apply_main_dap(&mut caller, main_clo, &argv).await?;
+              Ok(())
+            })
           }).map_err(|e| e.to_string())?;
         }
         _ => {
@@ -991,7 +1003,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore = "DWARF/sourcemap regression: IR pipeline doesn't emit mappings/marks yet"]
   fn stop_on_entry_then_continue_terminates_cleanly() {
     // The simplest CPS program: main calls its done continuation with 42.
     // The compiler produces at least one debug-marks breakpoint for the
@@ -1023,7 +1034,7 @@ mod tests {
   }
 
   #[test]
-  #[ignore = "DWARF/sourcemap regression: IR pipeline doesn't emit mappings/marks yet"]
+  #[ignore = "test program uses stale `main = fn done:` shape — needs rewrite to `main = fn ..args:` form. Marks pipeline itself works (sister test passes)."]
   fn continue_stops_only_at_user_breakpoints() {
     // Two-statement program — without any user breakpoint, stepping / a
     // blind Continue would stop at each mark in turn. With one user-

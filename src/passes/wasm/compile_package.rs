@@ -40,6 +40,8 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "compile")]
 use crate::passes::modules::SourceLoader;
 #[cfg(feature = "compile")]
+use crate::passes::debug_marks::DebugMarks;
+#[cfg(feature = "compile")]
 use super::ir::{Fragment, ModuleId};
 
 /// Compile a package rooted at `entry_path` into a single linked
@@ -81,9 +83,10 @@ pub fn compile_package(
   let mut visited: BTreeSet<String> = BTreeSet::new();
 
   let mut compiled: BTreeMap<String, Fragment> = BTreeMap::new();
+  let mut marks_by_module: BTreeMap<ModuleId, DebugMarks> = BTreeMap::new();
 
   // Compile entry first.
-  let entry_frag = compile_one(
+  let (entry_frag, entry_marks) = compile_one(
     &entry_canonical_url,
     entry_path,
     ModuleId(0),
@@ -91,6 +94,7 @@ pub fn compile_package(
   )?;
   let entry_imports = entry_frag.module_imports.clone();
   compiled.insert(entry_canonical_url.clone(), entry_frag);
+  marks_by_module.insert(ModuleId(0), entry_marks);
   visited.insert(entry_canonical_url.clone());
 
   // Seed the queue with the entry's direct deps.
@@ -116,7 +120,7 @@ pub fn compile_package(
     let dep_id = *url_to_id.get(&dep_canonical_url)
       .expect("BFS-enqueued dep should have a ModuleId");
 
-    let dep_frag = compile_one(
+    let (dep_frag, dep_marks) = compile_one(
       &dep_canonical_url,
       &dep_path,
       dep_id,
@@ -124,6 +128,7 @@ pub fn compile_package(
     )?;
     let dep_imports = dep_frag.module_imports.clone();
     compiled.insert(dep_canonical_url.clone(), dep_frag);
+    marks_by_module.insert(dep_id, dep_marks);
 
     for raw_url in dep_imports.keys() {
       enqueue_dep(
@@ -157,35 +162,56 @@ pub fn compile_package(
     ordered.push(frag);
   }
 
-  let merged = super::link::link(&ordered);
+  let (merged, instr_to_module) = super::link::link_with_instr_modules(&ordered);
 
   Ok(CompiledPackage {
     fragment: merged,
     url_to_id,
     entry_canonical_url,
+    marks_by_module,
+    instr_to_module,
   })
 }
 
 /// Output of `compile_package`. The merged fragment is ready to feed
 /// to `emit::emit`; the URL→ModuleId map lets callers identify
 /// the entry's ModuleId for host-side invocation.
+///
+/// `marks_by_module` carries per-module debug-marks analysis output, keyed
+/// by ModuleId. Survives link's IR→IR merge unchanged (link doesn't see
+/// it). Consumed by Section 5's finalize step once emit + link have been
+/// extended to carry per-instr byte offsets.
+///
+/// `instr_to_module` is parallel to `fragment.instrs`: each merged
+/// InstrId's source ModuleId. Lets the finalize step look up the right
+/// per-module `DebugMarks` (in `marks_by_module`) for an Instr's
+/// `cps_id` — CpsId is only meaningful within its source module's CPS
+/// space.
 #[cfg(feature = "compile")]
 pub struct CompiledPackage {
   pub fragment: Fragment,
   pub url_to_id: BTreeMap<String, ModuleId>,
   pub entry_canonical_url: String,
+  pub marks_by_module: BTreeMap<ModuleId, DebugMarks>,
+  pub instr_to_module: Vec<ModuleId>,
 }
 
 /// Compile one source file as a Fragment under the given canonical URL.
+///
+/// Returns the fragment plus the per-module `DebugMarks` (run on the
+/// lifted CPS before lower). Marks travel as a sidecar of the package,
+/// keyed by ModuleId — they don't ride on `Fragment` because link merges
+/// fragments and the per-module identity is lost there.
 #[cfg(feature = "compile")]
 fn compile_one(
   canonical_url: &str,
   disk_path: &Path,
   module_id: ModuleId,
   loader: &mut dyn SourceLoader,
-) -> Result<Fragment, String> {
+) -> Result<(Fragment, DebugMarks), String> {
   let source = loader.load(disk_path)?;
   let (lifted, desugared) = crate::to_lifted(&source, canonical_url)?;
+  let marks = crate::passes::debug_marks::analyse(&lifted, &desugared);
   let fqn_prefix = format!("{canonical_url}:");
   let mut frag = super::lower::lower(&lifted.result, &desugared.ast, &fqn_prefix);
   frag.module_id = module_id;
@@ -203,7 +229,7 @@ fn compile_one(
   for raw_url in lifted.result.module_imports.keys() {
     frag.module_imports.insert(raw_url.clone(), ModuleId(u32::MAX));
   }
-  Ok(frag)
+  Ok((frag, marks))
 }
 
 /// Enqueue a dep for BFS — canonicalise its URL, allocate a ModuleId
@@ -235,6 +261,47 @@ fn enqueue_dep(
   }
   let disk_path = resolve_canonical_to_disk(entry_dir, &canonical);
   queue.push_back((canonical, disk_path));
+}
+
+/// Join `CompiledPackage` (DebugMarks per module + InstrId → ModuleId)
+/// with `EmitOutput.instr_offsets` (InstrId → absolute byte offset in
+/// the binary) to produce the `MarkRecord`s the DAP consumes plus a
+/// parallel `WasmMapping` list.
+///
+/// For each merged Instr that has both a `cps_id` and an offset, look
+/// up the source location in the right module's `DebugMarks.stops` and
+/// emit a `MarkRecord` if the CpsId is a stop.
+#[cfg(feature = "compile")]
+pub fn finalize_marks(
+  pkg: &CompiledPackage,
+  emit_out: &super::emit::EmitOutput,
+) -> (Vec<crate::passes::debug_marks::MarkRecord>, Vec<super::sourcemap::WasmMapping>) {
+  use crate::passes::debug_marks::MarkRecord;
+  use super::sourcemap::WasmMapping;
+
+  let mut marks: Vec<MarkRecord> = Vec::new();
+  let mut mappings: Vec<WasmMapping> = Vec::new();
+
+  for (instr_id, &abs_offset) in &emit_out.instr_offsets {
+    let idx = instr_id.0 as usize;
+    let instr = match pkg.fragment.instrs.get(idx) {
+      Some(i) => i,
+      None => continue,
+    };
+    let Some(cps_id) = instr.cps_id else { continue };
+    let Some(&module_id) = pkg.instr_to_module.get(idx) else { continue };
+    let Some(module_marks) = pkg.marks_by_module.get(&module_id) else { continue };
+    let Some(stop) = module_marks.stops.try_get(cps_id).copied().flatten() else { continue };
+
+    marks.push(MarkRecord { wasm_pc: abs_offset, cps_id, source: stop.source });
+    mappings.push(WasmMapping {
+      wasm_offset: abs_offset,
+      src_line: stop.source.start.line,
+      src_col: stop.source.start.col,
+    });
+  }
+
+  (marks, mappings)
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -307,4 +374,150 @@ fn normalise_segments(url: &str) -> String {
   }
   out.push_str(&stack.join("/"));
   out
+}
+
+#[cfg(all(test, feature = "compile"))]
+mod tests {
+  use super::*;
+  use crate::passes::modules::InMemorySourceLoader;
+  use std::path::Path;
+
+  #[test]
+  fn marks_by_module_populated_for_entry() {
+    // Multi-stmt program. After analyse, at least one CpsId should be
+    // marked as a stop (Bind, Apply, or App-to-Ret).
+    let src = "x = 1\nmain = fn: x";
+    let mut loader = InMemorySourceLoader::single("main.fnk", src);
+    let pkg = compile_package(Path::new("main.fnk"), &mut loader).unwrap();
+
+    let entry_marks = pkg.marks_by_module.get(&ModuleId(0))
+      .expect("entry marks must be present");
+    let stop_count = (0..entry_marks.stops.len())
+      .filter_map(|i| entry_marks.stops.try_get(crate::passes::cps::ir::CpsId(i as u32)).copied().flatten())
+      .count();
+    assert!(stop_count > 0, "expected at least one stop in entry module marks");
+  }
+
+  #[test]
+  fn every_marked_cps_id_has_matching_instr() {
+    // Section 2 acceptance: for at least one stop in marks_by_module, the
+    // merged fragment must contain an Instr with cps_id == that stop's id.
+    // We don't require coverage of every stop yet — only that the threading
+    // works for the App / LetVal sites where we wired set_cps_id today.
+    let src = "x = 1\ny = x\nmain = fn: y";
+    let mut loader = InMemorySourceLoader::single("main.fnk", src);
+    let pkg = compile_package(Path::new("main.fnk"), &mut loader).unwrap();
+
+    let entry_marks = pkg.marks_by_module.get(&ModuleId(0)).unwrap();
+
+    // Collect raw u32s of cps_ids on instrs in the merged fragment.
+    let instr_cps_ids: std::collections::BTreeSet<u32> =
+      pkg.fragment.instrs.iter()
+        .filter_map(|i| i.cps_id.map(|id| id.0))
+        .collect();
+
+    // Count stops that have at least one matching instr.
+    let mut covered = 0usize;
+    let mut total = 0usize;
+    for i in 0..entry_marks.stops.len() {
+      let id = crate::passes::cps::ir::CpsId(i as u32);
+      if entry_marks.stops.try_get(id).copied().flatten().is_some() {
+        total += 1;
+        if instr_cps_ids.contains(&id.0) {
+          covered += 1;
+        }
+      }
+    }
+
+    let marked: Vec<u32> = (0..entry_marks.stops.len())
+      .filter_map(|i| {
+        let id = crate::passes::cps::ir::CpsId(i as u32);
+        entry_marks.stops.try_get(id).copied().flatten().map(|_| id.0)
+      })
+      .collect();
+
+    assert!(total > 0, "test program must produce at least one stop");
+    assert!(covered > 0,
+      "expected at least one marked CpsId to have a matching Instr.cps_id; \
+       got {covered}/{total} covered. \
+       marked cps_ids: {marked:?}, instr cps_ids: {instr_cps_ids:?}");
+  }
+
+  #[test]
+  fn emit_with_offsets_returns_one_offset_per_tagged_instr() {
+    // Section 3 acceptance: emit_with_offsets returns one entry per
+    // Instr that was tagged with cps_id in lower. The keys must be a
+    // subset of the merged fragment's tagged instrs.
+    let src = "x = 1\ny = x\nmain = fn: y";
+    let mut loader = InMemorySourceLoader::single("main.fnk", src);
+    let pkg = compile_package(Path::new("main.fnk"), &mut loader).unwrap();
+
+    let tagged_instr_ids: std::collections::BTreeSet<crate::passes::wasm::ir::InstrId> =
+      pkg.fragment.instrs.iter().enumerate()
+        .filter_map(|(i, instr)|
+          instr.cps_id.map(|_| crate::passes::wasm::ir::InstrId(i as u32))
+        )
+        .collect();
+
+    let out = crate::passes::wasm::emit::emit_with_offsets(&pkg.fragment);
+
+    // Every offset key must correspond to a tagged instr.
+    for k in out.instr_offsets.keys() {
+      assert!(tagged_instr_ids.contains(k),
+        "emit returned offset for InstrId {:?} which is not tagged", k);
+    }
+    // Every tagged instr that's actually in a function body must have
+    // an offset (some tagged instrs may live outside any user func body
+    // — e.g. the synthesised host wrapper — so we don't require ==).
+    assert!(!out.instr_offsets.is_empty(),
+      "expected at least one offset entry; got none. \
+       binary len: {}, tagged instrs: {}",
+      out.binary.len(), tagged_instr_ids.len());
+    // Offsets must be within the binary.
+    for (instr_id, off) in &out.instr_offsets {
+      assert!((*off as usize) < out.binary.len(),
+        "offset {} for {:?} is out of bounds (binary len {})",
+        off, instr_id, out.binary.len());
+    }
+  }
+
+  #[test]
+  fn finalize_marks_produces_non_empty_marks_and_mappings() {
+    // Section 5 acceptance: end-to-end, from source to MarkRecord +
+    // WasmMapping. For a small program with at least one App-to-Ret
+    // (which our selective tagging covers), the finalize step should
+    // produce at least one mark and one mapping.
+    let src = "main = fn: 42";
+    let mut loader = InMemorySourceLoader::single("main.fnk", src);
+    let pkg = compile_package(Path::new("main.fnk"), &mut loader).unwrap();
+    let emit_out = crate::passes::wasm::emit::emit_with_offsets(&pkg.fragment);
+    let (marks, mappings) = finalize_marks(&pkg, &emit_out);
+
+    assert!(!marks.is_empty(),
+      "expected at least one mark, got 0. \
+       instr_offsets: {} entries, marks_by_module: {} entries",
+      emit_out.instr_offsets.len(),
+      pkg.marks_by_module.len());
+    assert_eq!(marks.len(), mappings.len(),
+      "marks and mappings must be parallel");
+    // Every mark's wasm_pc must be within the binary.
+    for m in &marks {
+      assert!((m.wasm_pc as usize) < emit_out.binary.len(),
+        "mark wasm_pc {} out of bounds (binary len {})",
+        m.wasm_pc, emit_out.binary.len());
+    }
+  }
+
+  #[test]
+  fn marks_by_module_covers_all_modules() {
+    // Two-module program — entry imports a dep. Both modules should
+    // have an entry in marks_by_module.
+    let mut loader = InMemorySourceLoader::new();
+    loader.add("main.fnk", "import './dep.fnk'\nmain = fn: 1");
+    loader.add("dep.fnk", "y = 2");
+    let pkg = compile_package(Path::new("main.fnk"), &mut loader).unwrap();
+
+    assert_eq!(pkg.marks_by_module.len(), pkg.url_to_id.len(),
+      "every module must have a marks entry");
+  }
 }
