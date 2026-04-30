@@ -43,6 +43,10 @@ Concept: see [execution-model.md](execution-model.md) §7.
 
 `**` (power) and `/%` (divmod) parse but aren't lowered yet — using them today panics in the lowering pass. The other arithmetic operators all work end-to-end.
 
+## Ordering operator (`<=>`)
+
+A three-way comparison returning `LT` / `EQ` / `GT` was designed but isn't shipped — `<=>` doesn't lex, and `LT`/`EQ`/`GT` aren't defined. The pairwise `<` / `<=` / `>` / `>=` / `==` / `!=` operators cover most needs today.
+
 ## Advanced pattern matchers
 
 A few advanced match forms are parseable but don't lower end-to-end yet:

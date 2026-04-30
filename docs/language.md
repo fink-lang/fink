@@ -26,7 +26,7 @@ fink hello.fnk
 
 `fink <file>` is shorthand for `fink run <file>` — `run` is the default subcommand.
 
-You'll see `Hello, ƒink!` on stdout. `main` returns an exit code — `0` for success.
+You'll see `Hello, ƒink!` on stdout. `main` returns an exit code — `0` for success. For more on `>>`, channels, `spawn` / `await` and the rest, see [Concurrency and IO](#concurrency-and-io).
 
 ---
 
@@ -90,23 +90,35 @@ Single-quoted. A string with `${expr}` inside is a **template string** — the e
 'line one\nline two'
 ```
 
-Multiline strings start with `'` alone on a line and indent the content:
+Multiline strings start with `'` alone on a line and indent the content. Common leading whitespace is stripped from each line, and the surrounding newlines are preserved:
 
 ```fink
-'
+foo = '
   one
   two
   three
 '
+
+# foo == '\none\ntwo\nthree\n'
 ```
 
-Block strings begin with `":` and end when the indent drops back; template interpolation and embedded single-quotes need no escaping:
+Block strings begin with `":` and end when the indent drops back. Common leading whitespace is stripped, but unlike the multiline `'` form, leading and trailing newlines are not included in the value. Template interpolation and embedded single-quotes need no escaping:
+
+```fink
+foo = ":
+  one
+  two
+
+# foo == 'one\ntwo'
+```
 
 ```fink
 ":
   template interpolation ${name}
   and 'quotes' without escaping
 ```
+
+Use `'` when you want the surrounding newlines preserved; use `":` when you want a clean trimmed string and don't want to escape interior `'` or `${...}` segments.
 
 Escape sequences:
 
@@ -127,7 +139,37 @@ Escape sequences:
 '
 ```
 
-### Sequences
+#### Tagged templates
+
+A function name immediately before a string literal calls the function with the string's parts and interpolated values. The standard library exposes two tags from `std/str.fnk`:
+
+```fink
+{fmt, raw} = import 'std/str.fnk'
+
+fmt'result: ${1 + 2}'    # interpolates — same as 'result: ${1 + 2}'
+raw'line\nbreak'         # leaves \n literal — no escape processing
+```
+
+A tag is just a function. It receives `(parts, vals)` — `parts` is the sequence of literal segments, `vals` is the sequence of interpolated values. Defining your own:
+
+```fink
+fmt_log = fn parts, vals:
+  ...
+
+fmt_log'hello ${name}, you have ${count} messages'
+# calls fmt_log with parts ['hello ', ', you have ', ' messages'], vals [name, count]
+```
+
+## Collections
+
+Collections come in two literal shapes:
+
+- **Sequential** — `[ ... ]` — an ordered series of values.
+- **Keyed** — `{ ... }` — values addressed by a key.
+
+The shape is syntax. The runtime *type* is chosen by the compiler from what the literal contains. Sequential literals default to a `list`. Keyed literals default to a `record` when every key is known at compile time, otherwise a `dict`. To pick a different type explicitly — for example to dedup with a `set` — call its constructor.
+
+### Sequential — `[ ... ]`
 
 Ordered, zero-indexed.
 
@@ -146,9 +188,23 @@ numbers = [
 ]
 ```
 
-### Records
+For a specific sequential type, call its constructor with the elements as arguments:
 
-Keys are known at compile time. They can be identifiers, string literals (for keys with spaces or unusual characters), or parenthesised expressions the compiler can resolve at compile time.
+```fink
+{set} = import 'std/set.fnk'
+
+set 1, 2, 2, 3   # set of 1, 2, 3 — duplicates collapsed
+```
+
+```fink
+{list} = import 'std/list.fnk'
+
+list 1, 2, 3     # explicit list constructor
+```
+
+### Keyed — `{ ... }`
+
+A `record` has keys known at compile time. They can be identifiers, string literals (for keys with spaces or unusual characters), or parenthesised expressions the compiler can resolve at compile time.
 
 ```fink
 {}
@@ -158,6 +214,8 @@ Keys are known at compile time. They can be identifiers, string literals (for ke
 
 point = {x: 1, y: 2}
 ```
+
+When a key resolves only at runtime, the compiler builds a `dict` instead. There's no user-facing `dict` constructor yet — see [roadmap.md](roadmap.md#dicts).
 
 ---
 
@@ -215,15 +273,6 @@ a >< b         # disjoint — a and b have no element in common
 1 < x < 10     # chained
 ```
 
-### Ordering
-
-Shorthand for comparsion.
-
-```fink
-a <=> b  # returns LT, EQ, GT
-```
-
-
 ### Logical
 
 Operate on booleans and return a boolean.
@@ -256,18 +305,21 @@ a >>> b                  # rotate right
 ```fink
 0..10                    # 0 inclusive, 10 exclusive
 0...10                   # 0 inclusive, 10 inclusive
+
+1 + 2..3 + 4             # (1 + 2)..(3 + 4) — `..` binds looser than arithmetic
+(1 + 2)..(3 + 4)         # parens optional for clarity
 ```
 
 Range literals are first-class values.
 
 ### Membership
 
-`in` / `not in` test membership across any container that supports it — ranges, sequences, record keys, dict keys:
+`in` / `not in` test membership across any container that supports it — ranges, sequences, sets, and keyed types (records, dicts):
 
 ```fink
 5  in 0..10              # range
-'x' in {x: 1, y: 2}      # record key
 2  in [1, 2, 3]          # sequence element
+'x' in {x: 1, y: 2}      # keyed type — checks the keys, not the values
 5  not in 0..3           # negated form
 ```
 
@@ -288,7 +340,7 @@ By expression — the expression must be resolvable at compile time, or the oper
 key = 'x'
 point.(key)              # point.x
 
-point.'x'                # shorthand for .(str key)
+point.'x'                # string-literal form of .(expr) — useful for keys that aren't valid identifiers
 ```
 
 ### Spread
@@ -308,7 +360,9 @@ merged = {..a, ..b}
 
 ## Precedence and grouping
 
-Parentheses group, newlines separate statements, and `;` is a strong separator for stacking expressions on one line.
+Parentheses group. Newlines separate statements.
+
+`;` is the inline statement separator — it binds tighter than `,`, so `[add 1, 2; add 3, 4]` is `[(add 1, 2), (add 3, 4)]`, not `[add 1, (2; add 3), 4]`. Use it when you want to keep multiple statements on one line that would otherwise span several:
 
 ```fink
 15 == (1 + 2) * (2 + 3)
@@ -338,7 +392,7 @@ foo = 1
 
 ### Right-hand
 
-Useful for results of multi-line expressions:
+`expr |= pat` evaluates `expr` and binds it to `pat`. The same patterns as `=` work; the only difference is direction. Useful when the value-producing expression is long and the binding name reads better on the right:
 
 ```fink
 foo
@@ -367,12 +421,21 @@ Any pattern position accepts a guard — a boolean expression that must hold for
 [head, ..middle, end] = [1, 2, 3, 4]
 ```
 
-### Records match partially; sequences match exactly
+### Keyed patterns match partially; sequential patterns match exactly
 
 ```fink
-{a} = {a: 1, b: 2}       # fine — records match partially
-[a] = [1, 2]             # fails — sequence has extra elements
+{a} = {a: 1, b: 2}       # fine — keyed patterns match partially
+[a] = [1, 2]             # fails — sequential pattern has extra elements
 [a, ..] = [1, 2]         # fine — ..  discards the rest
+```
+
+### String patterns
+
+A template string on the left-hand side captures interpolation holes from a literal-on-the-right.
+
+```fink
+'start ${middle} end' = 'start foo end'
+# middle == 'foo'
 ```
 
 ---
@@ -406,11 +469,13 @@ head = fn [head, ..]: head
 
 ### Varargs
 
-One trailing `..rest` parameter captures the rest of the arguments as a sequence.
+One trailing `..rest` parameter captures the rest of the arguments as a sequence. (Interpolating a sequence renders it as `[a, b, c]`.)
 
 ```fink
 log = fn prefix, ..parts:
   '${prefix}: ${parts}'
+
+log 'tags', 'red', 'green'   # 'tags: [red, green]'
 ```
 
 ### `fn match`
@@ -435,7 +500,7 @@ classify = fn n: match n:
 
 ### Higher-order, closures, recursion
 
-Functions are values. They close over their enclosing scope. Module-level functions can refer to each other in any order (mutual recursion).
+Functions are values. They close over their enclosing scope. Module-level functions can refer to each other in any order (mutual recursion):
 
 ```fink
 is_even = fn n:
@@ -449,11 +514,13 @@ is_odd = fn n:
     _: is_even n - 1
 ```
 
+Mutual recursion only works at module scope. Inside a function body or block, bindings are not pre-declared — referring to a name before it is bound is an error. If you need mutual recursion in a nested scope, hoist the helpers to module level.
+
 ---
 
 ## Application
 
-Apply arguments to a function by writing them after it, separated by commas. `;` is a stronger-binding comma for packing expressions inline.
+Apply arguments to a function by writing them after it, separated by commas. (For `;` see [Precedence and grouping](#precedence-and-grouping).)
 
 ```fink
 log 'hello'
@@ -474,6 +541,14 @@ Nested application is right-to-left:
 foo bar spam
 # same as:
 foo (bar spam)
+```
+
+To call a zero-argument function, pass the wildcard `_` as the sole argument:
+
+```fink
+greet = fn: 'hello'
+
+greet _                  # calls greet with no arguments
 ```
 
 ### Tagged postfix application
@@ -591,6 +666,8 @@ match config:
   {..anything}:        'some config'
 ```
 
+Patterns match by *shape*, not concrete type. A `[..]` pattern matches anything sequence-like — list, set, range. A `{..}` pattern matches anything keyed — record, dict.
+
 String patterns capture holes in a template:
 
 ```fink
@@ -608,9 +685,15 @@ A file is a module. Bind the exports you care about from the result of `import`.
 ```fink
 {read, write} = import './files.fnk'
 {add, mul}    = import './math.fnk'
+{set}         = import 'std/set.fnk'
 ```
 
-Names bound at the top level of a module are exported by default; destructuring imports picks a subset. Module paths are relative to the importing file.
+Names bound at the top level of a module are exported by default; destructuring imports picks a subset.
+
+Path resolution:
+
+- `./foo.fnk` and `../bar.fnk` — relative to the importing file.
+- `std/foo.fnk` — bundled standard library (e.g. `std/io.fnk`, `std/list.fnk`, `std/set.fnk`, `std/str.fnk`).
 
 ---
 
@@ -701,11 +784,7 @@ foo bar,
   spam
 ```
 
-Use `;` for a strong inline separator when you need several expressions on one line:
-
-```fink
-[add 1, 2; add 3, 4]
-```
+For inline statement separation with `;` see [Precedence and grouping](#precedence-and-grouping).
 
 ---
 
