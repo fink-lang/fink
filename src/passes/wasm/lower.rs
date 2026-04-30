@@ -498,6 +498,11 @@ fn lower_expr(
       ctx.bind(name.id, local);
       let i = emit_val_into(lcx, ctx, val, local);
       if let Some(o) = origin_of(lcx.cps, lcx.ast, name.id) { set_origin(lcx.frag, i, o); }
+      // Tag the LetVal expr's own id (analyse rule 1 marks any CpsId with
+      // a Bind/Apply/etc origin — for a `name = val` shape that's the
+      // expr.id, not name.id). Falls back to name.id if expr.id has no
+      // origin or its origin AST is not a stop kind.
+      set_cps_id(lcx.frag, i, expr.id);
       ctx.instrs.push(i);
       lower_cont(lcx, ctx, cont);
     }
@@ -633,6 +638,7 @@ fn lower_expr(
         .collect();
       let i = push_return_call(lcx.frag, lcx.rt.str_match(), ops);
       if let Some(o) = origin_of(lcx.cps, lcx.ast, expr.id) { set_origin(lcx.frag, i, o); }
+      set_cps_id(lcx.frag, i, expr.id);
       ctx.instrs.push(i);
     }
 
@@ -822,6 +828,7 @@ fn lower_expr(
       let l_args_list = build_args_list(lcx, ctx, args);
       let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
+      set_cps_id(lcx.frag, i_app, expr.id);
       ctx.instrs.push(i_app);
     }
 
@@ -849,6 +856,7 @@ fn lower_expr(
       let l_args_list = build_args_list(lcx, ctx, args);
       let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
         vec![op_local(l_args_list), op_local(callee)]);
+      set_cps_id(lcx.frag, i_app, expr.id);
       ctx.instrs.push(i_app);
     }
 
@@ -1203,6 +1211,7 @@ fn emit_quaternary(
     .collect();
   let i = push_return_call(lcx.frag, target, ops);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
+  set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);
 }
 
@@ -1225,6 +1234,7 @@ fn emit_ternary_guard(
   let cont2_op = emit_arg_as_operand(lcx, ctx, &args[2]);
   let i = push_return_call(lcx.frag, lcx.rt.op(sym), vec![val_op, cont1_op, cont2_op]);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
+  set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);
 }
 
@@ -1245,6 +1255,7 @@ fn emit_op_tail_call(
   operands.push(cont_op);
   let i = push_return_call(lcx.frag, lcx.rt.op(sym), operands);
   if let Some(o) = origin_of(lcx.cps, lcx.ast, app_id) { set_origin(lcx.frag, i, o); }
+  set_cps_id(lcx.frag, i, app_id);
   ctx.instrs.push(i);
 }
 

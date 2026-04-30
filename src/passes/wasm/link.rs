@@ -48,14 +48,26 @@ struct Offsets {
 ///      "fink_module" })` → rewrite to producer's local FuncSym +
 ///      drop the import marker.
 pub fn link(fragments: &[Fragment]) -> Fragment {
+  link_with_instr_modules(fragments).0
+}
+
+/// Variant of [`link`] that also returns an `InstrId → ModuleId` map.
+/// Each merged InstrId carries the ModuleId of the source fragment it
+/// came from. Used by Section 5's mark-finalize step to look up the
+/// right per-module `DebugMarks` for an Instr's `cps_id`.
+pub fn link_with_instr_modules(fragments: &[Fragment]) -> (Fragment, Vec<ModuleId>) {
   match fragments {
     [] => panic!("link: empty fragment list"),
-    [only] => only.clone(),
-    _ => link_multi(fragments),
+    [only] => {
+      let mods = vec![only.module_id; only.instrs.len()];
+      (only.clone(), mods)
+    }
+    _ => link_multi_with_modules(fragments),
   }
 }
 
-fn link_multi(fragments: &[Fragment]) -> Fragment {
+fn link_multi_with_modules(fragments: &[Fragment]) -> (Fragment, Vec<ModuleId>) {
+  let mut instr_to_module: Vec<ModuleId> = Vec::new();
   // Step 1: compute per-fragment offsets.
   let mut offsets: Vec<Offsets> = vec![Offsets::default(); fragments.len()];
   let mut acc = Offsets::default();
@@ -148,7 +160,9 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
       merged.instrs.push(Instr {
         kind: remap_instr_kind(&instr.kind, &off),
         origin: instr.origin,
+        cps_id: instr.cps_id,
       });
+      instr_to_module.push(frag.module_id);
     }
   }
 
@@ -158,7 +172,7 @@ fn link_multi(fragments: &[Fragment]) -> Fragment {
     apply_func_redirect(&mut merged, &func_redirect);
   }
 
-  merged
+  (merged, instr_to_module)
 }
 
 /// Walk every FuncSym reference in the merged Fragment and apply the

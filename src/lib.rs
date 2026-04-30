@@ -95,20 +95,23 @@ pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
 /// implementation — typically `FileSourceLoader` for filesystem-backed
 /// compiles or `InMemorySourceLoader` for REPL/test scenarios.
 ///
-/// DWARF / sourcemap / debug-marks plumbing is currently absent on the
-/// IR pipeline — `mappings` and `marks` come back empty. To be re-
-/// plumbed in a follow-up.
+/// `marks` and `mappings` are populated from the per-module debug-marks
+/// analysis plus the per-Instr byte offsets emit produces — see the
+/// `finalize_marks` helper. DWARF emission into the binary itself is
+/// still TODO (browser debugging needs DWARF; native DAP only needs
+/// the in-memory `marks` / `mappings` we produce here).
 #[cfg(feature = "compile")]
 pub fn compile_package(
   entry_path: &std::path::Path,
   loader: &mut dyn passes::modules::SourceLoader,
 ) -> Result<passes::Wasm, String> {
   let pkg = passes::wasm::compile_package::compile_package(entry_path, loader)?;
-  let binary = passes::wasm::emit::emit(&pkg.fragment);
+  let emit_out = passes::wasm::emit::emit_with_offsets(&pkg.fragment);
+  let (marks, mappings) = passes::wasm::compile_package::finalize_marks(&pkg, &emit_out);
   Ok(passes::Wasm {
-    binary,
-    mappings: vec![],
-    marks: vec![],
+    binary: emit_out.binary,
+    mappings,
+    marks,
   })
 }
 
