@@ -5,9 +5,9 @@
 
 test 'stdout single message no main', fn:
   expect run ƒink:
-    {stdout} = import 'std/io.fnk'
+    {stdout, write} = import 'std/io.fnk'
 
-    'hello' >> stdout
+    write stdout, 'hello'
   | equals ":
     stdout == ":
       hello
@@ -15,10 +15,10 @@ test 'stdout single message no main', fn:
 
 test 'stdout single message', fn:
   expect run ƒink:
-    {stdout} = import 'std/io.fnk'
+    {stdout, write} = import 'std/io.fnk'
 
     main = fn:
-      'hello' >> stdout
+      write stdout, 'hello'
       0
   | equals ":
     0
@@ -28,11 +28,11 @@ test 'stdout single message', fn:
 
 test 'stdout multiple messages', fn:
   expect run ƒink:
-    {stdout} = import 'std/io.fnk'
+    {stdout, write} = import 'std/io.fnk'
 
     main = fn:
-      'hello' >> stdout
-      'world' >> stdout
+      write stdout, 'hello'
+      write stdout, 'world'
       0
   | equals ":
     0
@@ -42,10 +42,10 @@ test 'stdout multiple messages', fn:
 
 test 'stderr output', fn:
   expect run ƒink:
-    {stderr} = import 'std/io.fnk'
+    {stderr, write} = import 'std/io.fnk'
 
     main = fn:
-      'error' >> stderr
+      write stderr, 'error'
       1
   | equals ":
     1
@@ -55,11 +55,11 @@ test 'stderr output', fn:
 
 test 'stdout and stderr', fn:
   expect run ƒink:
-    {stdout, stderr} = import 'std/io.fnk'
+    {stdout, stderr, write} = import 'std/io.fnk'
 
     main = fn:
-      'out' >> stdout
-      'err' >> stderr
+      write stdout, 'out'
+      write stderr, 'err'
       0
   | equals ":
     0
@@ -69,27 +69,28 @@ test 'stdout and stderr', fn:
       err
 
 
-test 'send with <<', fn:
+test 'write returns the stream (chaining)', fn:
   expect run ƒink:
-    {stdout} = import 'std/io.fnk'
+    {stdout, write} = import 'std/io.fnk'
 
     main = fn:
-      stdout << 'hello'
+      stdout
+      | write ?, 'foo'
+      | write ?, 'bar'
       0
   | equals ":
     0
     stdout == ":
-      hello
-
+      foobar
 
 
 test 'read from stdin', fn:
   expect run ƒink:
-    {stdin, stdout, read} = import 'std/io.fnk'
+    {stdin, stdout, read, write} = import 'std/io.fnk'
 
     main = fn:
       data = read stdin, 1024
-      data >> stdout
+      write stdout, data
       0
   | equals ":
     0
@@ -99,13 +100,12 @@ test 'read from stdin', fn:
 
 test 'cli args printed via stdout', fn:
   expect run ƒink:
-    {stdout} = import 'std/io.fnk'
+    {stdout, write} = import 'std/io.fnk'
 
     main = fn ..args:
-      '${args}' >> stdout
+      write stdout, '${args}'
       0
   | equals ":
     0
     stdout == ":
       ['test', 'alpha', 'beta']
-

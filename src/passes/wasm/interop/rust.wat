@@ -21,7 +21,7 @@
 (module
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $interop/rust.wat:host_cont_adapter $interop/rust.wat:read_apply)
+  (elem declare func $interop/rust.wat:host_cont_adapter $interop/rust.wat:read_apply $interop/rust.wat:write_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -258,5 +258,72 @@
 
   (func $interop/io:get_read (export "interop/io:get_read") (result (ref any))
     (global.get $interop/rust.wat:read_closure))
+
+
+  ;; -- write closure ---------------------------------------------------------
+  ;;
+  ;; `std/io.fnk:write` returns a $Closure that, when applied as
+  ;; `write stream, value`, sends `value` to the host stream tagged by
+  ;; `stream` and resumes the caller with `stream` (so `write` returns the
+  ;; stream — enables chaining like `s | write ?, 'a' | write ?, 'b'`).
+  ;;
+  ;; Differs from `channel_send` only in that the cont is resumed with
+  ;; the stream value (via `make_thunk`) instead of unit.
+
+  (func $interop/rust.wat:channel_send_stream
+    (param $ch (ref null any))
+    (param $msg (ref null any))
+    (param $cont (ref null any))
+
+    (local $tag i32)
+    (local $bytes (ref $ByteArray))
+
+    (local.set $bytes
+      (call $std/str.wat:bytes (ref.cast (ref $Str) (local.get $msg))))
+
+    (local.set $tag
+      (i31.get_s (ref.cast (ref i31)
+        (struct.get $Channel $tag
+          (ref.cast (ref $Channel) (local.get $ch))))))
+
+    (call $interop/rust.wat:host_channel_send (local.get $tag) (local.get $bytes))
+
+    ;; Sender continues with the stream itself.
+    (call $std/async.wat:queue_push
+      (call $std/async.wat:make_thunk
+        (ref.as_non_null (local.get $cont))
+        (ref.as_non_null (local.get $ch))))
+
+    (return_call $std/async.wat:resume)
+  )
+
+  (func $interop/rust.wat:write_apply (type $Fn2)
+    (param $_caps (ref null any))
+    (param $args (ref null any))
+
+    (local $cursor (ref null any))
+    (local $cont (ref null any))
+    (local $stream (ref null any))
+    (local $value (ref null any))
+
+    (local.set $cursor (local.get $args))
+    (local.set $cont (call $std/list.wat:head_any (local.get $cursor)))
+    (local.set $cursor (call $std/list.wat:tail_any (local.get $cursor)))
+    (local.set $stream (call $std/list.wat:head_any (local.get $cursor)))
+    (local.set $cursor (call $std/list.wat:tail_any (local.get $cursor)))
+    (local.set $value (call $std/list.wat:head_any (local.get $cursor)))
+
+    (return_call $interop/rust.wat:channel_send_stream
+      (local.get $stream)
+      (local.get $value)
+      (local.get $cont)))
+
+  (global $interop/rust.wat:write_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $interop/rust.wat:write_apply)
+      (ref.null $Captures)))
+
+  (func $interop/io:get_write (export "interop/io:get_write") (result (ref any))
+    (global.get $interop/rust.wat:write_closure))
 
 )
