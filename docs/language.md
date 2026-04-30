@@ -616,11 +616,11 @@ Names bound at the top level of a module are exported by default; destructuring 
 
 ## Concurrency and IO
 
-ƒink programs are cooperative — tasks yield at I/O and scheduler points. Values flow between tasks through channels.
+ƒink programs are cooperative — tasks yield at I/O and scheduler points. Values flow between tasks through channels. stdio behaves like channels.
 
 ### `main` and the IO channels
 
-The runner calls `main` with `args, stdin, stdout, stderr` — CLI argv followed by the three IO channels. `main` returns an exit code.
+The runner calls `main` with `..args` — CLI argv. `main` returns an exit code. The IO channels (`stdin`, `stdout`, `stderr`) come from `import 'std/io.fnk'`, not as positional parameters.
 
 ```fink
 {stdin, stdout, stderr} = import 'std/io.fnk'
