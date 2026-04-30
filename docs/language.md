@@ -11,10 +11,10 @@ Features not yet reachable in the compiler live in [roadmap.md](roadmap.md). For
 Save as `hello.fnk`:
 
 ```fink
-{stdin, stdout, stderr} = import 'std/io.fnk'
+{stdout, write} = import 'std/io.fnk'
 
 main = fn ..args:
-  'Hello, ƒink!' >> stdout
+  write stdout, 'Hello, ƒink!'
   0
 ```
 
@@ -26,7 +26,7 @@ fink hello.fnk
 
 `fink <file>` is shorthand for `fink run <file>` — `run` is the default subcommand.
 
-You'll see `Hello, ƒink!` on stdout. `main` returns an exit code — `0` for success. For more on `>>`, channels, `spawn` / `await` and the rest, see [Concurrency and IO](#concurrency-and-io).
+You'll see `Hello, ƒink!` on stdout. `main` returns an exit code — `0` for success. For more on `write`, channels, `spawn` / `await` and the rest, see [Concurrency and IO](#concurrency-and-io).
 
 ---
 
@@ -703,26 +703,29 @@ Path resolution:
 
 ### `main` and the IO channels
 
-The runner calls `main` with `..args` — CLI argv. `main` returns an exit code. The IO channels (`stdin`, `stdout`, `stderr`) come from `import 'std/io.fnk'`, not as positional parameters.
+The runner calls `main` with `..args` — CLI argv. `main` returns an exit code. The IO channels (`stdin`, `stdout`, `stderr`) and the IO functions (`read`, `write`) come from `import 'std/io.fnk'`, not as positional parameters.
 
 ```fink
-{stdin, stdout, stderr} = import 'std/io.fnk'
+{stdout, write} = import 'std/io.fnk'
 
 main = fn ..args:
-  'Hello, world' >> stdout
+  write stdout, 'Hello, world'
   0
 ```
 
-### Sending to a channel
+### Writing to a stream
 
-`>>` sends the left-hand value to the right-hand channel; `<<` sends the right-hand value to the left-hand channel. Both work; pick whichever reads better in context.
+`write stream, value` sends `value` to `stream` and returns `stream`. The return value enables chaining via the pipeline operator:
 
 ```fink
-'line one' >> stdout
-stdout << 'line two'
+stdout
+| write ?, 'foo'
+| write ?, 'bar'
 ```
 
-> **Note on precedence.** `<<` and `>>` today double as bitwise shift. Dispatch is by value type — a channel on one side, bits on both.
+This writes `foobar` to stdout. `write` is the recommended way to send to streams.
+
+> **Low-level operators.** `>>` and `<<` are channel-send operators (`x >> stream` and `stream << x`) that also serve as bitwise shifts; dispatch is by value type. They remain available but `write` is preferred for stream IO.
 
 ### Receiving from a channel
 

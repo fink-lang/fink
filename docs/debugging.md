@@ -28,7 +28,7 @@ Save as `.vscode/launch.json` in the workspace. Set `stopOnEntry: true` to pause
 - **Breakpoints.** Click in the gutter to set one. A breakpoint on a line with no executable ƒink expression comes back unverified (greyed out) — move it to the nearest line with a binding, call, or operator.
 - **Continue.** Runs until the next breakpoint or program end.
 - **Step in / over / out.** All three advance to the next executable ƒink expression. True step-over and step-out (skip-the-callee, run-to-return) are a known limitation — every ƒink call is a tail call, so there is no call stack for the debugger to walk.
-- **Program output.** `'hello' >> stdout` / `>> stderr` shows up in the editor's debug console.
+- **Program output.** `write stdout, 'hello'` / `write stderr, ...` shows up in the editor's debug console.
 - **Clean exit.** The debug session ends when `main` returns.
 
 ## Running from the command line

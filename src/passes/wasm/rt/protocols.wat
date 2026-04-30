@@ -887,4 +887,11 @@
   (func (export "std/io.fnk:read") (result (ref any))
     (return_call $interop/io:get_read))
 
+  ;; std/io.fnk:write — writes a value to a stream and returns the
+  ;; stream itself (enabling chaining). Closure construction + Fn2
+  ;; adapter live in interop/rust.wat alongside the host bridge; this
+  ;; file just routes the protocol export name.
+  (func (export "std/io.fnk:write") (result (ref any))
+    (return_call $interop/io:get_write))
+
 )
