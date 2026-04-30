@@ -498,7 +498,11 @@ fn lower_expr(
       ctx.bind(name.id, local);
       let i = emit_val_into(lcx, ctx, val, local);
       if let Some(o) = origin_of(lcx.cps, lcx.ast, name.id) { set_origin(lcx.frag, i, o); }
-      set_cps_id(lcx.frag, i, name.id);
+      // Tag the LetVal expr's own id (analyse rule 1 marks any CpsId with
+      // a Bind/Apply/etc origin — for a `name = val` shape that's the
+      // expr.id, not name.id). Falls back to name.id if expr.id has no
+      // origin or its origin AST is not a stop kind.
+      set_cps_id(lcx.frag, i, expr.id);
       ctx.instrs.push(i);
       lower_cont(lcx, ctx, cont);
     }
