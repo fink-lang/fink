@@ -112,6 +112,7 @@ pub fn compile_package(
     binary: emit_out.binary,
     mappings,
     marks,
+    id_to_url: pkg.id_to_url,
   })
 }
 

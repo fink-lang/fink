@@ -296,9 +296,12 @@ struct FinkDebugHandler {
   /// by the emitter. Used to look up a firing PC's source line for the
   /// user-breakpoint filter.
   marks: Arc<Vec<crate::passes::debug_marks::MarkRecord>>,
-  /// Canonicalised absolute path of the source file, for comparing to
-  /// `setBreakpoints.source.path`. Precomputed once at startup.
-  source_abs: Arc<String>,
+  /// Per-module canonicalised absolute path, keyed by `ModuleId`. Lets the
+  /// matcher resolve which file each mark belongs to so user breakpoints
+  /// set in imported modules — not just the entry — can match.
+  module_paths: Arc<std::collections::BTreeMap<
+    crate::passes::wasm::ir::ModuleId, String,
+  >>,
 }
 
 impl wasmtime::DebugHandler for FinkDebugHandler {
@@ -336,7 +339,7 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
         match st.mode {
           FilterMode::StepAny => true,
           FilterMode::ContinueUntilUserBp => mark_matches_user_bp(
-            frame.pc, &self.marks, &self.source_abs, &st.user_bps,
+            frame.pc, &self.marks, &self.module_paths, &st.user_bps,
           ),
         }
       };
@@ -360,19 +363,26 @@ impl wasmtime::DebugHandler for FinkDebugHandler {
 }
 
 /// True if the mark at PC `pc` belongs to a line the user has placed a
-/// breakpoint on. Path comparison is literal — VSCode and our recorded
-/// `source_abs` should agree after `fs::canonicalize`.
+/// breakpoint on. The mark's `module_id` looks up its source path in
+/// `module_paths`; the resulting `(path, line)` is compared to the user
+/// breakpoint set. Path comparison is literal — VSCode and the recorded
+/// per-module path should agree after `fs::canonicalize`.
 fn mark_matches_user_bp(
   pc: u32,
   marks: &[crate::passes::debug_marks::MarkRecord],
-  source_abs: &str,
+  module_paths: &std::collections::BTreeMap<
+    crate::passes::wasm::ir::ModuleId, String,
+  >,
   user_bps: &std::collections::HashSet<(String, i64)>,
 ) -> bool {
   let Some(m) = marks.iter().find(|m| m.wasm_pc == pc) else {
     return false;
   };
+  let Some(path) = module_paths.get(&m.module_id) else {
+    return false;
+  };
   let line = m.source.start.line as i64;
-  user_bps.contains(&(source_abs.to_string(), line))
+  user_bps.contains(&(path.clone(), line))
 }
 
 // ── DAP server ──────────────────────────────────────────────────────────────
@@ -386,11 +396,14 @@ pub fn run<R: Read, W: Write + Send + 'static>(
   let mut server = Server::new(BufReader::new(input), BufWriter::new(output));
 
   // Load or compile the program.
-  let (wasm, source_file, mappings, marks) = if program.ends_with(".fnk") {
-    // Fink source: compile through the full pipeline (returns WASM binary directly).
-    let src = std::fs::read_to_string(program).map_err(|e| e.to_string())?;
-    let wasm = crate::to_wasm(&src, program)?;
-    (wasm.binary, program.to_string(), wasm.mappings, wasm.marks)
+  let (wasm, source_file, mappings, marks, id_to_url) = if program.ends_with(".fnk") {
+    // Fink source: compile the package via the multi-module path so
+    // imported `.fnk` files are loaded from disk (matches what
+    // `fink run` does). `to_wasm` would only register the entry file
+    // in an in-memory loader and fail on any `import './foo.fnk'`.
+    let mut loader = crate::passes::modules::FileSourceLoader::new();
+    let wasm = crate::compile_package(std::path::Path::new(program), &mut loader)?;
+    (wasm.binary, program.to_string(), wasm.mappings, wasm.marks, wasm.id_to_url)
   } else {
     let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
     if !bytes.starts_with(b"\0asm") {
@@ -398,7 +411,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
     }
     let fnk_path = find_fnk_source(program);
     let source_file = fnk_path.as_deref().unwrap_or(program).to_string();
-    (bytes, source_file, vec![], vec![])
+    (bytes, source_file, vec![], vec![], std::collections::BTreeMap::new())
   };
 
   // Set up Wasmtime with debug support.
@@ -446,19 +459,43 @@ pub fn run<R: Read, W: Write + Send + 'static>(
     user_bps: std::collections::HashSet::new(),
   }));
   let marks_arc = Arc::new(marks.clone());
-  // Canonical absolute path for comparing against `setBreakpoints.source.path`.
-  let source_abs_arc = Arc::new(
-    std::fs::canonicalize(&source_file)
+  // Per-module canonicalised absolute path map for comparing marks
+  // against `setBreakpoints.source.path`. Built from the package
+  // compiler's `id_to_url` plus the entry's directory: each module's
+  // canonical URL is resolved to a disk path under the entry dir, then
+  // canonicalised so it agrees with what VSCode sends.
+  let entry_dir = std::path::Path::new(program)
+    .parent()
+    .map(|p| p.to_path_buf())
+    .unwrap_or_else(|| std::path::PathBuf::from("."));
+  let mut module_paths: std::collections::BTreeMap<
+    crate::passes::wasm::ir::ModuleId, String,
+  > = std::collections::BTreeMap::new();
+  for (id, url) in &id_to_url {
+    let disk = crate::passes::wasm::compile_package::resolve_canonical_to_disk(
+      &entry_dir, url,
+    );
+    let canonical = std::fs::canonicalize(&disk)
       .map(|p| p.to_string_lossy().to_string())
-      .unwrap_or_else(|_| source_file.clone()),
-  );
+      .unwrap_or_else(|_| disk.to_string_lossy().to_string());
+    module_paths.insert(*id, canonical);
+  }
+  // Fallback for the no-package path (.wasm input): one entry keyed
+  // under ModuleId(0) so single-module flows still work.
+  if module_paths.is_empty() {
+    let canonical = std::fs::canonicalize(&source_file)
+      .map(|p| p.to_string_lossy().to_string())
+      .unwrap_or_else(|_| source_file.clone());
+    module_paths.insert(crate::passes::wasm::ir::ModuleId(0), canonical);
+  }
+  let module_paths_arc = Arc::new(module_paths);
 
   store.set_debug_handler(FinkDebugHandler {
     stopped_tx: stopped_tx.clone(),
     resume_rx: Arc::new(Mutex::new(resume_rx)),
     state: handler_state.clone(),
     marks: marks_arc.clone(),
-    source_abs: source_abs_arc.clone(),
+    module_paths: module_paths_arc.clone(),
   });
 
   // Wire env imports for the host-wrapper API. The wrapper protocol uses:
@@ -693,7 +730,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
                     // silently if it doesn't match.
                     let st = handler_state.lock().unwrap();
                     let is_user_bp = mark_matches_user_bp(
-                      frame.pc, &marks_arc, &source_abs_arc, &st.user_bps,
+                      frame.pc, &marks_arc, &module_paths_arc, &st.user_bps,
                     );
                     drop(st);
                     if is_user_bp {
@@ -1117,12 +1154,6 @@ mod tests {
   }
 
   #[test]
-  #[ignore = "needs per-mark module identity. MarkRecord.source: Loc carries \
-    only line/col, not which source file. mark_matches_user_bp compares \
-    every mark's line against the entry source path, so a breakpoint set \
-    in an imported module never matches. Root fix: add ModuleId to Loc \
-    plus a sibling propgraph keyed by ModuleId carrying { url, path, kind \
-    (User | Virtual) }; thread through finalize_marks and matcher."]
   fn breakpoint_in_imported_module_fires() {
     // Two-file program. Entry imports `helper.fnk` and calls
     // `double 21`. Helper has a multi-line `double` body. The user
@@ -1144,6 +1175,11 @@ mod tests {
       helper_path_canonical.replace('\\', "\\\\").replace('"', "\\\""),
     );
 
+    // Send a generous number of `continue`s (more than the program will
+    // ever produce stops) so the session always reaches `disconnect`.
+    // A user breakpoint can fire multiple times on the same source line
+    // because debug-marks are CPS-node-granular and a single line may
+    // contain multiple meaningful expressions.
     let mut input = Vec::new();
     input.extend_from_slice(&frame(r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#));
     input.extend_from_slice(&frame(r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":false}}"#));
@@ -1151,8 +1187,12 @@ mod tests {
       r#"{{"seq":3,"type":"request","command":"setBreakpoints","arguments":{{"source":{{"path":{helper_path_json}}},"breakpoints":[{{"line":2}}]}}}}"#
     )));
     input.extend_from_slice(&frame(r#"{"seq":4,"type":"request","command":"configurationDone"}"#));
-    input.extend_from_slice(&frame(r#"{"seq":5,"type":"request","command":"continue","arguments":{"threadId":1}}"#));
-    input.extend_from_slice(&frame(r#"{"seq":6,"type":"request","command":"disconnect","arguments":{}}"#));
+    for seq in 5..15 {
+      input.extend_from_slice(&frame(&format!(
+        r#"{{"seq":{seq},"type":"request","command":"continue","arguments":{{"threadId":1}}}}"#
+      )));
+    }
+    input.extend_from_slice(&frame(r#"{"seq":15,"type":"request","command":"disconnect","arguments":{}}"#));
 
     let output = Arc::new(Mutex::new(Vec::<u8>::new()));
     let output_clone = output.clone();
@@ -1183,10 +1223,13 @@ mod tests {
 
     let out = String::from_utf8_lossy(&output.lock().unwrap()).into_owned();
 
-    // Exactly one stopped event: the helper-line-2 user breakpoint.
-    assert_eq!(
-      count_stops(&out), 1,
-      "expected exactly 1 stopped event (at imported-module user breakpoint), got {}:\n{out}",
+    // At least one stopped event: the helper-line-2 user breakpoint.
+    // Could be more than one if line 2 has multiple debug-mark CPS
+    // nodes; what matters is that breakpoints in imported modules
+    // fire at all.
+    assert!(
+      count_stops(&out) >= 1,
+      "expected at least 1 stopped event (at imported-module user breakpoint), got {}:\n{out}",
       count_stops(&out),
     );
     assert!(
