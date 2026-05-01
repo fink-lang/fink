@@ -1,0 +1,5 @@
+{stdout, write} = import 'std/io.fnk'
+
+main = fn ..args:
+  write stdout, 'hello'
+  0

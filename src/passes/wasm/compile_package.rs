@@ -167,6 +167,7 @@ pub fn compile_package(
   Ok(CompiledPackage {
     fragment: merged,
     url_to_id,
+    id_to_url,
     entry_canonical_url,
     marks_by_module,
     instr_to_module,
@@ -191,6 +192,7 @@ pub fn compile_package(
 pub struct CompiledPackage {
   pub fragment: Fragment,
   pub url_to_id: BTreeMap<String, ModuleId>,
+  pub id_to_url: BTreeMap<ModuleId, String>,
   pub entry_canonical_url: String,
   pub marks_by_module: BTreeMap<ModuleId, DebugMarks>,
   pub instr_to_module: Vec<ModuleId>,
@@ -293,7 +295,7 @@ pub fn finalize_marks(
     let Some(module_marks) = pkg.marks_by_module.get(&module_id) else { continue };
     let Some(stop) = module_marks.stops.try_get(cps_id).copied().flatten() else { continue };
 
-    marks.push(MarkRecord { wasm_pc: abs_offset, cps_id, source: stop.source });
+    marks.push(MarkRecord { wasm_pc: abs_offset, cps_id, source: stop.source, module_id });
     mappings.push(WasmMapping {
       wasm_offset: abs_offset,
       src_line: stop.source.start.line,
@@ -308,8 +310,14 @@ pub fn finalize_marks(
 // URL canonicalisation — string-only, lifted from wasm-link/mod.rs.
 // ──────────────────────────────────────────────────────────────────
 
+/// Resolve a canonical URL (entry-relative `./helper.fnk`, virtual
+/// `std/io.fnk`, etc.) to a disk path under the entry's directory.
+///
+/// Pure path-joining: no filesystem access, no canonicalisation. Callers
+/// that need an absolute canonicalised path should `fs::canonicalize`
+/// the result themselves.
 #[cfg(feature = "compile")]
-fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
+pub fn resolve_canonical_to_disk(entry_dir: &Path, canonical_url: &str) -> PathBuf {
   let rest = canonical_url.strip_prefix("./").unwrap_or(canonical_url);
   entry_dir.join(rest)
 }

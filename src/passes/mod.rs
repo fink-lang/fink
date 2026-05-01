@@ -103,6 +103,11 @@ pub struct Wasm {
   /// the WASM emitter. Empty during Step 1 plumbing — `compile_package`
   /// returns `vec![]`. Populated once emit is wired up in Step 2/3.
   pub marks: Vec<debug_marks::MarkRecord>,
+  /// Per-module canonical URL, keyed by ModuleId. Lets DAP / sourcemap
+  /// consumers resolve a `MarkRecord.module_id` back to the source file
+  /// the mark belongs to (entry-relative `./helper.fnk`, virtual
+  /// `std/io.fnk`, etc.). Empty for non-package compiles.
+  pub id_to_url: std::collections::BTreeMap<wasm::ir::ModuleId, String>,
 }
 
 /// Emit WAT text from a WASM binary.

@@ -112,6 +112,7 @@ pub fn compile_package(
     binary: emit_out.binary,
     mappings,
     marks,
+    id_to_url: pkg.id_to_url,
   })
 }
 
@@ -130,7 +131,11 @@ pub fn to_wat(src: &str, path: &str) -> Result<String, String> {
   passes::emit_wat(&wasm)
 }
 
-/// Compile and run source. Returns the exit code from main.
+/// Compile and run source from an in-memory string. Single-module only —
+/// any `import './foo.fnk'` will fail with "no such source in loader"
+/// because the in-memory loader only knows the entry source. For
+/// filesystem-backed `.fnk` entries that may have imports, call
+/// [`run_file`] instead.
 ///
 /// `args` is the CLI argv passed to the user's `main` — `argv[0]` is the
 /// program name, followed by user-supplied CLI arguments.
@@ -144,6 +149,20 @@ pub fn run(
   stderr: runner::IoStream,
 ) -> Result<i64, String> {
   runner::run_source(Default::default(), src, path, args, stdin, stdout, stderr)
+}
+
+/// Compile and run a `.fnk` (or `.wasm`) file from disk. Multi-module —
+/// imports are resolved through `FileSourceLoader`. Use this from the
+/// CLI / DAP / anywhere the entry is a real path on disk.
+#[cfg(feature = "run")]
+pub fn run_file(
+  path: &str,
+  args: Vec<Vec<u8>>,
+  stdin: runner::IoReadStream,
+  stdout: runner::IoStream,
+  stderr: runner::IoStream,
+) -> Result<i64, String> {
+  runner::run_file(Default::default(), path, args, stdin, stdout, stderr)
 }
 
 /// Start DAP debug server for a .fnk file, communicating over stdin/stdout.

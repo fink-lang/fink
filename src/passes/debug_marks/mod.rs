@@ -20,6 +20,7 @@ pub mod fmt;
 use crate::ast::NodeKind;
 use crate::lexer::Loc;
 use crate::passes::cps::ir::{Arg, Bind, Callable, Cont, CpsId, Expr, ExprKind, Val, ValKind};
+use crate::passes::wasm::ir::ModuleId;
 use crate::propgraph::PropGraph;
 
 /// One realised step-stop in the linked WASM binary.
@@ -35,6 +36,7 @@ pub struct MarkRecord {
   pub wasm_pc: u32,
   pub cps_id: CpsId,
   pub source: Loc,
+  pub module_id: ModuleId,
 }
 
 /// Output of the debug-marker pass.
