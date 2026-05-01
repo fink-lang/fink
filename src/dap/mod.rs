@@ -102,7 +102,19 @@ async fn run_module(
       &[wasmtime::Val::AnyRef(Some(main_key)), wasmtime::Val::I32(CONT_WRAPPER_DONE)],
       &mut [])
     .await
-    .map_err(|e| format!("entry wrapper: {e}"))?;
+    .map_err(|e| {
+      // Wasmtime wraps host-trap errors with an "error while
+      // executing at wasm backtrace: ..." outer Display, stuffing
+      // the friendly trap message into the cause chain. Surface
+      // the whole chain so DAP consumers see the real reason.
+      let mut msg = format!("entry wrapper: {e}");
+      let mut cause: Option<&dyn std::error::Error> = e.source();
+      while let Some(c) = cause {
+        msg.push_str(&format!("\n  caused by: {c}"));
+        cause = c.source();
+      }
+      msg
+    })?;
   Ok(())
 }
 
@@ -503,8 +515,10 @@ pub fn run<R: Read, W: Write + Send + 'static>(
   //   - `host_invoke_cont(cont_id, args)` — fired by the wrapper with cont
   //     id 1 (`(last_expr, main_clo)`) and by main's done with cont id 2
   //     (`(main_result)`).
-  //   - `host_panic`, `host_channel_send`. `host_read` not wired yet —
-  //     DAP doesn't plumb stdin through the debug loop.
+  //   - `host_panic`, `host_channel_send`. `host_read` traps with a
+  //     clear error — proper stdin under DAP needs runInTerminal + an
+  //     adapter/debuggee process split (mirroring Node / cppdbg /
+  //     CodeLLDB), tracked separately.
   //
   // host_channel_send routes debuggee stdout/stderr into DAP `Output`
   // events so the bytes surface in VSCode's Debug Console rather than
@@ -603,10 +617,37 @@ pub fn run<R: Read, W: Write + Send + 'static>(
             })
           }).map_err(|e| e.to_string())?;
         }
+        "host_read" => {
+          // `read stdin` cannot work in the current DAP topology: `fink
+          // dap` is *both* DAP adapter (talks DAP on its own stdin/
+          // stdout to VSCode) and debuggee (runs the WASM program in
+          // process). Reading stdin would compete with the DAP frame
+          // reader.
+          //
+          // The conventional fix used by Node / cppdbg / CodeLLDB is
+          // DAP's `runInTerminal` reverse request — VSCode launches the
+          // debuggee in an integrated terminal with a real stdin, while
+          // the adapter stays on its own channel. That requires an
+          // adapter/debuggee process split here plus a launch-config
+          // bit (`console: integratedTerminal`) in vscode-fink, and
+          // is tracked as a follow-up.
+          //
+          // Until then, trap with a friendly, actionable error so the
+          // user sees what to do instead of a generic
+          // "builtin '...' not yet implemented".
+          linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
+            Err(wasmtime::Error::msg(
+              "read stdin is not supported under DAP. \
+               Run the program with `fink <file>` for stdin-using \
+               programs. Real stdin under the debugger needs \
+               `runInTerminal` support, which is not yet wired."
+            ))
+          }).map_err(|e| e.to_string())?;
+        }
         _ => {
-          // host_read + any other unknown env imports — trap for now.
-          // DAP sessions don't yet plumb stdin reads through the debug
-          // loop; that's a follow-up.
+          // Any other unknown env imports — trap with a generic
+          // "not implemented" so missing host functions don't fail
+          // silently.
           let err_name = name.clone();
           linker.func_new("env", &name, ft.clone(), move |_caller, _params, _results| {
             Err(wasmtime::Error::msg(format!("builtin '{}' not yet implemented in DAP", err_name)))
@@ -618,6 +659,12 @@ pub fn run<R: Read, W: Write + Send + 'static>(
 
   // Spawn WASM execution thread with async runtime (required by guest_debug).
   let terminated_tx = stopped_tx;
+  // Trap errors from the wasm execution surface here. Forward them as
+  // a stderr `Output` DAP event so the user sees them in the Debug
+  // Console — without this, trap messages (e.g. the friendly
+  // host_read error) only show up on the adapter's host stderr,
+  // which VSCode never displays.
+  let trap_output = server.output.clone();
   let wasm_thread = std::thread::spawn(move || {
     let rt = tokio::runtime::Builder::new_current_thread()
       .enable_all()
@@ -625,7 +672,20 @@ pub fn run<R: Read, W: Write + Send + 'static>(
       .expect("failed to build tokio runtime");
     rt.block_on(async {
       if let Err(e) = run_module(&mut store, &linker, &module).await {
-        eprintln!("[fink dap] {e}");
+        let msg = format!("error: {e}\n");
+        eprintln!("[fink dap] {msg}");
+        if let Ok(mut o) = trap_output.lock() {
+          let _ = o.send_event(Event::Output(dap::events::OutputEventBody {
+            category: Some(OutputEventCategory::Stderr),
+            output: msg,
+            group: None,
+            variables_reference: None,
+            source: None,
+            line: None,
+            column: None,
+            data: None,
+          }));
+        }
       }
     });
     let _ = terminated_tx.send(StoppedFrame { func_name: String::new(), pc: u32::MAX });
@@ -1260,6 +1320,30 @@ mod tests {
     assert!(
       out.contains(&helper_path_canonical),
       "expected stackTrace to report helper.fnk path ({helper_path_canonical}), got:\n{out}"
+    );
+    assert!(
+      out.contains(r#""event":"terminated""#),
+      "expected a 'terminated' event, got:\n{out}"
+    );
+  }
+
+  #[test]
+  fn read_stdin_under_dap_traps_with_clear_error() {
+    // `read stdin` cannot work under DAP today (single-process adapter
+    // + debuggee, stdin contended). The host stub must trap with a
+    // friendly, actionable error mentioning `runInTerminal` rather
+    // than the generic "builtin '...' not yet implemented".
+    let out = drive_session(include_str!("test_fixtures/reads_stdin.fnk"), &[
+      r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#.to_string(),
+      r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":false}}"#.to_string(),
+      r#"{"seq":3,"type":"request","command":"configurationDone"}"#.to_string(),
+      r#"{"seq":4,"type":"request","command":"continue","arguments":{"threadId":1}}"#.to_string(),
+      r#"{"seq":5,"type":"request","command":"disconnect"}"#.to_string(),
+    ]);
+
+    assert!(
+      out.contains("read stdin is not supported"),
+      "expected friendly host_read error, got:\n{out}"
     );
     assert!(
       out.contains(r#""event":"terminated""#),

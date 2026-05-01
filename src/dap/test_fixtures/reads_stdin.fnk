@@ -1,0 +1,6 @@
+{stdin, stdout, read, write} = import 'std/io.fnk'
+
+main = fn ..args:
+  data = read stdin, 10
+  write stdout, data
+  0
