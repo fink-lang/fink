@@ -1,0 +1,3 @@
+double = fn n:
+  doubled = n * 2
+  doubled

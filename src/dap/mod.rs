@@ -1115,4 +1115,83 @@ mod tests {
       "expected a 'terminated' event, got:\n{out}"
     );
   }
+
+  #[test]
+  #[ignore = "needs per-mark module identity. MarkRecord.source: Loc carries \
+    only line/col, not which source file. mark_matches_user_bp compares \
+    every mark's line against the entry source path, so a breakpoint set \
+    in an imported module never matches. Root fix: add ModuleId to Loc \
+    plus a sibling propgraph keyed by ModuleId carrying { url, path, kind \
+    (User | Virtual) }; thread through finalize_marks and matcher."]
+  fn breakpoint_in_imported_module_fires() {
+    // Two-file program. Entry imports `helper.fnk` and calls
+    // `double 21`. Helper has a multi-line `double` body. The user
+    // sets a breakpoint on line 2 of helper.fnk (the `doubled = n * 2`
+    // line) and expects the debugger to stop there exactly once when
+    // entry runs.
+    let entry_src = include_str!("test_fixtures/multi_module/entry.fnk");
+    let helper_src = include_str!("test_fixtures/multi_module/helper.fnk");
+
+    let dir = tempfile::tempdir().unwrap();
+    let entry_path = dir.path().join("entry.fnk");
+    let helper_path = dir.path().join("helper.fnk");
+    std::fs::write(&entry_path, entry_src).unwrap();
+    std::fs::write(&helper_path, helper_src).unwrap();
+    let helper_path_canonical = helper_path
+      .canonicalize().unwrap().to_string_lossy().into_owned();
+    let helper_path_json = format!(
+      "\"{}\"",
+      helper_path_canonical.replace('\\', "\\\\").replace('"', "\\\""),
+    );
+
+    let mut input = Vec::new();
+    input.extend_from_slice(&frame(r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":false}}"#));
+    input.extend_from_slice(&frame(&format!(
+      r#"{{"seq":3,"type":"request","command":"setBreakpoints","arguments":{{"source":{{"path":{helper_path_json}}},"breakpoints":[{{"line":2}}]}}}}"#
+    )));
+    input.extend_from_slice(&frame(r#"{"seq":4,"type":"request","command":"configurationDone"}"#));
+    input.extend_from_slice(&frame(r#"{"seq":5,"type":"request","command":"continue","arguments":{"threadId":1}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":6,"type":"request","command":"disconnect","arguments":{}}"#));
+
+    let output = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let output_clone = output.clone();
+    let entry_path_for_run = entry_path.to_string_lossy().into_owned();
+
+    let handle = std::thread::spawn(move || {
+      struct SharedWrite(Arc<Mutex<Vec<u8>>>);
+      impl std::io::Write for SharedWrite {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+          self.0.lock().unwrap().extend_from_slice(buf);
+          Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+      }
+      let writer = SharedWrite(output_clone);
+      let reader = std::io::Cursor::new(input);
+      super::run(reader, writer, &entry_path_for_run).ok();
+    });
+
+    let start = std::time::Instant::now();
+    while !handle.is_finished() {
+      if start.elapsed() > std::time::Duration::from_secs(10) {
+        panic!("DAP session did not terminate within 10s");
+      }
+      std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    handle.join().unwrap();
+
+    let out = String::from_utf8_lossy(&output.lock().unwrap()).into_owned();
+
+    // Exactly one stopped event: the helper-line-2 user breakpoint.
+    assert_eq!(
+      count_stops(&out), 1,
+      "expected exactly 1 stopped event (at imported-module user breakpoint), got {}:\n{out}",
+      count_stops(&out),
+    );
+    assert!(
+      out.contains(r#""event":"terminated""#),
+      "expected a 'terminated' event, got:\n{out}"
+    );
+  }
 }
