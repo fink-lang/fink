@@ -269,7 +269,15 @@ fn main() {
           }
         }
 
-        let exit_code = fink::run(&src, path, cli_args, stdin, stdout, stderr).unwrap_or_else(|e| die(&e));
+        // For real `.fnk` paths, go through `run_file` so imports are
+        // resolved off-disk via `FileSourceLoader`. The single-source
+        // `run` path is reserved for `-` (stdin) where there's no
+        // filesystem entry to resolve imports against.
+        let exit_code = if path == "-" {
+          fink::run(&src, path, cli_args, stdin, stdout, stderr)
+        } else {
+          fink::run_file(path, cli_args, stdin, stdout, stderr)
+        }.unwrap_or_else(|e| die(&e));
         process::exit(exit_code as i32);
       }
     }
