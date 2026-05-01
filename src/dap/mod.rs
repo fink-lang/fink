@@ -1010,7 +1010,7 @@ mod tests {
     //   1) emit a Stopped event at entry (driven by stopOnEntry),
     //   2) emit a Terminated event after continue,
     //   3) not hang.
-    let out = drive_session("main = fn done: done 42\n", &[
+    let out = drive_session(include_str!("test_fixtures/hello_world.fnk"), &[
       r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#.to_string(),
       r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":true}}"#.to_string(),
       r#"{"seq":3,"type":"request","command":"configurationDone"}"#.to_string(),
@@ -1034,16 +1034,15 @@ mod tests {
   }
 
   #[test]
-  #[ignore = "test program uses stale `main = fn done:` shape — needs rewrite to `main = fn ..args:` form. Marks pipeline itself works (sister test passes)."]
   fn continue_stops_only_at_user_breakpoints() {
-    // Two-statement program — without any user breakpoint, stepping / a
+    // Multi-line `main` — without any user breakpoint, stepping / a
     // blind Continue would stop at each mark in turn. With one user-
-    // placed breakpoint on line 3, a plain Continue from entry should
-    // reach exactly ONE user stop (entry itself, from stopOnEntry =
-    // false — we skip that here) and then stop on line 3, skipping any
-    // intermediate marks on line 2. After a second continue the program
-    // terminates.
-    let src = "main = fn done:\n  x = 1\n  done x\n";
+    // placed breakpoint on line 6 (the `x` return), a plain Continue
+    // from entry should reach exactly ONE user stop (entry itself is
+    // skipped, since stopOnEntry = false) and then stop on line 6,
+    // skipping any intermediate marks on lines 4-5. After a second
+    // continue the program terminates.
+    let src = include_str!("test_fixtures/let_write_return.fnk");
 
     // setBreakpoints must use the canonicalised path VSCode would send.
     // We don't know it ahead of time — drive_session writes to a
@@ -1066,7 +1065,7 @@ mod tests {
     input.extend_from_slice(&frame(r#"{"seq":1,"type":"request","command":"initialize","arguments":{"adapterID":"fink"}}"#));
     input.extend_from_slice(&frame(r#"{"seq":2,"type":"request","command":"launch","arguments":{"stopOnEntry":false}}"#));
     input.extend_from_slice(&frame(&format!(
-      r#"{{"seq":3,"type":"request","command":"setBreakpoints","arguments":{{"source":{{"path":{path_json}}},"breakpoints":[{{"line":3}}]}}}}"#
+      r#"{{"seq":3,"type":"request","command":"setBreakpoints","arguments":{{"source":{{"path":{path_json}}},"breakpoints":[{{"line":6}}]}}}}"#
     )));
     input.extend_from_slice(&frame(r#"{"seq":4,"type":"request","command":"configurationDone"}"#));
     // After configurationDone with stopOnEntry=false, the program should
