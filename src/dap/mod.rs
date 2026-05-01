@@ -49,16 +49,17 @@ fn pc_to_source_location(
 
 /// Look up a `MarkRecord` by linked-binary PC. Wasmtime fires
 /// breakpoints at the exact PC we registered, so an exact-match scan
-/// suffices. Returns the `(line, col)` 1-indexed for DAP. Falls back
-/// to nearest-preceding mark when there's no exact match — guards
-/// against any small drift introduced by `rewrite_body`'s LEB128
-/// changes during link-time PC shifting.
-fn pc_to_mark_source(
+/// suffices. Falls back to nearest-preceding mark when there's no
+/// exact match — guards against any small drift introduced by
+/// `rewrite_body`'s LEB128 changes during link-time PC shifting.
+/// Returning the full record lets callers read `source` *and*
+/// `module_id` to resolve which file the stop belongs to.
+fn pc_to_mark(
   pc: u32,
   marks: &[crate::passes::debug_marks::MarkRecord],
-) -> Option<(i64, i64)> {
+) -> Option<&crate::passes::debug_marks::MarkRecord> {
   if let Some(m) = marks.iter().find(|m| m.wasm_pc == pc) {
-    return Some((m.source.start.line as i64, m.source.start.col as i64));
+    return Some(m);
   }
   // Nearest preceding — same logic as pc_to_source_location.
   let mut best: Option<&crate::passes::debug_marks::MarkRecord> = None;
@@ -70,7 +71,7 @@ fn pc_to_mark_source(
       }
     }
   }
-  best.map(|m| (m.source.start.line as i64, m.source.start.col as i64))
+  best
 }
 
 // ── Runner bootstrap ────────────────────────────────────────────────────────
@@ -769,25 +770,43 @@ pub fn run<R: Read, W: Write + Send + 'static>(
           }
 
           Command::StackTrace(_) => {
-            let (line, col, name) = if let Some(ref frame) = last_frame {
-              // Prefer mark-based source resolution: every breakpoint
-              // we install corresponds to a MarkRecord with an exact
-              // source `Loc`. Fall back to the legacy DWARF-derived
-              // mapping for non-mark stops (e.g. legacy single_step
-              // path when marks is empty).
-              let (l, c) = pc_to_mark_source(frame.pc, &marks)
-                .or_else(|| pc_to_source_location(frame.pc, &mappings))
-                .unwrap_or((1, 1));
-              (l, c, frame.func_name.clone())
+            // Resolve the firing PC to a (line, col, source path). Prefer
+            // the mark-based path: every installed breakpoint has a
+            // MarkRecord with an exact `Loc` *and* the `module_id` of
+            // the source file, so multi-module stops jump to the right
+            // file. Fall back to the legacy DWARF-derived mapping (line
+            // only) + the entry path for non-mark stops (legacy
+            // single_step, .wasm input).
+            let (line, col, name, src_path, src_name) = if let Some(ref frame) = last_frame {
+              if let Some(m) = pc_to_mark(frame.pc, &marks) {
+                let path = module_paths_arc.get(&m.module_id)
+                  .cloned()
+                  .unwrap_or_else(|| abs_path.clone());
+                let name_for_source = std::path::Path::new(&path)
+                  .file_name()
+                  .map(|f| f.to_string_lossy().to_string())
+                  .unwrap_or_else(|| file_name.clone());
+                (
+                  m.source.start.line as i64,
+                  m.source.start.col as i64,
+                  frame.func_name.clone(),
+                  path,
+                  name_for_source,
+                )
+              } else {
+                let (l, c) = pc_to_source_location(frame.pc, &mappings)
+                  .unwrap_or((1, 1));
+                (l, c, frame.func_name.clone(), abs_path.clone(), file_name.clone())
+              }
             } else {
-              (1, 1, "?".to_string())
+              (1, 1, "?".to_string(), abs_path.clone(), file_name.clone())
             };
             let frames = vec![StackFrame {
               id: 1,
               name,
               source: Some(Source {
-                name: Some(file_name.clone()),
-                path: Some(abs_path.clone()),
+                name: Some(src_name),
+                path: Some(src_path),
                 ..Default::default()
               }),
               line,
@@ -1187,12 +1206,15 @@ mod tests {
       r#"{{"seq":3,"type":"request","command":"setBreakpoints","arguments":{{"source":{{"path":{helper_path_json}}},"breakpoints":[{{"line":2}}]}}}}"#
     )));
     input.extend_from_slice(&frame(r#"{"seq":4,"type":"request","command":"configurationDone"}"#));
-    for seq in 5..15 {
+    // Ask for a stackTrace once so the response carries the source path
+    // VSCode would jump to. After that, drain any further stops.
+    input.extend_from_slice(&frame(r#"{"seq":5,"type":"request","command":"stackTrace","arguments":{"threadId":1}}"#));
+    for seq in 6..16 {
       input.extend_from_slice(&frame(&format!(
         r#"{{"seq":{seq},"type":"request","command":"continue","arguments":{{"threadId":1}}}}"#
       )));
     }
-    input.extend_from_slice(&frame(r#"{"seq":15,"type":"request","command":"disconnect","arguments":{}}"#));
+    input.extend_from_slice(&frame(r#"{"seq":16,"type":"request","command":"disconnect","arguments":{}}"#));
 
     let output = Arc::new(Mutex::new(Vec::<u8>::new()));
     let output_clone = output.clone();
@@ -1231,6 +1253,13 @@ mod tests {
       count_stops(&out) >= 1,
       "expected at least 1 stopped event (at imported-module user breakpoint), got {}:\n{out}",
       count_stops(&out),
+    );
+    // The stackTrace response must carry the helper.fnk path, not the
+    // entry's. Without the per-mark module identity wired into the
+    // StackFrame source, VSCode would highlight the wrong file.
+    assert!(
+      out.contains(&helper_path_canonical),
+      "expected stackTrace to report helper.fnk path ({helper_path_canonical}), got:\n{out}"
     );
     assert!(
       out.contains(r#""event":"terminated""#),
