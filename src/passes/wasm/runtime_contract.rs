@@ -99,10 +99,10 @@ pub enum Sym {
   // All binary operators share the shape (anyref, anyref, anyref)
   // → unit (i.e. Fn_op_binary); Not is the only unary today
   // (anyref, anyref) → unit.
-  OpPlus, OpMinus, OpMul, OpDiv, OpIntDiv, OpRem, OpIntMod,
+  OpPlus, OpMinus, OpMul, OpDiv, OpIntDiv, OpRem, OpIntMod, OpDivMod, OpPow,
   OpEq, OpNeq, OpLt, OpLte, OpGt, OpGte, OpDisjoint,
   OpAnd, OpOr, OpXor, OpNot,
-  OpShl, OpShr,
+  OpShl, OpShr, OpRotL, OpRotR,
   OpRngex, OpRngin, OpIn, OpNotIn, OpDot,
   // Polymorphic predicate — same `(any, cont)` unary CPS shape as
   // OpNot. Used by `BuiltIn::Empty` and (future) other unary
@@ -226,6 +226,8 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::IntDiv => &[Sym::OpIntDiv],
     BuiltIn::Mod    => &[Sym::OpRem],
     BuiltIn::IntMod => &[Sym::OpIntMod],
+    BuiltIn::DivMod => &[Sym::OpDivMod],
+    BuiltIn::Pow    => &[Sym::OpPow],
     // Comparison
     BuiltIn::Eq  => &[Sym::OpEq],
     BuiltIn::Neq => &[Sym::OpNeq],
@@ -239,9 +241,11 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     BuiltIn::Or  => &[Sym::OpOr],
     BuiltIn::Xor => &[Sym::OpXor],
     BuiltIn::Not => &[Sym::OpNot],
-    // Shifts
-    BuiltIn::Shl => &[Sym::OpShl],
-    BuiltIn::Shr => &[Sym::OpShr],
+    // Shifts / rotations
+    BuiltIn::Shl  => &[Sym::OpShl],
+    BuiltIn::Shr  => &[Sym::OpShr],
+    BuiltIn::RotL => &[Sym::OpRotL],
+    BuiltIn::RotR => &[Sym::OpRotR],
     // Range / membership / field-access (polymorphic)
     BuiltIn::Range     => &[Sym::OpRngex],
     BuiltIn::RangeIncl => &[Sym::OpRngin],
@@ -332,6 +336,8 @@ pub struct Runtime {
   op_intdiv:  Option<FuncSym>,
   op_rem:     Option<FuncSym>,
   op_intmod:  Option<FuncSym>,
+  op_divmod:  Option<FuncSym>,
+  op_pow:     Option<FuncSym>,
   op_eq:      Option<FuncSym>,
   op_neq:     Option<FuncSym>,
   op_lt:      Option<FuncSym>,
@@ -369,6 +375,8 @@ pub struct Runtime {
   receive:      Option<FuncSym>,
   op_shl:     Option<FuncSym>,
   op_shr:     Option<FuncSym>,
+  op_rotl:    Option<FuncSym>,
+  op_rotr:    Option<FuncSym>,
   op_rngex:   Option<FuncSym>,
   op_rngin:   Option<FuncSym>,
   op_in:      Option<FuncSym>,
@@ -434,6 +442,8 @@ impl Runtime {
       Sym::OpIntDiv => self.op_intdiv,
       Sym::OpRem    => self.op_rem,
       Sym::OpIntMod => self.op_intmod,
+      Sym::OpDivMod => self.op_divmod,
+      Sym::OpPow    => self.op_pow,
       Sym::OpEq     => self.op_eq,
       Sym::OpNeq    => self.op_neq,
       Sym::OpLt     => self.op_lt,
@@ -454,6 +464,8 @@ impl Runtime {
       Sym::SeqPopBack => self.seq_pop_back,
       Sym::OpShl    => self.op_shl,
       Sym::OpShr    => self.op_shr,
+      Sym::OpRotL   => self.op_rotl,
+      Sym::OpRotR   => self.op_rotr,
       Sym::OpRngex  => self.op_rngex,
       Sym::OpRngin  => self.op_rngin,
       Sym::OpIn     => self.op_in,
@@ -511,6 +523,8 @@ pub(super) fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpIntDiv        => ("rt/protocols.wat", "std/operators.fnk:op_intdiv"),
     Sym::OpRem           => ("rt/protocols.wat", "std/operators.fnk:op_rem"),
     Sym::OpIntMod        => ("rt/protocols.wat", "std/operators.fnk:op_intmod"),
+    Sym::OpDivMod        => ("rt/protocols.wat", "std/operators.fnk:op_divmod"),
+    Sym::OpPow           => ("rt/protocols.wat", "std/operators.fnk:op_pow"),
     Sym::OpEq            => ("rt/protocols.wat", "std/operators.fnk:op_eq"),
     Sym::OpNeq           => ("rt/protocols.wat", "std/operators.fnk:op_neq"),
     Sym::OpLt            => ("rt/protocols.wat", "std/operators.fnk:op_lt"),
@@ -524,6 +538,8 @@ pub(super) fn import_key(sym: Sym) -> (&'static str, &'static str) {
     Sym::OpNot           => ("rt/protocols.wat", "std/operators.fnk:op_not"),
     Sym::OpShl           => ("rt/protocols.wat", "std/operators.fnk:op_shl"),
     Sym::OpShr           => ("rt/protocols.wat", "std/operators.fnk:op_shr"),
+    Sym::OpRotL          => ("rt/protocols.wat", "std/operators.fnk:op_rotl"),
+    Sym::OpRotR          => ("rt/protocols.wat", "std/operators.fnk:op_rotr"),
     Sym::OpRngex         => ("std/range.wat", "std/range.fnk:excl"),
     Sym::OpRngin         => ("std/range.wat", "std/range.fnk:incl"),
     Sym::OpIn            => ("rt/protocols.wat", "std/operators.fnk:op_in"),
@@ -699,10 +715,10 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
 
 /// All binary-protocol Syms — share `Fn_op_binary` signature.
 const BINARY_OPS: &[Sym] = &[
-  Sym::OpPlus, Sym::OpMinus, Sym::OpMul, Sym::OpDiv, Sym::OpIntDiv, Sym::OpRem, Sym::OpIntMod,
+  Sym::OpPlus, Sym::OpMinus, Sym::OpMul, Sym::OpDiv, Sym::OpIntDiv, Sym::OpRem, Sym::OpIntMod, Sym::OpDivMod, Sym::OpPow,
   Sym::OpEq, Sym::OpNeq, Sym::OpLt, Sym::OpLte, Sym::OpGt, Sym::OpGte, Sym::OpDisjoint,
   Sym::OpAnd, Sym::OpOr, Sym::OpXor,
-  Sym::OpShl, Sym::OpShr,
+  Sym::OpShl, Sym::OpShr, Sym::OpRotL, Sym::OpRotR,
   Sym::OpRngex, Sym::OpRngin, Sym::OpIn, Sym::OpNotIn, Sym::OpDot,
 ];
 
@@ -763,6 +779,8 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::OpIntDiv => &mut rt.op_intdiv,
     Sym::OpRem    => &mut rt.op_rem,
     Sym::OpIntMod => &mut rt.op_intmod,
+    Sym::OpDivMod => &mut rt.op_divmod,
+    Sym::OpPow    => &mut rt.op_pow,
     Sym::OpEq     => &mut rt.op_eq,
     Sym::OpNeq    => &mut rt.op_neq,
     Sym::OpLt     => &mut rt.op_lt,
@@ -775,6 +793,8 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::OpXor    => &mut rt.op_xor,
     Sym::OpShl    => &mut rt.op_shl,
     Sym::OpShr    => &mut rt.op_shr,
+    Sym::OpRotL   => &mut rt.op_rotl,
+    Sym::OpRotR   => &mut rt.op_rotr,
     Sym::OpRngex  => &mut rt.op_rngex,
     Sym::OpRngin  => &mut rt.op_rngin,
     Sym::OpIn     => &mut rt.op_in,

@@ -159,3 +159,39 @@ test 'bitwise shift right', fn:
     256 >> 4
   | equals ƒink:
     16
+
+
+test 'power', fn:
+  expect run ƒink:
+    2 ** 8
+  | equals ƒink:
+    256
+
+
+skip test 'power float', fn:
+  expect run ƒink:
+    2.0 ** 0.5
+  | equals ƒink:
+    1.4142135623730951
+
+
+test 'divmod', fn:
+  expect run ƒink:
+    [q, r] = 10 /% 3
+    '${q}, ${r}'
+  | equals ƒink:
+    3, 1
+
+
+test 'rotate left', fn:
+  expect run ƒink:
+    1 <<< 4
+  | equals ƒink:
+    16
+
+
+test 'rotate right', fn:
+  expect run ƒink:
+    16 >>> 4
+  | equals ƒink:
+    1

@@ -109,6 +109,38 @@
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
+  (func $std/operators.fnk:op_pow (export "std/operators.fnk:op_pow")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $std/list.wat:apply_1
+      (call $std/int.wat:op_pow
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
+      (local.get $cont)))
+
+  (func $std/operators.fnk:op_divmod (export "std/operators.fnk:op_divmod")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $std/list.wat:apply_1
+      (call $std/int.wat:op_divmod
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
+      (local.get $cont)))
+
+  (func $std/operators.fnk:op_rotl (export "std/operators.fnk:op_rotl")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $std/list.wat:apply_1
+      (call $std/int.wat:op_rotl
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
+      (local.get $cont)))
+
+  (func $std/operators.fnk:op_rotr (export "std/operators.fnk:op_rotr")
+    (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $std/list.wat:apply_1
+      (call $std/int.wat:op_rotr
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
+      (local.get $cont)))
+
   ;; =========================================================================
   ;; Comparison: unbox two $Num, f64 compare → i31ref (0/1)
   ;; =========================================================================
