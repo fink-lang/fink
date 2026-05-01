@@ -627,12 +627,6 @@ test 'mutual recursion — ping pong', fn:
     # sm:PAABACcAAQAnJAASAAIABgEODAAAAAENBBIABAEODAwABAEADAYAAAACABIABAEGAQoAAAACAAIACgEGBgABAAQSABIABAEKAQoABgEjBAABAAQQAQAEEAAGATYMAAAAAQ0EEgAEAQ4MDgAEAQAMBgAAAAIAFAAEAQYBCgAAAAIAAgAKAQYGAAEABBIAFAAEAQoBCgAGASMEAAEABBABAAQQAAYBAAQAAQAEFAEABA
 
 
-# TODO: mutual recursion with match body — second binding (is_odd) gets
-# threaded through a runtime continuation instead of landing as a direct
-# LetFn sibling like ping/pong. Expected output below is the blessed
-# (current) shape, which is reasonable per-se — but downstream wasm
-# collect misses one of the hoisted fns. Fix likely in wasm collect
-# traversal; keep this snapshot to detect if lifting shape shifts.
 test 'mutual recursion — is_even / is_odd', fn:
   expect lift ƒink:
     is_even = fn n:

@@ -1088,15 +1088,6 @@ test 'mutual recursion — ping pong', fn:
     ;; sm:KIgEAI4BAJYBAI4BAGgAagC2AQC2AQCeBQCQAQCWAQCOAQBoAGoAtgEAuAEA_AkAjgEAegEABM4BAGAAiAEAigEAwgEAegEoBNABAGAAiAEAigEAwgEBMgGGAQBqALgBALYBAIoHAIoBAL4BAMABAIQBAPoBAA
 
 
-# TODO: mutual recursion with match body — wat succeeds but the
-# output fails wasmtime validation at link time:
-#   `type mismatch: expected funcref, found anyref`
-# inside one of the hoisted fns (the struct.new $Closure is given an
-# anyref param where a funcref is required). Culprit is emit/collect
-# not registering every hoisted fn as a sibling func, so
-# emit_get_raw_funcref falls through to local.get. Ping/pong above
-# works. Snapshot here is the current (broken) output, blessed to
-# make the regression visible when the fix lands.
 test 'mutual recursion — is_even / is_odd', fn:
   expect wat ƒink:
     is_even = fn n:

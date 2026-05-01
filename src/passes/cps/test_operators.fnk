@@ -80,3 +80,39 @@ test 'range incl', fn:
       ·op_rngin 0, 10, ·ƒret_0
     # sm:DAABAAYAAQAGJAEABhIAAgAGAQAGAAEABhYBAAECAAQBCAIEAAQBBwY
 
+
+test 'infix pow', fn:
+  expect cps_module ƒink:
+    a ** b
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·op_pow ·∅a, ·∅b, ·ƒret_0
+    # sm:DAABAAYAAQAGJAEABhIAAgAGAQAGAAEABhIBAAEMAAQBCgEMAAQBCQY
+
+
+test 'infix divmod', fn:
+  expect cps_module ƒink:
+    a /% b
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·op_divmod ·∅a, ·∅b, ·ƒret_0
+    # sm:DAABAAYAAQAGJAEABhIAAgAGAQAGAAEABhgBAAEMAAQBCgEMAAQBCQY
+
+
+test 'infix rotl', fn:
+  expect cps_module ƒink:
+    a <<< b
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·op_rotl ·∅a, ·∅b, ·ƒret_0
+    # sm:DAABAAcAAQAHJAEABxIAAgAGAQAHAAEABxQBAAEMAAQBDAEMAAQBCwc
+
+
+test 'infix rotr', fn:
+  expect cps_module ƒink:
+    a >>> b
+  | equals ƒink:
+    ·ƒink_module fn ·ƒret_0:
+      ·op_rotr ·∅a, ·∅b, ·ƒret_0
+    # sm:DAABAAcAAQAHJAEABxIAAgAGAQAHAAEABxQBAAEMAAQBDAEMAAQBCwc
+
