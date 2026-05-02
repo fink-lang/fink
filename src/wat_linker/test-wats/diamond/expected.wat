@@ -1,14 +1,14 @@
 (module
   (rec
     (type $test-wats/diamond/d.wat:D (sub (struct
-    (field $val i32))))
+      (field $val i32))))
     (type $test-wats/diamond/b.wat:B (sub (struct
-    (field $payload (ref $test-wats/diamond/d.wat:D)))))
+      (field $payload (ref $test-wats/diamond/d.wat:D)))))
     (type $test-wats/diamond/c.wat:C (sub (struct
-    (field $payload (ref $test-wats/diamond/d.wat:D)))))
+      (field $payload (ref $test-wats/diamond/d.wat:D)))))
     (type $test-wats/diamond/a.wat:A (sub (struct
-    (field $left (ref $test-wats/diamond/b.wat:B))
-    (field $right (ref $test-wats/diamond/c.wat:C)))))
+      (field $left (ref $test-wats/diamond/b.wat:B))
+      (field $right (ref $test-wats/diamond/c.wat:C)))))
   )
 
 

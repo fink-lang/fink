@@ -118,7 +118,7 @@ pub fn link(modules: &[(&str, &str)]) -> String {
         out.push_str("  (rec");
         for t in &all_types {
             out.push_str("\n    ");
-            out.push_str(t);
+            out.push_str(&reindent_type_form(t, 6));
         }
         out.push_str("\n  )\n");
     }
@@ -140,6 +140,51 @@ pub fn link(modules: &[(&str, &str)]) -> String {
     // Only `(export "env:...")` forms reach the merged output (inter-wat
     // exports were dropped); plain string-replace is safe.
     out.replace("(export \"env:", "(export \"")
+}
+
+/// Re-indent a multi-line type form for placement inside the merged
+/// rec block. The first line is left untouched (the caller has already
+/// emitted the rec-level indent). Each continuation line has its
+/// leading whitespace replaced by `target_indent` spaces (preserving
+/// any deeper indentation relative to the source's continuation level).
+fn reindent_type_form(form: &str, target_indent: usize) -> String {
+    let mut lines = form.lines();
+    let first = match lines.next() {
+        Some(l) => l,
+        None => return String::new(),
+    };
+    // Detect the source's continuation-line indent from the second line.
+    let mut source_indent: Option<usize> = None;
+    let rest: Vec<&str> = lines.collect();
+    for line in &rest {
+        if line.trim().is_empty() {
+            continue;
+        }
+        source_indent = Some(line.bytes().take_while(|&b| b == b' ').count());
+        break;
+    }
+    let source_indent = match source_indent {
+        Some(n) => n,
+        None => return form.to_string(),
+    };
+
+    let mut out = String::with_capacity(form.len());
+    out.push_str(first);
+    for line in rest {
+        out.push('\n');
+        if line.trim().is_empty() {
+            continue;
+        }
+        let cur = line.bytes().take_while(|&b| b == b' ').count();
+        // Preserve indentation relative to the source's continuation
+        // level; shift the whole thing to the target.
+        let extra = cur.saturating_sub(source_indent);
+        for _ in 0..target_indent + extra {
+            out.push(' ');
+        }
+        out.push_str(line.trim_start());
+    }
+    out
 }
 
 /// Format a `url:line:col` location for error messages. `offset` is a

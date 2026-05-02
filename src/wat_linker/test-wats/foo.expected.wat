@@ -1,10 +1,10 @@
 (module
   (rec
     (type $test-wats/bar.wat:Bar (@pub) (sub (struct
-    (field $val i32))))
+      (field $val i32))))
     (type $test-wats/foo.wat:Foo (sub (struct
-    (field $tag i32)
-    (field $payload (ref $test-wats/bar.wat:Bar)))))
+      (field $tag i32)
+      (field $payload (ref $test-wats/bar.wat:Bar)))))
   )
 
   (import "env" "host_clamp" (func $env:host_clamp (param i32) (result i32)))
