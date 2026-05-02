@@ -64,7 +64,8 @@ pub fn run(
   }
 
   let engine = Engine::new(&config).map_err(|e| e.to_string())?;
-  let module = Module::new(&engine, wasm).map_err(|e| e.to_string())?;
+  let module = Module::new(&engine, wasm)
+    .map_err(|e| crate::passes::wasm::annotate_func_indices(&e.to_string(), wasm))?;
   let mut store = Store::new(&engine, ());
 
   let exit_state: Arc<Mutex<ExitState>> = Arc::new(Mutex::new(ExitState::default()));

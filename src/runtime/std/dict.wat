@@ -32,51 +32,71 @@
 ;;     Hash protocol (future, std-lib, CPS).
 ;;
 ;; Exported functions:
-;;   $std/dict.wat:hamt_empty   : () -> (ref $HamtNode)
-;;   $std/dict.wat:hamt_get     : (ref $HamtNode), (ref eq) -> (ref null eq)
-;;   $std/dict.wat:hamt_set     : (ref $HamtNode), (ref eq), (ref eq) -> (ref $HamtNode)
-;;   $std/dict.wat:hamt_delete  : (ref $HamtNode), (ref eq) -> (ref $HamtNode)
-;;   $std/dict.wat:hamt_pop     : (ref $HamtNode), (ref eq) -> (ref null eq), (ref $HamtNode)
-;;   $std/dict.wat:hamt_merge   : (ref $HamtNode), (ref $HamtNode) -> (ref $HamtNode)
-;;   $std/dict.wat:hamt_size    : (ref $HamtNode) -> i32
+;;   $hamt_empty   : () -> (ref $HamtNode)
+;;   $hamt_get     : (ref $HamtNode), (ref eq) -> (ref null eq)
+;;   $hamt_set     : (ref $HamtNode), (ref eq), (ref eq) -> (ref $HamtNode)
+;;   $hamt_delete  : (ref $HamtNode), (ref eq) -> (ref $HamtNode)
+;;   $hamt_pop     : (ref $HamtNode), (ref eq) -> (ref null eq), (ref $HamtNode)
+;;   $hamt_merge   : (ref $HamtNode), (ref $HamtNode) -> (ref $HamtNode)
+;;   $hamt_size    : (ref $HamtNode) -> i32
 ;;                   Merge src into dest. Src entries win on key conflict.
 ;;                   Single-traversal get+delete. Returns (value, rest).
 ;;                   Value is null if key absent; rest is unchanged in that case.
 
 (module
 
-  ;; Continuation dispatch: $std/list.wat:apply_0/1/2 (defined in list.wat) wrap results
-  ;; into lists and tail-call $_apply (defined in dispatch.wat).
+  ;; Func imports
+  (import "std/hashing.wat"  "hash_i31"
+    (func $hash_i31 (param $key (ref eq)) (result i32)))
+  (import "rt/protocols.wat" "deep_eq"
+    (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)))
+  (import "std/list.wat"     "apply_0"
+    (func $list_apply_0 (param $cont (ref null any))))
+  (import "std/list.wat"     "apply_1"
+    (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
+  (import "std/list.wat"     "apply_2_vals"
+    (func $list_apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
+
+
+  ;; -- $Rec / $Dict public types --------------------------------------------
+
+  (type $Rec  (@pub) (sub (struct)))
+  (type $Dict (@pub) (sub (struct)))
+
 
   ;; -- Type definitions -----------------------------------------------
 
   ;; Internal HAMT types. These are implementation details — user code
-  ;; sees $Rec / $Dict (from types.wat) via the wrapper types below.
+  ;; sees $Rec / $Dict via the wrapper types below.
   ;; Children array uses structref as the common base for leaves, nodes,
   ;; and collision nodes.
 
+  ;; TODO: HAMT types are leaking via _str_fmt_rec in str.wat. Move
+  ;; record formatting into dict.wat (with public iterator API) so the
+  ;; HAMT internals stay hidden. (@pub) here is a temporary measure.
+
   ;; $HamtLeaf — key-value pair.
   ;; Key and val are (ref eq) — non-nullable.
-  (type $HamtLeaf (struct
+  (type $HamtLeaf (@pub) (struct
     (field $key (ref eq))
     (field $val (ref eq))
   ))
 
   ;; $HamtChildren — dense array of struct refs (leaves, nodes, or collisions).
-  (type $HamtChildren (array (mut (ref null struct))))
+  (type $HamtChildren (@pub) (array (mut (ref null struct))))
 
   (rec
     ;; $HamtNode — bitmap + dense children array.
     ;; bitmap bit i is set iff hash fragment i is occupied.
     ;; children array length = popcount(bitmap).
-    (type $HamtNode (struct
+    (type $HamtNode (@pub) (struct
       (field $bitmap (mut i32))
       (field $children (ref $HamtChildren))
     ))
 
     ;; $HamtCollision — flat array of leaves that share the same hash.
     ;; Used at max trie depth when multiple keys hash identically.
-    (type $HamtCollision (struct
+    (type $HamtCollision (@pub) (struct
       (field $col_hash i32)
       (field $col_leaves (ref $HamtChildren))
     ))
@@ -85,13 +105,14 @@
     ;; Single-field wrappers that participate in the canonical type hierarchy.
     ;; Casting happens only at the runtime API boundary.
 
-    ;; $RecImpl — wraps $HamtNode as a $Rec (from types.wat).
-    (type $RecImpl (sub $Rec (struct
+    ;; TODO: $RecImpl and $DictImpl are leaking out via public APIs
+    ;; (modules.wat needs them). Hide behind $Rec/$Dict in signatures
+    ;; and downcast internally; then drop the (@pub) here.
+    (type $RecImpl (@pub) (sub $Rec (struct
       (field $hamt (ref $HamtNode))
     )))
 
-    ;; $DictImpl — wraps $HamtNode as a $Dict (from types.wat).
-    (type $DictImpl (sub $Dict (struct
+    (type $DictImpl (@pub) (sub $Dict (struct
       (field $hamt (ref $HamtNode))
     )))
   )
@@ -110,7 +131,7 @@
 
   ;; hash_fragment — extract 5-bit fragment at given depth (0-6)
   ;; fragment = (hash >> (depth * 5)) & 0x1f
-  (func $std/dict.wat:_hamt_hash_fragment (param $hash i32) (param $depth i32) (result i32)
+  (func $_hamt_hash_fragment (param $hash i32) (param $depth i32) (result i32)
     local.get $hash
     local.get $depth
     i32.const 5
@@ -123,7 +144,7 @@
   ;; bit_index — index into the dense children array for a given
   ;; bitmap and hash fragment.
   ;; = popcount(bitmap & ((1 << fragment) - 1))
-  (func $std/dict.wat:_hamt_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
+  (func $_hamt_bit_index (param $bitmap i32) (param $fragment i32) (result i32)
     local.get $bitmap
     i32.const 1
     local.get $fragment
@@ -139,7 +160,7 @@
 
   ;; Scan a collision node's leaves for a key. Returns the index,
   ;; or -1 if not found.
-  (func $std/dict.wat:_hamt_collision_find
+  (func $_hamt_collision_find
     (param $leaves (ref $HamtChildren))
     (param $key (ref eq))
     (result i32)
@@ -152,7 +173,7 @@
       (loop $scan
         (br_if $not_found
           (i32.ge_u (local.get $i) (local.get $len)))
-        (if (call $rt/protocols.wat:deep_eq
+        (if (call $deep_eq
               (struct.get $HamtLeaf $key
                 (ref.cast (ref $HamtLeaf)
                   (array.get $HamtChildren
@@ -169,22 +190,22 @@
   ;; -- Empty node -----------------------------------------------------
 
   ;; The canonical empty node — bitmap 0, zero-length children array.
-  (global $std/dict.wat:empty_node (ref $HamtNode)
+  (global $empty_node (ref $HamtNode)
     (struct.new $HamtNode
       (i32.const 0)
       (array.new_fixed $HamtChildren 0)
     )
   )
 
-  (func $std/dict.wat:hamt_empty (result (ref $HamtNode))
-    global.get $std/dict.wat:empty_node
+  (func $hamt_empty (result (ref $HamtNode))
+    global.get $empty_node
   )
 
 
   ;; -- Get ------------------------------------------------------------
 
   ;; Look up a key. Returns null if not found.
-  (func $std/dict.wat:hamt_get
+  (func $hamt_get
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref null eq))
@@ -199,14 +220,14 @@
     (local $col_idx i32)
 
     ;; compute hash once
-    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
+    (local.set $h (call $hash_i31(local.get $key)))
     (local.set $depth (i32.const 0))
 
     (block $not_found
       (loop $descend
         ;; extract fragment for this depth
         (local.set $fragment
-          (call $std/dict.wat:_hamt_hash_fragment (local.get $h) (local.get $depth)))
+          (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
 
         ;; check bitmap
         (local.set $bitmap
@@ -220,7 +241,7 @@
 
         ;; index into dense array
         (local.set $idx
-          (call $std/dict.wat:_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
+          (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
 
         ;; get child
         (local.set $child
@@ -231,7 +252,7 @@
         ;; if child is a leaf, check key equality
         (if (ref.test (ref $HamtLeaf) (local.get $child))
           (then
-            (if (call $rt/protocols.wat:deep_eq
+            (if (call $deep_eq
                   (struct.get $HamtLeaf $key
                     (ref.cast (ref $HamtLeaf) (local.get $child)))
                   (local.get $key))
@@ -246,7 +267,7 @@
         (if (ref.test (ref $HamtCollision) (local.get $child))
           (then
             (local.set $col_idx
-              (call $std/dict.wat:_hamt_collision_find
+              (call $_hamt_collision_find
                 (struct.get $HamtCollision $col_leaves
                   (ref.cast (ref $HamtCollision) (local.get $child)))
                 (local.get $key)))
@@ -279,7 +300,7 @@
 
   ;; Insert or update a key-value pair. Returns a new node (structural
   ;; sharing with the original for unchanged subtrees).
-  (func $std/dict.wat:hamt_set
+  (func $hamt_set
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $val (ref eq))
@@ -287,8 +308,8 @@
 
     (local $h i32)
 
-    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
-    (call $std/dict.wat:_hamt_set_inner
+    (local.set $h (call $hash_i31(local.get $key)))
+    (call $_hamt_set_inner
       (local.get $current)
       (local.get $key)
       (local.get $val)
@@ -296,7 +317,7 @@
       (i32.const 0))
   )
 
-  (func $std/dict.wat:_hamt_set_inner
+  (func $_hamt_set_inner
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $val (ref eq))
@@ -319,13 +340,13 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $std/dict.wat:_hamt_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
       (struct.get $HamtNode $bitmap (local.get $current)))
     (local.set $idx
-      (call $std/dict.wat:_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $old_children
       (struct.get $HamtNode $children (local.get $current)))
     (local.set $old_len
@@ -399,7 +420,7 @@
           (struct.get $HamtCollision $col_leaves
             (ref.cast (ref $HamtCollision) (local.get $child))))
         (local.set $col_idx
-          (call $std/dict.wat:_hamt_collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_hamt_collision_find (local.get $col_leaves) (local.get $key)))
 
         (if (i32.ge_s (local.get $col_idx) (i32.const 0))
           (then
@@ -473,7 +494,7 @@
     (if (ref.test (ref $HamtLeaf) (local.get $child))
       (then
         ;; same key — replace value
-        (if (call $rt/protocols.wat:deep_eq
+        (if (call $deep_eq
               (struct.get $HamtLeaf $key
                 (ref.cast (ref $HamtLeaf) (local.get $child)))
               (local.get $key))
@@ -535,14 +556,14 @@
                 (array.set $HamtChildren
                   (local.get $new_children)
                   (local.get $idx)
-                  (call $std/dict.wat:_hamt_set_inner
-                    (call $std/dict.wat:_hamt_set_inner
-                      (call $std/dict.wat:hamt_empty)
+                  (call $_hamt_set_inner
+                    (call $_hamt_set_inner
+                      (call $hamt_empty)
                       (struct.get $HamtLeaf $key
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
                       (struct.get $HamtLeaf $val
                         (ref.cast (ref $HamtLeaf) (local.get $child)))
-                      (call $std/hashing.wat:hash_i31
+                      (call $hash_i31
                         (struct.get $HamtLeaf $key
                           (ref.cast (ref $HamtLeaf) (local.get $child))))
                       (i32.add (local.get $depth) (i32.const 1)))
@@ -567,7 +588,7 @@
     (array.set $HamtChildren
       (local.get $new_children)
       (local.get $idx)
-      (call $std/dict.wat:_hamt_set_inner
+      (call $_hamt_set_inner
         (ref.cast (ref $HamtNode) (local.get $child))
         (local.get $key)
         (local.get $val)
@@ -583,21 +604,21 @@
 
   ;; Remove a key. Returns a new node (structural sharing).
   ;; If the key is not present, returns the original node unchanged.
-  (func $std/dict.wat:hamt_delete
+  (func $hamt_delete
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
-    (call $std/dict.wat:_hamt_delete_inner
+    (local.set $h (call $hash_i31(local.get $key)))
+    (call $_hamt_delete_inner
       (local.get $current)
       (local.get $key)
       (local.get $h)
       (i32.const 0))
   )
 
-  (func $std/dict.wat:_hamt_delete_inner
+  (func $_hamt_delete_inner
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $h i32)
@@ -620,7 +641,7 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $std/dict.wat:_hamt_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -635,7 +656,7 @@
       (then (return (local.get $current))))
 
     (local.set $idx
-      (call $std/dict.wat:_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $HamtChildren
         (local.get $old_children)
@@ -650,7 +671,7 @@
         (local.set $col_len
           (array.len (local.get $col_leaves)))
         (local.set $col_idx
-          (call $std/dict.wat:_hamt_collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_hamt_collision_find (local.get $col_leaves) (local.get $key)))
 
         ;; key not in collision — unchanged
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
@@ -756,7 +777,7 @@
       (then
         ;; key mismatch — return unchanged
         (if (i32.eqz
-              (call $rt/protocols.wat:deep_eq
+              (call $deep_eq
                 (struct.get $HamtLeaf $key
                   (ref.cast (ref $HamtLeaf) (local.get $child)))
                 (local.get $key)))
@@ -766,7 +787,7 @@
         (if (i32.eq (local.get $old_len) (i32.const 1))
           (then
             ;; last entry — return empty node
-            (return (call $std/dict.wat:hamt_empty))))
+            (return (call $hamt_empty))))
 
         ;; create new array with one fewer slot
         (local.set $new_children
@@ -818,7 +839,7 @@
 
     ;; child is a sub-node — recurse
     (local.set $sub_result
-      (call $std/dict.wat:_hamt_delete_inner
+      (call $_hamt_delete_inner
         (ref.cast (ref $HamtNode) (local.get $child))
         (local.get $key)
         (local.get $h)
@@ -855,21 +876,21 @@
   ;;
   ;; Returns (value, rest_node) via multi-value.
   ;; If key is absent, returns (null, original_node).
-  (func $std/dict.wat:hamt_pop
+  (func $hamt_pop
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (result (ref null eq) (ref $HamtNode))
 
     (local $h i32)
-    (local.set $h (call $std/hashing.wat:hash_i31(local.get $key)))
-    (call $std/dict.wat:_hamt_pop_inner
+    (local.set $h (call $hash_i31(local.get $key)))
+    (call $_hamt_pop_inner
       (local.get $current)
       (local.get $key)
       (local.get $h)
       (i32.const 0))
   )
 
-  (func $std/dict.wat:_hamt_pop_inner
+  (func $_hamt_pop_inner
     (param $current (ref $HamtNode))
     (param $key (ref eq))
     (param $h i32)
@@ -893,7 +914,7 @@
     (local $new_col_leaves (ref $HamtChildren))
 
     (local.set $fragment
-      (call $std/dict.wat:_hamt_hash_fragment (local.get $h) (local.get $depth)))
+      (call $_hamt_hash_fragment (local.get $h) (local.get $depth)))
     (local.set $bit
       (i32.shl (i32.const 1) (local.get $fragment)))
     (local.set $bitmap
@@ -909,7 +930,7 @@
         (return (ref.null eq) (local.get $current))))
 
     (local.set $idx
-      (call $std/dict.wat:_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
+      (call $_hamt_bit_index (local.get $bitmap) (local.get $fragment)))
     (local.set $child
       (array.get $HamtChildren
         (local.get $old_children)
@@ -924,7 +945,7 @@
         (local.set $col_len
           (array.len (local.get $col_leaves)))
         (local.set $col_idx
-          (call $std/dict.wat:_hamt_collision_find (local.get $col_leaves) (local.get $key)))
+          (call $_hamt_collision_find (local.get $col_leaves) (local.get $key)))
 
         ;; not found in collision
         (if (i32.lt_s (local.get $col_idx) (i32.const 0))
@@ -1035,7 +1056,7 @@
       (then
         ;; key mismatch — absent
         (if (i32.eqz
-              (call $rt/protocols.wat:deep_eq
+              (call $deep_eq
                 (struct.get $HamtLeaf $key
                   (ref.cast (ref $HamtLeaf) (local.get $child)))
                 (local.get $key)))
@@ -1050,7 +1071,7 @@
             (return
               (struct.get $HamtLeaf $val
                 (ref.cast (ref $HamtLeaf) (local.get $child)))
-              (call $std/dict.wat:hamt_empty))))
+              (call $hamt_empty))))
 
         ;; create new array with one fewer slot
         (local.set $new_children
@@ -1101,7 +1122,7 @@
             (local.get $new_children)))))
 
     ;; child is a sub-node — recurse
-    (call $std/dict.wat:_hamt_pop_inner
+    (call $_hamt_pop_inner
       (ref.cast (ref $HamtNode) (local.get $child))
       (local.get $key)
       (local.get $h)
@@ -1143,16 +1164,16 @@
   ;;   {..dest, ..src}  →  hamt_merge(dest, src)
   ;;
   ;; Walks src's tree and calls hamt_set for each leaf found.
-  (func $std/dict.wat:hamt_merge
+  (func $hamt_merge
     (param $dest (ref $HamtNode))
     (param $src (ref $HamtNode))
     (result (ref $HamtNode))
 
-    (call $std/dict.wat:_hamt_merge_node (local.get $dest) (local.get $src))
+    (call $_hamt_merge_node (local.get $dest) (local.get $src))
   )
 
   ;; Walk a source node, inserting each leaf into dest.
-  (func $std/dict.wat:_hamt_merge_node
+  (func $_hamt_merge_node
     (param $dest (ref $HamtNode))
     (param $src (ref $HamtNode))
     (result (ref $HamtNode))
@@ -1186,7 +1207,7 @@
         (if (ref.test (ref $HamtLeaf) (local.get $child))
           (then
             (local.set $dest
-              (call $std/dict.wat:hamt_set
+              (call $hamt_set
                 (local.get $dest)
                 (struct.get $HamtLeaf $key
                   (ref.cast (ref $HamtLeaf) (local.get $child)))
@@ -1197,7 +1218,7 @@
         (if (ref.test (ref $HamtNode) (local.get $child))
           (then
             (local.set $dest
-              (call $std/dict.wat:_hamt_merge_node
+              (call $_hamt_merge_node
                 (local.get $dest)
                 (ref.cast (ref $HamtNode) (local.get $child))))))
 
@@ -1205,7 +1226,7 @@
         (if (ref.test (ref $HamtCollision) (local.get $child))
           (then
             (local.set $dest
-              (call $std/dict.wat:_hamt_merge_collision
+              (call $_hamt_merge_collision
                 (local.get $dest)
                 (struct.get $HamtCollision $col_leaves
                   (ref.cast (ref $HamtCollision) (local.get $child)))))))
@@ -1217,7 +1238,7 @@
   )
 
   ;; Insert all leaves from a collision node's array into dest.
-  (func $std/dict.wat:_hamt_merge_collision
+  (func $_hamt_merge_collision
     (param $dest (ref $HamtNode))
     (param $leaves (ref $HamtChildren))
     (result (ref $HamtNode))
@@ -1232,7 +1253,7 @@
         (br_if $done
           (i32.ge_u (local.get $i) (local.get $len)))
         (local.set $dest
-          (call $std/dict.wat:hamt_set
+          (call $hamt_set
             (local.get $dest)
             (struct.get $HamtLeaf $key
               (ref.cast (ref $HamtLeaf)
@@ -1255,14 +1276,14 @@
 
   ;; Count the number of key-value entries in the HAMT.
   ;; Walks the tree, counting leaves and collision entries.
-  (func $std/dict.wat:hamt_size
+  (func $hamt_size
     (param $node (ref $HamtNode))
     (result i32)
 
-    (call $std/dict.wat:_hamt_size_node (local.get $node))
+    (call $_hamt_size_node (local.get $node))
   )
 
-  (func $std/dict.wat:_hamt_size_node
+  (func $_hamt_size_node
     (param $node (ref $HamtNode))
     (result i32)
 
@@ -1300,7 +1321,7 @@
           (then
             (local.set $count
               (i32.add (local.get $count)
-                (call $std/dict.wat:_hamt_size_node
+                (call $_hamt_size_node
                   (ref.cast (ref $HamtNode) (local.get $child)))))))
 
         ;; collision — count its leaves
@@ -1322,132 +1343,132 @@
   ;; -- Record: direct-style API ------------------------------------------
   ;; Typed functions for internal/runtime use. Keys/values are (ref eq).
 
-  (func $std/dict.wat:_rec_new (export "std/rec.fnk:new") (result (ref $RecImpl))
-    (struct.new $RecImpl (global.get $std/dict.wat:empty_node))
+  (func $_rec_new (@impl "std/rec.fnk:new") (result (ref $RecImpl))
+    (struct.new $RecImpl (global.get $empty_node))
   )
 
-  (func $std/dict.wat:get (export "std/dict.wat:get")
+  (func $get (@pub)
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref null eq))
-    (call $std/dict.wat:hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
+    (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
   )
 
-  (func $std/dict.wat:op_in (export "std/dict.wat:op_in")
+  (func $op_in (@impl "std/operators.fnk:op_in" _ $Rec)
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result i32)
     (ref.is_null
-      (call $std/dict.wat:hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key)))
+      (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key)))
     (i32.const 1)
     (i32.xor)
   )
 
-  (func $std/dict.wat:op_not_in (export "std/dict.wat:op_not_in")
+  (func $op_not_in (@impl "std/operators.fnk:op_notin" _ $Rec)
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result i32)
-    (i32.eqz (call $std/dict.wat:op_in (local.get $rec) (local.get $key)))
+    (i32.eqz (call $op_in (local.get $rec) (local.get $key)))
   )
 
-  (func $std/dict.wat:_rec_set
+  (func $_rec_set
     (param $rec (ref $RecImpl)) (param $key (ref eq)) (param $val (ref eq))
     (result (ref $RecImpl))
     (struct.new $RecImpl
-      (call $std/dict.wat:hamt_set (struct.get $RecImpl $hamt (local.get $rec))
+      (call $hamt_set (struct.get $RecImpl $hamt (local.get $rec))
         (local.get $key) (local.get $val)))
   )
 
-  (func $std/dict.wat:delete (export "std/dict.wat:delete")
+  (func $delete (@pub)
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref $RecImpl))
     (struct.new $RecImpl
-      (call $std/dict.wat:hamt_delete (struct.get $RecImpl $hamt (local.get $rec))
+      (call $hamt_delete (struct.get $RecImpl $hamt (local.get $rec))
         (local.get $key)))
   )
 
-  (func $std/dict.wat:_rec_pop
+  (func $_rec_pop
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result (ref null eq) (ref $RecImpl))
     (local $val (ref null eq))
     (local $rest (ref $HamtNode))
-    (call $std/dict.wat:hamt_pop (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
+    (call $hamt_pop (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
     (local.set $rest)
     (local.set $val)
     (local.get $val)
     (struct.new $RecImpl (local.get $rest))
   )
 
-  (func $std/dict.wat:_rec_merge
+  (func $_rec_merge
     (param $dest (ref $RecImpl)) (param $src (ref $RecImpl))
     (result (ref $RecImpl))
     (struct.new $RecImpl
-      (call $std/dict.wat:hamt_merge
+      (call $hamt_merge
         (struct.get $RecImpl $hamt (local.get $dest))
         (struct.get $RecImpl $hamt (local.get $src))))
   )
 
-  (func $std/dict.wat:size (export "std/dict.wat:size")
+  (func $size (@pub)
     (param $rec (ref $RecImpl)) (result i32)
-    (call $std/dict.wat:hamt_size (struct.get $RecImpl $hamt (local.get $rec)))
+    (call $hamt_size (struct.get $RecImpl $hamt (local.get $rec)))
   )
 
   ;; Predicate: is this record empty?
-  (func $std/dict.wat:op_empty (export "std/dict.wat:op_empty")
+  (func $op_empty (@impl "std/operators.fnk:op_empty" $Rec)
     (param $val (ref null any)) (result i32)
-    (i32.eqz (call $std/dict.wat:size (ref.cast (ref $RecImpl) (local.get $val))))
+    (i32.eqz (call $size (ref.cast (ref $RecImpl) (local.get $val))))
   )
 
   ;; -- Dict wrappers (user-visible API) ----------------------------------
   ;; Same as record wrappers but for $DictImpl ↔ $HamtNode.
 
-  (func $std/dict.wat:dict_empty (export "std/dict.wat:dict_empty") (result (ref $DictImpl))
-    (struct.new $DictImpl (global.get $std/dict.wat:empty_node))
+  (func $dict_empty (@pub) (result (ref $DictImpl))
+    (struct.new $DictImpl (global.get $empty_node))
   )
 
-  (func $std/dict.wat:dict_get (export "std/dict.wat:dict_get")
+  (func $dict_get (@pub)
     (param $dict (ref $DictImpl)) (param $key (ref eq))
     (result (ref null eq))
-    (call $std/dict.wat:hamt_get (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
+    (call $hamt_get (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
   )
 
-  (func $std/dict.wat:dict_set (export "std/dict.wat:dict_set")
+  (func $dict_set (@pub)
     (param $dict (ref $DictImpl)) (param $key (ref eq)) (param $val (ref eq))
     (result (ref $DictImpl))
     (struct.new $DictImpl
-      (call $std/dict.wat:hamt_set (struct.get $DictImpl $hamt (local.get $dict))
+      (call $hamt_set (struct.get $DictImpl $hamt (local.get $dict))
         (local.get $key) (local.get $val)))
   )
 
-  (func $std/dict.wat:dict_delete (export "std/dict.wat:dict_delete")
+  (func $dict_delete (@pub)
     (param $dict (ref $DictImpl)) (param $key (ref eq))
     (result (ref $DictImpl))
     (struct.new $DictImpl
-      (call $std/dict.wat:hamt_delete (struct.get $DictImpl $hamt (local.get $dict))
+      (call $hamt_delete (struct.get $DictImpl $hamt (local.get $dict))
         (local.get $key)))
   )
 
-  (func $std/dict.wat:dict_pop (export "std/dict.wat:dict_pop")
+  (func $dict_pop (@pub)
     (param $dict (ref $DictImpl)) (param $key (ref eq))
     (result (ref null eq) (ref $DictImpl))
     (local $val (ref null eq))
     (local $rest (ref $HamtNode))
-    (call $std/dict.wat:hamt_pop (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
+    (call $hamt_pop (struct.get $DictImpl $hamt (local.get $dict)) (local.get $key))
     (local.set $rest)
     (local.set $val)
     (local.get $val)
     (struct.new $DictImpl (local.get $rest))
   )
 
-  (func $std/dict.wat:dict_merge (export "std/dict.wat:dict_merge")
+  (func $dict_merge (@pub)
     (param $dest (ref $DictImpl)) (param $src (ref $DictImpl))
     (result (ref $DictImpl))
     (struct.new $DictImpl
-      (call $std/dict.wat:hamt_merge
+      (call $hamt_merge
         (struct.get $DictImpl $hamt (local.get $dest))
         (struct.get $DictImpl $hamt (local.get $src))))
   )
 
-  (func $std/dict.wat:dict_size (export "std/dict.wat:dict_size")
+  (func $dict_size (@pub)
     (param $dict (ref $DictImpl)) (result i32)
-    (call $std/dict.wat:hamt_size (struct.get $DictImpl $hamt (local.get $dict)))
+    (call $hamt_size (struct.get $DictImpl $hamt (local.get $dict)))
   )
 
 
@@ -1462,56 +1483,56 @@
   ;; Direct-style rec field setter — used by the emitter for module import rec construction.
   ;; Takes (rec, key, val) as (ref null any) and returns (ref null any).
   ;; Avoids CPS overhead for compile-time-known field sets.
-  (func $std/rec.fnk:put_field (export "std/rec.fnk:_set_field")
+  (func $_set_field (@impl "std/rec.fnk:_set_field")
     (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any))
     (result (ref null any))
-    (call $std/dict.wat:_rec_set
+    (call $_rec_set
       (ref.cast (ref $RecImpl) (local.get $rec))
       (ref.cast (ref eq) (local.get $key))
       (ref.cast (ref eq) (local.get $val))))
 
-  (func $std/rec.fnk:put (export "std/rec.fnk:put")
+  (func $rec_put (@pub) (@impl "std/rec.fnk:put")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $val (ref null any)) (param $cont (ref null any))
-    (return_call $std/list.wat:apply_1
-      (call $std/dict.wat:_rec_set
+    (return_call $list_apply_1
+      (call $_rec_set
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key))
         (ref.cast (ref eq) (local.get $val)))
       (local.get $cont)))
 
-  (func $std/rec.fnk:merge (export "std/rec.fnk:merge")
+  (func $rec_merge (@pub) (@impl "std/rec.fnk:merge")
     (param $dest (ref null any)) (param $src (ref null any))
     (param $cont (ref null any))
-    (return_call $std/list.wat:apply_1
-      (call $std/dict.wat:_rec_merge
+    (return_call $list_apply_1
+      (call $_rec_merge
         (ref.cast (ref $RecImpl) (local.get $dest))
         (ref.cast (ref $RecImpl) (local.get $src)))
       (local.get $cont)))
 
-  (func $std/rec.fnk:pop (export "std/rec.fnk:pop")
+  (func $rec_pop (@pub) (@impl "std/rec.fnk:pop")
     (param $rec (ref null any)) (param $key (ref null any))
     (param $fail (ref null any)) (param $succ (ref null any))
     (local $val (ref null eq))
     (local $rest (ref $RecImpl))
-    (call $std/dict.wat:_rec_pop
+    (call $_rec_pop
       (ref.cast (ref $RecImpl) (local.get $rec))
       (ref.cast (ref eq) (local.get $key)))
     (local.set $rest)
     (local.set $val)
     ;; null value = key not found → call fail
     (if (ref.is_null (local.get $val))
-      (then (return_call $std/list.wat:apply_0 (local.get $fail))))
+      (then (return_call $list_apply_0 (local.get $fail))))
     ;; found → pass (value, rest) to succ
-    (return_call $std/list.wat:apply_2_vals
+    (return_call $list_apply_2_vals
       (local.get $val)
       (local.get $rest)
       (local.get $succ)))
 
-  (func $std/dict.wat:op_dot (export "std/dict.wat:op_dot")
+  (func $op_dot (@impl "std/operators.fnk:op_dot" $Rec _)
     (param $rec (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
-    (return_call $std/list.wat:apply_1
-      (call $std/dict.wat:get
+    (return_call $list_apply_1
+      (call $get
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key)))
       (local.get $cont)))

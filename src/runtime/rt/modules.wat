@@ -34,18 +34,51 @@
 
 (module
 
+  ;; Type imports
+  (import "std/dict.wat"  "DictImpl" (type $DictImpl (sub any)))
+  (import "std/dict.wat"  "RecImpl"  (type $RecImpl  (sub any)))
+  (import "std/list.wat"  "List"     (type $List     (sub any)))
+  (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
+  (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
+  (import "rt/apply.wat"  "Fn2"      (type $Fn2      (sub any)))
+
+  ;; Func imports
+  (import "rt/apply.wat"  "apply"
+    (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
+  (import "std/dict.wat"  "dict_empty"
+    (func $dict_empty (result (ref $DictImpl))))
+  (import "std/dict.wat"  "dict_get"
+    (func $dict_get (param $dict (ref $DictImpl)) (param $key (ref eq)) (result (ref null eq))))
+  (import "std/dict.wat"  "dict_set"
+    (func $dict_set (param $dict (ref $DictImpl)) (param $key (ref eq)) (param $val (ref eq)) (result (ref $DictImpl))))
+  (import "std/dict.wat"  "_rec_new"
+    (func $rec_new (result (ref $RecImpl))))
+  (import "std/dict.wat"  "get"
+    (func $rec_get (param $rec (ref $RecImpl)) (param $key (ref eq)) (result (ref null eq))))
+  (import "std/dict.wat"  "_set_field"
+    (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
+  (import "std/list.wat"  "head_any"
+    (func $list_head_any (param $list (ref null any)) (result (ref null any))))
+  (import "std/list.wat"  "apply_1"
+    (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
+  (import "std/list.wat"  "empty"
+    (func $list_empty (result (ref $List))))
+  (import "std/list.wat"  "prepend"
+    (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+
+
   ;; -- Registry -------------------------------------------------------
 
   ;; The URL→rec map. Lazy-initialised on first `init` call.
   ;; Stored as $DictImpl so we can call dict_get/dict_set directly.
-  (global $std/modules.fnk:registry (mut (ref null $DictImpl)) (ref.null $DictImpl))
+  (global $registry (mut (ref null $DictImpl)) (ref.null $DictImpl))
 
   ;; -- init -----------------------------------------------------------
   ;;
   ;; Direct call. Returns 1 if this is the first call for `mod_url`
   ;; (and creates an empty rec at registry[mod_url]); returns 0 if the
   ;; module was already in the registry.
-  (func $std/modules.fnk:init (export "std/modules.fnk:init")
+  (func $init (@pub) (@impl "std/modules.fnk:init")
     (param $mod_url (ref null any))
     (result i32)
 
@@ -54,16 +87,16 @@
     (local $existing (ref null eq))
 
     ;; Lazy-init the registry on first call.
-    (if (ref.is_null (global.get $std/modules.fnk:registry))
+    (if (ref.is_null (global.get $registry))
       (then
-        (global.set $std/modules.fnk:registry
-          (call $std/dict.wat:dict_empty))))
+        (global.set $registry
+          (call $dict_empty))))
 
-    (local.set $reg (ref.as_non_null (global.get $std/modules.fnk:registry)))
+    (local.set $reg (ref.as_non_null (global.get $registry)))
     (local.set $key (ref.cast (ref eq) (local.get $mod_url)))
 
     (local.set $existing
-      (call $std/dict.wat:dict_get (local.get $reg) (local.get $key)))
+      (call $dict_get (local.get $reg) (local.get $key)))
 
     (if (i32.eqz (ref.is_null (local.get $existing)))
       (then
@@ -71,11 +104,11 @@
         (return (i32.const 0))))
 
     ;; First call — create empty rec and register it.
-    (global.set $std/modules.fnk:registry
-      (call $std/dict.wat:dict_set
+    (global.set $registry
+      (call $dict_set
         (local.get $reg)
         (local.get $key)
-        (call $std/dict.wat:_rec_new)))
+        (call $rec_new)))
     (i32.const 1))
 
 
@@ -89,7 +122,7 @@
   ;; exists. This makes single-fragment compiles (entry never called
   ;; via `import`) safe: their body's `pub` calls auto-create the
   ;; registry slot on first hit.
-  (func $std/modules.fnk:pub (export "std/modules.fnk:pub")
+  (func $pub (@pub) (@impl "std/modules.fnk:pub")
     (param $mod_url (ref null any))
     (param $name    (ref null any))
     (param $val     (ref null any))
@@ -100,27 +133,27 @@
     (local $new_rec (ref $RecImpl))
 
     ;; Ensure registry[mod_url] exists (init is a no-op if already there).
-    (drop (call $std/modules.fnk:init (local.get $mod_url)))
+    (drop (call $init (local.get $mod_url)))
 
-    (local.set $reg (ref.as_non_null (global.get $std/modules.fnk:registry)))
+    (local.set $reg (ref.as_non_null (global.get $registry)))
     (local.set $key (ref.cast (ref eq) (local.get $mod_url)))
 
     (local.set $rec
       (ref.cast (ref $RecImpl)
         (ref.as_non_null
-          (call $std/dict.wat:dict_get (local.get $reg) (local.get $key)))))
+          (call $dict_get (local.get $reg) (local.get $key)))))
 
     ;; new_rec = rec_set(rec, name, val) — _set_field is the direct
     ;; (non-CPS) shape that returns the updated rec.
     (local.set $new_rec
       (ref.cast (ref $RecImpl)
-        (call $std/rec.fnk:put_field
+        (call $put_field
           (local.get $rec)
           (local.get $name)
           (local.get $val))))
 
-    (global.set $std/modules.fnk:registry
-      (call $std/dict.wat:dict_set
+    (global.set $registry
+      (call $dict_set
         (local.get $reg)
         (local.get $key)
         (local.get $new_rec))))
@@ -133,7 +166,7 @@
   ;; call_ref the producer's import_module funcref with that as its
   ;; done arg. When import_module finishes, it fires wrap_cont, which
   ;; reads the now-populated rec and tail-applies user cont.
-  (func $std/modules.fnk:import (export "std/modules.fnk:import")
+  (func $import (@pub) (@impl "std/modules.fnk:import")
     (param $url     (ref null any))
     (param $mod_ref (ref null any))
     (param $cont    (ref null any))
@@ -144,19 +177,19 @@
     (local $caps (ref $Captures))
     (local $wrap_clos (ref $Closure))
 
-    (local.set $reg (global.get $std/modules.fnk:registry))
+    (local.set $reg (global.get $registry))
     (local.set $key (ref.cast (ref eq) (local.get $url)))
 
     ;; Already inited? Tail-apply cont with the cached rec.
     (if (i32.eqz (ref.is_null (local.get $reg)))
       (then
         (local.set $existing
-          (call $std/dict.wat:dict_get
+          (call $dict_get
             (ref.as_non_null (local.get $reg))
             (local.get $key)))
         (if (i32.eqz (ref.is_null (local.get $existing)))
           (then
-            (return_call $std/list.wat:apply_1
+            (return_call $list_apply_1
               (local.get $existing)
               (local.get $cont))))))
 
@@ -168,7 +201,7 @@
     ;; init here (rather than wrapping it around every producer body
     ;; in lowering) keeps the producer body dumb — it's a regular
     ;; CPS fn that doesn't know about the registry.
-    (drop (call $std/modules.fnk:init (local.get $url)))
+    (drop (call $init (local.get $url)))
 
     ;; Synthesise wrap_cont, capturing (url, cont) so it can read
     ;; registry[url] after the producer finishes and continue with cont.
@@ -177,42 +210,45 @@
 
     (local.set $wrap_clos
       (struct.new $Closure
-        (ref.func $std/modules.fnk:_import_wrap_step)
+        (ref.func $_import_wrap_step)
         (local.get $caps)))
 
     ;; Standard apply path: args = Cons(wrap_clos, Nil), callee = mod_ref.
     ;; The caller wrapped the module's `import_module` funcref in a
     ;; no-capture $Closure at the lowering site, so mod_ref is already
     ;; anyref-compatible and dispatches through _apply normally.
-    (return_call $rt/apply.wat:apply
-      (struct.new $Cons (local.get $wrap_clos) (struct.new $Nil))
+    (return_call $_apply
+      (call $list_prepend (local.get $wrap_clos) (call $list_empty))
       (local.get $mod_ref)))
 
 
   ;; Internal: like `std/list.wat:apply_2_vals` but allows null
   ;; values. Substitutes `$Nil` for null since `$Cons.head` is
   ;; `(ref any)` (non-null).
-  (func $std/modules.fnk:_apply_2_nullable
+  (func $_apply_2_nullable
     (param $a (ref null any))
     (param $b (ref null any))
     (param $cont (ref null any))
 
-    (return_call $rt/apply.wat:apply
-      (struct.new $Cons
-        (call $std/modules.fnk:_or_nil (local.get $a))
-        (struct.new $Cons
-          (call $std/modules.fnk:_or_nil (local.get $b))
-          (struct.new $Nil)))
+    (return_call $_apply
+      (call $list_prepend
+        (call $_or_nil (local.get $a))
+        (call $list_prepend
+          (call $_or_nil (local.get $b))
+          (call $list_empty)))
       (local.get $cont)))
 
-  ;; If `v` is null, returns a fresh `$Nil` (a non-null sentinel
-  ;; usable as `(ref any)`). Otherwise returns `v` cast to non-null.
-  (func $std/modules.fnk:_or_nil
+  ;; If `v` is null, returns a sentinel non-null (an empty list as a
+  ;; placeholder). Otherwise returns `v` cast to non-null.
+  ;; TODO: this used to return `(struct.new $Nil)` — now we return an
+  ;; empty list as the "missing value" sentinel. Caller semantics
+  ;; should be reviewed; the boundary between null/Nil/empty is murky.
+  (func $_or_nil
     (param $v (ref null any))
     (result (ref any))
     (if (result (ref any))
       (ref.is_null (local.get $v))
-      (then (struct.new $Nil))
+      (then (call $list_empty))
       (else (ref.as_non_null (local.get $v)))))
 
 
@@ -232,7 +268,7 @@
   ;; The host calls a module's wrapper export (named by canonical URL).
   ;; The wrapper passes through to here. Result: a single API by which
   ;; any host can both run-a-module and fetch-an-export.
-  (func $std/modules.fnk:init_module (export "std/modules.fnk:init_module")
+  (func $init_module (@pub) (@impl "std/modules.fnk:init_module")
     (param $mod_url  (ref null any))
     (param $mod_clos (ref null any))
     (param $key      (ref null any))
@@ -246,14 +282,14 @@
     (local $caps (ref $Captures))
     (local $intermediate (ref $Closure))
 
-    (local.set $reg (global.get $std/modules.fnk:registry))
+    (local.set $reg (global.get $registry))
     (local.set $key_eq (ref.cast (ref eq) (local.get $mod_url)))
 
     ;; Already inited? Return null last_expr + lookup result.
     (if (i32.eqz (ref.is_null (local.get $reg)))
       (then
         (local.set $existing
-          (call $std/dict.wat:dict_get
+          (call $dict_get
             (ref.as_non_null (local.get $reg))
             (local.get $key_eq)))
         (if (i32.eqz (ref.is_null (local.get $existing)))
@@ -263,10 +299,10 @@
               (then (local.set $val (local.get $exports)))
               (else
                 (local.set $val
-                  (call $std/dict.wat:get
+                  (call $rec_get
                     (ref.cast (ref $RecImpl) (local.get $exports))
                     (ref.cast (ref eq) (local.get $key))))))
-            (return_call $std/modules.fnk:_apply_2_nullable
+            (return_call $_apply_2_nullable
               (ref.null any)
               (local.get $val)
               (local.get $cont))))))
@@ -274,7 +310,7 @@
     ;; Not inited — ensure registry[mod_url] exists, then invoke the
     ;; module closure with an intermediate cont that captures
     ;; (mod_url, key, cont) and packages the result.
-    (drop (call $std/modules.fnk:init (local.get $mod_url)))
+    (drop (call $init (local.get $mod_url)))
 
     (local.set $caps
       (array.new_fixed $Captures 3
@@ -284,12 +320,12 @@
 
     (local.set $intermediate
       (struct.new $Closure
-        (ref.func $std/modules.fnk:_init_module_step)
+        (ref.func $_init_module_step)
         (local.get $caps)))
 
     ;; Tail-apply the module closure with [intermediate_cont] as args.
-    (return_call $rt/apply.wat:apply
-      (struct.new $Cons (local.get $intermediate) (struct.new $Nil))
+    (return_call $_apply
+      (call $list_prepend (local.get $intermediate) (call $list_empty))
       (local.get $mod_clos)))
 
 
@@ -298,9 +334,9 @@
   ;; (mod_url, key, cont). Reads registry[mod_url] (now populated),
   ;; extracts key field if non-null, tail-applies cont with
   ;; (last_expr, val).
-  (elem declare func $std/modules.fnk:_init_module_step)
+  (elem declare func $_init_module_step)
 
-  (func $std/modules.fnk:_init_module_step (type $Fn2)
+  (func $_init_module_step (type $Fn2)
     (param $caps (ref null any))
     (param $args (ref null any))
 
@@ -319,12 +355,12 @@
 
     ;; Pull last_expr off the args list — it's the head.
     (local.set $last_expr
-      (call $std/list.wat:head_any (local.get $args)))
+      (call $list_head_any (local.get $args)))
 
     ;; Read the now-populated exports rec.
     (local.set $exports
-      (call $std/dict.wat:dict_get
-        (ref.as_non_null (global.get $std/modules.fnk:registry))
+      (call $dict_get
+        (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $mod_url))))
 
     ;; Extract key if non-null.
@@ -332,11 +368,11 @@
       (then (local.set $val (local.get $exports)))
       (else
         (local.set $val
-          (call $std/dict.wat:get
+          (call $rec_get
             (ref.cast (ref $RecImpl) (local.get $exports))
             (ref.cast (ref eq) (local.get $key))))))
 
-    (return_call $std/modules.fnk:_apply_2_nullable
+    (return_call $_apply_2_nullable
       (local.get $last_expr)
       (local.get $val)
       (local.get $user_cont)))
@@ -350,9 +386,9 @@
   ;; guaranteed populated), and tail-applies user_cont with the rec.
   ;;
   ;; Declared with `elem declare` so `ref.func` is valid.
-  (elem declare func $std/modules.fnk:_import_wrap_step)
+  (elem declare func $_import_wrap_step)
 
-  (func $std/modules.fnk:_import_wrap_step (type $Fn2)
+  (func $_import_wrap_step (type $Fn2)
     (param $caps (ref null any))
     (param $_args (ref null any))
 
@@ -366,11 +402,11 @@
     (local.set $user_cont (array.get $Captures (local.get $cap_arr) (i32.const 1)))
 
     (local.set $rec
-      (call $std/dict.wat:dict_get
-        (ref.as_non_null (global.get $std/modules.fnk:registry))
+      (call $dict_get
+        (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $url))))
 
-    (return_call $std/list.wat:apply_1
+    (return_call $list_apply_1
       (local.get $rec)
       (local.get $user_cont)))
 

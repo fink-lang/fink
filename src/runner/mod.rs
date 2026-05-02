@@ -252,7 +252,8 @@ mod tests {
     config.wasm_function_references(true);
     config.wasm_tail_call(true);
     let engine = Engine::new(&config).map_err(|e| e.to_string())?;
-    let module = Module::new(&engine, &bytes).map_err(|e| format!("{e:#}"))?;
+    let module = Module::new(&engine, &bytes)
+      .map_err(|e| crate::passes::wasm::annotate_func_indices(&format!("{e:#}"), &bytes))?;
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
 

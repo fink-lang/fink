@@ -436,7 +436,8 @@ pub fn run<R: Read, W: Write + Send + 'static>(
   config.cranelift_opt_level(wasmtime::OptLevel::None);
 
   let engine = wasmtime::Engine::new(&config).map_err(|e| e.to_string())?;
-  let module = wasmtime::Module::new(&engine, &wasm).map_err(|e| e.to_string())?;
+  let module = wasmtime::Module::new(&engine, &wasm)
+    .map_err(|e| crate::passes::wasm::annotate_func_indices(&e.to_string(), &wasm))?;
 
   // Channels between DAP server (main thread) and WASM execution thread.
   let (stopped_tx, stopped_rx) = mpsc::sync_channel::<StoppedFrame>(1);

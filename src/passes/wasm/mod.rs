@@ -22,6 +22,108 @@ pub mod lower;
 pub mod runtime_contract;
 pub mod sourcemap;
 
+/// Translate any `function[N]` substring in a wasmtime / validator error
+/// message to `function[N]: $<qualified-name>`. If the error also
+/// names a byte offset (`offset M`), append the WAT line + a small
+/// surrounding window from `wasmprinter`'s offset-annotated dump of
+/// the runtime binary, so a validation error pinpoints the source
+/// instruction without re-running tooling externally.
+///
+/// Falls back to leaving unknown indices / offsets unchanged.
+pub fn annotate_func_indices(err: &str, _wasm: &[u8]) -> String {
+  let func_names = emit::runtime_func_names();
+  if func_names.is_empty() {
+    return err.to_string();
+  }
+  // Replace each `function[N]` with `function[N]: $<name>`.
+  let mut out = String::with_capacity(err.len());
+  let mut rest = err;
+  while let Some(pos) = rest.find("function[") {
+    out.push_str(&rest[..pos + "function[".len()]);
+    let after = &rest[pos + "function[".len()..];
+    let close = match after.find(']') { Some(c) => c, None => { out.push_str(after); return out; } };
+    let num_str = &after[..close];
+    out.push_str(num_str);
+    out.push(']');
+    if let Ok(idx) = num_str.parse::<u32>()
+      && let Some(name) = func_names.get(&idx)
+    {
+      out.push_str(": $");
+      out.push_str(name);
+    }
+    rest = &after[close + 1..];
+  }
+  out.push_str(rest);
+
+  // If the error pointed at an offset, append the runtime WAT line
+  // (with a small surrounding window) corresponding to that offset.
+  if let Some(off) = parse_offset(&out) {
+    if let Some(snippet) = wat_window_at_offset(off) {
+      out.push_str("\n--- runtime WAT near offset ---\n");
+      out.push_str(&snippet);
+    }
+  }
+  out
+}
+
+/// Parse an `offset 0x...` or `offset N` substring out of an error.
+fn parse_offset(err: &str) -> Option<usize> {
+  let pos = err.find("offset ")?;
+  let after = &err[pos + "offset ".len()..];
+  let end = after.find(|c: char| !c.is_ascii_alphanumeric() && c != 'x').unwrap_or(after.len());
+  let num = &after[..end];
+  if let Some(hex) = num.strip_prefix("0x") {
+    usize::from_str_radix(hex, 16).ok()
+  } else {
+    num.parse::<usize>().ok()
+  }
+}
+
+/// Render the runtime wasm to WAT with `print_offsets`, find the line
+/// whose annotated offset is closest to `target` (without going past),
+/// and return a window of ±5 lines.
+fn wat_window_at_offset(target: usize) -> Option<String> {
+  let bytes = emit::runtime_wasm_bytes();
+  let mut cfg = wasmprinter::Config::new();
+  cfg.print_offsets(true);
+  let wat = {
+    let mut s = String::new();
+    cfg.print(bytes, &mut wasmprinter::PrintFmtWrite(&mut s)).ok()?;
+    s
+  };
+
+  // Walk lines. wasmprinter prefixes each item with `(;@<hex>   ;)`
+  // when `print_offsets(true)` is set. Track the most recent line
+  // whose offset is <= target.
+  let lines: Vec<&str> = wat.lines().collect();
+  let mut best: Option<usize> = None;
+  for (i, line) in lines.iter().enumerate() {
+    let trimmed = line.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("(;@") {
+      let hex_end = rest.find(|c: char| !c.is_ascii_hexdigit()).unwrap_or(rest.len());
+      let hex = &rest[..hex_end];
+      if let Ok(off) = usize::from_str_radix(hex, 16) {
+        if off <= target {
+          best = Some(i);
+        } else if best.is_some() {
+          break;
+        }
+      }
+    }
+  }
+  let i = best?;
+  let lo = i.saturating_sub(5);
+  let hi = (i + 6).min(lines.len());
+  let mut window = String::new();
+  for (j, line) in lines[lo..hi].iter().enumerate() {
+    let marker = if lo + j == i { ">> " } else { "   " };
+    window.push_str(marker);
+    window.push_str(line);
+    window.push('\n');
+  }
+  Some(window)
+}
+
 #[cfg(test)]
 mod tests {
   /// CPS → IR `Fragment` → WAT. No wasm-encoder, no linker, no runtime

@@ -22,7 +22,6 @@ pub mod errors;
 pub mod fmt;
 #[cfg(feature = "compile")]
 pub mod compile;
-#[cfg(feature = "compile")]
 pub mod wat_linker;
 #[cfg(feature = "run")]
 pub mod dap;
