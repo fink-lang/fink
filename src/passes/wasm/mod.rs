@@ -259,7 +259,8 @@ mod tests {
       wasmparser::WasmFeatures::all(),
     );
     validator.validate_all(bytes)
-      .unwrap_or_else(|e| panic!("emit validation failed: {e}"));
+      .unwrap_or_else(|e| panic!("emit validation failed: {}",
+        super::annotate_func_indices(&e.to_string(), bytes)));
 
     let mut exports = Vec::new();
     for payload in wasmparser::Parser::new(0).parse_all(bytes) {

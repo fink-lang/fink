@@ -152,7 +152,7 @@ fn linked_runtime() -> &'static LinkedRuntime {
     let mut parser = wat_crate::Parser::new();
     parser.generate_dwarf(wat_crate::GenerateDwarf::Lines);
     let bytes = parser.parse_bytes(None, result.wat.as_bytes())
-      .expect("runtime: merged WAT failed to compile to wasm")
+      .unwrap_or_else(|e| panic!("runtime: merged WAT failed to compile to wasm:\n{e}"))
       .into_owned();
     LinkedRuntime { bytes, impls: result.impls }
   })
