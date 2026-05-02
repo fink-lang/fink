@@ -31,9 +31,9 @@
   (import "interop/rust.wat" "HostChannel" (type $HostChannel (sub any)))
 
   ;; Func imports — list helpers
-  (import "std/list.wat" "apply_0"
+  (import "rt/apply.wat" "apply_0"
     (func $list_apply_0 (param $cont (ref null any))))
-  (import "std/list.wat" "apply_1"
+  (import "rt/apply.wat" "apply_1"
     (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
@@ -97,7 +97,7 @@
   ;; Func imports — interop (host bridge)
   (import "interop/rust.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "interop/rust.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "interop/rust.wat" "panic"        (func $interop_panic))
+  (import "interop/rust.wat" "panic"        (func $host_panic))
 
   ;; =========================================================================
   ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)
@@ -966,10 +966,10 @@
   ;; Delegates to $interop_panic, which calls into the host to trap the
   ;; instance with a diagnostic message. Today panic carries no payload —
   ;; future work will pass a reason / source location for better diagnostics.
-  (func $interop_panic (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
+  (func $protocols_interop_panic (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
     (param $_caps (ref null any))
     (param $_args (ref null any))
-    (return_call $interop_panic))
+    (return_call $host_panic))
 
 
   ;; stdio protocols (`std/io.fnk:stdout` etc.) are implemented directly

@@ -39,18 +39,20 @@
   ;; Func imports
   (import "rt/apply.wat" "apply"
     (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
-  (import "std/list.wat" "apply_1"
+  (import "rt/apply.wat" "apply_1"
     (func $apply_1 (param $val (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat" "apply_0"
+  (import "rt/apply.wat" "apply_0"
     (func $apply_0 (param $cont (ref null any))))
-  (import "std/list.wat" "apply_2_vals"
+  (import "rt/apply.wat" "apply_2_vals"
     (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
   (import "std/set.wat" "repr"
     (func $set_repr (param $set (ref $Set)) (result (ref $Str))))
 
   (import "std/dict.wat" "size"
-    (func $dict_size (param $rec (ref $RecImpl)) (result i32)))
+    (func $dict_size (param $rec (ref $Rec)) (result i32)))
+  (import "std/dict.wat" "_hamt_size_node"
+    (func $_hamt_size_node (param $node (ref $HamtNode)) (result i32)))
 
   (import "std/list.wat" "size"
     (func $list_size (param $list (ref $List)) (result i32)))
@@ -66,8 +68,8 @@
   (import "std/range.wat" "is_incl"
     (func $range_is_incl (param $range (ref $Range)) (result i32)))
 
-  (import "rt/protocols.wat" "op_empty"
-    (func $op_empty (param $val (ref null any)) (param $cont (ref null any))))
+  (import "std/list.wat" "op_empty"
+    (func $list_op_empty (param $val (ref null any)) (result i32)))
 
   ;; Continuation dispatch: $std/list.wat:apply_1 (defined in list.wat) wraps a single
   ;; result in a list and tail-calls $_apply (defined in dispatch.wat).
@@ -97,7 +99,7 @@
     (field $length i32))))
 
   ;; $StrBytesImpl — heap-allocated string (byte array).
-  (type $StrBytesImpl (sub $Str (struct
+  (type $StrBytesImpl (@pub) (sub $Str (struct
     (field $bytes (ref $ByteArray)))))
 
 
@@ -2110,7 +2112,7 @@
 
     ;; Count entries for separator sizing.
     (local.set $entry_count
-      (call $dict_size (local.get $node)))
+      (call $dict_size (ref.cast (ref $Rec) (local.get $rec))))
 
     ;; Empty record: return "{}"
     (if (i32.eqz (local.get $entry_count))
@@ -2396,7 +2398,7 @@
             ;; Simpler: count via _hamt_size_node.
             (local.set $written
               (i32.add (local.get $written)
-                (call $dict_size
+                (call $_hamt_size_node
                   (ref.cast (ref $HamtNode) (local.get $child)))))))
 
         ;; Collision: copy all leaves
@@ -2495,7 +2497,7 @@
     (local $is_first i32)
 
     ;; Empty list: return "[]"
-    (if (call $op_empty (local.get $list))
+    (if (call $list_op_empty (local.get $list))
       (then
         (return (call $_str_from_ascii_2
           (i32.const 0x5B) ;; '['
@@ -2511,7 +2513,7 @@
     (block $done1
       (loop $len_loop
         (br_if $done1
-          (call $op_empty (local.get $cur)))
+          (call $list_op_empty (local.get $cur)))
         (local.set $total
           (i32.add (local.get $total)
             (call $_str_len
@@ -2544,7 +2546,7 @@
     (block $done2
       (loop $copy_loop
         (br_if $done2
-          (call $op_empty (local.get $cur)))
+          (call $list_op_empty (local.get $cur)))
 
         ;; Write ", " separator (except before first element).
         (if (i32.eqz (local.get $is_first))

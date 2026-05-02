@@ -515,11 +515,11 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::FnHostWrapper   => "rt/apply.wat:Fn_host_wrapper",
     Sym::Apply           => "rt/apply.wat:apply",
 
-    Sym::ArgsHead        => "std/fn.fnk:args_head",
-    Sym::ArgsTail        => "std/fn.fnk:args_tail",
-    Sym::ArgsEmpty       => "std/fn.fnk:args_empty",
-    Sym::ArgsPrepend     => "std/fn.fnk:args_prepend",
-    Sym::ArgsConcat      => "std/fn.fnk:args_concat",
+    Sym::ArgsHead        => "rt/apply.wat:args_head",
+    Sym::ArgsTail        => "rt/apply.wat:args_tail",
+    Sym::ArgsEmpty       => "rt/apply.wat:args_empty",
+    Sym::ArgsPrepend     => "rt/apply.wat:args_prepend",
+    Sym::ArgsConcat      => "rt/apply.wat:args_concat",
 
     Sym::OpPlus          => "std/operators.fnk:op_plus",
     Sym::OpMinus         => "std/operators.fnk:op_minus",

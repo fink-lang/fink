@@ -59,7 +59,7 @@
     (func $put_field (param $rec (ref null any)) (param $key (ref null any)) (param $val (ref null any)) (result (ref null any))))
   (import "std/list.wat"  "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
-  (import "std/list.wat"  "apply_1"
+  (import "rt/apply.wat"  "apply_1"
     (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat"  "empty"
     (func $list_empty (result (ref $List))))

@@ -356,7 +356,7 @@ mod tests {
               };
               let bytes: Vec<u8> = cap.lock().unwrap().read_stdin(size as usize).to_vec();
 
-              let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+              let str_wrap = caller.get_export("str_wrap_bytes")
                 .and_then(|e| e.into_func())
                 .ok_or_else(|| Error::msg("host_read: no _str_wrap_bytes export"))?;
               let array_ty = ArrayType::new(
@@ -370,7 +370,7 @@ mod tests {
               let mut wrapped = [Val::AnyRef(None)];
               str_wrap.call(&mut caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
 
-              let settle = caller.get_export("std/async.wat:_settle_future")
+              let settle = caller.get_export("_settle_future")
                 .and_then(|e| e.into_func())
                 .ok_or_else(|| Error::msg("host_read: no _settle_future export"))?;
               let future_ref = params[2].clone();
@@ -426,7 +426,7 @@ mod tests {
     // Entry compiles under `./test.fnk:`, so the wrapper is exported
     // as `"./test.fnk"`.
     let entry_wrapper = get_func(&instance, &mut store, "./test.fnk")?;
-    let str_wrap      = get_func(&instance, &mut store, "std/str.wat:_str_wrap_bytes")?;
+    let str_wrap      = get_func(&instance, &mut store, "str_wrap_bytes")?;
 
     let main_key_bytes = wrap_bytes_to_array_ref(&mut store, b"main")?;
 
@@ -434,7 +434,8 @@ mod tests {
       .call(&mut store,
         &[Val::AnyRef(Some(main_key_bytes)), Val::I32(1)],
         &mut [])
-      .map_err(|e| format!("entry wrapper: {e}"))?;
+      .map_err(|e| crate::passes::wasm::annotate_func_indices(
+        &format!("entry wrapper: {e}"), &bytes))?;
     // str_wrap is captured into the closure via `caller.get_export`
     // inside run_main_in_callback; the binding here is just to
     // ensure the runtime exports it (caught at host setup time).
@@ -548,16 +549,16 @@ mod tests {
     let wrap_host_cont = caller.get_export("wrap_host_cont")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no wrap_host_cont export"))?;
-    let args_empty = caller.get_export("std/fn.fnk:args_empty")
+    let args_empty = caller.get_export("args_empty")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no args_empty export"))?;
-    let args_prepend = caller.get_export("std/fn.fnk:args_prepend")
+    let args_prepend = caller.get_export("args_prepend")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no args_prepend export"))?;
-    let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+    let str_wrap = caller.get_export("str_wrap_bytes")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no _str_wrap_bytes export"))?;
-    let apply_fn = caller.get_export("rt/apply.wat:apply")
+    let apply_fn = caller.get_export("apply")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no apply export"))?;
 

@@ -7,6 +7,19 @@
 
   (import "std/list.wat" "List" (type $List (sub any)))
 
+  ;; List operations — args calling-convention storage. apply.wat owns
+  ;; the args ABI; list.wat just provides the underlying data structure.
+  (import "std/list.wat" "empty"
+    (func $list_empty (result (ref $List))))
+  (import "std/list.wat" "prepend"
+    (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+  (import "std/list.wat" "head_any"
+    (func $list_head_any (param $list (ref null any)) (result (ref null any))))
+  (import "std/list.wat" "tail_any"
+    (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
+  (import "std/list.wat" "concat"
+    (func $list_concat (param $a (ref $List)) (param $b (ref $List)) (result (ref $List))))
+
 
   ;; $Captures — flat array of captured values.
   ;; Each element is (ref null any) — nullable to allow default-init
@@ -69,4 +82,59 @@
       (ref.cast (ref $Fn2) (struct.get $Closure $func (local.get $clos))))
   )
 
+
+  ;; -- Args calling-convention primitives -----------------------------
+  ;;
+  ;; These are the runtime ABI for the args list — head/tail/empty/prepend/
+  ;; concat — used by every CPS call site. The underlying storage today
+  ;; is std/list.wat; apply.wat owns the contract.
+  ;;
+  ;; TODO: args impl leaks — empty/prepend/concat expose `$List` in their
+  ;; signatures, forcing every caller to import `$List` from std/list.wat
+  ;; just to type-check. Args should be opaque (an `$Args` type that hides
+  ;; the carrier) so apply.wat stays free to swap storage without ripple.
+
+  (func $args_head (@pub)
+    (param $args (ref null any))
+    (result (ref null any))
+    (return_call $list_head_any (local.get $args)))
+
+  (func $args_tail (@pub)
+    (param $args (ref null any))
+    (result (ref null any))
+    (return_call $list_tail_any (local.get $args)))
+
+  (func $args_empty (@pub) (result (ref $List))
+    (return_call $list_empty))
+
+  (func $args_prepend (@pub)
+    (param $head (ref any)) (param $tail (ref $List))
+    (result (ref $List))
+    (return_call $list_prepend (local.get $head) (local.get $tail)))
+
+  (func $args_concat (@pub)
+    (param $a (ref $List)) (param $b (ref $List))
+    (result (ref $List))
+    (return_call $list_concat (local.get $a) (local.get $b)))
+
+
+  ;; -- Apply helpers ---------------------------------------------------
+  ;;
+  ;; apply_0/1/2_vals wrap N values into an args list and tail-call
+  ;; $apply. Used by every CPS continuation site that returns N values
+  ;; to its continuation.
+
+  (func $apply_0 (@pub) (param $cont (ref null any))
+    (return_call $apply (call $args_empty) (local.get $cont)))
+
+  (func $apply_1 (@pub) (param $result (ref null any)) (param $cont (ref null any))
+    (return_call $apply
+      (call $args_prepend (ref.as_non_null (local.get $result)) (call $args_empty))
+      (local.get $cont)))
+
+  (func $apply_2_vals (@pub) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
+    (return_call $apply
+      (call $args_prepend (ref.as_non_null (local.get $a))
+        (call $args_prepend (ref.as_non_null (local.get $b)) (call $args_empty)))
+      (local.get $cont)))
 )

@@ -46,6 +46,14 @@
     (func $list_empty (result (ref $List))))
   (import "std/list.wat"    "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+  (import "rt/apply.wat"    "args_empty"
+    (func $args_empty (result (ref $List))))
+  (import "rt/apply.wat"    "args_prepend"
+    (func $args_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+  (import "rt/apply.wat"    "apply"
+    (func $apply (param $args (ref null any)) (param $callee (ref null any))))
+  (import "std/str.wat"     "_str_wrap_bytes"
+    (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
   ;; TODO: rename str.wat's `bytes` export to `str_bytes` (clashes with
   ;; the `$bytes` local in this file).
   (import "std/str.wat"     "bytes"
@@ -378,5 +386,32 @@
 
   (func $get_write (@pub) (@impl "std/io.fnk:write") (result (ref any))
     (global.get $write_closure))
+
+
+  ;; -- Host bootstrap delegates ---------------------------------------
+  ;;
+  ;; The wasmtime runner's `apply_main` reaches into the runtime to
+  ;; build the args list and apply main. Only interop should be visible
+  ;; to the host, so these delegates forward to the real funcs.
+  ;;
+  ;; TODO: move the apply_main bootstrap inside the wasm module behind
+  ;; one entry point, then drop these.
+
+  (func (export "env:apply")
+    (param $args (ref null any)) (param $callee (ref null any))
+    (return_call $apply (local.get $args) (local.get $callee)))
+
+  (func (export "env:args_empty") (result (ref $List))
+    (return_call $args_empty))
+
+  (func (export "env:args_prepend")
+    (param $head (ref any)) (param $tail (ref $List))
+    (result (ref $List))
+    (return_call $args_prepend (local.get $head) (local.get $tail)))
+
+  (func (export "env:str_wrap_bytes")
+    (param $bytes (ref null any))
+    (result (ref any))
+    (return_call $str_wrap_bytes (local.get $bytes)))
 
 )

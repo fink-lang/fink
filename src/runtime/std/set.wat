@@ -66,11 +66,11 @@
     (func $hash_i31 (param $key (ref eq)) (result i32)))
   (import "rt/protocols.wat" "deep_eq"
     (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)))
-  (import "std/list.wat"     "apply_0"
+  (import "rt/apply.wat"     "apply_0"
     (func $list_apply_0 (param $cont (ref null any))))
-  (import "std/list.wat"     "apply_1"
+  (import "rt/apply.wat"     "apply_1"
     (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat"     "apply_2_vals"
+  (import "rt/apply.wat"     "apply_2_vals"
     (func $list_apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat"     "head_any"
     (func $list_head_any (param $list (ref null any)) (result (ref null any))))
@@ -84,8 +84,7 @@
     (func $str_fmt_val_repr (param $val (ref any)) (result (ref $Str))))
   (import "std/str.wat"      "_str_len"
     (func $str_len (param $str (ref $Str)) (result i32)))
-  (import "std/str.wat"      "_str_wrap_bytes"
-    (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
+  (import "std/str.wat"      "StrBytesImpl" (type $StrBytesImpl (sub $Str)))
 
 
   ;; -- $Set type ------------------------------------------------------------
@@ -1601,7 +1600,7 @@
           (array.set $ByteArray (local.get $buf) (i32.const 2) (i32.const 0x74)) ;; 't'
           (array.set $ByteArray (local.get $buf) (i32.const 3) (i32.const 0x20)) ;; ' '
           (array.set $ByteArray (local.get $buf) (i32.const 4) (i32.const 0x5F)) ;; '_'
-          (return (call $str_wrap_bytes (local.get $buf)))))
+          (return (struct.new $StrBytesImpl (local.get $buf)))))
 
     ;; Pass 1: total = "set " (4) + sum(value_len) + (count-1)*2 (", ").
     (local.set $total
@@ -1630,7 +1629,7 @@
         (local.get $node) (local.get $buf) (local.get $pos)
         (i32.const 0))) ;; written = 0
 
-    (call $str_wrap_bytes (local.get $buf))
+    (struct.new $StrBytesImpl (local.get $buf))
   )
 
   ;; _repr_size_node : (ref $SetNode) -> i32

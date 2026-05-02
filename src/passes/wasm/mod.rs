@@ -35,25 +35,11 @@ pub fn annotate_func_indices(err: &str, _wasm: &[u8]) -> String {
   if func_names.is_empty() {
     return err.to_string();
   }
-  // Replace each `function[N]` with `function[N]: $<name>`.
-  let mut out = String::with_capacity(err.len());
-  let mut rest = err;
-  while let Some(pos) = rest.find("function[") {
-    out.push_str(&rest[..pos + "function[".len()]);
-    let after = &rest[pos + "function[".len()..];
-    let close = match after.find(']') { Some(c) => c, None => { out.push_str(after); return out; } };
-    let num_str = &after[..close];
-    out.push_str(num_str);
-    out.push(']');
-    if let Ok(idx) = num_str.parse::<u32>()
-      && let Some(name) = func_names.get(&idx)
-    {
-      out.push_str(": $");
-      out.push_str(name);
-    }
-    rest = &after[close + 1..];
-  }
-  out.push_str(rest);
+  // Replace each `function[N]` and `<wasm function N>` with the
+  // qualified name. Two formats: `function[42]` (translation/validation
+  // errors) and `<wasm function 42>` (trap backtraces).
+  let mut out = annotate_pattern(err, "function[", "]", &func_names);
+  out = annotate_pattern(&out, "<wasm function ", ">", &func_names);
 
   // If the error pointed at an offset, append the runtime WAT line
   // (with a small surrounding window) corresponding to that offset.
@@ -63,6 +49,30 @@ pub fn annotate_func_indices(err: &str, _wasm: &[u8]) -> String {
       out.push_str(&snippet);
     }
   }
+  out
+}
+
+/// Replace each `<prefix>N<close>` substring with `<prefix>N<close>: $<name>`,
+/// where N is a u32 looked up in `names`.
+fn annotate_pattern(err: &str, prefix: &str, close: &str, names: &std::collections::HashMap<u32, String>) -> String {
+  let mut out = String::with_capacity(err.len());
+  let mut rest = err;
+  while let Some(pos) = rest.find(prefix) {
+    out.push_str(&rest[..pos + prefix.len()]);
+    let after = &rest[pos + prefix.len()..];
+    let end = match after.find(close) { Some(c) => c, None => { out.push_str(after); return out; } };
+    let num_str = &after[..end];
+    out.push_str(num_str);
+    out.push_str(close);
+    if let Ok(idx) = num_str.parse::<u32>()
+      && let Some(name) = names.get(&idx)
+    {
+      out.push_str(": $");
+      out.push_str(name);
+    }
+    rest = &after[end + close.len()..];
+  }
+  out.push_str(rest);
   out
 }
 

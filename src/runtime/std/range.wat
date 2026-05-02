@@ -22,7 +22,7 @@
   ;; Func imports
   ;; TODO: apply_1 wraps a single result and calls _apply — conceptually
   ;; an apply concern, not a list one. Move to rt/apply.wat.
-  (import "std/list.wat" "apply_1"
+  (import "rt/apply.wat" "apply_1"
     (func $list_apply_1 (param $val (ref any)) (param $cont (ref null any))))
 
 

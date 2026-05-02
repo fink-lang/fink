@@ -19,6 +19,12 @@
   ;; Func imports
   (import "rt/apply.wat" "apply"
     (func $_apply (param $args (ref null any)) (param $callee (ref null any))))
+  (import "rt/apply.wat" "apply_0"
+    (func $apply_0 (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_1"
+    (func $apply_1 (param $result (ref null any)) (param $cont (ref null any))))
+  (import "rt/apply.wat" "apply_2_vals"
+    (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
 
   ;; -- Type definitions ------------------------------------------------
@@ -26,47 +32,28 @@
   ;; $List — opaque public base type.
   (type $List (@pub) (sub (struct)))
 
-  ;; $Nil — empty list, subtype of $List. Private.
-  (type $Nil (sub $List (struct)))
+  ;; $Nil — empty list, subtype of $List.
+  ;; @pub so rt/apply.wat can construct it (args calling convention).
+  (type $Nil (@pub) (sub $List (struct)))
 
-  ;; $Cons — a list cell, subtype of $List. Private.
+  ;; $Cons — a list cell, subtype of $List.
   ;; head is the value, tail is the rest of the list (always non-null).
-  (type $Cons (sub $List (struct
+  ;; @pub so rt/apply.wat can construct it (args calling convention).
+  (type $Cons (@pub) (sub $List (struct
     (field $head (ref any))
     (field $tail (ref $List))
   )))
-
-
-  ;; -- Apply helpers ---------------------------------------------------
-  ;;
-  ;; TODO: apply_0/apply_1/apply_2_vals wrap N values into an args list
-  ;; and tail-call _apply — they are apply concerns, not list concerns.
-  ;; Move to rt/apply.wat once list public API is stable.
-
-  (func $apply_0 (@pub) (param $cont (ref null any))
-    (return_call $_apply (struct.new $Nil) (local.get $cont)))
-
-  (func $apply_1 (@pub) (param $result (ref null any)) (param $cont (ref null any))
-    (return_call $_apply
-      (struct.new $Cons (ref.as_non_null (local.get $result)) (struct.new $Nil))
-      (local.get $cont)))
-
-  (func $apply_2_vals (@pub) (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
-    (return_call $_apply
-      (struct.new $Cons (ref.as_non_null (local.get $a))
-        (struct.new $Cons (ref.as_non_null (local.get $b)) (struct.new $Nil)))
-      (local.get $cont)))
 
 
   ;; -- Construction / empty -------------------------------------------
 
   ;; empty — singleton-style empty list. Cross-wat callers use this
   ;; instead of poking the private $Nil type directly.
-  (func $empty (@pub) (@impl "std/fn.fnk:args_empty") (result (ref $List))
+  (func $empty (@pub) (result (ref $List))
     (struct.new $Nil))
 
   ;; Prepend a value to a list. O(1).
-  (func $prepend (@pub) (@impl "std/fn.fnk:args_prepend")
+  (func $prepend (@pub)
     (param $head (ref any))
     (param $tail (ref $List))
     (result (ref $List))
@@ -104,12 +91,12 @@
   ;; Args-protocol primitives (calling convention) — take/return
   ;; (ref null any), cast internally. Used by emitter where args lists
   ;; flow through anyref slots.
-  (func $head_any (@pub) (@impl "std/fn.fnk:args_head")
+  (func $head_any (@pub)
     (param $list (ref null any))
     (result (ref null any))
     (struct.get $Cons $head (ref.cast (ref $Cons) (local.get $list))))
 
-  (func $tail_any (@pub) (@impl "std/fn.fnk:args_tail")
+  (func $tail_any (@pub)
     (param $list (ref null any))
     (result (ref null any))
     (struct.get $Cons $tail (ref.cast (ref $Cons) (local.get $list))))
@@ -191,7 +178,7 @@
 
   ;; [..a, ..b] — walks a, rebuilds cells pointing to b. O(len(a)).
   ;; If a is empty, returns b. If b is empty, returns a.
-  (func $concat (@pub) (@impl "std/fn.fnk:args_concat")
+  (func $concat (@pub)
     (param $a (ref $List))
     (param $b (ref $List))
     (result (ref $List))

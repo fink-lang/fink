@@ -50,11 +50,11 @@
     (func $hash_i31 (param $key (ref eq)) (result i32)))
   (import "rt/protocols.wat" "deep_eq"
     (func $deep_eq (param $a (ref eq)) (param $b (ref eq)) (result i32)))
-  (import "std/list.wat"     "apply_0"
+  (import "rt/apply.wat"     "apply_0"
     (func $list_apply_0 (param $cont (ref null any))))
-  (import "std/list.wat"     "apply_1"
+  (import "rt/apply.wat"     "apply_1"
     (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
-  (import "std/list.wat"     "apply_2_vals"
+  (import "rt/apply.wat"     "apply_2_vals"
     (func $list_apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
 
@@ -1283,7 +1283,7 @@
     (call $_hamt_size_node (local.get $node))
   )
 
-  (func $_hamt_size_node
+  (func $_hamt_size_node (@pub)
     (param $node (ref $HamtNode))
     (result i32)
 
@@ -1406,8 +1406,9 @@
   )
 
   (func $size (@pub)
-    (param $rec (ref $RecImpl)) (result i32)
-    (call $hamt_size (struct.get $RecImpl $hamt (local.get $rec)))
+    (param $rec (ref $Rec)) (result i32)
+    (call $hamt_size
+      (struct.get $RecImpl $hamt (ref.cast (ref $RecImpl) (local.get $rec))))
   )
 
   ;; Predicate: is this record empty?
