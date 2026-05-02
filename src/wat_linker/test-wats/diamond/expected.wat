@@ -8,8 +8,8 @@
     (field $payload (ref $test-wats/diamond/d.wat:D)))))
     (type $test-wats/diamond/a.wat:A (sub (struct
     (field $left (ref $test-wats/diamond/b.wat:B))
-    (field $right (ref $test-wats/diamond/c.wat:C))))))
-
+    (field $right (ref $test-wats/diamond/c.wat:C)))))
+  )
 
 
   (func $test-wats/diamond/d.wat:d_get 

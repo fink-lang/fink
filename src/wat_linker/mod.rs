@@ -70,17 +70,46 @@ pub fn link(modules: &[(&str, &str)]) -> String {
     // consistent text, then extract type/body spans from the renamed
     // text via a metadata-only re-walk.
     let mut all_types: Vec<String> = Vec::new();
+    let mut all_host_imports: Vec<String> = Vec::new();
+    let mut seen_host_imports: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut all_bodies: Vec<String> = Vec::new();
+    // Cross-fragment host-export dup detection: name → (url, byte offset
+    // in url's source). On second sight of the same name, panic with
+    // both file:line:col locations.
+    let mut host_export_sites: HashMap<String, (&str, usize)> = HashMap::new();
     for &i in &visit.order {
         let (url, src) = modules[i];
-        let renamed = rename_locals(url, src);
+        let plan = collect_plan(url, src);
+        for he in &plan.host_exports {
+            if let Some(&(prev_url, prev_offset)) = host_export_sites.get(&he.name) {
+                let prev_loc = format_loc(prev_url, modules, prev_offset);
+                let here_loc = format_loc(url, modules, he.offset);
+                panic!(
+                    "wat-linker: duplicate host export \"{}\":\n  first at  {}\n  again at {}",
+                    he.name, prev_loc, here_loc
+                );
+            }
+            host_export_sites.insert(he.name.clone(), (url, he.offset));
+        }
+
+        let renamed = apply_plan(src, &plan);
         let spans = collect_spans(&renamed);
-        let (types, body) = split_chunks(&renamed, &spans);
+        let (types, host_imports, body) = split_chunks(&renamed, &spans);
         all_types.extend(types);
+        for imp in host_imports {
+            // Dedupe by exact text. Two fragments importing the same
+            // host symbol with the same signature collapse to one
+            // import line in the merged binary.
+            if seen_host_imports.insert(imp.clone()) {
+                all_host_imports.push(imp);
+            }
+        }
         all_bodies.push(body);
     }
 
-    // Stitch the merged module.
+    // Stitch the merged module. Imports must precede all local
+    // definitions per WASM spec, so host imports are hoisted to the
+    // top after the rec group.
     let mut out = String::new();
     out.push_str("(module\n");
     if !all_types.is_empty() {
@@ -89,13 +118,40 @@ pub fn link(modules: &[(&str, &str)]) -> String {
             out.push_str("\n    ");
             out.push_str(t);
         }
-        out.push_str(")\n\n");
+        out.push_str("\n  )\n");
+    }
+    if !all_host_imports.is_empty() {
+        for imp in &all_host_imports {
+            out.push_str("\n  ");
+            out.push_str(imp);
+        }
+        out.push('\n');
     }
     for body in &all_bodies {
         out.push_str(body);
     }
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
     out.push_str(")\n");
-    out
+    // Strip the `env:` prefix from surviving host-visible exports.
+    // Only `(export "env:...")` forms reach the merged output (inter-wat
+    // exports were dropped); plain string-replace is safe.
+    out.replace("(export \"env:", "(export \"")
+}
+
+/// Format a `url:line:col` location for error messages. `offset` is a
+/// byte offset into the source identified by `url`.
+fn format_loc(url: &str, modules: &[(&str, &str)], offset: usize) -> String {
+    let src = modules
+        .iter()
+        .find(|(u, _)| *u == url)
+        .map(|(_, s)| *s)
+        .unwrap_or("");
+    let prefix = &src[..offset.min(src.len())];
+    let line = prefix.bytes().filter(|&b| b == b'\n').count() + 1;
+    let col = prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1;
+    format!("{url}:{line}:{col}")
 }
 
 struct Visit<'a> {
@@ -139,6 +195,11 @@ impl<'a> Visit<'a> {
 struct Spans {
     type_spans: Vec<Span>,
     import_spans: Vec<Span>,
+    /// `(import "X" "Y" ...)` forms where `X` does not end with `.wat`.
+    /// These are host imports that survive in the merged binary, but
+    /// must be hoisted to the top of the module (WASM requires imports
+    /// before local definitions) and deduped across fragments.
+    host_import_spans: Vec<Span>,
     /// Inline `(export "...")` forms inside top-level definitions.
     /// Dropped at merge time — visibility between wat modules is a
     /// build-time concern that the import-rewrite already resolved.
@@ -172,8 +233,11 @@ fn collect_spans(src: &str) -> Spans {
                     }
                     let kw = slice(src, &head);
                     let is_type = matches!(kw, "type" | "rec");
-                    let is_import_wat = kw == "import"
-                        && peek_module_string_is_wat(src, &mut tokens, &mut depth);
+                    let import_kind = if kw == "import" {
+                        Some(peek_import_kind(src, &mut tokens, &mut depth))
+                    } else {
+                        None
+                    };
                     let close = walk_form_recording_exports(src, &mut tokens, &mut depth, &mut spans);
                     if let Some(close) = close {
                         let span = Span {
@@ -182,8 +246,12 @@ fn collect_spans(src: &str) -> Spans {
                         };
                         if is_type {
                             spans.type_spans.push(span);
-                        } else if is_import_wat {
-                            spans.import_spans.push(span);
+                        } else {
+                            match import_kind {
+                                Some(ImportKind::Wat) => spans.import_spans.push(span),
+                                Some(ImportKind::Host) => spans.host_import_spans.push(span),
+                                None => {}
+                            }
                         }
                     }
                 }
@@ -220,12 +288,22 @@ where
                 // Peek the keyword to spot `(export ...)`.
                 let kw_tok = tokens.next()?;
                 if kw_tok.kind == TokenKind::Keyword && slice(src, &kw_tok) == "export" {
-                    // Record the span. Walk to this sub-form's close.
+                    // Peek the export string. `env:`-prefixed exports
+                    // survive into the merged binary as host-visible
+                    // exports (the prefix gets stripped at stitch time).
+                    // All other exports are inter-wat plumbing — drop.
+                    let str_tok = tokens.next()?;
+                    let is_host = str_tok.kind == TokenKind::String
+                        && slice(src, &str_tok)
+                            .trim_matches('"')
+                            .starts_with("env:");
                     let close = naive_form_end_at(*depth - 1, tokens, depth)?;
-                    spans.export_spans.push(Span {
-                        start: sub_start,
-                        end: close + 1,
-                    });
+                    if !is_host {
+                        spans.export_spans.push(Span {
+                            start: sub_start,
+                            end: close + 1,
+                        });
+                    }
                     last_close = Some(close);
                 }
                 // Otherwise just keep walking (depth tracking handles nested closes).
@@ -266,7 +344,18 @@ where
 /// `.wat"`, return true. Used to decide whether an `(import ...)` is
 /// a wat-to-wat import (linker should drop it) vs an env import
 /// (linker preserves it).
-fn peek_module_string_is_wat<I>(src: &str, tokens: &mut I, depth: &mut usize) -> bool
+#[derive(Copy, Clone)]
+enum ImportKind {
+    /// Inter-wat: module string ends with `.wat`. Linker resolves +
+    /// drops; references are FQN'd to the exporter's path.
+    Wat,
+    /// Host: module string does not end with `.wat` (typically `env`).
+    /// Linker dedupes across fragments, hoists to the top of the
+    /// merged module.
+    Host,
+}
+
+fn peek_import_kind<I>(src: &str, tokens: &mut I, depth: &mut usize) -> ImportKind
 where
     I: Iterator<Item = wast::lexer::Token>,
 {
@@ -276,29 +365,35 @@ where
         match tok.kind {
             TokenKind::String => {
                 let raw = slice(src, &tok);
-                return raw.trim_matches('"').ends_with(".wat");
+                return if raw.trim_matches('"').ends_with(".wat") {
+                    ImportKind::Wat
+                } else {
+                    ImportKind::Host
+                };
             }
             TokenKind::LParen => *depth += 1,
             TokenKind::RParen => {
                 *depth -= 1;
-                return false;
+                return ImportKind::Host;
             }
             _ => {}
         }
     }
-    false
+    ImportKind::Host
 }
 
 /// From a renamed module body + its spans, extract:
-/// * the body text with type forms, wat-imports, and inline exports
-///   removed,
-/// * a list of individual `(type ...)` forms (rec groups flattened).
-fn split_chunks(src: &str, spans: &Spans) -> (Vec<String>, String) {
+/// * a list of individual `(type ...)` forms (rec groups flattened),
+/// * the host-import lines (verbatim text, no comments),
+/// * the body text with type forms, wat-imports, host-imports, and
+///   inline exports removed.
+fn split_chunks(src: &str, spans: &Spans) -> (Vec<String>, Vec<String>, String) {
     // Top-level removals get their preceding `;; …` headers pulled
     // along, so dropping `(import …)` doesn't leave the header orphaned.
     let mut top_level: Vec<Span> = Vec::new();
     top_level.extend(spans.type_spans.iter().copied());
     top_level.extend(spans.import_spans.iter().copied());
+    top_level.extend(spans.host_import_spans.iter().copied());
     top_level.sort_by_key(|s| s.start);
     let top_level = extend_spans_over_preceding_comments(src, top_level);
 
@@ -326,7 +421,15 @@ fn split_chunks(src: &str, spans: &Spans) -> (Vec<String>, String) {
         .flat_map(|span| extract_type_forms(&src[span.start..span.end]))
         .collect();
 
-    (types, body)
+    // Host imports: verbatim text of each form (without leading
+    // comments — those stay with the dropped span).
+    let host_imports: Vec<String> = spans
+        .host_import_spans
+        .iter()
+        .map(|span| src[span.start..span.end].trim().to_string())
+        .collect();
+
+    (types, host_imports, body)
 }
 
 /// Extend each span's start backwards over preceding whitespace and
@@ -461,49 +564,46 @@ fn strip_module_wrapper(text: &str) -> String {
 /// `(type ...)` that's just the text itself; for `(rec (type ...) (type ...))`
 /// it's each inner `(type ...)`.
 fn extract_type_forms(text: &str) -> Vec<String> {
-    let trimmed = text.trim();
-    if let Some(inner) = trimmed.strip_prefix("(rec") {
-        let inner = inner.trim_end_matches(')').trim();
-        // Split into top-level `(type ...)` forms by paren-counting.
-        let mut forms = Vec::new();
-        let bytes = inner.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            // Skip whitespace.
-            while i < bytes.len() && (bytes[i] as char).is_ascii_whitespace() {
-                i += 1;
-            }
-            if i >= bytes.len() {
-                break;
-            }
-            if bytes[i] != b'(' {
-                // Stray content; skip char.
-                i += 1;
-                continue;
-            }
-            // Read paren-balanced form starting at i.
-            let start = i;
-            let mut depth = 0;
-            while i < bytes.len() {
-                match bytes[i] {
-                    b'(' => depth += 1,
-                    b')' => {
-                        depth -= 1;
-                        if depth == 0 {
-                            i += 1;
-                            break;
-                        }
-                    }
-                    _ => {}
+    // Walk via the wast lexer so `;; ...` and `(; ... ;)` comments
+    // (which can contain stray parens) don't confuse paren-balancing.
+    let lexer = Lexer::new(text);
+    let tokens = lexer.iter(0).filter_map(Result::ok).filter(is_significant);
+
+    let mut depth: usize = 0;
+    let mut form_start: Option<usize> = None;
+    let mut is_rec = false;
+    let mut forms = Vec::new();
+
+    for tok in tokens {
+        match tok.kind {
+            TokenKind::LParen => {
+                depth += 1;
+                if depth == 2 && is_rec {
+                    form_start = Some(tok.offset);
                 }
-                i += 1;
             }
-            forms.push(inner[start..i].trim().to_string());
+            TokenKind::RParen => {
+                if depth == 2 && is_rec
+                    && let Some(start) = form_start.take() {
+                    let end = tok.offset + tok.len as usize;
+                    forms.push(text[start..end].trim().to_string());
+                }
+                depth = depth.saturating_sub(1);
+            }
+            TokenKind::Keyword if depth == 1 && !is_rec
+                && slice(text, &tok) == "rec" => {
+                is_rec = true;
+            }
+            _ => {}
         }
-        forms
-    } else {
-        vec![trimmed.to_string()]
     }
+
+    if !is_rec {
+        // Single `(type ...)` form — return the whole trimmed text.
+        return vec![text.trim().to_string()];
+    }
+
+    forms
 }
 
 /// Single-file rename pass. Public for direct testing; the merger
@@ -530,6 +630,16 @@ struct Plan {
     /// Imports of `*.wat` modules: target URL (resolved) for each.
     /// Used by the merger to walk the dep graph.
     wat_imports: Vec<String>,
+    /// `(export "env:NAME")` sites — name and source byte offset of
+    /// the export string. Used to detect duplicate host exports across
+    /// fragments at link time.
+    host_exports: Vec<HostExport>,
+}
+
+#[derive(Clone)]
+struct HostExport {
+    name: String,
+    offset: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -657,12 +767,14 @@ where
             TokenKind::LParen => {
                 *depth += 1;
                 if *depth == 3 {
-                    // sub-form inside rec — likely (type $X ...).
+                    // sub-form inside rec — likely (type $X ...). Walk
+                    // only this sub-form (until depth drops back to 2),
+                    // not the whole rec body.
                     let kw = tokens.next()?;
                     if kw.kind == TokenKind::Keyword && slice(src, &kw) == "type" {
                         consume_optional_id(path, src, tokens, depth, plan);
                     }
-                    walk_inline_exports(path, src, tokens, depth, plan);
+                    walk_to_form_end(tokens, depth);
                 }
             }
             TokenKind::RParen => {
@@ -673,6 +785,26 @@ where
         }
     }
     last_close
+}
+
+/// Walk until the current sub-form closes — i.e. until `*depth` drops
+/// below its current value. Used inside rec to scope per-type walking.
+fn walk_to_form_end<I>(tokens: &mut I, depth: &mut usize)
+where
+    I: Iterator<Item = wast::lexer::Token>,
+{
+    let target = depth.saturating_sub(1);
+    while *depth > target {
+        let tok = match tokens.next() {
+            Some(t) => t,
+            None => return,
+        };
+        match tok.kind {
+            TokenKind::LParen => *depth += 1,
+            TokenKind::RParen => *depth -= 1,
+            _ => {}
+        }
+    }
 }
 
 /// Consume the immediate next significant token. If it's an `Id`,
@@ -749,10 +881,20 @@ fn inspect_subform_for_export<I>(
 
 /// Queue a rewrite for an `(export "name")` string. Only fires when
 /// the name is unqualified (no `:` or `/`); pre-qualified export
-/// strings are passed through untouched.
+/// strings are passed through untouched. `env:`-prefixed names are
+/// host-visible exports — recorded for cross-fragment duplicate
+/// detection but not rewritten (the `env:` prefix is stripped at
+/// stitch time).
 fn queue_export_rewrite(path: &str, src: &str, str_tok: &wast::lexer::Token, plan: &mut Plan) {
     let raw = slice(src, str_tok);
     let name = raw.trim_matches('"');
+    if let Some(host_name) = name.strip_prefix("env:") {
+        plan.host_exports.push(HostExport {
+            name: host_name.to_string(),
+            offset: str_tok.offset,
+        });
+        return;
+    }
     if name.contains(':') || name.contains('/') {
         return;
     }
@@ -816,6 +958,14 @@ fn handle_import<I>(
     if let (Some(module_str), Some(import_name), Some(id)) =
         (module_str.clone(), import_name.clone(), inner_id)
     {
+        // The handle id must match the import name (no aliasing). The
+        // linker renames it to `<scope>:<name>` so the merged module's
+        // ids are uniformly scoped:
+        //   - inter-wat: scope = exporter's resolved path (e.g.
+        //     `test-wats/bar.wat`); the import line gets dropped at
+        //     merge time, references resolve to the exporter's FQN.
+        //   - host: scope = the import's module string (e.g. `env`);
+        //     the import line survives in the merged output.
         if id != import_name {
             panic!(
                 "wat-linker: in {path}, import \"{module_str}\" \"{import_name}\" \
@@ -823,12 +973,15 @@ fn handle_import<I>(
                  name (\"{import_name}\"). Aliasing imports is not supported."
             );
         }
-        let exporter_path = resolve_import_path(path, &module_str);
+        let scope = if module_str.ends_with(".wat") {
+            let exporter_path = resolve_import_path(path, &module_str);
+            wat_target = Some(exporter_path.clone());
+            exporter_path
+        } else {
+            module_str.clone()
+        };
         plan.id_renames
-            .insert(id.clone(), format!("{exporter_path}:{import_name}"));
-        if module_str.ends_with(".wat") {
-            wat_target = Some(exporter_path);
-        }
+            .insert(id.clone(), format!("{scope}:{import_name}"));
     }
 
     let close = skip_to_form_end(tokens, depth);
@@ -1128,5 +1281,27 @@ mod tests {
               (import "./bar.wat" "Bar" (type $MyAlias (sub any))))
         "#;
         let _ = rename_locals("test-wats/foo.wat", src);
+    }
+
+    /// Two fragments declaring `(export "env:NAME")` for the same
+    /// NAME must fail with both `file:line:col` locations cited.
+    #[test]
+    #[should_panic(expected = "duplicate host export \"foo\"")]
+    fn duplicate_host_export_panics() {
+        let a = r#"
+(module
+  (import "./b.wat" "noop" (func $noop))
+  (func $foo_a (export "env:foo")
+    (result i32)
+    (i32.const 1)))
+"#;
+        let b = r#"
+(module
+  (func $noop (@pub))
+  (func $foo_b (export "env:foo")
+    (result i32)
+    (i32.const 2)))
+"#;
+        let _ = link(&[("a.wat", a), ("b.wat", b)]);
     }
 }

@@ -1,25 +1,24 @@
 (module
   (rec
-    (type $test-wats/bar.wat:Bar (sub (struct
+    (type $test-wats/bar.wat:Bar (@pub) (sub (struct
     (field $val i32))))
     (type $test-wats/foo.wat:Foo (sub (struct
     (field $tag i32)
-    (field $payload (ref $test-wats/bar.wat:Bar))))))
+    (field $payload (ref $test-wats/bar.wat:Bar)))))
+  )
 
+  (import "env" "host_clamp" (func $env:host_clamp (param i32) (result i32)))
 
 
   ;; --- private helper: same-file reference exercise ---------------------
 
   (func $test-wats/bar.wat:clamp (param $x i32) (result i32)
-    (local $hi i32)
-    (local.set $hi (i32.const 1000))
-    (block $done (result i32)
-      (local.get $x)))
+    (call $env:host_clamp (local.get $x)))
 
 
   ;; --- exported constructor --------------------------------------------
 
-  (func $test-wats/bar.wat:bar_make 
+  (func $test-wats/bar.wat:bar_make (@pub)
     (param $v i32) (result (ref $test-wats/bar.wat:Bar))
     (struct.new $test-wats/bar.wat:Bar (call $test-wats/bar.wat:clamp (local.get $v))))
 
@@ -35,12 +34,12 @@
     (local $cur i32)
     (local.set $cur (global.get $test-wats/foo.wat:next_id))
     (global.set $test-wats/foo.wat:next_id (i32.add (local.get $cur) (i32.const 1)))
-    (local.get $cur))
+    (call $env:host_clamp (local.get $cur)))
 
 
   ;; --- exported func: builds a $Foo wrapping a fresh $Bar ---------------
 
-  (func $test-wats/foo.wat:foo_make 
+  (func $test-wats/foo.wat:foo_make (export "foo_make")
     (param $v i32) (result (ref $test-wats/foo.wat:Foo))
 
     (local $id i32)
@@ -57,11 +56,11 @@
 
   ;; --- second exported func: peels the $Bar back out of a $Foo ----------
 
-  (func (@implements "std/operators.fnk:op_in")
+  (func (@impl "std/operators.fnk:op_in")
     (param $f (ref $test-wats/foo.wat:Foo)) (result (ref $test-wats/bar.wat:Bar))
     (struct.get $test-wats/foo.wat:Foo $payload (local.get $f)))
 
-  (func $test-wats/foo.wat:op_notin (@implements "std/operators.fnk:op_notin")
+  (func $test-wats/foo.wat:op_notin (@impl "std/operators.fnk:op_notin")
     (param $f (ref $test-wats/foo.wat:Foo)) (result (ref $test-wats/bar.wat:Bar))
     (struct.get $test-wats/foo.wat:Foo $payload (local.get $f)))
 )
