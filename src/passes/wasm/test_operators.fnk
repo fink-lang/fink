@@ -41,46 +41,46 @@ test 'chained arithmetic', fn:
     2 * 3 + 4
   | equals wat":
     (module
-      (func $test:v_12 (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
-        (local $:caps_cast (ref $rt/types.wat:Captures))
+      (func $test:v_12 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+        (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $v_13 (ref null any))
         (local $v_3 (ref null any))
         (local $v_5 (ref null any))
-        (local.set $:caps_cast (ref.cast (ref $rt/types.wat:Captures) (local.get $:caps_param)))
-        (local.set $v_13 (array.get $rt/types.wat:Captures (local.get $:caps_cast) (i32.const 0)))
-        (local.set $v_3 (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $v_5 (struct.new $rt/types.wat:Num (f64.const 4)))
+        (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
+        (local.set $v_13 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
+        (local.set $v_3 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $v_5 (struct.new $std/num.wat:Num (f64.const 4)))
         (return_call $std/operators.fnk:op_plus (local.get $v_3) (local.get $v_5) (local.get $v_13))
       )
-      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_17 (ref null any))
-        (local $:caps_arg (ref null $rt/types.wat:Captures))
+        (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
-        (local.set $v_0 (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $:caps_arg (array.new_fixed $rt/types.wat:Captures 1 (local.get $v_0)))
-        (local.set $v_17 (struct.new $rt/types.wat:Closure (ref.func $test:v_12) (local.get $:caps_arg)))
-        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
+        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_0)))
+        (local.set $v_17 (struct.new $rt/apply.wat:Closure (ref.func $test:v_12) (local.get $:caps_arg)))
+        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 2)))
+        (local.set $v_2 (struct.new $std/num.wat:Num (f64.const 3)))
         (return_call $std/operators.fnk:op_mul (local.get $v_1) (local.get $v_2) (local.get $v_17))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
+      (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
         (local $:wrap_cont (ref null any))
         (local $:wrap_key_str (ref null any))
-        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
-        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
-        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
+        (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:EaQEALoBAL4BAI4BARABhAEBDwmuBgCOAQCuAQDMAQEAAYQBAQgBhAEBBwWwBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EaQEALoBAL4BAJIBARABggEBDwmuBgCSAQCuAQDMAQEAAYIBAQgBggEBBwWwBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'unary not', fn:
@@ -118,31 +118,31 @@ test 'comparison eq', fn:
     2 == 3
   | equals wat":
     (module
-      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
-        (local.set $v_0 (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
+        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 2)))
+        (local.set $v_2 (struct.new $std/num.wat:Num (f64.const 3)))
         (return_call $std/operators.fnk:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
+      (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
         (local $:wrap_cont (ref null any))
         (local $:wrap_key_str (ref null any))
-        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
-        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
-        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
+        (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAI4BAQABhAEBCgGEAQEJBqwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABggEBCgGCAQEJBqwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'comparison lt', fn:
@@ -150,31 +150,31 @@ test 'comparison lt', fn:
     2 < 3
   | equals wat":
     (module
-      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
-        (local.set $v_0 (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 2)))
-        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 3)))
+        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 2)))
+        (local.set $v_2 (struct.new $std/num.wat:Num (f64.const 3)))
         (return_call $std/operators.fnk:op_lt (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
+      (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
         (local $:wrap_cont (ref null any))
         (local $:wrap_key_str (ref null any))
-        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
-        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
-        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
+        (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAI4BAQABhAEBCAGEAQEHBawHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABggEBCAGCAQEHBawHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'logical and', fn:
@@ -182,31 +182,31 @@ test 'logical and', fn:
     true and false
   | equals wat":
     (module
-      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
-        (local.set $v_0 (call $std/fn.fnk:args_head (local.get $:params)))
+        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (ref.i31 (i32.const 1)))
         (local.set $v_2 (ref.i31 (i32.const 0)))
         (return_call $std/operators.fnk:op_and (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
+      (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
         (local $:wrap_cont (ref null any))
         (local $:wrap_key_str (ref null any))
-        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
-        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
-        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
+        (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAI4BAQAEWgESBVoBEQ6uBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAJIBAQAEWgESBVoBEQ6uBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'logical or', fn:
@@ -246,31 +246,31 @@ test 'range exclusive', fn:
     0..10
   | equals wat":
     (module
-      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
-        (local.set $v_0 (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 10)))
+        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 0)))
+        (local.set $v_2 (struct.new $std/num.wat:Num (f64.const 10)))
         (return_call $std/range.fnk:excl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
+      (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
         (local $:wrap_cont (ref null any))
         (local $:wrap_key_str (ref null any))
-        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
-        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
-        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
+        (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAI4BAQABhAEBBgKGAQEFBaIHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABggEBBgKEAQEFBaIHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'range inclusive', fn:
@@ -278,31 +278,31 @@ test 'range inclusive', fn:
     0...10
   | equals wat":
     (module
-      (func $test::fink_module (type $rt/types.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
+      (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
-        (local.set $v_0 (call $std/fn.fnk:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $rt/types.wat:Num (f64.const 0)))
-        (local.set $v_2 (struct.new $rt/types.wat:Num (f64.const 10)))
+        (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
+        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 0)))
+        (local.set $v_2 (struct.new $std/num.wat:Num (f64.const 10)))
         (return_call $std/range.fnk:incl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $rt/types.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
+      (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
         (local $:wrap_url (ref null any))
         (local $:wrap_cont (ref null any))
         (local $:wrap_key_str (ref null any))
-        (local $:wrap_caps_arg (ref null $rt/types.wat:Captures))
+        (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
         (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
-        (local.set $:wrap_caps_arg (ref.null $rt/types.wat:Captures))
-        (local.set $:wrap_mod_clos (struct.new $rt/types.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
+        (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
+        (local.set $:wrap_mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:wrap_caps_arg)))
         (return_call $std/modules.fnk:init_module (local.get $:wrap_url) (local.get $:wrap_mod_clos) (local.get $:wrap_key_str) (local.get $:wrap_cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAI4BAQABhAEBCAKGAQEHBqIHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABggEBCAKEAQEHBqIHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'range in', fn:
