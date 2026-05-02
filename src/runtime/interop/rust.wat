@@ -46,12 +46,14 @@
     (func $list_empty (result (ref $List))))
   (import "std/list.wat"    "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+
   (import "rt/apply.wat"    "args_empty"
     (func $args_empty (result (ref $List))))
   (import "rt/apply.wat"    "args_prepend"
     (func $args_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
   (import "rt/apply.wat"    "apply"
     (func $apply (param $args (ref null any)) (param $callee (ref null any))))
+
   (import "std/str.wat"     "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
   ;; TODO: rename str.wat's `bytes` export to `str_bytes` (clashes with

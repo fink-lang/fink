@@ -435,7 +435,7 @@ mod tests {
         &[Val::AnyRef(Some(main_key_bytes)), Val::I32(1)],
         &mut [])
       .map_err(|e| crate::passes::wasm::annotate_func_indices(
-        &format!("entry wrapper: {e}"), &bytes))?;
+        &format!("entry wrapper: {e:#}"), &bytes))?;
     // str_wrap is captured into the closure via `caller.get_export`
     // inside run_main_in_callback; the binding here is just to
     // ensure the runtime exports it (caught at host setup time).
