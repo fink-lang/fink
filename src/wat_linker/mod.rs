@@ -20,9 +20,11 @@
 //! * Inline `(export "X")` strings whose name matches a locally-
 //!   declared id are rewritten to `(export "<path>:X")` so the
 //!   merged module exposes a unique export name per origin file.
-//! * The local handle id of an import must match the import's name
-//!   string. `(import "./bar.wat" "Bar" (type $Bar ...))` is legal;
-//!   `(... "Bar" (type $MyAlias ...))` is rejected.
+//! * The local handle id of an import may alias the import's name
+//!   string. References to the alias are FQN'd to the exporter's
+//!   path:name at merge time. Useful when the import name would
+//!   clash with a local id (e.g. `(import "./str.wat" "bytes" (func
+//!   $str_bytes ...))` keeps a local `$bytes` parameter unambiguous).
 
 use std::collections::HashMap;
 
@@ -958,21 +960,18 @@ fn handle_import<I>(
     if let (Some(module_str), Some(import_name), Some(id)) =
         (module_str.clone(), import_name.clone(), inner_id)
     {
-        // The handle id must match the import name (no aliasing). The
-        // linker renames it to `<scope>:<name>` so the merged module's
-        // ids are uniformly scoped:
+        // Local handle is renamed to `<scope>:<import_name>` so the
+        // merged module's ids are uniformly scoped. Aliasing is allowed:
+        // the local handle id can differ from the import name (e.g.
+        // `(import "./str.wat" "bytes" (func $str_bytes ...))` to avoid
+        // a clash with a local `$bytes`); references to the alias
+        // resolve to the exporter's FQN at merge time.
+        //
         //   - inter-wat: scope = exporter's resolved path (e.g.
         //     `test-wats/bar.wat`); the import line gets dropped at
         //     merge time, references resolve to the exporter's FQN.
         //   - host: scope = the import's module string (e.g. `env`);
         //     the import line survives in the merged output.
-        if id != import_name {
-            panic!(
-                "wat-linker: in {path}, import \"{module_str}\" \"{import_name}\" \
-                 binds local handle $\"{id}\" — handle id must equal the import \
-                 name (\"{import_name}\"). Aliasing imports is not supported."
-            );
-        }
         let scope = if module_str.ends_with(".wat") {
             let exporter_path = resolve_import_path(path, &module_str);
             wat_target = Some(exporter_path.clone());
@@ -1273,15 +1272,6 @@ mod tests {
         }
     }
 
-    #[test]
-    #[should_panic(expected = "handle id must equal the import name")]
-    fn import_handle_must_match_name() {
-        let src = r#"
-            (module
-              (import "./bar.wat" "Bar" (type $MyAlias (sub any))))
-        "#;
-        let _ = rename_locals("test-wats/foo.wat", src);
-    }
 
     /// Two fragments declaring `(export "env:NAME")` for the same
     /// NAME must fail with both `file:line:col` locations cited.

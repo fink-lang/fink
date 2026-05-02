@@ -16,8 +16,11 @@
 
   (import "./bar.wat" "Bar" (type $Bar (sub any)))
 
+  ;; Aliased import: bar.wat exports `bar_make`; we bind it locally as
+  ;; `$make_bar` (e.g. to avoid a clash with a same-named local). The
+  ;; linker resolves both names to bar.wat's FQN at merge time.
   (import "./bar.wat" "bar_make"
-    (func $bar_make (param $v i32) (result (ref $Bar))))
+    (func $make_bar (param $v i32) (result (ref $Bar))))
 
   ;; --- host import shared with bar.wat ----------------------------------
 
@@ -54,7 +57,7 @@
     (local $bar (ref $Bar))
 
     (local.set $id (call $alloc_id))
-    (local.set $bar (call $bar_make (local.get $v)))
+    (local.set $bar (call $make_bar (local.get $v)))
 
     (block $done (result (ref $Foo))
       (struct.new $Foo
