@@ -30,6 +30,17 @@ use std::collections::HashMap;
 
 use wast::lexer::{Lexer, TokenKind};
 
+/// Output of [`link`]. `wat` is the merged module text; `impls` maps
+/// every bare `(@impl "fqn")` annotation found in the linked sources
+/// to the qualified `$<url>:<name>` id of its enclosing func, so the
+/// emitter can resolve protocol fqns to runtime func indices via the
+/// wasm name section after `wat_crate::parse_str`.
+#[derive(Debug, Default)]
+pub struct LinkResult {
+    pub wat: String,
+    pub impls: HashMap<String, String>,
+}
+
 /// Link a set of `.wat` modules into a single merged `(module ...)`.
 ///
 /// `modules[0]` is the entry; the rest are deps reachable via imports.
@@ -51,7 +62,9 @@ use wast::lexer::{Lexer, TokenKind};
 ///    canonical name.
 /// 5. Concatenates remaining bodies in DFS post-order, wraps in
 ///    `(module ...)`.
-pub fn link(modules: &[(&str, &str)]) -> String {
+/// 6. Collects every bare `(@impl "fqn")` annotation into the result's
+///    `impls` map, keyed by fqn → qualified func id.
+pub fn link(modules: &[(&str, &str)]) -> LinkResult {
     let url_to_index: HashMap<&str, usize> = modules
         .iter()
         .enumerate()
@@ -79,6 +92,7 @@ pub fn link(modules: &[(&str, &str)]) -> String {
     // in url's source). On second sight of the same name, panic with
     // both file:line:col locations.
     let mut host_export_sites: HashMap<String, (&str, usize)> = HashMap::new();
+    let mut impls: HashMap<String, String> = HashMap::new();
     for &i in &visit.order {
         let (url, src) = modules[i];
         let plan = collect_plan(url, src);
@@ -92,6 +106,17 @@ pub fn link(modules: &[(&str, &str)]) -> String {
                 );
             }
             host_export_sites.insert(he.name.clone(), (url, he.offset));
+        }
+        for bi in &plan.bare_impls {
+            // Qualified func id is `$<url>:<func_name>` — same scheme
+            // as the linker's id rename pass, minus the `$`.
+            let qualified = format!("${url}:{}", bi.func_name);
+            if let Some(prev) = impls.insert(bi.fqn.clone(), qualified) {
+                panic!(
+                    "wat-linker: duplicate bare @impl \"{}\":\n  first at {}\n  redefined in {}",
+                    bi.fqn, prev, url
+                );
+            }
         }
 
         let renamed = apply_plan(src, &plan);
@@ -139,7 +164,8 @@ pub fn link(modules: &[(&str, &str)]) -> String {
     // Strip the `env:` prefix from surviving host-visible exports.
     // Only `(export "env:...")` forms reach the merged output (inter-wat
     // exports were dropped); plain string-replace is safe.
-    out.replace("(export \"env:", "(export \"")
+    let wat = out.replace("(export \"env:", "(export \"");
+    LinkResult { wat, impls }
 }
 
 /// Re-indent a multi-line type form for placement inside the merged
@@ -681,12 +707,26 @@ struct Plan {
     /// the export string. Used to detect duplicate host exports across
     /// fragments at link time.
     host_exports: Vec<HostExport>,
+    /// Bare `(@impl "fqn")` annotations found on top-level funcs.
+    /// "Bare" = exactly one string after `@impl`; typed impls (with
+    /// trailing type args) are protocol entries dispatched via the
+    /// protocol table and not directly addressable by name.
+    bare_impls: Vec<BareImpl>,
 }
 
 #[derive(Clone)]
 struct HostExport {
     name: String,
     offset: usize,
+}
+
+#[derive(Clone)]
+struct BareImpl {
+    /// User-facing fqn from `(@impl "fqn")`, e.g. `std/operators.fnk:op_plus`.
+    fqn: String,
+    /// Local id (without `$`) of the enclosing func — already known at
+    /// detection time because we sit just past `consume_optional_id`.
+    func_name: String,
 }
 
 #[derive(Clone, Copy)]
@@ -763,7 +803,11 @@ fn handle_top_form<I>(
                 });
             }
         }
-        "func" | "global" | "memory" | "table" | "data" => {
+        "func" => {
+            let func_id = consume_optional_id(path, src, tokens, depth, plan);
+            walk_func_interior(path, src, tokens, depth, plan, func_id.as_deref());
+        }
+        "global" | "memory" | "table" | "data" => {
             consume_optional_id(path, src, tokens, depth, plan);
             walk_inline_exports(path, src, tokens, depth, plan);
         }
@@ -864,29 +908,30 @@ fn consume_optional_id<I>(
     tokens: &mut I,
     depth: &mut usize,
     plan: &mut Plan,
-) where
+) -> Option<String>
+where
     I: Iterator<Item = wast::lexer::Token>,
 {
-    let tok = match tokens.next() {
-        Some(t) => t,
-        None => return,
-    };
+    let tok = tokens.next()?;
     match tok.kind {
         TokenKind::Id => {
             let name = strip_dollar(slice(src, &tok));
             plan.id_renames
                 .insert(name.clone(), format!("{path}:{name}"));
+            Some(name)
         }
         TokenKind::LParen => {
             *depth += 1;
             // Hand the just-opened sub-form to walk_inline_exports
             // by inspecting its keyword now.
             inspect_subform_for_export(path, src, tokens, depth, plan);
+            None
         }
         TokenKind::RParen => {
             *depth -= 1;
+            None
         }
-        _ => {}
+        _ => None,
     }
 }
 
@@ -982,6 +1027,106 @@ where
         }
     }
     last_close
+}
+
+/// Variant of [`walk_inline_exports`] for `(func ...)` forms: in
+/// addition to inline `(export ...)` rewrites, picks up bare
+/// `(@impl "fqn")` annotations sitting as immediate children of the
+/// func and records them in `plan.bare_impls` keyed by the func's id.
+/// Annotations on an anonymous func (`func_id == None`) are ignored —
+/// the linker has no qualified id to attach the fqn to.
+fn walk_func_interior<I>(
+    path: &str,
+    src: &str,
+    tokens: &mut I,
+    depth: &mut usize,
+    plan: &mut Plan,
+    func_id: Option<&str>,
+) -> Option<usize>
+where
+    I: Iterator<Item = wast::lexer::Token>,
+{
+    let mut last_close = None;
+    while *depth >= 2 {
+        let tok = tokens.next()?;
+        match tok.kind {
+            TokenKind::LParen => {
+                *depth += 1;
+                inspect_subform_for_export_or_impl(path, src, tokens, depth, plan, func_id);
+            }
+            TokenKind::RParen => {
+                last_close = Some(tok.offset);
+                *depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    last_close
+}
+
+/// Variant of [`inspect_subform_for_export`]: also detects bare
+/// `(@impl "fqn")` annotations and records them when `func_id` is set.
+/// Bare = exactly one string after `@impl`; typed impls (with trailing
+/// type-args) are skipped — they index the protocol table and are not
+/// directly addressable by name.
+fn inspect_subform_for_export_or_impl<I>(
+    path: &str,
+    src: &str,
+    tokens: &mut I,
+    depth: &mut usize,
+    plan: &mut Plan,
+    func_id: Option<&str>,
+) where
+    I: Iterator<Item = wast::lexer::Token>,
+{
+    let head_tok = match tokens.next() {
+        Some(t) => t,
+        None => return,
+    };
+    match head_tok.kind {
+        TokenKind::Keyword if slice(src, &head_tok) == "export" => {
+            if let Some(str_tok) = tokens.next()
+                && str_tok.kind == TokenKind::String
+            {
+                queue_export_rewrite(path, src, &str_tok, plan);
+            }
+        }
+        TokenKind::Annotation if slice(src, &head_tok) == "@impl" => {
+            if let Some(name) = func_id
+                && let Some(str_tok) = tokens.next()
+                && str_tok.kind == TokenKind::String
+            {
+                let raw = slice(src, &str_tok);
+                let fqn = raw.trim_matches('"').to_string();
+                // Bare impl = next significant token closes the
+                // annotation (no type args after the fqn).
+                if let Some(next) = tokens.next()
+                    && next.kind == TokenKind::RParen
+                {
+                    *depth -= 1;
+                    plan.bare_impls.push(BareImpl {
+                        fqn,
+                        func_name: name.to_string(),
+                    });
+                    return;
+                }
+            }
+        }
+        _ => {}
+    }
+    // Skip to end of this sub-form.
+    let target = *depth - 1;
+    while *depth > target {
+        let tok = match tokens.next() {
+            Some(t) => t,
+            None => return,
+        };
+        match tok.kind {
+            TokenKind::LParen => *depth += 1,
+            TokenKind::RParen => *depth -= 1,
+            _ => {}
+        }
+    }
 }
 
 /// Process `(import "<module>" "<name>" (<kind> $<id> ...))`.
@@ -1199,7 +1344,7 @@ mod tests {
             ("test-wats/foo.wat", include_str!("test-wats/foo.wat")),
             ("test-wats/bar.wat", include_str!("test-wats/bar.wat")),
         ];
-        let got = link(modules);
+        let got = link(modules).wat;
 
         let expected_path =
             concat!(env!("CARGO_MANIFEST_DIR"), "/src/wat_linker/test-wats/foo.expected.wat");
@@ -1239,7 +1384,7 @@ mod tests {
             ("test-wats/diamond/c.wat", include_str!("test-wats/diamond/c.wat")),
             ("test-wats/diamond/d.wat", include_str!("test-wats/diamond/d.wat")),
         ];
-        let got = link(modules);
+        let got = link(modules).wat;
         let expected_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/wat_linker/test-wats/diamond/expected.wat"
@@ -1260,7 +1405,7 @@ mod tests {
             ("test-wats/cycle/e.wat", include_str!("test-wats/cycle/e.wat")),
             ("test-wats/cycle/f.wat", include_str!("test-wats/cycle/f.wat")),
         ];
-        let got = link(modules);
+        let got = link(modules).wat;
         let expected_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/wat_linker/test-wats/cycle/expected.wat"
@@ -1282,7 +1427,7 @@ mod tests {
             ("test-wats/diamond/c.wat", include_str!("test-wats/diamond/c.wat")),
             ("test-wats/diamond/d.wat", include_str!("test-wats/diamond/d.wat")),
         ];
-        let got = link(modules);
+        let got = link(modules).wat;
         if let Err(e) = wat_crate::parse_str(&got) {
             panic!("merged diamond failed to parse: {e}\n\noutput:\n{got}");
         }
@@ -1295,7 +1440,7 @@ mod tests {
             ("test-wats/cycle/e.wat", include_str!("test-wats/cycle/e.wat")),
             ("test-wats/cycle/f.wat", include_str!("test-wats/cycle/f.wat")),
         ];
-        let got = link(modules);
+        let got = link(modules).wat;
         if let Err(e) = wat_crate::parse_str(&got) {
             panic!("merged cycle failed to parse: {e}\n\noutput:\n{got}");
         }
@@ -1311,7 +1456,7 @@ mod tests {
             ("test-wats/foo.wat", include_str!("test-wats/foo.wat")),
             ("test-wats/bar.wat", include_str!("test-wats/bar.wat")),
         ];
-        let got = link(modules);
+        let got = link(modules).wat;
         if let Err(e) = wat_crate::parse_str(&got) {
             panic!("merged output failed to parse: {e}\n\noutput:\n{got}");
         }
@@ -1338,5 +1483,118 @@ mod tests {
     (i32.const 2)))
 "#;
         let _ = link(&[("a.wat", a), ("b.wat", b)]);
+    }
+
+    /// Bare `(@impl "fqn")` annotations populate `LinkResult.impls`
+    /// keyed by fqn → qualified `$<url>:<func>`. Typed impls (with
+    /// trailing type args) and anonymous funcs are skipped.
+    #[test]
+    fn bare_impls_collected() {
+        let a = r#"
+(module
+  (func $plus (@impl "std/operators.fnk:op_plus")
+    (param $x (ref null any)) (param $y (ref null any))
+    (param $cont (ref null any)))
+
+  ;; Typed impl — protocol entry, not directly addressable.
+  (func $list_op_eq (@impl "std/operators.fnk:op_eq" $List $List)
+    (param $a (ref null any)) (param $b (ref null any))
+    (param $cont (ref null any)))
+
+  ;; Bare impl on an anonymous func — ignored (no qualified id).
+  (func (@impl "std/oops.fnk:no_id")
+    (result i32) (i32.const 0))
+)
+"#;
+        let result = link(&[("a.wat", a)]);
+        assert_eq!(
+            result.impls.get("std/operators.fnk:op_plus").map(String::as_str),
+            Some("$a.wat:plus"),
+            "bare @impl should map fqn → $url:func"
+        );
+        assert!(
+            !result.impls.contains_key("std/operators.fnk:op_eq"),
+            "typed @impl must not be in the manifest"
+        );
+        assert!(
+            !result.impls.contains_key("std/oops.fnk:no_id"),
+            "anonymous-func @impl must not be in the manifest"
+        );
+    }
+
+    /// The qualified `$<url>:<name>` ids in `LinkResult.impls` must
+    /// survive into the wasm name section after `wat_crate::parse_str`,
+    /// so the emitter can resolve fqn → func index. Compile a small
+    /// linked module, walk its name section, and assert every fqn maps
+    /// to a func whose name in the binary matches the impls value.
+    #[test]
+    fn impls_resolve_through_wat_to_wasm() {
+        let a = r#"
+(module
+  (func $plus (@impl "std/operators.fnk:op_plus")
+    (param $x (ref null any)) (param $y (ref null any))
+    (param $cont (ref null any)))
+
+  (func $minus (@impl "std/operators.fnk:op_minus")
+    (param $x (ref null any)) (param $y (ref null any))
+    (param $cont (ref null any)))
+)
+"#;
+        let result = link(&[("a.wat", a)]);
+        let wasm = wat_crate::parse_str(&result.wat).expect("merged WAT failed to compile");
+
+        // Walk the name section, building func_index → name (with `$`).
+        let mut func_names: HashMap<u32, String> = HashMap::new();
+        for payload in wasmparser::Parser::new(0).parse_all(&wasm) {
+            if let Ok(wasmparser::Payload::CustomSection(c)) = payload
+                && c.name() == "name"
+            {
+                let br = wasmparser::BinaryReader::new(c.data(), c.data_offset());
+                let reader = wasmparser::NameSectionReader::new(br);
+                for sub in reader {
+                    if let Ok(wasmparser::Name::Function(map)) = sub {
+                        for entry in map {
+                            let entry = entry.expect("name entry");
+                            func_names.insert(entry.index, format!("${}", entry.name));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build reverse: name (with `$`) → index.
+        let name_to_idx: HashMap<&String, u32> =
+            func_names.iter().map(|(i, n)| (n, *i)).collect();
+
+        for (fqn, qualified_id) in &result.impls {
+            assert!(
+                name_to_idx.contains_key(qualified_id),
+                "fqn {:?} → {:?} not found in wasm name section. \
+                 Available func names: {:?}",
+                fqn,
+                qualified_id,
+                func_names.values().collect::<Vec<_>>()
+            );
+        }
+    }
+
+    /// Two bare `(@impl)` annotations sharing the same fqn panic with
+    /// both source locations — typed dispatchers belong in only one
+    /// place; collisions indicate a runtime layering bug.
+    #[test]
+    #[should_panic(expected = "duplicate bare @impl")]
+    fn duplicate_bare_impl_panics() {
+        let a = r#"
+(module
+  (func $first  (@impl "std/operators.fnk:op_plus") (param (ref null any)))
+)
+"#;
+        let b = r#"
+(module
+  (import "./a.wat" "first" (func $_first (param (ref null any))))
+  (func $second (@impl "std/operators.fnk:op_plus") (param (ref null any)))
+)
+"#;
+        let _ = link(&[("b.wat", b), ("a.wat", a)]);
     }
 }
