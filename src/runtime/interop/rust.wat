@@ -48,9 +48,9 @@
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
 
   (import "rt/apply.wat"    "args_empty"
-    (func $args_empty (result (ref $List))))
+    (func $args_empty (result (ref any))))
   (import "rt/apply.wat"    "args_prepend"
-    (func $args_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+    (func $args_prepend (param $head (ref null any)) (param $tail (ref any)) (result (ref any))))
   (import "rt/apply.wat"    "apply"
     (func $apply (param $args (ref null any)) (param $callee (ref null any))))
 
@@ -83,7 +83,7 @@
 
 
   ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $host_cont_adapter $read_apply $write_apply)
+  (elem declare func $host_cont_adapter $read_apply $write_apply $panic_apply)
 
 
   ;; -- Host imports (provided by Rust runner) --------------------------------
@@ -233,6 +233,22 @@
     (call $host_panic)
     unreachable
   )
+
+
+  ;; -- $Fn2-shaped panic for CPS dispatch ------------------------------------
+  ;;
+  ;; CPS-side panic — used as a $Closure value passed as a fail continuation
+  ;; to pattern matchers, and as a direct tail-call at the terminal of a
+  ;; fail chain. Signature matches the universal $Fn2 calling convention so
+  ;; `_apply` can dispatch to it like any other continuation.
+  ;;
+  ;; Delegates to `$panic`, which traps the instance via host_panic. Today
+  ;; panic carries no payload; future work will pass a reason / source
+  ;; location for better diagnostics.
+  (func $panic_apply (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
+    (param $_caps (ref null any))
+    (param $_args (ref null any))
+    (return_call $panic))
 
 
   ;; -- stdio channels --------------------------------------------------------
@@ -403,12 +419,12 @@
     (param $args (ref null any)) (param $callee (ref null any))
     (return_call $apply (local.get $args) (local.get $callee)))
 
-  (func (export "env:args_empty") (result (ref $List))
+  (func (export "env:args_empty") (result (ref any))
     (return_call $args_empty))
 
   (func (export "env:args_prepend")
-    (param $head (ref any)) (param $tail (ref $List))
-    (result (ref $List))
+    (param $head (ref null any)) (param $tail (ref any))
+    (result (ref any))
     (return_call $args_prepend (local.get $head) (local.get $tail)))
 
   (func (export "env:str_wrap_bytes")

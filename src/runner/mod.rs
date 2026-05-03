@@ -42,7 +42,7 @@ pub fn run_source(
     opts.source_label = path.to_string();
   }
   let wasm = crate::to_wasm(src, path)?;
-  wasmtime_runner::run(&opts, &wasm.binary, args, stdin, stdout, stderr)
+  wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr)
 }
 
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
@@ -69,12 +69,18 @@ pub fn run_file(
   if path.ends_with(".fnk") {
     let mut loader = crate::passes::modules::FileSourceLoader::new();
     let wasm = crate::compile_package(std::path::Path::new(path), &mut loader)?;
-    return wasmtime_runner::run(&opts, &wasm.binary, args, stdin, stdout, stderr);
+    return wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
   if bytes.starts_with(b"\0asm") {
-    wasmtime_runner::run(&opts, &bytes, args, stdin, stdout, stderr)
+    let wasm = crate::passes::Wasm {
+      binary: bytes,
+      mappings: Vec::new(),
+      marks: Vec::new(),
+      id_to_url: std::collections::BTreeMap::new(),
+    };
+    wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr)
   } else {
     Err("only .fnk and .wasm files are supported".into())
   }

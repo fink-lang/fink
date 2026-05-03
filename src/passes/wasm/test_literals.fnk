@@ -10,7 +10,7 @@ test 'literal bool', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (ref.i31 (i32.const 1)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -32,7 +32,7 @@ test 'literal bool', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8wDAJIBAQAEWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQAEWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'literal bool false', fn:
@@ -43,7 +43,7 @@ test 'literal bool false', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (ref.i31 (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -65,7 +65,7 @@ test 'literal bool false', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8wDAJIBAQAFWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQAFWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'literal int', fn:
@@ -76,7 +76,7 @@ test 'literal int', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 42)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -98,7 +98,7 @@ test 'literal int', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8wDAJIBAQAChAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAChAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'literal neg 0', fn:
@@ -109,7 +109,7 @@ test 'literal neg 0', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $std/num.wat:Num (f64.const -0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -131,7 +131,7 @@ test 'literal neg 0', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8wDAJIBAQAChAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAChAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -143,7 +143,7 @@ test 'literal float', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 123400)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -165,7 +165,7 @@ test 'literal float', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8wDAJIBAQAIjAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAIjAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct

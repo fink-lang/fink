@@ -45,10 +45,12 @@ struct ExitState {
 ///
 /// `args` is the CLI argv passed to `main` — `argv[0]` is the program
 /// name. Returns the exit code from `main` (or 0 if the program has
-/// no `main`).
+/// no `main`). `wasm` carries the binary plus optional debug
+/// metadata (`marks`, `id_to_url`); annotation routes errors through
+/// that metadata when present.
 pub fn run(
   opts: &RunOptions,
-  wasm: &[u8],
+  wasm: &crate::passes::Wasm,
   args: Vec<Vec<u8>>,
   stdin: Arc<Mutex<dyn Read + Send>>,
   stdout: super::IoStream,
@@ -63,9 +65,10 @@ pub fn run(
     config.cranelift_opt_level(OptLevel::None);
   }
 
+  let bytes: &[u8] = &wasm.binary;
   let engine = Engine::new(&config).map_err(|e| e.to_string())?;
-  let module = Module::new(&engine, wasm)
-    .map_err(|e| crate::passes::wasm::annotate_func_indices(&e.to_string(), wasm))?;
+  let module = Module::new(&engine, bytes)
+    .map_err(|e| crate::passes::wasm::annotate_func_indices(&e.to_string(), bytes))?;
   let mut store = Store::new(&engine, ());
 
   let exit_state: Arc<Mutex<ExitState>> = Arc::new(Mutex::new(ExitState::default()));
@@ -207,7 +210,7 @@ pub fn run(
       &[Val::AnyRef(Some(main_key)), Val::I32(CONT_WRAPPER_DONE)],
       &mut [])
     .map_err(|e| crate::passes::wasm::annotate_func_indices(
-      &format!("entry wrapper: {e}"), wasm))?;
+      &format!("entry wrapper: {e}"), bytes))?;
 
   Ok(exit_state.lock().unwrap().exit_code)
 }

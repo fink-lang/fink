@@ -14,7 +14,7 @@ test 'single binding export', fn:
         (local $foo_0 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $foo_0 (struct.new $std/num.wat:Num (f64.const 1)))
         (global.set $test:foo (local.get $foo_0))
@@ -42,7 +42,7 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:D-YEAJIBAQADhgEAXACIAQCKAQDAAQBuAL4BAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D9wEAJIBAQADhgEAXACIAQCKAQDAAQBuAL4BAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -57,7 +57,7 @@ test 'let binding', fn:
         (local $x_0 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $x_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $x_0 (struct.new $std/num.wat:Num (f64.const 42)))
         (global.set $test:x (local.get $x_0))
@@ -85,7 +85,7 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:D-IEAJIBAQABhAEAVACIAQCKAQC8AQBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D9gEAJIBAQABhAEAVACIAQCKAQC8AQBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -165,7 +165,7 @@ test 'binding rhs is a call', fn:
         (local $x_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_35 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_16 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -183,7 +183,7 @@ test 'binding rhs is a call', fn:
         (local $v_0_callee (ref null any))
         (local $v_14 (ref null any))
         (local $v_15 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_39 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_0_callee (global.get $test:add))
         (local.set $v_14 (struct.new $std/num.wat:Num (f64.const 1)))
@@ -204,7 +204,7 @@ test 'binding rhs is a call', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_44_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $add_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_5) (local.get $:caps_arg)))
@@ -239,7 +239,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:LrYDAJIBAJoBAJIBAJoBAJIBAR4FsAcAugEAvgEAlAEBDAFOAFQAiAEAigEAvAEAbgC6AQDWBQCUAQBmARABhAEBBgGEAQBuALwBALwBALwBAOAJAJIBAHoBPwPMAQBcAIgBAIoBAMABAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:LrYDAJIBAJoBAJIBAJoBAJIBAR4FpgcAugEAvgEAlAEBDAFOAFQAiAEAigEAvAEAbgC6AQDMBQCUAQBmARABhAEBBgGEAQBuALwBALwBALwBANYJAJIBAHoBPwPMAQBcAIgBAIoBAMABAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -272,7 +272,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $foo_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_69 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_12 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -291,7 +291,7 @@ test 'top-level rec destructure then fn using binding', fn:
       (func $test:v_93 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $v_94 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_94 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -302,7 +302,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $v_127 (ref null any))
         (local $v_12 (ref null any))
         (local $v_16 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_127 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_12 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -358,7 +358,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_panic_clo (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_60 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_7 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -391,7 +391,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_75_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_3)))
         (local.set $v_75_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_59) (local.get $:caps_arg)))
@@ -419,6 +419,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:U6gFALoBAL4BAJQBAJoBAJIBATQFrAkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAIgBAIoBAMABAG4AvgEA7gQAugEAvgEAbgD2BQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABARsNgAEBAA3wBwCUAQCaAQCUAQCaAQCSAQCwAQDMAQDUAQDQAQEADZYKALoBAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAIYFAJQBAQwHWgECAX4BBgKEAQEFBcIHAJIBAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:U6gFALoBAL4BAJQBAJoBAJIBATQFogkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAIgBAIoBAMABAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABARsNgAEBAA3wBwCUAQCaAQCUAQCaAQCSAQCwAQDMAQDUAQDQAQEADYwKALoBAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAIYFAJQBAQwHWgECAX4BBgKEAQEFBbgHAJIBAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 

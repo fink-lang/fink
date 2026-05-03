@@ -82,7 +82,7 @@ test 'rec destructure', fn:
       (func $test:v_102 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $v_103 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_103 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -94,7 +94,7 @@ test 'rec destructure', fn:
         (local $v_157 (ref null any))
         (local $v_16 (ref null any))
         (local $v_21 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_155 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_157 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -172,7 +172,7 @@ test 'rec destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_panic_clo (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_72 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_10 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -222,7 +222,7 @@ test 'rec destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_80_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_2)))
         (local.set $v_80_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_62) (local.get $:caps_arg)))
@@ -249,7 +249,7 @@ test 'rec destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:W6oGALoBAL4BAJQBAJoBAJQBAQIBTgEMAU4BJAWeBQC6AQDAAQBuALwGALoBAMABAMABAJQBAJoBAJQBAG4AvAEAvgEA8AcAugEAwAEAwAEAlAEAmgEAlAEA1gEA0AEBMRiAAQEAGPAHALoBAMABAMABAJQBANgBANABAQAYgAEBABj0BwCUAQCaAQCUAQCaAQCUAQCwAQDQAQDUAQDQAQEAGJwKALoBAL4BAJQBALABAMwBAHoA0gEAegDyAQBuALwBAMoBALwBAKQHALoBAL4BAJIBALABAMwBASYBfgEGAYIBAQUEugUAlAEBDQxaAQIBfgEGAYIBAQUEwgcAkgEArgEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:W6oGALoBAL4BAJQBAJoBAJQBAQIBTgEMAU4BJAWUBQC6AQDAAQBuALIGALoBAMABAMABAJQBAJoBAJQBAG4AvAEAvgEA8AcAugEAwAEAwAEAlAEAmgEAlAEA1gEA0AEBMRiAAQEAGPAHALoBAMABAMABAJQBANgBANABAQAYgAEBABj0BwCUAQCaAQCUAQCaAQCUAQCwAQDQAQDUAQDQAQEAGJIKALoBAL4BAJQBALABAMwBAHoA0gEAegDyAQBuALwBAMoBALwBAKQHALoBAL4BAJIBALABAMwBASYBfgEGAYIBAQUEugUAlAEBDQxaAQIBfgEGAYIBAQUEuAcAkgEArgEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
 
 test 'rec spread', fn:
   expect wat ƒink:
@@ -328,7 +328,7 @@ test 'rec spread', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_49_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_1)))
         (local.set $v_49_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_31) (local.get $:caps_arg)))
@@ -358,7 +358,7 @@ test 'rec spread', fn:
       (data $d_3 "b")
       (data $d_4 "a")
     )
-    ;; sm:LewFALoBAL4BAJQBAS4BgAEBBgGEAQEFBPYIALoBAL4BAJIBAS0BTABUAIgBAIoBALwBALABAMwBASILXAECA7wHALoBAL4BAJIBALABAMwBAQ0BfgEGAYIBAQUEugUAlAEBDQxaAQIBfgEGAYIBAQUEwgcAkgEArgEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:LewFALoBAL4BAJQBAS4BgAEBBgGEAQEFBPYIALoBAL4BAJIBAS0BTABUAIgBAIoBALwBALABAMwBASILXAECA7wHALoBAL4BAJIBALABAMwBAQ0BfgEGAYIBAQUEugUAlAEBDQxaAQIBfgEGAYIBAQUEuAcAkgEArgEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
 
 test 'rec empty literal', fn:
   expect wat ƒink:
@@ -369,7 +369,7 @@ test 'rec empty literal', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/rec.fnk:new))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -391,7 +391,7 @@ test 'rec empty literal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C84EAJIBAQACWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8QEAJIBAQACWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 test 'rec single field', fn:
   expect wat ƒink:
@@ -441,7 +441,7 @@ test 'rec nested destructure', fn:
         (local $b_116 (ref null any))
         (local $v_36 (ref null any))
         (local $b_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $b_116 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_36 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -453,7 +453,7 @@ test 'rec nested destructure', fn:
       (func $test:v_157 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $v_158 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_158 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -464,7 +464,7 @@ test 'rec nested destructure', fn:
         (local $v_209 (ref null any))
         (local $v_36 (ref null any))
         (local $v_40 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_209 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_36 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -521,7 +521,7 @@ test 'rec nested destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_panic_clo (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $b_104 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_15 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -541,7 +541,7 @@ test 'rec nested destructure', fn:
       (func $test:v_128 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $v_129 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_129 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -552,7 +552,7 @@ test 'rec nested destructure', fn:
         (local $v_177 (ref null any))
         (local $v_15 (ref null any))
         (local $v_19 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_177 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_15 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -608,7 +608,7 @@ test 'rec nested destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_panic_clo (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $b_90 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_10 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -658,7 +658,7 @@ test 'rec nested destructure', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_98_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $b_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $b_2)))
         (local.set $v_98_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_80) (local.get $:caps_arg)))
@@ -685,7 +685,7 @@ test 'rec nested destructure', fn:
       (data $d_1 "a")
       (data $d_2 "test")
     )
-    ;; sm:e_AFALoBAMABAJQBASgBTgBuALoBAPQEALoBAMABAG4A-AUAugEAwAEAlAEAmgEAlAEAbgC8AQCuBwC6AQDAAQDAAQCUAQCyAQDQAQEBB4ABAQAH9AcAlAEAmgEAlAEAmgEAlAEAsAEA0AEA1AEA0AEBAAfiCgC6AQDAAQCUAQEjAU4AsgEA0AEAegDSAQB6APIBAG4AugEAygEAvgEA-AQAugEAwAEAbgD4BQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABAQESgAEBABL0BwCUAQCaAQCUAQCaAQCUAQCwAQDQAQDUAQDQAQEAEp4KALoBAL4BAJQBALABANABAHoA0gEAegDyAQBuALwBAMoBAL4BAKQHALoBAL4BAJIBALABAMwBAQwMWgECAX4BAAq6BQCUAQEGB1oBAgF-AQYChAEBBQXCBwCSAQCuAQDUAQB6ANIBAG4AxAEAjAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:e-YFALoBAMABAJQBASgBTgBuALoBAOoEALoBAMABAG4A7gUAugEAwAEAlAEAmgEAlAEAbgC8AQCuBwC6AQDAAQDAAQCUAQCyAQDQAQEBB4ABAQAH9AcAlAEAmgEAlAEAmgEAlAEAsAEA0AEA1AEA0AEBAAfYCgC6AQDAAQCUAQEjAU4AsgEA0AEAegDSAQB6APIBAG4AugEAygEAvgEA7gQAugEAwAEAbgDuBQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABAQESgAEBABL0BwCUAQCaAQCUAQCaAQCUAQCwAQDQAQDUAQDQAQEAEpQKALoBAL4BAJQBALABANABAHoA0gEAegDyAQBuALwBAMoBAL4BAKQHALoBAL4BAJIBALABAMwBAQwMWgECAX4BAAq6BQCUAQEGB1oBAgF-AQYChAEBBQW4BwCSAQCuAQDUAQB6ANIBAG4AxAEAjAcAigEAvgEAwAEAhAEA-gEA
 
 test 'rec spread merge two', fn:
   expect wat ƒink:
@@ -753,7 +753,7 @@ test 'rec spread merge two', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_61_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_37 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_6 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -787,7 +787,7 @@ test 'rec spread merge two', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_56_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_2)))
         (local.set $v_56_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_36) (local.get $:caps_arg)))
@@ -818,7 +818,7 @@ test 'rec spread merge two', fn:
       (data $d_3 "r1")
       (data $d_4 "a")
     )
-    ;; sm:OawFALoBAMABAL4BAJQBAT4EoAkAugEAwAEAvgEAlAEBJQJQAFgAiAEAigEAvgEA1AEAzAEBGAxcAQIEpAUAlAEBDwZaAQIBfgEGAYQBAQUEuAoAugEAvgEAkgEBIwJOAFgAiAEAigEAvgEA1AEA1AEAegDSAQBuAMQBAIYFAJQBAQoGWgECAX4BBgGCAQEFBMIHAJIBAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:OawFALoBAMABAL4BAJQBAT4EoAkAugEAwAEAvgEAlAEBJQJQAFgAiAEAigEAvgEA1AEAzAEBGAxcAQIEpAUAlAEBDwZaAQIBfgEGAYQBAQUErgoAugEAvgEAkgEBIwJOAFgAiAEAigEAvgEA1AEA1AEAegDSAQBuAMQBAIYFAJQBAQoGWgECAX4BBgGCAQEFBLgHAJIBAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 # TODO: should this be in strings?
 test 'rec format template', fn:
@@ -873,43 +873,4 @@ test 'rec format template', fn:
       (data $d_2 "test")
     )
     ;; sm:E5QGALoBAL4BAJIBAQIFfgDMAQEBEMIGAJIBAK4BAMwBARAGWgECAX4BBgGCAQEFBMAHAIoBAL4BAMABAIQBAPoBAA
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

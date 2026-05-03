@@ -95,27 +95,43 @@
   ;; the carrier) so apply.wat stays free to swap storage without ripple.
 
   (func $args_head (@pub)
-    (param $args (ref null any))
-    (result (ref null any))
+      (param $args (ref null any))
+      (result (ref null any))
     (return_call $list_head_any (local.get $args)))
 
   (func $args_tail (@pub)
-    (param $args (ref null any))
-    (result (ref null any))
+      (param $args (ref null any))
+      (result (ref null any))
     (return_call $list_tail_any (local.get $args)))
 
-  (func $args_empty (@pub) (result (ref $List))
+  ;; TODO use $Args type for result
+  (func $args_empty (@pub) (result (ref any))
     (return_call $list_empty))
 
+  ;; TODO use $Args type for param and result.
+  ;; TODO: $head should be (ref any) — args list elements are always
+  ;; real values, never null. Currently nullable because the compiler
+  ;; emits user value-locals as (ref null any) and doesn't insert a
+  ;; non-null cast at this boundary. Tighten user emit and revert to
+  ;; (ref any) once all call sites flow non-null.
   (func $args_prepend (@pub)
-    (param $head (ref any)) (param $tail (ref $List))
-    (result (ref $List))
-    (return_call $list_prepend (local.get $head) (local.get $tail)))
+      (param $head (ref null any)) (param $tail (ref any))
+      (result (ref any))
+    (return_call $list_prepend
+      (ref.as_non_null (local.get $head))
+      (ref.cast (ref $List) (local.get $tail))))
 
+  ;; TODO use $Args type for param and result.
+  ;; TODO: $a should be (ref any) — args lists are never null.
+  ;; Currently nullable because the compiler emits user value-locals
+  ;; as (ref null any) and doesn't insert a non-null cast at this
+  ;; boundary. Tighten user emit and revert once flow is non-null.
   (func $args_concat (@pub)
-    (param $a (ref $List)) (param $b (ref $List))
-    (result (ref $List))
-    (return_call $list_concat (local.get $a) (local.get $b)))
+      (param $a (ref null any)) (param $b (ref any))
+      (result (ref any))
+    (return_call $list_concat
+      (ref.cast (ref $List) (local.get $a))
+      (ref.cast (ref $List) (local.get $b))))
 
 
   ;; -- Apply helpers ---------------------------------------------------

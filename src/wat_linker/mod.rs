@@ -137,11 +137,31 @@ pub fn link(modules: &[(&str, &str)]) -> LinkResult {
     // Stitch the merged module. Imports must precede all local
     // definitions per WASM spec, so host imports are hoisted to the
     // top after the rec group.
+    //
+    // Types tagged `(@todo-no-rec)` are emitted as singletons BEFORE
+    // the rec group. Stepping-stone escape for types that need their
+    // own nominal identity at the host boundary (e.g. host-built
+    // arrays via wasmtime's ArrayType::new). Constraints: the
+    // singleton must be a leaf (no field refs into the rec group),
+    // because cross-rec-group references only resolve to earlier
+    // groups. Emitted before the rec group so rec-group types can
+    // forward-reference these singletons in their fields.
+    let (singletons, rec_types): (Vec<String>, Vec<String>) =
+        all_types.into_iter().partition(|t| t.contains("(@todo-no-rec)"));
+    let singletons: Vec<String> = singletons
+        .into_iter()
+        .map(|t| t.replace(" (@todo-no-rec)", "").replace("(@todo-no-rec) ", ""))
+        .collect();
     let mut out = String::new();
     out.push_str("(module\n");
-    if !all_types.is_empty() {
+    for t in &singletons {
+        out.push_str("  ");
+        out.push_str(&reindent_type_form(t, 4));
+        out.push('\n');
+    }
+    if !rec_types.is_empty() {
         out.push_str("  (rec");
-        for t in &all_types {
+        for t in &rec_types {
             out.push_str("\n    ");
             out.push_str(&reindent_type_form(t, 6));
         }

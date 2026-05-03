@@ -10,7 +10,7 @@ test 'empty string literal', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:str_empty))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -32,7 +32,7 @@ test 'empty string literal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8wDAJIBAQACZgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQACZgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -44,7 +44,7 @@ test 'string literal', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:str (data.ref $d_0 5)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -67,7 +67,7 @@ test 'string literal', fn:
       (data $d_0 "hello")
       (data $d_1 "test")
     )
-    ;; sm:C8wDAJIBAQAHfgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQAHfgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'string literal dedup', fn:
@@ -84,7 +84,7 @@ test 'string literal dedup', fn:
         (local $y_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $x_0 (call $std/str.fnk:str (data.ref $d_0 5)))
         (global.set $test:x (local.get $x_0))
@@ -120,7 +120,7 @@ test 'string literal dedup', fn:
       (data $d_2 "x")
       (data $d_3 "y")
     )
-    ;; sm:FLgGAJIBAQABfgBUAIgBAIoBALwBARgBfgBUAIgBAIoBALwBAG4AugEAhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:FK4GAJIBAQABfgBUAIgBAIoBALwBARgBfgBUAIgBAIoBALwBAG4AugEAhAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'str templ two exprs', fn:
@@ -187,7 +187,7 @@ test 'str tagged template', fn:
       (func $test:v_3 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $parts_4 (ref null any))
         (local $parts_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $parts_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $parts_1 (local.get $:params))
@@ -200,7 +200,7 @@ test 'str tagged template', fn:
         (local $foo_27 (ref null any))
         (local $v_29 (ref null any))
         (local $v_12 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $foo_27 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_29 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -229,7 +229,7 @@ test 'str tagged template', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_38_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $foo_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_3) (local.get $:caps_arg)))
@@ -263,7 +263,7 @@ test 'str tagged template', fn:
       (data $d_1 "foo")
       (data $d_2 "1\\n2")
     )
-    ;; sm:JsoDAJoBAJoBAFwAbgDCAQD8BQC6AQDCAQC-AQCUAQBuALoBALwBAMgEAJQBATgEgAEBBwlsAQAJ-AkAkgEAegEvA8wBAFwAiAEAigEAwAEA1AEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:JsADAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAMgEAJQBATgEgAEBBwlsAQAJ7gkAkgEAegEvA8wBAFwAiAEAigEAwAEA1AEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'str tagged template escape handling', fn:
@@ -276,7 +276,7 @@ test 'str tagged template escape handling', fn:
       (func $test:v_4 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $parts_5 (ref null any))
         (local $parts_2 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $parts_5 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $parts_2 (local.get $:params))
@@ -289,7 +289,7 @@ test 'str tagged template escape handling', fn:
         (local $foo_75 (ref null any))
         (local $v_77 (ref null any))
         (local $v_20 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $foo_75 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_77 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -355,7 +355,7 @@ test 'str tagged template escape handling', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_56_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_3 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $foo_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_4) (local.get $:caps_arg)))
@@ -397,7 +397,7 @@ test 'str tagged template escape handling', fn:
       (data $d_3 "foo")
       (data $d_4 "bar")
     )
-    ;; sm:O8oDAJoBAJoBAFwAbgDCAQD8BQC6AQDCAQC-AQCUAQBuALoBALwBAKwHALoBAMIBAL4BAJQBANgBAMwBAUgIgAEBBy7QBwC6AQDCAQDCAQC-AQCUAQDYAQDMAQEALuwEAJQBASQbggEBIy5sAQAu0gsAkgEAegE_A8wBAFwAiAEAigEAwAEBMAOGAQBcAIgBAIoBAMABAPoBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:O8ADAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAKwHALoBAMIBAL4BAJQBANgBAMwBAUgIgAEBBy7QBwC6AQDCAQDCAQC-AQCUAQDYAQDMAQEALuwEAJQBASQbggEBIy5sAQAuyAsAkgEAegE_A8wBAFwAiAEAigEAwAEBMAOGAQBcAIgBAIoBAMABAPoBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'str implicit formatting handling', fn:
@@ -410,7 +410,7 @@ test 'str implicit formatting handling', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:str (data.ref $d_0 5)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -433,7 +433,7 @@ test 'str implicit formatting handling', fn:
       (data $d_0 "1\0a2\0a3")
       (data $d_1 "test")
     )
-    ;; sm:C8wDAJIBAQANfgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQANfgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'str implicit formatting escapes', fn:
@@ -444,7 +444,7 @@ test 'str implicit formatting escapes', fn:
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_1 (call $std/str.fnk:str (data.ref $d_0 14)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -467,7 +467,7 @@ test 'str implicit formatting escapes', fn:
       (data $d_0 "\0a\0d\09\0c\08\0b$'\\\c3\a9\e8\aa\9e")
       (data $d_1 "test")
     )
-    ;; sm:C8wDAJIBAQAlgAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAlgAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'empty string eq', fn:
@@ -514,7 +514,7 @@ test 'match empty string', fn:
       (func $test:v_29 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_25 (ref null any))
         (local $v_26 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_25 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_26 (struct.new $std/num.wat:Num (f64.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -526,7 +526,7 @@ test 'match empty string', fn:
         (local $v_117 (ref null any))
         (local $v_29_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_117 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
@@ -542,8 +542,8 @@ test 'match empty string', fn:
         (local $v_15 (ref null any))
         (local $:cond_i31 (ref i31))
         (local $:cond_i32 i32)
-        (local $:args (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_146 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_148 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -586,7 +586,7 @@ test 'match empty string', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_23_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_7 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $v_8 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -605,7 +605,7 @@ test 'match empty string', fn:
       (func $test:v_50 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_46 (ref null any))
         (local $v_47 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_46 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_47 (struct.new $std/num.wat:Num (f64.const 1)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -618,7 +618,7 @@ test 'match empty string', fn:
         (local $v_42 (ref null any))
         (local $v_50_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_43 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $v_44 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -641,7 +641,7 @@ test 'match empty string', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_131_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_106 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_108 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 1)))
@@ -662,7 +662,7 @@ test 'match empty string', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_41_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_57 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $v_56 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -681,7 +681,7 @@ test 'match empty string', fn:
         (local $x_1 (ref null any))
         (local $v_67_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:params (call $rt/apply.wat:args_tail (local.get $:params)))
         (local.set $x_1 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -698,7 +698,7 @@ test 'match empty string', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $main_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_3) (local.get $:caps_arg)))
@@ -727,7 +727,7 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:a8ADAJQBAUABhAEAbgC8AQCsBgC6AQDAAQB6ANIBAG4AvgEAugcAugEAwAEAwAEAlAEAhAEAfADsCgCUAQCaAQCUAQCaAQCUAQDUAQDQAQEHAmgBAAKgCACSAQCaAQCSAQCaAQCSAQCuAQDQAQB6ANIBAG4AugEAugEAvgEAzAQAlAEBGgGEAQBuALwBAMIGAJQBAJoBAJQBAJoBAJQBAHoA0gEAbgC8AQCGAwC2BwC6AQDAAQDAAQB6ANIBAHoA1gEAbgC-AQDEAQC-AQC8BwCUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEAgAYAkgEAmgEAkgEAegDSAQBuALoBALoBAOYGAJIBAHoBUQTOAQBgAIgBAIoBAMIBAG4AwAEAhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:a7YDAJQBAUABhAEAbgC8AQCiBgC6AQDAAQB6ANIBAG4AvgEApgcAugEAwAEAwAEAlAEAhAEAfADsCgCUAQCaAQCUAQCaAQCUAQDUAQDQAQEHAmgBAAKWCACSAQCaAQCSAQCaAQCSAQCuAQDQAQB6ANIBAG4AugEAugEAvgEAwgQAlAEBGgGEAQBuALwBALgGAJQBAJoBAJQBAJoBAJQBAHoA0gEAbgC8AQCGAwCsBwC6AQDAAQDAAQB6ANIBAHoA1gEAbgC-AQDEAQC-AQCyBwCUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEA9gUAkgEAmgEAkgEAegDSAQBuALoBALoBANwGAJIBAHoBUQTOAQBgAIgBAIoBAMIBAG4AwAEAhAcAigEAvgEAwAEAhAEA-gEA
 
 
 test 'empty string eq template', fn:
@@ -793,120 +793,4 @@ test 'str eq', fn:
       (data $d_1 "test")
     )
     ;; sm:CsgDAJIBAQAHfgEWB34BFRKsBwCKAQC-AQDAAQCEAQD6AQA
-
-
-
-
-
-
-
-JIBAQAHfgEWB34BFRI
-
-
-
-
-
-
-
-JIBAQAHfgEWB34BFRI
-
-
-
-
-
-
-
-4BFRI
-
-
-
-
-
-
-
-JIBAQAHfgEWB34BFRI
-
-
-
-
-
-
-
-BFRI
-
-
-
-
-
-
-
-
-
-
-
-
-JIBAQAHfgEWB34BFRI
-
-
-
-
-
-
-
-BFRI
-
-
-
-
-
-
-
-
-
-
-
-BFRI
-
-
-
-
-
-
-
-BFRI
-
-
-
-
-
-
-
-
-
-
-
-
-JIBAQAHfgEWB34BFRI
-
-
-
-
-
-
-
-BFRI
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

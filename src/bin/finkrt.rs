@@ -39,7 +39,16 @@ fn main() {
     .map(|a| a.into_encoded_bytes())
     .collect();
 
-  match fink::runner::wasmtime_runner::run(&opts, &wasm, cli_args, stdin, stdout, stderr) {
+  // Wrap raw bytes in a Wasm bundle with empty debug metadata —
+  // pre-compiled binaries don't carry marks/id_to_url, so error
+  // annotation falls back to function-name-only resolution.
+  let wasm_bundle = fink::passes::Wasm {
+    binary: wasm,
+    mappings: Vec::new(),
+    marks: Vec::new(),
+    id_to_url: std::collections::BTreeMap::new(),
+  };
+  match fink::runner::wasmtime_runner::run(&opts, &wasm_bundle, cli_args, stdin, stdout, stderr) {
     Ok(exit_code) => process::exit(exit_code as i32),
     Err(e) => {
       eprintln!("error: {e}");

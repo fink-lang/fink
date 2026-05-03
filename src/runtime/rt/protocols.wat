@@ -97,7 +97,6 @@
   ;; Func imports — interop (host bridge)
   (import "interop/rust.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any))))
   (import "interop/rust.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "interop/rust.wat" "panic"        (func $host_panic))
 
   ;; =========================================================================
   ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)
@@ -953,28 +952,5 @@
       (local.get $size)
       (local.get $cont)))
 
-
-  ;; =========================================================================
-  ;; panic — irrefutable pattern failure
-  ;; =========================================================================
-  ;;
-  ;; Signature matches the universal closure calling convention so `_apply`
-  ;; can dispatch to it like any other continuation: panic is used both as
-  ;; a direct tail-call (terminal of a fail chain) and as a $Closure value
-  ;; passed as a fail continuation to pattern matchers.
-  ;;
-  ;; Delegates to $interop_panic, which calls into the host to trap the
-  ;; instance with a diagnostic message. Today panic carries no payload —
-  ;; future work will pass a reason / source location for better diagnostics.
-  (func $protocols_interop_panic (@pub) (@impl "std/interop.fnk:panic") (type $Fn2)
-    (param $_caps (ref null any))
-    (param $_args (ref null any))
-    (return_call $host_panic))
-
-
-  ;; stdio protocols (`std/io.fnk:stdout` etc.) are implemented directly
-  ;; by interop/rust.wat via (@impl "std/io.fnk:...") annotations. No
-  ;; per-target trampoline needed in protocols.wat any more — the linker
-  ;; routes user imports through the protocol table.
 
 )

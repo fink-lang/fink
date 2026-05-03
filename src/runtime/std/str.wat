@@ -88,7 +88,7 @@
   ;; TODO: ByteArray is internal — exposed (@pub) only because set.wat
   ;; needs it for repr's buffer construction. Move buffer-allocation
   ;; behind a str helper to drop this exposure.
-  (type $ByteArray (@pub) (array (mut i8)))
+  (type $ByteArray (@pub) (@todo-no-rec) (array (mut i8)))
 
   ;; $StrEmpty — singleton empty string. No fields, no storage.
   (type $StrEmpty (sub $Str (struct)))

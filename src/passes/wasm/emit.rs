@@ -739,6 +739,13 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
   if let Some(sec) = &data_sec {
     module.section(sec);
   }
+  // Name section — combines runtime funcs (passthrough) + user funcs
+  // by their `display` name. Used by `annotate_func_indices` to turn
+  // `function[N]` / `<wasm function N>` in error/trap messages into
+  // qualified names. Without this, user-fragment functions get no
+  // annotation and runtime ones rely on a static fallback table.
+  let name_sec = build_name_section(rt, &user_local_funcs, &func_remap);
+  module.section(&name_sec);
   let binary = module.finish();
 
   // Resolve per-function body-relative offsets to absolute binary
@@ -752,6 +759,44 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
   EmitOutput { binary, instr_offsets }
 }
 
+
+/// Build the user-fragment's `name` custom section. Includes:
+///   * every runtime function name (passthrough — runtime funcs occupy
+///     the low function-index range and need to remain addressable by
+///     name in annotated error messages).
+///   * every user-fragment function with a `display` name, mapped to
+///     its final binary index from `func_remap`.
+fn build_name_section(
+  rt: &Runtime,
+  user_local_funcs: &[(u32, &FuncDecl)],
+  func_remap: &[u32],
+) -> wasm_encoder::NameSection {
+  let mut names: Vec<(u32, String)> = Vec::new();
+  // Runtime funcs: `func_by_name` carries every runtime func keyed by
+  // qualified name; skip fnk-fqn aliases (they share an index with the
+  // canonical `<url>:<name>` entry).
+  for (name, &idx) in &rt.func_by_name {
+    if name.contains(".wat:") {
+      names.push((idx, name.clone()));
+    }
+  }
+  // User funcs: pull `display` from the IR; final index is in func_remap.
+  for (orig_idx, f) in user_local_funcs {
+    if let Some(name) = &f.display {
+      let final_idx = func_remap[*orig_idx as usize];
+      names.push((final_idx, name.clone()));
+    }
+  }
+  // NameSection's functions subsection requires sorted ascending indices.
+  names.sort_by_key(|(idx, _)| *idx);
+  let mut name_map = wasm_encoder::NameMap::new();
+  for (idx, name) in &names {
+    name_map.append(*idx, name);
+  }
+  let mut sec = wasm_encoder::NameSection::new();
+  sec.functions(&name_map);
+  sec
+}
 
 /// Translate per-function body-relative offsets into absolute binary
 /// offsets. Re-parses the binary with wasmparser to find each

@@ -19,7 +19,7 @@ test 'yield suspends and resumes', fn:
         (local $v_4 (ref null any))
         (local $v_6 (ref null any))
         (local $v_7 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_15 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_4 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -55,7 +55,7 @@ test 'yield suspends and resumes', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:E6gFALoBAL4BAJIBAQAHTAEQAoQBAG4AugEAwgUAkgEArgEAzAEBAwGCAQELB4QHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:E54FALoBAL4BAJIBAQAHTAEQAoQBAG4AugEAwgUAkgEArgEAzAEBAwGCAQELB4QHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'spawn and await', fn:
@@ -69,7 +69,7 @@ test 'spawn and await', fn:
       (func $test:v_6 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_7 (ref null any))
         (local $v_8 (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $v_7 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_8 (struct.new $std/num.wat:Num (f64.const 42)))
         (local.set $:args (call $rt/apply.wat:args_empty))
@@ -83,7 +83,7 @@ test 'spawn and await', fn:
         (local $result_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $result_46 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_16 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -149,7 +149,7 @@ test 'spawn and await', fn:
       (data $d_1 "result")
       (data $d_2 "fut")
     )
-    ;; sm:J7oDAJIBASQChAEAbgC6AQCYBwC6AQDIAQCUAQEGBlgAaACIAQCKAQDGAQBuAMQBAI4IALoBAMgBAJQBASkDUgBcAIgBAIoBAMABALoBAMwBATwJxgYAnAEAuAEAzAEAegDOAQEvDooHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:J7ADAJIBASQChAEAbgC6AQCOBwC6AQDIAQCUAQEGBlgAaACIAQCKAQDGAQBuAMQBAI4IALoBAMgBAJQBASkDUgBcAIgBAIoBAMABALoBAMwBATwJxgYAnAEAuAEAzAEAegDOAQEvDooHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'channel send and receive', fn:
@@ -167,7 +167,7 @@ test 'channel send and receive', fn:
         (local $msg_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $msg_66 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_16 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -219,7 +219,7 @@ test 'channel send and receive', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_81_clo (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $msg_38 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_7 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -249,7 +249,7 @@ test 'channel send and receive', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_57_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $msg_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $msg_4)))
         (local.set $v_57_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_37) (local.get $:caps_arg)))
@@ -278,7 +278,7 @@ test 'channel send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:OIgGALoBAMIBAJQBATADUgBcAIgBAIoBAMABAG4AvgEArgcAugEAwAEAwgEAlAEBEQhQALQBAMwBAR4KuAUAugEAwAEAlAEBHQKEAQEACKgKALoBAMIBAJIBAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAG4AxAEAgAQAlAEBGgGCAQEPCZIHAJYBALIBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:OP4FALoBAMIBAJQBATADUgBcAIgBAIoBAMABAG4AvgEArgcAugEAwAEAwgEAlAEBEQhQALQBAMwBAR4KuAUAugEAwAEAlAEBHQKEAQEACJ4KALoBAMIBAJIBAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAG4AxAEAgAQAlAEBGgGCAQEPCYgHAJYBALIBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'channel with spawned sender', fn:
@@ -308,7 +308,7 @@ test 'channel with spawned sender', fn:
         (local $msg_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $msg_84 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_24 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -376,7 +376,7 @@ test 'channel with spawned sender', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_63_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $msg_5 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $msg_5)))
         (local.set $v_63_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_47) (local.get $:caps_arg)))
@@ -405,7 +405,7 @@ test 'channel with spawned sender', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:NqoEALoBAMABAJQBATYChgEBAAi-BwC6AQDCAQCUAQESA1IAXACIAQCKAQDAAQBuAL4BAK4HALoBAMABAMIBAJQBASkUUAC0AQDMAQE2CrgJALoBAMIBAJIBAVMCTgBYAIgBAIoBAL4BALABAMwBANgBAMwBAR4UgAQAlAEBAwGCAQEPCZIHAJYBALIBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:NqoEALoBAMABAJQBATYChgEBAAi0BwC6AQDCAQCUAQESA1IAXACIAQCKAQDAAQBuAL4BAK4HALoBAMABAMIBAJQBASkUUAC0AQDMAQE2CrgJALoBAMIBAJIBAVMCTgBYAIgBAIoBAL4BALABAMwBANgBAMwBAR4UgAQAlAEBAwGCAQEPCYgHAJYBALIBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'channel multiple messages FIFO', fn:
@@ -424,7 +424,7 @@ test 'channel multiple messages FIFO', fn:
         (local $a_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $a_97 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_21 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -495,7 +495,7 @@ test 'channel multiple messages FIFO', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_92_clo (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $a_47 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_7 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -525,7 +525,7 @@ test 'channel multiple messages FIFO', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_66_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $a_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $a_4)))
         (local.set $v_66_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_46) (local.get $:caps_arg)))
@@ -554,7 +554,7 @@ test 'channel multiple messages FIFO', fn:
       (data $d_1 "a")
       (data $d_2 "ch")
     )
-    ;; sm:QYAGALoBAL4BAJQBAT4BTgBUAIgBAIoBALwBAG4AugEAqAcAugEAwAEAvgEAlAEBDwdQALABAM4BARgK9AcAugEAwAEAvgEAlAEBJwdQANYBAMwBARABhAEBAAfeBQC6AQDAAQCUAQEPAYIBAQAHpAoAugEAvgEAkgEBHQJOAFgAiAEAigEAvgEAsAEAzAEA1AEA1AEAbgDEAQCABACUAQEaAYIBAQ8JjgcAkgEArgEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:QfYFALoBAL4BAJQBAT4BTgBUAIgBAIoBALwBAG4AugEAqAcAugEAwAEAvgEAlAEBDwdQALABAM4BARgK9AcAugEAwAEAvgEAlAEBJwdQANYBAMwBARABhAEBAAfeBQC6AQDAAQCUAQEPAYIBAQAHmgoAugEAvgEAkgEBHQJOAFgAiAEAigEAvgEAsAEAzAEA1AEA1AEAbgDEAQCABACUAQEaAYIBAQ8JhAcAkgEArgEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'channel receiver waits for sender', fn:
@@ -583,7 +583,7 @@ test 'channel receiver waits for sender', fn:
         (local $result_2 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $result_112 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_30 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -676,7 +676,7 @@ test 'channel receiver waits for sender', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_75_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $result_7 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $result_7)))
         (local.set $v_75_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_59) (local.get $:caps_arg)))
@@ -707,7 +707,7 @@ test 'channel receiver waits for sender', fn:
       (data $d_2 "fut")
       (data $d_3 "ch")
     )
-    ;; sm:QugDALoBAMABAJQBAUIKqAcAugEAygEAlAEBKAZYAGgAiAEAigEAxgEAbgDEAQDABwC6AQDCAQDIAQCUAQERCFAAugEA0AEBJAmSCQC6AQDAAQDIAQCUAQFdA1IAXACIAQCKAQDAAQDgAQDOAQE6AoYBAQAI6AkAugEAyAEAlAEBVwJQAFgAiAEAigEAvgEAsAEAzAEA3gEAzAEBKhaABACUAQEPAYIBAQ8JmAcAnAEAuAEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:QugDALoBAMABAJQBAUIKngcAugEAygEAlAEBKAZYAGgAiAEAigEAxgEAbgDEAQDABwC6AQDCAQDIAQCUAQERCFAAugEA0AEBJAmSCQC6AQDAAQDIAQCUAQFdA1IAXACIAQCKAQDAAQDgAQDOAQE6AoYBAQAI6AkAugEAyAEAlAEBVwJQAFgAiAEAigEAvgEAsAEAzAEA3gEAzAEBKhaABACUAQEPAYIBAQ8JjgcAnAEAuAEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'channel << send and receive', fn:
@@ -725,7 +725,7 @@ test 'channel << send and receive', fn:
         (local $msg_1 (ref null any))
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $msg_66 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_16 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -777,7 +777,7 @@ test 'channel << send and receive', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_81_clo (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $msg_38 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_7 (call $rt/apply.wat:args_head (local.get $:params)))
@@ -807,7 +807,7 @@ test 'channel << send and receive', fn:
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $v_57_fn (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
-        (local $:args (ref null any))
+        (local $:args (ref any))
         (local.set $msg_4 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $msg_4)))
         (local.set $v_57_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_37) (local.get $:caps_arg)))
@@ -836,20 +836,7 @@ test 'channel << send and receive', fn:
       (data $d_1 "msg")
       (data $d_2 "ch")
     )
-    ;; sm:OIgGALoBAMIBAJQBATADUgBcAIgBAIoBAMABAG4AvgEArgcAugEAwAEAwgEAlAEBEQhQALQBAMwBAR4KugUAugEAwAEAlAEBEQKGAQELCKoKALoBAMIBAJIBAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAG4AxAEAgAQAlAEBGgGCAQEPCZIHAJYBALIBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
-BAHoAyAEAbgDEAQA
-AyAEAbgDEAQA
-AyAEAbgDEAQA
-AQA
-AyAEAbgDEAQA
-AyAEAbgDEAQA
-EAQA
-AyAEAbgDEAQA
-
-
-
-
-
+    ;; sm:OP4FALoBAMIBAJQBATADUgBcAIgBAIoBAMABAG4AvgEArgcAugEAwAEAwgEAlAEBEQhQALQBAMwBAR4KugUAugEAwAEAlAEBEQKGAQELCKAKALoBAMIBAJIBAR0CTgBYAIgBAIoBAL4BALABAMwBANgBANQBAG4AxAEAgAQAlAEBGgGCAQEPCYgHAJYBALIBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 

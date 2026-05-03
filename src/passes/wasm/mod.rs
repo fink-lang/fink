@@ -23,15 +23,23 @@ pub mod runtime_contract;
 pub mod sourcemap;
 
 /// Translate any `function[N]` substring in a wasmtime / validator error
-/// message to `function[N]: $<qualified-name>`. If the error also
-/// names a byte offset (`offset M`), append the WAT line + a small
-/// surrounding window from `wasmprinter`'s offset-annotated dump of
-/// the runtime binary, so a validation error pinpoints the source
-/// instruction without re-running tooling externally.
+/// message to `function[N]: $<qualified-name>`. Names are looked up in
+/// the supplied binary's name section first (covers user-fragment
+/// functions), falling back to the runtime's name table for runtime
+/// functions when the binary has no entry. If the error also names a
+/// byte offset (`offset M`), append the WAT line + a small surrounding
+/// window from `wasmprinter`'s offset-annotated dump of the runtime
+/// binary, so a validation error pinpoints the source instruction
+/// without re-running tooling externally.
 ///
 /// Falls back to leaving unknown indices / offsets unchanged.
-pub fn annotate_func_indices(err: &str, _wasm: &[u8]) -> String {
-  let func_names = emit::runtime_func_names();
+pub fn annotate_func_indices(err: &str, wasm: &[u8]) -> String {
+  // Build a combined name table: binary's own name section first, then
+  // runtime fallback for indices the binary doesn't name.
+  let mut func_names = func_names_from_binary(wasm);
+  for (idx, name) in emit::runtime_func_names() {
+    func_names.entry(idx).or_insert(name);
+  }
   if func_names.is_empty() {
     return err.to_string();
   }
@@ -41,19 +49,47 @@ pub fn annotate_func_indices(err: &str, _wasm: &[u8]) -> String {
   let mut out = annotate_pattern(err, "function[", "]", &func_names);
   out = annotate_pattern(&out, "<wasm function ", ">", &func_names);
 
-  // If the error pointed at an offset, append the runtime WAT line
-  // (with a small surrounding window) corresponding to that offset.
+  // If the error pointed at an offset, render the SAME binary the
+  // error came from to text WAT and show a window around the offset.
+  // This is the WAT view of the failing instruction — fuzzy-matchable
+  // against the test snapshot WAT to find the originating fixture line.
   if let Some(off) = parse_offset(&out) {
-    if let Some(snippet) = wat_window_at_offset(off) {
-      out.push_str("\n--- runtime WAT near offset ---\n");
+    if let Some(snippet) = wat_window_at_offset(wasm, off) {
+      out.push_str("\n--- WAT near offset ---\n");
       out.push_str(&snippet);
     }
   }
   out
 }
 
+/// Read the function-name subsection of `wasm`'s `name` custom section
+/// into a `idx → name` map. Empty map if the binary has no name section.
+fn func_names_from_binary(wasm: &[u8]) -> std::collections::HashMap<u32, String> {
+  use std::collections::HashMap;
+  let mut out: HashMap<u32, String> = HashMap::new();
+  if wasm.len() < 8 || !wasm.starts_with(b"\0asm") {
+    return out;
+  }
+  for payload in wasmparser::Parser::new(0).parse_all(wasm).flatten() {
+    if let wasmparser::Payload::CustomSection(c) = payload
+      && let wasmparser::KnownCustom::Name(reader) = c.as_known()
+    {
+      for sub in reader.into_iter().flatten() {
+        if let wasmparser::Name::Function(map) = sub {
+          for entry in map.into_iter().flatten() {
+            out.insert(entry.index, entry.name.to_string());
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
 /// Replace each `<prefix>N<close>` substring with `<prefix>N<close>: $<name>`,
-/// where N is a u32 looked up in `names`.
+/// where N is a u32 looked up in `names`. Skipped when `<close>` is
+/// already followed by `::` (wasmtime auto-annotates from the binary's
+/// name section, so adding our own would duplicate).
 fn annotate_pattern(err: &str, prefix: &str, close: &str, names: &std::collections::HashMap<u32, String>) -> String {
   let mut out = String::with_capacity(err.len());
   let mut rest = err;
@@ -64,13 +100,16 @@ fn annotate_pattern(err: &str, prefix: &str, close: &str, names: &std::collectio
     let num_str = &after[..end];
     out.push_str(num_str);
     out.push_str(close);
-    if let Ok(idx) = num_str.parse::<u32>()
+    let tail = &after[end + close.len()..];
+    let already_named = tail.starts_with("::") || tail.starts_with(": $");
+    if !already_named
+      && let Ok(idx) = num_str.parse::<u32>()
       && let Some(name) = names.get(&idx)
     {
       out.push_str(": $");
       out.push_str(name);
     }
-    rest = &after[end + close.len()..];
+    rest = tail;
   }
   out.push_str(rest);
   out
@@ -89,11 +128,16 @@ fn parse_offset(err: &str) -> Option<usize> {
   }
 }
 
-/// Render the runtime wasm to WAT with `print_offsets`, find the line
-/// whose annotated offset is closest to `target` (without going past),
-/// and return a window of ±5 lines.
-fn wat_window_at_offset(target: usize) -> Option<String> {
-  let bytes = emit::runtime_wasm_bytes();
+/// Render the supplied wasm bytes to WAT with `print_offsets`, find
+/// the line whose annotated offset is closest to `target` (without
+/// going past), and return a window of ±5 lines. Used to give a
+/// human-readable view of the failing instruction at error time —
+/// fuzzy-grep the surrounding lines into the test snapshot files
+/// to find which fixture line emitted that WASM.
+fn wat_window_at_offset(bytes: &[u8], target: usize) -> Option<String> {
+  if bytes.len() < 8 || !bytes.starts_with(b"\0asm") {
+    return None;
+  }
   let mut cfg = wasmprinter::Config::new();
   cfg.print_offsets(true);
   let wat = {
