@@ -379,8 +379,8 @@ mod tests {
               let settle = caller.get_export("_settle_future")
                 .and_then(|e| e.into_func())
                 .ok_or_else(|| Error::msg("host_read: no _settle_future export"))?;
-              let future_ref = params[2].clone();
-              settle.call(&mut caller, &[future_ref, wrapped[0].clone()], &mut [])?;
+              let future_ref = params[2];
+              settle.call(&mut caller, &[future_ref, wrapped[0]], &mut [])?;
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
@@ -571,7 +571,7 @@ mod tests {
     // done_cont = wrap_host_cont(2) — id 2 routes back here for main's result.
     let mut done_out = [Val::AnyRef(None)];
     wrap_host_cont.call(&mut *caller, &[Val::I32(2)], &mut done_out)?;
-    let done_cont = done_out[0].clone();
+    let done_cont = done_out[0];
 
     // Build cli arg strings.
     let mut main_args_vals: Vec<Val> = vec![done_cont];
@@ -586,17 +586,17 @@ mod tests {
         .map_err(|e| Error::msg(format!("byte array alloc: {e}")))?;
       let mut wrapped = [Val::AnyRef(None)];
       str_wrap.call(&mut *caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
-      main_args_vals.push(wrapped[0].clone());
+      main_args_vals.push(wrapped[0]);
     }
 
     // Build the args list (Cons-chain).
     let mut acc_out = [Val::AnyRef(None)];
     args_empty.call(&mut *caller, &[], &mut acc_out)?;
-    let mut acc = acc_out[0].clone();
+    let mut acc = acc_out[0];
     for v in main_args_vals.iter().rev() {
       let mut next = [Val::AnyRef(None)];
-      args_prepend.call(&mut *caller, &[v.clone(), acc], &mut next)?;
-      acc = next[0].clone();
+      args_prepend.call(&mut *caller, &[*v, acc], &mut next)?;
+      acc = next[0];
     }
     let main_args = acc;
 

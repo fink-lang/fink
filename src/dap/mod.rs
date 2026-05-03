@@ -186,16 +186,16 @@ async fn apply_main_dap(
   let wrap_host_cont = caller.get_export("wrap_host_cont")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no wrap_host_cont export"))?;
-  let args_empty = caller.get_export("std/fn.fnk:args_empty")
+  let args_empty = caller.get_export("args_empty")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no args_empty export"))?;
-  let args_prepend = caller.get_export("std/fn.fnk:args_prepend")
+  let args_prepend = caller.get_export("args_prepend")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no args_prepend export"))?;
-  let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+  let str_wrap = caller.get_export("str_wrap_bytes")
     .and_then(|e| e.into_func())
-    .ok_or_else(|| wasmtime::Error::msg("no _str_wrap_bytes export"))?;
-  let apply_fn = caller.get_export("rt/apply.wat:apply")
+    .ok_or_else(|| wasmtime::Error::msg("no str_wrap_bytes export"))?;
+  let apply_fn = caller.get_export("apply")
     .and_then(|e| e.into_func())
     .ok_or_else(|| wasmtime::Error::msg("no apply export"))?;
 

@@ -42,9 +42,6 @@ name = "finkrt"
 path = "src/bin/finkrt.rs"
 required-features = ["runtime"]
 
-[build-dependencies]
-wat-crate = { package = "wat", version = "1" }
-
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }
 tempfile = "3"

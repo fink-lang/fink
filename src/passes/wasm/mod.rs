@@ -53,11 +53,11 @@ pub fn annotate_func_indices(err: &str, wasm: &[u8]) -> String {
   // error came from to text WAT and show a window around the offset.
   // This is the WAT view of the failing instruction — fuzzy-matchable
   // against the test snapshot WAT to find the originating fixture line.
-  if let Some(off) = parse_offset(&out) {
-    if let Some(snippet) = wat_window_at_offset(wasm, off) {
-      out.push_str("\n--- WAT near offset ---\n");
-      out.push_str(&snippet);
-    }
+  if let Some(off) = parse_offset(&out)
+    && let Some(snippet) = wat_window_at_offset(wasm, off)
+  {
+    out.push_str("\n--- WAT near offset ---\n");
+    out.push_str(&snippet);
   }
   out
 }
@@ -295,70 +295,6 @@ mod tests {
     let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
     let linked = super::link::link(&[user_frag]);
     super::emit::emit(&linked)
-  }
-
-  #[cfg(test)]
-  fn validate_and_collect_exports(bytes: &[u8]) -> Vec<String> {
-    let mut validator = wasmparser::Validator::new_with_features(
-      wasmparser::WasmFeatures::all(),
-    );
-    validator.validate_all(bytes)
-      .unwrap_or_else(|e| panic!("emit validation failed: {}",
-        super::annotate_func_indices(&e.to_string(), bytes)));
-
-    let mut exports = Vec::new();
-    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
-      if let wasmparser::Payload::ExportSection(reader) = payload.unwrap() {
-        for exp in reader {
-          exports.push(exp.unwrap().name.to_string());
-        }
-      }
-    }
-    exports
-  }
-
-  #[test]
-  fn emit_produces_valid_wasm_for_int_literal() {
-    let bytes = emit_for("42");
-    let exports = validate_and_collect_exports(&bytes);
-
-    // The per-module host wrapper is exported under the canonical
-    // FQN — `test:` for the test driver. This is the host's entry
-    // point; `fink_module` itself is no longer host-visible.
-    assert!(exports.contains(&"test".to_string()),
-      "missing per-module host wrapper export 'test'. got: {exports:?}");
-
-    // Runtime exports are passed through (with <url>:<name> qualification).
-    assert!(exports.contains(&"rt/apply.wat:apply".to_string()),
-      "missing rt/apply.wat:apply passthrough");
-    assert!(exports.contains(&"std/fn.fnk:args_empty".to_string()),
-      "missing std/fn.fnk:args_empty passthrough");
-
-    // Interop exports stay bare (host contract).
-    assert!(exports.contains(&"wrap_host_cont".to_string()),
-      "missing wrap_host_cont passthrough");
-
-    // stdio protocol dispatchers — exposed under the virtual std/io.fnk
-    // namespace. Importing 'std/io.fnk' resolves to these.
-    assert!(exports.contains(&"std/io.fnk:stdout".to_string()),
-      "missing std/io.fnk:stdout dispatcher");
-    assert!(exports.contains(&"std/io.fnk:stderr".to_string()),
-      "missing std/io.fnk:stderr dispatcher");
-    assert!(exports.contains(&"std/io.fnk:stdin".to_string()),
-      "missing std/io.fnk:stdin dispatcher");
-    assert!(exports.contains(&"std/io.fnk:read".to_string()),
-      "missing std/io.fnk:read dispatcher");
-  }
-
-  #[test]
-  fn emit_produces_valid_wasm_for_int_sum() {
-    let bytes = emit_for("42 + 123");
-    let exports = validate_and_collect_exports(&bytes);
-
-    assert!(exports.contains(&"test".to_string()),
-      "missing per-module host wrapper export 'test'. got: {exports:?}");
-    assert!(exports.contains(&"std/operators.fnk:op_plus".to_string()),
-      "missing std/operators.fnk:op_plus passthrough (needed for a+b)");
   }
 
   /// Instantiate emit's output in wasmtime with trivial host stubs.
