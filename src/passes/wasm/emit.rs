@@ -75,13 +75,11 @@ fn resolve_type(sym: TypeSym, type_remap: &[u32]) -> u32 {
     TypeSym::Local(i) => type_remap[i as usize],
     TypeSym::Runtime(s) => {
       let rt = runtime();
-      let (m, n) = import_key(s);
-      let qualified = format!("{m}:{n}");
-      rt.type_by_name.get(&qualified).copied()
-        .or_else(|| rt.type_by_name.get(n).copied())
+      let key = import_key(s);
+      rt.type_by_name.get(key).copied()
         .unwrap_or_else(|| panic!(
           "emit: runtime type `{:?}` ({}) not found in runtime type-name table",
-          s, qualified))
+          s, key))
     }
   }
 }
@@ -95,30 +93,77 @@ fn resolve_func(sym: FuncSym, func_remap: &[u32]) -> u32 {
     FuncSym::Local(i) => func_remap[i as usize],
     FuncSym::Runtime(s) => {
       let rt = runtime();
-      let (m, n) = import_key(s);
-      let qualified = format!("{m}:{n}");
-      let (kind, idx) = *rt.export_by_name.get(&qualified)
-        .or_else(|| rt.export_by_name.get(n))
+      let key = import_key(s);
+      *rt.func_by_name.get(key)
         .unwrap_or_else(|| panic!(
-          "emit: runtime func `{:?}` ({}) not found in runtime export table",
-          s, qualified));
-      assert_eq!(kind, ExportKind::Func,
-        "emit: expected func export for `{:?}`, got {:?}", s, kind);
-      idx
+          "emit: runtime func `{:?}` ({}) not found in runtime func-name table",
+          s, key))
     }
   }
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Runtime bundle — compiled at build time, spliced at emit time.
+// Runtime bundle — linked from .wat sources at first use.
 // ──────────────────────────────────────────────────────────────────
 
-static RUNTIME_IR_WASM: &[u8] =
-  include_bytes!(concat!(env!("OUT_DIR"), "/runtime-ir.wasm"));
+/// Reverse of `runtime().func_by_name`: index → qualified name. Used
+/// by the public `annotate_func_indices` error helper.
+pub fn runtime_func_names() -> HashMap<u32, String> {
+  let rt = runtime();
+  rt.func_by_name.iter()
+    .filter(|(name, _)| name.contains(".wat:"))  // skip fnk-fqn aliases
+    .map(|(name, &idx)| (idx, name.clone()))
+    .collect()
+}
+
+/// The raw merged-runtime wasm bytes — same bytes produced by the
+/// linker + wat_crate at first use. Used by the error annotator to
+/// resolve byte offsets back to WAT lines via wasmprinter.
+pub fn runtime_wasm_bytes() -> &'static [u8] {
+  &linked_runtime().bytes
+}
+
+struct LinkedRuntime {
+  bytes: Vec<u8>,
+  impls: HashMap<String, String>,
+}
+
+fn linked_runtime() -> &'static LinkedRuntime {
+  static CELL: OnceLock<LinkedRuntime> = OnceLock::new();
+  CELL.get_or_init(|| {
+    let modules: &[(&str, &str)] = &[
+      ("interop/rust.wat", include_str!("../../runtime/interop/rust.wat")),
+      ("rt/types.wat",     include_str!("../../runtime/rt/types.wat")),
+      ("rt/apply.wat",     include_str!("../../runtime/rt/apply.wat")),
+      ("rt/modules.wat",   include_str!("../../runtime/rt/modules.wat")),
+      ("rt/protocols.wat", include_str!("../../runtime/rt/protocols.wat")),
+      ("std/num.wat",      include_str!("../../runtime/std/num.wat")),
+      ("std/str.wat",      include_str!("../../runtime/std/str.wat")),
+      ("std/list.wat",     include_str!("../../runtime/std/list.wat")),
+      ("std/int.wat",      include_str!("../../runtime/std/int.wat")),
+      ("std/range.wat",    include_str!("../../runtime/std/range.wat")),
+      ("std/set.wat",      include_str!("../../runtime/std/set.wat")),
+      ("std/dict.wat",     include_str!("../../runtime/std/dict.wat")),
+      ("std/hashing.wat",  include_str!("../../runtime/std/hashing.wat")),
+      ("std/channel.wat",  include_str!("../../runtime/std/channel.wat")),
+      ("std/async.wat",    include_str!("../../runtime/std/async.wat")),
+    ];
+    let result = crate::wat_linker::link(modules);
+    let mut parser = wat_crate::Parser::new();
+    parser.generate_dwarf(wat_crate::GenerateDwarf::Lines);
+    let bytes = parser.parse_bytes(None, result.wat.as_bytes())
+      .unwrap_or_else(|e| panic!("runtime: merged WAT failed to compile to wasm:\n{e}"))
+      .into_owned();
+    LinkedRuntime { bytes, impls: result.impls }
+  })
+}
 
 fn runtime() -> &'static Runtime {
   static CELL: OnceLock<Runtime> = OnceLock::new();
-  CELL.get_or_init(|| parse_runtime(RUNTIME_IR_WASM))
+  CELL.get_or_init(|| {
+    let lr = linked_runtime();
+    parse_runtime(&lr.bytes, &lr.impls)
+  })
 }
 
 /// Parsed runtime bundle — everything emit needs to splice.
@@ -147,13 +192,19 @@ struct Runtime {
   /// Total function count = imports + local funcs. New user funcs
   /// get appended after this.
   func_count_total: u32,
-  /// Map from qualified export name → (kind, index). Key format is
-  /// `"<fragment-url>:<name>"` for cross-fragment exports, bare for
-  /// interop exports. emit composes the same key from
-  /// user fragment `ImportKey` entries.
-  export_by_name: HashMap<String, (ExportKind, u32)>,
-  /// Exports to forward verbatim into the merged module's export
-  /// section.
+  /// Map from runtime func name → func index.
+  ///
+  /// Populated from the wasm name section's Function subsection. Keys
+  /// are the qualified `<url>:<name>` ids the linker emits (the `$`
+  /// prefix is stripped at insert time so callers can compose without
+  /// it). Bare `(@impl "fqn")` annotations also get inserted under
+  /// their fqn key, so emitter resolution accepts either qualified-id
+  /// or fnk-fqn lookups uniformly.
+  func_by_name: HashMap<String, u32>,
+  /// Host-facing exports to forward verbatim into the merged module's
+  /// export section. Pulled from the linker's export section (only
+  /// host exports survive — internal cross-wat refs are resolved by
+  /// id, not by export).
   exports_to_forward: Vec<(String, ExportKind, u32)>,
   /// Raw bytes of the runtime's global section body (including the
   /// leading count LEB128). `None` if no global section.
@@ -177,7 +228,7 @@ struct EnvImport {
   entity: wasm_encoder::EntityType,
 }
 
-fn parse_runtime(bytes: &[u8]) -> Runtime {
+fn parse_runtime(bytes: &[u8], impls: &HashMap<String, String>) -> Runtime {
   let mut type_groups: Vec<TypeGroup> = Vec::new();
   let mut type_count: u32 = 0;
   let mut type_by_name: HashMap<String, u32> = HashMap::new();
@@ -185,7 +236,7 @@ fn parse_runtime(bytes: &[u8]) -> Runtime {
   let mut local_func_sigs: Vec<u32> = Vec::new();
   let mut import_count: u32 = 0;
   let mut exports_all: Vec<(String, ExportKind, u32)> = Vec::new();
-  let mut export_by_name: HashMap<String, (ExportKind, u32)> = HashMap::new();
+  let mut func_by_name: HashMap<String, u32> = HashMap::new();
   let mut globals_body: Option<Vec<u8>> = None;
   let mut elements_body: Option<Vec<u8>> = None;
   let mut code_bodies_raw: Vec<Vec<u8>> = Vec::new();
@@ -259,9 +310,7 @@ fn parse_runtime(bytes: &[u8]) -> Runtime {
             wasmparser::ExternalKind::Global => ExportKind::Global,
             wasmparser::ExternalKind::Tag => ExportKind::Tag,
           };
-          let name = exp.name.to_string();
-          exports_all.push((name.clone(), kind, exp.index));
-          export_by_name.insert(name, (kind, exp.index));
+          exports_all.push((exp.name.to_string(), kind, exp.index));
         }
       }
       wasmparser::Payload::ElementSection(reader)
@@ -275,15 +324,33 @@ fn parse_runtime(bytes: &[u8]) -> Runtime {
       wasmparser::Payload::CustomSection(reader) => {
         if let wasmparser::KnownCustom::Name(name_reader) = reader.as_known() {
           for name in name_reader.into_iter().flatten() {
-            if let wasmparser::Name::Type(map) = name {
-              for n in map.into_iter().flatten() {
-                type_by_name.insert(n.name.to_string(), n.index);
+            match name {
+              wasmparser::Name::Type(map) => {
+                for n in map.into_iter().flatten() {
+                  type_by_name.insert(n.name.to_string(), n.index);
+                }
               }
+              wasmparser::Name::Function(map) => {
+                for n in map.into_iter().flatten() {
+                  func_by_name.insert(n.name.to_string(), n.index);
+                }
+              }
+              _ => {}
             }
           }
         }
       }
       _ => {}
+    }
+  }
+
+  // Alias every bare `(@impl "fqn")` annotation to its qualified
+  // func id, so emitter lookups by fnk fqn resolve to the same index
+  // as a lookup by `<url>:<func>`.
+  for (fqn, qualified) in impls {
+    let id = qualified.strip_prefix('$').unwrap_or(qualified);
+    if let Some(&idx) = func_by_name.get(id) {
+      func_by_name.insert(fqn.clone(), idx);
     }
   }
 
@@ -294,7 +361,7 @@ fn parse_runtime(bytes: &[u8]) -> Runtime {
     env_imports,
     local_func_sigs,
     func_count_total: import_count + code_bodies_raw.len() as u32,
-    export_by_name,
+    func_by_name,
     exports_to_forward: exports_all,
     globals_body,
     elements_body,
@@ -456,13 +523,11 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
     match &f.import {
       Some(ImportKey { module, name }) => {
         let qualified = format!("{module}:{name}");
-        let (kind, idx) = *rt.export_by_name.get(&qualified)
-          .or_else(|| rt.export_by_name.get(name.as_str()))
+        let idx = rt.func_by_name.get(&qualified).copied()
+          .or_else(|| rt.func_by_name.get(name.as_str()).copied())
           .unwrap_or_else(|| panic!(
-            "emit: unknown runtime func import `{}`. Not found in runtime export table",
+            "emit: unknown runtime func import `{}`. Not found in runtime func-name table",
             qualified));
-        assert_eq!(kind, ExportKind::Func,
-          "emit: expected func export for `{}`, got {:?}", qualified, kind);
         func_remap.push(idx);
       }
       None => {
@@ -674,6 +739,13 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
   if let Some(sec) = &data_sec {
     module.section(sec);
   }
+  // Name section — combines runtime funcs (passthrough) + user funcs
+  // by their `display` name. Used by `annotate_func_indices` to turn
+  // `function[N]` / `<wasm function N>` in error/trap messages into
+  // qualified names. Without this, user-fragment functions get no
+  // annotation and runtime ones rely on a static fallback table.
+  let name_sec = build_name_section(rt, &user_local_funcs, &func_remap);
+  module.section(&name_sec);
   let binary = module.finish();
 
   // Resolve per-function body-relative offsets to absolute binary
@@ -687,6 +759,44 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
   EmitOutput { binary, instr_offsets }
 }
 
+
+/// Build the user-fragment's `name` custom section. Includes:
+///   * every runtime function name (passthrough — runtime funcs occupy
+///     the low function-index range and need to remain addressable by
+///     name in annotated error messages).
+///   * every user-fragment function with a `display` name, mapped to
+///     its final binary index from `func_remap`.
+fn build_name_section(
+  rt: &Runtime,
+  user_local_funcs: &[(u32, &FuncDecl)],
+  func_remap: &[u32],
+) -> wasm_encoder::NameSection {
+  let mut names: Vec<(u32, String)> = Vec::new();
+  // Runtime funcs: `func_by_name` carries every runtime func keyed by
+  // qualified name; skip fnk-fqn aliases (they share an index with the
+  // canonical `<url>:<name>` entry).
+  for (name, &idx) in &rt.func_by_name {
+    if name.contains(".wat:") {
+      names.push((idx, name.clone()));
+    }
+  }
+  // User funcs: pull `display` from the IR; final index is in func_remap.
+  for (orig_idx, f) in user_local_funcs {
+    if let Some(name) = &f.display {
+      let final_idx = func_remap[*orig_idx as usize];
+      names.push((final_idx, name.clone()));
+    }
+  }
+  // NameSection's functions subsection requires sorted ascending indices.
+  names.sort_by_key(|(idx, _)| *idx);
+  let mut name_map = wasm_encoder::NameMap::new();
+  for (idx, name) in &names {
+    name_map.append(*idx, name);
+  }
+  let mut sec = wasm_encoder::NameSection::new();
+  sec.functions(&name_map);
+  sec
+}
 
 /// Translate per-function body-relative offsets into absolute binary
 /// offsets. Re-parses the binary with wasmparser to find each

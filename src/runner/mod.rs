@@ -42,7 +42,7 @@ pub fn run_source(
     opts.source_label = path.to_string();
   }
   let wasm = crate::to_wasm(src, path)?;
-  wasmtime_runner::run(&opts, &wasm.binary, args, stdin, stdout, stderr)
+  wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr)
 }
 
 /// Read a file and run it. Supports .fnk source and .wasm binaries.
@@ -69,12 +69,18 @@ pub fn run_file(
   if path.ends_with(".fnk") {
     let mut loader = crate::passes::modules::FileSourceLoader::new();
     let wasm = crate::compile_package(std::path::Path::new(path), &mut loader)?;
-    return wasmtime_runner::run(&opts, &wasm.binary, args, stdin, stdout, stderr);
+    return wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr);
   }
 
   let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
   if bytes.starts_with(b"\0asm") {
-    wasmtime_runner::run(&opts, &bytes, args, stdin, stdout, stderr)
+    let wasm = crate::passes::Wasm {
+      binary: bytes,
+      mappings: Vec::new(),
+      marks: Vec::new(),
+      id_to_url: std::collections::BTreeMap::new(),
+    };
+    wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr)
   } else {
     Err("only .fnk and .wasm files are supported".into())
   }
@@ -252,7 +258,8 @@ mod tests {
     config.wasm_function_references(true);
     config.wasm_tail_call(true);
     let engine = Engine::new(&config).map_err(|e| e.to_string())?;
-    let module = Module::new(&engine, &bytes).map_err(|e| format!("{e:#}"))?;
+    let module = Module::new(&engine, &bytes)
+      .map_err(|e| crate::passes::wasm::annotate_func_indices(&format!("{e:#}"), &bytes))?;
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
 
@@ -355,7 +362,7 @@ mod tests {
               };
               let bytes: Vec<u8> = cap.lock().unwrap().read_stdin(size as usize).to_vec();
 
-              let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+              let str_wrap = caller.get_export("str_wrap_bytes")
                 .and_then(|e| e.into_func())
                 .ok_or_else(|| Error::msg("host_read: no _str_wrap_bytes export"))?;
               let array_ty = ArrayType::new(
@@ -369,11 +376,11 @@ mod tests {
               let mut wrapped = [Val::AnyRef(None)];
               str_wrap.call(&mut caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
 
-              let settle = caller.get_export("std/async.wat:_settle_future")
+              let settle = caller.get_export("_settle_future")
                 .and_then(|e| e.into_func())
                 .ok_or_else(|| Error::msg("host_read: no _settle_future export"))?;
-              let future_ref = params[2].clone();
-              settle.call(&mut caller, &[future_ref, wrapped[0].clone()], &mut [])?;
+              let future_ref = params[2];
+              settle.call(&mut caller, &[future_ref, wrapped[0]], &mut [])?;
               Ok(())
             }).map_err(|e| e.to_string())?;
           }
@@ -425,7 +432,7 @@ mod tests {
     // Entry compiles under `./test.fnk:`, so the wrapper is exported
     // as `"./test.fnk"`.
     let entry_wrapper = get_func(&instance, &mut store, "./test.fnk")?;
-    let str_wrap      = get_func(&instance, &mut store, "std/str.wat:_str_wrap_bytes")?;
+    let str_wrap      = get_func(&instance, &mut store, "str_wrap_bytes")?;
 
     let main_key_bytes = wrap_bytes_to_array_ref(&mut store, b"main")?;
 
@@ -433,7 +440,8 @@ mod tests {
       .call(&mut store,
         &[Val::AnyRef(Some(main_key_bytes)), Val::I32(1)],
         &mut [])
-      .map_err(|e| format!("entry wrapper: {e}"))?;
+      .map_err(|e| crate::passes::wasm::annotate_func_indices(
+        &format!("entry wrapper: {e:#}"), &bytes))?;
     // str_wrap is captured into the closure via `caller.get_export`
     // inside run_main_in_callback; the binding here is just to
     // ensure the runtime exports it (caught at host setup time).
@@ -547,23 +555,23 @@ mod tests {
     let wrap_host_cont = caller.get_export("wrap_host_cont")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no wrap_host_cont export"))?;
-    let args_empty = caller.get_export("std/fn.fnk:args_empty")
+    let args_empty = caller.get_export("args_empty")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no args_empty export"))?;
-    let args_prepend = caller.get_export("std/fn.fnk:args_prepend")
+    let args_prepend = caller.get_export("args_prepend")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no args_prepend export"))?;
-    let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+    let str_wrap = caller.get_export("str_wrap_bytes")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no _str_wrap_bytes export"))?;
-    let apply_fn = caller.get_export("rt/apply.wat:apply")
+    let apply_fn = caller.get_export("apply")
       .and_then(|e| e.into_func())
       .ok_or_else(|| Error::msg("no apply export"))?;
 
     // done_cont = wrap_host_cont(2) — id 2 routes back here for main's result.
     let mut done_out = [Val::AnyRef(None)];
     wrap_host_cont.call(&mut *caller, &[Val::I32(2)], &mut done_out)?;
-    let done_cont = done_out[0].clone();
+    let done_cont = done_out[0];
 
     // Build cli arg strings.
     let mut main_args_vals: Vec<Val> = vec![done_cont];
@@ -578,17 +586,17 @@ mod tests {
         .map_err(|e| Error::msg(format!("byte array alloc: {e}")))?;
       let mut wrapped = [Val::AnyRef(None)];
       str_wrap.call(&mut *caller, &[Val::AnyRef(Some(array.to_anyref()))], &mut wrapped)?;
-      main_args_vals.push(wrapped[0].clone());
+      main_args_vals.push(wrapped[0]);
     }
 
     // Build the args list (Cons-chain).
     let mut acc_out = [Val::AnyRef(None)];
     args_empty.call(&mut *caller, &[], &mut acc_out)?;
-    let mut acc = acc_out[0].clone();
+    let mut acc = acc_out[0];
     for v in main_args_vals.iter().rev() {
       let mut next = [Val::AnyRef(None)];
-      args_prepend.call(&mut *caller, &[v.clone(), acc], &mut next)?;
-      acc = next[0].clone();
+      args_prepend.call(&mut *caller, &[*v, acc], &mut next)?;
+      acc = next[0];
     }
     let main_args = acc;
 

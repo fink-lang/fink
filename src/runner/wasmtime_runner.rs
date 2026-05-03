@@ -45,10 +45,12 @@ struct ExitState {
 ///
 /// `args` is the CLI argv passed to `main` — `argv[0]` is the program
 /// name. Returns the exit code from `main` (or 0 if the program has
-/// no `main`).
+/// no `main`). `wasm` carries the binary plus optional debug
+/// metadata (`marks`, `id_to_url`); annotation routes errors through
+/// that metadata when present.
 pub fn run(
   opts: &RunOptions,
-  wasm: &[u8],
+  wasm: &crate::passes::Wasm,
   args: Vec<Vec<u8>>,
   stdin: Arc<Mutex<dyn Read + Send>>,
   stdout: super::IoStream,
@@ -63,8 +65,10 @@ pub fn run(
     config.cranelift_opt_level(OptLevel::None);
   }
 
+  let bytes: &[u8] = &wasm.binary;
   let engine = Engine::new(&config).map_err(|e| e.to_string())?;
-  let module = Module::new(&engine, wasm).map_err(|e| e.to_string())?;
+  let module = Module::new(&engine, bytes)
+    .map_err(|e| crate::passes::wasm::annotate_func_indices(&e.to_string(), bytes))?;
   let mut store = Store::new(&engine, ());
 
   let exit_state: Arc<Mutex<ExitState>> = Arc::new(Mutex::new(ExitState::default()));
@@ -117,7 +121,7 @@ pub fn run(
             let str_val = bytes_to_str(&mut caller, &buf)?;
             let future_ref = params[2];
 
-            let settle = caller.get_export("std/async.wat:_settle_future")
+            let settle = caller.get_export("_settle_future")
               .and_then(|e| e.into_func())
               .ok_or_else(|| Error::msg("no _settle_future export"))?;
             settle.call(&mut caller, &[future_ref, str_val], &mut [])?;
@@ -205,7 +209,8 @@ pub fn run(
     .call(&mut store,
       &[Val::AnyRef(Some(main_key)), Val::I32(CONT_WRAPPER_DONE)],
       &mut [])
-    .map_err(|e| format!("entry wrapper: {e}"))?;
+    .map_err(|e| crate::passes::wasm::annotate_func_indices(
+      &format!("entry wrapper: {e}"), bytes))?;
 
   Ok(exit_state.lock().unwrap().exit_code)
 }
@@ -251,16 +256,16 @@ fn apply_main(
   let wrap_host_cont = caller.get_export("wrap_host_cont")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no wrap_host_cont export"))?;
-  let args_empty = caller.get_export("std/fn.fnk:args_empty")
+  let args_empty = caller.get_export("args_empty")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no args_empty export"))?;
-  let args_prepend = caller.get_export("std/fn.fnk:args_prepend")
+  let args_prepend = caller.get_export("args_prepend")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no args_prepend export"))?;
-  let str_wrap = caller.get_export("std/str.wat:_str_wrap_bytes")
+  let str_wrap = caller.get_export("str_wrap_bytes")
     .and_then(|e| e.into_func())
-    .ok_or_else(|| Error::msg("no _str_wrap_bytes export"))?;
-  let apply_fn = caller.get_export("rt/apply.wat:apply")
+    .ok_or_else(|| Error::msg("no str_wrap_bytes export"))?;
+  let apply_fn = caller.get_export("apply")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no apply export"))?;
 
@@ -345,7 +350,7 @@ fn bytes_to_str(caller: &mut Caller<'_, ()>, data: &[u8]) -> Result<Val, Error> 
   let elems: Vec<Val> = data.iter().map(|&b| Val::I32(b as i32)).collect();
   let array = ArrayRef::new_fixed(&mut *caller, &alloc, &elems)?;
 
-  let wrap_fn = caller.get_export("std/str.wat:_str_wrap_bytes")
+  let wrap_fn = caller.get_export("str_wrap_bytes")
     .and_then(|e| e.into_func())
     .ok_or_else(|| Error::msg("no _str_wrap_bytes export"))?;
 

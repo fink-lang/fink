@@ -1,97 +1,111 @@
-;; Integer operations — bitwise, shift, and rotation.
+;; Integer operations — bitwise, shift, rotation, integer arithmetic.
 ;;
-;; Direct-style helpers operate on already-cast (ref $Num) values and return
-;; (ref $Num). Called from polymorphic CPS operators in operators.wat.
+;; All ops operate on $Num (f64-boxed); they trunc to i64, compute, and box
+;; the result back. Used as protocol impls under (@impl ... $Num $Num).
 ;;
-;; CPS shift/rotation operators are self-contained (no polymorphic dispatch).
+;; Power and DivMod have richer behaviours (negative exponent fast-path,
+;; tuple return).
 
 (module
 
+  ;; Type imports
+  (import "std/num.wat"  "Num"  (type $Num  (sub any)))
+  (import "std/list.wat" "List" (type $List (sub any)))
+
+  ;; Func imports — list constructors via the public API.
+  (import "std/list.wat" "empty"
+    (func $list_empty (result (ref $List))))
+  (import "std/list.wat" "prepend"
+    (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+
   ;; =========================================================================
-  ;; Bitwise: direct-style helpers called from polymorphic operators.wat
+  ;; Bitwise: direct-style helpers — protocol impls under op_*  $Num $Num.
   ;; =========================================================================
 
-  (func $std/int.wat:op_and (export "std/int.wat:op_and")
+  (func $op_and (@impl "std/operators.fnk:op_and" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.and
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:op_or (export "std/int.wat:op_or")
+  (func $op_or (@impl "std/operators.fnk:op_or" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.or
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:op_xor (export "std/int.wat:op_xor")
+  (func $op_xor (@impl "std/operators.fnk:op_xor" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.xor
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:op_not (export "std/int.wat:op_not")
+  (func $op_not (@impl "std/operators.fnk:op_not" $Num)
     (param $a (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.xor
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.const -1)))))
 
   ;; =========================================================================
-  ;; Integer arithmetic: direct-style helpers called from operators.wat
+  ;; Integer arithmetic — protocol impls.
   ;; =========================================================================
 
-  (func $std/int.wat:op_div (export "std/int.wat:op_div")
+  (func $op_intdiv (@impl "std/operators.fnk:op_intdiv" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.div_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:op_rem (export "std/int.wat:op_rem")
+  (func $op_rem (@impl "std/operators.fnk:op_rem" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.rem_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:op_mod (export "std/int.wat:op_mod")
+  (func $op_intmod (@impl "std/operators.fnk:op_intmod" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.rem_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
   ;; =========================================================================
-  ;; Shifts: unbox $Num → i64, shift, i64 → $Num → apply_1(result, cont)
+  ;; Shifts — protocol impls.
   ;; =========================================================================
-  (func $std/int.wat:op_shl (export "std/int.wat:op_shl")
+
+  (func $op_shl (@impl "std/operators.fnk:op_shl" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.shl
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:op_shr (export "std/int.wat:op_shr")
+  (func $op_shr (@impl "std/operators.fnk:op_shr" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.shr_s
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
   ;; =========================================================================
-  ;; Rotations: direct-style helpers (called from polymorphic operators.wat)
+  ;; Rotations — protocol impls.
   ;; =========================================================================
-  (func $std/int.wat:op_rotl (export "std/int.wat:op_rotl")
+
+  (func $op_rotl (@impl "std/operators.fnk:op_rotl" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.rotl
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
-  (func $std/int.wat:op_rotr (export "std/int.wat:op_rotr")
+  (func $op_rotr (@impl "std/operators.fnk:op_rotr" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (struct.new $Num (f64.convert_i64_s (i64.rotr
       (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
       (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
 
   ;; =========================================================================
-  ;; Power: integer exponentiation by square-and-multiply.
+  ;; Power — integer exponentiation by square-and-multiply.
   ;; Negative exponents return 0 (pow(a, n<0) = 1/a^|n|, integer-truncated).
   ;; =========================================================================
-  (func $std/int.wat:op_pow (export "std/int.wat:op_pow")
+
+  (func $op_pow (@impl "std/operators.fnk:op_pow" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (local $base i64)
     (local $exp i64)
@@ -118,9 +132,10 @@
     (struct.new $Num (f64.convert_i64_s (local.get $acc))))
 
   ;; =========================================================================
-  ;; DivMod: returns [quotient, remainder] as a 2-element list.
+  ;; DivMod — returns [quotient, remainder] as a 2-element list.
   ;; =========================================================================
-  (func $std/int.wat:op_divmod (export "std/int.wat:op_divmod")
+
+  (func $op_divmod (@impl "std/operators.fnk:op_divmod" $Num $Num)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $List))
     (local $a_i i64)
     (local $b_i i64)
@@ -134,10 +149,10 @@
     (local.set $r (struct.new $Num (f64.convert_i64_s
       (i64.rem_s (local.get $a_i) (local.get $b_i)))))
 
-    ;; Build [q, r] = Cons(q, Cons(r, Nil))
-    (struct.new $Cons
+    ;; Build [q, r] via the list constructor: prepend(q, prepend(r, nil)).
+    (call $list_prepend
       (local.get $q)
-      (struct.new $Cons
+      (call $list_prepend
         (local.get $r)
-        (call $std/list.wat:nil))))
+        (call $list_empty))))
 )

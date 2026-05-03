@@ -790,7 +790,8 @@ fn lower_expr(
             }
           };
 
-          let l_args = ctx.alloc_local(":args");
+          let l_args = ctx.alloc_local_typed(":args",
+            val_ref_abs(AbsHeap::Any, /*nullable*/ false));
           let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
           ctx.instrs.push(i_nil);
           let i_cons = push_call(lcx.frag, lcx.rt.args_prepend(),
@@ -908,7 +909,8 @@ fn lower_cont(
     Cont::Ref(id) => {
       // Tail-call the named cont with an empty args list.
       let callee = ctx.lookup(*id);
-      let l_args_list = ctx.alloc_local(":args");
+      let l_args_list = ctx.alloc_local_typed(":args",
+        val_ref_abs(AbsHeap::Any, /*nullable*/ false));
       let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args_list));
       ctx.instrs.push(i_nil);
       let i_app = push_return_call(lcx.frag, lcx.rt.apply(),
@@ -971,7 +973,8 @@ fn build_args_list(
     })
     .collect();
 
-  let l_args = ctx.alloc_local(":args");
+  let l_args = ctx.alloc_local_typed(":args",
+    val_ref_abs(AbsHeap::Any, /*nullable*/ false));
   let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
   ctx.instrs.push(i_nil);
   for m in materialised.into_iter().rev() {
@@ -1100,7 +1103,8 @@ fn lower_import_virtual_stdlib(
     }
   };
 
-  let l_args = ctx.alloc_local(":args");
+  let l_args = ctx.alloc_local_typed(":args",
+    val_ref_abs(AbsHeap::Any, /*nullable*/ false));
   let i_nil = push_call(lcx.frag, lcx.rt.args_empty(), vec![], Some(l_args));
   ctx.instrs.push(i_nil);
   let i_cons = push_call(lcx.frag, lcx.rt.args_prepend(),

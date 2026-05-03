@@ -1,13 +1,14 @@
 ;; Minimal exercise of the surface forms the linker has to handle.
 ;;
 ;; Covers:
-;;   - imported type    (uses bar.wat's $Bar)
-;;   - imported func    (uses bar.wat's $bar_make)
+;;   - inter-wat type import   (uses bar.wat's $Bar)
+;;   - inter-wat func import   (uses bar.wat's $bar_make)
 ;;   - locally-defined named type
 ;;   - locally-defined global
 ;;   - locally-defined func with params, locals, and a block label
-;;   - exported func
+;;   - host-visible export     (`env:` prefix → real WASM export)
 ;;   - cross-reference to a sibling local func
+;;   - protocol impl annotations (`@implements`)
 
 (module
 
@@ -15,8 +16,15 @@
 
   (import "./bar.wat" "Bar" (type $Bar (sub any)))
 
+  ;; Aliased import: bar.wat exports `bar_make`; we bind it locally as
+  ;; `$make_bar` (e.g. to avoid a clash with a same-named local). The
+  ;; linker resolves both names to bar.wat's FQN at merge time.
   (import "./bar.wat" "bar_make"
-    (func $bar_make (param $v i32) (result (ref $Bar))))
+    (func $make_bar (param $v i32) (result (ref $Bar))))
+
+  ;; --- host import shared with bar.wat ----------------------------------
+
+  (import "env" "host_clamp" (func $host_clamp (param i32) (result i32)))
 
 
   ;; --- locally-defined named type ---------------------------------------
@@ -37,19 +45,19 @@
     (local $cur i32)
     (local.set $cur (global.get $next_id))
     (global.set $next_id (i32.add (local.get $cur) (i32.const 1)))
-    (local.get $cur))
+    (call $host_clamp (local.get $cur)))
 
 
   ;; --- exported func: builds a $Foo wrapping a fresh $Bar ---------------
 
-  (func $foo_make (export "foo_make")
+  (func $foo_make (export "env:foo_make")
     (param $v i32) (result (ref $Foo))
 
     (local $id i32)
     (local $bar (ref $Bar))
 
     (local.set $id (call $alloc_id))
-    (local.set $bar (call $bar_make (local.get $v)))
+    (local.set $bar (call $make_bar (local.get $v)))
 
     (block $done (result (ref $Foo))
       (struct.new $Foo
@@ -59,11 +67,11 @@
 
   ;; --- second exported func: peels the $Bar back out of a $Foo ----------
 
-  (func (@implements "std/operators.fnk:op_in")
+  (func (@impl "std/operators.fnk:op_in")
     (param $f (ref $Foo)) (result (ref $Bar))
     (struct.get $Foo $payload (local.get $f)))
 
-  (func $op_notin (@implements "std/operators.fnk:op_notin")
+  (func $op_notin (@impl "std/operators.fnk:op_notin")
     (param $f (ref $Foo)) (result (ref $Bar))
     (struct.get $Foo $payload (local.get $f)))
 )

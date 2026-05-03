@@ -22,6 +22,162 @@ pub mod lower;
 pub mod runtime_contract;
 pub mod sourcemap;
 
+/// Translate any `function[N]` substring in a wasmtime / validator error
+/// message to `function[N]: $<qualified-name>`. Names are looked up in
+/// the supplied binary's name section first (covers user-fragment
+/// functions), falling back to the runtime's name table for runtime
+/// functions when the binary has no entry. If the error also names a
+/// byte offset (`offset M`), append the WAT line + a small surrounding
+/// window from `wasmprinter`'s offset-annotated dump of the runtime
+/// binary, so a validation error pinpoints the source instruction
+/// without re-running tooling externally.
+///
+/// Falls back to leaving unknown indices / offsets unchanged.
+pub fn annotate_func_indices(err: &str, wasm: &[u8]) -> String {
+  // Build a combined name table: binary's own name section first, then
+  // runtime fallback for indices the binary doesn't name.
+  let mut func_names = func_names_from_binary(wasm);
+  for (idx, name) in emit::runtime_func_names() {
+    func_names.entry(idx).or_insert(name);
+  }
+  if func_names.is_empty() {
+    return err.to_string();
+  }
+  // Replace each `function[N]` and `<wasm function N>` with the
+  // qualified name. Two formats: `function[42]` (translation/validation
+  // errors) and `<wasm function 42>` (trap backtraces).
+  let mut out = annotate_pattern(err, "function[", "]", &func_names);
+  out = annotate_pattern(&out, "<wasm function ", ">", &func_names);
+
+  // If the error pointed at an offset, render the SAME binary the
+  // error came from to text WAT and show a window around the offset.
+  // This is the WAT view of the failing instruction — fuzzy-matchable
+  // against the test snapshot WAT to find the originating fixture line.
+  if let Some(off) = parse_offset(&out)
+    && let Some(snippet) = wat_window_at_offset(wasm, off)
+  {
+    out.push_str("\n--- WAT near offset ---\n");
+    out.push_str(&snippet);
+  }
+  out
+}
+
+/// Read the function-name subsection of `wasm`'s `name` custom section
+/// into a `idx → name` map. Empty map if the binary has no name section.
+fn func_names_from_binary(wasm: &[u8]) -> std::collections::HashMap<u32, String> {
+  use std::collections::HashMap;
+  let mut out: HashMap<u32, String> = HashMap::new();
+  if wasm.len() < 8 || !wasm.starts_with(b"\0asm") {
+    return out;
+  }
+  for payload in wasmparser::Parser::new(0).parse_all(wasm).flatten() {
+    if let wasmparser::Payload::CustomSection(c) = payload
+      && let wasmparser::KnownCustom::Name(reader) = c.as_known()
+    {
+      for sub in reader.into_iter().flatten() {
+        if let wasmparser::Name::Function(map) = sub {
+          for entry in map.into_iter().flatten() {
+            out.insert(entry.index, entry.name.to_string());
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
+/// Replace each `<prefix>N<close>` substring with `<prefix>N<close>: $<name>`,
+/// where N is a u32 looked up in `names`. Skipped when `<close>` is
+/// already followed by `::` (wasmtime auto-annotates from the binary's
+/// name section, so adding our own would duplicate).
+fn annotate_pattern(err: &str, prefix: &str, close: &str, names: &std::collections::HashMap<u32, String>) -> String {
+  let mut out = String::with_capacity(err.len());
+  let mut rest = err;
+  while let Some(pos) = rest.find(prefix) {
+    out.push_str(&rest[..pos + prefix.len()]);
+    let after = &rest[pos + prefix.len()..];
+    let end = match after.find(close) { Some(c) => c, None => { out.push_str(after); return out; } };
+    let num_str = &after[..end];
+    out.push_str(num_str);
+    out.push_str(close);
+    let tail = &after[end + close.len()..];
+    let already_named = tail.starts_with("::") || tail.starts_with(": $");
+    if !already_named
+      && let Ok(idx) = num_str.parse::<u32>()
+      && let Some(name) = names.get(&idx)
+    {
+      out.push_str(": $");
+      out.push_str(name);
+    }
+    rest = tail;
+  }
+  out.push_str(rest);
+  out
+}
+
+/// Parse an `offset 0x...` or `offset N` substring out of an error.
+fn parse_offset(err: &str) -> Option<usize> {
+  let pos = err.find("offset ")?;
+  let after = &err[pos + "offset ".len()..];
+  let end = after.find(|c: char| !c.is_ascii_alphanumeric() && c != 'x').unwrap_or(after.len());
+  let num = &after[..end];
+  if let Some(hex) = num.strip_prefix("0x") {
+    usize::from_str_radix(hex, 16).ok()
+  } else {
+    num.parse::<usize>().ok()
+  }
+}
+
+/// Render the supplied wasm bytes to WAT with `print_offsets`, find
+/// the line whose annotated offset is closest to `target` (without
+/// going past), and return a window of ±5 lines. Used to give a
+/// human-readable view of the failing instruction at error time —
+/// fuzzy-grep the surrounding lines into the test snapshot files
+/// to find which fixture line emitted that WASM.
+fn wat_window_at_offset(bytes: &[u8], target: usize) -> Option<String> {
+  if bytes.len() < 8 || !bytes.starts_with(b"\0asm") {
+    return None;
+  }
+  let mut cfg = wasmprinter::Config::new();
+  cfg.print_offsets(true);
+  let wat = {
+    let mut s = String::new();
+    cfg.print(bytes, &mut wasmprinter::PrintFmtWrite(&mut s)).ok()?;
+    s
+  };
+
+  // Walk lines. wasmprinter prefixes each item with `(;@<hex>   ;)`
+  // when `print_offsets(true)` is set. Track the most recent line
+  // whose offset is <= target.
+  let lines: Vec<&str> = wat.lines().collect();
+  let mut best: Option<usize> = None;
+  for (i, line) in lines.iter().enumerate() {
+    let trimmed = line.trim_start();
+    if let Some(rest) = trimmed.strip_prefix("(;@") {
+      let hex_end = rest.find(|c: char| !c.is_ascii_hexdigit()).unwrap_or(rest.len());
+      let hex = &rest[..hex_end];
+      if let Ok(off) = usize::from_str_radix(hex, 16) {
+        if off <= target {
+          best = Some(i);
+        } else if best.is_some() {
+          break;
+        }
+      }
+    }
+  }
+  let i = best?;
+  let lo = i.saturating_sub(5);
+  let hi = (i + 6).min(lines.len());
+  let mut window = String::new();
+  for (j, line) in lines[lo..hi].iter().enumerate() {
+    let marker = if lo + j == i { ">> " } else { "   " };
+    window.push_str(marker);
+    window.push_str(line);
+    window.push('\n');
+  }
+  Some(window)
+}
+
 #[cfg(test)]
 mod tests {
   /// CPS → IR `Fragment` → WAT. No wasm-encoder, no linker, no runtime
@@ -139,69 +295,6 @@ mod tests {
     let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
     let linked = super::link::link(&[user_frag]);
     super::emit::emit(&linked)
-  }
-
-  #[cfg(test)]
-  fn validate_and_collect_exports(bytes: &[u8]) -> Vec<String> {
-    let mut validator = wasmparser::Validator::new_with_features(
-      wasmparser::WasmFeatures::all(),
-    );
-    validator.validate_all(bytes)
-      .unwrap_or_else(|e| panic!("emit validation failed: {e}"));
-
-    let mut exports = Vec::new();
-    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
-      if let wasmparser::Payload::ExportSection(reader) = payload.unwrap() {
-        for exp in reader {
-          exports.push(exp.unwrap().name.to_string());
-        }
-      }
-    }
-    exports
-  }
-
-  #[test]
-  fn emit_produces_valid_wasm_for_int_literal() {
-    let bytes = emit_for("42");
-    let exports = validate_and_collect_exports(&bytes);
-
-    // The per-module host wrapper is exported under the canonical
-    // FQN — `test:` for the test driver. This is the host's entry
-    // point; `fink_module` itself is no longer host-visible.
-    assert!(exports.contains(&"test".to_string()),
-      "missing per-module host wrapper export 'test'. got: {exports:?}");
-
-    // Runtime exports are passed through (with <url>:<name> qualification).
-    assert!(exports.contains(&"rt/apply.wat:apply".to_string()),
-      "missing rt/apply.wat:apply passthrough");
-    assert!(exports.contains(&"std/fn.fnk:args_empty".to_string()),
-      "missing std/fn.fnk:args_empty passthrough");
-
-    // Interop exports stay bare (host contract).
-    assert!(exports.contains(&"wrap_host_cont".to_string()),
-      "missing wrap_host_cont passthrough");
-
-    // stdio protocol dispatchers — exposed under the virtual std/io.fnk
-    // namespace. Importing 'std/io.fnk' resolves to these.
-    assert!(exports.contains(&"std/io.fnk:stdout".to_string()),
-      "missing std/io.fnk:stdout dispatcher");
-    assert!(exports.contains(&"std/io.fnk:stderr".to_string()),
-      "missing std/io.fnk:stderr dispatcher");
-    assert!(exports.contains(&"std/io.fnk:stdin".to_string()),
-      "missing std/io.fnk:stdin dispatcher");
-    assert!(exports.contains(&"std/io.fnk:read".to_string()),
-      "missing std/io.fnk:read dispatcher");
-  }
-
-  #[test]
-  fn emit_produces_valid_wasm_for_int_sum() {
-    let bytes = emit_for("42 + 123");
-    let exports = validate_and_collect_exports(&bytes);
-
-    assert!(exports.contains(&"test".to_string()),
-      "missing per-module host wrapper export 'test'. got: {exports:?}");
-    assert!(exports.contains(&"std/operators.fnk:op_plus".to_string()),
-      "missing std/operators.fnk:op_plus passthrough (needed for a+b)");
   }
 
   /// Instantiate emit's output in wasmtime with trivial host stubs.

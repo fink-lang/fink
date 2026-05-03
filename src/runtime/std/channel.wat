@@ -15,16 +15,57 @@
 
 (module
 
-  ;; Declarative element segment — required by WASM spec for ref.func.
-  (elem declare func $std/channel.wat:_process_msg_q_fn)
+  ;; Type imports
+  (import "rt/apply.wat"  "Closure"  (type $Closure  (sub any)))
+  (import "rt/apply.wat"  "Captures" (type $Captures (sub any)))
+  (import "rt/apply.wat"  "Fn2"      (type $Fn2      (sub any)))
+  (import "std/list.wat"  "List"     (type $List     (sub any)))
+
+  ;; Func imports
+  (import "std/list.wat"  "empty"
+    (func $list_empty (result (ref $List))))
+  (import "std/list.wat"  "prepend"
+    (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
+  (import "std/list.wat"  "concat"
+    (func $list_concat (param $a (ref $List)) (param $b (ref $List)) (result (ref $List))))
+  (import "std/list.wat"  "is_empty"
+    (func $list_is_empty (param $list (ref $List)) (result i32)))
+  (import "std/list.wat"  "head_any"
+    (func $list_head_any (param $list (ref null any)) (result (ref null any))))
+  (import "std/list.wat"  "tail_any"
+    (func $list_tail_any (param $list (ref null any)) (result (ref null any))))
+
+  (import "std/async.wat" "queue_push"
+    (func $queue_push (param $task (ref any))))
+  (import "std/async.wat" "make_thunk"
+    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "std/async.wat" "make_unit_thunk"
+    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
+  (import "std/async.wat" "resume"
+    (func $resume))
+
+
+  ;; -- $Channel type --------------------------------------------------------
+  ;;
+  ;; Multi-message async channel (point-to-point).
+  ;; send buffers messages; an internal task drains (msg, receiver) pairs.
+  ;; $tag: user-supplied metadata value (set at creation, immutable).
+  (type $Channel (@pub) (sub (struct
+    (field $messages  (mut (ref $List)))
+    (field $receivers (mut (ref $List)))
+    (field $tag       (ref any))
+  )))
 
 
   ;; -- Helpers --------------------------------------------------------------
 
+  ;; Declarative element segment — required by WASM spec for ref.func.
+  (elem declare func $_process_msg_q_fn)
+
   ;; Create a process_msg_q closure capturing [ch].
-  (func $std/channel.wat:make_process_msg_q (param $ch (ref $Channel)) (result (ref $Closure))
+  (func $make_process_msg_q (param $ch (ref $Channel)) (result (ref $Closure))
     (struct.new $Closure
-      (ref.func $std/channel.wat:_process_msg_q_fn)
+      (ref.func $_process_msg_q_fn)
       (array.new_fixed $Captures 1 (local.get $ch)))
   )
 
@@ -35,12 +76,12 @@
   ;; The host calls this to create channels before entering the CPS world
   ;; (e.g. for stdin/stdout/stderr injection into main).
 
-  (func $std/channel.wat:_channel_new (export "std/channel.wat:_channel_new")
+  (func $_channel_new (@pub)
     (param $tag (ref null any))
     (result (ref any))
     (struct.new $Channel
-      (struct.new $Nil)
-      (struct.new $Nil)
+      (call $list_empty)
+      (call $list_empty)
       (ref.as_non_null (local.get $tag))))
 
 
@@ -49,35 +90,35 @@
   ;; channel(tag, cont):
   ;;   1. allocate $Channel with empty lists and user-supplied tag
   ;;   2. push thunk(cont, channel) to task queue
-  ;;   3. run_next
+  ;;   3. resume
 
-  (func $std/channels.fnk:channel (export "std/channels.fnk:channel")
+  (func $channel (@pub) (@impl "std/channel.fnk:channel")
     (param $tag (ref null any))
     (param $cont (ref null any))
 
     (local $ch (ref $Channel))
     (local.set $ch (struct.new $Channel
-      (struct.new $Nil)
-      (struct.new $Nil)
+      (call $list_empty)
+      (call $list_empty)
       (ref.as_non_null (local.get $tag))))
 
-    (call $std/async.wat:queue_push
-      (call $std/async.wat:make_thunk
+    (call $queue_push
+      (call $make_thunk
         (ref.as_non_null (local.get $cont))
         (local.get $ch)))
-    (return_call $std/async.wat:resume)
+    (return_call $resume)
   )
 
 
-  ;; -- channel_op_shr (>> on channels) --------------------------------------
+  ;; -- op_shr (>> on channels) ----------------------------------------------
   ;;
-  ;; channel_op_shr(ch, msg, cont):
+  ;; op_shr(ch, msg, cont):
   ;;   1. append msg to ch.$messages
   ;;   2. push process_msg_q(ch) to task queue
   ;;   3. push unit_thunk(cont) to task queue
-  ;;   4. run_next
+  ;;   4. resume
 
-  (func $std/channel.wat:op_shr
+  (func $op_shr (@impl "std/operators.fnk:op_shr" $Channel)
     (param $ch_val (ref null any))
     (param $msg    (ref null any))
     (param $cont   (ref null any))
@@ -87,20 +128,20 @@
 
     ;; Append msg to messages (FIFO).
     (struct.set $Channel $messages (local.get $ch)
-      (call $std/list.wat:concat
+      (call $list_concat
         (struct.get $Channel $messages (local.get $ch))
-        (struct.new $Cons
+        (call $list_prepend
           (ref.as_non_null (local.get $msg))
-          (struct.new $Nil))))
+          (call $list_empty))))
 
     ;; Push process_msg_q to drain one pair.
-    (call $std/async.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))
+    (call $queue_push (call $make_process_msg_q (local.get $ch)))
 
     ;; Sender continues with unit (always suspends).
-    (call $std/async.wat:queue_push
-      (call $std/async.wat:make_unit_thunk (ref.as_non_null (local.get $cont))))
+    (call $queue_push
+      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
 
-    (return_call $std/async.wat:resume)
+    (return_call $resume)
   )
 
 
@@ -109,9 +150,9 @@
   ;; receive(ch, cont):
   ;;   1. append cont to ch.$receivers
   ;;   2. if ch.$messages non-empty, push process_msg_q(ch) to task queue
-  ;;   3. run_next
+  ;;   3. resume
 
-  (func $std/channel.wat:receive
+  (func $receive (@pub) (@impl "std/channel.fnk:receive")
     (param $ch_val (ref null any))
     (param $cont   (ref null any))
 
@@ -120,18 +161,21 @@
 
     ;; Append cont to receivers (FIFO).
     (struct.set $Channel $receivers (local.get $ch)
-      (call $std/list.wat:concat
+      (call $list_concat
         (struct.get $Channel $receivers (local.get $ch))
-        (struct.new $Cons
+        (call $list_prepend
           (ref.as_non_null (local.get $cont))
-          (struct.new $Nil))))
+          (call $list_empty))))
 
     ;; If messages are buffered, trigger matching.
-    (if (ref.test (ref $Cons) (struct.get $Channel $messages (local.get $ch)))
+    ;; TODO: replace ref.test $Cons with a public list_is_empty op
+    ;; (currently relies on list internal structural test).
+    (if (i32.eqz (call $list_is_empty
+          (struct.get $Channel $messages (local.get $ch))))
       (then
-        (call $std/async.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
+        (call $queue_push (call $make_process_msg_q (local.get $ch)))))
 
-    (return_call $std/async.wat:resume)
+    (return_call $resume)
   )
 
 
@@ -141,21 +185,19 @@
   ;; Captures: [ch]. Called via _apply from task queue.
   ;;
   ;; process_msg_q(ch):
-  ;;   1. if $messages empty OR $receivers empty → run_next (done)
+  ;;   1. if $messages empty OR $receivers empty → resume (done)
   ;;   2. pop one msg, pop one receiver
   ;;   3. push thunk(receiver, msg) to task queue
   ;;   4. if both lists still non-empty → push self to task queue
-  ;;   5. run_next
+  ;;   5. resume
 
-  (func $std/channel.wat:_process_msg_q_fn (type $Fn2)
+  (func $_process_msg_q_fn (type $Fn2)
     (param $caps (ref null any))
     (param $args (ref null any))
 
     (local $ch (ref $Channel))
     (local $messages (ref $List))
     (local $receivers (ref $List))
-    (local $msg_cons (ref $Cons))
-    (local $recv_cons (ref $Cons))
 
     (local.set $ch (ref.cast (ref $Channel)
       (ref.as_non_null (array.get $Captures
@@ -167,34 +209,33 @@
 
     ;; If either list is empty, nothing to match.
     (if (i32.or
-          (ref.test (ref $Nil) (local.get $messages))
-          (ref.test (ref $Nil) (local.get $receivers)))
-      (then (return_call $std/async.wat:resume)))
+          (call $list_is_empty (local.get $messages))
+          (call $list_is_empty (local.get $receivers)))
+      (then (return_call $resume)))
 
-    ;; Pop one message.
-    (local.set $msg_cons (ref.cast (ref $Cons) (local.get $messages)))
+    ;; Pop one message: receiver gets messages.head; remaining = messages.tail
     (struct.set $Channel $messages (local.get $ch)
-      (struct.get $Cons $tail (local.get $msg_cons)))
+      (ref.cast (ref $List) (call $list_tail_any (local.get $messages))))
 
-    ;; Pop one receiver.
-    (local.set $recv_cons (ref.cast (ref $Cons) (local.get $receivers)))
     (struct.set $Channel $receivers (local.get $ch)
-      (struct.get $Cons $tail (local.get $recv_cons)))
+      (ref.cast (ref $List) (call $list_tail_any (local.get $receivers))))
 
     ;; Push thunk(receiver, msg) to task queue.
-    (call $std/async.wat:queue_push
-      (call $std/async.wat:make_thunk
-        (struct.get $Cons $head (local.get $recv_cons))
-        (struct.get $Cons $head (local.get $msg_cons))))
+    (call $queue_push
+      (call $make_thunk
+        (ref.as_non_null (call $list_head_any (local.get $receivers)))
+        (ref.as_non_null (call $list_head_any (local.get $messages)))))
 
     ;; If more pairs remain, self-requeue.
     (if (i32.and
-          (ref.test (ref $Cons) (struct.get $Channel $messages (local.get $ch)))
-          (ref.test (ref $Cons) (struct.get $Channel $receivers (local.get $ch))))
+          (i32.eqz (call $list_is_empty
+            (struct.get $Channel $messages (local.get $ch))))
+          (i32.eqz (call $list_is_empty
+            (struct.get $Channel $receivers (local.get $ch)))))
       (then
-        (call $std/async.wat:queue_push (call $std/channel.wat:make_process_msg_q (local.get $ch)))))
+        (call $queue_push (call $make_process_msg_q (local.get $ch)))))
 
-    (return_call $std/async.wat:resume)
+    (return_call $resume)
   )
 
 )

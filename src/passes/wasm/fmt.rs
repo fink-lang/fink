@@ -70,8 +70,7 @@ fn type_name(frag: &Fragment, sym: TypeSym) -> String {
   let i = match sym {
     TypeSym::Local(i) => i,
     TypeSym::Runtime(s) => {
-      let (m, n) = super::runtime_contract::import_key(s);
-      return import_alias(m, n);
+      return format!("${}", super::runtime_contract::import_key(s));
     }
   };
   let Some(ty) = frag.types.get(i as usize) else {
@@ -91,8 +90,7 @@ fn func_name(frag: &Fragment, sym: FuncSym) -> String {
   let i = match sym {
     FuncSym::Local(i) => i,
     FuncSym::Runtime(s) => {
-      let (m, n) = super::runtime_contract::import_key(s);
-      return import_alias(m, n);
+      return format!("${}", super::runtime_contract::import_key(s));
     }
   };
   let Some(f) = frag.funcs.get(i as usize) else {
