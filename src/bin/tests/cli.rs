@@ -260,6 +260,12 @@ mod compile_feature {
 
   #[test]
   fn wasm_optimize_default_succeeds() {
+    if std::process::Command::new("wasm-opt").arg("--version")
+      .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+      .status().is_err() {
+      eprintln!("skipping: wasm-opt not on PATH");
+      return;
+    }
     let out = fink().args(["wasm", "-O", &fixture_str("hello.fnk")])
       .assert().success().get_output().stdout.clone();
     assert_eq!(&out[0..4], b"\0asm");
