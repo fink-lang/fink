@@ -42,6 +42,16 @@ name = "finkrt"
 path = "src/bin/finkrt.rs"
 required-features = ["runtime"]
 
+# Black-box CLI tests — kept under `src/bin/` next to the binaries
+# they exercise (project rule: tests live with their subject). Declared
+# explicitly because Cargo's integration-test discovery only scans the
+# repo-root `tests/` directory, and we don't keep one. The path is in
+# `src/bin/tests/` rather than `src/bin/` directly so Cargo's bin
+# auto-discovery doesn't try to compile it as another binary.
+[[test]]
+name = "cli"
+path = "src/bin/tests/cli.rs"
+
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }
 tempfile = "3"

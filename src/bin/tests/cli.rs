@@ -1,13 +1,20 @@
 //! Integration tests for the `fink` and `finkrt` CLI binaries.
 //!
-//! These tests exercise the actual built binary via `assert_cmd`, and
+//! These tests exercise the actual built binaries via `assert_cmd`, and
 //! treat the CLI as a black box: arguments in, stdout/stderr/exit code
 //! out. The `.fnk` fixtures the tests feed live next to the binary
 //! source under `src/bin/fixtures/`.
 //!
+//! This file is wired as a `[[test]]` target in `Cargo.toml` so it can
+//! live next to its subject (the binaries in `src/bin/`) rather than
+//! under a repo-root `tests/` directory. The path under `src/bin/tests/`
+//! (rather than `src/bin/` directly) keeps Cargo's bin auto-discovery
+//! from trying to compile it as another binary.
+//!
 //! Tests for feature-gated subcommands (`wat`, `wasm`, `compile`,
 //! `run`, `dap`) are themselves gated on the same features so
-//! `cargo test --no-default-features` still passes.
+//! `cargo test --no-default-features` still passes for whatever
+//! subset is buildable.
 
 use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
