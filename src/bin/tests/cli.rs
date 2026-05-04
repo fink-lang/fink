@@ -258,13 +258,14 @@ mod compile_feature {
       .stderr(predicate::str::contains("unknown optimization level: bad"));
   }
 
-  // The runtime emits multivalue results and saturating-truncation
-  // instructions; wasm-opt's default validator rejects both. `wasm -O`
-  // (and the explicit `-O1..-Oz` levels) currently fail end-to-end on
-  // the hello fixture. Tracked as a real bug to surface, not fix here.
   #[test]
-  #[ignore = "BUG: wasm-opt rejects runtime's multivalue/sat-conv usage; see session note"]
   fn wasm_optimize_default_succeeds() {
+    if std::process::Command::new("wasm-opt").arg("--version")
+      .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+      .status().is_err() {
+      eprintln!("skipping: wasm-opt not on PATH");
+      return;
+    }
     let out = fink().args(["wasm", "-O", &fixture_str("hello.fnk")])
       .assert().success().get_output().stdout.clone();
     assert_eq!(&out[0..4], b"\0asm");
