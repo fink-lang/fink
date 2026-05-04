@@ -78,6 +78,7 @@ pub enum Sym {
   I64,
   U64,
   F64,
+  Decimal,
   Fn2,
   Closure,
   Captures,
@@ -316,6 +317,7 @@ pub struct Runtime {
   i64_: Option<TypeSym>,
   u64_: Option<TypeSym>,
   f64_: Option<TypeSym>,
+  decimal_: Option<TypeSym>,
   fn2: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
@@ -403,6 +405,7 @@ impl Runtime {
   pub fn i64_(&self)         -> TypeSym { self.i64_.expect("rt: I64 not declared") }
   pub fn u64_(&self)         -> TypeSym { self.u64_.expect("rt: U64 not declared") }
   pub fn f64_(&self)         -> TypeSym { self.f64_.expect("rt: F64 not declared") }
+  pub fn decimal_(&self)     -> TypeSym { self.decimal_.expect("rt: Decimal not declared") }
   pub fn fn2(&self)          -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
@@ -565,6 +568,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::I64             => "std/int.wat:I64",
     Sym::U64             => "std/int.wat:U64",
     Sym::F64             => "std/float.wat:F64",
+    Sym::Decimal         => "std/decimal.wat:Decimal",
 
     Sym::SeqPrepend      => "std/seq.fnk:prepend",
     Sym::SeqPop          => "std/seq.fnk:pop",
@@ -629,6 +633,9 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   }
   if needed.contains(&Sym::F64) {
     rt.f64_ = Some(TypeSym::Runtime(Sym::F64));
+  }
+  if needed.contains(&Sym::Decimal) {
+    rt.decimal_ = Some(TypeSym::Runtime(Sym::Decimal));
   }
   if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
     rt.fn2 = Some(TypeSym::Runtime(Sym::Fn2));
@@ -1074,6 +1081,7 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
       usage.mark(Sym::Num);
     }
     ValKind::Lit(Lit::Decimal { .. }) => {
+      usage.mark(Sym::Decimal);
       usage.mark(Sym::Num);
     }
     ValKind::Lit(Lit::Seq) => {

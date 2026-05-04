@@ -24,6 +24,7 @@
   (import "std/int.wat"      "I64"         (type $I64         (sub any)))
   (import "std/int.wat"      "U64"         (type $U64         (sub any)))
   (import "std/float.wat"    "F64"         (type $F64         (sub any)))
+  (import "std/decimal.wat"  "Decimal"     (type $Decimal     (sub any)))
   (import "std/str.wat"      "Str"         (type $Str         (sub any)))
   (import "std/list.wat"     "List"        (type $List        (sub any)))
   (import "std/dict.wat"     "Rec"         (type $Rec         (sub any)))

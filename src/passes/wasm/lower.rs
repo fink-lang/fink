@@ -1467,7 +1467,7 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
     LitVal::I64(n)  => push_struct_new(frag, rt.i64_(), vec![op_f64(*n as f64)], into),
     LitVal::U64(n)  => push_struct_new(frag, rt.u64_(), vec![op_f64(*n as f64)], into),
     LitVal::F64(n)  => push_struct_new(frag, rt.f64_(), vec![op_f64(*n)], into),
-    LitVal::Decimal(n) => push_struct_new(frag, rt.num(), vec![op_f64(*n)], into),
+    LitVal::Decimal(n) => push_struct_new(frag, rt.decimal_(), vec![op_f64(*n)], into),
     LitVal::Bool(b) => push_ref_i31(frag, op_i32(if *b { 1 } else { 0 }), into),
     LitVal::EmptySeq => push_call(frag, rt.args_empty(), vec![], Some(into)),
     LitVal::EmptyRec => push_call(frag, rt.rec_empty(), vec![], Some(into)),
