@@ -125,7 +125,7 @@ pub fn optimize_wasm(wasm: &mut Wasm, level: &str) -> Result<(), String> {
   use std::process::Command;
 
   let mut child = Command::new("wasm-opt")
-    .args([level, "--enable-gc", "--enable-reference-types", "--enable-tail-call", "-o", "-", "-"])
+    .args([level, "--enable-gc", "--enable-reference-types", "--enable-tail-call", "--enable-multivalue", "--enable-nontrapping-float-to-int", "-o", "-", "-"])
     .stdin(std::process::Stdio::piped())
     .stdout(std::process::Stdio::piped())
     .stderr(std::process::Stdio::piped())
