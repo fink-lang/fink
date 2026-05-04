@@ -10,7 +10,7 @@ test 'bind literal', fn:
     x = 42
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let (u8 42), fn ·x_0:
+      ·let (i8 42), fn ·x_0:
         ·ƒpub ·x_0, fn:
           ·ƒret_1 ·x_0
     # sm:FwABAAYAAQAGJAEABhIAAgAGAQQBAAEAAQ4BBAIAAQACBgEAAgYACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOAQABAAEAARQBAAE
@@ -51,7 +51,7 @@ test 'block two stmts', fn:
     x
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let (u8 1), fn ·x_0:
+      ·let (i8 1), fn ·x_0:
         ·ƒpub ·x_0, fn:
           ·ƒret_1 ·x_0
     # sm:FwABAAcAAQAHJAEMARIAAgAGAQcBAAEAAQ4BBAEAAQABBgEAAQQACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOAQwBAAEAARQBAAE
@@ -63,7 +63,7 @@ test 'block bind then ·apply', fn:
     foo x
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let (u8 42), fn ·x_0:
+      ·let (i8 42), fn ·x_0:
         ·ƒpub ·x_0, fn:
           ·∅foo ·ƒret_1, ·x_0
     # sm:GQABAAwAAQAMJAEOBRIAAgAGAQkBAAEAAQ4BBAIAAQACBgEAAgYACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOAQ4FAAEAAxIBAAUSAAQBCAE
@@ -78,7 +78,7 @@ test 'fn body with bind', fn:
     ·ƒink_module fn ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·a_0:
-          ·op_plus ·a_0, (u8 1), fn ·v_7:
+          ·op_plus ·a_0, (i8 1), fn ·v_7:
             ·let ·v_7, fn ·x_1:
               ·ƒret_4 ·x_1
         fn ·v_3: ·ƒret_2 ·v_3
@@ -112,11 +112,11 @@ test 'calling a local — still goes through ·load', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
       ·fn
-        fn ·ƒret_4, ·x_1: ·op_plus ·x_1, (u8 1), ·ƒret_4
+        fn ·ƒret_4, ·x_1: ·op_plus ·x_1, (i8 1), ·ƒret_4
         fn ·v_3:
           ·let ·v_3, fn ·inc_0:
             ·ƒpub ·inc_0, fn:
-              ·inc_0 ·ƒret_2, (u8 5)
+              ·inc_0 ·ƒret_2, (i8 5)
     # sm:LAABABcAAQAXJAEkBRIAAgAGARcLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgACAA4BAwEAAQABDAEECwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWASQFAAEAAxABAAUSAAYBCAEAAQABBgEAAQ
 
 
@@ -125,7 +125,7 @@ test 'chained binding is sequential ·match_store', fn:
     foo = spam = 1
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·let (u8 1), fn ·spam_1:
+      ·let (i8 1), fn ·spam_1:
         ·let ·spam_1, fn ·foo_0:
           ·ƒpub ·foo_0, fn:
             ·ƒret_2 ·foo_0
@@ -148,7 +148,7 @@ test 'group with binding — immediately-invoked ·closure', fn:
             fn ·v_7:
               ·let ·v_7, fn ·ni_1:
                 ·ƒret_4 ·ni_1
-            u8 1
+            i8 1
         fn ·v_3:
           ·v_3 fn ·v_15:
             ·let ·v_15, fn ·spam_0:
@@ -167,9 +167,9 @@ test 'sequential bindings', fn:
     bar = foo + 1
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·let (u8 1), fn ·foo_0:
+      ·let (i8 1), fn ·foo_0:
         ·ƒpub ·foo_0, fn:
-          ·op_plus ·foo_0, (u8 1), fn ·v_6:
+          ·op_plus ·foo_0, (i8 1), fn ·v_6:
             ·let ·v_6, fn ·bar_1:
               ·ƒpub ·bar_1, fn:
                 ·ƒret_2 ·bar_1
@@ -186,8 +186,8 @@ test 'binding rhs is a call', fn:
           ·let ·v_5, fn ·foo_0:
             ·ƒpub ·foo_0, fn:
               ·ƒret_1 ·foo_0
-        u8 1
-        u8 2
+        i8 1
+        i8 2
     # sm:IAABAA4AAQAOJAEADhIAAgAGAQwIAAEAAyABAAgKAAIADgEDAQABAAEMAQQICgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBAAMAAQADFAEAAxgBFAEAAQABBgEAAQwBBgEAAQABBgEAAQ
 
 
@@ -201,7 +201,7 @@ test 'expression result discarded', fn:
         fn ·v_3:
           ·let ·v_3, fn ·v_5:
             ·ƒret_0 ·∅bar
-        u8 1
+        i8 1
     # sm:FwABAAkAAQAJJAEMAxIAAgAGAQsFAAEAAyABAAUKAAIADgEABQABAAUMAQAFCgAKAQAFCgACABIBDAMAAQADFAEAAxoBAwEAAQABBgEAAQ
 
 
@@ -226,9 +226,9 @@ test 'two bindings at module level', fn:
     bar = 2
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·let (u8 1), fn ·foo_0:
+      ·let (i8 1), fn ·foo_0:
         ·ƒpub ·foo_0, fn:
-          ·let (u8 2), fn ·bar_1:
+          ·let (i8 2), fn ·bar_1:
             ·ƒpub ·bar_1, fn:
               ·ƒret_2 ·bar_1
     # sm:JgABAA8AAQAPJAEQBxIAAgAGAQcBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgAKAQADAAEAAxABAAMOAAgAAgAOARgBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQBAAM
@@ -248,7 +248,7 @@ test 'two fns at module level — main calls add', fn:
           ·let ·v_5, fn ·add_0:
             ·ƒpub ·add_0, fn:
               ·fn
-                fn ·ƒret_14: ·add_0 ·ƒret_14, (u8 3), (u8 4)
+                fn ·ƒret_14: ·add_0 ·ƒret_14, (i8 3), (i8 4)
                 fn ·v_13:
                   ·let ·v_13, fn ·main_1:
                     ·ƒpub ·main_1, fn:
@@ -284,7 +284,7 @@ test 'shadowed binding — inner add does not affect outer', fn:
                   ·let ·v_18, fn ·sub_1:
                     ·ƒpub ·sub_1, fn:
                       ·fn
-                        fn ·ƒret_42: ·add_0 ·ƒret_42, (u8 3), (u8 4)
+                        fn ·ƒret_42: ·add_0 ·ƒret_42, (i8 3), (i8 4)
                         fn ·v_41:
                           ·let ·v_41, fn ·main_2:
                             ·ƒpub ·main_2, fn:

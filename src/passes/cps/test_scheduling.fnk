@@ -11,7 +11,7 @@ test 'yield literal', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·yield (u8 42), ·ƒret_1
+      ·yield (i8 42), ·ƒret_1
     # sm:DAABAAgAAQAIJAEACBIAAgAGAQAIAAEACBIBDAIAAQACBgEAAgYABAELCA
 
 
@@ -77,7 +77,7 @@ test 'channel creation', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·channel (u8 0), ·ƒret_1
+      ·channel (i8 0), ·ƒret_1
     # sm:DAABAAkAAQAJJAEACRIAAgAGAQAJAAEACRYBEAEAAQABBgEAAQQABAEPCQ
 
 
@@ -98,7 +98,7 @@ test 'channel bound to name', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·channel (u8 0), fn ·v_5:
+      ·channel (i8 0), fn ·v_5:
         ·let ·v_5, fn ·ch_0:
           ·ƒpub ·ch_0, fn:
             ·ƒret_2 ·ch_0

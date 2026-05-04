@@ -1607,9 +1607,11 @@ fn wrap_with_fail(
 /// Parse an integer literal source slice into a typed `Lit`, inferring width.
 ///
 /// Width inference rules:
-/// - Bare positive (no sign prefix): smallest unsigned width that fits the value.
-/// - Sign-prefixed (`+` or `-`): smallest signed width that fits the value.
-/// - Hex/oct/bin: same rule (smallest unsigned, or smallest signed if prefixed).
+/// - Bare decimal literal (e.g. `42`, `1_234_567`): smallest **signed** width
+///   that fits the value (math family, mixes with floats).
+/// - Sign-prefixed (`+` / `-`) of any base: smallest signed width.
+/// - Bare hex / octal / binary (e.g. `0xFF`, `0o777`, `0b1010`): smallest
+///   **unsigned** width (bits family, used for masks / bit patterns).
 fn parse_int_lit(s: &str) -> Lit {
   let raw = s.replace('_', "");
   let (sign_prefixed, negative, body) = if let Some(rest) = raw.strip_prefix('-') {
@@ -1619,16 +1621,19 @@ fn parse_int_lit(s: &str) -> Lit {
   } else {
     (false, false, raw)
   };
-  let abs: u64 = if let Some(hex) = body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
-    u64::from_str_radix(hex, 16).unwrap_or(0)
-  } else if let Some(oct) = body.strip_prefix("0o").or_else(|| body.strip_prefix("0O")) {
-    u64::from_str_radix(oct, 8).unwrap_or(0)
-  } else if let Some(bin) = body.strip_prefix("0b").or_else(|| body.strip_prefix("0B")) {
-    u64::from_str_radix(bin, 2).unwrap_or(0)
-  } else {
-    body.parse().unwrap_or(0)
-  };
-  if sign_prefixed {
+  let (abs, is_bits_base): (u64, bool) =
+    if let Some(hex) = body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
+      (u64::from_str_radix(hex, 16).unwrap_or(0), true)
+    } else if let Some(oct) = body.strip_prefix("0o").or_else(|| body.strip_prefix("0O")) {
+      (u64::from_str_radix(oct, 8).unwrap_or(0), true)
+    } else if let Some(bin) = body.strip_prefix("0b").or_else(|| body.strip_prefix("0B")) {
+      (u64::from_str_radix(bin, 2).unwrap_or(0), true)
+    } else {
+      (body.parse().unwrap_or(0), false)
+    };
+  // Sign prefix overrides bits-family — `+0xFF` / `-0xFF` are signed.
+  // Bare hex/oct/bin → unsigned. Bare decimal → signed.
+  if sign_prefixed || !is_bits_base {
     let signed: i64 = if negative { -(abs as i64) } else { abs as i64 };
     let width = signed_width_for(signed);
     Lit::Int { value: signed, width }

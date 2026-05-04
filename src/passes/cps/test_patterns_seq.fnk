@@ -217,7 +217,7 @@ test 'seq — literal element', fn:
               fn ·v_52:
                 ·fn
                   fn ·ƒsucc_36, ·ƒfail_37, ·v_35:
-                    ·op_eq ·v_35, (u8 1), fn ·v_40:
+                    ·op_eq ·v_35, (i8 1), fn ·v_40:
                       ·if ·v_40,
                         fn: ·ƒsucc_36 _
                         fn: ·ƒfail_37 _
@@ -251,7 +251,7 @@ test 'seq — infix guard', fn:
               fn ·v_52:
                 ·fn
                   fn ·ƒsucc_37, ·ƒfail_38, ·v_36:
-                    ·op_gte ·v_36, (u8 2), fn ·v_41:
+                    ·op_gte ·v_36, (i8 2), fn ·v_41:
                       ·if ·v_41,
                         fn: ·ƒsucc_37 ·v_36
                         fn: ·ƒfail_38 _
@@ -383,19 +383,19 @@ test 'seq — multi-arg guard with bound element', fn:
                           fn ·v_79:
                             ·fn
                               fn ·ƒsucc_63, ·ƒfail_64, ·v_62:
-                                ·op_eq ·v_62, (u8 4), fn ·v_67:
+                                ·op_eq ·v_62, (i8 4), fn ·v_67:
                                   ·if ·v_67,
                                     fn: ·ƒsucc_63 _
                                     fn: ·ƒfail_64 _
                               fn ·v_75: ·v_75 ·v_79, ·panic, ·v_8
                       fn: ·panic _
-                  u8 2
+                  i8 2
                   ·a_0
-                  u8 3
+                  i8 3
             fn ·v_99:
               ·fn
                 fn ·ƒsucc_41, ·ƒfail_42, ·v_40:
-                  ·op_eq ·v_40, (u8 1), fn ·v_45:
+                  ·op_eq ·v_40, (i8 1), fn ·v_45:
                     ·if ·v_45,
                       fn: ·ƒsucc_41 _
                       fn: ·ƒfail_42 _

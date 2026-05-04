@@ -56,7 +56,7 @@ test 'simple guard', fn:
         fn ·v_18:
           ·fn
             fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-              ·op_gt ·v_3, (u8 0), fn ·v_8:
+              ·op_gt ·v_3, (i8 0), fn ·v_8:
                 ·if ·v_8,
                   fn: ·ƒsucc_4 ·v_3
                   fn: ·ƒfail_5 _
@@ -74,7 +74,7 @@ test 'nested guard', fn:
         fn ·v_22:
           ·fn
             fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
-              ·op_lt ·a_0, (u8 9), fn ·v_8:
+              ·op_lt ·a_0, (i8 9), fn ·v_8:
                 ·op_or ·v_3, ·v_8, fn ·v_11:
                   ·if ·v_11,
                     fn: ·ƒsucc_4 ·v_3

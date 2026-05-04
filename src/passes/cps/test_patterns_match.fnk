@@ -9,7 +9,7 @@ test 'match block bind', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·fn
-        fn ·ƒret_22: ·ƒret_22 (u8 2)
+        fn ·ƒret_22: ·ƒret_22 (i8 2)
         fn ·v_26:
           ·fn
             fn ·ƒsucc_4, ·ƒfail_5, ·v_3:
@@ -18,7 +18,7 @@ test 'match block bind', fn:
                 fn ·v_32:
                   ·fn
                     fn ·ƒsucc_8, ·ƒfail_9, ·v_7:
-                      ·op_eq ·v_7, (u8 1), fn ·v_12:
+                      ·op_eq ·v_7, (i8 1), fn ·v_12:
                         ·if ·v_12,
                           fn: ·ƒsucc_8 _
                           fn: ·ƒfail_9 _
@@ -55,7 +55,7 @@ test 'match wildcard', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·fn
-        fn ·ƒret_6: ·ƒret_6 (u8 42)
+        fn ·ƒret_6: ·ƒret_6 (i8 42)
         fn ·v_10:
           ·fn
             fn ·ƒsucc_3, ·ƒfail_4, ·v_2: ·v_10 ·ƒsucc_3
@@ -109,7 +109,7 @@ test 'match literal arms', fn:
                 fn ·v_31:
                   ·fn
                     fn ·ƒsucc_7, ·ƒfail_8, ·v_6:
-                      ·op_eq ·v_6, (u8 1), fn ·v_11:
+                      ·op_eq ·v_6, (i8 1), fn ·v_11:
                         ·if ·v_11,
                           fn: ·ƒsucc_7 _
                           fn: ·ƒfail_8 _
@@ -125,7 +125,7 @@ test 'match literal arms', fn:
                         fn ·v_67:
                           ·fn
                             fn ·ƒsucc_43, ·ƒfail_44, ·v_42:
-                              ·op_eq ·v_42, (u8 2), fn ·v_47:
+                              ·op_eq ·v_42, (i8 2), fn ·v_47:
                                 ·if ·v_47,
                                   fn: ·ƒsucc_43 _
                                   fn: ·ƒfail_44 _
@@ -163,7 +163,7 @@ test 'match — expression in arm', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·fn
-        fn ·ƒret_21: ·op_plus ·∅y, (u8 1), ·ƒret_21
+        fn ·ƒret_21: ·op_plus ·∅y, (i8 1), ·ƒret_21
         fn ·v_27:
           ·fn
             fn ·ƒsucc_3, ·ƒfail_4, ·v_2:
@@ -228,7 +228,7 @@ test 'match child ·scope — binding in arm body', fn:
                 fn ·v_34:
                   ·fn
                     fn ·ƒsucc_9, ·ƒfail_10, ·v_8:
-                      ·op_gt ·v_8, (u8 1), fn ·v_13:
+                      ·op_gt ·v_8, (i8 1), fn ·v_13:
                         ·if ·v_13,
                           fn: ·ƒsucc_9 ·v_8
                           fn: ·ƒfail_10 _
@@ -342,7 +342,7 @@ test 'match — seq literal guard', fn:
                     fn ·v_64:
                       ·fn
                         fn ·ƒsucc_37, ·ƒfail_38, ·v_36:
-                          ·op_eq ·v_36, (u8 1), fn ·v_41:
+                          ·op_eq ·v_36, (i8 1), fn ·v_41:
                             ·if ·v_41,
                               fn: ·ƒsucc_37 _
                               fn: ·ƒfail_38 _
@@ -360,7 +360,7 @@ test 'match — seq literal guard', fn:
                     fn ·v_34: ·v_34 ·v_72, ·ƒfail_5, ·v_3
             fn ·v_79:
               ·fn
-                fn ·ƒret_84: ·ƒret_84 (u8 0)
+                fn ·ƒret_84: ·ƒret_84 (i8 0)
                 fn ·v_88:
                   ·fn
                     fn ·ƒsucc_81, ·ƒfail_82, ·v_80: ·v_88 ·ƒsucc_81
@@ -400,7 +400,7 @@ test 'match — rec literal guard', fn:
                     fn ·v_61:
                       ·fn
                         fn ·ƒsucc_34, ·ƒfail_35, ·v_33:
-                          ·op_eq ·kind_33, (u8 1), fn ·v_38:
+                          ·op_eq ·kind_33, (i8 1), fn ·v_38:
                             ·if ·kind_38,
                               fn: ·ƒsucc_34 _
                               fn: ·ƒfail_35 _
@@ -417,7 +417,7 @@ test 'match — rec literal guard', fn:
                     fn ·v_31: ·v_31 ·v_69, ·ƒfail_5, ·v_3
             fn ·v_76:
               ·fn
-                fn ·ƒret_81: ·ƒret_81 (u8 0)
+                fn ·ƒret_81: ·ƒret_81 (i8 0)
                 fn ·v_85:
                   ·fn
                     fn ·ƒsucc_78, ·ƒfail_79, ·v_77: ·v_85 ·ƒsucc_78

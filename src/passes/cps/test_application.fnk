@@ -10,7 +10,7 @@ test '·apply ident to literal', fn:
     foo 42
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·∅foo ·ƒret_0, (u8 42)
+      ·∅foo ·ƒret_0, (i8 42)
     # sm:DAABAAYAAQAGJAEABhIAAgAGAQAGAAEAAxIBAAYSAAYBCAIAAQACBgEAAg
 
 
@@ -72,7 +72,7 @@ test 'simple call', fn:
     add 1, 2
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·∅add ·ƒret_0, (u8 1), (u8 2)
+      ·∅add ·ƒret_0, (i8 1), (i8 2)
     # sm:EAABAAgAAQAIJAEACBIAAgAGAQAIAAEAAxIBAAgSAAYBCAEAAQABBgEAAQQABgEGAQABAAEGAQAB
 
 
@@ -82,9 +82,9 @@ test 'nested call', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·∅mul
-        fn ·v_5: ·∅add ·ƒret_0, ·v_5, (u8 1)
-        u8 2
-        u8 3
+        fn ·v_5: ·∅add ·ƒret_0, ·v_5, (i8 1)
+        i8 2
+        i8 3
     # sm:GAABABEAAQARJAEAERIAAgAGAQoIAAEAAyABAAgKAAQBCREAAQADEgEAERIABAEKCAoABgEWAQABAAEGAQABDgENAQABAAEGAQABDAEGAQABAAEGAQAB
 
 
@@ -134,7 +134,7 @@ test 'partial apply', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·fn
-        fn ·ƒret_3, ·v_0: ·∅add ·ƒret_3, (u8 3), ·v_0
+        fn ·ƒret_3, ·v_0: ·∅add ·ƒret_3, (i8 3), ·v_0
         fn ·v_2: ·ƒret_1 ·v_2
     # sm:GgABAAgAAQAIJAEACBIAAgAGAQAIAAEACAgAEAEACBYBAAgKAAQBAAgAAQADEgEACBIABgEIAQABAAEGAQABBAAEAQYBCgAQAQ0ICgAEAQAIAAEACBQBAAg
 
@@ -145,8 +145,8 @@ test 'pipe with lambda — literal head', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·fn
-        fn ·ƒret_4, ·a_0: ·op_plus ·a_0, (u8 2), ·ƒret_4
-        fn ·v_3: ·v_3 ·ƒret_1, (u8 3)
+        fn ·ƒret_4, ·a_0: ·op_plus ·a_0, (i8 2), ·ƒret_4
+        fn ·v_3: ·v_3 ·ƒret_1, (i8 3)
     # sm:HgABAA8AAQAPJAEADxIAAgAGAQgLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQMBAAEECwwBBw8SAAYBAAEAAQABBgEAAQ
 
 
@@ -156,7 +156,7 @@ test 'pipe with lambda — ident head', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·fn
-        fn ·ƒret_4, ·a_0: ·op_plus ·a_0, (u8 2), ·ƒret_4
+        fn ·ƒret_4, ·a_0: ·op_plus ·a_0, (i8 2), ·ƒret_4
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
     # sm:HAABAA8AAQAPJAEADxIAAgAGAQgLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQMBAAEECwwBBw8SAAQBAAE
 
@@ -167,8 +167,8 @@ test 'pipe with partial', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·fn
-        fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, (u8 2), ·v_0
-        fn ·v_3: ·v_3 ·ƒret_1, (u8 3)
+        fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, (i8 2), ·v_0
+        fn ·v_3: ·v_3 ·ƒret_1, (i8 3)
     # sm:HgABAAwAAQAMJAEADBIAAgAGAQgIAAEACAgAEAEACBYBAAgKAAQBAAgAAQADEgEACBIABgEIAQABAAEGAQABBAAEAQYBCgAQAQ0ICgAEAQMBAAEECAwBBwwSAAYBAAEAAQABBgEAAQ
 
 
@@ -178,7 +178,7 @@ test 'pipe with partial — ident head', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·fn
-        fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, (u8 2), ·v_0
+        fn ·ƒret_4, ·v_0: ·∅add ·ƒret_4, (i8 2), ·v_0
         fn ·v_3: ·v_3 ·ƒret_1, ·∅x
     # sm:HAABAAwAAQAMJAEADBIAAgAGAQgIAAEACAgAEAEACBYBAAgKAAQBAAgAAQADEgEACBIABgEIAQABAAEGAQABBAAEAQYBCgAQAQ0ICgAEAQMBAAEECAwBBwwSAAQBAAE
 
@@ -196,7 +196,7 @@ test 'varargs — call site spreads iterable', fn:
     foo 1, ..items
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·∅foo ·ƒret_0, (u8 1), ..·∅items
+      ·∅foo ·ƒret_0, (i8 1), ..·∅items
     # sm:EAABAA4AAQAOJAEADhIAAgAGAQAOAAEAAxIBAA4SAAYBCAEAAQABBgEAAQQABAEKBQABAAUEAQAF
 
 

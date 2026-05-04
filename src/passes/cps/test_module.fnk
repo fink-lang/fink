@@ -26,7 +26,7 @@ test 'single module expr', fn:
     42
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 (u8 42)
+      ·ƒret_0 (i8 42)
     # sm:CgABAAIAAQACJAEAAhIAAgAGAQACAAEAAhYBAAIAAQACBgEAAg
 
 
@@ -39,7 +39,7 @@ test 'single binding export', fn:
     foo = 1
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let (u8 1), fn ·foo_0:
+      ·let (i8 1), fn ·foo_0:
         ·ƒpub ·foo_0, fn:
           ·ƒret_1 ·foo_0
     # sm:FwABAAcAAQAHJAEABxIAAgAGAQgBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgAKAQADAAEAAxABAAMOAAgAAgAOAQADAAEAAxQBAAM
@@ -51,9 +51,9 @@ test 'single binding export with trailing expr', fn:
     42
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let (u8 1), fn ·foo_0:
+      ·let (i8 1), fn ·foo_0:
         ·ƒpub ·foo_0, fn:
-          ·ƒret_1 (u8 42)
+          ·ƒret_1 (i8 42)
     # sm:GQABAAoAAQAKJAEQAhIAAgAGAQcBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgAKAQADAAEAAxABAAMOAAgAAgAOARACAAEAAhYBAAIAAQACBgEAAg
 
 
@@ -67,9 +67,9 @@ test 'two bindings export', fn:
     bar = 2
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·let (u8 1), fn ·foo_0:
+      ·let (i8 1), fn ·foo_0:
         ·ƒpub ·foo_0, fn:
-          ·let (u8 2), fn ·bar_1:
+          ·let (i8 2), fn ·bar_1:
             ·ƒpub ·bar_1, fn:
               ·ƒret_2 ·bar_1
     # sm:JgABAA8AAQAPJAEQBxIAAgAGAQcBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgAKAQADAAEAAxABAAMOAAgAAgAOARgBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQBAAM
@@ -90,7 +90,7 @@ test 'two fns export', fn:
           ·let ·v_5, fn ·add_0:
             ·ƒpub ·add_0, fn:
               ·fn
-                fn ·ƒret_14: ·add_0 ·ƒret_14, (u8 3), (u8 4)
+                fn ·ƒret_14: ·add_0 ·ƒret_14, (i8 3), (i8 4)
                 fn ·v_13:
                   ·let ·v_13, fn ·main_1:
                     ·ƒpub ·main_1, fn:
@@ -113,7 +113,7 @@ test 'import not in exports', fn:
           fn ·v_11:
             ·let ·v_11, fn ·foo_0:
               ·fn
-                fn ·ƒret_29: ·foo_0 ·ƒret_29, (u8 1)
+                fn ·ƒret_29: ·foo_0 ·ƒret_29, (i8 1)
                 fn ·v_28:
                   ·let ·v_28, fn ·main_1:
                     ·ƒpub ·main_1, fn:
@@ -140,8 +140,8 @@ test 'destructure not in exports', fn:
     foo = fn: a
   | equals ƒink:
     ·ƒink_module fn ·ƒret_3:
-      ·seq_prepend (u8 2), [], fn ·v_6:
-        ·seq_prepend (u8 1), ·v_6, fn ·v_9:
+      ·seq_prepend (i8 2), [], fn ·v_6:
+        ·seq_prepend (i8 1), ·v_6, fn ·v_9:
           ·fn
             fn ·v_14, ·v_15:
               ·let ·v_14, fn ·a_0:
@@ -180,8 +180,8 @@ test 'standalone top-level seq destructure with literal rhs', fn:
     [a, b] = [1, 2]
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·seq_prepend (u8 2), [], fn ·v_5:
-        ·seq_prepend (u8 1), ·v_5, fn ·v_8:
+      ·seq_prepend (i8 2), [], fn ·v_5:
+        ·seq_prepend (i8 1), ·v_5, fn ·v_8:
           ·fn
             fn ·v_13, ·v_14:
               ·let ·v_13, fn ·a_0:
@@ -208,7 +208,7 @@ test 'standalone top-level rec destructure with literal rhs', fn:
     {x} = {x: 1}
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·rec_put {}, 'x', (u8 1), fn ·v_5:
+      ·rec_put {}, 'x', (i8 1), fn ·v_5:
         ·fn
           fn ·v_10:
             ·let ·v_10, fn ·x_0:
@@ -321,7 +321,7 @@ test 'export args do not leak call args', fn:
                                     ·ƒpub ·p_3, fn:
                                       ·ƒret_9 ·p_3
                                 ·s_1
-                                u8 3
-                u8 1
-                u8 2
+                                i8 3
+                i8 1
+                i8 2
     # sm:gQEAAQBUAAEAVCQBkAEMEgACAAYBgwEQAAEAEAgAEAEWBRgBDwEOAQYBCgAEAQoFAAEABRQBAAEKAAQBCAEKAAQBBwUUABABFRAMAAIADgEDAQABAAEMAQQQDAAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBOAgAAQADLgEACAwAAgAeAQMBAAEAAQwBBAgMAAoBBwEKAAIAIgEAAQABAAEQAQABCgAIAAIAJgEoGgABABoIADABMAIYASkBDgEGAQoAAgAuARQFAAEABRIBAAEKAAQBCAEKAAoBBwUMAAIAMgEDAQABAAEMAQQFDAAKAQkCDAACADYBGgIAAQACFgEAAgwAMAEvGgwAAgAuAQMBAAEAAQwBBBoMAAoBCwMOAAIAMgEAAwABAAMQAQADDgAIAAIANgFMCAABAANOAQAIDAACAD4BAwEAAQABDAEECAwACgEHAQoAAgBCAQABAAEAARABAAEKAAgAAgBGAQABAAEAARQBAAFEARABRAEGAQABAAEGAQABHAFlAQABAAEGAQABHAEGAQABAAEGAQAB

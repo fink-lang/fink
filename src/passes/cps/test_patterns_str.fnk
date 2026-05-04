@@ -98,7 +98,7 @@ test 'str templ pattern: match arm', fn:
                     fn ·v_19: ·v_19 ·v_32, ·ƒfail_5, ·v_3
             fn ·v_39:
               ·fn
-                fn ·ƒret_44: ·ƒret_44 (u8 0)
+                fn ·ƒret_44: ·ƒret_44 (i8 0)
                 fn ·v_48:
                   ·fn
                     fn ·ƒsucc_41, ·ƒfail_42, ·v_40: ·v_48 ·ƒsucc_41

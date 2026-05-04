@@ -19,7 +19,7 @@ test 'infix literal', fn:
     a + 1
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·op_plus ·∅a, (u8 1), ·ƒret_0
+      ·op_plus ·∅a, (i8 1), ·ƒret_0
     # sm:DgABAAUAAQAFJAEABRIAAgAGAQAFAAEABRQBAAEMAAYBCAEAAQABBgEAAQQABAEHBQ
 
 
@@ -68,7 +68,7 @@ test 'range excl', fn:
     0..10
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·op_rngex (u8 0), (u8 10), ·ƒret_0
+      ·op_rngex (i8 0), (i8 10), ·ƒret_0
     # sm:EAABAAUAAQAFJAEABRIAAgAGAQAFAAEABRgBAAEAAQABBgEAAQQABgEGAgABAAIGAQACBgAEAQUF
 
 
@@ -77,7 +77,7 @@ test 'range incl', fn:
     0...10
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·op_rngin (u8 0), (u8 10), ·ƒret_0
+      ·op_rngin (i8 0), (i8 10), ·ƒret_0
     # sm:EAABAAYAAQAGJAEABhIAAgAGAQAGAAEABhgBAAEAAQABBgEAAQQABgEIAgABAAIGAQACBgAEAQcG
 
 
