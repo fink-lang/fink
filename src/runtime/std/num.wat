@@ -10,7 +10,7 @@
 
   ;; Type imports — int.wat / float.wat ops we re-route through num.wat
   (import "std/list.wat" "List" (type $List (sub any)))
-  (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $val f64)))))
+  (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $val f64) (field $ival i64)))))
   (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $val f64) (field $ival i64)))))
   (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $val f64) (field $ival i64)))))
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
@@ -44,19 +44,19 @@
 
   ;; Func imports — int.wat primitives. num.wat re-routes these so
   ;; protocols.wat only needs to know about num.wat for numeric ops.
-  (import "std/int.wat" "op_intdiv" (func $int_op_div    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_rem"    (func $int_op_rem    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_intmod" (func $int_op_mod    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_pow"    (func $int_op_pow    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_divmod" (func $int_op_divmod (param (ref $Num)) (param (ref $Num)) (result (ref $List))))
-  (import "std/int.wat" "op_rotl"   (func $int_op_rotl   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_rotr"   (func $int_op_rotr   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_not"    (func $int_op_not    (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_and"    (func $int_op_and    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_or"     (func $int_op_or     (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_xor"    (func $int_op_xor    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_shl"    (func $int_op_shl    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_shr"    (func $int_op_shr    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/int.wat" "op_intdiv" (func $int_op_div    (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_rem"    (func $int_op_rem    (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_intmod" (func $int_op_mod    (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_pow"    (func $int_op_pow    (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_divmod" (func $int_op_divmod (param (ref $Int)) (param (ref $Int)) (result (ref $List))))
+  (import "std/int.wat" "op_rotl"   (func $int_op_rotl   (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
+  (import "std/int.wat" "op_rotr"   (func $int_op_rotr   (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
+  (import "std/int.wat" "op_not"    (func $int_op_not    (param (ref $U64)) (result (ref $U64))))
+  (import "std/int.wat" "op_and"    (func $int_op_and    (param (ref $U64)) (param (ref $U64)) (result (ref $U64))))
+  (import "std/int.wat" "op_or"     (func $int_op_or     (param (ref $U64)) (param (ref $U64)) (result (ref $U64))))
+  (import "std/int.wat" "op_xor"    (func $int_op_xor    (param (ref $U64)) (param (ref $U64)) (result (ref $U64))))
+  (import "std/int.wat" "op_shl"    (func $int_op_shl    (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
+  (import "std/int.wat" "op_shr"    (func $int_op_shr    (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
 
   ;; $Num — abstract numeric base type.
   ;; Concrete subtypes ($I64 / $U64 in int.wat, $F64 in float.wat) extend
@@ -285,19 +285,25 @@
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_int (local.get $a) (local.get $b))
     (call $check_compat (local.get $a) (local.get $b))
-    (return_call $int_op_div (local.get $a) (local.get $b)))
+    (return_call $int_op_div
+      (ref.cast (ref $Int) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
   (func $op_rem (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_int (local.get $a) (local.get $b))
     (call $check_compat (local.get $a) (local.get $b))
-    (return_call $int_op_rem (local.get $a) (local.get $b)))
+    (return_call $int_op_rem
+      (ref.cast (ref $Int) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
   (func $op_intmod (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_int (local.get $a) (local.get $b))
     (call $check_compat (local.get $a) (local.get $b))
-    (return_call $int_op_mod (local.get $a) (local.get $b)))
+    (return_call $int_op_mod
+      (ref.cast (ref $Int) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
   (func $op_pow (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
@@ -306,55 +312,73 @@
       (then (call $float_op_pow
               (call $as_f64 (local.get $a))
               (call $as_f64 (local.get $b))))
-      (else (return_call $int_op_pow (local.get $a) (local.get $b)))))
+      (else (return_call $int_op_pow
+              (ref.cast (ref $Int) (local.get $a))
+              (ref.cast (ref $Int) (local.get $b))))))
 
   (func $op_divmod (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $List))
     (call $check_int (local.get $a) (local.get $b))
     (call $check_compat (local.get $a) (local.get $b))
-    (return_call $int_op_divmod (local.get $a) (local.get $b)))
+    (return_call $int_op_divmod
+      (ref.cast (ref $Int) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
-  ;; Bitwise ops — unsigned-only (bits family).
+  ;; Bitwise ops — unsigned-only (bits family). Cast to $U64 (post check).
 
   (func $op_rotl (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_shift (local.get $a) (local.get $b))
-    (return_call $int_op_rotl (local.get $a) (local.get $b)))
+    (return_call $int_op_rotl
+      (ref.cast (ref $U64) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
   (func $op_rotr (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_shift (local.get $a) (local.get $b))
-    (return_call $int_op_rotr (local.get $a) (local.get $b)))
+    (return_call $int_op_rotr
+      (ref.cast (ref $U64) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
   (func $op_not (@pub)
     (param $a (ref $Num)) (result (ref $Num))
     (call $check_uint_unary (local.get $a))
-    (return_call $int_op_not (local.get $a)))
+    (return_call $int_op_not (ref.cast (ref $U64) (local.get $a))))
 
   (func $op_and (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_uint (local.get $a) (local.get $b))
-    (return_call $int_op_and (local.get $a) (local.get $b)))
+    (return_call $int_op_and
+      (ref.cast (ref $U64) (local.get $a))
+      (ref.cast (ref $U64) (local.get $b))))
 
   (func $op_or (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_uint (local.get $a) (local.get $b))
-    (return_call $int_op_or (local.get $a) (local.get $b)))
+    (return_call $int_op_or
+      (ref.cast (ref $U64) (local.get $a))
+      (ref.cast (ref $U64) (local.get $b))))
 
   (func $op_xor (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_uint (local.get $a) (local.get $b))
-    (return_call $int_op_xor (local.get $a) (local.get $b)))
+    (return_call $int_op_xor
+      (ref.cast (ref $U64) (local.get $a))
+      (ref.cast (ref $U64) (local.get $b))))
 
   (func $op_shl (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_shift (local.get $a) (local.get $b))
-    (return_call $int_op_shl (local.get $a) (local.get $b)))
+    (return_call $int_op_shl
+      (ref.cast (ref $U64) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
   (func $op_shr (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
     (call $check_shift (local.get $a) (local.get $b))
-    (return_call $int_op_shr (local.get $a) (local.get $b)))
+    (return_call $int_op_shr
+      (ref.cast (ref $U64) (local.get $a))
+      (ref.cast (ref $Int) (local.get $b))))
 
 
   ;; -- Hashing impl ----------------------------------------------------

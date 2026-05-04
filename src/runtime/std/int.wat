@@ -14,12 +14,11 @@
   (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct (field $val f64))))
   (import "std/list.wat" "List" (type $List (sub any)))
 
-  ;; $Int — abstract integer parent. Concrete subtypes ($I64 / $U64)
-  ;; carry the i64 value in `$ival`; the legacy `$val f64` is retained
-  ;; on the parent so untyped $Num readers continue to work during the
-  ;; migration. Once all int.wat ops read `$ival`, the f64 field will
-  ;; be dropped.
-  (type $Int (@pub) (sub $Num (struct (field $val f64))))
+  ;; $Int — abstract integer parent. The `$ival i64` carries the
+  ;; canonical integer value; `$val f64` is the legacy view kept while
+  ;; untyped $Num readers exist. Once all int.wat ops read `$ival`,
+  ;; the f64 field will be dropped.
+  (type $Int (@pub) (sub $Num (struct (field $val f64) (field $ival i64))))
     (type $I64 (@pub) (sub final $Int (struct (field $val f64) (field $ival i64))))
     (type $U64 (@pub) (sub final $Int (struct (field $val f64) (field $ival i64))))
 
@@ -36,24 +35,31 @@
   (func $_box_i64_from_f64 (param $v f64) (result (ref $I64))
     (struct.new $I64 (local.get $v) (i64.trunc_f64_s (local.get $v))))
 
+  (func $_box_i64 (param $v i64) (result (ref $I64))
+    (struct.new $I64 (f64.convert_i64_s (local.get $v)) (local.get $v)))
+
   (func $op_plus (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (call $_box_i64_from_f64 (f64.add
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b)))))
+    (call $_box_i64 (i64.add
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
 
   (func $op_minus (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (call $_box_i64_from_f64 (f64.sub
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b)))))
+    (call $_box_i64 (i64.sub
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
 
   (func $op_mul (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (call $_box_i64_from_f64 (f64.mul
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b)))))
+    (call $_box_i64 (i64.mul
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
 
+  ;; op_div on $Int — keeps the `f64` view because integer / integer in
+  ;; fink semantics is real division (returns the precise float result).
+  ;; TODO: result type should arguably be $F64 once cross-family
+  ;; coercion is wired through num.wat's dispatcher.
   (func $op_div (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (call $_box_i64_from_f64 (f64.div
@@ -61,42 +67,46 @@
       (struct.get $Int $val (local.get $b)))))
 
   ;; -- Comparison — return raw i32 -----------------------------------
+  ;;
+  ;; Comparison uses i64 signed semantics. When sub-dispatch by
+  ;; signed/unsigned lands, $U64 comparisons will route through
+  ;; i64.{lt,le,gt,ge}_u versions instead.
 
   (func $op_eq (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (f64.eq
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b))))
+    (i64.eq
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b))))
 
   (func $op_neq (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (f64.ne
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b))))
+    (i64.ne
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b))))
 
   (func $op_lt (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (f64.lt
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b))))
+    (i64.lt_s
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b))))
 
   (func $op_lte (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (f64.le
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b))))
+    (i64.le_s
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b))))
 
   (func $op_gt (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (f64.gt
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b))))
+    (i64.gt_s
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b))))
 
   (func $op_gte (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (f64.ge
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b))))
+    (i64.ge_s
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b))))
 
   ;; Func imports — list constructors via the public API.
   (import "std/list.wat" "empty"
@@ -104,105 +114,109 @@
   (import "std/list.wat" "prepend"
     (func $list_prepend (param $head (ref any)) (param $tail (ref $List)) (result (ref $List))))
 
-  ;; =========================================================================
-  ;; Bitwise: direct-style helpers — protocol impls under op_*  $Num $Num.
-  ;; =========================================================================
-
-  (func $op_and (@impl "std/operators.fnk:op_and" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.and
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
-
-  (func $op_or (@impl "std/operators.fnk:op_or" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.or
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
-
-  (func $op_xor (@impl "std/operators.fnk:op_xor" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.xor
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
-
-  (func $op_not (@impl "std/operators.fnk:op_not" $Num)
-    (param $a (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.xor
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.const -1)))))
+  ;; Internal box helper — wrap an i64 result as $U64.
+  (func $_box_u64 (param $v i64) (result (ref $U64))
+    (struct.new $U64 (f64.convert_i64_s (local.get $v)) (local.get $v)))
 
   ;; =========================================================================
-  ;; Integer arithmetic — protocol impls.
+  ;; Bitwise — uint family. Take/return $U64.
   ;; =========================================================================
 
-  (func $op_intdiv (@impl "std/operators.fnk:op_intdiv" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.div_s
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+  (func $op_and (@impl "std/operators.fnk:op_and" $U64 $U64)
+    (param $a (ref $U64)) (param $b (ref $U64)) (result (ref $U64))
+    (return_call $_box_u64 (i64.and
+      (struct.get $U64 $ival (local.get $a))
+      (struct.get $U64 $ival (local.get $b)))))
 
-  (func $op_rem (@impl "std/operators.fnk:op_rem" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.rem_s
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+  (func $op_or (@impl "std/operators.fnk:op_or" $U64 $U64)
+    (param $a (ref $U64)) (param $b (ref $U64)) (result (ref $U64))
+    (return_call $_box_u64 (i64.or
+      (struct.get $U64 $ival (local.get $a))
+      (struct.get $U64 $ival (local.get $b)))))
 
-  (func $op_intmod (@impl "std/operators.fnk:op_intmod" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.rem_s
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+  (func $op_xor (@impl "std/operators.fnk:op_xor" $U64 $U64)
+    (param $a (ref $U64)) (param $b (ref $U64)) (result (ref $U64))
+    (return_call $_box_u64 (i64.xor
+      (struct.get $U64 $ival (local.get $a))
+      (struct.get $U64 $ival (local.get $b)))))
 
-  ;; =========================================================================
-  ;; Shifts — protocol impls.
-  ;; =========================================================================
-
-  (func $op_shl (@impl "std/operators.fnk:op_shl" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.shl
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
-
-  (func $op_shr (@impl "std/operators.fnk:op_shr" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.shr_s
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+  (func $op_not (@impl "std/operators.fnk:op_not" $U64)
+    (param $a (ref $U64)) (result (ref $U64))
+    (return_call $_box_u64 (i64.xor
+      (struct.get $U64 $ival (local.get $a))
+      (i64.const -1))))
 
   ;; =========================================================================
-  ;; Rotations — protocol impls.
+  ;; Integer arithmetic — math family. Take/return $Int.
   ;; =========================================================================
 
-  (func $op_rotl (@impl "std/operators.fnk:op_rotl" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.rotl
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+  (func $op_intdiv (@impl "std/operators.fnk:op_intdiv" $Int $Int)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (return_call $_box_i64 (i64.div_s
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
 
-  (func $op_rotr (@impl "std/operators.fnk:op_rotr" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.convert_i64_s (i64.rotr
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $a)))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $b)))))))
+  (func $op_rem (@impl "std/operators.fnk:op_rem" $Int $Int)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (return_call $_box_i64 (i64.rem_s
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
+
+  (func $op_intmod (@impl "std/operators.fnk:op_intmod" $Int $Int)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (return_call $_box_i64 (i64.rem_s
+      (struct.get $Int $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
+
+  ;; =========================================================================
+  ;; Shifts — value uint, count signed int. Return $U64.
+  ;; =========================================================================
+
+  (func $op_shl (@impl "std/operators.fnk:op_shl" $U64 $Int)
+    (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
+    (return_call $_box_u64 (i64.shl
+      (struct.get $U64 $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
+
+  (func $op_shr (@impl "std/operators.fnk:op_shr" $U64 $Int)
+    (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
+    (return_call $_box_u64 (i64.shr_u
+      (struct.get $U64 $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
+
+  ;; =========================================================================
+  ;; Rotations — value uint, count signed int. Return $U64.
+  ;; =========================================================================
+
+  (func $op_rotl (@impl "std/operators.fnk:op_rotl" $U64 $Int)
+    (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
+    (return_call $_box_u64 (i64.rotl
+      (struct.get $U64 $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
+
+  (func $op_rotr (@impl "std/operators.fnk:op_rotr" $U64 $Int)
+    (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
+    (return_call $_box_u64 (i64.rotr
+      (struct.get $U64 $ival (local.get $a))
+      (struct.get $Int $ival (local.get $b)))))
 
   ;; =========================================================================
   ;; Power — integer exponentiation by square-and-multiply.
   ;; Negative exponents return 0 (pow(a, n<0) = 1/a^|n|, integer-truncated).
   ;; =========================================================================
 
-  (func $op_pow (@impl "std/operators.fnk:op_pow" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+  (func $op_pow (@impl "std/operators.fnk:op_pow" $Int $Int)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (local $base i64)
     (local $exp i64)
     (local $acc i64)
 
-    (local.set $base (i64.trunc_f64_s (struct.get $Num $val (local.get $a))))
-    (local.set $exp  (i64.trunc_f64_s (struct.get $Num $val (local.get $b))))
+    (local.set $base (struct.get $Int $ival (local.get $a)))
+    (local.set $exp  (struct.get $Int $ival (local.get $b)))
 
     ;; Negative exponent → 0 (integer truncation of fractional result).
     (if (i64.lt_s (local.get $exp) (i64.const 0))
-      (then (return (struct.new $Num (f64.const 0)))))
+      (then (return_call $_box_i64 (i64.const 0))))
 
     (local.set $acc (i64.const 1))
     (block $done
@@ -215,30 +229,24 @@
         (local.set $exp  (i64.shr_u (local.get $exp) (i64.const 1)))
         (br $loop)))
 
-    (struct.new $Num (f64.convert_i64_s (local.get $acc))))
+    (return_call $_box_i64 (local.get $acc)))
 
   ;; =========================================================================
   ;; DivMod — returns [quotient, remainder] as a 2-element list.
   ;; =========================================================================
 
-  (func $op_divmod (@impl "std/operators.fnk:op_divmod" $Num $Num)
-    (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $List))
+  (func $op_divmod (@impl "std/operators.fnk:op_divmod" $Int $Int)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $List))
     (local $a_i i64)
     (local $b_i i64)
-    (local $q (ref $Num))
-    (local $r (ref $Num))
 
-    (local.set $a_i (i64.trunc_f64_s (struct.get $Num $val (local.get $a))))
-    (local.set $b_i (i64.trunc_f64_s (struct.get $Num $val (local.get $b))))
-    (local.set $q (struct.new $Num (f64.convert_i64_s
-      (i64.div_s (local.get $a_i) (local.get $b_i)))))
-    (local.set $r (struct.new $Num (f64.convert_i64_s
-      (i64.rem_s (local.get $a_i) (local.get $b_i)))))
+    (local.set $a_i (struct.get $Int $ival (local.get $a)))
+    (local.set $b_i (struct.get $Int $ival (local.get $b)))
 
     ;; Build [q, r] via the list constructor: prepend(q, prepend(r, nil)).
     (call $list_prepend
-      (local.get $q)
+      (call $_box_i64 (i64.div_s (local.get $a_i) (local.get $b_i)))
       (call $list_prepend
-        (local.get $r)
+        (call $_box_i64 (i64.rem_s (local.get $a_i) (local.get $b_i)))
         (call $list_empty))))
 )
