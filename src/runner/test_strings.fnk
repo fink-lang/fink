@@ -213,7 +213,7 @@ test 'str slice negative zero end', fn:
     'foobar'.(-3..-0)
   | equals ":
     ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:   0x4ce4 - <unknown>!std/str.wat:op_dot: wasm trap: wasm `unreachable` instruction executed
+        0:   0x4da2 - <unknown>!std/str.wat:op_dot: wasm trap: wasm `unreachable` instruction executed
 
 
 # --- String template pattern ---

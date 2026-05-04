@@ -130,6 +130,38 @@
           (ref.test (ref $U64) (local.get $b)))
       (then (unreachable))))
 
+  ;; Reject float operands on integer-math ops (intdiv, rem, intmod,
+  ;; divmod). Mixed signed/unsigned still goes through `check_compat`.
+  (func $check_int (param $a (ref $Num)) (param $b (ref $Num))
+    (if (i32.or
+          (ref.test (ref $F64) (local.get $a))
+          (ref.test (ref $F64) (local.get $b)))
+      (then (unreachable))))
+
+  ;; Reject any operand that is not $U64. Bitwise ops (and/or/xor/not/
+  ;; shl/shr/rotl/rotr) are unsigned-only — bit patterns belong to the
+  ;; bits family, signed math doesn't.
+  (func $check_uint (param $a (ref $Num)) (param $b (ref $Num))
+    (if (i32.eqz (ref.test (ref $U64) (local.get $a)))
+      (then (unreachable)))
+    (if (i32.eqz (ref.test (ref $U64) (local.get $b)))
+      (then (unreachable))))
+
+  (func $check_uint_unary (param $a (ref $Num))
+    (if (i32.eqz (ref.test (ref $U64) (local.get $a)))
+      (then (unreachable))))
+
+  ;; Shift / rotate ops take a uint value and a signed-int count.
+  ;; First arg must be $U64 (the bit pattern); second arg must be a
+  ;; non-float integer (the bit-position offset, math-family).
+  (func $check_shift (param $a (ref $Num)) (param $b (ref $Num))
+    (if (i32.eqz (ref.test (ref $U64) (local.get $a)))
+      (then (unreachable)))
+    (if (i32.or
+          (ref.test (ref $F64) (local.get $b))
+          (ref.test (ref $U64) (local.get $b)))
+      (then (unreachable))))
+
   ;; -- Arithmetic — dispatch on $F64 vs $Int -------------------------
 
   (func $op_plus (@pub)
@@ -248,14 +280,20 @@
 
   (func $op_intdiv (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_int (local.get $a) (local.get $b))
+    (call $check_compat (local.get $a) (local.get $b))
     (return_call $int_op_div (local.get $a) (local.get $b)))
 
   (func $op_rem (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_int (local.get $a) (local.get $b))
+    (call $check_compat (local.get $a) (local.get $b))
     (return_call $int_op_rem (local.get $a) (local.get $b)))
 
   (func $op_intmod (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_int (local.get $a) (local.get $b))
+    (call $check_compat (local.get $a) (local.get $b))
     (return_call $int_op_mod (local.get $a) (local.get $b)))
 
   (func $op_pow (@pub)
@@ -269,38 +307,50 @@
 
   (func $op_divmod (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $List))
+    (call $check_int (local.get $a) (local.get $b))
+    (call $check_compat (local.get $a) (local.get $b))
     (return_call $int_op_divmod (local.get $a) (local.get $b)))
+
+  ;; Bitwise ops — unsigned-only (bits family).
 
   (func $op_rotl (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_shift (local.get $a) (local.get $b))
     (return_call $int_op_rotl (local.get $a) (local.get $b)))
 
   (func $op_rotr (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_shift (local.get $a) (local.get $b))
     (return_call $int_op_rotr (local.get $a) (local.get $b)))
 
   (func $op_not (@pub)
     (param $a (ref $Num)) (result (ref $Num))
+    (call $check_uint_unary (local.get $a))
     (return_call $int_op_not (local.get $a)))
 
   (func $op_and (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_uint (local.get $a) (local.get $b))
     (return_call $int_op_and (local.get $a) (local.get $b)))
 
   (func $op_or (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_uint (local.get $a) (local.get $b))
     (return_call $int_op_or (local.get $a) (local.get $b)))
 
   (func $op_xor (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_uint (local.get $a) (local.get $b))
     (return_call $int_op_xor (local.get $a) (local.get $b)))
 
   (func $op_shl (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_shift (local.get $a) (local.get $b))
     (return_call $int_op_shl (local.get $a) (local.get $b)))
 
   (func $op_shr (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_shift (local.get $a) (local.get $b))
     (return_call $int_op_shr (local.get $a) (local.get $b)))
 
 
