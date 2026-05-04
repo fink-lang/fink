@@ -14,13 +14,12 @@
   (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct (field $val f64))))
   (import "std/list.wat" "List" (type $List (sub any)))
 
-  ;; $Int — abstract integer parent. The `$ival i64` carries the
-  ;; canonical integer value; `$val f64` is the legacy view kept while
-  ;; untyped $Num readers exist. Once all int.wat ops read `$ival`,
-  ;; the f64 field will be dropped.
-  (type $Int (@pub) (sub $Num (struct (field $val f64) (field $ival i64))))
-    (type $I64 (@pub) (sub final $Int (struct (field $val f64) (field $ival i64))))
-    (type $U64 (@pub) (sub final $Int (struct (field $val f64) (field $ival i64))))
+  ;; $Int — abstract integer parent. Carries `$ival i64`, the canonical
+  ;; integer value. $I64 and $U64 differ only in nominal type (signedness
+  ;; is interpreted by the operations, not the storage).
+  (type $Int (@pub) (sub $Num (struct (field $ival i64))))
+    (type $I64 (@pub) (sub final $Int (struct (field $ival i64))))
+    (type $U64 (@pub) (sub final $Int (struct (field $ival i64))))
 
   ;; =========================================================================
   ;; Arithmetic on $Int — result widens to $I64 when sign info is lost.
@@ -33,10 +32,10 @@
   ;; =========================================================================
 
   (func $_box_i64_from_f64 (param $v f64) (result (ref $I64))
-    (struct.new $I64 (local.get $v) (i64.trunc_f64_s (local.get $v))))
+    (struct.new $I64 (i64.trunc_f64_s (local.get $v))))
 
   (func $_box_i64 (@pub) (param $v i64) (result (ref $I64))
-    (struct.new $I64 (f64.convert_i64_s (local.get $v)) (local.get $v)))
+    (struct.new $I64 (local.get $v)))
 
   (func $op_plus (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
@@ -116,7 +115,7 @@
 
   ;; Internal box helper — wrap an i64 result as $U64.
   (func $_box_u64 (param $v i64) (result (ref $U64))
-    (struct.new $U64 (f64.convert_i64_s (local.get $v)) (local.get $v)))
+    (struct.new $U64 (local.get $v)))
 
   ;; =========================================================================
   ;; Bitwise — uint family. Take/return $U64.

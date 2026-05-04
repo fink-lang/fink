@@ -20,7 +20,7 @@
 
   ;; Type imports
   (import "std/num.wat"  "Num"  (type $Num  (sub any)))
-  (import "std/int.wat"  "I64"  (type $I64  (sub any) (struct (field $val f64) (field $ival i64))))
+  (import "std/int.wat"  "I64"  (type $I64  (sub any) (struct (field $ival i64))))
   (import "std/list.wat" "List" (type $List (sub any)))
 
   ;; Func imports

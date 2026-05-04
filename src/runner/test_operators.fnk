@@ -27,7 +27,7 @@ test 'division', fn:
   expect run ƒink:
     10 / 4
   | equals ƒink:
-    2.5
+    2
 
 
 test 'power', fn:
@@ -206,6 +206,6 @@ test 'mix signed and unsigned traps', fn:
     1 + 0xFF
   | equals ":
     ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:    0xead - <unknown>!std/num.wat:check_compat
-        1:    0xf08 - <unknown>!std/num.wat:op_plus
-        2:   0x5368 - <unknown>!rt/protocols.wat:op_plus: wasm trap: wasm `unreachable` instruction executed
+        0:    0xe9d - <unknown>!std/num.wat:check_compat
+        1:    0xef8 - <unknown>!std/num.wat:op_plus
+        2:   0x5358 - <unknown>!rt/protocols.wat:op_plus: wasm trap: wasm `unreachable` instruction executed

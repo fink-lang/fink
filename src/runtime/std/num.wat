@@ -10,9 +10,9 @@
 
   ;; Type imports — int.wat / float.wat ops we re-route through num.wat
   (import "std/list.wat" "List" (type $List (sub any)))
-  (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $val f64) (field $ival i64)))))
-  (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $val f64) (field $ival i64)))))
-  (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $val f64) (field $ival i64)))))
+  (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $ival i64)))))
+  (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $ival i64)))))
+  (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $ival i64)))))
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub $Num (struct (field $val f64)))))
 
@@ -60,21 +60,24 @@
   (import "std/int.wat" "op_shl"    (func $int_op_shl    (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
   (import "std/int.wat" "op_shr"    (func $int_op_shr    (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
 
-  ;; $Num — abstract numeric base type.
-  ;; Concrete subtypes ($I64 / $U64 in int.wat, $F64 in float.wat) extend
-  ;; this shape with their own value field. For now all subtypes share the
-  ;; same `f64 $val` slot so existing ops work uniformly; the field type
-  ;; will narrow per subtype in a later step.
-  ;; Small integers use i31ref directly (no struct needed).
+  ;; $Num — abstract numeric base type, fieldless. Concrete subtypes
+  ;; carry their own value field:
+  ;;   - $Int   (in int.wat)  — `(field $ival i64)`
+  ;;     ├── $I64
+  ;;     └── $U64
+  ;;   - $F64   (in float.wat) — `(field $val f64)`
+  ;;   - $Decimal (in decimal.wat) — `(field $val f64)` (placeholder)
   ;;
-  ;; `@todo-no-rec` emits $Num as a singleton before the merged rec group
-  ;; so subtypes in int.wat / float.wat (which land in the rec group) can
-  ;; reference it. WasmGC requires supertype to precede subtype, and the
-  ;; wat-linker doesn't yet topologically order types within the rec
-  ;; group. Promote out once the linker handles supertype ordering.
-  (type $Num (@pub) (@todo-no-rec) (sub (struct
-    (field $val f64)
-  )))
+  ;; Small integers may use i31ref directly (no struct needed) — that
+  ;; packing is a separate optimisation, orthogonal to subtype shape.
+  ;;
+  ;; `@todo-no-rec` emits $Num as a singleton before the merged rec
+  ;; group so subtypes in int.wat / float.wat / decimal.wat (which land
+  ;; in the rec group) can reference it. WasmGC requires supertype to
+  ;; precede subtype, and the wat-linker doesn't yet topologically order
+  ;; types within the rec group. Promote out once the linker handles
+  ;; supertype ordering.
+  (type $Num (@pub) (@todo-no-rec) (sub (struct)))
 
 
   ;; =========================================================================

@@ -23,8 +23,8 @@
 
   ;; Type imports
   (import "std/num.wat"    "Num"       (type $Num       (sub any)))
-  (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct (field $val f64) (field $ival i64))))
-  (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $val f64) (field $ival i64)))))
+  (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct (field $ival i64))))
+  (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
   (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $val f64))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
