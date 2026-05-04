@@ -16,7 +16,7 @@ test 'single binding export', fn:
         (local $:pub_name (ref null any))
         (local $:args (ref any))
         (local.set $v_1 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $foo_0 (struct.new $std/int.wat:I64 (f64.const 1)))
+        (local.set $foo_0 (struct.new $std/int.wat:I64 (f64.const 1) (i64.const 1)))
         (global.set $test:foo (local.get $foo_0))
         (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 3)))
@@ -42,7 +42,7 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:D9wEAJIBAQADhgEAXACIAQCKAQDAAQBuAL4BAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D9wEAJIBAQADogEAXACIAQCKAQDAAQBuAL4BAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -59,7 +59,7 @@ test 'let binding', fn:
         (local $:pub_name (ref null any))
         (local $:args (ref any))
         (local.set $x_1 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $x_0 (struct.new $std/int.wat:I64 (f64.const 42)))
+        (local.set $x_0 (struct.new $std/int.wat:I64 (f64.const 42) (i64.const 42)))
         (global.set $test:x (local.get $x_0))
         (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 1)))
@@ -85,7 +85,7 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:D9gEAJIBAQABhAEAVACIAQCKAQC8AQBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D9gEAJIBAQABogEAVACIAQCKAQC8AQBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -105,12 +105,12 @@ test 'multiple let bindings used', fn:
         (local $:pub_url (ref null any))
         (local $:pub_name (ref null any))
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $x_0 (struct.new $std/int.wat:I64 (f64.const 2)))
+        (local.set $x_0 (struct.new $std/int.wat:I64 (f64.const 2) (i64.const 2)))
         (global.set $test:x (local.get $x_0))
         (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $x_0))
-        (local.set $y_1 (struct.new $std/int.wat:I64 (f64.const 3)))
+        (local.set $y_1 (struct.new $std/int.wat:I64 (f64.const 3) (i64.const 3)))
         (global.set $test:y (local.get $y_1))
         (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
         (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_2 1)))
@@ -136,7 +136,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:EvQFAJIBAQABggEAVACIAQCKAQC8AQEMAYIBAFQAiAEAigEAvAEBDAWwBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EvQFAJIBAQABngEAVACIAQCKAQC8AQEMAZ4BAFQAiAEAigEAvAEBDAWwBwCKAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -186,8 +186,8 @@ test 'binding rhs is a call', fn:
         (local $:args (ref any))
         (local.set $v_39 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_0_callee (global.get $test:add))
-        (local.set $v_14 (struct.new $std/int.wat:I64 (f64.const 1)))
-        (local.set $v_15 (struct.new $std/int.wat:I64 (f64.const 2)))
+        (local.set $v_14 (struct.new $std/int.wat:I64 (f64.const 1) (i64.const 1)))
+        (local.set $v_15 (struct.new $std/int.wat:I64 (f64.const 2) (i64.const 2)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_15) (local.get $:args)))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_14) (local.get $:args)))
@@ -239,7 +239,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:LrYDAJIBAJoBAJIBAJoBAJIBAR4FpgcAugEAvgEAlAEBDAFOAFQAiAEAigEAvAEAbgC6AQDMBQCUAQBmARABhAEBBgGEAQBuALwBALwBALwBANYJAJIBAHoBPwPMAQBcAIgBAIoBAMABAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:LrYDAJIBAJoBAJIBAJoBAJIBAR4FpgcAugEAvgEAlAEBDAFOAFQAiAEAigEAvAEAbgC6AQDMBQCUAQBmARABoAEBBgGgAQBuALwBALwBALwBANYJAJIBAHoBPwPMAQBcAIgBAIoBAMABAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -382,7 +382,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_64 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_4 (call $std/rec.fnk:new))
         (local.set $v_5 (call $std/str.fnk:str (data.ref $d_2 1)))
-        (local.set $v_6 (struct.new $std/int.wat:I64 (f64.const 42)))
+        (local.set $v_6 (struct.new $std/int.wat:I64 (f64.const 42) (i64.const 42)))
         (return_call $std/rec.fnk:put (local.get $v_4) (local.get $v_5) (local.get $v_6) (local.get $v_64))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -419,6 +419,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:U6gFALoBAL4BAJQBAJoBAJIBATQFogkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAIgBAIoBAMABAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABARsNgAEBAA3wBwCUAQCaAQCUAQCaAQCSAQCwAQDMAQDUAQDQAQEADYwKALoBAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAIYFAJQBAQwHWgECAX4BBgKEAQEFBbgHAJIBAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:U6gFALoBAL4BAJQBAJoBAJIBATQFogkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAIgBAIoBAMABAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABARsNgAEBAA3wBwCUAQCaAQCUAQCaAQCSAQCwAQDMAQDUAQDQAQEADYwKALoBAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAIYFAJQBAQwHWgECAX4BBgKiAQEFBbgHAJIBAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
 
 

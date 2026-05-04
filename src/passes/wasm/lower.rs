@@ -1464,8 +1464,10 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
     // Integer literals: signed → $I64, unsigned → $U64. Field is still
     // f64 today (subtypes share $Num's slot); the value is converted
     // for storage. Future step narrows the field to i64.
-    LitVal::I64(n)  => push_struct_new(frag, rt.i64_(), vec![op_f64(*n as f64)], into),
-    LitVal::U64(n)  => push_struct_new(frag, rt.u64_(), vec![op_f64(*n as f64)], into),
+    // Two fields per int box: legacy f64 (`$val`) plus the new i64 (`$ival`).
+    // Both populated until the f64 field is dropped.
+    LitVal::I64(n)  => push_struct_new(frag, rt.i64_(), vec![op_f64(*n as f64), op_i64(*n)], into),
+    LitVal::U64(n)  => push_struct_new(frag, rt.u64_(), vec![op_f64(*n as f64), op_i64(*n as i64)], into),
     LitVal::F64(n)  => push_struct_new(frag, rt.f64_(), vec![op_f64(*n)], into),
     LitVal::Decimal(n) => push_struct_new(frag, rt.decimal_(), vec![op_f64(*n)], into),
     LitVal::Bool(b) => push_ref_i31(frag, op_i32(if *b { 1 } else { 0 }), into),

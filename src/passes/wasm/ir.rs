@@ -373,6 +373,7 @@ pub enum InstrKind {
 #[derive(Clone, Debug)]
 pub enum Operand {
   I32(i32),
+  I64(i64),
   F64(f64),
   Local(LocalIdx),
   Global(GlobalSym),
@@ -677,6 +678,7 @@ pub fn add_global(
 // --- operands (leaves) -------------------------------------------
 
 pub fn op_i32(v: i32) -> Operand { Operand::I32(v) }
+pub fn op_i64(v: i64) -> Operand { Operand::I64(v) }
 pub fn op_f64(v: f64) -> Operand { Operand::F64(v) }
 pub fn op_local(idx: LocalIdx) -> Operand { Operand::Local(idx) }
 pub fn op_global(sym: GlobalSym) -> Operand { Operand::Global(sym) }

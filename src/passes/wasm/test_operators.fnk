@@ -13,8 +13,8 @@ test 'add two literals', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2) (i64.const 2)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3) (i64.const 3)))
         (return_call $std/operators.fnk:op_plus (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -32,7 +32,7 @@ test 'add two literals', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQABggEBCAGCAQEHBbAHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABngEBCAGeAQEHBbAHAIoBAL4BAMABAIQBAPoBAA
 
 
 
@@ -49,7 +49,7 @@ test 'chained arithmetic', fn:
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_13 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_3 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_5 (struct.new $std/int.wat:I64 (f64.const 4)))
+        (local.set $v_5 (struct.new $std/int.wat:I64 (f64.const 4) (i64.const 4)))
         (return_call $std/operators.fnk:op_plus (local.get $v_3) (local.get $v_5) (local.get $v_13))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -61,8 +61,8 @@ test 'chained arithmetic', fn:
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_0)))
         (local.set $v_17 (struct.new $rt/apply.wat:Closure (ref.func $test:v_12) (local.get $:caps_arg)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2) (i64.const 2)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3) (i64.const 3)))
         (return_call $std/operators.fnk:op_mul (local.get $v_1) (local.get $v_2) (local.get $v_17))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -80,7 +80,7 @@ test 'chained arithmetic', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:EaQEALoBAL4BAJIBARABggEBDwmuBgCSAQCuAQDMAQEAAYIBAQgBggEBBwWwBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EaQEALoBAL4BAJIBARABngEBDwmuBgCSAQCuAQDMAQEAAZ4BAQgBngEBBwWwBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'unary not', fn:
@@ -123,8 +123,8 @@ test 'comparison eq', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2) (i64.const 2)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3) (i64.const 3)))
         (return_call $std/operators.fnk:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -142,7 +142,7 @@ test 'comparison eq', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQABggEBCgGCAQEJBqwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABngEBCgGeAQEJBqwHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'comparison lt', fn:
@@ -155,8 +155,8 @@ test 'comparison lt', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2) (i64.const 2)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3) (i64.const 3)))
         (return_call $std/operators.fnk:op_lt (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -174,7 +174,7 @@ test 'comparison lt', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQABggEBCAGCAQEHBawHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABngEBCAGeAQEHBawHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'logical and', fn:
@@ -251,8 +251,8 @@ test 'range exclusive', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 0)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 10)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 0) (i64.const 0)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 10) (i64.const 10)))
         (return_call $std/range.fnk:excl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -270,7 +270,7 @@ test 'range exclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQABggEBBgKEAQEFBaIHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABngEBBgKiAQEFBaIHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'range inclusive', fn:
@@ -283,8 +283,8 @@ test 'range inclusive', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 0)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 10)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 0) (i64.const 0)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 10) (i64.const 10)))
         (return_call $std/range.fnk:incl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -302,7 +302,7 @@ test 'range inclusive', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQABggEBCAKEAQEHBqIHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABngEBCAKiAQEHBqIHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'range in', fn:
@@ -318,7 +318,7 @@ test 'range in', fn:
         (local.set $:caps_cast (ref.cast (ref $rt/apply.wat:Captures) (local.get $:caps_param)))
         (local.set $v_13 (array.get $rt/apply.wat:Captures (local.get $:caps_cast) (i32.const 0)))
         (local.set $v_4 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 5)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 5) (i64.const 5)))
         (return_call $std/operators.fnk:op_in (local.get $v_1) (local.get $v_4) (local.get $v_13))
       )
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -330,8 +330,8 @@ test 'range in', fn:
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_0)))
         (local.set $v_17 (struct.new $rt/apply.wat:Closure (ref.func $test:v_12) (local.get $:caps_arg)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 0)))
-        (local.set $v_3 (struct.new $std/int.wat:I64 (f64.const 10)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 0) (i64.const 0)))
+        (local.set $v_3 (struct.new $std/int.wat:I64 (f64.const 10) (i64.const 10)))
         (return_call $std/range.fnk:excl (local.get $v_2) (local.get $v_3) (local.get $v_17))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -349,7 +349,7 @@ test 'range in', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:EaQEALoBAL4BAJIBAQABggEBAAqqBgCSAQCuAQDMAQEKAYIBAQYChAEBBQWkBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EaQEALoBAL4BAJIBAQABngEBAAqqBgCSAQCuAQDMAQEKAZ4BAQYCogEBBQWkBwCKAQC-AQDAAQCEAQD6AQA
 
 
 test 'power', fn:
@@ -362,8 +362,8 @@ test 'power', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 8)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 2) (i64.const 2)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 8) (i64.const 8)))
         (return_call $std/operators.fnk:op_pow (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -381,7 +381,7 @@ test 'power', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQABggEBCgGCAQEJBq4HAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABngEBCgGeAQEJBq4HAIoBAL4BAMABAIQBAPoBAA
 
 
 skip test 'power float', fn:
@@ -401,8 +401,8 @@ test 'divmod', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 10)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 10) (i64.const 10)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 3) (i64.const 3)))
         (return_call $std/operators.fnk:op_divmod (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -420,7 +420,7 @@ test 'divmod', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQAChAEBDAGCAQELB7QHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQACogEBDAGeAQELB7QHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'rotate left', fn:
@@ -433,8 +433,8 @@ test 'rotate left', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 1)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 4)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 1) (i64.const 1)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 4) (i64.const 4)))
         (return_call $std/operators.fnk:op_rotl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -452,7 +452,7 @@ test 'rotate left', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQABggEBDAGCAQELB7AHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:CsgDAJIBAQABngEBDAGeAQELB7AHAIoBAL4BAMABAIQBAPoBAA
 
 
 test 'rotate right', fn:
@@ -465,8 +465,8 @@ test 'rotate right', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 16)))
-        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 4)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 16) (i64.const 16)))
+        (local.set $v_2 (struct.new $std/int.wat:I64 (f64.const 4) (i64.const 4)))
         (return_call $std/operators.fnk:op_rotr (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -484,5 +484,4 @@ test 'rotate right', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQAChAEBDgGCAQENCLAHAIoBAL4BAMABAIQBAPoBAA
-
+    ;; sm:CsgDAJIBAQACogEBDgGeAQENCLAHAIoBAL4BAMABAIQBAPoBAA

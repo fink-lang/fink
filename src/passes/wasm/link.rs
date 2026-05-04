@@ -458,6 +458,7 @@ fn remap_instr_kind(kind: &InstrKind, off: &Offsets) -> InstrKind {
 fn remap_operand(op: &Operand, off: &Offsets) -> Operand {
   match op {
     Operand::I32(v) => Operand::I32(*v),
+    Operand::I64(v) => Operand::I64(*v),
     Operand::F64(v) => Operand::F64(*v),
     Operand::Local(idx) => Operand::Local(*idx),
     Operand::Global(sym) => Operand::Global(remap_global_sym(*sym, off)),

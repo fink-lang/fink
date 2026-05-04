@@ -15,38 +15,48 @@
   (import "std/list.wat" "List" (type $List (sub any)))
 
   ;; $Int — abstract integer parent. Concrete subtypes ($I64 / $U64)
-  ;; live below. Sharing $Num's `f64 $val` slot for now; will narrow to
-  ;; i64 in a later step.
+  ;; carry the i64 value in `$ival`; the legacy `$val f64` is retained
+  ;; on the parent so untyped $Num readers continue to work during the
+  ;; migration. Once all int.wat ops read `$ival`, the f64 field will
+  ;; be dropped.
   (type $Int (@pub) (sub $Num (struct (field $val f64))))
-    (type $I64 (@pub) (sub final $Int (struct (field $val f64))))
-    (type $U64 (@pub) (sub final $Int (struct (field $val f64))))
+    (type $I64 (@pub) (sub final $Int (struct (field $val f64) (field $ival i64))))
+    (type $U64 (@pub) (sub final $Int (struct (field $val f64) (field $ival i64))))
 
   ;; =========================================================================
   ;; Arithmetic on $Int — result widens to $I64 when sign info is lost.
   ;; (Sub-dispatch by I64/U64 is a future refinement.)
+  ;;
+  ;; Internal helper $_box_i64_from_f64 wraps a computed f64 into the
+  ;; two-field $I64 struct, supplying the i64 view via trunc_s. As ops
+  ;; migrate to native i64 arithmetic this helper becomes the natural
+  ;; place to drop the f64 field.
   ;; =========================================================================
+
+  (func $_box_i64_from_f64 (param $v f64) (result (ref $I64))
+    (struct.new $I64 (local.get $v) (i64.trunc_f64_s (local.get $v))))
 
   (func $op_plus (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (struct.new $I64 (f64.add
+    (call $_box_i64_from_f64 (f64.add
       (struct.get $Int $val (local.get $a))
       (struct.get $Int $val (local.get $b)))))
 
   (func $op_minus (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (struct.new $I64 (f64.sub
+    (call $_box_i64_from_f64 (f64.sub
       (struct.get $Int $val (local.get $a))
       (struct.get $Int $val (local.get $b)))))
 
   (func $op_mul (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (struct.new $I64 (f64.mul
+    (call $_box_i64_from_f64 (f64.mul
       (struct.get $Int $val (local.get $a))
       (struct.get $Int $val (local.get $b)))))
 
   (func $op_div (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (struct.new $I64 (f64.div
+    (call $_box_i64_from_f64 (f64.div
       (struct.get $Int $val (local.get $a))
       (struct.get $Int $val (local.get $b)))))
 

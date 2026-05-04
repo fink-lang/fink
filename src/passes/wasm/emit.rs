@@ -1031,6 +1031,7 @@ fn emit_operand(
 ) {
   match op {
     Operand::I32(v) => { func.instruction(&Instruction::I32Const(*v)); }
+    Operand::I64(v) => { func.instruction(&Instruction::I64Const(*v)); }
     Operand::F64(v) => { func.instruction(&Instruction::F64Const((*v).into())); }
     Operand::Local(idx) => { func.instruction(&Instruction::LocalGet(idx.0)); }
     Operand::Global(sym) => {

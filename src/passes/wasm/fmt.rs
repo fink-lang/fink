@@ -447,6 +447,7 @@ fn fmt_call_sexpr(frag: &Fragment, f: &FuncDecl, op: &str, target: FuncSym, args
 fn fmt_operand(frag: &Fragment, f: &FuncDecl, op: &Operand) -> String {
   match op {
     Operand::I32(v)     => format!("(i32.const {})", v),
+    Operand::I64(v)     => format!("(i64.const {})", v),
     Operand::F64(v)     => format!("(f64.const {})", v),
     Operand::Local(l)   => format!("(local.get {})", local_name(f, *l)),
     Operand::Global(g)  => format!("(global.get {})", global_name(frag, *g)),

@@ -11,8 +11,8 @@
   ;; Type imports — int.wat / float.wat ops we re-route through num.wat
   (import "std/list.wat" "List" (type $List (sub any)))
   (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $val f64)))))
-  (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $val f64)))))
-  (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $val f64)))))
+  (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $val f64) (field $ival i64)))))
+  (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $val f64) (field $ival i64)))))
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
 
   ;; Func imports — int.wat arithmetic + comparison on $Int.
@@ -109,7 +109,10 @@
           (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
       (return))
     ;; Otherwise re-box under $I64 (default int representation).
-    (struct.new $I64 (struct.get $Num $val (local.get $n))))
+    ;; Both fields populated: f64 for legacy readers, i64 for new int ops.
+    (struct.new $I64
+      (struct.get $Num $val (local.get $n))
+      (i64.trunc_f64_s (struct.get $Num $val (local.get $n)))))
 
   ;; True if either side is $F64 — picks the float arm.
   (func $is_float_op (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
