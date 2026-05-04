@@ -8,7 +8,7 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat" "Num" (type $Num (sub any) (struct (field $val f64))))
+  (import "std/num.wat" "Num" (type $Num (sub any) (struct)))
 
   ;; $F64 — IEEE 754 binary64. Subtype of $Num; for now shares $Num's
   ;; `f64 $val` slot.

@@ -10,7 +10,7 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat" "Num" (type $Num (sub any) (struct (field $val f64))))
+  (import "std/num.wat" "Num" (type $Num (sub any) (struct)))
 
   ;; $Decimal — distinct from $F64, both share f64 slot for now.
   (type $Decimal (@pub) (sub final $Num (struct (field $val f64))))

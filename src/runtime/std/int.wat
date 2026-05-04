@@ -11,7 +11,7 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct (field $val f64))))
+  (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct)))
   (import "std/list.wat" "List" (type $List (sub any)))
 
   ;; $Int — abstract integer parent. Carries `$ival i64`, the canonical
@@ -25,10 +25,11 @@
   ;; Arithmetic on $Int — result widens to $I64 when sign info is lost.
   ;; (Sub-dispatch by I64/U64 is a future refinement.)
   ;;
-  ;; Internal helper $_box_i64_from_f64 wraps a computed f64 into the
-  ;; two-field $I64 struct, supplying the i64 view via trunc_s. As ops
-  ;; migrate to native i64 arithmetic this helper becomes the natural
-  ;; place to drop the f64 field.
+  ;; Internal helper $_box_i64_from_f64 truncates an f64 to i64 then
+  ;; boxes as $I64. Used by op_div, where the divide stays in f64
+  ;; land for real-division semantics. The truncation drops fractional
+  ;; results — once cross-family coercion is wired through num.wat,
+  ;; op_div should return $F64 and this helper goes away.
   ;; =========================================================================
 
   (func $_box_i64_from_f64 (param $v f64) (result (ref $I64))
