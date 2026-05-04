@@ -1,0 +1,4 @@
+main = fn ..args:
+  match args:
+    [_, 'one', 'two']: 7
+    _: 1
