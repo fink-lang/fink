@@ -14,6 +14,7 @@
   (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $val f64) (field $ival i64)))))
   (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $val f64) (field $ival i64)))))
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
+  (import "std/decimal.wat" "Decimal" (type $Decimal (sub $Num (struct (field $val f64)))))
 
   ;; Func imports — int.wat arithmetic + comparison on $Int.
   (import "std/int.wat" "op_plus"  (func $int_op_plus  (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
@@ -383,17 +384,40 @@
 
   ;; -- Hashing impl ----------------------------------------------------
 
-  ;; hash_i31 — fold a $Num's f64 bits to a 31-bit hash.
+  ;; hash_i31 — fold a numeric subtype's bit pattern to a 31-bit hash.
   ;;
-  ;; XOR the upper and lower 32-bit halves, then mask to 31 bits
-  ;; so the result fits in i31ref without overflow.
+  ;; XOR the upper and lower 32-bit halves, then mask to 31 bits so
+  ;; the result fits in i31ref without overflow. Type-blind: the bit
+  ;; pattern differs per subtype (i64 for $Int; f64 bits for $F64 and
+  ;; $Decimal), so 1 (i64) and 1.0 (f64) hash to different values —
+  ;; consistent with deep_eq's strict-type rule.
   (func $hash_i31 (@pub) (@impl "std/hashing.fnk:hash_i31" $Num)
     (param $n (ref $Num))
     (result i32)
 
     (local $bits i64)
-    (local.set $bits
-      (i64.reinterpret_f64 (struct.get $Num $val (local.get $n))))
+
+    ;; Pick the bits per concrete subtype.
+    (block $done
+      (block $not_int
+        (block $is_int (result (ref $Int))
+          (br $not_int
+            (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
+        (local.set $bits (struct.get $Int $ival))
+        (br $done))
+
+      (block $not_f64
+        (block $is_f64 (result (ref $F64))
+          (br $not_f64
+            (br_on_cast $is_f64 (ref $Num) (ref $F64) (local.get $n))))
+        (local.set $bits
+          (i64.reinterpret_f64 (struct.get $F64 $val)))
+        (br $done))
+
+      ;; $Decimal fall-through — same bit-reinterpret as $F64 today.
+      (local.set $bits
+        (i64.reinterpret_f64
+          (struct.get $Decimal $val (ref.cast (ref $Decimal) (local.get $n))))))
 
     (i32.and
       (i32.xor

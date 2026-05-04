@@ -56,15 +56,15 @@
       (struct.get $Int $ival (local.get $a))
       (struct.get $Int $ival (local.get $b)))))
 
-  ;; op_div on $Int — keeps the `f64` view because integer / integer in
-  ;; fink semantics is real division (returns the precise float result).
-  ;; TODO: result type should arguably be $F64 once cross-family
-  ;; coercion is wired through num.wat's dispatcher.
+  ;; op_div on $Int — fink `/` is real division; convert i64 operands
+  ;; to f64 for the divide, truncate the result back to i64 when boxing.
+  ;; TODO: result type should be $F64 once cross-family coercion is
+  ;; wired through num.wat's dispatcher.
   (func $op_div (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (call $_box_i64_from_f64 (f64.div
-      (struct.get $Int $val (local.get $a))
-      (struct.get $Int $val (local.get $b)))))
+      (f64.convert_i64_s (struct.get $Int $ival (local.get $a)))
+      (f64.convert_i64_s (struct.get $Int $ival (local.get $b))))))
 
   ;; -- Comparison — return raw i32 -----------------------------------
   ;;
