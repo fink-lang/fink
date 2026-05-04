@@ -8,8 +8,38 @@
 
 (module
 
-  ;; Type imports — int.wat ops we re-route through num.wat
+  ;; Type imports — int.wat / float.wat ops we re-route through num.wat
   (import "std/list.wat" "List" (type $List (sub any)))
+  (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $val f64)))))
+  (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $val f64)))))
+  (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
+
+  ;; Func imports — int.wat arithmetic + comparison on $Int.
+  (import "std/int.wat" "op_plus"  (func $int_op_plus  (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_minus" (func $int_op_minus (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_mul"   (func $int_op_mul   (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_div"   (func $int_op_div_  (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_eq"    (func $int_op_eq    (param (ref $Int)) (param (ref $Int)) (result i32)))
+  (import "std/int.wat" "op_neq"   (func $int_op_neq   (param (ref $Int)) (param (ref $Int)) (result i32)))
+  (import "std/int.wat" "op_lt"    (func $int_op_lt    (param (ref $Int)) (param (ref $Int)) (result i32)))
+  (import "std/int.wat" "op_lte"   (func $int_op_lte   (param (ref $Int)) (param (ref $Int)) (result i32)))
+  (import "std/int.wat" "op_gt"    (func $int_op_gt    (param (ref $Int)) (param (ref $Int)) (result i32)))
+  (import "std/int.wat" "op_gte"   (func $int_op_gte   (param (ref $Int)) (param (ref $Int)) (result i32)))
+
+  ;; Func imports — float.wat primitives. The $F64 arm of every numeric
+  ;; op delegates here. Field is still f64-shared with $Num, so the
+  ;; result is numerically identical to the $Num path.
+  (import "std/float.wat" "op_plus"  (func $float_op_plus  (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "op_minus" (func $float_op_minus (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "op_mul"   (func $float_op_mul   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "op_div"   (func $float_op_div   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "op_eq"    (func $float_op_eq    (param (ref $F64)) (param (ref $F64)) (result i32)))
+  (import "std/float.wat" "op_neq"   (func $float_op_neq   (param (ref $F64)) (param (ref $F64)) (result i32)))
+  (import "std/float.wat" "op_lt"    (func $float_op_lt    (param (ref $F64)) (param (ref $F64)) (result i32)))
+  (import "std/float.wat" "op_lte"   (func $float_op_lte   (param (ref $F64)) (param (ref $F64)) (result i32)))
+  (import "std/float.wat" "op_gt"    (func $float_op_gt    (param (ref $F64)) (param (ref $F64)) (result i32)))
+  (import "std/float.wat" "op_gte"   (func $float_op_gte   (param (ref $F64)) (param (ref $F64)) (result i32)))
+  (import "std/float.wat" "op_pow"   (func $float_op_pow   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
 
   ;; Func imports — int.wat primitives. num.wat re-routes these so
   ;; protocols.wat only needs to know about num.wat for numeric ops.
@@ -53,69 +83,142 @@
   ;; route between them.
   ;; =========================================================================
 
-  ;; -- Float arithmetic ------------------------------------------------
+  ;; -- Coercion helpers ----------------------------------------------
+  ;;
+  ;; Given a $Num (any concrete subtype), return it as the requested
+  ;; concrete type by re-boxing. Field is f64-shared today so the value
+  ;; transfers verbatim. When fields narrow per subtype, these helpers
+  ;; will do the actual conversion (e.g. f64.convert_i64_s for Int→F64).
+
+  (func $as_f64 (param $n (ref $Num)) (result (ref $F64))
+    ;; Already $F64 → no-op.
+    (block $not_f64
+      (block $is_f64 (result (ref $F64))
+        (br $not_f64
+          (br_on_cast $is_f64 (ref $Num) (ref $F64) (local.get $n))))
+      (return))
+    ;; Otherwise re-box the f64 slot under $F64.
+    (struct.new $F64 (struct.get $Num $val (local.get $n))))
+
+  (func $as_int (param $n (ref $Num)) (result (ref $Int))
+    ;; Already $Int → no-op.
+    (block $not_int
+      (block $is_int (result (ref $Int))
+        (br $not_int
+          (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
+      (return))
+    ;; Otherwise re-box under $I64 (default int representation).
+    (struct.new $I64 (struct.get $Num $val (local.get $n))))
+
+  ;; True if either side is $F64 — picks the float arm.
+  (func $is_float_op (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
+    (i32.or
+      (ref.test (ref $F64) (local.get $a))
+      (ref.test (ref $F64) (local.get $b))))
+
+  ;; -- Arithmetic — dispatch on $F64 vs $Int -------------------------
 
   (func $op_plus (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.add
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b)))))
+    (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_plus
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_plus
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_minus (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.sub
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b)))))
+    (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_minus
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_minus
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_mul (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.mul
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b)))))
+    (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_mul
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_mul
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_div (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (struct.new $Num (f64.div
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b)))))
+    (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_div
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_div_
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
-  ;; -- Comparison — return raw i32 (caller boxes via ref.i31) ---------
+  ;; -- Comparison — dispatch on $F64 vs $Int --------------------------
 
   (func $op_eq (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
-    (f64.eq
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b))))
+    (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_eq
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_eq
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_neq (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
-    (f64.ne
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b))))
+    (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_neq
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_neq
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_lt (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
-    (f64.lt
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b))))
+    (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_lt
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_lt
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_lte (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
-    (f64.le
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b))))
+    (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_lte
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_lte
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_gt (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
-    (f64.gt
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b))))
+    (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_gt
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_gt
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   (func $op_gte (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
-    (f64.ge
-      (struct.get $Num $val (local.get $a))
-      (struct.get $Num $val (local.get $b))))
+    (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_gte
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (call $int_op_gte
+              (call $as_int (local.get $a))
+              (call $as_int (local.get $b))))))
 
   ;; -- Integer ops — delegate to int.wat ------------------------------
 
@@ -133,7 +236,11 @@
 
   (func $op_pow (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
-    (return_call $int_op_pow (local.get $a) (local.get $b)))
+    (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
+      (then (call $float_op_pow
+              (call $as_f64 (local.get $a))
+              (call $as_f64 (local.get $b))))
+      (else (return_call $int_op_pow (local.get $a) (local.get $b)))))
 
   (func $op_divmod (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $List))

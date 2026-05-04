@@ -1,7 +1,9 @@
-;; Integer operations — bitwise, shift, rotation, integer arithmetic.
+;; Integer operations — arithmetic, comparison, bitwise, shift, rotation.
 ;;
-;; All ops operate on $Num (f64-boxed); they trunc to i64, compute, and box
-;; the result back. Used as protocol impls under (@impl ... $Num $Num).
+;; Shape today: ops take/return (ref $Int) (or (ref $Num) for legacy bitwise
+;; helpers). Field is still f64-shared with $Num — narrowing to i64 is a
+;; follow-up step. num.wat dispatches polymorphic op_* to these for the
+;; $Int arm; the f64-trunc dance below is a stepping stone.
 ;;
 ;; Power and DivMod have richer behaviours (negative exponent fast-path,
 ;; tuple return).
@@ -12,11 +14,79 @@
   (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct (field $val f64))))
   (import "std/list.wat" "List" (type $List (sub any)))
 
-  ;; Concrete integer types — subtypes of $Num.
-  ;; For now they share $Num's `f64 $val` slot; the field type will narrow
-  ;; to i64 in a later step once codegen and ops are split.
-  (type $I64 (@pub) (sub final $Num (struct (field $val f64))))
-  (type $U64 (@pub) (sub final $Num (struct (field $val f64))))
+  ;; $Int — abstract integer parent. Concrete subtypes ($I64 / $U64)
+  ;; live below. Sharing $Num's `f64 $val` slot for now; will narrow to
+  ;; i64 in a later step.
+  (type $Int (@pub) (sub $Num (struct (field $val f64))))
+    (type $I64 (@pub) (sub final $Int (struct (field $val f64))))
+    (type $U64 (@pub) (sub final $Int (struct (field $val f64))))
+
+  ;; =========================================================================
+  ;; Arithmetic on $Int — result widens to $I64 when sign info is lost.
+  ;; (Sub-dispatch by I64/U64 is a future refinement.)
+  ;; =========================================================================
+
+  (func $op_plus (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (struct.new $I64 (f64.add
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b)))))
+
+  (func $op_minus (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (struct.new $I64 (f64.sub
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b)))))
+
+  (func $op_mul (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (struct.new $I64 (f64.mul
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b)))))
+
+  (func $op_div (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (struct.new $I64 (f64.div
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b)))))
+
+  ;; -- Comparison — return raw i32 -----------------------------------
+
+  (func $op_eq (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
+    (f64.eq
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b))))
+
+  (func $op_neq (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
+    (f64.ne
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b))))
+
+  (func $op_lt (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
+    (f64.lt
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b))))
+
+  (func $op_lte (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
+    (f64.le
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b))))
+
+  (func $op_gt (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
+    (f64.gt
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b))))
+
+  (func $op_gte (@pub)
+    (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
+    (f64.ge
+      (struct.get $Int $val (local.get $a))
+      (struct.get $Int $val (local.get $b))))
 
   ;; Func imports — list constructors via the public API.
   (import "std/list.wat" "empty"
