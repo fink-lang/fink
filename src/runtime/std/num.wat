@@ -27,11 +27,21 @@
   (import "std/int.wat" "op_shl"    (func $int_op_shl    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
   (import "std/int.wat" "op_shr"    (func $int_op_shr    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
 
-  ;; $Num — boxed float / large number.
+  ;; $Num — abstract numeric base type.
+  ;; Concrete subtypes ($I64 / $U64 in int.wat, $F64 in float.wat) extend
+  ;; this shape with their own value field. For now all subtypes share the
+  ;; same `f64 $val` slot so existing ops work uniformly; the field type
+  ;; will narrow per subtype in a later step.
   ;; Small integers use i31ref directly (no struct needed).
-  (type $Num (@pub) (struct
+  ;;
+  ;; `@todo-no-rec` emits $Num as a singleton before the merged rec group
+  ;; so subtypes in int.wat / float.wat (which land in the rec group) can
+  ;; reference it. WasmGC requires supertype to precede subtype, and the
+  ;; wat-linker doesn't yet topologically order types within the rec
+  ;; group. Promote out once the linker handles supertype ordering.
+  (type $Num (@pub) (@todo-no-rec) (sub (struct
     (field $val f64)
-  ))
+  )))
 
 
   ;; =========================================================================

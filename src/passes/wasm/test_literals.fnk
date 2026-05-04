@@ -78,7 +78,7 @@ test 'literal int', fn:
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 42)))
+        (local.set $v_1 (struct.new $std/int.wat:U64 (f64.const 42)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
@@ -111,7 +111,7 @@ test 'literal neg 0', fn:
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 0)))
+        (local.set $v_1 (struct.new $std/int.wat:I64 (f64.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
@@ -145,7 +145,7 @@ test 'literal float', fn:
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 123400)))
+        (local.set $v_1 (struct.new $std/float.wat:F64 (f64.const 123400)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
@@ -165,7 +165,7 @@ test 'literal float', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQAIjAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAIkAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 # skip: decimal type not yet wired to WASM — needs dedicated $Decimal struct

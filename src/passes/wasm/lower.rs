@@ -1392,7 +1392,18 @@ fn emit_val_into(
 
 /// Literal shape at lowering time.
 enum LitVal {
-  Num(f64),
+  /// Signed integer literal — boxes as `$I64`. All sized signed widths
+  /// (i8/i16/i32/i64) collapse to a single i64 carrier; the field stays
+  /// f64 today (will narrow to i64 in a later step).
+  I64(i64),
+  /// Unsigned integer literal — boxes as `$U64`. All unsigned widths
+  /// collapse to a single u64 carrier; field stays f64 today.
+  U64(u64),
+  /// Float literal — boxes as `$F64`. Both f32 and f64 widths share the
+  /// f64 carrier today.
+  F64(f64),
+  /// Decimal literal — boxes as `$Num` until a real `$Decimal` lands.
+  Decimal(f64),
   Bool(bool),
   /// Empty sequence literal `[]` — lowers to `call $args_empty`.
   /// Reuses the `args_empty` runtime function (which is exported as
@@ -1408,11 +1419,15 @@ enum LitVal {
 
 impl LitVal {
   fn from_lit(lit: &Lit) -> Option<Self> {
+    use crate::passes::cps::ir::IntWidth;
     Some(match lit {
-      Lit::Int { value, .. }     => LitVal::Num(*value as f64),
-      Lit::Float { value, .. }   => LitVal::Num(*value),
+      Lit::Int { value, width } => match width {
+        IntWidth::I8 | IntWidth::I16 | IntWidth::I32 | IntWidth::I64 => LitVal::I64(*value),
+        IntWidth::U8 | IntWidth::U16 | IntWidth::U32 | IntWidth::U64 => LitVal::U64(*value as u64),
+      },
+      Lit::Float { value, .. }   => LitVal::F64(*value),
       // Reconstruct the decimal value as f64 for now — future work narrows to a real decimal repr.
-      Lit::Decimal { coeff, exp } => LitVal::Num((*coeff as f64) * 10f64.powi(*exp)),
+      Lit::Decimal { coeff, exp } => LitVal::Decimal((*coeff as f64) * 10f64.powi(*exp)),
       Lit::Bool(b)    => LitVal::Bool(*b),
       Lit::Seq        => LitVal::EmptySeq,
       Lit::Rec        => LitVal::EmptyRec,
@@ -1446,7 +1461,13 @@ fn emit_str_const(
 
 fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> InstrId {
   match lit {
-    LitVal::Num(n) => push_struct_new(frag, rt.num(), vec![op_f64(*n)], into),
+    // Integer literals: signed → $I64, unsigned → $U64. Field is still
+    // f64 today (subtypes share $Num's slot); the value is converted
+    // for storage. Future step narrows the field to i64.
+    LitVal::I64(n)  => push_struct_new(frag, rt.i64_(), vec![op_f64(*n as f64)], into),
+    LitVal::U64(n)  => push_struct_new(frag, rt.u64_(), vec![op_f64(*n as f64)], into),
+    LitVal::F64(n)  => push_struct_new(frag, rt.f64_(), vec![op_f64(*n)], into),
+    LitVal::Decimal(n) => push_struct_new(frag, rt.num(), vec![op_f64(*n)], into),
     LitVal::Bool(b) => push_ref_i31(frag, op_i32(if *b { 1 } else { 0 }), into),
     LitVal::EmptySeq => push_call(frag, rt.args_empty(), vec![], Some(into)),
     LitVal::EmptyRec => push_call(frag, rt.rec_empty(), vec![], Some(into)),

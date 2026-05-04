@@ -9,8 +9,14 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"  "Num"  (type $Num  (sub any)))
+  (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct (field $val f64))))
   (import "std/list.wat" "List" (type $List (sub any)))
+
+  ;; Concrete integer types — subtypes of $Num.
+  ;; For now they share $Num's `f64 $val` slot; the field type will narrow
+  ;; to i64 in a later step once codegen and ops are split.
+  (type $I64 (@pub) (sub final $Num (struct (field $val f64))))
+  (type $U64 (@pub) (sub final $Num (struct (field $val f64))))
 
   ;; Func imports — list constructors via the public API.
   (import "std/list.wat" "empty"

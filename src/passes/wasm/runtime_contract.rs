@@ -75,6 +75,9 @@ use super::ir::*;
 pub enum Sym {
   // ── value types ────────────────────────────────────────────────
   Num,
+  I64,
+  U64,
+  F64,
   Fn2,
   Closure,
   Captures,
@@ -310,6 +313,9 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
 pub struct Runtime {
   // imported value types
   num: Option<TypeSym>,
+  i64_: Option<TypeSym>,
+  u64_: Option<TypeSym>,
+  f64_: Option<TypeSym>,
   fn2: Option<TypeSym>,
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
@@ -394,6 +400,9 @@ pub struct Runtime {
 
 impl Runtime {
   pub fn num(&self)          -> TypeSym { self.num.expect("rt: Num not declared") }
+  pub fn i64_(&self)         -> TypeSym { self.i64_.expect("rt: I64 not declared") }
+  pub fn u64_(&self)         -> TypeSym { self.u64_.expect("rt: U64 not declared") }
+  pub fn f64_(&self)         -> TypeSym { self.f64_.expect("rt: F64 not declared") }
   pub fn fn2(&self)          -> TypeSym { self.fn2.expect("rt: Fn2 not declared") }
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
@@ -553,6 +562,9 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::IsRecLike       => "std/operators.fnk:is_rec_like",
 
     Sym::Num             => "std/num.wat:Num",
+    Sym::I64             => "std/int.wat:I64",
+    Sym::U64             => "std/int.wat:U64",
+    Sym::F64             => "std/float.wat:F64",
 
     Sym::SeqPrepend      => "std/seq.fnk:prepend",
     Sym::SeqPop          => "std/seq.fnk:pop",
@@ -608,6 +620,15 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   // allocation; the Sym variant is the reference.
   if needed.contains(&Sym::Num) {
     rt.num = Some(TypeSym::Runtime(Sym::Num));
+  }
+  if needed.contains(&Sym::I64) {
+    rt.i64_ = Some(TypeSym::Runtime(Sym::I64));
+  }
+  if needed.contains(&Sym::U64) {
+    rt.u64_ = Some(TypeSym::Runtime(Sym::U64));
+  }
+  if needed.contains(&Sym::F64) {
+    rt.f64_ = Some(TypeSym::Runtime(Sym::F64));
   }
   if needed.contains(&Sym::Fn2) || needed.contains(&Sym::Apply) || always_need_fn2(usage) {
     rt.fn2 = Some(TypeSym::Runtime(Sym::Fn2));
@@ -1036,8 +1057,23 @@ fn scan_arg(arg: &Arg, cps: &CpsResult, usage: &mut RuntimeUsage) {
 }
 
 fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
+  use crate::passes::cps::ir::IntWidth;
   match kind {
-    ValKind::Lit(Lit::Int { .. } | Lit::Float { .. } | Lit::Decimal { .. }) => {
+    ValKind::Lit(Lit::Int { width, .. }) => {
+      // Signed widths box as $I64; unsigned as $U64. $Num still needed
+      // because numeric ops (op_plus etc.) operate on (ref $Num) — the
+      // boxed subtype upcasts at the call site.
+      match width {
+        IntWidth::I8 | IntWidth::I16 | IntWidth::I32 | IntWidth::I64 => usage.mark(Sym::I64),
+        IntWidth::U8 | IntWidth::U16 | IntWidth::U32 | IntWidth::U64 => usage.mark(Sym::U64),
+      }
+      usage.mark(Sym::Num);
+    }
+    ValKind::Lit(Lit::Float { .. }) => {
+      usage.mark(Sym::F64);
+      usage.mark(Sym::Num);
+    }
+    ValKind::Lit(Lit::Decimal { .. }) => {
       usage.mark(Sym::Num);
     }
     ValKind::Lit(Lit::Seq) => {
