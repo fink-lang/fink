@@ -2,8 +2,8 @@
 //!
 //! These tests exercise the actual built binaries via `assert_cmd`, and
 //! treat the CLI as a black box: arguments in, stdout/stderr/exit code
-//! out. The `.fnk` fixtures the tests feed live next to the binary
-//! source under `src/bin/fixtures/`.
+//! out. The `.fnk` fixtures the tests feed live alongside this file
+//! under `src/bin/tests/fixtures/`.
 //!
 //! This file is wired as a `[[test]]` target in `Cargo.toml` so it can
 //! live next to its subject (the binaries in `src/bin/`) rather than
@@ -28,7 +28,7 @@ fn fink() -> Command {
 
 fn fixture(name: &str) -> PathBuf {
   Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("src/bin/fixtures")
+    .join("src/bin/tests/fixtures")
     .join(name)
 }
 
