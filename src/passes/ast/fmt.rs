@@ -442,6 +442,36 @@ fn is_complex_arg(ast: &Ast<'_>, id: AstId) -> bool {
   }
 }
 
+/// True for Apply nodes that render as `id'string'` (tagged template) — the
+/// concatenated form has no internal separator and reads unambiguously even
+/// when used as a call arg, so it doesn't need parens.
+fn is_tagged_str_apply(ast: &Ast<'_>, id: AstId) -> bool {
+  let NodeKind::Apply { func, args } = &ast.nodes.get(id).kind else { return false };
+  let [arg_id] = args.items.as_ref() else { return false };
+  let func_node = ast.nodes.get(*func);
+  let arg_node = ast.nodes.get(*arg_id);
+  matches!(&func_node.kind, NodeKind::Ident(name) if !name.starts_with('·'))
+    && matches!(arg_node.kind, NodeKind::StrRawTempl { .. } | NodeKind::LitStr { .. })
+    && !is_multiline(ast, *arg_id)
+}
+
+/// Render an arg of an Apply call. If the arg is itself an Apply, wrap in
+/// parens so the juxtaposition doesn't read as additional positional args of
+/// the outer call. (`f g x` would otherwise be ambiguous between `f(g, x)`
+/// and `f(g(x))`.) Tagged template strings (`id'foo'`) render with no
+/// internal separator and don't need wrapping.
+fn fmt_arg(ast: &Ast<'_>, id: AstId, out: &mut MappedWriter, depth: usize) {
+  let needs_parens = matches!(&ast.nodes.get(id).kind, NodeKind::Apply { .. })
+    && !is_tagged_str_apply(ast, id);
+  if needs_parens {
+    out.push('(');
+    fmt_node(ast, id, out, depth);
+    out.push(')');
+  } else {
+    fmt_node(ast, id, out, depth);
+  }
+}
+
 fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter, depth: usize) {
   // Tagged string literal: `id'foo'`, `op'+'` — func ident + single quoted string arg, no separator
   // Excludes block strings (`":`) which need a space separator.
@@ -493,7 +523,7 @@ fn fmt_apply(ast: &Ast<'_>, func: AstId, args: &[AstId], out: &mut MappedWriter,
   // First plain arg: space separator; rest: ", "
   for (i, &arg_id) in plain.iter().enumerate() {
     if i == 0 { out.push(' '); } else { stop_mark(out); out.push_str(", "); }
-    fmt_node(ast, arg_id, out, depth);
+    fmt_arg(ast, arg_id, out, depth);
   }
 
   if trailing.is_empty() {

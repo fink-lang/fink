@@ -426,12 +426,23 @@ pub enum ValKind {
   BuiltIn(BuiltIn),   // a compiler-known op used as a value
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntWidth {
+  I8, I16, I32, I64,
+  U8, U16, U32, U64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatWidth {
+  F32, F64,
+}
+
 #[derive(Debug, Clone)]
 pub enum Lit {
   Bool(bool),
-  Int(i64),
-  Float(f64),
-  Decimal(f64),       // distinct from Float for the type system
+  Int { value: i64, width: IntWidth },
+  Float { value: f64, width: FloatWidth },
+  Decimal { coeff: i64, exp: i32 },
   /// Byte sequence. Fink strings are byte arrays, not UTF-8 strings — `\xFF`
   /// is a valid 1-byte string literal. Using `Vec<u8>` avoids Rust's UTF-8
   /// validation at the CPS boundary.

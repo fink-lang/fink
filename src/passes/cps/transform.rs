@@ -24,7 +24,7 @@ use crate::propgraph::PropGraph;
 use crate::passes::scopes::{BindId, BindInfo, BindOrigin, ScopeResult};
 use super::ir::{
   Arg, Bind, BindNode, BuiltIn, Callable, Cont, ContKind, CpsFnKind, CpsId, CpsResult,
-  Expr, ExprKind, Ref, Lit, Param, Val, ValKind,
+  Expr, ExprKind, Ref, Lit, IntWidth, FloatWidth, Param, Val, ValKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -229,18 +229,9 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
   match kind {
     // ---- literals ----
     NodeKind::LitBool(b) => (lit_val(g, Lit::Bool(b), o), vec![]),
-    NodeKind::LitInt(s)  => {
-      let n = parse_int(s);
-      // Preserve -0 as f64 negative zero (i64 has no -0).
-      let lit = if n == 0 && s.starts_with('-') {
-        Lit::Float(-0.0_f64)
-      } else {
-        Lit::Int(n)
-      };
-      (lit_val(g, lit, o), vec![])
-    }
-    NodeKind::LitFloat(s) => (lit_val(g, Lit::Float(parse_float(s)), o), vec![]),
-    NodeKind::LitDecimal(s) => (lit_val(g, Lit::Decimal(parse_decimal(s)), o), vec![]),
+    NodeKind::LitInt(s)  => (lit_val(g, parse_int_lit(s), o), vec![]),
+    NodeKind::LitFloat(s) => (lit_val(g, parse_float_lit(s), o), vec![]),
+    NodeKind::LitDecimal(s) => (lit_val(g, parse_decimal_lit(s), o), vec![]),
     NodeKind::LitStr { content: s, .. } => (lit_val(g, Lit::Str(crate::strings::render(&s)), o), vec![]),
 
     // ---- identifier reference — resolved via scope analysis ----
@@ -1613,31 +1604,103 @@ fn wrap_with_fail(
 // Numeric helpers
 // ---------------------------------------------------------------------------
 
-fn parse_int(s: &str) -> i64 {
-  let s = s.replace('_', "");
-  let (negative, s) = match s.strip_prefix('-') {
-    Some(rest) => (true, rest.to_string()),
-    None => (false, s.strip_prefix('+').unwrap_or(&s).to_string()),
-  };
-  let val = if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-    i64::from_str_radix(hex, 16).unwrap_or(0)
-  } else if let Some(oct) = s.strip_prefix("0o").or_else(|| s.strip_prefix("0O")) {
-    i64::from_str_radix(oct, 8).unwrap_or(0)
-  } else if let Some(bin) = s.strip_prefix("0b").or_else(|| s.strip_prefix("0B")) {
-    i64::from_str_radix(bin, 2).unwrap_or(0)
+/// Parse an integer literal source slice into a typed `Lit`, inferring width.
+///
+/// Width inference rules:
+/// - Bare positive (no sign prefix): smallest unsigned width that fits the value.
+/// - Sign-prefixed (`+` or `-`): smallest signed width that fits the value.
+/// - Hex/oct/bin: same rule (smallest unsigned, or smallest signed if prefixed).
+fn parse_int_lit(s: &str) -> Lit {
+  let raw = s.replace('_', "");
+  let (sign_prefixed, negative, body) = if let Some(rest) = raw.strip_prefix('-') {
+    (true, true, rest.to_string())
+  } else if let Some(rest) = raw.strip_prefix('+') {
+    (true, false, rest.to_string())
   } else {
-    s.parse().unwrap_or(0)
+    (false, false, raw)
   };
-  if negative { -val } else { val }
+  let abs: u64 = if let Some(hex) = body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
+    u64::from_str_radix(hex, 16).unwrap_or(0)
+  } else if let Some(oct) = body.strip_prefix("0o").or_else(|| body.strip_prefix("0O")) {
+    u64::from_str_radix(oct, 8).unwrap_or(0)
+  } else if let Some(bin) = body.strip_prefix("0b").or_else(|| body.strip_prefix("0B")) {
+    u64::from_str_radix(bin, 2).unwrap_or(0)
+  } else {
+    body.parse().unwrap_or(0)
+  };
+  if sign_prefixed {
+    let signed: i64 = if negative { -(abs as i64) } else { abs as i64 };
+    let width = signed_width_for(signed);
+    Lit::Int { value: signed, width }
+  } else {
+    let width = unsigned_width_for(abs);
+    Lit::Int { value: abs as i64, width }
+  }
 }
 
-fn parse_float(s: &str) -> f64 {
-  s.replace('_', "").parse().unwrap_or(0.0)
+fn signed_width_for(n: i64) -> IntWidth {
+  if (i8::MIN as i64..=i8::MAX as i64).contains(&n) { IntWidth::I8 }
+  else if (i16::MIN as i64..=i16::MAX as i64).contains(&n) { IntWidth::I16 }
+  else if (i32::MIN as i64..=i32::MAX as i64).contains(&n) { IntWidth::I32 }
+  else { IntWidth::I64 }
 }
 
-fn parse_decimal(s: &str) -> f64 {
-  let s = s.strip_suffix('d').unwrap_or(s);
-  s.replace('_', "").parse().unwrap_or(0.0)
+fn unsigned_width_for(n: u64) -> IntWidth {
+  if n <= u8::MAX as u64 { IntWidth::U8 }
+  else if n <= u16::MAX as u64 { IntWidth::U16 }
+  else if n <= u32::MAX as u64 { IntWidth::U32 }
+  else { IntWidth::U64 }
+}
+
+/// Parse a float literal source slice. Width is f32 if the value round-trips
+/// through f32 without loss, otherwise f64.
+fn parse_float_lit(s: &str) -> Lit {
+  let value: f64 = s.replace('_', "").parse().unwrap_or(0.0);
+  let width = if value.is_finite() && (value as f32 as f64) == value {
+    FloatWidth::F32
+  } else {
+    FloatWidth::F64
+  };
+  Lit::Float { value, width }
+}
+
+/// Parse a decimal literal source slice into `(coefficient, exponent)` form,
+/// preserving the source's precision verbatim.
+///
+/// Examples:
+/// - `1.0d`       → `(coeff: 10,   exp: -1)`
+/// - `1_000d`     → `(coeff: 1000, exp:  0)`
+/// - `1.0d-100`   → `(coeff: 10,   exp: -101)`
+/// - `1.0d+100`   → `(coeff: 10,   exp: 99)`
+fn parse_decimal_lit(s: &str) -> Lit {
+  let raw = s.replace('_', "");
+  // Split off the trailing `d[+-]NNN` exponent (if any). The `d` separator
+  // appears either as a bare suffix (`1.0d`) or before an explicit exponent
+  // (`1.0d-100`). The rest is the mantissa: optional sign + digits + optional `.frac`.
+  let (mantissa, exp_suffix): (&str, i32) = if let Some(d_idx) = raw.find('d') {
+    let (m, rest) = raw.split_at(d_idx);
+    let exp_part = &rest[1..]; // skip the `d`
+    let exp = if exp_part.is_empty() { 0 } else { exp_part.parse().unwrap_or(0) };
+    (m, exp)
+  } else {
+    (raw.as_str(), 0)
+  };
+  // Split mantissa on `.` to find fractional digit count.
+  let (sign_str, digits): (&str, &str) = if let Some(rest) = mantissa.strip_prefix('-') {
+    ("-", rest)
+  } else if let Some(rest) = mantissa.strip_prefix('+') {
+    ("", rest)
+  } else {
+    ("", mantissa)
+  };
+  let (int_part, frac_part) = match digits.find('.') {
+    Some(i) => (&digits[..i], &digits[i + 1..]),
+    None => (digits, ""),
+  };
+  let combined = format!("{sign_str}{int_part}{frac_part}");
+  let coeff: i64 = combined.parse().unwrap_or(0);
+  let exp = exp_suffix - frac_part.len() as i32;
+  Lit::Decimal { coeff, exp }
 }
 
 // ---------------------------------------------------------------------------
@@ -3055,17 +3118,11 @@ fn lower_pat_lhs(
 
     // Literal equality: `1`, `'hello'`, `true` — emits PatternMatch with op_eq test. No binding produced.
     NodeKind::LitInt(s) => {
-      let n = parse_int(s);
-      let lit = if n == 0 && s.starts_with('-') {
-        Lit::Float(-0.0_f64)
-      } else {
-        Lit::Int(n)
-      };
-      emit_literal_pattern(g, val, lit, origin, pending);
+      emit_literal_pattern(g, val, parse_int_lit(s), origin, pending);
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
     NodeKind::LitFloat(s) => {
-      emit_literal_pattern(g, val, Lit::Float(parse_float(s)), origin, pending);
+      emit_literal_pattern(g, val, parse_float_lit(s), origin, pending);
       { let r = g.fresh_result(origin); (r.kind, r.id) }
     }
     NodeKind::LitBool(b) => {

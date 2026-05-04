@@ -10,10 +10,10 @@ test 'seq literal', fn:
     [1, 2, 3]
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·seq_prepend 3, [], fn ·v_3:
-        ·seq_prepend 2, ·v_3, fn ·v_6:
-          ·seq_prepend 1, ·v_6, ·ƒret_0
-    # sm:IAABAAkAAQAJJAEACRIAAgAGAQ4BAAEAARwBAAECAAQBDQkAAQAJAgEACQIACgEOAQoAAgAKAQUBAAEAARwBAAECAAQBBgEKAAoBBQEKAAIADgEFAQABAAEcAQABAgAEAQYBCgAEAQUB
+      ·seq_prepend (u8 3), [], fn ·v_3:
+        ·seq_prepend (u8 2), ·v_3, fn ·v_6:
+          ·seq_prepend (u8 1), ·v_6, ·ƒret_0
+    # sm:JgABAAkAAQAJJAEACRIAAgAGAQ4BAAEAAR4BAAEAAQABBgEAAQQABAENCQABAAkCAQAJAgAKAQ4BCgACAAoBBQEAAQABHgEAAQABAAEGAQABBAAEAQYBCgAKAQUBCgACAA4BBQEAAQABHgEAAQABAAEGAQABBAAEAQYBCgAEAQUB
 
 
 test 'empty seq literal', fn:
@@ -30,9 +30,9 @@ test 'rec literal', fn:
     {x: 1, y: 2}
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·rec_put {}, 'x', 1, fn ·v_4:
-        ·rec_put ·v_4, 'y', 2, ·ƒret_0
-    # sm:IQABAAwAAQAMJAEADBIAAgAGAQIEAAEABBQBAQwAAQAMAgEADAIABAECAQABAAECAQABAgEAAQIABAEGAQIACgEFBAoAAgAKAQwEAAEABBQBCwQKAAQBDAEAAQABAgEAAQIBAAECAAQBBgECAAQBBQQ
+      ·rec_put {}, 'x', (u8 1), fn ·v_4:
+        ·rec_put ·v_4, 'y', (u8 2), ·ƒret_0
+    # sm:JQABAAwAAQAMJAEADBIAAgAGAQIEAAEABBQBAQwAAQAMAgEADAIABAECAQABAAECAQABAgEAAQIABgEGAQABAAEGAQABBAAKAQUECgACAAoBDAQAAQAEFAELBAoABAEMAQABAAECAQABAgEAAQIABgEGAQABAAEGAQABBAAEAQUE
 
 
 test 'empty rec literal', fn:
@@ -96,9 +96,9 @@ test 'seq spread', fn:
     [..xs, 1]
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·seq_prepend 1, [], fn ·v_3:
+      ·seq_prepend (u8 1), [], fn ·v_3:
         ·seq_concat ·∅xs, ·v_3, ·ƒret_0
-    # sm:FwABAAkAAQAJJAEACRIAAgAGAQ4BAAEAARwBAAECAAQBDQkAAQAJAgEACQIACgEOAQoAAgAKAQsEAAEABBoBBAIOAAQBCAEKAAQBCwQ
+    # sm:GQABAAkAAQAJJAEACRIAAgAGAQ4BAAEAAR4BAAEAAQABBgEAAQQABAENCQABAAkCAQAJAgAKAQ4BCgACAAoBCwQAAQAEGgEEAg4ABAEIAQoABAELBA
 
 
 test 'rec spread', fn:
@@ -107,8 +107,8 @@ test 'rec spread', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
       ·rec_merge {}, ·∅base, fn ·v_3:
-        ·rec_put ·v_3, 'x', 1, ·ƒret_0
-    # sm:HAABAA4AAQAOJAEADhIAAgAGAQIGAAEABhgBAQ4AAQAOAgEADgIABAEGBBIACgEDBgoAAgAKARAEAAEABBQBDwYKAAQBEAEAAQABAgEAAQIBAAECAAQBBgECAAQBBQQ
+        ·rec_put ·v_3, 'x', (u8 1), ·ƒret_0
+    # sm:HgABAA4AAQAOJAEADhIAAgAGAQIGAAEABhgBAQ4AAQAOAgEADgIABAEGBBIACgEDBgoAAgAKARAEAAEABBQBDwYKAAQBEAEAAQABAgEAAQIBAAECAAYBBgEAAQABBgEAAQQABAEFBA
 
 
 
@@ -121,8 +121,8 @@ test 'tagged literal', fn:
     10sec
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·∅sec ·ƒret_0, 10
-    # sm:CgABAAUAAQAFJAEABRIAAgAGAQAFAAEEAxIBAwUSAAQBAAI
+      ·∅sec ·ƒret_0, (u8 10)
+    # sm:DAABAAUAAQAFJAEABRIAAgAGAQAFAAEEAxIBAwUSAAYBAAIAAQACBgEAAg
 
 
 
@@ -137,10 +137,10 @@ test 'seq literal with spread', fn:
     [1, ..a, 2]
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·seq_prepend 2, [], fn ·v_3:
+      ·seq_prepend (u8 2), [], fn ·v_3:
         ·seq_concat ·∅a, ·v_3, fn ·v_6:
-          ·seq_prepend 1, ·v_6, ·ƒret_0
-    # sm:IAABAAsAAQALJAEACxIAAgAGARIBAAEAARwBAAECAAQBEQsAAQALAgEACwIACgESAQoAAgAKAQkDAAEAAxoBBAEMAAQBBgEKAAoBCQMKAAIADgEFAQABAAEcAQABAgAEAQYDCgAEAQUB
+          ·seq_prepend (u8 1), ·v_6, ·ƒret_0
+    # sm:JAABAAsAAQALJAEACxIAAgAGARIBAAEAAR4BAAEAAQABBgEAAQQABAERCwABAAsCAQALAgAKARIBCgACAAoBCQMAAQADGgEEAQwABAEGAQoACgEJAwoAAgAOAQUBAAEAAR4BAAEAAQABBgEAAQQABAEGAwoABAEFAQ
 
 test 'seq literal leading spread', fn:
   expect cps_module ƒink:

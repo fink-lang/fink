@@ -1037,7 +1037,7 @@ fn scan_arg(arg: &Arg, cps: &CpsResult, usage: &mut RuntimeUsage) {
 
 fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
   match kind {
-    ValKind::Lit(Lit::Int(_) | Lit::Float(_) | Lit::Decimal(_)) => {
+    ValKind::Lit(Lit::Int { .. } | Lit::Float { .. } | Lit::Decimal { .. }) => {
       usage.mark(Sym::Num);
     }
     ValKind::Lit(Lit::Seq) => {

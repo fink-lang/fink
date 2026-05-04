@@ -111,7 +111,7 @@ test 'literal neg 0', fn:
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const -0)))
+        (local.set $v_1 (struct.new $std/num.wat:Num (f64.const 0)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
@@ -131,7 +131,7 @@ test 'literal neg 0', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQAChAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQACggEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
 
 
 

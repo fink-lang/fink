@@ -364,16 +364,20 @@ fn render_val(b: &mut AstBuilder<'static>, val: &Val, fc: &FmtCtx<'_, '_>) -> As
 fn lit_node(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
   match lit {
     Lit::Bool(v) => b.append(NodeKind::LitBool(*v), loc),
-    Lit::Int(n) => {
-      let s: &'static str = Box::leak(n.to_string().into_boxed_str());
-      b.append(NodeKind::LitInt(s), loc)
+    Lit::Int { value, width } => {
+      let s: &'static str = Box::leak(value.to_string().into_boxed_str());
+      let lit_id = b.append(NodeKind::LitInt(s), loc);
+      let tag = b_ident_loc(b, crate::passes::cps::fmt::render_int_width(*width), loc);
+      b_apply_loc(b, tag, vec![lit_id], loc)
     }
-    Lit::Float(f) => {
-      let s: &'static str = Box::leak(f.to_string().into_boxed_str());
-      b.append(NodeKind::LitFloat(s), loc)
+    Lit::Float { value, width } => {
+      let s: &'static str = Box::leak(format!("{:e}", value).into_boxed_str());
+      let lit_id = b.append(NodeKind::LitFloat(s), loc);
+      let tag = b_ident_loc(b, crate::passes::cps::fmt::render_float_width(*width), loc);
+      b_apply_loc(b, tag, vec![lit_id], loc)
     }
-    Lit::Decimal(f) => {
-      let s: &'static str = Box::leak(format!("{}d", f).into_boxed_str());
+    Lit::Decimal { coeff, exp } => {
+      let s: &'static str = Box::leak(crate::passes::cps::fmt::render_decimal(*coeff, *exp).into_boxed_str());
       b.append(NodeKind::LitDecimal(s), loc)
     }
     Lit::Str(s) => b.append(

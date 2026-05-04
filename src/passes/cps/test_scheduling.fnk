@@ -11,8 +11,8 @@ test 'yield literal', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·yield 42, ·ƒret_1
-    # sm:CgABAAgAAQAIJAEACBIAAgAGAQAIAAEACBABDAIEAAQBCwg
+      ·yield (u8 42), ·ƒret_1
+    # sm:DAABAAgAAQAIJAEACBIAAgAGAQAIAAEACBIBDAIAAQACBgEAAgYABAELCA
 
 
 test 'yield ident', fn:
@@ -77,8 +77,8 @@ test 'channel creation', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·channel 0, ·ƒret_1
-    # sm:CgABAAkAAQAJJAEACRIAAgAGAQAJAAEACRQBEAECAAQBDwk
+      ·channel (u8 0), ·ƒret_1
+    # sm:DAABAAkAAQAJJAEACRIAAgAGAQAJAAEACRYBEAEAAQABBgEAAQQABAEPCQ
 
 
 
@@ -98,11 +98,11 @@ test 'channel bound to name', fn:
 
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·channel 0, fn ·v_5:
+      ·channel (u8 0), fn ·v_5:
         ·let ·v_5, fn ·ch_0:
           ·ƒpub ·ch_0, fn:
             ·ƒret_2 ·ch_0
-    # sm:HAABAA4AAQAOJAEADhIAAgAGAQoJAAEACRQBEAECAAoBDwkKAAIACgEDAQABAAEMAQQJCgAKAQkCDAACAA4BAAIAAQACEAEAAgwACAACABIBAAIAAQACFAEAAg
+    # sm:HgABAA4AAQAOJAEADhIAAgAGAQoJAAEACRYBEAEAAQABBgEAAQQACgEPCQoAAgAKAQMBAAEAAQwBBAkKAAoBCQIMAAIADgEAAgABAAIQAQACDAAIAAIAEgEAAgABAAIUAQAC
 
 
 test 'receive bound to name', fn:
@@ -116,3 +116,4 @@ test 'receive bound to name', fn:
           ·ƒpub ·msg_0, fn:
             ·ƒret_2 ·msg_0
     # sm:HAABABAAAQAQJAEAEBIAAgAGAQwKAAEAChQBEAIOAAoBDwoKAAIACgEDAQABAAEMAQQKCgAKAQsDDgACAA4BAAMAAQADEAEAAw4ACAACABIBAAMAAQADFAEAAw
+

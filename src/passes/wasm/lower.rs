@@ -1409,9 +1409,10 @@ enum LitVal {
 impl LitVal {
   fn from_lit(lit: &Lit) -> Option<Self> {
     Some(match lit {
-      Lit::Int(n)     => LitVal::Num(*n as f64),
-      Lit::Float(f)   => LitVal::Num(*f),
-      Lit::Decimal(f) => LitVal::Num(*f),
+      Lit::Int { value, .. }     => LitVal::Num(*value as f64),
+      Lit::Float { value, .. }   => LitVal::Num(*value),
+      // Reconstruct the decimal value as f64 for now — future work narrows to a real decimal repr.
+      Lit::Decimal { coeff, exp } => LitVal::Num((*coeff as f64) * 10f64.powi(*exp)),
       Lit::Bool(b)    => LitVal::Bool(*b),
       Lit::Seq        => LitVal::EmptySeq,
       Lit::Rec        => LitVal::EmptyRec,

@@ -10,10 +10,10 @@ test 'bind literal', fn:
     x = 42
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let 42, fn ·x_0:
+      ·let (u8 42), fn ·x_0:
         ·ƒpub ·x_0, fn:
           ·ƒret_1 ·x_0
-    # sm:FQABAAYAAQAGJAEABhIAAgAGAQQBAAEAAQwBBAIEAAoBBwEKAAIACgEAAQABAAEQAQABCgAIAAIADgEAAQABAAEUAQAB
+    # sm:FwABAAYAAQAGJAEABhIAAgAGAQQBAAEAAQ4BBAIAAQACBgEAAgYACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOAQABAAEAARQBAAE
 
 
 test 'bind ident', fn:
@@ -51,10 +51,10 @@ test 'block two stmts', fn:
     x
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let 1, fn ·x_0:
+      ·let (u8 1), fn ·x_0:
         ·ƒpub ·x_0, fn:
           ·ƒret_1 ·x_0
-    # sm:FQABAAcAAQAHJAEMARIAAgAGAQcBAAEAAQwBBAECAAoBBwEKAAIACgEAAQABAAEQAQABCgAIAAIADgEMAQABAAEUAQAB
+    # sm:FwABAAcAAQAHJAEMARIAAgAGAQcBAAEAAQ4BBAEAAQABBgEAAQQACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOAQwBAAEAARQBAAE
 
 
 test 'block bind then ·apply', fn:
@@ -63,10 +63,10 @@ test 'block bind then ·apply', fn:
     foo x
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
-      ·let 42, fn ·x_0:
+      ·let (u8 42), fn ·x_0:
         ·ƒpub ·x_0, fn:
           ·∅foo ·ƒret_1, ·x_0
-    # sm:FwABAAwAAQAMJAEOBRIAAgAGAQkBAAEAAQwBBAIEAAoBBwEKAAIACgEAAQABAAEQAQABCgAIAAIADgEOBQABAAMSAQAFEgAEAQgB
+    # sm:GQABAAwAAQAMJAEOBRIAAgAGAQkBAAEAAQ4BBAIAAQACBgEAAgYACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOAQ4FAAEAAxIBAAUSAAQBCAE
 
 
 test 'fn body with bind', fn:
@@ -78,11 +78,11 @@ test 'fn body with bind', fn:
     ·ƒink_module fn ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·a_0:
-          ·op_plus ·a_0, 1, fn ·v_7:
+          ·op_plus ·a_0, (u8 1), fn ·v_7:
             ·let ·v_7, fn ·x_1:
               ·ƒret_4 ·x_1
         fn ·v_3: ·ƒret_2 ·v_3
-    # sm:JQABABUAAQAVJAEAFRIAAgAGAQAVAAEAFQgAEAEoARYBIQEKAAIADgESBQABAAUUAQABCgAEAQgBAgAKAQcFCgACABIBAwEAAQABDAEEBQoACgEHAQoAAgAWARgBAAEAARQBAAEKABABJxUKAAQBABUAAQAVFAEAFQ
+    # sm:JwABABUAAQAVJAEAFRIAAgAGAQAVAAEAFQgAEAEoARYBIQEKAAIADgESBQABAAUUAQABCgAGAQgBAAEAAQYBAAEEAAoBBwUKAAIAEgEDAQABAAEMAQQFCgAKAQcBCgACABYBGAEAAQABFAEAAQoAEAEnFQoABAEAFQABABUUAQAV
 
 
 ---
@@ -112,12 +112,12 @@ test 'calling a local — still goes through ·load', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
       ·fn
-        fn ·ƒret_4, ·x_1: ·op_plus ·x_1, 1, ·ƒret_4
+        fn ·ƒret_4, ·x_1: ·op_plus ·x_1, (u8 1), ·ƒret_4
         fn ·v_3:
           ·let ·v_3, fn ·inc_0:
             ·ƒpub ·inc_0, fn:
-              ·inc_0 ·ƒret_2, 5
-    # sm:KAABABcAAQAXJAEkBRIAAgAGARcLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABAEIAQIABAEHBRIAEAELCwoAAgAOAQMBAAEAAQwBBAsKAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEkBQABAAMQAQAFEgAEAQgB
+              ·inc_0 ·ƒret_2, (u8 5)
+    # sm:LAABABcAAQAXJAEkBRIAAgAGARcLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgACAA4BAwEAAQABDAEECwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWASQFAAEAAxABAAUSAAYBCAEAAQABBgEAAQ
 
 
 test 'chained binding is sequential ·match_store', fn:
@@ -125,11 +125,11 @@ test 'chained binding is sequential ·match_store', fn:
     foo = spam = 1
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·let 1, fn ·spam_1:
+      ·let (u8 1), fn ·spam_1:
         ·let ·spam_1, fn ·foo_0:
           ·ƒpub ·foo_0, fn:
             ·ƒret_2 ·foo_0
-    # sm:HAABAA4AAQAOJAEADhIAAgAGARYBAAEAAQwBBAECAAoBDQQQAAIACgEDAQABAAEMAQQEEAAKAQsDDgACAA4BAAMAAQADEAEAAw4ACAACABIBAAMAAQADFAEAAw
+    # sm:HgABAA4AAQAOJAEADhIAAgAGARYBAAEAAQ4BBAEAAQABBgEAAQQACgENBBAAAgAKAQMBAAEAAQwBBAQQAAoBCwMOAAIADgEAAwABAAMQAQADDgAIAAIAEgEAAwABAAMUAQAD
 
 
 # NOTE: Group with binding becomes an immediately-invoked zero-param ·closure;
@@ -148,13 +148,13 @@ test 'group with binding — immediately-invoked ·closure', fn:
             fn ·v_7:
               ·let ·v_7, fn ·ni_1:
                 ·ƒret_4 ·ni_1
-            1
+            u8 1
         fn ·v_3:
           ·v_3 fn ·v_15:
             ·let ·v_15, fn ·spam_0:
               ·ƒpub ·spam_0, fn:
                 ·ƒret_2 ·spam_0
-    # sm:NAABABwAAQAcJAEAHBIAAgAGAQ4VAAEAFQgAEAEiAhIAAgAOAQ8FAAEAAygBAAUKAAIAFgEDAQABAAEMAQQFCgAKAQkCDAACABoBGgIAAQACFAEAAh4BBwECABABGRUKAAIADgEAFQABABUSAQAVDAACABIBAwEAAQABDAEEFQwACgENBBAAAgAWAQAEAAEABBABAAQQAAgAAgAaAQAEAAEABBQBAAQ
+    # sm:NgABABwAAQAcJAEAHBIAAgAGAQ4VAAEAFQgAEAEiAhIAAgAOAQ8FAAEAAygBAAUKAAIAFgEDAQABAAEMAQQFCgAKAQkCDAACABoBGgIAAQACFAEAAh4BBwEAAQABBgEAAQIAEAEZFQoAAgAOAQAVAAEAFRIBABUMAAIAEgEDAQABAAEMAQQVDAAKAQ0EEAACABYBAAQAAQAEEAEABBAACAACABoBAAQAAQAEFAEABA
 
 
 ---
@@ -167,13 +167,13 @@ test 'sequential bindings', fn:
     bar = foo + 1
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·let 1, fn ·foo_0:
+      ·let (u8 1), fn ·foo_0:
         ·ƒpub ·foo_0, fn:
-          ·op_plus ·foo_0, 1, fn ·v_6:
+          ·op_plus ·foo_0, (u8 1), fn ·v_6:
             ·let ·v_6, fn ·bar_1:
               ·ƒpub ·bar_1, fn:
                 ·ƒret_2 ·bar_1
-    # sm:KwABABUAAQAVJAEQDRIAAgAGAQcBAAEAAQwBBAECAAoBCwMOAAIACgEAAwABAAMQAQADDgAIAAIADgEcBwABAAcUAQADDgAEAQwBAgAKAQsHCgACABIBAwEAAQABDAEEBwoACgELAw4AAgAWAQADAAEAAxABAAMOAAgAAgAaAQADAAEAAxQBAAM
+    # sm:LwABABUAAQAVJAEQDRIAAgAGAQcBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgAKAQADAAEAAxABAAMOAAgAAgAOARwHAAEABxQBAAMOAAYBDAEAAQABBgEAAQQACgELBwoAAgASAQMBAAEAAQwBBAcKAAoBCwMOAAIAFgEAAwABAAMQAQADDgAIAAIAGgEAAwABAAMUAQAD
 
 
 test 'binding rhs is a call', fn:
@@ -186,9 +186,9 @@ test 'binding rhs is a call', fn:
           ·let ·v_5, fn ·foo_0:
             ·ƒpub ·foo_0, fn:
               ·ƒret_1 ·foo_0
-        1
-        2
-    # sm:HAABAA4AAQAOJAEADhIAAgAGAQwIAAEAAyABAAgKAAIADgEDAQABAAEMAQQICgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBAAMAAQADFAEAAxgBFAEMAQYB
+        u8 1
+        u8 2
+    # sm:IAABAA4AAQAOJAEADhIAAgAGAQwIAAEAAyABAAgKAAIADgEDAQABAAEMAQQICgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBAAMAAQADFAEAAxgBFAEAAQABBgEAAQwBBgEAAQABBgEAAQ
 
 
 test 'expression result discarded', fn:
@@ -201,8 +201,8 @@ test 'expression result discarded', fn:
         fn ·v_3:
           ·let ·v_3, fn ·v_5:
             ·ƒret_0 ·∅bar
-        1
-    # sm:FQABAAkAAQAJJAEMAxIAAgAGAQsFAAEAAyABAAUKAAIADgEABQABAAUMAQAFCgAKAQAFCgACABIBDAMAAQADFAEAAxoBAwE
+        u8 1
+    # sm:FwABAAkAAQAJJAEMAxIAAgAGAQsFAAEAAyABAAUKAAIADgEABQABAAUMAQAFCgAKAQAFCgACABIBDAMAAQADFAEAAxoBAwEAAQABBgEAAQ
 
 
 test 'chained member access', fn:
@@ -226,12 +226,12 @@ test 'two bindings at module level', fn:
     bar = 2
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
-      ·let 1, fn ·foo_0:
+      ·let (u8 1), fn ·foo_0:
         ·ƒpub ·foo_0, fn:
-          ·let 2, fn ·bar_1:
+          ·let (u8 2), fn ·bar_1:
             ·ƒpub ·bar_1, fn:
               ·ƒret_2 ·bar_1
-    # sm:IgABAA8AAQAPJAEQBxIAAgAGAQcBAAEAAQwBBAECAAoBCwMOAAIACgEAAwABAAMQAQADDgAIAAIADgEYAQABAAEMAQQBAgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBAAMAAQADFAEAAw
+    # sm:JgABAA8AAQAPJAEQBxIAAgAGAQcBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgAKAQADAAEAAxABAAMOAAgAAgAOARgBAAEAAQ4BBAEAAQABBgEAAQQACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQBAAM
 
 
 test 'two fns at module level — main calls add', fn:
@@ -248,12 +248,12 @@ test 'two fns at module level — main calls add', fn:
           ·let ·v_5, fn ·add_0:
             ·ƒpub ·add_0, fn:
               ·fn
-                fn ·ƒret_14: ·add_0 ·ƒret_14, 3, 4
+                fn ·ƒret_14: ·add_0 ·ƒret_14, (u8 3), (u8 4)
                 fn ·v_13:
                   ·let ·v_13, fn ·main_1:
                     ·ƒpub ·main_1, fn:
                       ·ƒret_4 ·main_1
-    # sm:RAABACwAAQAsJAEuFRIAAgAGASEQAAEAEAgAEAEWBRYBDwEOAQYBCgAEAQoFAAEABRQBAAEKAAQBCAEKAAQBBwUSABABFRAKAAIADgEDAQABAAEMAQQQCgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBPA4AAQAOCAAgAQwIFAAEAQAIAAEAAxABAAgUAAQBCAECAAQBBgECACABGQ4MAAIAHgEDAQABAAEMAQQODAAKAQ0EEAACACIBAAQAAQAEEAEABBAACAACACYBAAQAAQAEFAEABA
+    # sm:SAABACwAAQAsJAEuFRIAAgAGASEQAAEAEAgAEAEWBRYBDwEOAQYBCgAEAQoFAAEABRQBAAEKAAQBCAEKAAQBBwUSABABFRAKAAIADgEDAQABAAEMAQQQCgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBPA4AAQAOCAAgAQwIFAAEAQAIAAEAAxABAAgUAAYBCAEAAQABBgEAAQQABgEGAQABAAEGAQABBAAgARkODAACAB4BAwEAAQABDAEEDgwACgENBBAAAgAiAQAEAAEABBABAAQQAAgAAgAmAQAEAAEABBQBAAQ
 
 test 'shadowed binding — inner add does not affect outer', fn:
   expect cps_module ƒink:
@@ -284,10 +284,9 @@ test 'shadowed binding — inner add does not affect outer', fn:
                   ·let ·v_18, fn ·sub_1:
                     ·ƒpub ·sub_1, fn:
                       ·fn
-                        fn ·ƒret_42: ·add_0 ·ƒret_42, 3, 4
+                        fn ·ƒret_42: ·add_0 ·ƒret_42, (u8 3), (u8 4)
                         fn ·v_41:
                           ·let ·v_41, fn ·main_2:
                             ·ƒpub ·main_2, fn:
                               ·ƒret_9 ·main_2
-    # sm:fQABAFsAAQBbJAGMARUSAAIABgF_EAABABAIABABFgUYAQ8BDgEGAQoABAEKBQABAAUUAQABCgAEAQgBCgAEAQcFFAAQARUQDAACAA4BAwEAAQABDAEEEAwACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWATooAAEAKAgAIAE-CRgBNwEOAQYBCgACAB4BFgsAAQALCAAoARADGAEJAw4ABAEKAwABAAMWAQADDgAoAQ8LDAACACYBAwEAAQABDAEECwwACgELAw4AAgAqATAFAAEAA0IBAAUMAAQBBwkAAQAJFgEAAQoABAEIBQwABAEHCUIBEAEKACABTSgMAAIAHgEDAQABAAEMAQQoDAAKAQsDDgACACIBAAMAAQADEAEAAw4ACAACACYBbA4AAQAOCAAwAQwIFAAEAQAIAAEAAxABAAgUAAQBCAECAAQBBgECADABGQ4MAAIALgEDAQABAAEMAQQODAAKAQ0EEAACADIBAAQAAQAEEAEABBAACAACADYBAAQAAQAEFAEABA
-
+    # sm:gQEAAQBbAAEAWyQBjAEVEgACAAYBfxAAAQAQCAAQARYFGAEPAQ4BBgEKAAQBCgUAAQAFFAEAAQoABAEIAQoABAEHBRQAEAEVEAwAAgAOAQMBAAEAAQwBBBAMAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgE6KAABACgIACABPgkYATcBDgEGAQoAAgAeARYLAAEACwgAKAEQAxgBCQMOAAQBCgMAAQADFgEAAw4AKAEPCwwAAgAmAQMBAAEAAQwBBAsMAAoBCwMOAAIAKgEwBQABAANCAQAFDAAEAQcJAAEACRYBAAEKAAQBCAUMAAQBBwlCARABCgAgAU0oDAACAB4BAwEAAQABDAEEKAwACgELAw4AAgAiAQADAAEAAxABAAMOAAgAAgAmAWwOAAEADggAMAEMCBQABAEACAABAAMQAQAIFAAGAQgBAAEAAQYBAAEEAAYBBgEAAQABBgEAAQQAMAEZDgwAAgAuAQMBAAEAAQwBBA4MAAoBDQQQAAIAMgEABAABAAQQAQAEEAAIAAIANgEABAABAAQUAQAE
