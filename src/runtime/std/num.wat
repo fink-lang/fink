@@ -16,7 +16,8 @@
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub $Num (struct (field $val f64)))))
 
-  ;; Func imports — int.wat arithmetic + comparison on $Int.
+  ;; Func imports — int.wat box helper + arithmetic + comparison on $Int.
+  (import "std/int.wat" "_box_i64" (func $_box_i64     (param i64) (result (ref $I64))))
   (import "std/int.wat" "op_plus"  (func $int_op_plus  (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
   (import "std/int.wat" "op_minus" (func $int_op_minus (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
   (import "std/int.wat" "op_mul"   (func $int_op_mul   (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
@@ -99,8 +100,16 @@
         (br $not_f64
           (br_on_cast $is_f64 (ref $Num) (ref $F64) (local.get $n))))
       (return))
-    ;; Otherwise re-box the f64 slot under $F64.
-    (struct.new $F64 (struct.get $Num $val (local.get $n))))
+    ;; $Int → convert i64 to f64.
+    (block $not_int
+      (block $is_int (result (ref $Int))
+        (br $not_int
+          (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
+      (return (struct.new $F64
+        (f64.convert_i64_s (struct.get $Int $ival)))))
+    ;; $Decimal fall-through — re-box the f64 slot.
+    (struct.new $F64
+      (struct.get $Decimal $val (ref.cast (ref $Decimal) (local.get $n)))))
 
   (func $as_int (param $n (ref $Num)) (result (ref $Int))
     ;; Already $Int → no-op.
@@ -109,11 +118,17 @@
         (br $not_int
           (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
       (return))
-    ;; Otherwise re-box under $I64 (default int representation).
-    ;; Both fields populated: f64 for legacy readers, i64 for new int ops.
-    (struct.new $I64
-      (struct.get $Num $val (local.get $n))
-      (i64.trunc_f64_s (struct.get $Num $val (local.get $n)))))
+    ;; $F64 → trunc to i64.
+    (block $not_f64
+      (block $is_f64 (result (ref $F64))
+        (br $not_f64
+          (br_on_cast $is_f64 (ref $Num) (ref $F64) (local.get $n))))
+      (return (call $_box_i64
+        (i64.trunc_f64_s (struct.get $F64 $val)))))
+    ;; $Decimal fall-through — read its f64 slot, trunc to i64.
+    (call $_box_i64
+      (i64.trunc_f64_s
+        (struct.get $Decimal $val (ref.cast (ref $Decimal) (local.get $n))))))
 
   ;; True if either side is $F64 — picks the float arm.
   (func $is_float_op (param $a (ref $Num)) (param $b (ref $Num)) (result i32)

@@ -35,7 +35,7 @@
   (func $_box_i64_from_f64 (param $v f64) (result (ref $I64))
     (struct.new $I64 (local.get $v) (i64.trunc_f64_s (local.get $v))))
 
-  (func $_box_i64 (param $v i64) (result (ref $I64))
+  (func $_box_i64 (@pub) (param $v i64) (result (ref $I64))
     (struct.new $I64 (f64.convert_i64_s (local.get $v)) (local.get $v)))
 
   (func $op_plus (@pub)

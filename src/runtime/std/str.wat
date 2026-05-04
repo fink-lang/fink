@@ -23,7 +23,10 @@
 
   ;; Type imports
   (import "std/num.wat"    "Num"       (type $Num       (sub any)))
-  (import "std/int.wat"    "I64"       (type $I64       (sub any) (struct (field $val f64) (field $ival i64))))
+  (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct (field $val f64) (field $ival i64))))
+  (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $val f64) (field $ival i64)))))
+  (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
+  (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $val f64))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
   (import "std/dict.wat"   "Rec"           (type $Rec           (sub any)))
   (import "std/dict.wat"   "RecImpl"       (type $RecImpl       (sub any)))
@@ -1593,13 +1596,29 @@
             (local.get $val))))
       (return))
 
-    ;; Try $Num — format f64
-    (block $not_num
-      (block $is_num (result (ref $Num))
-        (br $not_num
-          (br_on_cast $is_num (ref any) (ref $Num)
+    ;; Try $Int — format i64 directly.
+    (block $not_int
+      (block $is_int (result (ref $Int))
+        (br $not_int
+          (br_on_cast $is_int (ref any) (ref $Int)
             (local.get $val))))
-      (return (call $_str_fmt_num (struct.get $Num $val))))
+      (return (call $_str_fmt_i64 (struct.get $Int $ival))))
+
+    ;; Try $F64 — format f64.
+    (block $not_f64
+      (block $is_f64 (result (ref $F64))
+        (br $not_f64
+          (br_on_cast $is_f64 (ref any) (ref $F64)
+            (local.get $val))))
+      (return (call $_str_fmt_num (struct.get $F64 $val))))
+
+    ;; Try $Decimal — format f64 (real coeff/exp repr is future work).
+    (block $not_decimal
+      (block $is_decimal (result (ref $Decimal))
+        (br $not_decimal
+          (br_on_cast $is_decimal (ref any) (ref $Decimal)
+            (local.get $val))))
+      (return (call $_str_fmt_num (struct.get $Decimal $val))))
 
     ;; Try i31ref — bool or small int
     (block $not_i31
@@ -1727,6 +1746,13 @@
     ;; Non-integer float.
     (call $_str_fmt_float (local.get $v))
   )
+
+  ;; _str_fmt_i64 : i64 -> (ref $Str)
+  ;; Format a signed i64 as a decimal string. Bridges through the f64
+  ;; formatter for now; values outside f64's exact-int range (±2^53)
+  ;; will lose precision until a native i64 formatter lands.
+  (func $_str_fmt_i64 (param $v i64) (result (ref $Str))
+    (call $_str_fmt_num (f64.convert_i64_s (local.get $v))))
 
   ;; _str_fmt_int : i32 -> (ref $Str)
   ;; Format a signed i32 as a decimal string.
