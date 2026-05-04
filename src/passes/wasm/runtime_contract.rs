@@ -83,7 +83,7 @@ pub enum Sym {
   Captures,
   VarArgs,
   // Function-signature type for the per-module host wrapper.
-  // `(ref null any, i32) -> ()`. Declared in `rt/types.wat` so all
+  // `(ref null any, i32) -> ()`. Declared in `rt/apply.wat` so all
   // modules share one nominal type instead of emitting a local
   // copy per fragment.
   FnHostWrapper,
@@ -606,9 +606,9 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   let mut rt = Runtime::default();
   let needed = &usage.used;
 
-  // Value-type imports — `rt/types.wat:Num` / `rt/types.wat:Fn2`. Shared
-  // identity across the ABI: user struct.new instances must match
-  // runtime's concrete type indices. Emit resolves them against
+  // Value-type imports — `std/num.wat:Num` / `rt/apply.wat:Fn2` / etc.
+  // Shared identity across the ABI: user struct.new instances must
+  // match runtime's concrete type indices. Emit resolves them against
   // `types-ir.wasm` at emit time.
   //
   // `Sym::Num` is marked in `scan_val_kind` whenever a numeric

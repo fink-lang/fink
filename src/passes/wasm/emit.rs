@@ -133,7 +133,6 @@ fn linked_runtime() -> &'static LinkedRuntime {
   CELL.get_or_init(|| {
     let modules: &[(&str, &str)] = &[
       ("interop/rust.wat", include_str!("../../runtime/interop/rust.wat")),
-      ("rt/types.wat",     include_str!("../../runtime/rt/types.wat")),
       ("rt/apply.wat",     include_str!("../../runtime/rt/apply.wat")),
       ("rt/modules.wat",   include_str!("../../runtime/rt/modules.wat")),
       ("rt/protocols.wat", include_str!("../../runtime/rt/protocols.wat")),
