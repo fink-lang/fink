@@ -23,6 +23,7 @@
 
   ;; Type imports
   (import "std/num.wat"    "Num"       (type $Num       (sub any)))
+  (import "std/int.wat"    "I64"       (type $I64       (sub any) (struct (field $val f64) (field $ival i64))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
   (import "std/dict.wat"   "Rec"           (type $Rec           (sub any)))
   (import "std/dict.wat"   "RecImpl"       (type $RecImpl       (sub any)))
@@ -62,9 +63,9 @@
     (func $tail_any (param $list (ref null any)) (result (ref null any))))
 
   (import "std/range.wat" "start"
-    (func $range_start (param $range (ref $Range)) (result (ref $Num))))
+    (func $range_start (param $range (ref $Range)) (result (ref $I64))))
   (import "std/range.wat" "end"
-    (func $range_end (param $range (ref $Range)) (result (ref $Num))))
+    (func $range_end (param $range (ref $Range)) (result (ref $I64))))
   (import "std/range.wat" "is_incl"
     (func $range_is_incl (param $range (ref $Range)) (result i32)))
 
@@ -1932,12 +1933,14 @@
     (local $i i32)
 
     ;; Format start and end numbers via range public accessors.
+    ;; Range bounds are $I64; convert i64 → f64 for the formatter
+    ;; (TODO: int-aware formatter once str.wat sheds f64 plumbing).
     (local.set $start_str
-      (call $_str_fmt_num (struct.get $Num $val
-        (call $range_start (local.get $range)))))
+      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
+        (call $range_start (local.get $range))))))
     (local.set $end_str
-      (call $_str_fmt_num (struct.get $Num $val
-        (call $range_end (local.get $range)))))
+      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
+        (call $range_end (local.get $range))))))
 
     ;; Get byte arrays.
     (local.set $start_bytes (call $bytes (local.get $start_str)))
@@ -2710,13 +2713,13 @@
 
   ;; ---- String slicing ----
 
-  ;; _str_slice(str, start_f, end_f) → (ref null $Str)
+  ;; _str_slice(str, start_i, end_i) → (ref null $Str)
   ;; Internal direct-style slice: extract bytes [start..end).
-  ;; Negative values resolve from end: -1 → len-1, -0.0 → len.
+  ;; Negative values resolve from end: -1 → len-1.
   ;; Returns null on out-of-bounds (after resolution: 0 <= start <= end <= len).
   ;; Returns empty string for empty slice, original for full range.
   (func $_str_slice
-    (param $str (ref $Str)) (param $start_f f64) (param $end_f f64)
+    (param $str (ref $Str)) (param $start_i i64) (param $end_i i64)
     (result (ref null $Str))
 
     (local $len i32)
@@ -2729,28 +2732,20 @@
 
     (local.set $len (call $_str_len (local.get $str)))
 
-    ;; Resolve negative values from end (including -0.0 via copysign check)
-    (if (f64.lt
-          (f64.copysign (f64.const 1) (local.get $start_f))
-          (f64.const 0))
+    ;; Resolve negative values from end.
+    (if (i64.lt_s (local.get $start_i) (i64.const 0))
       (then
         (local.set $start
-          (i32.add (local.get $len)
-            (i32.trunc_f64_s (local.get $start_f)))))
+          (i32.add (local.get $len) (i32.wrap_i64 (local.get $start_i)))))
       (else
-        (local.set $start
-          (i32.trunc_f64_s (local.get $start_f)))))
+        (local.set $start (i32.wrap_i64 (local.get $start_i)))))
 
-    (if (f64.lt
-          (f64.copysign (f64.const 1) (local.get $end_f))
-          (f64.const 0))
+    (if (i64.lt_s (local.get $end_i) (i64.const 0))
       (then
         (local.set $end
-          (i32.add (local.get $len)
-            (i32.trunc_f64_s (local.get $end_f)))))
+          (i32.add (local.get $len) (i32.wrap_i64 (local.get $end_i)))))
       (else
-        (local.set $end
-          (i32.trunc_f64_s (local.get $end_f)))))
+        (local.set $end (i32.wrap_i64 (local.get $end_i)))))
 
     ;; Bounds check: 0 <= start <= end <= len
     (if (i32.or
@@ -2805,8 +2800,8 @@
     (local.set $s (ref.cast (ref $Str) (local.get $str)))
     (local.set $result (call $_str_slice
       (local.get $s)
-      (struct.get $Num 0 (ref.cast (ref $Num) (local.get $start)))
-      (struct.get $Num 0 (ref.cast (ref $Num) (local.get $end)))))
+      (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $start)))
+      (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $end)))))
 
     (if (ref.is_null (local.get $result))
       (then
@@ -2830,8 +2825,8 @@
 
     (local $s (ref $Str))
     (local $range (ref $Range))
-    (local $start_f f64)
-    (local $end_f f64)
+    (local $start_i i64)
+    (local $end_i i64)
     (local $result (ref null $Str))
 
     (local.set $s (ref.cast (ref $Str) (local.get $str)))
@@ -2844,35 +2839,36 @@
             (local.get $key))))
       (local.set $range)
 
-      (local.set $start_f (struct.get $Num 0 (call $range_start (local.get $range))))
-      (local.set $end_f (struct.get $Num 0 (call $range_end (local.get $range))))
+      ;; Range bounds are $I64 — read $ival directly.
+      (local.set $start_i (struct.get $I64 $ival (call $range_start (local.get $range))))
+      (local.set $end_i (struct.get $I64 $ival (call $range_end (local.get $range))))
 
       ;; Adjust end for inclusive range
       (if (call $range_is_incl (local.get $range))
         (then
-          (local.set $end_f (f64.add (local.get $end_f) (f64.const 1)))))
+          (local.set $end_i (i64.add (local.get $end_i) (i64.const 1)))))
 
       (local.set $result
-        (call $_str_slice (local.get $s) (local.get $start_f) (local.get $end_f)))
+        (call $_str_slice (local.get $s) (local.get $start_i) (local.get $end_i)))
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 
-    ;; Try $Num key — single byte
-    (block $not_num
-      (block $is_num (result (ref $Num))
-        (br $not_num
-          (br_on_cast $is_num (ref null any) (ref $Num)
+    ;; Try $I64 key — single byte at index
+    (block $not_i64
+      (block $is_i64 (result (ref $I64))
+        (br $not_i64
+          (br_on_cast $is_i64 (ref null any) (ref $I64)
             (local.get $key))))
-      (local.set $start_f (struct.get $Num 0))
+      (local.set $start_i (struct.get $I64 $ival))
 
       (local.set $result
         (call $_str_slice
           (local.get $s)
-          (local.get $start_f)
-          (f64.add (local.get $start_f) (f64.const 1))))
+          (local.get $start_i)
+          (i64.add (local.get $start_i) (i64.const 1))))
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1

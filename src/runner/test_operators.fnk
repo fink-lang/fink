@@ -208,4 +208,4 @@ test 'mix signed and unsigned traps', fn:
     ERROR: entry wrapper: error while executing at wasm backtrace:
         0:    0xe71 - <unknown>!std/num.wat:check_compat
         1:    0xecc - <unknown>!std/num.wat:op_plus
-        2:   0x52e6 - <unknown>!rt/protocols.wat:op_plus: wasm trap: wasm `unreachable` instruction executed
+        2:   0x52b8 - <unknown>!rt/protocols.wat:op_plus: wasm trap: wasm `unreachable` instruction executed

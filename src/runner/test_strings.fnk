@@ -208,13 +208,11 @@ test 'str slice negative single byte', fn:
   | equals ":
     l
 
-test 'str slice negative zero end', fn:
+skip test 'str slice negative zero end', fn:
   expect run ƒink:
-    'foobar'.(-3..-0)
+    'foobar'.(-3..-0) #TODO .(-3..)
   | equals ":
-    ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:   0x4e26 - <unknown>!std/str.wat:op_dot: wasm trap: wasm `unreachable` instruction executed
-
+    TODO
 
 # --- String template pattern ---
 

@@ -21,6 +21,7 @@
   (import "rt/apply.wat"     "Closure"     (type $Closure     (sub any)))
   (import "rt/apply.wat"     "Captures"    (type $Captures    (sub any)))
   (import "std/num.wat"      "Num"         (type $Num         (sub any)))
+  (import "std/int.wat"      "Int"         (type $Int         (sub any)))
   (import "std/int.wat"      "I64"         (type $I64         (sub any)))
   (import "std/int.wat"      "U64"         (type $U64         (sub any)))
   (import "std/float.wat"    "F64"         (type $F64         (sub any)))
@@ -102,8 +103,8 @@
   (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — range ops
-  (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $Num)) (param (ref $Range)) (result i32)))
-  (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $Num)) (param (ref $Range)) (result i32)))
+  (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
+  (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
 
   ;; Func imports — channel
   (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any))))
@@ -246,13 +247,26 @@
   (func $deep_eq (@pub)
     (param $a (ref eq)) (param $b (ref eq)) (result i32)
 
-    ;; Try $Num
+    ;; Try $Num — strict subtype match.
+    ;;   1 !== 1.0 (different concrete subtypes never equal even if
+    ;;   numerically equivalent). HAMT keys are strict; arithmetic
+    ;;   operators may still coerce via num.wat's op_eq dispatcher.
     (block $not_num
       (block $is_num (result (ref $Num))
         (br $not_num
           (br_on_cast $is_num (ref eq) (ref $Num)
             (local.get $a))))
+      (drop)
+      (if (i32.xor
+            (ref.test (ref $F64) (local.get $a))
+            (ref.test (ref $F64) (local.get $b)))
+        (then (return (i32.const 0))))
+      (if (i32.xor
+            (ref.test (ref $Int) (local.get $a))
+            (ref.test (ref $Int) (local.get $b)))
+        (then (return (i32.const 0))))
       (return (call $num_op_eq
+        (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))))
 
     ;; Try $Str
@@ -728,7 +742,7 @@
       (local.set $range)
       (return_call $list_apply_1
         (ref.i31 (call $range_op_in
-          (ref.cast (ref $Num) (local.get $a))
+          (ref.cast (ref $I64) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
 
@@ -776,7 +790,7 @@
       (local.set $range)
       (return_call $list_apply_1
         (ref.i31 (call $range_op_not_in
-          (ref.cast (ref $Num) (local.get $a))
+          (ref.cast (ref $I64) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
 

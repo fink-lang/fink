@@ -296,3 +296,17 @@ test 'set destructure peel one', fn:
 
   | equals ƒink:
     102
+
+
+# Integer 1 and float 1.0 are distinct keys: deep_eq is type-strict
+# even within the math family. The set keeps both — duplicate `1` is
+# deduped, but `1` and `1.0` survive separately. (The formatter prints
+# both as `1` — distinct only in their underlying type.)
+test 'set distinguishes int from float', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+
+    '${set 1, 1.0, 1}'
+
+  | equals ƒink:
+    set 1, 1
