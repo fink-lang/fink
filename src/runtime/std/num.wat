@@ -12,6 +12,7 @@
   (import "std/list.wat" "List" (type $List (sub any)))
   (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $val f64)))))
   (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $val f64)))))
+  (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $val f64)))))
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
 
   ;; Func imports — int.wat arithmetic + comparison on $Int.
@@ -116,10 +117,24 @@
       (ref.test (ref $F64) (local.get $a))
       (ref.test (ref $F64) (local.get $b))))
 
+  ;; Type-family compatibility check for binary numeric ops.
+  ;;
+  ;; Rule: math family (signed int + float) mixes freely; bits family
+  ;; ($U64) does not mix with anything else. Mixed bits/math → trap.
+  ;;
+  ;; Concretely: if exactly one side is $U64 (i.e. xor of the U64 tests
+  ;; is true), the operands are from different families.
+  (func $check_compat (param $a (ref $Num)) (param $b (ref $Num))
+    (if (i32.xor
+          (ref.test (ref $U64) (local.get $a))
+          (ref.test (ref $U64) (local.get $b)))
+      (then (unreachable))))
+
   ;; -- Arithmetic — dispatch on $F64 vs $Int -------------------------
 
   (func $op_plus (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_plus
               (call $as_f64 (local.get $a))
@@ -130,6 +145,7 @@
 
   (func $op_minus (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_minus
               (call $as_f64 (local.get $a))
@@ -140,6 +156,7 @@
 
   (func $op_mul (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_mul
               (call $as_f64 (local.get $a))
@@ -150,6 +167,7 @@
 
   (func $op_div (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_div
               (call $as_f64 (local.get $a))
@@ -162,6 +180,7 @@
 
   (func $op_eq (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_eq
               (call $as_f64 (local.get $a))
@@ -172,6 +191,7 @@
 
   (func $op_neq (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_neq
               (call $as_f64 (local.get $a))
@@ -182,6 +202,7 @@
 
   (func $op_lt (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_lt
               (call $as_f64 (local.get $a))
@@ -192,6 +213,7 @@
 
   (func $op_lte (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_lte
               (call $as_f64 (local.get $a))
@@ -202,6 +224,7 @@
 
   (func $op_gt (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_gt
               (call $as_f64 (local.get $a))
@@ -212,6 +235,7 @@
 
   (func $op_gte (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result i32) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_gte
               (call $as_f64 (local.get $a))
@@ -236,6 +260,7 @@
 
   (func $op_pow (@pub)
     (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (call $check_compat (local.get $a) (local.get $b))
     (if (result (ref $Num)) (call $is_float_op (local.get $a) (local.get $b))
       (then (call $float_op_pow
               (call $as_f64 (local.get $a))
