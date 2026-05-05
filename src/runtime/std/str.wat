@@ -75,6 +75,8 @@
 
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
+  (import "std/list.wat" "fmt"
+    (func $list_fmt (param (ref $List)) (result (ref $Str))))
 
   ;; Continuation dispatch: $std/list.wat:apply_1 (defined in list.wat) wraps a single
   ;; result in a list and tail-calls $_apply (defined in dispatch.wat).
@@ -1517,7 +1519,7 @@
 
   ;; _str_len : (ref $Str) -> i32
   ;; Byte length of any string subtype.
-  (func $_str_len (param $str (ref $Str)) (result i32)
+  (func $_str_len (@pub) (param $str (ref $Str)) (result i32)
 
     ;; Empty string — length 0.
     (if (ref.test (ref $StrEmpty) (local.get $str))
@@ -1539,7 +1541,7 @@
 
   ;; _str_copy_to : (ref $Str, ref $ByteArray, i32) -> i32
   ;; Copy bytes from a string into dst at offset. Returns new offset.
-  (func $_str_copy_to
+  (func $_str_copy_to (@pub)
     (param $str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32)
     (result i32)
 
@@ -1594,9 +1596,12 @@
 
   ;; ---- Value formatting (direct-style) ----
 
-  ;; _str_fmt_val : (ref any) -> (ref $Str)
-  ;; Format any value as a string. Dispatches on runtime type.
-  (func $_str_fmt_val (param $val (ref any)) (result (ref $Str))
+  ;; fmt_val : (ref any) -> (ref $Str)
+  ;; Public dispatcher: format any value as a string by runtime type.
+  ;; Per-type fmt impls (int.wat:fmt, float.wat:fmt, etc.) own the
+  ;; rendering; this picks the right one. Container fmt impls
+  ;; (list.wat, dict.wat, set.wat) call back into this for elements.
+  (func $fmt_val (@pub) (param $val (ref any)) (result (ref $Str))
 
     ;; Try $Str — passthrough
     (block $not_str
@@ -1655,13 +1660,13 @@
             (local.get $val))))
       (return (call $_str_fmt_rec)))
 
-    ;; Try $List — format as "[a, b, ...]"
+    ;; Try $List — delegate to list.wat:fmt.
     (block $not_list
       (block $is_list (result (ref $List))
         (br $not_list
           (br_on_cast $is_list (ref any) (ref $List)
             (local.get $val))))
-      (return (call $_str_fmt_list)))
+      (return_call $list_fmt))
 
     ;; Try $Set — format as "set v1, v2, ..." (or "set _" for empty)
     (block $not_set
@@ -1689,7 +1694,7 @@
       (return (call $repr)))
 
     ;; Everything else delegates to _str_fmt_val.
-    (call $_str_fmt_val (local.get $val))
+    (call $fmt_val (local.get $val))
   )
 
   ;; _str_fmt_i31 : i32 -> (ref $Str)
@@ -1821,7 +1826,7 @@
     ;; Non-string key — (repr), add 2 for parens.
     (i32.add
       (call $_str_len
-        (call $_str_fmt_val (ref.cast (ref any) (local.get $key))))
+        (call $fmt_val (ref.cast (ref any) (local.get $key))))
       (i32.const 2))
   )
 
@@ -2034,7 +2039,7 @@
     (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
     (local.set $pos
       (call $_str_copy_to
-        (call $_str_fmt_val (ref.cast (ref any) (local.get $key)))
+        (call $fmt_val (ref.cast (ref any) (local.get $key)))
         (local.get $buf)
         (local.get $pos)))
     (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x29)) ;; ')'
@@ -2216,101 +2221,11 @@
     (local.get $pos)
   )
 
-  ;; _str_fmt_list : (ref $List) -> (ref $Str)
-  ;; Format a list as "[a, b, c]".
-  ;; Uses only the public list API (list_op_empty, list_head_any, list_tail_any).
-  (func $_str_fmt_list (param $list (ref $List)) (result (ref $Str))
-    (local $cur (ref null any))
-    (local $total i32)
-    (local $count i32)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-    (local $is_first i32)
-
-    ;; Empty list: return "[]"
-    (if (call $list_op_empty (local.get $list))
-      (then
-        (return (call $_str_from_ascii_2
-          (i32.const 0x5B) ;; '['
-          (i32.const 0x5D) ;; ']'
-        ))))
-
-    ;; Pass 1: compute total byte length.
-    ;; Each element: formatted length. Between elements: 2 (", ").
-    ;; Plus 2 for "[" and "]".
-    (local.set $cur (local.get $list))
-    (local.set $total (i32.const 2)) ;; [ and ]
-    (local.set $count (i32.const 0))
-    (block $done1
-      (loop $len_loop
-        (br_if $done1
-          (call $list_op_empty (local.get $cur)))
-        (local.set $total
-          (i32.add (local.get $total)
-            (call $_str_len
-              (call $_str_fmt_val_repr
-                (ref.as_non_null
-                  (call $head_any (local.get $cur)))))))
-        (local.set $count (i32.add (local.get $count) (i32.const 1)))
-        (local.set $cur
-          (call $tail_any (local.get $cur)))
-        (br $len_loop)))
-
-    ;; Add separator bytes: (count - 1) * 2
-    (local.set $total
-      (i32.add (local.get $total)
-        (i32.mul
-          (i32.sub (local.get $count) (i32.const 1))
-          (i32.const 2))))
-
-    ;; Allocate buffer.
-    (local.set $buf
-      (array.new $ByteArray (i32.const 0) (local.get $total)))
-
-    ;; Write opening '['.
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x5B))
-    (local.set $pos (i32.const 1))
-
-    ;; Pass 2: format and copy each element.
-    (local.set $cur (local.get $list))
-    (local.set $is_first (i32.const 1))
-    (block $done2
-      (loop $copy_loop
-        (br_if $done2
-          (call $list_op_empty (local.get $cur)))
-
-        ;; Write ", " separator (except before first element).
-        (if (i32.eqz (local.get $is_first))
-          (then
-            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2C)) ;; ','
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20)) ;; ' '
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
-        (local.set $is_first (i32.const 0))
-
-        ;; Format and copy element.
-        (local.set $pos
-          (call $_str_copy_to
-            (call $_str_fmt_val_repr
-              (ref.as_non_null
-                (call $head_any (local.get $cur))))
-            (local.get $buf)
-            (local.get $pos)))
-
-        (local.set $cur
-          (call $tail_any (local.get $cur)))
-        (br $copy_loop)))
-
-    ;; Write closing ']'.
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5D))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
 
 
   ;; _str_from_ascii_2 : (i32, i32) -> (ref $Str)
   ;; Build a 2-byte string from ASCII code points.
-  (func $_str_from_ascii_2 (param $a i32) (param $b i32) (result (ref $Str))
+  (func $_str_from_ascii_2 (@pub) (param $a i32) (param $b i32) (result (ref $Str))
     (local $buf (ref $ByteArray))
     (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 2)))
     (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
@@ -2357,7 +2272,7 @@
         (local.set $total
           (i32.add (local.get $total)
             (call $_str_len
-              (call $_str_fmt_val
+              (call $fmt_val
                 (ref.as_non_null
                   (array.get $VarArgs (local.get $segments) (local.get $i)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -2376,7 +2291,7 @@
           (i32.ge_u (local.get $i) (local.get $len)))
         (local.set $pos
           (call $_str_copy_to
-            (call $_str_fmt_val
+            (call $fmt_val
               (ref.as_non_null
                 (array.get $VarArgs (local.get $segments) (local.get $i))))
             (local.get $dst)

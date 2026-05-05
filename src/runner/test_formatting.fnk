@@ -94,6 +94,6 @@ test 'list format nested', fn:
 
 test 'list format nested strings', fn:
   expect run ƒink:
-    '${ ['foo bar \' spam'] }' == '[\'foo bar \\\' spam\']'
+    '${ ['foo bar \' spam'] }' == '[foo bar \' spam]'
   | equals ƒink:
     true

@@ -108,4 +108,4 @@ test 'cli args printed via stdout', fn:
   | equals ":
     0
     stdout == ":
-      ['test', 'alpha', 'beta']
+      [test, alpha, beta]
