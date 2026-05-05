@@ -45,6 +45,10 @@
 
 (module
 
+  ;; Type imports (str.wat — needed for the rec fmt impl).
+  (import "std/str.wat" "Str"       (type $Str       (sub any) (struct)))
+  (import "std/str.wat" "ByteArray" (type $ByteArray (array (mut i8))))
+
   ;; Func imports
   (import "std/hashing.wat"  "hash_i31"
     (func $hash_i31 (param $key (ref eq)) (result i32)))
@@ -56,6 +60,28 @@
     (func $list_apply_1 (param $val (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat"     "apply_2_vals"
     (func $list_apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
+
+  ;; str.wat helpers used by the rec fmt impl below.
+  (import "std/str.wat" "from_bytes"
+    (func $str_from_bytes (param $buf (ref $ByteArray)) (result (ref $Str))))
+  (import "std/str.wat" "_str_len"
+    (func $_str_len (param $str (ref $Str)) (result i32)))
+  (import "std/str.wat" "_str_copy_to"
+    (func $_str_copy_to (param $str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32) (result i32)))
+  (import "std/str.wat" "_str_from_ascii_2"
+    (func $_str_from_ascii_2 (param $a i32) (param $b i32) (result (ref $Str))))
+  (import "std/str.wat" "bytes"
+    (func $str_bytes (param $str (ref $Str)) (result (ref $ByteArray))))
+  (import "std/str.wat" "fmt_val"
+    (func $str_fmt_val (param $val (ref any)) (result (ref $Str))))
+  ;; _str_fmt_val_repr — quoted/escaped element formatter for container
+  ;; values. Temporary — will be replaced by a proper per-type `repr`
+  ;; protocol dispatch.
+  (import "std/str.wat" "_str_fmt_val_repr"
+    (func $_str_fmt_val_repr (param $val (ref any)) (result (ref $Str))))
+  ;; repr — for rec key quoting (string non-ident keys).
+  (import "std/str.wat" "repr"
+    (func $str_repr (param $str (ref $Str)) (result (ref $Str))))
 
 
   ;; -- $Rec / $Dict public types --------------------------------------------
@@ -71,32 +97,28 @@
   ;; Children array uses structref as the common base for leaves, nodes,
   ;; and collision nodes.
 
-  ;; TODO: HAMT types are leaking via _str_fmt_rec in str.wat. Move
-  ;; record formatting into dict.wat (with public iterator API) so the
-  ;; HAMT internals stay hidden. (@pub) here is a temporary measure.
-
   ;; $HamtLeaf — key-value pair.
   ;; Key and val are (ref eq) — non-nullable.
-  (type $HamtLeaf (@pub) (struct
+  (type $HamtLeaf (struct
     (field $key (ref eq))
     (field $val (ref eq))
   ))
 
   ;; $HamtChildren — dense array of struct refs (leaves, nodes, or collisions).
-  (type $HamtChildren (@pub) (array (mut (ref null struct))))
+  (type $HamtChildren (array (mut (ref null struct))))
 
   (rec
     ;; $HamtNode — bitmap + dense children array.
     ;; bitmap bit i is set iff hash fragment i is occupied.
     ;; children array length = popcount(bitmap).
-    (type $HamtNode (@pub) (struct
+    (type $HamtNode (struct
       (field $bitmap (mut i32))
       (field $children (ref $HamtChildren))
     ))
 
     ;; $HamtCollision — flat array of leaves that share the same hash.
     ;; Used at max trie depth when multiple keys hash identically.
-    (type $HamtCollision (@pub) (struct
+    (type $HamtCollision (struct
       (field $col_hash i32)
       (field $col_leaves (ref $HamtChildren))
     ))
@@ -1283,7 +1305,7 @@
     (call $_hamt_size_node (local.get $node))
   )
 
-  (func $_hamt_size_node (@pub)
+  (func $_hamt_size_node
     (param $node (ref $HamtNode))
     (result i32)
 
@@ -1537,5 +1559,459 @@
         (ref.cast (ref $RecImpl) (local.get $rec))
         (ref.cast (ref eq) (local.get $key)))
       (local.get $cont)))
+
+
+  ;; ---- Record formatting (direct-style) ----------------------------------
+  ;;
+  ;; Owns rec rendering as "{key: val, key2: val2}". Called by str.wat:fmt_val
+  ;; via the per-type fmt dispatch protocol. Walks the HAMT in two passes:
+  ;; first to compute total byte length, then to copy into a single buffer.
+
+  ;; _is_key_ident : (ref $Str) -> i32
+  ;; Check if a string is a valid fink identifier (used for bare key rendering).
+  ;; Returns 1 if all bytes are identifier chars (a-z, A-Z, 0-9, _, -, $, or >= 0x80).
+  ;; Empty string returns 0. First char must not be a digit.
+  (func $_is_key_ident (param $str (ref $Str)) (result i32)
+    (local $bytes (ref $ByteArray))
+    (local $len i32)
+    (local $i i32)
+    (local $b i32)
+
+    (local.set $bytes (call $str_bytes (local.get $str)))
+    (local.set $len (array.len (local.get $bytes)))
+
+    (if (i32.eqz (local.get $len))
+      (then (return (i32.const 0))))
+
+    (local.set $b (array.get_u $ByteArray (local.get $bytes) (i32.const 0)))
+    (if (i32.and
+          (i32.ge_u (local.get $b) (i32.const 0x30))
+          (i32.le_u (local.get $b) (i32.const 0x39)))
+      (then (return (i32.const 0))))
+
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $check
+        (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $b (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
+
+        (if (i32.ge_u (local.get $b) (i32.const 0x80))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $check)))
+
+        (if (i32.and
+              (i32.ge_u (local.get $b) (i32.const 0x61))
+              (i32.le_u (local.get $b) (i32.const 0x7A)))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $check)))
+
+        (if (i32.and
+              (i32.ge_u (local.get $b) (i32.const 0x41))
+              (i32.le_u (local.get $b) (i32.const 0x5A)))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $check)))
+
+        (if (i32.and
+              (i32.ge_u (local.get $b) (i32.const 0x30))
+              (i32.le_u (local.get $b) (i32.const 0x39)))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $check)))
+
+        (if (i32.or
+              (i32.eq (local.get $b) (i32.const 0x5F))
+              (i32.or
+                (i32.eq (local.get $b) (i32.const 0x2D))
+                (i32.eq (local.get $b) (i32.const 0x24))))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $check)))
+
+        (return (i32.const 0))))
+
+    (i32.const 1)
+  )
+
+  ;; _fmt_key_len : (ref eq) -> i32
+  ;; Byte length of a formatted record key.
+  ;; String ident: bare len. String non-ident: repr len. Other: fmt len + 2 for parens.
+  (func $_fmt_key_len (param $key (ref eq)) (result i32)
+    (local $str (ref $Str))
+
+    (block $not_str
+      (block $is_str (result (ref $Str))
+        (br $not_str
+          (br_on_cast $is_str (ref eq) (ref $Str)
+            (local.get $key))))
+      (local.set $str)
+      (return
+        (if (result i32) (call $_is_key_ident (local.get $str))
+          (then (call $_str_len (local.get $str)))
+          (else (call $_str_len (call $str_repr (local.get $str)))))))
+
+    (i32.add
+      (call $_str_len
+        (call $str_fmt_val (ref.cast (ref any) (local.get $key))))
+      (i32.const 2))
+  )
+
+  ;; _fmt_size_node : (ref $HamtNode) -> i32
+  ;; Compute total bytes for all entries in a HAMT node (key + ": " + val).
+  ;; Does NOT include separators between entries or braces.
+  (func $_fmt_size_node
+    (param $node (ref $HamtNode))
+    (result i32)
+
+    (local $children (ref $HamtChildren))
+    (local $len i32)
+    (local $i i32)
+    (local $total i32)
+    (local $child (ref null struct))
+    (local $leaf (ref $HamtLeaf))
+
+    (local.set $children
+      (struct.get $HamtNode $children (local.get $node)))
+    (local.set $len
+      (array.len (local.get $children)))
+    (local.set $total (i32.const 0))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+
+        (local.set $child
+          (array.get $HamtChildren
+            (local.get $children)
+            (local.get $i)))
+
+        (if (ref.test (ref $HamtLeaf) (local.get $child))
+          (then
+            (local.set $leaf
+              (ref.cast (ref $HamtLeaf) (local.get $child)))
+            (local.set $total
+              (i32.add (local.get $total)
+                (i32.add
+                  (i32.add
+                    (call $_fmt_key_len
+                      (struct.get $HamtLeaf $key (local.get $leaf)))
+                    (i32.const 2))
+                  (call $_str_len
+                    (call $_str_fmt_val_repr
+                      (ref.cast (ref any)
+                        (struct.get $HamtLeaf $val (local.get $leaf))))))))))
+
+        (if (ref.test (ref $HamtNode) (local.get $child))
+          (then
+            (local.set $total
+              (i32.add (local.get $total)
+                (call $_fmt_size_node
+                  (ref.cast (ref $HamtNode) (local.get $child)))))))
+
+        (if (ref.test (ref $HamtCollision) (local.get $child))
+          (then
+            (local.set $total
+              (i32.add (local.get $total)
+                (call $_fmt_size_collision
+                  (struct.get $HamtCollision $col_leaves
+                    (ref.cast (ref $HamtCollision) (local.get $child))))))))
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $total)
+  )
+
+  ;; _fmt_size_collision : (ref $HamtChildren) -> i32
+  (func $_fmt_size_collision
+    (param $leaves (ref $HamtChildren))
+    (result i32)
+
+    (local $len i32)
+    (local $i i32)
+    (local $total i32)
+    (local $leaf (ref $HamtLeaf))
+
+    (local.set $len (array.len (local.get $leaves)))
+    (local.set $total (i32.const 0))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+        (local.set $leaf
+          (ref.cast (ref $HamtLeaf)
+            (array.get $HamtChildren (local.get $leaves) (local.get $i))))
+        (local.set $total
+          (i32.add (local.get $total)
+            (i32.add
+              (i32.add
+                (call $_fmt_key_len
+                  (struct.get $HamtLeaf $key (local.get $leaf)))
+                (i32.const 2))
+              (call $_str_len
+                (call $_str_fmt_val_repr
+                  (ref.cast (ref any)
+                    (struct.get $HamtLeaf $val (local.get $leaf))))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $total)
+  )
+
+  ;; _fmt_copy_key : (key, buf, pos) -> new_pos
+  ;; Copy a formatted record key into buf.
+  ;; String ident: bare. String non-ident: repr. Other: (fmt).
+  (func $_fmt_copy_key
+    (param $key (ref eq))
+    (param $buf (ref $ByteArray))
+    (param $pos i32)
+    (result i32)
+
+    (local $str (ref $Str))
+
+    (block $not_str
+      (block $is_str (result (ref $Str))
+        (br $not_str
+          (br_on_cast $is_str (ref eq) (ref $Str)
+            (local.get $key))))
+      (local.set $str)
+
+      (if (call $_is_key_ident (local.get $str))
+        (then
+          (local.set $pos
+            (call $_str_copy_to (local.get $str) (local.get $buf) (local.get $pos))))
+        (else
+          (local.set $pos
+            (call $_str_copy_to
+              (call $str_repr (local.get $str))
+              (local.get $buf)
+              (local.get $pos)))))
+      (return (local.get $pos)))
+
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x28)) ;; '('
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (local.set $pos
+      (call $_str_copy_to
+        (call $str_fmt_val (ref.cast (ref any) (local.get $key)))
+        (local.get $buf)
+        (local.get $pos)))
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x29)) ;; ')'
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+
+    (local.get $pos)
+  )
+
+  ;; _fmt_copy_node : (node, buf, pos, written) -> new_pos
+  ;; Copy formatted entries into buf. written = entries written so far
+  ;; (used to decide whether to prepend ", ").
+  (func $_fmt_copy_node
+    (param $node (ref $HamtNode))
+    (param $buf (ref $ByteArray))
+    (param $pos i32)
+    (param $written i32)
+    (result i32)
+
+    (local $children (ref $HamtChildren))
+    (local $len i32)
+    (local $i i32)
+    (local $child (ref null struct))
+    (local $leaf (ref $HamtLeaf))
+
+    (local.set $children
+      (struct.get $HamtNode $children (local.get $node)))
+    (local.set $len
+      (array.len (local.get $children)))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+
+        (local.set $child
+          (array.get $HamtChildren
+            (local.get $children)
+            (local.get $i)))
+
+        (if (ref.test (ref $HamtLeaf) (local.get $child))
+          (then
+            (local.set $leaf
+              (ref.cast (ref $HamtLeaf) (local.get $child)))
+
+            (if (local.get $written)
+              (then
+                (array.set $ByteArray (local.get $buf) (local.get $pos)
+                  (i32.const 0x2C))
+                (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+                (array.set $ByteArray (local.get $buf) (local.get $pos)
+                  (i32.const 0x20))
+                (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+
+            (local.set $pos
+              (call $_fmt_copy_key
+                (struct.get $HamtLeaf $key (local.get $leaf))
+                (local.get $buf) (local.get $pos)))
+
+            (array.set $ByteArray (local.get $buf) (local.get $pos)
+              (i32.const 0x3A))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos)
+              (i32.const 0x20))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+
+            (local.set $pos
+              (call $_str_copy_to
+                (call $_str_fmt_val_repr
+                  (ref.cast (ref any)
+                    (struct.get $HamtLeaf $val (local.get $leaf))))
+                (local.get $buf)
+                (local.get $pos)))
+
+            (local.set $written
+              (i32.add (local.get $written) (i32.const 1)))))
+
+        (if (ref.test (ref $HamtNode) (local.get $child))
+          (then
+            (local.set $pos
+              (call $_fmt_copy_node
+                (ref.cast (ref $HamtNode) (local.get $child))
+                (local.get $buf) (local.get $pos) (local.get $written)))
+            (local.set $written
+              (i32.add (local.get $written)
+                (call $_hamt_size_node
+                  (ref.cast (ref $HamtNode) (local.get $child)))))))
+
+        (if (ref.test (ref $HamtCollision) (local.get $child))
+          (then
+            (local.set $pos
+              (call $_fmt_copy_collision
+                (struct.get $HamtCollision $col_leaves
+                  (ref.cast (ref $HamtCollision) (local.get $child)))
+                (local.get $buf) (local.get $pos) (local.get $written)))
+            (local.set $written
+              (i32.add (local.get $written)
+                (array.len
+                  (struct.get $HamtCollision $col_leaves
+                    (ref.cast (ref $HamtCollision) (local.get $child))))))))
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $pos)
+  )
+
+  ;; _fmt_copy_collision : (leaves, buf, pos, written) -> new_pos
+  (func $_fmt_copy_collision
+    (param $leaves (ref $HamtChildren))
+    (param $buf (ref $ByteArray))
+    (param $pos i32)
+    (param $written i32)
+    (result i32)
+
+    (local $len i32)
+    (local $i i32)
+    (local $leaf (ref $HamtLeaf))
+
+    (local.set $len (array.len (local.get $leaves)))
+    (local.set $i (i32.const 0))
+
+    (block $done
+      (loop $walk
+        (br_if $done
+          (i32.ge_u (local.get $i) (local.get $len)))
+
+        (local.set $leaf
+          (ref.cast (ref $HamtLeaf)
+            (array.get $HamtChildren (local.get $leaves) (local.get $i))))
+
+        (if (i32.or (local.get $written) (local.get $i))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos)
+              (i32.const 0x2C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos)
+              (i32.const 0x20))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+
+        (local.set $pos
+          (call $_fmt_copy_key
+            (struct.get $HamtLeaf $key (local.get $leaf))
+            (local.get $buf) (local.get $pos)))
+
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.const 0x3A))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.const 0x20))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+
+        (local.set $pos
+          (call $_str_copy_to
+            (call $_str_fmt_val_repr
+              (ref.cast (ref any)
+                (struct.get $HamtLeaf $val (local.get $leaf))))
+            (local.get $buf)
+            (local.get $pos)))
+
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $pos)
+  )
+
+  ;; fmt : (ref $Rec) -> (ref $Str)
+  ;; Format a record as "{key: val, key2: val2}". Empty record formats as "{}".
+  ;; Two-pass: first compute total byte length, then copy into a single buffer.
+  (func $fmt (@pub) (param $rec (ref $Rec)) (result (ref $Str))
+    (local $node (ref $HamtNode))
+    (local $total i32)
+    (local $entry_count i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    (local.set $node
+      (struct.get $RecImpl $hamt
+        (ref.cast (ref $RecImpl) (local.get $rec))))
+
+    (local.set $entry_count
+      (call $size (ref.cast (ref $Rec) (local.get $rec))))
+
+    (if (i32.eqz (local.get $entry_count))
+      (then
+        (return (call $_str_from_ascii_2
+          (i32.const 0x7B) ;; '{'
+          (i32.const 0x7D) ;; '}'
+        ))))
+
+    (local.set $total
+      (i32.add
+        (i32.const 2)
+        (i32.add
+          (call $_fmt_size_node (local.get $node))
+          (i32.mul
+            (i32.sub (local.get $entry_count) (i32.const 1))
+            (i32.const 2)))))
+
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0) (local.get $total)))
+
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x7B))
+    (local.set $pos (i32.const 1))
+
+    (local.set $pos
+      (call $_fmt_copy_node
+        (local.get $node) (local.get $buf) (local.get $pos)
+        (i32.const 0)))
+
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x7D))
+
+    (call $str_from_bytes (local.get $buf))
+  )
 
 )

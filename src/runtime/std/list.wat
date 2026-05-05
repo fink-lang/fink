@@ -35,8 +35,10 @@
     (func $_str_copy_to (param (ref $Str)) (param (ref $ByteArray)) (param i32) (result i32)))
   (import "std/str.wat" "_str_from_ascii_2"
     (func $_str_from_ascii_2 (param i32) (param i32) (result (ref $Str))))
-  (import "std/str.wat" "fmt_val"
-    (func $str_fmt_val (param (ref any)) (result (ref $Str))))
+  ;; _str_fmt_val_repr — quoted/escaped element formatter for container
+  ;; values. Temporary — will be replaced by a per-type `repr` protocol.
+  (import "std/str.wat" "_str_fmt_val_repr"
+    (func $_str_fmt_val_repr (param (ref any)) (result (ref $Str))))
 
 
   ;; -- Type definitions ------------------------------------------------
@@ -417,7 +419,7 @@
         (local.set $total
           (i32.add (local.get $total)
             (call $_str_len
-              (call $str_fmt_val
+              (call $_str_fmt_val_repr
                 (ref.as_non_null (call $head_any (local.get $cur)))))))
         (local.set $count (i32.add (local.get $count) (i32.const 1)))
         (local.set $cur (call $tail_any (local.get $cur)))
@@ -453,7 +455,7 @@
 
         (local.set $pos
           (call $_str_copy_to
-            (call $str_fmt_val
+            (call $_str_fmt_val_repr
               (ref.as_non_null (call $head_any (local.get $cur))))
             (local.get $buf)
             (local.get $pos)))
