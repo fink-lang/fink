@@ -164,8 +164,9 @@ test 'bitwise xor', fn:
   | equals ƒink:
     240
 
-# `not 0x0` flips all 64 bits → max-u64. Skipped while u64 formatting
-# still goes through the f64 printer.
+# `not 0x0` flips all 64 bits → max-u64. Skipped while the host
+# runner returns TestResult::Num(f64) for numeric values; needs a
+# host-side typed-result return path before u64::MAX prints faithfully.
 skip test 'bitwise not', fn:
   expect run ƒink:
     not 0x0
@@ -206,6 +207,6 @@ test 'mix signed and unsigned traps', fn:
     1 + 0xFF
   | equals ":
     ERROR: entry wrapper: error while executing at wasm backtrace:
-        0:    0xefc - <unknown>!std/num.wat:check_compat
-        1:    0xf57 - <unknown>!std/num.wat:op_plus
-        2:   0x53b2 - <unknown>!rt/protocols.wat:op_plus: wasm trap: wasm `unreachable` instruction executed
+        0:    0xefe - <unknown>!std/num.wat:check_compat
+        1:    0xf59 - <unknown>!std/num.wat:op_plus
+        2:   0x5515 - <unknown>!rt/protocols.wat:op_plus: wasm trap: wasm `unreachable` instruction executed

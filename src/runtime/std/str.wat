@@ -25,7 +25,7 @@
   (import "std/num.wat"    "Num"       (type $Num       (sub any)))
   (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct)))
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
-  (import "std/int.wat"     "_int_ival" (func $_int_ival (param (ref $Int)) (result i64)))
+  (import "std/int.wat"     "U64"     (type $U64     (sub $Int (struct (field $ival i64)))))
   (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
   (import "std/decimal.wat" "_as_f64"
@@ -1599,13 +1599,20 @@
             (local.get $val))))
       (return))
 
-    ;; Try $Int — format i64 directly.
+    ;; Try $Int — dispatch unsigned vs signed by concrete subtype so
+    ;; values above i64::MAX print correctly as $U64.
     (block $not_int
       (block $is_int (result (ref $Int))
         (br $not_int
           (br_on_cast $is_int (ref any) (ref $Int)
             (local.get $val))))
-      (return (call $_str_fmt_i64 (call $_int_ival))))
+      (drop)
+      (if (result (ref $Str)) (ref.test (ref $U64) (local.get $val))
+        (then (call $_str_fmt_u64
+          (struct.get $U64 $ival (ref.cast (ref $U64) (local.get $val)))))
+        (else (call $_str_fmt_i64
+          (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $val))))))
+      (return))
 
     ;; Try $F64 — format f64.
     (block $not_f64
@@ -1751,11 +1758,115 @@
   )
 
   ;; _str_fmt_i64 : i64 -> (ref $Str)
-  ;; Format a signed i64 as a decimal string. Bridges through the f64
-  ;; formatter for now; values outside f64's exact-int range (±2^53)
-  ;; will lose precision until a native i64 formatter lands.
+  ;; Format a signed i64 as a decimal string — native digit-by-digit,
+  ;; handles the full i64 range including i64::MIN.
   (func $_str_fmt_i64 (param $v i64) (result (ref $Str))
-    (call $_str_fmt_num (f64.convert_i64_s (local.get $v))))
+
+    (local $neg i32)
+    (local $abs i64)
+    (local $digits i32)
+    (local $tmp i64)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    ;; Zero special case.
+    (if (i64.eqz (local.get $v))
+      (then
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
+        (return (struct.new $StrBytesImpl (local.get $buf)))))
+
+    ;; Handle sign. i64::MIN negated stays i64::MIN (two's complement),
+    ;; but i64.div_u / i64.rem_u below treat $abs as unsigned, so the
+    ;; arithmetic is correct for that one edge case.
+    (local.set $neg (i64.lt_s (local.get $v) (i64.const 0)))
+    (if (local.get $neg)
+      (then (local.set $abs (i64.sub (i64.const 0) (local.get $v))))
+      (else (local.set $abs (local.get $v))))
+
+    ;; Count digits — unsigned divide so i64::MIN works.
+    (local.set $digits (i32.const 0))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $count
+        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (br_if $count (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    ;; Allocate buffer.
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (local.get $digits) (local.get $neg))))
+
+    ;; Write '-' if negative.
+    (if (local.get $neg)
+      (then (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))))
+
+    ;; Write digits right-to-left.
+    (local.set $pos
+      (i32.sub
+        (i32.add (local.get $digits) (local.get $neg))
+        (i32.const 1)))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $write
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.add (i32.const 0x30)
+            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
+        (br_if $write (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
+  ;; _str_fmt_u64 : i64 (interpreted as u64) -> (ref $Str)
+  ;; Format an unsigned 64-bit integer as a decimal string. Same digit
+  ;; loop as $_str_fmt_i64 but no sign handling.
+  (func $_str_fmt_u64 (param $v i64) (result (ref $Str))
+
+    (local $digits i32)
+    (local $tmp i64)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    ;; Zero special case.
+    (if (i64.eqz (local.get $v))
+      (then
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
+        (return (struct.new $StrBytesImpl (local.get $buf)))))
+
+    ;; Count digits.
+    (local.set $digits (i32.const 0))
+    (local.set $tmp (local.get $v))
+    (block $done
+      (loop $count
+        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (br_if $count (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    ;; Allocate buffer.
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $digits)))
+
+    ;; Write digits right-to-left.
+    (local.set $pos (i32.sub (local.get $digits) (i32.const 1)))
+    (local.set $tmp (local.get $v))
+    (block $done
+      (loop $write
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.add (i32.const 0x30)
+            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
+        (br_if $write (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
 
   ;; _str_fmt_int : i32 -> (ref $Str)
   ;; Format a signed i32 as a decimal string.
