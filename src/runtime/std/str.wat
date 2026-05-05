@@ -23,8 +23,9 @@
 
   ;; Type imports
   (import "std/num.wat"    "Num"       (type $Num       (sub any)))
-  (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct (field $ival i64))))
+  (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct)))
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
+  (import "std/int.wat"     "_int_ival" (func $_int_ival (param (ref $Int)) (result i64)))
   (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $val f64))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
@@ -1602,7 +1603,7 @@
         (br $not_int
           (br_on_cast $is_int (ref any) (ref $Int)
             (local.get $val))))
-      (return (call $_str_fmt_i64 (struct.get $Int $ival))))
+      (return (call $_str_fmt_i64 (call $_int_ival))))
 
     ;; Try $F64 — format f64.
     (block $not_f64

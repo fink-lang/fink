@@ -14,10 +14,12 @@
   (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct)))
   (import "std/list.wat" "List" (type $List (sub any)))
 
-  ;; $Int — abstract integer parent. Carries `$ival i64`, the canonical
-  ;; integer value. $I64 and $U64 differ only in nominal type (signedness
-  ;; is interpreted by the operations, not the storage).
-  (type $Int (@pub) (sub $Num (struct (field $ival i64))))
+  ;; $Int — abstract, nominal-only supertype. No fields. Storage
+  ;; (`$ival i64`) lives on the leaves $I64/$U64. They differ only in
+  ;; nominal type; signedness is interpreted by the operations, not
+  ;; the storage. Reads through $Int go via the $_int_ival helper,
+  ;; which dispatches per concrete leaf.
+  (type $Int (@pub) (sub $Num (struct)))
     (type $I64 (@pub) (sub final $Int (struct (field $ival i64))))
     (type $U64 (@pub) (sub final $Int (struct (field $ival i64))))
 
@@ -38,23 +40,32 @@
   (func $_box_i64 (@pub) (param $v i64) (result (ref $I64))
     (struct.new $I64 (local.get $v)))
 
+  ;; Read the i64 payload from any $Int. $Int itself is an empty
+  ;; abstract supertype; storage lives on the leaves $I64/$U64. This
+  ;; helper centralises the per-subtype dispatch so call sites stay
+  ;; legible.
+  (func $_int_ival (@pub) (param $n (ref $Int)) (result i64)
+    (if (result i64) (ref.test (ref $I64) (local.get $n))
+      (then (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $n))))
+      (else (struct.get $U64 $ival (ref.cast (ref $U64) (local.get $n))))))
+
   (func $op_plus (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (call $_box_i64 (i64.add
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b)))))
 
   (func $op_minus (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (call $_box_i64 (i64.sub
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b)))))
 
   (func $op_mul (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (call $_box_i64 (i64.mul
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b)))))
 
   ;; op_div on $Int — fink `/` is real division; convert i64 operands
   ;; to f64 for the divide, truncate the result back to i64 when boxing.
@@ -63,8 +74,8 @@
   (func $op_div (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (call $_box_i64_from_f64 (f64.div
-      (f64.convert_i64_s (struct.get $Int $ival (local.get $a)))
-      (f64.convert_i64_s (struct.get $Int $ival (local.get $b))))))
+      (f64.convert_i64_s (call $_int_ival (local.get $a)))
+      (f64.convert_i64_s (call $_int_ival (local.get $b))))))
 
   ;; -- Comparison — return raw i32 -----------------------------------
   ;;
@@ -75,38 +86,38 @@
   (func $op_eq (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
     (i64.eq
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b))))
 
   (func $op_neq (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
     (i64.ne
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b))))
 
   (func $op_lt (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
     (i64.lt_s
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b))))
 
   (func $op_lte (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
     (i64.le_s
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b))))
 
   (func $op_gt (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
     (i64.gt_s
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b))))
 
   (func $op_gte (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
     (i64.ge_s
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b))))
 
   ;; Func imports — list constructors via the public API.
   (import "std/list.wat" "empty"
@@ -153,20 +164,20 @@
   (func $op_intdiv (@impl "std/operators.fnk:op_intdiv" $Int $Int)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (return_call $_box_i64 (i64.div_s
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b)))))
 
   (func $op_rem (@impl "std/operators.fnk:op_rem" $Int $Int)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (return_call $_box_i64 (i64.rem_s
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b)))))
 
   (func $op_intmod (@impl "std/operators.fnk:op_intmod" $Int $Int)
     (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
     (return_call $_box_i64 (i64.rem_s
-      (struct.get $Int $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $a))
+      (call $_int_ival (local.get $b)))))
 
   ;; =========================================================================
   ;; Shifts — value uint, count signed int. Return $U64.
@@ -176,13 +187,13 @@
     (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
     (return_call $_box_u64 (i64.shl
       (struct.get $U64 $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $b)))))
 
   (func $op_shr (@impl "std/operators.fnk:op_shr" $U64 $Int)
     (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
     (return_call $_box_u64 (i64.shr_u
       (struct.get $U64 $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $b)))))
 
   ;; =========================================================================
   ;; Rotations — value uint, count signed int. Return $U64.
@@ -192,13 +203,13 @@
     (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
     (return_call $_box_u64 (i64.rotl
       (struct.get $U64 $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $b)))))
 
   (func $op_rotr (@impl "std/operators.fnk:op_rotr" $U64 $Int)
     (param $a (ref $U64)) (param $b (ref $Int)) (result (ref $U64))
     (return_call $_box_u64 (i64.rotr
       (struct.get $U64 $ival (local.get $a))
-      (struct.get $Int $ival (local.get $b)))))
+      (call $_int_ival (local.get $b)))))
 
   ;; =========================================================================
   ;; Power — integer exponentiation by square-and-multiply.
@@ -211,8 +222,8 @@
     (local $exp i64)
     (local $acc i64)
 
-    (local.set $base (struct.get $Int $ival (local.get $a)))
-    (local.set $exp  (struct.get $Int $ival (local.get $b)))
+    (local.set $base (call $_int_ival (local.get $a)))
+    (local.set $exp  (call $_int_ival (local.get $b)))
 
     ;; Negative exponent → 0 (integer truncation of fractional result).
     (if (i64.lt_s (local.get $exp) (i64.const 0))
@@ -240,8 +251,8 @@
     (local $a_i i64)
     (local $b_i i64)
 
-    (local.set $a_i (struct.get $Int $ival (local.get $a)))
-    (local.set $b_i (struct.get $Int $ival (local.get $b)))
+    (local.set $a_i (call $_int_ival (local.get $a)))
+    (local.set $b_i (call $_int_ival (local.get $b)))
 
     ;; Build [q, r] via the list constructor: prepend(q, prepend(r, nil)).
     (call $list_prepend

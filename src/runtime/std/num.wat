@@ -10,7 +10,7 @@
 
   ;; Type imports — int.wat / float.wat ops we re-route through num.wat
   (import "std/list.wat" "List" (type $List (sub any)))
-  (import "std/int.wat"   "Int" (type $Int (sub $Num (struct (field $ival i64)))))
+  (import "std/int.wat"   "Int" (type $Int (sub $Num (struct))))
   (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $ival i64)))))
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
@@ -18,6 +18,7 @@
 
   ;; Func imports — int.wat box helper + arithmetic + comparison on $Int.
   (import "std/int.wat" "_box_i64" (func $_box_i64     (param i64) (result (ref $I64))))
+  (import "std/int.wat" "_int_ival" (func $_int_ival   (param (ref $Int)) (result i64)))
   (import "std/int.wat" "op_plus"  (func $int_op_plus  (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
   (import "std/int.wat" "op_minus" (func $int_op_minus (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
   (import "std/int.wat" "op_mul"   (func $int_op_mul   (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
@@ -109,7 +110,7 @@
         (br $not_int
           (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
       (return (struct.new $F64
-        (f64.convert_i64_s (struct.get $Int $ival)))))
+        (f64.convert_i64_s (call $_int_ival)))))
     ;; $Decimal fall-through — re-box the f64 slot.
     (struct.new $F64
       (struct.get $Decimal $val (ref.cast (ref $Decimal) (local.get $n)))))
@@ -421,7 +422,7 @@
         (block $is_int (result (ref $Int))
           (br $not_int
             (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
-        (local.set $bits (struct.get $Int $ival))
+        (local.set $bits (call $_int_ival))
         (br $done))
 
       (block $not_f64
