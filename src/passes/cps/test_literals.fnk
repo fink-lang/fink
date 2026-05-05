@@ -32,71 +32,71 @@ test 'int literal', fn:
     42
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 42
-    # sm:CAABAAIAAQACJAEAAhIAAgAGAQACAAEAAhQBAAI
+      ·ƒret_0 (i8 42)
+    # sm:CgABAAIAAQACJAEAAhIAAgAGAQACAAEAAhYBAAIAAQACBgEAAg
 
 test 'int literal with underscores', fn:
   expect cps_module ƒink:
     1_000_000
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 1000000
-    # sm:CAABAAkAAQAJJAEACRIAAgAGAQAJAAEACRQBAAk
+      ·ƒret_0 (i32 1000000)
+    # sm:CgABAAkAAQAJJAEACRIAAgAGAQAJAAEACRYBAAkAAQAJCAEACQ
 
 test 'negative int literal', fn:
   expect cps_module ƒink:
     -1_000
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 -1000
-    # sm:CAABAAYAAQAGJAEABhIAAgAGAQAGAAEABhQBAAY
+      ·ƒret_0 (i16 -1000)
+    # sm:CgABAAYAAQAGJAEABhIAAgAGAQAGAAEABhYBAAYAAQAGCAEABg
 
 test 'negative zero literal', fn:
   expect cps_module ƒink:
     -0
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 -0
-    # sm:CAABAAIAAQACJAEAAhIAAgAGAQACAAEAAhQBAAI
+      ·ƒret_0 (i8 0)
+    # sm:CgABAAIAAQACJAEAAhIAAgAGAQACAAEAAhYBAAIAAQACBgEAAg
 
 test 'hex int literal', fn:
   expect cps_module ƒink:
     0xFF_FF
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 65535
-    # sm:CAABAAcAAQAHJAEABxIAAgAGAQAHAAEABxQBAAc
+      ·ƒret_0 (u16 65535)
+    # sm:CgABAAcAAQAHJAEABxIAAgAGAQAHAAEABxYBAAcAAQAHCAEABw
 
 test 'octal int literal', fn:
   expect cps_module ƒink:
     0o7_7
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 63
-    # sm:CAABAAUAAQAFJAEABRIAAgAGAQAFAAEABRQBAAU
+      ·ƒret_0 (u8 63)
+    # sm:CgABAAUAAQAFJAEABRIAAgAGAQAFAAEABRYBAAUAAQAFBgEABQ
 
 test 'binary int literal', fn:
   expect cps_module ƒink:
     0b_1010_1111
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 175
-    # sm:CAABAAwAAQAMJAEADBIAAgAGAQAMAAEADBQBAAw
+      ·ƒret_0 (u8 175)
+    # sm:CgABAAwAAQAMJAEADBIAAgAGAQAMAAEADBYBAAwAAQAMBgEADA
 
 test 'float literal with exponent', fn:
   expect cps_module ƒink:
     1.5e1_0
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 15000000000
-    # sm:CAABAAcAAQAHJAEABxIAAgAGAQAHAAEABxQBAAc
+      ·ƒret_0 (f64 1.5e10)
+    # sm:CgABAAcAAQAHJAEABxIAAgAGAQAHAAEABxYBAAcAAQAHCAEABw
 
 test 'decimal literal', fn:
   expect cps_module ƒink:
     1.5_0d
   | equals ƒink:
     ·ƒink_module fn ·ƒret_0:
-      ·ƒret_0 1.5d
+      ·ƒret_0 1.50d
     # sm:CAABAAYAAQAGJAEABhIAAgAGAQAGAAEABhQBAAY
 
 

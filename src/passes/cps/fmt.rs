@@ -190,19 +190,66 @@ fn build_val(b: &mut AstBuilder<'static>, v: &Val, ctx: &Ctx<'_, '_>) -> AstId {
   }
 }
 
+/// Render an int width tag prefix.
+pub fn render_int_width(w: super::ir::IntWidth) -> &'static str {
+  use super::ir::IntWidth::*;
+  match w {
+    I8 => "i8", I16 => "i16", I32 => "i32", I64 => "i64",
+    U8 => "u8", U16 => "u16", U32 => "u32", U64 => "u64",
+  }
+}
+
+/// Render a float width tag prefix.
+pub fn render_float_width(w: super::ir::FloatWidth) -> &'static str {
+  use super::ir::FloatWidth::*;
+  match w {
+    F32 => "f32",
+    F64 => "f64",
+  }
+}
+
+/// Render a decimal `(coeff, exp)` back to source-faithful form. Inverse of
+/// `parse_decimal_lit`: `(150, -2)` → `1.50d`, `(1000, 0)` → `1000d`,
+/// `(10, -101)` → `1.0d-100`.
+pub fn render_decimal(coeff: i64, exp: i32) -> String {
+  let (sign, abs) = if coeff < 0 { ("-", (-(coeff as i128)) as u128) } else { ("", coeff as u128) };
+  let digits = abs.to_string();
+  if exp >= 0 {
+    if exp == 0 {
+      format!("{sign}{digits}d")
+    } else {
+      format!("{sign}{digits}d+{exp}")
+    }
+  } else {
+    let frac_len = (-exp) as usize;
+    if frac_len < digits.len() {
+      let split = digits.len() - frac_len;
+      format!("{sign}{}.{}d", &digits[..split], &digits[split..])
+    } else {
+      // exp pushes past the digit count — pad with leading zeros: `(150, -5)` → `0.00150d`.
+      let zeros = frac_len - digits.len();
+      format!("{sign}0.{}{digits}d", "0".repeat(zeros))
+    }
+  }
+}
+
 fn build_lit(b: &mut AstBuilder<'static>, lit: &Lit, loc: Loc) -> AstId {
   match lit {
     Lit::Bool(v) => b.append(NodeKind::LitBool(*v), loc),
-    Lit::Int(n) => {
-      let s: &'static str = Box::leak(n.to_string().into_boxed_str());
-      b.append(NodeKind::LitInt(s), loc)
+    Lit::Int { value, width } => {
+      let s: &'static str = Box::leak(value.to_string().into_boxed_str());
+      let lit_id = b.append(NodeKind::LitInt(s), loc);
+      let tag = b_ident(b, render_int_width(*width), loc);
+      b_apply(b, tag, vec![lit_id], loc)
     }
-    Lit::Float(f) => {
-      let s: &'static str = Box::leak(f.to_string().into_boxed_str());
-      b.append(NodeKind::LitFloat(s), loc)
+    Lit::Float { value, width } => {
+      let s: &'static str = Box::leak(format!("{:e}", value).into_boxed_str());
+      let lit_id = b.append(NodeKind::LitFloat(s), loc);
+      let tag = b_ident(b, render_float_width(*width), loc);
+      b_apply(b, tag, vec![lit_id], loc)
     }
-    Lit::Decimal(f) => {
-      let s: &'static str = Box::leak(format!("{}d", f).into_boxed_str());
+    Lit::Decimal { coeff, exp } => {
+      let s: &'static str = Box::leak(render_decimal(*coeff, *exp).into_boxed_str());
       b.append(NodeKind::LitDecimal(s), loc)
     }
     Lit::Str(s) => b.append(

@@ -21,6 +21,11 @@
   (import "rt/apply.wat"     "Closure"     (type $Closure     (sub any)))
   (import "rt/apply.wat"     "Captures"    (type $Captures    (sub any)))
   (import "std/num.wat"      "Num"         (type $Num         (sub any)))
+  (import "std/int.wat"      "Int"         (type $Int         (sub any)))
+  (import "std/int.wat"      "I64"         (type $I64         (sub any)))
+  (import "std/int.wat"      "U64"         (type $U64         (sub any)))
+  (import "std/float.wat"    "F64"         (type $F64         (sub any)))
+  (import "std/decimal.wat"  "Decimal"     (type $Decimal     (sub any)))
   (import "std/str.wat"      "Str"         (type $Str         (sub any)))
   (import "std/list.wat"     "List"        (type $List        (sub any)))
   (import "std/dict.wat"     "Rec"         (type $Rec         (sub any)))
@@ -62,19 +67,30 @@
   (import "std/set.wat" "seq_pop"     (func $set_seq_pop     (param $cursor (ref null any)) (param $fail (ref null any)) (param $succ (ref null any))))
 
   ;; Func imports — int ops
-  (import "std/int.wat" "op_intdiv" (func $int_op_div    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_rem"    (func $int_op_rem    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_intmod" (func $int_op_mod    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_pow"    (func $int_op_pow    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_divmod" (func $int_op_divmod (param (ref $Num)) (param (ref $Num)) (result (ref $List))))
-  (import "std/int.wat" "op_rotl"   (func $int_op_rotl   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_rotr"   (func $int_op_rotr   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_not"    (func $int_op_not    (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_and"    (func $int_op_and    (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_or"     (func $int_op_or     (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_xor"    (func $int_op_xor    (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_shl"    (func $int_op_shl    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
-  (import "std/int.wat" "op_shr"    (func $int_op_shr    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  ;; Numeric ops — all routed through num.wat (the numeric dispatcher).
+  (import "std/num.wat" "op_plus"   (func $num_op_plus   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_minus"  (func $num_op_minus  (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_mul"    (func $num_op_mul    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_div"    (func $num_op_div    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_eq"     (func $num_op_eq     (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "std/num.wat" "op_neq"    (func $num_op_neq    (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "std/num.wat" "op_lt"     (func $num_op_lt     (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "std/num.wat" "op_lte"    (func $num_op_lte    (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "std/num.wat" "op_gt"     (func $num_op_gt     (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "std/num.wat" "op_gte"    (func $num_op_gte    (param (ref $Num)) (param (ref $Num)) (result i32)))
+  (import "std/num.wat" "op_intdiv" (func $num_op_intdiv (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_rem"    (func $num_op_rem    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_intmod" (func $num_op_intmod (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_pow"    (func $num_op_pow    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_divmod" (func $num_op_divmod (param (ref $Num)) (param (ref $Num)) (result (ref $List))))
+  (import "std/num.wat" "op_rotl"   (func $num_op_rotl   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_rotr"   (func $num_op_rotr   (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_not"    (func $num_op_not    (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_and"    (func $num_op_and    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_or"     (func $num_op_or     (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_xor"    (func $num_op_xor    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_shl"    (func $num_op_shl    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
+  (import "std/num.wat" "op_shr"    (func $num_op_shr    (param (ref $Num)) (param (ref $Num)) (result (ref $Num))))
 
   ;; Func imports — str ops
   (import "std/str.wat" "op_eq"  (func $str_op_eq  (param (ref $Str)) (result i32)))
@@ -87,8 +103,8 @@
   (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — range ops
-  (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $Num)) (param (ref $Range)) (result i32)))
-  (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $Num)) (param (ref $Range)) (result i32)))
+  (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
+  (import "std/range.wat" "op_not_in" (func $range_op_not_in (param (ref $I64)) (param (ref $Range)) (result i32)))
 
   ;; Func imports — channel
   (import "std/channel.wat" "op_shr"  (func $channel_op_shr  (param (ref null any)) (param (ref null any)) (param (ref null any))))
@@ -118,9 +134,9 @@
 
     ;; Default: $Num add
     (return_call $list_apply_1
-      (struct.new $Num (f64.add
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (call $num_op_plus
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_minus (@pub) (@impl "std/operators.fnk:op_minus")
@@ -139,25 +155,25 @@
 
     ;; Default: $Num sub
     (return_call $list_apply_1
-      (struct.new $Num (f64.sub
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (call $num_op_minus
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_mul (@pub) (@impl "std/operators.fnk:op_mul")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (struct.new $Num (f64.mul
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (call $num_op_mul
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   (func $op_div (@pub) (@impl "std/operators.fnk:op_div")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (struct.new $Num (f64.div
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (call $num_op_div
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
 
   ;; =========================================================================
@@ -167,7 +183,7 @@
   (func $op_intdiv (@pub) (@impl "std/operators.fnk:op_intdiv")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (call $int_op_div
+      (call $num_op_intdiv
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -175,7 +191,7 @@
   (func $op_rem (@pub) (@impl "std/operators.fnk:op_rem")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (call $int_op_rem
+      (call $num_op_rem
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -183,7 +199,7 @@
   (func $op_intmod (@pub) (@impl "std/operators.fnk:op_intmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (call $int_op_mod
+      (call $num_op_intmod
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -191,7 +207,7 @@
   (func $op_pow (@pub) (@impl "std/operators.fnk:op_pow")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (call $int_op_pow
+      (call $num_op_pow
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -199,7 +215,7 @@
   (func $op_divmod (@pub) (@impl "std/operators.fnk:op_divmod")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (call $int_op_divmod
+      (call $num_op_divmod
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -207,7 +223,7 @@
   (func $op_rotl (@pub) (@impl "std/operators.fnk:op_rotl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (call $int_op_rotl
+      (call $num_op_rotl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -215,7 +231,7 @@
   (func $op_rotr (@pub) (@impl "std/operators.fnk:op_rotr")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
-      (call $int_op_rotr
+      (call $num_op_rotr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -231,15 +247,27 @@
   (func $deep_eq (@pub)
     (param $a (ref eq)) (param $b (ref eq)) (result i32)
 
-    ;; Try $Num
+    ;; Try $Num — strict subtype match.
+    ;;   1 !== 1.0 (different concrete subtypes never equal even if
+    ;;   numerically equivalent). HAMT keys are strict; arithmetic
+    ;;   operators may still coerce via num.wat's op_eq dispatcher.
     (block $not_num
       (block $is_num (result (ref $Num))
         (br $not_num
           (br_on_cast $is_num (ref eq) (ref $Num)
             (local.get $a))))
-      (return (f64.eq
-        (struct.get $Num $val)
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b))))))
+      (drop)
+      (if (i32.xor
+            (ref.test (ref $F64) (local.get $a))
+            (ref.test (ref $F64) (local.get $b)))
+        (then (return (i32.const 0))))
+      (if (i32.xor
+            (ref.test (ref $Int) (local.get $a))
+            (ref.test (ref $Int) (local.get $b)))
+        (then (return (i32.const 0))))
+      (return (call $num_op_eq
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b)))))
 
     ;; Try $Str
     (block $not_str
@@ -268,9 +296,8 @@
             (local.get $a))))
       ;; $a is $Num — cast $b and compare
       (return_call $list_apply_1
-        (ref.i31 (f64.eq
-          (struct.get $Num $val)
-          (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+        (ref.i31 (call $num_op_eq
+          (ref.cast (ref $Num) (local.get $b))))
         (local.get $cont)))
 
     ;; Try $Str
@@ -313,9 +340,8 @@
             (local.get $a))))
       ;; $a is $Num — cast $b and compare
       (return_call $list_apply_1
-        (ref.i31 (f64.ne
-          (struct.get $Num $val)
-          (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+        (ref.i31 (call $num_op_neq
+          (ref.cast (ref $Num) (local.get $b))))
         (local.get $cont)))
 
     ;; Try $Str
@@ -378,9 +404,9 @@
         (local.get $cont)))
 
     (return_call $list_apply_1
-      (ref.i31 (f64.lt
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (ref.i31 (call $num_op_lt
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b))))
       (local.get $cont)))
 
   (func $op_lte (@pub) (@impl "std/operators.fnk:op_lte")
@@ -398,9 +424,9 @@
         (local.get $cont)))
 
     (return_call $list_apply_1
-      (ref.i31 (f64.le
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (ref.i31 (call $num_op_lte
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b))))
       (local.get $cont)))
 
   (func $op_gt (@pub) (@impl "std/operators.fnk:op_gt")
@@ -418,9 +444,9 @@
         (local.get $cont)))
 
     (return_call $list_apply_1
-      (ref.i31 (f64.gt
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (ref.i31 (call $num_op_gt
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b))))
       (local.get $cont)))
 
   (func $op_gte (@pub) (@impl "std/operators.fnk:op_gte")
@@ -438,9 +464,9 @@
         (local.get $cont)))
 
     (return_call $list_apply_1
-      (ref.i31 (f64.ge
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $a)))
-        (struct.get $Num $val (ref.cast (ref $Num) (local.get $b)))))
+      (ref.i31 (call $num_op_gte
+        (ref.cast (ref $Num) (local.get $a))
+        (ref.cast (ref $Num) (local.get $b))))
       (local.get $cont)))
 
   ;; =========================================================================
@@ -457,7 +483,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $list_apply_1
-        (call $int_op_not)
+        (call $num_op_not)
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean not
@@ -486,7 +512,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $list_apply_1
-        (call $int_op_and (ref.cast (ref $Num) (local.get $b)))
+        (call $num_op_and (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean and
@@ -517,7 +543,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $list_apply_1
-        (call $int_op_or (ref.cast (ref $Num) (local.get $b)))
+        (call $num_op_or (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean or
@@ -548,7 +574,7 @@
           (br_on_cast $is_num (ref null any) (ref $Num)
             (local.get $a))))
       (return_call $list_apply_1
-        (call $int_op_xor (ref.cast (ref $Num) (local.get $b)))
+        (call $num_op_xor (ref.cast (ref $Num) (local.get $b)))
         (local.get $cont)))
 
     ;; Fallback: i31ref boolean xor
@@ -716,7 +742,7 @@
       (local.set $range)
       (return_call $list_apply_1
         (ref.i31 (call $range_op_in
-          (ref.cast (ref $Num) (local.get $a))
+          (ref.cast (ref $I64) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
 
@@ -764,7 +790,7 @@
       (local.set $range)
       (return_call $list_apply_1
         (ref.i31 (call $range_op_not_in
-          (ref.cast (ref $Num) (local.get $a))
+          (ref.cast (ref $I64) (local.get $a))
           (local.get $range)))
         (local.get $cont)))
 
@@ -870,7 +896,7 @@
 
     ;; Fallback: numeric shift left
     (return_call $list_apply_1
-      (call $int_op_shl
+      (call $num_op_shl
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))
@@ -913,7 +939,7 @@
 
     ;; Fallback: numeric shift right
     (return_call $list_apply_1
-      (call $int_op_shr
+      (call $num_op_shr
         (ref.cast (ref $Num) (local.get $a))
         (ref.cast (ref $Num) (local.get $b)))
       (local.get $cont)))

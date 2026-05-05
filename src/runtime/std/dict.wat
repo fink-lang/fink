@@ -11,10 +11,10 @@
 ;;     subtrees are shared with the original
 ;;
 ;; Value representation:
-;;   - Type hierarchy (types.wat defines opaque base types):
-;;       $Rec  (from types.wat)      — opaque record type
+;;   - Type hierarchy:
+;;       $Rec                        — opaque record type
 ;;       └── $RecImpl (sub $Rec)     — wrapper: single $HamtNode field
-;;       $Dict (from types.wat)      — opaque dict type
+;;       $Dict                       — opaque dict type
 ;;       └── $DictImpl (sub $Dict)   — wrapper: single $HamtNode field
 ;;       $HamtLeaf                   — key-value pair (internal)
 ;;       $HamtNode                   — bitmap + children array (internal)

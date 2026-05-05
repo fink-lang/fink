@@ -52,12 +52,12 @@ test 'function binding', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_2:
       ·fn
-        fn ·ƒret_4, ·x_1: ·op_plus ·x_1, 1, ·ƒret_4
+        fn ·ƒret_4, ·x_1: ·op_plus ·x_1, (i8 1), ·ƒret_4
         fn ·v_3:
           ·let ·v_3, fn ·inc_0:
             ·ƒpub ·inc_0, fn:
               ·ƒret_2 ·inc_0
-    # sm:JgABABEAAQARJAEAERIAAgAGAQwLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABAEIAQIABAEHBRIAEAELCwoAAgAOAQMBAAEAAQwBBAsKAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEAAwABAAMUAQAD
+    # sm:KAABABEAAQARJAEAERIAAgAGAQwLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgACAA4BAwEAAQABDAEECwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQBAAM
 
 
 test '·closure over outer variable', fn:
@@ -89,15 +89,15 @@ test 'three sequential bindings', fn:
     c = a + b
   | equals ƒink:
     ·ƒink_module fn ·ƒret_3:
-      ·let 1, fn ·a_0:
+      ·let (i8 1), fn ·a_0:
         ·ƒpub ·a_0, fn:
-          ·let 2, fn ·b_1:
+          ·let (i8 2), fn ·b_1:
             ·ƒpub ·b_1, fn:
               ·op_plus ·a_0, ·b_1, fn ·v_8:
                 ·let ·v_8, fn ·c_2:
                   ·ƒpub ·c_2, fn:
                     ·ƒret_3 ·c_2
-    # sm:OAABABUAAQAVJAEYCRIAAgAGARMBAAEAAQwBBAECAAoBBwEKAAIACgEAAQABAAEQAQABCgAIAAIADgEQAQABAAEMAQQBAgAKAQcBCgACABIBAAEAAQABEAEAAQoACAACABYBFAUAAQAFFAEAAQoABAEIAQoACgEHBQoAAgAaAQMBAAEAAQwBBAUKAAoBBwEKAAIAHgEAAQABAAEQAQABCgAIAAIAIgEAAQABAAEUAQAB
+    # sm:PAABABUAAQAVJAEYCRIAAgAGARMBAAEAAQ4BBAEAAQABBgEAAQQACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOARABAAEAAQ4BBAEAAQABBgEAAQQACgEHAQoAAgASAQABAAEAARABAAEKAAgAAgAWARQFAAEABRQBAAEKAAQBCAEKAAoBBwUKAAIAGgEDAQABAAEMAQQFCgAKAQcBCgACAB4BAAEAAQABEAEAAQoACAACACIBAAEAAQABFAEAAQ
 
 
 
@@ -113,13 +113,13 @@ test 'forward ref', fn:
     ·ƒink_module fn ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·a_1:
-          ·op_plus ·a_1, 1, fn ·v_8:
+          ·op_plus ·a_1, (i8 1), fn ·v_8:
             ·foo_0 ·ƒret_4, ·v_8
         fn ·v_3:
           ·let ·v_3, fn ·foo_0:
             ·ƒpub ·foo_0, fn:
-              ·foo_0 ·ƒret_2, 1
-    # sm:MAABABsAAQAbJAEsBRIAAgAGAR8PAAEADwgAEAEMCRYBBQEKAAIADgEOBQABAAUUAQABCgAEAQgBAgAKAQcFCgACABIBBwkAAQADEAEACRIABAEIBQoAEAETDwoAAgAOAQMBAAEAAQwBBA8KAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEsBQABAAMQAQAFEgAEAQgB
+              ·foo_0 ·ƒret_2, (i8 1)
+    # sm:NAABABsAAQAbJAEsBRIAAgAGAR8PAAEADwgAEAEMCRYBBQEKAAIADgEOBQABAAUUAQABCgAGAQgBAAEAAQYBAAEEAAoBBwUKAAIAEgEHCQABAAMQAQAJEgAEAQgFCgAQARMPCgACAA4BAwEAAQABDAEEDwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWASwFAAEAAxABAAUSAAYBCAEAAQABBgEAAQ
 
 
 test 'mutual recursion', fn:
@@ -190,9 +190,9 @@ test 'function with operator in body', fn:
   | equals ƒink:
     ·ƒink_module fn ·ƒret_1:
       ·fn
-        fn ·ƒret_3, ·x_0: ·op_plus ·x_0, 1, ·ƒret_3
+        fn ·ƒret_3, ·x_0: ·op_plus ·x_0, (i8 1), ·ƒret_3
         fn ·v_2: ·ƒret_1 ·v_2
-    # sm:GAABAAsAAQALJAEACxIAAgAGAQALAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABAEIAQIABAEHBRIAEAELCwoABAEACwABAAsUAQAL
+    # sm:GgABAAsAAQALJAEACxIAAgAGAQALAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQALAAEACxQBAAs
 
 test 'try — result bound, code continues', fn:
   expect cps_module ƒink:
@@ -204,9 +204,11 @@ test 'try — result bound, code continues', fn:
         fn ·v_4:
           ·let ·v_4, fn ·ni_0:
             ·ƒpub ·ni_0, fn:
-              ·op_plus ·ni_0, 1, ·ƒret_1
+              ·op_plus ·ni_0, (i8 1), ·ƒret_1
         ·∅bar
-    # sm:HwABABcAAQAXJAEiBhIAAgAGAQ8HAAEAAyABAAcKAAIADgELAQABAAEMAQwHCgAKARECDAACABIBAAIAAQACEAEAAgwACAACABYBIgYAAQAGFAEAAgwABAEKAQIABAEJBhwBBwM
+    # sm:IQABABcAAQAXJAEiBhIAAgAGAQ8HAAEAAyABAAcKAAIADgELAQABAAEMAQwHCgAKARECDAACABIBAAIAAQACEAEAAgwACAACABYBIgYAAQAGFAEAAgwABgEKAQABAAEGAQABBAAEAQkGHAEHAw
+
+
 
 
 

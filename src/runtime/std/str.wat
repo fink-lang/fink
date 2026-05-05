@@ -23,6 +23,13 @@
 
   ;; Type imports
   (import "std/num.wat"    "Num"       (type $Num       (sub any)))
+  (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct)))
+  (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
+  (import "std/int.wat"     "U64"     (type $U64     (sub $Int (struct (field $ival i64)))))
+  (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
+  (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
+  (import "std/decimal.wat" "_as_f64"
+    (func $_decimal_as_f64 (param (ref $Decimal)) (result f64)))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
   (import "std/dict.wat"   "Rec"           (type $Rec           (sub any)))
   (import "std/dict.wat"   "RecImpl"       (type $RecImpl       (sub any)))
@@ -62,9 +69,9 @@
     (func $tail_any (param $list (ref null any)) (result (ref null any))))
 
   (import "std/range.wat" "start"
-    (func $range_start (param $range (ref $Range)) (result (ref $Num))))
+    (func $range_start (param $range (ref $Range)) (result (ref $I64))))
   (import "std/range.wat" "end"
-    (func $range_end (param $range (ref $Range)) (result (ref $Num))))
+    (func $range_end (param $range (ref $Range)) (result (ref $I64))))
   (import "std/range.wat" "is_incl"
     (func $range_is_incl (param $range (ref $Range)) (result i32)))
 
@@ -1592,13 +1599,36 @@
             (local.get $val))))
       (return))
 
-    ;; Try $Num — format f64
-    (block $not_num
-      (block $is_num (result (ref $Num))
-        (br $not_num
-          (br_on_cast $is_num (ref any) (ref $Num)
+    ;; Try $Int — dispatch unsigned vs signed by concrete subtype so
+    ;; values above i64::MAX print correctly as $U64.
+    (block $not_int
+      (block $is_int (result (ref $Int))
+        (br $not_int
+          (br_on_cast $is_int (ref any) (ref $Int)
             (local.get $val))))
-      (return (call $_str_fmt_num (struct.get $Num $val))))
+      (drop)
+      (if (result (ref $Str)) (ref.test (ref $U64) (local.get $val))
+        (then (call $_str_fmt_u64
+          (struct.get $U64 $ival (ref.cast (ref $U64) (local.get $val)))))
+        (else (call $_str_fmt_i64
+          (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $val))))))
+      (return))
+
+    ;; Try $F64 — format f64.
+    (block $not_f64
+      (block $is_f64 (result (ref $F64))
+        (br $not_f64
+          (br_on_cast $is_f64 (ref any) (ref $F64)
+            (local.get $val))))
+      (return (call $_str_fmt_num (struct.get $F64 $val))))
+
+    ;; Try $Decimal — format f64 (real coeff/exp repr is future work).
+    (block $not_decimal
+      (block $is_decimal (result (ref $Decimal))
+        (br $not_decimal
+          (br_on_cast $is_decimal (ref any) (ref $Decimal)
+            (local.get $val))))
+      (return (call $_str_fmt_num (call $_decimal_as_f64))))
 
     ;; Try i31ref — bool or small int
     (block $not_i31
@@ -1725,6 +1755,117 @@
 
     ;; Non-integer float.
     (call $_str_fmt_float (local.get $v))
+  )
+
+  ;; _str_fmt_i64 : i64 -> (ref $Str)
+  ;; Format a signed i64 as a decimal string — native digit-by-digit,
+  ;; handles the full i64 range including i64::MIN.
+  (func $_str_fmt_i64 (param $v i64) (result (ref $Str))
+
+    (local $neg i32)
+    (local $abs i64)
+    (local $digits i32)
+    (local $tmp i64)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    ;; Zero special case.
+    (if (i64.eqz (local.get $v))
+      (then
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
+        (return (struct.new $StrBytesImpl (local.get $buf)))))
+
+    ;; Handle sign. i64::MIN negated stays i64::MIN (two's complement),
+    ;; but i64.div_u / i64.rem_u below treat $abs as unsigned, so the
+    ;; arithmetic is correct for that one edge case.
+    (local.set $neg (i64.lt_s (local.get $v) (i64.const 0)))
+    (if (local.get $neg)
+      (then (local.set $abs (i64.sub (i64.const 0) (local.get $v))))
+      (else (local.set $abs (local.get $v))))
+
+    ;; Count digits — unsigned divide so i64::MIN works.
+    (local.set $digits (i32.const 0))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $count
+        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (br_if $count (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    ;; Allocate buffer.
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (local.get $digits) (local.get $neg))))
+
+    ;; Write '-' if negative.
+    (if (local.get $neg)
+      (then (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))))
+
+    ;; Write digits right-to-left.
+    (local.set $pos
+      (i32.sub
+        (i32.add (local.get $digits) (local.get $neg))
+        (i32.const 1)))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $write
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.add (i32.const 0x30)
+            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
+        (br_if $write (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    (struct.new $StrBytesImpl (local.get $buf))
+  )
+
+  ;; _str_fmt_u64 : i64 (interpreted as u64) -> (ref $Str)
+  ;; Format an unsigned 64-bit integer as a decimal string. Same digit
+  ;; loop as $_str_fmt_i64 but no sign handling.
+  (func $_str_fmt_u64 (param $v i64) (result (ref $Str))
+
+    (local $digits i32)
+    (local $tmp i64)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    ;; Zero special case.
+    (if (i64.eqz (local.get $v))
+      (then
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
+        (return (struct.new $StrBytesImpl (local.get $buf)))))
+
+    ;; Count digits.
+    (local.set $digits (i32.const 0))
+    (local.set $tmp (local.get $v))
+    (block $done
+      (loop $count
+        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (br_if $count (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    ;; Allocate buffer.
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $digits)))
+
+    ;; Write digits right-to-left.
+    (local.set $pos (i32.sub (local.get $digits) (i32.const 1)))
+    (local.set $tmp (local.get $v))
+    (block $done
+      (loop $write
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.add (i32.const 0x30)
+            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
+        (br_if $write (i32.wrap_i64 (local.get $tmp)))
+      ))
+
+    (struct.new $StrBytesImpl (local.get $buf))
   )
 
   ;; _str_fmt_int : i32 -> (ref $Str)
@@ -1932,12 +2073,14 @@
     (local $i i32)
 
     ;; Format start and end numbers via range public accessors.
+    ;; Range bounds are $I64; convert i64 → f64 for the formatter
+    ;; (TODO: int-aware formatter once str.wat sheds f64 plumbing).
     (local.set $start_str
-      (call $_str_fmt_num (struct.get $Num $val
-        (call $range_start (local.get $range)))))
+      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
+        (call $range_start (local.get $range))))))
     (local.set $end_str
-      (call $_str_fmt_num (struct.get $Num $val
-        (call $range_end (local.get $range)))))
+      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
+        (call $range_end (local.get $range))))))
 
     ;; Get byte arrays.
     (local.set $start_bytes (call $bytes (local.get $start_str)))
@@ -2710,13 +2853,13 @@
 
   ;; ---- String slicing ----
 
-  ;; _str_slice(str, start_f, end_f) → (ref null $Str)
+  ;; _str_slice(str, start_i, end_i) → (ref null $Str)
   ;; Internal direct-style slice: extract bytes [start..end).
-  ;; Negative values resolve from end: -1 → len-1, -0.0 → len.
+  ;; Negative values resolve from end: -1 → len-1.
   ;; Returns null on out-of-bounds (after resolution: 0 <= start <= end <= len).
   ;; Returns empty string for empty slice, original for full range.
   (func $_str_slice
-    (param $str (ref $Str)) (param $start_f f64) (param $end_f f64)
+    (param $str (ref $Str)) (param $start_i i64) (param $end_i i64)
     (result (ref null $Str))
 
     (local $len i32)
@@ -2729,28 +2872,20 @@
 
     (local.set $len (call $_str_len (local.get $str)))
 
-    ;; Resolve negative values from end (including -0.0 via copysign check)
-    (if (f64.lt
-          (f64.copysign (f64.const 1) (local.get $start_f))
-          (f64.const 0))
+    ;; Resolve negative values from end.
+    (if (i64.lt_s (local.get $start_i) (i64.const 0))
       (then
         (local.set $start
-          (i32.add (local.get $len)
-            (i32.trunc_f64_s (local.get $start_f)))))
+          (i32.add (local.get $len) (i32.wrap_i64 (local.get $start_i)))))
       (else
-        (local.set $start
-          (i32.trunc_f64_s (local.get $start_f)))))
+        (local.set $start (i32.wrap_i64 (local.get $start_i)))))
 
-    (if (f64.lt
-          (f64.copysign (f64.const 1) (local.get $end_f))
-          (f64.const 0))
+    (if (i64.lt_s (local.get $end_i) (i64.const 0))
       (then
         (local.set $end
-          (i32.add (local.get $len)
-            (i32.trunc_f64_s (local.get $end_f)))))
+          (i32.add (local.get $len) (i32.wrap_i64 (local.get $end_i)))))
       (else
-        (local.set $end
-          (i32.trunc_f64_s (local.get $end_f)))))
+        (local.set $end (i32.wrap_i64 (local.get $end_i)))))
 
     ;; Bounds check: 0 <= start <= end <= len
     (if (i32.or
@@ -2805,8 +2940,8 @@
     (local.set $s (ref.cast (ref $Str) (local.get $str)))
     (local.set $result (call $_str_slice
       (local.get $s)
-      (struct.get $Num 0 (ref.cast (ref $Num) (local.get $start)))
-      (struct.get $Num 0 (ref.cast (ref $Num) (local.get $end)))))
+      (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $start)))
+      (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $end)))))
 
     (if (ref.is_null (local.get $result))
       (then
@@ -2830,8 +2965,8 @@
 
     (local $s (ref $Str))
     (local $range (ref $Range))
-    (local $start_f f64)
-    (local $end_f f64)
+    (local $start_i i64)
+    (local $end_i i64)
     (local $result (ref null $Str))
 
     (local.set $s (ref.cast (ref $Str) (local.get $str)))
@@ -2844,35 +2979,36 @@
             (local.get $key))))
       (local.set $range)
 
-      (local.set $start_f (struct.get $Num 0 (call $range_start (local.get $range))))
-      (local.set $end_f (struct.get $Num 0 (call $range_end (local.get $range))))
+      ;; Range bounds are $I64 — read $ival directly.
+      (local.set $start_i (struct.get $I64 $ival (call $range_start (local.get $range))))
+      (local.set $end_i (struct.get $I64 $ival (call $range_end (local.get $range))))
 
       ;; Adjust end for inclusive range
       (if (call $range_is_incl (local.get $range))
         (then
-          (local.set $end_f (f64.add (local.get $end_f) (f64.const 1)))))
+          (local.set $end_i (i64.add (local.get $end_i) (i64.const 1)))))
 
       (local.set $result
-        (call $_str_slice (local.get $s) (local.get $start_f) (local.get $end_f)))
+        (call $_str_slice (local.get $s) (local.get $start_i) (local.get $end_i)))
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1
         (ref.as_non_null (local.get $result))
         (local.get $cont)))
 
-    ;; Try $Num key — single byte
-    (block $not_num
-      (block $is_num (result (ref $Num))
-        (br $not_num
-          (br_on_cast $is_num (ref null any) (ref $Num)
+    ;; Try $I64 key — single byte at index
+    (block $not_i64
+      (block $is_i64 (result (ref $I64))
+        (br $not_i64
+          (br_on_cast $is_i64 (ref null any) (ref $I64)
             (local.get $key))))
-      (local.set $start_f (struct.get $Num 0))
+      (local.set $start_i (struct.get $I64 $ival))
 
       (local.set $result
         (call $_str_slice
           (local.get $s)
-          (local.get $start_f)
-          (f64.add (local.get $start_f) (f64.const 1))))
+          (local.get $start_i)
+          (i64.add (local.get $start_i) (i64.const 1))))
       (if (ref.is_null (local.get $result))
         (then (unreachable)))
       (return_call $apply_1

@@ -19,9 +19,9 @@
 ;;   - Hash: imported from hashing.wat (hash_i31). Dispatches on i31ref,
 ;;     $Num, $Str via br_on_cast.
 ;;
-;; Type hierarchy (types.wat defines the opaque base type):
+;; Type hierarchy:
 ;;
-;;   $Set              ← opaque base (from types.wat)
+;;   $Set              ← opaque base
 ;;   └── $SetImpl      ← wrapper: single $SetNode field
 ;;
 ;; Exported functions:

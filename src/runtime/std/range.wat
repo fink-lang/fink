@@ -3,7 +3,10 @@
 ;; WASM GC implementation using struct types.
 ;;
 ;; Design:
-;;   - Stores start and end bounds as $Num (f64)
+;;   - Stores start and end bounds as $I64 (signed 64-bit int).
+;;     Non-int bounds trap at construction. Float / decimal / user-typed
+;;     ranges become possible once range becomes a protocol-driven shape
+;;     (TODO).
 ;;   - Inclusive flag distinguishes exclusive (..) from inclusive (...)
 ;;   - Membership test: start <= val and (val < end or val <= end)
 ;;   - Step field to be added later
@@ -17,6 +20,7 @@
 
   ;; Type imports
   (import "std/num.wat"  "Num"  (type $Num  (sub any)))
+  (import "std/int.wat"  "I64"  (type $I64  (sub any) (struct (field $ival i64))))
   (import "std/list.wat" "List" (type $List (sub any)))
 
   ;; Func imports
@@ -33,8 +37,8 @@
   (type $Range (@pub) (sub (struct)))
 
   (type $RangeImpl (sub $Range (struct
-    (field $start (ref $Num))
-    (field $end   (ref $Num))
+    (field $start (ref $I64))
+    (field $end   (ref $I64))
     (field $incl  i32)
   )))
 
@@ -43,7 +47,7 @@
 
   ;; range_excl(start, end) → exclusive range
   (func $excl (@pub)
-    (param $start (ref $Num)) (param $end (ref $Num))
+    (param $start (ref $I64)) (param $end (ref $I64))
     (result (ref $Range))
     (struct.new $RangeImpl
       (local.get $start)
@@ -54,7 +58,7 @@
 
   ;; range_incl(start, end) → inclusive range
   (func $incl (@pub)
-    (param $start (ref $Num)) (param $end (ref $Num))
+    (param $start (ref $I64)) (param $end (ref $I64))
     (result (ref $Range))
     (struct.new $RangeImpl
       (local.get $start)
@@ -70,35 +74,37 @@
   ;;
   ;; For exclusive: start <= val < end
   ;; For inclusive: start <= val <= end
-  (func $op_in (@impl "std/operators.fnk:op_in" $Num $Range)
-    (param $val (ref $Num)) (param $range (ref $Range))
+  ;;
+  ;; Both bounds and val are $I64 — non-int operands trap at the cast.
+  (func $op_in (@impl "std/operators.fnk:op_in" $I64 $Range)
+    (param $val (ref $I64)) (param $range (ref $Range))
     (result i32)
     (local $impl (ref $RangeImpl))
-    (local $v f64)
-    (local $s f64)
-    (local $e f64)
+    (local $v i64)
+    (local $s i64)
+    (local $e i64)
 
     (local.set $impl (ref.cast (ref $RangeImpl) (local.get $range)))
 
-    (local.set $v (struct.get $Num $val (local.get $val)))
-    (local.set $s (struct.get $Num $val (struct.get $RangeImpl $start (local.get $impl))))
-    (local.set $e (struct.get $Num $val (struct.get $RangeImpl $end (local.get $impl))))
+    (local.set $v (struct.get $I64 $ival (local.get $val)))
+    (local.set $s (struct.get $I64 $ival (struct.get $RangeImpl $start (local.get $impl))))
+    (local.set $e (struct.get $I64 $ival (struct.get $RangeImpl $end (local.get $impl))))
 
     ;; start <= val
-    (if (i32.eqz (f64.le (local.get $s) (local.get $v)))
+    (if (i32.eqz (i64.le_s (local.get $s) (local.get $v)))
       (then (return (i32.const 0)))
     )
 
     ;; Exclusive: val < end.  Inclusive: val <= end.
     (if (struct.get $RangeImpl $incl (local.get $impl))
-      (then (return (f64.le (local.get $v) (local.get $e))))
+      (then (return (i64.le_s (local.get $v) (local.get $e))))
     )
-    (f64.lt (local.get $v) (local.get $e))
+    (i64.lt_s (local.get $v) (local.get $e))
   )
 
   ;; op_not_in(val, range) → 1 if val is NOT in range, 0 otherwise
-  (func $op_not_in (@impl "std/operators.fnk:op_notin" $Num $Range)
-    (param $val (ref $Num)) (param $range (ref $Range))
+  (func $op_not_in (@impl "std/operators.fnk:op_notin" $I64 $Range)
+    (param $val (ref $I64)) (param $range (ref $Range))
     (result i32)
     (i32.eqz (call $op_in (local.get $val) (local.get $range)))
   )
@@ -106,17 +112,17 @@
 
   ;; -- Accessors ------------------------------------------------------------
 
-  ;; start(range) → start bound as $Num
+  ;; start(range) → start bound as $I64
   (func $start (@pub)
     (param $range (ref $Range))
-    (result (ref $Num))
+    (result (ref $I64))
     (struct.get $RangeImpl $start
       (ref.cast (ref $RangeImpl) (local.get $range))))
 
-  ;; end(range) → end bound as $Num
+  ;; end(range) → end bound as $I64
   (func $end (@pub)
     (param $range (ref $Range))
-    (result (ref $Num))
+    (result (ref $I64))
     (struct.get $RangeImpl $end
       (ref.cast (ref $RangeImpl) (local.get $range))))
 
@@ -137,16 +143,16 @@
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $excl
-        (ref.cast (ref $Num) (local.get $a))
-        (ref.cast (ref $Num) (local.get $b)))
+        (ref.cast (ref $I64) (local.get $a))
+        (ref.cast (ref $I64) (local.get $b)))
       (local.get $cont)))
 
   (func $cps_incl (@pub) (@impl "std/range.fnk:incl")
     (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))
     (return_call $list_apply_1
       (call $incl
-        (ref.cast (ref $Num) (local.get $a))
-        (ref.cast (ref $Num) (local.get $b)))
+        (ref.cast (ref $I64) (local.get $a))
+        (ref.cast (ref $I64) (local.get $b)))
       (local.get $cont)))
 
 )

@@ -133,7 +133,6 @@ fn linked_runtime() -> &'static LinkedRuntime {
   CELL.get_or_init(|| {
     let modules: &[(&str, &str)] = &[
       ("interop/rust.wat", include_str!("../../runtime/interop/rust.wat")),
-      ("rt/types.wat",     include_str!("../../runtime/rt/types.wat")),
       ("rt/apply.wat",     include_str!("../../runtime/rt/apply.wat")),
       ("rt/modules.wat",   include_str!("../../runtime/rt/modules.wat")),
       ("rt/protocols.wat", include_str!("../../runtime/rt/protocols.wat")),
@@ -141,6 +140,8 @@ fn linked_runtime() -> &'static LinkedRuntime {
       ("std/str.wat",      include_str!("../../runtime/std/str.wat")),
       ("std/list.wat",     include_str!("../../runtime/std/list.wat")),
       ("std/int.wat",      include_str!("../../runtime/std/int.wat")),
+      ("std/float.wat",    include_str!("../../runtime/std/float.wat")),
+      ("std/decimal.wat",  include_str!("../../runtime/std/decimal.wat")),
       ("std/range.wat",    include_str!("../../runtime/std/range.wat")),
       ("std/set.wat",      include_str!("../../runtime/std/set.wat")),
       ("std/dict.wat",     include_str!("../../runtime/std/dict.wat")),
@@ -1030,6 +1031,7 @@ fn emit_operand(
 ) {
   match op {
     Operand::I32(v) => { func.instruction(&Instruction::I32Const(*v)); }
+    Operand::I64(v) => { func.instruction(&Instruction::I64Const(*v)); }
     Operand::F64(v) => { func.instruction(&Instruction::F64Const((*v).into())); }
     Operand::Local(idx) => { func.instruction(&Instruction::LocalGet(idx.0)); }
     Operand::Global(sym) => {

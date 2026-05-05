@@ -352,12 +352,14 @@ mod tests {
                   .ok_or_else(|| Error::msg("host_read: null size"))?;
                 if let Ok(Some(i31)) = any.as_i31(&caller) {
                   i31.get_i32()
-                } else if let Ok(Some(s)) = any.as_struct(&caller)
-                  && let Ok(Val::F64(bits)) = s.field(&mut caller, 0)
-                {
-                  f64::from_bits(bits) as i32
+                } else if let Ok(Some(s)) = any.as_struct(&caller) {
+                  match s.field(&mut caller, 0) {
+                    Ok(Val::I64(v)) => v as i32,
+                    Ok(Val::F64(bits)) => f64::from_bits(bits) as i32,
+                    _ => return Err(Error::msg("host_read: size struct field unreadable")),
+                  }
                 } else {
-                  return Err(Error::msg("host_read: size is neither i31 nor $Num"));
+                  return Err(Error::msg("host_read: size is neither i31 nor numeric struct"));
                 }
               };
               let bytes: Vec<u8> = cap.lock().unwrap().read_stdin(size as usize).to_vec();
@@ -498,6 +500,13 @@ mod tests {
         Ok(Val::F64(bits)) => {
           *captured.lock().unwrap() =
             Some(TestResult::Num(f64::from_bits(bits)));
+          return Ok(());
+        }
+        Ok(Val::I64(v)) => {
+          // $Int subtype: field 0 is `$ival i64`. Surface as Num for now;
+          // a dedicated Int variant could land later.
+          *captured.lock().unwrap() =
+            Some(TestResult::Num(v as f64));
           return Ok(());
         }
         Ok(Val::I32(offset)) => {

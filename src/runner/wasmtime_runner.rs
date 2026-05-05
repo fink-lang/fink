@@ -317,24 +317,34 @@ fn capture_exit_code(
     exit.lock().unwrap().exit_code = i31.get_i32() as i64;
     return;
   }
-  if let Ok(Some(st)) = r.as_struct(&*caller)
-    && let Ok(Val::F64(bits)) = st.field(&mut *caller, 0)
-  {
-    exit.lock().unwrap().exit_code = f64::from_bits(bits) as i64;
+  if let Ok(Some(st)) = r.as_struct(&*caller) {
+    match st.field(&mut *caller, 0) {
+      Ok(Val::I64(v)) => {
+        // $Int subtype: field 0 is i64.
+        exit.lock().unwrap().exit_code = v;
+      }
+      Ok(Val::F64(bits)) => {
+        // $F64 / $Decimal: field 0 is f64.
+        exit.lock().unwrap().exit_code = f64::from_bits(bits) as i64;
+      }
+      _ => {}
+    }
   }
 }
 
-/// Extract an i32 from a wasm value (i31ref or `$Num` struct).
+/// Extract an i32 from a wasm value (i31ref, `$F64`/`$Decimal` struct, or `$Int` struct).
 fn extract_i32(caller: &mut Caller<'_, ()>, val: &Val) -> Result<i32, Error> {
   let any = val.unwrap_anyref()
     .ok_or_else(|| Error::msg("expected non-null value"))?;
   if let Ok(Some(i31)) = any.as_i31(&*caller) {
     return Ok(i31.get_i32());
   }
-  if let Ok(Some(s)) = any.as_struct(&*caller)
-    && let Ok(Val::F64(bits)) = s.field(&mut *caller, 0)
-  {
-    return Ok(f64::from_bits(bits) as i32);
+  if let Ok(Some(s)) = any.as_struct(&*caller) {
+    match s.field(&mut *caller, 0) {
+      Ok(Val::I64(v)) => return Ok(v as i32),
+      Ok(Val::F64(bits)) => return Ok(f64::from_bits(bits) as i32),
+      _ => {}
+    }
   }
   Err(Error::msg("cannot extract i32 from value"))
 }
