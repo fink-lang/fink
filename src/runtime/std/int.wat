@@ -95,29 +95,50 @@
       (call $_int_ival (local.get $a))
       (call $_int_ival (local.get $b))))
 
+  ;; Ordering ops dispatch on signedness: $U64 → unsigned compare,
+  ;; $I64 → signed compare. num.wat's $check_compat already traps on
+  ;; mixed signed/unsigned operands, so by the time we get here both
+  ;; operands share a family — testing $a is enough.
+
   (func $op_lt (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (i64.lt_s
-      (call $_int_ival (local.get $a))
-      (call $_int_ival (local.get $b))))
+    (if (result i32) (ref.test (ref $U64) (local.get $a))
+      (then (i64.lt_u
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))
+      (else (i64.lt_s
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))))
 
   (func $op_lte (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (i64.le_s
-      (call $_int_ival (local.get $a))
-      (call $_int_ival (local.get $b))))
+    (if (result i32) (ref.test (ref $U64) (local.get $a))
+      (then (i64.le_u
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))
+      (else (i64.le_s
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))))
 
   (func $op_gt (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (i64.gt_s
-      (call $_int_ival (local.get $a))
-      (call $_int_ival (local.get $b))))
+    (if (result i32) (ref.test (ref $U64) (local.get $a))
+      (then (i64.gt_u
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))
+      (else (i64.gt_s
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))))
 
   (func $op_gte (@pub)
     (param $a (ref $Int)) (param $b (ref $Int)) (result i32)
-    (i64.ge_s
-      (call $_int_ival (local.get $a))
-      (call $_int_ival (local.get $b))))
+    (if (result i32) (ref.test (ref $U64) (local.get $a))
+      (then (i64.ge_u
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))
+      (else (i64.ge_s
+        (call $_int_ival (local.get $a))
+        (call $_int_ival (local.get $b))))))
 
   ;; Func imports — list constructors via the public API.
   (import "std/list.wat" "empty"
