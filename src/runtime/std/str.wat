@@ -27,8 +27,9 @@
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"     "U64"     (type $U64     (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"     "fmt"     (func $int_fmt     (param (ref $Int))     (result (ref $Str))))
-  (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
-  (import "std/float.wat"   "fmt"     (func $float_fmt   (param (ref $F64))     (result (ref $Str))))
+  (import "std/float.wat"   "F64"      (type $F64     (sub any) (struct (field $val f64))))
+  (import "std/float.wat"   "fmt"      (func $float_fmt   (param (ref $F64)) (result (ref $Str))))
+  (import "std/float.wat"   "from_f64" (func $float_from_f64 (param f64) (result (ref $Str))))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
   (import "std/decimal.wat" "fmt"     (func $decimal_fmt (param (ref $Decimal)) (result (ref $Str))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
@@ -1723,235 +1724,6 @@
     (struct.new $StrBytesImpl (local.get $buf))
   )
 
-  ;; from_f64 : f64 -> (ref $Str)
-  ;; Public helper: render an f64 as a string. Handles NaN, ±Infinity,
-  ;; integers, and fractional values. Used by float.wat:fmt and
-  ;; decimal.wat:fmt as the shared f64 renderer; also used internally
-  ;; by range.wat formatting (until range moves out).
-  (func $from_f64 (@pub) (param $v f64) (result (ref $Str))
-
-    (local $i64v i64)
-
-    ;; NaN check — f64.ne with itself is true only for NaN.
-    (if (f64.ne (local.get $v) (local.get $v))
-      (then (return (call $_str_from_ascii_3 (i32.const 0x4E) (i32.const 0x61) (i32.const 0x4E))))) ;; "NaN"
-
-    ;; +Infinity
-    (if (f64.eq (local.get $v) (f64.const inf))
-      (then (return (call $_str_from_ascii_8
-        (i32.const 0x49) (i32.const 0x6E) (i32.const 0x66) (i32.const 0x69)
-        (i32.const 0x6E) (i32.const 0x69) (i32.const 0x74) (i32.const 0x79))))) ;; "Infinity"
-
-    ;; -Infinity
-    (if (f64.eq (local.get $v) (f64.const -inf))
-      (then (return (call $_str_from_ascii_9
-        (i32.const 0x2D)  ;; "-"
-        (i32.const 0x49) (i32.const 0x6E) (i32.const 0x66) (i32.const 0x69)
-        (i32.const 0x6E) (i32.const 0x69) (i32.const 0x74) (i32.const 0x79))))) ;; "-Infinity"
-
-    ;; If the value is an integer that fits in i32, render as integer.
-    (if (f64.eq (local.get $v) (f64.trunc (local.get $v)))
-      (then
-        (local.set $i64v (i64.trunc_sat_f64_s (local.get $v)))
-        (if (i32.and
-              (i64.le_s (local.get $i64v) (i64.const 2147483647))
-              (i64.ge_s (local.get $i64v) (i64.const -2147483648)))
-          (then
-            (return (call $_str_fmt_int
-              (i32.wrap_i64 (local.get $i64v))))))))
-
-    ;; Non-integer float.
-    (call $_str_fmt_float (local.get $v))
-  )
-
-  ;; _str_fmt_int : i32 -> (ref $Str)
-  ;; Format a signed i32 as a decimal string.
-  (func $_str_fmt_int (param $v i32) (result (ref $Str))
-
-    (local $neg i32)
-    (local $abs i32)
-    (local $digits i32)
-    (local $tmp i32)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-
-    ;; Zero special case.
-    (if (i32.eqz (local.get $v))
-      (then
-        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
-        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
-        (return (struct.new $StrBytesImpl (local.get $buf)))))
-
-    ;; Handle sign.
-    (local.set $neg (i32.lt_s (local.get $v) (i32.const 0)))
-    (if (local.get $neg)
-      (then (local.set $abs (i32.sub (i32.const 0) (local.get $v))))
-      (else (local.set $abs (local.get $v))))
-
-    ;; Count digits.
-    (local.set $digits (i32.const 0))
-    (local.set $tmp (local.get $abs))
-    (block $done
-      (loop $count
-        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
-        (local.set $tmp (i32.div_u (local.get $tmp) (i32.const 10)))
-        (br_if $count (local.get $tmp))
-      ))
-
-    ;; Allocate buffer.
-    (local.set $buf
-      (array.new $ByteArray (i32.const 0)
-        (i32.add (local.get $digits) (local.get $neg))))
-
-    ;; Write '-' if negative.
-    (if (local.get $neg)
-      (then (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))))
-
-    ;; Write digits right-to-left.
-    (local.set $pos
-      (i32.sub
-        (i32.add (local.get $digits) (local.get $neg))
-        (i32.const 1)))
-    (local.set $tmp (local.get $abs))
-    (block $done
-      (loop $write
-        (array.set $ByteArray (local.get $buf) (local.get $pos)
-          (i32.add (i32.const 0x30) (i32.rem_u (local.get $tmp) (i32.const 10))))
-        (local.set $tmp (i32.div_u (local.get $tmp) (i32.const 10)))
-        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
-        (br_if $write (local.get $tmp))
-      ))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_fmt_float : f64 -> (ref $Str)
-  ;; Format a non-integer f64 as "int_part.frac_part" with trailing zeros stripped.
-  ;; Simple approach: multiply fractional part by 1e15, render as i64, strip trailing '0's.
-  (func $_str_fmt_float (param $v f64) (result (ref $Str))
-
-    (local $neg i32)
-    (local $abs f64)
-    (local $int_part f64)
-    (local $frac f64)
-    (local $frac_i64 i64)
-    (local $int_buf (ref $ByteArray))
-    (local $int_len i32)
-    (local $frac_buf (ref $ByteArray))
-    (local $frac_digits i32)
-    (local $frac_len i32)
-    (local $tmp i64)
-    (local $buf (ref $ByteArray))
-    (local $total i32)
-    (local $pos i32)
-    (local $i i32)
-
-    ;; Handle sign.
-    (local.set $neg (f64.lt (local.get $v) (f64.const 0)))
-    (if (local.get $neg)
-      (then (local.set $abs (f64.neg (local.get $v))))
-      (else (local.set $abs (local.get $v))))
-
-    ;; Split into integer and fractional parts.
-    (local.set $int_part (f64.trunc (local.get $abs)))
-    (local.set $frac (f64.sub (local.get $abs) (local.get $int_part)))
-
-    ;; Render integer part as i64 digits into a temporary buffer.
-    ;; Max i64 digits = 20, allocate 20.
-    (local.set $int_buf (array.new $ByteArray (i32.const 0) (i32.const 20)))
-    (local.set $int_len (i32.const 0))
-    (block $int_zero
-      (local.set $tmp (i64.trunc_sat_f64_u (local.get $int_part)))
-      (if (i64.eqz (local.get $tmp))
-        (then
-          ;; Integer part is 0 — write single '0'.
-          (array.set $ByteArray (local.get $int_buf) (i32.const 0) (i32.const 0x30))
-          (local.set $int_len (i32.const 1))
-          (br $int_zero)))
-      ;; Write digits right-to-left into int_buf, then we'll reverse.
-      (loop $iloop
-        (array.set $ByteArray (local.get $int_buf) (local.get $int_len)
-          (i32.add (i32.const 0x30) (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
-        (local.set $int_len (i32.add (local.get $int_len) (i32.const 1)))
-        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-        (br_if $iloop (i64.ne (local.get $tmp) (i64.const 0)))))
-
-    ;; Render fractional part: multiply by 1e15, convert to i64, render digits.
-    ;; 15 digits is within i64 range and covers f64 precision.
-    (local.set $frac_i64 (i64.trunc_sat_f64_u
-      (f64.add
-        (f64.mul (local.get $frac) (f64.const 1e15))
-        (f64.const 0.5)))) ;; round
-
-    ;; Render all 15 digits (with leading zeros) then strip trailing zeros.
-    (local.set $frac_buf (array.new $ByteArray (i32.const 0) (i32.const 15)))
-    (local.set $frac_digits (i32.const 15))
-    (local.set $tmp (local.get $frac_i64))
-    ;; Write right-to-left.
-    (local.set $i (i32.const 14))
-    (loop $floop
-      (array.set $ByteArray (local.get $frac_buf) (local.get $i)
-        (i32.add (i32.const 0x30) (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
-      (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-      (if (local.get $i)
-        (then
-          (local.set $i (i32.sub (local.get $i) (i32.const 1)))
-          (br $floop))))
-
-    ;; Strip trailing '0's from frac_buf, but keep at least 1 digit.
-    (local.set $frac_len (local.get $frac_digits))
-    (loop $strip
-      (if (i32.and
-            (i32.gt_s (local.get $frac_len) (i32.const 1))
-            (i32.eq
-              (array.get_u $ByteArray (local.get $frac_buf)
-                (i32.sub (local.get $frac_len) (i32.const 1)))
-              (i32.const 0x30)))
-        (then
-          (local.set $frac_len (i32.sub (local.get $frac_len) (i32.const 1)))
-          (br $strip))))
-
-    ;; Assemble: ['-'] int_digits '.' frac_digits
-    ;; int_buf has digits in reverse order (except if single '0').
-    (local.set $total (i32.add
-      (i32.add (local.get $neg) (local.get $int_len))
-      (i32.add (i32.const 1) (local.get $frac_len)))) ;; +1 for '.'
-
-    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
-    (local.set $pos (i32.const 0))
-
-    ;; Write '-' if negative.
-    (if (local.get $neg)
-      (then
-        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))
-        (local.set $pos (i32.const 1))))
-
-    ;; Write integer digits (int_buf is in reverse order, write backwards).
-    (local.set $i (i32.sub (local.get $int_len) (i32.const 1)))
-    (loop $wcopy
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $int_buf) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (if (local.get $i)
-        (then
-          (local.set $i (i32.sub (local.get $i) (i32.const 1)))
-          (br $wcopy))))
-
-    ;; Write '.'.
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-
-    ;; Write fractional digits (frac_buf is in correct order).
-    (local.set $i (i32.const 0))
-    (loop $fcopy
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $frac_buf) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br_if $fcopy (i32.lt_u (local.get $i) (local.get $frac_len))))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
 
   ;; _str_fmt_range : (ref $Range) -> (ref $Str)
   ;; Format a range as "start..end" (exclusive) or "start...end" (inclusive).
@@ -1972,10 +1744,10 @@
     ;; Range bounds are $I64; convert i64 → f64 for the formatter
     ;; (TODO: int-aware formatter once str.wat sheds f64 plumbing).
     (local.set $start_str
-      (call $from_f64 (f64.convert_i64_s (struct.get $I64 $ival
+      (call $float_from_f64 (f64.convert_i64_s (struct.get $I64 $ival
         (call $range_start (local.get $range))))))
     (local.set $end_str
-      (call $from_f64 (f64.convert_i64_s (struct.get $I64 $ival
+      (call $float_from_f64 (f64.convert_i64_s (struct.get $I64 $ival
         (call $range_end (local.get $range))))))
 
     ;; Get byte arrays.
@@ -2626,54 +2398,6 @@
     (struct.new $StrBytesImpl (local.get $buf))
   )
 
-  ;; _str_from_ascii_3 : (i32, i32, i32) -> (ref $Str)
-  ;; Build a 3-byte string from ASCII code points.
-  (func $_str_from_ascii_3 (param $a i32) (param $b i32) (param $c i32) (result (ref $Str))
-    (local $buf (ref $ByteArray))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 3)))
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
-    (array.set $ByteArray (local.get $buf) (i32.const 1) (local.get $b))
-    (array.set $ByteArray (local.get $buf) (i32.const 2) (local.get $c))
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_from_ascii_8 : 8 bytes -> (ref $Str)
-  (func $_str_from_ascii_8
-    (param $a i32) (param $b i32) (param $c i32) (param $d i32)
-    (param $e i32) (param $f i32) (param $g i32) (param $h i32)
-    (result (ref $Str))
-    (local $buf (ref $ByteArray))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 8)))
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
-    (array.set $ByteArray (local.get $buf) (i32.const 1) (local.get $b))
-    (array.set $ByteArray (local.get $buf) (i32.const 2) (local.get $c))
-    (array.set $ByteArray (local.get $buf) (i32.const 3) (local.get $d))
-    (array.set $ByteArray (local.get $buf) (i32.const 4) (local.get $e))
-    (array.set $ByteArray (local.get $buf) (i32.const 5) (local.get $f))
-    (array.set $ByteArray (local.get $buf) (i32.const 6) (local.get $g))
-    (array.set $ByteArray (local.get $buf) (i32.const 7) (local.get $h))
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_from_ascii_9 : 9 bytes -> (ref $Str)
-  (func $_str_from_ascii_9
-    (param $a i32) (param $b i32) (param $c i32) (param $d i32)
-    (param $e i32) (param $f i32) (param $g i32) (param $h i32)
-    (param $i i32)
-    (result (ref $Str))
-    (local $buf (ref $ByteArray))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 9)))
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
-    (array.set $ByteArray (local.get $buf) (i32.const 1) (local.get $b))
-    (array.set $ByteArray (local.get $buf) (i32.const 2) (local.get $c))
-    (array.set $ByteArray (local.get $buf) (i32.const 3) (local.get $d))
-    (array.set $ByteArray (local.get $buf) (i32.const 4) (local.get $e))
-    (array.set $ByteArray (local.get $buf) (i32.const 5) (local.get $f))
-    (array.set $ByteArray (local.get $buf) (i32.const 6) (local.get $g))
-    (array.set $ByteArray (local.get $buf) (i32.const 7) (local.get $h))
-    (array.set $ByteArray (local.get $buf) (i32.const 8) (local.get $i))
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
 
 
   ;; CPS wrappers — stripped by unit test harness (prepare_wat).

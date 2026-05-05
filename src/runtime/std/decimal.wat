@@ -10,8 +10,8 @@
   ;; Type imports
   (import "std/num.wat" "Num" (type $Num (sub any) (struct)))
   (import "std/str.wat" "Str" (type $Str (sub any) (struct)))
-  (import "std/str.wat" "from_f64"
-    (func $str_from_f64 (param f64) (result (ref $Str))))
+  (import "std/float.wat" "from_f64"
+    (func $float_from_f64 (param f64) (result (ref $Str))))
 
   (type $Decimal (@pub) (sub final $Num
     (struct (field $coeff i64) (field $exp i32))))
@@ -53,9 +53,9 @@
     (local.get $f))
 
   ;; Render a $Decimal as a string. Today: render the f64 view via
-  ;; str.wat:from_f64 — same output as before the (coeff, exp) repr
+  ;; float.wat:from_f64 — same output as before the (coeff, exp) repr
   ;; landed. A real exact-decimal formatter is future work.
   (func $fmt (@pub) (param $d (ref $Decimal)) (result (ref $Str))
-    (return_call $str_from_f64 (call $_as_f64 (local.get $d))))
+    (return_call $float_from_f64 (call $_as_f64 (local.get $d))))
 
 )
