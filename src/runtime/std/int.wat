@@ -11,8 +11,9 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"  "Num"  (type $Num  (sub any) (struct)))
-  (import "std/list.wat" "List" (type $List (sub any)))
+  (import "std/num.wat"   "Num"  (type $Num  (sub any) (struct)))
+  (import "std/float.wat" "F64"  (type $F64  (sub $Num (struct (field $val f64)))))
+  (import "std/list.wat"  "List" (type $List (sub any)))
 
   ;; $Int — abstract, nominal-only supertype. No fields. Storage
   ;; (`$ival i64`) lives on the leaves $I64/$U64. They differ only in
@@ -26,16 +27,7 @@
   ;; =========================================================================
   ;; Arithmetic on $Int — result widens to $I64 when sign info is lost.
   ;; (Sub-dispatch by I64/U64 is a future refinement.)
-  ;;
-  ;; Internal helper $_box_i64_from_f64 truncates an f64 to i64 then
-  ;; boxes as $I64. Used by op_div, where the divide stays in f64
-  ;; land for real-division semantics. The truncation drops fractional
-  ;; results — once cross-family coercion is wired through num.wat,
-  ;; op_div should return $F64 and this helper goes away.
   ;; =========================================================================
-
-  (func $_box_i64_from_f64 (param $v f64) (result (ref $I64))
-    (struct.new $I64 (i64.trunc_f64_s (local.get $v))))
 
   (func $_box_i64 (@pub) (param $v i64) (result (ref $I64))
     (struct.new $I64 (local.get $v)))
@@ -67,13 +59,12 @@
       (call $_int_ival (local.get $a))
       (call $_int_ival (local.get $b)))))
 
-  ;; op_div on $Int — fink `/` is real division; convert i64 operands
-  ;; to f64 for the divide, truncate the result back to i64 when boxing.
-  ;; TODO: result type should be $F64 once cross-family coercion is
-  ;; wired through num.wat's dispatcher.
+  ;; op_div on $Int — fink `/` is real division; converts both i64
+  ;; operands to f64, divides, and returns a boxed $F64. For integer
+  ;; truncated division use op_intdiv (`//` at the source level).
   (func $op_div (@pub)
-    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
-    (call $_box_i64_from_f64 (f64.div
+    (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $F64))
+    (struct.new $F64 (f64.div
       (f64.convert_i64_s (call $_int_ival (local.get $a)))
       (f64.convert_i64_s (call $_int_ival (local.get $b))))))
 

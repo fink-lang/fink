@@ -24,7 +24,7 @@
   (import "std/int.wat" "op_plus"  (func $int_op_plus  (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
   (import "std/int.wat" "op_minus" (func $int_op_minus (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
   (import "std/int.wat" "op_mul"   (func $int_op_mul   (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
-  (import "std/int.wat" "op_div"   (func $int_op_div_  (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "op_div"   (func $int_op_div_  (param (ref $Int)) (param (ref $Int)) (result (ref $F64))))
   (import "std/int.wat" "op_eq"    (func $int_op_eq    (param (ref $Int)) (param (ref $Int)) (result i32)))
   (import "std/int.wat" "op_neq"   (func $int_op_neq   (param (ref $Int)) (param (ref $Int)) (result i32)))
   (import "std/int.wat" "op_lt"    (func $int_op_lt    (param (ref $Int)) (param (ref $Int)) (result i32)))
