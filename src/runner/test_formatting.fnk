@@ -97,3 +97,42 @@ test 'list format nested strings', fn:
     '${ ['foo bar \' spam'] }' == '[\'foo bar \\\' spam\']'
   | equals ƒink:
     true
+
+
+# --- Set formatting ---
+
+test 'set format empty', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    '${set _}' == 'set _'
+  | equals ƒink:
+    true
+
+test 'set format single', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    '${set 1}' == 'set 1'
+  | equals ƒink:
+    true
+
+test 'set format', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    '${set 1, 2, 3}' == 'set 1, 2, 3'
+  | equals ƒink:
+    true
+
+test 'set format string element', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    '${set 'foo \n bar'}' == 'set \'foo \\n bar\''
+  | equals ƒink:
+    true
+
+test 'set format in template', fn:
+  expect run ƒink:
+    {set} = import 'std/set.fnk'
+    s = set 1, 2
+    'got: ${s}' == 'got: set 1, 2'
+  | equals ƒink:
+    true

@@ -51,8 +51,8 @@
   (import "rt/apply.wat" "apply_2_vals"
     (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
-  (import "std/set.wat" "repr"
-    (func $set_repr (param $set (ref $Set)) (result (ref $Str))))
+  (import "std/set.wat" "fmt"
+    (func $set_fmt (param (ref $Set)) (result (ref $Str))))
 
   (import "std/dict.wat" "fmt"
     (func $rec_fmt (param (ref $Rec)) (result (ref $Str))))
@@ -1659,13 +1659,13 @@
             (local.get $val))))
       (return_call $list_fmt))
 
-    ;; Try $Set — format as "set v1, v2, ..." (or "set _" for empty)
+    ;; Try $Set — delegate to set.wat:fmt.
     (block $not_set
       (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref any) (ref $Set)
             (local.get $val))))
-      (return (call $set_repr)))
+      (return_call $set_fmt))
 
     ;; Unknown type — unreachable for now.
     (unreachable)
@@ -1673,8 +1673,8 @@
 
   ;; _str_fmt_val_repr : (ref any) -> (ref $Str)
   ;; Like fmt_val but uses repr for strings (quoted + escaped).
-  ;; Used by set.wat for element formatting; will be dropped when the
-  ;; set.wat repr -> fmt rename happens.
+  ;; Used by container fmt impls (list, dict, set) for element formatting.
+  ;; Temporary — will be replaced by a per-type `repr` protocol.
   (func $_str_fmt_val_repr (@pub) (param $val (ref any)) (result (ref $Str))
 
     ;; Try $Str — repr (quoted + escaped)

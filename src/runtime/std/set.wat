@@ -57,8 +57,8 @@
   (import "std/num.wat"      "Num"      (type $Num      (sub any)))
   (import "std/str.wat"      "Str"      (type $Str      (sub any)))
   ;; TODO: $ByteArray is currently a private type in std/str.wat; it's
-  ;; used by repr to write bytes directly. Either expose it via @pub or
-  ;; move repr's byte-buffer construction behind a public str helper.
+  ;; used by fmt to write bytes directly. Either expose it via @pub or
+  ;; move fmt's byte-buffer construction behind a public str helper.
   (import "std/str.wat"      "ByteArray" (type $ByteArray (sub any)))
 
   ;; Func imports
@@ -1565,17 +1565,14 @@
   )
 
 
-  ;; -- Repr -----------------------------------------------------------
+  ;; -- Fmt --------------------------------------------------------------
   ;;
   ;; Render a $Set as a string: `set v1, v2, ...` with each element
   ;; formatted via _str_fmt_val_repr. Empty set renders as `set _`.
   ;;
-  ;; Two-pass byte-buffer build, mirroring the rec formatter in str.wat
-  ;; but driven from inside set.wat so HAMT internals stay encapsulated.
+  ;; Two-pass byte-buffer build, mirroring the rec formatter in dict.wat.
 
-  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Set)
-    (param $set (ref $Set))
-    (result (ref $Str))
+  (func $fmt (@pub) (param $set (ref $Set)) (result (ref $Str))
 
     (local $node (ref $SetNode))
     (local $entry_count i32)
@@ -1607,7 +1604,7 @@
       (i32.add
         (i32.const 4) ;; "set "
         (i32.add
-          (call $_repr_size_node (local.get $node))
+          (call $_fmt_size_node (local.get $node))
           (i32.mul
             (i32.sub (local.get $entry_count) (i32.const 1))
             (i32.const 2)))))
@@ -1625,16 +1622,16 @@
 
     ;; Pass 2: copy entries.
     (local.set $pos
-      (call $_repr_copy_node
+      (call $_fmt_copy_node
         (local.get $node) (local.get $buf) (local.get $pos)
         (i32.const 0))) ;; written = 0
 
     (struct.new $StrBytesImpl (local.get $buf))
   )
 
-  ;; _repr_size_node : (ref $SetNode) -> i32
+  ;; _fmt_size_node : (ref $SetNode) -> i32
   ;; Sum of formatted-value lengths across all entries (no separators).
-  (func $_repr_size_node
+  (func $_fmt_size_node
     (param $node (ref $SetNode))
     (result i32)
 
@@ -1671,14 +1668,14 @@
           (then
             (local.set $total
               (i32.add (local.get $total)
-                (call $_repr_size_node
+                (call $_fmt_size_node
                   (ref.cast (ref $SetNode) (local.get $child)))))))
 
         (if (ref.test (ref $SetCollision) (local.get $child))
           (then
             (local.set $total
               (i32.add (local.get $total)
-                (call $_repr_size_collision
+                (call $_fmt_size_collision
                   (struct.get $SetCollision $col_entries
                     (ref.cast (ref $SetCollision) (local.get $child))))))))
 
@@ -1688,7 +1685,7 @@
     (local.get $total)
   )
 
-  (func $_repr_size_collision
+  (func $_fmt_size_collision
     (param $entries (ref $SetChildren))
     (result i32)
 
@@ -1717,10 +1714,10 @@
     (local.get $total)
   )
 
-  ;; _repr_copy_node : (node, buf, pos, written) -> new_pos
+  ;; _fmt_copy_node : (node, buf, pos, written) -> new_pos
   ;; Copy formatted entries into buf. written counts entries already
   ;; emitted (used to decide whether to prepend ", ").
-  (func $_repr_copy_node
+  (func $_fmt_copy_node
     (param $node (ref $SetNode))
     (param $buf (ref $ByteArray))
     (param $pos i32)
@@ -1767,7 +1764,7 @@
         (if (ref.test (ref $SetNode) (local.get $child))
           (then
             (local.set $pos
-              (call $_repr_copy_node
+              (call $_fmt_copy_node
                 (ref.cast (ref $SetNode) (local.get $child))
                 (local.get $buf)
                 (local.get $pos)
@@ -1780,7 +1777,7 @@
         (if (ref.test (ref $SetCollision) (local.get $child))
           (then
             (local.set $pos
-              (call $_repr_copy_collision
+              (call $_fmt_copy_collision
                 (struct.get $SetCollision $col_entries
                   (ref.cast (ref $SetCollision) (local.get $child)))
                 (local.get $buf)
@@ -1798,7 +1795,7 @@
     (local.get $pos)
   )
 
-  (func $_repr_copy_collision
+  (func $_fmt_copy_collision
     (param $entries (ref $SetChildren))
     (param $buf (ref $ByteArray))
     (param $pos i32)
