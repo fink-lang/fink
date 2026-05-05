@@ -677,9 +677,9 @@ pub fn add_global(
 
 // --- operands (leaves) -------------------------------------------
 
-pub fn op_i32(v: i32) -> Operand { Operand::I32(v) }
-pub fn op_i64(v: i64) -> Operand { Operand::I64(v) }
-pub fn op_f64(v: f64) -> Operand { Operand::F64(v) }
+pub fn lit_i32(v: i32) -> Operand { Operand::I32(v) }
+pub fn lit_i64(v: i64) -> Operand { Operand::I64(v) }
+pub fn lit_f64(v: f64) -> Operand { Operand::F64(v) }
 pub fn op_local(idx: LocalIdx) -> Operand { Operand::Local(idx) }
 pub fn op_global(sym: GlobalSym) -> Operand { Operand::Global(sym) }
 pub fn op_ref_func(f: FuncSym) -> Operand { Operand::RefFunc(f) }
@@ -916,9 +916,9 @@ mod tests {
     let l_b    = LocalIdx(4);
 
     // local.set $a (struct.new $Num (f64.const 42))
-    let i1 = push_struct_new(&mut frag, num_ty, vec![op_f64(42.0)], l_a);
+    let i1 = push_struct_new(&mut frag, num_ty, vec![lit_f64(42.0)], l_a);
     // local.set $b (struct.new $Num (f64.const 123))
-    let i2 = push_struct_new(&mut frag, num_ty, vec![op_f64(123.0)], l_b);
+    let i2 = push_struct_new(&mut frag, num_ty, vec![lit_f64(123.0)], l_b);
     // return_call $num_op_add ($done, $a, $b)
     let i3 = push_return_call(
       &mut frag,

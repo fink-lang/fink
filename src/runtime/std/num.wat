@@ -14,7 +14,9 @@
   (import "std/int.wat"   "I64" (type $I64 (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"   "U64" (type $U64 (sub $Int (struct (field $ival i64)))))
   (import "std/float.wat" "F64" (type $F64 (sub $Num (struct (field $val f64)))))
-  (import "std/decimal.wat" "Decimal" (type $Decimal (sub $Num (struct (field $val f64)))))
+  (import "std/decimal.wat" "Decimal" (type $Decimal (sub $Num (struct (field $coeff i64) (field $exp i32)))))
+  (import "std/decimal.wat" "_as_f64"
+    (func $_decimal_as_f64 (param (ref $Decimal)) (result f64)))
 
   ;; Func imports — int.wat box helper + arithmetic + comparison on $Int.
   (import "std/int.wat" "_box_i64" (func $_box_i64     (param i64) (result (ref $I64))))
@@ -61,13 +63,13 @@
   (import "std/int.wat" "op_shl"    (func $int_op_shl    (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
   (import "std/int.wat" "op_shr"    (func $int_op_shr    (param (ref $U64)) (param (ref $Int)) (result (ref $U64))))
 
-  ;; $Num — abstract numeric base type, fieldless. Concrete subtypes
-  ;; carry their own value field:
-  ;;   - $Int   (in int.wat)  — `(field $ival i64)`
-  ;;     ├── $I64
-  ;;     └── $U64
-  ;;   - $F64   (in float.wat) — `(field $val f64)`
-  ;;   - $Decimal (in decimal.wat) — `(field $val f64)` (placeholder)
+  ;; $Num — abstract numeric base type, fieldless. $Int is also abstract
+  ;; and fieldless; storage lives only on the leaves:
+  ;;   - $Int   (in int.wat)  — abstract, no fields
+  ;;     ├── $I64 — `(field $ival i64)`
+  ;;     └── $U64 — `(field $ival i64)`
+  ;;   - $F64   (in float.wat)   — `(field $val f64)`
+  ;;   - $Decimal (in decimal.wat) — `(field $coeff i64) (field $exp i32)`
   ;;
   ;; Small integers may use i31ref directly (no struct needed) — that
   ;; packing is a separate optimisation, orthogonal to subtype shape.
@@ -111,9 +113,9 @@
           (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
       (return (struct.new $F64
         (f64.convert_i64_s (call $_int_ival)))))
-    ;; $Decimal fall-through — re-box the f64 slot.
+    ;; $Decimal fall-through — compute f64 view from (coeff, exp).
     (struct.new $F64
-      (struct.get $Decimal $val (ref.cast (ref $Decimal) (local.get $n)))))
+      (call $_decimal_as_f64 (ref.cast (ref $Decimal) (local.get $n)))))
 
   (func $as_int (param $n (ref $Num)) (result (ref $Int))
     ;; Already $Int → no-op.
@@ -129,10 +131,10 @@
           (br_on_cast $is_f64 (ref $Num) (ref $F64) (local.get $n))))
       (return (call $_box_i64
         (i64.trunc_f64_s (struct.get $F64 $val)))))
-    ;; $Decimal fall-through — read its f64 slot, trunc to i64.
+    ;; $Decimal fall-through — compute f64 view, then trunc to i64.
     (call $_box_i64
       (i64.trunc_f64_s
-        (struct.get $Decimal $val (ref.cast (ref $Decimal) (local.get $n))))))
+        (call $_decimal_as_f64 (ref.cast (ref $Decimal) (local.get $n))))))
 
   ;; True if either side is $F64 — picks the float arm.
   (func $is_float_op (param $a (ref $Num)) (param $b (ref $Num)) (result i32)
@@ -433,10 +435,10 @@
           (i64.reinterpret_f64 (struct.get $F64 $val)))
         (br $done))
 
-      ;; $Decimal fall-through — same bit-reinterpret as $F64 today.
+      ;; $Decimal fall-through — bit-reinterpret the f64 view.
       (local.set $bits
         (i64.reinterpret_f64
-          (struct.get $Decimal $val (ref.cast (ref $Decimal) (local.get $n))))))
+          (call $_decimal_as_f64 (ref.cast (ref $Decimal) (local.get $n))))))
 
     (i32.and
       (i32.xor

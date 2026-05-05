@@ -322,7 +322,7 @@ fn lower_fn(
       ctx.bind(*cap_id, local);
       let i_get = push_array_get(
         lcx.frag, lcx.rt.captures(),
-        op_local(caps_cast), op_i32(i as i32),
+        op_local(caps_cast), lit_i32(i as i32),
         local,
       );
       ctx.instrs.push(i_get);
@@ -867,7 +867,7 @@ fn lower_expr(
     // falls through past the `If` in user code.
     ExprKind::If { cond, then, else_ } => {
       let cond_leaf = match &cond.kind {
-        ValKind::Lit(Lit::Bool(b)) => op_i32(if *b { 1 } else { 0 }),
+        ValKind::Lit(Lit::Bool(b)) => lit_i32(if *b { 1 } else { 0 }),
         ValKind::Ref(r) => {
           let op = resolve_id_as_operand(lcx, ctx, ref_cps_id(*r));
           unbox_anyref(lcx, ctx, op)
@@ -1402,8 +1402,10 @@ enum LitVal {
   /// Float literal — boxes as `$F64`. Both f32 and f64 widths share the
   /// f64 carrier today.
   F64(f64),
-  /// Decimal literal — boxes as `$Num` until a real `$Decimal` lands.
-  Decimal(f64),
+  /// Decimal literal — boxes as `$Decimal` with `(coeff i64, exp i32)`.
+  /// Value semantics: `coeff * 10^exp`. Read paths (formatter, hash,
+  /// num.wat conversions) compute the f64 view at use time.
+  Decimal { coeff: i64, exp: i32 },
   Bool(bool),
   /// Empty sequence literal `[]` — lowers to `call $args_empty`.
   /// Reuses the `args_empty` runtime function (which is exported as
@@ -1426,8 +1428,7 @@ impl LitVal {
         IntWidth::U8 | IntWidth::U16 | IntWidth::U32 | IntWidth::U64 => LitVal::U64(*value as u64),
       },
       Lit::Float { value, .. }   => LitVal::F64(*value),
-      // Reconstruct the decimal value as f64 for now — future work narrows to a real decimal repr.
-      Lit::Decimal { coeff, exp } => LitVal::Decimal((*coeff as f64) * 10f64.powi(*exp)),
+      Lit::Decimal { coeff, exp } => LitVal::Decimal { coeff: *coeff, exp: *exp },
       Lit::Bool(b)    => LitVal::Bool(*b),
       Lit::Seq        => LitVal::EmptySeq,
       Lit::Rec        => LitVal::EmptyRec,
@@ -1465,11 +1466,12 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
     // f64 today (subtypes share $Num's slot); the value is converted
     // for storage. Future step narrows the field to i64.
     // Single i64 field — the f64 view was dropped from $Int.
-    LitVal::I64(n)  => push_struct_new(frag, rt.i64_(), vec![op_i64(*n)], into),
-    LitVal::U64(n)  => push_struct_new(frag, rt.u64_(), vec![op_i64(*n as i64)], into),
-    LitVal::F64(n)  => push_struct_new(frag, rt.f64_(), vec![op_f64(*n)], into),
-    LitVal::Decimal(n) => push_struct_new(frag, rt.decimal_(), vec![op_f64(*n)], into),
-    LitVal::Bool(b) => push_ref_i31(frag, op_i32(if *b { 1 } else { 0 }), into),
+    LitVal::I64(n)  => push_struct_new(frag, rt.i64_(), vec![lit_i64(*n)], into),
+    LitVal::U64(n)  => push_struct_new(frag, rt.u64_(), vec![lit_i64(*n as i64)], into),
+    LitVal::F64(n)  => push_struct_new(frag, rt.f64_(), vec![lit_f64(*n)], into),
+    LitVal::Decimal { coeff, exp } => push_struct_new(frag, rt.decimal_(),
+      vec![lit_i64(*coeff), lit_i32(*exp)], into),
+    LitVal::Bool(b) => push_ref_i31(frag, lit_i32(if *b { 1 } else { 0 }), into),
     LitVal::EmptySeq => push_call(frag, rt.args_empty(), vec![], Some(into)),
     LitVal::EmptyRec => push_call(frag, rt.rec_empty(), vec![], Some(into)),
     LitVal::Str(bytes) => {

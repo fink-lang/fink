@@ -27,7 +27,9 @@
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"     "_int_ival" (func $_int_ival (param (ref $Int)) (result i64)))
   (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
-  (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $val f64))))
+  (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
+  (import "std/decimal.wat" "_as_f64"
+    (func $_decimal_as_f64 (param (ref $Decimal)) (result f64)))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
   (import "std/dict.wat"   "Rec"           (type $Rec           (sub any)))
   (import "std/dict.wat"   "RecImpl"       (type $RecImpl       (sub any)))
@@ -1619,7 +1621,7 @@
         (br $not_decimal
           (br_on_cast $is_decimal (ref any) (ref $Decimal)
             (local.get $val))))
-      (return (call $_str_fmt_num (struct.get $Decimal $val))))
+      (return (call $_str_fmt_num (call $_decimal_as_f64))))
 
     ;; Try i31ref — bool or small int
     (block $not_i31
