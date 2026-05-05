@@ -74,11 +74,9 @@
     (func $str_bytes (param $str (ref $Str)) (result (ref $ByteArray))))
   (import "std/str.wat" "fmt_val"
     (func $str_fmt_val (param $val (ref any)) (result (ref $Str))))
-  ;; _str_fmt_val_repr — quoted/escaped element formatter for container
-  ;; values. Temporary — will be replaced by a proper per-type `repr`
-  ;; protocol dispatch.
-  (import "std/str.wat" "_str_fmt_val_repr"
-    (func $_str_fmt_val_repr (param $val (ref any)) (result (ref $Str))))
+  ;; repr_val — value formatter (per-type repr protocol dispatcher).
+  (import "std/repr.wat" "repr_val"
+    (func $repr_val (param $val (ref any)) (result (ref $Str))))
   ;; repr — for rec key quoting (string non-ident keys).
   (import "std/str.wat" "repr"
     (func $str_repr (param $str (ref $Str)) (result (ref $Str))))
@@ -1701,7 +1699,7 @@
                       (struct.get $HamtLeaf $key (local.get $leaf)))
                     (i32.const 2))
                   (call $_str_len
-                    (call $_str_fmt_val_repr
+                    (call $repr_val
                       (ref.cast (ref any)
                         (struct.get $HamtLeaf $val (local.get $leaf))))))))))
 
@@ -1755,7 +1753,7 @@
                   (struct.get $HamtLeaf $key (local.get $leaf)))
                 (i32.const 2))
               (call $_str_len
-                (call $_str_fmt_val_repr
+                (call $repr_val
                   (ref.cast (ref any)
                     (struct.get $HamtLeaf $val (local.get $leaf))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -1867,7 +1865,7 @@
 
             (local.set $pos
               (call $_str_copy_to
-                (call $_str_fmt_val_repr
+                (call $repr_val
                   (ref.cast (ref any)
                     (struct.get $HamtLeaf $val (local.get $leaf))))
                 (local.get $buf)
@@ -1953,7 +1951,7 @@
 
         (local.set $pos
           (call $_str_copy_to
-            (call $_str_fmt_val_repr
+            (call $repr_val
               (ref.cast (ref any)
                 (struct.get $HamtLeaf $val (local.get $leaf))))
             (local.get $buf)
@@ -2013,5 +2011,10 @@
 
     (call $str_from_bytes (local.get $buf))
   )
+
+  ;; repr — same as fmt for records (their fmt already calls repr on values).
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Rec)
+    (param $rec (ref $Rec)) (result (ref $Str))
+    (return_call $fmt (local.get $rec)))
 
 )

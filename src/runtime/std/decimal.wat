@@ -58,4 +58,9 @@
   (func $fmt (@pub) (param $d (ref $Decimal)) (result (ref $Str))
     (return_call $float_from_f64 (call $_as_f64 (local.get $d))))
 
+  ;; repr — same as fmt for decimals.
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Decimal)
+    (param $d (ref $Decimal)) (result (ref $Str))
+    (return_call $fmt (local.get $d)))
+
 )

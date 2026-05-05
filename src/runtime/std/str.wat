@@ -1671,29 +1671,11 @@
     (unreachable)
   )
 
-  ;; _str_fmt_val_repr : (ref any) -> (ref $Str)
-  ;; Like fmt_val but uses repr for strings (quoted + escaped).
-  ;; Used by container fmt impls (list, dict, set) for element formatting.
-  ;; Temporary — will be replaced by a per-type `repr` protocol.
-  (func $_str_fmt_val_repr (@pub) (param $val (ref any)) (result (ref $Str))
-
-    ;; Try $Str — repr (quoted + escaped)
-    (block $not_str
-      (block $is_str (result (ref $Str))
-        (br $not_str
-          (br_on_cast $is_str (ref any) (ref $Str)
-            (local.get $val))))
-      (return (call $repr)))
-
-    ;; Everything else delegates to fmt_val.
-    (call $fmt_val (local.get $val))
-  )
-
   ;; _str_fmt_i31 : i32 -> (ref $Str)
   ;; Format an i31ref value as a boolean: 0 → "false", 1 → "true".
   ;; i31ref is currently only used for booleans; integer i31 rendering
   ;; will be added when i31ref is used for small integers.
-  (func $_str_fmt_i31 (param $v i32) (result (ref $Str))
+  (func $_str_fmt_i31 (@pub) (param $v i32) (result (ref $Str))
 
     (local $buf (ref $ByteArray))
 

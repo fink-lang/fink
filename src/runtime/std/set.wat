@@ -80,8 +80,9 @@
     (func $list_is_empty (param (ref $List)) (result i32)))
   (import "std/str.wat"      "_str_copy_to"
     (func $str_copy_to (param $dst (ref $ByteArray)) (param $pos i32) (param $src (ref $Str)) (result i32)))
-  (import "std/str.wat"      "_str_fmt_val_repr"
-    (func $str_fmt_val_repr (param $val (ref any)) (result (ref $Str))))
+  ;; repr_val — element formatter (per-type repr protocol dispatcher).
+  (import "std/repr.wat" "repr_val"
+    (func $repr_val (param $val (ref any)) (result (ref $Str))))
   (import "std/str.wat"      "_str_len"
     (func $str_len (param $str (ref $Str)) (result i32)))
   (import "std/str.wat"      "StrBytesImpl" (type $StrBytesImpl (sub $Str)))
@@ -1568,7 +1569,7 @@
   ;; -- Fmt --------------------------------------------------------------
   ;;
   ;; Render a $Set as a string: `set v1, v2, ...` with each element
-  ;; formatted via _str_fmt_val_repr. Empty set renders as `set _`.
+  ;; formatted via repr.wat:repr_val. Empty set renders as `set _`.
   ;;
   ;; Two-pass byte-buffer build, mirroring the rec formatter in dict.wat.
 
@@ -1659,7 +1660,7 @@
             (local.set $total
               (i32.add (local.get $total)
                 (call $str_len
-                  (call $str_fmt_val_repr
+                  (call $repr_val
                     (ref.cast (ref any)
                       (struct.get $SetEntry $key
                         (ref.cast (ref $SetEntry) (local.get $child))))))))))
@@ -1703,7 +1704,7 @@
         (local.set $total
           (i32.add (local.get $total)
             (call $str_len
-              (call $str_fmt_val_repr
+              (call $repr_val
                 (ref.cast (ref any)
                   (struct.get $SetEntry $key
                     (ref.cast (ref $SetEntry)
@@ -1753,7 +1754,7 @@
 
             (local.set $pos
               (call $str_copy_to
-                (call $str_fmt_val_repr
+                (call $repr_val
                   (ref.cast (ref any)
                     (struct.get $SetEntry $key
                       (ref.cast (ref $SetEntry) (local.get $child)))))
@@ -1821,7 +1822,7 @@
 
         (local.set $pos
           (call $str_copy_to
-            (call $str_fmt_val_repr
+            (call $repr_val
               (ref.cast (ref any)
                 (struct.get $SetEntry $key
                   (ref.cast (ref $SetEntry)
@@ -1890,5 +1891,10 @@
 
   (func $set_new (@impl "std/set.fnk:set") (result (ref any))
     (global.get $_set_closure))
+
+  ;; repr — same as fmt for sets (their fmt already calls repr on elements).
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Set)
+    (param $set (ref $Set)) (result (ref $Str))
+    (return_call $fmt (local.get $set)))
 
 )

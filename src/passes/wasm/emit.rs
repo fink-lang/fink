@@ -145,6 +145,7 @@ fn linked_runtime() -> &'static LinkedRuntime {
       ("std/range.wat",    include_str!("../../runtime/std/range.wat")),
       ("std/set.wat",      include_str!("../../runtime/std/set.wat")),
       ("std/dict.wat",     include_str!("../../runtime/std/dict.wat")),
+      ("std/repr.wat",     include_str!("../../runtime/std/repr.wat")),
       ("std/hashing.wat",  include_str!("../../runtime/std/hashing.wat")),
       ("std/channel.wat",  include_str!("../../runtime/std/channel.wat")),
       ("std/async.wat",    include_str!("../../runtime/std/async.wat")),

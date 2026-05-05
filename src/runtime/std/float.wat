@@ -106,6 +106,11 @@
   (func $fmt (@pub) (param $v (ref $F64)) (result (ref $Str))
     (return_call $from_f64 (struct.get $F64 $val (local.get $v))))
 
+  ;; repr — same as fmt for floats.
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $F64)
+    (param $v (ref $F64)) (result (ref $Str))
+    (return_call $fmt (local.get $v)))
+
   (func $from_f64 (@pub) (param $v f64) (result (ref $Str))
     (local $i64v i64)
 

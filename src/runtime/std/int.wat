@@ -378,4 +378,9 @@
     (if (result (ref $Str)) (ref.test (ref $U64) (local.get $n))
       (then (call $_fmt_u64 (struct.get $U64 $ival (ref.cast (ref $U64) (local.get $n)))))
       (else (call $_fmt_i64 (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $n)))))))
+
+  ;; repr — same as fmt for ints (no quoting/escaping needed).
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Int)
+    (param $n (ref $Int)) (result (ref $Str))
+    (return_call $fmt (local.get $n)))
 )

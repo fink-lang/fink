@@ -231,4 +231,9 @@
 
     (return_call $str_from_bytes (local.get $buf)))
 
+  ;; repr — same as fmt for ranges.
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Range)
+    (param $range (ref $Range)) (result (ref $Str))
+    (return_call $fmt (local.get $range)))
+
 )
