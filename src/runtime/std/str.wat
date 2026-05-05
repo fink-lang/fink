@@ -26,11 +26,11 @@
   (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct)))
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
   (import "std/int.wat"     "U64"     (type $U64     (sub $Int (struct (field $ival i64)))))
-  (import "std/int.wat"     "fmt"     (func $int_fmt (param (ref $Int)) (result (ref $Str))))
+  (import "std/int.wat"     "fmt"     (func $int_fmt     (param (ref $Int))     (result (ref $Str))))
   (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
+  (import "std/float.wat"   "fmt"     (func $float_fmt   (param (ref $F64))     (result (ref $Str))))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
-  (import "std/decimal.wat" "_as_f64"
-    (func $_decimal_as_f64 (param (ref $Decimal)) (result f64)))
+  (import "std/decimal.wat" "fmt"     (func $decimal_fmt (param (ref $Decimal)) (result (ref $Str))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
   (import "std/dict.wat"   "Rec"           (type $Rec           (sub any)))
   (import "std/dict.wat"   "RecImpl"       (type $RecImpl       (sub any)))
@@ -1618,21 +1618,21 @@
             (local.get $val))))
       (return_call $int_fmt))
 
-    ;; Try $F64 — format f64.
+    ;; Try $F64 — delegate to float.wat:fmt.
     (block $not_f64
       (block $is_f64 (result (ref $F64))
         (br $not_f64
           (br_on_cast $is_f64 (ref any) (ref $F64)
             (local.get $val))))
-      (return (call $_str_fmt_num (struct.get $F64 $val))))
+      (return_call $float_fmt))
 
-    ;; Try $Decimal — format f64 (real coeff/exp repr is future work).
+    ;; Try $Decimal — delegate to decimal.wat:fmt.
     (block $not_decimal
       (block $is_decimal (result (ref $Decimal))
         (br $not_decimal
           (br_on_cast $is_decimal (ref any) (ref $Decimal)
             (local.get $val))))
-      (return (call $_str_fmt_num (call $_decimal_as_f64))))
+      (return_call $decimal_fmt))
 
     ;; Try i31ref — bool or small int
     (block $not_i31
@@ -1723,9 +1723,12 @@
     (struct.new $StrBytesImpl (local.get $buf))
   )
 
-  ;; _str_fmt_num : f64 -> (ref $Str)
-  ;; Format an f64 as a string. Handles NaN, ±Infinity, integers, and floats.
-  (func $_str_fmt_num (param $v f64) (result (ref $Str))
+  ;; from_f64 : f64 -> (ref $Str)
+  ;; Public helper: render an f64 as a string. Handles NaN, ±Infinity,
+  ;; integers, and fractional values. Used by float.wat:fmt and
+  ;; decimal.wat:fmt as the shared f64 renderer; also used internally
+  ;; by range.wat formatting (until range moves out).
+  (func $from_f64 (@pub) (param $v f64) (result (ref $Str))
 
     (local $i64v i64)
 
@@ -1969,10 +1972,10 @@
     ;; Range bounds are $I64; convert i64 → f64 for the formatter
     ;; (TODO: int-aware formatter once str.wat sheds f64 plumbing).
     (local.set $start_str
-      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
+      (call $from_f64 (f64.convert_i64_s (struct.get $I64 $ival
         (call $range_start (local.get $range))))))
     (local.set $end_str
-      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
+      (call $from_f64 (f64.convert_i64_s (struct.get $I64 $ival
         (call $range_end (local.get $range))))))
 
     ;; Get byte arrays.

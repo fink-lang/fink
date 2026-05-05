@@ -9,6 +9,9 @@
 
   ;; Type imports
   (import "std/num.wat" "Num" (type $Num (sub any) (struct)))
+  (import "std/str.wat" "Str" (type $Str (sub any) (struct)))
+  (import "std/str.wat" "from_f64"
+    (func $str_from_f64 (param f64) (result (ref $Str))))
 
   ;; $F64 — IEEE 754 binary64. Subtype of $Num; for now shares $Num's
   ;; `f64 $val` slot.
@@ -91,5 +94,10 @@
   (func $op_pow (@pub)
     (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
     (unreachable))
+
+  ;; -- Formatting ------------------------------------------------------
+
+  (func $fmt (@pub) (param $v (ref $F64)) (result (ref $Str))
+    (return_call $str_from_f64 (struct.get $F64 $val (local.get $v))))
 
 )
