@@ -29,7 +29,10 @@
   (import "std/int.wat"     "fmt"     (func $int_fmt     (param (ref $Int))     (result (ref $Str))))
   (import "std/float.wat"   "F64"      (type $F64     (sub any) (struct (field $val f64))))
   (import "std/float.wat"   "fmt"      (func $float_fmt   (param (ref $F64)) (result (ref $Str))))
-  (import "std/float.wat"   "from_f64" (func $float_from_f64 (param f64) (result (ref $Str))))
+  (import "std/range.wat"   "fmt"      (func $range_fmt     (param (ref $Range)) (result (ref $Str))))
+  (import "std/range.wat"   "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
+  (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref $I64))))
+  (import "std/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
   (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
   (import "std/decimal.wat" "fmt"     (func $decimal_fmt (param (ref $Decimal)) (result (ref $Str))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
@@ -69,13 +72,6 @@
     (func $head_any (param $list (ref null any)) (result (ref null any))))
   (import "std/list.wat" "tail_any"
     (func $tail_any (param $list (ref null any)) (result (ref null any))))
-
-  (import "std/range.wat" "start"
-    (func $range_start (param $range (ref $Range)) (result (ref $I64))))
-  (import "std/range.wat" "end"
-    (func $range_end (param $range (ref $Range)) (result (ref $I64))))
-  (import "std/range.wat" "is_incl"
-    (func $range_is_incl (param $range (ref $Range)) (result i32)))
 
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
@@ -1643,13 +1639,13 @@
             (local.get $val))))
       (return (call $_str_fmt_i31 (i31.get_s))))
 
-    ;; Try $Range — format as "start..end" or "start...end"
+    ;; Try $Range — delegate to range.wat:fmt.
     (block $not_range
       (block $is_range (result (ref $Range))
         (br $not_range
           (br_on_cast $is_range (ref any) (ref $Range)
             (local.get $val))))
-      (return (call $_str_fmt_range)))
+      (return_call $range_fmt))
 
     ;; Try $Rec — format as "{key: val, ...}"
     (block $not_rec
@@ -1725,82 +1721,6 @@
   )
 
 
-  ;; _str_fmt_range : (ref $Range) -> (ref $Str)
-  ;; Format a range as "start..end" (exclusive) or "start...end" (inclusive).
-  (func $_str_fmt_range (param $range (ref $Range)) (result (ref $Str))
-    (local $start_str (ref $Str))
-    (local $end_str (ref $Str))
-    (local $start_bytes (ref $ByteArray))
-    (local $end_bytes (ref $ByteArray))
-    (local $start_len i32)
-    (local $end_len i32)
-    (local $dot_len i32)  ;; 2 for "..", 3 for "..."
-    (local $total i32)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-    (local $i i32)
-
-    ;; Format start and end numbers via range public accessors.
-    ;; Range bounds are $I64; convert i64 → f64 for the formatter
-    ;; (TODO: int-aware formatter once str.wat sheds f64 plumbing).
-    (local.set $start_str
-      (call $float_from_f64 (f64.convert_i64_s (struct.get $I64 $ival
-        (call $range_start (local.get $range))))))
-    (local.set $end_str
-      (call $float_from_f64 (f64.convert_i64_s (struct.get $I64 $ival
-        (call $range_end (local.get $range))))))
-
-    ;; Get byte arrays.
-    (local.set $start_bytes (call $bytes (local.get $start_str)))
-    (local.set $end_bytes (call $bytes (local.get $end_str)))
-    (local.set $start_len (array.len (local.get $start_bytes)))
-    (local.set $end_len (array.len (local.get $end_bytes)))
-
-    ;; Dot count: 2 for exclusive, 3 for inclusive.
-    (local.set $dot_len
-      (if (result i32) (call $range_is_incl (local.get $range))
-        (then (i32.const 3))
-        (else (i32.const 2))))
-
-    ;; Allocate result buffer.
-    (local.set $total
-      (i32.add (i32.add (local.get $start_len) (local.get $dot_len))
-        (local.get $end_len)))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
-
-    ;; Copy start bytes.
-    (local.set $pos (i32.const 0))
-    (local.set $i (i32.const 0))
-    (block $s_done (loop $s_copy
-      (br_if $s_done (i32.ge_u (local.get $i) (local.get $start_len)))
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $start_bytes) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $s_copy)))
-
-    ;; Write dots: 0x2E = '.'
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (if (i32.eq (local.get $dot_len) (i32.const 3))
-      (then
-        (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
-
-    ;; Copy end bytes.
-    (local.set $i (i32.const 0))
-    (block $e_done (loop $e_copy
-      (br_if $e_done (i32.ge_u (local.get $i) (local.get $end_len)))
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $end_bytes) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $e_copy)))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
 
   ;; _str_is_ident : (ref $Str) -> i32
   ;; Check if a string is a valid fink identifier.

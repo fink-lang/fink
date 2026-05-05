@@ -20,14 +20,22 @@
 
   ;; Type imports
   (import "std/num.wat"  "Num"  (type $Num  (sub any)))
-  (import "std/int.wat"  "I64"  (type $I64  (sub any) (struct (field $ival i64))))
+  (import "std/int.wat"  "Int"  (type $Int  (sub any) (struct)))
+  (import "std/int.wat"  "I64"  (type $I64  (sub $Int (struct (field $ival i64)))))
   (import "std/list.wat" "List" (type $List (sub any)))
+  (import "std/str.wat"  "Str"  (type $Str  (sub any) (struct)))
+  (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 
   ;; Func imports
   ;; TODO: apply_1 wraps a single result and calls _apply — conceptually
   ;; an apply concern, not a list one. Move to rt/apply.wat.
   (import "rt/apply.wat" "apply_1"
     (func $list_apply_1 (param $val (ref any)) (param $cont (ref null any))))
+  (import "std/int.wat"  "fmt" (func $int_fmt (param (ref $Int)) (result (ref $Str))))
+  (import "std/str.wat"  "from_bytes" (func $str_from_bytes
+    (param (ref $ByteArray)) (result (ref $Str))))
+  (import "std/str.wat"  "bytes" (func $str_bytes
+    (param (ref $Str)) (result (ref $ByteArray))))
 
 
   ;; -- $Range type ----------------------------------------------------------
@@ -154,5 +162,73 @@
         (ref.cast (ref $I64) (local.get $a))
         (ref.cast (ref $I64) (local.get $b)))
       (local.get $cont)))
+
+  ;; Format a $Range as "start..end" (exclusive) or "start...end"
+  ;; (inclusive). Bounds rendered via int.wat:fmt; bytes are
+  ;; concatenated locally and wrapped via str.wat:from_bytes.
+  (func $fmt (@pub) (param $range (ref $Range)) (result (ref $Str))
+    (local $start_str (ref $Str))
+    (local $end_str (ref $Str))
+    (local $start_bytes (ref $ByteArray))
+    (local $end_bytes (ref $ByteArray))
+    (local $start_len i32)
+    (local $end_len i32)
+    (local $dot_len i32)
+    (local $total i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local $i i32)
+
+    (local.set $start_str (call $int_fmt (call $start (local.get $range))))
+    (local.set $end_str   (call $int_fmt (call $end   (local.get $range))))
+
+    (local.set $start_bytes (call $str_bytes (local.get $start_str)))
+    (local.set $end_bytes   (call $str_bytes (local.get $end_str)))
+    (local.set $start_len (array.len (local.get $start_bytes)))
+    (local.set $end_len   (array.len (local.get $end_bytes)))
+
+    ;; Dot count: 2 for exclusive, 3 for inclusive.
+    (local.set $dot_len
+      (if (result i32) (call $is_incl (local.get $range))
+        (then (i32.const 3))
+        (else (i32.const 2))))
+
+    (local.set $total
+      (i32.add (i32.add (local.get $start_len) (local.get $dot_len))
+        (local.get $end_len)))
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
+
+    ;; Copy start bytes.
+    (local.set $pos (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $s_done (loop $s_copy
+      (br_if $s_done (i32.ge_u (local.get $i) (local.get $start_len)))
+      (array.set $ByteArray (local.get $buf) (local.get $pos)
+        (array.get_u $ByteArray (local.get $start_bytes) (local.get $i)))
+      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $s_copy)))
+
+    ;; Write dots: 0x2E = '.'
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (if (i32.eq (local.get $dot_len) (i32.const 3))
+      (then
+        (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+
+    ;; Copy end bytes.
+    (local.set $i (i32.const 0))
+    (block $e_done (loop $e_copy
+      (br_if $e_done (i32.ge_u (local.get $i) (local.get $end_len)))
+      (array.set $ByteArray (local.get $buf) (local.get $pos)
+        (array.get_u $ByteArray (local.get $end_bytes) (local.get $i)))
+      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $e_copy)))
+
+    (return_call $str_from_bytes (local.get $buf)))
 
 )
