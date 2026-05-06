@@ -83,9 +83,22 @@ pub fn to_lifted<'src>(src: &'src str, url: &str) -> Result<(passes::LiftedCps, 
 /// import will get a clean error from the in-memory loader.
 #[cfg(feature = "compile")]
 pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
+  to_wasm_for(src, path, passes::wasm::emit::Interop::Rust)
+}
+
+/// Variant of [`to_wasm`] that selects which interop module to splice
+/// into the runtime. `Interop::Rust` (the default) is for native /
+/// wasmtime hosts; `Interop::Js` produces a binary the website
+/// playground can drive via [`src/runtime/interop/js/fink.js`].
+#[cfg(feature = "compile")]
+pub fn to_wasm_for(
+  src: &str,
+  path: &str,
+  interop: passes::wasm::emit::Interop,
+) -> Result<passes::Wasm, String> {
   use passes::modules::InMemorySourceLoader;
   let mut loader = InMemorySourceLoader::single(path, src);
-  compile_package(std::path::Path::new(path), &mut loader)
+  compile_package(std::path::Path::new(path), &mut loader, interop)
 }
 
 /// Compile a package rooted at `entry_path` to a linked WASM binary.
@@ -103,9 +116,10 @@ pub fn to_wasm(src: &str, path: &str) -> Result<passes::Wasm, String> {
 pub fn compile_package(
   entry_path: &std::path::Path,
   loader: &mut dyn passes::modules::SourceLoader,
+  interop: passes::wasm::emit::Interop,
 ) -> Result<passes::Wasm, String> {
   let pkg = passes::wasm::compile_package::compile_package(entry_path, loader)?;
-  let emit_out = passes::wasm::emit::emit_with_offsets(&pkg.fragment);
+  let emit_out = passes::wasm::emit::emit_with_offsets(&pkg.fragment, interop);
   let (marks, mappings) = passes::wasm::compile_package::finalize_marks(&pkg, &emit_out);
   Ok(passes::Wasm {
     binary: emit_out.binary,

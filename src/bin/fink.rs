@@ -74,7 +74,7 @@ fn main() {
       eprintln!("  wat                          emit WAT text from IR fragment to stdout");
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wasm [-O|-O1..4|-Os|-Oz]     run wasm-opt (default -O)");
-      eprintln!("  compile --target=<wasm|triple> [-o output] <file>");
+      eprintln!("  compile --target=<wasm|wasm+js|triple> [-o output] <file>");
       process::exit(1);
     }
   };
@@ -232,8 +232,13 @@ fn main() {
           targets_dir: env::var("FINK_TARGETS_DIR").ok().map(Into::into),
         };
 
-        if target == "wasm" {
-          fink::compile::compile_to_wasm(&src, path, &out_path)
+        if target == "wasm" || target == "wasm+js" {
+          let interop = if target == "wasm+js" {
+            fink::passes::wasm::emit::Interop::Js
+          } else {
+            fink::passes::wasm::emit::Interop::Rust
+          };
+          fink::compile::compile_to_wasm(&src, path, &out_path, interop)
             .unwrap_or_else(|e| die(&e));
         } else {
           fink::compile::compile_to_native(&src, path, target, &out_path, &search)

@@ -1,0 +1,18 @@
+{stdout, stderr, write} = import 'std/io.fnk'
+
+foo = fn a, b:
+  a + b
+
+
+bar = fn a:
+  a
+
+say_hi = fn:
+  write stdout, 'hello from fink'
+  0
+
+shout = fn:
+  write stderr, 'oh no'
+  0
+
+42

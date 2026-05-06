@@ -294,7 +294,7 @@ mod tests {
     let (lifted, desugared) = crate::to_lifted(src, "test").unwrap_or_else(|e| panic!("{e}"));
     let user_frag = super::lower::lower(&lifted.result, &desugared.ast, "test:");
     let linked = super::link::link(&[user_frag]);
-    super::emit::emit(&linked)
+    super::emit::emit(&linked, super::emit::Interop::Rust)
   }
 
   /// Instantiate emit's output in wasmtime with trivial host stubs.
