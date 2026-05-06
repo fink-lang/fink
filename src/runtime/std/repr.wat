@@ -13,7 +13,7 @@
 ;;   2. direct-style `$repr_val` (this file) — for other WAT modules
 ;;   3. per-type `$repr` (each type's .wat)  — actual rendering
 ;;
-;; Container `fmt` impls call back into `$repr_val` for elements, which
+;; Collection `fmt` impls call back into `$repr_val` for elements, which
 ;; creates an import cycle with list.wat / dict.wat / set.wat. The
 ;; wat-linker handles cycles (same pattern str.wat <-> list.wat already
 ;; uses for fmt_val).

@@ -1585,7 +1585,7 @@
   ;; fmt_val : (ref any) -> (ref $Str)
   ;; Public dispatcher: format any value as a string by runtime type.
   ;; Per-type fmt impls (int.wat:fmt, float.wat:fmt, etc.) own the
-  ;; rendering; this picks the right one. Container fmt impls
+  ;; rendering; this picks the right one. Collection fmt impls
   ;; (list.wat, dict.wat, set.wat) call back into this for elements.
   (func $fmt_val (@pub) (param $val (ref any)) (result (ref $Str))
 
