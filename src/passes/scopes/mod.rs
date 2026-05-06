@@ -607,6 +607,10 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
       walk_node(ast, rhs, scope, ctx);
     }
 
+    NodeKind::PostfixOp { lhs, .. } => {
+      walk_node(ast, lhs, scope, ctx);
+    }
+
     NodeKind::UnaryOp { operand, .. } => {
       walk_node(ast, operand, scope, ctx);
     }

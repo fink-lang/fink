@@ -124,6 +124,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
             NodeKind::Arm { .. } => self.fix_arm(id),
             NodeKind::Apply { .. } => self.fix_apply(id),
             NodeKind::InfixOp { .. } => self.fix_infix(id),
+            NodeKind::PostfixOp { .. } => todo!("PostfixOp fix"),
 
             NodeKind::LitRec { items, .. } => {
                 let needs = items.items.iter()
@@ -427,6 +428,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
 
             NodeKind::UnaryOp { op, operand } => self.unary_op(op, operand, at),
             NodeKind::InfixOp { op, lhs, rhs } => self.infix_op(op, lhs, rhs, at),
+            NodeKind::PostfixOp { .. } => todo!("PostfixOp layout"),
             NodeKind::ChainedCmp(parts) => self.chained_cmp(&parts, at),
             NodeKind::Spread { op, inner } => self.spread(op, inner, at),
             NodeKind::Member { op, lhs, rhs } => self.member(op, lhs, rhs, at),

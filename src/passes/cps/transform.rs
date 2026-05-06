@@ -286,6 +286,7 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
 
     // ---- infix op: `a + b` ----
     NodeKind::InfixOp { op, lhs, rhs } => lower_infix(g, op.src, lhs, rhs, o),
+    NodeKind::PostfixOp { .. } => todo!("PostfixOp CPS lower"),
 
     // ---- unary op: `-a`, `not a` ----
     NodeKind::UnaryOp { op, operand } => lower_unary(g, op.src, operand, o),

@@ -114,6 +114,17 @@ test 'partial in range', fn:
         SynthIdent '·$_0'
 
 
+test 'partial in open range', fn:
+  expect partial ƒink:
+    (?..)
+  | equals ƒink:
+    Fn ':',
+      Patterns
+        SynthIdent '·$_0'
+      PostfixOp '..',
+        SynthIdent '·$_0'
+
+
 test 'partial in spread', fn:
   expect partial ƒink:
     [..?]

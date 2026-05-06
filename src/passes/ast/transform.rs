@@ -61,6 +61,7 @@ pub trait Transform<'src> {
       NodeKind::StrRawTempl { open, close, children } => self.transform_str_raw_templ(builder, src, open, close, children, loc),
       NodeKind::UnaryOp { op, operand } => self.transform_unary_op(builder, src, op, operand, loc),
       NodeKind::InfixOp { op, lhs, rhs } => self.transform_infix_op(builder, src, op, lhs, rhs, loc),
+      NodeKind::PostfixOp { op, lhs } => self.transform_postfix_op(builder, src, op, lhs, loc),
       NodeKind::ChainedCmp(parts) => self.transform_chained_cmp(builder, src, &parts, loc),
       NodeKind::Spread { op, inner } => self.transform_spread(builder, src, op, inner, loc),
       NodeKind::Member { op, lhs, rhs } => self.transform_member(builder, src, op, lhs, rhs, loc),
@@ -171,6 +172,18 @@ pub trait Transform<'src> {
     let lhs = self.transform(builder, src, lhs)?;
     let rhs = self.transform(builder, src, rhs)?;
     Ok(builder.append(NodeKind::InfixOp { op, lhs, rhs }, loc))
+  }
+
+  fn transform_postfix_op(
+    &mut self,
+    builder: &mut AstBuilder<'src>,
+    src: &Ast<'src>,
+    op: Token<'src>,
+    lhs: AstId,
+    loc: Loc,
+  ) -> TransformResult {
+    let lhs = self.transform(builder, src, lhs)?;
+    Ok(builder.append(NodeKind::PostfixOp { op, lhs }, loc))
   }
 
   fn transform_chained_cmp(

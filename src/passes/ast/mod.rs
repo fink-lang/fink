@@ -318,6 +318,9 @@ pub enum NodeKind<'src> {
   // InfixOp '+' | '-' | 'srcnd' | '>' | '&' | '..' | '...' | ...
   InfixOp { op: Token<'src>, lhs: AstId, rhs: AstId },
 
+  // PostfixOp '..' — open-end range from `lhs..` (no rhs)
+  PostfixOp { op: Token<'src>, lhs: AstId },
+
   // ChainedCmp — flat interleaved: operand, op, operand, op, operand, ...
   // e.g. a > b > c => [Operand(a), Op(">"), Operand(b), Op(">"), Operand(c)]
   ChainedCmp(Box<[CmpPart<'src>]>),
@@ -441,6 +444,7 @@ pub fn walk<'src, 'a>(
       walk(ast, *lhs, f);
       walk(ast, *rhs, f);
     }
+    NodeKind::PostfixOp { lhs, .. } => walk(ast, *lhs, f),
     NodeKind::ChainedCmp(parts) => {
       for part in parts.iter() {
         if let CmpPart::Operand(n) = part { walk(ast, *n, f); }
@@ -564,6 +568,11 @@ fn print_node(ast: &Ast, id: AstId, out: &mut String, depth: usize) {
       print_node(ast, *lhs, out, depth + 1);
       out.push('\n');
       print_node(ast, *rhs, out, depth + 1);
+    }
+    NodeKind::PostfixOp { op, lhs } => {
+      out.push_str("PostfixOp '"); out.push_str(op.src); out.push_str("',");
+      out.push('\n');
+      print_node(ast, *lhs, out, depth + 1);
     }
     NodeKind::ChainedCmp(parts) => {
       out.push_str("ChainedCmp");

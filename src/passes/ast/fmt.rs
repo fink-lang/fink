@@ -288,6 +288,11 @@ fn fmt_node(ast: &Ast<'_>, id: AstId, out: &mut MappedWriter, depth: usize) {
       out.push(' ');
       fmt_node(ast, rhs, out, depth);
     }
+    NodeKind::PostfixOp { op, lhs } => {
+      fmt_node(ast, lhs, out, depth);
+      out.mark(op.loc);
+      out.push_str(op.src);
+    }
     NodeKind::ChainedCmp(parts) => {
       for part in parts.iter() {
         match part {
