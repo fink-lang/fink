@@ -69,9 +69,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // returns Runtime handles for them even if the source code
   // doesn't otherwise need them (e.g. a module with no `pub` calls).
   usage.mark(runtime_contract::Sym::ModulesInitModule);
-  usage.mark(runtime_contract::Sym::WrapHostCont);
   usage.mark(runtime_contract::Sym::StrWrapBytes);
-  usage.mark(runtime_contract::Sym::FnHostWrapper);
   usage.mark(runtime_contract::Sym::Closure);
   usage.mark(runtime_contract::Sym::Captures);
   usage.mark(runtime_contract::Sym::StrFromData);
@@ -175,30 +173,30 @@ fn synth_host_wrapper(
   );
   let display = format!("{canonical_url}::host_wrapper");
 
-  // Host-friendly signature: `(key: anyref-or-null, cont_id: i32)
+  // Host-friendly signature: `(key: anyref-or-null, cont: anyref)
   // -> ()`. Key arrives as a raw GC `$ByteArray` (or null for
-  // "whole exports rec"); cont_id is a plain i32 the host
-  // pre-registered. The wrapper does the fink-side wrapping
-  // (`_str_wrap_bytes` for the key, `wrap_host_cont` for the
-  // cont) before tail-calling `init_module`.
-  // Uses the runtime-shared `Fn_host_wrapper` type so all modules
-  // reference one nominal signature instead of a per-fragment
-  // local copy.
-  let sig = lcx.rt.fn_host_wrapper();
+  // "whole exports rec"); cont arrives as a fink continuation
+  // (`$Closure` over `$Fn2`). The wrapper does the fink-side
+  // wrapping for the key (`_str_wrap_bytes`) and tail-calls
+  // `init_module`. Any host-bridge mechanics (e.g. the Rust runner's
+  // i32-cont-id table) live host-side; the wasm-side wrapper sees
+  // only a fink cont. Sig is declared locally per fragment — same
+  // approach as every other lowered fink function (no shared
+  // nominal type at this boundary).
+  let anyref_n = val_anyref(true);
+  let sig = ty_func(
+    lcx.frag,
+    vec![anyref_n.clone(), anyref_n.clone()],
+    vec![],
+    &format!("{canonical_url}::Fn_host_wrapper"),
+  );
 
   let mut ctx = FnCtx::new(HashMap::new());
-  let l_key_p     = ctx.alloc_param(":wrap_key_bytes");
-  let l_cont_id_p = ctx.alloc_param_typed(":wrap_cont_id", val_i32());
+  let l_key_p  = ctx.alloc_param(":key_bytes");
+  let l_cont_p = ctx.alloc_param(":cont");
 
   // URL constant — the registry key.
-  let l_url = emit_str_const(lcx, &mut ctx, canonical_url.as_bytes(), ":wrap_url");
-
-  // Wrap the cont id into a fink anyref via `wrap_host_cont(i32) ->
-  // anyref`. Runtime-resolved via the runtime contract.
-  let l_cont = ctx.alloc_local(":wrap_cont");
-  let i_wrap_cont = push_call(lcx.frag, lcx.rt.wrap_host_cont(),
-    vec![op_local(l_cont_id_p)], Some(l_cont));
-  ctx.instrs.push(i_wrap_cont);
+  let l_url = emit_str_const(lcx, &mut ctx, canonical_url.as_bytes(), ":url");
 
   // Wrap the byte-array key into a `$Str` via `_str_wrap_bytes`.
   // CONTRACT: host must pass a non-null `$ByteArray`. To request
@@ -207,20 +205,20 @@ fn synth_host_wrapper(
   // looks up in the rec (not found → null val). Null-key support
   // requires ref.is_null in the IR surface; that arrives
   // separately.
-  let l_key_str = ctx.alloc_local(":wrap_key_str");
+  let l_key_str = ctx.alloc_local(":key_str");
   let i_wrap_key = push_call(lcx.frag, lcx.rt.str_wrap_bytes(),
     vec![op_local(l_key_p)], Some(l_key_str));
   ctx.instrs.push(i_wrap_key);
 
   // Build no-capture closure over fink_module funcref.
   let l_caps_arg = ctx.alloc_local_typed(
-    ":wrap_caps_arg",
+    ":caps_arg",
     val_ref(lcx.rt.captures(), /*nullable*/ true),
   );
   let i_caps_null = push_ref_null_concrete(lcx.frag, lcx.rt.captures(), l_caps_arg);
   ctx.instrs.push(i_caps_null);
 
-  let l_mod_clos = ctx.alloc_local(":wrap_mod_clos");
+  let l_mod_clos = ctx.alloc_local(":mod_clos");
   let i_clos = push_struct_new(
     lcx.frag, lcx.rt.closure(),
     vec![Operand::RefFunc(fink_module), op_local(l_caps_arg)],
@@ -230,7 +228,7 @@ fn synth_host_wrapper(
 
   // Tail-call init_module(url, mod_clos, key, cont).
   let i_init = push_return_call(lcx.frag, lcx.rt.modules_init_module(),
-    vec![op_local(l_url), op_local(l_mod_clos), op_local(l_key_str), op_local(l_cont)]);
+    vec![op_local(l_url), op_local(l_mod_clos), op_local(l_key_str), op_local(l_cont_p)]);
   ctx.instrs.push(i_init);
 
   let sym = func(lcx.frag, sig, ctx.params, ctx.locals, ctx.instrs, &display);

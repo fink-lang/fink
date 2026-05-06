@@ -205,9 +205,20 @@ pub fn run(
   // calls `_str_wrap_bytes` to wrap into a $Str.
   let main_key = wrap_bytes_to_byte_array(&mut store, b"main")?;
 
+  // Host-side: turn the wrapper-done cont id into a fink anyref via
+  // `wrap_host_cont`. The per-module wrapper signature is host-
+  // neutral (`(ref null any, ref null any) -> ()`); host-bridge
+  // mechanics (i32 → anyref) live on the host side of the boundary.
+  let wrap_host_cont = instance.get_func(&mut store, "wrap_host_cont")
+    .ok_or_else(|| "no wrap_host_cont export".to_string())?;
+  let mut entry_cont_out = [Val::AnyRef(None)];
+  wrap_host_cont.call(&mut store, &[Val::I32(CONT_WRAPPER_DONE)], &mut entry_cont_out)
+    .map_err(|e| e.to_string())?;
+  let entry_cont = entry_cont_out[0];
+
   entry_wrapper
     .call(&mut store,
-      &[Val::AnyRef(Some(main_key)), Val::I32(CONT_WRAPPER_DONE)],
+      &[Val::AnyRef(Some(main_key)), entry_cont],
       &mut [])
     .map_err(|e| crate::passes::wasm::annotate_func_indices(
       &format!("entry wrapper: {e}"), bytes))?;

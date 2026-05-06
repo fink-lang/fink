@@ -97,9 +97,19 @@ async fn run_module(
 
   let main_key = wrap_bytes_to_byte_array_async(&mut *store, b"main")?;
 
+  // Host-side i32 → anyref wrap (host-bridge bookkeeping, not part
+  // of the per-module wrapper ABI).
+  let wrap_host_cont = instance.get_func(&mut *store, "wrap_host_cont")
+    .ok_or_else(|| "no wrap_host_cont export".to_string())?;
+  let mut entry_cont_out = [wasmtime::Val::AnyRef(None)];
+  wrap_host_cont.call_async(&mut *store,
+    &[wasmtime::Val::I32(CONT_WRAPPER_DONE)], &mut entry_cont_out).await
+    .map_err(|e| format!("wrap_host_cont: {e}"))?;
+  let entry_cont = entry_cont_out[0];
+
   entry_wrapper
     .call_async(&mut *store,
-      &[wasmtime::Val::AnyRef(Some(main_key)), wasmtime::Val::I32(CONT_WRAPPER_DONE)],
+      &[wasmtime::Val::AnyRef(Some(main_key)), entry_cont],
       &mut [])
     .await
     .map_err(|e| {

@@ -83,11 +83,6 @@ pub enum Sym {
   Closure,
   Captures,
   VarArgs,
-  // Function-signature type for the per-module host wrapper.
-  // `(ref null any, i32) -> ()`. Declared in `rt/apply.wat` so all
-  // modules share one nominal type instead of emitting a local
-  // copy per fragment.
-  FnHostWrapper,
 
   // ── calling-convention primitives (std/list.wat today) ────────
   ArgsHead,
@@ -176,12 +171,6 @@ pub enum Sym {
   // fragment; the wrapper is exported under the module's canonical
   // FQN so any host can call it as the unified module-init API.
   ModulesInitModule,
-  // `interop/rust.wat:wrap_host_cont` — `(i32) -> anyref`. Wraps a
-  // host-registered callback id into an opaque fink-side
-  // continuation. Used by the per-module host wrapper to convert
-  // the host's i32 cont_id into a fink anyref before tail-calling
-  // `init_module`.
-  WrapHostCont,
   // `std/str.wat:_str_wrap_bytes` — `(anyref) -> anyref`. Wraps a
   // GC `$ByteArray` into a fink `$Str`. Used by the per-module
   // host wrapper to convert the host's raw byte-array key into a
@@ -322,7 +311,6 @@ pub struct Runtime {
   closure: Option<TypeSym>,
   captures: Option<TypeSym>,
   varargs: Option<TypeSym>,
-  fn_host_wrapper: Option<TypeSym>,
   // Locally-declared function signature type used by the
   // virtual-stdlib import codegen path in lower (still allocates
   // `import_func` placeholders for source-named accessors). To be
@@ -396,7 +384,6 @@ pub struct Runtime {
   modules_pub:    Option<FuncSym>,
   modules_import: Option<FuncSym>,
   modules_init_module: Option<FuncSym>,
-  wrap_host_cont:  Option<FuncSym>,
   str_wrap_bytes:  Option<FuncSym>,
 }
 
@@ -410,7 +397,6 @@ impl Runtime {
   pub fn closure(&self)      -> TypeSym { self.closure.expect("rt: Closure not declared") }
   pub fn captures(&self)     -> TypeSym { self.captures.expect("rt: Captures not declared") }
   pub fn varargs(&self)      -> TypeSym { self.varargs.expect("rt: VarArgs not declared") }
-  pub fn fn_host_wrapper(&self) -> TypeSym { self.fn_host_wrapper.expect("rt: Fn_host_wrapper not declared") }
   pub fn args_head(&self)    -> FuncSym { self.args_head.expect("rt: args_head not declared") }
   pub fn args_tail(&self)    -> FuncSym { self.args_tail.expect("rt: args_tail not declared") }
   pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
@@ -422,7 +408,6 @@ impl Runtime {
   pub fn modules_pub(&self)    -> FuncSym { self.modules_pub.expect("rt: modules_pub not declared") }
   pub fn modules_import(&self) -> FuncSym { self.modules_import.expect("rt: modules_import not declared") }
   pub fn modules_init_module(&self) -> FuncSym { self.modules_init_module.expect("rt: modules_init_module not declared") }
-  pub fn wrap_host_cont(&self)       -> FuncSym { self.wrap_host_cont.expect("rt: wrap_host_cont not declared") }
   pub fn str_wrap_bytes(&self)       -> FuncSym { self.str_wrap_bytes.expect("rt: str_wrap_bytes not declared") }
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
@@ -518,13 +503,11 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
   match sym {
 
     Sym::Panic           => "std/interop.fnk:panic",
-    Sym::WrapHostCont    => "interop/rust.wat:wrap_host_cont",
 
     Sym::Fn2             => "rt/apply.wat:Fn2",
     Sym::Closure         => "rt/apply.wat:Closure",
     Sym::Captures        => "rt/apply.wat:Captures",
     Sym::VarArgs         => "rt/apply.wat:VarArgs",
-    Sym::FnHostWrapper   => "rt/apply.wat:Fn_host_wrapper",
     Sym::Apply           => "rt/apply.wat:apply",
 
     Sym::ArgsHead        => "rt/apply.wat:args_head",
@@ -649,9 +632,6 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::VarArgs) {
     rt.varargs = Some(TypeSym::Runtime(Sym::VarArgs));
   }
-  if needed.contains(&Sym::FnHostWrapper) {
-    rt.fn_host_wrapper = Some(TypeSym::Runtime(Sym::FnHostWrapper));
-  }
 
   // Function-signature types and function imports.
   //
@@ -732,7 +712,6 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::RecSetField) { rt.rec_set_field  = Some(FuncSym::Runtime(Sym::RecSetField)); }
   if needed.contains(&Sym::ModulesPub)  { rt.modules_pub    = Some(FuncSym::Runtime(Sym::ModulesPub)); }
   if needed.contains(&Sym::ModulesInitModule) { rt.modules_init_module = Some(FuncSym::Runtime(Sym::ModulesInitModule)); }
-  if needed.contains(&Sym::WrapHostCont)       { rt.wrap_host_cont      = Some(FuncSym::Runtime(Sym::WrapHostCont)); }
   if needed.contains(&Sym::StrWrapBytes)       { rt.str_wrap_bytes      = Some(FuncSym::Runtime(Sym::StrWrapBytes)); }
   if needed.contains(&Sym::ModulesImport) {
     rt.modules_import = Some(FuncSym::Runtime(Sym::ModulesImport));

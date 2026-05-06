@@ -435,12 +435,23 @@ mod tests {
     // as `"./test.fnk"`.
     let entry_wrapper = get_func(&instance, &mut store, "./test.fnk")?;
     let str_wrap      = get_func(&instance, &mut store, "str_wrap_bytes")?;
+    let wrap_host_cont = get_func(&instance, &mut store, "wrap_host_cont")?;
 
     let main_key_bytes = wrap_bytes_to_array_ref(&mut store, b"main")?;
 
+    // Host-side: turn cont id 1 into a fink anyref before invoking
+    // the wrapper. The per-module wrapper signature is host-neutral
+    // (`(ref null any, ref null any) -> ()`); host-bridge mechanics
+    // (the i32 → anyref wrap via `wrap_host_cont`) live on the host
+    // side of the boundary, not inside the wrapper.
+    let mut entry_cont_out = [Val::AnyRef(None)];
+    wrap_host_cont.call(&mut store, &[Val::I32(1)], &mut entry_cont_out)
+      .map_err(|e| e.to_string())?;
+    let entry_cont = entry_cont_out[0];
+
     entry_wrapper
       .call(&mut store,
-        &[Val::AnyRef(Some(main_key_bytes)), Val::I32(1)],
+        &[Val::AnyRef(Some(main_key_bytes)), entry_cont],
         &mut [])
       .map_err(|e| crate::passes::wasm::annotate_func_indices(
         &format!("entry wrapper: {e:#}"), &bytes))?;
