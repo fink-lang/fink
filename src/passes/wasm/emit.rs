@@ -928,6 +928,7 @@ fn emit_func(
   (func, body_offsets)
 }
 
+#[allow(clippy::too_many_arguments)] // 8 params (added rt for Interop split); refactor to a context struct is future work
 fn emit_instr(
   rt: &Runtime,
   func: &mut Function,
