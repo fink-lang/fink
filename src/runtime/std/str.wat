@@ -107,14 +107,11 @@
 
   ;; ---- Construction (compiler-emitted) ----
 
-  ;; str : (i32, i32) -> (ref $StrDataImpl)
-  ;; Wrap a data-section pointer into a string value.
-  ;; TODO: this is a contructor for literal. find protocol for it!
-  ;; TODO: rename to `from_data` — the name `str` clashes with the
-  ;; `$Str` type's surface (std/str.fnk:str = the type). Update the
-  ;; lowering in src/passes/wasm/lower.rs to emit `from_data` for
-  ;; string literals at the same time.
-  (func $str (@impl "std/str.fnk:str")
+  ;; from_data : (i32, i32) -> (ref $StrDataImpl)
+  ;; Wrap a data-section pointer into a string value. Used by the
+  ;; codegen for string literals — see lower.rs:1457 (`rt.str_from_data()`).
+  ;; TODO: this is a constructor for literals. find protocol for it!
+  (func $from_data (@impl "std/str.fnk:from_data")
     (param $offset i32)
     (param $length i32)
     (result (ref $StrDataImpl))

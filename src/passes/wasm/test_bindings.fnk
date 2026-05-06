@@ -18,8 +18,8 @@ test 'single binding export', fn:
         (local.set $v_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $foo_0 (struct.new $std/int.wat:I64 (i64.const 1)))
         (global.set $test:foo (local.get $foo_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 3)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $foo_0))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $foo_0) (local.get $:args)))
@@ -31,7 +31,7 @@ test 'single binding export', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -42,7 +42,7 @@ test 'single binding export', fn:
       (data $d_0 "test")
       (data $d_1 "foo")
     )
-    ;; sm:D9wEAJIBAQADhgEAXACIAQCKAQDAAQBuAL4BAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D9wEAJIBAQADhgEAXACUAQCWAQDAAQBuAL4BAIQHAJYBAL4BAMABAIQBAPoBAA
 
 
 
@@ -61,8 +61,8 @@ test 'let binding', fn:
         (local.set $x_1 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $x_0 (struct.new $std/int.wat:I64 (i64.const 42)))
         (global.set $test:x (local.get $x_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $x_0))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $x_0) (local.get $:args)))
@@ -74,7 +74,7 @@ test 'let binding', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -85,7 +85,7 @@ test 'let binding', fn:
       (data $d_0 "test")
       (data $d_1 "x")
     )
-    ;; sm:D9gEAJIBAQABhAEAVACIAQCKAQC8AQBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:D9gEAJIBAQABhAEAVACUAQCWAQC8AQBuALoBAIQHAJYBAL4BAMABAIQBAPoBAA
 
 
 
@@ -107,13 +107,13 @@ test 'multiple let bindings used', fn:
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $x_0 (struct.new $std/int.wat:I64 (i64.const 2)))
         (global.set $test:x (local.get $x_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $x_0))
         (local.set $y_1 (struct.new $std/int.wat:I64 (i64.const 3)))
         (global.set $test:y (local.get $y_1))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_2 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $y_1))
         (return_call $std/operators.fnk:op_plus (local.get $x_0) (local.get $y_1) (local.get $v_2))
       )
@@ -123,7 +123,7 @@ test 'multiple let bindings used', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -136,7 +136,7 @@ test 'multiple let bindings used', fn:
       (data $d_1 "x")
       (data $d_2 "y")
     )
-    ;; sm:EvQFAJIBAQABggEAVACIAQCKAQC8AQEMAYIBAFQAiAEAigEAvAEBDAWwBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:EvQFAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBDAWwBwCWAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -171,8 +171,8 @@ test 'binding rhs is a call', fn:
         (local.set $v_16 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $x_1 (local.get $v_16))
         (global.set $test:x (local.get $x_1))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $x_1))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $x_1) (local.get $:args)))
@@ -209,8 +209,8 @@ test 'binding rhs is a call', fn:
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $add_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_5) (local.get $:caps_arg)))
         (global.set $test:add (local.get $add_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_2 3)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_2 3)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $add_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_4)))
         (local.set $v_44_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_34) (local.get $:caps_arg)))
@@ -226,7 +226,7 @@ test 'binding rhs is a call', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -239,7 +239,7 @@ test 'binding rhs is a call', fn:
       (data $d_1 "x")
       (data $d_2 "add")
     )
-    ;; sm:LrYDAJIBAJoBAJIBAJoBAJIBAR4FpgcAugEAvgEAlAEBDAFOAFQAiAEAigEAvAEAbgC6AQDMBQCUAQBmARABhAEBBgGEAQBuALwBALwBALwBANYJAJIBAHoBPwPMAQBcAIgBAIoBAMABAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:LrYDAJIBAJoBAJIBAJoBAJIBAR4FpgcAugEAvgEAlAEBDAFOAFQAlAEAlgEAvAEAbgC6AQDMBQCUAQBmARABhAEBBgGEAQBuALwBALwBALwBANYJAJIBAHoBPwPMAQBcAJQBAJYBAMABAK4BANQBAHoA0gEAbgDEAQCMBwCWAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -281,8 +281,8 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_84 (struct.new $rt/apply.wat:Closure (ref.func $test:v_81) (local.get $:caps_arg)))
         (local.set $foo_1 (local.get $v_84))
         (global.set $test:foo (local.get $foo_1))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 3)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $foo_1))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $foo_1) (local.get $:args)))
@@ -326,7 +326,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local.set $v_17 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 1 (local.get $v_111)))
         (local.set $v_131 (struct.new $rt/apply.wat:Closure (ref.func $test:v_126) (local.get $:caps_arg)))
-        (local.set $v_19 (call $std/str.fnk:str (data.ref $d_2 1)))
+        (local.set $v_19 (call $std/str.fnk:from_data (data.ref $d_2 1)))
         (return_call $std/rec.fnk:pop (local.get $v_17) (local.get $v_19) (local.get $v_109) (local.get $v_131))
       )
       (func $test:v_26 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -381,7 +381,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $v_6 (ref null any))
         (local.set $v_64 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $v_4 (call $std/rec.fnk:new))
-        (local.set $v_5 (call $std/str.fnk:str (data.ref $d_2 1)))
+        (local.set $v_5 (call $std/str.fnk:from_data (data.ref $d_2 1)))
         (local.set $v_6 (struct.new $std/int.wat:I64 (i64.const 42)))
         (return_call $std/rec.fnk:put (local.get $v_4) (local.get $v_5) (local.get $v_6) (local.get $v_64))
       )
@@ -407,7 +407,7 @@ test 'top-level rec destructure then fn using binding', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -419,6 +419,6 @@ test 'top-level rec destructure then fn using binding', fn:
       (data $d_1 "foo")
       (data $d_2 "x")
     )
-    ;; sm:U6gFALoBAL4BAJQBAJoBAJIBATQFogkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAIgBAIoBAMABAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABARsNgAEBAA3wBwCUAQCaAQCUAQCaAQCSAQCwAQDMAQDUAQDQAQEADYwKALoBAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAIYFAJQBAQwHWgECAX4BBgKEAQEFBbgHAJIBAK4BANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:U6gFALoBAL4BAJQBAJoBAJIBATQFogkAugEAvgEAlAEBMQFOAK4BAMwBARoDUgBcAJQBAJYBAMABAG4AvgEA5AQAugEAvgEAbgDsBQC6AQDAAQCUAQCaAQCUAQBuALwBAK4HALoBAMABAMABAJQBALIBANABARsNjAEBAA3wBwCUAQCaAQCUAQCaAQCSAQCwAQDMAQDUAQDQAQEADYwKALoBAL4BAJIBALABAMwBAHoA0gEAegDyAQBuALoBAMoBALwBAIYFAJQBAQwHWgECAYoBAQYChAEBBQW4BwCSAQCuAQDUAQB6ANIBAG4AxAEAjAcAlgEAvgEAwAEAhAEA-gEA
 
 

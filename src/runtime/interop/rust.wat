@@ -62,9 +62,9 @@
     (func $str_bytes (param $s (ref $Str)) (result (ref $ByteArray))))
   (import "std/async.wat"   "queue_push"
     (func $queue_push (param $task (ref any))))
-  (import "std/async.wat"   "make_thunk"
+  (import "rt/apply.wat"    "make_thunk"
     (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
-  (import "std/async.wat"   "make_unit_thunk"
+  (import "rt/apply.wat"    "make_unit_thunk"
     (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
   (import "std/async.wat"   "resume"
     (func $resume))

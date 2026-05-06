@@ -74,7 +74,7 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   usage.mark(runtime_contract::Sym::FnHostWrapper);
   usage.mark(runtime_contract::Sym::Closure);
   usage.mark(runtime_contract::Sym::Captures);
-  usage.mark(runtime_contract::Sym::Str);
+  usage.mark(runtime_contract::Sym::StrFromData);
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
 
@@ -1079,7 +1079,7 @@ fn lower_import_virtual_stdlib(
     let l_key = ctx.alloc_local(&format!(":imp_key_{name}"));
     let key_bytes = name.as_bytes();
     let key_sym = intern_data(lcx.frag, key_bytes);
-    let i_key = push_call(lcx.frag, lcx.rt.str_(),
+    let i_key = push_call(lcx.frag, lcx.rt.str_from_data(),
       vec![Operand::DataRef { sym: key_sym, len: key_bytes.len() as u32 }],
       Some(l_key));
     ctx.instrs.push(i_key);
@@ -1415,7 +1415,7 @@ enum LitVal {
   EmptyRec,
   /// String literal. Empty strings are special-cased to `str_empty`;
   /// non-empty strings intern their bytes into `frag.data` and emit
-  /// `call $str (i32.const offset) (i32.const len)`.
+  /// `call $from_data (i32.const offset) (i32.const len)`.
   Str(Vec<u8>),
 }
 
@@ -1441,7 +1441,7 @@ impl LitVal {
 /// the Pub arm to materialise the `<fqn>` and `<name>` arguments to
 /// `std/modules.fnk:pub` at every export site.
 ///
-/// Uses `rt.str_()` unconditionally — even for empty bytes — so we
+/// Uses `rt.str_from_data()` unconditionally — even for empty bytes — so we
 /// don't need `Sym::StrEmpty` declared just for the empty-FQN case.
 /// `intern_data(frag, &[])` produces a zero-length data symbol; the
 /// resulting `$Str` has len 0 and reads as the empty string.
@@ -1454,7 +1454,7 @@ fn emit_str_const(
   let local = ctx.alloc_local(display_hint);
   let sym = intern_data(lcx.frag, bytes);
   let len = bytes.len() as u32;
-  let i = push_call(lcx.frag, lcx.rt.str_(),
+  let i = push_call(lcx.frag, lcx.rt.str_from_data(),
     vec![Operand::DataRef { sym, len }], Some(local));
   ctx.instrs.push(i);
   local
@@ -1478,11 +1478,11 @@ fn box_lit(frag: &mut Fragment, rt: &Runtime, lit: &LitVal, into: LocalIdx) -> I
       if bytes.is_empty() {
         push_call(frag, rt.str_empty(), vec![], Some(into))
       } else {
-        // Intern the bytes, then emit `call $str (data_ref, len)`.
+        // Intern the bytes, then emit `call $from_data (data_ref, len)`.
         // `Operand::DataRef` expands to two i32 consts at emit time.
         let sym = intern_data(frag, bytes);
         let len = bytes.len() as u32;
-        push_call(frag, rt.str_(),
+        push_call(frag, rt.str_from_data(),
           vec![Operand::DataRef { sym, len }], Some(into))
       }
     }

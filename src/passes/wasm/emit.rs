@@ -1049,7 +1049,7 @@ fn emit_operand(
     }
     Operand::DataRef { sym, len } => {
       // DataRef expands to TWO consts: (offset, len). Used by string
-      // literal lowering — `call $str (i32.const offset) (i32.const len)`.
+      // literal lowering — `call $from_data (i32.const offset) (i32.const len)`.
       let offset = data_offsets[sym.0 as usize];
       func.instruction(&Instruction::I32Const(offset as i32));
       func.instruction(&Instruction::I32Const(*len as i32));

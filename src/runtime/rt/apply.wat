@@ -153,4 +153,38 @@
       (call $args_prepend (ref.as_non_null (local.get $a))
         (call $args_prepend (ref.as_non_null (local.get $b)) (call $args_empty)))
       (local.get $cont)))
+
+
+  ;; -- Thunks ----------------------------------------------------------
+  ;;
+  ;; A thunk is a zero-arg $Closure that, when applied, calls a saved
+  ;; continuation with a saved value: thunk() = cont(value). Used by the
+  ;; async scheduler (queued tasks) and by channel/host-cont resumption.
+
+  ;; Declarative element segment — required by WASM spec for ref.func.
+  (elem declare func $_thunk_fn)
+
+  ;; Thunk body. Captures: [cont, value]. When applied: apply([value], cont).
+  (func $_thunk_fn (type $Fn2) (param $caps (ref null any)) (param $args (ref null any))
+    (local $captures (ref $Captures))
+    (local $cont (ref any))
+    (local $value (ref any))
+    (local.set $captures (ref.cast (ref $Captures) (local.get $caps)))
+    (local.set $cont (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 0))))
+    (local.set $value (ref.as_non_null (array.get $Captures (local.get $captures) (i32.const 1))))
+    (return_call $apply
+      (call $args_prepend (local.get $value) (call $args_empty))
+      (local.get $cont))
+  )
+
+  (func $make_thunk (@pub) (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))
+    (struct.new $Closure
+      (ref.func $_thunk_fn)
+      (array.new_fixed $Captures 2 (local.get $cont) (local.get $value)))
+  )
+
+  ;; Make a thunk that calls cont with unit (i31 0).
+  (func $make_unit_thunk (@pub) (param $cont (ref any)) (result (ref $Closure))
+    (call $make_thunk (local.get $cont) (ref.i31 (i32.const 0)))
+  )
 )

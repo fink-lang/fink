@@ -23,7 +23,7 @@ test 'empty string literal', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -32,7 +32,7 @@ test 'empty string literal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQACZgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQACZgBuALoBAIQHAJYBAL4BAMABAIQBAPoBAA
 
 
 
@@ -46,7 +46,7 @@ test 'string literal', fn:
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (call $std/str.fnk:str (data.ref $d_0 5)))
+        (local.set $v_1 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
@@ -57,7 +57,7 @@ test 'string literal', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_1 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -67,7 +67,7 @@ test 'string literal', fn:
       (data $d_0 "hello")
       (data $d_1 "test")
     )
-    ;; sm:C8IDAJIBAQAHfgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQAHigEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'string literal dedup', fn:
@@ -86,15 +86,15 @@ test 'string literal dedup', fn:
         (local $:pub_name (ref null any))
         (local $:args (ref any))
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $x_0 (call $std/str.fnk:str (data.ref $d_0 5)))
+        (local.set $x_0 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (global.set $test:x (local.get $x_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_1 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_2 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $x_0))
-        (local.set $y_1 (call $std/str.fnk:str (data.ref $d_0 5)))
+        (local.set $y_1 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (global.set $test:y (local.get $y_1))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_1 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_3 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_3 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $y_1))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $y_1) (local.get $:args)))
@@ -106,7 +106,7 @@ test 'string literal dedup', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_1 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -120,7 +120,7 @@ test 'string literal dedup', fn:
       (data $d_2 "x")
       (data $d_3 "y")
     )
-    ;; sm:FK4GAJIBAQABfgBUAIgBAIoBALwBARgBfgBUAIgBAIoBALwBAG4AugEAhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:FK4GAJIBAQABigEAVACUAQCWAQC8AQEYAYoBAFQAlAEAlgEAvAEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'str templ two exprs', fn:
@@ -143,15 +143,15 @@ test 'str templ two exprs', fn:
         (local.set $v_2 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $a_0 (struct.new $std/int.wat:I64 (i64.const 1)))
         (global.set $test:a (local.get $a_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $a_0))
         (local.set $b_1 (struct.new $std/int.wat:I64 (i64.const 2)))
         (global.set $test:b (local.get $b_1))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_2 1)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_2 1)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $b_1))
-        (local.set $v_6 (call $std/str.fnk:str (data.ref $d_3 5)))
+        (local.set $v_6 (call $std/str.fnk:from_data (data.ref $d_3 5)))
         (local.set $:varargs (array.new_fixed $rt/apply.wat:VarArgs 3 (local.get $a_0) (local.get $v_6) (local.get $b_1)))
         (return_call $std/str.fnk:fmt (local.get $:varargs) (local.get $v_2))
       )
@@ -161,7 +161,7 @@ test 'str templ two exprs', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -175,7 +175,7 @@ test 'str templ two exprs', fn:
       (data $d_2 "b")
       (data $d_3 " and ")
     )
-    ;; sm:FKIHAJIBAQABggEAVACIAQCKAQC8AQEMAYIBAFQAiAEAigEAvAEBFgV-AO4BAQkPhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:FKIHAJIBAQABggEAVACUAQCWAQC8AQEMAYIBAFQAlAEAlgEAvAEBFgWKAQDuAQEJD4QHAJYBAL4BAMABAIQBAPoBAA
 
 
 test 'str tagged template', fn:
@@ -215,7 +215,7 @@ test 'str tagged template', fn:
         (local $v_11 (ref null any))
         (local $v_10 (ref null any))
         (local.set $v_33 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_11 (call $std/str.fnk:str (data.ref $d_2 4)))
+        (local.set $v_11 (call $std/str.fnk:from_data (data.ref $d_2 4)))
         (local.set $v_10 (call $rt/apply.wat:args_empty))
         (return_call $std/seq.fnk:prepend (local.get $v_11) (local.get $v_10) (local.get $v_33))
       )
@@ -234,8 +234,8 @@ test 'str tagged template', fn:
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $foo_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_3) (local.get $:caps_arg)))
         (global.set $test:foo (local.get $foo_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 3)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 3)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $foo_0))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $foo_0) (local.get $v_2)))
         (local.set $v_38_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_26) (local.get $:caps_arg)))
@@ -251,7 +251,7 @@ test 'str tagged template', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -263,7 +263,7 @@ test 'str tagged template', fn:
       (data $d_1 "foo")
       (data $d_2 "1\\n2")
     )
-    ;; sm:JsADAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAMgEAJQBATgEgAEBBwlsAQAJ7gkAkgEAegEvA8wBAFwAiAEAigEAwAEA1AEA1AEAegDSAQBuAMQBAIwHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:JsADAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAMgEAJQBATgEjAEBBwlsAQAJ7gkAkgEAegEvA8wBAFwAlAEAlgEAwAEA1AEA1AEAegDSAQBuAMQBAIwHAJYBAL4BAMABAIQBAPoBAA
 
 
 test 'str tagged template escape handling', fn:
@@ -313,7 +313,7 @@ test 'str tagged template escape handling', fn:
         (local.set $v_17 (call $rt/apply.wat:args_head (local.get $:params)))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 2 (local.get $foo_60) (local.get $v_62)))
         (local.set $v_81 (struct.new $rt/apply.wat:Closure (ref.func $test:v_74) (local.get $:caps_arg)))
-        (local.set $v_19 (call $std/str.fnk:str (data.ref $d_0 8)))
+        (local.set $v_19 (call $std/str.fnk:from_data (data.ref $d_0 8)))
         (return_call $std/seq.fnk:prepend (local.get $v_19) (local.get $v_17) (local.get $v_81))
       )
       (func $test:v_42 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
@@ -338,7 +338,7 @@ test 'str tagged template escape handling', fn:
         (local $v_13 (ref null any))
         (local $v_12 (ref null any))
         (local.set $v_51 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_13 (call $std/str.fnk:str (data.ref $d_1 27)))
+        (local.set $v_13 (call $std/str.fnk:from_data (data.ref $d_1 27)))
         (local.set $v_12 (call $rt/apply.wat:args_empty))
         (return_call $std/seq.fnk:prepend (local.get $v_13) (local.get $v_12) (local.get $v_51))
       )
@@ -360,13 +360,13 @@ test 'str tagged template escape handling', fn:
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $foo_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_4) (local.get $:caps_arg)))
         (global.set $test:foo (local.get $foo_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_2 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_3 3)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_2 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_3 3)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $foo_0))
         (local.set $bar_1 (struct.new $std/int.wat:I64 (i64.const 1)))
         (global.set $test:bar (local.get $bar_1))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_2 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_4 3)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_2 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_4 3)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $bar_1))
         (local.set $:caps_arg (array.new_fixed $rt/apply.wat:Captures 3 (local.get $bar_1) (local.get $foo_0) (local.get $v_3)))
         (local.set $v_56_clo (struct.new $rt/apply.wat:Closure (ref.func $test:v_42) (local.get $:caps_arg)))
@@ -382,7 +382,7 @@ test 'str tagged template escape handling', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_2 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_2 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -397,7 +397,7 @@ test 'str tagged template escape handling', fn:
       (data $d_3 "foo")
       (data $d_4 "bar")
     )
-    ;; sm:O8ADAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAKwHALoBAMIBAL4BAJQBANgBAMwBAUgIgAEBBy7QBwC6AQDCAQDCAQC-AQCUAQDYAQDMAQEALuwEAJQBASQbggEBIy5sAQAuyAsAkgEAegE_A8wBAFwAiAEAigEAwAEBMAOGAQBcAIgBAIoBAMABAPoBANQBAHoA0gEAbgDEAQCMBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:O8ADAJoBAJoBAFwAbgDCAQDyBQC6AQDCAQC-AQCUAQBuALoBALwBAKwHALoBAMIBAL4BAJQBANgBAMwBAUgIjAEBBy7QBwC6AQDCAQDCAQC-AQCUAQDYAQDMAQEALuwEAJQBASQbjgEBIy5sAQAuyAsAkgEAegE_A8wBAFwAlAEAlgEAwAEBMAOGAQBcAJQBAJYBAMABAPoBANQBAHoA0gEAbgDEAQCMBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'str implicit formatting handling', fn:
@@ -412,7 +412,7 @@ test 'str implicit formatting handling', fn:
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (call $std/str.fnk:str (data.ref $d_0 5)))
+        (local.set $v_1 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
@@ -423,7 +423,7 @@ test 'str implicit formatting handling', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_1 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -433,7 +433,7 @@ test 'str implicit formatting handling', fn:
       (data $d_0 "1\0a2\0a3")
       (data $d_1 "test")
     )
-    ;; sm:C8IDAJIBAQANfgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQANigEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'str implicit formatting escapes', fn:
@@ -446,7 +446,7 @@ test 'str implicit formatting escapes', fn:
         (local $v_1 (ref null any))
         (local $:args (ref any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (call $std/str.fnk:str (data.ref $d_0 14)))
+        (local.set $v_1 (call $std/str.fnk:from_data (data.ref $d_0 14)))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $v_1) (local.get $:args)))
         (return_call $rt/apply.wat:apply (local.get $:args) (local.get $v_0))
@@ -457,7 +457,7 @@ test 'str implicit formatting escapes', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_1 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -467,7 +467,7 @@ test 'str implicit formatting escapes', fn:
       (data $d_0 "\0a\0d\09\0c\08\0b$'\\\c3\a9\e8\aa\9e")
       (data $d_1 "test")
     )
-    ;; sm:C8IDAJIBAQAlgAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAljAEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'empty string eq', fn:
@@ -490,7 +490,7 @@ test 'empty string eq', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -499,7 +499,7 @@ test 'empty string eq', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQACZgEMAmYBCwisBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAJIBAQACZgEMAmYBCwisBwCWAQC-AQDAAQCEAQD6AQA
 
 
 # TODO: move to ./test_patterns.fnk
@@ -703,8 +703,8 @@ test 'match empty string', fn:
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $main_0 (struct.new $rt/apply.wat:Closure (ref.func $test:v_3) (local.get $:caps_arg)))
         (global.set $test:main (local.get $main_0))
-        (local.set $:pub_url (call $std/str.fnk:str (data.ref $d_0 4)))
-        (local.set $:pub_name (call $std/str.fnk:str (data.ref $d_1 4)))
+        (local.set $:pub_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
+        (local.set $:pub_name (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (call $std/modules.fnk:pub (local.get $:pub_url) (local.get $:pub_name) (local.get $main_0))
         (local.set $:args (call $rt/apply.wat:args_empty))
         (local.set $:args (call $rt/apply.wat:args_prepend (local.get $main_0) (local.get $:args)))
@@ -716,7 +716,7 @@ test 'match empty string', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -727,7 +727,7 @@ test 'match empty string', fn:
       (data $d_0 "test")
       (data $d_1 "main")
     )
-    ;; sm:a7YDAJQBAUABhAEAbgC8AQCiBgC6AQDAAQB6ANIBAG4AvgEApgcAugEAwAEAwAEAlAEAhAEAfADsCgCUAQCaAQCUAQCaAQCUAQDUAQDQAQEHAmgBAAKWCACSAQCaAQCSAQCaAQCSAQCuAQDQAQB6ANIBAG4AugEAugEAvgEAwgQAlAEBGgGEAQBuALwBALgGAJQBAJoBAJQBAJoBAJQBAHoA0gEAbgC8AQCGAwCsBwC6AQDAAQDAAQB6ANIBAHoA1gEAbgC-AQDEAQC-AQCyBwCUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEA9gUAkgEAmgEAkgEAegDSAQBuALoBALoBANwGAJIBAHoBUQTOAQBgAIgBAIoBAMIBAG4AwAEAhAcAigEAvgEAwAEAhAEA-gEA
+    ;; sm:a7YDAJQBAUABhAEAbgC8AQCiBgC6AQDAAQB6ANIBAG4AvgEApgcAugEAwAEAwAEAlAEAhAEAfADsCgCUAQCaAQCUAQCaAQCUAQDUAQDQAQEHAmgBAAKWCACSAQCaAQCSAQCaAQCSAQCuAQDQAQB6ANIBAG4AugEAugEAvgEAwgQAlAEBGgGEAQBuALwBALgGAJQBAJoBAJQBAJoBAJQBAHoA0gEAbgC8AQCGAwCsBwC6AQDAAQDAAQB6ANIBAHoA1gEAbgC-AQDEAQC-AQCyBwCUAQCaAQCUAQDUAQDQAQB6ANIBAG4AvAEAvgEAvAEA9gUAkgEAmgEAkgEAegDSAQBuALoBALoBANwGAJIBAHoBUQTOAQBgAJQBAJYBAMIBAG4AwAEAhAcAlgEAvgEAwAEAhAEA-gEA
 
 
 test 'empty string eq template', fn:
@@ -750,7 +750,7 @@ test 'empty string eq template', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -759,7 +759,7 @@ test 'empty string eq template', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:CsgDAJIBAQACZgEMB2YBCw2sBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAJIBAQACZgEMB2YBCw2sBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'str eq', fn:
@@ -772,8 +772,8 @@ test 'str eq', fn:
         (local $v_1 (ref null any))
         (local $v_2 (ref null any))
         (local.set $v_0 (call $rt/apply.wat:args_head (local.get $:params)))
-        (local.set $v_1 (call $std/str.fnk:str (data.ref $d_0 5)))
-        (local.set $v_2 (call $std/str.fnk:str (data.ref $d_0 5)))
+        (local.set $v_1 (call $std/str.fnk:from_data (data.ref $d_0 5)))
+        (local.set $v_2 (call $std/str.fnk:from_data (data.ref $d_0 5)))
         (return_call $std/operators.fnk:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
       (func $test::host_wrapper (export "test") (type $rt/apply.wat:Fn_host_wrapper) (param $:wrap_key_bytes (ref null any)) (param $:wrap_cont_id i32)
@@ -782,7 +782,7 @@ test 'str eq', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_1 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_1 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -792,5 +792,5 @@ test 'str eq', fn:
       (data $d_0 "hello")
       (data $d_1 "test")
     )
-    ;; sm:CsgDAJIBAQAHfgEWB34BFRKsBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:CsgDAJIBAQAHigEBFgeKAQEVEqwHAJYBAL4BAMABAIQBAPoBAA
 
