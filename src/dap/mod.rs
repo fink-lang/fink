@@ -95,9 +95,7 @@ async fn run_module(
   let entry_wrapper = instance.get_func(&mut *store, &entry_wrapper_name)
     .ok_or_else(|| format!("no '{entry_wrapper_name}' export"))?;
 
-  let main_key = wrap_bytes_to_byte_array_async(&mut *store, b"main")?;
-
-  // Host-side i32 → anyref wrap (host-bridge bookkeeping, not part
+  // Host-side i32 -> anyref wrap (host-bridge bookkeeping, not part
   // of the per-module wrapper ABI).
   let wrap_host_cont = instance.get_func(&mut *store, "wrap_host_cont")
     .ok_or_else(|| "no wrap_host_cont export".to_string())?;
@@ -108,9 +106,7 @@ async fn run_module(
   let entry_cont = entry_cont_out[0];
 
   entry_wrapper
-    .call_async(&mut *store,
-      &[wasmtime::Val::AnyRef(Some(main_key)), entry_cont],
-      &mut [])
+    .call_async(&mut *store, &[entry_cont], &mut [])
     .await
     .map_err(|e| {
       // Wasmtime wraps host-trap errors with an "error while
@@ -149,21 +145,34 @@ fn find_entry_wrapper(module: &wasmtime::Module) -> Result<String, String> {
   Err("no entry wrapper export (expected one starting with './')".into())
 }
 
-/// Allocate a `$ByteArray` on the GC heap from raw bytes (DAP store flavour).
-fn wrap_bytes_to_byte_array_async(
-  store: &mut wasmtime::Store<DebugState>,
-  bytes: &[u8],
-) -> Result<wasmtime::Rooted<wasmtime::AnyRef>, String> {
+
+/// Look up `key` in `rec` by raw bytes via the interop helper.
+/// Async variant for DAP.
+async fn lookup_export_by_bytes_dap(
+  caller: &mut wasmtime::Caller<'_, DebugState>,
+  rec: wasmtime::Rooted<wasmtime::AnyRef>,
+  key: &[u8],
+) -> Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>, wasmtime::Error> {
+  let rec_get_by_bytes = caller.get_export("rec_get_by_bytes")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| wasmtime::Error::msg("no rec_get_by_bytes export"))?;
   let array_ty = wasmtime::ArrayType::new(
-    store.engine(),
+    caller.engine(),
     wasmtime::FieldType::new(wasmtime::Mutability::Var, wasmtime::StorageType::I8),
   );
-  let alloc = wasmtime::ArrayRefPre::new(&mut *store, array_ty);
+  let alloc = wasmtime::ArrayRefPre::new(&mut *caller, array_ty);
   let elems: Vec<wasmtime::Val> =
-    bytes.iter().map(|&b| wasmtime::Val::I32(b as i32)).collect();
-  let array = wasmtime::ArrayRef::new_fixed(&mut *store, &alloc, &elems)
-    .map_err(|e| format!("byte array alloc: {e}"))?;
-  Ok(array.to_anyref())
+    key.iter().map(|&b| wasmtime::Val::I32(b as i32)).collect();
+  let array = wasmtime::ArrayRef::new_fixed(&mut *caller, &alloc, &elems)
+    .map_err(|e| wasmtime::Error::msg(format!("key bytes alloc: {e}")))?;
+  let mut out = [wasmtime::Val::AnyRef(None)];
+  rec_get_by_bytes.call_async(&mut *caller,
+    &[wasmtime::Val::AnyRef(Some(rec)), wasmtime::Val::AnyRef(Some(array.to_anyref()))],
+    &mut out).await?;
+  Ok(match out[0] {
+    wasmtime::Val::AnyRef(Some(r)) => Some(r),
+    _ => None,
+  })
 }
 
 /// Capture an exit code into the DAP exit-code slot. Mirrors
@@ -603,24 +612,25 @@ pub fn run<R: Read, W: Write + Send + 'static>(
                 return Ok(());
               }
 
-              let main_clo_val = match cons.field(&mut caller, 1).ok() {
+              // args[1] is the exports rec; pull `main` host-side
+              // via the interop rec_get_by_bytes helper.
+              let exports_rec = match cons.field(&mut caller, 1).ok() {
                 Some(wasmtime::Val::AnyRef(Some(tail_ref))) => {
                   match tail_ref.as_struct(&caller) {
-                    Ok(Some(tail_st)) => tail_st.field(&mut caller, 0).ok(),
-                    _ => None,
+                    Ok(Some(tail_st)) => match tail_st.field(&mut caller, 0).ok() {
+                      Some(wasmtime::Val::AnyRef(Some(r))) => r,
+                      _ => return Ok(()),
+                    },
+                    _ => return Ok(()),
                   }
                 }
-                _ => None,
-              };
-              let main_clo = match main_clo_val {
-                Some(wasmtime::Val::AnyRef(Some(r))) => r,
                 _ => return Ok(()),
               };
-              if let Ok(Some(st)) = main_clo.as_struct(&caller)
-                && st.field(&mut caller, 1).is_err()
-              {
-                return Ok(());
-              }
+              let main_clo = match lookup_export_by_bytes_dap(
+                &mut caller, exports_rec, b"main").await? {
+                Some(r) => r,
+                None => return Ok(()),
+              };
 
               *exit.lock().unwrap() = 0;
               apply_main_dap(&mut caller, main_clo, &argv).await?;

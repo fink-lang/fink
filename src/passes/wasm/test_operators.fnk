@@ -8,7 +8,7 @@ test 'add two literals', fn:
     2 + 3
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -18,20 +18,18 @@ test 'add two literals', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
         (return_call $std/operators.fnk:op_plus (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQABggEBCAGCAQEHBagGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQABggEBCAGCAQEHBZgFAIwBAHoA5gEA
 
 
 
@@ -40,7 +38,7 @@ test 'chained arithmetic', fn:
     2 * 3 + 4
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test:v_12 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $v_13 (ref null any))
@@ -65,20 +63,18 @@ test 'chained arithmetic', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
         (return_call $std/operators.fnk:op_mul (local.get $v_1) (local.get $v_2) (local.get $v_17))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:EL4FALoBAL4BAJIBARABggEBDwmuBgCSAQCuAQDMAQEAAYIBAQgBggEBBwWoBgCMAQCsAQB6AOYBAA
+    ;; sm:D6AFALoBAL4BAJIBARABggEBDwmuBgCSAQCuAQDMAQEAAYIBAQgBggEBBwWYBQCMAQB6AOYBAA
 
 
 test 'unary not', fn:
@@ -86,7 +82,7 @@ test 'unary not', fn:
     not true
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -94,20 +90,18 @@ test 'unary not', fn:
         (local.set $v_1 (ref.i31 (i32.const 1)))
         (return_call $std/operators.fnk:op_not (local.get $v_1) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CKIEAJIBAQgEWgEHCIQGAIwBAKwBAHoA5gEA
+    ;; sm:B4QEAJIBAQgEWgEHCPQEAIwBAHoA5gEA
 
 
 test 'comparison eq', fn:
@@ -115,7 +109,7 @@ test 'comparison eq', fn:
     2 == 3
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -125,20 +119,18 @@ test 'comparison eq', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
         (return_call $std/operators.fnk:op_eq (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQABggEBCgGCAQEJBqQGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQABggEBCgGCAQEJBpQFAIwBAHoA5gEA
 
 
 test 'comparison lt', fn:
@@ -146,7 +138,7 @@ test 'comparison lt', fn:
     2 < 3
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -156,20 +148,18 @@ test 'comparison lt', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
         (return_call $std/operators.fnk:op_lt (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQABggEBCAGCAQEHBaQGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQABggEBCAGCAQEHBZQFAIwBAHoA5gEA
 
 
 test 'logical and', fn:
@@ -177,7 +167,7 @@ test 'logical and', fn:
     true and false
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -187,20 +177,18 @@ test 'logical and', fn:
         (local.set $v_2 (ref.i31 (i32.const 0)))
         (return_call $std/operators.fnk:op_and (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQAEWgESBVoBEQ6mBgCMAQCsAQB6AOYBAA
+    ;; sm:CMQEAJIBAQAEWgESBVoBEQ6WBQCMAQB6AOYBAA
 
 
 test 'logical or', fn:
@@ -208,7 +196,7 @@ test 'logical or', fn:
     true or false
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -218,20 +206,18 @@ test 'logical or', fn:
         (local.set $v_2 (ref.i31 (i32.const 0)))
         (return_call $std/operators.fnk:op_or (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQAEWgEQBVoBDw2kBgCMAQCsAQB6AOYBAA
+    ;; sm:CMQEAJIBAQAEWgEQBVoBDw2UBQCMAQB6AOYBAA
 
 
 test 'range exclusive', fn:
@@ -239,7 +225,7 @@ test 'range exclusive', fn:
     0..10
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -249,20 +235,18 @@ test 'range exclusive', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 10)))
         (return_call $std/range.fnk:excl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQABggEBBgKEAQEFBZoGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQABggEBBgKEAQEFBYoFAIwBAHoA5gEA
 
 
 test 'range inclusive', fn:
@@ -270,7 +254,7 @@ test 'range inclusive', fn:
     0...10
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -280,20 +264,18 @@ test 'range inclusive', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 10)))
         (return_call $std/range.fnk:incl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQABggEBCAKEAQEHBpoGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQABggEBCAKEAQEHBooFAIwBAHoA5gEA
 
 
 test 'range in', fn:
@@ -301,7 +283,7 @@ test 'range in', fn:
     5 in 0..10
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test:v_12 (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $:caps_cast (ref $rt/apply.wat:Captures))
         (local $v_13 (ref null any))
@@ -326,20 +308,18 @@ test 'range in', fn:
         (local.set $v_3 (struct.new $std/int.wat:I64 (i64.const 10)))
         (return_call $std/range.fnk:excl (local.get $v_2) (local.get $v_3) (local.get $v_17))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:EL4FALoBAL4BAJIBAQABggEBAAqqBgCSAQCuAQDMAQEKAYIBAQYChAEBBQWcBgCMAQCsAQB6AOYBAA
+    ;; sm:D6AFALoBAL4BAJIBAQABggEBAAqqBgCSAQCuAQDMAQEKAYIBAQYChAEBBQWMBQCMAQB6AOYBAA
 
 
 test 'power', fn:
@@ -347,7 +327,7 @@ test 'power', fn:
     2 ** 8
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -357,20 +337,18 @@ test 'power', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 8)))
         (return_call $std/operators.fnk:op_pow (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQABggEBCgGCAQEJBqYGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQABggEBCgGCAQEJBpYFAIwBAHoA5gEA
 
 
 skip test 'power float', fn:
@@ -385,7 +363,7 @@ test 'divmod', fn:
     10 /% 3
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -395,20 +373,18 @@ test 'divmod', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 3)))
         (return_call $std/operators.fnk:op_divmod (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQAChAEBDAGCAQELB6wGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQAChAEBDAGCAQELB5wFAIwBAHoA5gEA
 
 
 test 'rotate left', fn:
@@ -416,7 +392,7 @@ test 'rotate left', fn:
     1 <<< 4
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -426,20 +402,18 @@ test 'rotate left', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 4)))
         (return_call $std/operators.fnk:op_rotl (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQABggEBDAGCAQELB6gGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQABggEBDAGCAQELB5gFAIwBAHoA5gEA
 
 
 test 'rotate right', fn:
@@ -447,7 +421,7 @@ test 'rotate right', fn:
     16 >>> 4
   | equals wat":
     (module
-      (type $test::Fn_host_wrapper (func (param (ref null any) (ref null any))))
+      (type $test::Fn_host_wrapper (func (param (ref null any))))
       (func $test::fink_module (type $rt/apply.wat:Fn2) (param $:caps_param (ref null any)) (param $:params (ref null any))
         (local $v_0 (ref null any))
         (local $v_1 (ref null any))
@@ -457,17 +431,15 @@ test 'rotate right', fn:
         (local.set $v_2 (struct.new $std/int.wat:I64 (i64.const 4)))
         (return_call $std/operators.fnk:op_rotr (local.get $v_1) (local.get $v_2) (local.get $v_0))
       )
-      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:key_bytes (ref null any)) (param $:cont (ref null any))
+      (func $test::host_wrapper (export "test") (type $test::Fn_host_wrapper) (param $:cont (ref null any))
         (local $:url (ref null any))
-        (local $:key_str (ref null any))
         (local $:caps_arg (ref null $rt/apply.wat:Captures))
         (local $:mod_clos (ref null any))
         (local.set $:url (call $std/str.fnk:from_data (data.ref $d_0 4)))
-        (local.set $:key_str (call $std/str.wat:_str_wrap_bytes (local.get $:key_bytes)))
         (local.set $:caps_arg (ref.null $rt/apply.wat:Captures))
         (local.set $:mod_clos (struct.new $rt/apply.wat:Closure (ref.func $test::fink_module) (local.get $:caps_arg)))
-        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:key_str) (local.get $:cont))
+        (return_call $std/modules.fnk:init_module (local.get $:url) (local.get $:mod_clos) (local.get $:cont))
       )
       (data $d_0 "test")
     )
-    ;; sm:CeIEAJIBAQAChAEBDgGCAQENCKgGAIwBAKwBAHoA5gEA
+    ;; sm:CMQEAJIBAQAChAEBDgGCAQENCJgFAIwBAHoA5gEA

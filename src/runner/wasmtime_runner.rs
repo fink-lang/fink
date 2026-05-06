@@ -151,27 +151,26 @@ pub fn run(
               return Ok(());
             }
 
-            // Walk to args[1] = main_clo via the Cons tail.
-            let main_clo_val = match cons.field(&mut caller, 1).ok() {
+            // Walk to args[1] = exports_rec via the Cons tail.
+            let exports_rec = match cons.field(&mut caller, 1).ok() {
               Some(Val::AnyRef(Some(tail_ref))) => {
                 match tail_ref.as_struct(&caller) {
-                  Ok(Some(tail_st)) => tail_st.field(&mut caller, 0).ok(),
-                  _ => None,
+                  Ok(Some(tail_st)) => match tail_st.field(&mut caller, 0).ok() {
+                    Some(Val::AnyRef(Some(r))) => r,
+                    _ => return Ok(()),
+                  },
+                  _ => return Ok(()),
                 }
               }
-              _ => None,
-            };
-            let main_clo = match main_clo_val {
-              Some(Val::AnyRef(Some(r))) => r,
               _ => return Ok(()),
             };
-            // A real $Closure has 2 fields (funcref + captures); a
-            // $Nil placeholder has 0. Treat the latter as "no main".
-            if let Ok(Some(st)) = main_clo.as_struct(&caller)
-              && st.field(&mut caller, 1).is_err()
-            {
-              return Ok(());
-            }
+
+            // Look up `main` in the exports rec via the interop helper.
+            let main_clo = match lookup_export_by_bytes(
+              &mut caller, exports_rec, b"main")? {
+              Some(r) => r,
+              None => return Ok(()),
+            };
 
             // Reset the provisional exit code — main will overwrite
             // via cont id 2.
@@ -201,14 +200,10 @@ pub fn run(
   let entry_wrapper = instance.get_func(&mut store, &entry_wrapper_name)
     .ok_or_else(|| format!("no '{entry_wrapper_name}' export"))?;
 
-  // Build the b"main" key as a raw $ByteArray. The wrapper internally
-  // calls `_str_wrap_bytes` to wrap into a $Str.
-  let main_key = wrap_bytes_to_byte_array(&mut store, b"main")?;
-
   // Host-side: turn the wrapper-done cont id into a fink anyref via
   // `wrap_host_cont`. The per-module wrapper signature is host-
-  // neutral (`(ref null any, ref null any) -> ()`); host-bridge
-  // mechanics (i32 → anyref) live on the host side of the boundary.
+  // neutral (`(ref null any) -> ()`); host-bridge mechanics
+  // (i32 -> anyref) live on the host side of the boundary.
   let wrap_host_cont = instance.get_func(&mut store, "wrap_host_cont")
     .ok_or_else(|| "no wrap_host_cont export".to_string())?;
   let mut entry_cont_out = [Val::AnyRef(None)];
@@ -217,9 +212,7 @@ pub fn run(
   let entry_cont = entry_cont_out[0];
 
   entry_wrapper
-    .call(&mut store,
-      &[Val::AnyRef(Some(main_key)), entry_cont],
-      &mut [])
+    .call(&mut store, &[entry_cont], &mut [])
     .map_err(|e| crate::passes::wasm::annotate_func_indices(
       &format!("entry wrapper: {e}"), bytes))?;
 
@@ -241,20 +234,36 @@ fn find_entry_wrapper(module: &Module) -> Result<String, String> {
   Err("no entry wrapper export (expected one starting with './')".into())
 }
 
-/// Allocate a `$ByteArray` (mut i8 array) on the GC heap from raw bytes.
-fn wrap_bytes_to_byte_array(
-  store: &mut Store<()>, bytes: &[u8],
-) -> Result<Rooted<AnyRef>, String> {
+/// Look up `key` in `rec` by raw bytes. Calls the interop helper
+/// `rec_get_by_bytes` on the running instance — host wraps key bytes
+/// into a `$ByteArray`, hands to the helper, gets a fink anyref back
+/// (or null if the key is absent / value is itself null).
+fn lookup_export_by_bytes(
+  caller: &mut Caller<'_, ()>,
+  rec: Rooted<AnyRef>,
+  key: &[u8],
+) -> Result<Option<Rooted<AnyRef>>, Error> {
+  let rec_get_by_bytes = caller.get_export("rec_get_by_bytes")
+    .and_then(|e| e.into_func())
+    .ok_or_else(|| Error::msg("no rec_get_by_bytes export"))?;
   let array_ty = ArrayType::new(
-    store.engine(),
+    caller.engine(),
     FieldType::new(Mutability::Var, StorageType::I8),
   );
-  let alloc = ArrayRefPre::new(&mut *store, array_ty);
-  let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
-  let array = ArrayRef::new_fixed(&mut *store, &alloc, &elems)
-    .map_err(|e| format!("byte array alloc: {e}"))?;
-  Ok(array.to_anyref())
+  let alloc = ArrayRefPre::new(&mut *caller, array_ty);
+  let elems: Vec<Val> = key.iter().map(|&b| Val::I32(b as i32)).collect();
+  let array = ArrayRef::new_fixed(&mut *caller, &alloc, &elems)
+    .map_err(|e| Error::msg(format!("key bytes alloc: {e}")))?;
+  let mut out = [Val::AnyRef(None)];
+  rec_get_by_bytes.call(&mut *caller,
+    &[Val::AnyRef(Some(rec)), Val::AnyRef(Some(array.to_anyref()))],
+    &mut out)?;
+  Ok(match out[0] {
+    Val::AnyRef(Some(r)) => Some(r),
+    _ => None,
+  })
 }
+
 
 /// Apply `main_clo` with the program's cli args and a fresh done
 /// continuation (cont id 2). Called from inside `host_invoke_cont` so

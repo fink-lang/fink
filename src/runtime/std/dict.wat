@@ -1373,6 +1373,16 @@
     (call $hamt_get (struct.get $RecImpl $hamt (local.get $rec)) (local.get $key))
   )
 
+  ;; Host-friendly $Rec field accessor. Takes anyref-typed args so
+  ;; callers (interop, host) don't need to know about $RecImpl.
+  ;; Returns null when the key is absent.
+  (func $get_any (@pub)
+    (param $rec (ref null any)) (param $key (ref null any))
+    (result (ref null any))
+    (call $get
+      (ref.cast (ref $RecImpl) (local.get $rec))
+      (ref.cast (ref eq) (local.get $key))))
+
   (func $op_in (@impl "std/operators.fnk:op_in" _ $Rec)
     (param $rec (ref $RecImpl)) (param $key (ref eq))
     (result i32)

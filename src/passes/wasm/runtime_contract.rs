@@ -171,11 +171,6 @@ pub enum Sym {
   // fragment; the wrapper is exported under the module's canonical
   // FQN so any host can call it as the unified module-init API.
   ModulesInitModule,
-  // `std/str.wat:_str_wrap_bytes` — `(anyref) -> anyref`. Wraps a
-  // GC `$ByteArray` into a fink `$Str`. Used by the per-module
-  // host wrapper to convert the host's raw byte-array key into a
-  // fink string before tail-calling `init_module`.
-  StrWrapBytes,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -384,7 +379,6 @@ pub struct Runtime {
   modules_pub:    Option<FuncSym>,
   modules_import: Option<FuncSym>,
   modules_init_module: Option<FuncSym>,
-  str_wrap_bytes:  Option<FuncSym>,
 }
 
 impl Runtime {
@@ -408,7 +402,6 @@ impl Runtime {
   pub fn modules_pub(&self)    -> FuncSym { self.modules_pub.expect("rt: modules_pub not declared") }
   pub fn modules_import(&self) -> FuncSym { self.modules_import.expect("rt: modules_import not declared") }
   pub fn modules_init_module(&self) -> FuncSym { self.modules_init_module.expect("rt: modules_init_module not declared") }
-  pub fn str_wrap_bytes(&self)       -> FuncSym { self.str_wrap_bytes.expect("rt: str_wrap_bytes not declared") }
   pub fn rec_pop(&self)      -> FuncSym { self.rec_pop.expect("rt: rec_pop not declared") }
   pub fn rec_empty(&self)    -> FuncSym { self.rec_empty.expect("rt: rec_empty not declared") }
   pub fn rec_set_field(&self) -> FuncSym { self.rec_set_field.expect("rt: rec_set_field not declared") }
@@ -570,7 +563,6 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::StrEmpty        => "std/str.fnk:str_empty",
     Sym::StrFmt          => "std/str.fnk:fmt",
     Sym::StrMatch        => "std/str.fnk:match",
-    Sym::StrWrapBytes    => "std/str.wat:_str_wrap_bytes",
 
     Sym::Yield           => "std/async.fnk:yield",
     Sym::Spawn           => "std/async.fnk:spawn",
@@ -712,7 +704,6 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
   if needed.contains(&Sym::RecSetField) { rt.rec_set_field  = Some(FuncSym::Runtime(Sym::RecSetField)); }
   if needed.contains(&Sym::ModulesPub)  { rt.modules_pub    = Some(FuncSym::Runtime(Sym::ModulesPub)); }
   if needed.contains(&Sym::ModulesInitModule) { rt.modules_init_module = Some(FuncSym::Runtime(Sym::ModulesInitModule)); }
-  if needed.contains(&Sym::StrWrapBytes)       { rt.str_wrap_bytes      = Some(FuncSym::Runtime(Sym::StrWrapBytes)); }
   if needed.contains(&Sym::ModulesImport) {
     rt.modules_import = Some(FuncSym::Runtime(Sym::ModulesImport));
     // Virtual-stdlib `import` codegen path in lower allocates

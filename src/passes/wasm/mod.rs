@@ -339,11 +339,11 @@ mod tests {
 
     // The per-module wrapper is exported under the canonical FQN
     // (`test:` for the test driver) and has the host-friendly
-    // signature `(key_bytes: anyref, cont_id: i32) -> ()`.
+    // signature `(cont: anyref) -> ()`.
     let wrapper = instance.get_func(&mut store, "test")
       .expect("'test' wrapper export missing");
     let ty = wrapper.ty(&store);
-    assert_eq!(ty.params().len(), 2, "wrapper should take (key_bytes, cont_id)");
+    assert_eq!(ty.params().len(), 1, "wrapper should take (cont)");
     assert_eq!(ty.results().len(), 0, "wrapper should return nothing (CPS tail call)");
   }
 

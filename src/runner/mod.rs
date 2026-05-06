@@ -303,36 +303,33 @@ mod tests {
               // main's result (id=2, final answer).
               capture_test_result(&mut caller, &head, &captured_clone)?;
 
-              // Only id=1 (wrapper cont) carries a second arg (main_clo).
+              // Only id=1 (wrapper cont) carries a second arg (exports_rec).
               if cont_id != 1 {
                 return Ok(());
               }
 
-              // Walk the cons tail to get args[1] = main_clo.
+              // Walk the cons tail to get args[1] = exports_rec.
               let tail_val = cons.field(&mut caller, 1).ok();
-              let main_clo_val = match tail_val {
+              let exports_rec = match tail_val {
                 Some(Val::AnyRef(Some(tail_ref))) => {
                   match tail_ref.as_struct(&caller) {
-                    Ok(Some(tail_st)) => tail_st.field(&mut caller, 0).ok(),
-                    _ => None,
+                    Ok(Some(tail_st)) => match tail_st.field(&mut caller, 0).ok() {
+                      Some(Val::AnyRef(Some(r))) => r,
+                      _ => return Ok(()),
+                    },
+                    _ => return Ok(()),
                   }
                 }
-                _ => None,
-              };
-
-              // No main, or main_clo is Nil/null — we're done.
-              let main_clo = match main_clo_val {
-                Some(Val::AnyRef(Some(r))) => r,
                 _ => return Ok(()),
               };
-              // If main_clo points at a $Nil (no key matched in the
-              // exports rec), it's a struct with zero fields — skip.
-              // A real $Closure has 2 fields (funcref + captures).
-              if let Ok(Some(st)) = main_clo.as_struct(&caller)
-                && st.field(&mut caller, 1).is_err()
-              {
-                return Ok(());
-              }
+
+              // Look up `main` in the exports rec via the interop
+              // helper (host wraps b"main" -> $Str -> dict.wat:get).
+              let main_clo = match lookup_export_by_bytes(
+                &mut caller, exports_rec, b"main")? {
+                Some(r) => r,
+                None => return Ok(()),
+              };
 
               // Main exists. Reset captured (last_expr was provisional)
               // and apply main with the cli args. The host_invoke_cont
@@ -433,57 +430,61 @@ mod tests {
     //
     // Entry compiles under `./test.fnk:`, so the wrapper is exported
     // as `"./test.fnk"`.
-    let entry_wrapper = get_func(&instance, &mut store, "./test.fnk")?;
-    let str_wrap      = get_func(&instance, &mut store, "str_wrap_bytes")?;
+    let entry_wrapper  = get_func(&instance, &mut store, "./test.fnk")?;
     let wrap_host_cont = get_func(&instance, &mut store, "wrap_host_cont")?;
 
-    let main_key_bytes = wrap_bytes_to_array_ref(&mut store, b"main")?;
-
     // Host-side: turn cont id 1 into a fink anyref before invoking
-    // the wrapper. The per-module wrapper signature is host-neutral
-    // (`(ref null any, ref null any) -> ()`); host-bridge mechanics
-    // (the i32 → anyref wrap via `wrap_host_cont`) live on the host
-    // side of the boundary, not inside the wrapper.
+    // the wrapper. Host-bridge mechanics (i32 -> anyref via
+    // `wrap_host_cont`) live on the host side of the boundary.
     let mut entry_cont_out = [Val::AnyRef(None)];
     wrap_host_cont.call(&mut store, &[Val::I32(1)], &mut entry_cont_out)
       .map_err(|e| e.to_string())?;
     let entry_cont = entry_cont_out[0];
 
     entry_wrapper
-      .call(&mut store,
-        &[Val::AnyRef(Some(main_key_bytes)), entry_cont],
-        &mut [])
+      .call(&mut store, &[entry_cont], &mut [])
       .map_err(|e| crate::passes::wasm::annotate_func_indices(
         &format!("entry wrapper: {e:#}"), &bytes))?;
-    // str_wrap is captured into the closure via `caller.get_export`
-    // inside run_main_in_callback; the binding here is just to
-    // ensure the runtime exports it (caught at host setup time).
-    let _ = str_wrap;
 
     Ok(captured.lock().unwrap().take().unwrap_or(TestResult::None))
-  }
-
-  /// Allocate a fink `$ByteArray` from raw bytes. Used to hand the
-  /// host-facing wrapper its `key` arg (raw GC bytes — the wrapper
-  /// internally calls `_str_wrap_bytes` to wrap into a `$Str`).
-  fn wrap_bytes_to_array_ref(
-    store: &mut Store<()>, bytes: &[u8],
-  ) -> Result<Rooted<AnyRef>, String> {
-    let array_ty = ArrayType::new(
-      store.engine(),
-      FieldType::new(Mutability::Var, StorageType::I8),
-    );
-    let alloc = ArrayRefPre::new(&mut *store, array_ty);
-    let elems: Vec<Val> = bytes.iter().map(|&b| Val::I32(b as i32)).collect();
-    let array = ArrayRef::new_fixed(&mut *store, &alloc, &elems)
-      .map_err(|e| format!("byte array alloc: {e}"))?;
-    Ok(array.to_anyref())
   }
 
   fn get_func(
     instance: &wasmtime::Instance, store: &mut Store<()>, name: &str,
   ) -> Result<wasmtime::Func, String> {
     instance.get_func(store, name).ok_or_else(|| format!("no '{name}' export"))
+  }
+
+  /// Look up `key` in `rec` by raw bytes. Calls the interop helper
+  /// `rec_get_by_bytes` on the running instance — host wraps key bytes
+  /// into a `$ByteArray`, hands to the helper, gets a fink anyref back
+  /// (or null if the key is absent / the result is itself null).
+  /// Used to extract named exports (e.g. `main`) from the exports rec
+  /// returned by the per-module wrapper.
+  fn lookup_export_by_bytes(
+    caller: &mut wasmtime::Caller<'_, ()>,
+    rec: Rooted<AnyRef>,
+    key: &[u8],
+  ) -> Result<Option<Rooted<AnyRef>>, Error> {
+    let rec_get_by_bytes = caller.get_export("rec_get_by_bytes")
+      .and_then(|e| e.into_func())
+      .ok_or_else(|| Error::msg("no rec_get_by_bytes export"))?;
+    let array_ty = ArrayType::new(
+      caller.engine(),
+      FieldType::new(Mutability::Var, StorageType::I8),
+    );
+    let alloc = ArrayRefPre::new(&mut *caller, array_ty);
+    let elems: Vec<Val> = key.iter().map(|&b| Val::I32(b as i32)).collect();
+    let array = ArrayRef::new_fixed(&mut *caller, &alloc, &elems)
+      .map_err(|e| Error::msg(format!("key bytes alloc: {e}")))?;
+    let mut out = [Val::AnyRef(None)];
+    rec_get_by_bytes.call(&mut *caller,
+      &[Val::AnyRef(Some(rec)), Val::AnyRef(Some(array.to_anyref()))],
+      &mut out)?;
+    Ok(match out[0] {
+      Val::AnyRef(Some(r)) => Some(r),
+      _ => None,
+    })
   }
 
   /// Inspect a fink anyref and capture it as a `TestResult`. Used from
