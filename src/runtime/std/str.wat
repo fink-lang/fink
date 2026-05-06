@@ -22,19 +22,14 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"    "Num"       (type $Num       (sub any)))
+  (import "std/num.wat"     "Num"     (type $Num     (sub any)))
+  (import "std/num.wat"     "fmt"     (func $num_fmt   (param (ref $Num))   (result (ref $Str))))
   (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct)))
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
-  (import "std/int.wat"     "U64"     (type $U64     (sub $Int (struct (field $ival i64)))))
-  (import "std/int.wat"     "fmt"     (func $int_fmt     (param (ref $Int))     (result (ref $Str))))
-  (import "std/float.wat"   "F64"      (type $F64     (sub any) (struct (field $val f64))))
-  (import "std/float.wat"   "fmt"      (func $float_fmt   (param (ref $F64)) (result (ref $Str))))
   (import "std/range.wat"   "fmt"      (func $range_fmt     (param (ref $Range)) (result (ref $Str))))
   (import "std/range.wat"   "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
   (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref $I64))))
   (import "std/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
-  (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
-  (import "std/decimal.wat" "fmt"     (func $decimal_fmt (param (ref $Decimal)) (result (ref $Str))))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
   (import "std/dict.wat"   "Rec"       (type $Rec       (sub any)))
   (import "std/set.wat"    "Set"       (type $Set       (sub any)))
@@ -1602,30 +1597,13 @@
             (local.get $val))))
       (return))
 
-    ;; Try $Int — delegate to int.wat:fmt (handles signed/unsigned
-    ;; sub-dispatch + the digit loop).
-    (block $not_int
-      (block $is_int (result (ref $Int))
-        (br $not_int
-          (br_on_cast $is_int (ref any) (ref $Int)
+    ;; Try $Num — num.wat owns the inner Int / F64 / Decimal dispatch.
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref any) (ref $Num)
             (local.get $val))))
-      (return_call $int_fmt))
-
-    ;; Try $F64 — delegate to float.wat:fmt.
-    (block $not_f64
-      (block $is_f64 (result (ref $F64))
-        (br $not_f64
-          (br_on_cast $is_f64 (ref any) (ref $F64)
-            (local.get $val))))
-      (return_call $float_fmt))
-
-    ;; Try $Decimal — delegate to decimal.wat:fmt.
-    (block $not_decimal
-      (block $is_decimal (result (ref $Decimal))
-        (br $not_decimal
-          (br_on_cast $is_decimal (ref any) (ref $Decimal)
-            (local.get $val))))
-      (return_call $decimal_fmt))
+      (return_call $num_fmt))
 
     ;; Try i31ref — bool or small int
     (block $not_i31
