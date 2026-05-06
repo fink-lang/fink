@@ -166,7 +166,7 @@
   ;; Format a $Range as "start..end" (exclusive) or "start...end"
   ;; (inclusive). Bounds rendered via int.wat:fmt; bytes are
   ;; concatenated locally and wrapped via str.wat:from_bytes.
-  (func $fmt (@pub) (param $range (ref $Range)) (result (ref $Str))
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Range) (param $range (ref $Range)) (result (ref $Str))
     (local $start_str (ref $Str))
     (local $end_str (ref $Str))
     (local $start_bytes (ref $ByteArray))

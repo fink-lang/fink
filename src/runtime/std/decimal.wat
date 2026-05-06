@@ -55,7 +55,7 @@
   ;; Render a $Decimal as a string. Today: render the f64 view via
   ;; float.wat:from_f64 — same output as before the (coeff, exp) repr
   ;; landed. A real exact-decimal formatter is future work.
-  (func $fmt (@pub) (param $d (ref $Decimal)) (result (ref $Str))
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Decimal) (param $d (ref $Decimal)) (result (ref $Str))
     (return_call $float_from_f64 (call $_as_f64 (local.get $d))))
 
   ;; repr — same as fmt for decimals.

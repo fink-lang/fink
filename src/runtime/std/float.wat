@@ -103,7 +103,7 @@
   ;; and (until range fmt moves out) by str.wat for range bounds.
   ;; Handles NaN, ±Infinity, integer-fits-i32, and fractional values.
 
-  (func $fmt (@pub) (param $v (ref $F64)) (result (ref $Str))
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $F64) (param $v (ref $F64)) (result (ref $Str))
     (return_call $from_f64 (struct.get $F64 $val (local.get $v))))
 
   ;; repr — same as fmt for floats.

@@ -1573,7 +1573,7 @@
   ;;
   ;; Two-pass byte-buffer build, mirroring the rec formatter in dict.wat.
 
-  (func $fmt (@pub) (param $set (ref $Set)) (result (ref $Str))
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Set) (param $set (ref $Set)) (result (ref $Str))
 
     (local $node (ref $SetNode))
     (local $entry_count i32)

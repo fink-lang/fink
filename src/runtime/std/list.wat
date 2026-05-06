@@ -395,7 +395,7 @@
 
   ;; Format a $List as "[a, b, c]". Calls back into str.wat:fmt_val
   ;; for each element. Empty list renders as "[]".
-  (func $fmt (@pub) (param $list (ref $List)) (result (ref $Str))
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $List) (param $list (ref $List)) (result (ref $Str))
     (local $cur (ref null any))
     (local $total i32)
     (local $count i32)

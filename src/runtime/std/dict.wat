@@ -1966,7 +1966,7 @@
   ;; fmt : (ref $Rec) -> (ref $Str)
   ;; Format a record as "{key: val, key2: val2}". Empty record formats as "{}".
   ;; Two-pass: first compute total byte length, then copy into a single buffer.
-  (func $fmt (@pub) (param $rec (ref $Rec)) (result (ref $Str))
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Rec) (param $rec (ref $Rec)) (result (ref $Str))
     (local $node (ref $HamtNode))
     (local $total i32)
     (local $entry_count i32)
