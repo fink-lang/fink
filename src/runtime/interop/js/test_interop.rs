@@ -28,20 +28,6 @@ fn node_available() -> bool {
     .map(|o| o.status.success()).unwrap_or(false)
 }
 
-/// `node --version` prints e.g. `v20.11.0`. Node < 22 needs
-/// `--experimental-wasm-gc` to enable WasmGC; Node 22+ has it stable
-/// and removed the flag.
-fn needs_wasm_gc_flag() -> bool {
-  let out = StdCommand::new("node").arg("--version").output();
-  let Ok(o) = out else { return false };
-  let s = String::from_utf8_lossy(&o.stdout);
-  let trimmed = s.trim().trim_start_matches('v');
-  let major: u32 = trimmed.split('.').next()
-    .and_then(|m| m.parse().ok())
-    .unwrap_or(0);
-  major < 22
-}
-
 #[test]
 #[cfg(feature = "compile")]
 fn js_interop_round_trip() {
@@ -62,18 +48,12 @@ fn js_interop_round_trip() {
   ]).assert().success();
 
   let test_js = interop_dir().join("test_interop.js");
-  // Older Node (< 22) needs `--experimental-wasm-gc`. Node 22+ has
-  // WasmGC stable and removed the flag entirely (passing it errors).
-  // Detect via `node --version` and conditionally include.
-  let mut args: Vec<String> = Vec::new();
-  if needs_wasm_gc_flag() {
-    args.push("--experimental-wasm-gc".to_string());
-  }
-  args.push("--test".to_string());
-  args.push(test_js.to_str().unwrap().to_string());
-
+  // Requires Node 22+ for WasmGC stable. Node 20 rejects externref in
+  // struct fields even with `--experimental-wasm-gc`, so we don't
+  // bother with backward-compat shimming. CI pins Node 22 in
+  // .github/workflows/ci.yml; local devs get whatever's on PATH.
   let output = StdCommand::new("node")
-    .args(&args)
+    .args(["--test", test_js.to_str().unwrap()])
     .env("FINK_TEST_WASM", &wasm)
     .output()
     .expect("failed to invoke node");
