@@ -94,6 +94,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      # Node 22+ — the JS interop integration test (interop_js) needs
+      # WasmGC stable, which Node 20 lacks (externref in struct fields
+      # is rejected even with --experimental-wasm-gc). Mirrors ci.yml.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: Swatinem/rust-cache@v2
       - run: make deps-install
       - run: make test-full
