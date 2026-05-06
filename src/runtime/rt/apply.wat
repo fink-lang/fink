@@ -43,14 +43,6 @@
   (type $Fn2 (@pub) (func (param (ref null any) (ref null any))))
 
 
-  ;; $Fn_host_wrapper — host-facing per-module wrapper signature.
-  ;; (key_bytes: ref null any, cont_id: i32) -> ()
-  ;; Each fragment's lower-synthesised wrapper export has this type;
-  ;; declared once here so all modules share it instead of emitting a
-  ;; per-fragment local copy.
-  (type $Fn_host_wrapper (@pub) (func (param (ref null any)) (param i32)))
-
-
   ;; $SpreadArgs — wrapper for spread arguments at call sites.
   ;; Contains a $List of the spread values. Used to distinguish a spread
   ;; call (f ..items) from a regular call passing a list value (f items).

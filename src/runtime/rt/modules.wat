@@ -271,21 +271,19 @@
   (func $init_module (@pub) (@impl "std/modules.fnk:init_module")
     (param $mod_url  (ref null any))
     (param $mod_clos (ref null any))
-    (param $key      (ref null any))
     (param $cont     (ref null any))
 
     (local $reg (ref null $DictImpl))
     (local $key_eq (ref eq))
     (local $existing (ref null eq))
     (local $exports (ref null any))
-    (local $val (ref null any))
     (local $caps (ref $Captures))
     (local $intermediate (ref $Closure))
 
     (local.set $reg (global.get $registry))
     (local.set $key_eq (ref.cast (ref eq) (local.get $mod_url)))
 
-    ;; Already inited? Return null last_expr + lookup result.
+    ;; Already inited? Return null last_expr + the cached exports rec.
     (if (i32.eqz (ref.is_null (local.get $reg)))
       (then
         (local.set $existing
@@ -295,27 +293,19 @@
         (if (i32.eqz (ref.is_null (local.get $existing)))
           (then
             (local.set $exports (local.get $existing))
-            (if (ref.is_null (local.get $key))
-              (then (local.set $val (local.get $exports)))
-              (else
-                (local.set $val
-                  (call $rec_get
-                    (ref.cast (ref $RecImpl) (local.get $exports))
-                    (ref.cast (ref eq) (local.get $key))))))
             (return_call $_apply_2_nullable
               (ref.null any)
-              (local.get $val)
+              (local.get $exports)
               (local.get $cont))))))
 
     ;; Not inited — ensure registry[mod_url] exists, then invoke the
     ;; module closure with an intermediate cont that captures
-    ;; (mod_url, key, cont) and packages the result.
+    ;; (mod_url, cont) and packages the result.
     (drop (call $init (local.get $mod_url)))
 
     (local.set $caps
-      (array.new_fixed $Captures 3
+      (array.new_fixed $Captures 2
         (local.get $mod_url)
-        (local.get $key)
         (local.get $cont)))
 
     (local.set $intermediate
@@ -331,9 +321,8 @@
 
   ;; _init_module_step: backs intermediate_cont. Called when the
   ;; module's fink_module finishes evaluation. Captures hold
-  ;; (mod_url, key, cont). Reads registry[mod_url] (now populated),
-  ;; extracts key field if non-null, tail-applies cont with
-  ;; (last_expr, val).
+  ;; (mod_url, cont). Reads registry[mod_url] (now populated) and
+  ;; tail-applies cont with (last_expr, exports_rec).
   (elem declare func $_init_module_step)
 
   (func $_init_module_step (type $Fn2)
@@ -342,16 +331,13 @@
 
     (local $cap_arr (ref $Captures))
     (local $mod_url (ref null any))
-    (local $key (ref null any))
     (local $user_cont (ref null any))
     (local $last_expr (ref null any))
     (local $exports (ref null any))
-    (local $val (ref null any))
 
     (local.set $cap_arr (ref.cast (ref $Captures) (local.get $caps)))
     (local.set $mod_url   (array.get $Captures (local.get $cap_arr) (i32.const 0)))
-    (local.set $key       (array.get $Captures (local.get $cap_arr) (i32.const 1)))
-    (local.set $user_cont (array.get $Captures (local.get $cap_arr) (i32.const 2)))
+    (local.set $user_cont (array.get $Captures (local.get $cap_arr) (i32.const 1)))
 
     ;; Pull last_expr off the args list — it's the head.
     (local.set $last_expr
@@ -363,18 +349,9 @@
         (ref.as_non_null (global.get $registry))
         (ref.cast (ref eq) (local.get $mod_url))))
 
-    ;; Extract key if non-null.
-    (if (ref.is_null (local.get $key))
-      (then (local.set $val (local.get $exports)))
-      (else
-        (local.set $val
-          (call $rec_get
-            (ref.cast (ref $RecImpl) (local.get $exports))
-            (ref.cast (ref eq) (local.get $key))))))
-
     (return_call $_apply_2_nullable
       (local.get $last_expr)
-      (local.get $val)
+      (local.get $exports)
       (local.get $user_cont)))
 
 

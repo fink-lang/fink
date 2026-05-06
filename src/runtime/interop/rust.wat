@@ -56,6 +56,8 @@
 
   (import "std/str.wat"     "_str_wrap_bytes"
     (func $str_wrap_bytes (param $bytes (ref null any)) (result (ref any))))
+  (import "std/dict.wat"    "get_any"
+    (func $rec_get_any (param $rec (ref null any)) (param $key (ref null any)) (result (ref null any))))
   ;; TODO: rename str.wat's `bytes` export to `str_bytes` (clashes with
   ;; the `$bytes` local in this file).
   (import "std/str.wat"     "bytes"
@@ -431,5 +433,18 @@
     (param $bytes (ref null any))
     (result (ref any))
     (return_call $str_wrap_bytes (local.get $bytes)))
+
+  ;; Host-callable: look up a $Rec field by raw byte-array key.
+  ;; Wraps key_bytes into a $Str, then delegates to dict.wat:get_any.
+  ;; Returns null when the key is absent. Used by the Rust runner to
+  ;; pull named exports out of the exports rec it receives from the
+  ;; per-module wrapper.
+  (func (export "env:rec_get_by_bytes")
+    (param $rec       (ref null any))
+    (param $key_bytes (ref null any))
+    (result (ref null any))
+    (return_call $rec_get_any
+      (local.get $rec)
+      (call $str_wrap_bytes (local.get $key_bytes))))
 
 )
