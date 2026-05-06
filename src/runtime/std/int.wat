@@ -14,6 +14,10 @@
   (import "std/num.wat"   "Num"  (type $Num  (sub any) (struct)))
   (import "std/float.wat" "F64"  (type $F64  (sub $Num (struct (field $val f64)))))
   (import "std/list.wat"  "List" (type $List (sub any)))
+  (import "std/str.wat"   "Str"  (type $Str  (sub any) (struct)))
+  (import "std/str.wat"   "ByteArray" (type $ByteArray (array (mut i8))))
+  (import "std/str.wat"   "from_bytes" (func $str_from_bytes
+    (param (ref $ByteArray)) (result (ref $Str))))
 
   ;; $Int — abstract, nominal-only supertype. No fields. Storage
   ;; (`$ival i64`) lives on the leaves $I64/$U64. They differ only in
@@ -272,4 +276,111 @@
       (call $list_prepend
         (call $_box_i64 (i64.rem_s (local.get $a_i) (local.get $b_i)))
         (call $list_empty))))
+
+
+  ;; =========================================================================
+  ;; Formatting — render a $Int as a decimal string. $U64 prints unsigned;
+  ;; $I64 prints signed. The output is always a $Str backed by a
+  ;; $ByteArray (built locally, wrapped via str.wat:from_bytes).
+  ;; =========================================================================
+
+  (func $_fmt_i64 (param $v i64) (result (ref $Str))
+    (local $neg i32)
+    (local $abs i64)
+    (local $digits i32)
+    (local $tmp i64)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    ;; Zero special case.
+    (if (i64.eqz (local.get $v))
+      (then
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
+        (return_call $str_from_bytes (local.get $buf))))
+
+    ;; Sign handling. i64::MIN negated stays i64::MIN (two's complement),
+    ;; but i64.div_u / i64.rem_u below treat $abs as unsigned, so the
+    ;; arithmetic is correct for that one edge case.
+    (local.set $neg (i64.lt_s (local.get $v) (i64.const 0)))
+    (if (local.get $neg)
+      (then (local.set $abs (i64.sub (i64.const 0) (local.get $v))))
+      (else (local.set $abs (local.get $v))))
+
+    ;; Count digits.
+    (local.set $digits (i32.const 0))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $count
+        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (br_if $count (i32.wrap_i64 (local.get $tmp)))))
+
+    (local.set $buf
+      (array.new $ByteArray (i32.const 0)
+        (i32.add (local.get $digits) (local.get $neg))))
+
+    (if (local.get $neg)
+      (then (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))))
+
+    (local.set $pos
+      (i32.sub
+        (i32.add (local.get $digits) (local.get $neg))
+        (i32.const 1)))
+    (local.set $tmp (local.get $abs))
+    (block $done
+      (loop $write
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.add (i32.const 0x30)
+            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
+        (br_if $write (i32.wrap_i64 (local.get $tmp)))))
+
+    (return_call $str_from_bytes (local.get $buf)))
+
+  (func $_fmt_u64 (param $v i64) (result (ref $Str))
+    (local $digits i32)
+    (local $tmp i64)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+
+    (if (i64.eqz (local.get $v))
+      (then
+        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
+        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
+        (return_call $str_from_bytes (local.get $buf))))
+
+    (local.set $digits (i32.const 0))
+    (local.set $tmp (local.get $v))
+    (block $done
+      (loop $count
+        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (br_if $count (i32.wrap_i64 (local.get $tmp)))))
+
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $digits)))
+
+    (local.set $pos (i32.sub (local.get $digits) (i32.const 1)))
+    (local.set $tmp (local.get $v))
+    (block $done
+      (loop $write
+        (array.set $ByteArray (local.get $buf) (local.get $pos)
+          (i32.add (i32.const 0x30)
+            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
+        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
+        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
+        (br_if $write (i32.wrap_i64 (local.get $tmp)))))
+
+    (return_call $str_from_bytes (local.get $buf)))
+
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Int) (param $n (ref $Int)) (result (ref $Str))
+    (if (result (ref $Str)) (ref.test (ref $U64) (local.get $n))
+      (then (call $_fmt_u64 (struct.get $U64 $ival (ref.cast (ref $U64) (local.get $n)))))
+      (else (call $_fmt_i64 (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $n)))))))
+
+  ;; repr — same as fmt for ints (no quoting/escaping needed).
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Int)
+    (param $n (ref $Int)) (result (ref $Str))
+    (return_call $fmt (local.get $n)))
 )

@@ -81,21 +81,21 @@ test 'empty string eq template', fn:
 test 'string eq same', fn:
   expect run ƒink:
     'hello' == 'hello'
-  | equals ":
+  | equals ƒink:
     true
 
 
 test 'string eq different', fn:
   expect run ƒink:
     'hello' == 'world'
-  | equals ":
+  | equals ƒink:
     false
 
 
 test 'string neq', fn:
   expect run ƒink:
     'hello' != 'world'
-  | equals ":
+  | equals ƒink:
     true
 
 

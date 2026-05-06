@@ -40,5 +40,5 @@ test 'list construct destructures via head/tail', fn:
     [h, ..t] = list 10, 20, 30
     '${h} ${t}'
 
-  | equals ƒink:
+  | equals ":
     10 [20, 30]

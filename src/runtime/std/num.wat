@@ -18,6 +18,15 @@
   (import "std/decimal.wat" "_as_f64"
     (func $_decimal_as_f64 (param (ref $Decimal)) (result f64)))
 
+  ;; str.wat type + per-type fmt/repr — for the $Num fmt/repr dispatchers below.
+  (import "std/str.wat"     "Str"  (type $Str (sub any)))
+  (import "std/int.wat"     "fmt"  (func $int_fmt     (param (ref $Int))     (result (ref $Str))))
+  (import "std/int.wat"     "repr" (func $int_repr    (param (ref $Int))     (result (ref $Str))))
+  (import "std/float.wat"   "fmt"  (func $float_fmt   (param (ref $F64))     (result (ref $Str))))
+  (import "std/float.wat"   "repr" (func $float_repr  (param (ref $F64))     (result (ref $Str))))
+  (import "std/decimal.wat" "fmt"  (func $decimal_fmt (param (ref $Decimal)) (result (ref $Str))))
+  (import "std/decimal.wat" "repr" (func $decimal_repr(param (ref $Decimal)) (result (ref $Str))))
+
   ;; Func imports — int.wat box helper + arithmetic + comparison on $Int.
   (import "std/int.wat" "_box_i64" (func $_box_i64     (param i64) (result (ref $I64))))
   (import "std/int.wat" "_int_ival" (func $_int_ival   (param (ref $Int)) (result i64)))
@@ -445,6 +454,50 @@
         (i32.wrap_i64 (local.get $bits))
         (i32.wrap_i64 (i64.shr_u (local.get $bits) (i64.const 32))))
       (i32.const 0x7fffffff))
+  )
+
+
+  ;; -- fmt / repr dispatch over the numeric subtypes ---------------------
+  ;;
+  ;; num.wat owns the inner $Int / $F64 / $Decimal dispatch so that
+  ;; outer dispatchers (str.wat:fmt_val, repr.wat:repr_val) only need to
+  ;; test for $Num and delegate here. New numeric subtypes only require
+  ;; an arm here — no touchpoints in the outer dispatchers.
+
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Num)
+    (param $n (ref $Num)) (result (ref $Str))
+
+    (block $not_int
+      (block $is_int (result (ref $Int))
+        (br $not_int
+          (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
+      (return_call $int_fmt))
+
+    (block $not_f64
+      (block $is_f64 (result (ref $F64))
+        (br $not_f64
+          (br_on_cast $is_f64 (ref $Num) (ref $F64) (local.get $n))))
+      (return_call $float_fmt))
+
+    (return_call $decimal_fmt (ref.cast (ref $Decimal) (local.get $n)))
+  )
+
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Num)
+    (param $n (ref $Num)) (result (ref $Str))
+
+    (block $not_int
+      (block $is_int (result (ref $Int))
+        (br $not_int
+          (br_on_cast $is_int (ref $Num) (ref $Int) (local.get $n))))
+      (return_call $int_repr))
+
+    (block $not_f64
+      (block $is_f64 (result (ref $F64))
+        (br $not_f64
+          (br_on_cast $is_f64 (ref $Num) (ref $F64) (local.get $n))))
+      (return_call $float_repr))
+
+    (return_call $decimal_repr (ref.cast (ref $Decimal) (local.get $n)))
   )
 
 )

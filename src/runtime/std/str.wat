@@ -22,23 +22,16 @@
 (module
 
   ;; Type imports
-  (import "std/num.wat"    "Num"       (type $Num       (sub any)))
+  (import "std/num.wat"     "Num"     (type $Num     (sub any)))
+  (import "std/num.wat"     "fmt"     (func $num_fmt   (param (ref $Num))   (result (ref $Str))))
   (import "std/int.wat"     "Int"     (type $Int     (sub any) (struct)))
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
-  (import "std/int.wat"     "U64"     (type $U64     (sub $Int (struct (field $ival i64)))))
-  (import "std/float.wat"   "F64"     (type $F64     (sub any) (struct (field $val f64))))
-  (import "std/decimal.wat" "Decimal" (type $Decimal (sub any) (struct (field $coeff i64) (field $exp i32))))
-  (import "std/decimal.wat" "_as_f64"
-    (func $_decimal_as_f64 (param (ref $Decimal)) (result f64)))
+  (import "std/range.wat"   "fmt"      (func $range_fmt     (param (ref $Range)) (result (ref $Str))))
+  (import "std/range.wat"   "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
+  (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref $I64))))
+  (import "std/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
-  (import "std/dict.wat"   "Rec"           (type $Rec           (sub any)))
-  (import "std/dict.wat"   "RecImpl"       (type $RecImpl       (sub any)))
-  ;; TODO: HAMT internals leaked for the rec formatter; replace with a
-  ;; public dict iterator and drop these imports.
-  (import "std/dict.wat"   "HamtNode"      (type $HamtNode      (sub any)))
-  (import "std/dict.wat"   "HamtChildren"  (type $HamtChildren  (sub any)))
-  (import "std/dict.wat"   "HamtCollision" (type $HamtCollision (sub any)))
-  (import "std/dict.wat"   "HamtLeaf"      (type $HamtLeaf      (sub any)))
+  (import "std/dict.wat"   "Rec"       (type $Rec       (sub any)))
   (import "std/set.wat"    "Set"       (type $Set       (sub any)))
   (import "std/list.wat"   "List"      (type $List      (sub any)))
   (import "rt/apply.wat"   "VarArgs"   (type $VarArgs   (sub any)))
@@ -53,13 +46,11 @@
   (import "rt/apply.wat" "apply_2_vals"
     (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
 
-  (import "std/set.wat" "repr"
-    (func $set_repr (param $set (ref $Set)) (result (ref $Str))))
+  (import "std/set.wat" "fmt"
+    (func $set_fmt (param (ref $Set)) (result (ref $Str))))
 
-  (import "std/dict.wat" "size"
-    (func $dict_size (param $rec (ref $Rec)) (result i32)))
-  (import "std/dict.wat" "_hamt_size_node"
-    (func $_hamt_size_node (param $node (ref $HamtNode)) (result i32)))
+  (import "std/dict.wat" "fmt"
+    (func $rec_fmt (param (ref $Rec)) (result (ref $Str))))
 
   (import "std/list.wat" "size"
     (func $list_size (param $list (ref $List)) (result i32)))
@@ -68,15 +59,10 @@
   (import "std/list.wat" "tail_any"
     (func $tail_any (param $list (ref null any)) (result (ref null any))))
 
-  (import "std/range.wat" "start"
-    (func $range_start (param $range (ref $Range)) (result (ref $I64))))
-  (import "std/range.wat" "end"
-    (func $range_end (param $range (ref $Range)) (result (ref $I64))))
-  (import "std/range.wat" "is_incl"
-    (func $range_is_incl (param $range (ref $Range)) (result i32)))
-
   (import "std/list.wat" "op_empty"
     (func $list_op_empty (param $val (ref null any)) (result i32)))
+  (import "std/list.wat" "fmt"
+    (func $list_fmt (param (ref $List)) (result (ref $Str))))
 
   ;; Continuation dispatch: $std/list.wat:apply_1 (defined in list.wat) wraps a single
   ;; result in a list and tail-calls $_apply (defined in dispatch.wat).
@@ -124,6 +110,10 @@
   ;; str : (i32, i32) -> (ref $StrDataImpl)
   ;; Wrap a data-section pointer into a string value.
   ;; TODO: this is a contructor for literal. find protocol for it!
+  ;; TODO: rename to `from_data` — the name `str` clashes with the
+  ;; `$Str` type's surface (std/str.fnk:str = the type). Update the
+  ;; lowering in src/passes/wasm/lower.rs to emit `from_data` for
+  ;; string literals at the same time.
   (func $str (@impl "std/str.fnk:str")
     (param $offset i32)
     (param $length i32)
@@ -134,21 +124,26 @@
       (local.get $length))
   )
 
-  ;; _str_wrap_bytes : (ref $ByteArray) -> (ref $Str)
-  ;; Wrap a GC byte array into a $StrBytesImpl.
-  ;; Used by the host to create strings from IO data without
-  ;; touching linear memory — the host creates the $ByteArray
-  ;; directly via the GC API.
-  ;; TODO: what is this, who uses it?
+  ;; from_bytes : (ref $ByteArray) -> (ref $Str)
+  ;; Wrap a GC byte array as a $Str. Public constructor used by per-type
+  ;; `fmt` impls in other runtime modules — they build their digits/chars
+  ;; into a $ByteArray locally and call this to wrap. Empty arrays
+  ;; collapse to the shared $_str_empty global.
+  (func $from_bytes (@pub) (param $bytes (ref $ByteArray)) (result (ref $Str))
+    (if (i32.eqz (array.len (local.get $bytes)))
+      (then (return (global.get $_str_empty))))
+    (struct.new $StrBytesImpl (local.get $bytes)))
+
+  ;; _str_wrap_bytes : (ref null any) -> (ref any)
+  ;; Host-facing entry point with loose typing for JS/native interop —
+  ;; the host hands us a (ref null any) and expects (ref any) back.
+  ;; Internal callers should use `from_bytes` instead.
   (func $_str_wrap_bytes (@pub) (export "env:_str_wrap_bytes")
     (param $bytes (ref null any))
     (result (ref any))
 
-    (if (i32.eqz (array.len (ref.cast (ref $ByteArray) (local.get $bytes))))
-      (then (return (global.get $_str_empty))))
-    (struct.new $StrBytesImpl
-      (ref.cast (ref $ByteArray) (local.get $bytes)))
-  )
+    (return_call $from_bytes
+      (ref.cast (ref $ByteArray) (local.get $bytes))))
 
 
   ;; ---- Access ----
@@ -208,7 +203,7 @@
   ;; str_repr : (ref $Str) -> (ref $Str)
   ;; Produce a quoted, escaped representation of a string: 'hello' → '\'hello\''
   ;; Escapes: \n \r \t \\ \' and non-printable bytes as \xNN.
-  (func $repr (@impl "std/repr.fnk:repr" $Str)
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $Str)
     (param $str (ref $Str))
     (result (ref $Str))
 
@@ -1510,7 +1505,7 @@
 
   ;; _str_len : (ref $Str) -> i32
   ;; Byte length of any string subtype.
-  (func $_str_len (param $str (ref $Str)) (result i32)
+  (func $_str_len (@pub) (param $str (ref $Str)) (result i32)
 
     ;; Empty string — length 0.
     (if (ref.test (ref $StrEmpty) (local.get $str))
@@ -1532,7 +1527,7 @@
 
   ;; _str_copy_to : (ref $Str, ref $ByteArray, i32) -> i32
   ;; Copy bytes from a string into dst at offset. Returns new offset.
-  (func $_str_copy_to
+  (func $_str_copy_to (@pub)
     (param $str (ref $Str)) (param $dst (ref $ByteArray)) (param $pos i32)
     (result i32)
 
@@ -1587,9 +1582,12 @@
 
   ;; ---- Value formatting (direct-style) ----
 
-  ;; _str_fmt_val : (ref any) -> (ref $Str)
-  ;; Format any value as a string. Dispatches on runtime type.
-  (func $_str_fmt_val (param $val (ref any)) (result (ref $Str))
+  ;; fmt_val : (ref any) -> (ref $Str)
+  ;; Public dispatcher: format any value as a string by runtime type.
+  ;; Per-type fmt impls (int.wat:fmt, float.wat:fmt, etc.) own the
+  ;; rendering; this picks the right one. Collection fmt impls
+  ;; (list.wat, dict.wat, set.wat) call back into this for elements.
+  (func $fmt_val (@pub) (param $val (ref any)) (result (ref $Str))
 
     ;; Try $Str — passthrough
     (block $not_str
@@ -1599,36 +1597,13 @@
             (local.get $val))))
       (return))
 
-    ;; Try $Int — dispatch unsigned vs signed by concrete subtype so
-    ;; values above i64::MAX print correctly as $U64.
-    (block $not_int
-      (block $is_int (result (ref $Int))
-        (br $not_int
-          (br_on_cast $is_int (ref any) (ref $Int)
+    ;; Try $Num — num.wat owns the inner Int / F64 / Decimal dispatch.
+    (block $not_num
+      (block $is_num (result (ref $Num))
+        (br $not_num
+          (br_on_cast $is_num (ref any) (ref $Num)
             (local.get $val))))
-      (drop)
-      (if (result (ref $Str)) (ref.test (ref $U64) (local.get $val))
-        (then (call $_str_fmt_u64
-          (struct.get $U64 $ival (ref.cast (ref $U64) (local.get $val)))))
-        (else (call $_str_fmt_i64
-          (struct.get $I64 $ival (ref.cast (ref $I64) (local.get $val))))))
-      (return))
-
-    ;; Try $F64 — format f64.
-    (block $not_f64
-      (block $is_f64 (result (ref $F64))
-        (br $not_f64
-          (br_on_cast $is_f64 (ref any) (ref $F64)
-            (local.get $val))))
-      (return (call $_str_fmt_num (struct.get $F64 $val))))
-
-    ;; Try $Decimal — format f64 (real coeff/exp repr is future work).
-    (block $not_decimal
-      (block $is_decimal (result (ref $Decimal))
-        (br $not_decimal
-          (br_on_cast $is_decimal (ref any) (ref $Decimal)
-            (local.get $val))))
-      (return (call $_str_fmt_num (call $_decimal_as_f64))))
+      (return_call $num_fmt))
 
     ;; Try i31ref — bool or small int
     (block $not_i31
@@ -1638,64 +1613,47 @@
             (local.get $val))))
       (return (call $_str_fmt_i31 (i31.get_s))))
 
-    ;; Try $Range — format as "start..end" or "start...end"
+    ;; Try $Range — delegate to range.wat:fmt.
     (block $not_range
       (block $is_range (result (ref $Range))
         (br $not_range
           (br_on_cast $is_range (ref any) (ref $Range)
             (local.get $val))))
-      (return (call $_str_fmt_range)))
+      (return_call $range_fmt))
 
-    ;; Try $Rec — format as "{key: val, ...}"
+    ;; Try $Rec — delegate to dict.wat:fmt.
     (block $not_rec
       (block $is_rec (result (ref $Rec))
         (br $not_rec
           (br_on_cast $is_rec (ref any) (ref $Rec)
             (local.get $val))))
-      (return (call $_str_fmt_rec)))
+      (return_call $rec_fmt))
 
-    ;; Try $List — format as "[a, b, ...]"
+    ;; Try $List — delegate to list.wat:fmt.
     (block $not_list
       (block $is_list (result (ref $List))
         (br $not_list
           (br_on_cast $is_list (ref any) (ref $List)
             (local.get $val))))
-      (return (call $_str_fmt_list)))
+      (return_call $list_fmt))
 
-    ;; Try $Set — format as "set v1, v2, ..." (or "set _" for empty)
+    ;; Try $Set — delegate to set.wat:fmt.
     (block $not_set
       (block $is_set (result (ref $Set))
         (br $not_set
           (br_on_cast $is_set (ref any) (ref $Set)
             (local.get $val))))
-      (return (call $set_repr)))
+      (return_call $set_fmt))
 
     ;; Unknown type — unreachable for now.
     (unreachable)
-  )
-
-  ;; _str_fmt_val_repr : (ref any) -> (ref $Str)
-  ;; Like _str_fmt_val but uses str_repr for strings (quoted + escaped).
-  ;; Used by container formatters (list, rec) so strings display as 'hello'.
-  (func $_str_fmt_val_repr (param $val (ref any)) (result (ref $Str))
-
-    ;; Try $Str — repr (quoted + escaped)
-    (block $not_str
-      (block $is_str (result (ref $Str))
-        (br $not_str
-          (br_on_cast $is_str (ref any) (ref $Str)
-            (local.get $val))))
-      (return (call $repr)))
-
-    ;; Everything else delegates to _str_fmt_val.
-    (call $_str_fmt_val (local.get $val))
   )
 
   ;; _str_fmt_i31 : i32 -> (ref $Str)
   ;; Format an i31ref value as a boolean: 0 → "false", 1 → "true".
   ;; i31ref is currently only used for booleans; integer i31 rendering
   ;; will be added when i31ref is used for small integers.
-  (func $_str_fmt_i31 (param $v i32) (result (ref $Str))
+  (func $_str_fmt_i31 (@pub) (param $v i32) (result (ref $Str))
 
     (local $buf (ref $ByteArray))
 
@@ -1719,1010 +1677,11 @@
     (struct.new $StrBytesImpl (local.get $buf))
   )
 
-  ;; _str_fmt_num : f64 -> (ref $Str)
-  ;; Format an f64 as a string. Handles NaN, ±Infinity, integers, and floats.
-  (func $_str_fmt_num (param $v f64) (result (ref $Str))
-
-    (local $i64v i64)
-
-    ;; NaN check — f64.ne with itself is true only for NaN.
-    (if (f64.ne (local.get $v) (local.get $v))
-      (then (return (call $_str_from_ascii_3 (i32.const 0x4E) (i32.const 0x61) (i32.const 0x4E))))) ;; "NaN"
-
-    ;; +Infinity
-    (if (f64.eq (local.get $v) (f64.const inf))
-      (then (return (call $_str_from_ascii_8
-        (i32.const 0x49) (i32.const 0x6E) (i32.const 0x66) (i32.const 0x69)
-        (i32.const 0x6E) (i32.const 0x69) (i32.const 0x74) (i32.const 0x79))))) ;; "Infinity"
-
-    ;; -Infinity
-    (if (f64.eq (local.get $v) (f64.const -inf))
-      (then (return (call $_str_from_ascii_9
-        (i32.const 0x2D)  ;; "-"
-        (i32.const 0x49) (i32.const 0x6E) (i32.const 0x66) (i32.const 0x69)
-        (i32.const 0x6E) (i32.const 0x69) (i32.const 0x74) (i32.const 0x79))))) ;; "-Infinity"
-
-    ;; If the value is an integer that fits in i32, render as integer.
-    (if (f64.eq (local.get $v) (f64.trunc (local.get $v)))
-      (then
-        (local.set $i64v (i64.trunc_sat_f64_s (local.get $v)))
-        (if (i32.and
-              (i64.le_s (local.get $i64v) (i64.const 2147483647))
-              (i64.ge_s (local.get $i64v) (i64.const -2147483648)))
-          (then
-            (return (call $_str_fmt_int
-              (i32.wrap_i64 (local.get $i64v))))))))
-
-    ;; Non-integer float.
-    (call $_str_fmt_float (local.get $v))
-  )
-
-  ;; _str_fmt_i64 : i64 -> (ref $Str)
-  ;; Format a signed i64 as a decimal string — native digit-by-digit,
-  ;; handles the full i64 range including i64::MIN.
-  (func $_str_fmt_i64 (param $v i64) (result (ref $Str))
-
-    (local $neg i32)
-    (local $abs i64)
-    (local $digits i32)
-    (local $tmp i64)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-
-    ;; Zero special case.
-    (if (i64.eqz (local.get $v))
-      (then
-        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
-        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
-        (return (struct.new $StrBytesImpl (local.get $buf)))))
-
-    ;; Handle sign. i64::MIN negated stays i64::MIN (two's complement),
-    ;; but i64.div_u / i64.rem_u below treat $abs as unsigned, so the
-    ;; arithmetic is correct for that one edge case.
-    (local.set $neg (i64.lt_s (local.get $v) (i64.const 0)))
-    (if (local.get $neg)
-      (then (local.set $abs (i64.sub (i64.const 0) (local.get $v))))
-      (else (local.set $abs (local.get $v))))
-
-    ;; Count digits — unsigned divide so i64::MIN works.
-    (local.set $digits (i32.const 0))
-    (local.set $tmp (local.get $abs))
-    (block $done
-      (loop $count
-        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
-        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-        (br_if $count (i32.wrap_i64 (local.get $tmp)))
-      ))
-
-    ;; Allocate buffer.
-    (local.set $buf
-      (array.new $ByteArray (i32.const 0)
-        (i32.add (local.get $digits) (local.get $neg))))
-
-    ;; Write '-' if negative.
-    (if (local.get $neg)
-      (then (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))))
-
-    ;; Write digits right-to-left.
-    (local.set $pos
-      (i32.sub
-        (i32.add (local.get $digits) (local.get $neg))
-        (i32.const 1)))
-    (local.set $tmp (local.get $abs))
-    (block $done
-      (loop $write
-        (array.set $ByteArray (local.get $buf) (local.get $pos)
-          (i32.add (i32.const 0x30)
-            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
-        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
-        (br_if $write (i32.wrap_i64 (local.get $tmp)))
-      ))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_fmt_u64 : i64 (interpreted as u64) -> (ref $Str)
-  ;; Format an unsigned 64-bit integer as a decimal string. Same digit
-  ;; loop as $_str_fmt_i64 but no sign handling.
-  (func $_str_fmt_u64 (param $v i64) (result (ref $Str))
-
-    (local $digits i32)
-    (local $tmp i64)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-
-    ;; Zero special case.
-    (if (i64.eqz (local.get $v))
-      (then
-        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
-        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
-        (return (struct.new $StrBytesImpl (local.get $buf)))))
-
-    ;; Count digits.
-    (local.set $digits (i32.const 0))
-    (local.set $tmp (local.get $v))
-    (block $done
-      (loop $count
-        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
-        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-        (br_if $count (i32.wrap_i64 (local.get $tmp)))
-      ))
-
-    ;; Allocate buffer.
-    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $digits)))
-
-    ;; Write digits right-to-left.
-    (local.set $pos (i32.sub (local.get $digits) (i32.const 1)))
-    (local.set $tmp (local.get $v))
-    (block $done
-      (loop $write
-        (array.set $ByteArray (local.get $buf) (local.get $pos)
-          (i32.add (i32.const 0x30)
-            (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
-        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
-        (br_if $write (i32.wrap_i64 (local.get $tmp)))
-      ))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_fmt_int : i32 -> (ref $Str)
-  ;; Format a signed i32 as a decimal string.
-  (func $_str_fmt_int (param $v i32) (result (ref $Str))
-
-    (local $neg i32)
-    (local $abs i32)
-    (local $digits i32)
-    (local $tmp i32)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-
-    ;; Zero special case.
-    (if (i32.eqz (local.get $v))
-      (then
-        (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 1)))
-        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x30))
-        (return (struct.new $StrBytesImpl (local.get $buf)))))
-
-    ;; Handle sign.
-    (local.set $neg (i32.lt_s (local.get $v) (i32.const 0)))
-    (if (local.get $neg)
-      (then (local.set $abs (i32.sub (i32.const 0) (local.get $v))))
-      (else (local.set $abs (local.get $v))))
-
-    ;; Count digits.
-    (local.set $digits (i32.const 0))
-    (local.set $tmp (local.get $abs))
-    (block $done
-      (loop $count
-        (local.set $digits (i32.add (local.get $digits) (i32.const 1)))
-        (local.set $tmp (i32.div_u (local.get $tmp) (i32.const 10)))
-        (br_if $count (local.get $tmp))
-      ))
-
-    ;; Allocate buffer.
-    (local.set $buf
-      (array.new $ByteArray (i32.const 0)
-        (i32.add (local.get $digits) (local.get $neg))))
-
-    ;; Write '-' if negative.
-    (if (local.get $neg)
-      (then (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))))
-
-    ;; Write digits right-to-left.
-    (local.set $pos
-      (i32.sub
-        (i32.add (local.get $digits) (local.get $neg))
-        (i32.const 1)))
-    (local.set $tmp (local.get $abs))
-    (block $done
-      (loop $write
-        (array.set $ByteArray (local.get $buf) (local.get $pos)
-          (i32.add (i32.const 0x30) (i32.rem_u (local.get $tmp) (i32.const 10))))
-        (local.set $tmp (i32.div_u (local.get $tmp) (i32.const 10)))
-        (local.set $pos (i32.sub (local.get $pos) (i32.const 1)))
-        (br_if $write (local.get $tmp))
-      ))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_fmt_float : f64 -> (ref $Str)
-  ;; Format a non-integer f64 as "int_part.frac_part" with trailing zeros stripped.
-  ;; Simple approach: multiply fractional part by 1e15, render as i64, strip trailing '0's.
-  (func $_str_fmt_float (param $v f64) (result (ref $Str))
-
-    (local $neg i32)
-    (local $abs f64)
-    (local $int_part f64)
-    (local $frac f64)
-    (local $frac_i64 i64)
-    (local $int_buf (ref $ByteArray))
-    (local $int_len i32)
-    (local $frac_buf (ref $ByteArray))
-    (local $frac_digits i32)
-    (local $frac_len i32)
-    (local $tmp i64)
-    (local $buf (ref $ByteArray))
-    (local $total i32)
-    (local $pos i32)
-    (local $i i32)
-
-    ;; Handle sign.
-    (local.set $neg (f64.lt (local.get $v) (f64.const 0)))
-    (if (local.get $neg)
-      (then (local.set $abs (f64.neg (local.get $v))))
-      (else (local.set $abs (local.get $v))))
-
-    ;; Split into integer and fractional parts.
-    (local.set $int_part (f64.trunc (local.get $abs)))
-    (local.set $frac (f64.sub (local.get $abs) (local.get $int_part)))
-
-    ;; Render integer part as i64 digits into a temporary buffer.
-    ;; Max i64 digits = 20, allocate 20.
-    (local.set $int_buf (array.new $ByteArray (i32.const 0) (i32.const 20)))
-    (local.set $int_len (i32.const 0))
-    (block $int_zero
-      (local.set $tmp (i64.trunc_sat_f64_u (local.get $int_part)))
-      (if (i64.eqz (local.get $tmp))
-        (then
-          ;; Integer part is 0 — write single '0'.
-          (array.set $ByteArray (local.get $int_buf) (i32.const 0) (i32.const 0x30))
-          (local.set $int_len (i32.const 1))
-          (br $int_zero)))
-      ;; Write digits right-to-left into int_buf, then we'll reverse.
-      (loop $iloop
-        (array.set $ByteArray (local.get $int_buf) (local.get $int_len)
-          (i32.add (i32.const 0x30) (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
-        (local.set $int_len (i32.add (local.get $int_len) (i32.const 1)))
-        (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-        (br_if $iloop (i64.ne (local.get $tmp) (i64.const 0)))))
-
-    ;; Render fractional part: multiply by 1e15, convert to i64, render digits.
-    ;; 15 digits is within i64 range and covers f64 precision.
-    (local.set $frac_i64 (i64.trunc_sat_f64_u
-      (f64.add
-        (f64.mul (local.get $frac) (f64.const 1e15))
-        (f64.const 0.5)))) ;; round
-
-    ;; Render all 15 digits (with leading zeros) then strip trailing zeros.
-    (local.set $frac_buf (array.new $ByteArray (i32.const 0) (i32.const 15)))
-    (local.set $frac_digits (i32.const 15))
-    (local.set $tmp (local.get $frac_i64))
-    ;; Write right-to-left.
-    (local.set $i (i32.const 14))
-    (loop $floop
-      (array.set $ByteArray (local.get $frac_buf) (local.get $i)
-        (i32.add (i32.const 0x30) (i32.wrap_i64 (i64.rem_u (local.get $tmp) (i64.const 10)))))
-      (local.set $tmp (i64.div_u (local.get $tmp) (i64.const 10)))
-      (if (local.get $i)
-        (then
-          (local.set $i (i32.sub (local.get $i) (i32.const 1)))
-          (br $floop))))
-
-    ;; Strip trailing '0's from frac_buf, but keep at least 1 digit.
-    (local.set $frac_len (local.get $frac_digits))
-    (loop $strip
-      (if (i32.and
-            (i32.gt_s (local.get $frac_len) (i32.const 1))
-            (i32.eq
-              (array.get_u $ByteArray (local.get $frac_buf)
-                (i32.sub (local.get $frac_len) (i32.const 1)))
-              (i32.const 0x30)))
-        (then
-          (local.set $frac_len (i32.sub (local.get $frac_len) (i32.const 1)))
-          (br $strip))))
-
-    ;; Assemble: ['-'] int_digits '.' frac_digits
-    ;; int_buf has digits in reverse order (except if single '0').
-    (local.set $total (i32.add
-      (i32.add (local.get $neg) (local.get $int_len))
-      (i32.add (i32.const 1) (local.get $frac_len)))) ;; +1 for '.'
-
-    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
-    (local.set $pos (i32.const 0))
-
-    ;; Write '-' if negative.
-    (if (local.get $neg)
-      (then
-        (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x2D))
-        (local.set $pos (i32.const 1))))
-
-    ;; Write integer digits (int_buf is in reverse order, write backwards).
-    (local.set $i (i32.sub (local.get $int_len) (i32.const 1)))
-    (loop $wcopy
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $int_buf) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (if (local.get $i)
-        (then
-          (local.set $i (i32.sub (local.get $i) (i32.const 1)))
-          (br $wcopy))))
-
-    ;; Write '.'.
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-
-    ;; Write fractional digits (frac_buf is in correct order).
-    (local.set $i (i32.const 0))
-    (loop $fcopy
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $frac_buf) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br_if $fcopy (i32.lt_u (local.get $i) (local.get $frac_len))))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_fmt_range : (ref $Range) -> (ref $Str)
-  ;; Format a range as "start..end" (exclusive) or "start...end" (inclusive).
-  (func $_str_fmt_range (param $range (ref $Range)) (result (ref $Str))
-    (local $start_str (ref $Str))
-    (local $end_str (ref $Str))
-    (local $start_bytes (ref $ByteArray))
-    (local $end_bytes (ref $ByteArray))
-    (local $start_len i32)
-    (local $end_len i32)
-    (local $dot_len i32)  ;; 2 for "..", 3 for "..."
-    (local $total i32)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-    (local $i i32)
-
-    ;; Format start and end numbers via range public accessors.
-    ;; Range bounds are $I64; convert i64 → f64 for the formatter
-    ;; (TODO: int-aware formatter once str.wat sheds f64 plumbing).
-    (local.set $start_str
-      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
-        (call $range_start (local.get $range))))))
-    (local.set $end_str
-      (call $_str_fmt_num (f64.convert_i64_s (struct.get $I64 $ival
-        (call $range_end (local.get $range))))))
-
-    ;; Get byte arrays.
-    (local.set $start_bytes (call $bytes (local.get $start_str)))
-    (local.set $end_bytes (call $bytes (local.get $end_str)))
-    (local.set $start_len (array.len (local.get $start_bytes)))
-    (local.set $end_len (array.len (local.get $end_bytes)))
-
-    ;; Dot count: 2 for exclusive, 3 for inclusive.
-    (local.set $dot_len
-      (if (result i32) (call $range_is_incl (local.get $range))
-        (then (i32.const 3))
-        (else (i32.const 2))))
-
-    ;; Allocate result buffer.
-    (local.set $total
-      (i32.add (i32.add (local.get $start_len) (local.get $dot_len))
-        (local.get $end_len)))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
-
-    ;; Copy start bytes.
-    (local.set $pos (i32.const 0))
-    (local.set $i (i32.const 0))
-    (block $s_done (loop $s_copy
-      (br_if $s_done (i32.ge_u (local.get $i) (local.get $start_len)))
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $start_bytes) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $s_copy)))
-
-    ;; Write dots: 0x2E = '.'
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (if (i32.eq (local.get $dot_len) (i32.const 3))
-      (then
-        (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2E))
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
-
-    ;; Copy end bytes.
-    (local.set $i (i32.const 0))
-    (block $e_done (loop $e_copy
-      (br_if $e_done (i32.ge_u (local.get $i) (local.get $end_len)))
-      (array.set $ByteArray (local.get $buf) (local.get $pos)
-        (array.get_u $ByteArray (local.get $end_bytes) (local.get $i)))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $e_copy)))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_is_ident : (ref $Str) -> i32
-  ;; Check if a string is a valid fink identifier.
-  ;; Returns 1 if all bytes are identifier chars (a-z, A-Z, 0-9, _, -, $, or >= 0x80).
-  ;; Empty string returns 0. First char must not be a digit.
-  (func $_str_is_ident (param $str (ref $Str)) (result i32)
-    (local $bytes (ref $ByteArray))
-    (local $len i32)
-    (local $i i32)
-    (local $b i32)
-
-    (local.set $bytes (call $bytes (local.get $str)))
-    (local.set $len (array.len (local.get $bytes)))
-
-    ;; Empty string is not an identifier.
-    (if (i32.eqz (local.get $len))
-      (then (return (i32.const 0))))
-
-    ;; First byte must not be a digit (0x30-0x39).
-    (local.set $b (array.get_u $ByteArray (local.get $bytes) (i32.const 0)))
-    (if (i32.and
-          (i32.ge_u (local.get $b) (i32.const 0x30))
-          (i32.le_u (local.get $b) (i32.const 0x39)))
-      (then (return (i32.const 0))))
-
-    ;; Check all bytes.
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $check
-        (br_if $done (i32.ge_u (local.get $i) (local.get $len)))
-        (local.set $b (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
-
-        ;; >= 0x80: UTF-8 continuation/start — always valid
-        (if (i32.ge_u (local.get $b) (i32.const 0x80))
-          (then
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $check)))
-
-        ;; a-z (0x61-0x7A)
-        (if (i32.and
-              (i32.ge_u (local.get $b) (i32.const 0x61))
-              (i32.le_u (local.get $b) (i32.const 0x7A)))
-          (then
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $check)))
-
-        ;; A-Z (0x41-0x5A)
-        (if (i32.and
-              (i32.ge_u (local.get $b) (i32.const 0x41))
-              (i32.le_u (local.get $b) (i32.const 0x5A)))
-          (then
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $check)))
-
-        ;; 0-9 (0x30-0x39) — allowed after first char
-        (if (i32.and
-              (i32.ge_u (local.get $b) (i32.const 0x30))
-              (i32.le_u (local.get $b) (i32.const 0x39)))
-          (then
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $check)))
-
-        ;; _ (0x5F), - (0x2D), $ (0x24)
-        (if (i32.or
-              (i32.eq (local.get $b) (i32.const 0x5F))
-              (i32.or
-                (i32.eq (local.get $b) (i32.const 0x2D))
-                (i32.eq (local.get $b) (i32.const 0x24))))
-          (then
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $check)))
-
-        ;; Any other byte — not an identifier.
-        (return (i32.const 0))))
-
-    (i32.const 1)
-  )
-
-  ;; _str_fmt_rec_key_len : (ref eq) -> i32
-  ;; Byte length of a formatted record key.
-  ;; String ident: bare len. String non-ident: str_repr len. Other: repr len + 2 for parens.
-  (func $_str_fmt_rec_key_len (param $key (ref eq)) (result i32)
-    (local $str (ref $Str))
-
-    ;; Try $Str
-    (block $not_str
-      (block $is_str (result (ref $Str))
-        (br $not_str
-          (br_on_cast $is_str (ref eq) (ref $Str)
-            (local.get $key))))
-      (local.set $str)
-      ;; String key — identifier: bare, otherwise: str_repr (quoted + escaped).
-      (return
-        (if (result i32) (call $_str_is_ident (local.get $str))
-          (then (call $_str_len (local.get $str)))
-          (else (call $_str_len (call $repr (local.get $str)))))))
-
-    ;; Non-string key — (repr), add 2 for parens.
-    (i32.add
-      (call $_str_len
-        (call $_str_fmt_val (ref.cast (ref any) (local.get $key))))
-      (i32.const 2))
-  )
-
-  ;; _str_fmt_rec : (ref $Rec) -> (ref $Str)
-  ;; Format a record as "{key: val, key2: val2}".
-  ;; Empty record formats as "{}".
-  ;; Two-pass: first compute total byte length, then copy.
-  (func $_str_fmt_rec (param $rec (ref $Rec)) (result (ref $Str))
-    (local $node (ref $HamtNode))
-    (local $total i32)
-    (local $entry_count i32)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-
-    ;; Downcast to $RecImpl, extract HAMT root.
-    (local.set $node
-      (struct.get $RecImpl $hamt
-        (ref.cast (ref $RecImpl) (local.get $rec))))
-
-    ;; Count entries for separator sizing.
-    (local.set $entry_count
-      (call $dict_size (ref.cast (ref $Rec) (local.get $rec))))
-
-    ;; Empty record: return "{}"
-    (if (i32.eqz (local.get $entry_count))
-      (then
-        (return (call $_str_from_ascii_2
-          (i32.const 0x7B) ;; '{'
-          (i32.const 0x7D) ;; '}'
-        ))))
-
-    ;; Pass 1: compute total bytes.
-    ;; Each entry contributes: key_len + 2 (": ") + val_len
-    ;; Between entries: 2 (", ")
-    ;; Plus 2 for "{" and "}"
-    (local.set $total
-      (i32.add
-        (i32.const 2) ;; { and }
-        (i32.add
-          (call $_str_fmt_rec_size_node (local.get $node))
-          (i32.mul
-            (i32.sub (local.get $entry_count) (i32.const 1))
-            (i32.const 2))))) ;; ", " separators
-
-    ;; Allocate buffer.
-    (local.set $buf
-      (array.new $ByteArray (i32.const 0) (local.get $total)))
-
-    ;; Write opening '{'.
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x7B))
-    (local.set $pos (i32.const 1))
-
-    ;; Pass 2: copy formatted entries.
-    (local.set $pos
-      (call $_str_fmt_rec_copy_node
-        (local.get $node) (local.get $buf) (local.get $pos)
-        (i32.const 0))) ;; is_first = true (0 entries written so far)
-
-    ;; Write closing '}'.
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x7D))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_fmt_rec_size_node : (ref $HamtNode) -> i32
-  ;; Compute total bytes for all entries in a HAMT node (key + ": " + val).
-  ;; Does NOT include separators between entries or braces.
-  (func $_str_fmt_rec_size_node
-    (param $node (ref $HamtNode))
-    (result i32)
-
-    (local $children (ref $HamtChildren))
-    (local $len i32)
-    (local $i i32)
-    (local $total i32)
-    (local $child (ref null struct))
-    (local $leaf (ref $HamtLeaf))
-
-    (local.set $children
-      (struct.get $HamtNode $children (local.get $node)))
-    (local.set $len
-      (array.len (local.get $children)))
-    (local.set $total (i32.const 0))
-    (local.set $i (i32.const 0))
-
-    (block $done
-      (loop $walk
-        (br_if $done
-          (i32.ge_u (local.get $i) (local.get $len)))
-
-        (local.set $child
-          (array.get $HamtChildren
-            (local.get $children)
-            (local.get $i)))
-
-        ;; Leaf: key_display_len + 2 (": ") + val_len
-        (if (ref.test (ref $HamtLeaf) (local.get $child))
-          (then
-            (local.set $leaf
-              (ref.cast (ref $HamtLeaf) (local.get $child)))
-            (local.set $total
-              (i32.add (local.get $total)
-                (i32.add
-                  (i32.add
-                    (call $_str_fmt_rec_key_len
-                      (struct.get $HamtLeaf $key (local.get $leaf)))
-                    (i32.const 2)) ;; ": "
-                  (call $_str_len
-                    (call $_str_fmt_val_repr
-                      (ref.cast (ref any)
-                        (struct.get $HamtLeaf $val (local.get $leaf))))))))))
-
-        ;; Sub-node: recurse
-        (if (ref.test (ref $HamtNode) (local.get $child))
-          (then
-            (local.set $total
-              (i32.add (local.get $total)
-                (call $_str_fmt_rec_size_node
-                  (ref.cast (ref $HamtNode) (local.get $child)))))))
-
-        ;; Collision: walk leaves
-        (if (ref.test (ref $HamtCollision) (local.get $child))
-          (then
-            (local.set $total
-              (i32.add (local.get $total)
-                (call $_str_fmt_rec_size_collision
-                  (struct.get $HamtCollision $col_leaves
-                    (ref.cast (ref $HamtCollision) (local.get $child))))))))
-
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $walk)))
-
-    (local.get $total)
-  )
-
-  ;; _str_fmt_rec_size_collision : (ref $HamtChildren) -> i32
-  ;; Compute total bytes for all leaves in a collision array.
-  (func $_str_fmt_rec_size_collision
-    (param $leaves (ref $HamtChildren))
-    (result i32)
-
-    (local $len i32)
-    (local $i i32)
-    (local $total i32)
-    (local $leaf (ref $HamtLeaf))
-
-    (local.set $len (array.len (local.get $leaves)))
-    (local.set $total (i32.const 0))
-    (local.set $i (i32.const 0))
-
-    (block $done
-      (loop $walk
-        (br_if $done
-          (i32.ge_u (local.get $i) (local.get $len)))
-        (local.set $leaf
-          (ref.cast (ref $HamtLeaf)
-            (array.get $HamtChildren (local.get $leaves) (local.get $i))))
-        (local.set $total
-          (i32.add (local.get $total)
-            (i32.add
-              (i32.add
-                (call $_str_fmt_rec_key_len
-                  (struct.get $HamtLeaf $key (local.get $leaf)))
-                (i32.const 2))
-              (call $_str_len
-                (call $_str_fmt_val_repr
-                  (ref.cast (ref any)
-                    (struct.get $HamtLeaf $val (local.get $leaf))))))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $walk)))
-
-    (local.get $total)
-  )
-
-  ;; _str_fmt_rec_copy_key : (key, buf, pos) -> new_pos
-  ;; Copy a formatted record key into buf.
-  ;; String ident: bare. String non-ident: str_repr. Other: (repr).
-  (func $_str_fmt_rec_copy_key
-    (param $key (ref eq))
-    (param $buf (ref $ByteArray))
-    (param $pos i32)
-    (result i32)
-
-    (local $str (ref $Str))
-
-    ;; Try $Str
-    (block $not_str
-      (block $is_str (result (ref $Str))
-        (br $not_str
-          (br_on_cast $is_str (ref eq) (ref $Str)
-            (local.get $key))))
-      (local.set $str)
-
-      (if (call $_str_is_ident (local.get $str))
-        (then
-          ;; Identifier — copy as-is.
-          (local.set $pos
-            (call $_str_copy_to (local.get $str) (local.get $buf) (local.get $pos))))
-        (else
-          ;; Non-identifier string — use str_repr (quoted + escaped).
-          (local.set $pos
-            (call $_str_copy_to
-              (call $repr (local.get $str))
-              (local.get $buf)
-              (local.get $pos)))))
-      (return (local.get $pos)))
-
-    ;; Non-string key — wrap in parens: (repr)
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x28)) ;; '('
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (local.set $pos
-      (call $_str_copy_to
-        (call $_str_fmt_val (ref.cast (ref any) (local.get $key)))
-        (local.get $buf)
-        (local.get $pos)))
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x29)) ;; ')'
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-
-    (local.get $pos)
-  )
-
-  ;; _str_fmt_rec_copy_node : (node, buf, pos, written) -> new_pos
-  ;; Copy formatted entries into buf. written = entries written so far
-  ;; (used to decide whether to prepend ", ").
-  (func $_str_fmt_rec_copy_node
-    (param $node (ref $HamtNode))
-    (param $buf (ref $ByteArray))
-    (param $pos i32)
-    (param $written i32)
-    (result i32)
-
-    (local $children (ref $HamtChildren))
-    (local $len i32)
-    (local $i i32)
-    (local $child (ref null struct))
-    (local $leaf (ref $HamtLeaf))
-
-    (local.set $children
-      (struct.get $HamtNode $children (local.get $node)))
-    (local.set $len
-      (array.len (local.get $children)))
-    (local.set $i (i32.const 0))
-
-    (block $done
-      (loop $walk
-        (br_if $done
-          (i32.ge_u (local.get $i) (local.get $len)))
-
-        (local.set $child
-          (array.get $HamtChildren
-            (local.get $children)
-            (local.get $i)))
-
-        ;; Leaf
-        (if (ref.test (ref $HamtLeaf) (local.get $child))
-          (then
-            (local.set $leaf
-              (ref.cast (ref $HamtLeaf) (local.get $child)))
-
-            ;; Separator ", " if not first entry
-            (if (local.get $written)
-              (then
-                (array.set $ByteArray (local.get $buf) (local.get $pos)
-                  (i32.const 0x2C)) ;; ','
-                (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-                (array.set $ByteArray (local.get $buf) (local.get $pos)
-                  (i32.const 0x20)) ;; ' '
-                (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
-
-            ;; Copy key (with quotes if not an identifier)
-            (local.set $pos
-              (call $_str_fmt_rec_copy_key
-                (struct.get $HamtLeaf $key (local.get $leaf))
-                (local.get $buf) (local.get $pos)))
-
-            ;; Write ": "
-            (array.set $ByteArray (local.get $buf) (local.get $pos)
-              (i32.const 0x3A)) ;; ':'
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-            (array.set $ByteArray (local.get $buf) (local.get $pos)
-              (i32.const 0x20)) ;; ' '
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-
-            ;; Copy val
-            (local.set $pos
-              (call $_str_copy_to
-                (call $_str_fmt_val_repr
-                  (ref.cast (ref any)
-                    (struct.get $HamtLeaf $val (local.get $leaf))))
-                (local.get $buf)
-                (local.get $pos)))
-
-            (local.set $written
-              (i32.add (local.get $written) (i32.const 1)))))
-
-        ;; Sub-node: recurse
-        (if (ref.test (ref $HamtNode) (local.get $child))
-          (then
-            (local.set $pos
-              (call $_str_fmt_rec_copy_node
-                (ref.cast (ref $HamtNode) (local.get $child))
-                (local.get $buf) (local.get $pos) (local.get $written)))
-            ;; Update written count — we don't know exactly how many
-            ;; entries the sub-node had, but we can check if pos advanced.
-            ;; Simpler: count via _hamt_size_node.
-            (local.set $written
-              (i32.add (local.get $written)
-                (call $_hamt_size_node
-                  (ref.cast (ref $HamtNode) (local.get $child)))))))
-
-        ;; Collision: copy all leaves
-        (if (ref.test (ref $HamtCollision) (local.get $child))
-          (then
-            (local.set $pos
-              (call $_str_fmt_rec_copy_collision
-                (struct.get $HamtCollision $col_leaves
-                  (ref.cast (ref $HamtCollision) (local.get $child)))
-                (local.get $buf) (local.get $pos) (local.get $written)))
-            (local.set $written
-              (i32.add (local.get $written)
-                (array.len
-                  (struct.get $HamtCollision $col_leaves
-                    (ref.cast (ref $HamtCollision) (local.get $child))))))))
-
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $walk)))
-
-    (local.get $pos)
-  )
-
-  ;; _str_fmt_rec_copy_collision : (leaves, buf, pos, written) -> new_pos
-  ;; Copy formatted collision entries into buf.
-  (func $_str_fmt_rec_copy_collision
-    (param $leaves (ref $HamtChildren))
-    (param $buf (ref $ByteArray))
-    (param $pos i32)
-    (param $written i32)
-    (result i32)
-
-    (local $len i32)
-    (local $i i32)
-    (local $leaf (ref $HamtLeaf))
-
-    (local.set $len (array.len (local.get $leaves)))
-    (local.set $i (i32.const 0))
-
-    (block $done
-      (loop $walk
-        (br_if $done
-          (i32.ge_u (local.get $i) (local.get $len)))
-
-        (local.set $leaf
-          (ref.cast (ref $HamtLeaf)
-            (array.get $HamtChildren (local.get $leaves) (local.get $i))))
-
-        ;; Separator
-        (if (i32.or (local.get $written) (local.get $i))
-          (then
-            (array.set $ByteArray (local.get $buf) (local.get $pos)
-              (i32.const 0x2C))
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-            (array.set $ByteArray (local.get $buf) (local.get $pos)
-              (i32.const 0x20))
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
-
-        ;; Copy key (with quotes if not an identifier)
-        (local.set $pos
-          (call $_str_fmt_rec_copy_key
-            (struct.get $HamtLeaf $key (local.get $leaf))
-            (local.get $buf) (local.get $pos)))
-
-        ;; Write ": "
-        (array.set $ByteArray (local.get $buf) (local.get $pos)
-          (i32.const 0x3A))
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-        (array.set $ByteArray (local.get $buf) (local.get $pos)
-          (i32.const 0x20))
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-
-        ;; Copy val
-        (local.set $pos
-          (call $_str_copy_to
-            (call $_str_fmt_val_repr
-              (ref.cast (ref any)
-                (struct.get $HamtLeaf $val (local.get $leaf))))
-            (local.get $buf)
-            (local.get $pos)))
-
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $walk)))
-
-    (local.get $pos)
-  )
-
-  ;; _str_fmt_list : (ref $List) -> (ref $Str)
-  ;; Format a list as "[a, b, c]".
-  ;; Uses only the public list API (list_op_empty, list_head_any, list_tail_any).
-  (func $_str_fmt_list (param $list (ref $List)) (result (ref $Str))
-    (local $cur (ref null any))
-    (local $total i32)
-    (local $count i32)
-    (local $buf (ref $ByteArray))
-    (local $pos i32)
-    (local $is_first i32)
-
-    ;; Empty list: return "[]"
-    (if (call $list_op_empty (local.get $list))
-      (then
-        (return (call $_str_from_ascii_2
-          (i32.const 0x5B) ;; '['
-          (i32.const 0x5D) ;; ']'
-        ))))
-
-    ;; Pass 1: compute total byte length.
-    ;; Each element: formatted length. Between elements: 2 (", ").
-    ;; Plus 2 for "[" and "]".
-    (local.set $cur (local.get $list))
-    (local.set $total (i32.const 2)) ;; [ and ]
-    (local.set $count (i32.const 0))
-    (block $done1
-      (loop $len_loop
-        (br_if $done1
-          (call $list_op_empty (local.get $cur)))
-        (local.set $total
-          (i32.add (local.get $total)
-            (call $_str_len
-              (call $_str_fmt_val_repr
-                (ref.as_non_null
-                  (call $head_any (local.get $cur)))))))
-        (local.set $count (i32.add (local.get $count) (i32.const 1)))
-        (local.set $cur
-          (call $tail_any (local.get $cur)))
-        (br $len_loop)))
-
-    ;; Add separator bytes: (count - 1) * 2
-    (local.set $total
-      (i32.add (local.get $total)
-        (i32.mul
-          (i32.sub (local.get $count) (i32.const 1))
-          (i32.const 2))))
-
-    ;; Allocate buffer.
-    (local.set $buf
-      (array.new $ByteArray (i32.const 0) (local.get $total)))
-
-    ;; Write opening '['.
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x5B))
-    (local.set $pos (i32.const 1))
-
-    ;; Pass 2: format and copy each element.
-    (local.set $cur (local.get $list))
-    (local.set $is_first (i32.const 1))
-    (block $done2
-      (loop $copy_loop
-        (br_if $done2
-          (call $list_op_empty (local.get $cur)))
-
-        ;; Write ", " separator (except before first element).
-        (if (i32.eqz (local.get $is_first))
-          (then
-            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2C)) ;; ','
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20)) ;; ' '
-            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
-        (local.set $is_first (i32.const 0))
-
-        ;; Format and copy element.
-        (local.set $pos
-          (call $_str_copy_to
-            (call $_str_fmt_val_repr
-              (ref.as_non_null
-                (call $head_any (local.get $cur))))
-            (local.get $buf)
-            (local.get $pos)))
-
-        (local.set $cur
-          (call $tail_any (local.get $cur)))
-        (br $copy_loop)))
-
-    ;; Write closing ']'.
-    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5D))
-
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
 
 
   ;; _str_from_ascii_2 : (i32, i32) -> (ref $Str)
   ;; Build a 2-byte string from ASCII code points.
-  (func $_str_from_ascii_2 (param $a i32) (param $b i32) (result (ref $Str))
+  (func $_str_from_ascii_2 (@pub) (param $a i32) (param $b i32) (result (ref $Str))
     (local $buf (ref $ByteArray))
     (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 2)))
     (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
@@ -2730,54 +1689,6 @@
     (struct.new $StrBytesImpl (local.get $buf))
   )
 
-  ;; _str_from_ascii_3 : (i32, i32, i32) -> (ref $Str)
-  ;; Build a 3-byte string from ASCII code points.
-  (func $_str_from_ascii_3 (param $a i32) (param $b i32) (param $c i32) (result (ref $Str))
-    (local $buf (ref $ByteArray))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 3)))
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
-    (array.set $ByteArray (local.get $buf) (i32.const 1) (local.get $b))
-    (array.set $ByteArray (local.get $buf) (i32.const 2) (local.get $c))
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_from_ascii_8 : 8 bytes -> (ref $Str)
-  (func $_str_from_ascii_8
-    (param $a i32) (param $b i32) (param $c i32) (param $d i32)
-    (param $e i32) (param $f i32) (param $g i32) (param $h i32)
-    (result (ref $Str))
-    (local $buf (ref $ByteArray))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 8)))
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
-    (array.set $ByteArray (local.get $buf) (i32.const 1) (local.get $b))
-    (array.set $ByteArray (local.get $buf) (i32.const 2) (local.get $c))
-    (array.set $ByteArray (local.get $buf) (i32.const 3) (local.get $d))
-    (array.set $ByteArray (local.get $buf) (i32.const 4) (local.get $e))
-    (array.set $ByteArray (local.get $buf) (i32.const 5) (local.get $f))
-    (array.set $ByteArray (local.get $buf) (i32.const 6) (local.get $g))
-    (array.set $ByteArray (local.get $buf) (i32.const 7) (local.get $h))
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
-
-  ;; _str_from_ascii_9 : 9 bytes -> (ref $Str)
-  (func $_str_from_ascii_9
-    (param $a i32) (param $b i32) (param $c i32) (param $d i32)
-    (param $e i32) (param $f i32) (param $g i32) (param $h i32)
-    (param $i i32)
-    (result (ref $Str))
-    (local $buf (ref $ByteArray))
-    (local.set $buf (array.new $ByteArray (i32.const 0) (i32.const 9)))
-    (array.set $ByteArray (local.get $buf) (i32.const 0) (local.get $a))
-    (array.set $ByteArray (local.get $buf) (i32.const 1) (local.get $b))
-    (array.set $ByteArray (local.get $buf) (i32.const 2) (local.get $c))
-    (array.set $ByteArray (local.get $buf) (i32.const 3) (local.get $d))
-    (array.set $ByteArray (local.get $buf) (i32.const 4) (local.get $e))
-    (array.set $ByteArray (local.get $buf) (i32.const 5) (local.get $f))
-    (array.set $ByteArray (local.get $buf) (i32.const 6) (local.get $g))
-    (array.set $ByteArray (local.get $buf) (i32.const 7) (local.get $h))
-    (array.set $ByteArray (local.get $buf) (i32.const 8) (local.get $i))
-    (struct.new $StrBytesImpl (local.get $buf))
-  )
 
 
   ;; CPS wrappers — stripped by unit test harness (prepare_wat).
@@ -2817,7 +1728,7 @@
         (local.set $total
           (i32.add (local.get $total)
             (call $_str_len
-              (call $_str_fmt_val
+              (call $fmt_val
                 (ref.as_non_null
                   (array.get $VarArgs (local.get $segments) (local.get $i)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -2836,7 +1747,7 @@
           (i32.ge_u (local.get $i) (local.get $len)))
         (local.set $pos
           (call $_str_copy_to
-            (call $_str_fmt_val
+            (call $fmt_val
               (ref.as_non_null
                 (array.get $VarArgs (local.get $segments) (local.get $i))))
             (local.get $dst)

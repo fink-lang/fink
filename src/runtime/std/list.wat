@@ -15,6 +15,8 @@
   (import "rt/apply.wat" "Closure"  (type $Closure  (sub any)))
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat" "Fn2"      (type $Fn2      (sub any)))
+  (import "std/str.wat"  "Str"      (type $Str      (sub any) (struct)))
+  (import "std/str.wat"  "ByteArray" (type $ByteArray (array (mut i8))))
 
   ;; Func imports
   (import "rt/apply.wat" "apply"
@@ -25,6 +27,17 @@
     (func $apply_1 (param $result (ref null any)) (param $cont (ref null any))))
   (import "rt/apply.wat" "apply_2_vals"
     (func $apply_2_vals (param $a (ref null any)) (param $b (ref null any)) (param $cont (ref null any))))
+  (import "std/str.wat" "from_bytes"
+    (func $str_from_bytes (param (ref $ByteArray)) (result (ref $Str))))
+  (import "std/str.wat" "_str_len"
+    (func $_str_len (param (ref $Str)) (result i32)))
+  (import "std/str.wat" "_str_copy_to"
+    (func $_str_copy_to (param (ref $Str)) (param (ref $ByteArray)) (param i32) (result i32)))
+  (import "std/str.wat" "_str_from_ascii_2"
+    (func $_str_from_ascii_2 (param i32) (param i32) (result (ref $Str))))
+  ;; repr_val — element formatter (per-type repr protocol dispatcher).
+  (import "std/repr.wat" "repr_val"
+    (func $repr_val (param (ref any)) (result (ref $Str))))
 
 
   ;; -- Type definitions ------------------------------------------------
@@ -379,5 +392,84 @@
 
   (func $list (@pub) (@impl "std/list.fnk:list") (result (ref any))
     (global.get $_list_closure))
+
+  ;; Format a $List as "[a, b, c]". Calls back into str.wat:fmt_val
+  ;; for each element. Empty list renders as "[]".
+  (func $fmt (@pub) (@impl "std/str.fnk:fmt" $List) (param $list (ref $List)) (result (ref $Str))
+    (local $cur (ref null any))
+    (local $total i32)
+    (local $count i32)
+    (local $buf (ref $ByteArray))
+    (local $pos i32)
+    (local $is_first i32)
+
+    (if (call $op_empty (local.get $list))
+      (then
+        (return_call $_str_from_ascii_2
+          (i32.const 0x5B) (i32.const 0x5D)))) ;; "[]"
+
+    ;; Pass 1: total length = "[" + sum(elem_len) + (count-1)*2 (", ") + "]"
+    (local.set $cur (local.get $list))
+    (local.set $total (i32.const 2))
+    (local.set $count (i32.const 0))
+    (block $done1
+      (loop $len_loop
+        (br_if $done1 (call $op_empty (local.get $cur)))
+        (local.set $total
+          (i32.add (local.get $total)
+            (call $_str_len
+              (call $repr_val
+                (ref.as_non_null (call $head_any (local.get $cur)))))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (local.set $cur (call $tail_any (local.get $cur)))
+        (br $len_loop)))
+
+    (local.set $total
+      (i32.add (local.get $total)
+        (i32.mul
+          (i32.sub (local.get $count) (i32.const 1))
+          (i32.const 2))))
+
+    (local.set $buf (array.new $ByteArray (i32.const 0) (local.get $total)))
+
+    ;; Write '['.
+    (array.set $ByteArray (local.get $buf) (i32.const 0) (i32.const 0x5B))
+    (local.set $pos (i32.const 1))
+
+    ;; Pass 2: format and copy each element.
+    (local.set $cur (local.get $list))
+    (local.set $is_first (i32.const 1))
+    (block $done2
+      (loop $copy_loop
+        (br_if $done2 (call $op_empty (local.get $cur)))
+
+        ;; Write ", " separator (except before first element).
+        (if (i32.eqz (local.get $is_first))
+          (then
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x2C))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x20))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))))
+        (local.set $is_first (i32.const 0))
+
+        (local.set $pos
+          (call $_str_copy_to
+            (call $repr_val
+              (ref.as_non_null (call $head_any (local.get $cur))))
+            (local.get $buf)
+            (local.get $pos)))
+
+        (local.set $cur (call $tail_any (local.get $cur)))
+        (br $copy_loop)))
+
+    ;; Write ']'.
+    (array.set $ByteArray (local.get $buf) (local.get $pos) (i32.const 0x5D))
+
+    (return_call $str_from_bytes (local.get $buf)))
+
+  ;; repr — same as fmt for lists (their fmt already calls repr on elements).
+  (func $repr (@pub) (@impl "std/repr.fnk:repr" $List)
+    (param $list (ref $List)) (result (ref $Str))
+    (return_call $fmt (local.get $list)))
 
 )
