@@ -286,7 +286,7 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
 
     // ---- infix op: `a + b` ----
     NodeKind::InfixOp { op, lhs, rhs } => lower_infix(g, op.src, lhs, rhs, o),
-    NodeKind::PostfixOp { .. } => todo!("PostfixOp CPS lower"),
+    NodeKind::PostfixOp { op, lhs } => lower_postfix(g, op.src, lhs, o),
 
     // ---- unary op: `-a`, `not a` ----
     NodeKind::UnaryOp { op, operand } => lower_unary(g, op.src, operand, o),
@@ -827,6 +827,23 @@ fn lower_range<'src>(
   let result = g.fresh_result(origin);
   let (result_kind, result_id) = (result.kind, result.id);
   pending.push(Pending::App { func: Callable::BuiltIn(BuiltIn::from_builtin_str(op)), args: args_val(vec![sv, ev]), result,  origin });
+  (ref_val(g, result_kind, result_id, origin), pending)
+}
+
+fn lower_postfix<'src>(
+  g: &mut Gen<'_, 'src>,
+  op: &'src str,
+  lhs: AstId,
+  origin: Option<AstId>,
+) -> Lower {
+  let builtin = match op {
+    ".." => BuiltIn::RangeFrom,
+    _ => panic!("lower_postfix: unknown postfix op {op:?}"),
+  };
+  let (lv, mut pending) = lower(g, lhs);
+  let result = g.fresh_result(origin);
+  let (result_kind, result_id) = (result.kind, result.id);
+  pending.push(Pending::App { func: Callable::BuiltIn(builtin), args: args_val(vec![lv]), result, origin });
   (ref_val(g, result_kind, result_id, origin), pending)
 }
 
@@ -3219,6 +3236,7 @@ mod module_tests {
   test_macros::include_fink_tests!("src/passes/cps/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_functions.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_operators.fnk");
+  test_macros::include_fink_tests!("src/passes/cps/test_range.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_application.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_strings.fnk");
   test_macros::include_fink_tests!("src/passes/cps/test_collections.fnk");

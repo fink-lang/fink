@@ -384,6 +384,7 @@ fn render_builtin(op: &BuiltIn) -> String {
     // Range
     BuiltIn::Range     => "·op_rngex".into(),
     BuiltIn::RangeIncl => "·op_rngin".into(),
+    BuiltIn::RangeFrom => "·op_rngfrom".into(),
     BuiltIn::In        => "·op_in".into(),
     BuiltIn::NotIn     => "·op_notin".into(),
     // Member access
