@@ -259,6 +259,10 @@ impl<'a, 'src> Printer<'a, 'src> {
                 self.tok(&op);
                 self.node(rhs);
             }
+            NodeKind::PostfixOp { op, lhs } => {
+                self.node(lhs);
+                self.tok(&op);
+            }
             NodeKind::ChainedCmp(parts) => {
                 for part in parts.iter() {
                     match part {

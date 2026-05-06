@@ -161,6 +161,12 @@ fn rewrite_wildcard_call<'src>(
         builder.append(NodeKind::InfixOp { op, lhs: new_lhs, rhs: new_rhs }, loc)
       }
     }
+    NodeKind::PostfixOp { op, lhs } => {
+      let new_lhs = rewrite_wildcard_call(builder, src, lhs);
+      if new_lhs == lhs { id } else {
+        builder.append(NodeKind::PostfixOp { op, lhs: new_lhs }, loc)
+      }
+    }
     NodeKind::UnaryOp { op, operand } => {
       let new_operand = rewrite_wildcard_call(builder, src, operand);
       if new_operand == operand { id } else {
@@ -303,6 +309,7 @@ fn rewrite_wildcard_call<'src>(
 fn has_partial(ast: &Ast<'_>, id: AstId) -> bool {
   match &ast.nodes.get(id).kind {
     NodeKind::Partial => true,
+    NodeKind::PostfixOp { lhs, .. } => has_partial(ast, *lhs),
     NodeKind::LitBool(_)
     | NodeKind::LitInt(_)
     | NodeKind::LitFloat(_)
@@ -409,6 +416,12 @@ fn replace_partial<'src>(
         op,
         lhs: replace_partial(builder, src, lhs, synth_id),
         rhs: replace_partial(builder, src, rhs, synth_id),
+      }
+    }
+    NodeKind::PostfixOp { op, lhs } => {
+      NodeKind::PostfixOp {
+        op,
+        lhs: replace_partial(builder, src, lhs, synth_id),
       }
     }
     NodeKind::ChainedCmp(parts) => {
@@ -750,6 +763,7 @@ fn has_partial_builder(builder: &AstBuilder<'_>, id: AstId) -> bool {
   let node = builder.read(id);
   match &node.kind {
     NodeKind::Partial => true,
+    NodeKind::PostfixOp { lhs, .. } => has_partial_builder(builder, *lhs),
     NodeKind::LitBool(_) | NodeKind::LitInt(_) | NodeKind::LitFloat(_)
     | NodeKind::LitDecimal(_) | NodeKind::LitStr { .. } | NodeKind::Ident(_)
     | NodeKind::SynthIdent(_) | NodeKind::Wildcard | NodeKind::Token(_) => false,
@@ -836,6 +850,12 @@ fn replace_partial_builder<'src>(
         op,
         lhs: replace_partial_builder(builder, lhs, synth_id),
         rhs: replace_partial_builder(builder, rhs, synth_id),
+      }
+    }
+    NodeKind::PostfixOp { op, lhs } => {
+      NodeKind::PostfixOp {
+        op,
+        lhs: replace_partial_builder(builder, lhs, synth_id),
       }
     }
     NodeKind::ChainedCmp(parts) => {

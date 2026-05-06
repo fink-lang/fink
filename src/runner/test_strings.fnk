@@ -208,11 +208,11 @@ test 'str slice negative single byte', fn:
   | equals ":
     l
 
-skip test 'str slice negative zero end', fn:
+test 'str slice open range', fn:
   expect run ƒink:
-    'foobar'.(-3..-0) #TODO .(-3..)
+    'foobar'.(-3..)
   | equals ":
-    TODO
+    bar
 
 # --- String template pattern ---
 

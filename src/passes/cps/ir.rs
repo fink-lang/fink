@@ -264,7 +264,7 @@ pub enum BuiltIn {
   // Shifts / rotations
   Shl, Shr, RotL, RotR,
   // Range
-  Range, RangeIncl, In, NotIn,
+  Range, RangeIncl, RangeFrom, In, NotIn,
   // Member access
   Get,
   // Data construction

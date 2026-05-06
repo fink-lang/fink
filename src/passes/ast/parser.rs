@@ -320,6 +320,17 @@ impl<'src> Parser<'src> {
     }
   }
 
+  // Returns true if the current token can start an expression — atoms plus
+  // unary prefix operators (`-`, `+`, `~`, `not`).
+  fn can_start_expr(&self) -> bool {
+    if self.is_arg_start() { return true; }
+    match self.current.kind {
+      TokenKind::Sep => matches!(self.current.src, "-" | "+" | "~"),
+      TokenKind::Ident => self.current.src == "not",
+      _ => false,
+    }
+  }
+
   // Returns true if the current token is a comma or semicolon.
   fn at_sep(&self) -> bool {
     self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon)
@@ -831,6 +842,12 @@ impl<'src> Parser<'src> {
       // Range: .. and ...
       if Self::is_range_op(&tok) {
         let op = self.bump();
+        // Postfix (open-end) `..`: no expression follows.
+        if op.src == ".." && !self.can_start_expr() {
+          let loc = Loc { start: self.loc_of(lhs).start, end: op.loc.end };
+          lhs = self.node(NodeKind::PostfixOp { op, lhs }, loc);
+          continue;
+        }
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: self.loc_of(lhs).start, end: self.loc_of(rhs).end };
         lhs = self.node(
@@ -933,6 +950,11 @@ impl<'src> Parser<'src> {
       }
       if Self::is_range_op(&tok) {
         let op = self.bump();
+        if op.src == ".." && !self.can_start_expr() {
+          let loc = Loc { start: self.loc_of(lhs).start, end: op.loc.end };
+          lhs = self.node(NodeKind::PostfixOp { op, lhs }, loc);
+          continue;
+        }
         let rhs = self.parse_infix(r_bp)?;
         let loc = Loc { start: self.loc_of(lhs).start, end: self.loc_of(rhs).end };
         lhs = self.node(NodeKind::InfixOp { op, lhs, rhs }, loc);
@@ -1939,6 +1961,7 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_operators.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_grouping.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_spread_ranges.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_range.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_bindings.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_functions.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");

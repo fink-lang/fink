@@ -28,7 +28,7 @@
   (import "std/int.wat"     "I64"     (type $I64     (sub $Int (struct (field $ival i64)))))
   (import "std/range.wat"   "fmt"      (func $range_fmt     (param (ref $Range)) (result (ref $Str))))
   (import "std/range.wat"   "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
-  (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref $I64))))
+  (import "std/range.wat"   "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
   (import "std/range.wat"   "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
   (import "std/range.wat"  "Range"     (type $Range     (sub any)))
   (import "std/dict.wat"   "Rec"       (type $Rec       (sub any)))
@@ -1889,12 +1889,20 @@
 
       ;; Range bounds are $I64 — read $ival directly.
       (local.set $start_i (struct.get $I64 $ival (call $range_start (local.get $range))))
-      (local.set $end_i (struct.get $I64 $ival (call $range_end (local.get $range))))
 
-      ;; Adjust end for inclusive range
-      (if (call $range_is_incl (local.get $range))
-        (then
-          (local.set $end_i (i64.add (local.get $end_i) (i64.const 1)))))
+      ;; Open-end: end = string length (in bytes). Otherwise read $ival.
+      (block $end_done
+        (block $end_ref (result (ref $I64))
+          (br_on_non_null $end_ref (call $range_end (local.get $range)))
+          (local.set $end_i (i64.extend_i32_s
+            (array.len (call $bytes (local.get $s)))))
+          (br $end_done))
+        (local.set $end_i (struct.get $I64 $ival))
+
+        ;; Adjust end for inclusive range (only when end was set explicitly).
+        (if (call $range_is_incl (local.get $range))
+          (then
+            (local.set $end_i (i64.add (local.get $end_i) (i64.const 1))))))
 
       (local.set $result
         (call $_str_slice (local.get $s) (local.get $start_i) (local.get $end_i)))
