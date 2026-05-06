@@ -52,6 +52,13 @@ required-features = ["runtime"]
 name = "cli"
 path = "src/bin/tests/cli.rs"
 
+# JS interop integration test — compiles a fink fixture and drives
+# `node --test` against the produced wasm. Skipped when `node` is not
+# on PATH (per `feedback_ci_external_binary_guard.md`).
+[[test]]
+name = "interop_js"
+path = "src/runtime/interop/js/test_interop.rs"
+
 [dev-dependencies]
 test-macros = { path = "crates/test-macros" }
 tempfile = "3"

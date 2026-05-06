@@ -68,7 +68,7 @@ pub fn run_file(
 
   if path.ends_with(".fnk") {
     let mut loader = crate::passes::modules::FileSourceLoader::new();
-    let wasm = crate::compile_package(std::path::Path::new(path), &mut loader)?;
+    let wasm = crate::compile_package(std::path::Path::new(path), &mut loader, crate::passes::wasm::emit::Interop::Rust)?;
     return wasmtime_runner::run(&opts, &wasm, args, stdin, stdout, stderr);
   }
 
@@ -251,7 +251,7 @@ mod tests {
     let pkg = crate::passes::wasm::compile_package::compile_package(
       &entry_abs_path, &mut loader,
     ).map_err(|e| format!("compile_package: {e}"))?;
-    let bytes = crate::passes::wasm::emit::emit(&pkg.fragment);
+    let bytes = crate::passes::wasm::emit::emit(&pkg.fragment, crate::passes::wasm::emit::Interop::Rust);
 
     let mut config = Config::new();
     config.wasm_gc(true);

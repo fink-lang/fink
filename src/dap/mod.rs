@@ -434,7 +434,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
     // `fink run` does). `to_wasm` would only register the entry file
     // in an in-memory loader and fail on any `import './foo.fnk'`.
     let mut loader = crate::passes::modules::FileSourceLoader::new();
-    let wasm = crate::compile_package(std::path::Path::new(program), &mut loader)?;
+    let wasm = crate::compile_package(std::path::Path::new(program), &mut loader, crate::passes::wasm::emit::Interop::Rust)?;
     (wasm.binary, program.to_string(), wasm.mappings, wasm.marks, wasm.id_to_url)
   } else {
     let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
