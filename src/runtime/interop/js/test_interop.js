@@ -5,7 +5,7 @@
 // invokes `node --test` on this file with the wasm path supplied via
 // FINK_TEST_WASM.
 
-import { before, test } from 'node:test';
+import { before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
@@ -17,11 +17,24 @@ if (!wasm_path) {
   throw new Error('FINK_TEST_WASM env var not set');
 }
 
+let bytes;
 let fink;
+let logs;
+let errs;
 
 before(async () => {
-  const bytes = await readFile(wasm_path);
-  fink = await init_wasm(bytes);
+  bytes = await readFile(wasm_path);
+});
+
+// Fresh fink instance per test. `logs` / `errs` capture stdout / stderr
+// writes by passing host overrides into init_wasm.
+beforeEach(async () => {
+  logs = [];
+  errs = [];
+  fink = await init_wasm(bytes, {
+    stdout_write: (s) => logs.push(s),
+    stderr_write: (s) => errs.push(s),
+  });
 });
 
 test('init_wasm yields a fink object with import', () => {
@@ -29,7 +42,8 @@ test('init_wasm yields a fink object with import', () => {
 });
 
 test('import returns the entry module', async () => {
-  const mod = await fink.import('./test_interop.fnk');
+  const [last_val, mod] = await fink.import('./test_interop.fnk');
+  assert.equal(last_val, 42);
   assert.ok(mod);
 });
 
@@ -56,4 +70,18 @@ test('bool round-trip via identity fn', async () => {
   const [, {bar}] = await fink.import('./test_interop.fnk');
   assert.equal(await bar(true), true);
   assert.equal(await bar(false), false);
+});
+
+test('write to stdout routes to host stdout_write', async () => {
+  const [, {say_hi}] = await fink.import('./test_interop.fnk');
+  await say_hi();
+  assert.deepEqual(logs, ['hello from fink']);
+  assert.deepEqual(errs, []);
+});
+
+test('write to stderr routes to host stderr_write', async () => {
+  const [, {shout}] = await fink.import('./test_interop.fnk');
+  await shout();
+  assert.deepEqual(errs, ['oh no']);
+  assert.deepEqual(logs, []);
 });

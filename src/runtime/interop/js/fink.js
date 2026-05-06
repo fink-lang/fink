@@ -45,33 +45,33 @@ const make_type_of = (exports) => (v) => {
 };
 
 
-// Copy a JS string's UTF-8 bytes into wasm linear memory at offset 0
-// and return a fresh $ByteArray ref (a GC value). The linear-memory
-// window can be reused on the next call — bytes already live in the
-// GC heap.
-const make_fink_bytes = (exports) => (s) => {
+// Copy a JS string's UTF-8 bytes into wasm linear memory at the shared
+// SCRATCH_BASE offset and return a fresh $ByteArray ref (a GC value).
+// The linear-memory window can be reused on the next call — bytes
+// already live in the GC heap. We avoid offset 0 because the user
+// fragment's data segments (string literals) live there and would be
+// clobbered by writes here.
+const make_fink_bytes = (exports, scratch) => (s) => {
   const bytes = text_encoder.encode(s);
-  new Uint8Array(exports.memory.buffer).set(bytes, 0);
-  return exports.bytes_from_js(0, bytes.length);
+  new Uint8Array(exports.memory.buffer).set(bytes, scratch);
+  return exports.bytes_from_js(scratch, bytes.length);
 };
 
 
 // Build a $Str ref from a JS string. Same dance as fink_bytes but
 // wraps the result with $Str.
-const make_str_from_js = (exports) => (s) => {
+const make_str_from_js = (exports, scratch) => (s) => {
   const bytes = text_encoder.encode(s);
-  new Uint8Array(exports.memory.buffer).set(bytes, 0);
-  return exports.str_from_js(0, bytes.length);
+  new Uint8Array(exports.memory.buffer).set(bytes, scratch);
+  return exports.str_from_js(scratch, bytes.length);
 };
 
 
 // Decode a $Str ref back into a JS string by writing its bytes into
-// linear memory at offset 0, then reading them via TextDecoder. The
-// linear-memory window is reused with each call — same caveat as
-// fink_bytes on the inbound side.
-const make_str_to_js = (exports) => (s) => {
-  const len = exports.str_to_js(s, 0);
-  return text_decoder.decode(new Uint8Array(exports.memory.buffer, 0, len));
+// the SCRATCH_BASE window, then reading them via TextDecoder.
+const make_str_to_js = (exports, scratch) => (s) => {
+  const len = exports.str_to_js(s, scratch);
+  return text_decoder.decode(new Uint8Array(exports.memory.buffer, scratch, len));
 };
 
 
@@ -218,23 +218,50 @@ const make_import = (exports, {wrap}) => (name) =>
   });
 
 
-export const init_wasm = async (bytes) => {
+// Default host functions — keep them at module scope so the docstring's
+// `init_wasm(bytes)` form (no opts) still works as before.
+const default_host = {
+  stdout_write: (s) => console.log(s),
+  stderr_write: (s) => console.error(s),
+  panic:        () => { throw new Error('host_panic'); },
+};
+
+export const init_wasm = async (bytes, host = {}) => {
   // The wat-side wrap_host_cont takes an externref handle and stores
   // it inside a $Closure-shaped cont (boxed in $Captures via
   // $ExternBox). When fink fires the cont via _apply, the adapter
   // pulls the externref back out and calls host_invoke_cont(handle,
   // args). We hand JS *functions* in as handles, so dispatch is
   // a single call — no id table, no map.
+  //
+  // `host` lets the caller redirect stdout/stderr/panic — tests
+  // capture into arrays; the playground routes into a text field;
+  // a CLI host writes to process.std{out,err}. Defaults route to the
+  // global `console` and throw on panic.
+  const { stdout_write, stderr_write, panic } = { ...default_host, ...host };
+
+  // Forward decl — `host_channel_send` reads from linear memory, so it
+  // needs `exports` (set after instantiation). Fill it in below.
+  let exports;
+  const host_channel_send = (tag, ptr, len) => {
+    const bytes = new Uint8Array(exports.memory.buffer, ptr, len);
+    const text = text_decoder.decode(bytes);
+    // Tag matches js/interop.wat:_make_host_channel: 1 = stdout, 2 = stderr.
+    if (tag === 2) stderr_write(text);
+    else           stdout_write(text);
+  };
+
   const env = {
     host_resume:       () => {},
-    host_panic:        () => { throw new Error('host_panic'); },
+    host_panic:        panic,
     host_read:         (_a, _b, _c) => {},
-    host_channel_send: (_id, _ref) => {},
+    host_channel_send,
     host_invoke_cont:  (resolver, args) => resolver(args),
   };
 
   const { instance } = await WebAssembly.instantiate(bytes, { env });
-  const { exports } = instance;
+  exports = instance.exports;
+  const scratch = exports.SCRATCH_BASE.value;
 
   // Build helpers. `wrap` is mutually recursive with the proxy
   // builders (a list/rec/fn proxy yields wrapped children), so we
@@ -242,9 +269,9 @@ export const init_wasm = async (bytes) => {
   // — `wrap` reads through `deps.*` at call time, not at build time.
   const deps = {};
   deps.type_of      = make_type_of(exports);
-  deps.fink_bytes   = make_fink_bytes(exports);
-  deps.str_from_js  = make_str_from_js(exports);
-  deps.str_to_js    = make_str_to_js(exports);
+  deps.fink_bytes   = make_fink_bytes(exports, scratch);
+  deps.str_from_js  = make_str_from_js(exports, scratch);
+  deps.str_to_js    = make_str_to_js(exports, scratch);
   deps.wrap         = make_wrap(exports, deps);
   deps.list_iter    = make_list_iter(exports, deps);
   deps.list_at      = make_list_at(exports, deps);

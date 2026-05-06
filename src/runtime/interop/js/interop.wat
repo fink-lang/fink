@@ -86,11 +86,28 @@
     (func $rec_get_inner (param $rec (ref $RecImpl)) (param $key (ref eq))
       (result (ref null eq))))
 
+  ;; Async/scheduler — needed by channel_send to queue cont resumption
+  ;; and yield back to the scheduler.
+  (import "rt/apply.wat" "make_unit_thunk"
+    (func $make_unit_thunk (param $cont (ref any)) (result (ref $Closure))))
+  (import "rt/apply.wat" "make_thunk"
+    (func $make_thunk (param $cont (ref any)) (param $value (ref any)) (result (ref $Closure))))
+  (import "std/async.wat" "queue_push"
+    (func $queue_push (param $task (ref any))))
+  (import "std/async.wat" "resume"
+    (func $resume))
+
 
   ;; Host imports — stubbed by fink.js. Signatures must match
   ;; rust/interop.wat so runtime modules importing this contract see
   ;; the same shapes regardless of target.
-  (import "env" "host_channel_send" (func $host_channel_send (param i32) (param (ref null any))))
+  ;; host_channel_send(tag, ptr, len): JS reads `len` UTF-8 bytes
+  ;; starting at offset `ptr` in linear memory. Tag selects routing
+  ;; (1 = stdout/console.log, 2 = stderr/console.error). Differs from
+  ;; the rust-side import (which passes a $ByteArray ref) because JS
+  ;; can't read GC arrays directly — copying into linear memory first
+  ;; gives JS a TextDecoder-friendly window.
+  (import "env" "host_channel_send" (func $host_channel_send (param i32 i32 i32)))
   (import "env" "host_read"         (func $host_read         (param (ref any) (ref any) (ref any))))
   (import "env" "host_panic"        (func $host_panic))
   ;; host_invoke_cont: dispatch a JS-side cont. The first arg is the
@@ -145,6 +162,16 @@
   ;; bytes_from_js: returns the raw $ByteArray ref. JS hands this to the
   ;;   per-module host wrapper (which expects a $ByteArray key).
   ;; str_from_js: bytes_from_js + _str_wrap_bytes, returning a $Str ref.
+
+  ;; Scratch buffer offset for host<->wasm byte copying. Sits high in
+  ;; the first 64KB page so it doesn't collide with the user fragment's
+  ;; data segments (string literals etc., which start at offset 0). Both
+  ;; wat-side helpers and fink.js use this same offset for their
+  ;; transient buffers.
+  ;;
+  ;; If a single message is > 16KB (page_size - 0xC000 = 16KB) this will
+  ;; overflow the page; future work: grow memory dynamically or stream.
+  (global $SCRATCH_BASE (export "env:SCRATCH_BASE") i32 (i32.const 0xC000))
 
   (func $bytes_from_js (@pub) (export "env:bytes_from_js")
     (param $ptr i32) (param $len i32) (result (ref any))
@@ -373,7 +400,7 @@
 
   (type $ExternBox (sub final (struct (field externref))))
 
-  (elem declare func $host_cont_adapter)
+  (elem declare func $host_cont_adapter $panic_apply $write_apply)
 
   (func $host_cont_adapter (type $Fn2)
     (param $caps (ref null any))
@@ -400,11 +427,57 @@
         (struct.new $ExternBox (local.get $handle))))
   )
 
+  ;; -- channel_send (stdout/stderr) -------------------------------------
+  ;;
+  ;; Same shape as rust/interop.wat:channel_send: extract bytes from the
+  ;; $Str msg, read the channel tag (i31ref: 1 = stdout, 2 = stderr),
+  ;; hand to host, queue unit_thunk to resume sender, yield to scheduler.
+  ;;
+  ;; The host-side signature differs (linear-memory window vs. raw GC
+  ;; ByteArray) — see the host_channel_send import comment above. We
+  ;; copy the GC bytes into linear memory at offset 0 here so JS can
+  ;; decode via TextDecoder.
+
   (func $channel_send (@pub)
     (param $ch (ref null any))
     (param $msg (ref null any))
     (param $cont (ref null any))
-    unreachable)
+
+    (local $tag i32)
+    (local $bytes (ref $ByteArray))
+    (local $len i32)
+    (local $i i32)
+
+    ;; Extract raw bytes from the $Str.
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+    (local.set $len (array.len (local.get $bytes)))
+
+    ;; Read channel tag (i31ref).
+    (local.set $tag
+      (i31.get_s (ref.cast (ref i31)
+        (struct.get $Channel $tag
+          (ref.cast (ref $Channel) (local.get $ch))))))
+
+    ;; Copy bytes into linear memory at offset 0 — same window the
+    ;; str_to_js helper uses; reused on every send. JS reads it
+    ;; synchronously inside host_channel_send before this call returns.
+    (local.set $i (i32.const 0))
+    (block $done (loop $copy
+      (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
+      (i32.store8
+        (i32.add (global.get $SCRATCH_BASE) (local.get $i))
+        (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $copy)))
+
+    (call $host_channel_send (local.get $tag) (global.get $SCRATCH_BASE) (local.get $len))
+
+    ;; Sender continues with unit.
+    (call $queue_push
+      (call $make_unit_thunk (ref.as_non_null (local.get $cont))))
+
+    (return_call $resume))
 
   (func $op_read (@pub)
     (param $stream (ref null any))
@@ -420,19 +493,111 @@
     (param $_args (ref null any))
     unreachable)
 
+
+  ;; -- $HostChannel globals + accessors ----------------------------------
+  ;;
+  ;; Same lazy-init pattern as rust/interop.wat. Tags: 1 = stdout,
+  ;; 2 = stderr. stdin / read are still unimplemented for the JS side.
+
+  (global $stdout (mut (ref null $HostChannel)) (ref.null $HostChannel))
+  (global $stderr (mut (ref null $HostChannel)) (ref.null $HostChannel))
+
+  (func $_make_host_channel (param $tag i32) (result (ref $HostChannel))
+    (struct.new $HostChannel
+      (call $list_empty_inner)
+      (call $list_empty_inner)
+      (ref.i31 (local.get $tag))))
+
   (func $get_stdout (@pub) (@impl "std/io.fnk:stdout") (result (ref any))
-    unreachable)
+    (if (ref.is_null (global.get $stdout))
+      (then (global.set $stdout (call $_make_host_channel (i32.const 1)))))
+    (ref.as_non_null (global.get $stdout)))
 
   (func $get_stderr (@pub) (@impl "std/io.fnk:stderr") (result (ref any))
-    unreachable)
+    (if (ref.is_null (global.get $stderr))
+      (then (global.set $stderr (call $_make_host_channel (i32.const 2)))))
+    (ref.as_non_null (global.get $stderr)))
 
   (func $get_stdin (@pub) (@impl "std/io.fnk:stdin") (result (ref any))
     unreachable)
 
-  (func $get_read (@pub) (@impl "std/io.fnk:read") (result (ref any))
-    unreachable)
+
+  ;; -- write -----------------------------------------------------------
+  ;;
+  ;; `std/io.fnk:write` returns a $Closure applied as `write stream, val`.
+  ;; Sends `val` to the host stream tagged by `stream` and resumes the
+  ;; caller with `stream` (chainable: `s | write ?, 'a' | write ?, 'b'`).
+  ;;
+  ;; Same shape as channel_send but resumes with the stream (make_thunk)
+  ;; rather than unit (make_unit_thunk).
+
+  (func $channel_send_stream
+    (param $ch (ref null any))
+    (param $msg (ref null any))
+    (param $cont (ref null any))
+
+    (local $tag i32)
+    (local $bytes (ref $ByteArray))
+    (local $len i32)
+    (local $i i32)
+
+    (local.set $bytes
+      (call $str_bytes (ref.cast (ref $Str) (local.get $msg))))
+    (local.set $len (array.len (local.get $bytes)))
+
+    (local.set $tag
+      (i31.get_s (ref.cast (ref i31)
+        (struct.get $Channel $tag
+          (ref.cast (ref $Channel) (local.get $ch))))))
+
+    (local.set $i (i32.const 0))
+    (block $done (loop $copy
+      (br_if $done (i32.ge_s (local.get $i) (local.get $len)))
+      (i32.store8
+        (i32.add (global.get $SCRATCH_BASE) (local.get $i))
+        (array.get_u $ByteArray (local.get $bytes) (local.get $i)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $copy)))
+
+    (call $host_channel_send (local.get $tag) (global.get $SCRATCH_BASE) (local.get $len))
+
+    (call $queue_push
+      (call $make_thunk
+        (ref.as_non_null (local.get $cont))
+        (ref.as_non_null (local.get $ch))))
+
+    (return_call $resume))
+
+  (func $write_apply (type $Fn2)
+    (param $_caps (ref null any))
+    (param $args (ref null any))
+
+    (local $cursor (ref null any))
+    (local $cont (ref null any))
+    (local $stream (ref null any))
+    (local $value (ref null any))
+
+    (local.set $cursor (local.get $args))
+    (local.set $cont (call $list_head_any (local.get $cursor)))
+    (local.set $cursor (call $list_tail_any (local.get $cursor)))
+    (local.set $stream (call $list_head_any (local.get $cursor)))
+    (local.set $cursor (call $list_tail_any (local.get $cursor)))
+    (local.set $value (call $list_head_any (local.get $cursor)))
+
+    (return_call $channel_send_stream
+      (local.get $stream)
+      (local.get $value)
+      (local.get $cont)))
+
+  (global $write_closure (ref $Closure)
+    (struct.new $Closure
+      (ref.func $write_apply)
+      (ref.null $Captures)))
 
   (func $get_write (@pub) (@impl "std/io.fnk:write") (result (ref any))
+    (global.get $write_closure))
+
+  (func $get_read (@pub) (@impl "std/io.fnk:read") (result (ref any))
     unreachable)
 
 )
