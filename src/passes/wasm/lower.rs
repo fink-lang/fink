@@ -587,6 +587,12 @@ fn lower_expr(
       emit_op_tail_call(lcx, ctx, Sym::OpEmpty, vec![v_op], cont, expr.id);
     }
 
+    ExprKind::App { func: Callable::BuiltIn(BuiltIn::RangeFrom), args } => {
+      let (v, cont) = split_unary_args(args);
+      let v_op = emit_arg_as_operand(lcx, ctx, v);
+      emit_op_tail_call(lcx, ctx, Sym::OpRngFrom, vec![v_op], cont, expr.id);
+    }
+
     // Cooperative-multitasking + channels — all `(value, cont)` shape,
     // same as `BuiltIn::Not` / `BuiltIn::Empty`. Side effects happen in
     // the runtime function (queue manipulation, host channel I/O); the

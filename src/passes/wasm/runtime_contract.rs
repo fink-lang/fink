@@ -102,7 +102,7 @@ pub enum Sym {
   OpEq, OpNeq, OpLt, OpLte, OpGt, OpGte, OpDisjoint,
   OpAnd, OpOr, OpXor, OpNot,
   OpShl, OpShr, OpRotL, OpRotR,
-  OpRngex, OpRngin, OpIn, OpNotIn, OpDot,
+  OpRngex, OpRngin, OpRngFrom, OpIn, OpNotIn, OpDot,
   // Polymorphic predicate — same `(any, cont)` unary CPS shape as
   // OpNot. Used by `BuiltIn::Empty` and (future) other unary
   // predicates.
@@ -237,6 +237,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     // Range / membership / field-access (polymorphic)
     BuiltIn::Range     => &[Sym::OpRngex],
     BuiltIn::RangeIncl => &[Sym::OpRngin],
+    BuiltIn::RangeFrom => &[Sym::OpRngFrom],
     BuiltIn::In        => &[Sym::OpIn],
     BuiltIn::NotIn     => &[Sym::OpNotIn],
     BuiltIn::Get       => &[Sym::OpDot],
@@ -370,6 +371,7 @@ pub struct Runtime {
   op_rotr:    Option<FuncSym>,
   op_rngex:   Option<FuncSym>,
   op_rngin:   Option<FuncSym>,
+  op_rngfrom: Option<FuncSym>,
   op_in:      Option<FuncSym>,
   op_notin:   Option<FuncSym>,
   op_dot:     Option<FuncSym>,
@@ -456,8 +458,9 @@ impl Runtime {
       Sym::OpShr    => self.op_shr,
       Sym::OpRotL   => self.op_rotl,
       Sym::OpRotR   => self.op_rotr,
-      Sym::OpRngex  => self.op_rngex,
-      Sym::OpRngin  => self.op_rngin,
+      Sym::OpRngex    => self.op_rngex,
+      Sym::OpRngin    => self.op_rngin,
+      Sym::OpRngFrom  => self.op_rngfrom,
       Sym::OpIn     => self.op_in,
       Sym::OpNotIn  => self.op_notin,
       Sym::OpDot    => self.op_dot,
@@ -558,6 +561,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
 
     Sym::OpRngex         => "std/range.fnk:excl",
     Sym::OpRngin         => "std/range.fnk:incl",
+    Sym::OpRngFrom       => "std/range.fnk:from",
 
     Sym::StrFromData     => "std/str.fnk:from_data",
     Sym::StrEmpty        => "std/str.fnk:str_empty",
@@ -733,7 +737,7 @@ const BINARY_OPS: &[Sym] = &[
 ];
 
 /// All unary-protocol Syms — share `Fn_op_unary` signature.
-const UNARY_OPS: &[Sym] = &[Sym::OpNot, Sym::OpEmpty];
+const UNARY_OPS: &[Sym] = &[Sym::OpNot, Sym::OpEmpty, Sym::OpRngFrom];
 
 /// Scheduling / channel primitives — all `(any, any) -> ()` shape,
 /// same as `Fn_op_unary`. Distinct from operator unaries because they
@@ -805,8 +809,9 @@ fn set_op(rt: &mut Runtime, sym: Sym, f: FuncSym) {
     Sym::OpShr    => &mut rt.op_shr,
     Sym::OpRotL   => &mut rt.op_rotl,
     Sym::OpRotR   => &mut rt.op_rotr,
-    Sym::OpRngex  => &mut rt.op_rngex,
-    Sym::OpRngin  => &mut rt.op_rngin,
+    Sym::OpRngex    => &mut rt.op_rngex,
+    Sym::OpRngin    => &mut rt.op_rngin,
+    Sym::OpRngFrom  => &mut rt.op_rngfrom,
     Sym::OpIn     => &mut rt.op_in,
     Sym::OpNotIn  => &mut rt.op_notin,
     Sym::OpDot    => &mut rt.op_dot,

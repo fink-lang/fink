@@ -46,7 +46,7 @@
 
   (type $RangeImpl (sub $Range (struct
     (field $start (ref $I64))
-    (field $end   (ref $I64))
+    (field $end   (ref null $I64))
     (field $incl  i32)
   )))
 
@@ -75,6 +75,17 @@
     )
   )
 
+  ;; range_from(start) → open-end range; end is null, incl irrelevant.
+  (func $from (@pub)
+    (param $start (ref $I64))
+    (result (ref $Range))
+    (struct.new $RangeImpl
+      (local.get $start)
+      (ref.null $I64)
+      (i32.const 0)
+    )
+  )
+
 
   ;; -- Membership -----------------------------------------------------------
 
@@ -88,6 +99,7 @@
     (param $val (ref $I64)) (param $range (ref $Range))
     (result i32)
     (local $impl (ref $RangeImpl))
+    (local $end_ref (ref null $I64))
     (local $v i64)
     (local $s i64)
     (local $e i64)
@@ -96,12 +108,19 @@
 
     (local.set $v (struct.get $I64 $ival (local.get $val)))
     (local.set $s (struct.get $I64 $ival (struct.get $RangeImpl $start (local.get $impl))))
-    (local.set $e (struct.get $I64 $ival (struct.get $RangeImpl $end (local.get $impl))))
 
     ;; start <= val
     (if (i32.eqz (i64.le_s (local.get $s) (local.get $v)))
       (then (return (i32.const 0)))
     )
+
+    ;; Open-end: end is null, no upper bound check.
+    (local.set $end_ref (struct.get $RangeImpl $end (local.get $impl)))
+    (if (ref.is_null (local.get $end_ref))
+      (then (return (i32.const 1)))
+    )
+
+    (local.set $e (struct.get $I64 $ival (ref.as_non_null (local.get $end_ref))))
 
     ;; Exclusive: val < end.  Inclusive: val <= end.
     (if (struct.get $RangeImpl $incl (local.get $impl))
@@ -127,10 +146,10 @@
     (struct.get $RangeImpl $start
       (ref.cast (ref $RangeImpl) (local.get $range))))
 
-  ;; end(range) → end bound as $I64
+  ;; end(range) → end bound as $I64, or null for open-end.
   (func $end (@pub)
     (param $range (ref $Range))
-    (result (ref $I64))
+    (result (ref null $I64))
     (struct.get $RangeImpl $end
       (ref.cast (ref $RangeImpl) (local.get $range))))
 
@@ -163,10 +182,18 @@
         (ref.cast (ref $I64) (local.get $b)))
       (local.get $cont)))
 
+  (func $cps_from (@pub) (@impl "std/range.fnk:from")
+    (param $a (ref null any)) (param $cont (ref null any))
+    (return_call $list_apply_1
+      (call $from
+        (ref.cast (ref $I64) (local.get $a)))
+      (local.get $cont)))
+
   ;; Format a $Range as "start..end" (exclusive) or "start...end"
   ;; (inclusive). Bounds rendered via int.wat:fmt; bytes are
   ;; concatenated locally and wrapped via str.wat:from_bytes.
   (func $fmt (@pub) (@impl "std/str.fnk:fmt" $Range) (param $range (ref $Range)) (result (ref $Str))
+    (local $end_ref (ref null $I64))
     (local $start_str (ref $Str))
     (local $end_str (ref $Str))
     (local $start_bytes (ref $ByteArray))
@@ -180,18 +207,26 @@
     (local $i i32)
 
     (local.set $start_str (call $int_fmt (call $start (local.get $range))))
-    (local.set $end_str   (call $int_fmt (call $end   (local.get $range))))
-
     (local.set $start_bytes (call $str_bytes (local.get $start_str)))
-    (local.set $end_bytes   (call $str_bytes (local.get $end_str)))
     (local.set $start_len (array.len (local.get $start_bytes)))
-    (local.set $end_len   (array.len (local.get $end_bytes)))
 
-    ;; Dot count: 2 for exclusive, 3 for inclusive.
-    (local.set $dot_len
-      (if (result i32) (call $is_incl (local.get $range))
-        (then (i32.const 3))
-        (else (i32.const 2))))
+    ;; Default: empty end (open-end). Overwritten if range has end bound.
+    (local.set $end_bytes (array.new $ByteArray (i32.const 0) (i32.const 0)))
+    (local.set $end_len (i32.const 0))
+    (local.set $dot_len (i32.const 2))
+
+    (local.set $end_ref (call $end (local.get $range)))
+    (if (ref.is_null (local.get $end_ref))
+      (then)
+      (else
+        (local.set $end_str (call $int_fmt (ref.as_non_null (local.get $end_ref))))
+        (local.set $end_bytes (call $str_bytes (local.get $end_str)))
+        (local.set $end_len (array.len (local.get $end_bytes)))
+        ;; Dot count: 2 for exclusive, 3 for inclusive.
+        (local.set $dot_len
+          (if (result i32) (call $is_incl (local.get $range))
+            (then (i32.const 3))
+            (else (i32.const 2))))))
 
     (local.set $total
       (i32.add (i32.add (local.get $start_len) (local.get $dot_len))

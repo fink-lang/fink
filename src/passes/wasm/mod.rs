@@ -352,6 +352,7 @@ mod tests {
 
   test_macros::include_fink_tests!("src/passes/wasm/test_literals.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_operators.fnk", skip-ir);
+  test_macros::include_fink_tests!("src/passes/wasm/test_range.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_bindings.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_functions.fnk", skip-ir);
   test_macros::include_fink_tests!("src/passes/wasm/test_tasks.fnk", skip-ir);
