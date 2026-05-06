@@ -23,7 +23,7 @@ test 'literal bool', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -32,7 +32,7 @@ test 'literal bool', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQAEWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQAEWgBuALoBAIQHAJYBAL4BAMABAIQBAPoBAA
 
 
 test 'literal bool false', fn:
@@ -56,7 +56,7 @@ test 'literal bool false', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -65,7 +65,7 @@ test 'literal bool false', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQAFWgBuALoBAIQHAIoBAL4BAMABAIQBAPoBAA
+    ;; sm:C8IDAJIBAQAFWgBuALoBAIQHAJYBAL4BAMABAIQBAPoBAA
 
 
 test 'literal int', fn:
@@ -89,7 +89,7 @@ test 'literal int', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -98,7 +98,7 @@ test 'literal int', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQAChAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAChAEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'literal neg 0', fn:
@@ -122,7 +122,7 @@ test 'literal neg 0', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -131,7 +131,7 @@ test 'literal neg 0', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQACggEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQACggEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 
@@ -156,7 +156,7 @@ test 'literal float', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -165,7 +165,7 @@ test 'literal float', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQAIkAEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAIkAEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 test 'literal decimal', fn:
@@ -189,7 +189,7 @@ test 'literal decimal', fn:
         (local $:wrap_key_str (ref null any))
         (local $:wrap_caps_arg (ref null $rt/apply.wat:Captures))
         (local $:wrap_mod_clos (ref null any))
-        (local.set $:wrap_url (call $std/str.fnk:str (data.ref $d_0 4)))
+        (local.set $:wrap_url (call $std/str.fnk:from_data (data.ref $d_0 4)))
         (local.set $:wrap_cont (call $interop/rust.wat:wrap_host_cont (local.get $:wrap_cont_id)))
         (local.set $:wrap_key_str (call $std/str.wat:_str_wrap_bytes (local.get $:wrap_key_bytes)))
         (local.set $:wrap_caps_arg (ref.null $rt/apply.wat:Captures))
@@ -198,7 +198,7 @@ test 'literal decimal', fn:
       )
       (data $d_0 "test")
     )
-    ;; sm:C8IDAJIBAQAEsgEAbgC6AQCEBwCKAQC-AQDAAQCEAQD6AQA
+    ;; sm:C8IDAJIBAQAEsgEAbgC6AQCEBwCWAQC-AQDAAQCEAQD6AQA
 
 
 

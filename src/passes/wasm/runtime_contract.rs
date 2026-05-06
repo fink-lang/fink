@@ -125,9 +125,9 @@ pub enum Sym {
   // same. RecPop has a different 4-arg shape; not yet wired.
   IsSeqLike, IsRecLike,
   SeqPop, SeqPopBack,
-  // String construction. `Str` wraps a data-section pointer:
-  //   `str(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
-  Str, StrEmpty,
+  // String construction. `StrFromData` wraps a data-section pointer:
+  //   `from_data(offset, len) -> $Str`. `StrEmpty` is a singleton constant.
+  StrFromData, StrEmpty,
   // Polymorphic string formatter — `(varargs, cont)` where varargs
   // is a `$VarArgs` array of segment values. Same shape as
   // `Fn_op_unary`. Used by `BuiltIn::StrFmt` for `'${...}'` templates.
@@ -275,13 +275,13 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     // `·ƒpub name, val, cont` lowers inline to `global.set $<fqn>:<name>`
     // plus a direct call to `std/modules.fnk:pub (<fqn>, <name>, val)`
     // plus the cont continuation. The url + name strings are interned
-    // at lowering time, so `Sym::Str` is needed to materialise them.
-    BuiltIn::Pub        => &[Sym::ModulesPub, Sym::Str],
+    // at lowering time, so `Sym::StrFromData` is needed to materialise them.
+    BuiltIn::Pub        => &[Sym::ModulesPub, Sym::StrFromData],
     // Import has two lowering paths:
     //
     //   - Virtual stdlib (`std/io.fnk` etc.): per-name `<url>:<name>`
     //     accessor calls + inline rec build. Needs `RecEmpty`,
-    //     `RecSetField`, `Str`.
+    //     `RecSetField`, `StrFromData`.
     //   - User fragment (`./foo.fnk`): tail-call `std/modules.fnk:import`
     //     with [url_str, mod_clos, cont]. The mod_clos is a no-capture
     //     `$Closure` over the producer's `<url>:fink_module`, built
@@ -291,7 +291,7 @@ fn syms_for_builtin(b: BuiltIn) -> &'static [Sym] {
     // (the URL string is a Lit::Str arg, not a Sym). Unused imports
     // are harmless — the runtime side is small.
     BuiltIn::Import     => &[
-      Sym::RecEmpty, Sym::RecSetField, Sym::Str,
+      Sym::RecEmpty, Sym::RecSetField, Sym::StrFromData,
       Sym::ModulesImport, Sym::Closure, Sym::Captures,
     ],
     // Closure construction needs both $Closure struct + $Captures array types.
@@ -365,7 +365,7 @@ pub struct Runtime {
   seq_pop:     Option<FuncSym>,
   seq_pop_back: Option<FuncSym>,
   // string constructors
-  str_:         Option<FuncSym>,
+  str_from_data: Option<FuncSym>,
   str_empty:    Option<FuncSym>,
   // 4-arg rec primitives.
   rec_put:      Option<FuncSym>,
@@ -416,7 +416,7 @@ impl Runtime {
   pub fn args_empty(&self)   -> FuncSym { self.args_empty.expect("rt: args_empty not declared") }
   pub fn args_prepend(&self) -> FuncSym { self.args_prepend.expect("rt: args_prepend not declared") }
   pub fn args_concat(&self)  -> FuncSym { self.args_concat.expect("rt: args_concat not declared") }
-  pub fn str_(&self)         -> FuncSym { self.str_.expect("rt: str not declared") }
+  pub fn str_from_data(&self) -> FuncSym { self.str_from_data.expect("rt: str_from_data not declared") }
   pub fn str_empty(&self)    -> FuncSym { self.str_empty.expect("rt: str_empty not declared") }
   pub fn rec_put(&self)      -> FuncSym { self.rec_put.expect("rt: rec_put not declared") }
   pub fn modules_pub(&self)    -> FuncSym { self.modules_pub.expect("rt: modules_pub not declared") }
@@ -583,7 +583,7 @@ pub(super) fn import_key(sym: Sym) -> &'static str {
     Sym::OpRngex         => "std/range.fnk:excl",
     Sym::OpRngin         => "std/range.fnk:incl",
 
-    Sym::Str             => "std/str.fnk:str",
+    Sym::StrFromData     => "std/str.fnk:from_data",
     Sym::StrEmpty        => "std/str.fnk:str_empty",
     Sym::StrFmt          => "std/str.fnk:fmt",
     Sym::StrMatch        => "std/str.fnk:match",
@@ -700,7 +700,7 @@ pub fn declare(frag: &mut Fragment, usage: &RuntimeUsage) -> Runtime {
     }
   }
 
-  if needed.contains(&Sym::Str)      { rt.str_      = Some(FuncSym::Runtime(Sym::Str)); }
+  if needed.contains(&Sym::StrFromData) { rt.str_from_data = Some(FuncSym::Runtime(Sym::StrFromData)); }
   if needed.contains(&Sym::StrEmpty) { rt.str_empty = Some(FuncSym::Runtime(Sym::StrEmpty)); }
   if needed.contains(&Sym::StrFmt)   { rt.str_fmt   = Some(FuncSym::Runtime(Sym::StrFmt)); }
   if needed.contains(&Sym::StrMatch) { rt.str_match = Some(FuncSym::Runtime(Sym::StrMatch)); }
@@ -1091,7 +1091,7 @@ fn scan_val_kind(kind: &ValKind, usage: &mut RuntimeUsage) {
     }
     ValKind::Lit(Lit::Str(s)) => {
       if s.is_empty() { usage.mark(Sym::StrEmpty); }
-      else            { usage.mark(Sym::Str); }
+      else            { usage.mark(Sym::StrFromData); }
     }
     ValKind::Lit(Lit::Rec) => {
       usage.mark(Sym::RecEmpty);
