@@ -467,7 +467,7 @@ mod tests {
         )
         .collect();
 
-    let out = crate::passes::wasm::emit::emit_with_offsets(&pkg.fragment);
+    let out = crate::passes::wasm::emit::emit_with_offsets(&pkg.fragment, crate::passes::wasm::emit::Interop::Rust);
 
     // Every offset key must correspond to a tagged instr.
     for k in out.instr_offsets.keys() {
@@ -498,7 +498,7 @@ mod tests {
     let src = "main = fn: 42";
     let mut loader = InMemorySourceLoader::single("main.fnk", src);
     let pkg = compile_package(Path::new("main.fnk"), &mut loader).unwrap();
-    let emit_out = crate::passes::wasm::emit::emit_with_offsets(&pkg.fragment);
+    let emit_out = crate::passes::wasm::emit::emit_with_offsets(&pkg.fragment, crate::passes::wasm::emit::Interop::Rust);
     let (marks, mappings) = finalize_marks(&pkg, &emit_out);
 
     assert!(!marks.is_empty(),

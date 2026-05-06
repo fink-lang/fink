@@ -1,0 +1,8 @@
+foo = fn a, b:
+  a + b
+
+
+bar = fn a:
+  a
+
+42

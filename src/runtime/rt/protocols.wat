@@ -33,7 +33,7 @@
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))
   (import "std/range.wat"    "Range"       (type $Range       (sub any)))
   (import "std/channel.wat"  "Channel"     (type $Channel     (sub any)))
-  (import "interop/rust.wat" "HostChannel" (type $HostChannel (sub any)))
+  (import "interop.wat" "HostChannel" (type $HostChannel (sub any)))
 
   ;; Func imports — list helpers
   (import "rt/apply.wat" "apply_0"
@@ -111,8 +111,8 @@
   (import "std/channel.wat" "receive" (func $channel_receive (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — interop (host bridge)
-  (import "interop/rust.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any))))
-  (import "interop/rust.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "interop.wat" "channel_send" (func $interop_channel_send (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "interop.wat" "op_read"      (func $interop_op_read      (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; =========================================================================
   ;; Arithmetic: unbox two $Num, f64 op, box result → _apply([result], cont)

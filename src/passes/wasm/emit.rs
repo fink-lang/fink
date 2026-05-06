@@ -70,11 +70,10 @@ pub struct EmitOutput {
 /// top of `emit_fragment`). `Runtime(sym)` consults the runtime's
 /// type-name table — runtime types live at fixed indices in the
 /// merged binary, no per-fragment remap needed.
-fn resolve_type(sym: TypeSym, type_remap: &[u32]) -> u32 {
+fn resolve_type(rt: &Runtime, sym: TypeSym, type_remap: &[u32]) -> u32 {
   match sym {
     TypeSym::Local(i) => type_remap[i as usize],
     TypeSym::Runtime(s) => {
-      let rt = runtime();
       let key = import_key(s);
       rt.type_by_name.get(key).copied()
         .unwrap_or_else(|| panic!(
@@ -88,11 +87,10 @@ fn resolve_type(sym: TypeSym, type_remap: &[u32]) -> u32 {
 ///
 /// `Local(i)` consults the per-fragment `func_remap`. `Runtime(sym)`
 /// consults the runtime's export-by-name table.
-fn resolve_func(sym: FuncSym, func_remap: &[u32]) -> u32 {
+fn resolve_func(rt: &Runtime, sym: FuncSym, func_remap: &[u32]) -> u32 {
   match sym {
     FuncSym::Local(i) => func_remap[i as usize],
     FuncSym::Runtime(s) => {
-      let rt = runtime();
       let key = import_key(s);
       *rt.func_by_name.get(key)
         .unwrap_or_else(|| panic!(
@@ -108,8 +106,16 @@ fn resolve_func(sym: FuncSym, func_remap: &[u32]) -> u32 {
 
 /// Reverse of `runtime().func_by_name`: index → qualified name. Used
 /// by the public `annotate_func_indices` error helper.
+///
+/// Hardcoded to `Interop::Rust` — the annotator runs against names
+/// recovered from the binary itself, with this table only used as
+/// fallback for indices the binary doesn't name. Callers (runner,
+/// DAP) only ever annotate Rust-target binaries; JS-target binaries
+/// run in the browser, not through these paths. The qualified names
+/// (`<virtual-module>:<func>`) are interop-agnostic anyway, so the
+/// choice is mostly cosmetic.
 pub fn runtime_func_names() -> HashMap<u32, String> {
-  let rt = runtime();
+  let rt = runtime(Interop::Rust);
   rt.func_by_name.iter()
     .filter(|(name, _)| name.contains(".wat:"))  // skip fnk-fqn aliases
     .map(|(name, &idx)| (idx, name.clone()))
@@ -118,9 +124,10 @@ pub fn runtime_func_names() -> HashMap<u32, String> {
 
 /// The raw merged-runtime wasm bytes — same bytes produced by the
 /// linker + wat_crate at first use. Used by the error annotator to
-/// resolve byte offsets back to WAT lines via wasmprinter.
+/// resolve byte offsets back to WAT lines via wasmprinter. Hardcoded
+/// to `Interop::Rust` — see `runtime_func_names` for rationale.
 pub fn runtime_wasm_bytes() -> &'static [u8] {
-  &linked_runtime().bytes
+  &linked_runtime(Interop::Rust).bytes
 }
 
 struct LinkedRuntime {
@@ -128,11 +135,30 @@ struct LinkedRuntime {
   impls: HashMap<String, String>,
 }
 
-fn linked_runtime() -> &'static LinkedRuntime {
-  static CELL: OnceLock<LinkedRuntime> = OnceLock::new();
-  CELL.get_or_init(|| {
+/// Which host-bridge implementation to splice in under the virtual
+/// `interop.wat` module key. Selected by the CLI's `--target` flag:
+/// `wasm` → `Rust`, `wasm+js` → `Js`. Every other runtime module is
+/// shared across variants.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum Interop {
+  Rust,
+  Js,
+}
+
+fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
+  static RUST: OnceLock<LinkedRuntime> = OnceLock::new();
+  static JS:   OnceLock<LinkedRuntime> = OnceLock::new();
+  let cell = match interop {
+    Interop::Rust => &RUST,
+    Interop::Js   => &JS,
+  };
+  cell.get_or_init(|| {
+    let interop_src = match interop {
+      Interop::Rust => include_str!("../../runtime/interop/rust/interop.wat"),
+      Interop::Js   => include_str!("../../runtime/interop/js/interop.wat"),
+    };
     let modules: &[(&str, &str)] = &[
-      ("interop/rust.wat", include_str!("../../runtime/interop/rust.wat")),
+      ("interop.wat",      interop_src),
       ("rt/apply.wat",     include_str!("../../runtime/rt/apply.wat")),
       ("rt/modules.wat",   include_str!("../../runtime/rt/modules.wat")),
       ("rt/protocols.wat", include_str!("../../runtime/rt/protocols.wat")),
@@ -160,10 +186,15 @@ fn linked_runtime() -> &'static LinkedRuntime {
   })
 }
 
-fn runtime() -> &'static Runtime {
-  static CELL: OnceLock<Runtime> = OnceLock::new();
-  CELL.get_or_init(|| {
-    let lr = linked_runtime();
+fn runtime(interop: Interop) -> &'static Runtime {
+  static RUST: OnceLock<Runtime> = OnceLock::new();
+  static JS:   OnceLock<Runtime> = OnceLock::new();
+  let cell = match interop {
+    Interop::Rust => &RUST,
+    Interop::Js   => &JS,
+  };
+  cell.get_or_init(|| {
+    let lr = linked_runtime(interop);
     parse_runtime(&lr.bytes, &lr.impls)
   })
 }
@@ -471,14 +502,14 @@ fn convert_field(f: &wasmparser::FieldType) -> FieldType {
 
 /// Emit a linked user Fragment as a final standalone WASM binary,
 /// with runtime-ir.wasm spliced in as the prefix.
-pub fn emit(frag: &Fragment) -> Vec<u8> {
-  emit_with_offsets(frag).binary
+pub fn emit(frag: &Fragment, interop: Interop) -> Vec<u8> {
+  emit_with_offsets(frag, interop).binary
 }
 
 /// Variant of [`emit`] that also returns the per-InstrId absolute byte
 /// offset table. Used by Section 5's finalize step.
-pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
-  let rt = runtime();
+pub fn emit_with_offsets(frag: &Fragment, interop: Interop) -> EmitOutput {
+  let rt = runtime(interop);
 
 
   // ── resolve user type imports + plan local-type indices ──────
@@ -555,8 +586,8 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
   for (_, ty) in &user_local_types {
     match &ty.kind {
       TypeKind::Func { params, results } => {
-        let we_params: Vec<WEValType> = params.iter().map(|v| val_from_ir(v, &type_remap)).collect();
-        let we_results: Vec<WEValType> = results.iter().map(|v| val_from_ir(v, &type_remap)).collect();
+        let we_params: Vec<WEValType> = params.iter().map(|v| val_from_ir(rt, v, &type_remap)).collect();
+        let we_results: Vec<WEValType> = results.iter().map(|v| val_from_ir(rt, v, &type_remap)).collect();
         type_sec.ty().function(we_params, we_results);
       }
       _ => panic!("emit: only locally-declared func types supported (got {:?})", ty.kind),
@@ -573,7 +604,7 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
     func_sec.function(sig);
   }
   for (_, f) in &user_local_funcs {
-    func_sec.function(resolve_type(f.sig, &type_remap));
+    func_sec.function(resolve_type(rt, f.sig, &type_remap));
   }
 
   // Memory: runtime has none; user fragment brings one page.
@@ -603,14 +634,14 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
     // concatenate with runtime's body.
     let mut user_bytes: Vec<u8> = Vec::new();
     for g in &frag.globals {
-      let ty = val_from_ir(&g.ty, &type_remap);
+      let ty = val_from_ir(rt, &g.ty, &type_remap);
       let init = match &g.init {
         GlobalInit::RefNull(ht) => ConstExpr::ref_null(HeapType::Abstract {
           shared: false,
           ty: abs_heap_ir(*ht),
         }),
-        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(resolve_type(*ts, &type_remap))),
-        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(resolve_func(*fs, &func_remap)),
+        GlobalInit::RefNullConcrete(ts) => ConstExpr::ref_null(HeapType::Concrete(resolve_type(rt, *ts, &type_remap))),
+        GlobalInit::RefFunc(fs) => ConstExpr::ref_func(resolve_func(rt, *fs, &func_remap)),
         GlobalInit::I32Const(v) => ConstExpr::i32_const(*v),
         GlobalInit::F64Const(v) => ConstExpr::f64_const((*v).into()),
       };
@@ -701,7 +732,7 @@ pub fn emit_with_offsets(frag: &Fragment) -> EmitOutput {
   let mut user_body_offsets: Vec<(u32, Vec<(InstrId, u32)>)> = Vec::new();
   for (orig_idx, f) in &user_local_funcs {
     let final_idx = func_remap[*orig_idx as usize];
-    let (func, body_offsets) = emit_func(frag, f, &type_remap, &func_remap, user_global_base, &data_offsets);
+    let (func, body_offsets) = emit_func(rt, frag, f, &type_remap, &func_remap, user_global_base, &data_offsets);
     code_sec.function(&func);
     user_body_offsets.push((final_idx, body_offsets));
   }
@@ -867,6 +898,7 @@ fn resolve_abs_offsets(
 // ──────────────────────────────────────────────────────────────────
 
 fn emit_func(
+  rt: &Runtime,
   frag: &Fragment,
   f: &FuncDecl,
   type_remap: &[u32],
@@ -876,7 +908,7 @@ fn emit_func(
 ) -> (Function, Vec<(InstrId, u32)>) {
   let mut locals: Vec<(u32, WEValType)> = Vec::new();
   for l in &f.locals {
-    locals.push((1, val_from_ir(&l.ty, type_remap)));
+    locals.push((1, val_from_ir(rt, &l.ty, type_remap)));
   }
   let mut func = Function::new(locals);
   // Body-relative offset per InstrId — only recorded for instructions
@@ -890,13 +922,14 @@ fn emit_func(
     if instr.cps_id.is_some() {
       body_offsets.push((id, func.byte_len() as u32));
     }
-    emit_instr(&mut func, frag, instr, type_remap, func_remap, user_global_base, data_offsets);
+    emit_instr(rt, &mut func, frag, instr, type_remap, func_remap, user_global_base, data_offsets);
   }
   func.instruction(&Instruction::End);
   (func, body_offsets)
 }
 
 fn emit_instr(
+  rt: &Runtime,
   func: &mut Function,
   frag: &Fragment,
   instr: &Instr,
@@ -907,67 +940,67 @@ fn emit_instr(
 ) {
   match &instr.kind {
     InstrKind::LocalSet { idx, src } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::LocalSet(idx.0));
     }
     InstrKind::GlobalSet { sym, src } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::GlobalSet(user_global_base + sym.0));
     }
     InstrKind::StructNew { ty, fields, into } => {
       for fld in fields {
-        emit_operand(func, fld, type_remap, func_remap, user_global_base, data_offsets);
+        emit_operand(rt, func, fld, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::StructNew(resolve_type(*ty, type_remap)));
+      func.instruction(&Instruction::StructNew(resolve_type(rt, *ty, type_remap)));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::Call { target, args, into } => {
       for a in args {
-        emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
+        emit_operand(rt, func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::Call(resolve_func(*target, func_remap)));
+      func.instruction(&Instruction::Call(resolve_func(rt, *target, func_remap)));
       if let Some(l) = into {
         func.instruction(&Instruction::LocalSet(l.0));
       }
     }
     InstrKind::ReturnCall { target, args } => {
       for a in args {
-        emit_operand(func, a, type_remap, func_remap, user_global_base, data_offsets);
+        emit_operand(rt, func, a, type_remap, func_remap, user_global_base, data_offsets);
       }
-      func.instruction(&Instruction::ReturnCall(resolve_func(*target, func_remap)));
+      func.instruction(&Instruction::ReturnCall(resolve_func(rt, *target, func_remap)));
     }
     InstrKind::RefI31 { src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::RefI31);
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefFunc { func: fsym, into } => {
-      func.instruction(&Instruction::RefFunc(resolve_func(*fsym, func_remap)));
+      func.instruction(&Instruction::RefFunc(resolve_func(rt, *fsym, func_remap)));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefNullConcrete { ty, into } => {
-      func.instruction(&Instruction::RefNull(HeapType::Concrete(resolve_type(*ty, type_remap))));
+      func.instruction(&Instruction::RefNull(HeapType::Concrete(resolve_type(rt, *ty, type_remap))));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNull { ty, src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(resolve_type(*ty, type_remap))));
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::RefCastNonNull(HeapType::Concrete(resolve_type(rt, *ty, type_remap))));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::ArrayNewFixed { ty, size, elems, into } => {
       for e in elems {
-        emit_operand(func, e, type_remap, func_remap, user_global_base, data_offsets);
+        emit_operand(rt, func, e, type_remap, func_remap, user_global_base, data_offsets);
       }
       func.instruction(&Instruction::ArrayNewFixed {
-        array_type_index: resolve_type(*ty, type_remap),
+        array_type_index: resolve_type(rt, *ty, type_remap),
         array_size: *size,
       });
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::ArrayGet { ty, arr, idx, into } => {
-      emit_operand(func, arr, type_remap, func_remap, user_global_base, data_offsets);
-      emit_operand(func, idx, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::ArrayGet(resolve_type(*ty, type_remap)));
+      emit_operand(rt, func, arr, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, idx, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::ArrayGet(resolve_type(rt, *ty, type_remap)));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefNull { ht, into } => {
@@ -978,17 +1011,17 @@ fn emit_instr(
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::I31GetS { src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::I31GetS);
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNullable { ty, src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
-      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(resolve_type(*ty, type_remap))));
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
+      func.instruction(&Instruction::RefCastNullable(HeapType::Concrete(resolve_type(rt, *ty, type_remap))));
       func.instruction(&Instruction::LocalSet(into.0));
     }
     InstrKind::RefCastNonNullAbs { ht, src, into } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::RefCastNonNull(HeapType::Abstract {
         shared: false,
         ty: abs_heap_ir(*ht),
@@ -997,16 +1030,16 @@ fn emit_instr(
     }
     InstrKind::If { cond, then_body, else_body } => {
       // cond is a leaf operand evaluating to i32.
-      emit_operand(func, cond, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, cond, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
       for id in then_body {
-        emit_instr(func, frag, &frag.instrs[id.0 as usize],
+        emit_instr(rt, func, frag, &frag.instrs[id.0 as usize],
           type_remap, func_remap, user_global_base, data_offsets);
       }
       if !else_body.is_empty() {
         func.instruction(&Instruction::Else);
         for id in else_body {
-          emit_instr(func, frag, &frag.instrs[id.0 as usize],
+          emit_instr(rt, func, frag, &frag.instrs[id.0 as usize],
             type_remap, func_remap, user_global_base, data_offsets);
         }
       }
@@ -1016,13 +1049,14 @@ fn emit_instr(
       func.instruction(&Instruction::Unreachable);
     }
     InstrKind::Drop { src } => {
-      emit_operand(func, src, type_remap, func_remap, user_global_base, data_offsets);
+      emit_operand(rt, func, src, type_remap, func_remap, user_global_base, data_offsets);
       func.instruction(&Instruction::Drop);
     }
   }
 }
 
 fn emit_operand(
+  rt: &Runtime,
   func: &mut Function,
   op: &Operand,
   _type_remap: &[u32],
@@ -1039,7 +1073,7 @@ fn emit_operand(
       func.instruction(&Instruction::GlobalGet(user_global_base + sym.0));
     }
     Operand::RefFunc(fsym) => {
-      func.instruction(&Instruction::RefFunc(resolve_func(*fsym, func_remap)));
+      func.instruction(&Instruction::RefFunc(resolve_func(rt, *fsym, func_remap)));
     }
     Operand::RefNull(ht) => {
       func.instruction(&Instruction::RefNull(HeapType::Abstract {
@@ -1066,7 +1100,7 @@ fn abs_heap_ir(h: AbsHeap) -> AbstractHeapType {
   }
 }
 
-fn val_from_ir(v: &ValType, type_remap: &[u32]) -> WEValType {
+fn val_from_ir(rt: &Runtime, v: &ValType, type_remap: &[u32]) -> WEValType {
   match v {
     ValType::I32 => WEValType::I32,
     ValType::F64 => WEValType::F64,
@@ -1076,7 +1110,7 @@ fn val_from_ir(v: &ValType, type_remap: &[u32]) -> WEValType {
     }),
     ValType::RefConcrete { nullable, ty } => WEValType::Ref(RefType {
       nullable: *nullable,
-      heap_type: HeapType::Concrete(resolve_type(*ty, type_remap)),
+      heap_type: HeapType::Concrete(resolve_type(rt, *ty, type_remap)),
     }),
   }
 }
@@ -1111,4 +1145,33 @@ fn decode_leb_u32_prefix(raw: &[u8]) -> (u32, &[u8]) {
     }
   }
   panic!("emit: truncated LEB128");
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn js_runtime_links() {
+    let lr = linked_runtime(Interop::Js);
+    assert!(!lr.bytes.is_empty(), "JS runtime should link to non-empty bytes");
+  }
+
+  #[test]
+  fn js_runtime_exports_i31_helpers() {
+    let lr = linked_runtime(Interop::Js);
+    let parser = wasmparser::Parser::new(0);
+    let mut found_i31_to = false;
+    let mut found_i31_from = false;
+    for payload in parser.parse_all(&lr.bytes) {
+      if let Ok(wasmparser::Payload::ExportSection(reader)) = payload {
+        for exp in reader.into_iter().flatten() {
+          if exp.name == "i31_to_js"   { found_i31_to   = true; }
+          if exp.name == "i31_from_js" { found_i31_from = true; }
+        }
+      }
+    }
+    assert!(found_i31_to,   "i31_to_js export missing");
+    assert!(found_i31_from, "i31_from_js export missing");
+  }
 }

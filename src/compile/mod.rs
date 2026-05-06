@@ -27,9 +27,16 @@ const MAGIC: &[u8; 8] = b"f1nkw4sm";
 /// cargo's $TARGET env var.
 const HOST_TARGET: &str = env!("TARGET");
 
-/// Compile source to a WASM file.
-pub fn compile_to_wasm(src: &str, path: &str, out_path: &str) -> Result<(), String> {
-  let wasm = crate::to_wasm(src, path)?;
+/// Compile source to a WASM file. `interop` selects which host-bridge
+/// module the runtime is linked against; the CLI flag `--target=wasm`
+/// → `Rust`, `--target=wasm+js` → `Js`.
+pub fn compile_to_wasm(
+  src: &str,
+  path: &str,
+  out_path: &str,
+  interop: crate::passes::wasm::emit::Interop,
+) -> Result<(), String> {
+  let wasm = crate::to_wasm_for(src, path, interop)?;
   std::fs::write(out_path, &wasm.binary).map_err(|e| e.to_string())
 }
 
@@ -41,7 +48,9 @@ pub fn compile_to_native(
   out_path: &str,
   finkrt_search: &FinkrtSearch,
 ) -> Result<(), String> {
-  let wasm = crate::to_wasm(src, path)?;
+  // Native targets always use the Rust host-bridge interop — they
+  // bundle the wasm into a finkrt binary that runs in wasmtime.
+  let wasm = crate::to_wasm_for(src, path, crate::passes::wasm::emit::Interop::Rust)?;
   let finkrt_path = find_finkrt(target, finkrt_search)?;
 
   let mut binary = std::fs::read(&finkrt_path)
@@ -102,7 +111,7 @@ fn find_finkrt(target: &str, search: &FinkrtSearch) -> Result<PathBuf, String> {
 pub fn default_output(path: &str, target: &str) -> String {
   let stem = Path::new(path).file_stem()
     .and_then(|s| s.to_str()).unwrap_or("out");
-  if target == "wasm" {
+  if target == "wasm" || target == "wasm+js" {
     format!("{stem}.wasm")
   } else {
     stem.to_string()
