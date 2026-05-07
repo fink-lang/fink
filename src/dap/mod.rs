@@ -425,6 +425,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
   program: &str,
 ) -> Result<(), String> {
   eprintln!("[fink dap] starting for: {program}");
+  let _t_start = std::time::Instant::now();
   let mut server = Server::new(BufReader::new(input), BufWriter::new(output));
 
   // Load or compile the program.
@@ -435,6 +436,7 @@ pub fn run<R: Read, W: Write + Send + 'static>(
     // in an in-memory loader and fail on any `import './foo.fnk'`.
     let mut loader = crate::passes::modules::FileSourceLoader::new();
     let wasm = crate::compile_package(std::path::Path::new(program), &mut loader, crate::passes::wasm::emit::Interop::Rust)?;
+    eprintln!("[fink dap] compile_package: {:?} bytes={}", _t_start.elapsed(), wasm.binary.len());
     (wasm.binary, program.to_string(), wasm.mappings, wasm.marks, wasm.id_to_url)
   } else {
     let bytes = std::fs::read(program).map_err(|e| e.to_string())?;
@@ -454,9 +456,13 @@ pub fn run<R: Read, W: Write + Send + 'static>(
   config.guest_debug(true);
   config.cranelift_opt_level(wasmtime::OptLevel::None);
 
+  let _t_eng = std::time::Instant::now();
   let engine = wasmtime::Engine::new(&config).map_err(|e| e.to_string())?;
+  eprintln!("[fink dap] engine: {:?}", _t_eng.elapsed());
+  let _t_mod = std::time::Instant::now();
   let module = wasmtime::Module::new(&engine, &wasm)
     .map_err(|e| crate::passes::wasm::annotate_func_indices(&e.to_string(), &wasm))?;
+  eprintln!("[fink dap] module: {:?}", _t_mod.elapsed());
 
   // Channels between DAP server (main thread) and WASM execution thread.
   let (stopped_tx, stopped_rx) = mpsc::sync_channel::<StoppedFrame>(1);
