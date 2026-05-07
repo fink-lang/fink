@@ -64,7 +64,7 @@ fn main() {
     // source file; the rest become argv for the user's main.
     [path, ..] => ("run", *path),
     _ => {
-      eprintln!("usage: fink [<tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap>] [options] <file>");
+      eprintln!("usage: fink [<tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap|decode-sm>] [options] <file>");
       eprintln!("       fink <file> [args..]    (implicit `run`)");
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
@@ -75,6 +75,7 @@ fn main() {
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wasm [-O|-O1..4|-Os|-Oz]     run wasm-opt (default -O)");
       eprintln!("  compile --target=<wasm|wasm+js|triple> [-o output] <file>");
+      eprintln!("  decode-sm [--source=<path>]  decode embedded `# sm:<b64>` line into per-mapping rows");
       process::exit(1);
     }
   };
