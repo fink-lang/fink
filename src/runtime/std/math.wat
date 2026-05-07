@@ -26,6 +26,10 @@
     (func $head_any (param (ref null any)) (result (ref null any))))
   (import "std/list.wat" "tail_any"
     (func $tail_any (param (ref null any)) (result (ref null any))))
+  (import "std/list.wat" "List"
+    (type $List (sub any)))
+  (import "std/list.wat" "is_empty"
+    (func $list_is_empty (param (ref $List)) (result i32)))
 
 
   ;; -- Direct-style helpers --------------------------------------------
@@ -90,9 +94,10 @@
       (struct.get $F64 $val (local.get $a))
       (struct.get $F64 $val (local.get $b)))))
 
-  ;; clamp(x, lo, hi): max(lo, min(hi, x)).
+  ;; clamp(lo, x, hi): max(lo, min(hi, x)).
+  ;; Bounds frame the value — reads as `lo <= x <= hi`.
   (func $clamp_f64 (@pub)
-    (param $x (ref $F64)) (param $lo (ref $F64)) (param $hi (ref $F64))
+    (param $lo (ref $F64)) (param $x (ref $F64)) (param $hi (ref $F64))
     (result (ref $F64))
     (struct.new $F64 (f64.max
       (struct.get $F64 $val (local.get $lo))
@@ -195,33 +200,57 @@
     (local.set $a) (local.set $cont)
     (return_call $apply_1 (call $fract_f64 (local.get $a)) (local.get $cont)))
 
-  ;; --- 2-arg adapters ---
+  ;; --- varargs adapters (fold) ---
+  ;;
+  ;; min/max accept >=1 args. Walk the args list; at each step replace
+  ;; the accumulator with f64.min / f64.max of the previous accumulator
+  ;; and the next arg. Empty args list (after cont) traps via the cast
+  ;; on the first head_any.
 
   (func $_min_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $rest (ref null any))
-    (local $a (ref $F64)) (local $b (ref $F64))
+    (local $cont (ref null any)) (local $rest (ref $List))
+    (local $acc f64)
     (local.set $cont (call $head_any (local.get $args)))
-    (local.set $rest (call $tail_any (local.get $args)))
-    (local.set $a (ref.cast (ref $F64) (call $head_any (local.get $rest))))
-    (local.set $rest (call $tail_any (local.get $rest)))
-    (local.set $b (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $args))))
+    ;; First arg seeds the accumulator.
+    (local.set $acc (struct.get $F64 $val
+      (ref.cast (ref $F64) (call $head_any (local.get $rest)))))
+    (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
+    (block $done
+      (loop $fold
+        (br_if $done (call $list_is_empty (local.get $rest)))
+        (local.set $acc (f64.min (local.get $acc)
+          (struct.get $F64 $val
+            (ref.cast (ref $F64) (call $head_any (local.get $rest))))))
+        (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
+        (br $fold)))
     (return_call $apply_1
-      (call $min_f64 (local.get $a) (local.get $b))
+      (struct.new $F64 (local.get $acc))
       (local.get $cont)))
 
   (func $_max_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $rest (ref null any))
-    (local $a (ref $F64)) (local $b (ref $F64))
+    (local $cont (ref null any)) (local $rest (ref $List))
+    (local $acc f64)
     (local.set $cont (call $head_any (local.get $args)))
-    (local.set $rest (call $tail_any (local.get $args)))
-    (local.set $a (ref.cast (ref $F64) (call $head_any (local.get $rest))))
-    (local.set $rest (call $tail_any (local.get $rest)))
-    (local.set $b (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $args))))
+    (local.set $acc (struct.get $F64 $val
+      (ref.cast (ref $F64) (call $head_any (local.get $rest)))))
+    (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
+    (block $done
+      (loop $fold
+        (br_if $done (call $list_is_empty (local.get $rest)))
+        (local.set $acc (f64.max (local.get $acc)
+          (struct.get $F64 $val
+            (ref.cast (ref $F64) (call $head_any (local.get $rest))))))
+        (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
+        (br $fold)))
     (return_call $apply_1
-      (call $max_f64 (local.get $a) (local.get $b))
+      (struct.new $F64 (local.get $acc))
       (local.get $cont)))
+
+  ;; --- 2-arg adapter ---
 
   (func $_copysign_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
@@ -241,16 +270,16 @@
   (func $_clamp_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $rest (ref null any))
-    (local $x (ref $F64)) (local $lo (ref $F64)) (local $hi (ref $F64))
+    (local $lo (ref $F64)) (local $x (ref $F64)) (local $hi (ref $F64))
     (local.set $cont (call $head_any (local.get $args)))
     (local.set $rest (call $tail_any (local.get $args)))
-    (local.set $x (ref.cast (ref $F64) (call $head_any (local.get $rest))))
-    (local.set $rest (call $tail_any (local.get $rest)))
     (local.set $lo (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $rest (call $tail_any (local.get $rest)))
+    (local.set $x (ref.cast (ref $F64) (call $head_any (local.get $rest))))
     (local.set $rest (call $tail_any (local.get $rest)))
     (local.set $hi (ref.cast (ref $F64) (call $head_any (local.get $rest))))
     (return_call $apply_1
-      (call $clamp_f64 (local.get $x) (local.get $lo) (local.get $hi))
+      (call $clamp_f64 (local.get $lo) (local.get $x) (local.get $hi))
       (local.get $cont)))
 
 
