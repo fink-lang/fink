@@ -315,6 +315,22 @@ impl<'src> Lexer<'src> {
     }
   }
 
+  /// Consume `-NUMBER` as a single signed literal token. Captures the `-`
+  /// position before advancing past it, then delegates to one of
+  /// `consume_number` / `consume_hex` / etc. The delegate re-captures
+  /// start from the digit position; we splice the leading `-` back into
+  /// the token's loc and source slice afterwards.
+  fn consume_neg_number(&mut self, body: fn(&mut Self) -> Token<'src>) -> Token<'src> {
+    let neg_start = self.pos;
+    self.advance(1); // past the `-`
+    let inner = body(self);
+    Token {
+      kind: inner.kind,
+      loc: Loc { start: neg_start, end: inner.loc.end },
+      src: &self.src[neg_start.idx as usize..inner.loc.end.idx as usize],
+    }
+  }
+
   fn consume_float_frac(&mut self, start: Pos) -> Token<'src> {
     self.advance(1); // consume '.'
     loop {
@@ -970,6 +986,21 @@ impl<'src> Lexer<'src> {
       [b'0', b'b', ..] => self.consume_bin(),
       [b'0', b'o', ..] => self.consume_oct(),
       [b'0'..=b'9', ..] => self.consume_number(),
+
+      // `-NUMBER` (no space between) is a single signed numeric literal,
+      // not a Sep + number. Looks one byte ahead. With a space (`- 3`) the
+      // `-` falls through to the operator dispatch — that's subtraction or
+      // a bare unary the parser folds. See [docs/language.md] integer
+      // literals: a sign prefix forces signed shape.
+      //
+      // The `consume_*` helpers re-capture `start` from `self.pos`, which
+      // by that point is past the `-`. So the resulting token's source
+      // slice misses the leading `-`. We could fix by parameterising
+      // start, but instead we override the loc/src here after consuming.
+      [b'-', b'0', b'x', ..] => self.consume_neg_number(Self::consume_hex),
+      [b'-', b'0', b'b', ..] => self.consume_neg_number(Self::consume_bin),
+      [b'-', b'0', b'o', ..] => self.consume_neg_number(Self::consume_oct),
+      [b'-', b'0'..=b'9', ..] => self.consume_neg_number(Self::consume_number),
 
       [b'$' | b'_' | b'a'..=b'z' | b'A'..=b'Z' | 0x80..=0xFF, ..] => self.consume_ident(),
 
