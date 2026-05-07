@@ -154,14 +154,14 @@ fmt'result: ${1 + 2}'    # interpolates — same as 'result: ${1 + 2}'
 raw'line\nbreak'         # leaves \n literal — no escape processing
 ```
 
-A tag is just a function. It receives `(parts, vals)` — `parts` is the sequence of literal segments, `vals` is the sequence of interpolated values. Defining your own:
+A tag is just a function. It receives a single spread of the template's parts — an interleaved sequence of literal text segments and interpolated values, in source order. Defining your own:
 
 ```fink
-fmt_log = fn parts, vals:
+fmt_log = fn ..parts:
   ...
 
 fmt_log'hello ${name}, you have ${count} messages'
-# calls fmt_log with parts ['hello ', ', you have ', ' messages'], vals [name, count]
+# calls fmt_log with parts ['hello ', name, ', you have ', count, ' messages']
 ```
 
 ## Collections
