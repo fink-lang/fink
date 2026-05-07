@@ -102,10 +102,20 @@ fn main() {
     "ast" => {
       if desugar {
         let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", desugared.ast.print());
+        if source_map {
+          let (output, srcmap) = desugared.ast.print_mapped_native();
+          println!("{output}\n# sm:{}", srcmap.encode_base64url());
+        } else {
+          println!("{}", desugared.ast.print());
+        }
       } else {
         let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", ast.print());
+        if source_map {
+          let (output, srcmap) = ast.print_mapped_native();
+          println!("{output}\n# sm:{}", srcmap.encode_base64url());
+        } else {
+          println!("{}", ast.print());
+        }
       }
     }
 

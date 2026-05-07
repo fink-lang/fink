@@ -91,11 +91,7 @@ fn ast_desugar_runs_desugar_pass() {
     .stdout(predicate::str::starts_with("Module"));
 }
 
-// Usage advertises `ast [--source-map]` but the `ast` arm ignores the
-// flag — only `fmt`, `fmt2`, `cps`, `marks`, and `wat` actually emit a
-// source-map line. Documented as a wiring gap, not fixed here.
 #[test]
-#[ignore = "BUG: `ast --source-map` is silently ignored; usage advertises it"]
 fn ast_source_map_appends_sm_line() {
   fink().args(["ast", "--source-map", &fixture_str("hello.fnk")]).assert().success()
     .stdout(predicate::str::contains("# sm:"));

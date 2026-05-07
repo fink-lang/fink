@@ -491,31 +491,41 @@ pub fn walk<'src, 'a>(
 
 impl<'src> Ast<'src> {
   pub fn print(&self) -> String {
-    let mut out = String::new();
+    let mut out = crate::sourcemap::MappedWriter::new();
     print_node(self, self.root, &mut out, 0);
-    out
+    out.finish_string()
   }
 
   /// Print an arbitrary subtree rooted at `id` (rather than `self.root`).
   /// Used by test helpers that want to dump a specific statement inside
   /// a Module without printing the Module wrapper.
   pub fn print_subtree(&self, id: AstId) -> String {
-    let mut out = String::new();
+    let mut out = crate::sourcemap::MappedWriter::new();
     print_node(self, id, &mut out, 0);
-    out
+    out.finish_string()
+  }
+
+  /// Print the AST as the s-expression debug dump, also returning a
+  /// native-form source map associating each node's span with its
+  /// position in the printed output.
+  pub fn print_mapped_native(&self) -> (String, crate::sourcemap::native::SourceMap) {
+    let mut out = crate::sourcemap::MappedWriter::new();
+    print_node(self, self.root, &mut out, 0);
+    out.finish_native()
   }
 }
 
-fn indent(out: &mut String, depth: usize) {
+fn indent(out: &mut crate::sourcemap::MappedWriter, depth: usize) {
   for _ in 0..depth {
     out.push_str("  ");
   }
 }
 
 // TODO: include node Loc (start/end) in output so .fnk AST tests can assert on source spans
-fn print_node(ast: &Ast, id: AstId, out: &mut String, depth: usize) {
+fn print_node(ast: &Ast, id: AstId, out: &mut crate::sourcemap::MappedWriter, depth: usize) {
   indent(out, depth);
   let node = ast.nodes.get(id);
+  out.mark(node.loc);
   match &node.kind {
     NodeKind::LitBool(v) => {
       out.push_str(if *v { "LitBool true" } else { "LitBool false" });
@@ -691,14 +701,14 @@ fn print_node(ast: &Ast, id: AstId, out: &mut String, depth: usize) {
   }
 }
 
-fn print_id_children(ast: &Ast, children: &[AstId], out: &mut String, depth: usize) {
+fn print_id_children(ast: &Ast, children: &[AstId], out: &mut crate::sourcemap::MappedWriter, depth: usize) {
   for &child_id in children {
     out.push('\n');
     print_node(ast, child_id, out, depth + 1);
   }
 }
 
-fn print_exprs(ast: &Ast, exprs: &Exprs, out: &mut String, depth: usize) {
+fn print_exprs(ast: &Ast, exprs: &Exprs, out: &mut crate::sourcemap::MappedWriter, depth: usize) {
   print_id_children(ast, &exprs.items, out, depth);
 }
 
