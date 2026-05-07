@@ -138,6 +138,8 @@ mod tests {
 
   enum TestResult {
     Num(f64),
+    I64(i64),
+    U64(u64),
     Bool(bool),
     Str(Vec<u8>),
     None,
@@ -180,6 +182,8 @@ mod tests {
         if v == v.floor() && v.abs() < 1e15 { format!("{}", v as i64) }
         else { format!("{}", v) }
       }
+      Ok(TestResult::I64(v)) => format!("{v}"),
+      Ok(TestResult::U64(v)) => format!("{v}"),
       // Bool(false) when followed by IO is treated as "unit / void" —
       // the channel-send completion fires the cont with what the
       // runtime considers a unit value. Tests with explicit boolean
@@ -517,6 +521,23 @@ mod tests {
     })
   }
 
+  /// Call the runtime `type_of` export against `val` to discriminate
+  /// numeric subtypes the host can't tell apart from wasmtime's `Val`
+  /// alone (e.g. `$I64` vs `$U64`, both reported as `Val::I64`). Tag
+  /// values mirror `runtime/interop/rust/interop.wat::type_of`.
+  fn type_of_anyref(
+    caller: &mut wasmtime::Caller<'_, ()>,
+    val: &Rooted<AnyRef>,
+  ) -> Option<i32> {
+    let func = caller.get_export("type_of")?.into_func()?;
+    let mut out = [Val::I32(0)];
+    func.call(&mut *caller, &[Val::AnyRef(Some(*val))], &mut out).ok()?;
+    match out[0] {
+      Val::I32(t) => Some(t),
+      _ => None,
+    }
+  }
+
   /// Inspect a fink anyref and capture it as a `TestResult`. Used from
   /// inside the `host_invoke_cont` callback. The TestResult variants
   /// mirror the value types our wasm tests can produce: i31 booleans,
@@ -545,10 +566,16 @@ mod tests {
           return Ok(());
         }
         Ok(Val::I64(v)) => {
-          // $Int subtype: field 0 is `$ival i64`. Surface as Num for now;
-          // a dedicated Int variant could land later.
-          *captured.lock().unwrap() =
-            Some(TestResult::Num(v as f64));
+          // $Int subtype: field 0 is `$ival i64`. Storage is identical
+          // for $I64 and $U64 — call the runtime's `type_of` to
+          // discriminate so the host can format faithfully.
+          let tag = type_of_anyref(caller, &head_any).unwrap_or(0);
+          let result = match tag {
+            3 => TestResult::U64(v as u64),  // $U64
+            2 => TestResult::I64(v),          // $I64
+            _ => TestResult::I64(v),          // unknown $Int variant — treat as signed
+          };
+          *captured.lock().unwrap() = Some(result);
           return Ok(());
         }
         Ok(Val::I32(offset)) => {

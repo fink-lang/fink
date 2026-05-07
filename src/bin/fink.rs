@@ -64,7 +64,7 @@ fn main() {
     // source file; the rest become argv for the user's main.
     [path, ..] => ("run", *path),
     _ => {
-      eprintln!("usage: fink [<tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap>] [options] <file>");
+      eprintln!("usage: fink [<tokens|ast|fmt|fmt2|cps|marks|wat|wasm|compile|run|dap|decode-sm>] [options] <file>");
       eprintln!("       fink <file> [args..]    (implicit `run`)");
       eprintln!("       fink --version");
       eprintln!("  ast [--desugar]              parse (optionally desugar)");
@@ -75,6 +75,7 @@ fn main() {
       eprintln!("  wasm                         emit WASM binary to stdout");
       eprintln!("  wasm [-O|-O1..4|-Os|-Oz]     run wasm-opt (default -O)");
       eprintln!("  compile --target=<wasm|wasm+js|triple> [-o output] <file>");
+      eprintln!("  decode-sm [--source=<path>]  decode embedded `# sm:<b64>` line into per-mapping rows");
       process::exit(1);
     }
   };
@@ -102,10 +103,20 @@ fn main() {
     "ast" => {
       if desugar {
         let desugared = fink::to_desugared(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", desugared.ast.print());
+        if source_map {
+          let (output, srcmap) = desugared.ast.print_mapped_native();
+          println!("{output}\n# sm:{}", srcmap.encode_base64url());
+        } else {
+          println!("{}", desugared.ast.print());
+        }
       } else {
         let ast = fink::to_ast(&src, path).unwrap_or_else(|e| die(&e));
-        println!("{}", ast.print());
+        if source_map {
+          let (output, srcmap) = ast.print_mapped_native();
+          println!("{output}\n# sm:{}", srcmap.encode_base64url());
+        } else {
+          println!("{}", ast.print());
+        }
       }
     }
 
@@ -340,11 +351,7 @@ fn main() {
       }
     }
 
-    _ => {
-      eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|compile|run|dap> [options] <file>");
-      process::exit(1);
-    }
+    _ => unreachable!("cmd is constrained to COMMANDS or \"run\" by the dispatcher above"),
   }
 }
 
