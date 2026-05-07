@@ -174,10 +174,7 @@ test 'bitwise xor', fn:
   | equals ƒink:
     240
 
-# `not 0x0` flips all 64 bits → max-u64. Skipped while the host
-# runner returns TestResult::Num(f64) for numeric values; needs a
-# host-side typed-result return path before u64::MAX prints faithfully.
-skip test 'bitwise not', fn:
+test 'bitwise not', fn:
   expect run ƒink:
     not 0x0
   | equals ƒink:

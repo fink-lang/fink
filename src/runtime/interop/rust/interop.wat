@@ -36,6 +36,10 @@
   (import "std/channel.wat" "Channel"   (type $Channel  (sub any)))
   (import "std/list.wat"    "List"      (type $List     (sub any)))
   (import "std/async.wat"   "Future"    (type $Future   (sub any)))
+  (import "std/int.wat"     "Int"       (type $Int      (sub $Num (struct))))
+  (import "std/int.wat"     "I64"       (type $I64      (sub $Int (struct (field $ival i64)))))
+  (import "std/int.wat"     "U64"       (type $U64      (sub $Int (struct (field $ival i64)))))
+  (import "std/float.wat"   "F64"       (type $F64      (sub $Num (struct (field $val f64)))))
 
   ;; Func imports
   (import "std/list.wat"    "head_any"
@@ -446,5 +450,34 @@
     (return_call $rec_get_any
       (local.get $rec)
       (call $str_wrap_bytes (local.get $key_bytes))))
+
+
+  ;; -- type_of -----------------------------------------------------------
+  ;;
+  ;; Discriminate a runtime value for the Rust host. Tags only cover the
+  ;; cases the test runner needs today — the bool / numeric leaves for
+  ;; faithful headline rendering. Other types fall through to 0; extend
+  ;; as new host needs arise.
+  ;;
+  ;;   0  unknown / null
+  ;;   1  i31 (Bool)
+  ;;   2  $I64 (signed)
+  ;;   3  $U64 (unsigned)
+  ;;   4  $F64
+  ;;   5  $Num (other — e.g. $Decimal)
+  (func (export "env:type_of")
+    (param $v (ref null any)) (result i32)
+    (local $nn (ref any))
+
+    (if (ref.is_null (local.get $v)) (then (return (i32.const 0))))
+    (local.set $nn (ref.as_non_null (local.get $v)))
+
+    (if (ref.test (ref i31)  (local.get $nn)) (then (return (i32.const 1))))
+    (if (ref.test (ref $I64) (local.get $nn)) (then (return (i32.const 2))))
+    (if (ref.test (ref $U64) (local.get $nn)) (then (return (i32.const 3))))
+    (if (ref.test (ref $F64) (local.get $nn)) (then (return (i32.const 4))))
+    (if (ref.test (ref $Num) (local.get $nn)) (then (return (i32.const 5))))
+
+    (i32.const 0))
 
 )
