@@ -101,6 +101,7 @@
   (import "std/dict.wat" "op_not_in" (func $dict_op_notin  (param (ref $RecImpl)) (param (ref eq)) (result i32)))
   (import "std/dict.wat" "op_empty"  (func $dict_op_empty  (param (ref null any)) (result i32)))
   (import "std/dict.wat" "op_dot"    (func $dict_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any))))
+  (import "std/list.wat" "op_dot"    (func $list_op_dot    (param (ref null any)) (param (ref null any)) (param (ref null any))))
 
   ;; Func imports — range ops
   (import "std/range.wat" "op_in"     (func $range_op_in     (param (ref $I64)) (param (ref $Range)) (result i32)))
@@ -827,8 +828,9 @@
   ;; =========================================================================
 
   ;; op_dot(container, key, cont) → val
-  ;;   $Str → str_op_dot
-  ;;   $Rec → rec_op_dot
+  ;;   $Str  → str_op_dot
+  ;;   $Rec  → rec_op_dot
+  ;;   $List → list_op_dot
   (func $op_dot (@pub) (@impl "std/operators.fnk:op_dot")
     (param $container (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
 
@@ -852,6 +854,18 @@
             (local.get $container))))
       (drop)
       (return_call $dict_op_dot
+        (local.get $container)
+        (local.get $key)
+        (local.get $cont)))
+
+    ;; Try $List
+    (block $not_list
+      (block $is_list (result (ref $List))
+        (br $not_list
+          (br_on_cast $is_list (ref null any) (ref $List)
+            (local.get $container))))
+      (drop)
+      (return_call $list_op_dot
         (local.get $container)
         (local.get $key)
         (local.get $cont)))

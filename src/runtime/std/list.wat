@@ -39,6 +39,13 @@
   (import "std/repr.wat" "repr_val"
     (func $repr_val (param (ref any)) (result (ref $Str))))
 
+  ;; Range / I64 imports for $op_dot indexing & slicing.
+  (import "std/int.wat"   "I64"      (type $I64   (sub any) (struct (field $ival i64))))
+  (import "std/range.wat" "Range"    (type $Range (sub any)))
+  (import "std/range.wat" "start"    (func $range_start   (param (ref $Range)) (result (ref $I64))))
+  (import "std/range.wat" "end"      (func $range_end     (param (ref $Range)) (result (ref null $I64))))
+  (import "std/range.wat" "is_incl"  (func $range_is_incl (param (ref $Range)) (result i32)))
+
 
   ;; -- Type definitions ------------------------------------------------
 
@@ -234,6 +241,199 @@
       (call $_concat_inner
         (ref.cast (ref $Cons) (local.get $tail))
         (local.get $dest))))
+
+
+  ;; -- Slice -----------------------------------------------------------
+
+  ;; Drop the first $n cells. n must be in [0, len]. Returns the suffix —
+  ;; shared with the input (no allocation). Out-of-range traps.
+  (func $_list_skip
+    (param $list (ref $List))
+    (param $n i32)
+    (result (ref $List))
+
+    (local $cur (ref $List))
+    (local.set $cur (local.get $list))
+
+    (block $done
+      (loop $walk
+        (br_if $done (i32.eqz (local.get $n)))
+        (if (ref.test (ref $Nil) (local.get $cur))
+          (then (unreachable)))
+        (local.set $cur
+          (struct.get $Cons $tail
+            (ref.cast (ref $Cons) (local.get $cur))))
+        (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+        (br $walk)))
+
+    (local.get $cur))
+
+  ;; Build a new spine of the first $n cells of $list, ending in $Nil.
+  ;; n must be in [0, len($list)]. Out-of-range traps.
+  ;; Recursive — mirrors $_concat_inner shape.
+  (func $_list_take
+    (param $list (ref $List))
+    (param $n i32)
+    (result (ref $List))
+
+    (local $cons (ref $Cons))
+
+    (if (i32.eqz (local.get $n))
+      (then (return (struct.new $Nil))))
+
+    (if (ref.test (ref $Nil) (local.get $list))
+      (then (unreachable)))
+
+    (local.set $cons (ref.cast (ref $Cons) (local.get $list)))
+
+    (struct.new $Cons
+      (struct.get $Cons $head (local.get $cons))
+      (call $_list_take
+        (struct.get $Cons $tail (local.get $cons))
+        (i32.sub (local.get $n) (i32.const 1)))))
+
+  ;; Resolve a possibly-negative i64 index against a length. Negative
+  ;; values count from the end: -1 means len-1. Returns the resolved
+  ;; non-negative i64; caller bounds-checks.
+  (func $_list_resolve_idx
+    (param $idx i64)
+    (param $len i64)
+    (result i64)
+
+    (if (result i64) (i64.lt_s (local.get $idx) (i64.const 0))
+      (then (i64.add (local.get $len) (local.get $idx)))
+      (else (local.get $idx))))
+
+  ;; Slice $list[$start_i .. $end_i_or_neg1) where end_i_or_neg1 == -1
+  ;; signals open end (use len). Negative bounds resolve against len.
+  ;; Out-of-bounds traps. Returns the resulting list.
+  ;;
+  ;; Tail-share strategy: when end resolves to len, return the suffix
+  ;; from $_list_skip directly (no allocation). When start == 0 and
+  ;; end == len, returns the original list unchanged. Empty slice
+  ;; returns $Nil. Other slices allocate (end_r - start_r) cons cells.
+  (func $_list_slice
+    (param $list (ref $List))
+    (param $start_i i64)
+    (param $end_i i64)
+    (param $is_open i32)
+    (result (ref $List))
+
+    (local $len i64)
+    (local $start_r i64)
+    (local $end_r i64)
+    (local $suffix (ref $List))
+
+    (local.set $len (i64.extend_i32_s (call $size (local.get $list))))
+
+    ;; Resolve negatives.
+    (local.set $start_r
+      (call $_list_resolve_idx (local.get $start_i) (local.get $len)))
+    (if (local.get $is_open)
+      (then (local.set $end_r (local.get $len)))
+      (else
+        (local.set $end_r
+          (call $_list_resolve_idx (local.get $end_i) (local.get $len)))))
+
+    ;; Bounds check: 0 <= start <= end <= len.
+    (if (i64.lt_s (local.get $start_r) (i64.const 0))
+      (then (unreachable)))
+    (if (i64.lt_s (local.get $end_r) (local.get $start_r))
+      (then (unreachable)))
+    (if (i64.gt_s (local.get $end_r) (local.get $len))
+      (then (unreachable)))
+
+    ;; Skip start_r cells — suffix is shared.
+    (local.set $suffix
+      (call $_list_skip
+        (local.get $list)
+        (i32.wrap_i64 (local.get $start_r))))
+
+    ;; If end_r == len, the suffix IS the answer (no allocation).
+    (if (i64.eq (local.get $end_r) (local.get $len))
+      (then (return (local.get $suffix))))
+
+    ;; Otherwise, take (end_r - start_r) cells from the suffix.
+    (call $_list_take
+      (local.get $suffix)
+      (i32.wrap_i64 (i64.sub (local.get $end_r) (local.get $start_r)))))
+
+
+  ;; op_dot(list, key, cont) — indexing & slicing.
+  ;;   $I64 key   → element at index (negative counts from end).
+  ;;                Out of bounds → unreachable.
+  ;;   $Range key → slice (closed, inclusive, or open-end).
+  ;;                Out of bounds → unreachable.
+  (func $op_dot (@impl "std/operators.fnk:op_dot" $List _)
+    (param $list (ref null any)) (param $key (ref null any)) (param $cont (ref null any))
+
+    (local $l (ref $List))
+    (local $range (ref $Range))
+    (local $start_i i64)
+    (local $end_i i64)
+    (local $is_open i32)
+    (local $idx i64)
+    (local $len i64)
+    (local $elem (ref null any))
+
+    (local.set $l (ref.cast (ref $List) (local.get $list)))
+
+    ;; Try $Range key — slice.
+    (block $not_range
+      (block $is_range (result (ref $Range))
+        (br $not_range
+          (br_on_cast $is_range (ref null any) (ref $Range)
+            (local.get $key))))
+      (local.set $range)
+
+      (local.set $start_i (struct.get $I64 $ival (call $range_start (local.get $range))))
+
+      ;; Open-end: leave end_i unset and flag is_open.
+      (local.set $is_open (i32.const 0))
+      (local.set $end_i (i64.const 0))
+      (block $end_done
+        (block $end_ref (result (ref $I64))
+          (br_on_non_null $end_ref (call $range_end (local.get $range)))
+          (local.set $is_open (i32.const 1))
+          (br $end_done))
+        (local.set $end_i (struct.get $I64 $ival))
+        (if (call $range_is_incl (local.get $range))
+          (then
+            (local.set $end_i (i64.add (local.get $end_i) (i64.const 1))))))
+
+      (return_call $apply_1
+        (call $_list_slice
+          (local.get $l)
+          (local.get $start_i)
+          (local.get $end_i)
+          (local.get $is_open))
+        (local.get $cont)))
+
+    ;; Try $I64 key — element at index.
+    (block $not_i64
+      (block $is_i64 (result (ref $I64))
+        (br $not_i64
+          (br_on_cast $is_i64 (ref null any) (ref $I64)
+            (local.get $key))))
+      (local.set $idx (struct.get $I64 $ival))
+
+      (local.set $len (i64.extend_i32_s (call $size (local.get $l))))
+      (local.set $idx (call $_list_resolve_idx (local.get $idx) (local.get $len)))
+
+      (if (i64.lt_s (local.get $idx) (i64.const 0))
+        (then (unreachable)))
+      (if (i64.ge_s (local.get $idx) (local.get $len))
+        (then (unreachable)))
+
+      (local.set $elem
+        (call $get (local.get $l) (i32.wrap_i64 (local.get $idx))))
+      (if (ref.is_null (local.get $elem))
+        (then (unreachable)))
+      (return_call $apply_1
+        (ref.as_non_null (local.get $elem))
+        (local.get $cont)))
+
+    (unreachable))
 
 
   ;; -- Find ------------------------------------------------------------
