@@ -340,11 +340,7 @@ fn main() {
       }
     }
 
-    _ => {
-      eprintln!("unknown command: {cmd}");
-      eprintln!("usage: fink <tokens|ast|fmt|fmt2|cps|wat|wasm|compile|run|dap> [options] <file>");
-      process::exit(1);
-    }
+    _ => unreachable!("cmd is constrained to COMMANDS or \"run\" by the dispatcher above"),
   }
 }
 
