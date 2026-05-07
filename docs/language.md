@@ -310,6 +310,9 @@ a >>> b                  # rotate right
 0..10                    # 0 inclusive, 10 exclusive
 0...10                   # 0 inclusive, 10 inclusive
 
+0..                      # open end — 0 inclusive, runs to the end of the target
+'foobar'.(-3..)          # 'bar' — slice from -3 to end
+
 1 + 2..3 + 4             # (1 + 2)..(3 + 4) — `..` binds looser than arithmetic
 (1 + 2)..(3 + 4)         # parens optional for clarity
 ```
