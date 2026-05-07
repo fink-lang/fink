@@ -168,6 +168,7 @@ fn linked_runtime(interop: Interop) -> &'static LinkedRuntime {
       ("std/int.wat",      include_str!("../../runtime/std/int.wat")),
       ("std/float.wat",    include_str!("../../runtime/std/float.wat")),
       ("std/decimal.wat",  include_str!("../../runtime/std/decimal.wat")),
+      ("std/math.wat",     include_str!("../../runtime/std/math.wat")),
       ("std/range.wat",    include_str!("../../runtime/std/range.wat")),
       ("std/set.wat",      include_str!("../../runtime/std/set.wat")),
       ("std/dict.wat",     include_str!("../../runtime/std/dict.wat")),

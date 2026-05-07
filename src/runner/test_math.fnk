@@ -1,0 +1,246 @@
+{test, expect, equals, run} = import '!fake'
+{ƒink} = import '@fink/parse/blocks.fnk'
+
+
+# --- abs ---
+
+test 'math abs positive', fn:
+  expect run ƒink:
+    {abs} = import 'std/math.fnk'
+    abs 3.5
+  | equals ƒink:
+    3.5
+
+test 'math abs negative', fn:
+  expect run ƒink:
+    {abs} = import 'std/math.fnk'
+    abs (-3.5)
+  | equals ƒink:
+    3.5
+
+test 'math abs zero', fn:
+  expect run ƒink:
+    {abs} = import 'std/math.fnk'
+    abs 0.0
+  | equals ƒink:
+    0
+
+
+# --- neg ---
+
+test 'math neg positive', fn:
+  expect run ƒink:
+    {neg} = import 'std/math.fnk'
+    neg 4.0
+  | equals ƒink:
+    -4
+
+test 'math neg negative', fn:
+  expect run ƒink:
+    {neg} = import 'std/math.fnk'
+    neg (-4.0)
+  | equals ƒink:
+    4
+
+
+# --- ceil / floor / trunc / round ---
+
+test 'math ceil positive fractional', fn:
+  expect run ƒink:
+    {ceil} = import 'std/math.fnk'
+    ceil 3.2
+  | equals ƒink:
+    4
+
+test 'math ceil negative fractional', fn:
+  expect run ƒink:
+    {ceil} = import 'std/math.fnk'
+    ceil (-3.2)
+  | equals ƒink:
+    -3
+
+test 'math floor positive fractional', fn:
+  expect run ƒink:
+    {floor} = import 'std/math.fnk'
+    floor 3.7
+  | equals ƒink:
+    3
+
+test 'math floor negative fractional', fn:
+  expect run ƒink:
+    {floor} = import 'std/math.fnk'
+    floor (-3.2)
+  | equals ƒink:
+    -4
+
+test 'math trunc positive', fn:
+  expect run ƒink:
+    {trunc} = import 'std/math.fnk'
+    trunc 3.9
+  | equals ƒink:
+    3
+
+test 'math trunc negative', fn:
+  expect run ƒink:
+    {trunc} = import 'std/math.fnk'
+    trunc (-3.9)
+  | equals ƒink:
+    -3
+
+test 'math round half-to-even up', fn:
+  expect run ƒink:
+    {round} = import 'std/math.fnk'
+    round 2.5
+  | equals ƒink:
+    2
+
+test 'math round half-to-even down', fn:
+  expect run ƒink:
+    {round} = import 'std/math.fnk'
+    round 3.5
+  | equals ƒink:
+    4
+
+test 'math round normal up', fn:
+  expect run ƒink:
+    {round} = import 'std/math.fnk'
+    round 3.7
+  | equals ƒink:
+    4
+
+
+# --- sqrt ---
+
+test 'math sqrt positive', fn:
+  expect run ƒink:
+    {sqrt} = import 'std/math.fnk'
+    sqrt 9.0
+  | equals ƒink:
+    3
+
+test 'math sqrt of zero', fn:
+  expect run ƒink:
+    {sqrt} = import 'std/math.fnk'
+    sqrt 0.0
+  | equals ƒink:
+    0
+
+
+# --- sign ---
+
+test 'math sign positive', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign 42.0
+  | equals ƒink:
+    1
+
+test 'math sign negative', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign (-42.0)
+  | equals ƒink:
+    -1
+
+test 'math sign zero', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign 0.0
+  | equals ƒink:
+    0
+
+
+# --- fract ---
+
+test 'math fract positive', fn:
+  expect run ƒink:
+    {fract} = import 'std/math.fnk'
+    fract 3.25
+  | equals ƒink:
+    0.25
+
+test 'math fract negative', fn:
+  expect run ƒink:
+    {fract} = import 'std/math.fnk'
+    fract (-3.25)
+  | equals ƒink:
+    -0.25
+
+
+# --- min / max ---
+
+test 'math min picks lesser', fn:
+  expect run ƒink:
+    {min} = import 'std/math.fnk'
+    min 1.5, 2.5
+  | equals ƒink:
+    1.5
+
+test 'math min picks lesser swapped', fn:
+  expect run ƒink:
+    {min} = import 'std/math.fnk'
+    min 2.5, 1.5
+  | equals ƒink:
+    1.5
+
+test 'math max picks greater', fn:
+  expect run ƒink:
+    {max} = import 'std/math.fnk'
+    max 1.5, 2.5
+  | equals ƒink:
+    2.5
+
+test 'math max picks greater swapped', fn:
+  expect run ƒink:
+    {max} = import 'std/math.fnk'
+    max 2.5, 1.5
+  | equals ƒink:
+    2.5
+
+
+# --- copysign ---
+
+test 'math copysign positive magnitude positive sign', fn:
+  expect run ƒink:
+    {copysign} = import 'std/math.fnk'
+    copysign 3.0, 2.0
+  | equals ƒink:
+    3
+
+test 'math copysign positive magnitude negative sign', fn:
+  expect run ƒink:
+    {copysign} = import 'std/math.fnk'
+    copysign 3.0, (-2.0)
+  | equals ƒink:
+    -3
+
+test 'math copysign negative magnitude positive sign', fn:
+  expect run ƒink:
+    {copysign} = import 'std/math.fnk'
+    copysign (-3.0), 2.0
+  | equals ƒink:
+    3
+
+
+# --- clamp ---
+
+test 'math clamp within range', fn:
+  expect run ƒink:
+    {clamp} = import 'std/math.fnk'
+    clamp 5.0, 0.0, 10.0
+  | equals ƒink:
+    5
+
+test 'math clamp below range', fn:
+  expect run ƒink:
+    {clamp} = import 'std/math.fnk'
+    clamp (-3.0), 0.0, 10.0
+  | equals ƒink:
+    0
+
+test 'math clamp above range', fn:
+  expect run ƒink:
+    {clamp} = import 'std/math.fnk'
+    clamp 15.0, 0.0, 10.0
+  | equals ƒink:
+    10
