@@ -189,7 +189,7 @@ mod tests {
       }
       Ok(TestResult::Str(bytes)) => String::from_utf8_lossy(&bytes).into_owned(),
       Ok(TestResult::None) => String::new(),
-      Err(e) => format!("ERROR: {}", e),
+      Err(e) => format!("ERROR: {}", strip_wasm_offsets(&e.to_string())),
     };
 
     // If IO occurred, emit the multi-stream block format.
@@ -214,6 +214,36 @@ mod tests {
       for line in s.split('\n').filter(|l| !l.is_empty()) {
         out.push_str(&format!("\n  {line}"));
       }
+    }
+    out
+  }
+
+  /// Strip wasm instruction byte offsets from a wasmtime trap backtrace.
+  /// Lines like `    0:   0x124d - <unknown>!fn_name` become
+  /// `    0:  <unknown>!fn_name`. The offsets shift on any change that
+  /// grows the runtime binary, which is incidental to what tests assert
+  /// (the trap's call chain).
+  fn strip_wasm_offsets(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for (i, line) in s.split('\n').enumerate() {
+      if i > 0 { out.push('\n'); }
+      let trimmed = line.trim_start();
+      let leading = &line[..line.len() - trimmed.len()];
+      if let Some(colon) = trimmed.find(':')
+        && !trimmed[..colon].is_empty()
+        && trimmed[..colon].chars().all(|c| c.is_ascii_digit())
+        && let Some(rest) = trimmed[colon + 1..].trim_start().strip_prefix("0x")
+      {
+        let hex_end = rest.find(|c: char| !c.is_ascii_hexdigit()).unwrap_or(rest.len());
+        if let Some(after_dash) = rest[hex_end..].strip_prefix(" - ") {
+          out.push_str(leading);
+          out.push_str(&trimmed[..colon + 1]);
+          out.push_str("  ");
+          out.push_str(after_dash);
+          continue;
+        }
+      }
+      out.push_str(line);
     }
     out
   }
