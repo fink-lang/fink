@@ -307,6 +307,20 @@ impl<'src> Parser<'src> {
   // --- application ---
 
   // Returns true if the current token can start an argument.
+  //
+  // Sep `-` / `~` glued to the next token (no whitespace between)
+  // counts as an arg start. `foo -bar`, `foo ~mask` → `foo` applied to
+  // a unary expression. With whitespace (`foo - bar`) the `-` falls
+  // through to the infix Pratt path and parses as subtraction.
+  //
+  // (Numeric `-NUMBER` is fused at the lexer, so it arrives here as a
+  // single Int/Float/Decimal token and matches the literal arms above.)
+  //
+  // `not`-prefixed args (`foo not x`) are NOT arg starters by this
+  // predicate — `not` is an infix keyword in some contexts (`not in`)
+  // and the apply-loop must not consume it speculatively here. Use
+  // `is_arg_start_after_sep` after an explicit separator (comma or
+  // block-cont) where the next token is unambiguously an arg.
   fn is_arg_start(&self) -> bool {
     match self.current.kind {
       TokenKind::Ident => !Self::is_infix_keyword(self.current.src),
@@ -316,8 +330,25 @@ impl<'src> Parser<'src> {
       | TokenKind::Partial
       | TokenKind::StrStart => true,
       TokenKind::BracketOpen => true,
+      TokenKind::Sep if matches!(self.current.src, "-" | "~") => self.next_is_glued(),
       _ => false,
     }
+  }
+
+  // After-separator (comma or block-cont) variant of `is_arg_start`:
+  // `not` is unambiguously a unary prefix in this position (no `not in`
+  // ambiguity since there's no preceding lhs in the same arg slot).
+  fn is_arg_start_after_sep(&self) -> bool {
+    if self.is_arg_start() { return true; }
+    self.at(TokenKind::Ident) && self.current.src == "not"
+  }
+
+  // True when the current token is immediately followed (no whitespace)
+  // by another token. Used to spot prefix-unary glue like `-bar`.
+  fn next_is_glued(&self) -> bool {
+    let cur_end = self.current.loc.end.idx as usize;
+    let bytes = self.src.as_bytes();
+    bytes.get(cur_end).is_some_and(|b| !b.is_ascii_whitespace())
   }
 
   // Returns true if the current token can start an expression — atoms plus
@@ -434,6 +465,10 @@ impl<'src> Parser<'src> {
     let mut params: Vec<AstId> = vec![];
     let mut seps: Vec<Token<'src>> = vec![];
     let mut last_end = func_loc.end.idx;
+    // True after consuming a comma or block-cont — the next token starts
+    // an arg slot, which lifts the `not` ambiguity (no `not in` since no
+    // preceding lhs in this slot). See `is_arg_start_after_sep`.
+    let mut after_sep = false;
 
     // Use the same logic as collect_apply_args but we collect into `params`
     // and check for ":" after
@@ -444,13 +479,15 @@ impl<'src> Parser<'src> {
     loop {
       if self.at(TokenKind::EOF) || self.at(TokenKind::BlockEnd) { break; }
       if self.at(TokenKind::BlockCont) {
-        if has_block_tok { self.bump(); last_end = 0; continue; }
+        if has_block_tok { self.bump(); last_end = 0; after_sep = true; continue; }
         break;
       }
       let tok_start = self.peek().loc.start.idx;
       let has_ws = tok_start > last_end;
       let is_spread = has_ws && self.at(TokenKind::Sep) && self.peek().src == "..";
-      if !self.is_arg_start() && !is_spread { break; }
+      let can_start = if after_sep { self.is_arg_start_after_sep() } else { self.is_arg_start() };
+      if !can_start && !is_spread { break; }
+      after_sep = false;
       // Peek: if next is an ident followed by ":", it may be a block name in arg position.
       // We use parse_apply_no_block for params; if the last param (an ident) is immediately
       // followed by ":", the block-detection check at the end handles it.
@@ -472,6 +509,7 @@ impl<'src> Parser<'src> {
             loc: comma.loc,
           });
         }
+        after_sep = true;
         continue;
       }
       if self.at(TokenKind::Semicolon) {
@@ -570,6 +608,7 @@ impl<'src> Parser<'src> {
     let mut args = vec![];
     let mut seps = vec![];
     let mut last_end = self.loc_of(func).end.idx;
+    let mut after_sep = false;
 
     // Check for multiline indented args block
     let mut has_block = self.at(TokenKind::BlockStart);
@@ -594,6 +633,7 @@ impl<'src> Parser<'src> {
           }
           // Record BlockCont as separator between args (only if we already have an arg)
           if !args.is_empty() { seps.push(cont); }
+          after_sep = true;
           // Otherwise, continue collecting args on the next line
           continue;
         }
@@ -602,7 +642,9 @@ impl<'src> Parser<'src> {
 
       let has_ws = self.peek().loc.start.idx > last_end;
       let is_spread = has_ws && self.at(TokenKind::Sep) && self.peek().src == "..";
-      if !self.is_arg_start() && !is_spread { break; }
+      let can_start = if after_sep { self.is_arg_start_after_sep() } else { self.is_arg_start() };
+      if !can_start && !is_spread { break; }
+      after_sep = false;
 
       // Semicolon between args: the NEXT arg is a strong-grouped arg for the OUTER function
       // Actually: semicolon terminates the current nested app; outer collects next arg
@@ -635,6 +677,7 @@ impl<'src> Parser<'src> {
             loc: comma.loc,
           });
         }
+        after_sep = true;
         // Continue to next arg
         continue;
       }
@@ -1012,44 +1055,48 @@ impl<'src> Parser<'src> {
       let loc = Loc { start: op_tok.loc.start, end: self.loc_of(operand).end };
       return Ok(self.node(NodeKind::UnaryOp { op: op_tok, operand }, loc));
     }
-    // Handle prefix sign: +/- followed by number.
-    // Consume the sign, check adjacency.
+    // Prefix sign:
+    // - `+NUMBER` (adjacent) fuses into a signed-typed literal — `+0xFF`
+    //   forces a hex literal into the math family, `+1` is decoration.
+    //   Lexer doesn't fuse `+NUMBER`; we do it here.
+    // - `-NUMBER` is fused at the lexer (see lexer's `-` dispatch). By
+    //   the time this parser path sees `Sep "-"`, the operand is non-numeric.
+    // - `-OPERAND` is unary minus on the operand.
+    // - `+OPERAND` (non-numeric) is invalid.
     if self.at(TokenKind::Sep) && (self.peek().src == "+" || self.peek().src == "-") {
       let sign = self.bump();
       let adjacent = self.peek().loc.start.idx == sign.loc.end.idx;
 
-      if adjacent {
-        match self.peek().kind {
-          TokenKind::Int | TokenKind::Float | TokenKind::Decimal => {
-            let num = self.bump();
-            let src = &self.src[sign.loc.start.idx as usize..num.loc.end.idx as usize];
-            let loc = Loc { start: sign.loc.start, end: num.loc.end };
-            return Ok(match num.kind {
-              TokenKind::Int => self.node(NodeKind::LitInt(src), loc),
-              TokenKind::Float => self.node(NodeKind::LitFloat(src), loc),
-              TokenKind::Decimal => self.node(NodeKind::LitDecimal(src), loc),
-              _ => unreachable!(),
-            });
+      if sign.src == "+" {
+        if adjacent {
+          match self.peek().kind {
+            TokenKind::Int | TokenKind::Float | TokenKind::Decimal => {
+              let num = self.bump();
+              let src = &self.src[sign.loc.start.idx as usize..num.loc.end.idx as usize];
+              let loc = Loc { start: sign.loc.start, end: num.loc.end };
+              return Ok(match num.kind {
+                TokenKind::Int => self.node(NodeKind::LitInt(src), loc),
+                TokenKind::Float => self.node(NodeKind::LitFloat(src), loc),
+                TokenKind::Decimal => self.node(NodeKind::LitDecimal(src), loc),
+                _ => unreachable!(),
+              });
+            }
+            _ => {}
           }
-          _ => {}
         }
+        return Err(ParseError {
+          message: "unexpected '+'".into(),
+          loc: sign.loc,
+        });
       }
 
-      // Not adjacent to a number, or not followed by a number: treat as unary
-      if sign.src == "-" {
-        let operand = self.parse_unary_or_atom()?;
-        let loc = Loc { start: sign.loc.start, end: self.loc_of(operand).end };
-        return Ok(self.node(
-          NodeKind::UnaryOp { op: sign, operand },
-          loc,
-        ));
-      }
-
-      // "+" without adjacent number is not valid
-      return Err(ParseError {
-        message: "unexpected '+'".into(),
-        loc: sign.loc,
-      });
+      // `-OPERAND` — unary minus on a non-numeric operand.
+      let operand = self.parse_unary_or_atom()?;
+      let loc = Loc { start: sign.loc.start, end: self.loc_of(operand).end };
+      return Ok(self.node(
+        NodeKind::UnaryOp { op: sign, operand },
+        loc,
+      ));
     }
 
     self.parse_atom()
