@@ -87,24 +87,55 @@ test 'math trunc negative', fn:
   | equals ƒink:
     -3
 
-test 'math round half-to-even up', fn:
+test 'math round half away from zero positive', fn:
   expect run ƒink:
     {round} = import 'std/math.fnk'
     round 2.5
   | equals ƒink:
-    2
+    3
 
-test 'math round half-to-even down', fn:
+test 'math round half away from zero negative', fn:
   expect run ƒink:
     {round} = import 'std/math.fnk'
-    round 3.5
+    round (-2.5)
   | equals ƒink:
-    4
+    -3
 
 test 'math round normal up', fn:
   expect run ƒink:
     {round} = import 'std/math.fnk'
     round 3.7
+  | equals ƒink:
+    4
+
+test 'math round normal down', fn:
+  expect run ƒink:
+    {round} = import 'std/math.fnk'
+    round 3.2
+  | equals ƒink:
+    3
+
+
+# --- round_even (banker's / IEEE half-to-even) ---
+
+test 'math round_even half down to even', fn:
+  expect run ƒink:
+    {round_even} = import 'std/math.fnk'
+    round_even 2.5
+  | equals ƒink:
+    2
+
+test 'math round_even half up to even', fn:
+  expect run ƒink:
+    {round_even} = import 'std/math.fnk'
+    round_even 3.5
+  | equals ƒink:
+    4
+
+test 'math round_even normal up', fn:
+  expect run ƒink:
+    {round_even} = import 'std/math.fnk'
+    round_even 3.7
   | equals ƒink:
     4
 
@@ -235,10 +266,7 @@ test 'math copysign positive magnitude negative sign', fn:
   | equals ƒink:
     -3
 
-# Negative literal as first arg without parens parses as `copysign - 3.0`
-# (subtraction). Pre-existing language-level ambiguity, not Bug 7 — see
-# AST tests in src/passes/ast/test_operators.fnk for the design note.
-skip test 'math copysign negative magnitude positive sign', fn:
+test 'math copysign negative magnitude positive sign', fn:
   expect run ƒink:
     {copysign} = import 'std/math.fnk'
     copysign -3.0, 2.0

@@ -3,7 +3,7 @@
 ;; in-runtime use.
 ;;
 ;; Surface (via `import 'std/math.fnk'`):
-;;   abs, neg, ceil, floor, trunc, round, sqrt, sign, fract,
+;;   abs, neg, ceil, floor, trunc, round, round_even, sqrt, sign, fract,
 ;;   min, max, copysign, clamp
 ;;
 ;; Tier 2 transcendentals (sin, cos, log, exp, pow on floats, ...) are a
@@ -52,8 +52,19 @@
   (func $trunc_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
     (struct.new $F64 (f64.trunc (struct.get $F64 $val (local.get $a)))))
 
-  ;; round-to-nearest-even (banker's rounding) — wasm's native f64.nearest.
+  ;; round half away from zero ("natural" rounding).
+  ;; copysign(floor(abs(x) + 0.5), x): adds 0.5 to magnitude then floors,
+  ;; reattaches original sign. `2.5 → 3`, `-2.5 → -3`, `3.5 → 4`.
   (func $round_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (local $v f64)
+    (local.set $v (struct.get $F64 $val (local.get $a)))
+    (struct.new $F64
+      (f64.copysign
+        (f64.floor (f64.add (f64.abs (local.get $v)) (f64.const 0.5)))
+        (local.get $v))))
+
+  ;; round half-to-even (banker's / IEEE 754) — wasm's native f64.nearest.
+  (func $round_even_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
     (struct.new $F64 (f64.nearest (struct.get $F64 $val (local.get $a)))))
 
   (func $sqrt_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
@@ -118,7 +129,7 @@
 
   (elem declare func
     $_abs_apply $_neg_apply $_ceil_apply $_floor_apply $_trunc_apply
-    $_round_apply $_sqrt_apply $_sign_apply $_fract_apply
+    $_round_apply $_round_even_apply $_sqrt_apply $_sign_apply $_fract_apply
     $_min_apply $_max_apply $_copysign_apply $_clamp_apply)
 
   ;; --- 1-arg adapters ---
@@ -178,6 +189,13 @@
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
     (return_call $apply_1 (call $round_f64 (local.get $a)) (local.get $cont)))
+
+  (func $_round_even_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $round_even_f64 (local.get $a)) (local.get $cont)))
 
   (func $_sqrt_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
@@ -291,6 +309,7 @@
   (global $_floor_closure    (ref $Closure) (struct.new $Closure (ref.func $_floor_apply)    (ref.null $Captures)))
   (global $_trunc_closure    (ref $Closure) (struct.new $Closure (ref.func $_trunc_apply)    (ref.null $Captures)))
   (global $_round_closure    (ref $Closure) (struct.new $Closure (ref.func $_round_apply)    (ref.null $Captures)))
+  (global $_round_even_closure (ref $Closure) (struct.new $Closure (ref.func $_round_even_apply) (ref.null $Captures)))
   (global $_sqrt_closure     (ref $Closure) (struct.new $Closure (ref.func $_sqrt_apply)     (ref.null $Captures)))
   (global $_sign_closure     (ref $Closure) (struct.new $Closure (ref.func $_sign_apply)     (ref.null $Captures)))
   (global $_fract_closure    (ref $Closure) (struct.new $Closure (ref.func $_fract_apply)    (ref.null $Captures)))
@@ -304,7 +323,8 @@
   (func $ceil     (@pub) (@impl "std/math.fnk:ceil")     (result (ref any)) (global.get $_ceil_closure))
   (func $floor    (@pub) (@impl "std/math.fnk:floor")    (result (ref any)) (global.get $_floor_closure))
   (func $trunc    (@pub) (@impl "std/math.fnk:trunc")    (result (ref any)) (global.get $_trunc_closure))
-  (func $round    (@pub) (@impl "std/math.fnk:round")    (result (ref any)) (global.get $_round_closure))
+  (func $round      (@pub) (@impl "std/math.fnk:round")      (result (ref any)) (global.get $_round_closure))
+  (func $round_even (@pub) (@impl "std/math.fnk:round_even") (result (ref any)) (global.get $_round_even_closure))
   (func $sqrt     (@pub) (@impl "std/math.fnk:sqrt")     (result (ref any)) (global.get $_sqrt_closure))
   (func $sign     (@pub) (@impl "std/math.fnk:sign")     (result (ref any)) (global.get $_sign_closure))
   (func $fract    (@pub) (@impl "std/math.fnk:fract")    (result (ref any)) (global.get $_fract_closure))
