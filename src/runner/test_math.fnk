@@ -625,14 +625,14 @@ test 'math log1p zero', fn:
 
 # --- pow / cbrt / hypot ---
 
-skip test 'math pow square', fn:
+test 'math pow square', fn:
   expect run ƒink:
     {pow} = import 'std/math.fnk'
     pow 3.0, 2.0
   | equals ƒink:
     9
 
-skip test 'math pow zero exponent', fn:
+test 'math pow zero exponent', fn:
   expect run ƒink:
     {pow} = import 'std/math.fnk'
     pow 5.0, 0.0
@@ -684,28 +684,28 @@ test 'math tan zero', fn:
   | equals ƒink:
     0
 
-skip test 'math asin zero', fn:
+test 'math asin zero', fn:
   expect run ƒink:
     {asin} = import 'std/math.fnk'
     asin 0.0
   | equals ƒink:
     0
 
-skip test 'math acos one', fn:
+test 'math acos one', fn:
   expect run ƒink:
     {acos} = import 'std/math.fnk'
     acos 1.0
   | equals ƒink:
     0
 
-skip test 'math atan zero', fn:
+test 'math atan zero', fn:
   expect run ƒink:
     {atan} = import 'std/math.fnk'
     atan 0.0
   | equals ƒink:
     0
 
-skip test 'math atan2 zero zero', fn:
+test 'math atan2 zero zero', fn:
   expect run ƒink:
     {atan2} = import 'std/math.fnk'
     atan2 0.0, 1.0

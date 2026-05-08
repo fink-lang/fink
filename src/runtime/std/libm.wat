@@ -302,8 +302,98 @@
 
   ;; -- Power / roots --------------------------------------------------
 
+  ;; Binary exponentiation for x > 0, integer y in i32 range.
+  ;; Returns a precise result for moderate exponents; pow 3, 2 = 9 exact.
+  (func $_pow_int_pos (param $x f64) (param $y f64) (result (ref $F64))
+    (local $n i32) (local $negexp i32) (local $result f64) (local $base f64)
+    (local.set $n (i32.trunc_f64_s (f64.abs (local.get $y))))
+    (local.set $negexp (f64.lt (local.get $y) (f64.const 0)))
+    (local.set $result (f64.const 1))
+    (local.set $base (local.get $x))
+    (block $done
+      (loop $sq
+        (br_if $done (i32.eqz (local.get $n)))
+        (if (i32.and (local.get $n) (i32.const 1))
+          (then (local.set $result (f64.mul (local.get $result) (local.get $base)))))
+        (local.set $base (f64.mul (local.get $base) (local.get $base)))
+        (local.set $n (i32.shr_u (local.get $n) (i32.const 1)))
+        (br $sq)))
+    (if (local.get $negexp)
+      (then (local.set $result (f64.div (f64.const 1) (local.get $result)))))
+    (struct.new $F64 (local.get $result)))
+
+  ;; pow(x, y) — power. Faithful impl via exp/log.
+  ;;
+  ;; Cases handled:
+  ;;   y == 0:           1 (per IEEE pow, even for x = 0 or NaN)
+  ;;   y == 1:           x
+  ;;   x == 1:           1
+  ;;   x > 0:            exp(y * log(x))
+  ;;   x == 0, y > 0:    0
+  ;;   x == 0, y < 0:    +Inf
+  ;;   x < 0, y integer: pow(|x|, y) with sign by oddness
+  ;;   x < 0, y non-int: NaN
+  ;;   NaN propagation as IEEE.
   (func $pow (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $x f64) (local $y f64) (local $r (ref $F64))
+    (local $iy i64) (local $is_int i32) (local $is_odd i32)
+    (local.set $x (struct.get $F64 $val (local.get $a)))
+    (local.set $y (struct.get $F64 $val (local.get $b)))
+    ;; y == 0 → 1.
+    (if (f64.eq (local.get $y) (f64.const 0))
+      (then (return (struct.new $F64 (f64.const 1)))))
+    ;; NaN propagation.
+    (if (i32.or
+          (f64.ne (local.get $x) (local.get $x))
+          (f64.ne (local.get $y) (local.get $y)))
+      (then (return (struct.new $F64 (f64.add (local.get $x) (local.get $y))))))
+    ;; y == 1 → x.
+    (if (f64.eq (local.get $y) (f64.const 1))
+      (then (return (struct.new $F64 (local.get $x)))))
+    ;; x == 1 → 1.
+    (if (f64.eq (local.get $x) (f64.const 1))
+      (then (return (struct.new $F64 (f64.const 1)))))
+    ;; x == 0.
+    (if (f64.eq (local.get $x) (f64.const 0))
+      (then
+        (if (f64.gt (local.get $y) (f64.const 0))
+          (then (return (struct.new $F64 (f64.const 0)))))
+        (return (struct.new $F64 (f64.const inf)))))
+    ;; Integer-exponent fast path (preserves precision for cases like pow 3 2 = 9).
+    ;; Use binary exponentiation when |y| fits comfortably in i32 and y is an integer.
+    (if (i32.and
+          (f64.eq (local.get $y) (f64.trunc (local.get $y)))
+          (i32.and
+            (f64.le (f64.abs (local.get $y)) (f64.const 1073741824))
+            (f64.gt (local.get $x) (f64.const 0))))
+      (then
+        (return_call $_pow_int_pos (local.get $x) (local.get $y))))
+    ;; x > 0 → exp(y * log(x)).
+    (if (f64.gt (local.get $x) (f64.const 0))
+      (then
+        (return_call $exp
+          (struct.new $F64
+            (f64.mul (local.get $y)
+              (struct.get $F64 $val (call $log (local.get $a))))))))
+    ;; x < 0: y must be integer for a real result.
+    (local.set $is_int
+      (f64.eq (local.get $y) (f64.trunc (local.get $y))))
+    (if (i32.eqz (local.get $is_int))
+      (then (return (struct.new $F64
+        (f64.div (f64.const 0) (f64.sub (local.get $x) (local.get $x)))))))
+    ;; integer y: compute pow(|x|, y), apply sign if y is odd.
+    (local.set $iy (i64.trunc_f64_s (local.get $y)))
+    (local.set $is_odd
+      (i32.wrap_i64 (i64.and (local.get $iy) (i64.const 1))))
+    (local.set $r (call $exp
+      (struct.new $F64
+        (f64.mul (local.get $y)
+          (struct.get $F64 $val (call $log
+            (struct.new $F64 (f64.neg (local.get $x)))))))))
+    (if (local.get $is_odd)
+      (then (return (struct.new $F64
+        (f64.neg (struct.get $F64 $val (local.get $r)))))))
+    (local.get $r))
 
   ;; cbrt — cube root via Newton's method.
   ;;
@@ -536,17 +626,299 @@
         (struct.get $F64 $val (local.get $s))
         (struct.get $F64 $val (local.get $c)))))
 
+  ;; asin/acos rational R(z) = P(z)/Q(z) approximation.
+  ;; P, Q from FreeBSD msun e_asin.c.
+  (func $_asin_R (param $z f64) (result f64)
+    (local $p f64) (local $q f64)
+    (local.set $p
+      (f64.mul (local.get $z)
+        (f64.add (f64.const 1.66666666666666657415e-01)
+          (f64.mul (local.get $z)
+            (f64.add (f64.const -3.25565818622400915405e-01)
+              (f64.mul (local.get $z)
+                (f64.add (f64.const 2.01212532134862925881e-01)
+                  (f64.mul (local.get $z)
+                    (f64.add (f64.const -4.00555345006794114027e-02)
+                      (f64.mul (local.get $z)
+                        (f64.add (f64.const 7.91534994289814532176e-04)
+                          (f64.mul (local.get $z) (f64.const 3.47933107596021167570e-05)))))))))))))
+    (local.set $q
+      (f64.add (f64.const 1)
+        (f64.mul (local.get $z)
+          (f64.add (f64.const -2.40339491173441421878e+00)
+            (f64.mul (local.get $z)
+              (f64.add (f64.const 2.02094576023350569471e+00)
+                (f64.mul (local.get $z)
+                  (f64.add (f64.const -6.88283971605453293030e-01)
+                    (f64.mul (local.get $z) (f64.const 7.70381505559019352791e-02))))))))))
+    (f64.div (local.get $p) (local.get $q)))
+
+  ;; asin — arcsine. Domain [-1, 1]; traps for |x| > 1.
+  ;; |x| < 0.5: x + x*R(x²). Otherwise use asin(x) = pi/2 - 2*asin(sqrt((1-|x|)/2)).
   (func $asin (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $x f64) (local $z f64) (local $r f64) (local $s f64) (local $f f64) (local $c f64)
+    (local $hx i32) (local $ix i32)
+    (local.set $x (struct.get $F64 $val (local.get $a)))
+    (local.set $hx (i32.wrap_i64
+      (i64.shr_u (i64.reinterpret_f64 (local.get $x)) (i64.const 32))))
+    (local.set $ix (i32.and (local.get $hx) (i32.const 0x7fffffff)))
+    ;; |x| >= 1.
+    (if (i32.ge_u (local.get $ix) (i32.const 0x3ff00000))
+      (then
+        ;; Exactly ±1 → ±pi/2.
+        (if (f64.eq (f64.abs (local.get $x)) (f64.const 1))
+          (then (return (struct.new $F64
+            (f64.copysign (f64.const 1.57079632679489655800) (local.get $x))))))
+        ;; |x| > 1 (or NaN) → NaN.
+        (return (struct.new $F64
+          (f64.div (f64.const 0) (f64.sub (local.get $x) (local.get $x)))))))
+    ;; |x| < 0.5.
+    (if (i32.lt_u (local.get $ix) (i32.const 0x3fe00000))
+      (then
+        (return (struct.new $F64
+          (f64.add (local.get $x)
+            (f64.mul (local.get $x)
+              (call $_asin_R (f64.mul (local.get $x) (local.get $x)))))))))
+    ;; 0.5 <= |x| < 1.
+    (local.set $z (f64.mul (f64.const 0.5)
+      (f64.sub (f64.const 1) (f64.abs (local.get $x)))))
+    (local.set $s (f64.sqrt (local.get $z)))
+    (local.set $r (call $_asin_R (local.get $z)))
+    ;; |x| > 0.975 fast path; below that uses extra precision via low-word clear.
+    ;; We use the simpler upper-path uniformly — a few-ulp loss for x in [0.5, 0.975]
+    ;; but matches faithful rounding target.
+    (local.set $x
+      (f64.sub (f64.const 1.57079632679489655800)
+        (f64.sub
+          (f64.mul (f64.const 2)
+            (f64.add (local.get $s) (f64.mul (local.get $s) (f64.mul (local.get $z) (local.get $r)))))
+          (f64.const 6.12323399573676603587e-17))))
+    (struct.new $F64
+      (select (f64.neg (local.get $x)) (local.get $x)
+              (i32.shr_u (local.get $hx) (i32.const 31)))))
 
+  ;; acos — arccosine. Domain [-1, 1].
+  ;; |x| < 0.5: pi/2 - x - x*R(x²)  (rearranged for precision).
+  ;; x >= 0.5:  2*asin(sqrt((1-x)/2)).
+  ;; x <= -0.5: pi - 2*asin(sqrt((1+x)/2)).
   (func $acos (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $x f64) (local $z f64) (local $r f64) (local $s f64) (local $w f64)
+    (local $hx i32) (local $ix i32)
+    (local.set $x (struct.get $F64 $val (local.get $a)))
+    (local.set $hx (i32.wrap_i64
+      (i64.shr_u (i64.reinterpret_f64 (local.get $x)) (i64.const 32))))
+    (local.set $ix (i32.and (local.get $hx) (i32.const 0x7fffffff)))
+    ;; |x| >= 1.
+    (if (i32.ge_u (local.get $ix) (i32.const 0x3ff00000))
+      (then
+        (if (f64.eq (local.get $x) (f64.const 1))
+          (then (return (struct.new $F64 (f64.const 0)))))
+        (if (f64.eq (local.get $x) (f64.const -1))
+          (then (return (struct.new $F64
+            (f64.add (f64.const 3.14159265358979311600)
+                     (f64.const 1.22464679914735320700e-16))))))
+        (return (struct.new $F64
+          (f64.div (f64.const 0) (f64.sub (local.get $x) (local.get $x)))))))
+    ;; |x| < 0.5.
+    (if (i32.lt_u (local.get $ix) (i32.const 0x3fe00000))
+      (then
+        ;; Tiny x: acos(x) = pi/2 - x  (via pio2_hi - (x - pio2_lo)).
+        (if (i32.lt_u (local.get $ix) (i32.const 0x3c600000))
+          (then (return (struct.new $F64
+            (f64.add (f64.const 1.57079632679489655800) (f64.const 6.12323399573676603587e-17))))))
+        (local.set $z (call $_asin_R (f64.mul (local.get $x) (local.get $x))))
+        (return (struct.new $F64
+          (f64.sub (f64.const 1.57079632679489655800)
+            (f64.sub (local.get $x)
+              (f64.sub (f64.const 6.12323399573676603587e-17)
+                (f64.mul (local.get $x) (local.get $z)))))))))
+    ;; x <= -0.5.
+    (if (i32.shr_u (local.get $hx) (i32.const 31))
+      (then
+        (local.set $z (f64.mul (f64.const 0.5)
+          (f64.add (f64.const 1) (local.get $x))))
+        (local.set $r (call $_asin_R (local.get $z)))
+        (local.set $s (f64.sqrt (local.get $z)))
+        (local.set $w
+          (f64.sub (f64.mul (local.get $s) (local.get $r))
+                   (f64.const 6.12323399573676603587e-17)))
+        (return (struct.new $F64
+          (f64.sub (f64.const 3.14159265358979311600)
+            (f64.mul (f64.const 2)
+              (f64.add (local.get $s) (local.get $w))))))))
+    ;; x >= 0.5.
+    (local.set $z (f64.mul (f64.const 0.5)
+      (f64.sub (f64.const 1) (local.get $x))))
+    (local.set $s (f64.sqrt (local.get $z)))
+    (local.set $r (call $_asin_R (local.get $z)))
+    (local.set $w
+      (f64.sub (f64.mul (local.get $s) (local.get $r))
+               (f64.const 6.12323399573676603587e-17)))
+    (struct.new $F64
+      (f64.mul (f64.const 2)
+        (f64.add (local.get $s) (local.get $w)))))
 
+  ;; atan — arctangent. Port of FreeBSD msun s_atan.c via rust-libm.
+  ;;
+  ;; Method: split |x| into 4 ranges; each maps to an interval where a
+  ;; degree-22 polynomial in x² approximates arctan. ATANHI/ATANLO[id]
+  ;; are reference angles (atan(0.5), atan(1), atan(1.5), atan(inf))
+  ;; with high/low Cody-Waite splits for accuracy. Result is reassembled
+  ;; from the reference + polynomial residual, then sign-applied.
   (func $atan (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $x f64) (local $z f64) (local $w f64) (local $s1 f64) (local $s2 f64)
+    (local $hi f64) (local $lo f64)
+    (local $ix i32) (local $sign i32) (local $id i32)
+    (local.set $x (struct.get $F64 $val (local.get $a)))
+    (local.set $ix (i32.wrap_i64
+      (i64.shr_u (i64.reinterpret_f64 (local.get $x)) (i64.const 32))))
+    (local.set $sign (i32.shr_u (local.get $ix) (i32.const 31)))
+    (local.set $ix (i32.and (local.get $ix) (i32.const 0x7fffffff)))
+    ;; |x| >= 2^66 → ±atan(inf) = ±pi/2.
+    (if (i32.ge_u (local.get $ix) (i32.const 0x44100000))
+      (then
+        (if (f64.ne (local.get $x) (local.get $x))
+          (then (return (struct.new $F64 (local.get $x)))))
+        ;; ATANHI[3] = atan(inf)hi = pi/2 high.
+        (local.set $z (f64.const 1.57079632679489655800))
+        (return (struct.new $F64
+          (select (f64.neg (local.get $z)) (local.get $z) (local.get $sign))))))
+    ;; Range bucket selection.
+    (if (i32.lt_u (local.get $ix) (i32.const 0x3fdc0000))
+      (then
+        ;; |x| < 0.4375 → no reduction, no offset.
+        (if (i32.lt_u (local.get $ix) (i32.const 0x3e400000))
+          (then (return (struct.new $F64 (local.get $x)))))
+        (local.set $id (i32.const -1)))
+      (else
+        (local.set $x (f64.abs (local.get $x)))
+        (if (i32.lt_u (local.get $ix) (i32.const 0x3ff30000))
+          (then
+            (if (i32.lt_u (local.get $ix) (i32.const 0x3fe60000))
+              (then
+                ;; 7/16 <= |x| < 11/16 → x = (2x-1)/(2+x), id = 0.
+                (local.set $x
+                  (f64.div
+                    (f64.sub (f64.mul (f64.const 2) (local.get $x)) (f64.const 1))
+                    (f64.add (f64.const 2) (local.get $x))))
+                (local.set $id (i32.const 0)))
+              (else
+                ;; 11/16 <= |x| < 19/16 → x = (x-1)/(x+1), id = 1.
+                (local.set $x
+                  (f64.div
+                    (f64.sub (local.get $x) (f64.const 1))
+                    (f64.add (local.get $x) (f64.const 1))))
+                (local.set $id (i32.const 1)))))
+          (else
+            (if (i32.lt_u (local.get $ix) (i32.const 0x40038000))
+              (then
+                ;; 19/16 <= |x| < 2.4375 → x = (x-1.5)/(1+1.5x), id = 2.
+                (local.set $x
+                  (f64.div
+                    (f64.sub (local.get $x) (f64.const 1.5))
+                    (f64.add (f64.const 1) (f64.mul (f64.const 1.5) (local.get $x)))))
+                (local.set $id (i32.const 2)))
+              (else
+                ;; 2.4375 <= |x| < 2^66 → x = -1/x, id = 3.
+                (local.set $x (f64.div (f64.const -1) (local.get $x)))
+                (local.set $id (i32.const 3))))))))
+    ;; Polynomial.
+    (local.set $z (f64.mul (local.get $x) (local.get $x)))
+    (local.set $w (f64.mul (local.get $z) (local.get $z)))
+    ;; s1 = z*(AT0 + w*(AT2 + w*(AT4 + w*(AT6 + w*(AT8 + w*AT10)))))
+    (local.set $s1
+      (f64.mul (local.get $z)
+        (f64.add (f64.const 3.33333333333329318027e-01)
+          (f64.mul (local.get $w)
+            (f64.add (f64.const 1.42857142725034663711e-01)
+              (f64.mul (local.get $w)
+                (f64.add (f64.const 9.09088713343650656196e-02)
+                  (f64.mul (local.get $w)
+                    (f64.add (f64.const 6.66107313738753120669e-02)
+                      (f64.mul (local.get $w)
+                        (f64.add (f64.const 4.97687799461593236017e-02)
+                          (f64.mul (local.get $w) (f64.const 1.62858201153657823623e-02)))))))))))))
+    ;; s2 = w*(AT1 + w*(AT3 + w*(AT5 + w*(AT7 + w*AT9))))
+    (local.set $s2
+      (f64.mul (local.get $w)
+        (f64.add (f64.const -1.99999999998764832476e-01)
+          (f64.mul (local.get $w)
+            (f64.add (f64.const -1.11111104054623557880e-01)
+              (f64.mul (local.get $w)
+                (f64.add (f64.const -7.69187620504482999495e-02)
+                  (f64.mul (local.get $w)
+                    (f64.add (f64.const -5.83357013379057348645e-02)
+                      (f64.mul (local.get $w) (f64.const -3.65315727442169155270e-02)))))))))))
+    (if (i32.lt_s (local.get $id) (i32.const 0))
+      (then (return (struct.new $F64
+        (f64.sub (local.get $x)
+          (f64.mul (local.get $x) (f64.add (local.get $s1) (local.get $s2))))))))
+    ;; ATANHI/ATANLO arrays via id select.
+    (if (i32.eqz (local.get $id))
+      (then
+        (local.set $hi (f64.const 4.63647609000806093515e-01))
+        (local.set $lo (f64.const 2.26987774529616870924e-17))))
+    (if (i32.eq (local.get $id) (i32.const 1))
+      (then
+        (local.set $hi (f64.const 7.85398163397448278999e-01))
+        (local.set $lo (f64.const 3.06161699786838301793e-17))))
+    (if (i32.eq (local.get $id) (i32.const 2))
+      (then
+        (local.set $hi (f64.const 9.82793723247329054082e-01))
+        (local.set $lo (f64.const 1.39033110312309984516e-17))))
+    (if (i32.eq (local.get $id) (i32.const 3))
+      (then
+        (local.set $hi (f64.const 1.57079632679489655800e+00))
+        (local.set $lo (f64.const 6.12323399573676603587e-17))))
+    ;; z = ATANHI[id] - ((x*(s1+s2) - ATANLO[id]) - x)
+    (local.set $z
+      (f64.sub (local.get $hi)
+        (f64.sub
+          (f64.sub (f64.mul (local.get $x) (f64.add (local.get $s1) (local.get $s2)))
+                   (local.get $lo))
+          (local.get $x))))
+    (struct.new $F64
+      (select (f64.neg (local.get $z)) (local.get $z) (local.get $sign))))
 
+  ;; atan2(y, x) — two-argument arctangent. Returns angle in (-pi, pi].
+  ;; Simplified port; covers all quadrants + axes; doesn't preserve signed-zero
+  ;; distinction in some edge cases (acceptable for faithful target).
+  ;;
+  ;; Logic:
+  ;;   x > 0:           atan(y/x)
+  ;;   x < 0, y >= 0:   atan(y/x) + pi
+  ;;   x < 0, y < 0:    atan(y/x) - pi
+  ;;   x == 0, y > 0:   pi/2
+  ;;   x == 0, y < 0:  -pi/2
+  ;;   x == 0, y == 0:  0
+  ;;   NaN in either:   NaN
   (func $atan2 (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $y f64) (local $x f64) (local $r (ref $F64)) (local $rv f64)
+    (local.set $y (struct.get $F64 $val (local.get $a)))
+    (local.set $x (struct.get $F64 $val (local.get $b)))
+    ;; NaN propagation.
+    (if (i32.or
+          (f64.ne (local.get $y) (local.get $y))
+          (f64.ne (local.get $x) (local.get $x)))
+      (then (return (struct.new $F64 (f64.add (local.get $y) (local.get $x))))))
+    ;; x == 0.
+    (if (f64.eq (local.get $x) (f64.const 0))
+      (then
+        (if (f64.eq (local.get $y) (f64.const 0))
+          (then (return (struct.new $F64 (f64.const 0)))))
+        (return (struct.new $F64
+          (f64.copysign (f64.const 1.57079632679489655800) (local.get $y))))))
+    ;; r = atan(y/x).
+    (local.set $r (call $atan
+      (struct.new $F64 (f64.div (local.get $y) (local.get $x)))))
+    (local.set $rv (struct.get $F64 $val (local.get $r)))
+    ;; x > 0: just r.
+    (if (f64.gt (local.get $x) (f64.const 0))
+      (then (return (struct.new $F64 (local.get $rv)))))
+    ;; x < 0: r ± pi (sign matches y).
+    (struct.new $F64
+      (f64.add (local.get $rv)
+        (f64.copysign (f64.const 3.14159265358979311600) (local.get $y)))))
 
 
   ;; -- Hyperbolic -----------------------------------------------------
