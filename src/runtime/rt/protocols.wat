@@ -28,6 +28,11 @@
   (import "std/decimal.wat"  "Decimal"     (type $Decimal     (sub any)))
   (import "std/str.wat"      "Str"         (type $Str         (sub any)))
   (import "std/list.wat"     "List"        (type $List        (sub any)))
+  ;; Pull std/math.wat into the link DAG. rt/protocols doesn't call any
+  ;; math primitive directly; this import exists so the linker reaches
+  ;; math.wat's `(@impl "std/math.fnk:...")` entries.
+  (import "std/math.wat"     "abs_f64"
+    (func $_link_math_anchor (param (ref $F64)) (result (ref $F64))))
   (import "std/dict.wat"     "Rec"         (type $Rec         (sub any)))
   (import "std/dict.wat"     "RecImpl"     (type $RecImpl     (sub any)))
   (import "std/set.wat"      "Set"         (type $Set         (sub any)))

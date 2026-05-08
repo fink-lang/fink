@@ -279,6 +279,100 @@
 
 
   ;; =========================================================================
+  ;; Math primitives — int arms of std/math.fnk dispatch.
+  ;;
+  ;; Result subtype matches input subtype where defined: $I64 → $I64,
+  ;; $U64 → $U64. Ops not meaningful on the bits family (neg, copysign)
+  ;; trap on $U64 input.
+  ;; =========================================================================
+
+  ;; abs — magnitude. $U64: identity (already non-negative). $I64: sign-
+  ;; extract trick `(v ^ (v >> 63)) - (v >> 63)`.
+  (func $abs (@pub) (param $a (ref $Int)) (result (ref $Int))
+    (local $v i64) (local $m i64)
+    (if (ref.test (ref $U64) (local.get $a))
+      (then (return (local.get $a))))
+    (local.set $v (call $_int_ival (local.get $a)))
+    (local.set $m (i64.shr_s (local.get $v) (i64.const 63)))
+    (return_call $_box_i64
+      (i64.sub
+        (i64.xor (local.get $v) (local.get $m))
+        (local.get $m))))
+
+  ;; neg — negation. Traps on $U64 (bits family has no signed negation).
+  (func $neg (@pub) (param $a (ref $Int)) (result (ref $Int))
+    (if (ref.test (ref $U64) (local.get $a))
+      (then (unreachable)))
+    (return_call $_box_i64
+      (i64.sub (i64.const 0) (call $_int_ival (local.get $a)))))
+
+  ;; sign — -1/0/1 in same subtype as input. $U64 result is 0 or 1.
+  (func $sign (@pub) (param $a (ref $Int)) (result (ref $Int))
+    (local $v i64)
+    (local.set $v (call $_int_ival (local.get $a)))
+    (if (ref.test (ref $U64) (local.get $a))
+      (then
+        (return_call $_box_u64
+          (i64.extend_i32_u (i64.ne (local.get $v) (i64.const 0))))))
+    ;; signed: (v > 0) - (v < 0) → -1, 0, or 1
+    (return_call $_box_i64
+      (i64.sub
+        (i64.extend_i32_u (i64.gt_s (local.get $v) (i64.const 0)))
+        (i64.extend_i32_u (i64.lt_s (local.get $v) (i64.const 0))))))
+
+  ;; min / max — pairwise. $U64 uses unsigned comparison; $I64 uses signed.
+  ;; check_compat (in num.wat) already enforces same family at the call site;
+  ;; here we only need to pick the right comparison per subtype.
+  (func $min (@pub) (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (local $av i64) (local $bv i64)
+    (local.set $av (call $_int_ival (local.get $a)))
+    (local.set $bv (call $_int_ival (local.get $b)))
+    (if (ref.test (ref $U64) (local.get $a))
+      (then
+        (return_call $_box_u64
+          (select (local.get $av) (local.get $bv)
+            (i64.lt_u (local.get $av) (local.get $bv))))))
+    (return_call $_box_i64
+      (select (local.get $av) (local.get $bv)
+        (i64.lt_s (local.get $av) (local.get $bv)))))
+
+  (func $max (@pub) (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (local $av i64) (local $bv i64)
+    (local.set $av (call $_int_ival (local.get $a)))
+    (local.set $bv (call $_int_ival (local.get $b)))
+    (if (ref.test (ref $U64) (local.get $a))
+      (then
+        (return_call $_box_u64
+          (select (local.get $av) (local.get $bv)
+            (i64.gt_u (local.get $av) (local.get $bv))))))
+    (return_call $_box_i64
+      (select (local.get $av) (local.get $bv)
+        (i64.gt_s (local.get $av) (local.get $bv)))))
+
+  ;; copysign — magnitude of `a`, sign of `b`. Traps on $U64 (no sign).
+  (func $copysign (@pub) (param $a (ref $Int)) (param $b (ref $Int)) (result (ref $Int))
+    (local $av i64) (local $bv i64) (local $abs i64) (local $sign i64)
+    (if (i32.or
+          (ref.test (ref $U64) (local.get $a))
+          (ref.test (ref $U64) (local.get $b)))
+      (then (unreachable)))
+    (local.set $av (call $_int_ival (local.get $a)))
+    (local.set $bv (call $_int_ival (local.get $b)))
+    ;; |a| via the same trick as $abs.
+    (local.set $sign (i64.shr_s (local.get $av) (i64.const 63)))
+    (local.set $abs
+      (i64.sub
+        (i64.xor (local.get $av) (local.get $sign))
+        (local.get $sign)))
+    ;; sign of b: -1 if b < 0 else +1 (treating 0 as +).
+    (return_call $_box_i64
+      (select
+        (i64.sub (i64.const 0) (local.get $abs))
+        (local.get $abs)
+        (i64.lt_s (local.get $bv) (i64.const 0)))))
+
+
+  ;; =========================================================================
   ;; Formatting — render a $Int as a decimal string. $U64 prints unsigned;
   ;; $I64 prints signed. The output is always a $Str backed by a
   ;; $ByteArray (built locally, wrapped via str.wat:from_bytes).

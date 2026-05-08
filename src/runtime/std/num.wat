@@ -108,7 +108,7 @@
   ;; transfers verbatim. When fields narrow per subtype, these helpers
   ;; will do the actual conversion (e.g. f64.convert_i64_s for Int→F64).
 
-  (func $as_f64 (param $n (ref $Num)) (result (ref $F64))
+  (func $as_f64 (@pub) (param $n (ref $Num)) (result (ref $F64))
     ;; Already $F64 → no-op.
     (block $not_f64
       (block $is_f64 (result (ref $F64))

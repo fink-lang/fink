@@ -1,4 +1,4 @@
-{test, expect, equals, ast} = import '!fake'
+{test, skip, expect, equals, ast} = import '!fake'
 {ƒink} = import '@fink/parse/blocks.fnk'
 
 
@@ -607,3 +607,53 @@ test 'multiply with call rhs', fn:
         Apply
           Ident 'foo'
           Ident 'b'
+
+
+---
+negative literal as second arg — Bug 7 (parser drops `-NUM` after a comma).
+Today the parser stops the arg list at the comma when the next token is a
+unary `-`, so `foo 1, -2` parses as `Apply foo, 1` followed by a separate
+top-level `LitInt '-2'`. The arg-list parser needs to allow unary-prefix
+expression starts after a comma.
+---
+
+test 'apply with negative int literal as second arg', fn:
+  expect ast ƒink:
+    foo 1, -2
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        LitInt '1'
+        LitInt '-2'
+
+test 'apply with negative float literal as second arg', fn:
+  expect ast ƒink:
+    foo 3.0, -2.0
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        LitFloat '3.0'
+        LitFloat '-2.0'
+
+test 'apply with unary-minus ident as second arg', fn:
+  expect ast ƒink:
+    foo a, -b
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        Ident 'a'
+        UnaryOp '-',
+          Ident 'b'
+
+test 'apply with negative literal as first arg', fn:
+  expect ast ƒink:
+    foo -3.0, 2.0
+  | equals ƒink:
+    Module
+      Apply
+        Ident 'foo'
+        LitFloat '-3.0'
+        LitFloat '2.0'

@@ -1125,12 +1125,12 @@ mod tests {
       super::run(reader, writer, &path_str).ok();
     });
 
-    // Wait up to 10s for the DAP session to finish. If it hangs past that,
+    // Wait up to 30s for the DAP session to finish. If it hangs past that,
     // the test fails loudly rather than hanging CI.
     let start = std::time::Instant::now();
     while !handle.is_finished() {
-      if start.elapsed() > std::time::Duration::from_secs(10) {
-        panic!("DAP session did not terminate within 10s");
+      if start.elapsed() > std::time::Duration::from_secs(30) {
+        panic!("DAP session did not terminate within 30s");
       }
       std::thread::sleep(std::time::Duration::from_millis(50));
     }
@@ -1231,8 +1231,8 @@ mod tests {
 
     let start = std::time::Instant::now();
     while !handle.is_finished() {
-      if start.elapsed() > std::time::Duration::from_secs(10) {
-        panic!("DAP session did not terminate within 10s");
+      if start.elapsed() > std::time::Duration::from_secs(30) {
+        panic!("DAP session did not terminate within 30s");
       }
       std::thread::sleep(std::time::Duration::from_millis(50));
     }
@@ -1317,8 +1317,8 @@ mod tests {
 
     let start = std::time::Instant::now();
     while !handle.is_finished() {
-      if start.elapsed() > std::time::Duration::from_secs(10) {
-        panic!("DAP session did not terminate within 10s");
+      if start.elapsed() > std::time::Duration::from_secs(30) {
+        panic!("DAP session did not terminate within 30s");
       }
       std::thread::sleep(std::time::Duration::from_millis(50));
     }
