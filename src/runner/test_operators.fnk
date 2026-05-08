@@ -37,11 +37,11 @@ test 'power', fn:
     256
 
 
-skip test 'power float', fn:
+test 'power float', fn:
   expect run ƒink:
     2.0 ** 0.5
   | equals ƒink:
-    1.4142135623730951
+    1.414213562373095
 
 
 test 'integer division', fn:

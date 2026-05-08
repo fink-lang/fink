@@ -82,19 +82,15 @@
       (struct.get $F64 $val (local.get $a))
       (struct.get $F64 $val (local.get $b))))
 
-  ;; -- TODO: float math primitives ------------------------------------
-  ;;
-  ;; `pow` (and friends `sqrt`/`log`/`exp`/trig) need either host imports
-  ;; or in-wasm implementations. Wasm provides `f64.sqrt` natively but
-  ;; nothing else from the math.h surface. Plan: add std/math.wat with
-  ;; host-imported transcendentals once the host story is settled.
-  ;;
-  ;; Until then `op_pow` traps so users get a clear error rather than
-  ;; silent integer truncation.
+  ;; op_pow on floats — delegates to std/libm.wat:pow (faithfully-rounded
+  ;; port of rust-libm). The `**` operator routes here via num.wat for
+  ;; `$F64` operands and mixed Int/F64 (after Int→F64 widening).
+  (import "std/libm.wat" "pow"
+    (func $libm_pow (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
 
   (func $op_pow (@pub)
     (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (return_call $libm_pow (local.get $a) (local.get $b)))
 
   ;; -- Math primitives — float arms of std/math.fnk dispatch ------------
   ;;
