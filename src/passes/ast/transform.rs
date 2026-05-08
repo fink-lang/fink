@@ -77,6 +77,7 @@ pub trait Transform<'src> {
       NodeKind::Match { subjects, sep, arms } => self.transform_match(builder, src, subjects, sep, arms, loc),
       NodeKind::Arm { lhs, sep, body } => self.transform_arm(builder, src, lhs, sep, body, loc),
       NodeKind::Block { name, params, sep, body } => self.transform_block(builder, src, name, params, sep, body, loc),
+      NodeKind::With { .. } => panic!("With not yet supported in passes::ast::transform"),
     }
   }
 

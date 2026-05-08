@@ -381,6 +381,7 @@ impl<'src> Parser<'src> {
 
       if name == "fn" { return self.parse_fn(loc); }
       if name == "match" { return self.parse_match_expr(loc); }
+      if name == "with" { return self.parse_with_expr(loc); }
       if self.block_names.contains_key(name) { return self.parse_block(loc, name); }
 
       // Tagged template string: ident immediately adjacent to StrStart → raw template
@@ -428,6 +429,7 @@ impl<'src> Parser<'src> {
     if let NodeKind::Ident(name) = self.get(head).kind {
       if name == "fn" { return self.parse_fn(self.loc_of(head)); }
       if name == "match" { return self.parse_match_expr(self.loc_of(head)); }
+      if name == "with" { return self.parse_with_expr(self.loc_of(head)); }
       if self.block_names.contains_key(name) && name != "fn" && name != "match" {
         return self.parse_block(self.loc_of(head), name);
       }
@@ -747,6 +749,10 @@ impl<'src> Parser<'src> {
       if name_tok.src == "match" {
         self.bump();
         return self.parse_match_expr(name_tok.loc);
+      }
+      if name_tok.src == "with" {
+        self.bump();
+        return self.parse_with_expr(name_tok.loc);
       }
       if self.block_names.contains_key(name_tok.src) {
         self.bump();
@@ -1693,6 +1699,22 @@ impl<'src> Parser<'src> {
     ))
   }
 
+  fn parse_with_expr(&mut self, with_loc: Loc) -> ParseResult {
+    let (params_node, params_loc) = self.parse_params()?;
+    // Extract handler expressions from Patterns wrapper — handlers are
+    // value-site, not patterns. Same shape as `match` subjects.
+    let handlers = match self.get(params_node).kind.clone() {
+      NodeKind::Patterns(exprs) => exprs,
+      _ => Exprs { items: Box::new([params_node]), seps: vec![] },
+    };
+    let (sep, body) = self.parse_colon_body()?;
+    let end = body.items.last().map(|&id| self.loc_of(id).end).unwrap_or(params_loc.end);
+    Ok(self.node(
+      NodeKind::With { handlers, sep, body },
+      Loc { start: with_loc.start, end },
+    ))
+  }
+
   fn parse_colon_arms(&mut self) -> Result<(Token<'src>, Exprs<'src>), ParseError> {
     let sep = self.expect(TokenKind::Colon)?;
     let arms = if self.at(TokenKind::BlockStart) {
@@ -2014,5 +2036,6 @@ mod tests {
   test_macros::include_fink_tests!("src/passes/ast/test_match.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_blocks.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_block_modes.fnk");
+  test_macros::include_fink_tests!("src/passes/ast/test_with.fnk");
   test_macros::include_fink_tests!("src/passes/ast/test_module.fnk");
 }

@@ -343,6 +343,7 @@ impl<'a, 'src> Printer<'a, 'src> {
                 self.tok(&sep);
                 self.exprs(&body);
             }
+            NodeKind::With { .. } => panic!("With not yet supported in fmt::print::node"),
         }
     }
 

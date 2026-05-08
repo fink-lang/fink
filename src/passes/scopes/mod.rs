@@ -714,6 +714,8 @@ fn walk_node<'src>(ast: &Ast<'src>, id: AstId, scope: ScopeId, ctx: &mut Ctx<'sr
       }
       walk_pattern_refs(ast, rhs, scope, ctx);
     }
+
+    NodeKind::With { .. } => panic!("With not yet supported in passes::scopes"),
   }
 }
 

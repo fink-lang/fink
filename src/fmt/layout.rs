@@ -469,6 +469,7 @@ impl<'a, 'src> Ctx<'a, 'src> {
             NodeKind::Block { name, params, sep, body } => {
                 self.block_node(name, params, sep, &body, at)
             }
+            NodeKind::With { .. } => panic!("With not yet supported in fmt::layout::node"),
         }
     }
 

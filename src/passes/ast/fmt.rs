@@ -436,6 +436,7 @@ fn fmt_node(ast: &Ast<'_>, id: AstId, out: &mut MappedWriter, depth: usize) {
       out.push(':');
       fmt_body(ast, &body.items, out, depth, true);
     }
+    NodeKind::With { .. } => panic!("With not yet supported in passes::ast::fmt::fmt_node"),
   }
 }
 

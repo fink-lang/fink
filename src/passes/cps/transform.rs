@@ -357,6 +357,7 @@ fn lower(g: &mut Gen, id: AstId) -> Lower {
     NodeKind::Patterns(_) => panic!("Patterns node lowered via fn/match"),
     NodeKind::Arm { .. }  => panic!("Arm node lowered via lower_match"),
     NodeKind::Token(_) => panic!("Token node should not reach CPS transform"),
+    NodeKind::With { .. } => panic!("With not yet supported in passes::cps::transform"),
   }
 }
 
