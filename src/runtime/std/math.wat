@@ -1,6 +1,8 @@
-;; Math primitives — Tier 1: native f64 wasm instructions wrapped as
-;; user-importable fink functions and as direct-style helpers for
-;; in-runtime use.
+;; Math primitives — Tier 1: polymorphic dispatch over $Num.
+;;
+;; This module is thin glue. The actual primitives live in:
+;;   - std/float.wat  (f64 arms)
+;;   - std/int.wat    (int arms; traps on $U64 where ops are signed-only)
 ;;
 ;; Surface (via `import 'std/math.fnk'`):
 ;;   abs, neg, ceil, floor, trunc, round, round_even, sqrt, sign, fract,
@@ -17,9 +19,10 @@
   (import "rt/apply.wat" "Captures" (type $Captures (sub any)))
   (import "rt/apply.wat" "Fn2"      (type $Fn2      (sub any)))
   (import "std/num.wat"  "Num"      (type $Num      (sub any) (struct)))
+  (import "std/int.wat"  "Int"      (type $Int      (sub $Num (struct))))
   (import "std/float.wat" "F64"     (type $F64      (sub final $Num (struct (field $val f64)))))
 
-  ;; Func imports
+  ;; Func imports — apply / list plumbing
   (import "rt/apply.wat" "apply_1"
     (func $apply_1 (param $result (ref null any)) (param $cont (ref null any))))
   (import "std/list.wat" "head_any"
@@ -31,306 +34,397 @@
   (import "std/list.wat" "is_empty"
     (func $list_is_empty (param (ref $List)) (result i32)))
 
+  ;; Func imports — float arms
+  (import "std/float.wat" "abs"        (func $float_abs        (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "neg"        (func $float_neg        (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "ceil"       (func $float_ceil       (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "floor"      (func $float_floor      (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "trunc"      (func $float_trunc      (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "round"      (func $float_round      (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "round_even" (func $float_round_even (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "sqrt"       (func $float_sqrt       (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "sign"       (func $float_sign       (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "fract"      (func $float_fract      (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "min"        (func $float_min        (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "max"        (func $float_max        (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "copysign"   (func $float_copysign   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/float.wat" "clamp"      (func $float_clamp      (param (ref $F64)) (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
 
-  ;; -- Direct-style helpers --------------------------------------------
+  ;; Func imports — int arms
+  (import "std/int.wat" "abs"      (func $int_abs      (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "neg"      (func $int_neg      (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "sign"     (func $int_sign     (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "min"      (func $int_min      (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "max"      (func $int_max      (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+  (import "std/int.wat" "copysign" (func $int_copysign (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+
+
+  ;; -- Dispatchers — branch on $F64 vs $Int over $Num. ----------------
   ;;
-  ;; These wrap a single wasm instruction. Other WAT modules can call
-  ;; them directly when they need the underlying primitive.
+  ;; Identity-on-Int ops (floor/ceil/trunc/round/round_even/fract) return
+  ;; the input unchanged when given an Int. Sign-only ops (neg/copysign)
+  ;; trap inside int.wat when given a $U64. sqrt is float-only — Int
+  ;; widens to f64 then back. Anything that is not $F64 or $Int (i.e.
+  ;; $Decimal) traps via the unreachable fall-through.
 
-  (func $abs_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.abs (struct.get $F64 $val (local.get $a)))))
+  (func $abs_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_abs (ref.cast (ref $F64) (local.get $n)))))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return_call $int_abs (ref.cast (ref $Int) (local.get $n)))))
+    (unreachable))
 
-  (func $neg_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.neg (struct.get $F64 $val (local.get $a)))))
+  (func $neg_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_neg (ref.cast (ref $F64) (local.get $n)))))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return_call $int_neg (ref.cast (ref $Int) (local.get $n)))))
+    (unreachable))
 
-  (func $ceil_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.ceil (struct.get $F64 $val (local.get $a)))))
+  (func $sign_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_sign (ref.cast (ref $F64) (local.get $n)))))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return_call $int_sign (ref.cast (ref $Int) (local.get $n)))))
+    (unreachable))
 
-  (func $floor_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.floor (struct.get $F64 $val (local.get $a)))))
+  ;; Identity on Int — floor/ceil/trunc/round/round_even/fract.
+  (func $ceil_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return (local.get $n))))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_ceil (ref.cast (ref $F64) (local.get $n)))))
+    (unreachable))
 
-  (func $trunc_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.trunc (struct.get $F64 $val (local.get $a)))))
+  (func $floor_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return (local.get $n))))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_floor (ref.cast (ref $F64) (local.get $n)))))
+    (unreachable))
 
-  ;; round half away from zero ("natural" rounding).
-  ;; copysign(floor(abs(x) + 0.5), x): adds 0.5 to magnitude then floors,
-  ;; reattaches original sign. `2.5 → 3`, `-2.5 → -3`, `3.5 → 4`.
-  (func $round_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (local $v f64)
-    (local.set $v (struct.get $F64 $val (local.get $a)))
-    (struct.new $F64
-      (f64.copysign
-        (f64.floor (f64.add (f64.abs (local.get $v)) (f64.const 0.5)))
-        (local.get $v))))
+  (func $trunc_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return (local.get $n))))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_trunc (ref.cast (ref $F64) (local.get $n)))))
+    (unreachable))
 
-  ;; round half-to-even (banker's / IEEE 754) — wasm's native f64.nearest.
-  (func $round_even_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.nearest (struct.get $F64 $val (local.get $a)))))
+  (func $round_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return (local.get $n))))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_round (ref.cast (ref $F64) (local.get $n)))))
+    (unreachable))
 
-  (func $sqrt_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.sqrt (struct.get $F64 $val (local.get $a)))))
+  (func $round_even_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return (local.get $n))))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_round_even (ref.cast (ref $F64) (local.get $n)))))
+    (unreachable))
 
-  ;; sign(x): 1.0 if x > 0, -1.0 if x < 0, 0.0 if x == 0, NaN if x is NaN.
-  (func $sign_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (local $v f64)
-    (local.set $v (struct.get $F64 $val (local.get $a)))
-    ;; NaN check
-    (if (f64.ne (local.get $v) (local.get $v))
-      (then (return (struct.new $F64 (local.get $v)))))
-    ;; ±0 → 0.0 (exact zero)
-    (if (f64.eq (local.get $v) (f64.const 0))
-      (then (return (struct.new $F64 (f64.const 0)))))
-    ;; non-zero, non-NaN → ±1
-    (struct.new $F64 (f64.copysign (f64.const 1) (local.get $v))))
+  ;; fract on Int → 0 in same subtype. Reuse $int_sub_self via $int_neg
+  ;; round-trip would be wrong; instead take advantage of `n - n = 0`
+  ;; semantics by calling the existing int min(n,n)... no, simplest: the
+  ;; Int identity rule says fract(n) is the same family's zero. Use
+  ;; $int_neg(n) ... no — explicit: int.wat doesn't expose a zero builder.
+  ;; Cheapest: subtract n from itself via int_neg+plus would pull deps.
+  ;; Pragmatic: int.wat already has `op_minus`. Import it for this one
+  ;; case to produce a zero of the right subtype.
+  (func $fract_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $Int) (local.get $n))
+      (then (return_call $int_sub_self (ref.cast (ref $Int) (local.get $n)))))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_fract (ref.cast (ref $F64) (local.get $n)))))
+    (unreachable))
 
-  ;; fract(x): x - trunc(x). Sign matches x.
-  (func $fract_f64 (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (local $v f64)
-    (local.set $v (struct.get $F64 $val (local.get $a)))
-    (struct.new $F64
-      (f64.sub (local.get $v) (f64.trunc (local.get $v)))))
+  ;; sqrt — float-only at the surface; Int widens to F64.
+  ;; Today sqrt over Int is not requested by tests, so trap to keep the
+  ;; family rules tight. Revisit if Int sqrt is wanted.
+  (func $sqrt_num (param $n (ref $Num)) (result (ref $Num))
+    (if (ref.test (ref $F64) (local.get $n))
+      (then (return_call $float_sqrt (ref.cast (ref $F64) (local.get $n)))))
+    (unreachable))
 
-  (func $min_f64 (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.min
-      (struct.get $F64 $val (local.get $a))
-      (struct.get $F64 $val (local.get $b)))))
+  ;; Binary ops — both args must be same family (no implicit widening
+  ;; for math.* yet; mirrors num.wat's $check_compat which only allows
+  ;; mixed Int/Float widening for arithmetic). Caller's varargs adapter
+  ;; ensures all args go through this same dispatcher.
+  (func $min_num (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (if (i32.and
+          (ref.test (ref $F64) (local.get $a))
+          (ref.test (ref $F64) (local.get $b)))
+      (then (return_call $float_min
+              (ref.cast (ref $F64) (local.get $a))
+              (ref.cast (ref $F64) (local.get $b)))))
+    (if (i32.and
+          (ref.test (ref $Int) (local.get $a))
+          (ref.test (ref $Int) (local.get $b)))
+      (then (return_call $int_min
+              (ref.cast (ref $Int) (local.get $a))
+              (ref.cast (ref $Int) (local.get $b)))))
+    (unreachable))
 
-  (func $max_f64 (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.max
-      (struct.get $F64 $val (local.get $a))
-      (struct.get $F64 $val (local.get $b)))))
+  (func $max_num (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (if (i32.and
+          (ref.test (ref $F64) (local.get $a))
+          (ref.test (ref $F64) (local.get $b)))
+      (then (return_call $float_max
+              (ref.cast (ref $F64) (local.get $a))
+              (ref.cast (ref $F64) (local.get $b)))))
+    (if (i32.and
+          (ref.test (ref $Int) (local.get $a))
+          (ref.test (ref $Int) (local.get $b)))
+      (then (return_call $int_max
+              (ref.cast (ref $Int) (local.get $a))
+              (ref.cast (ref $Int) (local.get $b)))))
+    (unreachable))
 
-  (func $copysign_f64 (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
-    (struct.new $F64 (f64.copysign
-      (struct.get $F64 $val (local.get $a))
-      (struct.get $F64 $val (local.get $b)))))
+  (func $copysign_num (param $a (ref $Num)) (param $b (ref $Num)) (result (ref $Num))
+    (if (i32.and
+          (ref.test (ref $F64) (local.get $a))
+          (ref.test (ref $F64) (local.get $b)))
+      (then (return_call $float_copysign
+              (ref.cast (ref $F64) (local.get $a))
+              (ref.cast (ref $F64) (local.get $b)))))
+    (if (i32.and
+          (ref.test (ref $Int) (local.get $a))
+          (ref.test (ref $Int) (local.get $b)))
+      (then (return_call $int_copysign
+              (ref.cast (ref $Int) (local.get $a))
+              (ref.cast (ref $Int) (local.get $b)))))
+    (unreachable))
 
-  ;; clamp(lo, x, hi): max(lo, min(hi, x)).
-  ;; Bounds frame the value — reads as `lo <= x <= hi`.
-  (func $clamp_f64 (@pub)
-    (param $lo (ref $F64)) (param $x (ref $F64)) (param $hi (ref $F64))
-    (result (ref $F64))
-    (struct.new $F64 (f64.max
-      (struct.get $F64 $val (local.get $lo))
-      (f64.min
-        (struct.get $F64 $val (local.get $hi))
-        (struct.get $F64 $val (local.get $x))))))
+  (func $clamp_num
+    (param $lo (ref $Num)) (param $x (ref $Num)) (param $hi (ref $Num))
+    (result (ref $Num))
+    ;; All-float fast path.
+    (if (i32.and
+          (ref.test (ref $F64) (local.get $lo))
+          (i32.and
+            (ref.test (ref $F64) (local.get $x))
+            (ref.test (ref $F64) (local.get $hi))))
+      (then (return_call $float_clamp
+              (ref.cast (ref $F64) (local.get $lo))
+              (ref.cast (ref $F64) (local.get $x))
+              (ref.cast (ref $F64) (local.get $hi)))))
+    ;; All-int: max(lo, min(hi, x)).
+    (if (i32.and
+          (ref.test (ref $Int) (local.get $lo))
+          (i32.and
+            (ref.test (ref $Int) (local.get $x))
+            (ref.test (ref $Int) (local.get $hi))))
+      (then (return_call $int_max
+              (ref.cast (ref $Int) (local.get $lo))
+              (call $int_min
+                (ref.cast (ref $Int) (local.get $hi))
+                (ref.cast (ref $Int) (local.get $x))))))
+    (unreachable))
 
 
-  ;; -- User-importable closures ---------------------------------------
+  ;; -- Internal helper: Int "n - n = 0 in same subtype" for fract on Int.
   ;;
-  ;; Each `_<name>_apply` is a Fn2 adapter that peels (cont, ..args) off
-  ;; the args list, calls the direct helper, and tail-calls cont with
-  ;; the result. The `_<name>_closure` global wraps the adapter as a
-  ;; $Closure value. The `<name>` function with `@impl "std/math.fnk:..."`
-  ;; is what fink lookups resolve to — returns the closure ref.
+  ;; Imports `op_minus` from int.wat so we get a zero of the right
+  ;; family without needing int.wat to grow a zero-builder.
+  (import "std/int.wat" "op_minus"
+    (func $int_op_minus (param (ref $Int)) (param (ref $Int)) (result (ref $Int))))
+
+  (func $int_sub_self (param $n (ref $Int)) (result (ref $Int))
+    (return_call $int_op_minus (local.get $n) (local.get $n)))
+
+
+  ;; -- Fn2 adapters ---------------------------------------------------
   ;;
-  ;; Cast pattern: args[1] etc. are (ref null any); cast to (ref $F64).
+  ;; Each peels (cont, ..args) off the args list, calls the dispatcher,
+  ;; and tail-calls cont with the result. Args are cast to (ref $Num).
 
   (elem declare func
     $_abs_apply $_neg_apply $_ceil_apply $_floor_apply $_trunc_apply
     $_round_apply $_round_even_apply $_sqrt_apply $_sign_apply $_fract_apply
     $_min_apply $_max_apply $_copysign_apply $_clamp_apply)
 
-  ;; --- 1-arg adapters ---
-
   (func $_unary_peel
     (param $args (ref null any))
-    (result (ref null any) (ref $F64))
+    (result (ref null any) (ref $Num))
 
     (local $cont (ref null any))
     (local $rest (ref null any))
-    (local $a    (ref $F64))
+    (local $a    (ref $Num))
 
     (local.set $cont (call $head_any (local.get $args)))
     (local.set $rest (call $tail_any (local.get $args)))
-    (local.set $a    (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $a    (ref.cast (ref $Num) (call $head_any (local.get $rest))))
 
     (local.get $cont) (local.get $a))
 
   (func $_abs_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $abs_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $abs_num (local.get $a)) (local.get $cont)))
 
   (func $_neg_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $neg_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $neg_num (local.get $a)) (local.get $cont)))
 
   (func $_ceil_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $ceil_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $ceil_num (local.get $a)) (local.get $cont)))
 
   (func $_floor_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $floor_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $floor_num (local.get $a)) (local.get $cont)))
 
   (func $_trunc_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $trunc_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $trunc_num (local.get $a)) (local.get $cont)))
 
   (func $_round_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $round_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $round_num (local.get $a)) (local.get $cont)))
 
   (func $_round_even_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $round_even_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $round_even_num (local.get $a)) (local.get $cont)))
 
   (func $_sqrt_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $sqrt_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $sqrt_num (local.get $a)) (local.get $cont)))
 
   (func $_sign_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $sign_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $sign_num (local.get $a)) (local.get $cont)))
 
   (func $_fract_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
-    (local $cont (ref null any)) (local $a (ref $F64))
+    (local $cont (ref null any)) (local $a (ref $Num))
     (call $_unary_peel (local.get $args))
     (local.set $a) (local.set $cont)
-    (return_call $apply_1 (call $fract_f64 (local.get $a)) (local.get $cont)))
+    (return_call $apply_1 (call $fract_num (local.get $a)) (local.get $cont)))
 
-  ;; --- varargs adapters (fold) ---
-  ;;
-  ;; min/max accept >=1 args. Walk the args list; at each step replace
-  ;; the accumulator with f64.min / f64.max of the previous accumulator
-  ;; and the next arg. Empty args list (after cont) traps via the cast
-  ;; on the first head_any.
+  ;; --- varargs adapters (fold) — min / max ---
 
   (func $_min_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $rest (ref $List))
-    (local $acc f64)
+    (local $acc (ref $Num))
     (local.set $cont (call $head_any (local.get $args)))
     (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $args))))
-    ;; First arg seeds the accumulator.
-    (local.set $acc (struct.get $F64 $val
-      (ref.cast (ref $F64) (call $head_any (local.get $rest)))))
+    (local.set $acc (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
     (block $done
       (loop $fold
         (br_if $done (call $list_is_empty (local.get $rest)))
-        (local.set $acc (f64.min (local.get $acc)
-          (struct.get $F64 $val
-            (ref.cast (ref $F64) (call $head_any (local.get $rest))))))
+        (local.set $acc (call $min_num
+          (local.get $acc)
+          (ref.cast (ref $Num) (call $head_any (local.get $rest)))))
         (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
         (br $fold)))
-    (return_call $apply_1
-      (struct.new $F64 (local.get $acc))
-      (local.get $cont)))
+    (return_call $apply_1 (local.get $acc) (local.get $cont)))
 
   (func $_max_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $rest (ref $List))
-    (local $acc f64)
+    (local $acc (ref $Num))
     (local.set $cont (call $head_any (local.get $args)))
     (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $args))))
-    (local.set $acc (struct.get $F64 $val
-      (ref.cast (ref $F64) (call $head_any (local.get $rest)))))
+    (local.set $acc (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
     (block $done
       (loop $fold
         (br_if $done (call $list_is_empty (local.get $rest)))
-        (local.set $acc (f64.max (local.get $acc)
-          (struct.get $F64 $val
-            (ref.cast (ref $F64) (call $head_any (local.get $rest))))))
+        (local.set $acc (call $max_num
+          (local.get $acc)
+          (ref.cast (ref $Num) (call $head_any (local.get $rest)))))
         (local.set $rest (ref.cast (ref $List) (call $tail_any (local.get $rest))))
         (br $fold)))
-    (return_call $apply_1
-      (struct.new $F64 (local.get $acc))
-      (local.get $cont)))
-
-  ;; --- 2-arg adapter ---
+    (return_call $apply_1 (local.get $acc) (local.get $cont)))
 
   (func $_copysign_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $rest (ref null any))
-    (local $a (ref $F64)) (local $b (ref $F64))
+    (local $a (ref $Num)) (local $b (ref $Num))
     (local.set $cont (call $head_any (local.get $args)))
     (local.set $rest (call $tail_any (local.get $args)))
-    (local.set $a (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $a (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (local.set $rest (call $tail_any (local.get $rest)))
-    (local.set $b (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $b (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (return_call $apply_1
-      (call $copysign_f64 (local.get $a) (local.get $b))
+      (call $copysign_num (local.get $a) (local.get $b))
       (local.get $cont)))
-
-  ;; --- 3-arg adapter ---
 
   (func $_clamp_apply (type $Fn2)
     (param $_caps (ref null any)) (param $args (ref null any))
     (local $cont (ref null any)) (local $rest (ref null any))
-    (local $lo (ref $F64)) (local $x (ref $F64)) (local $hi (ref $F64))
+    (local $lo (ref $Num)) (local $x (ref $Num)) (local $hi (ref $Num))
     (local.set $cont (call $head_any (local.get $args)))
     (local.set $rest (call $tail_any (local.get $args)))
-    (local.set $lo (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $lo (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (local.set $rest (call $tail_any (local.get $rest)))
-    (local.set $x (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $x (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (local.set $rest (call $tail_any (local.get $rest)))
-    (local.set $hi (ref.cast (ref $F64) (call $head_any (local.get $rest))))
+    (local.set $hi (ref.cast (ref $Num) (call $head_any (local.get $rest))))
     (return_call $apply_1
-      (call $clamp_f64 (local.get $lo) (local.get $x) (local.get $hi))
+      (call $clamp_num (local.get $lo) (local.get $x) (local.get $hi))
       (local.get $cont)))
 
 
   ;; -- Closure globals + @impl entries ---------------------------------
 
-  (global $_abs_closure      (ref $Closure) (struct.new $Closure (ref.func $_abs_apply)      (ref.null $Captures)))
-  (global $_neg_closure      (ref $Closure) (struct.new $Closure (ref.func $_neg_apply)      (ref.null $Captures)))
-  (global $_ceil_closure     (ref $Closure) (struct.new $Closure (ref.func $_ceil_apply)     (ref.null $Captures)))
-  (global $_floor_closure    (ref $Closure) (struct.new $Closure (ref.func $_floor_apply)    (ref.null $Captures)))
-  (global $_trunc_closure    (ref $Closure) (struct.new $Closure (ref.func $_trunc_apply)    (ref.null $Captures)))
-  (global $_round_closure    (ref $Closure) (struct.new $Closure (ref.func $_round_apply)    (ref.null $Captures)))
+  (global $_abs_closure        (ref $Closure) (struct.new $Closure (ref.func $_abs_apply)        (ref.null $Captures)))
+  (global $_neg_closure        (ref $Closure) (struct.new $Closure (ref.func $_neg_apply)        (ref.null $Captures)))
+  (global $_ceil_closure       (ref $Closure) (struct.new $Closure (ref.func $_ceil_apply)       (ref.null $Captures)))
+  (global $_floor_closure      (ref $Closure) (struct.new $Closure (ref.func $_floor_apply)      (ref.null $Captures)))
+  (global $_trunc_closure      (ref $Closure) (struct.new $Closure (ref.func $_trunc_apply)      (ref.null $Captures)))
+  (global $_round_closure      (ref $Closure) (struct.new $Closure (ref.func $_round_apply)      (ref.null $Captures)))
   (global $_round_even_closure (ref $Closure) (struct.new $Closure (ref.func $_round_even_apply) (ref.null $Captures)))
-  (global $_sqrt_closure     (ref $Closure) (struct.new $Closure (ref.func $_sqrt_apply)     (ref.null $Captures)))
-  (global $_sign_closure     (ref $Closure) (struct.new $Closure (ref.func $_sign_apply)     (ref.null $Captures)))
-  (global $_fract_closure    (ref $Closure) (struct.new $Closure (ref.func $_fract_apply)    (ref.null $Captures)))
-  (global $_min_closure      (ref $Closure) (struct.new $Closure (ref.func $_min_apply)      (ref.null $Captures)))
-  (global $_max_closure      (ref $Closure) (struct.new $Closure (ref.func $_max_apply)      (ref.null $Captures)))
-  (global $_copysign_closure (ref $Closure) (struct.new $Closure (ref.func $_copysign_apply) (ref.null $Captures)))
-  (global $_clamp_closure    (ref $Closure) (struct.new $Closure (ref.func $_clamp_apply)    (ref.null $Captures)))
+  (global $_sqrt_closure       (ref $Closure) (struct.new $Closure (ref.func $_sqrt_apply)       (ref.null $Captures)))
+  (global $_sign_closure       (ref $Closure) (struct.new $Closure (ref.func $_sign_apply)       (ref.null $Captures)))
+  (global $_fract_closure      (ref $Closure) (struct.new $Closure (ref.func $_fract_apply)      (ref.null $Captures)))
+  (global $_min_closure        (ref $Closure) (struct.new $Closure (ref.func $_min_apply)        (ref.null $Captures)))
+  (global $_max_closure        (ref $Closure) (struct.new $Closure (ref.func $_max_apply)        (ref.null $Captures)))
+  (global $_copysign_closure   (ref $Closure) (struct.new $Closure (ref.func $_copysign_apply)   (ref.null $Captures)))
+  (global $_clamp_closure      (ref $Closure) (struct.new $Closure (ref.func $_clamp_apply)      (ref.null $Captures)))
 
-  (func $abs      (@pub) (@impl "std/math.fnk:abs")      (result (ref any)) (global.get $_abs_closure))
-  (func $neg      (@pub) (@impl "std/math.fnk:neg")      (result (ref any)) (global.get $_neg_closure))
-  (func $ceil     (@pub) (@impl "std/math.fnk:ceil")     (result (ref any)) (global.get $_ceil_closure))
-  (func $floor    (@pub) (@impl "std/math.fnk:floor")    (result (ref any)) (global.get $_floor_closure))
-  (func $trunc    (@pub) (@impl "std/math.fnk:trunc")    (result (ref any)) (global.get $_trunc_closure))
+  (func $abs        (@pub) (@impl "std/math.fnk:abs")        (result (ref any)) (global.get $_abs_closure))
+  (func $neg        (@pub) (@impl "std/math.fnk:neg")        (result (ref any)) (global.get $_neg_closure))
+  (func $ceil       (@pub) (@impl "std/math.fnk:ceil")       (result (ref any)) (global.get $_ceil_closure))
+  (func $floor      (@pub) (@impl "std/math.fnk:floor")      (result (ref any)) (global.get $_floor_closure))
+  (func $trunc      (@pub) (@impl "std/math.fnk:trunc")      (result (ref any)) (global.get $_trunc_closure))
   (func $round      (@pub) (@impl "std/math.fnk:round")      (result (ref any)) (global.get $_round_closure))
   (func $round_even (@pub) (@impl "std/math.fnk:round_even") (result (ref any)) (global.get $_round_even_closure))
-  (func $sqrt     (@pub) (@impl "std/math.fnk:sqrt")     (result (ref any)) (global.get $_sqrt_closure))
-  (func $sign     (@pub) (@impl "std/math.fnk:sign")     (result (ref any)) (global.get $_sign_closure))
-  (func $fract    (@pub) (@impl "std/math.fnk:fract")    (result (ref any)) (global.get $_fract_closure))
-  (func $min      (@pub) (@impl "std/math.fnk:min")      (result (ref any)) (global.get $_min_closure))
-  (func $max      (@pub) (@impl "std/math.fnk:max")      (result (ref any)) (global.get $_max_closure))
-  (func $copysign (@pub) (@impl "std/math.fnk:copysign") (result (ref any)) (global.get $_copysign_closure))
-  (func $clamp    (@pub) (@impl "std/math.fnk:clamp")    (result (ref any)) (global.get $_clamp_closure))
+  (func $sqrt       (@pub) (@impl "std/math.fnk:sqrt")       (result (ref any)) (global.get $_sqrt_closure))
+  (func $sign       (@pub) (@impl "std/math.fnk:sign")       (result (ref any)) (global.get $_sign_closure))
+  (func $fract      (@pub) (@impl "std/math.fnk:fract")      (result (ref any)) (global.get $_fract_closure))
+  (func $min        (@pub) (@impl "std/math.fnk:min")        (result (ref any)) (global.get $_min_closure))
+  (func $max        (@pub) (@impl "std/math.fnk:max")        (result (ref any)) (global.get $_max_closure))
+  (func $copysign   (@pub) (@impl "std/math.fnk:copysign")   (result (ref any)) (global.get $_copysign_closure))
+  (func $clamp      (@pub) (@impl "std/math.fnk:clamp")      (result (ref any)) (global.get $_clamp_closure))
 
 )

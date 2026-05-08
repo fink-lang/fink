@@ -96,6 +96,87 @@
     (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
     (unreachable))
 
+  ;; -- Math primitives — float arms of std/math.fnk dispatch ------------
+  ;;
+  ;; std/math.wat dispatches polymorphic abs/neg/min/max/etc. to these
+  ;; for the $F64 arm. Each wraps a single f64.* instruction (or a short
+  ;; sequence) on the unboxed payload.
+
+  (func $abs (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.abs (struct.get $F64 $val (local.get $a)))))
+
+  (func $neg (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.neg (struct.get $F64 $val (local.get $a)))))
+
+  (func $ceil (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.ceil (struct.get $F64 $val (local.get $a)))))
+
+  (func $floor (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.floor (struct.get $F64 $val (local.get $a)))))
+
+  (func $trunc (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.trunc (struct.get $F64 $val (local.get $a)))))
+
+  ;; round half away from zero ("natural" rounding):
+  ;; copysign(floor(abs(x) + 0.5), x).
+  (func $round (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (local $v f64)
+    (local.set $v (struct.get $F64 $val (local.get $a)))
+    (struct.new $F64
+      (f64.copysign
+        (f64.floor (f64.add (f64.abs (local.get $v)) (f64.const 0.5)))
+        (local.get $v))))
+
+  ;; round half-to-even (banker's / IEEE 754) — wasm's native f64.nearest.
+  (func $round_even (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.nearest (struct.get $F64 $val (local.get $a)))))
+
+  (func $sqrt (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.sqrt (struct.get $F64 $val (local.get $a)))))
+
+  ;; sign(x): 1.0 if x > 0, -1.0 if x < 0, 0.0 if x == 0, NaN if x is NaN.
+  (func $sign (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (local $v f64)
+    (local.set $v (struct.get $F64 $val (local.get $a)))
+    (if (f64.ne (local.get $v) (local.get $v))
+      (then (return (struct.new $F64 (local.get $v)))))
+    (if (f64.eq (local.get $v) (f64.const 0))
+      (then (return (struct.new $F64 (f64.const 0)))))
+    (struct.new $F64 (f64.copysign (f64.const 1) (local.get $v))))
+
+  ;; fract(x): x - trunc(x). Sign matches x.
+  (func $fract (@pub) (param $a (ref $F64)) (result (ref $F64))
+    (local $v f64)
+    (local.set $v (struct.get $F64 $val (local.get $a)))
+    (struct.new $F64
+      (f64.sub (local.get $v) (f64.trunc (local.get $v)))))
+
+  (func $min (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.min
+      (struct.get $F64 $val (local.get $a))
+      (struct.get $F64 $val (local.get $b)))))
+
+  (func $max (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.max
+      (struct.get $F64 $val (local.get $a))
+      (struct.get $F64 $val (local.get $b)))))
+
+  (func $copysign (@pub) (param $a (ref $F64)) (param $b (ref $F64)) (result (ref $F64))
+    (struct.new $F64 (f64.copysign
+      (struct.get $F64 $val (local.get $a))
+      (struct.get $F64 $val (local.get $b)))))
+
+  ;; clamp(lo, x, hi): max(lo, min(hi, x)).
+  (func $clamp (@pub)
+    (param $lo (ref $F64)) (param $x (ref $F64)) (param $hi (ref $F64))
+    (result (ref $F64))
+    (struct.new $F64 (f64.max
+      (struct.get $F64 $val (local.get $lo))
+      (f64.min
+        (struct.get $F64 $val (local.get $hi))
+        (struct.get $F64 $val (local.get $x))))))
+
+
   ;; -- Formatting ------------------------------------------------------
   ;;
   ;; from_f64 is the public entry: takes a raw f64 and returns its

@@ -296,3 +296,224 @@ test 'math clamp above range', fn:
     clamp 0.0, 15.0, 10.0
   | equals ƒink:
     10
+
+
+# ===========================================================================
+# Polymorphic dispatch across $Num — int / uint / mixed-family cases.
+# Skipped tests track impl follow-ups; un-skip as each lands.
+# ===========================================================================
+
+# --- abs on Int ---
+
+test 'math abs int positive', fn:
+  expect run ƒink:
+    {abs} = import 'std/math.fnk'
+    abs 7
+  | equals ƒink:
+    7
+
+test 'math abs int negative', fn:
+  expect run ƒink:
+    {abs} = import 'std/math.fnk'
+    abs (-7)
+  | equals ƒink:
+    7
+
+test 'math abs uint identity', fn:
+  expect run ƒink:
+    {abs} = import 'std/math.fnk'
+    abs 0xff
+  | equals ƒink:
+    255
+
+
+# --- neg on Int ---
+
+test 'math neg int positive', fn:
+  expect run ƒink:
+    {neg} = import 'std/math.fnk'
+    neg 5
+  | equals ƒink:
+    -5
+
+test 'math neg int negative', fn:
+  expect run ƒink:
+    {neg} = import 'std/math.fnk'
+    neg (-5)
+  | equals ƒink:
+    5
+
+# Negating a $U64 has no signed result — trap (bits family has no sign).
+test 'math neg uint traps', fn:
+  expect run ƒink:
+    {neg} = import 'std/math.fnk'
+    neg 0xff
+  | equals ":
+    ERROR: entry wrapper: error while executing at wasm backtrace:
+        0:  <unknown>!std/int.wat:neg
+        1:  <unknown>!std/math.wat:_neg_apply: wasm trap: wasm `unreachable` instruction executed
+
+
+# --- sign on Int ---
+
+test 'math sign int positive', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign 42
+  | equals ƒink:
+    1
+
+test 'math sign int negative', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign (-42)
+  | equals ƒink:
+    -1
+
+test 'math sign int zero', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign 0
+  | equals ƒink:
+    0
+
+test 'math sign uint zero', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign 0x0
+  | equals ƒink:
+    0
+
+test 'math sign uint nonzero', fn:
+  expect run ƒink:
+    {sign} = import 'std/math.fnk'
+    sign 0xff
+  | equals ƒink:
+    1
+
+
+# --- floor / ceil / trunc / round / round_even / fract on Int → identity ---
+
+test 'math floor int identity', fn:
+  expect run ƒink:
+    {floor} = import 'std/math.fnk'
+    floor 7
+  | equals ƒink:
+    7
+
+test 'math ceil int identity', fn:
+  expect run ƒink:
+    {ceil} = import 'std/math.fnk'
+    ceil 7
+  | equals ƒink:
+    7
+
+test 'math trunc int identity', fn:
+  expect run ƒink:
+    {trunc} = import 'std/math.fnk'
+    trunc 7
+  | equals ƒink:
+    7
+
+test 'math round int identity', fn:
+  expect run ƒink:
+    {round} = import 'std/math.fnk'
+    round 7
+  | equals ƒink:
+    7
+
+test 'math round_even int identity', fn:
+  expect run ƒink:
+    {round_even} = import 'std/math.fnk'
+    round_even 7
+  | equals ƒink:
+    7
+
+test 'math fract int zero', fn:
+  expect run ƒink:
+    {fract} = import 'std/math.fnk'
+    fract 7
+  | equals ƒink:
+    0
+
+
+# --- min / max on Int ---
+
+test 'math min int picks lesser', fn:
+  expect run ƒink:
+    {min} = import 'std/math.fnk'
+    min 3, 7
+  | equals ƒink:
+    3
+
+test 'math max int picks greater', fn:
+  expect run ƒink:
+    {max} = import 'std/math.fnk'
+    max 3, 7
+  | equals ƒink:
+    7
+
+test 'math min int many args', fn:
+  expect run ƒink:
+    {min} = import 'std/math.fnk'
+    min 5, 1, 3, 2, 4
+  | equals ƒink:
+    1
+
+# U64 comparisons use unsigned ordering (bits-family).
+test 'math min uint unsigned ordering', fn:
+  expect run ƒink:
+    {min} = import 'std/math.fnk'
+    min 0x1, 0xff
+  | equals ƒink:
+    1
+
+
+# --- copysign on Int ---
+
+test 'math copysign int positive magnitude positive sign', fn:
+  expect run ƒink:
+    {copysign} = import 'std/math.fnk'
+    copysign 3, 2
+  | equals ƒink:
+    3
+
+test 'math copysign int positive magnitude negative sign', fn:
+  expect run ƒink:
+    {copysign} = import 'std/math.fnk'
+    copysign 3, -2
+  | equals ƒink:
+    -3
+
+test 'math copysign uint traps', fn:
+  expect run ƒink:
+    {copysign} = import 'std/math.fnk'
+    copysign 0x3, 0x2
+  | equals ":
+    ERROR: entry wrapper: error while executing at wasm backtrace:
+        0:  <unknown>!std/int.wat:copysign
+        1:  <unknown>!std/math.wat:_copysign_apply: wasm trap: wasm `unreachable` instruction executed
+
+
+# --- clamp on Int ---
+
+test 'math clamp int within range', fn:
+  expect run ƒink:
+    {clamp} = import 'std/math.fnk'
+    clamp 0, 5, 10
+  | equals ƒink:
+    5
+
+test 'math clamp int below range', fn:
+  expect run ƒink:
+    {clamp} = import 'std/math.fnk'
+    clamp 0, -3, 10
+  | equals ƒink:
+    0
+
+test 'math clamp int above range', fn:
+  expect run ƒink:
+    {clamp} = import 'std/math.fnk'
+    clamp 0, 15, 10
+  | equals ƒink:
+    10
