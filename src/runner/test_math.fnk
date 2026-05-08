@@ -663,21 +663,21 @@ test 'math hypot 3 4 5', fn:
 
 # --- trigonometric ---
 
-skip test 'math sin zero', fn:
+test 'math sin zero', fn:
   expect run ƒink:
     {sin} = import 'std/math.fnk'
     sin 0.0
   | equals ƒink:
     0
 
-skip test 'math cos zero', fn:
+test 'math cos zero', fn:
   expect run ƒink:
     {cos} = import 'std/math.fnk'
     cos 0.0
   | equals ƒink:
     1
 
-skip test 'math tan zero', fn:
+test 'math tan zero', fn:
   expect run ƒink:
     {tan} = import 'std/math.fnk'
     tan 0.0

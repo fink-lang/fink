@@ -400,14 +400,141 @@
 
   ;; -- Trigonometric --------------------------------------------------
 
+  ;; -- Trigonometric kernels (k_sin / k_cos from FreeBSD msun) ----------
+  ;;
+  ;; These approximate sin and cos on |x| <= pi/4. The full sin/cos/tan
+  ;; do quadrant reduction modulo pi/2 then dispatch to the right kernel.
+  ;;
+  ;; Naive reduction (`n = round(x * 2/pi); r = x - n*pi/2`) loses precision
+  ;; for very large |x| (> ~10^15) because x * 2/pi loses bits to integer
+  ;; truncation. Real libm has a multi-precision __rem_pio2 for this case;
+  ;; we accept reduced precision for very large inputs as a faithful-rounding
+  ;; trade-off.
+
+  (func $_k_sin (param $x f64) (result f64)
+    (local $z f64) (local $w f64) (local $r f64) (local $v f64)
+    (local.set $z (f64.mul (local.get $x) (local.get $x)))
+    (local.set $w (f64.mul (local.get $z) (local.get $z)))
+    ;; r = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
+    (local.set $r
+      (f64.add
+        (f64.add (f64.const 8.33333333332248946124e-03)
+          (f64.mul (local.get $z)
+            (f64.add (f64.const -1.98412698298579493134e-04)
+              (f64.mul (local.get $z) (f64.const 2.75573137070700676789e-06)))))
+        (f64.mul (f64.mul (local.get $z) (local.get $w))
+          (f64.add (f64.const -2.50507602534068634195e-08)
+            (f64.mul (local.get $z) (f64.const 1.58969099521155010221e-10))))))
+    (local.set $v (f64.mul (local.get $z) (local.get $x)))
+    ;; sin = x + v*(S1 + z*r)
+    (f64.add (local.get $x)
+      (f64.mul (local.get $v)
+        (f64.add (f64.const -1.66666666666666324348e-01)
+          (f64.mul (local.get $z) (local.get $r))))))
+
+  (func $_k_cos (param $x f64) (result f64)
+    (local $z f64) (local $w f64) (local $r f64) (local $hz f64) (local $ww f64)
+    (local.set $z (f64.mul (local.get $x) (local.get $x)))
+    (local.set $w (f64.mul (local.get $z) (local.get $z)))
+    ;; r = z*(C1 + z*(C2 + z*C3)) + w*w*(C4 + z*(C5 + z*C6))
+    (local.set $r
+      (f64.add
+        (f64.mul (local.get $z)
+          (f64.add (f64.const 4.16666666666666019037e-02)
+            (f64.mul (local.get $z)
+              (f64.add (f64.const -1.38888888888741095749e-03)
+                (f64.mul (local.get $z) (f64.const 2.48015872894767294178e-05))))))
+        (f64.mul (f64.mul (local.get $w) (local.get $w))
+          (f64.add (f64.const -2.75573143513906633035e-07)
+            (f64.mul (local.get $z)
+              (f64.add (f64.const 2.08757232129817482790e-09)
+                (f64.mul (local.get $z) (f64.const -1.13596475577881948265e-11))))))))
+    (local.set $hz (f64.mul (f64.const 0.5) (local.get $z)))
+    (local.set $ww (f64.sub (f64.const 1) (local.get $hz)))
+    ;; cos = ww + (((1 - ww) - hz) + z*r)  (the tail term -x*y is 0 here)
+    (f64.add (local.get $ww)
+      (f64.add
+        (f64.sub (f64.sub (f64.const 1) (local.get $ww)) (local.get $hz))
+        (f64.mul (local.get $z) (local.get $r)))))
+
+  ;; Quadrant reduction: write x = n*(pi/2) + r with |r| <= pi/4. Returns
+  ;; (n_mod_4, r). Uses Cody-Waite split of pi/2 for accuracy.
+  ;;
+  ;; PIO2_HI = 1.57079632673412561417e+00  (pi/2 high part)
+  ;; PIO2_LO = 6.07710050650619224932e-11  (pi/2 low part)
+  ;; INV_PIO2 = 6.36619772367581382433e-01 (2/pi)
+  (func $_rem_pio2 (param $x f64) (result i32 f64)
+    (local $n i32) (local $fn f64) (local $r f64)
+    ;; Round x*2/pi to nearest integer.
+    (local.set $fn
+      (f64.nearest (f64.mul (local.get $x) (f64.const 0.6366197723675814))))
+    (local.set $n (i32.trunc_f64_s (local.get $fn)))
+    ;; r = (x - fn*PIO2_HI) - fn*PIO2_LO
+    (local.set $r
+      (f64.sub
+        (f64.sub (local.get $x)
+          (f64.mul (local.get $fn) (f64.const 1.5707963267341256)))
+        (f64.mul (local.get $fn) (f64.const 6.077100506506192e-11))))
+    (local.get $n) (local.get $r))
+
+  ;; sin — sine. For |x| <= pi/4, k_sin direct. Otherwise reduce mod pi/2
+  ;; into [-pi/4, pi/4], pick arm by quadrant.
   (func $sin (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $x f64) (local $r f64) (local $n i32) (local $q i32)
+    (local.set $x (struct.get $F64 $val (local.get $a)))
+    (if (f64.ne (local.get $x) (local.get $x))
+      (then (return (struct.new $F64 (local.get $x)))))
+    (if (f64.eq (f64.abs (local.get $x)) (f64.const inf))
+      (then (return (struct.new $F64
+        (f64.div (f64.sub (local.get $x) (local.get $x)) (f64.const 0))))))
+    ;; Fast path: |x| <= pi/4 → no reduction.
+    (if (f64.le (f64.abs (local.get $x)) (f64.const 0.7853981633974483))
+      (then (return (struct.new $F64 (call $_k_sin (local.get $x))))))
+    ;; Reduce.
+    (call $_rem_pio2 (local.get $x))
+    (local.set $r) (local.set $n)
+    (local.set $q (i32.and (local.get $n) (i32.const 3)))
+    ;; n mod 4: 0 → sin(r); 1 → cos(r); 2 → -sin(r); 3 → -cos(r).
+    (if (i32.eqz (local.get $q))
+      (then (return (struct.new $F64 (call $_k_sin (local.get $r))))))
+    (if (i32.eq (local.get $q) (i32.const 1))
+      (then (return (struct.new $F64 (call $_k_cos (local.get $r))))))
+    (if (i32.eq (local.get $q) (i32.const 2))
+      (then (return (struct.new $F64 (f64.neg (call $_k_sin (local.get $r)))))))
+    (struct.new $F64 (f64.neg (call $_k_cos (local.get $r)))))
 
+  ;; cos — cosine. Same quadrant rotation as sin, shifted by 1.
   (func $cos (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $x f64) (local $r f64) (local $n i32) (local $q i32)
+    (local.set $x (struct.get $F64 $val (local.get $a)))
+    (if (f64.ne (local.get $x) (local.get $x))
+      (then (return (struct.new $F64 (local.get $x)))))
+    (if (f64.eq (f64.abs (local.get $x)) (f64.const inf))
+      (then (return (struct.new $F64
+        (f64.div (f64.sub (local.get $x) (local.get $x)) (f64.const 0))))))
+    (if (f64.le (f64.abs (local.get $x)) (f64.const 0.7853981633974483))
+      (then (return (struct.new $F64 (call $_k_cos (local.get $x))))))
+    (call $_rem_pio2 (local.get $x))
+    (local.set $r) (local.set $n)
+    (local.set $q (i32.and (local.get $n) (i32.const 3)))
+    ;; n mod 4: 0 → cos(r); 1 → -sin(r); 2 → -cos(r); 3 → sin(r).
+    (if (i32.eqz (local.get $q))
+      (then (return (struct.new $F64 (call $_k_cos (local.get $r))))))
+    (if (i32.eq (local.get $q) (i32.const 1))
+      (then (return (struct.new $F64 (f64.neg (call $_k_sin (local.get $r)))))))
+    (if (i32.eq (local.get $q) (i32.const 2))
+      (then (return (struct.new $F64 (f64.neg (call $_k_cos (local.get $r)))))))
+    (struct.new $F64 (call $_k_sin (local.get $r))))
 
+  ;; tan — tangent. tan(x) = sin(x) / cos(x).
   (func $tan (@pub) (param $a (ref $F64)) (result (ref $F64))
-    (unreachable))
+    (local $s (ref $F64)) (local $c (ref $F64))
+    (local.set $s (call $sin (local.get $a)))
+    (local.set $c (call $cos (local.get $a)))
+    (struct.new $F64
+      (f64.div
+        (struct.get $F64 $val (local.get $s))
+        (struct.get $F64 $val (local.get $c)))))
 
   (func $asin (@pub) (param $a (ref $F64)) (result (ref $F64))
     (unreachable))
