@@ -1,16 +1,20 @@
-;; Math primitives — Tier 1: polymorphic dispatch over $Num.
+;; Math primitives — polymorphic dispatch over $Num.
 ;;
 ;; This module is thin glue. The actual primitives live in:
-;;   - std/float.wat  (f64 arms)
-;;   - std/int.wat    (int arms; traps on $U64 where ops are signed-only)
+;;   - std/float.wat  (Tier 1 f64 arms)
+;;   - std/int.wat    (Tier 1 int arms; traps on $U64 where ops are signed-only)
+;;   - std/libm.wat   (Tier 2 transcendentals — pure-wasm port of rust-libm)
 ;;
 ;; Surface (via `import 'std/math.fnk'`):
-;;   abs, neg, ceil, floor, trunc, round, round_even, sqrt, sign, fract,
-;;   min, max, copysign, clamp
+;;   Tier 1: abs, neg, ceil, floor, trunc, round, round_even, sqrt, sign,
+;;           fract, min, max, copysign, clamp
+;;   Tier 2: exp, exp2, expm1, log, log2, log10, log1p, pow, cbrt, hypot,
+;;           sin, cos, tan, asin, acos, atan, atan2,
+;;           sinh, cosh, tanh, asinh, acosh, atanh
 ;;
-;; Tier 2 transcendentals (sin, cos, log, exp, pow on floats, ...) are a
-;; separate piece of work — they need polynomial approximations or host
-;; imports and a precision/range-reduction story. Not in this file.
+;; Tier 2 functions auto-widen $Int → $F64; result is always $F64 (these
+;; are irrational in general). Tier 2 stubs trap until ported — see
+;; libm.wat status comments.
 
 (module
 
@@ -426,5 +430,304 @@
   (func $max        (@pub) (@impl "std/math.fnk:max")        (result (ref any)) (global.get $_max_closure))
   (func $copysign   (@pub) (@impl "std/math.fnk:copysign")   (result (ref any)) (global.get $_copysign_closure))
   (func $clamp      (@pub) (@impl "std/math.fnk:clamp")      (result (ref any)) (global.get $_clamp_closure))
+
+
+  ;; =========================================================================
+  ;; Tier 2 — transcendentals.
+  ;;
+  ;; All take $Num and return $F64 (irrational results). Int args widen
+  ;; via num.wat:as_f64. Decimal traps inside as_f64.
+  ;; =========================================================================
+
+  ;; Coercion helper from num.wat for the Int→F64 widen path.
+  (import "std/num.wat" "as_f64"
+    (func $as_f64 (param (ref $Num)) (result (ref $F64))))
+
+  ;; Func imports — libm arms.
+  (import "std/libm.wat" "exp"   (func $libm_exp   (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "exp2"  (func $libm_exp2  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "expm1" (func $libm_expm1 (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "log"   (func $libm_log   (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "log2"  (func $libm_log2  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "log10" (func $libm_log10 (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "log1p" (func $libm_log1p (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "pow"   (func $libm_pow   (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "cbrt"  (func $libm_cbrt  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "hypot" (func $libm_hypot (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "sin"   (func $libm_sin   (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "cos"   (func $libm_cos   (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "tan"   (func $libm_tan   (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "asin"  (func $libm_asin  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "acos"  (func $libm_acos  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "atan"  (func $libm_atan  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "atan2" (func $libm_atan2 (param (ref $F64)) (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "sinh"  (func $libm_sinh  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "cosh"  (func $libm_cosh  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "tanh"  (func $libm_tanh  (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "asinh" (func $libm_asinh (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "acosh" (func $libm_acosh (param (ref $F64)) (result (ref $F64))))
+  (import "std/libm.wat" "atanh" (func $libm_atanh (param (ref $F64)) (result (ref $F64))))
+
+
+  ;; -- Fn2 adapters for Tier 2 ---------------------------------------------
+  ;;
+  ;; Each peels (cont, ..args) off the args list, widens Int→F64 via
+  ;; $as_f64, calls the libm kernel, tail-calls cont with the result.
+
+  (elem declare func
+    $_exp_apply $_exp2_apply $_expm1_apply
+    $_log_apply $_log2_apply $_log10_apply $_log1p_apply
+    $_pow_apply $_cbrt_apply $_hypot_apply
+    $_sin_apply $_cos_apply $_tan_apply
+    $_asin_apply $_acos_apply $_atan_apply $_atan2_apply
+    $_sinh_apply $_cosh_apply $_tanh_apply
+    $_asinh_apply $_acosh_apply $_atanh_apply)
+
+  ;; Helper: peel cont + first arg as $F64 (widening Int→F64).
+  (func $_unary_peel_f64
+    (param $args (ref null any))
+    (result (ref null any) (ref $F64))
+    (local $cont (ref null any))
+    (local $rest (ref null any))
+    (local $a    (ref $F64))
+    (local.set $cont (call $head_any (local.get $args)))
+    (local.set $rest (call $tail_any (local.get $args)))
+    (local.set $a    (call $as_f64
+                       (ref.cast (ref $Num) (call $head_any (local.get $rest)))))
+    (local.get $cont) (local.get $a))
+
+  (func $_exp_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_exp (local.get $a)) (local.get $cont)))
+
+  (func $_exp2_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_exp2 (local.get $a)) (local.get $cont)))
+
+  (func $_expm1_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_expm1 (local.get $a)) (local.get $cont)))
+
+  (func $_log_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_log (local.get $a)) (local.get $cont)))
+
+  (func $_log2_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_log2 (local.get $a)) (local.get $cont)))
+
+  (func $_log10_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_log10 (local.get $a)) (local.get $cont)))
+
+  (func $_log1p_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_log1p (local.get $a)) (local.get $cont)))
+
+  (func $_cbrt_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_cbrt (local.get $a)) (local.get $cont)))
+
+  (func $_sin_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_sin (local.get $a)) (local.get $cont)))
+
+  (func $_cos_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_cos (local.get $a)) (local.get $cont)))
+
+  (func $_tan_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_tan (local.get $a)) (local.get $cont)))
+
+  (func $_asin_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_asin (local.get $a)) (local.get $cont)))
+
+  (func $_acos_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_acos (local.get $a)) (local.get $cont)))
+
+  (func $_atan_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_atan (local.get $a)) (local.get $cont)))
+
+  (func $_sinh_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_sinh (local.get $a)) (local.get $cont)))
+
+  (func $_cosh_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_cosh (local.get $a)) (local.get $cont)))
+
+  (func $_tanh_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_tanh (local.get $a)) (local.get $cont)))
+
+  (func $_asinh_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_asinh (local.get $a)) (local.get $cont)))
+
+  (func $_acosh_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_acosh (local.get $a)) (local.get $cont)))
+
+  (func $_atanh_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64))
+    (call $_unary_peel_f64 (local.get $args))
+    (local.set $a) (local.set $cont)
+    (return_call $apply_1 (call $libm_atanh (local.get $a)) (local.get $cont)))
+
+  ;; --- 2-arg adapters: pow, hypot, atan2 ---
+
+  (func $_binary_peel_f64
+    (param $args (ref null any))
+    (result (ref null any) (ref $F64) (ref $F64))
+    (local $cont (ref null any)) (local $rest (ref null any))
+    (local $a (ref $F64)) (local $b (ref $F64))
+    (local.set $cont (call $head_any (local.get $args)))
+    (local.set $rest (call $tail_any (local.get $args)))
+    (local.set $a    (call $as_f64
+                       (ref.cast (ref $Num) (call $head_any (local.get $rest)))))
+    (local.set $rest (call $tail_any (local.get $rest)))
+    (local.set $b    (call $as_f64
+                       (ref.cast (ref $Num) (call $head_any (local.get $rest)))))
+    (local.get $cont) (local.get $a) (local.get $b))
+
+  (func $_pow_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64)) (local $b (ref $F64))
+    (call $_binary_peel_f64 (local.get $args))
+    (local.set $b) (local.set $a) (local.set $cont)
+    (return_call $apply_1
+      (call $libm_pow (local.get $a) (local.get $b))
+      (local.get $cont)))
+
+  (func $_hypot_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64)) (local $b (ref $F64))
+    (call $_binary_peel_f64 (local.get $args))
+    (local.set $b) (local.set $a) (local.set $cont)
+    (return_call $apply_1
+      (call $libm_hypot (local.get $a) (local.get $b))
+      (local.get $cont)))
+
+  (func $_atan2_apply (type $Fn2)
+    (param $_caps (ref null any)) (param $args (ref null any))
+    (local $cont (ref null any)) (local $a (ref $F64)) (local $b (ref $F64))
+    (call $_binary_peel_f64 (local.get $args))
+    (local.set $b) (local.set $a) (local.set $cont)
+    (return_call $apply_1
+      (call $libm_atan2 (local.get $a) (local.get $b))
+      (local.get $cont)))
+
+
+  ;; -- Closure globals + @impl entries (Tier 2) -----------------------------
+
+  (global $_exp_closure   (ref $Closure) (struct.new $Closure (ref.func $_exp_apply)   (ref.null $Captures)))
+  (global $_exp2_closure  (ref $Closure) (struct.new $Closure (ref.func $_exp2_apply)  (ref.null $Captures)))
+  (global $_expm1_closure (ref $Closure) (struct.new $Closure (ref.func $_expm1_apply) (ref.null $Captures)))
+  (global $_log_closure   (ref $Closure) (struct.new $Closure (ref.func $_log_apply)   (ref.null $Captures)))
+  (global $_log2_closure  (ref $Closure) (struct.new $Closure (ref.func $_log2_apply)  (ref.null $Captures)))
+  (global $_log10_closure (ref $Closure) (struct.new $Closure (ref.func $_log10_apply) (ref.null $Captures)))
+  (global $_log1p_closure (ref $Closure) (struct.new $Closure (ref.func $_log1p_apply) (ref.null $Captures)))
+  (global $_pow_closure   (ref $Closure) (struct.new $Closure (ref.func $_pow_apply)   (ref.null $Captures)))
+  (global $_cbrt_closure  (ref $Closure) (struct.new $Closure (ref.func $_cbrt_apply)  (ref.null $Captures)))
+  (global $_hypot_closure (ref $Closure) (struct.new $Closure (ref.func $_hypot_apply) (ref.null $Captures)))
+  (global $_sin_closure   (ref $Closure) (struct.new $Closure (ref.func $_sin_apply)   (ref.null $Captures)))
+  (global $_cos_closure   (ref $Closure) (struct.new $Closure (ref.func $_cos_apply)   (ref.null $Captures)))
+  (global $_tan_closure   (ref $Closure) (struct.new $Closure (ref.func $_tan_apply)   (ref.null $Captures)))
+  (global $_asin_closure  (ref $Closure) (struct.new $Closure (ref.func $_asin_apply)  (ref.null $Captures)))
+  (global $_acos_closure  (ref $Closure) (struct.new $Closure (ref.func $_acos_apply)  (ref.null $Captures)))
+  (global $_atan_closure  (ref $Closure) (struct.new $Closure (ref.func $_atan_apply)  (ref.null $Captures)))
+  (global $_atan2_closure (ref $Closure) (struct.new $Closure (ref.func $_atan2_apply) (ref.null $Captures)))
+  (global $_sinh_closure  (ref $Closure) (struct.new $Closure (ref.func $_sinh_apply)  (ref.null $Captures)))
+  (global $_cosh_closure  (ref $Closure) (struct.new $Closure (ref.func $_cosh_apply)  (ref.null $Captures)))
+  (global $_tanh_closure  (ref $Closure) (struct.new $Closure (ref.func $_tanh_apply)  (ref.null $Captures)))
+  (global $_asinh_closure (ref $Closure) (struct.new $Closure (ref.func $_asinh_apply) (ref.null $Captures)))
+  (global $_acosh_closure (ref $Closure) (struct.new $Closure (ref.func $_acosh_apply) (ref.null $Captures)))
+  (global $_atanh_closure (ref $Closure) (struct.new $Closure (ref.func $_atanh_apply) (ref.null $Captures)))
+
+  (func $exp   (@pub) (@impl "std/math.fnk:exp")   (result (ref any)) (global.get $_exp_closure))
+  (func $exp2  (@pub) (@impl "std/math.fnk:exp2")  (result (ref any)) (global.get $_exp2_closure))
+  (func $expm1 (@pub) (@impl "std/math.fnk:expm1") (result (ref any)) (global.get $_expm1_closure))
+  (func $log   (@pub) (@impl "std/math.fnk:log")   (result (ref any)) (global.get $_log_closure))
+  (func $log2  (@pub) (@impl "std/math.fnk:log2")  (result (ref any)) (global.get $_log2_closure))
+  (func $log10 (@pub) (@impl "std/math.fnk:log10") (result (ref any)) (global.get $_log10_closure))
+  (func $log1p (@pub) (@impl "std/math.fnk:log1p") (result (ref any)) (global.get $_log1p_closure))
+  (func $pow   (@pub) (@impl "std/math.fnk:pow")   (result (ref any)) (global.get $_pow_closure))
+  (func $cbrt  (@pub) (@impl "std/math.fnk:cbrt")  (result (ref any)) (global.get $_cbrt_closure))
+  (func $hypot (@pub) (@impl "std/math.fnk:hypot") (result (ref any)) (global.get $_hypot_closure))
+  (func $sin   (@pub) (@impl "std/math.fnk:sin")   (result (ref any)) (global.get $_sin_closure))
+  (func $cos   (@pub) (@impl "std/math.fnk:cos")   (result (ref any)) (global.get $_cos_closure))
+  (func $tan   (@pub) (@impl "std/math.fnk:tan")   (result (ref any)) (global.get $_tan_closure))
+  (func $asin  (@pub) (@impl "std/math.fnk:asin")  (result (ref any)) (global.get $_asin_closure))
+  (func $acos  (@pub) (@impl "std/math.fnk:acos")  (result (ref any)) (global.get $_acos_closure))
+  (func $atan  (@pub) (@impl "std/math.fnk:atan")  (result (ref any)) (global.get $_atan_closure))
+  (func $atan2 (@pub) (@impl "std/math.fnk:atan2") (result (ref any)) (global.get $_atan2_closure))
+  (func $sinh  (@pub) (@impl "std/math.fnk:sinh")  (result (ref any)) (global.get $_sinh_closure))
+  (func $cosh  (@pub) (@impl "std/math.fnk:cosh")  (result (ref any)) (global.get $_cosh_closure))
+  (func $tanh  (@pub) (@impl "std/math.fnk:tanh")  (result (ref any)) (global.get $_tanh_closure))
+  (func $asinh (@pub) (@impl "std/math.fnk:asinh") (result (ref any)) (global.get $_asinh_closure))
+  (func $acosh (@pub) (@impl "std/math.fnk:acosh") (result (ref any)) (global.get $_acosh_closure))
+  (func $atanh (@pub) (@impl "std/math.fnk:atanh") (result (ref any)) (global.get $_atanh_closure))
 
 )
