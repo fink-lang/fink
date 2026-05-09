@@ -56,3 +56,21 @@ test 'with single handler and multiline body', fn:
         InfixOp '*',
           Ident 'x'
           LitInt '2'
+
+
+test 'with handler registration using with as a protocol', fn:
+  expect ast ƒink:
+    with foo = fn body, done:
+      bar
+  | equals ƒink:
+    Module
+      Bind '=',
+        Apply
+          Ident 'with'
+          Ident 'foo'
+        Fn ':',
+          Patterns
+            Ident 'body'
+            Ident 'done'
+          Ident 'bar'
+

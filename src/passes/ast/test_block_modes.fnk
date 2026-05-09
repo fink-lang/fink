@@ -19,6 +19,31 @@ test 'ƒink block with no args', fn:
         Patterns
         LitStr 'hello'
 
+test 'registered block as protocol-impl binding lhs', fn:
+  expect ast ƒink:
+    {ƒink} = import '@fink/parse/blocks.fnk'
+    ƒink foo = fn a, b:
+      a + b
+  | equals ƒink:
+    Module
+      Bind '=',
+        LitRec '{..}',
+          Ident 'ƒink'
+        Apply
+          Ident 'import'
+          LitStr '@fink/parse/blocks.fnk'
+      Bind '=',
+        Apply
+          Ident 'ƒink'
+          Ident 'foo'
+        Fn ':',
+          Patterns
+            Ident 'a'
+            Ident 'b'
+          InfixOp '+',
+            Ident 'a'
+            Ident 'b'
+
 
 test 'ƒink block with params and body', fn:
   expect ast ƒink:

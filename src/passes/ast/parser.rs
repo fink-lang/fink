@@ -1560,6 +1560,14 @@ impl<'src> Parser<'src> {
 
   // Parse comma-separated params until ":"
   fn parse_params(&mut self) -> Result<(AstId, Loc), ParseError> {
+    self.parse_params_with(true)
+  }
+
+  // Variant of parse_params that lets the caller disable default-arg
+  // (`name = expr`) consumption. With/registered-block dispatchers need this:
+  // they must let the outer `=` surface so the LHS can be reshaped as
+  // `Apply(name, args)` for protocol-impl binding (`with foo = ...`).
+  fn parse_params_with(&mut self, allow_default_args: bool) -> Result<(AstId, Loc), ParseError> {
     let start = self.peek().loc.start;
     let mut items: Vec<AstId> = vec![];
     let mut seps: Vec<Token<'src>> = vec![];
@@ -1579,7 +1587,7 @@ impl<'src> Parser<'src> {
         // Parse param without block detection (no `:` consumption).
         // Also support default args: name = 'default'.
         let param = self.parse_apply_no_block()?;
-        let param = if self.at(TokenKind::Sep) && self.peek().src == "=" {
+        let param = if allow_default_args && self.at(TokenKind::Sep) && self.peek().src == "=" {
           let op = self.bump();
           let rhs = self.parse_infix(0)?;
           let loc = Loc { start: self.loc_of(param).start, end: self.loc_of(rhs).end };
@@ -1700,13 +1708,23 @@ impl<'src> Parser<'src> {
   }
 
   fn parse_with_expr(&mut self, with_loc: Loc) -> ParseResult {
-    let (params_node, params_loc) = self.parse_params()?;
+    let (params_node, params_loc) = self.parse_params_with(false)?;
     // Extract handler expressions from Patterns wrapper — handlers are
     // value-site, not patterns. Same shape as `match` subjects.
     let handlers = match self.get(params_node).kind.clone() {
       NodeKind::Patterns(exprs) => exprs,
       _ => Exprs { items: Box::new([params_node]), seps: vec![] },
     };
+    // If the params are followed by `=` instead of `:`, this is a protocol-impl
+    // binding (`with foo = fn body, done: ...`), not a `with`-block. Reconstruct
+    // the LHS as `Apply(with, args)` and let `parse_binding` consume the `=`.
+    if self.at(TokenKind::Sep) && self.peek().src == "=" {
+      let func = self.node(NodeKind::Ident("with"), with_loc);
+      return Ok(self.node(
+        NodeKind::Apply { func, args: handlers },
+        Loc { start: with_loc.start, end: params_loc.end },
+      ));
+    }
     let (sep, body) = self.parse_colon_body()?;
     let end = body.items.last().map(|&id| self.loc_of(id).end).unwrap_or(params_loc.end);
     Ok(self.node(
@@ -1766,7 +1784,20 @@ impl<'src> Parser<'src> {
   fn parse_block(&mut self, name_loc: Loc, name: &'src str) -> ParseResult {
     let mode = self.block_names.get(name).copied().unwrap_or(BlockMode::Ast);
     let name_node = self.node(NodeKind::Ident(name), name_loc);
-    let (params, _) = self.parse_params()?;
+    let (params, params_loc) = self.parse_params_with(false)?;
+    // If the params are followed by `=` instead of `:`, this is a protocol-impl
+    // binding (`ƒink foo = fn ...`), not a custom-block use. Reconstruct the
+    // LHS as `Apply(name, args)` and let `parse_binding` consume the `=`.
+    if self.at(TokenKind::Sep) && self.peek().src == "=" {
+      let args = match self.get(params).kind.clone() {
+        NodeKind::Patterns(exprs) => exprs,
+        _ => Exprs { items: Box::new([params]), seps: vec![] },
+      };
+      return Ok(self.node(
+        NodeKind::Apply { func: name_node, args },
+        Loc { start: name_loc.start, end: params_loc.end },
+      ));
+    }
     let (sep, body) = match mode {
       BlockMode::Ast    => self.parse_colon_body_or_arms()?,
       BlockMode::Tokens => self.parse_colon_body_tokens()?,
