@@ -850,8 +850,12 @@ pub fn scan(cps: &CpsResult) -> RuntimeUsage {
   // Every well-formed module is a `Fn2`-shaped `fink_module`, so
   // that type is always needed. `args_head` is always needed
   // because bring-up always pops `done` out of `_args`.
+  // `args_tail` is also always needed because fink_module's user
+  // params are now `[ƒctx, ƒret]` — two args means at least one peel
+  // (head + tail) to unpack them.
   usage.mark(Sym::Fn2);
   usage.mark(Sym::ArgsHead);
+  usage.mark(Sym::ArgsTail);
 
   // Bring-up further uses `_apply` (with `args_empty` + `args_prepend`)
   // only when the tail call is a user value or continuation — i.e.

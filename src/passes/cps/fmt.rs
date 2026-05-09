@@ -315,6 +315,7 @@ fn render_synth_fallback(cps_id: CpsId, ctx: &Ctx<'_, '_>) -> String {
         Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", cps_id.0),
         Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", cps_id.0),
         Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", cps_id.0),
+        Bind::Ctx                  => format!("·ƒctx_{}", cps_id.0),
         _ => format!("·v_{}", cps_id.0),
       };
   }
@@ -342,6 +343,7 @@ fn render_bind_ctx(bind: &BindNode, ctx: &Ctx<'_, '_>) -> String {
     Bind::Cont(ContKind::Ret)  => format!("·ƒret_{}", bind.id.0),
     Bind::Cont(ContKind::Succ) => format!("·ƒsucc_{}", bind.id.0),
     Bind::Cont(ContKind::Fail) => format!("·ƒfail_{}", bind.id.0),
+    Bind::Ctx                  => format!("·ƒctx_{}", bind.id.0),
   }
 }
 

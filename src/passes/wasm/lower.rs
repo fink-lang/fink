@@ -75,8 +75,8 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   let mut frag = Fragment::default();
   let rt = runtime_contract::declare(&mut frag, &usage);
 
-  // CPS root shape: App(FinkModule, [Cont::Expr { args: [ƒret], body }]).
-  let Some((ret_bind, module_body)) = extract_fink_module_body(&cps.root) else {
+  // CPS root shape: App(FinkModule, [Cont::Expr { args: [ƒctx, ƒret], body }]).
+  let Some((ctx_bind, ret_bind, module_body)) = extract_fink_module_body(&cps.root) else {
     panic!("lower: unsupported CPS root shape (expected App(FinkModule, [Cont::Expr]))");
   };
 
@@ -110,15 +110,17 @@ pub fn lower(cps: &CpsResult, ast: &Ast<'_>, fqn_prefix: &str) -> Fragment {
   // fink_module` in source: `:` is lexer-rejected at the source
   // level, making `<fqn>::fink_module` collision-safe.
   let module_display = format!("{fqn_prefix}:fink_module");
+  let bind_kinds = crate::passes::cps::ir::collect_bind_kinds(&cps.root);
   {
     let mut lcx = LowerCtx {
       cps, ast, rt: &rt, frag: &mut frag,
       pub_globals: &pub_globals, fqn_prefix,
+      bind_kinds: &bind_kinds,
     };
     let fink_module = lower_fn(
       &mut lcx,
       &[],                 // no cap params at the module level
-      &[(ret_bind, false)], // user param: ƒret (not a spread)
+      &[(ctx_bind, false), (ret_bind, false)], // user params: ƒctx, ƒret
       module_body,
       &module_display,
       &HashMap::new(),    // module body: no enclosing fn_syms
@@ -250,6 +252,9 @@ struct LowerCtx<'a> {
   /// fragment compiles; `"<canonical_url>:"` for multi-fragment
   /// package compiles. See `lower()` doc.
   fqn_prefix: &'a str,
+  /// Bind-kind lookup. Populated once per `to_fragment`. Used to give
+  /// special bind kinds (e.g. `Bind::Ctx`) descriptive local names.
+  bind_kinds: &'a crate::propgraph::PropGraph<CpsId, Option<crate::passes::cps::ir::Bind>>,
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -325,7 +330,7 @@ fn lower_fn(
   // current $:params cursor.
   let n = user_params.len();
   for (j, &(pid, is_spread)) in user_params.iter().enumerate() {
-    let name = cps_ident(lcx.cps, lcx.ast, pid);
+    let name = cps_ident_kinded(lcx.cps, lcx.ast, lcx.bind_kinds, pid);
     let local = ctx.alloc_local(&name);
     ctx.bind(pid, local);
     if is_spread {
@@ -1511,7 +1516,7 @@ fn binary_op_sym(b: BuiltIn) -> Option<Sym> {
   })
 }
 
-fn extract_fink_module_body(root: &Expr) -> Option<(CpsId, &Expr)> {
+fn extract_fink_module_body(root: &Expr) -> Option<(CpsId, CpsId, &Expr)> {
   let ExprKind::App { func: Callable::BuiltIn(BuiltIn::FinkModule), args } = &root.kind else {
     return None;
   };
@@ -1519,8 +1524,12 @@ fn extract_fink_module_body(root: &Expr) -> Option<(CpsId, &Expr)> {
   let Arg::Cont(Cont::Expr { args: cont_args, body }) = cont_arg else {
     return None;
   };
-  let ret_bind = cont_args.first()?;
-  Some((ret_bind.id, body))
+  // Module body shape: `fn ·ƒctx, ·ƒret: <body>`. Ctx is the 0th param
+  // (effect-handler universe context, runtime-injected); ƒret is the
+  // host return continuation.
+  let ctx_bind = cont_args.first()?;
+  let ret_bind = cont_args.get(1)?;
+  Some((ctx_bind.id, ret_bind.id, body))
 }
 
 fn split_binary_args(args: &[Arg]) -> (&Arg, &Arg, &Arg) {
@@ -1563,12 +1572,19 @@ fn ref_cps_id(r: Ref) -> CpsId {
 }
 
 fn cps_ident_for_bind(cps: &CpsResult, ast: &Ast<'_>, b: &BindNode) -> String {
-  cps_ident(cps, ast, b.id)
+  // BindNode carries kind directly, so we don't need bind_kinds here —
+  // special-case kinds that don't map to AST origins.
+  match b.kind {
+    crate::passes::cps::ir::Bind::Ctx => format!(":ctx_{}", b.id.0),
+    _ => cps_ident(cps, ast, b.id),
+  }
 }
 
 /// Derive a display name for a CPS bind/ref. Uses the source ident
-/// from the origin map (`{ident}_{id}`) when available, otherwise
-/// falls back to `v_<id>`. Mirrors `collect.rs::label`.
+/// from the origin map (`{ident}_{id}`) when available, falls back to
+/// `v_<id>`. Mirrors `collect.rs::label`. Special bind kinds with no
+/// AST origin (e.g. `Bind::Ctx`) get descriptive synth names instead
+/// of the generic `v_<id>` fallback.
 fn cps_ident(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> String {
   let ast_id = cps.origin.try_get(id).and_then(|o| *o);
   match ast_id {
@@ -1578,6 +1594,20 @@ fn cps_ident(cps: &CpsResult, ast: &Ast<'_>, id: CpsId) -> String {
     },
     None => format!("v_{}", id.0),
   }
+}
+
+/// `cps_ident` with bind-kind awareness. Special-cases `Bind::Ctx` to
+/// render as `:ctx_<id>` (matching the CPS-level synth-name convention).
+fn cps_ident_kinded(
+  cps: &CpsResult,
+  ast: &Ast<'_>,
+  bind_kinds: &crate::propgraph::PropGraph<CpsId, Option<crate::passes::cps::ir::Bind>>,
+  id: CpsId,
+) -> String {
+  if let Some(Some(crate::passes::cps::ir::Bind::Ctx)) = bind_kinds.try_get(id) {
+    return format!(":ctx_{}", id.0);
+  }
+  cps_ident(cps, ast, id)
 }
 
 /// Recover the user-visible export name for a CpsId via the origin map.

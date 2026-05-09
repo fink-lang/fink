@@ -9,36 +9,36 @@ test 'fn one param', fn:
   expect cps_module ƒink:
     fn a: a
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_9, ·ƒret_1:
       ·fn
         fn ·ƒret_3, ·a_0: ·ƒret_3 ·a_0
         fn ·v_2: ·ƒret_1 ·v_2
-    # sm:FAABAAcAAQAHJAEABxIAAgAGAQAHAAEABwgAEAEMARYBBQEKAAQBBgEAAQABFAEAAQoAEAELBwoABAEABwABAAcUAQAH
+    # sm:FQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcIABABDAEWAQUBCgAEAQYBAAEAARQBAAEKABABCwcKAAQBAAcAAQAHFAEABw
 
 
 test 'fn two params', fn:
   expect cps_module ƒink:
     fn a, b: a
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_10, ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·a_0, ·b_1: ·ƒret_4 ·a_0
         fn ·v_3: ·ƒret_2 ·v_3
-    # sm:FQABAAoAAQAKJAEAChIAAgAGAQAKAAEACggAEAESARYBCwEOAQYBCgAEAQYBAAEAARQBAAEKABABEQoKAAQBAAoAAQAKFAEACg
+    # sm:FgABAAoAAQAKJAEAChgBAAoSAAIABgEACgABAAoIABABEgEWAQsBDgEGAQoABAEGAQABAAEUAQABCgAQAREKCgAEAQAKAAEAChQBAAo
 
 
 test 'named fn', fn:
   expect cps_module ƒink:
     double = fn a: a
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_18, ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·a_1: ·ƒret_4 ·a_1
         fn ·v_3:
           ·let ·v_3, fn ·double_0:
             ·ƒpub ·double_0, fn:
               ·ƒret_2 ·double_0
-    # sm:IgABABAAAQAQJAEAEBIAAgAGARIHAAEABwgAEAEMARYBBQEKAAQBBgEAAQABFAEAAQoAEAELBwoAAgAOAQMBAAEAAQwBBAcKAAoBEQYUAAIAEgEABgABAAYQAQAGFAAIAAIAFgEABgABAAYUAQAG
+    # sm:IwABABAAAQAQJAEAEBgBABASAAIABgESBwABAAcIABABDAEWAQUBCgAEAQYBAAEAARQBAAEKABABCwcKAAIADgEDAQABAAEMAQQHCgAKAREGFAACABIBAAYAAQAGEAEABhQACAACABYBAAYAAQAGFAEABg
 
 
 
@@ -50,14 +50,14 @@ test 'function binding', fn:
   expect cps_module ƒink:
     inc = fn x: x + 1
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_20, ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·x_1: ·op_plus ·x_1, (i8 1), ·ƒret_4
         fn ·v_3:
           ·let ·v_3, fn ·inc_0:
             ·ƒpub ·inc_0, fn:
               ·ƒret_2 ·inc_0
-    # sm:KAABABEAAQARJAEAERIAAgAGAQwLAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgACAA4BAwEAAQABDAEECwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWAQADAAEAAxQBAAM
+    # sm:KQABABEAAQARJAEAERgBABESAAIABgEMCwABAAsIABABDAUWAQUBCgAEAQYFAAEABRQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoAAgAOAQMBAAEAAQwBBAsKAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEAAwABAAMUAQAD
 
 
 test '·closure over outer variable', fn:
@@ -67,7 +67,7 @@ test '·closure over outer variable', fn:
         a + b
       ni
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_4:
+    ·ƒink_module fn ·ƒctx_31, ·ƒret_4:
       ·fn
         fn ·ƒret_6, ·a_1:
           ·fn
@@ -79,7 +79,7 @@ test '·closure over outer variable', fn:
           ·let ·v_5, fn ·foo_0:
             ·ƒpub ·foo_0, fn:
               ·ƒret_4 ·foo_0
-    # sm:OwABACcAAQAnJAEAJxIAAgAGAQwhAAEAIQgAEAE-AhYBNwEKAAIADgEUDwABAA8IABgBFAUWAQ0BCgAEAQ4FAAEABRQBAAEKAAQBCAEKAAQBBwUSABgBEw8KAAIAFgEDAQABAAEMAQQPCgAKAQkCDAACABoBLgIAAQACFAEAAgwAEAE9IQoAAgAOAQMBAAEAAQwBBCEKAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEAAwABAAMUAQAD
+    # sm:PAABACcAAQAnJAEAJxgBACcSAAIABgEMIQABACEIABABPgIWATcBCgACAA4BFA8AAQAPCAAYARQFFgENAQoABAEOBQABAAUUAQABCgAEAQgBCgAEAQcFEgAYARMPCgACABYBAwEAAQABDAEEDwoACgEJAgwAAgAaAS4CAAEAAhQBAAIMABABPSEKAAIADgEDAQABAAEMAQQhCgAKAQsDDgACABIBAAMAAQADEAEAAw4ACAACABYBAAMAAQADFAEAAw
 
 
 test 'three sequential bindings', fn:
@@ -88,7 +88,7 @@ test 'three sequential bindings', fn:
     b = 2
     c = a + b
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_3:
+    ·ƒink_module fn ·ƒctx_27, ·ƒret_3:
       ·let (i8 1), fn ·a_0:
         ·ƒpub ·a_0, fn:
           ·let (i8 2), fn ·b_1:
@@ -97,7 +97,7 @@ test 'three sequential bindings', fn:
                 ·let ·v_8, fn ·c_2:
                   ·ƒpub ·c_2, fn:
                     ·ƒret_3 ·c_2
-    # sm:PAABABUAAQAVJAEYCRIAAgAGARMBAAEAAQ4BBAEAAQABBgEAAQQACgEHAQoAAgAKAQABAAEAARABAAEKAAgAAgAOARABAAEAAQ4BBAEAAQABBgEAAQQACgEHAQoAAgASAQABAAEAARABAAEKAAgAAgAWARQFAAEABRQBAAEKAAQBCAEKAAoBBwUKAAIAGgEDAQABAAEMAQQFCgAKAQcBCgACAB4BAAEAAQABEAEAAQoACAACACIBAAEAAQABFAEAAQ
+    # sm:PQABABUAAQAVJAEAFRgBGAkSAAIABgETAQABAAEOAQQBAAEAAQYBAAEEAAoBBwEKAAIACgEAAQABAAEQAQABCgAIAAIADgEQAQABAAEOAQQBAAEAAQYBAAEEAAoBBwEKAAIAEgEAAQABAAEQAQABCgAIAAIAFgEUBQABAAUUAQABCgAEAQgBCgAKAQcFCgACABoBAwEAAQABDAEEBQoACgEHAQoAAgAeAQABAAEAARABAAEKAAgAAgAiAQABAAEAARQBAAE
 
 
 
@@ -110,7 +110,7 @@ test 'forward ref', fn:
     foo = fn a: foo a + 1
     foo 1
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_27, ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·a_1:
           ·op_plus ·a_1, (i8 1), fn ·v_8:
@@ -119,7 +119,7 @@ test 'forward ref', fn:
           ·let ·v_3, fn ·foo_0:
             ·ƒpub ·foo_0, fn:
               ·foo_0 ·ƒret_2, (i8 1)
-    # sm:NAABABsAAQAbJAEsBRIAAgAGAR8PAAEADwgAEAEMCRYBBQEKAAIADgEOBQABAAUUAQABCgAGAQgBAAEAAQYBAAEEAAoBBwUKAAIAEgEHCQABAAMQAQAJEgAEAQgFCgAQARMPCgACAA4BAwEAAQABDAEEDwoACgELAw4AAgASAQADAAEAAxABAAMOAAgAAgAWASwFAAEAAxABAAUSAAYBCAEAAQABBgEAAQ
+    # sm:NQABABsAAQAbJAEAGxgBLAUSAAIABgEfDwABAA8IABABDAkWAQUBCgACAA4BDgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAKAQcFCgACABIBBwkAAQADEAEACRIABAEIBQoAEAETDwoAAgAOAQMBAAEAAQwBBA8KAAoBCwMOAAIAEgEAAwABAAMQAQADDgAIAAIAFgEsBQABAAMQAQAFEgAGAQgBAAEAAQYBAAE
 
 
 test 'mutual recursion', fn:
@@ -127,7 +127,7 @@ test 'mutual recursion', fn:
     ping = fn x: pong x
     pong = fn x: ping x
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_4:
+    ·ƒink_module fn ·ƒctx_36, ·ƒret_4:
       ·fn
         fn ·ƒret_6, ·x_2: ·pong_1 ·ƒret_6, ·x_2
         fn ·v_5:
@@ -139,7 +139,7 @@ test 'mutual recursion', fn:
                   ·let ·v_13, fn ·pong_1:
                     ·ƒpub ·pong_1, fn:
                       ·ƒret_4 ·pong_1
-    # sm:QAABACcAAQAnJAEoExIAAgAGARkMAAEADAgAEAEMBhYBBQEKAAQBBgYAAQAEEgEABhIABAEKAQoAEAEVDAoAAgAOAQMBAAEAAQwBBAwKAAoBDQQQAAIAEgEABAABAAQQAQAEEAAIAAIAFgE2DAABAAwIACABDAYYAQUBCgAEAQYGAAEABBIBAAYUAAQBCgEKACABFQwMAAIAHgEDAQABAAEMAQQMDAAKAQ0EEAACACIBAAQAAQAEEAEABBAACAACACYBAAQAAQAEFAEABA
+    # sm:QQABACcAAQAnJAEAJxgBKBMSAAIABgEZDAABAAwIABABDAYWAQUBCgAEAQYGAAEABBIBAAYSAAQBCgEKABABFQwKAAIADgEDAQABAAEMAQQMCgAKAQ0EEAACABIBAAQAAQAEEAEABBAACAACABYBNgwAAQAMCAAgAQwGGAEFAQoABAEGBgABAAQSAQAGFAAEAQoBCgAgARUMDAACAB4BAwEAAQABDAEEDAwACgENBBAAAgAiAQAEAAEABBABAAQQAAgAAgAmAQAEAAEABBQBAAQ
 
 
 
@@ -151,22 +151,22 @@ test 'multi-param function', fn:
   expect cps_module ƒink:
     fn x, y: x + y
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_12, ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·x_0, ·y_1: ·op_plus ·x_0, ·y_1, ·ƒret_4
         fn ·v_3: ·ƒret_2 ·v_3
-    # sm:GQABAA4AAQAOJAEADhIAAgAGAQAOAAEADggAEAESBRYBCwEOAQYBCgAEAQYFAAEABRQBAAEKAAQBCAEKAAQBBwUSABABEQ4KAAQBAA4AAQAOFAEADg
+    # sm:GgABAA4AAQAOJAEADhgBAA4SAAIABgEADgABAA4IABABEgUWAQsBDgEGAQoABAEGBQABAAUUAQABCgAEAQgBCgAEAQcFEgAQAREOCgAEAQAOAAEADhQBAA4
 
 
 test 'varargs — collect rest', fn:
   expect cps_module ƒink:
     fn a, ..rest: rest
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_2:
+    ·ƒink_module fn ·ƒctx_10, ·ƒret_2:
       ·fn
         fn ·ƒret_4, ·a_0, ..·rest_1: ·ƒret_4 ·rest_1
         fn ·v_3: ·ƒret_2 ·v_3
-    # sm:FwABABIAAQASJAEAEhIAAgAGAQASAAEAEggAEAEcBBYBFQEOAQoEAAEABAQBAAQQAAQBDAQAAQAEFAEABBAAEAEbEgoABAEAEgABABIUAQAS
+    # sm:GAABABIAAQASJAEAEhgBABISAAIABgEAEgABABIIABABHAQWARUBDgEKBAABAAQEAQAEEAAEAQwEAAEABBQBAAQQABABGxIKAAQBABIAAQASFAEAEg
 
 
 
@@ -178,35 +178,35 @@ test 'identity function', fn:
   expect cps_module ƒink:
     fn x: x
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_9, ·ƒret_1:
       ·fn
         fn ·ƒret_3, ·x_0: ·ƒret_3 ·x_0
         fn ·v_2: ·ƒret_1 ·v_2
-    # sm:FAABAAcAAQAHJAEABxIAAgAGAQAHAAEABwgAEAEMARYBBQEKAAQBBgEAAQABFAEAAQoAEAELBwoABAEABwABAAcUAQAH
+    # sm:FQABAAcAAQAHJAEABxYBAAcSAAIABgEABwABAAcIABABDAEWAQUBCgAEAQYBAAEAARQBAAEKABABCwcKAAQBAAcAAQAHFAEABw
 
 test 'function with operator in body', fn:
   expect cps_module ƒink:
     fn x: x + 1
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_11, ·ƒret_1:
       ·fn
         fn ·ƒret_3, ·x_0: ·op_plus ·x_0, (i8 1), ·ƒret_3
         fn ·v_2: ·ƒret_1 ·v_2
-    # sm:GgABAAsAAQALJAEACxIAAgAGAQALAAEACwgAEAEMBRYBBQEKAAQBBgUAAQAFFAEAAQoABgEIAQABAAEGAQABBAAEAQcFEgAQAQsLCgAEAQALAAEACxQBAAs
+    # sm:GwABAAsAAQALJAEACxgBAAsSAAIABgEACwABAAsIABABDAUWAQUBCgAEAQYFAAEABRQBAAEKAAYBCAEAAQABBgEAAQQABAEHBRIAEAELCwoABAEACwABAAsUAQAL
 
 test 'try — result bound, code continues', fn:
   expect cps_module ƒink:
     ni = try foo bar
     ni + 1
   | equals ƒink:
-    ·ƒink_module fn ·ƒret_1:
+    ·ƒink_module fn ·ƒctx_17, ·ƒret_1:
       ·∅foo
         fn ·v_4:
           ·let ·v_4, fn ·ni_0:
             ·ƒpub ·ni_0, fn:
               ·op_plus ·ni_0, (i8 1), ·ƒret_1
         ·∅bar
-    # sm:IQABABcAAQAXJAEiBhIAAgAGAQ8HAAEAAyABAAcKAAIADgELAQABAAEMAQwHCgAKARECDAACABIBAAIAAQACEAEAAgwACAACABYBIgYAAQAGFAEAAgwABgEKAQABAAEGAQABBAAEAQkGHAEHAw
+    # sm:IgABABcAAQAXJAEAFxgBIgYSAAIABgEPBwABAAMgAQAHCgACAA4BCwEAAQABDAEMBwoACgERAgwAAgASAQACAAEAAhABAAIMAAgAAgAWASIGAAEABhQBAAIMAAYBCgEAAQABBgEAAQQABAEJBhwBBwM
 
 
 

@@ -1906,12 +1906,18 @@ pub fn lower_module<'src>(ast: &'src Ast<'src>, exprs: &[AstId], scope: &ScopeRe
     if export_ids.is_empty() { body } else { inject_pub_calls(&mut g, body, &export_ids) }
   };
 
-  // Root: App(FinkModule, [Cont::Expr { args: [ƒret], body }])
-  // The CPS root is a call — every module starts with an action.
+  // Root: App(FinkModule, [Cont::Expr { args: [ƒctx, ƒret], body }])
+  // The CPS root is a call — every module starts with an action. The
+  // module body fn receives the universe context (`ƒctx`) as its 0th
+  // arg, threaded by the runtime; `ƒret` is the host-supplied return
+  // continuation. Ctx is currently unused inside fink code — the runtime
+  // mints a placeholder value and the module ignores it. This is
+  // pure-pass-through plumbing for the effect-handler substrate.
+  let ctx_bind = g.bind(Bind::Ctx, module_origin);
   let root = g.expr(ExprKind::App {
     func: Callable::BuiltIn(BuiltIn::FinkModule),
     args: vec![Arg::Cont(Cont::Expr {
-      args: vec![fret_bind],
+      args: vec![ctx_bind, fret_bind],
       body: Box::new(body),
     })],
   }, module_origin);

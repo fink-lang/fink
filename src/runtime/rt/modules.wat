@@ -213,12 +213,15 @@
         (ref.func $_import_wrap_step)
         (local.get $caps)))
 
-    ;; Standard apply path: args = Cons(wrap_clos, Nil), callee = mod_ref.
-    ;; The caller wrapped the module's `import_module` funcref in a
-    ;; no-capture $Closure at the lowering site, so mod_ref is already
-    ;; anyref-compatible and dispatches through _apply normally.
+    ;; Standard apply path: args = Cons(ctx, Cons(wrap_clos, Nil)),
+    ;; callee = mod_ref. The caller wrapped the module's `import_module`
+    ;; funcref in a no-capture $Closure at the lowering site, so mod_ref
+    ;; is already anyref-compatible and dispatches through _apply normally.
+    ;; Module body shape: `fn ·ƒctx, ·ƒret: <body>` — see init_module
+    ;; for the matching ctx-injection at primary entry.
     (return_call $_apply
-      (call $list_prepend (local.get $wrap_clos) (call $list_empty))
+      (call $list_prepend (ref.i31 (i32.const 42))
+        (call $list_prepend (local.get $wrap_clos) (call $list_empty)))
       (local.get $mod_ref)))
 
 
@@ -313,9 +316,14 @@
         (ref.func $_init_module_step)
         (local.get $caps)))
 
-    ;; Tail-apply the module closure with [intermediate_cont] as args.
+    ;; Tail-apply the module closure with [ctx, intermediate_cont] as args.
+    ;; The 0th arg is the universe context (placeholder ref.i31 42 today —
+    ;; the host injects a value the module is free to ignore until the
+    ;; effect-handler substrate is wired). Module body shape is
+    ;; `fn ·ƒctx, ·ƒret: <body>`.
     (return_call $_apply
-      (call $list_prepend (local.get $intermediate) (call $list_empty))
+      (call $list_prepend (ref.i31 (i32.const 42))
+        (call $list_prepend (local.get $intermediate) (call $list_empty)))
       (local.get $mod_clos)))
 
 
